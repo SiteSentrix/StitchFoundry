@@ -3,7 +3,7 @@
 //! Each click adds a point and the path curves smoothly through all points. Alt-click or
 //! double-click a point toggles it between smooth and corner; drag a point to move it; click the
 //! first point to close; Backspace/Delete removes the last touched point; Esc/Enter ends the path.
-//! A rubber band shows the curve to the cursor.
+//! A rubber band shows the curve to the cursor (Enable Rubber Band for Curvature Tool).
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -167,7 +167,8 @@ impl Tool for CurvatureTool {
             return vec![];
         }
         let mut o = vec![];
-        if !self.closed
+        if cx.curvature_rubber_band
+            && !self.closed
             && self.drag.is_none()
             && let Some(h) = self.hover
         {

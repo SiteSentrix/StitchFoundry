@@ -17,6 +17,7 @@ enum Kind {
     Edge,
     Artboard,
     Bleed,
+    Guide,
 }
 
 impl Kind {
@@ -27,6 +28,7 @@ impl Kind {
             Kind::Edge => "path",
             Kind::Artboard => "artboard",
             Kind::Bleed => "bleed",
+            Kind::Guide => "guide",
         }
     }
 }
@@ -93,6 +95,27 @@ impl Targets {
             add_rect(&mut t, b, Kind::Edge);
         });
         t
+    }
+
+    /// View → Snap to Point: only these targets' anchors pull, and the ruler guides (shown and
+    /// unlocked, as the selection tools pick them) pull the pointer into line.
+    fn for_snap_to_point(mut self, cx: &ToolContext) -> Self {
+        self.points.retain(|(_, k)| *k == Kind::Anchor);
+        self.xs.clear();
+        self.ys.clear();
+        if cx.guides {
+            for g in &cx.doc.guides {
+                let (lines, at) = if g.vertical { (&mut self.xs, Point::new(g.pos, 0.0)) } else { (&mut self.ys, Point::new(0.0, g.pos)) };
+                lines.push((g.pos, at, Kind::Guide));
+            }
+        }
+        self
+    }
+
+    /// What a dragged selection's grabbed point snaps to with View → Snap to Point and Smart
+    /// Guides off: the anchors of the art but `exclude` and the ruler guides.
+    pub fn snap_to_point(cx: &ToolContext, exclude: &[NodeId]) -> Option<Self> {
+        (cx.snap_to_point && !cx.smart_guides).then(|| Self::collect(cx.doc, exclude, None).for_snap_to_point(cx))
     }
 
     /// Anchors and centres of the visible leaves under `roots` (the roots included) whose bounds
@@ -309,7 +332,8 @@ pub fn snap_draw(cx: &ToolContext, p: Point, exclude: &[NodeId]) -> (Point, Vec<
     snap_with(cx, p, || Targets::collect(cx.doc, exclude, None))
 }
 
-/// Snap `p` to pixels or the grid when they are on, else to the smart guide `targets`.
+/// Snap `p` to pixels or the grid when they are on, else to the smart guide `targets`, else (Snap
+/// to Point) to their anchors and the ruler guides within the Snap to Point distance.
 fn snap_with(cx: &ToolContext, p: Point, targets: impl FnOnce() -> Targets) -> (Point, Vec<Overlay>) {
     if cx.snap_to_pixel {
         return (Point::new(p.x.round(), p.y.round()), vec![]);
@@ -317,10 +341,13 @@ fn snap_with(cx: &ToolContext, p: Point, targets: impl FnOnce() -> Targets) -> (
     if cx.snap_to_grid {
         return (vectorcraft_geom::snap::snap_point_to_grid(p, cx.grid_step()), vec![]);
     }
-    if !cx.smart_guides {
-        return (p, vec![]);
+    if cx.smart_guides {
+        return targets().snap_point(p, cx.tol(5.0));
     }
-    targets().snap_point(p, cx.tol(5.0))
+    if cx.snap_to_point {
+        return targets().for_snap_to_point(cx).snap_point(p, cx.tol(cx.snap_tolerance));
+    }
+    (p, vec![])
 }
 
 /// Where a dragged direction handle of anchor `ai` of subpath `si` of path `id` goes for the
@@ -350,7 +377,7 @@ pub fn snap_pick(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
     if !(cx.snap_to_point || cx.smart_guides) {
         return (p, vec![]);
     }
-    let tol = cx.tol(5.0);
+    let tol = cx.tol(if cx.smart_guides { 5.0 } else { cx.snap_tolerance });
     let mut roots = cx.selection.objects.clone();
     roots.extend(hit_test(cx.doc, p, HitOptions { tol, ..cx.hit_options() }).map(|h| h.leaf));
     let near = Rect::new(p.x - tol, p.y - tol, p.x + tol, p.y + tol);

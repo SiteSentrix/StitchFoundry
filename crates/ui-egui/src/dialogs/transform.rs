@@ -1,5 +1,5 @@
-//! Transform dialogs: Move, Rotate, Scale, Reflect and Shear (with Copy; Scale also has Uniform,
-//! Scale Corners and Scale Strokes & Effects).
+//! Transform dialogs: Move, Rotate, Scale, Reflect and Shear (with Transform Patterns and Copy;
+//! Scale also has Uniform, Scale Corners and Scale Strokes & Effects).
 
 use serde_json::{Value, json};
 
@@ -26,8 +26,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         form::check(ui, d, "uniform", tl!("Uniform"));
         scale_options(app, ui, d);
     }
+    d.fields.insert("patterns".into(), Value::Bool(transform_patterns(app, d)));
+    form::check(ui, d, "patterns", tl!("Transform Patterns"));
     form::check(ui, d, "copy", tl!("Copy (make a transformed copy)"));
     false
+}
+
+/// Transform Patterns: the dialog's field, else General › Transform Pattern Tiles.
+fn transform_patterns(app: &VectorcraftApp, d: &Dialog) -> bool {
+    d.fields.get("patterns").and_then(Value::as_bool).unwrap_or(app.session.prefs.transform_pattern_tiles)
 }
 
 /// The scale options: (dialog field, preference, label).
@@ -74,17 +81,21 @@ fn origin_params(d: &Dialog, mut p: Value) -> Value {
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let copy = d.bool("copy");
+    let (copy, patterns) = (d.bool("copy"), transform_patterns(app, d));
     let (id, params) = match d.kind.as_str() {
-        "move" => return run_and_close(app, "object.move", json!({"dx": d.f64("dx", 0.0), "dy": d.f64("dy", 0.0), "copy": copy})),
-        "rotate" => ("object.rotate", json!({"angle": d.f64("angle", 0.0), "copy": copy})),
+        "move" => {
+            return run_and_close(app, "object.move", json!({"dx": d.f64("dx", 0.0), "dy": d.f64("dy", 0.0), "copy": copy, "patterns": patterns}));
+        }
+        "rotate" => ("object.rotate", json!({"angle": d.f64("angle", 0.0), "copy": copy, "patterns": patterns})),
         "scale" => {
             let sx = d.f64("sx", 100.0);
             let sy = if d.bool("uniform") { sx } else { d.f64("sy", 100.0) };
-            ("object.scale", with_scale_options(app, d, json!({"sx": sx, "sy": sy, "copy": copy}))?)
+            ("object.scale", with_scale_options(app, d, json!({"sx": sx, "sy": sy, "copy": copy, "patterns": patterns}))?)
         }
-        "reflect" => ("object.reflect", json!({"axis": d.fields.get("axis").cloned().unwrap_or(json!("vertical")), "copy": copy})),
-        _ => ("object.shear", json!({"angle": d.f64("angle", 0.0), "axis": d.str("axis"), "copy": copy})),
+        "reflect" => {
+            ("object.reflect", json!({"axis": d.fields.get("axis").cloned().unwrap_or(json!("vertical")), "copy": copy, "patterns": patterns}))
+        }
+        _ => ("object.shear", json!({"angle": d.f64("angle", 0.0), "axis": d.str("axis"), "copy": copy, "patterns": patterns})),
     };
     run_and_close(app, id, origin_params(d, params))
 }
@@ -120,5 +131,28 @@ mod tests {
         assert_eq!(n.appearance.stroke_width(), 1.0);
         let (cmd, p) = app.session.journal.last().unwrap();
         assert_eq!((cmd.as_str(), &p["strokes"], &p["corners"]), ("object.scale", &json!(false), &json!(true)));
+    }
+
+    /// Transform Patterns starts from General › Transform Pattern Tiles (#394) and goes with the
+    /// command.
+    #[test]
+    fn transform_patterns_starts_from_the_preference() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        for on in [false, true] {
+            app.run("prefs.set", json!({"key": "transformPatternTiles", "value": on})).unwrap();
+            crate::menus::invoke(&mut app, "object.move", json!({}));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let d = app.ui.dialog.as_mut().unwrap();
+            assert_eq!(d.fields["patterns"], json!(on));
+            d.fields.insert("dx".into(), json!(10));
+            crate::dialogs::confirm(&mut app).unwrap();
+            let (cmd, p) = app.session.journal.last().unwrap();
+            assert_eq!((cmd.as_str(), &p["patterns"]), ("object.move", &json!(on)));
+        }
     }
 }

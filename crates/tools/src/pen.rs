@@ -6,7 +6,7 @@
 //! Clicking the first anchor closes the path. Clicking the last one retracts its outgoing handle, so
 //! the next segment leaves it as a corner; dragging from it pulls a new one out on its own.
 //! Enter/Esc (or switching tools) ends the path. Clicking the end of a selected open path continues
-//! it. The rubber-band preview shows the next segment. Auto Add/Delete: between paths, a click on a
+//! it. The rubber-band preview shows the next segment (Enable Rubber Band for Pen Tool). Auto Add/Delete: between paths, a click on a
 //! segment of a selected path adds an anchor there and a click on one of its anchors deletes it
 //! (Shift held or General → Disable Auto Add/Delete starts a new path instead). On a selected
 //! blend's spine a click adds a point (on a point no key object sits on: deletes it).
@@ -201,7 +201,7 @@ impl Tool for PenTool {
         vec![]
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        if !self.drawing || self.drag.is_some() || self.handle.is_some() {
+        if !cx.pen_rubber_band || !self.drawing || self.drag.is_some() || self.handle.is_some() {
             return vec![];
         }
         let (Some((id, _, last, out)), Some(h)) = (active_path(cx), self.hover) else { return vec![] };

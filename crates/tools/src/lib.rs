@@ -228,7 +228,9 @@ pub struct ToolContext<'a> {
     pub show_bbox: bool,
     /// View → Snap to Pixel.
     pub snap_to_pixel: bool,
-    /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
+    /// View → Snap to Point: with Smart Guides off, dragged selections, drawn points and picked
+    /// points (a transform's reference point) land on anchors and ruler guides within
+    /// [`Self::snap_tolerance`].
     pub snap_to_point: bool,
     /// View → Show Corner Widget: live rectangles show draggable Live Corners widgets.
     pub corner_widgets: bool,
@@ -279,6 +281,25 @@ pub struct ToolContext<'a> {
     /// Selection & Anchor Display → Highlight anchors on mouse over: Direct Selection marks the
     /// anchor under the pointer.
     pub highlight_anchors: bool,
+    /// Selection & Anchor Display → Snap to Point (screen pixels): how near an anchor or a ruler
+    /// guide pulls the pointer while View → Snap to Point is on.
+    pub snap_tolerance: f64,
+    /// Selection & Anchor Display → Show handles when multiple anchors are selected: off, Direct
+    /// Selection shows and drags handles only while a single anchor is selected.
+    pub handles_multiple: bool,
+    /// Selection & Anchor Display → Hide Corner Widget for angles greater than (degrees): corners
+    /// wider than this show no Live Corners widget.
+    pub corner_widget_max_angle: f64,
+    /// Selection & Anchor Display → Move Locked and Hidden Artwork with Artboard.
+    pub move_locked_with_artboard: bool,
+    /// Selection & Anchor Display → Enable Rubber Band for Pen Tool: the Pen previews the next
+    /// segment to the pointer.
+    pub pen_rubber_band: bool,
+    /// Selection & Anchor Display → Enable Rubber Band for Curvature Tool.
+    pub curvature_rubber_band: bool,
+    /// Type → Fill New Type Objects With Placeholder Text: type the Type tools place starts with
+    /// placeholder text, selected.
+    pub placeholder_text: bool,
     /// The document window (none headless): screen-fixed widgets sit in it.
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
@@ -585,6 +606,13 @@ pub(crate) mod testutil {
             double_click_isolate: true,
             select_behind: true,
             highlight_anchors: true,
+            snap_tolerance: 2.0,
+            handles_multiple: true,
+            corner_widget_max_angle: 177.0,
+            move_locked_with_artboard: false,
+            pen_rubber_band: true,
+            curvature_rubber_band: true,
+            placeholder_text: false,
             screen: None,
             plane_widget: Some(Default::default()),
         }

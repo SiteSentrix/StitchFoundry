@@ -3,7 +3,7 @@
 //! commands of the Edit menu (Find and Replace, Find Next, Paste without Formatting).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Document, Justify, NodeId, NodeKind, Quotes, TextKind, TextRun};
+use vectorcraft_doc::{CharStyle, Document, Justify, NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
@@ -388,34 +388,42 @@ fn fill_placeholder(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = texts(s, p, "type.fillPlaceholder")?;
     s.edit("Fill with Placeholder Text", |d, _| {
         for id in &ids {
-            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            let style = t.first_style();
-            let text = match &t.kind {
-                TextKind::Area { frame } => {
-                    let b = frame.bounds().unwrap_or_default();
-                    let chars_per_line = (b.width() / (style.size * 0.5)).max(1.0);
-                    let lines = (b.height() / style.effective_leading()).max(1.0);
-                    let want = (chars_per_line * lines) as usize;
-                    let mut out = String::new();
-                    let words: Vec<&str> = PLACEHOLDER.split(' ').collect();
-                    let mut i = 0;
-                    while out.len() < want && i < 10_000 {
-                        if !out.is_empty() {
-                            out.push(' ');
-                        }
-                        out.push_str(words[i % words.len()]);
-                        i += 1;
-                    }
-                    out
-                }
-                _ => PLACEHOLDER.split(". ").next().unwrap_or(PLACEHOLDER).to_string() + ".",
-            };
-            t.runs = vec![TextRun { text, style }];
-            refresh_bounds(t);
+            if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                fill_with_placeholder(t);
+            }
         }
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// Replace `t`'s text with placeholder text in its first style: area type is filled to its frame,
+/// other type gets a sentence (Type › Fill with Placeholder Text, and new type with Preferences ›
+/// Type › Fill New Type Objects With Placeholder Text).
+pub(crate) fn fill_with_placeholder(t: &mut TextObject) {
+    let style = t.first_style();
+    let text = match &t.kind {
+        TextKind::Area { frame } => {
+            let b = frame.bounds().unwrap_or_default();
+            let chars_per_line = (b.width() / (style.size * 0.5)).max(1.0);
+            let lines = (b.height() / style.effective_leading()).max(1.0);
+            let want = (chars_per_line * lines) as usize;
+            let mut out = String::new();
+            for (i, w) in PLACEHOLDER.split(' ').cycle().enumerate() {
+                if out.len() >= want || i >= 10_000 {
+                    break;
+                }
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                out.push_str(w);
+            }
+            out
+        }
+        _ => PLACEHOLDER.split(". ").next().unwrap_or(PLACEHOLDER).to_string() + ".",
+    };
+    t.runs = vec![TextRun { text, style }];
+    refresh_bounds(t);
 }
 
 pub(crate) fn special_char(name: &str) -> Option<&'static str> {

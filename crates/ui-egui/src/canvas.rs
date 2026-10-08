@@ -352,7 +352,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // View → Hide Gradient Annotator hides the Gradient tool's annotator.
     if app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator {
         let overlays = app.session.overlays(view_info);
-        draw_overlays(&painter, &xf, &overlays, &t);
+        draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
     }
     ime_output(app, ui.ctx(), &xf);
     crate::place::paint_drop_highlight(app, ui.ctx(), &painter, rect);
@@ -1118,6 +1118,31 @@ fn selected_anchor(c: Color32) -> Color32 {
     if c == Color32::from_rgb(0x4f, 0x80, 0xff) { Color32::from_rgb(0x3d, 0x82, 0xff) } else { c }
 }
 
+/// How anchors and handles look: Selection & Anchor Display › Size and Handles.
+#[derive(Clone, Copy)]
+struct HandleLook<'a> {
+    /// Points bigger (or smaller) than the default size 3, per step of Size (1–7).
+    grow: f32,
+    /// `solid` (the default), `hollow` or `large`.
+    style: &'a str,
+}
+
+impl<'a> HandleLook<'a> {
+    fn of(prefs: &'a vectorcraft_engine::Prefs) -> Self {
+        Self { grow: prefs.anchor_size.clamp(1, 7) as f32 - 3.0, style: &prefs.handle_style }
+    }
+
+    /// A direction handle's end at `c`: a solid dot, a hollow one or a larger solid one.
+    fn draw(self, p: &egui::Painter, c: Pos2, color: Color32) {
+        let r = 2.75 + self.grow / 2.0;
+        let hollow = self.style == "hollow";
+        p.circle_filled(c, if self.style == "large" { r + 1.5 } else { r }, if hollow { Color32::WHITE } else { color });
+        if hollow {
+            p.circle_stroke(c, r, Stroke::new(1.0, color));
+        }
+    }
+}
+
 fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
     let r = egui::Rect::from_center_size(c, vec2(size, size));
     if filled {
@@ -1279,8 +1304,12 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let direct = matches!(tool, "directSelection" | "pen" | "addAnchor" | "deleteAnchor" | "anchorPoint" | "curvature");
     // Selection & Anchor Display › Size (1–7, 3 the default): anchors, handles and the bounding
     // box's handles a point bigger or smaller per step.
-    let grow = app.session.prefs.anchor_size.clamp(1, 7) as f32 - 3.0;
+    let look = HandleLook::of(&app.session.prefs);
+    let grow = look.grow;
     let anchor = |direct: bool| grow + if direct { 5.0 } else { 4.0 };
+    // The selected anchors' handles (drawn once they are counted: Show handles when multiple
+    // anchors are selected off shows them for a single one only).
+    let (mut handles, mut with_handles) = (vec![], 0);
     for id in &st.selection.objects {
         let Some(n) = st.doc.node(*id) else { continue };
         let color = c32(st.doc.layer_color(*id));
@@ -1303,13 +1332,8 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                 };
                 let sp = xf.to_screen(a.p);
                 if sel && (direct || partial.is_some()) {
-                    for h in [a.h_in, a.h_out] {
-                        if h.distance(a.p) > 1e-6 {
-                            let hp = xf.to_screen(h);
-                            p.line_segment([sp, hp], Stroke::new(1.0, color));
-                            p.circle_filled(hp, 2.75 + grow / 2.0, color);
-                        }
-                    }
+                    with_handles += 1;
+                    handles.extend([a.h_in, a.h_out].into_iter().filter(|h| h.distance(a.p) > 1e-6).map(|h| (sp, xf.to_screen(h), color)));
                 }
                 anchor_square(p, sp, if sel && partial.is_some() { selected_anchor(color) } else { color }, sel, anchor(partial.is_some() || direct));
             }
@@ -1331,6 +1355,12 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
             p.circle_filled(o, 2.5, color);
         }
     }
+    if app.session.prefs.show_handles_multiple_anchors || with_handles <= 1 {
+        for (sp, hp, color) in handles {
+            p.line_segment([sp, hp], Stroke::new(1.0, color));
+            look.draw(p, hp, color);
+        }
+    }
     // The spine of each selected blend (or of the blend a selected key object belongs to).
     let mut spines = vec![];
     for id in &st.selection.objects {
@@ -1349,6 +1379,7 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     if matches!(tool, "selection" | "directSelection")
         && app.ui.view.corner_widgets
         && let Some(w) = vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, xf.zoom)
+            .and_then(|w| w.within_angle(app.session.prefs.hide_corner_widget_above))
     {
         let color = c32(st.doc.layer_color(w.id));
         for sp in w.visible().map(|q| xf.to_screen(q)) {
@@ -1398,7 +1429,7 @@ fn names_an_artboard(text: &str) -> bool {
     text.split_once(" - ").is_some_and(|(n, _)| n.len() >= 2 && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
-fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
+fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook) {
     for o in overlays {
         match o {
             Overlay::Marquee(r) => {
@@ -1428,9 +1459,7 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
                 }
             }
             Overlay::Anchor { p: pt, color, filled, size } => anchor_square(p, xf.to_screen(*pt), c32(*color), *filled, *size),
-            Overlay::Handle { p: pt, color } => {
-                p.circle_filled(xf.to_screen(*pt), 2.8, c32(*color));
-            }
+            Overlay::Handle { p: pt, color } => look.draw(p, xf.to_screen(*pt), c32(*color)),
             Overlay::Label { p: pt, text, color } => {
                 let sp = xf.to_screen(*pt) + vec2(8.0, -14.0);
                 p.text(
@@ -1881,6 +1910,59 @@ mod tests {
         assert!(big.contains(&8.0) && big.contains(&10.0) && !big.contains(&4.0), "4 points bigger at 7: {big:?}");
     }
 
+    /// Selection & Anchor Display › Handles and Show handles when multiple anchors are selected
+    /// (#394): handle ends drawn solid, hollow or large; with the latter off, a second selected
+    /// anchor hides the handles.
+    #[test]
+    fn handle_style_and_handles_of_multiple_anchors() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+        app.session.select_tool("directSelection", app.view_info()).unwrap();
+        let ctx = egui::Context::default();
+        let select = |app: &mut VectorcraftApp, anchors: serde_json::Value| {
+            app.session.execute("select.anchors", &json!({"id": id, "anchors": anchors, "mode": "set"})).unwrap();
+        };
+        // The handle ends: (radius, filled white).
+        let dots = |app: &mut VectorcraftApp| -> Vec<(f32, bool)> {
+            shapes(app, &ctx)
+                .iter()
+                .filter_map(|s| match s {
+                    Shape::Circle(c) if c.fill != Color32::TRANSPARENT => Some((c.radius, c.fill == Color32::WHITE)),
+                    _ => None,
+                })
+                .collect()
+        };
+        select(&mut app, json!([[0, 0]]));
+        assert_eq!(dots(&mut app), [(2.75, false); 2], "solid by default");
+        app.session.execute("prefs.set", &json!({"key": "handleStyle", "value": "hollow"})).unwrap();
+        assert_eq!(dots(&mut app), [(2.75, true); 2]);
+        app.session.execute("prefs.set", &json!({"key": "handleStyle", "value": "large"})).unwrap();
+        assert_eq!(dots(&mut app), [(4.25, false); 2]);
+        select(&mut app, json!([[0, 0], [0, 1]]));
+        assert_eq!(dots(&mut app).len(), 4, "both anchors' handles");
+        app.session.execute("prefs.set", &json!({"key": "showHandlesMultipleAnchors", "value": false})).unwrap();
+        assert!(dots(&mut app).is_empty(), "off: none for two anchors");
+        select(&mut app, json!([[0, 1]]));
+        assert_eq!(dots(&mut app).len(), 2, "one anchor still shows them");
+    }
+
+    /// Hide Corner Widget for angles greater than (#394): a rectangle's 90° corners lose their
+    /// widgets below 90°.
+    #[test]
+    fn corner_widgets_hide_above_the_preference_angle() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        let widgets = |app: &mut VectorcraftApp| {
+            shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == 3.0 && c.fill == Color32::WHITE)).count()
+        };
+        assert_eq!(widgets(&mut app), 4);
+        app.session.execute("prefs.set", &json!({"key": "hideCornerWidgetAbove", "value": 80})).unwrap();
+        assert_eq!(widgets(&mut app), 0);
+    }
+
     /// General › Zoom with Mouse Wheel (#394), through the control channel's `ui.wheel`: off,
     /// the wheel scrolls and Cmd-wheel zooms; on, the wheel zooms about the pointer, Shift-wheel
     /// scrolls up and down and Cmd/Ctrl-wheel sideways.
@@ -2274,6 +2356,8 @@ mod tests {
     #[test]
     fn japanese_ime_composes_on_the_canvas_with_its_window_at_the_caret() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        // The type placed starts empty (Fill New Type Objects With Placeholder Text off).
+        app.session.prefs.placeholder_text = false;
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
         let ctx = egui::Context::default();
         // Not editing: the IME stays off (single-key tool shortcuts keep working).

@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform Each…",
             ["Object", "Transform"],
             Some("Cmd+Alt+Shift+D"),
-            "{scaleH?: % (100), scaleV?: % (100), moveH?: pt, moveV?: pt (down = +), rotate?: deg (counter-clockwise), reflectX?: bool (flip vertically), reflectY?: bool (flip horizontally), random?: bool, seed?: n, reference?: 0..8 (9-point grid, 4 = centre), copy?: bool, strokes?: bool (Scale Strokes & Effects), corners?: bool (Scale Corners; both default to the preferences)} transform every selected object about its own reference point → {ids}",
+            "{scaleH?: % (100), scaleV?: % (100), moveH?: pt, moveV?: pt (down = +), rotate?: deg (counter-clockwise), reflectX?: bool (flip vertically), reflectY?: bool (flip horizontally), random?: bool, seed?: n, reference?: 0..8 (9-point grid, 4 = centre), copy?: bool, strokes?: bool (Scale Strokes & Effects), corners?: bool (Scale Corners; both default to the preferences), patterns?: bool (Transform Patterns; default: prefs transformPatternTiles)} transform every selected object about its own reference point → {ids}",
             has_selection,
             transform_each
         ),
@@ -147,7 +147,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{columns?: n (2), spacing?: pt (20), byColumn?: false, moveArtwork?: true} lay artboards out in a grid",
+            "{columns?: n (2), spacing?: pt (20), byColumn?: false, moveArtwork?: true (locked and hidden art only with prefs moveLockedWithArtboard)} lay artboards out in a grid",
             has_doc,
             rearrange_artboards
         ),
@@ -288,7 +288,8 @@ fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("object.transformEach", "scale must be non-zero"));
     }
     let mut rng = Rng(p.get("seed").and_then(Value::as_u64).unwrap_or(0x9E37_79B9_7F4A_7C15).max(1));
-    let sc = if sh != 100.0 || sv != 100.0 { super::object::scaling(s, p) } else { Default::default() };
+    let mut sc = if sh != 100.0 || sv != 100.0 { super::object::scaling(s, p) } else { Default::default() };
+    sc.patterns = super::object::transform_patterns(s, p, &roots)?;
     let ids = s.edit("Transform Each", |d, sel| {
         let targets = if copy { duplicate_in(d, sel, &roots, Affine::IDENTITY)? } else { roots.clone() };
         for id in &targets {
@@ -742,6 +743,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let by_col = bool_or(p, "byColumn", false);
     let move_art = bool_or(p, "moveArtwork", true);
+    let locked_and_hidden = s.prefs.move_locked_with_artboard;
     let scale_strokes = false;
     s.edit("Rearrange Artboards", |d, _| {
         let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
@@ -753,7 +755,9 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
             let tops: Vec<(NodeId, Point)> = d
                 .layers
                 .iter()
+                .filter(|l| l.rides_with_artboard(locked_and_hidden))
                 .flat_map(|l| l.children().into_iter().flatten())
+                .filter(|n| n.rides_with_artboard(locked_and_hidden))
                 .filter_map(|n| Some((n.id, n.geometric_bounds()?.center())))
                 .collect();
             for (id, c) in tops {

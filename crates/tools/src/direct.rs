@@ -189,8 +189,17 @@ fn hit_frame_edge(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, Vec<A
     })
 }
 
+/// Selection & Anchor Display → Show handles when multiple anchors are selected: off, handles show
+/// (and drag) only while a single anchor is selected.
+pub fn handles_shown(selection: &vectorcraft_doc::Selection, multiple: bool) -> bool {
+    multiple || selection.anchors.values().map(|set| set.len()).sum::<usize>() <= 1
+}
+
 /// Direction handle of a partially selected anchor under `p`: (id, si, ai, is_out).
 fn hit_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, bool)> {
+    if !handles_shown(cx.selection, cx.handles_multiple) {
+        return None;
+    }
     for (id, set) in &cx.selection.anchors {
         let Some(pd) = cx.doc.node(*id).and_then(|n| n.path_data()) else { continue };
         for &(si, ai) in set {

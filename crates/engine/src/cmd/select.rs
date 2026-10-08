@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
+use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::*;
@@ -30,26 +31,50 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("select.key", "Set Key Object", [], None, "{id?} (none clears)", has_doc, key),
         cmd!("select.anchors", "Select Anchors", [], None, "{id, anchors: [[subpath, anchor]…], mode: \"set\"|\"add\"|\"toggle\"}", has_doc, anchors),
         cmd!("select.anchorsMany", "Select Anchors", [], None, "{items: [{id, anchors}], add?: bool}", has_doc, anchors_many),
-        cmd!("select.same.fillColor", "Fill Color", ["Select", "Same"], None, "{}", has_selection, |s, _| same(
-            s,
+        cmd!(
             "select.same.fillColor",
-            |a, b| a.appearance.fill_paint() == b.appearance.fill_paint()
-        )),
-        cmd!("select.same.strokeColor", "Stroke Color", ["Select", "Same"], None, "{}", has_selection, |s, _| same(
-            s,
+            "Fill Color",
+            ["Select", "Same"],
+            None,
+            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent)",
+            has_selection,
+            |s, _| {
+                let tint = s.prefs.select_same_tint_percent;
+                same(s, "select.same.fillColor", |a, b| same_paint(&a.appearance.fill_paint(), &b.appearance.fill_paint(), tint))
+            }
+        ),
+        cmd!(
             "select.same.strokeColor",
-            |a, b| a.appearance.stroke_paint() == b.appearance.stroke_paint()
-        )),
+            "Stroke Color",
+            ["Select", "Same"],
+            None,
+            "{} the objects stroked with the first selected object's stroke colour (tints as select.same.fillColor)",
+            has_selection,
+            |s, _| {
+                let tint = s.prefs.select_same_tint_percent;
+                same(s, "select.same.strokeColor", |a, b| same_paint(&a.appearance.stroke_paint(), &b.appearance.stroke_paint(), tint))
+            }
+        ),
         cmd!("select.same.strokeWeight", "Stroke Weight", ["Select", "Same"], None, "{}", has_selection, |s, _| same(
             s,
             "select.same.strokeWeight",
             |a, b| (a.appearance.stroke_width() - b.appearance.stroke_width()).abs() < 1e-9
         )),
-        cmd!("select.same.fillAndStroke", "Fill & Stroke", ["Select", "Same"], None, "{}", has_selection, |s, _| same(
-            s,
+        cmd!(
             "select.same.fillAndStroke",
-            |a, b| a.appearance.fill_paint() == b.appearance.fill_paint() && a.appearance.stroke_paint() == b.appearance.stroke_paint()
-        )),
+            "Fill & Stroke",
+            ["Select", "Same"],
+            None,
+            "{} the objects with the first selected object's fill and stroke colours (tints as select.same.fillColor)",
+            has_selection,
+            |s, _| {
+                let tint = s.prefs.select_same_tint_percent;
+                same(s, "select.same.fillAndStroke", |a, b| {
+                    let (x, y) = (&a.appearance, &b.appearance);
+                    same_paint(&x.fill_paint(), &y.fill_paint(), tint) && same_paint(&x.stroke_paint(), &y.stroke_paint(), tint)
+                })
+            }
+        ),
         cmd!("select.same.opacity", "Opacity", ["Select", "Same"], None, "{}", has_selection, |s, _| same(s, "select.same.opacity", |a, b| (a
             .opacity
             - b.opacity)
@@ -255,7 +280,16 @@ fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn same(s: &mut Session, cmd: &str, eq: fn(&Node, &Node) -> bool) -> Result<Value> {
+/// Select › Same › Fill/Stroke Color: is `a` the same colour as `b`? Tints of one global or spot
+/// swatch are, unless `tint` (General › Select Same Tint %) asks for the same tint too.
+fn same_paint(a: &Paint, b: &Paint, tint: bool) -> bool {
+    match (a, b) {
+        (Paint::Solid { swatch: Some(x), tint: ta, .. }, Paint::Solid { swatch: Some(y), tint: tb, .. }) if x == y => !tint || (ta - tb).abs() < 1e-4,
+        _ => a == b,
+    }
+}
+
+fn same(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
     let refn = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
     select_where(s, cmd, &json!({}), |_, n| !n.is_container() && eq(n, &refn))

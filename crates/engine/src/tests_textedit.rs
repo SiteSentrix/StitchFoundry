@@ -9,7 +9,9 @@ use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 use super::*;
 
 fn session() -> Session {
+    // Type placed by the Type tools starts empty (Fill New Type Objects With Placeholder Text off).
     let mut s = Session::new();
+    s.prefs.placeholder_text = false;
     s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
     s
 }

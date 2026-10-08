@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Artboard",
             [],
             None,
-            "{index, dx, dy, moveArt?: bool, copy?: bool} move an artboard (and the unlocked art fully inside it); `copy` (Alt-drag) leaves them and moves copies → {index, moved: the art moved or the copies}",
+            "{index, dx, dy, moveArt?: bool, copy?: bool} move an artboard (and the art fully inside it; locked and hidden art only with prefs moveLockedWithArtboard); `copy` (Alt-drag) leaves them and moves copies → {index, moved: the art moved or the copies}",
             has_doc,
             artboard_move
         ),
@@ -374,7 +374,7 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     let move_art = bool_or(p, "moveArt", false);
     let st = s.doc()?;
     let rect = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-    let art = if move_art { st.doc.art_on_artboard(rect) } else { vec![] };
+    let art = if move_art { st.doc.art_on_artboard(rect, s.prefs.move_locked_with_artboard) } else { vec![] };
     let scale_strokes = s.prefs.scale_strokes;
     let copy = bool_or(p, "copy", false);
     let (index, moved) = s.edit(if copy { "Duplicate Artboard" } else { "Move Artboard" }, |d, _| {

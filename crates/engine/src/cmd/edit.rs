@@ -163,7 +163,7 @@ fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// A typing session in progress (the Type tool previews the whole session as one interaction).
-fn typing_in_progress(s: &Session) -> bool {
+pub(crate) fn typing_in_progress(s: &Session) -> bool {
     s.active().and_then(|d| d.interaction.as_ref()).is_some_and(|it| it.label == "Typing" && it.preview.is_some())
 }
 
