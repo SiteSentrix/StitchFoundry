@@ -629,7 +629,7 @@ mod area_tests {
             NodeKind::Text(t) => t.para.clone(),
             _ => panic!("text"),
         };
-        // New type: Standard, as in Illustrator.
+        // New type: Standard.
         assert_eq!(para(&s).burasagari, Burasagari::Standard);
         s.execute("select.set", &json!({"ids": [id]})).unwrap();
         assert!(s.execute("text.setFormat", &json!({"burasagari": "strong"})).is_err());
