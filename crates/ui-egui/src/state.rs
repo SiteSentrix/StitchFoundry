@@ -407,6 +407,9 @@ impl UiState {
             f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
             f.tools.first().is_some_and(|k| seen.insert(k.clone()))
         });
+        // Overrides that can't fire (modifier-only chords recorded by older versions, #487) give
+        // the default back.
+        self.shortcut_overrides.retain(|_, c| c.is_empty() || crate::shortcut_editor::normalize(c).is_some());
         self
     }
 }

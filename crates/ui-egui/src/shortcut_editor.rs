@@ -515,11 +515,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut ok = false;
     let mut cancel = false;
     let recording = d.str("__recording");
-    // Record a chord (before widgets see the keys).
+    // Record a chord (before widgets see the keys). Modifiers held down are part of the next key's
+    // chord, not a chord of their own.
     if !recording.is_empty() {
         let ev = ctx.input(|i| {
             i.events.iter().find_map(|e| match e {
-                egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
+                egui::Event::Key { key, pressed: true, modifiers, .. } if !crate::shortcuts::is_modifier(*key) => Some((*key, *modifiers)),
                 _ => None,
             })
         });
@@ -789,6 +790,39 @@ mod tests {
         assert_eq!(chord_from_event(Key::K, Modifiers::COMMAND | Modifiers::SHIFT).as_deref(), Some("Cmd+Shift+K"));
         assert_eq!(chord_from_event(Key::P, Modifiers::NONE).as_deref(), Some("P"));
         assert_eq!(chord_from_event(Key::Escape, Modifiers::NONE), None);
+        // A modifier's own key press is no chord (#487).
+        assert_eq!(chord_from_event(Key::ShiftLeft, Modifiers::SHIFT), None);
+        assert!(normalize("ShiftLeft").is_none() && normalize("Cmd+ControlRight").is_none());
+    }
+
+    #[test]
+    fn a_modifier_pressed_while_recording_waits_for_the_key() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        open(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("__recording".into(), json!("tool:groupSelection"));
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let mut press = |key, modifiers| {
+            let events = vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }];
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            app.ui.dialog.clone().unwrap()
+        };
+        // egui reports Shift's own key press first (#487): the recording goes on.
+        assert_eq!(press(Key::ShiftLeft, Modifiers::SHIFT).str("__recording"), "tool:groupSelection");
+        let d = press(Key::A, Modifiers::SHIFT);
+        assert_eq!(d.str("__recording"), "");
+        assert_eq!(dialog_overrides(&d).get("tool:groupSelection").map(String::as_str), Some("Shift+A"));
+    }
+
+    #[test]
+    fn saved_modifier_only_overrides_give_the_default_back() {
+        let mut ui = UiState::default();
+        ui.shortcut_overrides.insert("tool:groupSelection".into(), "Shift+ShiftLeft".into());
+        ui.shortcut_overrides.insert("edit.preferences".into(), String::new());
+        let ui = ui.sanitized();
+        assert!(!ui.shortcut_overrides.contains_key("tool:groupSelection"));
+        assert_eq!(ui.shortcut_overrides.get("edit.preferences").map(String::as_str), Some(""));
     }
 
     #[test]

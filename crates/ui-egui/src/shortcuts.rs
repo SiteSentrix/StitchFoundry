@@ -40,9 +40,18 @@ pub fn parse(s: &str) -> Option<KeyboardShortcut> {
         "Backspace" => Key::Backspace,
         "Tab" => Key::Tab,
         "~" => Key::Backtick,
-        k => Key::from_name(k)?,
+        // A modifier alone is never a chord's key: it couldn't fire (#487).
+        k => Key::from_name(k).filter(|k| !is_modifier(*k))?,
     };
     Some(KeyboardShortcut::new(m, key))
+}
+
+/// The modifier keys, which egui also reports as key presses of their own.
+pub(crate) fn is_modifier(key: Key) -> bool {
+    matches!(
+        key,
+        Key::ShiftLeft | Key::ShiftRight | Key::ControlLeft | Key::ControlRight | Key::AltLeft | Key::AltRight | Key::SuperLeft | Key::SuperRight
+    )
 }
 
 /// Every command shortcut in effect (user overrides from Edit → Keyboard Shortcuts win), with the
