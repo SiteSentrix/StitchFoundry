@@ -743,7 +743,7 @@ impl Interp<'_> {
         let Some(mut img) = self.decode_image(image)? else { return Ok(None) };
         let Some(m) = self.decode_image(stencil)? else { return Ok(Some(img)) };
         let (w, h, mw, mh) = (img.w as usize, img.h as usize, m.w as usize, m.h as usize);
-        for (i, px) in img.rgba.chunks_exact_mut(4).enumerate() {
+        for (i, px) in img.rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let (x, y) = (i % w, i / w);
             // The mask's pixel over this one (in 64 bits: rows times rows overflow 32).
             let at = (y as u64 * mh as u64 / h.max(1) as u64) * mw as u64 + x as u64 * mw as u64 / w.max(1) as u64;
