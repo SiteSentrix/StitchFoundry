@@ -12,10 +12,11 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::{hit_test, marquee, objects_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
-use vectorcraft_geom::{Affine, Point, Rect};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag, over_widget};
+use crate::guides::Targets;
 use crate::rulerguide::GuideEdit;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
 
@@ -55,12 +56,52 @@ pub struct SelectionTool {
     state: State,
     measure: Option<(Point, String)>,
     guides: Vec<Overlay>,
-    targets: Option<crate::guides::Targets>,
-    /// View → Snap to Point (Smart Guides off): the anchors and ruler guides the grabbed point
-    /// lands on while moving.
-    points: Option<crate::guides::Targets>,
-    start_bounds: Option<Rect>,
+    /// What a bounding-box handle being dragged snaps to.
+    targets: Option<Targets>,
+    moving: Option<MoveSnap>,
     guide: GuideEdit,
+}
+
+/// Snapping for the selection moved as a whole, its targets gathered when the move begins: Smart
+/// Guides line its bounds up with the other art; with them off, View → Snap to Point lands the
+/// point it was grabbed by on an anchor or a ruler guide; Snap to Pixel puts its top-left on whole
+/// pixels.
+pub(crate) struct MoveSnap {
+    bounds: Option<Rect>,
+    targets: Option<Targets>,
+    points: Option<Targets>,
+}
+
+impl MoveSnap {
+    pub(crate) fn new(cx: &ToolContext) -> Self {
+        Self {
+            bounds: selection_bounds(cx),
+            targets: cx.smart_guides.then(|| Targets::collect(cx.doc, &cx.selection.objects, None)),
+            points: Targets::snap_to_point(cx, &cx.selection.objects),
+        }
+    }
+
+    /// The move by `d` of the selection grabbed at `start`, snapped, and its guides.
+    pub(crate) fn snap(&self, cx: &ToolContext, start: Point, mut d: Vec2) -> (Vec2, Vec<Overlay>) {
+        let mut guides = vec![];
+        if let Some(t) = &self.points {
+            let (q, ov) = t.snap_point(start + d, cx.tol(cx.snap_tolerance));
+            d = q - start;
+            guides = ov;
+        }
+        if let (Some(t), Some(b)) = (&self.targets, self.bounds) {
+            let (adj, ov) = t.snap_rect(b + d, cx.tol(5.0));
+            d += adj;
+            guides = ov;
+        }
+        if cx.snap_to_pixel
+            && let Some(b) = self.bounds
+        {
+            d = Vec2::new((b.x0 + d.x).round() - b.x0, (b.y0 + d.y).round() - b.y0);
+            guides.clear();
+        }
+        (d, guides)
+    }
 }
 
 pub fn matrix_json(a: Affine) -> Value {
@@ -155,7 +196,7 @@ impl Tool for SelectionTool {
                             // Only area type: the step resizes type areas; anything else scales.
                             let label = if areas && cx.selection.objects.iter().all(is_area) { "Resize Type Area" } else { "Scale" };
                             // Smart Guides align what the handle moves with the other objects.
-                            self.targets = cx.smart_guides.then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
+                            self.targets = cx.smart_guides.then(|| Targets::collect(cx.doc, &cx.selection.objects, None));
                             self.state = State::Scaling { handle, bx, areas };
                             return vec![Action::Begin(label.into())];
                         }
@@ -211,31 +252,11 @@ impl Tool for SelectionTool {
                         return out;
                     }
                     out.push(Action::Begin(if m.alt { "Copy".into() } else { "Move".into() }));
+                    self.moving = Some(MoveSnap::new(cx));
                 }
                 let mut d = move_delta(start, p, m.shift);
-                if !began {
-                    self.start_bounds = selection_bounds(cx);
-                    self.targets = cx.smart_guides.then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
-                    self.points = crate::guides::Targets::snap_to_point(cx, &cx.selection.objects);
-                }
-                self.guides.clear();
-                // Snap to Point: the point the selection was grabbed by lands on an anchor or guide.
-                if let Some(t) = &self.points {
-                    let (q, ov) = t.snap_point(start + d, cx.tol(cx.snap_tolerance));
-                    d = q - start;
-                    self.guides = ov;
-                }
-                if let (Some(t), Some(b)) = (&self.targets, self.start_bounds) {
-                    let (adj, ov) = t.snap_rect(b + d, cx.tol(5.0));
-                    d += adj;
-                    self.guides = ov;
-                }
-                // Snap to Pixel: the moved selection's top-left lands on whole pixels.
-                if cx.snap_to_pixel
-                    && let Some(b) = self.start_bounds
-                {
-                    d = vectorcraft_geom::Vec2::new((b.x0 + d.x).round() - b.x0, (b.y0 + d.y).round() - b.y0);
-                    self.guides.clear();
+                if let Some(snap) = &self.moving {
+                    (d, self.guides) = snap.snap(cx, start, d);
                 }
                 self.state = State::Moving { start, began: true, deselect: None };
                 self.measure = Some((p, cx.offset_label(d.x, d.y)));
@@ -279,8 +300,7 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 self.measure = None;
                 self.guides.clear();
-                self.targets = None;
-                self.points = None;
+                self.moving = None;
                 match (began, deselect) {
                     (true, _) => vec![Action::Commit],
                     (false, Some(id)) => vec![Action::Exec("select.toggle".into(), json!({ "id": id.0 }))],
