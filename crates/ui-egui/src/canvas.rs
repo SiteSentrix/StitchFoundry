@@ -79,6 +79,8 @@ enum Drag {
     /// A Selection tool move dragged off the canvas: the panels get the art
     /// ([`widgets::PanelDrag::Art`]).
     Art,
+    /// Fingers making a touch gesture ([`crate::touch`]): the first one's press does nothing.
+    Gesture,
 }
 
 fn drag_id() -> egui::Id {
@@ -477,6 +479,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     let at = hover.or_else(|| pointer.interact_pos().filter(|p| rect.contains(*p)));
     app.hover_doc = hover.map(|p| xf.to_doc(p));
     let view = app.view_info();
+    touch_gestures(app, ui, rect, view);
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
     // A modifier pressed or released over the canvas re-hovers the tool, so what it changes shows
     // without moving the mouse (Alt switches the Shape Builder to erase mode).
@@ -568,7 +571,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                         vm.rotation = vectorcraft_geom::normalize_deg(deg);
                     }
                 }
-                Drag::ZoomBox { .. } | Drag::Art => {}
+                Drag::ZoomBox { .. } | Drag::Art | Drag::Gesture => {}
                 Drag::Tool if drag_art_out(app, ui, resp, p, view) => {
                     ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Art));
                 }
@@ -612,7 +615,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                     let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                     dispatch(app, &ev, view);
                 }
-                Drag::Art => {}
+                Drag::Art | Drag::Gesture => {}
                 Drag::Pan { .. } | Drag::RotateView { .. } => {}
             }
         }
@@ -689,6 +692,50 @@ fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, alt_turn
         }
     }
     (zoom, scroll)
+}
+
+/// Enable Touch Gestures: this frame's finger contacts on the canvas ([`crate::touch`]). A second
+/// finger drops the press the first one began (its tool interaction rolled back; the rest of the
+/// gesture presses nothing), and a tap of two fingers undoes, one of three redoes.
+fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vectorcraft_engine::ViewInfo) {
+    if !app.session.prefs.touch_gestures {
+        return;
+    }
+    let (touches, now): (Vec<_>, f64) = ui.input(|i| {
+        let t = i.events.iter().filter_map(|e| match e {
+            egui::Event::Touch { id, phase, pos, .. } => Some((*id, *phase, *pos)),
+            _ => None,
+        });
+        (t.collect(), i.time)
+    });
+    if touches.is_empty() {
+        return;
+    }
+    let key = egui::Id::new("canvas-touch");
+    let mut taps: crate::touch::Taps = ui.data(|d| d.get_temp(key)).unwrap_or_default();
+    let mut tap = None;
+    for (id, phase, pos) in touches {
+        // A gesture begins on the canvas.
+        if phase == egui::TouchPhase::Start && !taps.is_down() && !rect.contains(pos) {
+            continue;
+        }
+        match taps.feed(id, phase, pos, now) {
+            Some(crate::touch::Touch::Fingers) => {
+                if ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool) {
+                    // Nothing it began is kept; the tool's mouse-up returns it to rest.
+                    let _ = app.session.cancel_interaction();
+                    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
+                }
+                ui.data_mut(|d| d.insert_temp(drag_id(), Drag::Gesture));
+            }
+            Some(crate::touch::Touch::Tap(n)) => tap = crate::touch::tap_command(n),
+            None => {}
+        }
+    }
+    ui.data_mut(|d| d.insert_temp(key, taps));
+    if let Some(cmd) = tap {
+        crate::menus::invoke(app, cmd, serde_json::json!({}));
+    }
 }
 
 /// A Selection tool move dragged off the canvas (to `p`, over a panel) turns into a panel drag of
@@ -1866,6 +1913,40 @@ mod tests {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
         out.textures_delta.clear();
+    }
+
+    /// Enable Touch Gestures (#585): a two-finger tap undoes and a three-finger one redoes, and the
+    /// first finger's press (the pointer egui makes of it) draws nothing. Off, a tap does nothing.
+    #[test]
+    fn two_finger_tap_undoes_and_three_finger_tap_redoes() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 40, "height": 40})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+        let c = app.canvas_rect.unwrap().center();
+        let touch = |n: u64, phase, pos| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(n), phase, pos, force: None };
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        // `fingers` fingers tap at the centre, the first also pressing as the pointer and moving a
+        // little (as a rectangle drag would begin).
+        let tap = |app: &mut VectorcraftApp, fingers: u64| {
+            let at = |n: u64| c + vec2(n as f32 * 50.0, 0.0);
+            frame(app, &ctx, vec![touch(0, egui::TouchPhase::Start, at(0)), egui::Event::PointerMoved(at(0)), button(at(0), true)]);
+            frame(app, &ctx, vec![touch(0, egui::TouchPhase::Move, at(0) + vec2(6.0, 6.0)), egui::Event::PointerMoved(at(0) + vec2(6.0, 6.0))]);
+            frame(app, &ctx, (1..fingers).map(|n| touch(n, egui::TouchPhase::Start, at(n))).collect());
+            frame(app, &ctx, vec![touch(0, egui::TouchPhase::End, at(0)), button(at(0) + vec2(6.0, 6.0), false), egui::Event::PointerGone]);
+            frame(app, &ctx, (1..fingers).map(|n| touch(n, egui::TouchPhase::End, at(n))).collect());
+            frame(app, &ctx, vec![]);
+        };
+        tap(&mut app, 2);
+        assert_eq!(count(&app), 0, "the rectangle undone, none drawn");
+        tap(&mut app, 3);
+        assert_eq!(count(&app), 1, "redone");
+        app.session.prefs.touch_gestures = false;
+        tap(&mut app, 2);
+        assert_eq!(count(&app), 2, "off: the first finger draws as the pointer, and nothing is undone");
     }
 
     /// The Artboard tool's label holds the artboard's name (never translated); the tools' own
