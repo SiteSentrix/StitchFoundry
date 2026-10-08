@@ -134,6 +134,10 @@ struct MenuState {
     /// The pass the list was last drawn in, and the pass it opened in.
     last: u64,
     opened: u64,
+    /// The family the text had as the menu opened. A preview shows another one in the document
+    /// (and the menu's caller), but this one stays the current family: hovering it ends the
+    /// preview (#563).
+    current: String,
     /// The highlighted row and the query and filters it belongs to.
     highlight: Option<usize>,
     query: String,
@@ -194,6 +198,7 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
         st.opened = pass;
         st.highlight = None;
         st.query.clear();
+        st.current = current.to_string();
     }
     st.last = pass;
     // For [`end_stale_preview`]: the menu is open, in this layer.
@@ -243,8 +248,9 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
     });
     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
     let db = vectorcraft_text::FontDb::global();
-    // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック).
-    let current = db.canonical(current, "").0;
+    // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック),
+    // as it was before any preview.
+    let current = db.canonical(&st.current, "").0;
     let current = current.as_str();
     let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
     // The generation is read first: fonts that load meanwhile make the next frame list them.

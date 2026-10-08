@@ -13,13 +13,13 @@ use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
 
 /// The active artboard (of `n`).
-fn selected(app: &VectorcraftApp, n: usize) -> usize {
+pub(crate) fn selected(app: &VectorcraftApp, n: usize) -> usize {
     app.view().map_or(0, |v| v.artboard).min(n.saturating_sub(1))
 }
 
 /// Make artboard `i` the active one, leaving the view where it is: the navigator's and, while it
 /// is the tool, the Artboard tool's.
-fn select(app: &mut VectorcraftApp, i: usize) {
+pub(crate) fn select(app: &mut VectorcraftApp, i: usize) {
     if let Some(v) = app.view_mut() {
         v.artboard = i;
     }
