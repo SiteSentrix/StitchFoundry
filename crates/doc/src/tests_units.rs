@@ -60,6 +60,8 @@ fn readouts_show_two_decimals() {
     assert_eq!(Unit::Points.readout(15.0), "15.00 pt");
     assert_eq!(Unit::Millimeters.readout(72.0), "25.40 mm");
     assert_eq!(Unit::Inches.readout(-36.0), "-0.50 in");
-    assert_eq!(Unit::Millimeters.number(1.0), "0.353");
-    assert_eq!(Unit::Points.number(-0.0001), "0");
+    assert_eq!(Unit::Millimeters.number(1.0), "0.3528");
+    // Inches reach four decimals for Illustrator's sub-eighth-inch stroke ladder.
+    assert_eq!(Unit::Inches.number(0.5616), "0.0078");
+    assert_eq!(Unit::Points.number(-0.00001), "0");
 }

@@ -191,7 +191,9 @@ impl Unit {
     }
     /// [`Unit::format`] without the suffix (`12.5`), for narrow fields.
     pub fn number(self, pt: f64) -> String {
-        let s = format!("{:.3}", self.from_pt(pt));
+        // Four decimals so inches shows `0.0078`, `0.0156`, `0.0313`, `0.0625` from Illustrator's
+        // sub-eighth-inch stroke ladder; trailing zeros are trimmed so `1 pt` stays `1`.
+        let s = format!("{:.4}", self.from_pt(pt));
         let s = s.trim_end_matches('0').trim_end_matches('.');
         if s == "-0" { "0".into() } else { s.into() }
     }

@@ -4,7 +4,7 @@
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, LineCap, LineJoin, Node, StrokeAlign, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, LineCap, LineJoin, Node, StrokeAlign, StrokeLayer, Unit, WidthProfile};
 use vectorcraft_engine::inspect::StrokeMixed;
 
 use super::{character, current_stroke, pstate, set_pstate, stroke_mixed};
@@ -12,8 +12,58 @@ use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
 
-pub const WEIGHT_PRESETS: [f64; 22] =
-    [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
+/// Stroke weight dropdown presets per unit, in that unit's native values; the dropdown converts
+/// each to points for the model. One pt list converted into every unit produced junk like
+/// `0.353 mm` for a 1-pt stroke; each unit now has its own ladder so the numbers read cleanly.
+pub fn weight_presets(unit: Unit) -> Vec<f64> {
+    let native: &[f64] = match unit {
+        Unit::Points => &PT_PRESETS,
+        Unit::Millimeters => &MM_PRESETS,
+        Unit::Centimeters => &CM_PRESETS,
+        Unit::Inches => &IN_PRESETS,
+        Unit::Pixels => &PX_PRESETS,
+        Unit::Picas => &PC_PRESETS,
+        // Feet & Inches, Meters, Yards, Feet keep the pt ladder as a reasonable fallback.
+        _ => &PT_PRESETS,
+    };
+    native.iter().map(|v| unit.to_pt(*v)).collect()
+}
+
+const PT_PRESETS: [f64; 22] =
+    [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 40.0, 60.0, 80.0, 100.0];
+const MM_PRESETS: [f64; 22] = [0.1, 0.25, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 25.0, 30.0];
+const CM_PRESETS: [f64; 22] = [0.01, 0.02, 0.03, 0.05, 0.06, 0.07, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0];
+const IN_PRESETS: [f64; 22] =
+    [0.0078, 0.0156, 0.0313, 0.0625, 0.125, 0.25, 0.325, 0.5, 0.625, 0.75, 0.875, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0];
+const PX_PRESETS: [f64; 22] =
+    [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 30.0, 40.0];
+/// Picas authored as `points / 12` so each entry round-trips to an exact pt weight (Illustrator's
+/// pica ladder is 0p1 … 5p, i.e. 1 pt … 60 pt in 1-pt / 3-pt / 12-pt steps). The dropdown labels
+/// read as decimal picas (`0.083 p`) until `Unit::number` learns `ApB` notation.
+const PC_PRESETS: [f64; 22] = [
+    1.0 / 12.0,
+    2.0 / 12.0,
+    3.0 / 12.0,
+    4.0 / 12.0,
+    5.0 / 12.0,
+    6.0 / 12.0,
+    7.0 / 12.0,
+    8.0 / 12.0,
+    9.0 / 12.0,
+    10.0 / 12.0,
+    11.0 / 12.0,
+    1.0,
+    15.0 / 12.0,
+    18.0 / 12.0,
+    21.0 / 12.0,
+    2.0,
+    27.0 / 12.0,
+    30.0 / 12.0,
+    33.0 / 12.0,
+    3.0,
+    4.0,
+    5.0,
+];
 
 /// A profile's points as its silhouette: none (the plain bar) for the uniform stroke.
 fn silhouette(points: &[(f64, f64, f64)]) -> Option<&[(f64, f64, f64)]> {
@@ -87,7 +137,9 @@ pub(crate) fn shown_weight(app: &VectorcraftApp, st: Option<&StrokeLayer>, mixed
 
 /// The weight spinner (Stroke panel, Control bar): Units > Stroke, presets, blank when mixed.
 pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weight: Option<f64>, width: f32) {
-    if let Some(w) = widgets::spin_field(ui, id, weight, app.session.stroke_unit(), width, 1.0, 0.0, &WEIGHT_PRESETS) {
+    let unit = app.session.stroke_unit();
+    let presets = weight_presets(unit);
+    if let Some(w) = widgets::spin_field(ui, id, weight, unit, width, 1.0, 0.0, &presets) {
         set(app, json!({"weight": w}));
     }
 }
