@@ -4,11 +4,16 @@
 //! - Windows: text, SVG, PDF, PNG and an opaque bitmap (for apps that don't read PNG) in one go;
 //!   Paste reads each of them.
 //! - macOS and Linux: one format at a time, the text (a type-only copy's text or the SVG markup),
-//!   else the PNG as a bitmap; Paste reads text and bitmaps.
+//!   else the PNG as a bitmap; Paste reads text and bitmaps. On Wayland, arboard's data-control
+//!   backend reads the compositor's clipboard (X11 through XWayland only sees what X11 apps
+//!   copied), falling back to X11 where the compositor lacks the protocol.
+//! - Everywhere: files copied in a file manager paste as the first one that is art (SVG, PDF, a
+//!   metafile or a bitmap), before the clipboard's other formats (the files' paths as text).
 
-use std::io::Cursor;
+use std::io::{Cursor, Read};
+use std::path::PathBuf;
 
-use vectorcraft_engine::cmd::clipboard::{BITMAP, Flavour, PNG, TEXT};
+use vectorcraft_engine::cmd::clipboard::{BITMAP, FILE_HEAD, Flavour, PNG, TEXT, file_flavour};
 use vectorcraft_ui_egui::SystemClipboard;
 
 /// This platform's system clipboard.
@@ -27,6 +32,23 @@ fn text_of(flavours: &[Flavour]) -> Option<String> {
 
 fn decode_png(png: &[u8]) -> Option<image::RgbaImage> {
     Some(image::load_from_memory_with_format(png, image::ImageFormat::Png).ok()?.to_rgba8())
+}
+
+/// The first of `paths` (files copied in a file manager) that pastes as one of `mimes`, read
+/// whole. Only its first bytes are read to tell, so other files cost little.
+fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
+    paths.into_iter().find_map(|path| {
+        // text/uri-list lines end in CRLF (RFC 2483), but arboard splits them on LF only.
+        let path = match path.to_str() {
+            Some(p) if p.ends_with('\r') => PathBuf::from(p.trim_end_matches('\r')),
+            _ => path,
+        };
+        let mut head = Vec::with_capacity(FILE_HEAD);
+        std::fs::File::open(&path).ok()?.take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
+        let mime = file_flavour(&path.to_string_lossy(), &head, mimes)?;
+        let data = std::fs::read(&path).ok()?;
+        (!data.is_empty()).then_some(Flavour { mime, data })
+    })
 }
 
 #[cfg(windows)]
@@ -123,16 +145,26 @@ mod win {
         }
 
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
-            let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
-            mimes.iter().find_map(|m| read_one(m))
+            let mut files = vec![];
+            {
+                let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
+                // None copied when the clipboard holds no file list.
+                let _ = raw::get_file_list_path(&mut files);
+            }
+            // The files are read with the clipboard closed again, not keeping other apps waiting.
+            copied_file(files, mimes).or_else(|| {
+                let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
+                mimes.iter().find_map(|m| read_one(m))
+            })
         }
 
         fn has(&mut self, mimes: &[&'static str]) -> bool {
-            mimes.iter().any(|m| match *m {
-                TEXT => raw::is_format_avail(formats::CF_UNICODETEXT),
-                BITMAP => raw::is_format_avail(formats::CF_BITMAP) || formats_of(PNG).any(raw::is_format_avail),
-                m => formats_of(m).any(raw::is_format_avail),
-            })
+            raw::is_format_avail(formats::CF_HDROP)
+                || mimes.iter().any(|m| match *m {
+                    TEXT => raw::is_format_avail(formats::CF_UNICODETEXT),
+                    BITMAP => raw::is_format_avail(formats::CF_BITMAP) || formats_of(PNG).any(raw::is_format_avail),
+                    m => formats_of(m).any(raw::is_format_avail),
+                })
         }
     }
 
@@ -245,6 +277,9 @@ mod portable {
 
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
             let cb = self.cb().ok()?;
+            if let Some(f) = cb.get().file_list().ok().and_then(|paths| copied_file(paths, mimes)) {
+                return Some(f);
+            }
             mimes.iter().find_map(|m| match *m {
                 TEXT => cb.get_text().ok().filter(|t| !t.is_empty()).map(|t| Flavour { mime: TEXT, data: t.into_bytes() }),
                 BITMAP => {
@@ -260,5 +295,50 @@ mod portable {
         fn has(&mut self, mimes: &[&'static str]) -> bool {
             mimes.contains(&TEXT) && self.cb().is_ok_and(|cb| cb.get_text().is_ok_and(|t| !t.is_empty()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use vectorcraft_engine::cmd::clipboard::{PASTE_ORDER, SVG};
+
+    use super::*;
+
+    fn dir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("vectorcraft-clipboard-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn png(w: u32, h: u32) -> Vec<u8> {
+        let mut out = vec![];
+        image::RgbaImage::new(w, h).write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+        out
+    }
+
+    #[test]
+    fn the_first_copied_file_that_is_art_pastes() {
+        let d = dir("art");
+        let (notes, red, art) = (d.join("notes.txt"), d.join("red image.png"), d.join("art.svg"));
+        std::fs::write(&notes, "not art").unwrap();
+        std::fs::write(&red, png(3, 2)).unwrap();
+        std::fs::write(&art, "<svg xmlns=\"http://www.w3.org/2000/svg\"/>").unwrap();
+        // Missing files, folders and text are skipped.
+        let f = copied_file(vec![d.join("gone.png"), d.clone(), notes.clone(), red.clone(), art.clone()], &PASTE_ORDER).unwrap();
+        assert_eq!((f.mime, f.data), (PNG, png(3, 2)));
+        assert_eq!(copied_file(vec![art.clone(), red.clone()], &PASTE_ORDER).map(|f| f.mime), Some(SVG));
+        // Only what Paste asks for.
+        assert_eq!(copied_file(vec![art, red.clone()], &[BITMAP]).map(|f| f.mime), Some(PNG));
+        assert!(copied_file(vec![red], &[TEXT]).is_none());
+        assert!(copied_file(vec![notes], &PASTE_ORDER).is_none());
+        assert!(copied_file(vec![], &PASTE_ORDER).is_none());
+    }
+
+    #[test]
+    fn a_crlf_left_by_the_uri_list_is_ignored() {
+        let red = dir("crlf").join("red.png");
+        std::fs::write(&red, png(2, 2)).unwrap();
+        let with_cr = PathBuf::from(format!("{}\r", red.display()));
+        assert_eq!(copied_file(vec![with_cr], &PASTE_ORDER).map(|f| f.mime), Some(PNG));
     }
 }
