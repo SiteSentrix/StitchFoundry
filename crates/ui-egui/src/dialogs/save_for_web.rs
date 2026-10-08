@@ -813,7 +813,7 @@ fn image_size(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option
         if let Some(v) = widgets::plain_field(ui, "sfw-w", f64::from(w), " px", 0, 80.0) {
             set(d, "width", json!(v.round().max(1.0)));
         }
-        ui.label(tl!("H:"));
+        widgets::field_label(ui, tl!("H:"));
         if let Some(v) = widgets::plain_field(ui, "sfw-h", f64::from(h), " px", 0, 80.0) {
             set(d, "height", json!(v.round().max(1.0)));
         }

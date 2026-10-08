@@ -89,6 +89,15 @@ pub struct Interaction {
     pub perspective_again: Option<Value>,
 }
 
+/// An open undo group ([`Session::begin_undo_group`]): the edits made in it are one undo step.
+#[derive(Clone, Debug)]
+pub struct UndoGroup {
+    /// The document before the group's first edit, as the undo step that edit recorded keeps it.
+    first: Option<Arc<Document>>,
+    /// The journal's length when the group began: a cancelled group drops the entries after it.
+    journal: usize,
+}
+
 /// Per-document editing state.
 #[derive(Clone, Debug)]
 pub struct DocState {
@@ -112,6 +121,8 @@ pub struct DocState {
     /// Isolation mode container.
     pub isolation: Option<NodeId>,
     pub interaction: Option<Interaction>,
+    /// Edits made while this is open are one undo step (a scrubbed numeric field).
+    pub undo_group: Option<UndoGroup>,
     /// For Object → Transform → Transform Again (⌘D).
     pub last_transform: Option<(Affine, bool)>,
     /// Selection saved by Select → Reselect.
@@ -166,6 +177,7 @@ impl DocState {
             layer_rows: vec![],
             isolation: None,
             interaction: None,
+            undo_group: None,
             last_transform: None,
             last_selection_cmd: None,
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -197,10 +209,25 @@ impl DocState {
     /// Keep what interaction `it` (taken from this document) changed, as one undo step.
     pub(crate) fn keep_interaction(&mut self, it: Interaction) {
         if !Arc::ptr_eq(&it.doc, &self.doc) {
-            self.history.undo.push(HistoryEntry { label: it.label, doc: it.doc, selection: it.selection });
-            self.history.redo.clear();
+            self.push_undo(HistoryEntry { label: it.label, doc: it.doc, selection: it.selection });
             self.revision += 1;
         }
+    }
+    /// Record undo step `e` (the document before an edit). In an undo group only the group's first
+    /// edit records one: the edits after it extend that step.
+    fn push_undo(&mut self, e: HistoryEntry) {
+        if let Some(g) = &mut self.undo_group {
+            let recorded = |first: &Arc<Document>| self.history.undo.last().is_some_and(|l| Arc::ptr_eq(&l.doc, first));
+            if g.first.as_ref().is_some_and(recorded) {
+                return;
+            }
+            g.first = Some(e.doc.clone());
+        }
+        self.history.undo.push(e);
+        if self.history.undo.len() > self.history.limit {
+            self.history.undo.remove(0);
+        }
+        self.history.redo.clear();
     }
     /// End the interaction in progress, undoing what it changed.
     pub(crate) fn undo_interaction(&mut self) {
@@ -332,6 +359,8 @@ pub struct Prefs {
     /// Scale Strokes & Effects.
     pub scale_strokes: bool,
     pub zoom_with_mouse_wheel: bool,
+    /// A horizontal drag on a numeric field or its label steps its value (#400).
+    pub scrub_numeric_fields: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
@@ -552,6 +581,7 @@ impl Default for Prefs {
             scale_corners: false,
             scale_strokes: false,
             zoom_with_mouse_wheel: false,
+            scrub_numeric_fields: true,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
             object_selection_by_path_only: false,
@@ -1066,11 +1096,7 @@ impl Session {
                 st.selection.prune(&st.doc);
                 st.revision += 1;
                 if st.interaction.is_none() {
-                    st.history.undo.push(HistoryEntry { label: label.to_string(), doc: before, selection: before_sel });
-                    if st.history.undo.len() > st.history.limit {
-                        st.history.undo.remove(0);
-                    }
-                    st.history.redo.clear();
+                    st.push_undo(HistoryEntry { label: label.to_string(), doc: before, selection: before_sel });
                 }
                 Ok(v)
             }
@@ -1182,6 +1208,44 @@ impl Session {
 
     pub fn in_interaction(&self) -> bool {
         self.active().is_some_and(|d| d.interaction.is_some())
+    }
+
+    // ---------- undo groups (scrubbed numeric fields) ----------
+
+    /// Open an undo group in the active document: until [`Session::end_undo_group`], the edits
+    /// made there (commands, committed interactions) are one undo step. A scrubbed numeric field
+    /// applies each value it passes as its own command, as a typed value is applied; the drag is
+    /// one step.
+    pub fn begin_undo_group(&mut self) {
+        let journal = self.journal.len();
+        if let Some(st) = self.active_mut()
+            && st.undo_group.is_none()
+        {
+            st.undo_group = Some(UndoGroup { first: None, journal });
+        }
+    }
+
+    /// Close the open undo groups: their edits stay one undo step or, `cancel`led (Escape), are
+    /// undone and dropped from the journal.
+    pub fn end_undo_group(&mut self, cancel: bool) {
+        let mut journal = None;
+        for st in &mut self.docs {
+            let Some(g) = st.undo_group.take() else { continue };
+            // Only while the group's step is still the newest one.
+            if cancel
+                && let Some(first) = g.first
+                && st.history.undo.last().is_some_and(|e| Arc::ptr_eq(&e.doc, &first))
+                && let Some(e) = st.history.undo.pop()
+            {
+                st.doc = e.doc;
+                st.selection = e.selection;
+                st.revision += 1;
+                journal = Some(g.journal);
+            }
+        }
+        if let Some(len) = journal {
+            self.journal.truncate(len);
+        }
     }
 
     /// Commands with enablement (for menus, palette, MCP `list_commands`).

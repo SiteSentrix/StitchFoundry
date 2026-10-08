@@ -524,7 +524,7 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     set_layout(&mut d, "spacing", json!(v.max(0.0)));
                 }
                 ui.add_space(20.0);
-                ui.label(egui::RichText::new(tl!("Columns:")).color(t.text));
+                widgets::field_label(ui, egui::RichText::new(tl!("Columns:")).color(t.text));
                 let grid = matches!(lay, ArtboardLayout::GridByRow | ArtboardLayout::GridByColumn);
                 ui.add_enabled_ui(grid, |ui| {
                     if let Some(v) = widgets::spin_plain(ui, "newdoc-columns", cols as f64, "", 0, 76.0, 1.0, 1.0, &[]) {

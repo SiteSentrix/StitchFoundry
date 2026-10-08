@@ -227,7 +227,9 @@ pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
 fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
-        ui.add_sized(vec2(22.0, 24.0), egui::Label::new(egui::RichText::new(label).size(11.5).strong().color(t.text))).on_hover_text(tl!(tip));
+        let l =
+            ui.add_sized(vec2(22.0, 24.0), egui::Label::new(egui::RichText::new(label).size(11.5).strong().color(t.text))).on_hover_text(tl!(tip));
+        crate::scrub::note_label(ui, l.rect);
         add(ui);
     });
 }

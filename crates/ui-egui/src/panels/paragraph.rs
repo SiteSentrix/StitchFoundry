@@ -89,7 +89,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Indents and paragraph spacing are distances (General); type sizes follow Units ▸ Type.
     let unit = app.session.general_unit();
     let label = |ui: &mut Ui, s: &str, tip: &str| {
-        ui.add_sized(vec2(22.0, 24.0), egui::Label::new(egui::RichText::new(s).size(11.5).strong().color(t.text))).on_hover_text(tip);
+        let l = ui.add_sized(vec2(22.0, 24.0), egui::Label::new(egui::RichText::new(s).size(11.5).strong().color(t.text))).on_hover_text(tip);
+        crate::scrub::note_label(ui, l.rect);
     };
     egui::Grid::new("para-grid").num_columns(4).spacing([4.0, 4.0]).show(ui, |ui| {
         label(ui, "→|", tl!("Left Indent"));

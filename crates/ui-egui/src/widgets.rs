@@ -4,8 +4,8 @@ use egui::{Color32, CornerRadius, Pos2, Rect, Response, Sense, Stroke, StrokeKin
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::Unit;
 
-use crate::icons;
 use crate::theme::{self, Tokens};
+use crate::{icons, scrub};
 
 /// Square icon button; `selected` draws the pressed well.
 pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, size: f32) -> Response {
@@ -87,8 +87,20 @@ pub fn divider(ui: &mut Ui) {
     ui.add_space(6.0);
 }
 
+/// A label in the panels' text colour; before a numeric field it scrubs the field
+/// ([`scrub`]).
 pub fn dim_label(ui: &mut Ui, text: &str) -> Response {
-    dim_name(ui, tl!(text))
+    let resp = dim_name(ui, tl!(text));
+    scrub::note_label(ui, resp.rect);
+    resp
+}
+
+/// A field's label in other styles (`text` as given): before a numeric field it scrubs the field
+/// ([`scrub`]).
+pub fn field_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> Response {
+    let resp = ui.label(text);
+    scrub::note_label(ui, resp.rect);
+    resp
 }
 
 /// [`dim_label`] for a name that is user or file data (a swatch, style, artboard or font name):
@@ -110,10 +122,10 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         buf = shown.clone();
     }
     take_dialog_focus(ui, id, &buf);
-    let resp = ui
+    let (rect, resp) = ui
         .allocate_ui_with_layout(vec2(width, 26.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.set_min_width(width);
-            egui::Frame::NONE
+            let framed = egui::Frame::NONE
                 .fill(t.input)
                 .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
                 .corner_radius(CornerRadius::same(2))
@@ -128,16 +140,26 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
                             .font(egui::FontId::proportional(12.5))
                             .text_color(t.text_strong),
                     )
-                })
-                .inner
+                });
+            (framed.response.rect, framed.inner)
         })
         .inner;
     select_all_on_focus(ui, &resp, &buf);
-    // ↑/↓ step in the field's unit.
+    // ↑/↓ step in the field's unit; a drag on its label scrubs it.
     let stepped = step_with_arrows(ui, &resp, &mut buf, |b| Some(unit.from_pt(unit.parse(b)?)), |v| unit.format(unit.to_pt(v)));
+    let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS);
     let commit = resp.lost_focus() && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
-    if commit { unit.parse(&buf) } else { stepped.map(|v| unit.to_pt(v)) }
+    if commit { unit.parse(&buf) } else { stepped.or(scrubbed).map(|v| unit.to_pt(v)) }
+}
+
+/// The places a stepped value in a unit field keeps (no 12.300000001).
+const STEP_DECIMALS: i32 = 3;
+
+/// `v` rounded to `decimals` places.
+pub(crate) fn round_to(v: f64, decimals: i32) -> f64 {
+    let scale = 10f64.powi(decimals.clamp(0, 6));
+    (v * scale).round() / scale
 }
 
 /// ↑/↓ in focused numeric field `resp` step the number `buf` shows (`read` parses it, `show`
@@ -163,8 +185,8 @@ fn step_with_arrows(ui: &Ui, resp: &Response, buf: &mut String, read: impl Fn(&s
     if steps == 0.0 {
         return None;
     }
-    // Rounded as fields show it (no 12.300000001).
-    let v = ((read(buf)? + steps) * 1000.0).round() / 1000.0;
+    // Rounded as fields show it.
+    let v = round_to(read(buf)? + steps, STEP_DECIMALS);
     *buf = show(v);
     ui.data_mut(|d| d.insert_temp(resp.id, buf.clone()));
     select_all(ui, resp.id, buf);
@@ -184,6 +206,11 @@ pub(crate) fn take_dialog_focus(ui: &Ui, id: egui::Id, text: &str) {
     if ui.is_sizing_pass() || ui.data_mut(|d| d.remove_temp::<bool>(dialog_focus_flag())).is_none() {
         return;
     }
+    focus_field(ui, id, text);
+}
+
+/// Give text field `id` the keyboard focus with all of `text` selected.
+pub(crate) fn focus_field(ui: &Ui, id: egui::Id, text: &str) {
     select_all(ui, id, text);
     ui.memory_mut(|m| m.request_focus(id));
 }
@@ -209,16 +236,17 @@ fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
 }
 
 /// The recessed text box of the panel fields showing `shown`, `rows` lines tall (1: single line),
-/// its text kept under `id` while it has focus. Returns the text (as edited) and the response.
-fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize) -> (String, Response) {
+/// its text kept under `id` while it has focus. Returns the text (as edited), the text edit's
+/// response and the box.
+fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize) -> (String, Response, Rect) {
     let t = Tokens::get(ui.ctx());
     let editing = ui.memory(|m| m.has_focus(id));
     let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.to_string()) } else { shown.to_string() };
     let height = 26.0 + 16.0 * (rows.max(1) - 1) as f32;
-    let resp = ui
+    let (rect, resp) = ui
         .allocate_ui_with_layout(vec2(width, height), egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.set_min_width(width);
-            egui::Frame::NONE
+            let framed = egui::Frame::NONE
                 .fill(t.input)
                 .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
                 .corner_radius(CornerRadius::same(2))
@@ -233,12 +261,12 @@ fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize
                             .font(egui::FontId::proportional(12.5))
                             .text_color(t.text_strong),
                     )
-                })
-                .inner
+                });
+            (framed.response.rect, framed.inner)
         })
         .inner;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
-    (buf, resp)
+    (buf, resp, rect)
 }
 
 /// A recessed text field showing `value` (blank when `None`: the selection's values differ),
@@ -247,7 +275,7 @@ fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize
 pub fn text_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<&str>, width: f32, rows: usize) -> Option<String> {
     let id = ui.id().with(id);
     let shown = value.unwrap_or_default();
-    let (buf, resp) = recessed_text(ui, id, shown, width, rows);
+    let (buf, resp, _) = recessed_text(ui, id, shown, width, rows);
     (resp.lost_focus() && buf.trim() != shown).then(|| buf.trim().to_string())
 }
 
@@ -257,6 +285,7 @@ pub fn label_row(ui: &mut Ui, label: &str, label_width: f32, add: impl FnOnce(&m
         let (r, _) = ui.allocate_exact_size(vec2(label_width, 24.0), Sense::hover());
         let t = Tokens::get(ui.ctx());
         ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, tl!(label), egui::FontId::proportional(12.5), t.text);
+        scrub::note_label(ui, r);
         add(ui);
     });
 }
@@ -288,14 +317,14 @@ pub fn mixed_field(
         vectorcraft_doc::parse_number(&bare.replace(['%', '°'], ""))
     };
     let shown = value.map(show).unwrap_or_default();
-    let (mut buf, resp) = recessed_text(ui, id, &shown, width, 1);
+    let (mut buf, resp, rect) = recessed_text(ui, id, &shown, width, 1);
     select_all_on_focus(ui, &resp, &buf);
-    // ↑/↓ step at the field's precision (a count ignores Ctrl/Cmd's tenth).
-    let stepped = step_with_arrows(ui, &resp, &mut buf, read, show).map(|v| {
-        let scale = 10f64.powi(decimals.min(6) as i32);
-        (v * scale).round() / scale
-    });
-    if resp.lost_focus() && buf != shown { read(&buf) } else { stepped.filter(|&v| Some(v) != value) }
+    // ↑/↓ step at the field's precision (a count ignores Ctrl/Cmd's tenth); a drag on its label
+    // scrubs it.
+    let decimals = decimals.min(6) as i32;
+    let stepped = step_with_arrows(ui, &resp, &mut buf, read, show).map(|v| round_to(v, decimals));
+    let scrubbed = scrub::field(ui, id, rect, &buf, value, decimals);
+    if resp.lost_focus() && buf != shown { read(&buf) } else { stepped.or(scrubbed).filter(|&v| Some(v) != value) }
 }
 
 /// Draw a paint preview (swatch chip) into `rect`.
@@ -1102,7 +1131,7 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
     let editing = ui.memory(|m| m.has_focus(id));
     let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone()) } else { shown.clone() };
     let enabled = ui.is_enabled();
-    let resp = egui::Frame::NONE
+    let framed = egui::Frame::NONE
         .fill(t.input)
         .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
         .corner_radius(CornerRadius::same(2))
@@ -1116,15 +1145,16 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
                     .font(egui::FontId::proportional(12.5))
                     .text_color(if enabled { t.text_strong } else { t.text_disabled }),
             )
-        })
-        .inner;
+        });
+    let resp = framed.inner;
     select_all_on_focus(ui, &resp, &buf);
+    let scrubbed = scrub::field(ui, id, framed.response.rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS);
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if resp.lost_focus() && buf != shown {
         let s = buf.trim();
         if s.is_empty() { Some(None) } else { unit.parse(s).map(Some) }
     } else {
-        None
+        scrubbed.map(|v| Some(unit.to_pt(v)))
     }
 }
 

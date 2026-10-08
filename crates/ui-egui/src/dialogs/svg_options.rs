@@ -202,7 +202,7 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
             choice(ui, d, "images", tl!("Images:"), &IMAGES, None);
         }
         choice(ui, d, "objectIds", tl!("Object IDs:"), &OBJECT_IDS, None);
-        ui.label(egui::RichText::new(tl!("Decimal:")).color(t.text_dim));
+        widgets::field_label(ui, egui::RichText::new(tl!("Decimal:")).color(t.text_dim));
         let decimals = d.f64("decimals", 3.0);
         if let Some(v) = widgets::spin_plain(ui, "svg-decimals", decimals, "", 0, 70.0, 1.0, 1.0, &[]) {
             let (lo, hi) = (*vectorcraft_svg::DECIMALS.start() as f64, *vectorcraft_svg::DECIMALS.end() as f64);

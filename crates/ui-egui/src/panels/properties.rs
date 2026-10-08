@@ -299,7 +299,8 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         super::transform::constrain_link(app, ui);
     });
     ui.horizontal(|ui| {
-        icons::icon(ui, "rotate-ccw", 16.0, Tokens::get(ui.ctx()).icon);
+        let icon = icons::icon(ui, "rotate-ccw", 16.0, Tokens::get(ui.ctx()).icon);
+        crate::scrub::note_label(ui, icon.rect);
         // The bounding box's angle: a new value turns the selection to it.
         if let Some(a) = widgets::plain_field(ui, "rot", bx.angle, "°", 2, 70.0) {
             app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
@@ -345,7 +346,7 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     for (label, is_fill) in [(tl!("Fill"), true), (tl!("Stroke"), false)] {
         ui.horizontal(|ui| {
             super::paint_chip(app, ui, !is_fill, 22.0, false);
-            ui.label(egui::RichText::new(label).size(12.0));
+            widgets::field_label(ui, egui::RichText::new(label).size(12.0));
             if !is_fill {
                 ui.add_space(8.0);
                 if let Some(w) = widgets::num_field(ui, "ap-w", weight, app.session.stroke_unit(), 70.0) {
@@ -357,7 +358,7 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     }
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(tl!("Opacity")).size(12.0));
+        widgets::field_label(ui, egui::RichText::new(tl!("Opacity")).size(12.0));
         ui.add_space(8.0);
         if let Some(o) = widgets::plain_field(ui, "ap-op", n.opacity as f64 * 100.0, "%", 0, 64.0) {
             app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0)})).ok();

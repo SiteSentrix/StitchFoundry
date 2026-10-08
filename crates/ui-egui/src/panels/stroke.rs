@@ -110,7 +110,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "stroke-hide-options");
     let label_w = 64.0;
     let row_label = |ui: &mut Ui, s: &str| {
-        ui.add_sized(vec2(label_w, 24.0), egui::Label::new(egui::RichText::new(s).size(12.5).color(t.text)).halign(egui::Align::RIGHT));
+        let l = ui.add_sized(vec2(label_w, 24.0), egui::Label::new(egui::RichText::new(s).size(12.5).color(t.text)).halign(egui::Align::RIGHT));
+        crate::scrub::note_label(ui, l.rect);
     };
     ui.horizontal(|ui| {
         row_label(ui, tl!("Weight:"));

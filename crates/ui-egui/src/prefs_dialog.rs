@@ -78,6 +78,7 @@ struct Applied {
     white_canvas: bool,
     threads: i32,
     tool_tips: bool,
+    scrub: bool,
 }
 
 /// Per frame: push UI-side preferences into egui / the renderer when they change.
@@ -88,8 +89,13 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     {
         app.ui.brightness = b;
     }
-    let want =
-        Applied { brightness: app.ui.brightness, white_canvas: p.canvas_color == "white", threads: p.render_threads, tool_tips: p.show_tool_tips };
+    let want = Applied {
+        brightness: app.ui.brightness,
+        white_canvas: p.canvas_color == "white",
+        threads: p.render_threads,
+        tool_tips: p.show_tool_tips,
+        scrub: p.scrub_numeric_fields,
+    };
     let id = egui::Id::new("dc-applied-prefs");
     let prev: Option<Applied> = ctx.data(|d| d.get_temp::<Option<Applied>>(id)).flatten();
     if prev != Some(want) {
@@ -98,6 +104,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // due), whichever widget asks for one.
         let delay = if want.tool_tips { egui::style::Interaction::default().tooltip_delay } else { f32::INFINITY };
         ctx.global_style_mut(|s| s.interaction.tooltip_delay = delay);
+        crate::scrub::set_enabled(ctx, want.scrub);
         if want.white_canvas {
             let mut t = Tokens::get(ctx);
             t.pasteboard = egui::Color32::WHITE;
