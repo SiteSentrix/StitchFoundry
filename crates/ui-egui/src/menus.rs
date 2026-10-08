@@ -2263,6 +2263,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 todo("Optical Margin Alignment"),
                 Sep,
                 c("Fill with Placeholder Text", "type.fillPlaceholder"),
+                c("Insert Inline Symbol", "text.insertInline"),
                 Sep,
                 c("Show Hidden Characters", "type.hiddenCharacters"),
                 sub("Type Orientation", vec![c("Horizontal", "type.orientation.horizontal"), c("Vertical", "type.orientation.vertical")]),

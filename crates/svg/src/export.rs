@@ -1597,9 +1597,21 @@ impl Writer<'_> {
     /// Type: its characters (live text, or glyph outlines when text is exported as outlines) and,
     /// as the canvas paints them, the object's own fills and strokes on the glyph outlines: those
     /// below the Characters row under the characters, the others over them.
+    ///
+    /// Inline graphics ([`vectorcraft_doc::TextRun::inline`]) are written after the characters as
+    /// instances of their symbols (a `<use>` of the symbol's def where it can be shared), all in
+    /// one group carrying the object's transparency. The live text skips their characters and
+    /// places the text after each one; type on a path with inline graphics is written as outlines
+    /// (a `<textPath>` couldn't leave room for the art).
     fn text_node(&mut self, n: &Node, t: &TextObject) {
-        let chars = |w: &mut Self, n: &Node| if w.opts.outline_text || t.vertical { w.text_outlines(n, t) } else { w.text(n, t) };
-        if !n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none()) {
+        let doc = self.doc;
+        let resolved = doc.inline_resolved(t);
+        let t = &*resolved;
+        let inline = t.runs.iter().any(|r| r.inline.is_some());
+        let outlined = self.opts.outline_text || t.vertical || (inline && matches!(t.kind, TextKind::OnPath { .. }));
+        let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t) } else { w.text(n, t) };
+        let painted = n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none());
+        if !painted && !inline {
             return chars(self, n);
         }
         let id = self.id_attr(n);
@@ -1622,6 +1634,14 @@ impl Writer<'_> {
         let bare = Node { opacity: 1.0, blend: BlendMode::Normal, isolate: false, ..n.clone() };
         let anonymous = std::mem::replace(&mut self.anonymous, true);
         chars(self, &bare);
+        for ig in &lay.inlines {
+            let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
+            let inst = Node::new(
+                NodeId(u64::MAX),
+                NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf: t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol) },
+            );
+            self.node(&inst);
+        }
         glyphs(self, above);
         self.anonymous = anonymous;
         self.depth -= 1;
@@ -1684,7 +1704,9 @@ impl Writer<'_> {
         self.note_fonts(t, &lay);
         let lines = text_lines(t, &lay, self.opts.fewer_tspans);
         // Each line is anchored as its paragraph is aligned. A tab starts a new chunk at its
-        // stop: lines with tabs are never anchored.
+        // stop, and so does the text after an inline graphic: lines with tabs, and text with
+        // inline graphics, are never anchored.
+        let has_inline = t.runs.iter().any(|r| r.inline.is_some());
         let anchors: Vec<Option<(&str, f64)>> = lines
             .iter()
             .map(|l| {
@@ -1693,7 +1715,7 @@ impl Writer<'_> {
                     Justify::Right => Some(("end", 1.0)),
                     _ => None,
                 }
-                .filter(|_| !l.segs.iter().any(|s| s.brk))
+                .filter(|_| !has_inline && !l.segs.iter().any(|s| s.brk))
             })
             .collect();
         // Every line anchored alike (the text's only paragraph style, typically): the <text>
@@ -1985,8 +2007,18 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                 glyphs = rest;
             }
         }
+        let mut after_inline = false;
         for g in glyphs {
             let Some(run) = t.runs.get(g.run) else { continue };
+            if run.inline.is_some() {
+                // An inline graphic (written as art): the text after it is placed anew.
+                if let Some(last) = segs.last_mut() {
+                    last.brk = true;
+                }
+                after_inline = true;
+                cluster = None;
+                continue;
+            }
             if g.len > 0 && cluster == Some(g.byte) {
                 // Another glyph of the same cluster.
                 if let Some(last) = segs.last_mut() {
@@ -1998,8 +2030,9 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
             let src: String = source(g).chars().filter(|c| *c != '\u{ad}').collect();
             let piece = if run.style.all_caps { src.to_uppercase() } else { src };
             let brk = piece == "\t" || (split_words && !piece.is_empty() && piece.chars().all(char::is_whitespace));
+            let fresh = std::mem::take(&mut after_inline);
             match segs.last_mut() {
-                Some(last) if last.run == g.run && !last.brk => {
+                Some(last) if last.run == g.run && !last.brk && !fresh => {
                     last.text.push_str(&piece);
                     last.advance += g.advance;
                     last.brk = brk;

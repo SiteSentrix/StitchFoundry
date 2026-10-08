@@ -277,3 +277,26 @@ fn artboard_guides_round_trip_and_canvas_guides_save_as_before() {
     let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
     assert_eq!(old.guides, [Guide::new(false, 20.0)]);
 }
+
+#[test]
+fn inline_graphics_in_text_round_trip() {
+    let d = rich_doc();
+    let inline = |d: &Document| {
+        let mut found = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                found.extend(t.runs.iter().filter_map(|r| r.inline.clone().map(|a| (r.text.clone(), a.symbol, a.scale, a.baseline_shift))));
+            }
+        });
+        found
+    };
+    let want = inline(&d);
+    assert_eq!(want, vec![("\u{FFFC}".to_string(), "Dot".to_string(), 1.0, 0.0)]);
+    let bytes = save(&d, false);
+    let saved = json_of(&bytes).to_string();
+    assert!(saved.contains("\"inline\":{") && saved.contains("\"symbol\":\"Dot\""), "{saved}");
+    let back = load(&bytes).unwrap();
+    assert_eq!(inline(&back), want);
+    assert_eq!(doc_json(&back), doc_json(&d));
+    check_native_roundtrip(&d).unwrap();
+}

@@ -5,7 +5,7 @@ use std::ops::Range;
 use kurbo::{Affine, BezPath, PathEl, Point, Rect, Shape, Vec2};
 use unicode_bidi::{BidiInfo, Level};
 use vectorcraft_doc::{
-    Burasagari, CharStyle, Justify, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject,
+    Burasagari, CharStyle, InlineArt, Justify, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject,
 };
 use vectorcraft_geom::{ArcPath, PathData};
 
@@ -13,7 +13,7 @@ use crate::composer::{Breakpoint, Params, compose};
 use crate::fontdb::FontDb;
 use crate::hyphen::hyphen_points;
 use crate::shape::{Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, no_line_end, no_line_start, punct, shape_range, style_metrics};
-use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
+use crate::{Composer, FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
 const EPS: f64 = 1e-6;
 
@@ -22,6 +22,8 @@ struct Ctx<'a> {
     db: &'a FontDb,
     text: &'a str,
     runs: Vec<(Range<usize>, &'a CharStyle)>,
+    /// The inline graphic of each run that is one (parallel to `runs`).
+    inlines: Vec<Option<&'a InlineArt>>,
     default: CharStyle,
     opts: &'a LayoutOptions,
     /// Vertical type: lines are laid out as horizontal lines in line space, upright glyphs turned
@@ -41,7 +43,7 @@ impl Ctx<'_> {
     fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         let levels = bidi.map_or(&[][..], |b| &b.levels);
-        shape_range(self.db, self.text, r, &self.runs, &self.opts.features, levels, &mut v);
+        shape_range(self.db, self.text, r, &self.runs, &self.inlines, &self.opts.features, levels, &mut v);
         if self.vertical {
             tate_chu_yoko(&mut v, |g| self.style_at(g.byte).size);
             // An upright glyph advances down the column by its vertical advance (the font's vertical
@@ -57,13 +59,18 @@ impl Ctx<'_> {
     }
 
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
-        let src = self.db.outline(&g.face, g.gid);
+        let src = if g.inline.is_some() { std::sync::Arc::new(BezPath::new()) } else { self.db.outline(&g.face, g.gid) };
         // A glyph whose leading space was taken off (mojikumi) is drawn that much earlier: an
         // upright one in vertical type by moving it up the column once it stands upright.
         let upright = self.vertical && !self.on_path && g.tcy.is_none() && stands_upright(g);
         let lead = if upright { 0.0 } else { g.lead };
-        let local =
-            Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx - lead, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
+        let local = match &g.inline {
+            // Inline graphics: art space to glyph space (no font outline).
+            Some(ib) => Affine::translate((-lead, -g.bshift)) * ib.xf,
+            None => {
+                Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx - lead, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy)
+            }
+        };
         let mut m = pre * local;
         if self.vertical && self.on_path {
             // Vertical path type keeps the baseline path and turns each glyph across it.
@@ -99,6 +106,9 @@ impl Ctx<'_> {
             p
         };
         let font_id = g.face.id();
+        if let Some(art) = g.inline.as_ref().and_then(|ib| ib.art) {
+            self.out.inlines.push(InlineGlyph { run: g.run, byte: g.byte, glyph: self.out.glyphs.len(), xf: m, bounds: m.transform_rect_bbox(art) });
+        }
         self.out.glyphs.push(PositionedGlyph {
             outline,
             run: g.run,
@@ -212,9 +222,12 @@ fn scaled(t: &TextObject, f: f64) -> TextObject {
 fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
     let text = t.plain_text();
     let mut runs = Vec::with_capacity(t.runs.len());
+    let mut inlines = Vec::with_capacity(t.runs.len());
     let mut off = 0;
     for r in &t.runs {
         runs.push((off..off + r.text.len(), &r.style));
+        // Only a well-formed inline run (one object replacement character) is a graphic.
+        inlines.push(r.inline.as_ref().filter(|_| crate::edit::is_inline_text(&r.text)));
         off += r.text.len();
     }
     let mut paras = Vec::new();
@@ -235,7 +248,8 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
     } else {
         opts
     };
-    let mut cx = Ctx { on_path: is_on_path, db, text: &text, runs, default: CharStyle::default(), opts, vertical, out: TextLayout::default() };
+    let mut cx =
+        Ctx { on_path: is_on_path, db, text: &text, runs, inlines, default: CharStyle::default(), opts, vertical, out: TextLayout::default() };
     // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next
     // one to the left). Point type's anchor is on the first column's centre line. Vertical path
     // type stays on its path (each glyph turned across it in `emit`).
@@ -274,6 +288,10 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
             g.xf = line_xf * g.xf;
             g.origin = line_xf * g.origin;
             g.angle += std::f64::consts::FRAC_PI_2;
+        }
+        for i in &mut cx.out.inlines {
+            i.xf = line_xf * i.xf;
+            i.bounds = line_xf.transform_rect_bbox(i.bounds);
         }
         cx.out.vertical = true;
         cx.out.line_xf = line_xf;
@@ -414,6 +432,10 @@ fn glyph_em(g: &SGlyph) -> f64 {
 /// `line_em`: the glyph's em box top, centre or bottom onto the line's (the em box running from
 /// its centre less half an em to its centre plus half an em above the baseline). Nothing on the
 /// Roman baseline, or for the line's largest characters.
+///
+/// An inline graphic has its run's em (whatever its scale): it counts as one of the line's
+/// largest characters only when its run's size is, and moves with the text of its run (its art
+/// stays centred on that text's cap height).
 fn align_shift(g: &SGlyph, a: vectorcraft_doc::CharAlign, line_em: f64) -> f64 {
     use vectorcraft_doc::CharAlign;
     let k = match a {
@@ -485,6 +507,9 @@ fn finish_bounds(out: &mut TextLayout) {
         if !g.outline.elements().is_empty() {
             add(g.outline.bounding_box());
         }
+    }
+    for i in &out.inlines {
+        add(i.bounds);
     }
     if !out.on_path {
         for l in &out.lines {
@@ -1023,9 +1048,9 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
 
 /// Can glyph `g` hang outside the line (burasagari)? An East Asian comma or full stop, full width
 /// (、。，．) or half width (､｡); not a closing bracket, nor Latin punctuation (Latin text keeps
-/// its line breaks and composer).
+/// its line breaks and composer). Never an inline graphic (U+FFFC).
 fn hangs(g: &SGlyph) -> bool {
-    matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none()
+    g.inline.is_none() && matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none()
 }
 
 /// Does kinsoku allow a line break after glyph `j`? Not after an opening bracket, nor before a
@@ -1073,6 +1098,7 @@ mod wrapping_tests {
                 xh: 4.0,
                 ch,
                 tcy: None,
+                inline: None,
                 lead: 0.0,
                 level: unicode_bidi::Level::ltr(),
             })
@@ -1128,7 +1154,7 @@ mod wrapping_tests {
         let bidi = para_bidi(text, None);
         let levels = bidi.as_ref().map_or(&[][..], |info| &info.levels);
         let mut shaped = Vec::new();
-        shape_range(db, text, 0..text.len(), &[(0..text.len(), &style)], &OtFeatures::default(), levels, &mut shaped);
+        shape_range(db, text, 0..text.len(), &[(0..text.len(), &style)], &[], &OtFeatures::default(), levels, &mut shaped);
         let Some(first) = shaped.first() else { return };
         let first_end = shaped.iter().take_while(|g| g.byte == first.byte).count();
         if first.byte != 0 || first_end < 2 || first_end >= shaped.len() {

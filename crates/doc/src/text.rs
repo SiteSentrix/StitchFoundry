@@ -758,6 +758,70 @@ pub struct TextStyleDef {
 pub struct TextRun {
     pub text: String,
     pub style: CharStyle,
+    /// An inline graphic: the run is one [`INLINE_CHAR`] drawn as a document symbol that flows
+    /// with the text like a glyph (InDesign-style inline anchored object). Its `style` still sets
+    /// the size and tracking; fills and strokes don't apply to the art.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inline: Option<InlineArt>,
+}
+
+impl TextRun {
+    /// A plain text run.
+    pub fn new(text: impl Into<String>, style: CharStyle) -> Self {
+        Self { text: text.into(), style, inline: None }
+    }
+    /// An inline graphic run showing `art`.
+    pub fn inline(art: InlineArt, style: CharStyle) -> Self {
+        Self { text: INLINE_CHAR.to_string(), style, inline: Some(art) }
+    }
+}
+
+/// The object replacement character: the plain text of an inline graphic run.
+pub const INLINE_CHAR: char = '\u{FFFC}';
+
+/// Largest inline graphic scale (× the run's size) accepted from input.
+pub const INLINE_MAX_SCALE: f64 = 100.0;
+
+/// A document symbol placed inline in text ([`TextRun::inline`]).
+///
+/// Placement: the art is scaled uniformly so its height (visual bounds) is `scale` × the run's
+/// font size, its left edge at the pen position, and its vertical centre on the middle of the
+/// run's cap height, raised by `baseline_shift` (points, positive = up). Centred on the cap
+/// height the art lines up with capitals and figures (like a mana symbol in rules text) and, at
+/// the default scale, stays inside the font's ascent and descent so the leading doesn't change.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct InlineArt {
+    /// Name of the document symbol ([`crate::Symbol::name`]).
+    pub symbol: String,
+    /// Art height as a multiple of the run's font size.
+    #[serde(default = "one")]
+    pub scale: f64,
+    /// Extra raise in points (positive = up).
+    #[serde(default)]
+    pub baseline_shift: f64,
+    /// The symbol art's visual bounds at its natural size, resolved from the document's symbols by
+    /// [`crate::Document::resolve_inline_art`] (not saved). `None`: not resolved or missing; the
+    /// layout then reserves a one-em square and nothing is drawn.
+    #[serde(skip)]
+    pub bounds: Option<Rect>,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+impl InlineArt {
+    pub fn new(symbol: impl Into<String>) -> Self {
+        Self { symbol: symbol.into(), scale: 1.0, baseline_shift: 0.0, bounds: None }
+    }
+    /// `scale`, made finite and positive (untrusted input).
+    pub fn safe_scale(&self) -> f64 {
+        if self.scale.is_finite() && self.scale > 0.0 { self.scale.min(INLINE_MAX_SCALE) } else { 1.0 }
+    }
+    /// `baseline_shift`, made finite (untrusted input).
+    pub fn safe_shift(&self) -> f64 {
+        if self.baseline_shift.is_finite() { self.baseline_shift.clamp(-1e5, 1e5) } else { 0.0 }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -863,7 +927,7 @@ impl TextObject {
             vertical: false,
             kind: TextKind::Point,
             xf: Affine::translate(origin.to_vec2()),
-            runs: vec![TextRun { text: text.into(), style }],
+            runs: vec![TextRun::new(text, style)],
             para: ParaStyle::default(),
             paras: Vec::new(),
             area: AreaOptions::default(),

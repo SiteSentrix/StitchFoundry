@@ -340,7 +340,16 @@ pub struct Renderer {
     /// Layer Options → Dim Images to, of the layer being drawn (screen views only): images show
     /// faded to this opacity over white.
     dim_images: Option<f32>,
+    /// Inline graphics being drawn inside inline graphics (a symbol whose art holds text showing
+    /// it): drawing stops at [`MAX_INLINE_DEPTH`].
+    inline_depth: u32,
 }
+
+/// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
+const MAX_INLINE_DEPTH: u32 = 4;
+
+/// Set once a missing inline symbol has been logged (it would log every frame otherwise).
+static MISSING_INLINE_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameStats {
@@ -418,6 +427,7 @@ impl Renderer {
             stroke_slices: PtrMap::default(),
             adjusted: Default::default(),
             dim_images: None,
+            inline_depth: 0,
         }
     }
 
@@ -794,6 +804,7 @@ impl Renderer {
             && a.blend == vectorcraft_color::BlendMode::Normal
             && !fx::has_fx(a)
         {
+            let t = &*f.doc.inline_resolved(t);
             let g = match f.text_snap(t) {
                 Some(xf) => Arc::new(text_geom_snapped(t, Some(xf))),
                 None => self.text_geom_of(a, t),
@@ -1206,8 +1217,36 @@ impl Renderer {
     }
 
     fn draw_text(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject) {
+        let t = &*f.doc.inline_resolved(t);
         let g = text_geom_snapped(t, f.text_snap(t));
         self.draw_text_geom(ctx, f, n, t, &g);
+    }
+
+    /// Draw the inline graphics of type `t` (laid out in `g`): each symbol's art through the
+    /// normal node path, placed by the layout (inside the text's own transparency group, so its
+    /// opacity and blend mode apply). A missing symbol draws nothing.
+    fn draw_inlines(&mut self, ctx: &mut RenderContext, f: &Frame, t: &TextObject, g: &TextGeom) {
+        if g.inlines.is_empty() && !t.runs.iter().any(|r| r.inline.is_some()) {
+            return;
+        }
+        if self.inline_depth >= MAX_INLINE_DEPTH {
+            return;
+        }
+        for r in t.runs.iter().filter_map(|r| r.inline.as_ref()) {
+            if !f.doc.symbols.iter().any(|s| s.name == r.symbol) && !MISSING_INLINE_LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                log::warn!("inline graphic shows symbol {:?}, which the document doesn't have: it draws nothing", r.symbol);
+            }
+        }
+        self.inline_depth += 1;
+        for ig in &g.inlines {
+            let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
+            let Some(sym) = f.doc.symbols.iter().find(|s| s.name == art.symbol) else { continue };
+            let mut node = (*sym.art).clone();
+            // Strokes scale with the art (it is sized to the type, as in the SVG `<use>`).
+            node.transform(t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true);
+            self.draw_node(ctx, f, &node, true);
+        }
+        self.inline_depth -= 1;
     }
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).
@@ -1240,6 +1279,7 @@ impl Renderer {
             ctx.set_stroke(kurbo::Stroke::new(1.0));
             ctx.set_paint(peniko::Color::BLACK);
             ctx.stroke_path(&p);
+            self.draw_inlines(ctx, f, t, g);
             return;
         }
         let tb = t.xf.transform_rect_bbox(g.bounds);
@@ -1293,6 +1333,7 @@ impl Renderer {
             }
         }
         overprint(ctx, false);
+        self.draw_inlines(ctx, f, t, g);
         if let Some(all) = &all {
             self.draw_text_items(ctx, f, n, above, all, tb);
         }
@@ -1549,6 +1590,8 @@ struct TextGeom {
     /// font lacks (drawn from a fallback font): Document Setup's substitution highlights.
     substituted_fonts: BezPath,
     substituted_glyphs: BezPath,
+    /// Inline graphics placed by the layout.
+    inlines: Vec<vectorcraft_text::InlineGlyph>,
 }
 
 fn text_geom(t: &TextObject) -> TextGeom {
@@ -1592,7 +1635,7 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
         cell.apply_affine(Affine::rotate_about(g.angle, g.origin));
         target.extend(cell.iter());
     }
-    TextGeom { runs, all, bounds: layout.bounds, substituted_fonts, substituted_glyphs }
+    TextGeom { runs, all, bounds: layout.bounds, substituted_fonts, substituted_glyphs, inlines: layout.inlines }
 }
 
 /// Document Setup's highlight behind substituted fonts and glyphs (screen only).

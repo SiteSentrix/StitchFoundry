@@ -386,8 +386,8 @@ fn fallback_font_per_character() {
 fn multiple_runs_and_styles() {
     let mut t = point("", style(10.0));
     t.runs = vec![
-        TextRun { text: "Big".into(), style: style(40.0) },
-        TextRun { text: "small".into(), style: CharStyle { font_family: "Inter".into(), ..style(10.0) } },
+        TextRun { text: "Big".into(), style: style(40.0), inline: None },
+        TextRun { text: "small".into(), style: CharStyle { font_family: "Inter".into(), ..style(10.0) }, inline: None },
     ];
     let l = layout(db(), &t);
     assert_eq!(l.glyphs.len(), 8);
@@ -567,7 +567,7 @@ fn em_box_top_leading_hangs_lines_from_the_line_above() {
     }
     // 40 pt over 20 pt (leading 60 and 30).
     let mut mixed = point("", st(40.0));
-    mixed.runs = vec![TextRun { text: "大\n".into(), style: st(40.0) }, TextRun { text: "小".into(), style: st(20.0) }];
+    mixed.runs = vec![TextRun { text: "大\n".into(), style: st(40.0), inline: None }, TextRun { text: "小".into(), style: st(20.0), inline: None }];
     let roman = lay(&mixed, LeadingModel::RomanBaseline);
     assert!((roman.lines[1].baseline - roman.lines[0].baseline - 30.0).abs() < 0.01, "the small line's leading, above it");
     let em = lay(&mixed, LeadingModel::EmBoxTop);
@@ -591,10 +591,10 @@ fn leading_model_is_per_paragraph() {
     let top = |size: f64| 0.88 * size;
     let mut t = point("", st(40.0));
     t.runs = vec![
-        TextRun { text: "大\n".into(), style: st(40.0) },
-        TextRun { text: "小\n".into(), style: st(20.0) },
-        TextRun { text: "大\n".into(), style: st(40.0) },
-        TextRun { text: "小".into(), style: st(20.0) },
+        TextRun { text: "大\n".into(), style: st(40.0), inline: None },
+        TextRun { text: "小\n".into(), style: st(20.0), inline: None },
+        TextRun { text: "大\n".into(), style: st(40.0), inline: None },
+        TextRun { text: "小".into(), style: st(20.0), inline: None },
     ];
     t.set_paragraph_styles(vec![
         model(LeadingModel::RomanBaseline),
@@ -631,8 +631,8 @@ fn character_alignment_lines_small_characters_up_with_the_largest_em_box() {
             let mut t = point("", style(40.0));
             t.vertical = vertical_type;
             t.runs = vec![
-                TextRun { text: "大".into(), style: style(40.0) },
-                TextRun { text: "小".into(), style: CharStyle { char_align: a, ..style(20.0) } },
+                TextRun { text: "大".into(), style: style(40.0), inline: None },
+                TextRun { text: "小".into(), style: CharStyle { char_align: a, ..style(20.0) }, inline: None },
             ];
             let l = layout(db(), &t);
             // How far the small character's origin sits above the big one's (to the right, vertical).

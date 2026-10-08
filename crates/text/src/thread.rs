@@ -97,10 +97,10 @@ pub fn distribute(db: &FontDb, frames: &[&TextObject], runs: &[TextRun], paras: 
         };
         let mut head = slice_runs(&rest, 0, n);
         if head.is_empty() {
-            head.push(TextRun { text: String::new(), style: style_at(&rest, n) });
+            head.push(TextRun { text: String::new(), style: style_at(&rest, n), inline: None });
         }
         let tail = slice_runs(&rest, n, len);
-        rest = if tail.is_empty() { vec![TextRun { text: String::new(), style: style_at(&rest, len) }] } else { tail };
+        rest = if tail.is_empty() { vec![TextRun { text: String::new(), style: style_at(&rest, len), inline: None }] } else { tail };
         let head_paras = slice_paras(paras, first_para, &head);
         next_para += head_paras.len().saturating_sub(1);
         out.push(Slice { runs: head, paras: head_paras });
@@ -126,7 +126,7 @@ mod tests {
         let db = FontDb::global();
         let (a, b, c) = (frame(0.0), frame(200.0), frame(400.0));
         let text = "The quick brown fox jumps over the lazy dog. ".repeat(6) + "\nSecond paragraph here.";
-        let story = vec![TextRun { text: text.clone(), style: CharStyle::default() }];
+        let story = vec![TextRun { text: text.clone(), style: CharStyle::default(), inline: None }];
         let parts: Vec<Vec<TextRun>> = distribute(db, &[&a, &b, &c], &story, &[]).into_iter().map(|s| s.runs).collect();
         let lens: Vec<usize> = parts.iter().map(|p| runs_len(p)).collect();
         assert!(lens[0] > 0 && lens[1] > 0, "{lens:?}");
@@ -147,7 +147,7 @@ mod tests {
         let db = FontDb::global();
         let (a, b) = (frame(0.0), frame(200.0));
         let text = "The quick brown fox jumps over the lazy dog. ".repeat(4) + "\nSecond paragraph.\nThird.";
-        let story = vec![TextRun { text, style: CharStyle::default() }];
+        let story = vec![TextRun { text, style: CharStyle::default(), inline: None }];
         let style = |j| ParaStyle { justify: j, ..Default::default() };
         use vectorcraft_doc::Justify::*;
         let paras = vec![style(Left), style(Center), style(Right)];
@@ -178,7 +178,7 @@ mod tests {
         let (a, b) = (frame(0.0), frame(200.0));
         let st = CharStyle { size: 20.0, ..Default::default() };
         let parts: Vec<Vec<TextRun>> =
-            distribute(db, &[&a, &b], &[TextRun { text: "Hi".into(), style: st }], &[]).into_iter().map(|s| s.runs).collect();
+            distribute(db, &[&a, &b], &[TextRun { text: "Hi".into(), style: st, inline: None }], &[]).into_iter().map(|s| s.runs).collect();
         assert_eq!(parts[0][0].text, "Hi");
         assert_eq!((parts[1][0].text.as_str(), parts[1][0].style.size), ("", 20.0));
     }

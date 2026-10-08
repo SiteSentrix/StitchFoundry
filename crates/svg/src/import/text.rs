@@ -892,7 +892,7 @@ fn assemble(cells: &[Cell], breaks: &[Break]) -> (Runs, Vec<usize>) {
             r.text.push(ch);
             return;
         }
-        runs.push(TextRun { text: ch.into(), style });
+        runs.push(TextRun { text: ch.into(), style, inline: None });
         keys.push(key);
     }
     let mut out: Runs = (vec![], vec![]);

@@ -30,7 +30,7 @@ fn area_doc(runs: Vec<TextRun>, w: f64, justify: Justify) -> Document {
 }
 
 fn run(text: &str, st: CharStyle) -> TextRun {
-    TextRun { text: text.into(), style: st }
+    TextRun { text: text.into(), style: st, inline: None }
 }
 
 /// The `<tspan …>` start tags.

@@ -301,7 +301,7 @@ impl TextLine {
         if self.runs.iter().all(|(_, t)| t.trim().is_empty()) {
             return None;
         }
-        let mut runs = self.runs.into_iter().map(|(look, text)| TextRun { text, style: look.style() });
+        let mut runs = self.runs.into_iter().map(|(look, text)| TextRun { text, style: look.style(), inline: None });
         let first = runs.next()?;
         let mut t = TextObject::point(Point::ORIGIN, &first.text, first.style);
         t.runs.extend(runs);
@@ -397,13 +397,13 @@ fn tracked(runs: Vec<TextRun>, tracking: f64, spaces: &[(usize, f64)]) -> Vec<Te
             let at = b - off;
             let (Some(before), Some(space)) = (r.text.get(from..at), r.text.get(at..at + 1)) else { continue };
             if !before.is_empty() {
-                out.push(TextRun { text: before.to_string(), style: style.clone() });
+                out.push(TextRun { text: before.to_string(), style: style.clone(), inline: None });
             }
-            out.push(TextRun { text: space.to_string(), style: CharStyle { tracking: own, ..style.clone() } });
+            out.push(TextRun { text: space.to_string(), style: CharStyle { tracking: own, ..style.clone() }, inline: None });
             from = at + 1;
         }
         if let Some(rest) = r.text.get(from..).filter(|t| !t.is_empty()) {
-            out.push(TextRun { text: rest.to_string(), style });
+            out.push(TextRun { text: rest.to_string(), style, inline: None });
         }
         off = end;
     }
@@ -490,7 +490,7 @@ fn to_logical(t: &mut TextObject) {
             _ => runs.push((i, c.to_string())),
         }
     }
-    let runs = runs.into_iter().filter_map(|(i, text)| Some(TextRun { text, style: t.runs.get(i)?.style.clone() })).collect();
+    let runs = runs.into_iter().filter_map(|(i, text)| Some(TextRun { text, style: t.runs.get(i)?.style.clone(), inline: None })).collect();
     t.runs = runs;
     t.para.direction = Some(if rtl { ParaDirection::RightToLeft } else { ParaDirection::LeftToRight });
 }
