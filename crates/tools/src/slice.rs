@@ -116,7 +116,9 @@ impl Tool for SliceTool {
             Some(s) if self.began => {
                 let d = self.last - s;
                 let mut o = self.guides.clone();
-                o.push(Overlay::Measure { p: self.last, text: cx.size_label(d.x.abs(), d.y.abs()) });
+                if cx.measurement_labels {
+                    o.push(Overlay::Measure { p: self.last, text: cx.size_label(d.x.abs(), d.y.abs()) });
+                }
                 o
             }
             _ => vec![],
@@ -280,7 +282,8 @@ impl Tool for SliceSelectionTool {
                 o.extend(Handle::ALL.iter().map(|h| Overlay::Anchor { p: h.pos(r), color: BLUE, filled: false, size: 7.0 }));
             }
         }
-        match &self.drag {
+        // Smart Guides › Measurement Labels: the size readouts while resizing or moving slices.
+        match self.drag.as_ref().filter(|_| cx.measurement_labels) {
             Some(Drag::Resize { id, began: true, .. }) => {
                 if let Some(r) = cx.doc.slice_bounds(*id) {
                     o.push(Overlay::Measure {

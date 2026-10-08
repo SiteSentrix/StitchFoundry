@@ -80,7 +80,7 @@ impl MoveSnap {
     pub(crate) fn new(cx: &ToolContext) -> Self {
         Self {
             bounds: selection_bounds(cx),
-            targets: cx.smart_guides.then(|| Targets::collect(cx.doc, &cx.selection.objects, None)),
+            targets: cx.smart_guides.then(|| Targets::collect(cx.doc, &cx.selection.objects, None).styled(cx)),
             points: Targets::snap_to_point(cx, &cx.selection.objects),
         }
     }
@@ -94,7 +94,7 @@ impl MoveSnap {
             guides = ov;
         }
         if let (Some(t), Some(b)) = (&self.targets, self.bounds) {
-            let (adj, ov) = t.snap_rect(b + d, cx.tol(5.0));
+            let (adj, ov) = t.snap_rect(b + d, cx.snap_tol());
             d += adj;
             guides = ov;
         }
@@ -205,7 +205,7 @@ impl Tool for SelectionTool {
                             // Only area type: the step resizes type areas; anything else scales.
                             let label = if areas && cx.selection.objects.iter().all(is_area) { "Resize Type Area" } else { "Scale" };
                             // Smart Guides align what the handle moves with the other objects.
-                            self.targets = cx.smart_guides.then(|| Targets::collect(cx.doc, &cx.selection.objects, None));
+                            self.targets = cx.smart_guides.then(|| Targets::collect(cx.doc, &cx.selection.objects, None).styled(cx));
                             self.state = State::Scaling { handle, bx, areas };
                             return vec![Action::Begin(label.into())];
                         }
@@ -268,7 +268,7 @@ impl Tool for SelectionTool {
                     (d, self.guides) = snap.snap(cx, start, d);
                 }
                 self.state = State::Moving { start, began: true, deselect: None };
-                self.measure = Some((p, cx.offset_label(d.x, d.y)));
+                self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
                 out.push(Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt })));
                 out
             }
@@ -277,10 +277,10 @@ impl Tool for SelectionTool {
                 let mut a = scale_for_drag(bx.rect, handle, bx.to_local(p), m.shift, m.alt);
                 self.guides.clear();
                 if let Some(t) = &self.targets {
-                    (a, self.guides) = t.snap_scale(&bx, handle, a, m.shift, m.alt, cx.tol(5.0));
+                    (a, self.guides) = t.snap_scale(&bx, handle, a, m.shift, m.alt, cx.snap_tol());
                 }
                 let nr = a.transform_rect_bbox(bx.rect);
-                self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
+                self.measure = cx.transform_tools_guides.then(|| (p, cx.size_label(nr.width(), nr.height())));
                 let mut params = json!({ "matrix": matrix_json(bx.conjugate(a)), "copy": false });
                 if areas {
                     params["typeAreas"] = json!(true);
@@ -289,7 +289,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Drag, State::Rotating { center, start, .. }) => {
                 let (a, deg) = rotate_for_drag(center, start, p, m.shift);
-                self.measure = Some((p, format!("{:.1}°", -deg)));
+                self.measure = cx.transform_tools_guides.then(|| (p, format!("{:.1}°", -deg)));
                 vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(a), "copy": false }))]
             }
             (PointerKind::Drag, State::Marquee { start, add, .. }) => {
@@ -590,6 +590,54 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 275.0, 150.0));
         let a = t.pointer(&c, &ev(PointerKind::Drag, 275.0, 197.0));
         assert!((height(&a) - 97.0).abs() < 1e-9, "{a:?}");
+    }
+
+    /// Smart Guides › Measurement Labels, Transform Tools and Snapping Tolerance (#394): the
+    /// readouts while moving and while scaling each follow their option; the tolerance sets how
+    /// far a dragged handle is pulled.
+    #[test]
+    fn smart_guide_display_preferences_drive_the_readouts_and_the_pull() {
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        d.insert(Some(l), 1, Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(250.0, 100.0, 300.0, 150.0)), Appearance::default_art()))
+            .unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let measures = |t: &SelectionTool, c: &ToolContext| t.overlays(c).iter().filter(|o| matches!(o, Overlay::Measure { .. })).count();
+        let height = |a: &[Action]| {
+            let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+            v["matrix"][3].as_f64().unwrap() * 50.0
+        };
+        // Moving: the offset readout is a measurement label.
+        for on in [true, false] {
+            let c = ToolContext { measurement_labels: on, ..cx(&d, &s, &p) };
+            let mut t = SelectionTool::default();
+            t.pointer(&c, &ev(PointerKind::Down, 275.0, 125.0));
+            t.pointer(&c, &ev(PointerKind::Drag, 285.0, 135.0));
+            assert_eq!(measures(&t, &c), usize::from(on), "measurement labels {on}");
+            t.pointer(&c, &ev(PointerKind::Up, 285.0, 135.0));
+        }
+        // Scaling by a handle: the size readout belongs to Transform Tools.
+        for on in [true, false] {
+            let c = ToolContext { transform_tools_guides: on, ..cx(&d, &s, &p) };
+            let mut t = SelectionTool::default();
+            t.pointer(&c, &ev(PointerKind::Down, 275.0, 150.0));
+            t.pointer(&c, &ev(PointerKind::Drag, 275.0, 180.0));
+            assert_eq!(measures(&t, &c), usize::from(on), "transform tools {on}");
+            t.pointer(&c, &ev(PointerKind::Up, 275.0, 180.0));
+        }
+        // Snapping Tolerance: 6 px from the neighbour's bottom edge is beyond 4, within 8.
+        for (tol, want) in [(4.0, 94.0), (8.0, 100.0), (0.0, 94.0)] {
+            let c = ToolContext { snapping_tolerance: tol, ..cx(&d, &s, &p) };
+            let mut t = SelectionTool::default();
+            t.pointer(&c, &ev(PointerKind::Down, 275.0, 150.0));
+            let a = t.pointer(&c, &ev(PointerKind::Drag, 275.0, 194.0));
+            assert!((height(&a) - want).abs() < 1e-9, "tolerance {tol}: {a:?}");
+            t.pointer(&c, &ev(PointerKind::Up, 275.0, 194.0));
+        }
     }
 
     #[test]

@@ -1162,6 +1162,26 @@ wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel s
 `scrubNumericFields` (on: a horizontal drag on a numeric field's label steps the field, one undo step per drag; the
 control channel's `ui.drag` scrubs).
 
+The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
+default view) and to the mouse; they change what the tools show and how far a target pulls, never where a snapped
+point lands:
+
+- `smartGuideColor` (`#ff3dfc` by default): the colour of the smart guides' lines and labels.
+- `alignmentGuides` (on by default): off, no line is drawn along the edge or centre the art lines up with; the art
+  still snaps into line.
+- `anchorPathLabels` (on by default): off, no "anchor", "center", "path" or "align" label.
+- `measurementLabels` (on by default): off, no size or offset readout while drawing, moving (Free Transform's move
+  too), dragging a ruler guide, drawing and resizing an artboard, or moving and resizing a slice.
+- `transformToolsGuides` (on by default): off, no readout while scaling or rotating with the Selection tool, the
+  Free Transform tool or the Rotate, Scale, Shear and Reflect tools.
+- `objectHighlighting` (on by default; desktop app): off, the Selection tools no longer outline the object under the
+  pointer. The outline also needs View › Smart Guides on.
+- `snappingTolerance` (0–40 px, 4 by default): how near an anchor, edge, centre or artboard edge pulls a drawn point,
+  a dragged selection, a bounding-box handle, a ruler guide or an artboard. With Smart Guides off, Snap to Point uses
+  `snapToPointTolerance` instead.
+
+Not read yet: Construction Guides and their Angles, and Spacing Guides (the tools draw neither).
+
 ## Type preferences
 
 - `placeholderText` (on by default): type the Type tools place (`pointer_gesture` with `type`, `areaType`…) starts with

@@ -67,7 +67,7 @@ impl GuideSnap {
         let targets = if cx.snap_to_pixel || cx.snap_to_grid {
             None
         } else if cx.smart_guides {
-            Some((targets(), 5.0))
+            Some((targets().styled(cx), cx.snapping_tolerance))
         } else if cx.snap_to_point {
             Some((targets().anchors_only(), cx.snap_tolerance))
         } else {
@@ -98,8 +98,10 @@ impl GuideSnap {
     /// The target the guide at `at` snapped to, and its position by the `pointer`.
     fn overlays(&self, cx: &ToolContext, vertical: bool, at: f64, pointer: Point) -> Vec<Overlay> {
         let mut o = self.snapped.clone();
-        let axis = if vertical { "X" } else { "Y" };
-        o.push(Overlay::Measure { p: pointer, text: format!("{axis}: {}", cx.len(at)) });
+        if cx.measurement_labels {
+            let axis = if vertical { "X" } else { "Y" };
+            o.push(Overlay::Measure { p: pointer, text: format!("{axis}: {}", cx.len(at)) });
+        }
         o
     }
 }
@@ -376,6 +378,25 @@ mod tests {
         assert_eq!(drag(true, 497.0), (500.0, Some("artboard".into())), "the artboard's right edge");
         assert_eq!(drag(false, 248.0), (250.0, Some("center".into())), "the artboard's centre");
         assert_eq!(drag(true, 320.0), (320.0, None), "nothing within reach");
+    }
+
+    /// Preferences › Smart Guides (#394) reach a guide dragged out of a ruler: Snapping
+    /// Tolerance sets how far a target pulls it, Anchor/Path Labels and Measurement Labels what
+    /// shows by it.
+    #[test]
+    fn a_new_guide_follows_the_smart_guide_preferences() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let drag = |c: &ToolContext| {
+            let mut g = NewGuide::new(c, true, None);
+            let a = g.pointer(c, &ev(PointerKind::Drag, 497.0, 50.0, Mods::default()), true);
+            let Some(Action::Preview(_, p)) = a.last() else { panic!("{a:?}") };
+            (p["pos"].as_f64().unwrap(), g.overlays(c))
+        };
+        let (at, ov) = drag(&ToolContext { snapping_tolerance: 2.0, ..cx(&d, &s, &p) });
+        assert_eq!((at, ov.len()), (497.0, 1), "3 px off is beyond 2: only the readout {ov:?}");
+        let (at, ov) = drag(&ToolContext { anchor_path_labels: false, measurement_labels: false, ..cx(&d, &s, &p) });
+        assert_eq!((at, ov), (500.0, vec![]), "onto the artboard's edge, nothing said");
     }
 
     #[test]

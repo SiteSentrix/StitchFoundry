@@ -206,7 +206,9 @@ impl Tool for ShapeTool {
             Some(s) if self.began => {
                 let d = self.last - s;
                 let mut o = self.guides.clone();
-                o.push(Overlay::Measure { p: self.last, text: cx.size_label(d.x.abs(), d.y.abs()) });
+                if cx.measurement_labels {
+                    o.push(Overlay::Measure { p: self.last, text: cx.size_label(d.x.abs(), d.y.abs()) });
+                }
                 o
             }
             _ => vec![],
