@@ -48,6 +48,7 @@ mod images;
 mod import;
 mod import_color;
 mod import_image;
+mod import_lines;
 mod import_mask;
 mod import_scan;
 mod import_shading;
@@ -230,6 +231,8 @@ mod tests_import_color;
 mod tests_import_fidelity;
 #[cfg(test)]
 mod tests_import_layers;
+#[cfg(test)]
+mod tests_import_lines;
 #[cfg(test)]
 mod tests_import_options;
 #[cfg(test)]

@@ -402,11 +402,14 @@ their stop opacity and stop where the shading doesn't extend. Text becomes point
 the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font, and
 every export that draws that type — PDF, EPS, EMF/WMF, raster images, SVG with outlined or embedded fonts — says in
 its `warnings` that it wrote the fallback font) — `textAs: "outlines"` keeps the glyph outlines the file draws instead
-(its embedded fonts, installed or not). Strokes stay live strokes (width, cap, join, miter limit, dash and paint), and
+(its embedded fonts, installed or not). Lines wrapped in a frame (each wrapped line ending in a space, sharing a left
+edge, font and leading) come back as one area type object, left aligned or justified, where laying it out breaks the
+lines where the file does; a stroke written as each glyph's outline stroked is the type object's stroke; glyphs set
+apart by gaps wider than a space keep their places. Strokes stay live strokes (width, cap, join, miter limit, dash and paint), and
 an object written as a fill and then a stroke of the same outline is one path with both. Optional content groups (the
 layers of PDF and PDF-compatible `.ai` files) become layers with their name, visibility (the default configuration's,
-or a view state that is off), print state and lock, nested as sublayers the way the file's layer order nests them; art
-that is off comes in as a hidden layer. Art outside them goes to a layer per page (except the opaque white page a `.ai`
+or a view state that is off), print state and lock, nested as sublayers the way the file's layer order nests them, stacked as the pages mark them
+(layers with no art come in empty); art that is off comes in as a hidden layer. Art outside them goes to a layer per page (except the opaque white page a `.ai`
 paints under its layers, which isn't art). `layers: false` gives one layer per page of only what shows:
 
 ```json
