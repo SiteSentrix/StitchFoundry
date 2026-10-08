@@ -115,9 +115,13 @@ fn malformed_crc_and_every_truncation_fail() {
     let mut crc = b.clone();
     crc[130] ^= 1;
     assert!(load("bad.af", &crc).is_err());
+    // Affinity 1 and 2 (container versions 8 to 11) store the same preview record.
     let mut legacy = b.clone();
     legacy[4..6].copy_from_slice(&10u16.to_le_bytes());
-    assert!(load("old.af", &legacy).err().unwrap().to_string().contains("legacy preview"));
+    assert!(load("old.afdesign", &legacy).is_ok());
+    let mut unknown = b.clone();
+    unknown[4..6].copy_from_slice(&13u16.to_le_bytes());
+    assert!(load("new.af", &unknown).err().unwrap().to_string().contains("unknown container version"));
 }
 
 #[test]
