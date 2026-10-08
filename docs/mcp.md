@@ -1479,8 +1479,11 @@ physical size) or `clipboard.importText {text}` (point text in the default type 
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
 Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
 copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). Pasting what VectorCraft copied
-keeps the lossless internal clipboard. Windows carries every format both ways; macOS and Linux carry one format
-(the text, else the PNG) and paste text and bitmaps. On the web only SVG text goes through the system clipboard.
+keeps the lossless internal clipboard. Windows carries every format both ways and pastes a bitmap from PNG, else
+from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
+throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
+bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). On the web Copy publishes SVG text, and
+Paste takes SVG text and the pictures and files a paste carries (a screenshot pastes as an embedded image).
 
 The `pasteTextFormatting` preference (`keep` or `plain`): with `plain`, text the Type tool copied pastes into type
 without its formatting, taking the style at the caret.

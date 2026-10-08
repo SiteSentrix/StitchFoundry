@@ -3,6 +3,7 @@
 
 use egui::{Key, KeyboardShortcut, Modifiers};
 use serde_json::json;
+use vectorcraft_engine::cmd::clipboard::{Flavour, TEXT};
 use vectorcraft_tools::{Mods, ToolKey};
 
 use crate::VectorcraftApp;
@@ -301,7 +302,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         clip.push((id, None));
     }
     for (id, text) in clip {
-        app.clipboard_in = text;
+        app.clipboard_in = text.map(|t| Flavour { mime: TEXT, data: t.into_bytes() });
         crate::menus::invoke(app, id, json!({}));
     }
     if busy {
