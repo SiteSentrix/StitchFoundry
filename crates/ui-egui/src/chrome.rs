@@ -108,10 +108,32 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// An anchor button: icon, tooltip, command and the convert command's `to`.
 type AnchorButton<'a> = (&'a str, &'a str, &'a str, Option<&'a str>);
 
-/// What the Control bar and the Properties panel offer for direct-selected anchors: "Convert:"
-/// corner or smooth, then "Anchors:" remove, connect (Join) and cut. Each group is a row of its
-/// own: inline in the Control bar, one under the other in a panel.
-pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// The anchor controls the Control bar and the Properties panel show.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AnchorControls {
+    None,
+    /// Paths selected as a whole with a tool that edits anchors (Direct Selection, the Pen…),
+    /// which shows all their anchors selected: "Convert:" only, as removing or cutting at every
+    /// anchor isn't what they're for.
+    Convert,
+    /// Anchors direct-selected: "Convert:" and "Anchors:".
+    All,
+}
+
+/// Which anchor controls show for the selection and the active tool.
+pub fn anchor_controls(app: &VectorcraftApp) -> AnchorControls {
+    let Some(st) = app.session.active() else { return AnchorControls::None };
+    if !st.selection.anchors.is_empty() {
+        return AnchorControls::All;
+    }
+    let paths = st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Path { .. })));
+    if paths && vectorcraft_tools::catalog::edits_anchors(app.session.tool_id()) { AnchorControls::Convert } else { AnchorControls::None }
+}
+
+/// What the Control bar and the Properties panel offer for selected anchors ([`anchor_controls`]):
+/// "Convert:" corner or smooth, then "Anchors:" remove, connect (Join) and cut. Each group is a
+/// row of its own: inline in the Control bar, one under the other in a panel.
+pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorControls) {
     let t = Tokens::get(ui.ctx());
     let mut run = None;
     let groups: [(&str, &[AnchorButton]); 2] = [
@@ -131,7 +153,12 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
             ],
         ),
     ];
-    for (label, buttons) in groups {
+    let shown = match controls {
+        AnchorControls::None => 0,
+        AnchorControls::Convert => 1,
+        AnchorControls::All => groups.len(),
+    };
+    for (label, buttons) in groups.into_iter().take(shown) {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(label).size(12.0).color(t.text));
             for &(icon, tip, id, to) in buttons {
@@ -166,9 +193,9 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let sel = st.selection.objects.clone();
                 let units = app.session.general_unit();
                 let first = sel.first().and_then(|id| st.doc.node(*id)).cloned();
-                let anchor_mode = !st.selection.anchors.is_empty();
+                let anchors = anchor_controls(app);
                 let label = match &first {
-                    Some(_) if sel.len() == 1 && anchor_mode => tl!("Anchor Point"),
+                    Some(_) if sel.len() == 1 && anchors != AnchorControls::None => tl!("Anchor Point"),
                     Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if sel.len() == 1 => {
                         if im.link.is_some() {
                             tl!("Linked File")
@@ -180,8 +207,8 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     _ => tl!(crate::panels::appearance::object_label(app)),
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
-                if anchor_mode {
-                    anchor_buttons(app, ui);
+                if anchors != AnchorControls::None {
+                    anchor_buttons(app, ui, anchors);
                 }
                 ui.add_space(6.0);
                 // An image or an Image Trace object shows its own controls in place of Fill and Stroke.

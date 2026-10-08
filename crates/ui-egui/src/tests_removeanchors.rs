@@ -205,3 +205,26 @@ fn the_control_bar_converts_connects_and_cuts_selected_anchors() {
     assert!(app.session.active().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].closed);
     assert_eq!(anchor_count(&app, id), 4, "the coincident ends merge");
 }
+
+/// #504: with a tool that edits anchors (Direct Selection, the Pen…), a path selected as a whole
+/// shows all its anchors selected, and the Control bar and the Properties panel offer to convert
+/// them; removing and cutting wait for anchors direct-selected. The Selection tool shows neither.
+#[test]
+fn a_whole_path_converts_with_the_tools_that_edit_anchors() {
+    let mut app = app();
+    let id = rect(&mut app);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.select_tool("selection");
+    assert!(!has(&control_frame(&mut app, &ctx, vec![]), "Convert:"));
+    for tool in ["directSelection", "pen"] {
+        app.select_tool(tool);
+        let texts = control_frame(&mut app, &ctx, vec![]);
+        assert!(has(&texts, "Convert:") && !has(&texts, "Anchors:"), "{tool}: {texts:?}");
+        let props = crate::tests_labels::painted_text(&mut app, crate::panels::properties::show);
+        assert!(props.contains("Convert:") && !props.contains("Anchors:"), "{tool}: {props}");
+    }
+    click_button(&mut app, &ctx, "Convert:", 1);
+    let sp = app.session.active().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+    assert!(sp.anchors.iter().all(|a| a.has_in() && a.has_out()), "every corner made smooth: {sp:?}");
+}
