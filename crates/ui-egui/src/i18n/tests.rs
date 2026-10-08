@@ -418,7 +418,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 5] = ["cs", "es", "it", "ja", "pt-br"];
+const KEEPS_MENU_NAMES: [&str; 6] = ["cs", "es", "it", "ja", "pt-br", "ru"];
 
 /// Menu labels the menu-complete catalogs (Czech, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -555,6 +555,10 @@ fn it() -> Lang {
     Lang::from_code("it").expect("it registered")
 }
 
+fn ru() -> Lang {
+    Lang::from_code("ru").expect("ru registered")
+}
+
 /// Spanish uses the vector-illustration vocabulary its users know, has two plural forms like
 /// English, and reads the same in the menus and in the panels.
 #[test]
@@ -597,6 +601,30 @@ fn italian_reads_as_italian() {
     assert_eq!(trn(it(), 3, "{n} Layer", "{n} Layers"), "3 livelli");
 }
 
+/// Russian uses the vector-illustration vocabulary its users know, has the three plural forms
+/// (one/few/many), and reads the same in the menus and in the panels.
+#[test]
+fn russian_reads_as_russian() {
+    for (en, want) in [
+        ("Artboard Tool", "Инструмент «Монтажная область»"),
+        ("Swatches", "Образцы"),
+        ("Pathfinder", "Обработка контуров"),
+        ("Stroke", "Обводка"),
+        ("Fill", "Заливка"),
+        ("Direct Selection Tool", "Инструмент «Прямое выделение»"),
+        ("Save As…", "Сохранить как…"),
+        ("Undo", "Отменить"),
+    ] {
+        assert_eq!(tr(ru(), en), want);
+    }
+    assert_eq!(trn(ru(), 1, "{n} Layer", "{n} Layers"), "1 слой");
+    assert_eq!(trn(ru(), 2, "{n} Layer", "{n} Layers"), "2 слоя");
+    assert_eq!(trn(ru(), 5, "{n} Layer", "{n} Layers"), "5 слоёв");
+    assert_eq!(trn(ru(), 11, "{n} Layer", "{n} Layers"), "11 слоёв");
+    assert_eq!(trn(ru(), 21, "{n} Layer", "{n} Layers"), "21 слой");
+    assert_eq!(trn(ru(), 22, "{n} Layer", "{n} Layers"), "22 слоя");
+}
+
 /// Catalogs written with spaces between words keep a fragment's leading and trailing spaces: the
 /// hint bar and a few labels are joined from pieces (" to finish", "Press ").
 #[test]
@@ -615,6 +643,12 @@ fn czech_plurals_have_three_forms() {
     assert_eq!(forms, [2, 0, 1, 1, 2, 2, 2]);
 }
 
+#[test]
+fn russian_plurals_have_three_forms() {
+    let forms: Vec<usize> = [0, 1, 2, 4, 5, 11, 21, 22, 25, 111, 121].into_iter().map(plural_russian).collect();
+    assert_eq!(forms, [2, 0, 1, 1, 2, 2, 0, 1, 2, 2, 0]);
+}
+
 /// Czech, Spanish and Italian letters (and the punctuation their text uses) come from each family's own first font, not
 /// from a fallback further down the stack. (`has_glyph` can't tell: it counts characters of the
 /// face that draws missing glyphs, the first one, as missing.)
@@ -631,6 +665,28 @@ fn czech_spanish_and_italian_glyphs_are_available_without_system_fonts() {
             let mut font = fonts.fonts.font(&family);
             let chars = font.characters();
             for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”àèìòùÀÈÌÒÙ«»’".chars()
+            {
+                assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
+            }
+        }
+    });
+}
+
+/// Russian letters (and the punctuation the catalog uses) come from each family's own first font, not
+/// from a fallback further down the stack.
+#[test]
+fn russian_glyphs_are_available_without_system_fonts() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+    output.textures_delta.clear();
+    ctx.fonts_mut(|fonts| {
+        let families: Vec<_> = fonts.definitions().families.iter().map(|(f, stack)| (f.clone(), stack.first().cloned())).collect();
+        for (family, first) in families {
+            let first = first.unwrap();
+            let mut font = fonts.fonts.font(&family);
+            let chars = font.characters();
+            for ch in "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ«»„“…–’".chars()
             {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
             }
@@ -708,7 +764,7 @@ fn complete_languages_translate_every_message() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["es", "it"];
+const COMPLETE_MESSAGES: &[&str] = &["es", "it", "ru"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
