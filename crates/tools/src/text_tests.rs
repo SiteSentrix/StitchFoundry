@@ -335,3 +335,24 @@ fn hebrew_typing_and_visual_arrows_keep_logical_text() {
     let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
     assert_eq!(t.plain_text(), "שלום");
 }
+
+/// Where new type goes snaps to Smart Guides (#506): a click beside a rect lines up with its
+/// centre, and hovering shows it first; an area's corners land on its anchors.
+#[test]
+fn new_type_snaps_to_smart_guides() {
+    let (d, _) = crate::testutil::doc_with_rect();
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("type");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, 151.0, 330.0));
+    assert!(tool.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { text, p, .. } if text == "align" && *p == Point::new(150.0, 330.0))));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 151.0, 330.0));
+    let acts = tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 151.0, 330.0));
+    assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, v) if cmd == "text.create" && v["x"] == 150.0 && v["y"] == 330.0)), "{acts:?}");
+    let mut tool = TypeTool::new("type");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 102.0, 98.0));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 199.0, 202.0));
+    let acts = tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 199.0, 202.0));
+    let area = json!({"width": 100.0, "height": 100.0});
+    assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, v) if cmd == "text.create" && v["x"] == 100.0 && v["area"] == area)), "{acts:?}");
+}
