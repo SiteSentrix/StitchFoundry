@@ -56,7 +56,7 @@ impl Ctx<'_> {
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
         let src = self.db.outline(&g.face, g.gid);
         // A glyph whose leading space was taken off (mojikumi) is drawn that much earlier: an
-        // upright one in vertical type by turning about a point that much higher.
+        // upright one in vertical type by moving it up the column once it stands upright.
         let upright = self.vertical && !self.on_path && g.tcy.is_none() && stands_upright(g);
         let lead = if upright { 0.0 } else { g.lead };
         let local =
@@ -79,10 +79,11 @@ impl Ctx<'_> {
             // after the cell, and must not push the glyph off the centre line).
             let em = self.style_at(g.byte).size;
             let cell = if g.adv > 0.0 { upright_cell(g) } else { advance };
-            m = Affine::rotate_about(
-                -std::f64::consts::FRAC_PI_2,
-                Point::new(origin.x + cell * 0.5 - g.lead, origin.y - upright_centre(g, cell, em)),
-            ) * m;
+            // A leading space taken off moves it up the column after the turn (moving the
+            // turning point instead would move it across the column too).
+            m = Affine::translate((-g.lead, 0.0))
+                * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em)))
+                * m;
         }
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let outline = if src.elements().is_empty() || g.is_soft_hyphen() || g.ch.is_control() {
@@ -969,6 +970,18 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             let est = if i < n { Metrics::of(&sg[i]) } else { pm };
             let first_line = li_para == 0;
             let ind_l = para.left_indent + if first_line { para.first_line_indent } else { 0.0 };
+            // Mojikumi: an opening bracket starting a wrapped line is set flush with the line's
+            // start (the space before it goes), and the line has that much more room.
+            if !first_line
+                && !rtl
+                && para.mojikumi == Mojikumi::LineEndHalf
+                && let Some(g) = sg.get_mut(i)
+                && g.lead <= 0.0
+                && let Some(h) = punct_half(g, Punct::Opening)
+            {
+                g.adv -= h;
+                g.lead += h;
+            }
             // Place, break, then settle the baseline on the line's real metrics (moving on to the
             // next row/column if it no longer fits).
             let (baseline, x0, x1, end, hyph, m) = loop {

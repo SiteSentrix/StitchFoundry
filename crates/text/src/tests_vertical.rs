@@ -325,6 +325,9 @@ fn mojikumi_halves_line_end_and_consecutive_punctuation() {
         let along = |r: Rect| if vertical_type { r.y0 } else { r.x0 };
         let moved = along(off.glyphs[1].outline.bounding_box()) - along(on.glyphs[1].outline.bounding_box());
         assert!((moved - 10.0).abs() < 0.01, "vertical {vertical_type}: the second 「 is drawn half an em earlier ({moved})");
+        let across = |r: Rect| if vertical_type { r.x0 } else { r.y0 };
+        let drift = across(off.glyphs[1].outline.bounding_box()) - across(on.glyphs[1].outline.bounding_box());
+        assert!(drift.abs() < 0.01, "vertical {vertical_type}: and not moved across the line ({drift})");
         // Text without punctuation is untouched.
         assert_eq!(adv("一二", Mojikumi::LineEndHalf), adv("一二", Mojikumi::None));
     }
@@ -363,4 +366,43 @@ fn mojikumi_spaces_japanese_from_latin_by_a_quarter_em() {
     let on = lay("第10回", Mojikumi::LineEndHalf, true);
     let off = lay("第10回", Mojikumi::None, true);
     assert!(on.glyphs.iter().zip(&off.glyphs).all(|(a, b)| (a.advance - b.advance).abs() < 0.01));
+}
+
+/// Mojikumi (JLREQ 3.1.5): with Line-end Punctuation Half Width, an opening bracket starting a
+/// wrapped line is set flush with the line's start (the space before it goes), giving the line half
+/// an em more room; at the start of a paragraph it keeps its full width. Horizontal and vertical.
+/// Needs a font with full-width Japanese punctuation (skipped without one).
+#[test]
+fn mojikumi_sets_an_opening_bracket_flush_at_the_start_of_a_wrapped_line() {
+    use vectorcraft_doc::Mojikumi;
+    // 20 pt type in a frame three and a half ems across the lines.
+    let lay = |text: &str, m: Mojikumi, vertical_type: bool| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.vertical = vertical_type;
+        t.para.mojikumi = m;
+        let frame = if vertical_type { Rect::new(0.0, 0.0, 200.0, 70.0) } else { Rect::new(0.0, 0.0, 70.0, 200.0) };
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame.to_path(0.1)) };
+        layout(FontDb::global(), &t)
+    };
+    if (lay("一「", Mojikumi::None, false).glyphs[1].advance - 20.0).abs() > 2.0 {
+        return; // no font with full-width punctuation here
+    }
+    for vertical_type in [false, true] {
+        let along = |r: Rect| if vertical_type { r.y0 } else { r.x0 };
+        // 一二三 / 「四五六: the bracket can't end the first line, so it starts the second.
+        let (on, off) = (lay("一二三「四五六", Mojikumi::LineEndHalf, vertical_type), lay("一二三「四五六", Mojikumi::None, vertical_type));
+        let moved = along(off.glyphs[3].outline.bounding_box()) - along(on.glyphs[3].outline.bounding_box());
+        assert!((moved - 10.0).abs() < 0.01, "vertical {vertical_type}: 「 is drawn half an em earlier ({moved})");
+        let across = |r: Rect| if vertical_type { r.x0 } else { r.y0 };
+        let drift = across(off.glyphs[3].outline.bounding_box()) - across(on.glyphs[3].outline.bounding_box());
+        assert!(drift.abs() < 0.01, "vertical {vertical_type}: and not moved across the line ({drift})");
+        assert!((on.glyphs[3].advance - 10.0).abs() < 0.01, "vertical {vertical_type}: {}", on.glyphs[3].advance);
+        // The half em it gave up lets 六 stay on the line.
+        assert_eq!(on.glyphs[6].line, on.glyphs[3].line, "vertical {vertical_type}");
+        assert_ne!(off.glyphs[6].line, off.glyphs[3].line, "vertical {vertical_type}");
+        // At the start of a paragraph the bracket keeps its full width.
+        let first = lay("「一」", Mojikumi::LineEndHalf, vertical_type);
+        assert!((first.glyphs[0].advance - 20.0).abs() < 0.01, "vertical {vertical_type}: {}", first.glyphs[0].advance);
+    }
 }
