@@ -15,10 +15,6 @@ fn tags_map_to_languages() {
     for tag in ["es", "es_ES.UTF-8", "es-MX", "es_AR", "es-419", "es-US"] {
         assert_eq!(lang_from_tag(tag), Lang::from_code("es"), "{tag}");
     }
-    // Italian: Italy, Switzerland and San Marino share the one catalog.
-    for tag in ["it", "it_IT.UTF-8", "it-CH", "it_SM"] {
-        assert_eq!(lang_from_tag(tag), Lang::from_code("it"), "{tag}");
-    }
     // French: France, Belgium, Canada, Switzerland and the rest share the one catalog.
     for tag in ["fr", "fr_FR.UTF-8", "fr-BE", "fr_CA", "fr-CH", "fr-LU"] {
         assert_eq!(lang_from_tag(tag), Lang::from_code("fr"), "{tag}");
@@ -547,6 +543,10 @@ fn menu_catalogs_translate_every_menu_label() {
     }
     assert_eq!(tr(cs(), "File"), "Soubor");
     assert_eq!(tr(Lang::from_code("ja").expect("ja"), "File"), "ファイル");
+    // Italian: Italy, Switzerland and San Marino share the one catalog.
+    for tag in ["it", "it_IT.UTF-8", "it-CH", "it_SM"] {
+        assert_eq!(lang_from_tag(tag), Lang::from_code("it"), "{tag}");
+    }
     assert_eq!(tr(Lang::from_code("pt-br").expect("pt-br"), "File"), "Arquivo");
     assert_eq!(tr(es(), "File"), "Archivo");
     assert_eq!(tr(it(), "Edit"), "Modifica");
@@ -556,12 +556,12 @@ fn es() -> Lang {
     Lang::from_code("es").expect("es registered")
 }
 
-fn it() -> Lang {
-    Lang::from_code("it").expect("it registered")
-}
-
 fn fr() -> Lang {
     Lang::from_code("fr").expect("fr registered")
+}
+
+fn it() -> Lang {
+    Lang::from_code("it").expect("it registered")
 }
 
 fn ru() -> Lang {
@@ -589,27 +589,6 @@ fn spanish_reads_as_spanish() {
     assert_eq!(trn(es(), 3, "{n} Layer", "{n} Layers"), "3 capas");
 }
 
-/// Italian uses the vector-illustration vocabulary its users know, has two plural forms like
-/// English (zero takes the plural), and reads the same in the menus and in the panels.
-#[test]
-fn italian_reads_as_italian() {
-    for (en, want) in [
-        ("Artboard Tool", "Strumento Tavola da disegno"),
-        ("Swatches", "Campioni"),
-        ("Pathfinder", "Elaborazione tracciati"),
-        ("Stroke", "Traccia"),
-        ("Fill", "Riempimento"),
-        ("Direct Selection Tool", "Strumento Selezione diretta"),
-        ("Save As…", "Salva con nome…"),
-        ("Undo", "Annulla"),
-    ] {
-        assert_eq!(tr(it(), en), want);
-    }
-    assert_eq!(trn(it(), 1, "{n} Layer", "{n} Layers"), "1 livello");
-    assert_eq!(trn(it(), 0, "{n} Layer", "{n} Layers"), "0 livelli");
-    assert_eq!(trn(it(), 3, "{n} Layer", "{n} Layers"), "3 livelli");
-}
-
 /// French uses the vector-illustration vocabulary its users know, puts zero in the singular (« 0
 /// calque »), and reads the same in the menus and in the panels.
 #[test]
@@ -629,6 +608,27 @@ fn french_reads_as_french() {
     assert_eq!(trn(fr(), 0, "{n} Layer", "{n} Layers"), "0 calque");
     assert_eq!(trn(fr(), 1, "{n} Layer", "{n} Layers"), "1 calque");
     assert_eq!(trn(fr(), 2, "{n} Layer", "{n} Layers"), "2 calques");
+}
+
+/// Italian uses the vector-illustration vocabulary its users know, has two plural forms like
+/// English (zero takes the plural), and reads the same in the menus and in the panels.
+#[test]
+fn italian_reads_as_italian() {
+    for (en, want) in [
+        ("Artboard Tool", "Strumento Tavola da disegno"),
+        ("Swatches", "Campioni"),
+        ("Pathfinder", "Elaborazione tracciati"),
+        ("Stroke", "Traccia"),
+        ("Fill", "Riempimento"),
+        ("Direct Selection Tool", "Strumento Selezione diretta"),
+        ("Save As…", "Salva con nome…"),
+        ("Undo", "Annulla"),
+    ] {
+        assert_eq!(tr(it(), en), want);
+    }
+    assert_eq!(trn(it(), 1, "{n} Layer", "{n} Layers"), "1 livello");
+    assert_eq!(trn(it(), 0, "{n} Layer", "{n} Layers"), "0 livelli");
+    assert_eq!(trn(it(), 3, "{n} Layer", "{n} Layers"), "3 livelli");
 }
 
 /// Russian uses the vector-illustration vocabulary its users know, has the three plural forms
@@ -679,7 +679,7 @@ fn russian_plurals_have_three_forms() {
     assert_eq!(forms, [2, 0, 1, 1, 2, 2, 0, 1, 2, 2, 0]);
 }
 
-/// Czech, Spanish, Italian and French letters (and the punctuation their text uses) come from each family's own first font, not
+/// Czech, Spanish, French and Italian letters (and the punctuation their text uses) come from each family's own first font, not
 /// from a fallback further down the stack. (`has_glyph` can't tell: it counts characters of the
 /// face that draws missing glyphs, the first one, as missing.)
 #[test]
