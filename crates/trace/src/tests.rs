@@ -278,3 +278,73 @@ fn timing_1000x1000_bw_under_300ms() {
     assert!(!res.paths.is_empty());
     assert!(ms < 300.0, "{ms} ms");
 }
+
+/// Stripes of `n` colours, each with a few dots of the next one: many layers, many small shapes.
+fn stripes(size: u32, n: u32) -> Raster {
+    let colour = |i: u32| [(i * 37 % 256) as u8, (i * 91 % 256) as u8, (i * 53 % 256) as u8, 255];
+    Raster::from_fn(size, size, |x, y| {
+        let band = x * n / size;
+        if (x % 9 < 3) && (y % 9 < 3) { colour(band + 1) } else { colour(band) }
+    })
+}
+
+/// #525: past the anchor budget the trace gives up with advice instead of making millions of
+/// anchors; under it, it is the plain trace.
+#[test]
+fn a_trace_past_its_anchor_budget_is_refused() {
+    let img = stripes(120, 8);
+    let p = TraceParams { mode: Mode::Color, colors: 16, noise: 1, ..TraceParams::default() };
+    let full = trace(&img, &p);
+    let anchors = full.anchor_count();
+    assert!(anchors > 100, "{anchors} anchors");
+    assert!(matches!(trace_within(&img, &p, anchors / 2), Err(TraceError::TooComplex { max }) if max == anchors / 2));
+    assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
+}
+
+/// Layers traced in parallel come out in the same order every time: bottom (largest) first.
+#[test]
+fn parallel_layers_keep_their_order() {
+    let img = stripes(90, 12);
+    let p = TraceParams { mode: Mode::Color, colors: 24, noise: 1, method: Method::Overlapping, ..TraceParams::default() };
+    let a = trace(&img, &p);
+    assert!(a.palette.len() > 8, "{} colours", a.palette.len());
+    for _ in 0..4 {
+        assert_eq!(trace(&img, &p), a);
+    }
+    // Overlapping: each layer's shapes cover the layers above, so the pixel counts fall upwards.
+    let firsts: Vec<usize> = a.palette.iter().filter_map(|c| a.paths.iter().find(|t| t.color == *c).map(|t| t.pixels)).collect();
+    assert!(firsts.windows(2).all(|w| w[0] >= w[1]), "{firsts:?}");
+}
+
+/// A PNG whose header says `w` × `h` pixels, with no image data.
+fn png_header(w: u32, h: u32) -> Vec<u8> {
+    fn crc(bytes: &[u8]) -> u32 {
+        let mut c = !0u32;
+        for &b in bytes {
+            c ^= u32::from(b);
+            for _ in 0..8 {
+                c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            }
+        }
+        !c
+    }
+    let mut ihdr = b"IHDR".to_vec();
+    ihdr.extend(w.to_be_bytes());
+    ihdr.extend(h.to_be_bytes());
+    ihdr.extend([8, 6, 0, 0, 0]);
+    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    for chunk in [ihdr, b"IDAT".to_vec(), b"IEND".to_vec()] {
+        png.extend((chunk.len() as u32 - 4).to_be_bytes());
+        png.extend(&chunk);
+        png.extend(crc(&chunk).to_be_bytes());
+    }
+    png
+}
+
+/// An image too large to trace is refused from its header, before it is decoded.
+#[test]
+fn an_image_too_large_to_trace_is_refused_before_decoding() {
+    let err = Raster::decode(&png_header(30_000, 30_000)).unwrap_err();
+    assert!(matches!(err, TraceError::TooLarge { width: 30_000, height: 30_000, .. }), "{err}");
+    assert!(matches!(Raster::decode(&png_header(64, 64)), Err(TraceError::Decode(_))), "a small header goes on to decoding");
+}

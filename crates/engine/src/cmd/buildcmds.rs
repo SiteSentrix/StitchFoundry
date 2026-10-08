@@ -640,6 +640,11 @@ fn trace_params(p: &Value) -> Result<tr::TraceParams> {
     serde_json::from_value(v).map_err(|e| bad("imageTrace.make", e.to_string()))
 }
 
+/// The most anchor points an Image Trace may make: a photo traced at high fidelity can make
+/// millions, more than the canvas draws smoothly or a laptop has memory for, so the trace is
+/// refused with advice instead (#525).
+pub const MAX_TRACE_ANCHORS: usize = 2_000_000;
+
 fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     const C: &str = "imageTrace.make";
     let params = trace_params(p)?;
@@ -671,7 +676,7 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     };
     let blob = s.doc()?.doc.images.get(&img.key).ok_or_else(|| EngineError::Other(format!("image data `{}` is missing", img.key)))?;
     let raster = tr::Raster::decode(&blob.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
-    let res = tr::trace(&raster, &params);
+    let res = tr::trace_within(&raster, &params, MAX_TRACE_ANCHORS).map_err(|e| EngineError::Other(e.to_string()))?;
     // Pixel space of the decoded raster → the image object's pixel space → document.
     let sx = img.width.max(1) as f64 / raster.width.max(1) as f64;
     let sy = img.height.max(1) as f64 / raster.height.max(1) as f64;
