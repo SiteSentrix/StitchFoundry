@@ -449,7 +449,8 @@ mod area_tests {
         use vectorcraft_doc::LeadingModel;
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "一\n二", "area": {"width": 200, "height": 100}})).unwrap()["id"]
+        // Exercise ink bounds with bundled glyphs; Japanese outlines require optional craft-fonts.
+        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "A\nB", "area": {"width": 200, "height": 100}})).unwrap()["id"]
             .as_u64()
             .unwrap();
         let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
