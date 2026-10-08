@@ -192,10 +192,19 @@ pub(super) fn params(d: &Dialog) -> Value {
     Value::Object(d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect())
 }
 
+/// The (label, value) choices of a parameter that picks one of some values.
+pub(super) type Choices = &'static [(&'static str, &'static str)];
+
 /// Generic editor for command/effect parameters: numbers, booleans, strings and colours; the
-/// parameters `is_length` names are distances shown and typed in `unit`. Returns true when a
-/// value changed.
-pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog, is_length: &dyn Fn(&str) -> bool, unit: Unit) -> bool {
+/// parameters `is_length` names are distances shown and typed in `unit`, those `choices` gives
+/// choices for are dropdowns. Returns true when a value changed.
+pub(super) fn param_fields(
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    is_length: &dyn Fn(&str) -> bool,
+    choices: &dyn Fn(&str) -> Option<Choices>,
+    unit: Unit,
+) -> bool {
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     egui::Grid::new("fxgrid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
@@ -213,6 +222,17 @@ pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog, is_length: &dyn Fn
             }
             if is_length(&k) {
                 changed |= length(ui, d, &k, unit, 140.0);
+                ui.end_row();
+                continue;
+            }
+            if let Some(options) = choices(&k) {
+                let cur = v.as_str().unwrap_or_default();
+                let label = options.iter().find(|(_, value)| *value == cur).map_or(cur, |(l, _)| *l);
+                let labels: Vec<&str> = options.iter().map(|(l, _)| *l).collect();
+                if let Some((_, value)) = crate::widgets::dropdown(ui, ("fx-choice", &k), label, &labels, 140.0).and_then(|i| options.get(i)) {
+                    d.fields.insert(k, json!(value));
+                    changed = true;
+                }
                 ui.end_row();
                 continue;
             }
@@ -318,6 +338,7 @@ pub(super) fn humanize(k: &str) -> String {
         "Radius1" => "Radius 1".into(),
         "Radius2" => "Radius 2".into(),
         "Include Cmy Blacks" => "Include Blacks with CMY:".into(),
+        "Align To Path" => "Align to Path:".into(),
         _ => format!("{s}:"),
     }
 }

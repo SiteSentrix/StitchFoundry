@@ -111,6 +111,21 @@ fn corner_radius(p: &Painter, o: Pos2) {
     p.add(Shape::line(pts, Stroke::new(1.2, INK)));
 }
 
+/// Over a bracket of type on a path: the arrow with a bracket (a stem standing on a baseline,
+/// with a foot) below right.
+fn path_bracket(p: &Painter, o: Pos2) {
+    arrow(p, o, false);
+    let b = o + vec2(13.0, 13.0);
+    let stem = [b + vec2(3.0, 0.0), b + vec2(3.0, 10.0)];
+    let foot = [b + vec2(3.0, 0.0), b + vec2(7.0, 0.0)];
+    let base = [b + vec2(0.0, 8.0), b + vec2(10.0, 8.0)];
+    for (w, c) in [(3.0, HALO), (1.2, INK)] {
+        for l in [stem, foot, base] {
+            p.line_segment(l, Stroke::new(w, c));
+        }
+    }
+}
+
 /// The gradient annotator's stop cursors: the arrow with a plus (add a stop) or minus (delete it)
 /// badge.
 fn stop_badge(p: &Painter, o: Pos2, add: bool) {
@@ -221,6 +236,7 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
         Cursor::WidthAdd => width(painter, p, "+"),
         Cursor::WidthPoint => width(painter, p, "point"),
         Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor => blend(painter, p, c),
+        Cursor::PathBracket => path_bracket(painter, p),
         _ => return false,
     }
     let _ = pos2;

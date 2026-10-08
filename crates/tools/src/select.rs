@@ -4,7 +4,8 @@
 //! drag a live rectangle's corner widget to round its corners (Alt-click cycles their kind,
 //! double-click opens the Corners dialog), double-click to enter isolation mode (Double Click To
 //! Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
-//! click or drag a ruler guide ([`crate::rulerguide`]).
+//! click or drag a ruler guide ([`crate::rulerguide`]), drag the brackets of type on a path
+//! ([`crate::pathtype`]).
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
@@ -17,6 +18,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::Targets;
+use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::rulerguide::GuideEdit;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
 
@@ -49,6 +51,8 @@ enum State {
     },
     /// Dragging a Live Corners widget.
     Corner(CornerDrag),
+    /// Dragging a bracket of type on a path.
+    Bracket(BracketDrag),
 }
 
 #[derive(Default)]
@@ -181,9 +185,14 @@ impl Tool for SelectionTool {
                 vec![]
             }
             (PointerKind::Down, _) => {
-                // 1. Live Corners widgets, then the bounding-box handles of the current selection.
+                // 1. Live Corners widgets and type on a path's brackets, then the bounding-box
+                // handles of the current selection.
                 if let Some(c) = CornerDrag::hit(cx, ev) {
                     self.state = State::Corner(c);
+                    return vec![];
+                }
+                if let Some(b) = BracketDrag::hit(cx, ev) {
+                    self.state = State::Bracket(b);
                     return vec![];
                 }
                 if cx.show_bbox
@@ -296,6 +305,15 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 c.finish()
             }
+            (PointerKind::Drag, State::Bracket(mut b)) => {
+                let out = b.drag(cx, p, m.cmd);
+                self.state = State::Bracket(b);
+                out
+            }
+            (PointerKind::Up, State::Bracket(b)) => {
+                self.state = State::Idle;
+                b.finish()
+            }
             (PointerKind::Up, State::Moving { began, deselect, .. }) => {
                 self.state = State::Idle;
                 self.measure = None;
@@ -332,7 +350,7 @@ impl Tool for SelectionTool {
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let mut o = vec![];
+        let mut o = pathtype::overlays(cx);
         match &self.state {
             State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             State::Corner(c) => o.extend(c.overlays(cx)),
@@ -352,6 +370,7 @@ impl Tool for SelectionTool {
             State::Scaling { handle, bx, .. } => return handle_cursor(handle, bx.angle),
             State::Moving { began: true, .. } => return Cursor::Arrow,
             State::Corner(_) => return Cursor::CornerRadius,
+            State::Bracket(_) => return Cursor::PathBracket,
             _ => {}
         }
         if self.guide.busy() {
@@ -359,6 +378,9 @@ impl Tool for SelectionTool {
         }
         if over_widget(cx, p) {
             return Cursor::CornerRadius;
+        }
+        if over_bracket(cx, p) {
+            return Cursor::PathBracket;
         }
         if cx.show_bbox
             && let Some(bx) = selection_box(cx)

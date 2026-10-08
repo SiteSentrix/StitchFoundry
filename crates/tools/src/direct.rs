@@ -15,6 +15,7 @@
 //! with it) and, once a point is clicked, its handles; and the points of selected gradient meshes
 //! and mesh envelopes and their handles ([`MeshEdit`]). Dragging a corner or an edge of area
 //! type's frame reshapes the type area (`text.reshapeArea`): the text reflows at its size.
+//! Dragging the brackets of selected type on a path moves or flips it ([`crate::pathtype`]).
 //!
 //! A press on the stroke of a path that isn't selected as a whole selects that segment's two anchors
 //! (the fill, or Alt, selects the whole path); dragging the segment bends it if it's curved, else
@@ -31,6 +32,7 @@ use crate::bbox::move_delta;
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets};
 use crate::meshedit::MeshEdit;
+use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::rulerguide::GuideEdit;
 use crate::select::{MoveSnap, is_area_type, matrix_json};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
@@ -70,6 +72,8 @@ enum State {
         add: bool,
     },
     Corner(CornerDrag),
+    /// Dragging a bracket of type on a path.
+    Bracket(BracketDrag),
     /// Dragging a point of a blend's spine from `from`.
     SpinePoint {
         id: NodeId,
@@ -310,6 +314,10 @@ impl Tool for DirectSelectionTool {
                     self.state = State::Corner(c);
                     return vec![];
                 }
+                if let Some(b) = BracketDrag::hit(cx, ev) {
+                    self.state = State::Bracket(b);
+                    return vec![];
+                }
                 if let Some(sel) = self.spine.filter(|(id, _)| cx.selection.contains(*id))
                     && let Some(out) = hit_spine_handle(cx, sel, p, tol)
                 {
@@ -502,6 +510,15 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Idle;
                 c.finish()
             }
+            (PointerKind::Drag, State::Bracket(mut b)) => {
+                let out = b.drag(cx, p, ev.mods.cmd);
+                self.state = State::Bracket(b);
+                out
+            }
+            (PointerKind::Up, State::Bracket(b)) => {
+                self.state = State::Idle;
+                b.finish()
+            }
             (
                 PointerKind::Up,
                 State::MoveAnchors { began, .. }
@@ -552,6 +569,7 @@ impl Tool for DirectSelectionTool {
                 out.extend(self.mesh.overlays(cx));
                 if !self.group {
                     out.extend(frame_overlays(cx));
+                    out.extend(pathtype::overlays(cx));
                 }
                 if matches!(self.state, State::Handle { .. } | State::MoveAnchors { .. } | State::MoveObject { .. }) {
                     out.extend(self.guides.iter().cloned());
@@ -567,6 +585,9 @@ impl Tool for DirectSelectionTool {
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
         if !self.group && (matches!(self.state, State::Corner(_)) || over_widget(cx, p)) {
             return Cursor::CornerRadius;
+        }
+        if !self.group && (matches!(self.state, State::Bracket(_)) || over_bracket(cx, p)) {
+            return Cursor::PathBracket;
         }
         // A press on the highlighted anchor picks it, not the guide.
         self.guide.cursor(cx, p).filter(|_| self.hover.is_none() || self.guide.busy()).unwrap_or(Cursor::ArrowHollow)

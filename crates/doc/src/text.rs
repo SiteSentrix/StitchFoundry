@@ -539,6 +539,36 @@ impl PathEffect {
     }
 }
 
+/// Type on a Path Options › Align to Path: which height of the type runs along the path.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PathAlign {
+    /// The font's top edge: the type hangs below the path.
+    Ascender,
+    /// The font's bottom edge: the type stands above the path.
+    Descender,
+    /// Halfway between the ascender and the descender.
+    Center,
+    /// The baseline (the default).
+    #[default]
+    Baseline,
+}
+
+impl PathAlign {
+    pub const ALL: [PathAlign; 4] = [PathAlign::Ascender, PathAlign::Descender, PathAlign::Center, PathAlign::Baseline];
+    pub fn id(self) -> &'static str {
+        match self {
+            PathAlign::Ascender => "ascender",
+            PathAlign::Descender => "descender",
+            PathAlign::Center => "center",
+            PathAlign::Baseline => "baseline",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|a| a.id().eq_ignore_ascii_case(s.trim()))
+    }
+}
+
 /// Area Type Options: rows and columns, gutters, inset and first baseline of area type.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -583,8 +613,48 @@ pub enum TextKind {
     Point,
     /// Area type flowed inside `frame` (document coordinates, untransformed by `xf`).
     Area { frame: PathData },
-    /// Type on a path, starting at `start` (0..1 of the path length).
-    OnPath { path: PathData, start: f64 },
+    /// Type on a path, flowing from its start bracket `start` to its end bracket `end` (0..1 of the
+    /// path length; no `end`: the end of the path, or once round a closed path). See
+    /// [`TextKind::path_span`].
+    OnPath {
+        path: PathData,
+        start: f64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        end: Option<f64>,
+    },
+}
+
+impl TextKind {
+    /// Type on a path's span: from its start to its end bracket, as fractions of its path's length.
+    /// Round a closed path the end may be past 1 (the span runs on past the path's start), a full
+    /// turn without an end or with the end at the start. None for other type.
+    pub fn path_span(&self) -> Option<(f64, f64)> {
+        let TextKind::OnPath { path, start, end } = self else { return None };
+        let s = fraction(*start);
+        Some(if path.is_closed() {
+            let run = end.map_or(0.0, |e| (fraction(e) - s).rem_euclid(1.0));
+            (s, s + if run < 1e-9 { 1.0 } else { run })
+        } else {
+            (s, end.map_or(1.0, |e| fraction(e).max(s)))
+        })
+    }
+}
+
+/// `x` as a fraction of a path's length (0..1; 0 when not finite).
+fn fraction(x: f64) -> f64 {
+    if x.is_finite() { x.clamp(0.0, 1.0) } else { 0.0 }
+}
+
+/// `path` run the other way, each point as far from its new start as it was from its old end
+/// (the subpaths in reverse order, a closed one keeping its first anchor first).
+fn reverse_from_end(path: &mut PathData) {
+    path.subpaths.reverse();
+    for sp in &mut path.subpaths {
+        sp.reverse();
+        if sp.closed && !sp.anchors.is_empty() {
+            sp.anchors.rotate_right(1);
+        }
+    }
 }
 
 /// A text object. `runs` split into paragraphs at `\n`.
@@ -605,6 +675,14 @@ pub struct TextObject {
     /// Type on a Path effect (type on a path only).
     #[serde(default, rename = "pathEffect", skip_serializing_if = "crate::skip::is_default")]
     pub path_effect: PathEffect,
+    /// Type on a Path Options › Align to Path (type on a path only).
+    #[serde(default, rename = "pathAlign", skip_serializing_if = "crate::skip::is_default")]
+    pub path_align: PathAlign,
+    /// Type on a Path Options › Spacing in points (type on a path only): glyphs are spaced as if
+    /// set this far above the path, which closes them up round the outside of a curve and opens
+    /// them up round the inside.
+    #[serde(default, rename = "pathSpacing", skip_serializing_if = "crate::skip::is_default")]
+    pub path_spacing: f64,
     /// Wrap objects above this area type, resolved by the engine after each edit (text space).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrap: Vec<WrapShape>,
@@ -623,6 +701,8 @@ impl TextObject {
             para: ParaStyle::default(),
             area: AreaOptions::default(),
             path_effect: PathEffect::default(),
+            path_align: PathAlign::default(),
+            path_spacing: 0.0,
             wrap: Vec::new(),
             cached_bounds: None,
         }
@@ -651,6 +731,29 @@ impl TextObject {
     }
     pub fn transform(&mut self, a: Affine) {
         self.xf = a * self.xf;
+    }
+    /// Type on a path's path in document space; None for other type.
+    pub fn type_path(&self) -> Option<PathData> {
+        match &self.kind {
+            TextKind::OnPath { path, .. } => Some(path.transformed(self.xf)),
+            _ => None,
+        }
+    }
+    /// Flip type on a path to the other side of its path (Type on a Path Options › Flip, or its
+    /// centre bracket dragged across the path): the path runs the other way and the brackets swap
+    /// ends, so the type keeps its stretch of the path. False, changing nothing, for other type.
+    pub fn flip_on_path(&mut self) -> bool {
+        let Some((s, e)) = self.kind.path_span() else { return false };
+        let TextKind::OnPath { path, start, end } = &mut self.kind else { return false };
+        reverse_from_end(path);
+        if path.is_closed() {
+            *start = (1.0 - e).rem_euclid(1.0);
+            *end = (e - s < 1.0 - 1e-9).then(|| (1.0 - s).rem_euclid(1.0));
+        } else {
+            *start = 1.0 - e;
+            *end = (s > 1e-9).then_some(1.0 - s);
+        }
+        true
     }
     /// Area type's frame (the type area) in document space; None for other type.
     pub fn area_frame(&self) -> Option<PathData> {

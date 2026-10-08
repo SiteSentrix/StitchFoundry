@@ -269,7 +269,7 @@ impl TextLine {
         t.xf = Affine::translate(self.at.origin.to_vec2()) * Affine::rotate(angle);
         let db = vectorcraft_text::FontDb::global();
         if let Some(path) = path {
-            t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0 };
+            t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
             t.xf = Affine::IDENTITY;
             t.cached_bounds = Some(vectorcraft_text::layout(db, &t).bounds);
             return Some((t, self.opacity));

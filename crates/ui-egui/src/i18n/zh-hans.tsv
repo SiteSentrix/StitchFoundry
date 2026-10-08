@@ -183,6 +183,7 @@
 	Artwork Colors	图稿颜色
 	As Multiple Assets	作为多个资源
 	As Single Asset	作为单一资源
+	Ascender	上缘
 	Ask When Modified	修改时询问
 	Aspect Ratio	长宽比
 	Asset Export	资源导出
@@ -214,6 +215,7 @@
 	Background:	背景：
 	Backspace	Backspace
 	Bar Graph Tool	条形图工具
+	Baseline	基线
 	Baseline Shift	基线偏移
 	Basic Latin	基本拉丁文
 	Batch	批处理
@@ -471,6 +473,8 @@
 	Corner Radius:	圆角半径：
 	Corner:	转角：
 	Corners	转角
+	Descender	下缘
+	Flip	翻转
 	Round	圆角
 	Inverted Round	反向圆角
 	Corners…	转角…
@@ -918,6 +922,7 @@
 	Fit Headline	适合标题
 	Decrease Font Size	减小字体大小
 	Increase Font Size	增大字体大小
+	Spacing	间距
 	Step Type	按增量调整文字
 	Fit in View	适合视图
 	Fit in Window	适合窗口
@@ -2647,6 +2652,7 @@
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	文字变为轮廓，CAD 无法绘制的描边变为填充形状。
 	Type Object Selection by Path Only	仅按路径选择文字对象
 	Type on a Path	路径文字
+	Type on a Path Options	路径文字选项
 	Type on a Path Options…	路径文字选项…
 	Type on a Path Tool	路径文字工具
 	Type Orientation	文字方向

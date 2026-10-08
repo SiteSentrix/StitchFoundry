@@ -453,10 +453,10 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let text = str_param(p, "text").unwrap_or("").to_string();
     let start = match point_param(p, "at") {
-        Some(at) if on_path => vectorcraft_text::path_fraction_at(&path.to_bezpath(), at).0,
+        Some(at) if on_path => vectorcraft_geom::ArcPath::new(path).fraction_at(at).unwrap_or(0.0),
         _ => 0.0,
     };
-    let kind = if on_path { TextKind::OnPath { path: path.clone(), start } } else { TextKind::Area { frame: path.clone() } };
+    let kind = if on_path { TextKind::OnPath { path: path.clone(), start, end: None } } else { TextKind::Area { frame: path.clone() } };
     let mut t = TextObject {
         vertical: p.get("vertical").and_then(Value::as_bool).unwrap_or(false),
         kind,
@@ -465,6 +465,8 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         para: super::create::new_type_para(),
         area: Default::default(),
         path_effect: Default::default(),
+        path_align: Default::default(),
+        path_spacing: 0.0,
         wrap: Vec::new(),
         cached_bounds: None,
     };
@@ -595,6 +597,8 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             para: Default::default(),
             area: Default::default(),
             path_effect: Default::default(),
+            path_align: Default::default(),
+            path_spacing: 0.0,
             wrap: Vec::new(),
             cached_bounds: None,
         };

@@ -586,7 +586,7 @@ impl Ctx {
             let offset = tp.attribute("startOffset").and_then(|v| self.length(v, em, len)).unwrap_or(0.0) + dx[0];
             let width = if anchor > 0.0 { advance(&point_text(&cells)) } else { 0.0 };
             let start = Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| s.clamp(0.0, 1.0));
-            obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start };
+            obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start, end: None };
             obj.xf = Affine::IDENTITY;
         } else if vertical {
             // Type on a vertical path: dy is extra advance, dx shifts across the column.
@@ -606,7 +606,7 @@ impl Ctx {
             let mut bp = BezPath::new();
             bp.move_to((x0, y0));
             bp.line_to((x0, y0 + width + 1.0));
-            obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start: 0.0 };
+            obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start: 0.0, end: None };
             obj.xf = Affine::IDENTITY;
         } else {
             let origin = Point::new(x[0].unwrap_or(0.0) + dx[0], y[0].unwrap_or(0.0) + dy[0]);

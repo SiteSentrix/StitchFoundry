@@ -96,7 +96,7 @@ fn real_text_lands_within_half_a_point_of_the_outlines() {
         TextRun { text: " ok".into(), style: CharStyle { rotation: 20.0, ..style(20.0) } },
     ];
     let mut on_path = TextObject::point(Point::ZERO, "along the arc", style(18.0));
-    on_path.kind = TextKind::OnPath { path: arc(), start: 0.0 };
+    on_path.kind = TextKind::OnPath { path: arc(), start: 0.0, end: None };
     on_path.xf = Affine::IDENTITY;
     for t in [plain, turned, mixed, on_path] {
         let what = t.plain_text();

@@ -401,7 +401,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn cursor_icon(c: Cursor) -> egui::CursorIcon {
     use egui::CursorIcon as C;
     match c {
-        Cursor::Arrow | Cursor::ArrowHollow | Cursor::CornerRadius => C::Default,
+        Cursor::Arrow | Cursor::ArrowHollow | Cursor::CornerRadius | Cursor::PathBracket => C::Default,
         Cursor::Move => C::Move,
         Cursor::Crosshair => C::Crosshair,
         Cursor::ResizeH => C::ResizeHorizontal,
@@ -972,10 +972,11 @@ fn node_outline(n: &Node) -> BezPath {
     let mut bp = BezPath::new();
     walk_drawn(n, &mut |c| match &c.kind {
         NodeKind::Path { path, .. } => bp.extend(path.to_bezpath()),
-        // Area type shows its frame: the type area Direct Selection reshapes.
-        NodeKind::Text(t) if c.perspective.is_none() && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) => {
-            if let Some(frame) = t.area_frame() {
-                bp.extend(frame.to_bezpath());
+        // Area type shows its frame: the type area Direct Selection reshapes; type on a path its
+        // path, which the selection tools' brackets sit on.
+        NodeKind::Text(t) if c.perspective.is_none() && !matches!(t.kind, vectorcraft_doc::TextKind::Point) => {
+            if let Some(path) = t.area_frame().or_else(|| t.type_path()) {
+                bp.extend(path.to_bezpath());
             }
         }
         NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
@@ -1344,9 +1345,10 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         {
             anchor_square(p, xf.to_screen(b.center()), color, true, anchor(false));
         }
-        // Text: baseline marker (area type shows its frame instead, which may not be a rectangle).
+        // Point type: baseline marker (area type shows its frame instead, which may not be a
+        // rectangle, and type on a path its path).
         if let NodeKind::Text(tx) = &n.kind
-            && !matches!(tx.kind, vectorcraft_doc::TextKind::Area { .. })
+            && matches!(tx.kind, vectorcraft_doc::TextKind::Point)
         {
             let o = xf.to_screen(tx.xf * Point::ZERO);
             let b = n.geometric_bounds().unwrap_or_default();

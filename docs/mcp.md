@@ -2029,6 +2029,25 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
 ```
 
+## Moving and flipping type on a path
+
+Type on a path flows between a start and an end bracket, stored as fractions of its path's length.
+`type.pathOptions {start?, end?, flip?, effect?, alignToPath?, spacing?, ids?}` sets them and the rest of Type on a
+Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); `flip`
+then turns the type to the other side of its path, the path running the other way and the brackets swapping ends so
+the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
+default) along the path; `spacing` (points) closes glyphs up round the outside of curves and opens them up round the
+inside. With none of them it queries the first selected type on a path:
+`{start, end, flip: false, effect, alignToPath, spacing}`. The Options dialog shows Effect, Flip, Align to Path and
+Spacing and leaves the brackets where they are. As in the reference app, the Selection and Direct Selection tools
+show selected type on a path's brackets: dragging the start or end bracket (`pointer_gesture`) sets where the type
+begins or ends, dragging the centre bracket slides the type along its path and, dragged across the path, flips it
+(with Cmd/Ctrl held it only slides). Each is one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
+```
+
 ## Constrain proportions
 
 The link between W and H in the Transform panel, the Properties panel and the Control bar is the

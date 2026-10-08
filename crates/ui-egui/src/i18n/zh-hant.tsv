@@ -194,6 +194,7 @@
 	Artwork Colors	圖稿顏色
 	As Multiple Assets	作為多個資產
 	As Single Asset	作為單一資產
+	Ascender	上緣
 	Ask When Modified	修改時詢問
 	Aspect Ratio	長寬比
 	Asset Export	資產匯出
@@ -225,6 +226,7 @@
 	Background:	背景：
 	Backspace	Backspace
 	Bar Graph Tool	橫條圖工具
+	Baseline	基線
 	Baseline Shift	基線位移
 	Basic Latin	基本拉丁文
 	Batch	批次
@@ -297,6 +299,7 @@
 	Cap	端點
 	Cap:	端點：
 	Cascade	重疊顯示
+	Center	置中
 	Center Artwork	圖稿置中
 	Center on Artboard	在工作區域置中
 	Center-Justified Tab	置中對齊定位點
@@ -484,6 +487,8 @@
 	Corner Radius:	圓角半徑：
 	Corner:	轉角：
 	Corners	轉角
+	Descender	下緣
+	Flip	翻轉
 	Round	圓角
 	Radius:	半徑：
 	Inverted Round	反向圓角
@@ -940,6 +945,7 @@
 	Fit Headline	符合標題
 	Decrease Font Size	縮小字體大小
 	Increase Font Size	放大字體大小
+	Spacing	間距
 	Step Type	依增量調整文字
 	Fit in View	符合檢視
 	Fit in Window	符合視窗
@@ -2729,6 +2735,7 @@
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	文字會變成外框，CAD 線條無法繪製的筆畫會變成填色形狀。
 	Type Object Selection by Path Only	僅以路徑選取文字物件
 	Type on a Path	路徑文字
+	Type on a Path Options	路徑文字選項
 	Type on a Path Options…	路徑文字選項…
 	Type on a Path Tool	路徑文字工具
 	Type Orientation	文字方向
