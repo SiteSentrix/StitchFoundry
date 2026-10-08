@@ -4,9 +4,9 @@
 //! The canvas is rasterized on the CPU; the GPU only composites it and draws the UI, so any
 //! adapter that can present to the window will do. [`adapter_order`] ranks the adapters: those that
 //! can't present to the window's surface never, then the one `WGPU_ADAPTER_NAME` names, hardware
-//! before software, the native backends (Vulkan, Metal, DX12) before OpenGL, and the power
-//! preference ([`power_preference`]) among the rest. eframe is handed [`selector`], which takes
-//! the first of that order.
+//! before software, the native backends (Vulkan, Metal, DX12) before OpenGL, the power preference
+//! ([`power_preference`]) among the rest, and a GPU's DX12 adapter before its Vulkan one (#545).
+//! eframe is handed [`selector`], which takes the first of that order.
 //!
 //! An adapter can report that it presents to the window and still fail once it does: on a hybrid
 //! Linux desktop under Wayland, the compositor runs on one GPU and may refuse the frame buffers
@@ -89,15 +89,17 @@ fn key(backend: Backend, vendor: u32, device: u32) -> String {
 
 /// The order to try `candidates` in (their indices): only those that present to the window and
 /// aren't in `skip`; the one whose name contains `named` (any case) first; hardware before
-/// software; native backends before OpenGL; then by `power`, keeping the system's order among
-/// equals (all of it for [`PowerPreference::None`]).
+/// software; native backends before OpenGL; then by `power`; then DX12 before Vulkan, keeping the
+/// system's order among equals (all of it for [`PowerPreference::None`]). Windows lists each GPU
+/// under both, and Intel's Vulkan driver made the whole window flicker black where DX12 and OpenGL
+/// didn't (#545); elsewhere there is no DX12 adapter, so the order is unchanged.
 pub fn adapter_order(candidates: &[Candidate], power: PowerPreference, named: Option<&str>, skip: &[String]) -> Vec<usize> {
     let named = named.map(str::to_lowercase).filter(|n| !n.is_empty());
     let mut order: Vec<(usize, &Candidate)> = candidates.iter().enumerate().filter(|(_, c)| c.presents && !skip.contains(&c.key)).collect();
     // Stable, so equals keep the system's order.
     order.sort_by_key(|(_, c)| {
         let unnamed = named.as_ref().is_some_and(|n| !c.name.to_lowercase().contains(n));
-        (unnamed, c.device_type == DeviceType::Cpu, c.backend == Backend::Gl, power_rank(c.device_type, power))
+        (unnamed, c.device_type == DeviceType::Cpu, c.backend == Backend::Gl, power_rank(c.device_type, power), c.backend == Backend::Vulkan)
     });
     order.into_iter().map(|(i, _)| i).collect()
 }
@@ -361,7 +363,7 @@ mod tests {
     }
 
     /// A Windows machine lists every GPU twice (Vulkan and DX12): power saving still takes the
-    /// integrated GPU first, as wgpu's own choice did (#306).
+    /// integrated GPU first, as wgpu's own choice did (#306), each GPU through DX12 first (#545).
     #[test]
     fn hybrid_laptop_on_windows_renders_on_the_integrated_gpu_with_power_saving() {
         let c = vec![
@@ -372,8 +374,25 @@ mod tests {
             gpu("Microsoft Basic Render Driver", Backend::Dx12, DeviceType::Cpu),
         ];
         let order = adapter_order(&c, PowerPreference::LowPower, None, &[]);
-        assert_eq!(order, [1, 3, 0, 2, 4]);
-        assert_eq!(adapter_order(&c, PowerPreference::HighPerformance, None, &[]), [0, 2, 1, 3, 4]);
+        assert_eq!(order, [3, 1, 2, 0, 4]);
+        assert_eq!(adapter_order(&c, PowerPreference::HighPerformance, None, &[]), [2, 0, 3, 1, 4]);
+    }
+
+    /// The machine of #545: one Intel GPU, whose Vulkan driver made the window flicker black.
+    /// DX12 comes first whatever the preference; Vulkan stays a fallback, and `WGPU_ADAPTER_NAME`
+    /// or a restart leaving DX12 out still reach it.
+    #[test]
+    fn a_windows_gpu_renders_through_dx12_before_vulkan() {
+        let c = vec![
+            gpu("Intel(R) Graphics", Backend::Vulkan, DeviceType::IntegratedGpu),
+            gpu("Intel(R) Graphics", Backend::Dx12, DeviceType::IntegratedGpu),
+            gpu("Microsoft Basic Render Driver", Backend::Dx12, DeviceType::Cpu),
+            gpu("Intel(R) Graphics", Backend::Gl, DeviceType::Other),
+        ];
+        for power in [PowerPreference::LowPower, PowerPreference::HighPerformance, PowerPreference::None] {
+            assert_eq!(adapter_order(&c, power, None, &[]), [1, 0, 3, 2], "{power:?}");
+        }
+        assert_eq!(adapter_order(&c, PowerPreference::LowPower, None, &[c[1].key.clone()]), [0, 3, 2], "DX12 failed: Vulkan next");
     }
 
     #[test]
