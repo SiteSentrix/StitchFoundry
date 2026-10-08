@@ -3,25 +3,27 @@
 use harfrust::{Feature, Tag};
 use vectorcraft_doc::CharStyle;
 
-/// Tracking (in 1/1000 em) beyond which standard ligatures are dropped automatically.
+/// Tracking (in 1/1000 em) outside which standard ligatures are dropped automatically: tighter
+/// than the first, looser than the second.
 ///
 /// Letterspaced type should not ligate: an `fi` glyph keeps its letters tight while everything
-/// around it opens up, which reads as a blot. Small tracking adjustments made to fit a line
-/// (a few thousandths either way) are not letterspacing and keep the ligatures, so only
-/// `|tracking|` above this threshold suppresses them. An explicit `liga` / `clig` in the
-/// character's own features always wins.
-pub const LIGATURE_TRACKING_LIMIT: f64 = 50.0;
+/// around it opens up (or stays open while it closes up), which reads as a blot. Small tracking
+/// adjustments made to fit a line are not letterspacing and keep the ligatures. The limits are
+/// about −8% and +22% of a typical word space (250/1000 em), the thresholds Adobe's composers are
+/// described as using (John Hudson, www-style, 2012-07): condensing shows the fixed ligature
+/// sooner than expanding. An explicit `liga` / `clig` in the character's own features always wins.
+pub const LIGATURE_TRACKING_LIMITS: (f64, f64) = (-20.0, 55.0);
 
 /// OpenType features applied during shaping. Kerning, `case` and ligature suppression are driven
 /// by the character style (`kerning`, `all_caps`, `tracking`); the rest are layout-wide options.
-/// Standard ligatures are dropped when `|tracking|` exceeds [`LIGATURE_TRACKING_LIMIT`], unless
+/// Standard ligatures are dropped when tracking is outside [`LIGATURE_TRACKING_LIMITS`], unless
 /// the character's features turn `liga` (or `clig`) on explicitly.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OtFeatures {
     /// Vertical glyph alternates (`vert`), set by the writing direction.
     pub vertical: bool,
-    /// Standard ligatures (`liga`, `clig`). Suppressed automatically when `|tracking|` exceeds
-    /// [`LIGATURE_TRACKING_LIMIT`], unless the character turns them on explicitly.
+    /// Standard ligatures (`liga`, `clig`). Suppressed automatically when tracking is outside
+    /// [`LIGATURE_TRACKING_LIMITS`], unless the character turns them on explicitly.
     pub ligatures: bool,
     /// Contextual alternates (`calt`).
     pub contextual: bool,
@@ -165,7 +167,8 @@ impl OtFeatures {
 /// Does `tracking` (1/1000 em) count as letterspacing that drops standard ligatures?
 pub fn ligatures_suppressed_by(tracking: f64) -> bool {
     // A non-finite value is not a real letterspacing request; keep the default.
-    tracking.is_finite() && tracking.abs() > LIGATURE_TRACKING_LIMIT
+    let (tight, loose) = LIGATURE_TRACKING_LIMITS;
+    tracking.is_finite() && (tracking < tight || tracking > loose)
 }
 
 /// Do `features` turn standard ligatures on explicitly (`liga`, `+liga`, `clig`, `+clig`)? The last

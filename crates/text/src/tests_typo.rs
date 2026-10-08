@@ -377,9 +377,11 @@ fn opentype_ligature_switches() {
     // Small tracking adjustments (fitting a line) keep the ligature.
     assert_eq!(fi(-5.0, &[]), 1, "tracking -5 keeps fi");
     assert_eq!(fi(20.0, &[]), 1, "tracking +20 keeps fi");
-    assert_eq!(fi(LIGATURE_TRACKING_LIMIT, &[]), 1, "the limit itself keeps fi");
-    // Real letterspacing suppresses ligatures (as letterspaced type should)...
+    let (tight, loose) = LIGATURE_TRACKING_LIMITS;
+    assert_eq!((fi(tight, &[]), fi(loose, &[])), (1, 1), "the limits themselves keep fi");
+    // Real letterspacing suppresses ligatures (as letterspaced type should), condensing sooner...
     assert_eq!(fi(100.0, &[]), 2, "tracking 100 drops fi");
+    assert_eq!(fi(-30.0, &[]), 2, "tracking -30 drops fi");
     assert_eq!(fi(-100.0, &[]), 2, "tracking -100 drops fi");
     // ...unless the character turns them on explicitly.
     assert_eq!(fi(100.0, &["liga"]), 1, "explicit liga wins over tracking");
