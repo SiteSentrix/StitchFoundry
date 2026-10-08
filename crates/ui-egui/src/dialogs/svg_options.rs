@@ -360,7 +360,7 @@ mod tests {
         let f = &mut app.ui.dialog.as_mut().unwrap().fields;
         f.insert("decimals".into(), json!(1));
         f.insert("allArtboards".into(), json!(false));
-        f.insert("range".into(), json!("2"));
+        f.insert("range".into(), json!("1"));
         super::super::confirm(&mut app).unwrap();
         assert!(app.ui.dialog.is_none());
         let svg = text(&written, 0);
