@@ -59,6 +59,7 @@ pub mod rasterfx;
 mod recolor;
 pub mod recovery;
 mod select;
+pub(crate) mod shaper;
 pub(crate) mod slices;
 mod stroke;
 mod style;
@@ -231,6 +232,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(docinfo::specs());
         v.extend(panelcmds::specs());
         v.extend(buildcmds::specs());
+        v.extend(shaper::specs());
         v.extend(brushsym::specs());
         v.extend(patterncmds::specs());
         v.extend(prefscmds::specs());

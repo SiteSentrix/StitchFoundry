@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use vectorcraft_geom::Point;
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
 fn session() -> Session {
@@ -695,7 +696,7 @@ fn snap_to_pixel_rounds_drawing_and_moves() {
 }
 
 #[test]
-fn shaper_turns_rough_strokes_into_live_shapes_and_scribbles_delete() {
+fn shaper_turns_rough_strokes_into_live_shapes_and_scribbles_punch_fills() {
     let mut s = session();
     let v = ViewInfo { smart_guides: false, ..Default::default() };
     s.select_tool("shaper", v).unwrap();
@@ -725,10 +726,86 @@ fn shaper_turns_rough_strokes_into_live_shapes_and_scribbles_delete() {
         "{:?}",
         n.kind_label()
     );
-    // A zig-zag over it deletes it.
+    // A zig-zag inside it clears its fill while retaining the editable original and stroke.
     let zig: Vec<(f64, f64)> = (0..30).map(|i| (150.0 + (i % 2) as f64 * 80.0, 120.0 + i as f64 * 2.0)).collect();
     stroke(&mut s, &zig);
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap(), &n);
+    let group = s.doc().unwrap().doc.node(s.doc().unwrap().selection.objects[0]).unwrap();
+    assert!(group.shaper.is_some());
+    assert!(group.children().unwrap().iter().skip(1).all(|n| n.appearance.fill_paint().is_none()));
+    assert!(group.children().unwrap().iter().skip(1).any(|n| !n.appearance.stroke_paint().is_none()));
+}
+
+#[test]
+fn shaper_square_started_mid_edge_closes_on_pointer_release_and_undoes_once() {
+    let mut s = session();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("shaper", v).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (kind, x, y) in [
+        (PointerKind::Down, 150.0, 100.0),
+        (PointerKind::Drag, 200.0, 105.0),
+        (PointerKind::Drag, 194.0, 200.0),
+        (PointerKind::Drag, 110.0, 191.0),
+        (PointerKind::Drag, 100.0, 100.0),
+        (PointerKind::Up, 150.0, 100.0),
+    ] {
+        s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
+    }
+    let id = *s.doc().unwrap().selection.objects.first().expect("recognized square");
+    assert!(matches!(
+        s.doc().unwrap().doc.node(id).unwrap().kind,
+        vectorcraft_doc::NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Rectangle { .. }), .. }
+    ));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
     assert!(s.doc().unwrap().doc.node(id).is_none());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_some());
+}
+
+#[test]
+fn shaper_creates_upright_or_inverted_live_triangles_with_one_undo_step() {
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    for direction in [0.0_f64, 180.0] {
+        let mut s = session();
+        s.select_tool("shaper", v).unwrap();
+        let undo = s.doc().unwrap().history.undo.len();
+        let corners: Vec<Point> = (0..3)
+            .map(|i| {
+                let angle = (direction + 7.0 - 90.0).to_radians() + std::f64::consts::TAU * i as f64 / 3.0;
+                Point::new(200.0 + 70.0 * angle.cos(), 200.0 + 70.0 * angle.sin())
+            })
+            .collect();
+        let mut pts = vec![];
+        for i in 0..3 {
+            for j in 0..20 {
+                pts.push(corners[i] + (corners[(i + 1) % 3] - corners[i]) * (j as f64 / 20.0));
+            }
+        }
+        // Begin midway along an edge; the release closes the final segment.
+        pts.rotate_left(7);
+        s.pointer(&PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y), v).unwrap();
+        for p in &pts[1..] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, p.x, p.y), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, pts[0].x, pts[0].y), v).unwrap();
+        let id = *s.doc().unwrap().selection.objects.first().expect("recognized triangle");
+        let node = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let vectorcraft_doc::NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Polygon { sides: 3, xf, .. }), .. } = &node.kind else {
+            panic!("expected live triangle, got {:?}", node.kind_label());
+        };
+        let [a, b, c, d, _, _] = xf.as_coeffs();
+        let (sin, cos) = direction.to_radians().sin_cos();
+        for (actual, expected) in [(a, cos), (b, sin), (c, -sin), (d, cos)] {
+            assert!((actual - expected).abs() < 1e-12, "direction {direction}, transform {xf:?}");
+        }
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc.node(id).is_none());
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.node(id).unwrap(), &node);
+    }
 }
 
 #[test]

@@ -472,6 +472,9 @@ pub struct Node {
     /// Graph object: the group's children are generated from this spec (Object → Graph).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<Box<crate::graph::GraphSpec>>,
+    /// Editable Shaper composition; the original art is retained in its source child.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
     pub kind: NodeKind,
     /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
     /// that style's look: editing its appearance or transparency breaks the link.
@@ -536,6 +539,7 @@ impl Node {
             trace: None,
             wrap: None,
             graph: None,
+            shaper: None,
             kind,
             graphic_style: None,
             attrs: None,
@@ -707,6 +711,7 @@ impl Node {
             }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => children
                 .iter()
+                .skip(usize::from(self.shaper.is_some()))
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds())),
             NodeKind::Text(t) => self.projected(t.bounds()),
@@ -738,7 +743,11 @@ impl Node {
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
                 // The container's own strokes paint around its members.
                 let o = self.appearance.outset();
-                children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds())).map(|b| b.inflate(o, o))
+                children
+                    .iter()
+                    .skip(usize::from(self.shaper.is_some()))
+                    .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()))
+                    .map(|b| b.inflate(o, o))
             }
             NodeKind::Blend { children, spec } => {
                 let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()));
@@ -965,7 +974,7 @@ impl Node {
                 }
             }
             NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
-                for c in children.iter().filter(|c| c.visible) {
+                for c in children.iter().skip(usize::from(self.shaper.is_some())).filter(|c| c.visible) {
                     c.push_clip_shapes(text, out);
                 }
             }
