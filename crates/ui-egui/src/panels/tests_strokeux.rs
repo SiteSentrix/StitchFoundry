@@ -32,10 +32,10 @@ fn weights_and_dashes_show_in_the_stroke_unit_everywhere() {
     app.session.prefs.units_stroke = "millimeters".into();
     run(&mut app, "stroke.set", json!({"dash": [12, 6]}));
     let mm = vectorcraft_doc::Unit::Millimeters.format(1.0);
-    assert_eq!(mm, "0.353 mm");
+    assert_eq!(mm, "0.3528 mm");
     let t = texts(&ctx, &mut app, stroke::show);
     assert!(shows(&t, &mm), "Stroke panel: {t:?}");
-    assert!(shows(&t, "4.233") && shows(&t, "2.117"), "dash and gap in mm: {t:?}");
+    assert!(shows(&t, "4.2333") && shows(&t, "2.1167"), "dash and gap in mm: {t:?}");
     assert!(shows(&texts(&ctx, &mut app, properties::show), &mm), "Properties panel");
     assert!(shows(&texts(&ctx, &mut app, crate::chrome::control_bar), &mm), "Control bar");
 }
@@ -75,7 +75,8 @@ fn inside_and_outside_are_off_for_open_paths_and_type() {
 
 #[test]
 fn the_weight_presets_run_from_a_quarter_point_to_a_hundred() {
-    assert!(stroke::WEIGHT_PRESETS.contains(&0.25) && stroke::WEIGHT_PRESETS.contains(&100.0));
+    let pt = stroke::weight_presets(vectorcraft_doc::Unit::Points);
+    assert!(pt.contains(&0.25) && pt.contains(&100.0));
     let ctx = egui::Context::default();
     let mut app = app_with_rect();
     // The chevron at the right end of the 120 px weight spinner opens them.
@@ -85,4 +86,29 @@ fn the_weight_presets_run_from_a_quarter_point_to_a_hundred() {
     click(&ctx, &mut app, egui::pos2(r.right() + sp + 110.0, r.center().y), stroke::show);
     let t = texts(&ctx, &mut app, stroke::show);
     assert!(shows(&t, "0.25 pt") && shows(&t, "100 pt"), "{t:?}");
+}
+
+#[test]
+fn weight_presets_display_cleanly_in_their_native_unit() {
+    use vectorcraft_doc::Unit;
+    // Round-tripping a native-unit value through to_pt → from_pt → number() must give the same
+    // string the ladder was authored with: no "0.353 mm" surprises in the dropdown.
+    for (unit, want) in [
+        (Unit::Millimeters, ["0.1", "0.25", "0.35", "0.5", "0.75", "1", "30"].as_slice()),
+        (Unit::Centimeters, ["0.01", "0.05", "0.1", "0.5", "1", "5"].as_slice()),
+        (Unit::Pixels, ["1", "10", "20", "40"].as_slice()),
+        (Unit::Inches, ["0.0078", "0.0313", "0.375", "1", "5"].as_slice()),
+        (Unit::Points, ["0.25", "0.5", "1", "50", "100"].as_slice()),
+    ] {
+        let presets = stroke::weight_presets(unit);
+        let shown: Vec<String> = presets.iter().map(|pt| unit.number(*pt)).collect();
+        for w in want {
+            assert!(shown.iter().any(|s| s == w), "{unit:?} preset {w:?} missing from {shown:?}");
+        }
+    }
+    // Picas are exact pt weights (0p1 = 1 pt, 1p = 12 pt, 5p = 60 pt).
+    let pc = stroke::weight_presets(Unit::Picas);
+    assert!([1.0, 12.0, 60.0].iter().all(|w| pc.contains(w)), "{pc:?}");
+    // Units no stroke is measured in keep the pt ladder, in points.
+    assert_eq!(stroke::weight_presets(Unit::Meters), stroke::weight_presets(Unit::Points));
 }
