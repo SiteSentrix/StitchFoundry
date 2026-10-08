@@ -160,9 +160,18 @@ fn open_dialog(app: &mut VectorcraftApp, files: Vec<Value>) {
             "template": false,
             "replace": false,
             "__replace": files.len() == 1 && one_object,
+            "__documents": files.iter().any(is_vectorcraft_file),
+            "__others": !files.iter().all(is_vectorcraft_file),
             "__info": info,
         }),
     ));
+}
+
+/// Is dialog file entry `file` a VectorCraft document on disk (what Link places as one locked
+/// object)?
+fn is_vectorcraft_file(file: &Value) -> bool {
+    let native = ["vectorcraft", vectorcraft_format::LEGACY_EXTENSION, "vctemplate"];
+    file.get("path").and_then(Value::as_str).is_some_and(|p| native.contains(&fileio::extension(p).as_str()))
 }
 
 /// The engine params naming `file` (a dialog file entry).

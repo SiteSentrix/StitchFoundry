@@ -230,7 +230,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         hidden: vec![],
         rot: v.rotation,
         anti_alias: app.session.prefs.anti_aliased_artwork,
+        placed: vectorcraft_render::placed_document::generation(),
     };
+    // Placed documents' bitmaps are being made: draw again when they are ready.
+    if vectorcraft_render::placed_document::busy() {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
+    }
     if !app.canvas.worker_started {
         app.canvas.worker_started = true;
         if std::env::var_os("VECTORCRAFT_SYNC_RENDER").is_none() {
@@ -265,6 +270,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // General › Anti-aliased Artwork: off, edges are hard on screen (raster effects and
             // pattern tiles stay smooth), as in Illustrator.
             anti_alias: if app.session.prefs.anti_aliased_artwork { vectorcraft_render::AntiAlias::Art } else { vectorcraft_render::AntiAlias::None },
+            progressive_placed: true,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
@@ -1029,6 +1035,13 @@ fn node_outline(n: &Node) -> BezPath {
             if let Some(b) = c.geometric_bounds() {
                 bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
             }
+        }
+        // A placed document shows its box, turned with it.
+        NodeKind::PlacedDocument(p) => {
+            let [a, b, c, d] = p.corners();
+            bp.move_to(a);
+            [b, c, d].into_iter().for_each(|q| bp.line_to(q));
+            bp.close_path();
         }
         // An envelope shows its mesh (or top object), not its content.
         NodeKind::Envelope { .. } => {

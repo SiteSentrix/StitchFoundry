@@ -962,8 +962,21 @@ pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
     check3(ui, label, Some(value), enabled)
 }
 
+/// [`check`] with tooltip `tip` on the box and its label. Returns true when toggled.
+pub fn check_tip(ui: &mut Ui, label: &str, value: bool, enabled: bool, tip: &str) -> bool {
+    let (clicked, resp) = check_row(ui, label, Some(value), enabled);
+    resp.on_hover_text(tip);
+    clicked
+}
+
 /// Three-state [`check`]: `None` shows a dash (a neutral or mixed state). Returns true when clicked.
 pub fn check3(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> bool {
+    check_row(ui, label, value, enabled).0
+}
+
+/// [`check3`], also returning the row's response (what a tooltip goes on: a widget around it never
+/// counts as hovered under the box).
+fn check_row(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> (bool, Response) {
     let t = Tokens::get(ui.ctx());
     let (bx, resp, border) = choice_row(ui, label, enabled);
     let checked = value == Some(true);
@@ -981,7 +994,7 @@ pub fn check3(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> b
         }
         Some(false) => {}
     }
-    enabled && resp.clicked()
+    (enabled && resp.clicked(), resp)
 }
 
 /// Radio button in the style of [`check`], with a disabled state. Returns true when clicked.

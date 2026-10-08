@@ -450,11 +450,16 @@ impl SaveJob {
     /// its own also ends its Data Recovery copy.
     pub fn complete(self, s: &mut Session, uid: u64) {
         let saved = self.plan.retargets() && self.plan.path.is_some();
+        // The other open documents that place this one show the new version.
+        let written = self.plan.path.clone().filter(|_| matches!(self.plan.format.id, "vectorcraft" | "template"));
         if let Some(st) = s.document_mut(uid) {
             self.finish(st);
         }
         if saved {
             crate::cmd::recovery::forget(s, uid);
+        }
+        if let Some(path) = written {
+            crate::cmd::links::refresh_placed(s, uid, &path);
         }
     }
 }

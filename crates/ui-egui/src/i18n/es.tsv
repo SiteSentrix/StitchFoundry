@@ -3593,3 +3593,8 @@ axis	Both	Ambos
 	Zoom	Zoom
 	Bring All to Front	Traer todo al frente
 	Settings	Ajustes
+	Break Link	Romper vínculo
+	On: one locked object showing the document, updated when it changes.	Activado: un objeto bloqueado que muestra el documento y se actualiza cuando este cambia.
+	Off: an editable copy of its art, embedded in this document.	Desactivado: una copia editable de su ilustración, incrustada en este documento.
+	Images: link to the file instead of only embedding it.	Imágenes: vincular al archivo en lugar de solo incrustarlo.
+	VectorCraft documents: one locked object, updated when the file changes.	Documentos de VectorCraft: un objeto bloqueado que se actualiza cuando cambia el archivo.

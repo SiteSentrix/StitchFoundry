@@ -127,6 +127,7 @@ fn node_refs(n: &Node, f: Visit) {
                 }
             }
             NodeKind::Image(im) => f(Ref::Name(Res::Image, &im.key)),
+            NodeKind::PlacedDocument(pl) => f(Ref::Name(Res::Image, &pl.key)),
             NodeKind::SymbolInstance { symbol, .. } => f(Ref::Name(Res::Symbol, symbol)),
             _ => {}
         }
@@ -444,6 +445,7 @@ impl Relink {
                 }
             }
             NodeKind::Image(im) => self.name(Res::Image, &mut im.key),
+            NodeKind::PlacedDocument(pl) => self.name(Res::Image, &mut pl.key),
             NodeKind::SymbolInstance { symbol, .. } => self.name(Res::Symbol, symbol),
             _ => {}
         }
