@@ -238,6 +238,26 @@ mod tests {
     }
 
     #[test]
+    fn pasted_type_gets_its_layout_bounds_cache() {
+        // Reported from Illustrator: pasted type kept no layout bounds, so its box (and alignment)
+        // fell back to the rough estimate until the file was saved and reopened.
+        let mut s = session();
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="120"><text x="0" y="80" font-family="Source Sans 3" font-size="40">WWWWWWWW</text></svg>"#;
+        s.execute("clipboard.importSvg", &json!({"svg": svg})).unwrap();
+        s.execute("edit.paste", &json!({})).unwrap();
+        let mut checked = 0;
+        s.doc().unwrap().doc.walk(|n| {
+            let vectorcraft_doc::NodeKind::Text(t) = &n.kind else { return };
+            let cached = t.cached_bounds.expect("pasted type computed its bounds");
+            let real = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds;
+            assert!((cached.width() - real.width()).abs() < 1e-6, "{cached:?} {real:?}");
+            assert!(cached.width() > t.estimate_bounds().width() + 1.0, "{cached:?} is just the estimate");
+            checked += 1;
+        });
+        assert_eq!(checked, 1, "one text object pasted");
+    }
+
+    #[test]
     fn paste_never_lands_in_an_object_that_reused_an_undone_layers_id() {
         // Found by the model-based test: undo restores the id counter, so a compound path made
         // after undoing New Layer gets the dead layer's id, which was still the active layer.

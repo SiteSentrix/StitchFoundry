@@ -103,6 +103,20 @@ pub(crate) fn refresh_bounds(t: &mut TextObject) {
     t.cached_bounds = Some(lay.bounds);
 }
 
+/// Recompute the layout bounds cache for the text among `ids` (and their descendants) that lacks
+/// it. Pasted or imported type arrives without the cache (not serialized), so selection boxes, the
+/// Transform panel and hit testing would fall back to [`TextObject::estimate_bounds`] (a rough
+/// 0.55 em per character) until the text is edited — the box comes up short and alignment looks off.
+pub(crate) fn refresh_bounds_of(d: &mut Document, ids: &[NodeId]) {
+    for id in text_ids(d, ids) {
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind)
+            && t.cached_bounds.is_none()
+        {
+            refresh_bounds(t);
+        }
+    }
+}
+
 /// Text objects among `ids` and their descendants.
 fn text_ids(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     let mut out = vec![];
