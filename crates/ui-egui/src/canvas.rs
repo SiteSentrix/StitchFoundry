@@ -300,6 +300,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
     }
+    // The pixel grid (Guides & Grid › Show Pixel Grid (Above 600% Zoom)): in Pixel Preview from
+    // 600% zoom, a line at every document pixel over the art, so the pixels it rasterizes to show.
+    if app.ui.view.pixel_preview && v.zoom >= PIXEL_GRID_ZOOM && app.session.prefs.show_pixel_grid {
+        grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
+    }
     // Artboard edges and names.
     let active_ab = 0;
     for (i, ab) in doc.artboards.iter().enumerate() {
@@ -766,6 +771,11 @@ fn checker(p: &egui::Painter, quad: &[Pos2], ab: Rect, zoom: f64, tex: egui::Tex
     mesh.indices.extend([0, 1, 2, 0, 2, 3]);
     p.add(Shape::mesh(mesh));
 }
+
+/// The zoom the pixel grid shows from in Pixel Preview (600%), and its colour: a translucent grey,
+/// so the art's pixels read through it.
+const PIXEL_GRID_ZOOM: f64 = 6.0;
+const PIXEL_GRID: Color32 = Color32::from_rgba_premultiplied(64, 64, 64, 96);
 
 /// The look of the grid or of the guides (Preferences › Guides & Grid › Color and Style).
 #[derive(Clone, Copy)]
@@ -1998,6 +2008,42 @@ mod tests {
         assert!(off.iter().filter(|&&a| a == 255).count() > 1000, "the disc is still painted");
         app.session.execute("prefs.set", &json!({"key": "antiAliasedArtwork", "value": true})).unwrap();
         assert!(partial(&alphas(&mut app).expect("re-rendered")) > 50, "smooth again");
+    }
+
+    /// Guides & Grid › Show Pixel Grid (Above 600% Zoom) (#394): in Pixel Preview at 600% zoom and
+    /// above, a line at every document pixel over the art; none below 600%, out of Pixel Preview,
+    /// or with the option off.
+    #[test]
+    fn pixel_grid_shows_in_pixel_preview_from_600_percent() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        let ctx = egui::Context::default();
+        shapes(&mut app, &ctx); // the first frame fits the view to the artboard
+        // → (the pixel grid's lines, whether the first of them is drawn over the art).
+        let pixel_lines = |app: &mut VectorcraftApp| {
+            let s = shapes(app, &ctx);
+            let art = app.canvas.texture.as_ref().unwrap().id();
+            let image = s.iter().position(|s| matches!(s, Shape::Mesh(m) if m.texture_id == art)).expect("the art");
+            let is_line = |s: &Shape| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == PIXEL_GRID);
+            let lines: Vec<usize> = s.iter().enumerate().filter(|(_, s)| is_line(s)).map(|(i, _)| i).collect();
+            (lines.len(), lines.first().is_some_and(|&i| i > image))
+        };
+        app.ui.view.pixel_preview = true;
+        app.view_mut().unwrap().zoom = 8.0;
+        let (n, over) = pixel_lines(&mut app);
+        assert!(n >= 150, "a line every 8 px across the 800 × 600 canvas: {n}");
+        assert!(over, "over the art");
+        app.view_mut().unwrap().zoom = 5.0;
+        assert_eq!(pixel_lines(&mut app).0, 0, "below 600%: none");
+        app.view_mut().unwrap().zoom = 6.0;
+        assert!(pixel_lines(&mut app).0 >= 200, "from 600%");
+        app.ui.view.pixel_preview = false;
+        assert_eq!(pixel_lines(&mut app).0, 0, "out of Pixel Preview: none");
+        app.ui.view.pixel_preview = true;
+        app.session.execute("prefs.set", &json!({"key": "showPixelGrid", "value": false})).unwrap();
+        assert_eq!(pixel_lines(&mut app).0, 0, "the option off: none");
     }
 
     /// Guides & Grid (#394): the grid in Grid Color, behind the art or, with Grids In Back off,

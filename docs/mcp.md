@@ -1176,10 +1176,11 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 The preferences for the view need the desktop app (`vectorcraft-cli mcp --connect`): `zoomWithMouseWheel` (the
 wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel sideways; the control channel's
 `ui.wheel` turns the wheel), `zoomToSelection` (on: Zoom In and Zoom Out centre the selection), `showToolTips`,
-`anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle`, `recentFontsCount`,
-`antiAliasedArtwork` (on by default; off, the canvas draws the art with hard edges — a pixel is painted when the art
-covers at least half of it — while raster effects and pattern tiles stay smooth; exports keep their own Anti-aliasing
-option) and
+`anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle`, `showPixelGrid` (on by
+default: in View › Pixel Preview at 600% zoom and above, a line at every document pixel over the art),
+`recentFontsCount`, `antiAliasedArtwork` (on by default; off, the canvas draws the art with hard edges — a pixel is
+painted when the art covers at least half of it — while raster effects and pattern tiles stay smooth; exports keep
+their own Anti-aliasing option) and
 `scrubNumericFields` (on: a horizontal drag on a numeric field's label steps the field, one undo step per drag; the
 control channel's `ui.drag` scrubs).
 
