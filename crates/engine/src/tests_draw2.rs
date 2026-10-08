@@ -734,3 +734,35 @@ fn reshaping_a_segment_keeps_smooth_anchors_smooth() {
     assert!((a.h_out.distance(a.p) - 40.0).abs() < 1e-9, "its length kept");
     assert!(near(sp.anchors[0].h_out, Point::new(100.0, 260.0)) && !sp.anchors[0].has_in(), "the corner end: {:?}", sp.anchors[0]);
 }
+
+#[test]
+fn pen_drag_from_the_first_anchor_closes_the_path() {
+    // #501: closing a path by dragging out of its first anchor flickered between a close and a new
+    // path, and released at the wrong moment left the shape open. The press decides: the drag
+    // shapes the closing curve, symmetric, and the release closes the path wherever it ends.
+    let none = Mods::default();
+    let v = view();
+    let mut s = session();
+    s.select_tool("pen", v).unwrap();
+    for (x, y) in [(100.0, 300.0), (200.0, 300.0), (200.0, 400.0)] {
+        gesture(&mut s, &[(x, y)], none);
+    }
+    let id = s.doc().unwrap().selection.objects[0];
+    let pts: Vec<(f64, f64)> = (0..=12).map(|i| (100.0 + 5.0 * f64::from(i), 300.0 - 4.0 * f64::from(i))).collect();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 300.0), v).unwrap();
+    for &(x, y) in &pts[1..] {
+        s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        let p = path(&s, id);
+        assert!(p.subpaths[0].closed && paths(&s).len() == 1, "closed throughout the drag, at ({x}, {y})");
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Up, 160.0, 252.0), v).unwrap();
+    assert!(!s.in_interaction());
+    let sp = &path(&s, id).subpaths[0];
+    assert!(sp.closed && sp.anchors.len() == 3, "{sp:?}");
+    let a = sp.anchors[0];
+    assert_eq!((a.h_in, a.h_out), (Point::new(40.0, 348.0), Point::new(160.0, 252.0)), "symmetric");
+    assert_eq!(paths(&s).len(), 1);
+    // The next click starts a new path.
+    gesture(&mut s, &[(500.0, 500.0)], none);
+    assert_eq!(paths(&s).len(), 2);
+}
