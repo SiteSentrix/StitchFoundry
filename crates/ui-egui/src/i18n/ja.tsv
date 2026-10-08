@@ -10,12 +10,18 @@
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 	About VectorCraft	VectorCraft について
 	All Scripts	すべての文字
+	Anchors:	アンカー:
 	Any Kind	すべての種類
 	Ascender	アセンダ
 	Baseline	ベースライン
 	Bottom-to-Bottom Leading	欧文ベースライン基準の行送り
 	Center	中央
 	Character Alignment	文字揃え
+	Connect Selected End Points	選択した端点を連結
+	Convert Selected Anchor Points to Corner	選択したアンカーポイントをコーナーポイントに変換
+	Convert Selected Anchor Points to Smooth	選択したアンカーポイントをスムーズポイントに変換
+	Convert:	変換:
+	Cut Path	パスをカット
 	Decorative	装飾
 	Descender	ディセンダ
 	Em Box Bottom/Left	仮想ボディの下 / 左

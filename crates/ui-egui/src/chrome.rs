@@ -105,6 +105,47 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// An anchor button: icon, tooltip, command and the convert command's `to`.
+type AnchorButton<'a> = (&'a str, &'a str, &'a str, Option<&'a str>);
+
+/// What the Control bar and the Properties panel offer for direct-selected anchors: "Convert:"
+/// corner or smooth, then "Anchors:" remove, connect (Join) and cut. Each group is a row of its
+/// own: inline in the Control bar, one under the other in a panel.
+pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let t = Tokens::get(ui.ctx());
+    let mut run = None;
+    let groups: [(&str, &[AnchorButton]); 2] = [
+        (
+            tl!("Convert:"),
+            &[
+                ("dc-anchor", tl!("Convert Selected Anchor Points to Corner"), "path.convertAnchors", Some("corner")),
+                ("dc-anchor-smooth", tl!("Convert Selected Anchor Points to Smooth"), "path.convertAnchors", Some("smooth")),
+            ],
+        ),
+        (
+            tl!("Anchors:"),
+            &[
+                ("dc-pen-delete", tl!("Remove Anchor Points"), "path.removeAnchors", None),
+                ("dc-join", tl!("Connect Selected End Points"), "path.join", None),
+                ("scissors", tl!("Cut Path at Selected Anchor Points"), "path.cutAtAnchors", None),
+            ],
+        ),
+    ];
+    for (label, buttons) in groups {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(label).size(12.0).color(t.text));
+            for &(icon, tip, id, to) in buttons {
+                if widgets::icon_button(ui, icon, tip, false, 24.0).clicked() {
+                    run = Some((id, to.map_or_else(|| json!({}), |to| json!({ "to": to }))));
+                }
+            }
+        });
+    }
+    if let Some((id, p)) = run {
+        crate::menus::invoke(app, id, p);
+    }
+}
+
 /// The Control bar (Window → Control), context-sensitive like Illustrator's.
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -139,8 +180,8 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     _ => tl!(crate::panels::appearance::object_label(app)),
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
-                if anchor_mode && widgets::icon_button(ui, "dc-pen-delete", "Remove Anchor Points", false, 24.0).clicked() {
-                    crate::menus::invoke(app, "path.removeAnchors", json!({}));
+                if anchor_mode {
+                    anchor_buttons(app, ui);
                 }
                 ui.add_space(6.0);
                 // An image or an Image Trace object shows its own controls in place of Fill and Stroke.

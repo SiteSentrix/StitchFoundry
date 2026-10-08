@@ -1,5 +1,6 @@
 //! Object › Path › Remove Anchor Points: the menu, the Control bar, the contextual task bar, the
-//! Properties panel and the context menu run it on direct-selected anchors.
+//! Properties panel and the context menu run it on direct-selected anchors. The Control bar's and
+//! the Properties panel's other anchor buttons: convert to corner or smooth, connect, cut.
 
 use egui::{Event, PointerButton, Pos2, Rect, Shape, vec2};
 use serde_json::json;
@@ -116,12 +117,10 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     assert!(menus::enabled(&app, "path.removeAnchors"));
     assert!(labels(&menus::context_items(&app)).contains(&LABEL));
 
-    // The Control bar's icon follows its "Anchor Point" label.
+    // The Control bar's icon follows its "Anchors:" label.
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    let bar = control_frame(&mut app, &ctx, vec![]);
-    let label = bar.iter().find(|(t, _)| t == "Anchor Point").map(|(_, r)| *r).expect("anchor label");
-    click_control(&mut app, &ctx, Pos2::new(label.max.x + ctx.global_style().spacing.item_spacing.x + 12.0, label.center().y));
+    click_button(&mut app, &ctx, "Anchors:", 0);
     assert_eq!(anchor_count(&app, id), 3, "the Control bar button removes the anchor");
     let st = app.session.active().unwrap();
     assert_eq!(st.history.undo.last().unwrap().label, LABEL);
@@ -131,10 +130,12 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     assert_eq!(anchor_count(&app, id), 4);
 
     app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
-    // 230 pt is the dock's minimum width. The label has to sit inside that row.
+    // 230 pt is the dock's minimum width. Each row of anchor buttons has to fit in it.
     let props = properties_frame(&mut app, 230.0);
-    let row = props.iter().find(|(t, _)| t == LABEL).expect("properties");
-    assert!(row.1.min.x >= -0.5 && row.1.max.x <= 230.5, "properties clips the label: {:?}", row.1);
+    for label in ["Convert:", "Anchors:"] {
+        let row = props.iter().find(|(t, _)| t == label).map(|(_, r)| *r).expect("properties");
+        assert!(row.min.x >= -0.5 && button(&props, &ctx, label, 2).x + 12.0 <= 230.5, "properties clips the {label} row: {row:?}");
+    }
 
     // The task bar's area settles on the second frame.
     let ctx = egui::Context::default();
@@ -157,5 +158,50 @@ fn the_control_bar_and_properties_hide_it_without_anchors() {
     let mut app = app();
     rect(&mut app);
     let props = crate::tests_labels::painted_text(&mut app, crate::panels::properties::show);
-    assert!(!props.contains("Remove Anchor Points"), "{props}");
+    assert!(!props.contains("Anchors:"), "{props}");
+}
+
+/// The centre of the `i`-th 24 pt icon button after `label`.
+fn button(texts: &[(String, Rect)], ctx: &egui::Context, label: &str, i: usize) -> Pos2 {
+    let r = texts.iter().find(|(t, _)| t == label).map(|(_, r)| *r).unwrap_or_else(|| panic!("no `{label}`"));
+    let gap = ctx.global_style().spacing.item_spacing.x;
+    Pos2::new(r.max.x + gap + 12.0 + i as f32 * (24.0 + gap), r.center().y)
+}
+
+/// Click the Control bar's `i`-th icon button after `label`.
+fn click_button(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str, i: usize) {
+    let at = button(&control_frame(app, ctx, vec![]), ctx, label, i);
+    click_control(app, ctx, at);
+}
+
+#[test]
+fn the_control_bar_converts_connects_and_cuts_selected_anchors() {
+    let mut app = app();
+    let id = rect(&mut app);
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let anchor = |app: &VectorcraftApp, id: NodeId, ai: usize| {
+        app.session.active().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors[ai]
+    };
+    let last_undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().unwrap().label.clone();
+    // Convert: smooth, then corner again.
+    click_button(&mut app, &ctx, "Convert:", 1);
+    assert!(anchor(&app, id, 1).has_in() && anchor(&app, id, 1).has_out(), "smooth");
+    assert_eq!(last_undo(&app), "Convert Anchor Points");
+    click_button(&mut app, &ctx, "Convert:", 0);
+    assert!(!anchor(&app, id, 1).has_in() && !anchor(&app, id, 1).has_out(), "corner");
+    // Cut: the rectangle opens at the anchor, one of its two ends selected.
+    click_button(&mut app, &ctx, "Anchors:", 2);
+    assert_eq!(last_undo(&app), "Cut Path");
+    let st = app.session.active().unwrap();
+    let sp = &st.doc.node(id).unwrap().path_data().unwrap().subpaths[0];
+    assert!(!sp.closed && sp.anchors.len() == 5, "{sp:?}");
+    assert_eq!(st.selection.anchors[&id].iter().collect::<Vec<_>>(), [&(0, 0)]);
+    // Connect: closes it again.
+    click_button(&mut app, &ctx, "Anchors:", 1);
+    assert_eq!(last_undo(&app), "Join");
+    assert!(app.session.active().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].closed);
+    assert_eq!(anchor_count(&app, id), 4, "the coincident ends merge");
 }

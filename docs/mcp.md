@@ -1029,6 +1029,24 @@ their facing handles are refitted so one cubic follows the two old segments; two
 {"name":"run_command","arguments":{"command":"path.removeAnchors","params":{}}}
 ```
 
+## Converting and cutting anchor points
+
+The Control bar's and the Properties panel's anchor buttons, one undo step each, act on the direct-selected anchors
+(all anchors of a path selected as a whole): `path.convertAnchors {to: "corner"|"smooth"}` retracts both handles,
+or pulls handles out in line with the neighbouring anchors (a smooth anchor keeps its own); `path.cutAtAnchors {}`
+(Cut Path at Selected Anchor Points) cuts there and answers `{ids}`: a closed path opens at the cut, its two ends
+on top of each other, and an open path becomes one path per piece. Each cut leaves one of its two anchors selected,
+so `path.moveAnchors {dx, dy}` (or a Direct Selection drag) pulls the path apart there; `path.join {}` (Connect
+Selected End Points) joins the ends again. `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
+`path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools); the Pen with Alt
+held over a selected path's handle or anchor works as the Anchor Point tool.
+
+```json
+{"name":"run_command","arguments":{"command":"select.anchors","params":{"id":12,"anchors":[[0,2]]}}}
+{"name":"run_command","arguments":{"command":"path.cutAtAnchors","params":{}}}
+{"name":"run_command","arguments":{"command":"path.moveAnchors","params":{"dx":0,"dy":40}}}
+```
+
 ## Registration and trim marks
 
 Every document has the built-in `[Registration]` swatch (listed after None by `swatch.list`): a colour that prints on

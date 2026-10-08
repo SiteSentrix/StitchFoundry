@@ -49,11 +49,13 @@ impl AnchorTool {
     }
 }
 
-/// A direction handle of a selected path under `p`: (id, subpath, anchor, is_out).
-fn hit_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, bool)> {
+/// A direction handle of a selected path under `p`, among those shown (a path with anchors
+/// direct-selected shows theirs only): (id, subpath, anchor, is_out).
+pub(crate) fn hit_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, bool)> {
     for id in &cx.selection.objects {
         let Some(pd) = cx.doc.node(*id).and_then(|n| n.path_data()) else { continue };
-        for (si, ai, a) in pd.anchors() {
+        let shown = cx.selection.partial(*id);
+        for (si, ai, a) in pd.anchors().filter(|(si, ai, _)| shown.is_none_or(|set| set.contains(&(*si, *ai)))) {
             if a.has_out() && a.h_out.distance(p) <= tol {
                 return Some((*id, si, ai, true));
             }

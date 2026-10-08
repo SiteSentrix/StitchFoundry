@@ -135,6 +135,7 @@
 	Anchor Points	錨點
 	Anchor Points, Handle, and Bounding Box Display	錨點、控制把手與邊框顯示
 	Anchor/Path Labels	錨點/路徑標籤
+	Anchors:	錨點：
 	Angle	角度
 	Angle:	角度：
 	Angles	角度
@@ -440,6 +441,7 @@
 	Compression:	壓縮：
 	Condition identifier:	條件識別碼：
 	Conflict {n} of {count}	衝突 {n}／{count}
+	Connect Selected End Points	連接所選端點
 	Consolidate All Windows	合併所有視窗
 	Constrain Angle	強制角度
 	Constrain Width and Height Proportions	強制寬度與高度比例
@@ -457,6 +459,8 @@
 	Convert Color	轉換顏色
 	Convert Document Color Mode	轉換文件色彩模式
 	Convert Process to Global	將印刷色轉換為整體色
+	Convert Selected Anchor Points to Corner	將所選錨點轉換為尖角
+	Convert Selected Anchor Points to Smooth	將所選錨點轉換為平滑
 	Convert text to outlines	將文字轉換為外框
 	Convert To Area Type	轉換為區域文字
 	Convert to Artboards	轉換為工作區域
@@ -467,6 +471,7 @@
 	Convert to RGB	轉換為 RGB
 	Convert to Shape	轉換為形狀
 	Convert to sRGB	轉換為 sRGB
+	Convert:	轉換：
 	Copied the CSS of {rules} object(s)	已複製 {rules} 個物件的 CSS
 	Copies:	份數：
 	Copy	複製
@@ -487,6 +492,7 @@
 	Corner Radius:	圓角半徑：
 	Corner:	轉角：
 	Corners	轉角
+	Cut Path	切斷路徑
 	Descender	下緣
 	Flip	翻轉
 	Round	圓角

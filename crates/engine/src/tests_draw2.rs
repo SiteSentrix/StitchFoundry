@@ -534,3 +534,128 @@ fn remove_anchor_points_keeps_the_paths_closed() {
     let spec = find_command("path.removeAnchors").unwrap();
     assert_eq!(spec.menu, &["Object", "Path"][..]);
 }
+
+fn undo_steps(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+#[test]
+fn convert_anchors_turns_the_selected_anchors_corner_or_smooth() {
+    // The Control bar's convert buttons: one undo step each, other anchors left alone.
+    let mut s = session();
+    let made = s.execute("path.create", &json!({"anchors": [{"x": 100, "y": 200}, {"x": 200, "y": 100}, {"x": 300, "y": 200}]})).unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    let undo = undo_steps(&s);
+    s.execute("path.convertAnchors", &json!({"to": "smooth"})).unwrap();
+    let a = path(&s, id).subpaths[0].anchors.clone();
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert_eq!(a[1].kind, vectorcraft_geom::AnchorKind::Smooth);
+    let r = 100.0 * 2f64.sqrt() / 3.0;
+    assert!(near(a[1].h_in, Point::new(200.0 - r, 100.0)) && near(a[1].h_out, Point::new(200.0 + r, 100.0)), "{:?}", a[1]);
+    assert!(!a[0].has_out() && !a[2].has_in(), "the neighbours keep theirs");
+    // Smooth again keeps the handles; corner retracts them.
+    s.execute("path.setHandle", &json!({"id": id.0, "anchor": 1, "which": "out", "x": 260, "y": 100})).unwrap();
+    let h = path(&s, id).subpaths[0].anchors[1];
+    s.execute("path.convertAnchors", &json!({"to": "smooth"})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors[1], h);
+    s.execute("path.convertAnchors", &json!({"to": "corner"})).unwrap();
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert!(!a.has_in() && !a.has_out(), "{a:?}");
+    // Anchors that are gone (a stale selection) are skipped; a bad `to` is refused.
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 99], [7, 0]]})).unwrap();
+    s.execute("path.convertAnchors", &json!({"to": "smooth"})).unwrap();
+    let undo = undo_steps(&s);
+    assert!(s.execute("path.convertAnchors", &json!({"to": "round"})).is_err());
+    assert_eq!(undo_steps(&s), undo);
+}
+
+#[test]
+fn cut_at_anchors_splits_paths_and_leaves_one_end_selected() {
+    // Cut Path at Selected Anchor Points: an open path becomes one path per piece, and one anchor
+    // of each cut stays selected, so dragging it pulls the path apart there.
+    let mut s = session();
+    let anchors = json!([{"x": 100, "y": 100}, {"x": 200, "y": 100, "in": [170, 80], "out": [230, 120]}, {"x": 300, "y": 100}, {"x": 400, "y": 100}]);
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, 2]]})).unwrap();
+    let undo = undo_steps(&s);
+    let made = s.execute("path.cutAtAnchors", &json!({})).unwrap();
+    let ids: Vec<NodeId> = made["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert_eq!((ids.len(), ids[0]), (3, id));
+    let pieces: Vec<Vec<Point>> = ids.iter().map(|i| path(&s, *i).subpaths[0].anchors.iter().map(|a| a.p).collect()).collect();
+    let p = |x: f64| Point::new(x, 100.0);
+    assert_eq!(pieces, vec![vec![p(100.0), p(200.0)], vec![p(200.0), p(300.0)], vec![p(300.0), p(400.0)]]);
+    // The curve keeps its shape: each end keeps the handle on its own side only.
+    let (l, r) = (path(&s, ids[0]).subpaths[0].anchors[1], path(&s, ids[1]).subpaths[0].anchors[0]);
+    assert!(l.h_in == Point::new(170.0, 80.0) && !l.has_out() && r.h_out == Point::new(230.0, 120.0) && !r.has_in(), "{l:?} {r:?}");
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!(sel.objects, vec![ids[1], ids[2]]);
+    assert!(sel.anchors.values().all(|a| a.iter().eq([&(0, 0)])), "{sel:?}");
+    s.execute("path.moveAnchors", &json!({"dx": 0, "dy": 50})).unwrap();
+    assert_eq!(path(&s, ids[0]).subpaths[0].anchors[1].p, p(200.0));
+    assert_eq!(path(&s, ids[1]).subpaths[0].anchors[0].p, Point::new(200.0, 150.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paths(&s).len(), 1);
+    // A closed path opens at the cut, its ends on top of each other.
+    let r = rect(&mut s, 500.0, 100.0, 100.0, 100.0);
+    s.execute("select.anchors", &json!({"id": r.0, "anchors": [[0, 2]]})).unwrap();
+    s.execute("path.cutAtAnchors", &json!({})).unwrap();
+    let sp = &path(&s, r).subpaths[0];
+    assert!(!sp.closed && sp.anchors.len() == 5 && sp.anchors[0].p == sp.anchors[4].p, "{sp:?}");
+    assert_eq!(s.doc().unwrap().selection.anchors[&r].iter().collect::<Vec<_>>(), [&(0, 0)]);
+    // Only the end points of an open path selected: nothing to cut.
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0], [0, 3]]})).unwrap();
+    let undo = undo_steps(&s);
+    assert!(s.execute("path.cutAtAnchors", &json!({})).is_err());
+    assert_eq!(undo_steps(&s), undo);
+}
+
+#[test]
+fn pen_with_alt_moves_one_handle_and_converts_anchors() {
+    // Discord feedback: Alt held with the Pen moves a direction handle on its own (and works as
+    // the Anchor Point tool on a selected path's anchors), while a path is being drawn too.
+    let alt = Mods { alt: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let anchors = json!([{"x": 100, "y": 200}, {"x": 200, "y": 100, "in": [150, 100], "out": [250, 100]}, {"x": 300, "y": 200}]);
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    s.select_tool("pen", v).unwrap();
+    let gesture = |s: &mut Session, pts: &[(f64, f64)], m: Mods| {
+        let undo = undo_steps(s);
+        s.pointer(&PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m), v).unwrap();
+        for &(x, y) in &pts[1..] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, y).with_mods(m), v).unwrap();
+        }
+        let l = pts[pts.len() - 1];
+        s.pointer(&PointerEvent::new(PointerKind::Up, l.0, l.1).with_mods(m), v).unwrap();
+        undo_steps(s) - undo
+    };
+    // Alt-drag the out handle: it moves alone, the in handle stays.
+    assert_eq!(gesture(&mut s, &[(250.0, 100.0), (260.0, 130.0), (275.0, 165.0)], alt), 1);
+    assert!(!s.in_interaction());
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert_eq!((a.h_in, a.h_out), (Point::new(150.0, 100.0), Point::new(275.0, 165.0)));
+    assert_eq!(paths(&s).len(), 1, "no new path or anchor");
+    // Alt-click the anchor: a corner. Alt-drag it: new symmetric handles.
+    assert_eq!(gesture(&mut s, &[(200.0, 100.0)], alt), 1);
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert!(!a.has_in() && !a.has_out(), "{a:?}");
+    gesture(&mut s, &[(200.0, 100.0), (220.0, 100.0), (240.0, 110.0)], alt);
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert_eq!((a.h_in, a.h_out), (Point::new(160.0, 90.0), Point::new(240.0, 110.0)));
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 3);
+    // Drawing: place a smooth point, then Alt-drag its outgoing handle; the next click goes on
+    // drawing the same path.
+    s.execute("select.none", &json!({})).unwrap();
+    gesture(&mut s, &[(100.0, 400.0)], Mods::default());
+    gesture(&mut s, &[(200.0, 400.0), (250.0, 400.0)], Mods::default());
+    let new = *s.doc().unwrap().selection.objects.first().unwrap();
+    gesture(&mut s, &[(250.0, 400.0), (230.0, 350.0)], alt);
+    let a = path(&s, new).subpaths[0].anchors[1];
+    assert_eq!((a.h_in, a.h_out), (Point::new(150.0, 400.0), Point::new(230.0, 350.0)));
+    gesture(&mut s, &[(300.0, 450.0)], Mods::default());
+    assert_eq!(path(&s, new).subpaths[0].anchors.len(), 3);
+    assert_eq!(paths(&s).len(), 2);
+}

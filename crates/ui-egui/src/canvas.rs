@@ -1612,8 +1612,11 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let is_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { .. }));
     let is_text = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Text(_)));
     let mut items: Vec<(&str, &str, &str)> = vec![]; // (label, icon, command)
-    if !st.selection.anchors.is_empty() {
+    // Direct-selected anchors take the place of a path's Offset Path and Simplify.
+    let anchors = !st.selection.anchors.is_empty();
+    if anchors {
         items.push((tl!("Remove Anchor Points"), "dc-pen-delete", "path.removeAnchors"));
+        items.push((tl!("Cut Path"), "scissors", "path.cutAtAnchors"));
     }
     if n > 1 {
         items.push((tl!("Group"), "group", "object.group"));
@@ -1623,7 +1626,7 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         items.push((tl!("Isolate"), "square-dashed", "object.isolate"));
     } else if is_text {
         items.push((tl!("Create Outlines"), "type", "type.createOutlines"));
-    } else {
+    } else if !anchors {
         items.push((tl!("Offset Path"), "square-dashed", "object.path.offsetPath"));
         items.push((tl!("Simplify"), "spline", "object.path.simplify"));
     }
