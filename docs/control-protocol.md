@@ -17,7 +17,7 @@ so only enable it while you use it. Transport: `apps/vectorcraft/src/control_ser
 |---|---|---|
 | `engine.execute` | `{command, params}` | run any engine or UI command (see `engine.commands`) |
 | `engine.commands` | | every command with label, shortcut, params doc, enablement |
-| `document.inspect` | | layer tree, selection, history, paint defaults |
+| `document.inspect` | `{depth?, childLimit?}` | layer tree, selection, history, paint defaults; the options slice the layer tree as `document.node {summary: true}` does |
 | `ui.inspect` | | tool, UI state, view, canvas rect, window size, perf, background saves and exports still running |
 | `ui.menu.list` / `ui.menu.invoke` | `{command, params}` | the full menu tree / invoke an item |
 | `ui.contextMenu.list` | | the canvas context menu for the current selection, flattened like `ui.menu.list` (`path` holds its submenus). `ui.click {x, y, button: "right"}` on the canvas opens it, after selecting the object there unless it is already selected |
