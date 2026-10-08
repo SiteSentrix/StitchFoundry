@@ -864,9 +864,14 @@ fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
 /// ruler, snapped as a moved guide is (with Shift to the ruler's ticks). Released anywhere else,
 /// it makes none.
 fn ruler_guides(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf) {
-    let [top, left, _] = ruler_rects(full);
+    let [top, left, corner] = ruler_rects(full);
+    // Right-click on a ruler or the origin box: the document units, to swap between them as
+    // Preferences ▸ Units ▸ General does ([`crate::menus::ruler_menu_body`]).
+    let mut unit_clicked = None;
     for (r, vertical, id) in [(top, false, "ruler-top"), (left, true, "ruler-left")] {
-        let resp = ui.interact(r, egui::Id::new(id), Sense::drag());
+        // Click-and-drag so the same widget drags out guides (left) and opens the unit menu (right).
+        let resp = ui.interact(r, egui::Id::new(id), Sense::click_and_drag());
+        resp.context_menu(|ui| crate::menus::ruler_menu_body(app, ui, &mut unit_clicked));
         let kind = if resp.drag_stopped() {
             PointerKind::Up
         } else if resp.dragged() {
@@ -884,6 +889,11 @@ fn ruler_guides(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egu
         if let Err(e) = app.session.ruler_guide(vertical, &ev, on_canvas, app.view_info()) {
             app.status(e.to_string());
         }
+    }
+    let corner = ui.interact(corner, egui::Id::new("ruler-corner"), Sense::click());
+    corner.context_menu(|ui| crate::menus::ruler_menu_body(app, ui, &mut unit_clicked));
+    if let Some((id, p)) = unit_clicked {
+        crate::menus::invoke(app, &id, p);
     }
 }
 

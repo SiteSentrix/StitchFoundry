@@ -1414,6 +1414,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             let cmyk = app.session.active().is_some_and(|d| d.doc.color_mode == vectorcraft_engine::doc::ColorMode::Cmyk);
             p.get("mode").and_then(Value::as_str) == Some(if cmyk { "cmyk" } else { "rgb" })
         }
+        // The ruler context menu lists the document units, the current one checked.
+        "document.setUnits" => {
+            p.get("units").and_then(Value::as_str).and_then(vectorcraft_engine::doc::Unit::named) == Some(app.session.general_unit())
+        }
         _ => return None,
     })
 }
@@ -2635,6 +2639,21 @@ pub fn context_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut 
         ui.set_min_width(200.0);
         // Its toggles already say what they do (Show Rulers, Hide Guides): no check-mark gutter.
         render_items(app, ui, &context_items(app), false, clicked);
+    });
+}
+
+/// The document units a right-click on a ruler offers: each runs `document.setUnits`, exactly as
+/// Preferences ▸ Units ▸ General does, with the current one checked ([`checked`]).
+pub fn ruler_unit_items() -> Vec<Item> {
+    vectorcraft_engine::doc::Unit::ALL.iter().map(|u| cp(u.label(), "document.setUnits", json!({ "units": u.label() }))).collect()
+}
+
+/// The ruler context menu's popup (right-click a ruler or the origin box); the unit clicked goes in
+/// `clicked`, for [`invoke`].
+pub fn ruler_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Option<(String, Value)>) {
+    widgets::menu_scroll(ui, |ui| {
+        ui.set_min_width(160.0);
+        render_items(app, ui, &ruler_unit_items(), true, clicked);
     });
 }
 
