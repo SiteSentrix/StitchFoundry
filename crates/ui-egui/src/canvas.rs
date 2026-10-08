@@ -218,6 +218,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Artwork raster.
     let ppp = ui.ctx().pixels_per_point();
     let (w, h) = ((rect.width() * ppp).round().max(1.0) as u32, (rect.height() * ppp).round().max(1.0) as u32);
+    // View › Pixel Preview: the art as it rasterizes, one pixel per point, while a document pixel
+    // is bigger than a screen pixel (below that the screen render already shows it).
+    let pixel = (app.ui.view.pixel_preview && v.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
     let key = CacheKey {
         doc: st.uid as usize,
         revision: st.revision,
@@ -233,6 +236,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         rot: v.rotation,
         anti_alias: app.session.prefs.anti_aliased_artwork,
         placed: vectorcraft_render::placed_document::generation(),
+        pixel,
     };
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
@@ -248,16 +252,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(done) = app.canvas.worker.as_mut().and_then(|w| w.poll())
         && done.key.doc == key.doc
     {
-        upload(app, ui.ctx(), &done.img);
+        upload(app, ui.ctx(), &done.img, done.key.pixel.is_some());
         app.canvas.key = Some(done.key);
         app.perf.render_ms = done.ms;
         app.canvas.last_ms = done.ms;
     }
     if app.canvas.key.as_ref() != Some(&key) || app.canvas.texture.is_none() {
-        let view = Affine::translate((w as f64 / 2.0, h as f64 / 2.0))
-            * Affine::rotate(v.rotation.to_radians())
-            * Affine::scale(v.zoom * ppp as f64)
-            * Affine::translate(-v.center.to_vec2());
+        let (w, h, view) = match pixel {
+            Some([x0, y0, x1, y1]) => ((x1 - x0) as u32, (y1 - y0) as u32, Affine::translate((-x0 as f64, -y0 as f64))),
+            None => (
+                w,
+                h,
+                Affine::translate((w as f64 / 2.0, h as f64 / 2.0))
+                    * Affine::rotate(v.rotation.to_radians())
+                    * Affine::scale(v.zoom * ppp as f64)
+                    * Affine::translate(-v.center.to_vec2()),
+            ),
+        };
         let opts = vectorcraft_render::RenderOptions { outline: app.ui.view.outline, background: None, artboards: false, ..Default::default() };
         let opts = vectorcraft_render::RenderOptions {
             proof: vectorcraft_render::proof::active_proof(),
@@ -284,7 +295,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => {
                 let t0 = now_ms();
                 let img = app.canvas.renderer.render(&doc, w, h, view, &opts);
-                upload(app, ui.ctx(), &img);
+                upload(app, ui.ctx(), &img, pixel.is_some());
                 app.canvas.key = Some(key.clone());
                 app.perf.render_ms = now_ms() - t0;
                 app.canvas.last_ms = app.perf.render_ms;
@@ -293,14 +304,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let (Some(tex), Some(k)) = (&app.canvas.texture, &app.canvas.key)
         && k.doc == key.doc
-        && (k.rot - v.rotation).abs() < 1e-9
     {
-        // Reproject the last frame if it was rendered for a different view.
-        let old = Xf { rect, zoom: k.zoom, center: Point::new(k.cx, k.cy), rot: xf.rot };
-        let _ = k.rot;
-        let a = xf.to_screen(old.to_doc(rect.min));
-        let b = xf.to_screen(old.to_doc(rect.max));
-        painter.image(tex.id(), egui::Rect::from_min_max(a, b), egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+        match k.pixel {
+            // Document pixels: placed over the document rect they cover, turning with the view.
+            Some([x0, y0, x1, y1]) => {
+                let q = xf.quad(Rect::new(x0 as f64, y0 as f64, x1 as f64, y1 as f64));
+                let mut mesh = egui::Mesh::with_texture(tex.id());
+                for (pos, uv) in q.into_iter().zip([pos2(0.0, 0.0), pos2(1.0, 0.0), pos2(1.0, 1.0), pos2(0.0, 1.0)]) {
+                    mesh.vertices.push(egui::epaint::Vertex { pos, uv, color: Color32::WHITE });
+                }
+                mesh.add_triangle(0, 1, 2);
+                mesh.add_triangle(0, 2, 3);
+                painter.add(Shape::mesh(mesh));
+            }
+            None if (k.rot - v.rotation).abs() < 1e-9 => {
+                // Reproject the last frame if it was rendered for a different view.
+                let old = Xf { rect, zoom: k.zoom, center: Point::new(k.cx, k.cy), rot: xf.rot };
+                let a = xf.to_screen(old.to_doc(rect.min));
+                let b = xf.to_screen(old.to_doc(rect.max));
+                painter.image(tex.id(), egui::Rect::from_min_max(a, b), egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+            }
+            None => {}
+        }
     }
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
@@ -1717,12 +1742,29 @@ fn kurbo_flatten(p: &BezPath, tol: f64, f: &mut impl FnMut(PathEl)) {
     vectorcraft_geom::kurbo::flatten(p.elements().iter().copied(), tol, f);
 }
 
-fn upload(app: &mut VectorcraftApp, ctx: &egui::Context, img: &vectorcraft_render::Rendered) {
+/// Upload the art's raster; Pixel Preview's document pixels keep hard edges when magnified.
+fn upload(app: &mut VectorcraftApp, ctx: &egui::Context, img: &vectorcraft_render::Rendered, pixel: bool) {
     let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+    let options = if pixel { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
     match &mut app.canvas.texture {
-        Some(tex) => tex.set(color, egui::TextureOptions::LINEAR),
-        None => app.canvas.texture = Some(ctx.load_texture("canvas", color, egui::TextureOptions::LINEAR)),
+        Some(tex) => tex.set(color, options),
+        None => app.canvas.texture = Some(ctx.load_texture("canvas", color, options)),
     }
+}
+
+/// Pixel Preview: the whole document pixels (x0, y0, x1, y1) under the canvas, rotated view
+/// included. None when the view is degenerate.
+fn pixel_region(xf: &Xf) -> Option<[i64; 4]> {
+    let r = xf.rect;
+    let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()].map(|p| xf.to_doc(p));
+    let (mut x0, mut y0, mut x1, mut y1) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for p in corners {
+        (x0, y0, x1, y1) = (x0.min(p.x), y0.min(p.y), x1.max(p.x), y1.max(p.y));
+    }
+    let (x0, y0, x1, y1) = (x0.floor(), y0.floor(), x1.ceil(), y1.ceil());
+    // A document pixel is bigger than a screen pixel here, so the region is about canvas-sized.
+    let ok = [x0, y0, x1, y1].iter().all(|c| c.is_finite() && c.abs() < 1e9) && x1 > x0 && y1 > y0 && x1 - x0 <= 16384.0 && y1 - y0 <= 16384.0;
+    ok.then_some([x0 as i64, y0 as i64, x1 as i64, y1 as i64])
 }
 
 /// The Contextual Task Bar's area.
@@ -2247,6 +2289,56 @@ mod tests {
         let mut v = vec![];
         out.shapes.into_iter().for_each(|c| flat(c.shape, &mut v));
         (v, out.textures_delta)
+    }
+
+    /// View › Pixel Preview: magnified, the art shows as the document pixels it rasterizes to (one
+    /// per point, hard-edged), not as smooth vectors; zoomed out or out of Pixel Preview the canvas
+    /// renders for the screen again.
+    #[test]
+    fn pixel_preview_shows_the_document_pixels() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        // Its 1 pt stroke covers a quarter of document pixel 99 and most of pixel 100.
+        app.session.execute("shape.rectangle", &json!({"x": 100.25, "y": 50, "width": 200, "height": 200})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        let ctx = egui::Context::default();
+        // The art's raster uploaded by one frame: (width, height, hard-edged, pixels).
+        let upload = |app: &mut VectorcraftApp| {
+            let (_, mut delta) = frame_output(app, &ctx);
+            let art = app.canvas.texture.as_ref().unwrap().id();
+            let up = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+                let egui::ImageData::Color(img) = &d.image;
+                (img.width(), img.height(), d.options.magnification == egui::TextureFilter::Nearest, img.pixels.clone())
+            });
+            delta.clear();
+            up.expect("the art re-rendered")
+        };
+        let screen = upload(&mut app); // the first frame fits the view to the artboard
+        assert!(screen.0 > 600 && !screen.2, "out of Pixel Preview: the screen's pixels, smoothed");
+        app.ui.view.pixel_preview = true;
+        let view = app.view_mut().unwrap();
+        (view.zoom, view.center) = (8.0, Point::new(100.0, 150.0));
+        let (w, h, hard, px) = upload(&mut app);
+        assert!(hard, "hard-edged pixels");
+        assert!(w <= screen.0 / 8 + 2 && h <= screen.1 / 8 + 2, "one pixel per point: {w} × {h}");
+        let [x0, y0, x1, y1] = app.canvas.key.as_ref().and_then(|k| k.pixel).expect("the pixels rendered");
+        assert_eq!(((x1 - x0) as usize, (y1 - y0) as usize), (w, h));
+        // Each document pixel is one texel, anti-aliased by how much of it the art covers.
+        let alpha = |x: i64| px[((150 - y0) * w as i64 + x - x0) as usize].a();
+        assert!((40..=90).contains(&alpha(99)), "a quarter of pixel 99: {}", alpha(99));
+        assert!(alpha(100) > 200, "most of pixel 100: {}", alpha(100));
+        assert_eq!((alpha(98), alpha(101)), (0, 255));
+        // The pixels are placed over the document rect they cover.
+        let s = shapes(&mut app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let Some(Shape::Mesh(mesh)) = s.iter().find(|s| matches!(s, Shape::Mesh(m) if m.texture_id == art)) else { panic!("the art") };
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(x0 as f64, y0 as f64));
+        assert!((mesh.vertices[0].pos - at).length() < 0.01, "{:?} at {at:?}", mesh.vertices[0].pos);
+        // Zoomed out, a document pixel is no bigger than a screen pixel: rendered for the screen.
+        app.view_mut().unwrap().zoom = 0.5;
+        let (w, _, hard, _) = upload(&mut app);
+        assert!(w > 600 && !hard, "zoomed out: the screen's pixels");
     }
 
     /// General › Anti-aliased Artwork (#394): on (the default), the art's edges are smoothed on
