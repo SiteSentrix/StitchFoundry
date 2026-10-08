@@ -338,6 +338,72 @@ fn lasso_selects_anchor_subset() {
     assert_eq!(st.selection.partial(a).map(|p| p.len()), Some(2));
 }
 
+/// Shift-drag a marquee with the Selection tool (#483): the selected objects it reaches are
+/// deselected and the others selected, the rest of the selection staying as it was.
+#[test]
+fn selection_shift_marquee_toggles_objects() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let b = rect(&mut s, 200.0, 100.0, 50.0, 50.0);
+    let c = rect(&mut s, 300.0, 100.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let shift = Mods { shift: true, ..Default::default() };
+    gesture(&mut s, "selection", &[(180.0, 80.0), (300.0, 200.0), (380.0, 200.0)], shift);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, c]);
+    // Again over all three: a leaves, b joins, c leaves.
+    gesture(&mut s, "selection", &[(80.0, 80.0), (300.0, 200.0), (380.0, 200.0)], shift);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![b]);
+    // Without Shift the marquee replaces the selection.
+    gesture(&mut s, "selection", &[(80.0, 80.0), (300.0, 200.0), (260.0, 200.0)], Mods::default());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+}
+
+/// Shift-drag a marquee with Direct Selection (#483): the anchors inside toggle; a path left with
+/// none of them leaves the selection, one with all of them is selected whole again.
+#[test]
+fn direct_selection_shift_marquee_toggles_anchors() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let shift = Mods { shift: true, ..Default::default() };
+    // Around a's top edge (two anchors, selected) and b's top-left anchor (not selected).
+    let top = [(90.0, 90.0), (310.0, 110.0), (310.0, 110.0)];
+    gesture(&mut s, "directSelection", &top, shift);
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection.objects, vec![a, b]);
+    assert_eq!(st.selection.partial(a).map(|p| p.len()), Some(2), "a's bottom anchors stay");
+    assert_eq!(st.selection.partial(b).map(|p| p.len()), Some(1));
+    // The same again: a whole once more, b out.
+    gesture(&mut s, "directSelection", &top, shift);
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection.objects, vec![a]);
+    assert_eq!(st.selection.partial(a), None);
+    // Group Selection's marquee toggles the same way.
+    gesture(&mut s, "groupSelection", &top, shift);
+    assert_eq!(s.doc().unwrap().selection.partial(a).map(|p| p.len()), Some(2));
+}
+
+/// The Lasso: Shift adds anchors, Alt takes them away, and neither drops the rest of the
+/// selection (a path selected whole stays whole when its anchors are added again).
+#[test]
+fn lasso_shift_adds_and_alt_subtracts() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let t = s.execute("text.create", &json!({"x": 300, "y": 300, "text": "Hi"})).unwrap();
+    let t = NodeId(t["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, t.0]})).unwrap();
+    // A loop round a's top-left anchor.
+    let corner = [(90.0, 90.0), (110.0, 90.0), (110.0, 110.0), (90.0, 110.0), (90.0, 110.0)];
+    gesture(&mut s, "lasso", &corner, Mods { shift: true, ..Default::default() });
+    let st = s.doc().unwrap();
+    assert_eq!((st.selection.objects.clone(), st.selection.partial(a)), (vec![a, t], None));
+    gesture(&mut s, "lasso", &corner, Mods { alt: true, ..Default::default() });
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection.objects, vec![a, t], "the type stays selected");
+    assert_eq!(st.selection.partial(a).map(|p| p.len()), Some(3));
+}
+
 #[test]
 fn measure_tool_leaves_document_untouched() {
     let mut s = session();
