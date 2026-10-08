@@ -715,6 +715,10 @@ pub struct TextObject {
     /// Cached layout bounds in text space, filled in by the layout engine (not serialized).
     #[serde(skip)]
     pub cached_bounds: Option<Rect>,
+    /// Cached baselines in text space, start to end, one per line that holds characters (a
+    /// vertical column's centre line), filled in with `cached_bounds` (not serialized).
+    #[serde(skip)]
+    pub cached_baselines: Vec<(Point, Point)>,
 }
 
 impl TextObject {
@@ -731,6 +735,7 @@ impl TextObject {
             path_spacing: 0.0,
             wrap: Vec::new(),
             cached_bounds: None,
+            cached_baselines: Vec::new(),
         }
     }
     pub fn plain_text(&self) -> String {
@@ -838,6 +843,15 @@ impl TextObject {
     /// gradient fits, as the renderers lay it out.
     pub fn local_bounds(&self) -> Rect {
         self.cached_bounds.unwrap_or_else(|| self.estimate_bounds())
+    }
+    /// The baselines in text space (the layout cache): for point type with none cached, the first
+    /// one across [`Self::local_bounds`] (down the first column's centre line for vertical type).
+    pub fn baselines(&self) -> impl Iterator<Item = (Point, Point)> + '_ {
+        let first = (self.cached_baselines.is_empty() && matches!(self.kind, TextKind::Point)).then(|| {
+            let b = self.local_bounds();
+            if self.vertical { (Point::new(0.0, b.y0), Point::new(0.0, b.y1)) } else { (Point::new(b.x0, 0.0), Point::new(b.x1, 0.0)) }
+        });
+        self.cached_baselines.iter().copied().chain(first)
     }
 }
 

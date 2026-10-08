@@ -687,6 +687,7 @@ fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64) {
     }
     if resized {
         o.cached_bounds = None;
+        o.cached_baselines.clear();
     }
 }
 

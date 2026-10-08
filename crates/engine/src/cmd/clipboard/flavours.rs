@@ -300,7 +300,7 @@ fn import_text(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "the text is empty"));
     }
     let mut t = TextObject::point(Point::ZERO, text, super::super::create::new_type_style(s, &Value::Null));
-    t.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).bounds);
+    crate::cmd::typecmd::refresh_bounds(&mut t);
     let n = Node::new(NodeId(1), NodeKind::Text(Box::new(t)));
     let count = s.load_clipboard(Clipboard { nodes: vec![n], ..Default::default() }, p)?;
     Ok(json!({ "count": count }))

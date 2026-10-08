@@ -194,7 +194,11 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
             }
             (!opt.outline && !opt.path_only && fill_contains(&bp, *rule, p)).then_some(HitKind::Fill)
         }
-        NodeKind::Text(t) if opt.type_path_only => stroke_contains(&type_path(t), 0.0, opt.tol, p).then_some(HitKind::Outline),
+        // The type path lies within the bounds: they rule out the rest before it is measured.
+        NodeKind::Text(t) if opt.type_path_only => {
+            n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p))?;
+            on_type_path(n, t, p, opt.tol).then_some(HitKind::Outline)
+        }
         NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } | NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
             n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
         }
@@ -210,22 +214,26 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
     }
 }
 
-/// The type path of `t` in document space, what "Type Object Selection by Path Only" picks type
-/// by: area type's frame, type on a path's path, and for point type its first baseline (the line
-/// the selection marks under it), across the width of its layout.
-fn type_path(t: &crate::TextObject) -> vectorcraft_geom::BezPath {
+/// Is `p` within `tol` of the type path of `t` (in `n`), what "Type Object Selection by Path
+/// Only" picks type by: its baselines ([`crate::TextObject::baselines`]), area type's frame and
+/// type on a path's path, drawn through `n`'s perspective projection if it has one.
+fn on_type_path(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> bool {
     use crate::TextKind;
-    match &t.kind {
-        TextKind::Area { frame } => frame.transformed(t.xf).to_bezpath(),
-        TextKind::OnPath { path, .. } => path.transformed(t.xf).to_bezpath(),
-        TextKind::Point => {
-            let b = t.cached_bounds.unwrap_or_else(|| t.estimate_bounds());
-            let mut bp = vectorcraft_geom::BezPath::new();
-            bp.move_to(t.xf * Point::new(b.x0, 0.0));
-            bp.line_to(t.xf * Point::new(b.x1, 0.0));
-            bp
-        }
+    use vectorcraft_geom::kurbo::ParamCurveNearest;
+    let h = n.projection();
+    let project = |q: Point| h.as_ref().and_then(|h| h.apply(q)).unwrap_or(q);
+    // A homography keeps straight lines straight: a baseline's ends are enough.
+    let near = |(a, b): (Point, Point)| vectorcraft_geom::Line::new(project(t.xf * a), project(t.xf * b)).nearest(p, 1e-9).distance_sq <= tol * tol;
+    if t.baselines().any(near) {
+        return true;
     }
+    let (TextKind::Area { frame: path } | TextKind::OnPath { path, .. }) = &t.kind else { return false };
+    let mut path = path.transformed(t.xf);
+    if h.is_some() {
+        let piece = path.bounds().map_or(1.0, |b| (b.width().max(b.height()) / 64.0).max(0.25));
+        path = crate::live::map_nonlinear(&path, piece, project);
+    }
+    stroke_contains(&path.to_bezpath(), 0.0, tol, p)
 }
 
 /// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]).
@@ -464,6 +472,63 @@ mod tests {
         assert_eq!(hit(Point::new(75.0, 100.0), path_only), None, "point type: past the end of its layout");
         assert_eq!(hit(Point::new(250.0, 200.5), path_only), Some((area, HitKind::Outline)), "area type: its frame");
         assert_eq!(hit(Point::new(60.0, 339.5), path_only), Some((on_path, HitKind::Outline)), "type on a path: its path");
+    }
+
+    /// Type Object Selection by Path Only with the layout's baselines: every line's for point type,
+    /// area type's besides its frame, a vertical column's centre line, and type in perspective
+    /// where it is drawn.
+    #[test]
+    fn type_path_only_picks_every_baseline() {
+        use crate::{CharStyle, PerspectiveAttachment, TextKind, TextObject};
+        use vectorcraft_geom::{Affine, Homography};
+        let mut d = Document::new(400.0, 400.0);
+        let l = d.layers[0].id;
+        let mut add = |t: TextObject, perspective: Option<Affine>| {
+            let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+            n.perspective = perspective.map(|a| {
+                Box::new(PerspectiveAttachment { projection: Some(Homography::from_affine(a).to_array()), ..PerspectiveAttachment::new("left", 0.0) })
+            });
+            let id = n.id;
+            d.insert(Some(l), 9, n).unwrap();
+            id
+        };
+        let style = CharStyle { size: 20.0, ..CharStyle::default() };
+        // Two lines of point type at (10, 100), 24 pt apart.
+        let mut point = TextObject::point(
+            Point::new(10.0, 100.0),
+            "Hello
+world",
+            style.clone(),
+        );
+        point.cached_bounds = Some(Rect::new(0.0, -16.0, 60.0, 28.0));
+        point.cached_baselines = vec![(Point::ZERO, Point::new(60.0, 0.0)), (Point::new(0.0, 24.0), Point::new(50.0, 24.0))];
+        let point = add(point, None);
+        // Area type: a line inside its frame.
+        let mut area = TextObject::point(Point::new(200.0, 50.0), "Area", style.clone());
+        area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)) };
+        area.cached_baselines = vec![(Point::new(0.0, 16.0), Point::new(40.0, 16.0))];
+        let area = add(area, None);
+        // Vertical point type at (300, 200) with no baselines cached: down its first column.
+        let mut vertical = TextObject::point(Point::new(300.0, 200.0), "Tate", style.clone());
+        vertical.vertical = true;
+        vertical.cached_bounds = Some(Rect::new(-10.0, 0.0, 10.0, 80.0));
+        let vertical = add(vertical, None);
+        // Point type drawn 100 to the right of where it is laid out.
+        let mut moved = TextObject::point(Point::new(10.0, 350.0), "Moved", style);
+        moved.cached_bounds = Some(Rect::new(0.0, -16.0, 60.0, 4.0));
+        let moved = add(moved, Some(Affine::translate((100.0, 0.0))));
+        let path_only = HitOptions { type_path_only: true, ..Default::default() };
+        let hit = |p: Point| hit_test(&d, p, path_only).map(|h| h.leaf);
+        assert_eq!(hit(Point::new(40.0, 100.0)), Some(point), "the first line's baseline");
+        assert_eq!(hit(Point::new(40.0, 125.0)), Some(point), "the second line's");
+        assert_eq!(hit(Point::new(40.0, 112.0)), None, "between the lines");
+        assert_eq!(hit(Point::new(65.0, 124.0)), None, "past the end of the shorter second line");
+        assert_eq!(hit(Point::new(220.0, 66.0)), Some(area), "area type: a line's baseline");
+        assert_eq!(hit(Point::new(220.0, 80.0)), None, "area type: inside the frame, off the baselines");
+        assert_eq!(hit(Point::new(299.0, 260.0)), Some(vertical), "vertical type: down the column");
+        assert_eq!(hit(Point::new(306.0, 260.0)), None, "vertical type: beside it");
+        assert_eq!(hit(Point::new(140.0, 351.0)), Some(moved), "in perspective: where it is drawn");
+        assert_eq!(hit(Point::new(40.0, 351.0)), None, "in perspective: not where it is laid out");
     }
 
     /// `objects_at`: every object under the point, topmost first; a group counts once.

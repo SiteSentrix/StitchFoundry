@@ -469,6 +469,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         path_spacing: 0.0,
         wrap: Vec::new(),
         cached_bounds: None,
+        cached_baselines: Vec::new(),
     };
     if bool_or(p, "placeholder", false) {
         super::typemenu::fill_with_placeholder(&mut t);
@@ -601,6 +602,7 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             path_spacing: 0.0,
             wrap: Vec::new(),
             cached_bounds: None,
+            cached_baselines: Vec::new(),
         };
         for r in &mut h.runs {
             r.style.tracking = tr;

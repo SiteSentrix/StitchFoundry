@@ -73,6 +73,41 @@ fn area_type_starts_at_the_right_edge_and_wraps_to_the_left() {
     assert!(l.glyphs.iter().all(|g| g.outline.bounding_box().y1 <= 105.0 + 1e-6), "inside the frame");
 }
 
+/// `baselines`: one per line that holds characters, along it for horizontal type and down the
+/// column's centre line for vertical type (where point type's anchor is); none on a path.
+#[test]
+fn baselines_run_along_lines_and_down_column_centres() {
+    let h = layout(
+        FontDb::global(),
+        &TextObject::point(
+            Point::ZERO,
+            "§§
+
+§",
+            CharStyle { size: 20.0, ..CharStyle::default() },
+        ),
+    );
+    let hb = h.baselines();
+    assert_eq!(hb.len(), 2, "the empty line has none: {hb:?}");
+    assert!(hb[0].0 == Point::ZERO && hb[0].1.y == 0.0 && hb[0].1.x > 15.0, "the first baseline runs from the anchor: {hb:?}");
+    assert!(hb[1].0.y > 40.0 && hb[1].0.y == hb[1].1.y && hb[1].1.x > hb[1].0.x, "the third line's, lower: {hb:?}");
+    let v = layout(
+        FontDb::global(),
+        &vertical(
+            "§§
+§",
+        ),
+    );
+    let vb = v.baselines();
+    let (a, c) = (ink(&v, 0), ink(&v, 2));
+    assert_eq!(vb.len(), 2, "{vb:?}");
+    assert!(vb[0].0.x.abs() < 4.0 && vb[0].0.x == vb[0].1.x && vb[0].1.y > vb[0].0.y + 30.0, "down the first column's centre: {vb:?}");
+    assert!((vb[0].0.x - a.center().x).abs() < 4.0 && (vb[1].0.x - c.center().x).abs() < 4.0, "through the glyphs: {vb:?} {a:?} {c:?}");
+    let mut on_path = vertical("ab");
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (100.0, 0.0)).to_path(0.1)), start: 0.0, end: None };
+    assert!(layout(FontDb::global(), &on_path).baselines().is_empty());
+}
+
 #[test]
 fn type_on_a_path_stays_horizontal() {
     let mut t = vertical("ab");

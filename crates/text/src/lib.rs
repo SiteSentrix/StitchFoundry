@@ -158,6 +158,18 @@ impl TextLayout {
     pub fn physical_point(&self, p: Point) -> Point {
         if self.vertical { self.line_xf * p } else { p }
     }
+    /// Each line's baseline in text space, start to end (a vertical column's centre line), for
+    /// the lines that hold characters; none for type on a path, which its path stands for.
+    pub fn baselines(&self) -> Vec<(Point, Point)> {
+        if self.on_path {
+            return vec![];
+        }
+        let line = |l: &LineInfo| {
+            let y = if self.vertical { l.baseline + (l.descent - l.ascent) / 2.0 } else { l.baseline };
+            (self.physical_point(Point::new(l.x0, y)), self.physical_point(Point::new(l.x1, y)))
+        };
+        self.lines.iter().filter(|l| l.x1 > l.x0).map(line).collect()
+    }
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {
         let mut p = BezPath::new();
