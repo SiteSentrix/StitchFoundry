@@ -41,6 +41,7 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("dc-alignto-key", include_bytes!("../../../assets/icons/dc-alignto-key.svg")),
     ("dc-alignto-selection", include_bytes!("../../../assets/icons/dc-alignto-selection.svg")),
     ("dc-anchor", include_bytes!("../../../assets/icons/dc-anchor.svg")),
+    ("dc-anchor-smooth", include_bytes!("../../../assets/icons/dc-anchor-smooth.svg")),
     ("dc-appearance", include_bytes!("../../../assets/icons/dc-appearance.svg")),
     ("dc-arc", include_bytes!("../../../assets/icons/dc-arc.svg")),
     ("dc-arrow-down", include_bytes!("../../../assets/icons/dc-arrow-down.svg")),

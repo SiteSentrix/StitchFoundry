@@ -124,6 +124,7 @@
 	Anchor Points	Puntos de ancla
 	Anchor Points, Handle, and Bounding Box Display	Visualización de puntos de ancla, manejadores y cuadro delimitador
 	Anchor/Path Labels	Etiquetas de ancla/trazado
+	Anchors:	Anclas:
 	Angle	Ángulo
 	Angle:	Ángulo:
 	Angles	Ángulos
@@ -427,6 +428,7 @@
 	Compression:	Compresión:
 	Condition identifier:	Identificador de condición:
 	Conflict {n} of {count}	Conflicto {n} de {count}
+	Connect Selected End Points	Conectar los puntos finales seleccionados
 	Consolidate All Windows	Consolidar todas las ventanas
 	Constrain Angle	Restringir ángulo
 	Constrain Width and Height Proportions	Restringir proporciones de anchura y altura
@@ -444,6 +446,8 @@
 	Convert Color	Convertir color
 	Convert Document Color Mode	Convertir modo de color del documento
 	Convert Process to Global	Convertir cuatricromía en global
+	Convert Selected Anchor Points to Corner	Convertir los puntos de ancla seleccionados en esquina
+	Convert Selected Anchor Points to Smooth	Convertir los puntos de ancla seleccionados en suaves
 	Convert text to outlines	Convertir texto en contornos
 	Convert To Area Type	Convertir en texto de área
 	Convert to Artboards	Convertir en mesas de trabajo
@@ -454,6 +458,7 @@
 	Convert to RGB	Convertir a RGB
 	Convert to Shape	Convertir en forma
 	Convert to sRGB	Convertir a sRGB
+	Convert:	Convertir:
 	Copied the CSS of {rules} object(s)	Se copió el CSS de {rules} objeto(s)
 	Copies:	Copias:
 	Copy	Copiar
@@ -476,6 +481,7 @@
 	Corners	Esquinas
 	Chamfer	Chaflán
 	Corners…	Esquinas…
+	Cut Path	Cortar trazado
 	Descender	Descendente
 	Flip	Voltear
 	Inverted Round	Redondeada invertida
@@ -3047,6 +3053,7 @@ axis	Both	Ambos
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	`to` must be "corner" or "smooth"	`to` debe ser "corner" o "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	los archivos BMP son RGB o en escala de grises: colorModel rgb o gray
 @msg	Blend colors: select at least three objects with filled colours	Fusionar colores: selecciona al menos tres objetos con relleno de color
 @msg	Combine Slices: the slices have no bounds	Combinar sectores: los sectores no tienen límites
@@ -3064,6 +3071,7 @@ axis	Both	Ambos
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Crear a partir de guías: las guías forman más de {MAX_PIECES} sectores
 @msg	Create from Selection: the selection has no area	Crear a partir de la selección: la selección no tiene área
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Recuperación de datos no tiene dónde guardar copias: configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
+@msg	direct-select anchor points to cut at (not the end points of open paths)	selecciona con Selección directa los puntos de ancla en los que cortar (no los puntos finales de trazados abiertos)
 @msg	Divide Objects Below: select a path	Dividir objetos inferiores: selecciona un trazado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
 @msg	Downloaded {_1} file(s)	Se descargaron {_1} archivo(s)
@@ -3098,6 +3106,7 @@ axis	Both	Ambos
 @msg	Release Guides: no guides	Soltar guías: no hay guías
 @msg	Release: no layer to put the rectangle in	Soltar: no hay ninguna capa donde poner el rectángulo
 @msg	Replace Spine: select a blend and a path	Reemplazar eje: selecciona una fusión y un trazado
+@msg	select paths or anchor points	selecciona trazados o puntos de ancla
 @msg	SVG parse error: {0}	error al analizar el SVG: {0}
 @msg	Save for Web: the image is empty	Guardar para web: la imagen está vacía
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Guardar escribe {_1}, no {_2}: usa document.export para otros formatos

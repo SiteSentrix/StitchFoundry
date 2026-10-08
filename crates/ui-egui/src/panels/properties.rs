@@ -85,6 +85,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
+    if anchor_mode {
+        divider(ui);
+        section_header(ui, tl!("Anchor Point"));
+        crate::chrome::anchor_buttons(app, ui);
+    }
     divider(ui);
     section_header(ui, tl!("Quick Actions"));
     let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
@@ -103,10 +108,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if multi_color(app, ui.ctx()) {
         actions.push((tl!("Recolor"), "ui.recolorDialog"));
-    }
-    // One column: the label is wider than half of the narrowest dock.
-    if anchor_mode && widgets::flat_button(ui, "Remove Anchor Points", ui.available_width()).clicked() {
-        crate::menus::invoke(app, "path.removeAnchors", json!({}));
     }
     if is_image {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());

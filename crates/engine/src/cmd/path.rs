@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath, Vec2};
 
 use super::create::anchor_from_json;
 use super::*;
@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Anchor Points",
             [],
             None,
-            "{to: \"corner\"|\"smooth\"} (Control bar convert buttons)",
+            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
             has_selection,
             convert_anchors
         ),
@@ -104,7 +104,15 @@ pub fn specs() -> Vec<CommandSpec> {
             reshape
         ),
         cmd!("path.insertAnchor", "Add Anchor Point", [], None, "{id, subpath, segment, t: 0..1}", has_doc, insert_anchor),
-        cmd!("path.cutAtAnchors", "Cut Path at Selected Anchor Points", [], None, "{}", has_selection, cut_at_anchors),
+        cmd!(
+            "path.cutAtAnchors",
+            "Cut Path at Selected Anchor Points",
+            [],
+            None,
+            "{} cut the paths at their direct-selected anchors (one undo step): a closed path opens there, an open one becomes one path per piece; one of each cut's two coincident anchors stays selected → {ids}",
+            has_anchors,
+            cut_at_anchors
+        ),
     ]
 }
 
@@ -386,41 +394,24 @@ fn average(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "path.convertAnchors";
+    let smooth = match str_param(p, "to") {
+        Some("smooth") => true,
+        Some("corner") => false,
+        _ => return Err(bad(C, "`to` must be \"corner\" or \"smooth\"")),
+    };
     let t = anchor_targets(s)?;
-    let smooth = str_param(p, "to") == Some("smooth");
+    if t.is_empty() {
+        return Err(bad(C, "select paths or anchor points"));
+    }
     s.edit("Convert Anchor Points", |d, _| {
         for (id, v) in &t {
             let path = path_mut(d, *id)?;
             for &(si, ai) in v {
-                let sp = &path.subpaths[si];
-                let n = sp.anchors.len();
-                let prev = if ai > 0 {
-                    Some(sp.anchors[ai - 1].p)
-                } else if sp.closed {
-                    Some(sp.anchors[n - 1].p)
-                } else {
-                    None
-                };
-                let next = if ai + 1 < n {
-                    Some(sp.anchors[ai + 1].p)
-                } else if sp.closed {
-                    Some(sp.anchors[0].p)
-                } else {
-                    None
-                };
-                let a: &mut Anchor = &mut path.subpaths[si].anchors[ai];
+                let Some(sp) = path.subpaths.get_mut(si) else { continue };
                 if smooth {
-                    // Handles parallel to prev→next, a third of the neighbour distances.
-                    let (pp, nn) = (prev.unwrap_or(a.p), next.unwrap_or(a.p));
-                    let dir = nn - pp;
-                    let l = dir.hypot();
-                    if l > 1e-9 {
-                        let u = dir / l;
-                        a.h_in = a.p - u * (a.p.distance(pp) / 3.0);
-                        a.h_out = a.p + u * (a.p.distance(nn) / 3.0);
-                        a.kind = AnchorKind::Smooth;
-                    }
-                } else {
+                    sp.smooth_anchor(ai);
+                } else if let Some(a) = sp.anchors.get_mut(ai) {
                     a.retract();
                 }
             }
@@ -519,40 +510,50 @@ fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
-    let sel = s.doc()?.selection.anchors.clone();
-    s.edit("Cut Path", |d, _| {
-        for (id, set) in &sel {
-            let path = path_mut(d, *id)?;
-            let mut out = vec![];
-            for (si, sp) in path.subpaths.iter().enumerate() {
-                let cuts: Vec<usize> = set.iter().filter(|(s, _)| *s == si).map(|(_, a)| *a).collect();
-                if cuts.is_empty() {
-                    out.push(sp.clone());
-                    continue;
-                }
-                let mut anchors = sp.anchors.clone();
-                if sp.closed {
-                    anchors.rotate_left(cuts[0]);
-                    anchors.push(anchors[0]);
-                }
-                let base = if sp.closed { cuts[0] } else { 0 };
-                let n = sp.anchors.len();
-                let rel: Vec<usize> = cuts.iter().map(|c| (c + n - base) % n).collect();
-                let mut cur = vec![];
-                for (i, a) in anchors.iter().enumerate() {
-                    cur.push(*a);
-                    if rel.contains(&(i % n)) && cur.len() > 1 {
-                        out.push(SubPath::new(std::mem::take(&mut cur), false));
-                        cur.push(*a);
-                    }
-                }
-                if cur.len() > 1 {
-                    out.push(SubPath::new(cur, false));
-                }
-            }
-            path.subpaths = out;
+    const C: &str = "path.cutAtAnchors";
+    let st = s.doc()?;
+    // Each selected path's subpaths cut at its selected anchors, those that cut anything.
+    let mut cuts: Vec<(NodeId, Vec<SubPath>, Vec<bool>)> = vec![];
+    for (id, set) in &st.selection.anchors {
+        let Some(pd) = st.doc.node(*id).and_then(|n| n.path_data()) else { continue };
+        let (mut subs, mut starts) = (vec![], vec![]);
+        for (si, sp) in pd.subpaths.iter().enumerate() {
+            let at: BTreeSet<usize> = set.iter().filter(|(s, _)| *s == si).map(|(_, a)| *a).collect();
+            let pieces = sp.cut_at(&at);
+            // The pieces that start at a cut: every piece of an opened closed subpath, all but the
+            // first of an open one.
+            starts.extend(pieces.iter().enumerate().map(|(k, piece)| if sp.closed { !piece.closed } else { k > 0 }));
+            subs.extend(pieces);
         }
-        Ok(())
+        if starts.contains(&true) {
+            cuts.push((*id, subs, starts));
+        }
+    }
+    if cuts.is_empty() {
+        return Err(bad(C, "direct-select anchor points to cut at (not the end points of open paths)"));
+    }
+    let ids = s.edit("Cut Path", |d, sel| {
+        let (mut all, mut picked) = (vec![], vec![]);
+        for (id, subs, starts) in cuts {
+            // A path of one subpath becomes one path per piece (the first keeps the id); the
+            // pieces of a compound shape stay subpaths of it.
+            if d.node(id).and_then(|n| n.path_data()).is_some_and(|pd| pd.subpaths.len() == 1) {
+                let ids = super::draw2::replace_with_pieces(d, id, subs.into_iter().map(PathData::single).collect())?;
+                picked.extend(ids.iter().zip(&starts).filter(|(_, s)| **s).map(|(id, _)| (*id, (0, 0))));
+                all.extend(ids);
+            } else {
+                path_mut(d, id)?.subpaths = subs;
+                picked.extend(starts.iter().enumerate().filter(|(_, s)| **s).map(|(si, _)| (id, (si, 0))));
+                all.push(id);
+            }
+        }
+        // Each cut leaves one of its two coincident anchors selected, so a drag pulls the ends apart.
+        sel.clear();
+        for (id, a) in picked {
+            sel.add(id);
+            sel.anchors.entry(id).or_default().insert(a);
+        }
+        Ok(all)
     })?;
-    ok()
+    Ok(super::draw2::ids_json(&ids))
 }

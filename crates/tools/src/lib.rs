@@ -400,7 +400,8 @@ pub enum Cursor {
     PenDelete,
     PenClose,
     PenContinue,
-    /// Over the last anchor of the path being drawn: a click retracts its outgoing handle.
+    /// Over the last anchor of the path being drawn (a click retracts its outgoing handle), or with
+    /// Alt held over a selected path's handle or anchor (the Anchor Point tool's gesture).
     PenConvert,
     Text,
     Hand,
