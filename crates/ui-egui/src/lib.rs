@@ -288,6 +288,9 @@ pub struct CacheKey {
     pub anti_alias: bool,
     /// [`vectorcraft_render::placed_document::generation`]: placed documents' bitmaps made since.
     pub placed: u64,
+    /// View › Pixel Preview: the document pixels rendered (x0, y0, x1, y1), one per point, shown
+    /// with hard edges. None: the art is rendered for the screen.
+    pub pixel: Option<[i64; 4]>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
