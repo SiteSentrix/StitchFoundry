@@ -2848,7 +2848,8 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
 /// are.
 fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     Some(match id {
-        "text.areaOptions" => ("Area Type Options", &[]),
+        // Whether the text overflows, and Shrink Text's factor, are read-only facts.
+        "text.areaOptions" => ("Area Type Options", &["overflow", "fitScale"]),
         "type.pathOptions" => ("Type on a Path Options", &["start", "end"]),
         _ => return None,
     })

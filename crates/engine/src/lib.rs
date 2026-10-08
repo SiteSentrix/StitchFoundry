@@ -1293,6 +1293,8 @@ mod tests_adjust;
 #[cfg(test)]
 mod tests_appearance;
 #[cfg(test)]
+mod tests_areafit;
+#[cfg(test)]
 mod tests_assets;
 #[cfg(test)]
 mod tests_attributes;

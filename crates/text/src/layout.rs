@@ -128,14 +128,88 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
         first_baseline: a.first_baseline,
         first_baseline_min: a.first_baseline_min,
         vertical_align: a.vertical_align,
+        fit: a.fit,
         ..LayoutOptions::default()
     };
     layout_with(db, t, &opts)
 }
 
+/// Most layout passes Shrink Text to Fit runs past the first (bisection plus the final pass).
+const SHRINK_PASSES: usize = 11;
+
 /// Lay out a text object with explicit options (area type rows/columns, inset, first baseline,
-/// composer, OpenType features).
+/// fit, composer, OpenType features).
 pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    let first = layout_once(db, t, opts);
+    match (opts.fit.min_scale(), &t.kind) {
+        (Some(min), TextKind::Area { .. }) if first.overflow => shrink_to_fit(db, t, opts, min).unwrap_or(first),
+        _ => first,
+    }
+}
+
+/// Shrink Text to Fit for text that overflows at full size: the largest scale in `min..1` at which
+/// it fits, searched by bisection over the first run's size in steps of 0.1 pt (so its scaled size
+/// is a whole number of tenths of a point, the same every time). Down at `min` it lays out there,
+/// still overflowing. None (keep the full-size layout) when the text has no usable size.
+fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) -> Option<TextLayout> {
+    let size = t.runs.first().map(|r| r.style.size).filter(|s| s.is_finite() && *s >= 0.1)?;
+    if !(min.is_finite() && min < 1.0) {
+        return None;
+    }
+    let tenths = size * 10.0;
+    // Candidate sizes k/10 pt for k in lo..hi: `hi` (full size, rounded down) is known to overflow
+    // unless it is below the full size; `lo` is the smallest allowed.
+    let mut lo = (tenths * min).ceil().max(1.0);
+    let mut hi = tenths.floor();
+    if hi < lo {
+        hi = lo;
+    }
+    let at = |k: f64| -> TextLayout {
+        let f = (k / tenths).clamp(min, 1.0);
+        let mut l = layout_once(db, &scaled(t, f), opts);
+        l.fit_scale = f;
+        l
+    };
+    let mut passes = 0;
+    let mut best: Option<TextLayout> = None;
+    // `hi` itself may fit when the size isn't a whole number of tenths.
+    if hi < tenths && hi > lo {
+        let l = at(hi);
+        passes += 1;
+        if !l.overflow {
+            return Some(l);
+        }
+    }
+    // Invariant: everything at `hi` or above overflows; `lo` fits or is the floor.
+    while hi - lo > 1.0 && passes + 1 < SHRINK_PASSES {
+        let mid = ((lo + hi) * 0.5).floor();
+        let l = at(mid);
+        passes += 1;
+        if l.overflow {
+            hi = mid;
+        } else {
+            lo = mid;
+            best = Some(l);
+        }
+    }
+    // `best` is the layout at `lo` once `lo` has moved; at the floor it still needs laying out.
+    Some(best.unwrap_or_else(|| at(lo)))
+}
+
+/// `t` with every run's size, explicit leading and baseline shift scaled by `f` (auto leading
+/// follows the size; paragraph spacing stays).
+fn scaled(t: &TextObject, f: f64) -> TextObject {
+    let mut s = t.clone();
+    for r in &mut s.runs {
+        r.style.size *= f;
+        r.style.leading = r.style.leading.map(|l| l * f);
+        r.style.baseline_shift *= f;
+    }
+    s
+}
+
+/// One layout pass, without fitting.
+fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
     let text = t.plain_text();
     let mut runs = Vec::with_capacity(t.runs.len());
     let mut off = 0;

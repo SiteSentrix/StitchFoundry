@@ -311,6 +311,54 @@ fn structured_junk() {
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }
 
+/// Area Type Options with junk fit values, on selected area type (the fixtures have none), with
+/// text that overflows: never a panic, the document stays sound, and editing still works.
+#[test]
+fn area_options_fit_junk() {
+    let cases = [
+        json!({"fit": "shrinkText", "fitMinPercent": 1e308}),
+        json!({"fit": "shrinkText", "fitMinPercent": -1e308}),
+        json!({"fit": "shrinkText", "fitMinPercent": "x"}),
+        json!({"fit": {"shrinkText": {"minPercent": -5}}}),
+        json!({"fit": {"shrinkText": {"minPercent": "a"}}}),
+        json!({"fit": {"shrinkText": null}}),
+        json!({"fit": {"autoHeight": 1}}),
+        json!({"fit": {"bogus": {}}}),
+        json!({"fit": [1, 2]}),
+        json!({"fit": ""}),
+        json!({"fit": "AUTO-HEIGHT", "height": 1e308, "width": -1e308}),
+        json!({"fit": "autoHeight", "columns": u64::MAX, "gutter": 1e308, "inset": 1e308}),
+        json!({"fit": "autoHeight", "rows": 5, "inset": -1}),
+        json!({"fit": "shrinkText", "columns": 100, "gutter": 0, "inset": 10000}),
+        json!({"fitMinPercent": 50}),
+        json!({"fit": "none", "fitMinPercent": 1e-308}),
+    ];
+    let story = "Words that overflow a small frame. ".repeat(40);
+    let mut failures = vec![];
+    for (size, (w, h)) in [(12.0, (120.0, 40.0)), (0.1, (1.0, 1.0)), (1296.0, (100_000.0, 1.0))] {
+        for p in &cases {
+            let mut s = Fixture::Multi.session();
+            let made = s.execute("text.create", &json!({"x": 10, "y": 10, "size": size, "text": story, "area": {"width": w, "height": h}}));
+            let Ok(made) = made else { continue };
+            let id = made["id"].as_u64().unwrap_or(0);
+            let r = catch_quiet(|| s.execute("text.areaOptions", p));
+            match r {
+                Err(m) => failures.push(format!("PANIC text.areaOptions {p} [{size} pt, {w}×{h}]: {m}")),
+                Ok(_) => {
+                    let typed = catch_quiet(|| s.execute("text.editRange", &json!({"id": id, "start": 0, "insert": "More words. "})));
+                    if typed.is_err() {
+                        failures.push(format!("PANIC typing after text.areaOptions {p}"));
+                    }
+                    if let Err(e) = check_session(&s) {
+                        failures.push(format!("text.areaOptions {p} [{size} pt]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
 /// After a successful fuzzed call, the document still round-trips and exports.
 #[test]
 fn fuzzed_calls_keep_documents_serializable() {
