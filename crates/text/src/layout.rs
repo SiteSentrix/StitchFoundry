@@ -250,7 +250,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         _ => QUARTER_TURN,
     };
     match &t.kind {
-        TextKind::Point => flow(&mut cx, &paras, &t.para, None),
+        TextKind::Point => flow(&mut cx, &paras, t, None),
         TextKind::Area { frame } => {
             let to_lines = line_xf.inverse();
             let wrap: Vec<vectorcraft_doc::WrapShape> = if vertical {
@@ -260,9 +260,9 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
             };
             let mut regions = Region::cells(&(to_lines * frame.to_bezpath()), opts, &wrap);
             cx.out.frames = regions.iter().map(|r| line_xf.transform_rect_bbox(r.cell)).collect();
-            flow(&mut cx, &paras, &t.para, Some(&regions));
+            flow(&mut cx, &paras, t, Some(&regions));
             if opts.vertical_align != VerticalAlign::Top {
-                align_vertically(&mut cx, &paras, &t.para, &mut regions);
+                align_vertically(&mut cx, &paras, t, &mut regions);
             }
         }
         TextKind::OnPath { path, .. } => on_path(&mut cx, &paras, t, path),
@@ -526,7 +526,7 @@ fn cell_space(out: &TextLayout, regions: &[Region]) -> Vec<Option<(f64, f64, usi
 /// Other frames give lines different widths at different heights, so the text flows again with
 /// each cell's lines started lower (or spaced wider) until it settles, at most eight passes; a
 /// pass that would push text out of the frame is undone and retried with half the step.
-fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: &mut [Region]) {
+fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, regions: &mut [Region]) {
     let align = cx.opts.vertical_align;
     let plain = regions.iter().all(|r| (r.rect || r.polys.is_empty()) && r.wraps.is_empty());
     if plain {
@@ -596,7 +596,7 @@ fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, 
         }
         let before = laid_out(&cx.out);
         let prev = (std::mem::take(&mut cx.out.glyphs), std::mem::take(&mut cx.out.lines), std::mem::replace(&mut cx.out.overflow, false));
-        flow(cx, paras, para, Some(regions));
+        flow(cx, paras, t, Some(regions));
         if laid_out(&cx.out) < before {
             // Text no longer fits (lines got narrower, or flow around a wrap object): undo the
             // pass and try a smaller step.
@@ -1291,7 +1291,9 @@ fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>, rt
     compose(sg, &width, &start_credit, &cands, &params(strict)).or_else(|| compose(sg, &width, &start_credit, &cands, &params(loose)))
 }
 
-fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Option<&[Region]>) {
+/// Flow paragraphs `paras` (byte ranges) of `t`, each with its own paragraph attributes
+/// (alignment, indents, spacing, direction, mojikumi, leading model…).
+fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, regions: Option<&[Region]>) {
     let mut pen = Pen {
         regions,
         ri: 0,
@@ -1300,10 +1302,14 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
         fb: cx.opts.first_baseline,
         fb_min: cx.opts.first_baseline_min,
         queued: vec![],
-        model: para.leading_model,
+        model: t.para_at(0).leading_model,
         next_top: None,
     };
     'paras: for (pi, pr) in paras.iter().enumerate() {
+        let para = t.para_at(pi);
+        // The leading model is a paragraph attribute: this paragraph's lines (and the space to
+        // its first line) follow its own.
+        pen.model = para.leading_model;
         let text = cx.text;
         let bidi = para_bidi(text.get(pr.clone()).unwrap_or_default(), para.direction);
         let rtl = is_rtl(bidi.as_ref());
@@ -1568,7 +1574,8 @@ fn path_steps(ap: &ArcPath, glyphs: &[SGlyph], from: f64, spacing: f64) -> Vec<f
 /// Lay type on a path out along `path` (text space), between its brackets.
 fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
-    let para = &t.para;
+    // Type on a path is one line: the first paragraph's attributes align it.
+    let para = t.para_at(0);
     let mut sg = Vec::new();
     // The first paragraph's direction aligns the line (Auto) and sets the caret's.
     let mut rtl = None;

@@ -272,7 +272,7 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
             let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
             let slack = size * 0.5;
             // Slack goes where the alignment leaves room, so the text doesn't move or rewrap.
-            let (sl, sr) = match t.para.justify {
+            let (sl, sr) = match t.para_at(0).justify {
                 Justify::Center | Justify::JustifyCenter => (slack * 0.5, slack * 0.5),
                 Justify::Right | Justify::JustifyRight => (slack, 0.0),
                 Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => (slack, 0.0),
@@ -315,20 +315,22 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             breaks.sort_unstable();
             breaks.dedup();
             for b in breaks.into_iter().rev() {
+                // Each wrapped line becomes a paragraph with its paragraph's attributes.
                 if plain.as_bytes().get(b - 1) == Some(&b' ') {
                     if let Some((ri, bi)) = locate(&t.runs, b - 1) {
+                        t.splice_paras(b - 1, b, "\n");
                         t.runs[ri].text.replace_range(bi..bi + 1, "\n");
                     }
                 } else if let Some((ri, bi)) = locate(&t.runs, b) {
+                    t.splice_paras(b, b, "\n");
                     t.runs[ri].text.insert(bi, '\n');
                 }
             }
             // The point origin sits where the alignment anchors the first line.
-            let (x0, x1) = lay
-                .lines
-                .first()
-                .map_or((fb.x0, fb.x1), |l| (l.avail.0 - t.para.left_indent - t.para.first_line_indent, l.avail.1 + t.para.right_indent));
-            let ox = match t.para.justify {
+            let p0 = t.para_at(0);
+            let (x0, x1) =
+                lay.lines.first().map_or((fb.x0, fb.x1), |l| (l.avail.0 - p0.left_indent - p0.first_line_indent, l.avail.1 + p0.right_indent));
+            let ox = match p0.justify {
                 Justify::Center | Justify::JustifyCenter => (x0 + x1) * 0.5,
                 Justify::Right | Justify::JustifyRight => x1,
                 Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => x1,
@@ -646,7 +648,7 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
     if let NodeKind::Text(t) = &mut n.kind {
         let text = t.plain_text();
         t.runs = vec![TextRun { text, style: CharStyle::default() }];
-        t.para = Default::default();
+        t.set_all_paras(Default::default());
         refresh_bounds(t);
     }
     if let Some(ch) = n.children_mut() {

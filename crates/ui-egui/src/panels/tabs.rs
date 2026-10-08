@@ -26,15 +26,21 @@ fn align_id(a: TabAlign) -> &'static str {
     }
 }
 
-/// The first selected text object's stops and the ruler span in points (the frame width for area type).
+/// The stops of the caret's paragraph while the Type tool edits text (else the first selected text
+/// object's first paragraph) and the ruler span in points (the frame width for area type).
 fn current(app: &VectorcraftApp) -> Option<(Vec<TabStop>, f64)> {
-    let n = first_selected(app)?;
+    let editing = super::character::text_editing(app);
+    let n = match editing {
+        Some((id, _, _)) => app.session.active()?.doc.node(id)?.clone(),
+        None => first_selected(app)?,
+    };
     let NodeKind::Text(t) = &n.kind else { return None };
+    let para = editing.map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start);
     let span = match &t.kind {
         vectorcraft_doc::TextKind::Area { frame } => frame.bounds().map_or(360.0, |b| b.width()),
         _ => 360.0,
     };
-    Some((t.para.tabs.clone(), span.max(72.0)))
+    Some((t.para_at(para).tabs.clone(), span.max(72.0)))
 }
 
 fn stops_json(stops: &[TabStop]) -> Value {
@@ -47,9 +53,9 @@ fn stops_json(stops: &[TabStop]) -> Value {
 }
 
 fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) {
-    if let Some((id, _, _)) = super::character::text_editing(app) {
+    if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
-        app.run("text.tabs.set", json!({"stops": stops_json(stops), "ids": [id.0]})).ok();
+        app.run("text.tabs.set", json!({"stops": stops_json(stops), "ids": [id.0], "start": a, "end": b})).ok();
     } else {
         app.run("text.tabs.set", json!({"stops": stops_json(stops)})).ok();
     }
@@ -209,7 +215,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let sel: usize = pstate(ui.ctx(), "tabs-sel");
     if menu_item(ui, tl!("Clear All Tabs"), false, !stops.is_empty()) {
-        app.run("text.tabs.clear", json!({})).ok();
+        apply(app, &[]);
     }
     if menu_item(ui, tl!("Delete Tab"), false, sel < stops.len()) {
         stops.remove(sel);

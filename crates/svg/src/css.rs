@@ -549,6 +549,10 @@ impl Rules<'_> {
         if let Some(l) = st.leading {
             art.props.push(("line-height", self.len(l)));
         }
+        // One element: the first paragraph's alignment.
+        if (1..t.paragraph_count()).any(|i| t.para_at(i).justify != t.para.justify) {
+            art.unsupported("paragraphs aligned differently");
+        }
         let align = match t.para.justify {
             Justify::Auto | Justify::Left => None,
             Justify::Center => Some("center"),
