@@ -23,7 +23,7 @@ use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
 use crate::import_scan::{MAX_NESTING, Ocgs, Scan, all_on, hides_forms, scan_page, tag_key};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
-use crate::import_text::{Families, Look, Placement, TextLine, Upright};
+use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
 /// The name of the paths text imports as.
@@ -74,6 +74,33 @@ fn place_group(g: usize, ocgs: &Ocgs, slots: &mut Vec<Slot>, nesting: &mut Nesti
         child = parent;
     }
     slots.push(Slot::Group(child));
+}
+
+/// The top-level group that group `g` is listed under (`g` itself when it isn't a sublayer).
+fn top_group(g: usize, ocgs: &Ocgs) -> usize {
+    let mut top = g;
+    for _ in 0..=MAX_NESTING {
+        match ocgs.list.get(top).and_then(|o| o.parent) {
+            Some(parent) => top = parent,
+            None => break,
+        }
+    }
+    top
+}
+
+/// Merge the top-level groups a page marks (`page`, in the order it first marks each, its empty
+/// ones too) into the stacking order of the pages before (`order`, bottom first; `known`: its
+/// groups). A group new to it goes right below the first group the page marks after it that it
+/// has: a layer whose art starts on a later page keeps its place among the others (#508).
+fn merge_order(order: &mut Vec<usize>, known: &mut HashSet<usize>, page: &[usize]) {
+    let mut above = None;
+    for &g in page.iter().rev() {
+        if known.insert(g) {
+            let at = above.and_then(|a| order.iter().position(|&x| x == a)).unwrap_or(order.len());
+            order.insert(at, g);
+        }
+        above = Some(g);
+    }
 }
 
 /// The layer of group `g`, in `color`: its art and sublayers. `None` for a group that isn't read.
@@ -166,6 +193,8 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let mut slots: Vec<Slot> = vec![];
     let mut group_art: HashMap<usize, Vec<Arc<Node>>> = HashMap::new();
     let mut nesting = Nesting::new();
+    // The top-level groups in the order the pages mark them, bottom first.
+    let (mut order, mut known) = (vec![], HashSet::new());
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
         // The chosen box sits at (x, 0); the page draws round it.
@@ -175,6 +204,11 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         let mut ctx = Context::new(xf, ab, &cache, pdf.xref(), settings.clone());
         b.page = ab;
         let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts);
+        if route {
+            let mut seen = HashSet::new();
+            let marked: Vec<usize> = scan.tags.iter().filter_map(|(_, g)| g.map(|g| top_group(g, &ocgs))).filter(|g| seen.insert(*g)).collect();
+            merge_order(&mut order, &mut known, &marked);
+        }
         b.begin_page(scan);
         interpret_page(page, &mut ctx, &mut b);
         let mut parts = b.end_page();
@@ -239,8 +273,25 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     if placeholder {
         return Err(PdfError::PlaceholderOnly);
     }
+    // A group the pages mark but draw nothing in is an empty layer, as the editor had it.
+    for &g in &order {
+        if !nesting.contains_key(&g) {
+            slots.push(Slot::Group(g));
+        }
+    }
+    // The groups' layers stack as the pages mark them (the art outside them stays where it was
+    // drawn): a group that first paints on a later page doesn't go on top of the others.
+    let rank: HashMap<usize, usize> = order.iter().enumerate().map(|(i, &g)| (g, i)).collect();
+    let at: Vec<usize> = slots.iter().enumerate().filter(|(_, s)| matches!(s, Slot::Group(_))).map(|(i, _)| i).collect();
+    let mut stacked: Vec<usize> = slots.iter().filter_map(|s| if let Slot::Group(g) = s { Some(*g) } else { None }).collect();
+    stacked.sort_by_key(|g| rank.get(g).copied().unwrap_or(usize::MAX));
+    for (i, g) in at.into_iter().zip(stacked) {
+        if let Some(s) = slots.get_mut(i) {
+            *s = Slot::Group(g);
+        }
+    }
     for (n, slot) in slots.into_iter().enumerate() {
-        let layer = match slot {
+        let mut layer = match slot {
             Slot::Page(l) => *l,
             // Sublayers take their top-level layer's colour.
             Slot::Group(g) => match group_layer(&mut b, g, &ocgs, &nesting, &mut group_art, LayerColor::Preset((n % 27) as u8)) {
@@ -248,6 +299,9 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
                 None => continue,
             },
         };
+        if let Some(art) = layer.children_mut() {
+            crate::import_lines::rebuild(art, &b.lines);
+        }
         doc.layers.push(Arc::new(layer));
     }
     for (k, blob) in b.images.drain() {
@@ -567,6 +621,8 @@ struct Builder<'p> {
     nested: u32,
     /// The last filled path: its node and its outline (a stroke of the same outline joins it).
     last_fill: Option<(NodeId, BezPath)>,
+    /// What each line of type made tells beyond its text object ([`crate::import_lines`]).
+    lines: HashMap<NodeId, LineFacts>,
 }
 
 fn blend(b: hayro_interpret::BlendMode) -> BlendMode {
@@ -701,6 +757,7 @@ impl<'p> Builder<'p> {
             pending: false,
             nested: 0,
             last_fill: None,
+            lines: HashMap::new(),
         }
     }
 
@@ -786,10 +843,11 @@ impl<'p> Builder<'p> {
         let current = self.current_group();
         let Some(f) = self.stack.last_mut() else { return };
         f.children.push(n);
+        // A frame's art goes where its first art was drawn (a clip can end in a later group).
         if root {
             self.root_groups.push(group.or(current));
         } else if f.group.is_none() {
-            f.group = group;
+            f.group = group.or(current);
         }
     }
 
@@ -955,9 +1013,10 @@ impl<'p> Builder<'p> {
     }
 
     fn flush_text(&mut self) {
-        let Some((t, opacity)) = self.text.take().and_then(TextLine::finish) else { return };
+        let Some((t, opacity, facts)) = self.text.take().and_then(TextLine::finish) else { return };
         let mut n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
         n.opacity = opacity;
+        self.lines.insert(n.id, facts);
         self.push_node(n);
     }
 
@@ -1226,6 +1285,14 @@ impl<'p> Builder<'p> {
             let mut line = TextLine::new(at, opacity);
             place(&mut line);
             self.text = Some(line);
+        }
+        // Its ink: a stroke the file draws as outlines of the glyphs is told by it.
+        let mut ink = o.outline();
+        if let Some(line) = &mut self.text
+            && !ink.elements().is_empty()
+        {
+            ink.apply_affine(m);
+            line.ink.push(ink.bounding_box());
         }
         true
     }
@@ -1570,8 +1637,10 @@ impl<'a> Device<'a> for Builder<'_> {
         if self.nested > 0 {
             return;
         }
-        if self.marked.pop().flatten().is_some() {
+        // The runs gathered within a layer's sequence are its art: finish them before it ends.
+        if self.marked.last().copied().flatten().is_some() {
             self.flush();
         }
+        self.marked.pop();
     }
 }
