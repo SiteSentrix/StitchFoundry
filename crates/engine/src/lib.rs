@@ -754,6 +754,10 @@ pub struct Session {
     pub style_libraries: cmd::stylelib::Libraries,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
     pub recent_urls: Vec<String>,
+    /// The language the UI is drawn in (a language code, never `auto`), set by the UI each frame;
+    /// `None` without one (headless), where an explicit `interfaceLanguage` preference counts.
+    /// Japanese gives new type the Japanese defaults ([`Session::japanese_interface`]).
+    pub ui_language: Option<String>,
     /// Parameters the running top-level command resolved from the preferences or the clock, added
     /// to its journal entry so a replay does the same ([`Session::note_journal`]).
     journal_note: serde_json::Map<String, Value>,
@@ -814,6 +818,7 @@ impl Session {
             freeform_point: None,
             style_libraries: Default::default(),
             recent_urls: vec![],
+            ui_language: None,
             journal_note: Default::default(),
             note_depth: 1,
             batch_stash: None,
@@ -981,6 +986,12 @@ impl Session {
             self.after_command();
         }
         Ok(r)
+    }
+
+    /// Is the interface in Japanese? Then new type starts with em box top-to-top leading and em
+    /// box centre character alignment (#432).
+    pub fn japanese_interface(&self) -> bool {
+        self.ui_language.as_deref().unwrap_or(&self.prefs.interface_language).eq_ignore_ascii_case("ja")
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
