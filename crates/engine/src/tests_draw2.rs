@@ -766,3 +766,27 @@ fn pen_drag_from_the_first_anchor_closes_the_path() {
     gesture(&mut s, &[(500.0, 500.0)], none);
     assert_eq!(paths(&s).len(), 2);
 }
+
+#[test]
+fn pen_with_alt_converts_the_anchors_of_the_path_being_drawn() {
+    // #504: while drawing, Alt-click on a smooth anchor of the path makes it a corner and Alt-drag
+    // on a corner one pulls out smooth handles; the next click goes on drawing the path.
+    let (none, alt) = (Mods::default(), Mods { alt: true, ..Mods::default() });
+    let v = view();
+    let mut s = session();
+    s.select_tool("pen", v).unwrap();
+    gesture(&mut s, &[(100.0, 300.0)], none);
+    gesture(&mut s, &[(200.0, 300.0), (240.0, 300.0)], none);
+    gesture(&mut s, &[(300.0, 400.0)], none);
+    gesture(&mut s, &[(400.0, 300.0)], none);
+    let id = s.doc().unwrap().selection.objects[0];
+    assert!(smooth(path(&s, id).subpaths[0].anchors[1]));
+    assert_eq!(gesture(&mut s, &[(200.0, 300.0)], alt), 1);
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert!(!a.has_in() && !a.has_out(), "a corner: {a:?}");
+    assert_eq!(gesture(&mut s, &[(300.0, 400.0), (320.0, 400.0), (340.0, 400.0)], alt), 1);
+    let a = path(&s, id).subpaths[0].anchors[2];
+    assert!(smooth(a) && a.h_out == Point::new(340.0, 400.0), "smooth: {a:?}");
+    gesture(&mut s, &[(500.0, 400.0)], none);
+    assert_eq!((paths(&s).len(), path(&s, id).subpaths[0].anchors.len()), (1, 5));
+}
