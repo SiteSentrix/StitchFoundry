@@ -425,19 +425,20 @@ mod area_tests {
             NodeKind::Text(t) => t.para.clone(),
             _ => panic!("text"),
         };
-        assert_eq!(para(&s).burasagari, Burasagari::None);
+        // New type: Standard, as in Illustrator.
+        assert_eq!(para(&s).burasagari, Burasagari::Standard);
         s.execute("select.set", &json!({"ids": [id]})).unwrap();
         assert!(s.execute("text.setFormat", &json!({"burasagari": "strong"})).is_err());
         s.execute("text.setFormat", &json!({"burasagari": "forced"})).unwrap();
         assert_eq!(para(&s).burasagari, Burasagari::Forced);
         assert_eq!(serde_json::to_value(para(&s)).unwrap()["burasagari"], "forced");
-        s.execute("text.setFormat", &json!({"burasagari": "standard"})).unwrap();
-        assert_eq!(para(&s).burasagari, Burasagari::Standard);
-        s.execute("edit.undo", &json!({})).unwrap();
-        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("text.setFormat", &json!({"burasagari": "none"})).unwrap();
         assert_eq!(para(&s).burasagari, Burasagari::None);
         // Saved only when on; documents from before it read as None.
         assert!(serde_json::to_value(para(&s)).unwrap().get("burasagari").is_none());
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(para(&s).burasagari, Burasagari::Standard);
         let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
         assert_eq!(old.burasagari, Burasagari::None);
     }

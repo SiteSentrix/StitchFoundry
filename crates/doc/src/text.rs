@@ -315,7 +315,8 @@ pub struct ParaStyle {
     /// of one line's ideographic em box to the next.
     pub leading_model: LeadingModel,
     /// Hanging punctuation (Paragraph panel menu › Burasagari): a comma or full stop ending a line
-    /// may stand outside the frame.
+    /// may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
+    /// it and imported text keep [`Burasagari::None`].
     pub burasagari: Burasagari,
 }
 

@@ -912,8 +912,10 @@ fn candidates(text: &str, g: &[SGlyph], hyphenate: bool) -> Vec<Breakpoint> {
 /// line metrics); `None` falls back to the greedy single-line composer.
 fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) -> Option<Vec<(usize, bool)>> {
     let justified = !matches!(para.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
-    // Hanging punctuation is composed line by line (as the Japanese single-line composer does).
-    if cx.opts.composer != Composer::EveryLine || !justified || pen.regions.is_none() || sg.len() < 2 || para.burasagari != Burasagari::None {
+    // A paragraph whose commas or full stops may hang is composed line by line (as the Japanese
+    // single-line composer does).
+    let may_hang = para.burasagari != Burasagari::None && sg.iter().any(hangs);
+    if cx.opts.composer != Composer::EveryLine || !justified || pen.regions.is_none() || sg.len() < 2 || may_hang {
         return None;
     }
     let m = Metrics::of(&sg[0]);

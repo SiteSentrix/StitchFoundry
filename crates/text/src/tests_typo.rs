@@ -262,6 +262,22 @@ fn every_line_composer_is_more_even() {
     assert!(kp <= greedy + 1e-6, "every-line worst space {kp} vs greedy {greedy}");
 }
 
+/// Burasagari (new type's Standard) leaves Latin paragraphs to the every-line composer: only a
+/// paragraph with a Japanese comma or full stop is composed line by line.
+#[test]
+fn burasagari_keeps_the_every_line_composer_for_latin_text() {
+    // A measure where the two composers break the copy differently.
+    let mut t = area(&COPY.repeat(2), style(12.0), Rect::new(0.0, 0.0, 300.0, 4000.0), Justify::JustifyLeft);
+    let ends = |t: &TextObject, c: Composer| {
+        let l = layout_with(db(), t, &LayoutOptions { composer: c, ..Default::default() });
+        l.lines.iter().map(|li| li.glyph_end).collect::<Vec<_>>()
+    };
+    let every_line = ends(&t, Composer::EveryLine);
+    assert_ne!(every_line, ends(&t, Composer::SingleLine));
+    t.para.burasagari = vectorcraft_doc::Burasagari::Standard;
+    assert_eq!(ends(&t, Composer::EveryLine), every_line);
+}
+
 #[test]
 fn hyphenation_rules() {
     assert_eq!(hyphen::hyphenate_word("typography"), "typo-gra-phy");
