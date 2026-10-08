@@ -382,6 +382,31 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
     let _ = t;
 }
 
+/// Where `window.floatTools` puts a strip (the next one a row lower), right of the toolbar; it's
+/// kept on screen and moved by its bar.
+const FLOAT_AT: [f32; 2] = [90.0, 100.0];
+
+/// Float the toolbar group (of the current layout) holding `tool` as a strip of tool buttons, put
+/// it back in the toolbar, or toggle (`floating` omitted), as a flyout's tear-off bar and the
+/// strip's × do (`window.floatTools`). Returns the new state.
+pub fn float_group(app: &mut VectorcraftApp, tool: &str, floating: Option<bool>) -> Result<bool, String> {
+    let Some((_, group)) = slots(app).into_iter().find(|(_, s)| s.len() > 1 && s.contains(&tool)) else {
+        return Err(format!("{tool} isn't in a toolbar group of several tools"));
+    };
+    let key = group.first().copied().unwrap_or_default();
+    let was = is_floating(app, key);
+    let on = floating.unwrap_or(!was);
+    if on && !was {
+        let n = app.ui.floating_flyouts.len() as f32;
+        let tools = group.iter().map(|id| id.to_string()).collect();
+        app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [FLOAT_AT[0], FLOAT_AT[1] + n * (PITCH + 12.0)] });
+        app.ui.flyout = None;
+    } else if !on {
+        app.ui.floating_flyouts.retain(|f| f.tools.first().is_none_or(|k| k != key));
+    }
+    Ok(on)
+}
+
 /// Whether the group whose first tool is `key` floats as its own panel.
 fn is_floating(app: &VectorcraftApp, key: &str) -> bool {
     app.ui.floating_flyouts.iter().any(|f| f.tools.first().is_some_and(|k| k == key))
@@ -420,8 +445,8 @@ struct FlyoutInput {
 }
 
 /// A flyout's tool rows (a floating flyout's strip of tool buttons) with the grab bar down their
-/// right side; a floating flyout's bar has a × at its top. The bar's id is the group's, so a drag that tears a flyout off carries on moving
-/// the floating flyout it becomes.
+/// right side; a floating flyout's bar has a × at its top. The bar's id is the group's, so a drag
+/// that tears a flyout off carries on moving the floating flyout it becomes.
 fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating: bool) -> FlyoutInput {
     let mut out = FlyoutInput::default();
     let key = tools.first().map_or("", String::as_str);
@@ -546,20 +571,22 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let anchor: egui::Rect =
         ctx.data(|d| d.get_temp(egui::Id::new("flyout-anchor"))).unwrap_or(egui::Rect::from_min_size(pos2(40.0, 100.0), vec2(32.0, 32.0)));
     let t = Tokens::get(ctx);
-    let active = app.session.tool_id().to_string();
+    let active = app.session.tool_id();
     let mut input = FlyoutInput::default();
     let resp = egui::Area::new(egui::Id::new("tool-flyout")).order(egui::Order::Foreground).fixed_pos(anchor.right_top() + vec2(8.0, -1.0)).show(
         ctx,
         |ui| {
-            flyout_frame(&t, false).show(ui, |ui| input = flyout_body(ui, &t, &active, &tools, false));
+            flyout_frame(&t, false).show(ui, |ui| input = flyout_body(ui, &t, active, &tools, false));
         },
     );
-    // Dragging the bar tears the flyout off: it floats where the drag puts it.
-    if input.bar.is_some_and(|b| b.dragged())
-        && let Some(d) = press_travel(ctx).filter(|d| d.length() > TEAR)
-    {
+    // Dragging the bar tears the flyout off, and so does releasing a press over it (a click, or the
+    // end of the long press that opened the flyout): it floats where the pointer is.
+    let at = ctx.input(|i| i.pointer.interact_pos());
+    let released_on_bar = input.bar.as_ref().is_some_and(|b| ctx.input(|i| i.pointer.primary_released()) && at.is_some_and(|p| b.rect.contains(p)));
+    let dragged_off = input.bar.as_ref().is_some_and(egui::Response::dragged) && press_travel(ctx).is_some_and(|d| d.length() > TEAR);
+    if released_on_bar || dragged_off {
         // The strip is far narrower than the flyout: it floats with its bar under the pointer.
-        let at = ctx.input(|i| i.pointer.interact_pos()).unwrap_or(resp.response.rect.min + d);
+        let at = at.unwrap_or(resp.response.rect.right_center());
         // (Past the frame's 1 pt border.)
         let grab = vec2(1.0 + strip_width(&tools) - BAR / 2.0, 1.0 + CLOSE + 4.0);
         let p = at - grab;
@@ -582,13 +609,16 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// The flyouts torn off the toolbar, each floating where its bar was dragged; its × puts it back.
 fn floating(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if app.ui.floating_flyouts.is_empty() {
+        return;
+    }
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
     let now = ctx.input(|i| i.time);
-    let active = app.session.tool_id().to_string();
+    let active = app.session.tool_id();
     let mut chosen = None;
     let mut closed = None;
-    for (k, f) in app.ui.floating_flyouts.clone().into_iter().enumerate() {
+    for (k, f) in app.ui.floating_flyouts.iter_mut().enumerate() {
         let Some(key) = f.tools.first() else { continue };
         let id = floating_area(key);
         let since = ctx.data(|d| d.get_temp::<f64>(id)).map(|t0| now - t0);
@@ -603,19 +633,18 @@ fn floating(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let pos = pos2(x.min(screen.right() - size.x).max(screen.left()), y.min(screen.bottom() - size.y).max(screen.top()));
         let mut input = FlyoutInput::default();
         egui::Area::new(id).order(egui::Order::Middle).fixed_pos(pos).show(ctx, |ui| {
-            flyout_frame(&t, flash).show(ui, |ui| input = flyout_body(ui, &t, &active, &f.tools, true));
+            flyout_frame(&t, flash).show(ui, |ui| input = flyout_body(ui, &t, active, &f.tools, true));
         });
         // Dragging the bar keeps the flyout where the pointer holds it (by an offset rather than
         // each frame's motion, which a just torn-off flyout's first, unseen frame would drop).
         let grab = grab_id(key);
         if ctx.is_being_dragged(bar_id(key))
             && let Some(at) = ctx.input(|i| i.pointer.interact_pos())
-            && let Some(slot) = app.ui.floating_flyouts.get_mut(k)
         {
             let off = ctx.data_mut(|m| *m.get_temp_mut_or_insert_with(grab, || at - pos));
             let p = at - off;
             if p.x.is_finite() && p.y.is_finite() {
-                slot.pos = [p.x, p.y];
+                f.pos = [p.x, p.y];
             }
         } else if !ctx.input(|i| i.pointer.any_down()) {
             ctx.data_mut(|m| m.remove::<egui::Vec2>(grab));
@@ -1005,14 +1034,87 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_click_on_a_flyouts_bar_doesnt_tear_it_off() {
+    fn a_click_on_a_flyouts_bar_tears_it_off() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         let ctx = egui::Context::default();
         let at = shapes_button(&mut app, &ctx).center();
         click(&mut app, &ctx, 1.0, at, PointerButton::Secondary);
         let menu = ctx.memory(|m| m.area_rect(egui::Id::new("tool-flyout"))).unwrap();
-        click(&mut app, &ctx, 2.0, pos2(menu.right() - BAR / 2.0, menu.center().y), PointerButton::Primary);
-        assert!(app.ui.flyout.is_some() && app.ui.floating_flyouts.is_empty());
+        let bar = pos2(menu.right() - BAR / 2.0, menu.center().y);
+        click(&mut app, &ctx, 2.0, bar, PointerButton::Primary);
+        frame(&mut app, &ctx, 2.2, vec![]);
+        assert_eq!(app.ui.flyout, None);
+        assert_eq!(app.ui.floating_flyouts.iter().map(|f| f.tools[0].as_str()).collect::<Vec<_>>(), ["rectangle"]);
+        let float = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).expect("the floating flyout is shown");
+        assert!(float.contains(bar), "its bar is under the pointer: {float:?}");
+        assert_eq!(app.session.tool_id(), "selection", "no tool picked");
+    }
+
+    #[test]
+    fn releasing_a_long_press_over_the_flyouts_bar_tears_it_off() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let at = shapes_button(&mut app, &ctx).center();
+        let b = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), b(at, true)]);
+        frame(&mut app, &ctx, 1.0 + LONG_PRESS + 0.01, vec![]);
+        frame(&mut app, &ctx, 1.45, vec![]);
+        let menu = ctx.memory(|m| m.area_rect(egui::Id::new("tool-flyout"))).expect("the long press opens the flyout");
+        let bar = pos2(menu.right() - BAR / 2.0, menu.center().y);
+        frame(&mut app, &ctx, 1.5, vec![Event::PointerMoved(bar)]);
+        frame(&mut app, &ctx, 1.55, vec![b(bar, false)]);
+        frame(&mut app, &ctx, 1.6, vec![]);
+        assert_eq!((app.ui.flyout, app.ui.floating_flyouts.len(), app.session.tool_id()), (None, 1, "selection"));
+    }
+
+    #[test]
+    fn window_float_tools_floats_and_puts_back_a_group() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let check = |app: &VectorcraftApp| crate::menus::checked(app, "window.floatTools", &json!({"tool": "star"}));
+        assert_eq!(app.run("window.floatTools", json!({"tool": "star"})).unwrap(), json!(true));
+        let [f] = app.ui.floating_flyouts.as_slice() else { panic!("one strip: {:?}", app.ui.floating_flyouts) };
+        assert_eq!(f.tools.first().map(String::as_str), Some("rectangle"), "the Basic toolbar's Shapes group");
+        assert_eq!(check(&app), Some(true));
+        // Already floating: stays where it is.
+        app.ui.floating_flyouts[0].pos = [300.0, 400.0];
+        assert_eq!(app.run("window.floatTools", json!({"tool": "rectangle", "floating": true})).unwrap(), json!(true));
+        assert_eq!(app.ui.floating_flyouts.iter().map(|f| f.pos).collect::<Vec<_>>(), [[300.0, 400.0]]);
+        // Omitted toggles it back.
+        assert_eq!(app.run("window.floatTools", json!({"tool": "star"})).unwrap(), json!(false));
+        assert!(app.ui.floating_flyouts.is_empty() && check(&app) == Some(false));
+        assert_eq!(app.run("window.floatTools", json!({"tool": "pen", "floating": false})).unwrap(), json!(false));
+        // A tool alone in its slot, an unknown tool, a bad flag.
+        assert!(app.run("window.floatTools", json!({"tool": "ellipse"})).is_err());
+        assert!(app.run("window.floatTools", json!({"tool": "nope"})).is_err());
+        assert!(app.run("window.floatTools", json!({})).is_err());
+        assert!(app.run("window.floatTools", json!({"tool": "pen", "floating": "yes"})).is_err());
+        assert!(app.ui.floating_flyouts.is_empty());
+    }
+
+    #[test]
+    fn workspaces_keep_floating_flyouts_and_reset_puts_them_back() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("window.floatTools", json!({"tool": "pen"})).unwrap();
+        app.run("window.workspace.new", json!({"name": "Strips"})).unwrap();
+        app.run("window.workspace", json!({"name": "Essentials"})).unwrap();
+        assert!(app.ui.floating_flyouts.is_empty(), "the built-in workspaces float none");
+        app.run("window.workspace", json!({"name": "Strips"})).unwrap();
+        assert_eq!(app.ui.floating_flyouts.iter().map(|f| f.tools[0].as_str()).collect::<Vec<_>>(), ["pen"]);
+        // Workspaces saved before floating strips load without any.
+        let mut old = serde_json::to_value(crate::workspaces::Workspace::default()).unwrap();
+        old.as_object_mut().unwrap().remove("floatingFlyouts");
+        assert!(serde_json::from_value::<crate::workspaces::Workspace>(old).unwrap().floating_flyouts.is_empty());
+    }
+
+    #[test]
+    fn loaded_floating_flyouts_keep_known_tools_one_strip_per_group() {
+        let f = |tools: &[&str]| crate::state::FloatingFlyout { tools: tools.iter().map(|s| s.to_string()).collect(), pos: [0.0, 0.0] };
+        let ui = crate::state::UiState {
+            floating_flyouts: vec![f(&["pen", "nope", "addAnchor"]), f(&["pen", "addAnchor"]), f(&["nope"]), f(&[])],
+            ..Default::default()
+        };
+        let ui = ui.sanitized();
+        assert_eq!(ui.floating_flyouts.iter().map(|f| f.tools.join(",")).collect::<Vec<_>>(), ["pen,addAnchor"]);
     }
 
     #[test]

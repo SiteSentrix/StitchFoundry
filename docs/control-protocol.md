@@ -192,6 +192,14 @@ pop the panel out next to the column like the other icon panels (`ui.dock_collap
 `ui.inspect`); expanding with one popped out shows its tab. The state is saved with the preferences and in user
 workspaces; the built-in workspaces expand the dock.
 
+Floating tool groups: dragging or clicking the tear-off bar down a tool group's flyout (or releasing the long press
+that opened it over the bar) floats the group as a strip of tool buttons, moved by the same bar and put back in the
+toolbar by the × at its top; `window.floatTools {tool, floating?}` does the same for the group of the current
+layout holding `tool` (omitted toggles; a tool alone in its slot is an error). While a group floats, the presses
+that open its flyout raise the strip instead. The strips (`ui.floating_flyouts` in `ui.inspect`: the group's tools
+and the strip's top-left corner) are saved with the preferences and in user workspaces; the built-in workspaces
+float none.
+
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of
 `object.flattenTransparency`: `balance` 0–100, `lineArtPpi` and `gradientPpi` 1–2400, `textToOutlines`,

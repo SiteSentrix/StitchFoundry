@@ -199,6 +199,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.toolbar", "Tools", "", "{}"),
     ("window.toolbarColumns", "Toolbar: Single/Double Column", "", "{}"),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
+    (
+        "window.floatTools",
+        "Float Tool Group",
+        "",
+        "{tool: id, floating?: bool} float the toolbar group holding `tool` (in the current Basic or Advanced layout) as its own strip of tool buttons (true), put it back in the toolbar (false) or toggle (omitted), as dragging or clicking a flyout's tear-off bar and the strip's × do; returns the new state",
+    ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
     ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too)"),
@@ -980,6 +986,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "window.toolbar" => flag(&mut app.ui.toolbar),
         "window.toolbarColumns" => flag(&mut app.ui.toolbar_double),
         "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
+        "window.floatTools" => {
+            let floating = match p.get("floating") {
+                None | Some(Value::Null) => None,
+                Some(Value::Bool(b)) => Some(*b),
+                Some(_) => return Some(Err("floating must be true or false".into())),
+            };
+            let Some(tool) = s("tool") else { return Some(Err("tool (a tool id) is required".into())) };
+            crate::toolbar::float_group(app, &tool, floating).map(Value::Bool)
+        }
         "window.taskBar" => flag(&mut app.ui.task_bar),
         "window.dock" => {
             let on = !(app.ui.dock && app.ui.toolbar);
@@ -1302,6 +1317,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control" => app.ui.control_bar,
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.floatTools" => {
+            let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
+            app.ui.floating_flyouts.iter().any(|f| f.tools.iter().any(|id| id == tool))
+        }
         "window.taskBar" => app.ui.task_bar,
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");

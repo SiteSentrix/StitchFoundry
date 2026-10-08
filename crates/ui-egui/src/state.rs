@@ -392,6 +392,12 @@ impl UiState {
         if self.group_tool.len() != vectorcraft_tools::TOOL_GROUPS.len() {
             self.group_tool = UiState::default().group_tool;
         }
+        // One strip per group, of known tools (a hand-edited preferences file).
+        let mut seen = std::collections::BTreeSet::new();
+        self.floating_flyouts.retain_mut(|f| {
+            f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
+            f.tools.first().is_some_and(|k| seen.insert(k.clone()))
+        });
         self
     }
 }
