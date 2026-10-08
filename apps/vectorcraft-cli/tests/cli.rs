@@ -160,6 +160,27 @@ fn mcp_protocol_over_stdio() {
     send(&mut stdin, json!({"jsonrpc":"2.0","id":10,"method":"resources/read","params":{"uri":"vectorcraft://object/"}}));
     assert_eq!(recv(&mut lines, &mut notes, 10)["error"]["code"], -32602);
 
+    // Large containers slice through run_command document.node: a truncated level reports
+    // childCount, and a bad limit is a tool error, not a crash or a full read.
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"draw_shape","arguments":{"shape":"ellipse","x":90,"y":10,"width":30,"height":30}}}),
+    );
+    assert_eq!(recv(&mut lines, &mut notes, 20)["result"]["isError"], false);
+    let run = |id: u64, command: &str, params: Value| json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":"run_command","arguments":{"command":command,"params":params}}});
+    send(&mut stdin, run(21, "select.all", json!({})));
+    recv(&mut lines, &mut notes, 21);
+    send(&mut stdin, run(22, "object.group", json!({})));
+    let r = recv(&mut lines, &mut notes, 22);
+    let group = serde_json::from_str::<Value>(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap()["id"].clone();
+    send(&mut stdin, run(23, "document.node", json!({"id": group, "summary": true, "childLimit": 1})));
+    let r = recv(&mut lines, &mut notes, 23);
+    let sliced: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(sliced["children"].as_array().map(Vec::len), Some(1), "{sliced}");
+    assert_eq!(sliced["childCount"], 2, "{sliced}");
+    send(&mut stdin, run(24, "document.node", json!({"id": group, "summary": true, "depth": -1})));
+    assert_eq!(recv(&mut lines, &mut notes, 24)["result"]["isError"], true);
+
     // The binary installed its logger: records arrive as notifications/message, and only
     // after the client asked for them.
     send(&mut stdin, json!({"jsonrpc":"2.0","id":11,"method":"logging/setLevel","params":{"level":"debug"}}));
