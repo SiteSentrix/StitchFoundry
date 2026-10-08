@@ -172,6 +172,154 @@ fn shape_builder_tool_drives_the_command() {
     assert_eq!(layer_children(&s), 1);
 }
 
+/// A red 100 × 100 square crossed by a stroke-only vertical line at x = 50, both selected.
+fn square_and_line(s: &mut Session) -> (NodeId, NodeId) {
+    let a = rect(s, 0.0, 0.0, 100.0, 100.0);
+    set_fill(s, a, Color::rgb(1.0, 0.0, 0.0));
+    let l = line(s, (50.0, -20.0), (50.0, 120.0));
+    s.execute("select.set", &json!({"ids": [a.0, l.0]})).unwrap();
+    (a, l)
+}
+
+/// The open paths among `ids`, as (anchors, bounds).
+fn open_paths(s: &Session, ids: &[NodeId]) -> Vec<(usize, Rect)> {
+    ids.iter()
+        .map(|i| node(s, *i))
+        .filter(|n| !outline(n).0.is_closed())
+        .map(|n| (outline(&n).0.anchor_count(), n.geometric_bounds().unwrap()))
+        .collect()
+}
+
+#[test]
+fn shape_builder_line_splits_a_shape_into_regions() {
+    let mut s = session();
+    let (a, l) = square_and_line(&mut s);
+    let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    let regs = r["regions"].as_array().unwrap();
+    assert_eq!(regs.len(), 2, "{r}");
+    for x in regs {
+        assert!((x["area"].as_f64().unwrap() - 5000.0).abs() < 1e-6);
+        assert_eq!(x["sources"], json!([a.0]));
+    }
+    let lines = r["lines"].as_array().unwrap();
+    assert_eq!(lines.len(), 3, "the line cut at both sides of the square");
+    assert!(lines.iter().all(|x| x["source"] == l.0));
+}
+
+#[test]
+fn shape_builder_click_on_a_side_of_a_line_splits_the_shape() {
+    let mut s = session();
+    square_and_line(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50]]})).unwrap();
+    assert_eq!(r["regions"], 1);
+    let out = ids(&r);
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert_eq!(node(&s, merged).geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 50.0, 100.0));
+    assert_eq!(node(&s, merged).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let closed: Vec<f64> = out.iter().filter(|i| outline(&node(&s, **i)).0.is_closed()).map(|i| area(&s, *i)).collect();
+    assert_eq!(closed.len(), 2, "both halves");
+    assert!(closed.iter().all(|a| (a - 5000.0).abs() < 1.0), "{closed:?}");
+    // The line only bounds the region: it stays whole.
+    assert_eq!(open_paths(&s, &out), vec![(2, Rect::new(50.0, -20.0, 50.0, 120.0))]);
+}
+
+#[test]
+fn shape_builder_merge_across_a_line_removes_the_piece_between() {
+    let mut s = session();
+    square_and_line(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50], [75, 50]]})).unwrap();
+    assert_eq!(r["regions"], 2);
+    let out = ids(&r);
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert!((area(&s, merged) - 10000.0).abs() < 1.0);
+    assert_eq!(out.len(), 3, "merged square + the line's two loose ends");
+    let mut ends = open_paths(&s, &out);
+    ends.sort_by(|a, b| a.1.y0.total_cmp(&b.1.y0));
+    assert_eq!(ends, vec![(2, Rect::new(50.0, -20.0, 50.0, 0.0)), (2, Rect::new(50.0, 100.0, 50.0, 120.0))]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(layer_children(&s), 2);
+}
+
+#[test]
+fn shape_builder_alt_deletes_a_region_or_a_line_piece() {
+    let mut s = session();
+    square_and_line(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[75, 50]], "erase": true})).unwrap();
+    assert!(r["merged"].is_null());
+    let out = ids(&r);
+    let left: Vec<NodeId> = out.iter().copied().filter(|i| outline(&node(&s, *i)).0.is_closed()).collect();
+    assert_eq!(left.len(), 1);
+    assert_eq!(node(&s, left[0]).geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 50.0, 100.0));
+    assert_eq!(open_paths(&s, &out).len(), 1, "the line stays whole");
+
+    // Alt on the line inside the square deletes that piece only.
+    let mut s = session();
+    square_and_line(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[51, 50]], "erase": true, "tolerance": 2})).unwrap();
+    assert_eq!((r["regions"].as_u64(), r["lines"].as_u64()), (Some(0), Some(1)));
+    let out = ids(&r);
+    assert_eq!(out.len(), 3);
+    let sq: Vec<NodeId> = out.iter().copied().filter(|i| outline(&node(&s, *i)).0.is_closed()).collect();
+    assert_eq!(sq.len(), 1);
+    assert!((area(&s, sq[0]) - 10000.0).abs() < 1.0, "the square is untouched");
+    assert_eq!(open_paths(&s, &out).len(), 2);
+}
+
+#[test]
+fn shape_builder_fills_an_area_lines_enclose() {
+    let mut s = session();
+    let l1 = line(&mut s, (0.0, 0.0), (100.0, 100.0));
+    let l2 = line(&mut s, (100.0, 0.0), (0.0, 100.0));
+    let l3 = line(&mut s, (-10.0, 80.0), (110.0, 80.0));
+    s.execute("select.set", &json!({"ids": [l1.0, l2.0, l3.0]})).unwrap();
+    let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    assert_eq!(r["regions"].as_array().unwrap().len(), 1);
+    assert_eq!(r["regions"][0]["sources"], json!([]));
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 70]]})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert!((area(&s, merged) - 900.0).abs() < 1e-6, "{}", area(&s, merged));
+    assert_eq!(node(&s, merged).appearance.fill_paint(), s.paint.fill, "the current fill");
+    assert!(!node(&s, merged).appearance.stroke_paint().is_none(), "the lines' stroke");
+    assert_eq!(ids(&r).len(), 4, "the triangle + the three lines, which only bound it");
+}
+
+#[test]
+fn shape_builder_closes_filled_open_paths() {
+    let mut s = session();
+    let r = s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}]})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    set_fill(&mut s, p, Color::rgb(0.0, 1.0, 0.0));
+    s.execute("select.set", &json!({"ids": [p.0]})).unwrap();
+    let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    assert_eq!(r["regions"].as_array().unwrap().len(), 1, "the fill's area, closed by an invisible edge");
+    assert!((r["regions"][0]["area"].as_f64().unwrap() - 5000.0).abs() < 1e-6);
+    assert_eq!(r["lines"], json!([]));
+    // Unfilled, it is only an edge.
+    s.edit("t", |d, _| {
+        d.node_mut(p).unwrap().appearance.set_fill(Paint::None);
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    assert_eq!(r["regions"], json!([]));
+    assert_eq!(r["lines"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn shape_builder_tool_alt_deletes_line_pieces() {
+    let mut s = session();
+    square_and_line(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    let alt = Mods { alt: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Move, 51.0, 50.0).with_mods(alt), v).unwrap();
+    assert_eq!(s.overlays(v).len(), 1, "the line piece is highlighted");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 51.0, 50.0).with_mods(alt), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 51.0, 50.0).with_mods(alt), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    assert_eq!(layer_children(&s), 3, "square + the line's two loose ends");
+}
+
 // ---------- Live Paint ----------
 
 fn live(s: &mut Session) -> NodeId {

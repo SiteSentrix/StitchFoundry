@@ -288,6 +288,32 @@ pub fn live_paint(shapes: &[Shape]) -> (Vec<Region>, Vec<Shape>) {
     build(shapes).unwrap_or_default()
 }
 
+/// Most segments the Shape Builder sweeps with open paths as edges: the planar map costs far more
+/// than the filled areas' arrangement, so past this only the filled areas count.
+pub const SHAPE_BUILDER_MAX_SEGMENTS: usize = 4096;
+
+/// Shape Builder regions of `shapes` (back → front), and the pieces of their open paths.
+///
+/// Closed paths bound regions with their filled areas, as in [`regions`](crate::regions). Open
+/// paths (the caller closes the ones whose fill should count) are cutting edges: a line across a
+/// shape splits it, lines around an area enclose a region nothing fills (empty `sources`), and each
+/// path with no closed subpath comes back cut wherever another path meets it, as pieces keyed by
+/// its index in `shapes`. With no open path, more than [`SHAPE_BUILDER_MAX_SEGMENTS`] segments or
+/// a map that can't be built, only the filled areas count and there are no pieces.
+pub fn shape_builder(shapes: &[Shape]) -> (Vec<Region>, Vec<Shape>) {
+    let has_open = shapes.iter().flat_map(|s| &s.path.subpaths).any(|sp| !sp.closed && sp.anchors.len() >= 2);
+    let segments: usize = shapes.iter().flat_map(|s| &s.path.subpaths).map(|sp| sp.segment_count()).sum();
+    if has_open && segments <= SHAPE_BUILDER_MAX_SEGMENTS {
+        let keyed: Vec<Shape> = shapes.iter().enumerate().map(|(i, s)| Shape::new(s.path.clone(), s.rule, i as u64)).collect();
+        let (faces, edges) = live_paint(&keyed);
+        if !faces.is_empty() || !edges.is_empty() {
+            let is_line = |i: u64| shapes.get(i as usize).is_some_and(|s| !s.path.subpaths.iter().any(|sp| sp.closed));
+            return (faces, edges.into_iter().filter(|e| is_line(e.key)).collect());
+        }
+    }
+    (crate::regions(shapes), Vec::new())
+}
+
 fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
     let mut inputs: Vec<(BezPath, usize)> = Vec::new();
     for (i, s) in shapes.iter().enumerate() {
@@ -734,6 +760,69 @@ mod tests {
         let (faces, edges) = live_paint(&[line((0.0, 0.0), (10.0, 10.0), 0)]);
         assert!(faces.is_empty());
         assert_eq!(edges.len(), 1);
+    }
+
+    #[test]
+    fn shape_builder_lines_cut_regions() {
+        // A line across a rectangle: two regions, the line in three pieces keyed by its index.
+        let s = [rect(0.0, 0.0, 100.0, 50.0, 7), line((40.0, -20.0), (60.0, 70.0), 8)];
+        let (regions, lines) = shape_builder(&s);
+        assert_eq!(regions.len(), 2);
+        assert!(regions.iter().all(|r| r.sources == [0]));
+        assert_eq!(lines.len(), 3);
+        assert!(lines.iter().all(|l| l.key == 1 && !l.path.is_closed()));
+        // Lines alone enclose a region nothing fills.
+        let s = [line((0.0, 0.0), (100.0, 100.0), 0), line((100.0, 0.0), (0.0, 100.0), 0), line((-10.0, 80.0), (110.0, 80.0), 0)];
+        let (regions, lines) = shape_builder(&s);
+        assert_eq!(regions.len(), 1);
+        assert!(regions[0].sources.is_empty() && regions[0].top().is_none());
+        assert_eq!(lines.len(), 9);
+    }
+
+    #[test]
+    fn shape_builder_closed_only_or_degenerate_is_the_filled_arrangement() {
+        let s = [rect(0.0, 0.0, 100.0, 100.0, 0), rect(50.0, 0.0, 150.0, 100.0, 1)];
+        assert_eq!(shape_builder(&s), (crate::regions(&s), vec![]));
+        // A broken line can't be swept: what the filled areas give (nothing here, without a panic).
+        let s = [rect(0.0, 0.0, 100.0, 100.0, 0), line((0.0, 0.0), (f64::NAN, 1.0), 1)];
+        assert_eq!(shape_builder(&s), (crate::regions(&s), vec![]));
+        // Zero-length and doubled-back lines don't break it either.
+        let s = [
+            rect(0.0, 0.0, 100.0, 100.0, 0),
+            line((50.0, 50.0), (50.0, 50.0), 1),
+            line((0.0, 0.0), (100.0, 0.0), 2),
+            line((50.0, 0.0), (50.0, 100.0), 3),
+        ];
+        let (regions, _) = shape_builder(&s);
+        assert_eq!(regions.len(), 2);
+        assert!((regions.iter().map(area).sum::<f64>() - 10000.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn shape_builder_stays_quick_up_to_its_cap() {
+        // A wavy ring of nearly the most segments the map takes, crossed by a few lines.
+        let n = SHAPE_BUILDER_MAX_SEGMENTS - 8;
+        let ring: Vec<Point> = (0..n)
+            .map(|k| {
+                let t = k as f64 / n as f64 * std::f64::consts::TAU;
+                let r = 100.0 + 5.0 * (t * 200.0).sin();
+                Point::new(r * t.cos(), r * t.sin())
+            })
+            .collect();
+        let mut s = vec![Shape::new(PathData::single(SubPath::polyline(&ring, true)), FillRule::NonZero, 0)];
+        for k in 0..4 {
+            let y = -60.0 + 40.0 * f64::from(k);
+            s.push(line((-150.0, y), (150.0, y + 7.0), 1));
+        }
+        let started = std::time::Instant::now();
+        let (regions, lines) = shape_builder(&s);
+        assert!(regions.len() >= 5, "the ring cut in five bands at least (the waves make pockets)");
+        assert!(lines.len() >= 12, "{}", lines.len());
+        assert!(started.elapsed().as_secs_f64() < 5.0, "{:?}", started.elapsed());
+        // Past the cap, only the filled areas count.
+        s.push(line((0.0, 0.0), (1.0, 1.0), 2));
+        s[0].path.subpaths[0].anchors.extend((0..16).map(|k| vectorcraft_geom::Anchor::corner(Point::new(100.0, f64::from(k)))));
+        assert!(shape_builder(&s).1.is_empty());
     }
 
     fn arb_segment() -> impl Strategy<Value = Shape> {

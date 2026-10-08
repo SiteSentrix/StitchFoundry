@@ -16,10 +16,11 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer, StrokeLayer};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
-use vectorcraft_geom::{FillRule, Point, Rect, Shape as _};
+use vectorcraft_geom::{FillRule, PathData, Point, Rect};
 use vectorcraft_pathops as po;
 use vectorcraft_tools::builder::{
-    self as b, EDGE_NAME, FACE_NAME, LIVE_PAINT_NAME, SOURCES_NAME, edge_near, face_at, is_live_paint, sample_polyline, shapes_for, sorted_roots,
+    self as b, BuilderMap, EDGE_NAME, FACE_NAME, LIVE_PAINT_NAME, SOURCES_NAME, Touched, edge_near, face_at, is_live_paint, sample_polyline,
+    sorted_roots,
 };
 use vectorcraft_trace as tr;
 
@@ -38,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Shape Builder",
             [],
             None,
-            "{ids?: [id…] (default: selection), points: [[x,y]…] (drag path; one point = click), erase?: bool (Alt-drag deletes the regions), fill?: \"#rrggbb\" | {color|swatch|gradient|none} (default: the fill of the object under the first point)} → {ids, merged, regions}",
+            "{ids?: [id…] (default: selection), points: [[x,y]…] (drag path; one point = click), erase?: bool (Alt-drag deletes the regions, and the pieces of unfilled open paths within tolerance), tolerance?: pt (2, erase only), fill?: \"#rrggbb\" | {color|swatch|gradient|none} (default: the fill of the object under the first point; the current fill for an area only lines enclose)} → {ids, merged, regions, lines}",
             has_selection_or_ids,
             sb_merge
         ),
@@ -47,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Shape Builder Regions",
             [],
             None,
-            "{ids?} → {regions: [{bounds: [x0,y0,x1,y1], area, sources: [id…]}]} faces of the planar arrangement",
+            "{ids?} → {regions: [{bounds: [x0,y0,x1,y1], area, sources: [id…]}], lines: [{bounds, source: id}]} faces of the planar arrangement (unfilled open paths cut them; sources is empty for an area only they enclose) and the pieces of those open paths",
             has_selection_or_ids,
             sb_regions
         ),
@@ -224,37 +225,51 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "points must be a non-empty list of finite [x,y]"));
     }
     let erase = bool_or(p, "erase", false);
+    // Line pieces are only deleted (Alt), never merged.
+    let line_tol = erase.then(|| f64_or(p, "tolerance", 2.0).clamp(0.0, 1000.0));
     let fill = fill_param(s, p, C)?;
+    let current_fill = s.paint.fill.clone();
     let roots = root_ids(s, p)?;
     let label = if erase { "Shape Builder Delete" } else { "Shape Builder" };
-    let (ids, merged, count) = s.edit(label, |d, sel| {
-        let (shapes, leaves) = shapes_for(d, &roots);
+    let (ids, merged, regions, lines) = s.edit(label, |d, sel| {
+        let (map, leaves) = BuilderMap::new(d, &roots);
         let leaves: Vec<Node> = leaves.into_iter().cloned().collect();
-        if shapes.is_empty() {
+        if map.shapes.is_empty() {
             return Err(EngineError::Other("Shape Builder: select paths or compound paths".into()));
         }
-        let regs = po::regions(&shapes);
-        let shapes_r: Vec<(kurbo::BezPath, Rect)> = regs.iter().map(|r| (r.path.to_bezpath(), r.path.bounds().unwrap_or(Rect::ZERO))).collect();
         let step = (d.bounds_of(&roots, false).map(|r| r.width().max(r.height())).unwrap_or(100.0) / 2000.0).max(0.25);
-        let mut touched: Vec<usize> = vec![];
+        let mut touched = Touched::default();
         for q in sample_polyline(&pts, step) {
-            if let Some(i) = shapes_r.iter().position(|(bp, bb)| bb.contains(q) && bp.winding(q) != 0)
-                && !touched.contains(&i)
-            {
-                touched.push(i);
-            }
+            touched.add(map.hit(q, line_tol));
         }
         if touched.is_empty() {
             return Err(EngineError::Other("Shape Builder: no region under the pointer".into()));
         }
-        let picked: Vec<&po::Region> = touched.iter().map(|&i| &regs[i]).collect();
-        let union = po::merge_regions(&picked);
-        let affected: Vec<bool> = (0..shapes.len()).map(|i| picked.iter().any(|r| r.sources.contains(&i))).collect();
-        let style_src = regs[touched[0]].top();
+        let picked: Vec<&po::Region> = touched.regions.iter().filter_map(|&i| map.regions.get(i).map(|r| &r.0)).collect();
+        let union = if picked.is_empty() { PathData::default() } else { po::merge_regions(&picked) };
+        // The merged shape takes the look of the front-most object over the first region, or (for an
+        // area only lines enclose) of the front-most object and the current fill.
+        let covered = picked.iter().find_map(|r| r.top());
+        let style_src = covered.or(map.shapes.len().checked_sub(1));
+        let merged_fill = fill.or_else(|| covered.is_none().then_some(current_fill));
         let mut new_nodes: Vec<Node> = vec![];
         let mut merged_id = None;
-        for (i, (sh, leaf)) in shapes.iter().zip(&leaves).enumerate() {
-            if !affected[i] {
+        for (i, (sh, leaf)) in map.shapes.iter().zip(&leaves).enumerate() {
+            let pieces: Vec<usize> = map.lines.iter().enumerate().filter(|(_, (l, _))| l.key == i as u64).map(|(k, _)| k).collect();
+            if !pieces.is_empty() {
+                // An open path loses the pieces deleted and those between merged (or deleted) regions.
+                let keep: Vec<usize> =
+                    pieces.iter().copied().filter(|k| !touched.lines.contains(k) && !map.line_between(*k, &touched.regions)).collect();
+                if keep.len() == pieces.len() {
+                    new_nodes.push(d.reid(leaf));
+                } else {
+                    for k in keep {
+                        if let Some((l, _)) = map.lines.get(k) {
+                            new_nodes.push(shape_node(d, l.path.clone(), Some(leaf)));
+                        }
+                    }
+                }
+            } else if !picked.iter().any(|r| r.sources.contains(&i)) {
                 new_nodes.push(d.reid(leaf));
             } else {
                 let rest = po::boolean(&sh.path, sh.rule, &union, FillRule::NonZero, po::BoolOp::Difference);
@@ -262,9 +277,9 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
                     new_nodes.push(shape_node(d, rest, Some(leaf)));
                 }
             }
-            if !erase && Some(i) == style_src {
+            if !erase && !union.is_empty() && Some(i) == style_src {
                 let mut m = shape_node(d, union.clone(), Some(leaf));
-                if let Some(f) = &fill {
+                if let Some(f) = &merged_fill {
                     m.appearance.set_fill(f.clone());
                 }
                 merged_id = Some(m.id);
@@ -273,9 +288,9 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let new_ids = replace_roots(d, &roots, new_nodes)?;
         sel.set(new_ids.iter().copied());
-        Ok((new_ids, merged_id, touched.len()))
+        Ok((new_ids, merged_id, touched.regions.len(), touched.lines.len()))
     })?;
-    Ok(json!({ "ids": ids_json(&ids), "merged": merged.map(|m| m.0), "regions": count }))
+    Ok(json!({ "ids": ids_json(&ids), "merged": merged.map(|m| m.0), "regions": regions, "lines": lines }))
 }
 
 /// Remove the roots and insert `nodes` where the front-most root was. Returns the new ids.
@@ -300,20 +315,22 @@ fn replace_roots(d: &mut Document, roots: &[NodeId], nodes: Vec<Node>) -> Result
 fn sb_regions(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = root_ids(s, p)?;
     let d = &s.doc()?.doc;
-    let (shapes, leaves) = shapes_for(d, &roots);
-    let regs = po::regions(&shapes);
-    let out: Vec<Value> = regs
+    let (map, leaves) = BuilderMap::new(d, &roots);
+    let id_of = |i: usize| leaves.get(i).map(|n| n.id.0);
+    let regions: Vec<Value> = map
+        .regions
         .iter()
-        .filter_map(|r| {
-            let bb = r.path.bounds()?;
-            Some(json!({
+        .map(|(r, _, bb)| {
+            json!({
                 "bounds": [bb.x0, bb.y0, bb.x1, bb.y1],
                 "area": po::area(&r.path, FillRule::NonZero),
-                "sources": r.sources.iter().map(|&i| leaves[i].id.0).collect::<Vec<_>>(),
-            }))
+                "sources": r.sources.iter().filter_map(|&i| id_of(i)).collect::<Vec<_>>(),
+            })
         })
         .collect();
-    Ok(json!({ "regions": out }))
+    let lines: Vec<Value> =
+        map.lines.iter().map(|(l, bb)| json!({ "bounds": [bb.x0, bb.y0, bb.x1, bb.y1], "source": id_of(l.key as usize) })).collect();
+    Ok(json!({ "regions": regions, "lines": lines }))
 }
 
 // ---------- Live Paint ----------
