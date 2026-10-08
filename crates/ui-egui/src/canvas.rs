@@ -158,8 +158,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
     }
-    if app.session.active().is_none() || app.ui.home.is_some() {
+    if crate::menus::home_showing(app) {
         home(app, ui, full);
+        return;
+    }
+    if app.session.active().is_none() {
+        // No document and Show The Home Screen When No Documents Are Open off: an empty window.
+        ui.painter().rect_filled(full, 0.0, t.panel_darker);
         return;
     }
     let rect = if app.ui.view.rulers && app.ui.screen_mode < 3 { egui::Rect::from_min_max(full.min + vec2(RULER, RULER), full.max) } else { full };
@@ -1572,7 +1577,7 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, l
     }
 }
 
-/// The Home screen shown when no document is open.
+/// The Home screen (`app.home`; with no document open, unless its preference is off).
 fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let t = Tokens::get(ui.ctx());
     ui.painter().rect_filled(rect, 0.0, t.panel_darker);
