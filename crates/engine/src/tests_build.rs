@@ -704,3 +704,67 @@ fn image_trace_object_remembers_its_settings() {
     let id = st.selection.in_paint_order(&st.doc)[0];
     assert!(st.doc.node(id).unwrap().trace.is_none());
 }
+
+/// #569: merging the regions of a rosette of unfilled ellipses (each off the centre, petals
+/// overlapping) merges every region the drags touch into one shape whose outline is only the
+/// merged area's border: no edge between merged regions stays in, as a stray line or a spur.
+#[test]
+fn shape_builder_merges_rosette_rings_cleanly() {
+    let mut s = session();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    let c = [400.0, 320.0];
+    let mut petals = vec![];
+    for k in 0..8 {
+        let id =
+            s.execute("shape.ellipse", &json!({"x": c[0] - 60.0, "y": c[1] - 172.0, "width": 120, "height": 324})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        s.execute("object.rotate", &json!({"angle": 45.0 * f64::from(k), "origin": c})).unwrap();
+        petals.push(id);
+    }
+    s.execute("select.set", &json!({"ids": petals})).unwrap();
+    // Drags around the ring of petals, from its inside out; the outer ones miss the petals.
+    let mut merged = None;
+    for radius in [110.0, 150.0, 190.0, 230.0] {
+        let pts: Vec<[f64; 2]> = (0..=120)
+            .map(|i| {
+                let a = std::f64::consts::TAU * f64::from(i) / 120.0;
+                [c[0] + radius * a.cos(), c[1] + radius * a.sin()]
+            })
+            .collect();
+        if let Ok(r) = s.execute("shapeBuilder.merge", &json!({"points": pts})) {
+            merged = r["merged"].as_u64().map(NodeId);
+        }
+    }
+    let (ring, rule) = outline(&node(&s, merged.expect("the drags merged")));
+    let inside = |p: kurbo::Point| kurbo::Shape::winding(&ring.to_bezpath(), p) != 0;
+    for k in 0..8 {
+        let a = std::f64::consts::FRAC_PI_4 * f64::from(k) - std::f64::consts::FRAC_PI_2;
+        let tip = kurbo::Point::new(c[0] + 165.0 * a.cos(), c[1] + 165.0 * a.sin());
+        assert!(inside(tip), "petal {k}'s tip at {tip:?} is in the merged shape");
+    }
+    // What is left of the petals stays out of the merged area (a piece left over it is a stray
+    // outline inside it).
+    let merged = merged.unwrap();
+    for id in s.doc().unwrap().selection.objects.clone().into_iter().filter(|id| *id != merged) {
+        let (p, r) = outline(&node(&s, id));
+        let over = vectorcraft_pathops::boolean(&p, r, &ring, rule, vectorcraft_pathops::BoolOp::Intersect);
+        let a = vectorcraft_pathops::area(&over, FillRule::NonZero);
+        assert!(a < 1.0, "{id:?} overlaps the merged shape by {a} pt²");
+    }
+    // No outline is a sliver or carries a spur (2 × area / length: its mean width).
+    for id in s.doc().unwrap().selection.objects.clone() {
+        let (p, r) = outline(&node(&s, id));
+        for sp in &p.subpaths {
+            let one = PathData::new(vec![sp.clone()]);
+            let width = 2.0 * vectorcraft_pathops::area(&one, r) / one.length();
+            assert!(width > 1.0, "{id:?} has an outline {width:.3} pt wide on average, {:.1} pt long", one.length());
+        }
+    }
+    // The ring is one outline around the centre (the regions the drags missed aside): the
+    // petals' tips are no outlines of their own beside it, apart by a hairline.
+    let big = ring.subpaths.iter().filter(|sp| vectorcraft_pathops::area(&PathData::new(vec![(*sp).clone()]), rule) > 100.0).count();
+    assert_eq!(big, 2, "{:?}", ring.subpaths.iter().map(|sp| vectorcraft_pathops::area(&PathData::new(vec![sp.clone()]), rule)).collect::<Vec<_>>());
+    // An inner edge would be a second outline over the merged area: normalising would drop it.
+    let clean = vectorcraft_pathops::normalize(&ring, rule);
+    assert!((ring.length() - clean.length()).abs() < 1.0, "{} pt of outline, {} without inner edges", ring.length(), clean.length());
+}

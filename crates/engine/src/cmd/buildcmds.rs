@@ -250,7 +250,8 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
         // Edges come back from the planar map within a few hundredths of the outlines they follow.
         let cut_tol = step * 0.2;
         let picked: Vec<&po::Region> = touched.regions.iter().filter_map(|&i| map.regions.get(i).map(|r| &r.0)).collect();
-        let union = if picked.is_empty() { PathData::default() } else { po::merge_regions(&picked) };
+        let faces = po::FaceMerger::new(&map.shapes);
+        let union = if picked.is_empty() { PathData::default() } else { faces.merge(&picked) };
         // The merged shape takes the look of the front-most object over the first region, or (for an
         // area only lines enclose) of the front-most object and the current fill.
         let covered = picked.iter().find_map(|r| r.top());
@@ -278,7 +279,17 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
                 // its outline, shared edges from every shape along them).
                 let in_union = picked.iter().any(|r| r.sources.contains(&i));
                 let mut rest = if in_union {
-                    po::boolean(&sh.path, sh.rule, &union, FillRule::NonZero, po::BoolOp::Difference)
+                    // What is left of it: its faces not merged or deleted, united. They share their
+                    // edges with the merged faces exactly, where subtracting the merged shape left
+                    // slivers of the outline along them (#569).
+                    let kept: Vec<&po::Region> = map
+                        .regions
+                        .iter()
+                        .enumerate()
+                        .filter(|(k, (r, ..))| r.sources.contains(&i) && !touched.regions.contains(k))
+                        .map(|(_, (r, ..))| r)
+                        .collect();
+                    if kept.is_empty() { PathData::default() } else { faces.merge(&kept) }
                 } else {
                     b::node_outline(leaf).map_or_else(|| sh.path.clone(), |o| o.0)
                 };
