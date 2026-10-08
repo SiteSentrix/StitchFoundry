@@ -2672,6 +2672,13 @@ pub(crate) fn home_key(app: &VectorcraftApp) -> (Option<u64>, usize) {
     (app.session.active().map(|d| d.uid), app.session.documents().len())
 }
 
+/// Whether the Home screen is up: chosen with the Home button (`app.home`), or no document is open
+/// and Preferences › General › Show The Home Screen When No Documents Are Open is on (#394). Off,
+/// an app with no document shows an empty window, and the Home button still opens the screen.
+pub(crate) fn home_showing(app: &VectorcraftApp) -> bool {
+    app.ui.home.is_some() || (app.session.active().is_none() && app.session.prefs.show_home_screen)
+}
+
 fn label_of(it: &Item) -> &'static str {
     match it {
         Item::Cmd(l, _, _) => l,

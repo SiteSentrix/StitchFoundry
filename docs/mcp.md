@@ -1190,9 +1190,10 @@ wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel s
 default: in View › Pixel Preview at 600% zoom and above, a line at every document pixel over the art),
 `recentFontsCount`, `antiAliasedArtwork` (on by default; off, the canvas draws the art with hard edges — a pixel is
 painted when the art covers at least half of it — while raster effects and pattern tiles stay smooth; exports keep
-their own Anti-aliasing option) and
+their own Anti-aliasing option),
 `scrubNumericFields` (on: a horizontal drag on a numeric field's label steps the field, one undo step per drag; the
-control channel's `ui.drag` scrubs).
+control channel's `ui.drag` scrubs) and `showHomeScreen` (on by default: the Home screen while no document is open;
+off, an empty window, and the Home button or `app.home` still shows the screen).
 
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
 default view) and to the mouse; they change what the tools show and how far a target pulls, never where a snapped
