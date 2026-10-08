@@ -381,6 +381,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             }
         }
         sel.set(new_ids.iter().copied());
+        // Pasted type arrives without the layout bounds cache: fill it so boxes and alignment are
+        // right away (opening the file later would, but paste must not depend on a reopen).
+        super::typecmd::refresh_bounds_of(d, &new_ids);
         Ok((new_ids, imported, artboard))
     })?;
     // The Artboard tool takes the pasted artboard.
