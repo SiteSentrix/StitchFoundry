@@ -457,6 +457,197 @@ fn rows_and_columns_flow_in_order() {
     }
 }
 
+// ---------- vertical alignment ----------
+
+fn valign(a: VerticalAlign) -> LayoutOptions {
+    LayoutOptions { vertical_align: a, ..Default::default() }
+}
+
+/// (space above the first line's ascent, space below the last line's descent) in `0..h`.
+fn block_space(l: &TextLayout, h: f64) -> (f64, f64) {
+    let (first, last) = (l.lines.first().unwrap(), l.lines.last().unwrap());
+    (first.baseline - first.ascent, h - (last.baseline + last.descent))
+}
+
+#[test]
+fn vertical_align_center_bottom_and_justify_in_a_rectangle() {
+    let t = area("First line\nSecond line\nThird line", style(12.0), Rect::new(0.0, 0.0, 200.0, 300.0), Justify::Left);
+    let top = layout(db(), &t);
+    let (above, below) = block_space(&top, 300.0);
+    assert!(above.abs() < 1e-6 && below > 200.0);
+    let center = layout_with(db(), &t, &valign(VerticalAlign::Center));
+    let (a, b) = block_space(&center, 300.0);
+    assert!((a - b).abs() < 1e-6 && a > 100.0, "{a} {b}");
+    // The model field reaches layout().
+    let mut tc = t.clone();
+    tc.area.vertical_align = VerticalAlign::Center;
+    assert!((layout(db(), &tc).lines[0].baseline - center.lines[0].baseline).abs() < 1e-9);
+    // Lines, glyph origins, outlines and transforms move together.
+    let d = center.lines[0].baseline - top.lines[0].baseline;
+    for (g, h) in center.glyphs.iter().zip(&top.glyphs) {
+        assert!((g.origin.y - h.origin.y - d).abs() < 1e-9);
+        assert!((g.xf.translation().y - h.xf.translation().y - d).abs() < 1e-9);
+        if !h.outline.elements().is_empty() {
+            assert!((g.outline.bounding_box().y0 - h.outline.bounding_box().y0 - d).abs() < 1e-6);
+        }
+    }
+    assert!(center.bounds.y0 > top.bounds.y0 + 100.0);
+    let bottom = layout_with(db(), &t, &valign(VerticalAlign::Bottom));
+    let (a, b) = block_space(&bottom, 300.0);
+    assert!(b.abs() < 1e-6 && a > 200.0);
+    // Justify: the first line stays, the last one reaches the bottom, gaps are equal.
+    let just = layout_with(db(), &t, &valign(VerticalAlign::Justify));
+    let (a, b) = block_space(&just, 300.0);
+    assert!(a.abs() < 1e-6 && b.abs() < 1e-6, "{a} {b}");
+    let gaps: Vec<f64> = just.lines.windows(2).map(|w| w[1].baseline - w[0].baseline).collect();
+    assert!(gaps.len() == 2 && (gaps[0] - gaps[1]).abs() < 1e-6 && gaps[0] > 100.0);
+    // A single line justifies to the top.
+    let one = area("Alone", style(12.0), Rect::new(0.0, 0.0, 200.0, 300.0), Justify::Left);
+    assert_eq!(layout_with(db(), &one, &valign(VerticalAlign::Justify)).lines[0].baseline, layout(db(), &one).lines[0].baseline);
+    // Inset: the space is measured inside it.
+    let inset = layout_with(db(), &t, &LayoutOptions { inset: 10.0, vertical_align: VerticalAlign::Bottom, ..Default::default() });
+    assert!(block_space(&inset, 290.0).1.abs() < 1e-6);
+}
+
+#[test]
+fn vertical_align_leaves_overflowing_text_where_it_is() {
+    let text = COPY.repeat(4);
+    let t = area(&text, style(12.0), Rect::new(0.0, 0.0, 200.0, 100.0), Justify::Left);
+    let top = layout(db(), &t);
+    assert!(top.overflow);
+    for a in [VerticalAlign::Center, VerticalAlign::Bottom, VerticalAlign::Justify] {
+        let l = layout_with(db(), &t, &valign(a));
+        assert!(l.overflow);
+        assert_eq!(l.lines.len(), top.lines.len());
+        assert_eq!(l.lines.last().unwrap().end, top.lines.last().unwrap().end);
+        // A full cell has less than a line of space left: the lines barely move.
+        assert!(l.lines[0].baseline - top.lines[0].baseline < top.lines[0].ascent + top.lines[0].descent);
+        assert!(block_space(&l, 100.0).1 >= -1e-6);
+    }
+}
+
+#[test]
+fn vertical_align_acts_on_each_column_on_its_own() {
+    // Enough text for column 1 and a few lines of column 2.
+    let t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 420.0, 120.0), Justify::Left);
+    let opts = |a| LayoutOptions { columns: 2, gutter: 20.0, vertical_align: a, ..Default::default() };
+    let top = layout_with(db(), &t, &opts(VerticalAlign::Top));
+    let col = |l: &TextLayout, c: usize| l.lines.iter().filter(|li| li.region == c).cloned().collect::<Vec<_>>();
+    assert!(!top.overflow && !col(&top, 0).is_empty() && !col(&top, 1).is_empty());
+    assert!(col(&top, 1).iter().all(|li| li.x0 >= 220.0 - 1e-6));
+    let bottom = layout_with(db(), &t, &opts(VerticalAlign::Bottom));
+    for c in 0..2 {
+        let last = col(&bottom, c).last().cloned().unwrap();
+        assert!((last.baseline + last.descent - 120.0).abs() < 1e-6, "column {c} ends at the bottom");
+    }
+    let shift = |c: usize| col(&bottom, c)[0].baseline - col(&top, c)[0].baseline;
+    assert!(shift(1) > shift(0) + 20.0, "the short column moves further: {} {}", shift(0), shift(1));
+}
+
+#[test]
+fn vertical_align_in_a_circle_reflows_and_stays_inside() {
+    let circle = Circle::new((150.0, 150.0), 120.0).to_path(0.1);
+    let t = area_path("Centred text in a round frame flows again at its new height.", style(12.0), &circle, Justify::Left);
+    let top = layout(db(), &t);
+    for a in [VerticalAlign::Center, VerticalAlign::Bottom, VerticalAlign::Justify] {
+        let l = layout_with(db(), &t, &valign(a));
+        assert!(!l.overflow, "{a:?}");
+        assert_eq!(l.lines.last().unwrap().end, top.lines.last().unwrap().end);
+        let moved = if a == VerticalAlign::Justify {
+            l.lines.last().unwrap().baseline - top.lines.last().unwrap().baseline
+        } else {
+            l.lines[0].baseline - top.lines[0].baseline
+        };
+        assert!(moved > 20.0, "{a:?} {moved}");
+        for g in l.glyphs.iter().filter(|g| !g.outline.elements().is_empty()) {
+            let b = g.outline.bounding_box();
+            for p in [Point::new(b.x0, b.y0), Point::new(b.x1, b.y1)] {
+                assert!((p - Point::new(150.0, 150.0)).hypot() <= 121.0, "{a:?} {p:?}");
+            }
+        }
+    }
+    let c = layout_with(db(), &t, &valign(VerticalAlign::Center));
+    let (above, below) = block_space(&c, 270.0);
+    assert!((above - 30.0 - below).abs() < 10.0, "roughly centred: {above} {below}");
+}
+
+#[test]
+fn vertical_align_with_text_wrap_flows_again_around_the_object() {
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 300.0, 400.0), Justify::Left);
+    let obstacle = Rect::new(100.0, 250.0, 200.0, 330.0).to_path(0.1);
+    t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&obstacle), wrap: Default::default() }];
+    let top = layout(db(), &t);
+    let bottom = layout_with(db(), &t, &valign(VerticalAlign::Bottom));
+    assert!(!bottom.overflow);
+    assert_eq!(bottom.lines.last().unwrap().end, top.lines.last().unwrap().end);
+    let last = bottom.lines.last().unwrap();
+    assert!(400.0 - (last.baseline + last.descent) < 15.0, "near the bottom: {}", last.baseline);
+    // Lines beside the object leave room for it (offset 6 pt).
+    for li in bottom.lines.iter().filter(|li| li.baseline + li.descent > 244.0 && li.baseline - li.ascent < 336.0) {
+        assert!(li.x1 <= 94.0 + 1e-6 || li.x0 >= 206.0 - 1e-6, "{li:?}");
+    }
+}
+
+#[test]
+fn vertical_align_on_vertical_type_moves_columns_along_the_block_axis() {
+    // Vertical type: the block axis runs right to left, so "bottom" is the frame's left edge.
+    let mut t = area("Tate\nYoko", style(20.0), Rect::new(0.0, 0.0, 200.0, 100.0), Justify::Left);
+    t.vertical = true;
+    let top = layout(db(), &t);
+    let bottom = layout_with(db(), &t, &valign(VerticalAlign::Bottom));
+    let center = layout_with(db(), &t, &valign(VerticalAlign::Center));
+    assert!(top.bounds.x1 > 190.0 && top.bounds.x0 > 100.0, "{:?}", top.bounds);
+    assert!(bottom.bounds.x0.abs() < 0.5, "{:?}", bottom.bounds);
+    assert!((center.bounds.x0 - (200.0 - center.bounds.x1)).abs() < 0.5, "{:?}", center.bounds);
+    // Glyphs stay inside the frame; lines keep line-space coordinates.
+    for g in &bottom.glyphs {
+        assert!(g.origin.x >= -1e-6 && g.origin.x <= 200.0 + 1e-6);
+    }
+}
+
+/// Top-to-Top leading (em box top to em box top): the first line hangs from the frame's top and a
+/// line's leading is the space below it. Vertical alignment measures the space from the lines that
+/// model placed, keeps their spacing when it shifts them, and justify adds its share on top of it.
+#[test]
+fn vertical_align_with_top_to_top_leading() {
+    use vectorcraft_doc::LeadingModel;
+    let st = |size: f64| CharStyle { size, leading: Some(size * 1.5), ..style(size) };
+    let mut t = area("", st(40.0), Rect::new(0.0, 0.0, 200.0, 300.0), Justify::Left);
+    t.runs = vec![TextRun { text: "大\n".into(), style: st(40.0) }, TextRun { text: "小\n中".into(), style: st(20.0) }];
+    t.para.leading_model = LeadingModel::EmBoxTop;
+    let top = layout(db(), &t);
+    assert_eq!(top.lines.len(), 3);
+    assert!((top.lines[0].baseline - 0.88 * 40.0).abs() < 0.01, "first em box at the top: {}", top.lines[0].baseline);
+    let gaps = |l: &TextLayout| l.lines.windows(2).map(|w| w[1].baseline - w[0].baseline).collect::<Vec<_>>();
+    let bottom = layout_with(db(), &t, &valign(VerticalAlign::Bottom));
+    assert!(block_space(&bottom, 300.0).1.abs() < 1e-6, "{:?}", block_space(&bottom, 300.0));
+    for (a, b) in gaps(&bottom).iter().zip(gaps(&top)) {
+        assert!((a - b).abs() < 1e-6, "spacing kept: {a} {b}");
+    }
+    let center = layout_with(db(), &t, &valign(VerticalAlign::Center));
+    let d = center.lines[0].baseline - top.lines[0].baseline;
+    assert!((d - block_space(&top, 300.0).1 * 0.5).abs() < 1e-6, "{d}");
+    let just = layout_with(db(), &t, &valign(VerticalAlign::Justify));
+    assert!((just.lines[0].baseline - top.lines[0].baseline).abs() < 1e-9, "the first line stays");
+    assert!(block_space(&just, 300.0).1.abs() < 1e-6);
+    let extra: Vec<f64> = gaps(&just).iter().zip(gaps(&top)).map(|(a, b)| a - b).collect();
+    assert!(extra.len() == 2 && (extra[0] - extra[1]).abs() < 1e-6 && extra[0] > 50.0, "{extra:?}");
+    // A round frame reflows with Top-to-Top leading too, without losing text.
+    let circle = Circle::new((150.0, 150.0), 120.0).to_path(0.1);
+    let mut round = area_path("", st(20.0), &circle, Justify::Left);
+    round.runs = t.runs.clone();
+    round.para.leading_model = LeadingModel::EmBoxTop;
+    let rtop = layout(db(), &round);
+    for a in [VerticalAlign::Center, VerticalAlign::Bottom, VerticalAlign::Justify] {
+        let l = layout_with(db(), &round, &valign(a));
+        assert!(!l.overflow, "{a:?}");
+        assert_eq!(l.lines.last().unwrap().end, rtop.lines.last().unwrap().end);
+        // The 40 pt line starts low in the circle already, so centring moves it a little.
+        let want = if a == VerticalAlign::Center { 1.0 } else { 20.0 };
+        assert!(l.lines.last().unwrap().baseline > rtop.lines.last().unwrap().baseline + want, "{a:?}");
+    }
+}
+
 // ---------- OpenType ----------
 
 #[test]

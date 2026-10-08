@@ -13,7 +13,7 @@ use crate::composer::{Breakpoint, Params, compose};
 use crate::fontdb::FontDb;
 use crate::hyphen::hyphen_points;
 use crate::shape::{Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, no_line_end, no_line_start, punct, shape_range, style_metrics};
-use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout};
+use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
 const EPS: f64 = 1e-6;
 
@@ -127,6 +127,7 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
         inset: a.inset,
         first_baseline: a.first_baseline,
         first_baseline_min: a.first_baseline_min,
+        vertical_align: a.vertical_align,
         ..LayoutOptions::default()
     };
     layout_with(db, t, &opts)
@@ -183,9 +184,12 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
             } else {
                 t.wrap.clone()
             };
-            let regions = Region::cells(&(to_lines * frame.to_bezpath()), opts, &wrap);
+            let mut regions = Region::cells(&(to_lines * frame.to_bezpath()), opts, &wrap);
             cx.out.frames = regions.iter().map(|r| line_xf.transform_rect_bbox(r.cell)).collect();
             flow(&mut cx, &paras, &t.para, Some(&regions));
+            if opts.vertical_align != VerticalAlign::Top {
+                align_vertically(&mut cx, &paras, &t.para, &mut regions);
+            }
         }
         TextKind::OnPath { path, .. } => on_path(&mut cx, &paras, t, path),
     }
@@ -416,6 +420,125 @@ fn finish_bounds(out: &mut TextLayout) {
     out.bounds = b.unwrap_or_default();
 }
 
+/// Space left in each cell after flowing top-aligned: (space above the first line's ascent, space
+/// below the last line's descent, number of distinct baselines). Cells without lines are `None`.
+fn cell_space(out: &TextLayout, regions: &[Region]) -> Vec<Option<(f64, f64, usize)>> {
+    regions
+        .iter()
+        .enumerate()
+        .map(|(ri, r)| {
+            let mut top = f64::INFINITY;
+            let mut bottom = f64::NEG_INFINITY;
+            let mut baselines: Vec<f64> = vec![];
+            for l in out.lines.iter().filter(|l| l.region == ri) {
+                top = top.min(l.baseline - l.ascent);
+                bottom = bottom.max(l.baseline + l.descent);
+                if !baselines.iter().any(|b| (b - l.baseline).abs() < 1e-6) {
+                    baselines.push(l.baseline);
+                }
+            }
+            if baselines.is_empty() || !top.is_finite() || !bottom.is_finite() {
+                return None;
+            }
+            // Never negative: a full (or overflowing) cell stays where top alignment put it.
+            Some(((top - r.top()).max(0.0), (r.bottom() - bottom).max(0.0), baselines.len()))
+        })
+        .collect()
+}
+
+/// Area Type Options "Align" other than Top: move each cell's lines down. Rectangular cells
+/// without text wrap shift their lines (centre: half the space left below the last line;
+/// bottom: all of it; justify: the first line stays, each further line gets an equal share of it).
+/// Other frames give lines different widths at different heights, so the text flows again with
+/// each cell's lines started lower (or spaced wider) until it settles, at most eight passes; a
+/// pass that would push text out of the frame is undone and retried with half the step.
+fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: &mut [Region]) {
+    let align = cx.opts.vertical_align;
+    let plain = regions.iter().all(|r| (r.rect || r.polys.is_empty()) && r.wraps.is_empty());
+    if plain {
+        let space = cell_space(&cx.out, regions);
+        // Each distinct baseline's index within its cell, for justify.
+        let mut seen: Vec<Vec<f64>> = vec![vec![]; regions.len()];
+        let offs: Vec<f64> = cx
+            .out
+            .lines
+            .iter()
+            .map(|l| {
+                let Some(Some((_, below, n))) = space.get(l.region).copied() else { return 0.0 };
+                match align {
+                    VerticalAlign::Top => 0.0,
+                    VerticalAlign::Center => below * 0.5,
+                    VerticalAlign::Bottom => below,
+                    VerticalAlign::Justify => {
+                        let Some(s) = seen.get_mut(l.region) else { return 0.0 };
+                        let k = s.iter().position(|b| (b - l.baseline).abs() < 1e-6).unwrap_or_else(|| {
+                            s.push(l.baseline);
+                            s.len() - 1
+                        });
+                        if n > 1 { below * k as f64 / (n - 1) as f64 } else { 0.0 }
+                    }
+                }
+            })
+            .collect();
+        for (l, d) in cx.out.lines.iter_mut().zip(&offs) {
+            l.baseline += d;
+        }
+        for g in &mut cx.out.glyphs {
+            let d = offs.get(g.line).copied().unwrap_or(0.0);
+            if d != 0.0 {
+                let m = Affine::translate((0.0, d));
+                g.outline.apply_affine(m);
+                g.xf = m * g.xf;
+                g.origin.y += d;
+            }
+        }
+        return;
+    }
+    let laid_out = |out: &TextLayout| out.lines.last().map_or(0, |l| l.end);
+    // How much of the measured space a pass takes up: halved after a pass that lost text.
+    let mut step = 1.0;
+    for _ in 0..8 {
+        let space = cell_space(&cx.out, regions);
+        let mut moved = false;
+        let saved: Vec<(f64, f64)> = regions.iter().map(|r| (r.shift, r.gap)).collect();
+        for (r, s) in regions.iter_mut().zip(&space) {
+            let Some((above, below, n)) = *s else { continue };
+            let (shift, gap) = match align {
+                VerticalAlign::Top => (r.shift, r.gap),
+                VerticalAlign::Center => (r.shift + (below - above) * 0.5 * step, r.gap),
+                VerticalAlign::Bottom => (r.shift + below * step, r.gap),
+                VerticalAlign::Justify if n > 1 => (r.shift, r.gap + below * step / (n - 1) as f64),
+                VerticalAlign::Justify => (r.shift, r.gap),
+            };
+            let (shift, gap) = (shift.clamp(0.0, r.cell.height().max(0.0)), gap.clamp(0.0, r.cell.height().max(0.0)));
+            if (shift - r.shift).abs() > 0.25 || (gap - r.gap).abs() > 0.01 {
+                moved = true;
+            }
+            r.shift = shift;
+            r.gap = gap;
+        }
+        if !moved {
+            return;
+        }
+        let before = laid_out(&cx.out);
+        let prev = (std::mem::take(&mut cx.out.glyphs), std::mem::take(&mut cx.out.lines), std::mem::replace(&mut cx.out.overflow, false));
+        flow(cx, paras, para, Some(regions));
+        if laid_out(&cx.out) < before {
+            // Text no longer fits (lines got narrower, or flow around a wrap object): undo the
+            // pass and try a smaller step.
+            (cx.out.glyphs, cx.out.lines, cx.out.overflow) = prev;
+            for (r, (shift, gap)) in regions.iter_mut().zip(saved) {
+                r.shift = shift;
+                r.gap = gap;
+            }
+            step *= 0.5;
+            if step < 0.1 {
+                return;
+            }
+        }
+    }
+}
+
 /// One cell of a flattened area-type frame (the whole frame, or one row/column of it).
 struct Region {
     /// The cell (frame bounds, or a grid cell of them).
@@ -427,6 +550,10 @@ struct Region {
     rect: bool,
     /// Text Wrap shapes: (polygons, offset, invert).
     wraps: Vec<(Vec<Vec<Point>>, f64, bool)>,
+    /// Vertical alignment: how far below the top-aligned position the first line starts.
+    shift: f64,
+    /// Vertical justification: extra space added between consecutive lines.
+    gap: f64,
 }
 
 /// Flattened closed polygons of a path.
@@ -529,7 +656,7 @@ impl Region {
                 let x0 = bbox.x0 + c as f64 * (cw + gutter);
                 let y0 = bbox.y0 + r as f64 * (rh + gutter);
                 let cell = if rows * cols == 1 { bbox } else { Rect::new(x0, y0, x0 + cw, y0 + rh) };
-                out.push(Region { cell, inset: opts.inset.max(0.0), polys: polys.clone(), rect, wraps: wraps.clone() });
+                out.push(Region { cell, inset: opts.inset.max(0.0), polys: polys.clone(), rect, wraps: wraps.clone(), shift: 0.0, gap: 0.0 });
             }
         }
         out
@@ -674,9 +801,9 @@ impl Pen<'_> {
         loop {
             let r = regions.get(self.ri)?;
             let mut baseline = match self.prev {
-                None if self.model == LeadingModel::EmBoxTop => r.top() + est.top.max(self.fb_min),
-                None => r.top() + est.first_baseline(self.fb, self.fb_min),
-                Some(b) => self.next_baseline(b, est),
+                None if self.model == LeadingModel::EmBoxTop => r.top() + r.shift + est.top.max(self.fb_min),
+                None => r.top() + r.shift + est.first_baseline(self.fb, self.fb_min),
+                Some(b) => self.next_baseline(b, est) + r.gap,
             };
             loop {
                 if baseline + est.desc > r.bottom() + 0.01 {
@@ -1205,6 +1332,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 glyph_start,
                 glyph_end: cx.out.glyphs.len(),
                 avail: if regions.is_some() { (ax0, ax1) } else { (start_x, x_end) },
+                region: if regions.is_some() { pen.ri } else { 0 },
             });
             pen.settled(baseline, m);
             // Further spans of this line band share the settled baseline.
@@ -1281,6 +1409,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &Path
             glyph_start: 0,
             glyph_end: 0,
             avail: (0.0, 0.0),
+            region: 0,
         });
         return;
     }
@@ -1365,6 +1494,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &Path
         glyph_start: 0,
         glyph_end: cx.out.glyphs.len(),
         avail: (0.0, ap.len()),
+        region: 0,
     });
 }
 

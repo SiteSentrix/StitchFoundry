@@ -532,6 +532,34 @@ pub enum FirstBaseline {
     Fixed,
 }
 
+/// Area Type Options "Align" (vertical): where the lines of each row/column sit in it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VerticalAlign {
+    /// Lines start at the top of the cell (the default).
+    #[default]
+    Top,
+    /// The block of lines is centred in the cell.
+    Center,
+    /// The last line's descent touches the cell bottom.
+    Bottom,
+    /// The first line stays at the top, the last one moves to the bottom and the space left over
+    /// is shared equally between the lines (no paragraph spacing limit).
+    Justify,
+}
+
+impl VerticalAlign {
+    pub const ALL: [VerticalAlign; 4] = [VerticalAlign::Top, VerticalAlign::Center, VerticalAlign::Bottom, VerticalAlign::Justify];
+    pub fn id(self) -> &'static str {
+        match self {
+            VerticalAlign::Top => "top",
+            VerticalAlign::Center => "center",
+            VerticalAlign::Bottom => "bottom",
+            VerticalAlign::Justify => "justify",
+        }
+    }
+}
+
 /// Text Wrap Options of a wrap object (Object → Text Wrap).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -634,11 +662,21 @@ pub struct AreaOptions {
     pub first_baseline: FirstBaseline,
     /// Minimum first-baseline offset in points.
     pub first_baseline_min: f64,
+    /// Vertical alignment of the lines in each row/column.
+    pub vertical_align: VerticalAlign,
 }
 
 impl Default for AreaOptions {
     fn default() -> Self {
-        Self { rows: 1, columns: 1, gutter: 18.0, inset: 0.0, first_baseline: FirstBaseline::Ascent, first_baseline_min: 0.0 }
+        Self {
+            rows: 1,
+            columns: 1,
+            gutter: 18.0,
+            inset: 0.0,
+            first_baseline: FirstBaseline::Ascent,
+            first_baseline_min: 0.0,
+            vertical_align: VerticalAlign::Top,
+        }
     }
 }
 

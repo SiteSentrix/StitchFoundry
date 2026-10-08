@@ -2201,6 +2201,22 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
 ```
 
+### Vertical alignment
+
+`text.areaOptions {verticalAlign: top|center|bottom|justify}` (Area Type Options › Align) places the lines of each
+row/column cell on its own: `center` centres the block of lines in the cell, `bottom` puts the last line's descent on
+the cell's bottom (inside the inset), `justify` keeps the first line at the top, moves the last one to the bottom and
+shares the space left over equally between the lines (there is no paragraph spacing limit: every line gap grows by
+the same amount). A cell with a single line justifies to the top, and a full or overflowing cell only moves by the
+less-than-a-line of space it has left. In rectangular frames without text wrap the lines just move; in other
+frames (and around wrap objects) the text flows again starting lower until it settles, never losing text that fit
+top-aligned. Vertical type aligns along its block axis (`bottom` is the frame's left edge). Exports lay type out
+again, so SVG, PDF and EPS show the aligned text.
+
+```json
+{"name":"run_command","arguments":{"command":"text.areaOptions","params":{"verticalAlign":"center"}}}
+```
+
 ## Converting between point type and area type
 
 With the Selection tool, a single selected point or area type object shows the type widget: a small circle beside

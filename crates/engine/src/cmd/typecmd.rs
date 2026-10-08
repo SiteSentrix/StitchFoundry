@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?, width?: pt, height?: pt, rows?, columns?, gutter?: pt, inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt} set the selected area type's options; width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (none given: query) → the first object's options",
+            "{ids?, width?: pt, height?: pt, rows?, columns?, gutter?: pt, inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify} set the selected area type's options; width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (none given: query) → the first object's options",
             has_selection,
             area_options
         ),
