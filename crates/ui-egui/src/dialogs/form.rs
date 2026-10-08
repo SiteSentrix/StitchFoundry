@@ -329,6 +329,19 @@ pub(super) fn slider_w(
     }
 }
 
+/// The words at the two ends of a slider's rail (Less … More), under a slider whose label column
+/// is `label_w` wide.
+pub(super) fn slider_ends(ui: &mut egui::Ui, label_w: f32, (left, right): (&str, &str)) {
+    let t = Tokens::get(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.add_space(label_w + ui.spacing().item_spacing.x);
+        let (r, _) = ui.allocate_exact_size(egui::vec2(SLIDER_WIDTH, 14.0), egui::Sense::hover());
+        let font = egui::FontId::proportional(11.0);
+        ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, left, font.clone(), t.text_dim);
+        ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, right, font, t.text_dim);
+    });
+}
+
 /// The field where [`preview`] keeps the parameters it last previewed.
 pub(super) const PREVIEWED: &str = "__previewed";
 

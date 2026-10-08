@@ -99,10 +99,12 @@
 	< 1 sec	< 1 segundo
 	<Opacity Mask>	<máscara de opacidade>
 	A File…	Um arquivo…
+	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Um valor menor segue o traço de perto; um valor maior gera menos pontos e curvas mais suaves.
 	A new preset starting from the selected one	Um novo predefinido a partir do selecionado
 	A saved copy of the selected preset	Uma cópia salva do predefinido selecionado
 	About VectorCraft	Sobre o VectorCraft
 	Absolute Position	Posição Absoluta
+	Accurate	Preciso
 	Abutting	Contíguo
 	Actions	Ações
 	Activate Document	Ativar Documento
@@ -381,6 +383,7 @@
 	Close All	Fechar Tudo
 	Close Library	Fechar Biblioteca
 	Close Path	Fechar Caminho
+	Close paths when ends are within:	Fechar caminhos quando as extremidades estiverem a menos de:
 	Collapse Panels to Icons	Recolher Painéis em Ícones
 	Collapse to Icons	Recolher em Ícones
 	Collate	Agrupar
@@ -695,6 +698,7 @@
 	Edit PDF Preset	Editar Predefinido de PDF
 	Edit Pattern	Editar Padrão
 	Edit Print Preset	Editar Predefinido de Impressão
+	Edit selected paths within:	Editar caminhos selecionados a menos de:
 	Edit Selection…	Editar Seleção…
 	Edit Symbol	Editar Símbolo
 	Edit Text	Editar Texto
@@ -848,6 +852,7 @@
 	Fill New Type Objects With Placeholder Text	Preencher Novos Objetos de Texto com Texto de Placeholder
 	Fill Rule	Regra de Preenchimento
 	Fill and Stroke	Preenchimento e Traçado
+	Fill new strokes	Preencher novos traçados
 	Fill with Placeholder Text	Preencher com Texto de Placeholder
 	Fill:	Preenchimento:
 	Find	Localizar

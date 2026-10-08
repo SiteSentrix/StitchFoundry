@@ -41,13 +41,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     };
     form::slider(ui, d, "steps", tl!("Steps:"), 1.0..=max, "", &ramp);
     form::slider(ui, d, "amount", tl!("Variation:"), 0.0..=100.0, "%", &ramp);
-    ui.horizontal(|ui| {
-        ui.add_space(form::SLIDER_LABEL + ui.spacing().item_spacing.x);
-        let (r, _) = ui.allocate_exact_size(vec2(form::SLIDER_WIDTH, 14.0), Sense::hover());
-        let font = egui::FontId::proportional(11.0);
-        ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, tl!("Less"), font.clone(), t.text_dim);
-        ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, tl!("More"), font, t.text_dim);
-    });
+    form::slider_ends(ui, form::SLIDER_LABEL, (tl!("Less"), tl!("More")));
     ui.add_space(10.0);
     // Preview: the base colour's row of variations.
     let o = options(app, d);

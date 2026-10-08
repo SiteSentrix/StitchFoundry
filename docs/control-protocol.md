@@ -523,6 +523,12 @@ then the tool's options `detail`, `simplify` and `simplifyOn` (Warp, Twirl, Puck
 `vertical` (Wrinkle, %), and `showBrush`. `ui.dialog.confirm` runs `tool.setOption {tool, values}`. `ui.pointer`
 events take `pressure` (0..1, default 1): it is the Liquify intensity while Use Pressure Pen is on.
 
+Freehand Tool Options: double-clicking the Pencil, Paintbrush, Smooth, Blob Brush or Eraser tool
+(`tool.options {tool: "pencil"}`) opens a `freehandOptions` dialog. Its fields are `tool` and the options the tool
+keeps: `fidelity` (pt; Pencil, Paintbrush, Smooth), `fill` (Pencil, Paintbrush), `closeWithin` and `editWithin` (screen
+pixels, 0 turns it off; Pencil, Paintbrush) and `size` (pt; Blob Brush, Eraser). `ui.dialog.confirm` runs
+`tool.setOption {tool, values}`.
+
 `ui.pointer` events also take `holdMs` (0..60000): the pointer then holds still that long, button down, before the
 next event. Twirl, Pucker and Bloat keep applying while held (a repeat of the last point every 0.1 s), exactly as
 for the same time held with the mouse. Liquify leaves type, symbols, images, graphs, meshes, envelopes, repeats and

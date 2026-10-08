@@ -219,8 +219,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// Options dialog, the Blend tool's Blend
 /// Options; the Print Tiling tool's resets the print tiling. As in the reference app, the Hand
 /// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, the Rotate, Scale,
-/// Reflect and Shear tools' are their Object › Transform dialogs, and the selection tools' are the
-/// Move dialog.
+/// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
+/// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush and Eraser tools' are their Tool
+/// Options.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
         "hand" => app.run("view.fitArtboard", json!({})),
@@ -252,6 +253,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),
         // The Liquify tools: their Tool Options (the Global Brush Dimensions and the tool's own).
         _ if vectorcraft_tools::settings::LIQUIFY.contains(&tool) => crate::dialogs::liquify::open(app, tool),
+        // The freehand tools: their Tool Options (Fidelity, fill, the tolerances, the brush size).
+        _ if crate::dialogs::freehand::TOOLS.contains(&tool) => crate::dialogs::freehand::open(app, tool),
         _ if vectorcraft_tools::tool_info(tool).is_none() => Err(format!("unknown tool `{tool}`")),
         _ => Err(format!("the {tool} tool has no options")),
     }
