@@ -245,3 +245,66 @@ fn the_control_bar_shows_the_image_file_link_colour_mode_and_ppi() {
     let text = crate::tests_labels::painted_text(&mut app, crate::chrome::control_bar);
     assert!(text.contains("Embedded"), "{text}");
 }
+
+/// Click the Control bar's `label`.
+fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    use crate::tests_removeanchors::{at, click_control, control_frame};
+    let p = at(&control_frame(app, ctx, vec![]), label);
+    click_control(app, ctx, p);
+}
+
+#[test]
+fn the_control_bar_and_properties_trace_a_selected_image() {
+    use crate::panels::image_trace::{TRACE_BUTTON_W, selected_preset};
+    use crate::tests_removeanchors::{at, click_control, control_frame, has, properties_frame};
+    let mut app = app();
+    let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
+    app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    for s in ["Embedded", "Unembed…", "Image Trace", "Mask", "Crop Image", "Opacity:"] {
+        assert!(has(&bar, s), "{s}");
+    }
+    assert!(!has(&bar, "Stroke:"), "an image has no Fill and Stroke in the Control bar");
+    let props = properties_frame(&mut app, 260.0);
+    for s in ["Unembed…", "Image Trace", "Mask", "Crop Image"] {
+        assert!(has(&props, s), "Properties: {s}");
+    }
+    // The button's arrow lists the presets; choosing one traces the image with it.
+    click_control(&mut app, &ctx, at(&bar, "Image Trace") + vec2(TRACE_BUTTON_W / 2.0, 0.0));
+    click_label(&mut app, &ctx, "6 Colors");
+    assert_eq!(selected_preset(&app).as_deref(), Some("6 Colors"));
+    // The button itself traces with the Default preset.
+    app.run("edit.undo", json!({})).unwrap();
+    click_label(&mut app, &ctx, "Image Trace");
+    assert_eq!(selected_preset(&app).as_deref(), Some("Default"));
+    // An Image Trace object: its preset (another traces it again), the panel and Expand.
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    for s in ["Image Tracing", "Preset:", "Default", "Expand"] {
+        assert!(has(&bar, s), "{s}");
+    }
+    assert!(has(&properties_frame(&mut app, 260.0), "Release"));
+    click_control(&mut app, &ctx, at(&bar, "Default"));
+    click_label(&mut app, &ctx, "3 Colors");
+    assert_eq!(selected_preset(&app).as_deref(), Some("3 Colors"));
+    click_label(&mut app, &ctx, "Expand");
+    let st = app.session.active().unwrap();
+    let g = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!(selected_preset(&app).is_none() && g.children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Image(_))), "expanded");
+}
+
+#[test]
+fn the_control_bars_mask_clips_the_image_and_selects_the_clipping_path() {
+    let mut app = app();
+    let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
+    let img = app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap()["ids"][0].as_u64().unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    click_label(&mut app, &ctx, "Mask");
+    let st = app.session.active().unwrap();
+    let group = &st.doc.layers[0].children().unwrap()[0];
+    assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }));
+    let ids: Vec<u64> = group.children().unwrap().iter().map(|c| c.id.0).collect();
+    assert_eq!((ids[1], st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>()), (img, vec![ids[0]]));
+}

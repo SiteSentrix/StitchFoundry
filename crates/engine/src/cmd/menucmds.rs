@@ -1,5 +1,5 @@
 //! Object menu long tail: Lock/Hide All Artwork Above & Other Layers, Transform Each, Reset
-//! Bounding Box, Rasterize, Crop Image, Create Trim Marks, Convert to Shape and
+//! Bounding Box, Rasterize, Crop Image, Mask (an image), Create Trim Marks, Convert to Shape and
 //! Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
 
 use std::sync::Arc;
@@ -114,6 +114,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{rect?: [x, y, width, height]} crop the selected image (default: to the artboard it sits on) → {id, width, height}",
             has_image,
             crop_image
+        ),
+        cmd!(
+            "object.maskImage",
+            "Mask",
+            [],
+            None,
+            "{} clip the selected image with a rectangle around it (its own outline, rotated with it) and select that clipping path, whose handles then crop it; one undo step → {id: the clip group, path: the clipping path}",
+            has_image,
+            mask_image
         ),
         cmd!(
             "object.createTrimMarks",
@@ -583,6 +592,36 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "id": id.0, "width": w, "height": h }))
+}
+
+/// The Control bar's Mask for an image: a clip group of the image and a clipping path on its
+/// outline, with that path selected so dragging its handles crops the image.
+fn mask_image(s: &mut Session, _: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    let (id, outline) = st
+        .selection
+        .objects
+        .iter()
+        .find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
+            Some(NodeKind::Image(im)) => {
+                Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+            }
+            _ => None,
+        })
+        .ok_or_else(|| bad("object.maskImage", "select an image"))?;
+    let (gid, pid) = s.edit("Mask", |d, sel| {
+        let mut clip = super::pathops::shape_node(d, outline, None);
+        super::object::as_clipping_path(&mut clip)?;
+        let pid = clip.id;
+        let (par, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
+        let gid = d.alloc_id();
+        d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![], clip: true }))?;
+        d.insert(Some(gid), 0, clip)?;
+        d.move_node(id, Some(gid), usize::MAX)?;
+        sel.set([pid]);
+        Ok((gid, pid))
+    })?;
+    Ok(json!({ "id": gid.0, "path": pid.0 }))
 }
 
 // ---------- Trim marks ----------

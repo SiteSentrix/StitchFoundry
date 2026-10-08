@@ -511,6 +511,7 @@
 	Created:	Creado:
 	Crop	Recortar
 	Crop Image	Recortar imagen
+	Mask	Máscara
 	Crop Marks	Marcas de corte
 	Crop To	Recortar a
 	Crystallize Tool	Herramienta Cristalizar
@@ -1143,6 +1144,8 @@
 	Image Map:	Mapa de imagen:
 	Image Size	Tamaño de imagen
 	Image Trace	Calco de imagen
+	Image Tracing	Objeto de calco de imagen
+	Tracing Presets	Preajustes de calco
 	Image Trace Presets	Preajustes de calco de imagen
 	Image:	Imagen:
 	Images:	Imágenes:
@@ -2669,6 +2672,7 @@
 	Total Width:	Anchura total:
 	Touch Type Tool	Herramienta Retocar texto
 	Trace	Calcar
+	Trace the image with the Default preset	Calcar la imagen con el preajuste Predeterminado
 	Tracking	Espaciado
 	Trademark Symbol	Símbolo de marca comercial
 	Transform	Transformar
