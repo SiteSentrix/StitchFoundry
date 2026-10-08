@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{AnchorRef, LiveShape, NodeKind};
+use vectorcraft_geom::Affine;
 use vectorcraft_geom::shapes::CornerKind;
 
 use super::*;
@@ -104,4 +105,48 @@ fn a_drag_previews_one_corner_and_commits_one_step() {
     assert_eq!(corners(&s, id), ([0.0, 0.0, 14.0, 0.0], [CornerKind::Round; 4], 5));
     assert_eq!(selected_anchors(&s, id), Some(anchors(&[2, 3])));
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+}
+
+/// How far each corner's cut reaches along x and y (top-left, top-right, bottom-right,
+/// bottom-left) of a rectangle with four cut corners: equal for a circular arc.
+fn spans(s: &Session, id: NodeId) -> Vec<(f64, f64)> {
+    let NodeKind::Path { path, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("not a path") };
+    let a: Vec<_> = path.subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(a.len(), 8, "four cut corners");
+    [(7, 0), (1, 2), (3, 4), (5, 6)].iter().map(|(i, j)| ((a[*j].x - a[*i].x).abs(), (a[*j].y - a[*i].y).abs())).collect()
+}
+
+fn assert_spans(s: &Session, id: NodeId, want: [f64; 4]) {
+    let got = spans(s, id);
+    let ok = got.iter().zip(want).all(|((x, y), r)| (x - r).abs() < 1e-9 && (y - r).abs() < 1e-9);
+    assert!(ok, "corners span {got:?}, want circles of radii {want:?}");
+}
+
+/// #442: on a rectangle that isn't square, every corner is the same circle, also past the limit
+/// and on a shape from a file that kept an uneven scale in its transform (before #291).
+#[test]
+fn corners_of_a_non_square_rectangle_are_alike_circles() {
+    let (mut s, id) = session();
+    run(&mut s, json!({"radius": 12}));
+    assert_spans(&s, id, [12.0; 4]);
+    // Past half the shorter side, every corner stops there.
+    run(&mut s, json!({"radius": 45}));
+    assert_spans(&s, id, [30.0; 4]);
+    // A 50 × 60 rectangle with 10 pt corners, saved stretched to 100 × 60: 20 × 10 ellipses.
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let NodeKind::Path { path, live: Some(live), .. } = &mut d.node_mut(id).unwrap().kind else { panic!("not live") };
+        let xf = Affine::translate((10.0, 10.0)) * Affine::scale_non_uniform(2.0, 1.0);
+        *live = LiveShape::Rectangle { w: 50.0, h: 60.0, radii: [10.0; 4], kinds: Default::default(), xf };
+        *path = live.to_path();
+    }
+    assert_eq!(spans(&s, id)[0], (20.0, 10.0));
+    // Rounding one corner makes every corner a circle: the others of the mean radius.
+    run(&mut s, json!({"corners": [1], "radius": 12}));
+    let mean = 10.0 * 2f64.sqrt();
+    assert_spans(&s, id, [mean, 12.0, mean, mean]);
+    let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0).abs() < 1e-9 && (b.x1 - 110.0).abs() < 1e-9 && (b.y1 - 70.0).abs() < 1e-9, "same bounds: {b:?}");
+    run(&mut s, json!({"radius": 8}));
+    assert_spans(&s, id, [8.0; 4]);
 }
