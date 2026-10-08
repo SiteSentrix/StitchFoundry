@@ -1,6 +1,9 @@
 //! VectorCraft desktop app.
 //!
-//! Usage: `vectorcraft [--control <port>] [files…]`
+//! Usage: `vectorcraft [--control <port>] [--in-window-menus] [files…]`
+//!
+//! `--in-window-menus` (or `VECTORCRAFT_IN_WINDOW_MENUS=1`) keeps the menus inside the window on
+//! macOS instead of the macOS menu bar (`mac_menu`).
 //!
 //! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
@@ -20,7 +23,7 @@ mod control_server;
 mod gpu;
 mod logging;
 #[cfg(target_os = "macos")]
-mod native_menu;
+mod mac_menu;
 #[cfg(target_os = "macos")]
 mod open_documents;
 mod printing;
@@ -37,8 +40,6 @@ struct App {
     graphics_loss: GraphicsLoss,
     /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
     graphics_lost: bool,
-    #[cfg(target_os = "macos")]
-    menu: Option<native_menu::NativeMenu>,
 }
 
 impl eframe::App for App {
@@ -59,15 +60,7 @@ impl eframe::App for App {
             return;
         }
         #[cfg(target_os = "macos")]
-        {
-            if self.menu.is_none() && std::env::var_os("VECTORCRAFT_NO_NATIVE_MENU").is_none() {
-                self.menu = Some(native_menu::NativeMenu::install(&mut self.app));
-            }
-            if let Some(m) = &mut self.menu {
-                m.poll(&mut self.app, ctx);
-            }
-            open_files(&mut self.app, open_documents::take());
-        }
+        open_files(&mut self.app, open_documents::take());
         self.app.logic(ctx);
         window::track(ctx, &mut self.app.ui.window);
         if self.app.ui.status == "quit" {
@@ -319,10 +312,12 @@ fn main() -> std::process::ExitCode {
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
     let mut files = Vec::new();
+    let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--control" => control_port = args.next().and_then(|p| p.parse().ok()),
+            "--in-window-menus" => in_window_menus = true,
             "--version" => {
                 println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
                 return std::process::ExitCode::SUCCESS;
@@ -434,15 +429,17 @@ fn main() -> std::process::ExitCode {
                     app = app.with_control(rx);
                 }
                 #[cfg(target_os = "macos")]
-                open_documents::set_ui(&cc.egui_ctx);
+                {
+                    open_documents::set_ui(&cc.egui_ctx);
+                    // The macOS menu bar, installed now so winit's default menu doesn't stay up.
+                    if !in_window_menus {
+                        app.services.native_menu = mac_menu::install(&cc.egui_ctx, &app);
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
+                let _ = in_window_menus;
                 open_files(&mut app, files);
-                Ok(Box::new(App {
-                    app,
-                    graphics_loss,
-                    graphics_lost: false,
-                    #[cfg(target_os = "macos")]
-                    menu: None,
-                }))
+                Ok(Box::new(App { app, graphics_loss, graphics_lost: false }))
             }),
         )
     });

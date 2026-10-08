@@ -1353,14 +1353,20 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         });
     }
     let v = &app.ui.view;
+    // An item that can be on or off is `Some` whatever the document and selection (off with none):
+    // the macOS menu bar can't change an item's kind without rebuilding.
+    let selected_text = |onpath: bool| {
+        let st = app.session.active()?;
+        st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
+            Some(vectorcraft_engine::doc::NodeKind::Text(t)) if !onpath || matches!(t.kind, vectorcraft_engine::doc::TextKind::OnPath { .. }) => {
+                Some(t)
+            }
+            _ => None,
+        })
+    };
     Some(match id {
         "type.orientation.vertical" | "type.orientation.horizontal" => {
-            let st = app.session.active()?;
-            let t = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
-                Some(vectorcraft_engine::doc::NodeKind::Text(t)) => Some(t),
-                _ => None,
-            })?;
-            t.vertical == (id == "type.orientation.vertical")
+            selected_text(false).is_some_and(|t| t.vertical == (id == "type.orientation.vertical"))
         }
         "view.outline" => v.outline,
         "view.pixelPreview" => v.pixel_preview,
@@ -1368,12 +1374,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.snapToPixel" => v.snap_to_pixel,
         // Type on a Path effect of the selected path type.
         "type.pathOptions" if p.get("effect").is_some() => {
-            let st = app.session.active()?;
-            let t = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
-                Some(vectorcraft_engine::doc::NodeKind::Text(t)) if matches!(t.kind, vectorcraft_engine::doc::TextKind::OnPath { .. }) => Some(t),
-                _ => None,
-            })?;
-            p.get("effect").and_then(Value::as_str) == Some(t.path_effect.id())
+            selected_text(true).is_some_and(|t| p.get("effect").and_then(Value::as_str) == Some(t.path_effect.id()))
         }
         "view.smartGuides" => v.smart_guides,
         "view.grid" => v.grid,
@@ -1407,8 +1408,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.proofColors" => vectorcraft_render::proof::view().proof_colors,
         "view.overprintPreview" => vectorcraft_render::proof::view().overprint,
         "view.proofSetup" => p.get("target").and_then(Value::as_str) == Some(vectorcraft_render::proof::view().setup.target.id().as_str()),
-        "perspective.grid.snap" => perspective_grid(app)?.snap,
-        "perspective.grid.lockStation" => perspective_grid(app)?.lock_station,
+        "perspective.grid.snap" => perspective_grid(app).is_some_and(|g| g.snap),
+        "perspective.grid.lockStation" => perspective_grid(app).is_some_and(|g| g.lock_station),
         "file.documentColorMode" | "object.convertDocumentColorMode" => {
             let cmyk = app.session.active().is_some_and(|d| d.doc.color_mode == vectorcraft_engine::doc::ColorMode::Cmyk);
             p.get("mode").and_then(Value::as_str) == Some(if cmyk { "cmyk" } else { "rgb" })
@@ -1611,28 +1612,81 @@ fn recent_slot<'a>(app: &'a VectorcraftApp, id: &str) -> Option<&'a String> {
     io::recent_files(app).get(n.checked_sub(1)?)
 }
 
-/// A menu slot hidden while it is empty ([`hidden_when_disabled`]) rather than shown disabled (the
-/// native menu leaves it out).
-pub fn hidden_slot(app: &VectorcraftApp, id: &str) -> bool {
-    hidden_when_disabled(id) && !enabled(app, id)
+/// How the menus show item `id` (params `p`) now: (enabled, checked: `Some` for an item that is on
+/// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]) or an item
+/// another stands in for ([`swapped_out`]).
+pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
+    let en = enabled(app, id);
+    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
+        return None;
+    }
+    Some((en, checked(app, id, p)))
 }
 
-/// How many saved-view, recent-file and User Defined library slots are listed: a menu that can't
-/// hide items (the native one) is rebuilt when this changes.
-pub fn listed_slots(app: &VectorcraftApp) -> usize {
-    use vectorcraft_engine::cmd::{stylelib, swatchlib};
-    let user = |libs: Vec<swatchlib::LibraryInfo>| libs.iter().filter(|l| l.category == "user").count().min(10);
-    let views = app.session.active().map_or(0, |d| d.doc.views.len().min(10));
-    views
-        + app.session.active().map_or(0, |d| d.doc.saved_selections.len().min(SAVED_SELECTION_IDS.len()))
-        + io::recent_files(app).len().min(RECENT_IDS.len())
-        + user(swatchlib::libraries(&app.session))
-        + user(stylelib::libraries(&app.session))
-        + crate::dialogs::perspective_presets::listed_slots(app)
+/// One row of a menu as it shows now. The in-window menus draw these and the macOS menu bar
+/// ([`crate::native_menu`]) is built from them, so the two can't drift.
+pub enum Entry<'a> {
+    Sep,
+    /// A section header (a disabled label), in the UI language.
+    Header(&'static str),
+    /// A submenu: its label in the UI language, and its items.
+    Sub(&'static str, &'a [Item]),
+    Item(Row<'a>),
+}
+
+/// A menu item as it shows now ([`entry`]).
+pub struct Row<'a> {
+    /// The command and its params; `None` for an item not implemented yet (always disabled).
+    pub command: Option<(&'static str, &'a Value)>,
+    /// The tree's own English label, which [`click_target`] reads.
+    pub source: &'static str,
+    /// The label in the UI language, as it reads now (Undo *Move*, Show/Hide…, a recent file).
+    pub label: std::borrow::Cow<'static, str>,
+    /// The shortcut as the registry writes it (`Cmd+Shift+Z`), the user's overrides applied.
+    pub shortcut: Option<&'static str>,
+    pub enabled: bool,
+    /// `Some` for an item that is on or off.
+    pub checked: Option<bool>,
+}
+
+impl Row<'_> {
+    /// What choosing it runs ([`click_target`]); `None` for an item not implemented yet.
+    pub fn target(&self) -> Option<(String, Value)> {
+        self.command.map(|(id, p)| click_target(self.source, id, p))
+    }
+}
+
+/// Item `it` as the menus show it now, or `None` while they leave it out ([`shown_state`]).
+pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
+    use crate::i18n::t;
+    Some(match it {
+        Item::Sep => Entry::Sep,
+        Item::Header(h) => Entry::Header(t(h)),
+        Item::Sub(label, children) => Entry::Sub(t(label), children),
+        Item::Todo(label, sc) => Entry::Item(Row {
+            command: None,
+            source: label,
+            label: t(label).into(),
+            shortcut: Some(*sc).filter(|s| !s.is_empty()),
+            enabled: false,
+            checked: None,
+        }),
+        Item::Cmd(label, id, p) => {
+            let (enabled, checked) = shown_state(app, id, p)?;
+            Entry::Item(Row {
+                command: Some((id, p)),
+                source: label,
+                label: display_label(app, id, label).into(),
+                shortcut: item_shortcut(id, p),
+                enabled,
+                checked,
+            })
+        }
+    })
 }
 
 /// Changes whenever a plug-in is installed or removed: Object › Plug-ins and Effect › Plug-ins
-/// list them, so a menu built once (the native one) is rebuilt.
+/// list them (the command palette's cache follows it).
 pub fn plugin_revision() -> u64 {
     vectorcraft_plugins::registry::revision()
 }
@@ -2657,63 +2711,61 @@ fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &
 /// room for one).
 fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks: bool, clicked: &mut Option<(String, Value)>) {
     let t = Tokens::get(ui.ctx());
-    for it in items {
-        match it {
-            Item::Sep => {
+    for e in items.iter().filter_map(|it| entry(app, it)) {
+        match e {
+            Entry::Sep => {
                 ui.separator();
             }
-            Item::Header(h) => {
-                ui.label(egui::RichText::new(tl!(h)).size(11.0).color(t.text_dim));
+            Entry::Header(h) => {
+                ui.label(egui::RichText::new(h).size(11.0).color(t.text_dim));
             }
-            Item::Sub(label, children) => {
-                ui.menu_button(tl!(label), |ui| {
+            Entry::Sub(label, children) => {
+                ui.menu_button(label, |ui| {
                     widgets::menu_scroll(ui, |ui| {
                         ui.set_min_width(200.0);
                         render_items(app, ui, children, checks, clicked);
                     });
                 });
             }
-            Item::Todo(label, sc) => {
-                ui.add_enabled_ui(false, |ui| {
-                    ui.add(egui::Button::new(tl!(label)).shortcut_text(pretty_shortcut(sc)));
-                })
-                .response
-                .on_disabled_hover_text(tl!("Coming soon — tracked in the parity plan"));
-            }
-            Item::Cmd(label, id, p) => {
-                let en = enabled(app, id);
-                // Unused saved-view and recent-file slots are hidden (only the real ones are listed).
-                if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
-                    continue;
-                }
-                let label = display_label(app, id, label);
-                let sc = item_shortcut(id, p).map(pretty_shortcut).unwrap_or_default();
-                let chk = checks.then(|| checked(app, id, p)).flatten();
-                let text = match chk {
-                    Some(true) => format!("✓  {label}"),
-                    Some(false) => format!("     {label}"),
-                    None => label,
-                };
-                // Type → Font: each family's sample after its name (Enable in-menu font previews).
-                let sampled = p.get("font").and_then(Value::as_str).filter(|_| *id == "text.setStyle" && app.session.prefs.font_preview);
-                let r = match sampled {
-                    Some(family) => {
-                        let slot = ui.id().with(("font-sample", family));
-                        let button = egui::Button::new(text).right_text(egui::Atom::custom(slot, crate::font_menu::MENU_SAMPLE_SIZE));
-                        let out = ui.add_enabled_ui(en, |ui| button.atom_ui(ui)).inner;
-                        if let Some(rect) = out.rect(slot) {
-                            crate::font_menu::menu_item_sample(ui, rect, family);
-                        }
-                        out.response
-                    }
-                    None => ui.add_enabled(en, egui::Button::new(text).shortcut_text(sc)),
-                };
-                if r.clicked() {
-                    *clicked = Some(click_target(label_of(it), id, p));
-                    ui.close();
-                }
-            }
+            Entry::Item(row) => render_row(app, ui, &row, checks, clicked),
         }
+    }
+}
+
+/// One menu item: its label (with a check mark, or the room for one, under `checks`), its shortcut,
+/// and Type › Font's samples.
+fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, clicked: &mut Option<(String, Value)>) {
+    let sc = row.shortcut.map(pretty_shortcut).unwrap_or_default();
+    let Some((id, p)) = row.command else {
+        ui.add_enabled_ui(false, |ui| {
+            ui.add(egui::Button::new(row.label.as_ref()).shortcut_text(sc));
+        })
+        .response
+        .on_disabled_hover_text(tl!("Coming soon — tracked in the parity plan"));
+        return;
+    };
+    let text = match row.checked.filter(|_| checks) {
+        Some(true) => format!("✓  {}", row.label),
+        Some(false) => format!("     {}", row.label),
+        None => row.label.to_string(),
+    };
+    // Type → Font: each family's sample after its name (Enable in-menu font previews).
+    let sampled = p.get("font").and_then(Value::as_str).filter(|_| id == "text.setStyle" && app.session.prefs.font_preview);
+    let r = match sampled {
+        Some(family) => {
+            let slot = ui.id().with(("font-sample", family));
+            let button = egui::Button::new(text).right_text(egui::Atom::custom(slot, crate::font_menu::MENU_SAMPLE_SIZE));
+            let out = ui.add_enabled_ui(row.enabled, |ui| button.atom_ui(ui)).inner;
+            if let Some(rect) = out.rect(slot) {
+                crate::font_menu::menu_item_sample(ui, rect, family);
+            }
+            out.response
+        }
+        None => ui.add_enabled(row.enabled, egui::Button::new(text).shortcut_text(sc)),
+    };
+    if r.clicked() {
+        *clicked = row.target();
+        ui.close();
     }
 }
 
@@ -2728,13 +2780,6 @@ pub(crate) fn home_key(app: &VectorcraftApp) -> (Option<u64>, usize) {
 /// an app with no document shows an empty window, and the Home button still opens the screen.
 pub(crate) fn home_showing(app: &VectorcraftApp) -> bool {
     app.ui.home.is_some() || (app.session.active().is_none() && app.session.prefs.show_home_screen)
-}
-
-fn label_of(it: &Item) -> &'static str {
-    match it {
-        Item::Cmd(l, _, _) => l,
-        _ => "",
-    }
 }
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
@@ -2790,10 +2835,10 @@ fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Event> {
     })
 }
 
-/// Invoke an item of the system menu bar (macOS), chosen by a click or by its key equivalent: the
-/// system takes those keys before the window sees them. While a text field has the keyboard,
-/// Select All, Cut, Copy and Paste act on the field's text, as their keys do in the window;
-/// everything else (and those commands with no field focused) goes to [`invoke`].
+/// Invoke an item clicked in the system menu bar (macOS; its key equivalents come back to egui as
+/// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
+/// Copy and Paste act on the field's text, as their keys do; everything else (and those commands
+/// with no field focused) goes to [`invoke`].
 pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
     if ctx.text_edit_focused()
         && let Some(e) = field_event(app, id)
@@ -3000,15 +3045,17 @@ pub fn context_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
 fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
     for it in items {
         match it {
-            Item::Cmd(_, id, _) if (hidden_when_disabled(id) && !enabled(app, id)) || swapped_out(app, id) => {}
-            Item::Cmd(l, id, p) => out.push(MenuEntry {
-                path: path.clone(),
-                label: dynamic_label(app, id, l),
-                command: Some(id.to_string()),
-                params: p.clone(),
-                enabled: enabled(app, id),
-                shortcut: item_shortcut(id, p).or_else(|| shortcut_of(id)).unwrap_or("").to_string(),
-            }),
+            Item::Cmd(l, id, p) => {
+                let Some((enabled, _)) = shown_state(app, id, p) else { continue };
+                out.push(MenuEntry {
+                    path: path.clone(),
+                    label: dynamic_label(app, id, l),
+                    command: Some(id.to_string()),
+                    params: p.clone(),
+                    enabled,
+                    shortcut: item_shortcut(id, p).or_else(|| shortcut_of(id)).unwrap_or("").to_string(),
+                })
+            }
             Item::Todo(l, sc) => out.push(MenuEntry {
                 path: path.clone(),
                 label: l.to_string(),
@@ -3285,6 +3332,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
         out.insert(title.to_string());
         walk(&items, title, &mut out);
     }
+    out.extend(crate::native_menu::MAC_LABELS.iter().map(|s| s.to_string()));
     out.extend(DYNAMIC_LABELS.iter().map(|s| s.to_string()));
     out.extend(CONTEXT_LABELS.iter().map(|s| s.to_string()));
     out.extend(UI_COMMANDS.iter().map(|c| c.1.to_string()));
@@ -3549,11 +3597,11 @@ mod tests {
         let r = app.run("select.recall2", json!({})).unwrap();
         assert!(r["count"].as_u64().unwrap() >= 1);
         assert_eq!(app.session.active().unwrap().selection.len(), 2);
-        // The native menu is rebuilt when the number of slots changes.
-        let listed = listed_slots(&app);
+        // A deleted selection's slot leaves the menus.
         app.run("select.editSaved", json!({"name": "Ellipse", "delete": true})).unwrap();
-        assert_eq!(listed_slots(&app), listed - 1);
         assert!(!enabled(&app, "select.recall2"));
+        assert!(shown_state(&app, "select.recall2", &Value::Null).is_none());
+        assert!(shown_state(&app, "select.recall1", &Value::Null).is_some());
     }
 
     #[test]

@@ -503,6 +503,9 @@ fn menu_catalogs_translate_every_menu_label() {
     let mut all: Vec<String> = labels.iter().filter(|l| interface(l)).map(|(l, ..)| l.to_string()).collect();
     all.extend(toggled_labels());
     all.extend(crate::menus::CONTEXT_LABELS.iter().map(|l| l.to_string()));
+    // The macOS menu bar's own labels, and its Settings submenu's Preferences pages.
+    all.extend(crate::native_menu::MAC_LABELS.iter().map(|l| l.to_string()));
+    all.extend(vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES.iter().map(|l| l.to_string()));
     all.sort();
     all.dedup();
     for code in KEEPS_MENU_NAMES {

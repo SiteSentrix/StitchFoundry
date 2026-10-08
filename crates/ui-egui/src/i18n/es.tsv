@@ -3582,3 +3582,10 @@ axis	Both	Ambos
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no está en un grupo de la barra de herramientas con varias herramientas
 @msg	onto must name a panel floating in another group	onto debe nombrar un panel que flote en otro grupo
 @msg	x and y must both be numbers	x e y deben ser números
+
+# The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
+	Services	Servicios
+	Hide VectorCraft	Ocultar VectorCraft
+	Zoom	Zoom
+	Bring All to Front	Traer todo al frente
+	Settings	Ajustes

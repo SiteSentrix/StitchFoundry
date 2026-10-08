@@ -209,11 +209,6 @@ pub fn slot_preset(app: &VectorcraftApp, id: &str) -> Option<String> {
     app.session.prefs.perspective_presets.iter().filter(|p| p.kind == kind).nth(n.checked_sub(1)?).map(|p| p.name.clone())
 }
 
-/// How many saved presets the slots list (the native menu is rebuilt when this changes).
-pub fn listed_slots(app: &VectorcraftApp) -> usize {
-    (1..=3u8).map(|k| app.session.prefs.perspective_presets.iter().filter(|p| p.kind == k).count().min(SLOTS)).sum()
-}
-
 /// View → Perspective Grid → One/Two/Three Point Perspective (`kind` 1–3): the built-in views of
 /// the type, then the saved presets' slots (`slots`, the type's ids).
 pub fn menu(kind: u8, slots: [&'static str; SLOTS]) -> Vec<Item> {

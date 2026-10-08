@@ -62,12 +62,22 @@ By default VectorCraft's own crates log at `info` and everything else at `warn`.
 | Variable | Effect |
 |---|---|
 | `VECTORCRAFT_CONTROL_PORT` | Same as `--control <port>` |
+| `VECTORCRAFT_IN_WINDOW_MENUS` | Any value but empty or `0`: same as `--in-window-menus` (see [macOS: the menu bar](#macos-the-menu-bar)) |
 | `VECTORCRAFT_NO_PREFS` | No preferences read or written, no default Data Recovery folder and no log file (agents' test runs) |
 | `WGPU_POWER_PREF` | Graphics adapter: `low`, `high` or `none` (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `WGPU_ADAPTER_NAME` | Graphics adapter by (part of) its name, any case (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `WGPU_BACKEND` | Graphics backends: `vulkan`, `dx12`, `metal`, `gl` |
 | `VECTORCRAFT_GPU_SKIP` | Set by the app when it starts again without a graphics adapter that failed (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `RUST_LOG` | Log levels for standard error and the log file (see [Logs](#logs)) |
+
+## macOS: the menu bar
+
+On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search box and the workspace switcher next to the traffic lights). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
+
+- **One menu model.** `crates/ui-egui/src/native_menu.rs` (platform-free, tested on every platform) builds the menu bar from the in-window menus (`menus::menu_tree`, each item through `menus::entry`, which the in-window menus draw too) and lays it out the Mac way: the VectorCraft menu holds About, Settings ▸ (one item per Preferences page, General… ⌘K), Language ▸, Appearance ▸ (UI brightness), Services, Hide VectorCraft ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All and Quit ⌘Q (the app's own `app.quit`, so unsaved documents are asked about); those leave Edit and Help. Window starts with Minimize ⌃⌘M and Zoom and ends with Bring All to Front, and Help is the system's Help menu (its search field). A system key a command (or a user's shortcut) already has stays the command's, and the log says so.
+- **The native side** is `apps/vectorcraft/src/mac_menu.rs`: muda (`=0.21.1`, default features off, macOS only, no `unsafe`) builds the `NSMenu`s. Labels, enabled and checked are updated in place when anything they show may have changed (a command ran, the document, its history or selection changed, a click or a key press); a change of structure (a recent file, the language, a shortcut) rebuilds the menus.
+- **Keys stay with egui.** AppKit runs a menu's key equivalents before the window sees the key, so the item's key goes back to egui as the key press it was (⌘X/⌘C/⌘V as egui's Cut/Copy/Paste events), through `raw_input_hook`: `shortcuts::handle` runs it once, user shortcuts apply, and a focused text field keeps ⌘A, ⌘C, ⌘V and ⌘Z. A click runs the item like an in-window click. Bare keys and ⌥/⇧ chords are never key equivalents (they type).
+- Built and clippy-checked for `aarch64-apple-darwin` and `x86_64-apple-darwin` from any host: `cargo clippy -p vectorcraft --target aarch64-apple-darwin --all-targets -- -D warnings`.
 
 ## Linux: Wayland and X11
 
