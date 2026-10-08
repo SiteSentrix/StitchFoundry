@@ -384,6 +384,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.task_bar && !app.session.tool_busy() && app.ui.screen_mode < 3 {
         task_bar(app, ui, &xf);
     }
+    if app.ui.screen_mode < 3 {
+        crate::free_transform::show(app, ui, xf.rect);
+    }
     // Cursor.
     if resp.hovered() {
         let m = ui.input(|i| i.modifiers);

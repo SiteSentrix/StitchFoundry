@@ -27,6 +27,7 @@ pub mod dock;
 pub mod find_font;
 pub mod floating;
 pub mod font_menu;
+mod free_transform;
 pub mod graphics;
 pub mod i18n;
 pub mod icon_data;
