@@ -21,7 +21,7 @@ use vectorcraft_color::Swatch;
 use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, PatternDef, Symbol, TextStyleDef};
 use vectorcraft_geom::Rect;
 
-pub use flavours::{BITMAP, EMF, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour};
+pub use flavours::{BITMAP, EMF, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address};
 pub(crate) use resources::SwatchChoices;
 
 use super::*;
@@ -218,6 +218,25 @@ mod tests {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
         s
+    }
+
+    /// The address a browser's Copy Image puts next to the picture (#597), and text that isn't one.
+    #[test]
+    fn an_address_alone_is_told_from_other_text() {
+        for a in [
+            "https://example.com/cat.png",
+            " http://x.org/a?b=1
+",
+            "HTTPS://EXAMPLE.COM",
+            "file:///C:/art/cat.png",
+            "data:image/png;base64,iVBOR",
+            "blob:https://x.org/1",
+        ] {
+            assert!(is_address(a), "{a}");
+        }
+        for t in ["Pasted words", "see https://example.com", "https://a.org https://b.org", "https://", "example.com/cat.png", ""] {
+            assert!(!is_address(t), "{t}");
+        }
     }
 
     #[test]
