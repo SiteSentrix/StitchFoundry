@@ -42,6 +42,21 @@ The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (
 - The `WGPU_POWER_PREF` environment variable (`low`, `high` or `none`) overrides the preference.
 - Help › About and the control channel's `ui.inspect` (`graphicsAdapter`) show the adapter in use, and the app logs it at startup.
 
+## Logs
+
+The desktop app writes its `log` records to standard error and to `logs/vectorcraft.log` next to the preferences (Linux `$XDG_CONFIG_HOME/vectorcraft/logs/`, by default `~/.config/vectorcraft/logs/`; macOS `~/Library/Application Support/VectorCraft/logs/`; Windows `%APPDATA%\VectorCraft\logs\`). A start launched from a desktop menu or the Dock has no terminal, so this file is what to attach to a bug report: the graphics adapter in use, a lost graphics device, panics the engine's guard recovered from and clipboard formats that couldn't be made land there. Each launch moves the previous log to `vectorcraft.1.log` (and that one to `vectorcraft.2.log`), so the log of a run that crashed survives the next start. The file stops growing at 16 MiB. `--version` writes no file, and runs with `VECTORCRAFT_NO_PREFS` log to standard error only.
+
+By default VectorCraft's own crates log at `info` and everything else at `warn`. `RUST_LOG` replaces that with env_logger-style directives, for example `RUST_LOG=debug`, `RUST_LOG=warn,vectorcraft_render=trace` or `RUST_LOG=info,wgpu_core=warn`; a directive ending in `*` covers every target starting with it (`vectorcraft*=debug`). The logger is `apps/vectorcraft/src/logging.rs`. `vectorcraft-cli mcp` has its own logger, which sends records to the MCP client (`docs/mcp.md`).
+
+## Environment variables (desktop app)
+
+| Variable | Effect |
+|---|---|
+| `VECTORCRAFT_CONTROL_PORT` | Same as `--control <port>` |
+| `VECTORCRAFT_NO_PREFS` | No preferences read or written, no default Data Recovery folder and no log file (agents' test runs) |
+| `WGPU_POWER_PREF` | Graphics adapter: `low`, `high` or `none` (see [Desktop graphics processor](#desktop-graphics-processor)) |
+| `RUST_LOG` | Log levels for standard error and the log file (see [Logs](#logs)) |
+
 ## Linux: Wayland and X11
 
 The window runs natively on Wayland (eframe's `wayland` feature) and on X11. The system clipboard (`apps/vectorcraft/src/clipboard.rs`) is arboard with its `wayland-data-control` feature:

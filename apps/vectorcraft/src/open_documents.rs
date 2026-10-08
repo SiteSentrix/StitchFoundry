@@ -59,7 +59,7 @@ pub fn take() -> Vec<String> {
 fn add_open_urls_method() {
     let Some(mtm) = MainThreadMarker::new() else { return };
     let Some(delegate) = NSApplication::sharedApplication(mtm).delegate() else {
-        log::warn!("vectorcraft: no application delegate; files opened from Finder won't open");
+        log::warn!("no application delegate; files opened from Finder won't open");
         return;
     };
     let class = AsRef::<AnyObject>::as_ref(&*delegate).class();
@@ -72,7 +72,7 @@ fn add_open_urls_method() {
         objc2::ffi::class_addMethod(std::ptr::from_ref(class).cast_mut(), sel!(application:openURLs:), imp, c"v@:@@".as_ptr())
     };
     if !added.as_bool() {
-        log::warn!("vectorcraft: the application delegate already handles open-document events");
+        log::warn!("the application delegate already handles open-document events");
     }
 }
 
