@@ -180,6 +180,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
                 }
                 ui.separator();
+                crate::panels::character::control_bar(app, ui);
                 if sel.is_empty() {
                     if widgets::flat_button(ui, tl!("Document Setup"), 112.0).clicked() {
                         app.run("file.documentSetup", json!({})).ok();

@@ -830,7 +830,10 @@ pub fn radio(ui: &mut Ui, label: &str, selected: bool, enabled: bool) -> bool {
 }
 
 /// Numeric field with an up/down spinner on the left and a preset dropdown on the right
-/// (Stroke weight, font size, leading…). `presets` empty = no dropdown. Returns the committed value.
+/// (Stroke weight, font size…): an editable combo box whose field keeps typing, ↑/↓ stepping and
+/// label scrubbing. `value` (points) shows in `unit`, blank when `None` (the selection's values
+/// differ); `presets` (points) are listed in `unit` too, and empty = no dropdown. Returns the
+/// committed, stepped or picked value.
 #[allow(clippy::too_many_arguments)]
 pub fn spin_field(
     ui: &mut Ui,
@@ -842,15 +845,50 @@ pub fn spin_field(
     min: f64,
     presets: &[f64],
 ) -> Option<f64> {
-    spin_generic(ui, value, width, step, min, presets, &|v| unit.format(v), &mut |ui, fw| num_field(ui, id, value, unit, fw))
+    spin_field_auto(ui, id, value, None, unit, width, step, min, presets).and_then(SpinPick::value)
 }
 
-/// [`spin_field`] for unitless values (percent, degrees, 1/1000 em) with a display suffix.
+/// What a [`spin_field_auto`] returns: a value (points), or its Auto entry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SpinPick {
+    Value(f64),
+    Auto,
+}
+
+impl SpinPick {
+    /// The value, `None` for Auto.
+    pub fn value(self) -> Option<f64> {
+        match self {
+            SpinPick::Value(v) => Some(v),
+            SpinPick::Auto => None,
+        }
+    }
+}
+
+/// [`spin_field`] whose dropdown starts with an Auto entry (Leading): `auto` is `Some(on)`, with
+/// `on` checking it (no preset is then checked), or `None` for no Auto entry.
+#[allow(clippy::too_many_arguments)]
+pub fn spin_field_auto(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug + Copy,
+    value: Option<f64>,
+    auto: Option<bool>,
+    unit: Unit,
+    width: f32,
+    step: f64,
+    min: f64,
+    presets: &[f64],
+) -> Option<SpinPick> {
+    spin_generic(ui, value, auto, width, step, min, presets, &|v| unit.format(v), &mut |ui, fw| num_field(ui, id, value, unit, fw))
+}
+
+/// [`spin_field`] for unitless values (percent, degrees, 1/1000 em) with a display suffix; a
+/// `None` value (the selection's values differ) shows blank.
 #[allow(clippy::too_many_arguments)]
 pub fn spin_plain(
     ui: &mut Ui,
     id: impl std::hash::Hash + std::fmt::Debug + Copy,
-    value: f64,
+    value: impl Into<Option<f64>>,
     suffix: &str,
     decimals: usize,
     width: f32,
@@ -858,21 +896,24 @@ pub fn spin_plain(
     min: f64,
     presets: &[f64],
 ) -> Option<f64> {
+    let value = value.into();
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, Some(value), width, step, min, presets, &fmt, &mut |ui, fw| plain_field(ui, id, value, suffix, decimals, fw))
+    spin_generic(ui, value, None, width, step, min, presets, &fmt, &mut |ui, fw| mixed_field(ui, id, value, suffix, decimals, fw))
+        .and_then(SpinPick::value)
 }
 
 #[allow(clippy::too_many_arguments)]
 fn spin_generic(
     ui: &mut Ui,
     value: Option<f64>,
+    auto: Option<bool>,
     width: f32,
     step: f64,
     min: f64,
     presets: &[f64],
     fmt: &dyn Fn(f64) -> String,
     field: &mut dyn FnMut(&mut Ui, f32) -> Option<f64>,
-) -> Option<f64> {
+) -> Option<SpinPick> {
     let t = Tokens::get(ui.ctx());
     let mut out = None;
     let h = 26.0;
@@ -898,24 +939,31 @@ fn spin_generic(
             ui.painter().line_segment([m + vec2(-3.0, -d), m + vec2(0.0, d)], Stroke::new(1.2, c));
             ui.painter().line_segment([m + vec2(0.0, d), m + vec2(3.0, -d)], Stroke::new(1.2, c));
         }
+        // A blank field (values that differ) has nothing to step from.
         if sresp.clicked()
             && let Some(p) = sresp.interact_pointer_pos()
+            && let Some(v) = value
         {
-            let v = value.unwrap_or(0.0);
             let nv = if up.contains(p) { v + step } else { v - step };
-            out = Some(nv.max(min));
+            out = Some(SpinPick::Value(nv.max(min)));
         }
         let fw = if presets.is_empty() { width - 16.0 } else { width - 36.0 };
         if let Some(v) = field(ui, fw) {
-            out = Some(v.max(min));
+            out = Some(SpinPick::Value(v.max(min)));
         }
         if !presets.is_empty() {
             let dresp = chevron_cell(ui, h);
             egui::Popup::menu(&dresp).show(|ui| {
                 ui.set_min_width(width - 10.0);
+                if let Some(on) = auto
+                    && ui.selectable_label(on, tl!("Auto")).clicked()
+                {
+                    out = Some(SpinPick::Auto);
+                }
+                let current = value.filter(|_| auto != Some(true));
                 for p in presets {
-                    if ui.selectable_label(value.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p)).clicked() {
-                        out = Some(*p);
+                    if ui.selectable_label(current.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p)).clicked() {
+                        out = Some(SpinPick::Value(*p));
                     }
                 }
             });

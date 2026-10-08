@@ -11,10 +11,13 @@ use vectorcraft_tools::{Mods, ToolKey};
 use super::{first_selected, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
+use crate::widgets::{self, SpinPick, menu_item};
 
-pub const SIZE_PRESETS: [f64; 16] = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 18.0, 21.0, 24.0, 36.0, 48.0, 60.0, 72.0, 96.0];
-pub const TRACKING_PRESETS: [f64; 13] = [-100.0, -75.0, -50.0, -25.0, -10.0, -5.0, 0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0];
+/// The Font Size and Leading dropdowns' presets in points (Leading's after its Auto entry), shown
+/// in the type unit.
+pub const SIZE_PRESETS: [f64; 15] = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 18.0, 21.0, 24.0, 36.0, 48.0, 60.0, 72.0];
+/// The Kerning and Tracking dropdowns' presets in 1/1000 em.
+pub const TRACKING_PRESETS: [f64; 14] = [-100.0, -75.0, -50.0, -25.0, -10.0, -5.0, 0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0, 200.0];
 pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0, 150.0];
 
 /// The character style shown by the panel: the selected range's (or the caret's) while the Type
@@ -29,6 +32,64 @@ pub(crate) fn text_style(app: &VectorcraftApp) -> Option<(CharStyle, vectorcraft
     match &n.kind {
         NodeKind::Text(t) => Some((t.first_style(), t.para.clone())),
         _ => None,
+    }
+}
+
+/// `f` of the character styles the panels act on: the runs the Type tool's selection covers (the
+/// caret's style at a caret), else every run of the selected type, groups' included. `None` (a
+/// blank field) where they differ, or with no type.
+pub(crate) fn shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> T) -> Option<T> {
+    let st = app.session.active()?;
+    let text = |id: NodeId| match st.doc.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => Some(t),
+        _ => None,
+    };
+    let mut acc = Shared::None;
+    if let Some((id, a, b)) = text_editing(app) {
+        let t = text(id)?;
+        if b <= a {
+            return Some(f(&vectorcraft_text::edit::insertion_style(&t.runs, a, b)));
+        }
+        let mut end = 0;
+        for r in &t.runs {
+            let start = end;
+            end += r.text.len();
+            if start < b && end > a {
+                acc.add(f(&r.style));
+            }
+        }
+    } else {
+        for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+            n.walk(&mut |c| {
+                if let NodeKind::Text(t) = &c.kind {
+                    t.runs.iter().for_each(|r| acc.add(f(&r.style)));
+                }
+            });
+        }
+    }
+    acc.value()
+}
+
+/// The value a run of styles share so far ([`shared`]).
+enum Shared<T> {
+    None,
+    Same(T),
+    Differ,
+}
+
+impl<T: PartialEq> Shared<T> {
+    fn add(&mut self, v: T) {
+        match self {
+            Shared::None => *self = Shared::Same(v),
+            Shared::Same(x) if *x != v => *self = Shared::Differ,
+            _ => {}
+        }
+    }
+    fn value(self) -> Option<T> {
+        match self {
+            Shared::Same(v) => Some(v),
+            _ => None,
+        }
     }
 }
 
@@ -234,74 +295,115 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
     });
 }
 
+/// The Character panel's grid of numeric fields, `w` wide: Font Size, Leading, Kerning and
+/// Tracking, then with `more` the scales, Baseline Shift and Character Rotation (`s`: the style
+/// shown). The Properties panel shows its first rows.
+pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
+    let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
+    let unit = app.session.type_unit();
+    egui::Grid::new(id).num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
+        cell(ui, "T", tl!("Font Size"), |ui| size_field(app, ui, "ch-size", fw));
+        cell(ui, "A↕", tl!("Leading"), |ui| {
+            let leading = shared(app, CharStyle::effective_leading);
+            let auto = shared(app, |s| s.leading.is_none()) == Some(true);
+            match widgets::spin_field_auto(ui, "ch-lead", leading, Some(auto), unit, fw, 1.0, 0.1, &SIZE_PRESETS) {
+                Some(SpinPick::Value(v)) => style(app, json!({"leading": v})),
+                Some(SpinPick::Auto) => style(app, json!({"leading": "auto"})),
+                None => {}
+            }
+        });
+        ui.end_row();
+        cell(ui, "VA", tl!("Kerning (0 = Auto)"), |ui| {
+            let kerning = shared(app, |s| s.kerning.unwrap_or(0.0));
+            if let Some(v) = widgets::spin_plain(ui, "ch-kern", kerning, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
+                format(app, if v == 0.0 { json!({"kerning": "auto"}) } else { json!({"kerning": v}) });
+            }
+        });
+        cell(ui, "VA↔", tl!("Tracking"), |ui| {
+            if let Some(v) = widgets::spin_plain(ui, "ch-track", shared(app, |s| s.tracking), "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
+                style(app, json!({"tracking": v}));
+            }
+        });
+        ui.end_row();
+        if !more {
+            return;
+        }
+        cell(ui, "IT", tl!("Vertical Scale %"), |ui| {
+            if let Some(v) = widgets::spin_plain(ui, "ch-vs", s.v_scale, "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS) {
+                format(app, json!({"vScale": v}));
+            }
+        });
+        cell(ui, "T↔", tl!("Horizontal Scale %"), |ui| {
+            if let Some(v) = widgets::spin_plain(ui, "ch-hs", s.h_scale, "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS) {
+                format(app, json!({"hScale": v}));
+            }
+        });
+        ui.end_row();
+        cell(ui, "Aª", tl!("Baseline Shift"), |ui| {
+            if let Some(v) = widgets::spin_field(ui, "ch-bs", Some(s.baseline_shift), unit, fw, 1.0, -1296.0, &[]) {
+                format(app, json!({"baselineShift": v}));
+            }
+        });
+        cell(ui, "⟲T", tl!("Character Rotation"), |ui| {
+            if let Some(v) = widgets::spin_plain(ui, "ch-rot", s.rotation, "°", 1, fw, 15.0, -360.0, &super::transform::ANGLE_PRESETS) {
+                format(app, json!({"rotation": v}));
+            }
+        });
+        ui.end_row();
+    });
+}
+
+/// The Font Size combo (Character and Properties panels, Control bar): typed, stepped, scrubbed or
+/// picked from the presets, in the type unit, blank where the selected text's sizes differ.
+pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width: f32) {
+    let size = shared(app, |s| s.size);
+    if let Some(v) = widgets::spin_field(ui, id, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
+        style(app, json!({"size": v}));
+    }
+}
+
+/// The font family menu and the font style dropdown of style `s` (Character and Properties panels,
+/// Control bar), with their `ids` and `widths`.
+pub(crate) fn font_pickers(app: &mut VectorcraftApp, ui: &mut Ui, s: &CharStyle, ids: (&str, &str), widths: (f32, f32)) {
+    let sample = crate::font_menu::sample_text(app);
+    if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), crate::font_menu::MenuLook::of(app)) {
+        crate::font_menu::apply(app, ui.ctx(), pick);
+    }
+    let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
+    let names: Vec<&str> = styles.iter().map(String::as_str).collect();
+    if let Some(name) = widgets::dropdown_names(ui, ids.1, &s.font_style, &names, widths.1).and_then(|i| names.get(i)) {
+        style(app, json!({"style": name}));
+    }
+}
+
+/// The Control bar's type controls while type is selected or edited: the Character link (the
+/// Character panel in a popover), the font family and style menus and the Font Size combo.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some((s, _)) = text_style(app) else { return };
+    let link = ui
+        .link(egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline())
+        .on_hover_text(tl!("Character options"));
+    widgets::popover(&link, link.clicked(), |ui| {
+        ui.set_width(260.0);
+        show(app, ui);
+    });
+    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
+    size_field(app, ui, "cb-font-size", 96.0);
+    ui.add_space(4.0);
+    ui.separator();
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((s, _)) = text_style(app) else {
         super::empty_state(ui, "type", tl!("No text selected"), tl!("Select a text object to edit its character attributes."));
         return;
     };
     let w = ui.available_width();
-    let sample = crate::font_menu::sample_text(app);
-    if let Some(pick) = crate::font_menu::font_menu(ui, "ch-font", &s.font_family, w - 4.0, sample.as_deref(), crate::font_menu::MenuLook::of(app)) {
-        crate::font_menu::apply(app, ui.ctx(), pick);
-    }
-    let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
-    let snames: Vec<&str> = styles.iter().map(String::as_str).collect();
-    if let Some(i) = widgets::dropdown_names(ui, "ch-style", &s.font_style, &snames, w - 4.0) {
-        style(app, json!({"style": snames[i]}));
-    }
+    font_pickers(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0));
     ui.add_space(2.0);
-    let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
-    let unit = app.session.type_unit();
-    egui::Grid::new("ch-grid").num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
-        cell(ui, "T", tl!("Font Size"), |ui| {
-            if let Some(v) = widgets::spin_field(ui, "ch-size", Some(s.size), unit, fw, 1.0, 0.1, &SIZE_PRESETS) {
-                style(app, json!({"size": v}));
-            }
-        });
-        cell(ui, "A↕", tl!("Leading"), |ui| {
-            let presets: Vec<f64> = SIZE_PRESETS.iter().map(|v| v * 1.2).collect();
-            if let Some(v) = widgets::spin_field(ui, "ch-lead", Some(s.effective_leading()), unit, fw, 1.0, 0.1, &presets) {
-                style(app, json!({"leading": v}));
-            }
-        });
-        ui.end_row();
-        cell(ui, "VA", tl!("Kerning (0 = Auto)"), |ui| {
-            if let Some(v) = widgets::spin_plain(ui, "ch-kern", s.kerning.unwrap_or(0.0), "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
-                format(app, if v == 0.0 { json!({"kerning": "auto"}) } else { json!({"kerning": v}) });
-            }
-        });
-        cell(ui, "VA↔", tl!("Tracking"), |ui| {
-            if let Some(v) = widgets::spin_plain(ui, "ch-track", s.tracking, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
-                style(app, json!({"tracking": v}));
-            }
-        });
-        ui.end_row();
-        if !pstate::<bool>(ui.ctx(), "ch-hide-options") {
-            cell(ui, "IT", tl!("Vertical Scale %"), |ui| {
-                if let Some(v) = widgets::spin_plain(ui, "ch-vs", s.v_scale, "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS) {
-                    format(app, json!({"vScale": v}));
-                }
-            });
-            cell(ui, "T↔", tl!("Horizontal Scale %"), |ui| {
-                if let Some(v) = widgets::spin_plain(ui, "ch-hs", s.h_scale, "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS) {
-                    format(app, json!({"hScale": v}));
-                }
-            });
-            ui.end_row();
-            cell(ui, "Aª", tl!("Baseline Shift"), |ui| {
-                if let Some(v) = widgets::spin_field(ui, "ch-bs", Some(s.baseline_shift), unit, fw, 1.0, -1296.0, &[]) {
-                    format(app, json!({"baselineShift": v}));
-                }
-            });
-            cell(ui, "⟲T", tl!("Character Rotation"), |ui| {
-                if let Some(v) = widgets::spin_plain(ui, "ch-rot", s.rotation, "°", 1, fw, 15.0, -360.0, &super::transform::ANGLE_PRESETS) {
-                    format(app, json!({"rotation": v}));
-                }
-            });
-            ui.end_row();
-        }
-    });
-    if pstate::<bool>(ui.ctx(), "ch-hide-options") {
+    let hidden = pstate::<bool>(ui.ctx(), "ch-hide-options");
+    metrics_grid(app, ui, "ch-grid", &s, w, !hidden);
+    if hidden {
         return;
     }
     ui.add_space(4.0);
