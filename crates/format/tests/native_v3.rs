@@ -55,7 +55,7 @@ fn compressed_files_load() {
     assert!(!flate2_unpack(&packed).contains(&b'\n'));
     // A legacy (v2, pre-rename) file compressed by hand opens too.
     let text = String::from_utf8(plain.clone()).unwrap();
-    let legacy = text.replacen("\"format\":\"vectorcraft\",\"version\":3", "\"format\":\"drawcraft\",\"version\":2", 1);
+    let legacy = text.replacen(&format!("\"format\":\"vectorcraft\",\"version\":{VERSION}"), "\"format\":\"drawcraft\",\"version\":2", 1);
     assert_ne!(legacy, text);
     let legacy = gzip(legacy.as_bytes());
     assert!(sniff(&legacy));
