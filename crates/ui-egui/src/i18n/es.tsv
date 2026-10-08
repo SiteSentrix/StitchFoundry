@@ -3005,6 +3005,8 @@
 # Leading model (Paragraph panel menu, East Asian options).
 	Top-to-Top Leading	Interlineado de superior a superior
 	Bottom-to-Bottom Leading	Interlineado de inferior a inferior
+	Burasagari	Burasagari
+	Force	Forzar
 
 # About › Contributors / Models (credits.rs)
 	About	Acerca de

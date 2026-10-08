@@ -2112,6 +2112,20 @@ Type and Convert To Point Type. Either keeps the text and its styles and is one 
 {"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
 ```
 
+## Hanging punctuation (burasagari)
+
+`text.setFormat {burasagari: "none"|"standard"|"forced"}` sets the Paragraph panel menu's Burasagari (None / Regular /
+Force) of the selected type (or `ids`): an East Asian comma or full stop ending an area type line (、。，．, half-width
+､｡) hangs outside the frame, Regular only when it doesn't fit, Force always (the rest of the line then fills the
+measure). Closing brackets and Latin punctuation don't hang; point type, right-to-left and hyphenated lines are left as
+they are. The hanging mark is as wide as its punctuation spacing makes it (`mojikumi`). New type (the Type tools,
+`text.create`) takes `standard`; documents from before it and imported text keep `none`, and `none` isn't saved. One
+undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"burasagari":"forced"}}}
+```
+
 ## Moving and flipping type on a path
 
 Type on a path flows between a start and an end bracket, stored as fractions of its path's length.

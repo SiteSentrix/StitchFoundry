@@ -4,7 +4,9 @@ use std::ops::Range;
 
 use kurbo::{Affine, BezPath, PathEl, Point, Rect, Shape, Vec2};
 use unicode_bidi::{BidiInfo, Level};
-use vectorcraft_doc::{CharStyle, Justify, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject};
+use vectorcraft_doc::{
+    Burasagari, CharStyle, Justify, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject,
+};
 use vectorcraft_geom::{ArcPath, PathData};
 
 use crate::composer::{Breakpoint, compose};
@@ -749,7 +751,8 @@ fn tab_advance(tabs: &[vectorcraft_doc::TabStop], origin: f64, x: f64, rest: &[S
 }
 
 /// Greedy break: returns (end glyph index, hyphenated) for a line starting at `i` of `width`.
-fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool) -> (usize, bool) {
+/// With burasagari, a comma or full stop that doesn't fit ends the line, hanging outside it.
+fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, burasagari: Burasagari) -> (usize, bool) {
     if !width.is_finite() {
         return (g.len(), false);
     }
@@ -759,6 +762,14 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool) -
     while j < g.len() {
         let gl = &g[j];
         if j > i && !gl.is_space() && x + gl.adv > width + EPS {
+            // It ends the line with the spaces after it.
+            if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, j) && g.get(j + 1).is_none_or(|n| n.byte != gl.byte) {
+                let mut end = j + 1;
+                while g.get(end).is_some_and(SGlyph::is_space) {
+                    end += 1;
+                }
+                return (end, false);
+            }
             break;
         }
         x += gl.adv;
@@ -803,6 +814,13 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool) -
         end -= 1;
     }
     (end, hy)
+}
+
+/// Can glyph `g` hang outside the line (burasagari)? An East Asian comma or full stop, full width
+/// (、。，．) or half width (､｡); not a closing bracket, nor Latin punctuation (Latin text keeps
+/// its line breaks and composer).
+fn hangs(g: &SGlyph) -> bool {
+    matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none()
 }
 
 /// Does kinsoku allow a line break after glyph `j`? Not after an opening bracket, nor before a
@@ -900,7 +918,10 @@ fn candidates(text: &str, g: &[SGlyph], hyphenate: bool) -> Vec<Breakpoint> {
 /// line metrics); `None` falls back to the greedy single-line composer.
 fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) -> Option<Vec<(usize, bool)>> {
     let justified = !matches!(para.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
-    if cx.opts.composer != Composer::EveryLine || !justified || pen.regions.is_none() || sg.len() < 2 {
+    // A paragraph whose commas or full stops may hang is composed line by line (as the Japanese
+    // single-line composer does).
+    let may_hang = para.burasagari != Burasagari::None && sg.iter().any(hangs);
+    if cx.opts.composer != Composer::EveryLine || !justified || pen.regions.is_none() || sg.len() < 2 || may_hang {
         return None;
     }
     let m = Metrics::of(&sg[0]);
@@ -994,7 +1015,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 let width = x1 - x0 - ind_l - para.right_indent;
                 let (end, hyph) = match composed.as_ref().and_then(|c| c.get(li_para)) {
                     Some(&(e, h)) if e > i => (e, h),
-                    _ if i < n => break_line(cx.text, &sg, i, width, para.hyphenate),
+                    _ if i < n => break_line(cx.text, &sg, i, width, para.hyphenate, para.burasagari),
                     _ => (n, false),
                 };
                 let m = Metrics::max(&sg[i..end]).unwrap_or(pm);
@@ -1038,6 +1059,21 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 None => 0.0,
             };
             let w: f64 = sg[i..trimmed].iter().map(|g| g.adv).sum::<f64>() + hyphen.as_ref().map_or(0.0, |h| h.adv) - end_trim;
+            // Burasagari: a comma or full stop ending an area type line hangs outside it (Standard:
+            // when it doesn't fit; Forced: always). The rest of the line is aligned and justified
+            // without it, and it follows the line's last character.
+            let hang = (regions.is_some() && !rtl && hyphen.is_none() && trimmed > i + 1)
+                .then(|| sg.get(trimmed - 1))
+                .flatten()
+                .filter(|g| hangs(g))
+                .map(|g| g.adv - end_trim)
+                .filter(|_| match para.burasagari {
+                    Burasagari::None => false,
+                    Burasagari::Standard => w > width + EPS,
+                    Burasagari::Forced => true,
+                });
+            let body = if hang.is_some() { trimmed - 1 } else { trimmed };
+            let w = w - hang.unwrap_or(0.0);
             let (align, justify) = match para.justify {
                 Justify::Auto => (if rtl { 2 } else { 0 }, false),
                 Justify::Left => (0, false),
@@ -1050,17 +1086,17 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             };
             let justify = justify && regions.is_some();
             let (mut per_space, mut per_gap, mut per_cjk) = (0.0, 0.0, 0.0);
-            let spaces = sg[i..trimmed].iter().filter(|g| g.is_space()).count();
+            let spaces = sg[i..body].iter().filter(|g| g.is_space()).count();
             // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
             // gaps next to a CJK character, not inside a Latin word or a tate-chu-yoko block.
             let cjk_gap = |j: usize| {
-                j + 1 < trimmed
+                j + 1 < body
                     && sg
                         .get(j)
                         .zip(sg.get(j + 1))
                         .is_some_and(|(a, b)| !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch)))
             };
-            let cjk_gaps = (i..trimmed).filter(|&j| cjk_gap(j)).count();
+            let cjk_gaps = (i..body).filter(|&j| cjk_gap(j)).count();
             if justify && (width - w).abs() > EPS {
                 if cjk_gaps > 0 && width > w {
                     // Spread over the CJK gaps and the word spaces alike.
@@ -1069,9 +1105,9 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 } else if spaces > 0 {
                     // Composed lines may shrink word spaces (never below zero).
                     per_space =
-                        ((width - w) / spaces as f64).max(-sg[i..trimmed].iter().filter(|g| g.is_space()).map(|g| g.adv).fold(f64::MAX, f64::min));
+                        ((width - w) / spaces as f64).max(-sg[i..body].iter().filter(|g| g.is_space()).map(|g| g.adv).fold(f64::MAX, f64::min));
                 } else if para.justify == Justify::JustifyAll && width > w {
-                    let gaps = sg.get(i + 1..trimmed).map_or(0, |s| s.iter().filter(|g| !g.continues_tcy()).count());
+                    let gaps = sg.get(i + 1..body).map_or(0, |s| s.iter().filter(|g| !g.continues_tcy()).count());
                     if gaps > 0 {
                         per_gap = (width - w) / gaps as f64;
                     }
@@ -1116,14 +1152,14 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 }
                 if g.ch == '\t' {
                     adv = tab_advance(&para.tabs, tab_origin, x, &sg[j + 1..trimmed.max(j + 1)]);
-                } else if j < trimmed {
+                } else if j < body {
                     if g.is_space() {
                         adv += per_space;
                     } else if per_cjk != 0.0 {
                         if cjk_gap(j) {
                             adv += per_cjk;
                         }
-                    } else if j + 1 < trimmed && sg.get(j + 1).is_some_and(|next| !next.continues_tcy()) {
+                    } else if j + 1 < body && sg.get(j + 1).is_some_and(|next| !next.continues_tcy()) {
                         // Between glyphs, never inside a tate-chu-yoko block (one cell).
                         adv += per_gap;
                     }

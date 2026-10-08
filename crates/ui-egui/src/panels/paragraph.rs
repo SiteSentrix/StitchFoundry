@@ -162,6 +162,23 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if menu_item(ui, tl!("Bottom-to-Bottom Leading"), has, has && !top_to_top) {
             format(app, json!({"leadingModel": "romanBaseline"}));
         }
+        // Hanging punctuation: a comma or full stop ending a line stands outside it.
+        let hang = style.as_ref().map(|(_, p)| p.burasagari);
+        ui.add_enabled_ui(has, |ui| {
+            // Indented like the items beside it (their check column).
+            ui.menu_button(format!("   {}", tl!("Burasagari")), |ui| {
+                use vectorcraft_doc::Burasagari;
+                for (label, b, key) in [
+                    (tl!("None"), Burasagari::None, "none"),
+                    (tl!("Regular"), Burasagari::Standard, "standard"),
+                    (tl!("Force"), Burasagari::Forced, "forced"),
+                ] {
+                    if menu_item(ui, label, true, hang == Some(b)) {
+                        format(app, json!({"burasagari": key}));
+                    }
+                }
+            });
+        });
     }
     ui.separator();
     menu_item(ui, tl!("Single-line Composer"), false, false);
@@ -171,7 +188,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
         format(
             app,
-            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline"}),
+            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard"}),
         );
     }
 }

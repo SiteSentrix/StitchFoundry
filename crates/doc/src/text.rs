@@ -314,6 +314,10 @@ pub struct ParaStyle {
     /// How leading is measured (Paragraph panel menu): from baseline to baseline, or from the top
     /// of one line's ideographic em box to the next.
     pub leading_model: LeadingModel,
+    /// Hanging punctuation (Paragraph panel menu › Burasagari): a comma or full stop ending a line
+    /// may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
+    /// it and imported text keep [`Burasagari::None`].
+    pub burasagari: Burasagari,
 }
 
 /// [`ParaStyle`] as saved. [`Justify::Auto`] is written as the alignment it has in the paragraph
@@ -347,6 +351,8 @@ struct ParaStyleFile {
     direction: Option<ParaDirection>,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     leading_model: LeadingModel,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    burasagari: Burasagari,
 }
 
 impl From<ParaStyle> for ParaStyleFile {
@@ -369,6 +375,7 @@ impl From<ParaStyle> for ParaStyleFile {
             mojikumi,
             direction,
             leading_model,
+            burasagari,
             ..
         } = p;
         Self {
@@ -385,6 +392,7 @@ impl From<ParaStyle> for ParaStyleFile {
             mojikumi,
             direction,
             leading_model,
+            burasagari,
         }
     }
 }
@@ -404,6 +412,7 @@ impl From<ParaStyleFile> for ParaStyle {
             mojikumi,
             direction,
             leading_model,
+            burasagari,
             ..
         } = f;
         Self {
@@ -419,6 +428,7 @@ impl From<ParaStyleFile> for ParaStyle {
             mojikumi,
             direction,
             leading_model,
+            burasagari,
         }
     }
 }
@@ -463,6 +473,22 @@ impl Mojikumi {
     pub fn is_none(&self) -> bool {
         *self == Mojikumi::None
     }
+}
+
+/// Hanging punctuation (burasagari): an East Asian comma or full stop ending a line (、。，．､｡)
+/// stands outside the line's measure, in the space its punctuation spacing gives it (half width
+/// with Line-end Punctuation Half Width). Closing brackets and Latin punctuation don't hang. Shown
+/// as None / Regular / Force.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Burasagari {
+    /// A comma or full stop that doesn't fit goes to the next line with the character before it.
+    #[default]
+    None,
+    /// A comma or full stop that doesn't fit hangs outside the line; one that fits stays inside.
+    Standard,
+    /// A comma or full stop ending a line always hangs, and the rest of the line fills the measure.
+    Forced,
 }
 
 /// Area Type Options "First Baseline" offset.

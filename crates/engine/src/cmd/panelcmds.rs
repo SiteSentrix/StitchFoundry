@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\" (where characters smaller than the largest on their line line up with it)}",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\" (where characters smaller than the largest on their line line up with it), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\")}",
             has_doc,
             set_format
         ),
@@ -218,6 +218,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "direction",
         "leadingModel",
         "charAlign",
+        "burasagari",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         return Err(bad(C, "nothing to change"));
@@ -247,6 +248,15 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             Some("romanBaseline") => vectorcraft_doc::LeadingModel::RomanBaseline,
             Some("emBoxTop") => vectorcraft_doc::LeadingModel::EmBoxTop,
             _ => return Err(bad(C, "`leadingModel` must be \"romanBaseline\" or \"emBoxTop\"")),
+        }),
+    };
+    let burasagari = match p.get("burasagari") {
+        None => None,
+        Some(v) => Some(match v.as_str() {
+            Some("none") => vectorcraft_doc::Burasagari::None,
+            Some("standard") => vectorcraft_doc::Burasagari::Standard,
+            Some("forced") => vectorcraft_doc::Burasagari::Forced,
+            _ => return Err(bad(C, "`burasagari` must be \"none\", \"standard\" or \"forced\"")),
         }),
     };
     s.edit("Character", |d, _| {
@@ -315,6 +325,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(v) = leading_model {
                 para.leading_model = v;
+            }
+            if let Some(v) = burasagari {
+                para.burasagari = v;
             }
             super::typecmd::refresh_bounds(t);
         }
