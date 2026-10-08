@@ -72,7 +72,7 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 
 /// A path from the open dialog, or "cancelled".
 fn pick_open(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {
-    app.services.pick_open.as_mut().and_then(|f| f(pick)).ok_or_else(|| "cancelled".into())
+    crate::picks::open(app, pick).ok_or_else(|| "cancelled".into())
 }
 
 /// Object › Plug-ins › Install Plug-in…: installs the `.wasm` at `path`, else a picked one (the
@@ -164,7 +164,7 @@ fn pick_path(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String
     if is_web(app) {
         return Ok(pick.name.clone());
     }
-    let picked = app.services.pick_save.as_mut().and_then(|f| f(pick)).ok_or("cancelled")?;
+    let picked = crate::picks::save(app, pick).ok_or("cancelled")?;
     Ok(with_extension(&picked, &fileio::extension(&pick.name), |_| true))
 }
 
