@@ -388,6 +388,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // Caps Lock gives precise (crosshair) cursors, like Illustrator; env opt-out for system cursors.
             let custom = std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none();
             match ui.input(|i| i.pointer.hover_pos()) {
+                // An OS cursor: the system moves it at once, where a painted one trails the pointer
+                // (#444). The system cursor stands in for cursors without a glyph.
+                Some(_) if custom && crate::cursors::OS_CURSORS => {
+                    let ppp = ui.ctx().native_pixels_per_point().unwrap_or_else(|| ui.ctx().pixels_per_point());
+                    ui.ctx().set_cursor_image(app.canvas.cursors.get(c, ppp));
+                    cursor_icon(c)
+                }
                 Some(hp) if custom && crate::cursors::paint(&painter, c, hp) => egui::CursorIcon::None,
                 _ => cursor_icon(c),
             }

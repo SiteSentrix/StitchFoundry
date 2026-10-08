@@ -234,6 +234,8 @@ pub struct CanvasCache {
     pub print_tiling: Option<PrintTilingCache>,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
     pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
+    /// The tools' cursors as OS cursor bitmaps.
+    pub cursors: cursors::Images,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
@@ -367,6 +369,7 @@ impl VectorcraftApp {
                 slices: None,
                 print_tiling: None,
                 selection_box: None,
+                cursors: Default::default(),
             },
             perf: Perf::default(),
             integrated_titlebar: false,

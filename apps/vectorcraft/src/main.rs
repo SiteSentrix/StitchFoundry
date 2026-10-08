@@ -358,6 +358,9 @@ fn main() -> eframe::Result {
     #[cfg(feature = "wgpu")]
     let options = {
         let mut options = options;
+        // One frame queued, not two: the canvas is rasterized on the CPU and the GPU only
+        // composites it, so the window answers the pointer a frame sooner (#444).
+        options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
             create.power_preference = power;
         }
