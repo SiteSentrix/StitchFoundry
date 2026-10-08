@@ -50,11 +50,15 @@ pub struct HitOptions {
     pub outline: bool,
     /// "Object Selection by Path Only" preference.
     pub path_only: bool,
+    /// "Type Object Selection by Path Only" preference: type is picked on its type path only
+    /// (point type's baseline, area type's frame, type on a path's path), not anywhere in its
+    /// bounds.
+    pub type_path_only: bool,
 }
 
 impl Default for HitOptions {
     fn default() -> Self {
-        Self { tol: 3.0, outline: false, path_only: false }
+        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false }
     }
 }
 
@@ -190,6 +194,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
             }
             (!opt.outline && !opt.path_only && fill_contains(&bp, *rule, p)).then_some(HitKind::Fill)
         }
+        NodeKind::Text(t) if opt.type_path_only => stroke_contains(&type_path(t), 0.0, opt.tol, p).then_some(HitKind::Outline),
         NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } | NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
             n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
         }
@@ -202,6 +207,24 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
             (!opt.path_only && fill_contains(&bp, vectorcraft_geom::FillRule::NonZero, p)).then_some(HitKind::Fill)
         }
         _ => None,
+    }
+}
+
+/// The type path of `t` in document space, what "Type Object Selection by Path Only" picks type
+/// by: area type's frame, type on a path's path, and for point type its first baseline (the line
+/// the selection marks under it), across the width of its layout.
+fn type_path(t: &crate::TextObject) -> vectorcraft_geom::BezPath {
+    use crate::TextKind;
+    match &t.kind {
+        TextKind::Area { frame } => frame.transformed(t.xf).to_bezpath(),
+        TextKind::OnPath { path, .. } => path.transformed(t.xf).to_bezpath(),
+        TextKind::Point => {
+            let b = t.cached_bounds.unwrap_or_else(|| t.estimate_bounds());
+            let mut bp = vectorcraft_geom::BezPath::new();
+            bp.move_to(t.xf * Point::new(b.x0, 0.0));
+            bp.line_to(t.xf * Point::new(b.x1, 0.0));
+            bp
+        }
     }
 }
 
@@ -402,6 +425,45 @@ mod tests {
             assert!(hit_test(&d, inside, path_only).is_none(), "path only: the fill of {id:?} doesn't hit");
             assert_eq!(hit_test(&d, edge, path_only).map(|h| h.leaf), Some(id), "path only: the outline does");
         }
+    }
+
+    /// Type Object Selection by Path Only: point type is picked on its baseline, area type on its
+    /// frame and type on a path on its path, no longer anywhere in its bounds.
+    #[test]
+    fn type_path_only_picks_type_on_its_path() {
+        use crate::{CharStyle, TextKind, TextObject};
+        let mut d = Document::new(400.0, 400.0);
+        let l = d.layers[0].id;
+        let mut add = |t: TextObject| {
+            let id = d.alloc_id();
+            d.insert(Some(l), 9, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+            id
+        };
+        // Point type at (10, 100), 20 pt: its glyphs rise above the baseline, its layout is 60 wide.
+        let mut point = TextObject::point(Point::new(10.0, 100.0), "Hello", CharStyle { size: 20.0, ..CharStyle::default() });
+        point.cached_bounds = Some(Rect::new(0.0, -16.0, 60.0, 4.0));
+        let point = add(point);
+        let mut area = TextObject::point(Point::new(200.0, 200.0), "Area", CharStyle::default());
+        area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)) };
+        let area = add(area);
+        let mut on_path = TextObject::point(Point::new(10.0, 300.0), "Path", CharStyle::default());
+        on_path.kind = TextKind::OnPath { path: shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 40.0)), start: 0.0, end: None };
+        let on_path = add(on_path);
+        let path_only = HitOptions { type_path_only: true, ..Default::default() };
+        let hit = |p: Point, opt: HitOptions| hit_test(&d, p, opt).map(|h| (h.leaf, h.kind));
+        // Off: anywhere in the bounds.
+        assert_eq!(hit(Point::new(40.0, 90.0), HitOptions::default()), Some((point, HitKind::Bounds)));
+        assert_eq!(hit(Point::new(250.0, 225.0), HitOptions::default()), Some((area, HitKind::Bounds)));
+        assert_eq!(hit(Point::new(60.0, 320.0), HitOptions::default()), Some((on_path, HitKind::Bounds)));
+        // On: the glyphs and the inside of the frame or path no longer pick the type.
+        assert_eq!(hit(Point::new(40.0, 90.0), path_only), None, "point type: among its glyphs");
+        assert_eq!(hit(Point::new(250.0, 225.0), path_only), None, "area type: inside its frame");
+        assert_eq!(hit(Point::new(60.0, 320.0), path_only), None, "type on a path: inside its path");
+        // The baseline (within the tolerance, across the layout's width), frame and path do.
+        assert_eq!(hit(Point::new(40.0, 101.5), path_only), Some((point, HitKind::Outline)), "point type: its baseline");
+        assert_eq!(hit(Point::new(75.0, 100.0), path_only), None, "point type: past the end of its layout");
+        assert_eq!(hit(Point::new(250.0, 200.5), path_only), Some((area, HitKind::Outline)), "area type: its frame");
+        assert_eq!(hit(Point::new(60.0, 339.5), path_only), Some((on_path, HitKind::Outline)), "type on a path: its path");
     }
 
     /// `objects_at`: every object under the point, topmost first; a group counts once.

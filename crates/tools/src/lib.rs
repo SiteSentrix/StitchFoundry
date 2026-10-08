@@ -273,6 +273,9 @@ pub struct ToolContext<'a> {
     /// Selection & Anchor Display → Object Selection by Path Only: a click inside a filled path
     /// doesn't pick it, only one on its path does.
     pub path_only: bool,
+    /// Type → Type Object Selection by Path Only: type is picked on its type path only (point
+    /// type's baseline, area type's frame, type on a path's path), not anywhere in its bounds.
+    pub type_path_only: bool,
     /// General → Double Click To Isolate: a double-click on a group with the Selection tool
     /// isolates it.
     pub double_click_isolate: bool,
@@ -352,7 +355,12 @@ impl ToolContext<'_> {
         self.tol(self.selection_tolerance)
     }
     pub fn hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
-        vectorcraft_doc::hit::HitOptions { tol: self.pick_tol(), outline: self.outline, path_only: self.path_only }
+        vectorcraft_doc::hit::HitOptions {
+            tol: self.pick_tol(),
+            outline: self.outline,
+            path_only: self.path_only,
+            type_path_only: self.type_path_only,
+        }
     }
 }
 
@@ -650,6 +658,7 @@ pub(crate) mod testutil {
             auto_add_delete: true,
             selection_tolerance: 3.0,
             path_only: false,
+            type_path_only: false,
             double_click_isolate: true,
             select_behind: true,
             highlight_anchors: true,

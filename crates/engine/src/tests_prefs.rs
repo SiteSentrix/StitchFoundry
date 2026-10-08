@@ -561,3 +561,35 @@ fn missing_glyph_protection_keeps_glyphs_a_new_font_lacks() {
     s.execute("text.setStyle", &json!({"font": to})).unwrap();
     assert_eq!(fonts(&s), [to, to, to]);
 }
+
+// ---------- #394, fourth batch ----------
+
+/// Type › Type Object Selection by Path Only (#394): on, a click among point type's glyphs no
+/// longer selects it with the Selection tool, a click on its baseline does; off (the default),
+/// anywhere in its bounds selects it.
+#[test]
+fn type_selection_by_path_only_picks_type_on_its_baseline() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = new_doc();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Hello world", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let b = s.doc().unwrap().doc.node(id).and_then(|n| n.geometric_bounds()).unwrap();
+    assert!(b.y0 < 95.0 && b.x1 > 130.0, "the glyphs rise above the baseline at y = 100: {b:?}");
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| {
+        for k in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(k, x, y), ViewInfo::default()).unwrap();
+        }
+        s.doc().unwrap().selection.objects.clone()
+    };
+    // Clear of the bounding box's handles: 15 px in from the left, halfway up the glyphs.
+    let (x, glyphs) = (b.x0 + 15.0, (b.y0 + 100.0) / 2.0);
+    assert_eq!(click(&mut s, x, glyphs), vec![id], "off: a click among the glyphs selects the type");
+    assert!(click(&mut s, x, 300.0).is_empty(), "empty canvas deselects");
+    set_pref(&mut s, "typeSelectionByPathOnly", json!(true));
+    assert!(click(&mut s, x, glyphs).is_empty(), "on: a click among the glyphs selects nothing");
+    assert_eq!(click(&mut s, x, 101.0), vec![id], "on: a click on the baseline selects it");
+    assert!(click(&mut s, x, 300.0).is_empty());
+    set_pref(&mut s, "typeSelectionByPathOnly", json!(false));
+    assert_eq!(click(&mut s, x, glyphs), vec![id], "off again: the glyphs select it");
+}

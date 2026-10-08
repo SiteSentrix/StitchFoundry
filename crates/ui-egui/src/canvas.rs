@@ -1043,13 +1043,15 @@ fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 }
 
 /// The topmost editable object under document point `p` at `zoom`, as the selection tools pick it
-/// (Selection & Anchor Display › Tolerance and Object Selection by Path Only).
+/// (Selection & Anchor Display › Tolerance and Object Selection by Path Only, Type › Type Object
+/// Selection by Path Only).
 fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::hit::Hit> {
     let prefs = &app.session.prefs;
     let opt = vectorcraft_doc::hit::HitOptions {
         tol: prefs.selection_tolerance / zoom,
         outline: app.ui.view.outline,
         path_only: prefs.object_selection_by_path_only,
+        type_path_only: prefs.type_selection_by_path_only,
     };
     vectorcraft_doc::hit::hit_test(&app.session.active()?.doc, p, opt)
 }
