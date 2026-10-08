@@ -12,6 +12,8 @@ use crate::{VectorcraftApp, icons, widgets};
 
 const PITCH: f32 = 30.0;
 const WIDTH: f32 = 48.0;
+/// Seconds a press on a tool group's button is held before its flyout opens.
+const LONG_PRESS: f64 = 0.35;
 
 /// The Basic toolbar: (category, slots); each slot is a flyout group (first = default).
 pub const BASIC: &[(&str, &[&[&str]])] = &[
@@ -167,21 +169,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                                     Stroke::NONE,
                                 ));
                             }
-                            let held_for = resp
-                                .is_pointer_button_down_on()
-                                .then(|| ui.input(|inp| inp.pointer.press_start_time().map(|s| inp.time - s)))
-                                .flatten();
-                            if slot.len() > 1
-                                && let Some(seconds) = held_for
-                                && seconds < 0.35
-                            {
-                                ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(0.35 - seconds));
-                            }
-                            let long_press = held_for.is_some_and(|seconds| seconds >= 0.35);
+                            let press = if slot.len() > 1 { flyout_press(ui, &resp, rect) } else { None };
                             let alt = ui.input(|inp| inp.modifiers.alt);
-                            if (resp.secondary_clicked() || long_press) && slot.len() > 1 {
+                            if press.is_some() {
                                 open_flyout = Some((slot.clone(), rect));
-                                if long_press {
+                                if press == Some(FlyoutPress::Primary) {
                                     ui.data_mut(|d| d.insert_temp(held_id, resp.id));
                                 }
                             } else if resp.clicked() && held == Some(resp.id) {
@@ -212,6 +204,40 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         });
     flyout(app, ui.ctx());
+}
+
+/// How a press on a tool group's button opens its flyout.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum FlyoutPress {
+    /// A right press (it opens at once, before the release).
+    Secondary,
+    /// A primary press on the corner triangle, or one held [`LONG_PRESS`] seconds: its release
+    /// mustn't pick the button's tool.
+    Primary,
+}
+
+/// Whether this frame's pointer state on a tool button opens its group's flyout. A primary press
+/// still short of a long one asks for the frame where it becomes long: egui draws only on input,
+/// so a still mouse would otherwise never get there.
+fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<FlyoutPress> {
+    if resp.hovered() && ui.input(|inp| inp.pointer.button_pressed(egui::PointerButton::Secondary)) {
+        return Some(FlyoutPress::Secondary);
+    }
+    if !resp.is_pointer_button_down_on() || !ui.input(|inp| inp.pointer.primary_down()) {
+        return None;
+    }
+    // The triangle's corner: the bottom-right third of the button.
+    let corner = egui::Rect::from_min_max(rect.center() + vec2(6.0, 4.0), rect.max);
+    let (origin, held) = ui.input(|inp| (inp.pointer.press_origin(), inp.pointer.press_start_time().map(|s| inp.time - s)));
+    if origin.is_some_and(|p| corner.contains(p)) {
+        return Some(FlyoutPress::Primary);
+    }
+    let held = held.unwrap_or(0.0);
+    if held >= LONG_PRESS {
+        return Some(FlyoutPress::Primary);
+    }
+    ui.ctx().request_repaint_after_secs((LONG_PRESS - held) as f32);
+    None
 }
 
 /// Open a tool's options (`tool.options`, a double-click on its button): the Gradient tool's are
@@ -607,6 +633,78 @@ pub(crate) mod tests {
         frame(&mut app, &ctx, 4.05, vec![c(false)]);
         assert_eq!((app.session.tool_id(), app.ui.flyout), ("roundedRectangle", None));
     }
+
+    /// The Shapes group's button (Selection, Direct Selection, Lasso, then Rectangle).
+    fn shapes_button(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        frame(app, ctx, 0.0, vec![])[3]
+    }
+
+    #[test]
+    fn a_held_press_asks_for_the_frame_that_opens_the_flyout() {
+        // egui draws only on input: a still press must schedule the frame where it becomes long.
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let at = shapes_button(&mut app, &ctx).center();
+        let p = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: true, modifiers: Default::default() };
+        frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), p]);
+        // The frames egui runs after the input settle; then nothing moves.
+        frame(&mut app, &ctx, 1.02, vec![]);
+        let input =
+            egui::RawInput { time: Some(1.04), screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0))), ..Default::default() };
+        let out = ctx.run_ui(input, |ui| show(&mut app, ui));
+        let delay = out.viewport_output.get(&egui::ViewportId::ROOT).unwrap().repaint_delay;
+        assert!(delay <= std::time::Duration::from_secs_f64(LONG_PRESS), "repaint in {delay:?}");
+        assert!(app.ui.flyout.is_none(), "not open before the press is long");
+    }
+
+    #[test]
+    fn pressing_the_corner_triangle_opens_the_flyout_at_once() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let button = shapes_button(&mut app, &ctx);
+        let at = button.right_bottom() - vec2(4.0, 4.0);
+        let p = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), p(true)]);
+        assert!(app.ui.flyout.is_some(), "the press on the triangle opens it");
+        frame(&mut app, &ctx, 1.05, vec![p(false)]);
+        frame(&mut app, &ctx, 1.1, vec![]);
+        assert_eq!((app.session.tool_id(), app.ui.flyout.is_some()), ("selection", true), "the release neither closes it nor picks the tool");
+        // A plain click in the middle of the button still just picks its tool.
+        let mid = button.center();
+        let c = |pressed| Event::PointerButton { pos: mid, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 2.0, vec![Event::PointerMoved(mid), c(true)]);
+        frame(&mut app, &ctx, 2.05, vec![c(false)]);
+        assert_eq!((app.session.tool_id(), app.ui.flyout), ("rectangle", None));
+    }
+
+    #[test]
+    fn the_flyout_opens_on_the_right_press_even_when_its_tool_is_active() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let at = shapes_button(&mut app, &ctx).center();
+        app.select_tool("rectangle");
+        for (k, t0) in [1.0, 3.0, 5.0].into_iter().enumerate() {
+            let r = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
+            frame(&mut app, &ctx, t0, vec![Event::PointerMoved(at), r(true)]);
+            assert!(app.ui.flyout.is_some(), "right press #{k} opens it before the release");
+            frame(&mut app, &ctx, t0 + 0.05, vec![r(false)]);
+            assert!(app.ui.flyout.is_some(), "right press #{k} leaves it open");
+            // A click away closes it; then try again.
+            let away = egui::pos2(300.0, 1000.0);
+            let c = |pressed| Event::PointerButton { pos: away, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(&mut app, &ctx, t0 + 1.0, vec![Event::PointerMoved(away), c(true)]);
+            frame(&mut app, &ctx, t0 + 1.05, vec![c(false)]);
+            assert!(app.ui.flyout.is_none());
+        }
+        // A long press on the active tool's button opens it too.
+        let p = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 8.0, vec![Event::PointerMoved(at), p(true)]);
+        frame(&mut app, &ctx, 8.0 + LONG_PRESS + 0.01, vec![]);
+        assert!(app.ui.flyout.is_some(), "a long press on the active tool opens it");
+        assert_eq!(app.session.tool_id(), "rectangle");
+    }
+
     #[test]
     fn type_button_long_press_selects_vertical_type_in_both_layouts() {
         for advanced in [false, true] {
