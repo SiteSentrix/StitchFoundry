@@ -11,7 +11,7 @@ use vectorcraft_engine::cmd::fileio::SaveMode;
 
 use crate::VectorcraftApp;
 use crate::io;
-use crate::state::{DockTab, ICON_PANELS, next_zoom};
+use crate::state::{DockTab, next_zoom};
 use crate::theme::{self, Brightness, Tokens};
 use crate::widgets;
 
@@ -762,10 +762,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
 /// matched case-insensitively (`"Layers"`, `"swatches"`, `"Color Guide"`).
 fn normalize_panel(input: &str) -> Option<&'static str> {
     let name = input.trim();
-    let tabs = DockTab::ALL.into_iter().map(|t| (t.info().0, t.info().1));
-    tabs.chain(ICON_PANELS.iter().map(|&(id, label, _)| (id, label)))
-        .find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label))
-        .map(|(id, _)| id)
+    crate::state::all_panels().find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label)).map(|(id, _)| id)
 }
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -3229,8 +3226,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
         out.insert(c.label.to_string());
         out.extend(c.menu.iter().map(|m| m.to_string()));
     }
-    out.extend(ICON_PANELS.iter().map(|p| p.1.to_string()));
-    out.extend(["Properties", "Layers", "Libraries"].map(str::to_string));
+    out.extend(crate::state::all_panels().map(|(_, label)| label.to_string()));
     out.extend(vectorcraft_tools::catalog::all_tools().map(|t| t.label.to_string()));
     out.extend(crate::toolbar::BASIC.iter().map(|c| c.0.to_string()));
     out.extend(vectorcraft_color::BlendMode::ALL.iter().map(|m| m.label().to_string()));

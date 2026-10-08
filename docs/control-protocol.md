@@ -24,7 +24,7 @@ so only enable it while you use it. Transport: `apps/vectorcraft/src/control_ser
 | `ui.tool.select` / `ui.tool.list` | `{tool}` | |
 | `ui.pointer` | `{events:[{kind: down|drag|up|move|doubleclick, x, y, space?: "doc"|"screen", mods?}]}` | drive the active tool exactly like the mouse |
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | synthetic keyboard input |
-| `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel zooms; with the `zoomWithMouseWheel` preference the wheel zooms about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways |
+| `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel (Option on the Mac) zooms about the pointer; with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?}` | |
 | `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` | fill and submit the open dialog |
 | `ui.screenshot` | `{path?}` | capture the window (PNG). Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
@@ -180,9 +180,14 @@ build are unchanged.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);
-a swatch clicked there runs `paint.setFill` / `paint.setStroke`. Panel keys (Color F6, Color Guide Shift+F3,
-Appearance Shift+F6, Graphic Styles Shift+F5, Stroke Cmd+F10, Gradient Cmd+F9, Transparency Cmd+Shift+F10) run
-`window.panel {panel}` and can be pressed with `ui.key`; `ui.menu.list` shows them on the Window menu's items.
+a swatch clicked there runs `paint.setFill` / `paint.setStroke`. The Properties panel has them with nothing selected
+too (they set up the next object), with the Control bar's Stroke link (the Stroke panel as a popover) and weight
+spinner. Panel keys (Brushes F5, Color F6, Layers F7, Color Guide Shift+F3, Graphic Styles Shift+F5, Appearance
+Shift+F6, Align Shift+F7, Transform Shift+F8, Info Cmd+F8, Gradient Cmd+F9, Pathfinder Cmd+Shift+F9, Stroke Cmd+F10,
+Transparency Cmd+Shift+F10, Attributes Cmd+F11, Symbols Cmd+Shift+F11, Character Cmd+T, Paragraph Cmd+Alt+T, Tabs
+Cmd+Shift+T, OpenType Cmd+Alt+Shift+T; Cmd is Ctrl on Windows and Linux) run `window.panel {panel}`, can be changed in
+Edit › Keyboard Shortcuts (entry `panel:<id>`, every panel) and pressed with `ui.key`; `ui.menu.list` shows them on
+the Window menu's items.
 `window.panel` takes a panel id in any case or the panel's display label (`"Layers"`, `"Color Guide"`).
 
 Collapsing the dock: `window.collapseDock {collapsed?}` (the » at the top of the dock; omitted toggles) hides the

@@ -100,16 +100,27 @@ pub fn default_command_shortcut(id: &str) -> Option<&'static str> {
 }
 
 /// Window menu items that show a panel (`window.panel {panel}`) with a default shortcut: (panel
-/// id, shortcut). Every icon panel can be given one in the editor (entry key `panel:<id>`).
+/// id, shortcut). Every panel can be given one in the editor (entry key `panel:<id>`).
 pub const PANEL_SHORTCUTS: &[(&str, &str)] = &[
+    ("brushes", "F5"),
     ("color", "F6"),
+    ("layers", "F7"),
     ("colorGuide", "Shift+F3"),
-    ("appearance", "Shift+F6"),
     ("graphicStyles", "Shift+F5"),
-    ("stroke", "Cmd+F10"),
+    ("appearance", "Shift+F6"),
+    ("align", "Shift+F7"),
+    ("transform", "Shift+F8"),
+    ("info", "Cmd+F8"),
     ("gradient", "Cmd+F9"),
+    ("pathfinder", "Cmd+Shift+F9"),
+    ("stroke", "Cmd+F10"),
     ("transparency", "Cmd+Shift+F10"),
     ("attributes", "Cmd+F11"),
+    ("symbols", "Cmd+Shift+F11"),
+    ("character", "Cmd+T"),
+    ("paragraph", "Cmd+Alt+T"),
+    ("tabs", "Cmd+Shift+T"),
+    ("openType", "Cmd+Alt+Shift+T"),
 ];
 
 /// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id).
@@ -252,7 +263,7 @@ pub fn entries() -> &'static [Entry] {
             }
             v.push(Entry { key: c.id.into(), label: c.label.into(), group: c.menu.join(" › "), is_tool: false });
         }
-        v.extend(crate::state::ICON_PANELS.iter().map(|(id, label, _)| Entry {
+        v.extend(crate::state::all_panels().map(|(id, label)| Entry {
             key: format!("panel:{id}"),
             label: label.to_string(),
             group: "Window".into(),

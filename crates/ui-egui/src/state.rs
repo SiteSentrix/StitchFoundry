@@ -94,6 +94,12 @@ impl DockTab {
     }
 }
 
+/// Every panel `window.panel` shows, as (id, English label): the dock tabs, then the icon panels.
+pub fn all_panels() -> impl Iterator<Item = (&'static str, &'static str)> {
+    let tabs = DockTab::ALL.into_iter().map(|t| (t.info().0, t.info().1));
+    tabs.chain(ICON_PANELS.iter().map(|&(id, label, _)| (id, label)))
+}
+
 /// Panels that live as collapsed icons in the dock (Essentials Classic).
 pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("color", "Color", "palette"),
