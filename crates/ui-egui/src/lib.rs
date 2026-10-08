@@ -808,6 +808,15 @@ impl VectorcraftApp {
         place::drop_files(self, files, target);
     }
 
+    /// Fonts installed or removed while the app was in the background are listed when it comes
+    /// back (Refresh Font List by itself): a look at the font folders, a scan only when they changed.
+    fn refresh_installed_fonts(&mut self) {
+        if vectorcraft_text::FontDb::global().installed_fonts_changed() {
+            // A failure shows in the status bar, as the menu item's does.
+            let _ = self.run("text.rescanFonts", json!({}));
+        }
+    }
+
     /// Inject synthetic events (one press/release step or wheel turn per frame). Handlers read the
     /// modifiers egui holds (`i.modifiers`), so a synthetic key, button or wheel turn holds its own
     /// for the frames it spans (a drag's moves included); the keyboard's come back after.
@@ -816,6 +825,7 @@ impl VectorcraftApp {
             match e {
                 egui::Event::ModifiersChanged(m) => self.host_modifiers = *m,
                 egui::Event::WindowFocused(false) => self.host_modifiers = egui::Modifiers::NONE,
+                egui::Event::WindowFocused(true) => self.refresh_installed_fonts(),
                 _ => {}
             }
         }

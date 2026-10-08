@@ -2096,15 +2096,20 @@ tone (mono, or CMYK screens multiplied over each other), clipped to the art's ou
 
 ## Fonts
 
-Type can use the bundled fonts, fonts added to the session and the fonts installed on the system (none on the web).
-The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
+Type can use the bundled fonts, fonts added to the session and the fonts installed on the system (none on the web):
+the system's and the user's font folders (Windows: `Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, plus fonts
+registered outside them, such as fonts installed as shortcuts; macOS: `/System/Library/Fonts`, `/Library/Fonts`,
+`/Network/Library/Fonts`, `~/Library/Fonts` and downloaded system fonts; Linux and BSD: `/usr/share/fonts`,
+`/usr/local/share/fonts`, `~/.fonts` and the XDG data folders' `fonts`, `~/.local/share/fonts` among them, and in a
+Flatpak sandbox the host's fonts). The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
 by family name), so opening, placing, pasting and importing files find them whatever ran before. `text.fontList`
 lists every family available, the installed ones included, as the font menus do: without the system's hidden
 families, whose names start with "." (macOS's ".SF NS", ".LastResort"), which still resolve when a document names
 them. With `family` it gives that family's styles (upright by weight, then italics) and fails when the family isn't
 available. `text.rescanFonts` (Character panel menu ›
 Refresh Font List) scans the font folders again, for fonts installed or removed since the app started: type set in a
-font that became available redraws in it, without editing the document.
+font that became available redraws in it, without editing the document. The app does so by itself when its window
+comes to the front and a font folder changed meanwhile.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
