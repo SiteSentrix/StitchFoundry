@@ -123,6 +123,12 @@ pub fn rich_session() -> Session {
     ));
     select(&mut s, &[area]);
     exec(&mut s, "text.areaOptions", json!({"verticalAlign": "center", "inset": 2}));
+    let _ = id_of(&exec(
+        &mut s,
+        "text.create",
+        json!({"x": 300, "y": 330, "size": 14, "text": "Area type shrinks its text to fit the frame.",
+               "area": {"width": 150, "height": 40, "fit": "shrinkText", "fitMinPercent": 40}}),
+    ));
     exec(&mut s, "layer.new", json!({"name": "Top"}));
     let d = rect(&mut s, 350.0, 200.0, 80.0, 80.0);
     let e = ellipse(&mut s, 380.0, 230.0, 80.0, 80.0);

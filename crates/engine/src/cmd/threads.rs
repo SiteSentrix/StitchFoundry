@@ -93,6 +93,16 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             continue;
         }
         vectorcraft_text::edit::normalize(&mut story);
+        if live.len() >= 2 {
+            // Threaded frames keep their size: Auto Size is off for them (as in Illustrator).
+            for id in &live {
+                if text_of(doc, *id).is_some_and(|t| t.area.fit == vectorcraft_doc::AreaFit::AutoHeight)
+                    && let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind)
+                {
+                    t.area.fit = vectorcraft_doc::AreaFit::None;
+                }
+            }
+        }
         let frames: Vec<TextObject> = live.iter().filter_map(|id| text_of(doc, *id).cloned()).collect();
         let refs: Vec<&TextObject> = frames.iter().collect();
         let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &refs, &story);

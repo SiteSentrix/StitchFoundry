@@ -2219,6 +2219,34 @@ again, so SVG, PDF and EPS show the aligned text.
 {"name":"run_command","arguments":{"command":"text.areaOptions","params":{"verticalAlign":"center"}}}
 ```
 
+## Fitting area type: Auto Size, Shrink Text to Fit, overflow
+
+`text.areaOptions` (and `text.create`'s `area`, `text.createInPath` in area mode) take a `fit`:
+
+- `none` (default): the frame keeps its size; text that doesn't fit overflows (the red "+").
+- `autoHeight`: Auto Size. After every edit (typing, `text.editRange`, character and paragraph changes, a new
+  width) the frame's bottom moves to just below the last line plus the inset, in the same undo step as the edit.
+  In several columns the frame gets the least height (to 0.01 pt) at which the columns hold the text. It applies
+  to rectangular frames of horizontal type in one row; `height` is ignored while it is on, and setting the height
+  by hand (a handle drag, `text.reshapeArea` moving the bottom) turns it off, as does threading the frame. The
+  `autoSizeAreaType` preference ("Auto Size New Area Type") gives new area type `autoHeight`.
+- `shrinkText` (beyond the reference app), with `fitMinPercent` (10–100, default 50): when the text overflows,
+  every run's size, leading (explicit leading; auto leading follows the size) and baseline shift are scaled by the
+  largest factor down to `fitMinPercent` % that makes it fit. Paragraph spacing and indents stay. The stored
+  sizes don't change: the scaling happens at layout time, so rendering and every export see it. The factor is
+  found by bisection over the first run's size in steps of 0.1 pt (its scaled size is a whole number of tenths of
+  a point, so the result is deterministic); at `fitMinPercent` the text may still overflow.
+
+The file stores `"fit": "autoHeight"` or `"fit": {"shrinkText": {"minPercent": 40}}` in the object's `area`; the
+command also accepts that object form. The query (and every reply) of `text.areaOptions` reports `fit` as its id,
+`fitMinPercent`, `overflow` (the text doesn't fit its frame) and `fitScale` (Shrink Text's factor, 1 unshrunk).
+`document.inspect` (and `document.node {summary: true}`) reports `overflow` for area type and type on a path (text past
+the end of the path), and `fit` and `fitScale` for area type.
+
+```json
+{"name":"run_command","arguments":{"command":"text.areaOptions","params":{"fit":"shrinkText","fitMinPercent":60}}}
+```
+
 ## Converting between point type and area type
 
 With the Selection tool, a single selected point or area type object shows the type widget: a small circle beside

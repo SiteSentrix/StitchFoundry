@@ -31,7 +31,7 @@ use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
 pub use vectorcraft_doc::TextObject;
 
-pub use vectorcraft_doc::{FirstBaseline, VerticalAlign};
+pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
 
 /// Paragraph composer; stored per text object in [`vectorcraft_doc::ParaStyle::composer`].
 pub use vectorcraft_doc::Composer;
@@ -52,6 +52,9 @@ pub struct LayoutOptions {
     pub first_baseline_min: f64,
     /// Vertical alignment of the lines in each row/column (Area Type Options "Align").
     pub vertical_align: VerticalAlign,
+    /// Area type only: Shrink Text to Fit scales overflowing text down at layout time (see
+    /// [`TextLayout::fit_scale`]); the other fits are the engine's business and lay out as `None`.
+    pub fit: AreaFit,
     /// Overrides the object's paragraph composer (`None` = use `ParaStyle::composer`).
     pub composer: Option<Composer>,
     pub features: OtFeatures,
@@ -67,6 +70,7 @@ impl Default for LayoutOptions {
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
             vertical_align: VerticalAlign::Top,
+            fit: AreaFit::None,
             composer: None,
             features: OtFeatures::default(),
         }
@@ -131,7 +135,7 @@ pub struct LineInfo {
     pub region: usize,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TextLayout {
     /// Lines retain inline/block coordinates; glyph geometry is in physical text space.
     pub vertical: bool,
@@ -149,6 +153,25 @@ pub struct TextLayout {
     pub on_path: bool,
     /// Area type: the frame cells text flowed into (one per row/column).
     pub frames: Vec<Rect>,
+    /// Shrink Text to Fit: the factor the text's sizes, leading and baseline shifts were scaled
+    /// by to fit its frame (1.0 when the text is not shrunk).
+    pub fit_scale: f64,
+}
+
+impl Default for TextLayout {
+    fn default() -> Self {
+        Self {
+            vertical: false,
+            line_xf: Affine::IDENTITY,
+            glyphs: Vec::new(),
+            lines: Vec::new(),
+            bounds: Rect::ZERO,
+            overflow: false,
+            on_path: false,
+            frames: Vec::new(),
+            fit_scale: 1.0,
+        }
+    }
 }
 
 impl TextLayout {
@@ -449,6 +472,8 @@ mod tests;
 mod tests_bidi;
 #[cfg(test)]
 mod tests_embed;
+#[cfg(test)]
+mod tests_fit;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]

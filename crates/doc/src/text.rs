@@ -664,6 +664,9 @@ pub struct AreaOptions {
     pub first_baseline_min: f64,
     /// Vertical alignment of the lines in each row/column.
     pub vertical_align: VerticalAlign,
+    /// How the frame and its text fit each other (Auto Size, Shrink Text to Fit).
+    #[serde(skip_serializing_if = "crate::skip::is_default")]
+    pub fit: AreaFit,
 }
 
 impl Default for AreaOptions {
@@ -676,6 +679,67 @@ impl Default for AreaOptions {
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
             vertical_align: VerticalAlign::Top,
+            fit: AreaFit::None,
+        }
+    }
+}
+
+/// How area type and its frame fit each other. Serialized as `"none"`, `"autoHeight"` or
+/// `{"shrinkText": {"minPercent": 50}}`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AreaFit {
+    /// The frame keeps its size; text that doesn't fit overflows.
+    #[default]
+    None,
+    /// The frame's height follows the text (Illustrator's Auto Size): resolved by the engine after
+    /// each edit, for rectangular frames of horizontal type in one row.
+    AutoHeight,
+    /// Text that overflows is scaled down (size, leading and baseline shift; not paragraph
+    /// spacing) by the largest factor down to `min_percent` % that makes it fit, at layout time.
+    ShrinkText {
+        #[serde(rename = "minPercent", default = "AreaFit::default_min_percent")]
+        min_percent: f64,
+    },
+}
+
+impl AreaFit {
+    /// The smallest Shrink Text to Fit percentage allowed.
+    pub const MIN_PERCENT: f64 = 10.0;
+    /// The Shrink Text to Fit percentage new settings start with.
+    pub const DEFAULT_MIN_PERCENT: f64 = 50.0;
+    fn default_min_percent() -> f64 {
+        Self::DEFAULT_MIN_PERCENT
+    }
+    /// Its id: `none`, `autoHeight` or `shrinkText`.
+    pub fn id(self) -> &'static str {
+        match self {
+            AreaFit::None => "none",
+            AreaFit::AutoHeight => "autoHeight",
+            AreaFit::ShrinkText { .. } => "shrinkText",
+        }
+    }
+    /// The fit an id names (case, spaces, dashes and underscores ignored), with `min_percent`
+    /// for Shrink Text (clamped to 10..100; a non-finite value gives the default).
+    pub fn parse(id: &str, min_percent: Option<f64>) -> Option<Self> {
+        match id.to_ascii_lowercase().replace([' ', '-', '_'], "").as_str() {
+            "none" | "off" => Some(AreaFit::None),
+            "autoheight" | "autosize" => Some(AreaFit::AutoHeight),
+            "shrinktext" | "shrinktexttofit" | "shrink" => {
+                Some(AreaFit::ShrinkText { min_percent: Self::clamp_percent(min_percent.unwrap_or(Self::DEFAULT_MIN_PERCENT)) })
+            }
+            _ => None,
+        }
+    }
+    /// A Shrink Text minimum percentage within 10..100 (the default when not finite).
+    pub fn clamp_percent(p: f64) -> f64 {
+        if p.is_finite() { p.clamp(Self::MIN_PERCENT, 100.0) } else { Self::DEFAULT_MIN_PERCENT }
+    }
+    /// Shrink Text's minimum scale factor (0.1..1), if this is Shrink Text.
+    pub fn min_scale(self) -> Option<f64> {
+        match self {
+            AreaFit::ShrinkText { min_percent } => Some(Self::clamp_percent(min_percent) / 100.0),
+            _ => None,
         }
     }
 }
