@@ -174,6 +174,9 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
     }
 }
 
+/// The room the Control bar's inline X/Y/W/H fields need; with less, only the Transform link shows.
+const INLINE_TRANSFORM_WIDTH: f32 = 440.0;
+
 /// The Control bar (Window → Control), context-sensitive like Illustrator's.
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -280,9 +283,13 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 }
                 ui.separator();
-                // Transform fields.
+                // The Transform link opens the whole Transform panel (reference point, rotate,
+                // shear, options) in a popover; X/Y/W/H follow inline while the bar has room.
+                crate::panels::transform::link(app, ui);
                 // The bounding box, rotated with rotated objects: its centre and its own sides.
-                if let Some(b) = app.selection_box() {
+                if let Some(b) = app.selection_box()
+                    && ui.available_width() >= INLINE_TRANSFORM_WIDTH
+                {
                     let c = b.center();
                     let link = app.session.prefs.constrain_proportions;
                     for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", b.rect.width()), ("height", "H:", b.rect.height())] {

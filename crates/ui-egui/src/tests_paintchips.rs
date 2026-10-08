@@ -242,3 +242,31 @@ fn the_window_menu_panel_keys() {
     app.ui.shortcut_overrides.clear();
     shortcut_editor::sync(&app.ui);
 }
+
+/// Where `shapes` paint the text `s`.
+fn text_rect(shapes: &[Shape], s: &str) -> Option<Rect> {
+    shapes.iter().find_map(|sh| match sh {
+        Shape::Text(t) if t.galley.text() == s => Some(t.visual_bounding_rect()),
+        Shape::Vec(v) => text_rect(v, s),
+        _ => None,
+    })
+}
+
+#[test]
+fn the_transform_link_opens_the_transform_panel() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
+    let shapes = frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
+    let link = text_rect(&shapes, "Transform").expect("the Control bar shows the Transform link");
+    assert!(text_rect(&shapes, "Scale Corners").is_none());
+    click(&mut app, &ctx, link.center(), Modifiers::NONE, control_bar);
+    let shapes = frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
+    for s in ["Scale Corners", "Scale Strokes & Effects", "0°"] {
+        assert!(text_rect(&shapes, s).is_some(), "the popover shows {s}");
+    }
+    // A click outside closes it.
+    click(&mut app, &ctx, Pos2::new(1300.0, 900.0), Modifiers::NONE, control_bar);
+    assert!(text_rect(&frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar), "Scale Corners").is_none());
+}
