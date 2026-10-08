@@ -1135,21 +1135,32 @@ size. The journal entry of a scaling command records the `strokes` and `corners`
 
 ## Live Corners
 
-`object.setLiveShape {id?, ids?, radius?, kind?, corners?}` sets the corners of live rectangles (one undo step):
-`radius` (pt) and `kind` (`round`, `invertedRound` or `chamfer`) go to the `corners` given (0 top-left, 1 top-right,
-2 bottom-right, 3 bottom-left), else to the corners holding a Direct-Selected anchor (`select.anchors`), else to all
-four. Each corner keeps its own radius and kind (the shape's `live` in queries has `radii` and, when a corner isn't
-round, `kinds`); a corner with no radius is one anchor, a cut one two, and Direct-Selected corners stay selected as
-that changes. Every corner is a circular arc, whatever the rectangle's proportions: a radius past half the shorter
-side draws at half of it (the same limit for every corner), and a rectangle from a file that kept an uneven scale in its
-transform (elliptical corners) gets circular ones in document units when its corners are next set. With the Selection or
-Direct Selection tool, dragging a corner widget rounds the corners whose widgets show (all four, or the Direct-Selected
-ones), outlining them in red once they reach that limit; Alt-clicking one cycles their kind and double-clicking one
-opens Corners (`ui.corners {id?, corners?}`, dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
+`object.setLiveShape {id?, ids?, radius?, kind?, corners?}` sets the corners of any path (one undo step): a live
+rectangle's or polygon's, a star's, a pen path's. A corner is an anchor without handles between two straight sides
+(not an open path's ends, not a smooth anchor, not one the sides run straight on through). `radius` (pt) and `kind`
+(`round`, `invertedRound` or `chamfer`) go to the `corners` given, else to the corners holding a Direct-Selected
+anchor (`select.anchors`), else to every corner. `corners` are anchor indices of the path with its corners uncut,
+counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a
+polygon's from its first vertex clockwise; a star's from its first tip; an index past the last anchor is an error.
+Each corner keeps its own radius and kind (the shape's `live` in queries has `radii` and, when a corner isn't round,
+`kinds`); a corner with no radius is one anchor, a cut one two, and Direct-Selected corners stay selected as that
+changes. A path that isn't a live shape keeps its uncut outline (`live` `{"shape": "path", "base", "radii"}`) so its
+corners stay editable, and is a plain path again once no corner is cut; a polygon stays a live polygon, its corners
+keeping the radius they shared when `sides` changes. Every corner is a circular arc tangent to both sides: a radius
+draws no larger than takes the cut halfway along the corner's shorter side (half the shorter side of a rectangle, the
+same limit for its four corners), the corners stay circular through uneven scales (the radius scales by the mean scale,
+or keeps its size with Scale Corners off), and a rectangle from a file that kept an uneven scale in its transform
+(elliptical corners) gets circular ones in document units when its corners are next set. Dragging a corner widget
+rounds the corners whose widgets show (every corner, or the Direct-Selected ones), outlining in red those that reach
+their limit; the Selection tool shows the widgets of live rectangles and polygons, the Direct Selection tool those of
+any path. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
+dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[1],"radius":16}}}
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[0,3],"radius":8,"kind":"chamfer"}}}
+{"name":"run_command","arguments":{"command":"shape.star","params":{"cx":200,"cy":200,"radius1":60,"radius2":30}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"radius":5}}}
 ```
 
 ## Use Preview Bounds

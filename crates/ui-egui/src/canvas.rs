@@ -1429,11 +1429,16 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
             anchor_square(p, xf.to_screen(a.p), color, false, anchor(direct));
         }
     }
-    // Live Corners widgets (Selection / Direct Selection on a single live rectangle).
+    // Live Corners widgets (Selection on a live rectangle or polygon, Direct Selection on any path).
     if matches!(tool, "selection" | "directSelection")
-        && app.ui.view.corner_widgets
-        && let Some(w) = vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, xf.zoom)
-            .and_then(|w| w.within_angle(app.session.prefs.hide_corner_widget_above))
+        && let Some(w) = vectorcraft_tools::corners::CornerWidgets::showing(
+            &st.doc,
+            &st.selection,
+            xf.zoom,
+            tool == "directSelection",
+            app.ui.view.corner_widgets,
+            app.session.prefs.hide_corner_widget_above,
+        )
     {
         let color = c32(st.doc.layer_color(w.id));
         for sp in w.visible().map(|q| xf.to_screen(q)) {
@@ -2256,6 +2261,25 @@ mod tests {
         };
         assert_eq!(widgets(&mut app), 4);
         app.session.execute("prefs.set", &json!({"key": "hideCornerWidgetAbove", "value": 80})).unwrap();
+        assert_eq!(widgets(&mut app), 0);
+    }
+
+    /// #511: a star shows a widget in each of its ten corners with Direct Selection (none with
+    /// the Selection tool: it isn't a live shape); View → Hide Corner Widget hides them.
+    #[test]
+    fn a_star_shows_corner_widgets_with_direct_selection() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.star", &json!({"cx": 200, "cy": 150, "radius1": 80, "radius2": 40})).unwrap();
+        let ctx = egui::Context::default();
+        let widgets = |app: &mut VectorcraftApp| {
+            shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == 3.0 && c.fill == Color32::WHITE)).count()
+        };
+        app.select_tool("selection");
+        assert_eq!(widgets(&mut app), 0);
+        app.select_tool("directSelection");
+        assert_eq!(widgets(&mut app), 10);
+        app.run("view.cornerWidget", json!({})).unwrap();
         assert_eq!(widgets(&mut app), 0);
     }
 

@@ -2,7 +2,7 @@
 //! the selected ones are deselected, the others selected), move (Alt copies, Shift constrains; Smart
 //! Guides, or with them off View › Snap to Point, snap it),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
-//! drag a live rectangle's corner widget to round its corners (Alt-click cycles their kind,
+//! drag a live rectangle's or polygon's corner widget to round its corners (Alt-click cycles their kind,
 //! double-click opens the Corners dialog), double-click to enter isolation mode (Double Click To
 //! Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
 //! click or drag a ruler guide ([`crate::rulerguide`]), drag the brackets of type on a path
@@ -169,7 +169,7 @@ impl Tool for SelectionTool {
         match (ev.kind, self.state.clone()) {
             (PointerKind::DoubleClick, _) => {
                 self.state = State::Idle;
-                if let Some(a) = corners::double_click(cx, p).or_else(|| typewidget::double_click(cx, p)) {
+                if let Some(a) = corners::double_click(cx, p, false).or_else(|| typewidget::double_click(cx, p)) {
                     return vec![a];
                 }
                 if crate::rulerguide::guide_at(cx, p).is_some() {
@@ -191,7 +191,7 @@ impl Tool for SelectionTool {
             (PointerKind::Down, _) => {
                 // 1. Live Corners widgets and type on a path's brackets, then the bounding-box
                 // handles of the current selection.
-                if let Some(c) = CornerDrag::hit(cx, ev) {
+                if let Some(c) = CornerDrag::hit(cx, ev, false) {
                     self.state = State::Corner(c);
                     return vec![];
                 }
@@ -381,7 +381,7 @@ impl Tool for SelectionTool {
         if self.guide.busy() {
             return self.guide.cursor(cx, p).unwrap_or_default();
         }
-        if over_widget(cx, p) {
+        if over_widget(cx, p, false) {
             return Cursor::CornerRadius;
         }
         if over_bracket(cx, p) {

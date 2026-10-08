@@ -188,7 +188,8 @@ fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
     let r = f64_req(p, "radius", "shape.polygon")?.abs();
     let sides = p.get("sides").and_then(Value::as_u64).unwrap_or(6).clamp(3, 1000) as u32;
     let rot = f64_or(p, "rotation", 0.0);
-    let live = LiveShape::Polygon { radius: r, sides, xf: Affine::translate(c.to_vec2()) * Affine::rotate(rot.to_radians()) };
+    let xf = Affine::translate(c.to_vec2()) * Affine::rotate(rot.to_radians());
+    let live = LiveShape::Polygon { radius: r, sides, xf, radii: vec![], kinds: vec![] };
     add_art(s, "Polygon", path_kind(live.to_path(), Some(live)), None)
 }
 
