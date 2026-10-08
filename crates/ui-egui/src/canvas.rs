@@ -76,29 +76,17 @@ enum Drag {
         start_angle: f64,
         start_rot: f64,
     },
-    /// Cmd held: temporary selection tool; restore this tool on release.
-    TempSelect,
     /// A Selection tool move dragged off the canvas: the panels get the art
-    /// ([`widgets::PanelDrag::Art`]); `temp` restores the tool Cmd switched from on release.
-    Art {
-        temp: bool,
-    },
+    /// ([`widgets::PanelDrag::Art`]).
+    Art,
 }
 
 fn drag_id() -> egui::Id {
     egui::Id::new("canvas-drag")
 }
-fn temp_tool_id() -> egui::Id {
-    egui::Id::new("canvas-temp-tool")
-}
 /// Where the pointer was last seen during a press on the canvas.
 fn drag_pos_id() -> egui::Id {
     egui::Id::new("canvas-drag-pos")
-}
-
-/// Selection, Direct Selection and Group Selection: the tools Cmd switches to for a drag.
-pub(crate) fn is_selection_tool(id: &str) -> bool {
-    matches!(id, "selection" | "directSelection" | "groupSelection")
 }
 
 /// The pen pressure (0..1) of the press in progress: the force of this frame's pen or touch
@@ -531,19 +519,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
             let c = rect.center();
             Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation }
         } else {
-            let mut kind = Drag::Tool;
-            // Cmd with another tool: drag with the selection tool used last.
-            if m.command && !is_selection_tool(tool) {
-                ui.data_mut(|d| d.insert_temp(temp_tool_id(), tool.to_string()));
-                let last = app.ui.last_selection_tool.clone();
-                app.select_tool(if is_selection_tool(&last) { &last } else { "selection" });
-                kind = Drag::TempSelect;
-            }
-            // Cmd only brought the selection tool: its click is a plain one, not Select Behind.
-            let mods = Mods { cmd: m.command && kind != Drag::TempSelect, ..mods(m, space) };
-            let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods, pressure: pen_pressure(ui, true) };
+            // Cmd with another tool drags with the selection tool used last (the session lends it).
+            let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, true) };
             dispatch(app, &ev, view);
-            kind
+            Drag::Tool
         };
         ui.data_mut(|dd| {
             dd.insert_temp(drag_id(), d);
@@ -580,11 +559,11 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                         vm.rotation = vectorcraft_geom::normalize_deg(deg);
                     }
                 }
-                Drag::ZoomBox { .. } | Drag::Art { .. } => {}
-                Drag::Tool | Drag::TempSelect if drag_art_out(app, ui, resp, p, view) => {
-                    ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Art { temp: d == Drag::TempSelect }));
+                Drag::ZoomBox { .. } | Drag::Art => {}
+                Drag::Tool if drag_art_out(app, ui, resp, p, view) => {
+                    ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Art));
                 }
-                Drag::Tool | Drag::TempSelect => {
+                Drag::Tool => {
                     if pointer.delta() != egui::Vec2::ZERO {
                         let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                         dispatch(app, &ev, view);
@@ -620,17 +599,11 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                         }
                     }
                 }
-                Drag::Tool | Drag::TempSelect | Drag::Art { .. } => {
-                    if !matches!(d, Drag::Art { .. }) {
-                        let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
-                        dispatch(app, &ev, view);
-                    }
-                    if matches!(d, Drag::TempSelect | Drag::Art { temp: true })
-                        && let Some(prev) = ui.data(|dd| dd.get_temp::<String>(temp_tool_id()))
-                    {
-                        app.restore_tool(&prev);
-                    }
+                Drag::Tool => {
+                    let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
+                    dispatch(app, &ev, view);
                 }
+                Drag::Art => {}
                 Drag::Pan { .. } | Drag::RotateView { .. } => {}
             }
         }
@@ -1371,7 +1344,7 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let app = &*app;
     let Some(st) = app.session.active() else { return };
     let tool = app.session.tool_id();
-    let direct = matches!(tool, "directSelection" | "pen" | "addAnchor" | "deleteAnchor" | "anchorPoint" | "curvature");
+    let direct = vectorcraft_tools::catalog::edits_anchors(tool);
     // Selection & Anchor Display › Size (1–7, 3 the default): anchors, handles and the bounding
     // box's handles a point bigger or smaller per step.
     let look = HandleLook::of(&app.session.prefs);

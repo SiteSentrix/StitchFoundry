@@ -5,9 +5,11 @@
 //! follows the pointer; Space held moves the anchor, handles and all); Shift constrains to 45°.
 //! Clicking the first anchor closes the path. Clicking the last one retracts its outgoing handle, so
 //! the next segment leaves it as a corner; dragging from it pulls a new one out on its own.
-//! Alt held over a handle end or an anchor of a selected path (the one being drawn too) works as
-//! the Anchor Point tool: dragging a handle moves it alone, clicking a smooth anchor makes it a
-//! corner and dragging an anchor pulls out new symmetric handles.
+//! Alt held over a handle end, an anchor or a segment of a selected path (the one being drawn too)
+//! works as the Anchor Point tool: dragging a handle moves it alone, clicking a smooth anchor makes
+//! it a corner, dragging an anchor pulls out new symmetric handles and dragging a segment reshapes
+//! it. Cmd held lends the selection tool used last for a drag (the engine's
+//! `Session::pointer`); the path being drawn goes on afterwards while it stays selected.
 //! Enter/Esc (or switching tools) ends the path. Clicking the end of a selected open path continues
 //! it. The rubber-band preview shows the next segment (Enable Rubber Band for Pen Tool). Auto Add/Delete: between paths, a click on a
 //! segment of a selected path adds an anchor there and a click on one of its anchors deletes it
@@ -18,13 +20,16 @@ use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{BezPath, Point};
 
-use crate::draw2::{AnchorTool, hit_handle};
+use crate::direct::hit_handle;
+use crate::draw2::AnchorTool;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Default)]
 pub struct PenTool {
-    /// The path being drawn (set once the first anchor exists and the engine selected it).
+    /// A path is being drawn...
     drawing: bool,
+    /// ...this one, once the engine made it: another path selected meanwhile isn't drawn on.
+    path: Option<NodeId>,
     drag: Option<(Point, bool)>,
     hover: Option<Point>,
     /// The incoming handle of the anchor being dragged out, as last previewed.
@@ -63,10 +68,14 @@ fn last_anchor(cx: &ToolContext, id: NodeId) -> Option<(usize, usize)> {
     Some((si, ai))
 }
 
-/// Alt held over a handle end or an anchor of a selected path: the Anchor Point tool's gesture.
+/// Alt held over a handle end, an anchor or a segment of a selected path: the Anchor Point tool's
+/// gesture, within its tolerance.
 fn alt_converts(cx: &ToolContext, p: Point, m: Mods) -> bool {
-    let tol = cx.tol(4.0);
-    m.alt && (hit_handle(cx, p, tol).is_some() || crate::draw2::anchor_in(cx, editable_paths(cx), p, tol).is_some())
+    let tol = cx.pick_tol();
+    m.alt
+        && (hit_handle(cx, p, tol).is_some()
+            || crate::draw2::anchor_in(cx, editable_paths(cx), p, tol).is_some()
+            || crate::draw2::segment_in(cx, editable_paths(cx), p, tol).is_some())
 }
 
 /// The selected paths the pen edits (not guides, nor locked or hidden ones).
@@ -97,9 +106,13 @@ impl Tool for PenTool {
         let exclude: Vec<vectorcraft_doc::NodeId> = if self.drawing { cx.selection.objects.clone() } else { vec![] };
         let (mut p, _) = if matches!(ev.kind, PointerKind::Down) { crate::guides::snap_draw(cx, ev.pos, &exclude) } else { (ev.pos, vec![]) };
         let tol = cx.tol(5.0);
-        let active = if self.drawing { active_path(cx) } else { None };
+        // The path a press began is the selected one by the next event.
+        if self.drawing && self.path.is_none() {
+            self.path = active_path(cx).map(|a| a.0);
+        }
+        let active = self.active(cx);
         if self.drawing && active.is_none() && ev.kind == PointerKind::Down {
-            self.drawing = false;
+            self.stop();
         }
         match ev.kind {
             PointerKind::Move => {
@@ -142,6 +155,7 @@ impl Tool for PenTool {
                     && (p.distance(last) <= tol || p.distance(first) <= tol)
                 {
                     self.drawing = true;
+                    self.path = active_path(cx).map(|a| a.0);
                     if p.distance(first) <= tol && p.distance(last) > tol {
                         return vec![Action::Exec("path.reverse".into(), json!({}))];
                     }
@@ -150,7 +164,7 @@ impl Tool for PenTool {
                 if let Some(act) = auto_add_delete(cx, ev.pos, ev.mods, tol) {
                     return vec![act];
                 }
-                self.drawing = true;
+                (self.drawing, self.path) = (true, None);
                 self.drag = Some((p, false));
                 vec![Action::Begin("Pen".into()), Action::Preview("path.create".into(), json!({"anchors": [{"x": p.x, "y": p.y}]}))]
             }
@@ -179,7 +193,7 @@ impl Tool for PenTool {
                     out_h = a + vectorcraft_geom::constrain_angle(ev.pos - a, 45.0);
                 }
                 let alt = ev.mods.alt;
-                let Some((id, ..)) = active_path(cx).or(active) else {
+                let Some((id, ..)) = active else {
                     // First anchor of a new path: re-issue create with handles.
                     let in_h = a - (out_h - a);
                     return vec![Action::Preview(
@@ -211,7 +225,7 @@ impl Tool for PenTool {
                 }
                 let Some((_, closing)) = self.drag.take() else { return vec![] };
                 if closing {
-                    self.drawing = false;
+                    self.stop();
                 }
                 vec![Action::Commit]
             }
@@ -221,7 +235,7 @@ impl Tool for PenTool {
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {
         match key {
             ToolKey::Enter | ToolKey::Escape => {
-                self.drawing = false;
+                self.stop();
                 self.drag = None;
                 self.handle = None;
                 // An Alt gesture under way ends as it stands.
@@ -231,17 +245,17 @@ impl Tool for PenTool {
         }
     }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
-        self.drawing = false;
+        self.stop();
         self.convert.take().map(|mut t| t.deactivate(cx)).unwrap_or_default()
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         if let Some(t) = &self.convert {
             return t.overlays(cx);
         }
-        if !cx.pen_rubber_band || !self.drawing || self.drag.is_some() || self.handle.is_some() {
+        if !cx.pen_rubber_band || self.drag.is_some() || self.handle.is_some() {
             return vec![];
         }
-        let (Some((id, _, last, out)), Some(h)) = (active_path(cx), self.hover) else { return vec![] };
+        let (Some((id, _, last, out)), Some(h)) = (self.active(cx), self.hover) else { return vec![] };
         let mut bp = BezPath::new();
         bp.move_to(last);
         if out.distance(last) > 1e-9 {
@@ -254,10 +268,7 @@ impl Tool for PenTool {
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         let tol = cx.tol(5.0);
-        let active = active_path(cx);
-        if self.drawing
-            && let Some((id, first, last, _)) = active
-        {
+        if let Some((id, first, last, _)) = self.active(cx) {
             let one = last_anchor(cx, id).is_some_and(|(_, ai)| ai == 0);
             if p.distance(first) <= tol && !one {
                 return Cursor::PenClose;
@@ -275,7 +286,7 @@ impl Tool for PenTool {
                 Some([_]) => return Cursor::PenAdd,
                 _ => {}
             }
-            if active.is_some_and(|(_, first, last, _)| p.distance(last) <= tol || p.distance(first) <= tol) {
+            if active_path(cx).is_some_and(|(_, first, last, _)| p.distance(last) <= tol || p.distance(first) <= tol) {
                 return Cursor::PenContinue;
             }
             match auto_add_delete(cx, p, m, tol) {
@@ -289,13 +300,27 @@ impl Tool for PenTool {
 }
 
 impl PenTool {
-    /// Hand an Alt press on a selected path's handle or anchor to the Anchor Point tool.
+    /// The open path being drawn: the one the pen made or went on with, while it is the single
+    /// selected open path.
+    fn active(&self, cx: &ToolContext) -> Option<(NodeId, Point, Point, Point)> {
+        active_path(cx).filter(|(id, ..)| self.drawing && self.path.is_none_or(|p| p == *id))
+    }
+
+    /// The path is finished.
+    fn stop(&mut self) {
+        (self.drawing, self.path) = (false, None);
+    }
+
+    /// Hand an Alt press on a selected path's handle, anchor or segment to the Anchor Point tool.
     fn alt_convert(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
         if !alt_converts(cx, ev.pos, ev.mods) {
             return None;
         }
         let mut t = AnchorTool::new("anchorPoint");
         let acts = t.pointer(cx, ev);
+        if !t.busy() {
+            return None;
+        }
         self.convert = Some(t);
         Some(acts)
     }
@@ -586,5 +611,54 @@ mod tests {
         s.anchors.insert(id, std::collections::BTreeSet::from([(0, 0)]));
         let cx1 = cx(&d, &s, &p);
         assert_eq!(t.cursor(&cx1, Point::new(250.0, 101.0), alt), Cursor::Pen);
+    }
+
+    /// #494: Alt held over a segment of a selected path reshapes it as the Anchor Point tool does,
+    /// while drawing too; Alt away from paths still places an anchor.
+    #[test]
+    fn alt_over_a_segment_reshapes_it() {
+        let (d, id, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Mods::default() };
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        assert_eq!(t.cursor(&cx, Point::new(150.0, 302.0), alt), Cursor::PenConvert);
+        assert_eq!(t.cursor(&cx, Point::new(150.0, 302.0), Mods::default()), Cursor::Pen);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 302.0).with_mods(alt)), vec![]);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 262.0).with_mods(alt));
+        assert_eq!(a[0], Action::Begin("Reshape".into()));
+        assert!(
+            matches!(&a[1], Action::Preview(c, v) if c == "path.reshapeSegment" && v["id"] == id.0 && v["segment"] == 0 && v["dy"] == -40.0),
+            "{a:?}"
+        );
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 262.0)), vec![Action::Commit]);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 250.0, 400.0).with_mods(alt));
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.appendAnchor"), "{a:?}");
+    }
+
+    /// #494: the Pen goes on drawing the path it drew while that path stays selected (after a Cmd
+    /// drag with Direct Selection), but never another open path selected meanwhile.
+    #[test]
+    fn the_pen_draws_on_the_path_it_began_only() {
+        let (mut d, a, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(10.0, 300.0), Point::new(60.0, 300.0)], false));
+        let l = d.layers[0].id;
+        let b = d.alloc_id();
+        let line = vectorcraft_geom::shapes::line(Point::new(10.0, 400.0), Point::new(60.0, 400.0));
+        d.insert(Some(l), 2, vectorcraft_doc::Node::path(b, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let p = paint();
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        let cx_a = cx(&d, &s, &p);
+        let appended = |acts: &[Action]| match acts {
+            [Action::Begin(_), Action::Preview(c, v)] if c == "path.appendAnchor" => v["id"].as_u64(),
+            _ => None,
+        };
+        assert_eq!(appended(&click(&mut t, &cx_a, 100.0, 320.0, Mods::default())), Some(a.0));
+        // Path B selected instead: the next click starts a new path.
+        let mut sb = Selection::default();
+        sb.set([b]);
+        let cx_b = cx(&d, &sb, &p);
+        assert_eq!(t.cursor(&cx_b, Point::new(150.0, 350.0), Mods::default()), Cursor::Pen);
+        let acts = click(&mut t, &cx_b, 150.0, 350.0, Mods::default());
+        assert!(matches!(&acts[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.create"), "{acts:?}");
     }
 }

@@ -49,6 +49,8 @@ mod tests_links;
 #[cfg(test)]
 mod tests_liquify;
 #[cfg(test)]
+mod tests_pen;
+#[cfg(test)]
 mod tests_persp;
 #[cfg(test)]
 mod tests_place;

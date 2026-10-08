@@ -300,7 +300,7 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         "hand" => app.run("view.fitArtboard", json!({})),
         "zoom" => app.run("view.actualSize", json!({})),
         "rotate" | "scale" | "reflect" | "shear" | "selection" | "directSelection" | "groupSelection" => {
-            let dialog = if crate::canvas::is_selection_tool(tool) { "move" } else { tool };
+            let dialog = if vectorcraft_tools::catalog::is_selection_tool(tool) { "move" } else { tool };
             let id = format!("object.{dialog}");
             if let Some(c) = vectorcraft_engine::find_command(&id) {
                 (c.enabled)(&app.session)?;

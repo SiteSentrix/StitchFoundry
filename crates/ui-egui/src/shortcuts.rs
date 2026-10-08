@@ -246,7 +246,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 // Enter with a selection tool opens the Move dialog, as a double-click on its button
                 // does.
                 let tool = app.session.tool_id();
-                if app.ui.dialog.is_none() && crate::canvas::is_selection_tool(tool) {
+                if app.ui.dialog.is_none() && vectorcraft_tools::catalog::is_selection_tool(tool) {
                     // Nothing selected: it fails and nothing opens (the menu item is disabled then too).
                     let _ = crate::toolbar::open_options(app, tool);
                 }

@@ -540,28 +540,14 @@ impl VectorcraftApp {
 
     /// Select a tool (also used by the toolbar and shortcuts).
     pub fn select_tool(&mut self, id: &str) {
-        self.change_tool(id, true);
-    }
-
-    /// Go back to tool `id` after a temporary one, without choosing it afresh
-    /// ([`vectorcraft_engine::Session::switch_tool`]).
-    pub fn restore_tool(&mut self, id: &str) {
-        self.change_tool(id, false);
-    }
-
-    fn change_tool(&mut self, id: &str, choose: bool) {
         let v = self.view_info();
-        let r = if choose { self.session.select_tool(id, v) } else { self.session.switch_tool(id, v) };
-        if let Err(e) = r {
+        if let Err(e) = self.session.select_tool(id, v) {
             self.ui.status = e.to_string();
         }
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
         {
             *slot = id.to_string();
-        }
-        if canvas::is_selection_tool(id) {
-            self.ui.last_selection_tool = id.to_string();
         }
         toolbar::remember(self, id);
         self.ui.flyout = None;
