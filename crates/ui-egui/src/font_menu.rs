@@ -1,10 +1,12 @@
-//! The font family menu of the Character and Properties panels: a search field over every family
-//! available, each row the family's name and a sample of the selected text set in it. The row
-//! under the pointer or reached with ↑/↓ previews its font on the selected text (one live
-//! interaction, nothing in the history); a click or Enter applies it as one step, Escape or
-//! closing the menu puts the text back. A star marks a favourite family, and the ★ filter lists
-//! only those. Preferences › Type › Enable in-menu font previews and Font Preview Size turn the
-//! samples off or size the rows.
+//! The font family menu of the Character, Properties and Glyphs panels and Find Font's Replace
+//! With: a search field over every family available, each row the family's name and a sample of
+//! the selected text set in it. In the Character and Properties panels the row under the pointer
+//! or reached with ↑/↓ previews its font on the selected text (one live interaction, nothing in
+//! the history); a click or Enter applies it as one step, Escape or closing the menu puts the text
+//! back. The Glyphs panel and Find Font only pick a font ([`picked`]): nothing is previewed on the
+//! document. A star marks a favourite family, and the ★ filter lists only those. Preferences ›
+//! Type › Enable in-menu font previews and Font Preview Size turn the samples off or size the
+//! rows.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -637,15 +639,7 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
                 app.sync_views();
             }
         }
-        FontPick::Favorite(f) => {
-            let favs = &mut app.ui.favorite_fonts;
-            match favs.iter().position(|x| x.eq_ignore_ascii_case(&f)) {
-                Some(i) => {
-                    favs.remove(i);
-                }
-                None => favs.push(f),
-            }
-        }
+        FontPick::Favorite(f) => toggle_favorite(app, f),
         FontPick::Chosen(f, style) => {
             if previewing {
                 app.session.cancel_interaction().ok();
@@ -655,6 +649,31 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
             let (cmd, params) = font_command(app, &f, style.as_deref());
             app.run(cmd, params).ok();
         }
+    }
+}
+
+/// Star `family`, or take its star off (any case).
+fn toggle_favorite(app: &mut VectorcraftApp, family: String) {
+    let favs = &mut app.ui.favorite_fonts;
+    match favs.iter().position(|x| x.eq_ignore_ascii_case(&family)) {
+        Some(i) => {
+            favs.remove(i);
+        }
+        None => favs.push(family),
+    }
+}
+
+/// For a font menu that only picks a font and never changes the document (Find Font's Replace
+/// With, the Glyphs panel): the family (and style) chosen, if any. A star is toggled here; the
+/// highlighted row is not previewed.
+pub(crate) fn picked(app: &mut VectorcraftApp, pick: Option<FontPick>) -> Option<(String, Option<String>)> {
+    match pick? {
+        FontPick::Chosen(f, style) => Some((f, style)),
+        FontPick::Favorite(f) => {
+            toggle_favorite(app, f);
+            None
+        }
+        FontPick::Preview(..) | FontPick::EndPreview => None,
     }
 }
 
