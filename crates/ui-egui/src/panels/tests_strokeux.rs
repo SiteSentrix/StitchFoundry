@@ -40,6 +40,33 @@ fn weights_and_dashes_show_in_the_stroke_unit_everywhere() {
     assert!(shows(&texts(&ctx, &mut app, crate::chrome::control_bar), &mm), "Control bar");
 }
 
+/// The Properties panel's Stroke row is the Control bar's: the Stroke link opens the Stroke panel
+/// as a popover and the weight spinner lists the presets (Discord feedback).
+#[test]
+fn the_properties_stroke_link_and_weight_presets() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = app_with_rect();
+    let t = texts(&ctx, &mut app, properties::show);
+    assert!(!shows(&t, "Cap:"), "closed: {t:?}");
+    click(&ctx, &mut app, text_rect(&t, "Stroke").center(), properties::show);
+    let t = texts(&ctx, &mut app, properties::show);
+    assert!(shows(&t, "Cap:") && shows(&t, "Align Stroke:"), "the Stroke panel's popover: {t:?}");
+    click(&ctx, &mut app, text_rect(&t, "Stroke").center(), properties::show);
+    // The weight's dropdown: the 20 pt chevron cell right of the field showing "1 pt".
+    let field = text_rect(&texts(&ctx, &mut app, properties::show), "1 pt");
+    let chevron = ctx.viewport(|vp| {
+        let w = vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).map(|w| w.rect);
+        w.filter(|r| r.width() == 20.0 && r.left() > field.right() && r.y_range().contains(field.center().y))
+            .min_by(|a, b| a.left().total_cmp(&b.left()))
+    });
+    click(&ctx, &mut app, chevron.expect("the weight's preset chevron").center(), properties::show);
+    let t = texts(&ctx, &mut app, properties::show);
+    assert!(!shows(&t, "Cap:") && shows(&t, "0.25 pt") && shows(&t, "100 pt"), "the presets: {t:?}");
+    click(&ctx, &mut app, text_rect(&t, "3 pt").center(), properties::show);
+    assert_eq!(app.session.shown_stroke().unwrap().width, 3.0);
+}
+
 #[test]
 fn mixed_weights_show_blank() {
     let ctx = egui::Context::default();

@@ -153,8 +153,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 crate::panels::paint_chip(app, ui, true, 22.0, true);
                 // The link opens the Stroke panel as a popover under it; then the weight spinner
                 // (with presets) and the width profile.
-                let link = ui.link(egui::RichText::new(tl!("Stroke:")).size(12.0).color(t.text).underline()).on_hover_text(tl!("Stroke options"));
-                stroke_panel::popover(app, &link);
+                stroke_panel::link(app, ui, tl!("Stroke:"));
                 stroke_panel::weight_field(app, ui, "cb-stroke", weight, 100.0);
                 if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
                     app.run("stroke.set", json!({"profile": id})).ok();
