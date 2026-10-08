@@ -1,6 +1,6 @@
 //! Symbols export as one `<symbol>` def and a `<use>` per instance (instances the def can't stand
-//! for get their own art), hidden layers are kept hidden when asked and come back hidden, and the
-//! editing data notices edits made elsewhere.
+//! for get their own art), hidden layers are kept hidden when asked and come back hidden, clipped
+//! layers come in as clipping layers, and the editing data notices edits made elsewhere.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -202,6 +202,78 @@ fn hidden_layers_are_kept_hidden_when_asked() {
         assert_eq!((notes.name.as_deref(), notes.visible), (Some("Notes"), false));
         assert_eq!(notes.children().unwrap().len(), 1);
         assert!(back.layers[0].visible);
+    }
+}
+
+/// Each layer's art: clipping layer or not, and the kinds of its children.
+fn layer_art(d: &Document) -> Vec<(String, bool, Vec<&'static str>)> {
+    d.layers.iter().map(|l| (l.name.clone().unwrap_or_default(), l.clips(), l.children().unwrap().iter().map(|c| c.kind_label()).collect())).collect()
+}
+
+/// Two Inkscape layers clipped to the same window (#420), in pixels so resvg draws them at our scale.
+const CLIPPED_LAYERS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="200" height="100" viewBox="0 0 200 100">
+<defs><clipPath id="window"><rect x="5" y="5" width="190" height="90"/></clipPath></defs>
+<g id="CUT" inkscape:groupmode="layer" inkscape:label="Cut lines" clip-path="url(#window)"><rect x="0" y="0" width="100" height="100" fill="#f00"/></g>
+<g id="HATCH" inkscape:groupmode="layer" inkscape:label="HATCH" clip-path="url(#window)"><rect x="100" y="0" width="100" height="100" fill="#00f"/></g>
+</svg>"##;
+
+#[test]
+fn clipped_layers_come_in_as_clipping_layers() {
+    let d = import(CLIPPED_LAYERS).unwrap();
+    assert_eq!(
+        layer_art(&d),
+        [("Cut lines".to_string(), true, vec!["Path", "Path"]), ("HATCH".to_string(), true, vec!["Path", "Path"])],
+        "{:?}",
+        d.layers
+    );
+    for l in &d.layers {
+        let clip = &l.children().unwrap()[0];
+        assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }) && clip.name.as_deref() == Some("window"));
+        assert_eq!(clip.geometric_bounds().unwrap(), Rect::new(5.0, 5.0, 195.0, 95.0));
+    }
+    // Drawn as the SVG is: each layer cut to the window.
+    assert_similar(&render_artboard(&d), &resvg_render(CLIPPED_LAYERS, 200, 100), 24.0, 0.002);
+    // The issue's file (in points): two clipping layers, the names kept.
+    let pt = CLIPPED_LAYERS.replace("width=\"200\" height=\"100\"", "width=\"200pt\" height=\"100pt\"");
+    let d = import(&pt).unwrap();
+    assert_eq!(d.layers.iter().map(|l| (l.name.as_deref().unwrap(), l.clips())).collect::<Vec<_>>(), [("Cut lines", true), ("HATCH", true)]);
+}
+
+#[test]
+fn clipping_layers_round_trip() {
+    let mut d = import(CLIPPED_LAYERS).unwrap();
+    // A clip path clipped in turn: the layer's own clip outermost, the other one inside it.
+    let nested = CLIPPED_LAYERS.replace(
+        "<defs>",
+        "<defs><clipPath id=\"left\"><rect x=\"0\" y=\"0\" width=\"60\" height=\"100\"/></clipPath><clipPath id=\"inner\" clip-path=\"url(#left)\"><rect x=\"20\" y=\"20\" width=\"160\" height=\"60\"/></clipPath>",
+    );
+    let nested = nested.replacen("url(#window)", "url(#inner)", 1);
+    let n = import(&nested).unwrap();
+    assert_eq!(layer_art(&n)[0], ("Cut lines".to_string(), true, vec!["Path", "Clip Group"]));
+    assert_similar(&render_artboard(&n), &resvg_render(&nested, 200, 100), 24.0, 0.002);
+    d.layers.push(n.layers[0].clone());
+    let svg = export(&d, &ExportOptions::default());
+    let back = import(&svg).unwrap();
+    assert_eq!(layer_art(&back), layer_art(&d), "{svg}");
+    assert_similar(&render_artboard(&back), &render_artboard(&d), 24.0, 0.002);
+}
+
+#[test]
+fn text_joining_a_clipping_layer_stays_unclipped() {
+    // Text beside clipped layers isn't in their clip: the layer keeps its clip as a clip group.
+    let svg = CLIPPED_LAYERS
+        .replace("<g id=\"CUT\"", "<text x=\"1\" y=\"99\">Before</text><g id=\"CUT\"")
+        .replace("</svg>", "<text x=\"150\" y=\"99\">After</text></svg>");
+    let d = import(&svg).unwrap();
+    assert_eq!(
+        layer_art(&d),
+        [("Cut lines".to_string(), false, vec!["Type", "Clip Group"]), ("HATCH".to_string(), false, vec!["Clip Group", "Type"])],
+        "{:?}",
+        d.layers
+    );
+    for l in &d.layers {
+        let g = l.children().unwrap().iter().find(|c| c.clips()).unwrap();
+        assert_eq!(g.children().unwrap().iter().map(|c| c.kind_label()).collect::<Vec<_>>(), ["Path", "Path"]);
     }
 }
 
