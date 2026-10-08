@@ -1041,6 +1041,27 @@ fn node_outline(n: &Node) -> BezPath {
     bp
 }
 
+/// The most anchor points the selection's outlines and anchors, and the hover highlight, are drawn
+/// for: an Image Trace of a photo selects hundreds of thousands of paths at once, whose outlines
+/// would make a mesh larger than the GPU takes in one buffer (#525).
+const OVERLAY_MAX_ANCHORS: usize = 100_000;
+
+/// Whether `nodes` have more than [`OVERLAY_MAX_ANCHORS`] anchor points to outline (counting
+/// stops there).
+fn too_many_anchors<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> bool {
+    fn over(n: &Node, left: &mut usize) -> bool {
+        if let NodeKind::Path { path, .. } = &n.kind {
+            match left.checked_sub(path.anchor_count()) {
+                Some(l) => *left = l,
+                None => return true,
+            }
+        }
+        !matches!(n.kind, NodeKind::Envelope { .. }) && n.children().into_iter().flatten().any(|c| over(c, left))
+    }
+    let mut left = OVERLAY_MAX_ANCHORS;
+    nodes.into_iter().any(|n| over(n, &mut left))
+}
+
 /// [`Node::walk`] over what a selection highlight shows: an envelope's content is left out (the
 /// envelope shows its mesh instead).
 fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
@@ -1160,7 +1181,7 @@ fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     if st.selection.contains(id) {
         return;
     }
-    if let Some(n) = st.doc.node(id) {
+    if let Some(n) = st.doc.node(id).filter(|n| !too_many_anchors([*n])) {
         let color = c32(st.doc.layer_color(id));
         stroke_path(p, &node_outline(n), xf, Stroke::new(1.5, color));
     }
@@ -1351,6 +1372,9 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
     let bbox = if show_box { app.selection_box() } else { None };
+    let st = app.session.active();
+    let big = st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
+    let big_bounds = if big { app.selection_bounds() } else { None };
     let app = &*app;
     let Some(st) = app.session.active() else { return };
     let tool = app.session.tool_id();
@@ -1363,7 +1387,11 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     // The selected anchors' handles (drawn once they are counted: Show handles when multiple
     // anchors are selected off shows them for a single one only).
     let (mut handles, mut with_handles) = (vec![], 0);
-    for id in &st.selection.objects {
+    // Too many paths to outline: the selection's bounds stand for them.
+    if let Some((b, id)) = big_bounds.zip(st.selection.objects.first()) {
+        stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(1.0, c32(st.doc.layer_color(*id))));
+    }
+    for id in st.selection.objects.iter().filter(|_| !big) {
         let Some(n) = st.doc.node(*id) else { continue };
         let color = c32(st.doc.layer_color(*id));
         let partial = st.selection.partial(*id);
@@ -1633,11 +1661,13 @@ pub(crate) fn task_bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
 fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let t = Tokens::get(ui.ctx());
-    let Some(st) = app.session.active() else { return };
-    if st.selection.is_empty() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
+    if app.session.active().is_none_or(|st| st.selection.is_empty())
+        || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection")
+    {
         return;
     }
-    let Some(b) = st.doc.bounds_of(&st.selection.objects, true) else { return };
+    let Some(b) = app.selection_bounds() else { return };
+    let Some(st) = app.session.active() else { return };
     let n = st.selection.len();
     let first = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned();
     let is_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { .. }));
@@ -2022,6 +2052,29 @@ mod tests {
         assert_eq!(cmd_drag(&mut app, inside, inside), "groupSelection");
         app.select_tool("selection");
         assert_eq!(cmd_drag(&mut app, inside, inside), "selection");
+    }
+
+    /// #525: a selection with more anchors than the overlay draws (a traced photo) shows its bounds,
+    /// not every outline and anchor, which made a mesh larger than the GPU takes; an ordinary one
+    /// still shows its outline and anchors.
+    #[test]
+    fn a_huge_selection_shows_its_bounds_instead_of_every_outline() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let points = |n: usize| (0..n).map(|i| format!("L{} {}", 20.0 + 360.0 * i as f64 / n as f64, 100 + (i % 2) * 50)).collect::<String>();
+        let ctx = egui::Context::default();
+        let mut drawn = |n: usize| {
+            app.session.execute("path.create", &json!({"d": format!("M20 20 {} Z", points(n))})).unwrap();
+            frame(&mut app, &ctx, vec![]);
+            let shapes = shapes(&mut app, &ctx);
+            let points: usize = shapes.iter().map(|s| if let Shape::Path(ps) = s { ps.points.len() } else { 0 }).sum();
+            let squares = shapes.iter().filter(|s| matches!(s, Shape::Rect(_))).count();
+            (points, squares)
+        };
+        let (points, squares) = drawn(OVERLAY_MAX_ANCHORS + 10);
+        assert!(points < 100 && squares < 100, "{points} outline points, {squares} squares");
+        let (points, squares) = drawn(200);
+        assert!(points > 200 && squares > 200, "{points} outline points, {squares} squares");
     }
 
     /// One headless canvas frame → the shapes drawn, `Shape::Vec`s flattened.

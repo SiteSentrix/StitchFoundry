@@ -249,6 +249,8 @@ pub struct CanvasCache {
     pub print_tiling: Option<PrintTilingCache>,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
     pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
+    /// [`VectorcraftApp::selection_bounds`] for (document uid, revision).
+    pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// The tools' cursors as OS cursor bitmaps.
     pub cursors: cursors::Images,
 }
@@ -389,6 +391,7 @@ impl VectorcraftApp {
                 slices: None,
                 print_tiling: None,
                 selection_box: None,
+                selection_bounds: None,
                 cursors: Default::default(),
             },
             perf: Perf::default(),
@@ -702,6 +705,22 @@ impl VectorcraftApp {
         }
         let b = self.session.transform_box(&st.selection.objects);
         self.canvas.selection_box = Some((key, b));
+        b
+    }
+
+    /// The selection's visual bounds (stroke and effects included), square to the page: measured
+    /// once per revision, as the canvas reads it every frame (a traced photo selects a group of
+    /// hundreds of thousands of paths).
+    pub fn selection_bounds(&mut self) -> Option<vectorcraft_geom::Rect> {
+        let st = self.session.active()?;
+        let key = (st.uid, st.revision);
+        if let Some((k, b)) = self.canvas.selection_bounds
+            && k == key
+        {
+            return b;
+        }
+        let b = st.doc.bounds_of(&st.selection.objects, true);
+        self.canvas.selection_bounds = Some((key, b));
         b
     }
 }

@@ -27,6 +27,8 @@ mod fit;
 mod mosaic;
 mod quantize;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use serde::{Deserialize, Serialize};
 use vectorcraft_geom::PathData;
 
@@ -41,7 +43,17 @@ pub enum TraceError {
     Decode(String),
     #[error("image is empty")]
     Empty,
+    #[error("the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)")]
+    TooLarge { width: u32, height: u32, max: u64 },
+    #[error(
+        "this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset"
+    )]
+    TooComplex { max: usize },
 }
+
+/// The most pixels an image to trace may have (64 megapixels: 256 MB decoded); larger images are
+/// refused instead of running out of memory.
+pub const MAX_PIXELS: u64 = 64 << 20;
 
 /// An RGBA8 raster (row-major, top row first).
 #[derive(Clone, Debug, PartialEq)]
@@ -67,13 +79,19 @@ impl Raster {
         }
         Self { width, height, rgba }
     }
-    /// Decode PNG / JPEG / WebP / GIF bytes.
+    /// Decode PNG / JPEG / WebP / GIF bytes (at most [`MAX_PIXELS`], checked before decoding).
     pub fn decode(bytes: &[u8]) -> Result<Self, TraceError> {
-        let img = image::load_from_memory(bytes).map_err(|e| TraceError::Decode(e.to_string()))?.to_rgba8();
-        let (w, h) = img.dimensions();
+        let decode_err = |e: image::ImageError| TraceError::Decode(e.to_string());
+        let reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| TraceError::Decode(e.to_string()))?;
+        let (w, h) = reader.into_dimensions().map_err(decode_err)?;
         if w == 0 || h == 0 {
             return Err(TraceError::Empty);
         }
+        if u64::from(w) * u64::from(h) > MAX_PIXELS {
+            return Err(TraceError::TooLarge { width: w, height: h, max: MAX_PIXELS >> 20 });
+        }
+        let img = image::load_from_memory(bytes).map_err(decode_err)?.to_rgba8();
+        let (w, h) = img.dimensions();
         Ok(Self { width: w, height: h, rgba: img.into_raw() })
     }
     /// Encode as PNG.
@@ -262,17 +280,25 @@ fn is_white(c: [u8; 3]) -> bool {
 
 /// Trace `img` with `params`.
 pub fn trace(img: &Raster, params: &TraceParams) -> TraceResult {
+    // No trace has more than `usize::MAX` anchors.
+    trace_within(img, params, usize::MAX).unwrap_or_default()
+}
+
+/// Trace `img` with `params`, giving up with [`TraceError::TooComplex`] once the paths have more
+/// than `max_anchors` anchor points (a photo traced at high fidelity can make millions). The
+/// colour layers are traced in parallel where threads are available.
+pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result<TraceResult, TraceError> {
     let (w, h) = (img.width as usize, img.height as usize);
-    if w == 0 || h == 0 {
-        return TraceResult::default();
+    if w == 0 || h == 0 || img.rgba.len() != w * h * 4 {
+        return Ok(TraceResult::default());
     }
     let mut q = quantize(img, params);
     denoise(&mut q.labels, w, h, params.noise as usize);
     // Pixel count per palette entry.
     let mut counts = vec![0usize; q.palette.len()];
     for &l in &q.labels {
-        if l != TRANSPARENT {
-            counts[l as usize] += 1;
+        if let Some(c) = counts.get_mut(l as usize) {
+            *c += 1;
         }
     }
     // Layers bottom → top: largest area first.
@@ -282,46 +308,117 @@ pub fn trace(img: &Raster, params: &TraceParams) -> TraceResult {
     for (r, &i) in order.iter().enumerate() {
         rank[i] = r;
     }
-    let opts = fit::FitOptions {
-        polygon_tol: params.polygon_tolerance(),
-        fit_tol: params.fit_tolerance(),
-        corner_angle: params.corner_angle(),
-        snap_lines: params.snap_curves_to_lines,
+    let layers: Vec<(usize, usize)> =
+        order.iter().copied().enumerate().filter(|&(_, ci)| !(params.ignore_white && is_white(q.palette[ci]))).collect();
+    let job = Layers {
+        q: &q,
+        rank: &rank,
+        params,
+        opts: fit::FitOptions {
+            polygon_tol: params.polygon_tolerance(),
+            fit_tol: params.fit_tolerance(),
+            corner_angle: params.corner_angle(),
+            snap_lines: params.snap_curves_to_lines,
+        },
+        w,
+        h,
+        anchors: AtomicUsize::new(0),
+        max_anchors,
     };
-    let min_hole = params.noise.max(1) as i64;
     let mut out = TraceResult::default();
-    let mut mask = vec![false; w * h];
-    for (r, &ci) in order.iter().enumerate() {
+    for (paths, &(_, ci)) in parallel_map(&layers, |&(r, ci)| job.layer(r, ci)).into_iter().zip(&layers) {
+        out.paths.extend(paths.ok_or(TraceError::TooComplex { max: max_anchors })?);
         let color = q.palette[ci];
-        if params.ignore_white && is_white(color) {
-            continue;
-        }
-        let overlapping = params.method == Method::Overlapping;
-        for (m, &l) in mask.iter_mut().zip(&q.labels) {
-            *m = l != TRANSPARENT && if overlapping { rank[l as usize] >= r } else { l as usize == ci };
-        }
-        for comp in trace_mask(&mask, w, h) {
-            let mut subs = Vec::with_capacity(1 + comp.holes.len());
-            if let Some(sp) = fit::fit_loop(&comp.outer, &opts) {
-                subs.push(sp);
-            } else {
-                continue;
-            }
-            for hole in &comp.holes {
-                if hole.area2.abs() / 2 < min_hole && params.noise > 0 {
-                    continue;
-                }
-                if let Some(sp) = fit::fit_loop(hole, &opts) {
-                    subs.push(sp);
-                }
-            }
-            out.paths.push(TracedPath { path: PathData::new(subs), color, pixels: comp.pixels });
-        }
         if !out.palette.contains(&color) {
             out.palette.push(color);
         }
     }
-    out
+    Ok(out)
+}
+
+/// What tracing one colour layer needs.
+struct Layers<'a> {
+    q: &'a Quantized,
+    /// Each palette entry's layer, bottom (0) up.
+    rank: &'a [usize],
+    params: &'a TraceParams,
+    opts: fit::FitOptions,
+    w: usize,
+    h: usize,
+    /// Anchor points made so far, by every layer.
+    anchors: AtomicUsize,
+    max_anchors: usize,
+}
+
+impl Layers<'_> {
+    /// The paths of layer `r` (palette entry `ci`), or `None` once the anchors made pass the
+    /// maximum.
+    fn layer(&self, r: usize, ci: usize) -> Option<Vec<TracedPath>> {
+        let (params, opts) = (self.params, &self.opts);
+        let color = *self.q.palette.get(ci)?;
+        let overlapping = params.method == Method::Overlapping;
+        let mask: Vec<bool> = self
+            .q
+            .labels
+            .iter()
+            .map(|&l| l != TRANSPARENT && if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) } else { l as usize == ci })
+            .collect();
+        let min_hole = params.noise.max(1) as i64;
+        let mut paths = vec![];
+        for comp in trace_mask(&mask, self.w, self.h) {
+            let Some(outer) = fit::fit_loop(&comp.outer, opts) else { continue };
+            let mut subs = vec![outer];
+            for hole in &comp.holes {
+                if hole.area2.abs() / 2 < min_hole && params.noise > 0 {
+                    continue;
+                }
+                subs.extend(fit::fit_loop(hole, opts));
+            }
+            let path = PathData::new(subs);
+            let n = path.anchor_count();
+            if self.anchors.fetch_add(n, Ordering::Relaxed).saturating_add(n) > self.max_anchors {
+                return None;
+            }
+            paths.push(TracedPath { path, color, pixels: comp.pixels });
+        }
+        Some(paths)
+    }
+}
+
+/// `f` of each of `items`, in order, spread over the available cores.
+#[cfg(not(target_arch = "wasm32"))]
+fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(items.len());
+    if threads <= 1 {
+        return items.iter().map(f).collect();
+    }
+    let next = AtomicUsize::new(0);
+    let mut done: Vec<(usize, R)> = std::thread::scope(|s| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                s.spawn(|| {
+                    let mut mine = vec![];
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(item) = items.get(i) else { break };
+                        mine.push((i, f(item)));
+                    }
+                    mine
+                })
+            })
+            .collect();
+        // A worker's panic goes on in this thread, as if it had run here (the engine's guard
+        // reports it).
+        workers.into_iter().flat_map(|w| w.join().unwrap_or_else(|e| std::panic::resume_unwind(e))).collect()
+    });
+    done.sort_by_key(|(i, _)| *i);
+    done.into_iter().map(|(_, r)| r).collect()
+}
+
+/// `f` of each of `items`, in order (no threads on the web).
+#[cfg(target_arch = "wasm32")]
+fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    items.iter().map(f).collect()
 }
 
 #[cfg(test)]

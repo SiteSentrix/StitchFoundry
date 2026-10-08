@@ -3416,6 +3416,10 @@ axis	Both	Ambos
 @msg	select a stroke with a variable width	selecciona un trazo con anchura variable
 @msg	select a symbol instance	selecciona una instancia de símbolo
 @msg	select an Image Trace object	selecciona un objeto de calco de imagen
+@msg	could not decode image: {0}	no se pudo decodificar la imagen: {0}
+@msg	image is empty	la imagen está vacía
+@msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	la imagen mide {width} × {height} píxeles, más de lo que admite Calco de imagen ({max} megapíxeles)
+@msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	este calco crearía más de {max} puntos de ancla, más de los que el documento puede mostrar con fluidez: sube Ruido, baja Trazados o Colores, o elige un preajuste de menor fidelidad
 @msg	select an envelope	selecciona una envolvente
 @msg	select an image	selecciona una imagen
 @msg	select an object in perspective	selecciona un objeto en perspectiva
