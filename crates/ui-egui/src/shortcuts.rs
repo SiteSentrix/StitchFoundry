@@ -222,7 +222,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 crate::canvas::apply_requests(app, r);
             }
             if k == Key::Escape && !busy && !claimed {
-                if app.session.active().is_some_and(|d| d.doc.pattern_edit.is_some()) {
+                // Escape leaves Presentation Mode first: it hides the menus and panels.
+                if app.ui.screen_mode == 3 {
+                    let _ = app.run("view.presentation", json!({}));
+                } else if app.session.active().is_some_and(|d| d.doc.pattern_edit.is_some()) {
                     let _ = app.run("object.pattern.done", json!({}));
                 } else if app.session.active().is_some_and(|d| d.isolation.is_some()) {
                     let _ = app.run("object.exitIsolation", json!({}));

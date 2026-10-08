@@ -37,13 +37,20 @@ pub struct DropAt {
     pub embed: bool,
 }
 
-/// Where files dropped on the window go.
+/// Where a file dropped on the window goes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DropTarget {
-    /// The canvas of the document they were dropped on.
+    /// The canvas of the document it was dropped on.
     Place(DropAt),
-    /// Opened as documents: no document is open, or the drop missed the canvas (the tab bar).
+    /// Opened as a document: no document is open, the drop missed the canvas (the tab bar), or it
+    /// is a document dropped where the platform doesn't say.
     Open,
+}
+
+/// Does a file named `name` open as a document of its own (vector art: native, SVG, PDF, `.ai`,
+/// EPS, DXF, metafiles) rather than being a picture or text to place?
+pub fn is_document(name: &str) -> bool {
+    fileio::format_for_name(name).is_some_and(|f| f.read && !f.raster)
 }
 
 /// The app's Place state (not saved with the preferences).
@@ -281,33 +288,47 @@ pub fn paint_cursor(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egu
 // ---------- drops ----------
 
 impl VectorcraftApp {
-    /// Where files dropped with the pointer at `pos` (screen points; `None` when the platform
-    /// doesn't tell) go: onto the canvas of the open document (Shift embeds them), else opened. An
-    /// unknown position counts as the middle of the view.
-    pub fn drop_target(&self, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
+    /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
+    /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
+    /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
+    /// own and a picture or text is placed in the middle of the view.
+    pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
         let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
         let at = match pos {
             Some(p) if !rect.contains(p) => return DropTarget::Open,
             Some(p) => crate::canvas::Xf::new(rect, v).to_doc(p),
+            None if is_document(name) => return DropTarget::Open,
             None => v.center,
         };
         DropTarget::Place(DropAt { doc: st.uid, at, embed: shift })
     }
 }
 
-/// Files dropped on the window (`(name, path, bytes)`): placed on the canvas or opened (and added
-/// to Open Recent Files), as `target` says. Files for a canvas go to the document they were
-/// dropped on, which becomes active again; none are placed when it has closed since.
-pub fn drop_files(app: &mut VectorcraftApp, files: Vec<(String, Option<String>, Vec<u8>)>, target: DropTarget) {
-    if let DropTarget::Place(d) = target {
-        let Some(i) = app.session.documents().iter().position(|st| st.uid == d.doc) else {
-            let names: Vec<&str> = files.iter().map(|(name, ..)| name.as_str()).collect();
-            app.status(format!("Couldn't place {}: the document it was dropped on was closed", names.join(", ")));
-            return;
-        };
-        app.session.set_active(i);
-    }
-    for (name, path, bytes) in files {
+/// Where the pointer is during a file drag over the window, as far as egui knows: nowhere on the
+/// desktop, whose drags carry no position (the one egui had before is stale; files dropped there
+/// go by their kind, see [`VectorcraftApp::drop_target`]). On the web, egui's own position (for
+/// the highlight: the web host follows its drags itself for drops).
+pub fn drag_pos(ctx: &egui::Context) -> Option<egui::Pos2> {
+    if cfg!(target_arch = "wasm32") { ctx.input(|i| i.pointer.latest_pos()) } else { None }
+}
+
+/// A file dropped on the window: its name, path (when it has one) and bytes.
+pub type DropFile = (String, Option<String>, Vec<u8>);
+
+/// Files dropped on the window, each placed on a canvas or opened (and added to Open Recent
+/// Files) as its target says: the placed ones first, so the last document opened is the one
+/// shown. A file for a canvas goes to the document it was dropped on, which becomes active again;
+/// it isn't placed when that document has closed since.
+pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile)>) {
+    files.sort_by_key(|(target, _)| *target == DropTarget::Open);
+    for (target, (name, path, bytes)) in files {
+        if let DropTarget::Place(d) = target {
+            let Some(i) = app.session.documents().iter().position(|st| st.uid == d.doc) else {
+                app.status(format!("Couldn't place {name}: the document it was dropped on was closed"));
+                continue;
+            };
+            app.session.set_active(i);
+        }
         let r = match target {
             DropTarget::Place(DropAt { at, embed, .. }) => {
                 let mut p = match &path {
@@ -338,7 +359,7 @@ pub fn drain(app: &mut VectorcraftApp) {
     let mut picked = vec![];
     for a in arrived {
         match a.drop {
-            Some(d) => drop_files(app, vec![(a.name, None, a.bytes)], DropTarget::Place(d)),
+            Some(d) => drop_files(app, vec![(DropTarget::Place(d), (a.name, None, a.bytes))]),
             None => {
                 picked.push(json!({ "name": a.name }));
                 app.place.picked.retain(|(n, _)| *n != a.name);
@@ -353,8 +374,14 @@ pub fn drain(app: &mut VectorcraftApp) {
 
 /// Files dragged over the window: the canvas is outlined where they would be placed.
 pub fn paint_drop_highlight(app: &VectorcraftApp, ctx: &egui::Context, painter: &egui::Painter, rect: egui::Rect) {
-    let hovering = ctx.input(|i| !i.raw.hovered_files.is_empty());
-    if !hovering || matches!(app.drop_target(ctx.input(|i| i.pointer.latest_pos()), false), DropTarget::Open) {
+    let pos = drag_pos(ctx);
+    let placed = ctx.input(|i| {
+        i.raw.hovered_files.iter().any(|f| {
+            let name = f.path.as_deref().map(|p| p.to_string_lossy()).unwrap_or_default();
+            app.drop_target(&name, pos, false) != DropTarget::Open
+        })
+    });
+    if !placed {
         return;
     }
     let t = Tokens::get(ctx);

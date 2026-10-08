@@ -349,11 +349,12 @@ impl eframe::App for WebShell {
         if !dropped.is_empty() {
             let at = self.host.drag.take();
             let z = ctx.zoom_factor();
-            let target = app.drop_target(at.map(|(x, y, _)| egui::pos2(x / z, y / z)), at.is_some_and(|a| a.2));
+            let (pos, shift) = (at.map(|(x, y, _)| egui::pos2(x / z, y / z)), at.is_some_and(|a| a.2));
             for f in dropped {
+                let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
+                let target = app.drop_target(&name, pos, shift);
                 let (inbox, place_inbox, ctx) = (self.host.inbox.clone(), self.host.place_inbox.clone(), ctx.clone());
                 wasm_bindgen_futures::spawn_local(async move {
-                    let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
                     match f.bytes_async().await {
                         Ok(bytes) => {
                             match target {

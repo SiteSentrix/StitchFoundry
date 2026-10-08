@@ -278,7 +278,10 @@ pub struct UiState {
     pub status: String,
     pub palette_open: bool,
     pub palette_query: String,
-    /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation.
+    /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
+    /// the app always starts in Normal Screen Mode, with its menus and panels (#472: a saved
+    /// Presentation Mode came back on restart with no way out).
+    #[serde(skip)]
     pub screen_mode: u8,
     /// Draw Normal / Behind / Inside.
     pub draw_mode: u8,

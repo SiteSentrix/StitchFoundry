@@ -151,6 +151,20 @@ fn page_fill(before: &str, after: &str, ai: bool) -> Document {
     import(&pdf_with_catalog(&[page], &[&objs[0], &objs[1]], &catalog, None)).unwrap()
 }
 
+/// A file with an editor's private data says that art off its artboards isn't in the part read
+/// (#472); a plain PDF has nothing to say.
+#[test]
+fn an_ai_file_notes_that_its_art_off_the_artboards_is_not_read() {
+    for ai in [false, true] {
+        let page = PdfPage {
+            entries: if ai { "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>".into() } else { String::new() },
+            ..PdfPage::new(100.0, 100.0, "1 0 0 rg 10 10 30 30 re f")
+        };
+        let r = import_with_report(&pdf_with_catalog(&[page], &[], "", None), &ImportOptions::default()).unwrap();
+        assert_eq!(r.warnings, if ai { vec![crate::import::OFF_ARTBOARD_NOTE.to_string()] } else { vec![] });
+    }
+}
+
 fn path_count(d: &Document) -> usize {
     let mut n = 0;
     d.walk(|c| n += usize::from(matches!(c.kind, NodeKind::Path { .. })));

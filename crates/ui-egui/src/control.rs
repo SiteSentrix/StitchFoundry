@@ -77,6 +77,8 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "tool": app.session.tool_id(),
         "toolOptions": app.session.tool_options(),
         "ui": serde_json::to_value(&app.ui).unwrap_or_default(),
+        // Not saved with the UI state, so not in `ui`: 0 normal … 3 Presentation Mode.
+        "screenMode": app.ui.screen_mode,
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
         "window": [r.width(), r.height()],
