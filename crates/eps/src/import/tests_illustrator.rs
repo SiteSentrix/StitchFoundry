@@ -20,6 +20,9 @@ fn ai(header: &str, ugroup: &str, body: &str) -> Vec<u8> {
     .into_bytes()
 }
 
+/// A legacy Illustrator format header: the reader takes `u` … `U` as groups only in files whose
+/// header says they are in that format (`%AI…` comments or the creator, which the format's
+/// published specification documents; see the `import` module docs).
 const AI8: &str = "%%Creator: Adobe Illustrator(R) 8.0\n%AI5_FileFormat 4.0\n";
 
 /// A triangle filled at `x`.
