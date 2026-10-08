@@ -414,6 +414,35 @@ mod area_tests {
     use super::*;
 
     #[test]
+    fn burasagari_is_set_per_paragraph_and_saved_only_when_on() {
+        use vectorcraft_doc::Burasagari;
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "雅楽、笙。", "area": {"width": 200, "height": 100}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.para.clone(),
+            _ => panic!("text"),
+        };
+        assert_eq!(para(&s).burasagari, Burasagari::None);
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        assert!(s.execute("text.setFormat", &json!({"burasagari": "strong"})).is_err());
+        s.execute("text.setFormat", &json!({"burasagari": "forced"})).unwrap();
+        assert_eq!(para(&s).burasagari, Burasagari::Forced);
+        assert_eq!(serde_json::to_value(para(&s)).unwrap()["burasagari"], "forced");
+        s.execute("text.setFormat", &json!({"burasagari": "standard"})).unwrap();
+        assert_eq!(para(&s).burasagari, Burasagari::Standard);
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(para(&s).burasagari, Burasagari::None);
+        // Saved only when on; documents from before it read as None.
+        assert!(serde_json::to_value(para(&s)).unwrap().get("burasagari").is_none());
+        let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+        assert_eq!(old.burasagari, Burasagari::None);
+    }
+
+    #[test]
     fn leading_model_is_set_per_paragraph_and_saved_only_when_top_to_top() {
         use vectorcraft_doc::LeadingModel;
         let mut s = Session::new();
