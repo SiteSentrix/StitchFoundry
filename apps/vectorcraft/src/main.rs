@@ -231,6 +231,19 @@ fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
     fileio::write_atomic(std::path::Path::new(path), bytes).map_err(|e| e.to_string())
 }
 
+/// The factory for the off-thread clipboard check: Linux only for now. On Linux an X11 clipboard
+/// owner that never answers would otherwise block the frame loop (see `clipboard_probe`).
+fn clipboard_probe_factory() -> Option<vectorcraft_ui_egui::ClipboardProbeFactory> {
+    #[cfg(target_os = "linux")]
+    {
+        Some(Box::new(clipboard::system_clipboard))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
 fn services() -> Services {
     Services {
         pick_open: Some(Box::new(|pick: &FilePick| file_dialog(pick).pick_file().map(|p| p.to_string_lossy().to_string()))),
@@ -256,6 +269,9 @@ fn services() -> Services {
         write_shared: Some(std::sync::Arc::new(write_file)),
         // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).
         system_clipboard: Some(clipboard::system_clipboard()),
+        // Whether Paste has something to take is checked on a background thread (Linux), so a stuck
+        // clipboard owner can't freeze the UI.
+        clipboard_probe: clipboard_probe_factory(),
         // Help → Discord / website / GitHub, the Discord button, About and Home links.
         open_url: Some(Box::new(|url: &str| {
             let _ = webbrowser::open(url);

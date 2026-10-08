@@ -17,6 +17,7 @@ pub mod background;
 mod brand;
 pub mod canvas;
 pub mod chrome;
+mod clipboard_probe;
 pub mod community;
 pub mod control;
 pub mod credits;
@@ -129,6 +130,8 @@ mod tests_sysclip;
 #[cfg(test)]
 mod tests_sysclip_emf;
 #[cfg(test)]
+mod tests_sysclip_probe;
+#[cfg(test)]
 mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_widthtool;
@@ -142,7 +145,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse};
 pub use state::{UiState, View};
-pub use sysclip::SystemClipboard;
+pub use sysclip::{ClipboardProbeFactory, SystemClipboard};
 
 /// What a file dialog shows: a suggested file name (save dialogs), the folder to start in and the
 /// file-type filters.
@@ -205,6 +208,10 @@ pub struct Services {
     /// Paste takes SVG, PDF, text and bitmaps from other apps. Without it, SVG text only (through
     /// egui and `clipboard_read`).
     pub system_clipboard: Option<Box<dyn SystemClipboard>>,
+    /// A factory for a second system-clipboard handle, checked on a background thread so an
+    /// unresponsive clipboard owner never freezes the UI ([`VectorcraftApp::system_paste`]).
+    /// Without it, that check stays on the UI thread, as before.
+    pub clipboard_probe: Option<ClipboardProbeFactory>,
     /// File → Show in Folder: select a file in the system file manager (desktop).
     pub reveal: Option<RevealFn>,
     /// Write a file from any thread (desktop): lets Background Save and Export write off the UI
@@ -329,6 +336,13 @@ pub struct VectorcraftApp {
     pub(crate) system_paste: bool,
     /// When `system_paste` was last checked (app time, s; at most once per frame).
     system_paste_at: f64,
+    /// The probe's last verdict: the system clipboard holds something Paste can take.
+    system_paste_available: bool,
+    /// The background thread that checks the system clipboard for Paste (native desktop), started
+    /// on the first frame. Without it the check runs in line, throttled ([`SYSTEM_CLIPBOARD_POLL`]).
+    clipboard_probe: Option<clipboard_probe::Probe>,
+    /// The host's factory for the probe, taken when its thread starts ([`Services::clipboard_probe`]).
+    clipboard_probe_factory: Option<ClipboardProbeFactory>,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
@@ -353,12 +367,14 @@ pub struct VectorcraftApp {
 const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 impl VectorcraftApp {
-    pub fn new(mut session: Session, services: Services) -> Self {
+    pub fn new(mut session: Session, mut services: Services) -> Self {
         // The font menus and the first file opened need the installed fonts: catalog them now.
         vectorcraft_text::FontDb::global().scan_in_background();
         if let Some(store) = &services.recovery_store {
             session.recovery.set_store(store.clone());
         }
+        // The probe is started on the first frame, which is where an `egui::Context` is available.
+        let clipboard_probe_factory = services.clipboard_probe.take();
         let views = session.documents().iter().map(View::of).collect();
         Self {
             session,
@@ -404,6 +420,9 @@ impl VectorcraftApp {
             place: Default::default(),
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
+            system_paste_available: false,
+            clipboard_probe: None,
+            clipboard_probe_factory,
             paste_chord: Default::default(),
             background: Default::default(),
             recovery: Default::default(),
@@ -729,12 +748,26 @@ impl VectorcraftApp {
         }
         self.last_time = now;
         self.sync_views();
-        // Read the system clipboard only when that alone decides whether Paste is enabled, and at
-        // most a few times a second (opening it locks it against other apps on some systems).
-        if !(0.0..SYSTEM_CLIPBOARD_POLL).contains(&(now - self.system_paste_at)) {
-            self.system_paste_at = now;
-            self.system_paste = self.session.clipboard.is_empty() && self.session.active().is_some() && self.system_clipboard_pasteable();
+        // Whether Paste can take from the system clipboard. On a native desktop a background thread
+        // checks it (an unresponsive clipboard owner must never stall the frame loop) and only its
+        // latest verdict is read here; without a probe the check runs in line, at most a few times a
+        // second (opening the clipboard locks it against other apps on some systems).
+        if self.clipboard_probe.is_none()
+            && let Some(make) = self.clipboard_probe_factory.take()
+        {
+            self.clipboard_probe = clipboard_probe::Probe::start(make, ctx.clone());
         }
+        let verdict = self.clipboard_probe.as_mut().and_then(clipboard_probe::Probe::poll);
+        let available = if self.clipboard_probe.is_some() {
+            verdict.unwrap_or(self.system_paste_available)
+        } else if !(0.0..SYSTEM_CLIPBOARD_POLL).contains(&(now - self.system_paste_at)) {
+            self.system_paste_at = now;
+            self.system_clipboard_pasteable()
+        } else {
+            self.system_paste_available
+        };
+        self.system_paste_available = available;
+        self.system_paste = available && self.session.clipboard.is_empty() && self.session.active().is_some();
         background::poll(self);
         if !self.background.jobs.is_empty() {
             // Keep the status bar's progress moving and pick the result up when it arrives.
