@@ -43,7 +43,7 @@ fn snap(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
         cx.doc
             .guides
             .iter()
-            .filter(|g| g.vertical == vertical && (g.pos - v).abs() <= tol)
+            .filter(|g| g.vertical == vertical && (g.pos - v).abs() <= tol && cx.doc.guide_passes(g, p, tol))
             .min_by(|a, b| (a.pos - v).abs().total_cmp(&(b.pos - v).abs()))
     };
     if let Some(g) = nearest(true, p.x) {
@@ -341,7 +341,7 @@ mod tests {
     #[test]
     fn the_slice_tool_drags_out_a_slice_in_one_undo_step() {
         let (mut d, _) = doc_with_rect();
-        d.guides.push(Guide { vertical: true, pos: 403.0 });
+        d.guides.push(Guide::new(true, 403.0));
         let s = Selection::default();
         let p = paint();
         let mut c = cx(&d, &s, &p);

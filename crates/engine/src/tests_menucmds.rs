@@ -799,6 +799,126 @@ fn ruler_guides_select_move_and_delete() {
     assert!(matches!(s.execute("edit.clear", &json!({})), Err(EngineError::Disabled(..))));
 }
 
+/// #451: an artboard guide (`guide.add {artboard}`) runs across its artboard only, and is moved,
+/// copied and deleted with it; canvas guides stay put.
+#[test]
+fn artboard_guides_go_with_their_artboard() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 1000, "artboard": 1})).unwrap();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 100})).unwrap();
+    let list = |s: &mut Session| s.execute("guide.list", &json!({})).unwrap();
+    assert_eq!(
+        list(&mut s),
+        json!([
+            {"index": 0, "vertical": true, "pos": 1000.0, "selected": false, "artboard": 1},
+            {"index": 1, "vertical": false, "pos": 100.0, "selected": false},
+        ])
+    );
+    let spans = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        d.guides.iter().map(|g| d.guide_span(g)).collect::<Vec<_>>()
+    };
+    assert_eq!(spans(&s), [Some((0.0, 300.0)), None]);
+    for bad in [json!(5), json!("x"), json!(-1)] {
+        assert!(s.execute("guide.add", &json!({"vertical": true, "pos": 10, "artboard": bad})).is_err(), "{bad}");
+    }
+    // Moved, the artboard takes its guides along; in Artboard Options too, unless resized.
+    s.execute("artboard.move", &json!({"index": 1, "dx": 50, "dy": 20})).unwrap();
+    assert_eq!(guides(&s), [(true, 1050.0), (false, 100.0)]);
+    s.execute("artboard.setProps", &json!({"index": 1, "x": 960.5})).unwrap();
+    assert_eq!(guides(&s)[0], (true, 1060.5));
+    s.execute("artboard.setProps", &json!({"index": 1, "x": 900, "width": 500})).unwrap();
+    assert_eq!((guides(&s)[0], spans(&s)[0]), ((true, 1060.5), Some((20.0, 320.0))));
+    // Renumbered, it keeps them.
+    s.execute("artboard.reorder", &json!({"index": 1, "to": 0})).unwrap();
+    assert_eq!(list(&mut s)[0]["artboard"], 0);
+    // Duplicated (or Alt-dragged), the copy gets copies of them.
+    let dup = s.execute("artboard.duplicate", &json!({"index": 0})).unwrap()["index"].as_u64().unwrap();
+    let dx = s.doc().unwrap().doc.artboards[dup as usize].rect.x0 - 900.0;
+    assert_eq!(guides(&s), [(true, 1060.5), (false, 100.0), (true, 1060.5 + dx)]);
+    assert_eq!(list(&mut s)[2]["artboard"], dup);
+    s.execute("artboard.move", &json!({"index": 0, "dx": 0, "dy": 400, "copy": true})).unwrap();
+    assert_eq!((guides(&s).len(), list(&mut s)[3]["artboard"].clone()), (4, json!(3)));
+    // Rearranged, they follow their artboards.
+    s.execute("artboard.rearrange", &json!({"columns": 4})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    for (g, ab) in d.guides.iter().filter_map(|g| Some((g, d.artboards.iter().find(|a| Some(a.id) == g.artboard)?))) {
+        assert_eq!(g.pos - ab.rect.x0, 160.5, "{g:?} on {ab:?}");
+    }
+    // Deleted, the artboard takes its guides; the selected ones left stay selected.
+    s.execute("guide.select", &json!({"indexes": [1, 2]})).unwrap();
+    let n = undo_len(&s);
+    s.execute("artboard.delete", &json!({"index": 0})).unwrap();
+    assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
+    assert_eq!(list(&mut s)[0], json!({"index": 0, "vertical": false, "pos": 100.0, "selected": true}));
+    assert_eq!(undo_len(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((guides(&s).len(), selected_guides(&s)), (4, vec![1, 2]));
+    // Cut, too.
+    s.execute("artboard.cut", &json!({"index": 0})).unwrap();
+    assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
+}
+
+/// #451: a guide dragged out of a ruler snaps (to the art's corners, side midpoints and anchors,
+/// the artboards' edges and centres) and is made in one undo step where it is released over the
+/// canvas; with the Artboard tool it is an artboard guide of the active artboard.
+#[test]
+fn guides_dragged_out_of_a_ruler_snap_and_take_the_artboard_tool_s_artboard() {
+    use vectorcraft_tools::{Overlay, PointerEvent, PointerKind};
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let v = ViewInfo::default();
+    let ev = |kind, x, y| PointerEvent::new(kind, x, y);
+    let n = undo_len(&s);
+    s.ruler_guide(true, &ev(PointerKind::Drag, -10.0, 30.0), false, v).unwrap();
+    assert!(guides(&s).is_empty(), "still over the ruler");
+    s.ruler_guide(true, &ev(PointerKind::Drag, 153.0, 30.0), true, v).unwrap();
+    assert_eq!(guides(&s), [(true, 150.0)], "onto the line through the top and bottom midpoints");
+    assert!(s.overlays(v).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "center")));
+    s.ruler_guide(true, &ev(PointerKind::Drag, 797.0, 30.0), true, v).unwrap();
+    assert_eq!(guides(&s), [(true, 800.0)], "the artboard's edge");
+    s.ruler_guide(true, &ev(PointerKind::Up, 797.0, 30.0), true, v).unwrap();
+    assert_eq!(guides(&s), [(true, 800.0)]);
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "New Guide");
+    assert!(s.overlays(v).is_empty());
+    // Released off the canvas: none.
+    s.ruler_guide(false, &ev(PointerKind::Drag, 30.0, 250.0), true, v).unwrap();
+    s.ruler_guide(false, &ev(PointerKind::Up, 30.0, -10.0), false, v).unwrap();
+    assert_eq!((guides(&s).len(), undo_len(&s)), (1, n + 1));
+    // The Artboard tool: an artboard guide of its active artboard.
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    s.select_tool("artboard", v).unwrap();
+    s.set_tool_option("active", &json!(1));
+    s.ruler_guide(false, &ev(PointerKind::Drag, 1000.0, 50.0), true, v).unwrap();
+    s.ruler_guide(false, &ev(PointerKind::Up, 1000.0, 50.0), true, v).unwrap();
+    assert_eq!(
+        s.execute("guide.list", &json!({})).unwrap()[1],
+        json!({"index": 1, "vertical": false, "pos": 50.0, "selected": false, "artboard": 1})
+    );
+}
+
+/// #451: art moved with the Selection tool lands flush on the artboard's edges and centre (Smart
+/// Guides).
+#[test]
+fn moved_art_snaps_to_the_artboard_edges_and_centre() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let mut drag = |from: (f64, f64), to: (f64, f64)| {
+        for (kind, (x, y)) in [(PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+            s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
+        }
+        let b = bounds(&s, a);
+        (b.x0, b.y0)
+    };
+    assert_eq!(drag((150.0, 150.0), (53.0, 147.0)), (0.0, 97.0), "3 pt off the left edge: flush with it");
+    assert_eq!(drag((50.0, 147.0), (402.0, 298.0)), (350.0, 250.0), "its centre on the artboard's");
+}
+
 /// #414: the Selection tool picks a ruler guide over the art and drags it in one undo step; with
 /// guides hidden or locked the press goes to the art.
 #[test]

@@ -735,14 +735,16 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
     let i = p.get("index").and_then(Value::as_u64).ok_or_else(|| bad("artboard.delete", "missing index"))? as usize;
-    s.edit("Delete Artboard", |d, _| {
+    s.edit("Delete Artboard", |d, sel| {
         if d.artboards.len() <= 1 {
             return Err(EngineError::Other("a document needs at least one artboard".into()));
         }
         if i >= d.artboards.len() {
             return Err(EngineError::Other("no such artboard".into()));
         }
-        d.artboards.remove(i);
+        // Its guides go with it.
+        let id = d.artboards.remove(i).id;
+        d.retain_guides(sel, |_, g| g.artboard != Some(id));
         Ok(())
     })?;
     ok()
@@ -752,9 +754,15 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
     let i = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
     s.edit("Artboard Options", |d, _| {
         let a = d.artboards.get_mut(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+        let was = a.rect;
         a.rect = rect_from(p, a.rect);
         if let Some(n) = str_param(p, "name") {
             a.name = n.to_string();
+        }
+        // Moved (not resized), it takes its guides along.
+        let (id, now) = (a.id, a.rect);
+        if (now.width() - was.width()).abs() <= 1e-6 && (now.height() - was.height()).abs() <= 1e-6 {
+            d.move_artboard_guides(id, now.origin() - was.origin());
         }
         Ok(())
     })?;

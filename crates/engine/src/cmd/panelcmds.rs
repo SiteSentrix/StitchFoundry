@@ -118,7 +118,9 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
             if i >= d.artboards.len() {
                 return Err(EngineError::Other("no such artboard".into()));
             }
-            d.artboards.remove(i);
+            // Its guides go with it.
+            let gone = d.artboards.remove(i).id;
+            d.retain_guides(sel, |_, g| g.artboard != Some(gone));
             for id in &art {
                 // Always there: none of the art is inside another of it.
                 let _ = d.remove(*id);
@@ -134,8 +136,9 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
     Ok(json!({"copied": copied}))
 }
 
-/// Add a copy of artboard `i` moved by `dv`, with copies of its `art` (each just above its
-/// original) moved along → (the copy's index, the art's copies). Duplicate Artboards and Alt-drag.
+/// Add a copy of artboard `i` moved by `dv`, with copies of its guides and of its `art` (each just
+/// above its original) moved along → (the copy's index, the art's copies). Duplicate Artboards and
+/// Alt-drag.
 pub(crate) fn copy_artboard(
     d: &mut vectorcraft_doc::Document,
     i: usize,
@@ -145,6 +148,10 @@ pub(crate) fn copy_artboard(
 ) -> Result<(usize, Vec<NodeId>)> {
     let src = d.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
     let index = push_artboard_copy(d, &src, src.rect + dv);
+    // Its guides come along.
+    if let Some(id) = d.artboards.get(index).map(|a| a.id) {
+        d.copy_artboard_guides(src.id, id, dv);
+    }
     let mut copies = Vec::with_capacity(art.len());
     for id in art {
         let (Some((parent, at, _)), Some(n)) = (d.position(*id), d.node(*id).cloned()) else { continue };

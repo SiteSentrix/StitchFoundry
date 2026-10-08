@@ -774,6 +774,8 @@ pub struct Session {
     pub(crate) liquify_stroke: Option<Box<cmd::distortcmds::LiquifyStroke>>,
     /// A press on the Plane Switching Widget is under way: its drag and release are the widget's.
     pub(crate) plane_widget_press: bool,
+    /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
+    pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
 }
 
 impl Default for Session {
@@ -818,6 +820,7 @@ impl Session {
             envelope_defaults: None,
             liquify_stroke: None,
             plane_widget_press: false,
+            ruler_guide: None,
         }
     }
 
