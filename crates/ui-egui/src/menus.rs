@@ -560,7 +560,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "links.editOriginal",
         "Edit Original",
         "",
-        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original) → {path}; edits saved there show after links.update",
+        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original); a placed document's file opens here in a new tab, and saving it updates the documents placing it → {path}; edits saved elsewhere show after links.update",
     ),
     (
         "links.reveal",
@@ -1837,8 +1837,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.spotColors" => app.session.active().is_some(),
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
-        "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()),
-        "ui.placementOptionsDialog" => selected_image(app, |_| true),
+        "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
+        "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
@@ -1853,6 +1853,13 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.perspectivePlane" => app.session.active().is_some(),
         _ => true,
     }
+}
+
+/// Is a placed document selected?
+fn selected_placed(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|st| {
+        st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::PlacedDocument(_))))
+    })
 }
 
 /// Is an image `keep` accepts selected?

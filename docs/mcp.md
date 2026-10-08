@@ -1424,8 +1424,11 @@ passed straight back to `file.new`. Print presets and sizes without `units` star
 
 `file.place` puts another file's art into the active document as one undo step without touching the clipboard:
 a raster image at 100% of its physical size (the resolution its file declares, else 72 ppi; linked to its `path`
-unless `link: false`), an SVG as one group, a PDF/.ai page or a native document's artboard (`page`, `crop`) as one
-clipped group, with the images, symbols, patterns and swatches it uses. `at` centres it, `rect` fits it, `replace`
+unless `link: false`), an SVG as one group, a PDF/.ai page as one clipped group, with the images, symbols, patterns
+and swatches it uses. A VectorCraft document read from `path` is a placed document: one locked object showing its
+artboard `page` (or, with `crop: "bounding"`, its art's bounds), linked to the file and read again when it changes
+(see Linked images), and vectors in every output; with `link: false` (or from `dataBase64`) it is an editable copy
+of its art, as one clipped group. `at` centres it, `rect` fits it, `replace`
 swaps the selected object (keeping its place and transform), `template` puts it on a new template layer.
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
@@ -1533,6 +1536,14 @@ in `updatedLinks`), each as `{name, path, ids}`. `links.check` reports every lin
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. Without a
 file system (the web), linked images show their previews.
+
+Placed documents (a `.vectorcraft` file placed linked) work the same way: the document keeps the file's bytes and a
+preview (JPEG or PNG, 1 px per point, at most 1024 px a side), and a save writes the preview (Include Linked Files:
+the file); output reads the file again, or uses the preview with a warning when it is gone or changed.
+`links.list` and `links.info` give them `document: true` and the artboard's `pageWidth` and `pageHeight` (pt).
+Saving the file in the app updates the open documents that place it. `links.embed` (the Links panel's Break Link)
+turns one into the editable copy placing without link gives, its symbols, patterns, swatches and images joining
+the document; so does `object.expand`.
 
 ```json
 {"name":"run_command","arguments":{"command":"links.check","params":{}}}

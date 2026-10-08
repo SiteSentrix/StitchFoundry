@@ -361,3 +361,40 @@ fn the_control_bars_mask_clips_the_image_and_selects_the_clipping_path() {
     let ids: Vec<u64> = group.children().unwrap().iter().map(|c| c.id.0).collect();
     assert_eq!((ids[1], st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>()), (img, vec![ids[0]]));
 }
+
+#[test]
+fn a_vectorcraft_document_places_linked_and_edit_original_opens_it() {
+    let mut app = app();
+    // A one-artboard document with a rectangle.
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    let bytes = vectorcraft_format::save_file(&src.active().unwrap().doc);
+    let path = temp_file("badge.vectorcraft", &bytes);
+    place_picked(&mut app, &path);
+    let d = app.ui.dialog.as_ref().expect("the Place dialog");
+    assert!(d.bool("link") && d.bool("__documents") && !d.bool("__others"), "Link on, for a document");
+    // Link's tooltip says what it does for a document.
+    assert!(crate::dialogs::place::link_tip(d).contains("editable copy"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    let id = st.selection.objects[0];
+    let vectorcraft_doc::NodeKind::PlacedDocument(p) = &st.doc.node(id).unwrap().kind else { panic!("not a placed document") };
+    assert_eq!(p.link.path, path);
+    // Edit Original opens the document in a new tab.
+    let tabs = app.session.documents().len();
+    app.run("links.editOriginal", json!({})).unwrap();
+    assert_eq!(app.session.documents().len(), tabs + 1);
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some(path.as_str()));
+    // A PNG keeps the image tooltip; a PNG and a document, both.
+    let pic = temp_file("pic.png", &png(10, 10, 72.0));
+    place_picked(&mut app, &pic);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.bool("__documents") && crate::dialogs::place::link_tip(d).contains("image file"));
+    app.ui.dialog = None;
+    let both = vec![pic.clone(), path.clone()];
+    app.services.pick_open_multi = Some(Box::new(move || both.clone()));
+    app.run("file.place", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(crate::dialogs::place::link_tip(d).contains("VectorCraft documents"));
+}
