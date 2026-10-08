@@ -320,6 +320,69 @@ fn shape_builder_tool_alt_deletes_line_pieces() {
     assert_eq!(layer_children(&s), 3, "square + the line's two loose ends");
 }
 
+/// Red square A (0..100) and blue square B (50..150 both ways), overlapping at a corner, selected.
+fn corner(s: &mut Session) -> (NodeId, NodeId) {
+    let a = rect(s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(s, 50.0, 50.0, 100.0, 100.0);
+    set_fill(s, a, Color::rgb(1.0, 0.0, 0.0));
+    set_fill(s, b, Color::rgb(0.0, 0.0, 1.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    (a, b)
+}
+
+/// (closed, anchors, length) of each of `ids`.
+fn shapes_of(s: &Session, ids: &[NodeId]) -> Vec<(bool, usize, f64)> {
+    ids.iter()
+        .map(|i| {
+            let (p, _) = outline(&node(s, *i));
+            (p.is_closed(), p.anchor_count(), (p.length() * 1e6).round() / 1e6)
+        })
+        .collect()
+}
+
+#[test]
+fn shape_builder_erase_click_on_an_edge_opens_its_path() {
+    let mut s = session();
+    corner(&mut s);
+    let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    assert_eq!(r["edges"].as_array().unwrap().len(), 4, "each outline cut in two where the other crosses it: {r}");
+    // A's side inside B (1 pt off it).
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[101, 75]], "erase": true})).unwrap();
+    assert_eq!((r["regions"].as_u64(), r["lines"].as_u64(), r["edges"].as_u64()), (Some(0), Some(0), Some(1)));
+    let out = ids(&r);
+    // A opens where B's outline crosses it and keeps its look; B is untouched.
+    assert_eq!(shapes_of(&s, &out), vec![(false, 5, 300.0), (true, 4, 400.0)]);
+    assert_eq!(node(&s, out[0]).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let back: Vec<NodeId> = s.doc().unwrap().doc.children(s.doc().unwrap().doc.default_layer()).unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(shapes_of(&s, &back), vec![(true, 4, 400.0); 2], "one undo step");
+}
+
+#[test]
+fn shape_builder_erase_drag_along_edges_deletes_each() {
+    let mut s = session();
+    corner(&mut s);
+    // Down A's side inside B, round the corner and along B's side inside A.
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[100, 75], [100, 50], [75, 50]], "erase": true})).unwrap();
+    assert_eq!((r["regions"].as_u64(), r["edges"].as_u64()), (Some(0), Some(2)));
+    assert_eq!(shapes_of(&s, &ids(&r)), vec![(false, 5, 300.0); 2]);
+}
+
+#[test]
+fn shape_builder_erase_drag_into_regions_deletes_them_not_the_edges_it_crosses() {
+    let mut s = session();
+    corner(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 25], [75, 75]], "erase": true})).unwrap();
+    assert_eq!((r["regions"].as_u64(), r["edges"].as_u64()), (Some(2), Some(0)));
+    // A is gone; what is left of B stays closed and blue.
+    let out = ids(&r);
+    assert_eq!(out.len(), 1);
+    assert!((area(&s, out[0]) - 7500.0).abs() < 1e-6);
+    assert!(outline(&node(&s, out[0])).0.is_closed());
+    assert_eq!(node(&s, out[0]).appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+}
+
 // ---------- Live Paint ----------
 
 fn live(s: &mut Session) -> NodeId {

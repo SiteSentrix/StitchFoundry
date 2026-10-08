@@ -201,6 +201,17 @@ fn blend(p: &Painter, o: Pos2, badge: Cursor) {
     poly(p, vec![b, b + vec2(7.0, 0.0), b + vec2(7.0, 7.0), b + vec2(0.0, 7.0)], fill, INK);
 }
 
+/// The Shape Builder: a crosshair with a plus badge below right of the hotspot (merge mode), or a
+/// minus (erase mode).
+fn shape_builder(p: &Painter, o: Pos2, erase: bool) {
+    crosshair(p, o);
+    let c = o + vec2(12.0, 12.0);
+    line(p, c - vec2(3.5, 0.0), c + vec2(3.5, 0.0));
+    if !erase {
+        line(p, c - vec2(0.0, 3.5), c + vec2(0.0, 3.5));
+    }
+}
+
 /// Paint cursor `c` at `p` on the given (foreground) painter. Returns false for cursors that should
 /// stay system cursors (hand, zoom, busy states).
 pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
@@ -237,6 +248,8 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
         Cursor::WidthPoint => width(painter, p, "point"),
         Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor => blend(painter, p, c),
         Cursor::PathBracket => path_bracket(painter, p),
+        Cursor::ShapeBuilder => shape_builder(painter, p, false),
+        Cursor::ShapeBuilderErase => shape_builder(painter, p, true),
         _ => return false,
     }
     let _ = pos2;
