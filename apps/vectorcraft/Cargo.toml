@@ -37,9 +37,11 @@ winit = { version = "0.30", default-features = false }
 clipboard-win = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-muda = { version = "0.21", default-features = false }
+# The macOS menu bar (src/mac_menu.rs): Tauri's menu crate, AppKit menus behind a safe API (no GTK
+# with default features off). Pinned exactly: review the diff before bumping.
+muda = { version = "=0.21.1", default-features = false }
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSPasteboard", "NSResponder", "NSTextInputContext"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSPasteboard", "NSResponder", "NSTextInputContext"] }
 # Files opened from Finder and the Dock (src/open_documents.rs) and pasted bitmaps (src/clipboard.rs); both already come with winit, muda and rfd.
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSNotification", "NSOperation", "NSString", "NSURL"] }
 block2 = "0.6"

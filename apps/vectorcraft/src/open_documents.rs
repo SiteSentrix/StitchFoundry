@@ -78,6 +78,7 @@ fn add_open_urls_method() {
 
 /// Queue the files among `urls` and wake the UI. Never panics: it runs inside AppKit.
 extern "C-unwind" fn open_urls(_delegate: &AnyObject, _cmd: Sel, _app: &AnyObject, urls: &NSArray<NSURL>) {
+    // Only file URLs: macOS 27 turns an https URL's path into a file path too (#433).
     let paths = urls.iter().filter(|u| u.isFileURL()).filter_map(|u| u.to_file_path()).map(|p| p.to_string_lossy().into_owned());
     PENDING.lock().unwrap_or_else(PoisonError::into_inner).extend(paths);
     if let Some(ctx) = UI.get() {

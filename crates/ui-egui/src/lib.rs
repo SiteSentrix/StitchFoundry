@@ -33,6 +33,7 @@ pub mod icon_data;
 pub mod icons;
 pub mod io;
 pub mod menus;
+pub mod native_menu;
 pub mod palette;
 pub mod panels;
 pub mod place;
@@ -77,6 +78,8 @@ mod tests_fonts;
 mod tests_home;
 #[cfg(test)]
 mod tests_labels;
+#[cfg(test)]
+mod tests_nativemenu;
 #[cfg(test)]
 mod tests_nativeoptions;
 #[cfg(test)]
@@ -228,6 +231,8 @@ pub struct Services {
     /// File → Print: the system's printers and print queue (desktop), the browser's print dialog
     /// (web). Without it Print saves the job as a PDF.
     pub print: Option<Box<dyn print::PrintService>>,
+    /// The macOS menu bar, when the desktop app installed one: the in-window menus are hidden then.
+    pub native_menu: Option<native_menu::NativeMenu>,
 }
 
 /// Cached canvas raster.
@@ -288,12 +293,11 @@ pub struct VectorcraftApp {
     pub perf: Perf,
     /// macOS: draw our own title strip under the traffic lights.
     pub integrated_titlebar: bool,
-    /// The host installed a native menu bar (macOS): don't draw in-window menus.
-    pub native_menu: bool,
     /// Last applied effect (Effect → Apply Last Effect).
     pub last_effect: Option<(String, serde_json::Value)>,
-    /// Commands whose shortcuts the native menu handles (skip them in egui to avoid double firing).
-    pub native_shortcuts: std::collections::HashSet<String>,
+    /// Commands run through [`Self::run`] so far: the native menu bar reads its rows again when it
+    /// moves ([`native_menu::sync`]).
+    run_count: u64,
     control_rx: Option<Receiver<ControlRequest>>,
     /// (token, path, reply, deadline ms): a window that isn't presented never delivers its frame.
     pending_screenshots: Vec<(u64, Option<String>, Sender<ControlResponse>, f64)>,
@@ -389,9 +393,8 @@ impl VectorcraftApp {
             },
             perf: Perf::default(),
             integrated_titlebar: false,
-            native_menu: false,
             last_effect: None,
-            native_shortcuts: Default::default(),
+            run_count: 0,
             clipboard_out: None,
             clipboard_published: None,
             clipboard_in: None,
@@ -477,6 +480,7 @@ impl VectorcraftApp {
 
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        self.run_count = self.run_count.wrapping_add(1);
         if let Some(r) = menus::run_ui_command(self, id, &params) {
             return r;
         }
@@ -722,7 +726,12 @@ impl VectorcraftApp {
     }
 
     fn logic_frame(&mut self, ctx: &egui::Context) {
-        i18n::set_current(self.ui_language());
+        let lang = self.ui_language();
+        i18n::set_current(lang);
+        // The engine gives new type the Japanese defaults while the UI is in Japanese.
+        if self.session.ui_language.as_deref() != Some(lang.code()) {
+            self.session.ui_language = Some(lang.code().to_string());
+        }
         self.adopt_context(ctx);
         if !self.styled {
             theme::install_fonts(ctx);
@@ -793,6 +802,7 @@ impl VectorcraftApp {
             ctx.copy_text(t);
         }
         self.drain_inbox();
+        native_menu::run(self, ctx);
         if self.fonts_ready {
             shortcuts::handle(self, ctx);
         }
@@ -838,6 +848,13 @@ impl VectorcraftApp {
     /// modifiers egui holds (`i.modifiers`), so a synthetic key, button or wheel turn holds its own
     /// for the frames it spans (a drag's moves included); the keyboard's come back after.
     pub fn raw_input_hook(&mut self, raw: &mut egui::RawInput) {
+        // The native menu's key equivalents become the input their keys make, ahead of what came
+        // after them (see `native_menu`).
+        let keys = self.services.native_menu.as_mut().map(native_menu::NativeMenu::take_keys).unwrap_or_default();
+        if !keys.is_empty() {
+            let events: Vec<egui::Event> = keys.into_iter().flat_map(|k| native_menu::key_events(k, || self.system_clipboard_text())).collect();
+            raw.events.splice(0..0, events);
+        }
         for e in &raw.events {
             match e {
                 egui::Event::ModifiersChanged(m) => self.host_modifiers = *m,
@@ -936,6 +953,7 @@ impl VectorcraftApp {
         }
         self.ui_fonts.frame(&ctx);
         scrub::end_frame(self, &ctx);
+        native_menu::sync(self, &ctx);
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
     }

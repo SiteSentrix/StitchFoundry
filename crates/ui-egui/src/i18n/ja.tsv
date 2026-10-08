@@ -233,8 +233,6 @@
 	Image Trace	画像トレース
 	Image Tracing	画像トレースオブジェクト
 	Tracing Presets	トレースプリセット
-	Make…	作成…
-	Make and Expand…	作成して拡張…
 	Text Wrap	テキストの回り込み
 	Text Wrap Options…	テキストの回り込みオプション…
 	Clipping Mask	クリッピングマスク
@@ -2352,6 +2350,7 @@
 	Character:	文字:
 	Character options	文字オプション
 	Stroke options	線オプション
+	Transform options	変形オプション
 	Stroke:	線:
 	Style	スタイル
 	Style Name:	スタイル名:
@@ -3048,3 +3047,11 @@ axis	Both	両方
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
 	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
+
+# The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
+	Services	サービス
+	Hide VectorCraft	VectorCraft を隠す
+	Zoom	拡大/縮小
+	Bring All to Front	すべてを手前に移動
+	Settings	環境設定
+theme	Appearance	外観

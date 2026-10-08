@@ -11,9 +11,11 @@
 //! - `text`: fonts by name and type as point type; Type 3 fonts' glyphs drawn by their procedures.
 //! - `preview`: the previews a file carries, for when its PostScript can't be read.
 //!
-//! Clipped art comes in as clipping groups. In an Illustrator file (Illustrator 3–8, written with
-//! the prolog that defines its operators), the groups it writes (`u` … `U`, nested) come in as
-//! groups.
+//! Clipped art comes in as clipping groups. In a file in the legacy Illustrator format (versions
+//! 3–8, with the prolog that defines its operators), the group operators `u` … `U` (nested) come in
+//! as groups. The format's published specification documents its header comments (`%AI…`,
+//! `%%Creator`) and these operators: Adobe Illustrator File Format Specification, version 7.0
+//! (1998), listed by PRONOM at https://www.nationalarchives.gov.uk/PRONOM/fmt/423.
 //!
 //! The page is the file's `%%BoundingBox` (`%%HiResBoundingBox` when it has one), the first page
 //! of a PostScript file without one. A file whose program can't be read (an operator the
@@ -39,6 +41,8 @@ mod tests_fontnames;
 mod tests_generators;
 #[cfg(test)]
 mod tests_illustrator;
+#[cfg(test)]
+mod tests_images;
 
 use std::sync::Arc;
 
@@ -73,7 +77,8 @@ struct Dsc {
     /// `llx lly urx ury` in PostScript's default space.
     bbox: Option<[f64; 4]>,
     pages: Option<u32>,
-    /// Written by Illustrator (or in its format): `%AI…` comments, or Illustrator the creator.
+    /// In the legacy Illustrator format: its header has `%AI…` comments or names the app as the
+    /// creator (see the module docs for the specification).
     illustrator: bool,
 }
 

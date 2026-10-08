@@ -42,7 +42,7 @@ fn a85_flate(data: &[u8]) -> String {
 }
 
 /// Pixel `(x, y)` (straight RGBA) of the first image in `d`.
-fn pixel(d: &Document, x: u32, y: u32) -> [u8; 4] {
+pub(super) fn pixel(d: &Document, x: u32, y: u32) -> [u8; 4] {
     let im = all(d)
         .into_iter()
         .find_map(|n| match &n.kind {
@@ -592,105 +592,52 @@ showpage"##;
     assert!(near(bounds(&meshes[1]), Rect::new(150.0, 90.0, 190.0, 140.0)), "{:?}", bounds(&meshes[1]));
 }
 
-/// Illustrator's EPS (CS and later, through 2026): procsets that define helpers with
-/// `bdf`/`ndf`/`ddf`, probe the level and version (`{version cvr} stopped`), switch VM with
-/// `currentglobal`/`setglobal`, save and restore the whole graphics state through
-/// `currentcolorrendering`, `rootfont`, the colour transfers, half-tone and flatness, set up
-/// categories and keep fonts by VM (`gcheck`), while the art is drawn with procedures of their own.
+/// A procset written as the PostScript Language Reference (3rd ed.) describes the Level 2 and 3
+/// facilities programs probe before drawing: a resource category made from `Generic` and
+/// resources defined and found in it (§3.9), local and global VM (`currentglobal`, `setglobal`,
+/// `gcheck`, §3.7.2), `internaldict` (§8.2), a halftone dictionary (§7.4), the font cache
+/// (`cachestatus`), `rootfont` and the colour rendering dictionary (§7.1), each guarded or
+/// probed through `stopped` (§3.10), saving the state they change and drawing with procedures of
+/// their own.
 #[test]
-fn illustrator_procsets_read_as_vectors() {
+fn level_2_and_3_probes_read_as_vectors() {
     let program = r##"%%BeginProlog
-%%BeginResource: procset Adobe_AGM_Utils 1.0 0
-systemdict /setpacking known { currentpacking true setpacking } if
-userdict /Adobe_AGM_Utils 75 dict dup begin put
-/bdf { bind def } bind def
-/nd { null def } bdf
-/xdf { exch def } bdf
-/ddf { put } bdf
-/xddf { 3 -1 roll put } bdf
-/ndf { exch dup where { pop pop pop } { xdf } ifelse } def
-/gx { get exec } bdf
-/ps_level /languagelevel where { pop systemdict /languagelevel gx } { 1 } ifelse def
-/level2 ps_level 2 ge def
-/level3 ps_level 3 ge def
-/ps_version { version cvr } stopped { -1 } if def
-/set_gvm { currentglobal exch setglobal } bdf
-/reset_gvm { setglobal } bdf
-/makereadonlyarray { /packedarray where { pop packedarray } { array astore readonly } ifelse } bdf
-/GSTATE 22 dict def
-/get_gstate {
-  GSTATE begin
-  /clr_spc currentcolorspace def
-  mark currentcolor counttomark array astore /clr_comps xdf pop
-  /fnt rootfont def
-  /lw currentlinewidth def /lc currentlinecap def /lj currentlinejoin def /ml currentmiterlimit def
-  currentdash /dsh_o xdf /dsh_a xdf
-  /sa currentstrokeadjust def
-  /crd currentcolorrendering def
-  /op currentoverprint def
-  /bg currentblackgeneration cvlit def
-  /ucr currentundercolorremoval cvlit def
-  currentcolortransfer cvlit /gy_x xdf cvlit /b_x xdf cvlit /g_x xdf cvlit /r_x xdf
-  /ht currenthalftone def
-  /flt currentflat def
-  end
-} def
-/set_gstate {
-  GSTATE begin
-  clr_spc setcolorspace clr_comps aload pop setcolor
-  fnt setfont lw setlinewidth lc setlinecap lj setlinejoin ml setmiterlimit dsh_a dsh_o setdash
-  sa setstrokeadjust crd setcolorrendering op setoverprint
-  bg cvx setblackgeneration ucr cvx setundercolorremoval
-  r_x cvx g_x cvx b_x cvx gy_x cvx setcolortransfer
-  ht /HalftoneType get dup 9 eq exch 100 eq or { ht sethalftone } if
-  flt setflat
-  end
-} def
-/ct_tst { 1183615869 internaldict pop } stopped pop
-currentdict readonly pop
+/ExampleKit 40 dict def ExampleKit begin
+/defp { bind def } bind def
+% A category of our own, implemented by a copy of Generic's dictionary (§3.9.2).
+/Generic /Category findresource dup length dict copy /ExampleShapes exch /Category defineresource pop
+/Card << /W 80 /H 50 >> /ExampleShapes defineresource pop
+% VM: a dictionary made in global VM, then the VM mode put back.
+/wasglobal currentglobal def true setglobal /Shared 4 dict def wasglobal setglobal
+/vm Shared gcheck { (global) } { (local) } ifelse def
+% Probes that fail on some interpreters, inside stopped.
+/hasinternal { 1183615869 internaldict } stopped { false } { pop true } ifelse def
+/screen << /HalftoneType 1 /Frequency 85 /Angle 15 /SpotFunction { 180 mul cos exch 180 mul cos add 2 div } >> def
+/oldscreen currenthalftone def
+/rendering currentcolorrendering def
+/cache [ cachestatus ] def
+/frame { /h exch def /w exch def moveto w 0 rlineto 0 h rlineto w neg 0 rlineto closepath } defp
 end
-systemdict /setpacking known { setpacking } if
-%%EndResource
-%%BeginResource: procset Adobe_AGM_Core 2.0 0
-userdict /Adobe_AGM_Core 200 dict dup begin put
-/AGMCORE_str256 256 string def
-/AGMCORE_deviceDPI 72 0 matrix defaultmatrix dtransform dup mul exch dup mul add sqrt def
-/AGMCORE_distilling /product where { pop systemdict /setdistillerparams known product (Adobe PostScript Parser) ne and } { false } ifelse def
-/AGMCORE_producing_seps currentpagedevice /Separations 2 copy known { get } { pop pop false } ifelse def
-/AGMCORE_page_size currentpagedevice /PageSize get def
-/Generic /Category findresource dup length dict copy /Category defineresource pop
-/AGMCORE_mo { moveto } def /AGMCORE_li { lineto } def /AGMCORE_cv { curveto } def /AGMCORE_cp { closepath } def
-/AGMCORE_rgb { setrgbcolor } def /AGMCORE_cmyk { setcmykcolor } def
-/doc_setup { Adobe_AGM_Utils begin get_gstate end } def
-/page_setup { Adobe_AGM_Utils begin set_gstate end } def
-end
-%%EndResource
-%%BeginResource: procset Adobe_CoolType_Core 2.31 0
-userdict /CT_Core 20 dict dup begin put
-/GVMFonts 10 dict def /LVMFonts 10 dict def
-/VMDictPut { dup gcheck { GVMFonts } { LVMFonts } ifelse 3 1 roll put } bind def
-/copyfont { currentglobal exch dup gcheck setglobal dup length dict copy exch setglobal } bind def
-end
-%%EndResource
 %%EndProlog
 %%BeginSetup
-Adobe_AGM_Core /doc_setup get exec
-CT_Core begin /Body /Helvetica findfont copyfont VMDictPut end
+ExampleKit begin
+screen sethalftone
+/Helvetica 12 selectfont
+/face rootfont /FontName get def
 %%EndSetup
 %%Page: 1 1
-%%BeginPageSetup
-Adobe_AGM_Core /page_setup get exec
-%%EndPageSetup
-Adobe_AGM_Core begin
-/mo { AGMCORE_mo } def /li { AGMCORE_li } def /cv { AGMCORE_cv } def /cp { AGMCORE_cp } def
-0 0.94 0.94 0.12 AGMCORE_cmyk
-10 140 mo 90 140 li 90 90 li 10 90 li cp fill
-0.2 0.4 0.8 AGMCORE_rgb
-100 20 mo 150 80 180 0 190 60 cv 2 setlinewidth stroke
-0 setgray CT_Core /LVMFonts get /Body get 12 scalefont setfont 10 30 moveto (Art) show
+gsave
+0 0.94 0.94 0.12 setcmykcolor
+10 90 /Card /ExampleShapes findresource dup /W get exch /H get frame fill
+0.2 0.4 0.8 setrgbcolor 2 setlinewidth 100 20 moveto 150 80 180 0 190 60 curveto stroke
+grestore
+% Each probe answered as the reference says: draw only when it did.
+vm length 5 eq hasinternal and rendering type /dicttype eq and cache length 7 eq and face /Helvetica eq and
+{ 0 setgray 10 30 moveto (Art) show } if
+oldscreen sethalftone
 end
 showpage"##;
-    let r = open("Adobe Illustrator(R) 30.0", program);
+    let r = open("Example Generator 1.0", program);
     let d = &r.document;
     let rect = all(d).into_iter().find(|n| fill(n).and_then(Paint::color) == Some(Color::cmyk(0.0, 0.94, 0.94, 0.12))).unwrap();
     assert!(near(bounds(&rect), Rect::new(10.0, 10.0, 90.0, 60.0)), "{:?}", bounds(&rect));
@@ -950,44 +897,65 @@ fn hostile_patterns_glyphs_and_shadings_end() {
     assert_eq!(objects(&r.document).len(), 1);
 }
 
-/// Illustrator 8 EPS (what stock art often comes as, #474): its gradient procset builds shading
-/// dictionaries with `bd` … `ed`, where `ed` is an executable string (`(>>) cvx`, or a Level 1
-/// dictionary builder), and its `discard` runs procedures it `load`s by integer keys.
+/// Executable strings and keys other than names (#474): `cvx` makes a string executable, and
+/// running it runs its text (PLRM 3rd ed. §3.3.1, `cvx`, `exec`); `load` takes any key (§8.2).
+/// A program closes its shading dictionaries with an executable string (`>>` at Level 2 and up,
+/// else a dictionary built with `counttomark`), and runs procedures it keeps under integer keys
+/// through `stopped`.
 #[test]
-fn illustrator_8_gradients_and_executable_strings() {
+fn executable_strings_and_integer_keys() {
     let program = r##"%%BeginProlog
-userdict /AGM_Gradient 20 dict dup begin put
-/AGM_Gradient_private 201 dict def
-/initialize {
-  AGM_Gradient begin AGM_Gradient_private begin
-  /bd systemdict /mark get def
-  /ed /languagelevel where { pop languagelevel 2 ge } { false } ifelse
-    { (>>) } { (counttomark 2 idiv dup dict begin {def} repeat pop currentdict end) } ifelse cvx def
-  /ed1 (counttomark 2 idiv dup dict begin {def} repeat pop currentdict end) cvx def
-  end end
-} def
-userdict /discardDict 4 dict dup begin put
-0 { 0 1 0 setrgbcolor } def
-2 { 0 0 1 setrgbcolor } def
+/ShadeKit 12 dict def ShadeKit begin
+% A Level 1 way to make a dictionary of the pairs above a mark.
+/pairs (counttomark 2 idiv dict begin { counttomark 0 eq { exit } if def } loop pop currentdict end) cvx def
+/close /languagelevel where { pop languagelevel 2 ge } { false } ifelse { (>>) } { (pairs) } ifelse cvx def
+/open /mark load def
+/actions 3 dict def actions begin 0 { 0 1 0 setrgbcolor } def 1 { 1 0 0 setrgbcolor } def end
+/act { actions 1 index known { actions begin load end stopped pop } { pop } ifelse } bind def
 end
-/gt38? false def
-/discard { discardDict begin /endString exch def gt38? { 2 add } if load stopped pop end } bind def
 %%EndProlog
-initialize
-AGM_Gradient begin AGM_Gradient_private begin
-bd /ShadingType 3 /ColorSpace /DeviceRGB
-  /Function bd /FunctionType 2 /Domain [0 1] /C0 [1 1 0] /C1 [0 0.5 0] /N 1 ed
-  /Extend [true true] /Coords [50 50 0 50 50 40] ed
+ShadeKit begin
+open /ShadingType 3 /ColorSpace /DeviceRGB
+  /Function open /FunctionType 2 /Domain [0 1] /C0 [1 1 0] /C1 [0 0.5 0] /N 1 close
+  /Extend [true true] /Coords [50 50 0 50 50 40] close
 gsave 10 10 80 80 rectclip shfill grestore
-bd /Width 3 ed1 /Width get 3 eq { 0 (%AI5_EndPalette) discard 10 10 20 20 rectfill } if
-end end
+mark /Width 3 pairs /Width get 3 eq { 0 act 10 10 20 20 rectfill } if
+2 act
+end
 (x) cvx xcheck (x) cvx cvlit xcheck not and { 50 50 10 10 rectfill } if
 showpage"##;
-    let r = open("Adobe Illustrator(R) 8.0", program);
+    let r = open("Example Generator 1.0", program);
     let d = &r.document;
     let Some(Paint::Gradient(g)) = all(d).into_iter().find_map(|n| fill(&n).cloned()) else { panic!("no gradient") };
     assert_eq!(g.gradient.kind, vectorcraft_color::GradientKind::Radial);
-    // `discard` ran the procedure under key 0 (green), not the one under 2.
+    // `act` ran the procedure under key 0 (green); there is none under key 2.
     assert!(all(d).iter().any(|n| fill(n).and_then(Paint::color) == Some(Color::rgb(0.0, 1.0, 0.0))));
     assert_eq!(objects(d).len(), 3);
+}
+
+/// `restore` puts local VM back as it was at the `save` (PLRM 3rd ed., §3.7.3 "Save and
+/// Restore"): dictionaries get back the entries they had, whatever changed them. A program that
+/// keeps a count of the saves it has open in a dictionary, and refuses to go past a depth, reads
+/// to its end only if each `restore` puts the count back (part of #505: files with many images,
+/// each drawn between `save` and `restore`).
+#[test]
+fn restore_puts_dictionaries_back() {
+    let r = read(
+        "/Depth 2 dict def Depth /open 0 put \
+         /enter { save Depth /open get 1 add dup 8 gt { rangecheck } if Depth exch /open exch put } def \
+         1 1 100 { pop enter 0 0 1 1 rectfill restore } for Depth /open get 0 eq { 10 10 5 5 rectfill } if",
+    );
+    clean(&r);
+    assert_eq!(objects(&r.document).len(), 101);
+    // `def`, `store`, `put`, `undef` and dictionary `copy` are undone, newest first.
+    super::tests::check(
+        "/a 1 def /d 2 dict def d /k 1 put save /a 2 def /b 3 def d /k 2 put d /k undef 1 dict dup /z 9 put d copy pop \
+         /a 4 store restore a 1 eq /b where not and d /k get 1 eq and d /z known not and",
+    );
+    // A save restored (itself, or through an outer one) is no longer valid: `invalidrestore`.
+    super::tests::check("save dup restore { restore } stopped");
+    super::tests::check("save save exch restore { restore } stopped");
+    // `cachestatus` gives a device's cache sizes; its last, the most bytes one cached glyph may
+    // take, is positive (chapter 8), and programs divide by it.
+    super::tests::check("cachestatus 7 1 roll 6 { pop } repeat 0 gt");
 }

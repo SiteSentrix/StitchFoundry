@@ -1,11 +1,13 @@
 //! Object menu: transforms, arrange, group, lock/hide, compound paths, clipping masks, isolation,
 //! align & distribute, object properties.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, Document, Knockout, Node, NodeId, NodeKind, OrientedBox, Scaling};
+use vectorcraft_doc::corners::set_corners;
+use vectorcraft_doc::{Appearance, Document, Knockout, LiveCorners, LiveShape, Node, NodeId, NodeKind, OrientedBox, Scaling};
 use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Affine, FillRule, Point, Rect, Vec2};
 
@@ -194,7 +196,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Live Shape Properties",
             [],
             None,
-            "{id?, ids?, radius?: pt, kind?: \"round\"|\"invertedRound\"|\"chamfer\", corners?: [0..3…], sides?: n} (Live Corners: radius and kind set a rectangle's corners: `corners` (0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left), else the corners with a Direct-Selected anchor, else all four; sides: a polygon's)",
+            "{id?, ids?, radius?: pt, kind?: \"round\"|\"invertedRound\"|\"chamfer\", corners?: [i…], sides?: n} (Live Corners on any path: radius and kind set its corners (anchors without handles between two straight sides): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared)",
             has_selection,
             set_live_shape
         ),
@@ -1006,21 +1008,12 @@ fn expand_shape(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
-/// The `corners` of `object.setLiveShape`: a mask of corner indices 0–3.
-fn corners_param(p: &Value) -> Result<Option<[bool; 4]>> {
+/// The `corners` of `object.setLiveShape`: anchor indices of a path's uncut outline.
+fn corners_param(p: &Value) -> Result<Option<BTreeSet<usize>>> {
     let Some(v) = p.get("corners").filter(|v| !v.is_null()) else { return Ok(None) };
-    let err = || {
-        bad(
-            "object.setLiveShape",
-            format!("`corners` must list corner indices 0–3 (0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left), not {v}"),
-        )
-    };
-    let mut mask = [false; 4];
-    for k in v.as_array().ok_or_else(err)? {
-        let slot = k.as_u64().and_then(|k| mask.get_mut(usize::try_from(k).ok()?)).ok_or_else(err)?;
-        *slot = true;
-    }
-    Ok(Some(mask))
+    let err = || bad("object.setLiveShape", format!("`corners` must list anchor indices (0, 1, 2…), not {v}"));
+    let list = v.as_array().ok_or_else(err)?;
+    list.iter().map(|k| k.as_u64().and_then(|k| usize::try_from(k).ok()).ok_or_else(err)).collect::<Result<_>>().map(Some)
 }
 
 fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1035,39 +1028,37 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         })
         .transpose()?;
     let radius = p.get("radius").and_then(Value::as_f64);
+    let sides = p.get("sides").and_then(Value::as_u64);
     s.edit("Live Shape", |d, sel| {
         for id in &ids {
-            let Some(NodeKind::Path { path, live: Some(live), .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            // Radii are document lengths and corners circular, also on a rectangle from a file
-            // that kept an uneven scale in its transform (#442).
-            live.fold_scale();
-            let partial = sel.anchors.get_mut(id);
-            let picked = corners.unwrap_or_else(|| live.picked_corners(partial.as_deref()));
-            let (layout, selected) = (live.anchor_corners(), partial.as_deref().map(|a| live.corners_of(a)));
-            match live {
-                vectorcraft_doc::LiveShape::Rectangle { radii, kinds, .. } => {
-                    for ((_, r), k) in picked.iter().zip(radii.iter_mut()).zip(kinds.iter_mut()).filter(|((on, _), _)| **on) {
-                        if let Some(radius) = radius {
-                            *r = radius.max(0.0);
-                        }
-                        if let Some(kind) = kind {
-                            *k = kind;
-                        }
-                    }
-                }
-                vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
-                    if let Some(n) = p.get("sides").and_then(Value::as_u64) {
-                        *sides = n.clamp(3, 1000) as u32;
-                    }
-                }
-                _ => {}
+            let Some(NodeKind::Path { path, live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            if let (Some(l @ LiveShape::Polygon { .. }), Some(n)) = (live.as_mut(), sides) {
+                l.set_sides(n);
+                *path = l.to_path();
             }
-            *path = live.to_path();
+            if radius.is_none() && kind.is_none() {
+                continue;
+            }
+            let partial = sel.anchors.get_mut(id);
+            // The corners to edit, the Direct-Selected ones and the anchor layout before the edit.
+            let Some(c) = LiveCorners::new(path, live.as_ref()) else { continue };
+            let picked = match &corners {
+                Some(k) if k.last().is_some_and(|k| *k >= c.base.anchor_count()) => {
+                    let n = c.base.anchor_count();
+                    let past: Vec<_> = k.range(n..).collect();
+                    return Err(bad("object.setLiveShape", format!("object {id} has anchors 0–{} for `corners`, not {past:?}", n.saturating_sub(1))));
+                }
+                Some(k) => k.clone(),
+                None => c.picked(partial.as_deref()),
+            };
+            let (selected, layout) = (partial.as_deref().map(|a| c.corners_of(a)), c.sources().to_vec());
+            set_corners(path, live, &picked, radius, kind);
             // Direct-Selected corners stay selected as they gain or lose anchors.
             if let (Some(anchors), Some(selected)) = (partial, selected)
-                && live.anchor_corners() != layout
+                && let Some(c) = LiveCorners::new(path, live.as_ref())
+                && c.sources() != layout
             {
-                *anchors = live.corner_anchors(selected);
+                *anchors = c.anchors_of(&selected);
             }
         }
         Ok(())

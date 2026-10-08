@@ -1351,7 +1351,6 @@
 	Make a theme on Create and save it.	在“创建”中制作主题并存储。
 	Make all bleed settings the same	使所有出血设置相同
 	Make and Expand	创建并扩展
-	Make and Expand…	制作并展开…
 	Make Clipping Mask	制作剪切蒙版
 	Make Compound Shape	创建复合形状
 	Make Envelope	制作封套
@@ -1364,7 +1363,6 @@
 	Make with Top Object	用顶层对象创建
 	Make with Warp…	用变形创建…
 	Make/Release Clipping Mask	创建/释放剪切蒙版
-	Make…	制作…
 	Manage Workspaces	管理工作区
 	Manage Workspaces…	管理工作区…
 	Manually	手动
@@ -2484,6 +2482,7 @@
 	Character:	字符：
 	Character options	字符选项
 	Stroke options	描边选项
+	Transform options	变换选项
 	Stroke Weight	描边粗细
 	Stroke:	描边：
 	Stroke: click for swatches, Shift-click for the color mixer	描边：单击开启色板，按住 Shift 单击开启混色器
@@ -3305,3 +3304,9 @@ axis	Both	两者
 	Drag to float the toolbar	拖动以浮动工具栏
 	Drag to the window's left edge to dock	拖到窗口左边缘以停放
 	Float Tool Group	浮动工具组
+
+# The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
+	Services	服务
+	Hide VectorCraft	隐藏 VectorCraft
+	Bring All to Front	前置全部窗口
+	Settings	设置

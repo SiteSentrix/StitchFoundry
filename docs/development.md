@@ -38,7 +38,7 @@ How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 
 The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (wgpu, through eframe) only composites the canvas texture and draws the UI, so any GPU that can show the window will do. The desktop app picks the window's adapter itself (`apps/vectorcraft/src/gpu.rs`, eframe's `native_adapter_selector`) and logs every adapter it found and the one it uses.
 
-- **Order:** adapters that report they can't present to the window are never tried; then the one `WGPU_ADAPTER_NAME` names; hardware before software (llvmpipe, WARP); the native backends (Vulkan, Metal, DX12) before OpenGL; then the power preference, keeping the system's order among equals.
+- **Order:** adapters that report they can't present to the window are never tried; then the one `WGPU_ADAPTER_NAME` names; hardware before software (llvmpipe, WARP); the native backends (Vulkan, Metal, DX12) before OpenGL; then the power preference; then, on Windows, where each GPU is listed under both, a GPU's DX12 adapter before its Vulkan one (Intel's Vulkan driver made the whole window flicker black, #545), keeping the system's order among equals. `WGPU_BACKEND=vulkan` still picks Vulkan.
 - **Preferences › Performance › Graphics Processor** (`gpuPreference`): `automatic` (the default), `lowPower` (Power Saving, the integrated GPU) or `highPerformance` (the discrete GPU). The adapter is chosen when the window opens, so a change applies after a restart.
   - **Automatic on Windows and macOS** is power saving: the system shows frames from any GPU, and presenting frames rendered on a discrete GPU through the integrated one made the window flicker on some hybrid laptops (#306).
   - **Automatic on Linux and the BSDs** keeps the system's order: Mesa's Vulkan device-select layer puts the GPU the desktop runs on first (the integrated one on hybrid laptops; `DRI_PRIME` and `MESA_VK_DEVICE_SELECT` steer it). A Wayland compositor may not accept frames from another GPU: on a desktop whose compositor ran on an NVIDIA GPU, rendering on the Ryzen's integrated GPU made KWin end the window's connection ("importing the supplied dmabufs failed") and 0.5.0 crashed at startup (#502).
@@ -62,12 +62,22 @@ By default VectorCraft's own crates log at `info` and everything else at `warn`.
 | Variable | Effect |
 |---|---|
 | `VECTORCRAFT_CONTROL_PORT` | Same as `--control <port>` |
+| `VECTORCRAFT_IN_WINDOW_MENUS` | Any value but empty or `0`: same as `--in-window-menus` (see [macOS: the menu bar](#macos-the-menu-bar)) |
 | `VECTORCRAFT_NO_PREFS` | No preferences read or written, no default Data Recovery folder and no log file (agents' test runs) |
 | `WGPU_POWER_PREF` | Graphics adapter: `low`, `high` or `none` (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `WGPU_ADAPTER_NAME` | Graphics adapter by (part of) its name, any case (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `WGPU_BACKEND` | Graphics backends: `vulkan`, `dx12`, `metal`, `gl` |
 | `VECTORCRAFT_GPU_SKIP` | Set by the app when it starts again without a graphics adapter that failed (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `RUST_LOG` | Log levels for standard error and the log file (see [Logs](#logs)) |
+
+## macOS: the menu bar
+
+On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search box and the workspace switcher next to the traffic lights). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
+
+- **One menu model.** `crates/ui-egui/src/native_menu.rs` (platform-free, tested on every platform) builds the menu bar from the in-window menus (`menus::menu_tree`, each item through `menus::entry`, which the in-window menus draw too) and lays it out the Mac way: the VectorCraft menu holds About, Settings ▸ (one item per Preferences page, General… ⌘K), Language ▸, Appearance ▸ (UI brightness), Services, Hide VectorCraft ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All and Quit ⌘Q (the app's own `app.quit`, so unsaved documents are asked about); those leave Edit and Help. Window starts with Minimize ⌃⌘M and Zoom and ends with Bring All to Front, and Help is the system's Help menu (its search field). A system key a command (or a user's shortcut) already has stays the command's, and the log says so.
+- **The native side** is `apps/vectorcraft/src/mac_menu.rs`: muda (`=0.21.1`, default features off, macOS only, no `unsafe`) builds the `NSMenu`s. Labels, enabled and checked are updated in place when anything they show may have changed (a command ran, the document, its history or selection changed, a click or a key press); a change of structure (a recent file, the language, a shortcut) rebuilds the menus.
+- **Keys stay with egui.** AppKit runs a menu's key equivalents before the window sees the key, so the item's key goes back to egui as the key press it was (⌘X/⌘C/⌘V as egui's Cut/Copy/Paste events), through `raw_input_hook`: `shortcuts::handle` runs it once, user shortcuts apply, and a focused text field keeps ⌘A, ⌘C, ⌘V and ⌘Z. A click runs the item like an in-window click. Bare keys and ⌥/⇧ chords are never key equivalents (they type).
+- Built and clippy-checked for `aarch64-apple-darwin` and `x86_64-apple-darwin` from any host: `cargo clippy -p vectorcraft --target aarch64-apple-darwin --all-targets -- -D warnings`.
 
 ## Linux: Wayland and X11
 
@@ -124,7 +134,8 @@ Languages shipped: English (`en`, the source), Traditional Chinese (`zh-hant`, c
 in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Simplified Chinese (`zh-hans`,
 complete, in the vocabulary used in mainland China; `zh-CN`, `zh-SG`, `zh-Hans-*` and a bare `zh` resolve to it,
 so the two scripts never mix), Japanese (`ja`, complete), Spanish (`es`, complete, in neutral
-international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or `es-419` resolves to it), Czech (`cs`, every menu label) and Brazilian Portuguese
+international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or `es-419` resolves to it), Italian (`it`,
+complete; `it-IT`, `it-CH` and every other `it-*` locale resolve to it), Czech (`cs`, every menu label) and Brazilian Portuguese
 (`pt-br`, every menu label and every `tl!` literal). Untranslated text falls back to English until its rows are added.
 
 - `tl!("…")` translates a literal into the language the UI is drawn in; `i18n::t(s)` is the same for a
@@ -152,10 +163,10 @@ international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or 
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish covers every
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish and Italian cover every
   message literal the test scan finds (`complete_languages_translate_every_message`, languages listed in
   `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs an `es.tsv`
-  row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
+  and an `it.tsv` row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
   complete_languages_translate_every_message` lists them all). Other languages show messages in English
   until they add `@msg` rows.
 - Not translated on purpose: names that are user data (layers, swatches, fonts, documents), the tab

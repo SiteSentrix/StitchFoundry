@@ -216,6 +216,10 @@ impl ScreenFrame {
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
+    /// Which open document `doc` is (its process-unique id) and its revision, which moves with
+    /// every change of the document or the selection: what a tool keeps between pointer events
+    /// for the document as it is (the snap targets of hovering) is keyed on it.
+    pub revision: (u64, u64),
     pub selection: &'a Selection,
     /// Screen pixels per document point.
     pub zoom: f64,
@@ -234,7 +238,7 @@ pub struct ToolContext<'a> {
     /// points (a transform's reference point) land on anchors and ruler guides within
     /// [`Self::snap_tolerance`].
     pub snap_to_point: bool,
-    /// View → Show Corner Widget: live rectangles show draggable Live Corners widgets.
+    /// View → Show Corner Widget: paths show draggable Live Corners widgets in their corners.
     pub corner_widgets: bool,
     /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
     pub fill_active: bool,
@@ -319,6 +323,10 @@ pub struct ToolContext<'a> {
     /// Smart Guides → Snapping Tolerance (screen pixels): how near a smart guide target pulls the
     /// pointer, a dragged edge or a drawn point.
     pub snapping_tolerance: f64,
+    /// Smart Guides → Construction Guides: the angles (degrees, counter-clockwise from the x axis
+    /// as seen on the page) of the lines through the point a drawn point leaves from, onto which a
+    /// point near one lands ([`guides::construction_angles`]); none with the option off.
+    pub construction_angles: &'static [f64],
     /// The document window (none headless): screen-fixed widgets sit in it.
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
@@ -631,6 +639,7 @@ pub(crate) mod testutil {
     pub fn cx<'a>(d: &'a Document, s: &'a Selection, p: &'a PaintDefaults) -> ToolContext<'a> {
         ToolContext {
             doc: d,
+            revision: (0, 0),
             selection: s,
             zoom: 1.0,
             isolation: None,
@@ -675,6 +684,7 @@ pub(crate) mod testutil {
             measurement_labels: true,
             transform_tools_guides: true,
             snapping_tolerance: 4.0,
+            construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
         }

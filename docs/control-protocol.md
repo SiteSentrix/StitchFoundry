@@ -18,7 +18,7 @@ so only enable it while you use it. Transport: `apps/vectorcraft/src/control_ser
 | `engine.execute` | `{command, params}` | run any engine or UI command (see `engine.commands`) |
 | `engine.commands` | | every command with label, shortcut, params doc, enablement |
 | `document.inspect` | `{depth?, childLimit?}` | layer tree, selection, history, paint defaults; the options slice the layer tree as `document.node {summary: true}` does |
-| `ui.inspect` | | tool, UI state, `screenMode` (0 normal, 1 full screen with menu bar, 2 full screen, 3 Presentation Mode), `taskBar` (`pinned`, and `rect` `[x, y, w, h]` while the Contextual Task Bar shows), view, canvas rect, window size, perf, background saves and exports still running |
+| `ui.inspect` | | tool, UI state, `screenMode` (0 normal, 1 full screen with menu bar, 2 full screen, 3 Presentation Mode), `taskBar` (`pinned`, and `rect` `[x, y, w, h]` while the Contextual Task Bar shows), view, canvas rect, window size, perf, background saves and exports still running, `nativeMenuBar` (true when the menus are in the macOS menu bar rather than the window; `ui.menu.list` lists the in-window menus either way) |
 | `ui.menu.list` / `ui.menu.invoke` | `{command, params}` | the full menu tree / invoke an item |
 | `ui.contextMenu.list` | | the canvas context menu for the current selection, flattened like `ui.menu.list` (`path` holds its submenus). `ui.click {x, y, button: "right"}` on the canvas opens it, after selecting the object there unless it is already selected |
 | `ui.tool.select` / `ui.tool.list` | `{tool}` | |
@@ -291,9 +291,9 @@ Width Point Edit: double-clicking a width point with the Width tool, or `ui.widt
 value: true}` then confirm (the Delete button) removes the point with `stroke.widthPoint.remove`.
 
 Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
-corners?}`, opens the `corners` dialog for a live rectangle's corners (the Direct-Selected ones, else all four; fields
-`id`, `corners`: indices 0–3 clockwise from the top-left, `kind`: round, invertedRound or chamfer, `radius` in points;
-`kind` or `radius` is absent while the corners differ). `ui.dialog.confirm` runs `object.setLiveShape` with them.
+corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; fields `id`,
+`corners`: anchor indices of the path with its corners uncut, a rectangle's 0–3 clockwise from the top-left, `kind`:
+round, invertedRound or chamfer, `radius` in points; `kind` or `radius` is absent while the corners differ). `ui.dialog.confirm` runs `object.setLiveShape` with them.
 
 Perspective plane options: double-clicking a plane widget of the perspective grid, or `ui.perspectivePlane {plane}`,
 opens the `perspectivePlane` dialog (fields `plane`: left, right or ground; `location`: points along the plane's

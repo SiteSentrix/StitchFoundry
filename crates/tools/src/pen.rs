@@ -16,6 +16,10 @@
 //! segment of a selected path adds an anchor there and a click on one of its anchors deletes it
 //! (Shift held or General → Disable Auto Add/Delete starts a new path instead). On a selected
 //! blend's spine a click adds a point (on a point no key object sits on: deletes it).
+//! Each anchor placed snaps to Smart Guides ([`DrawSnap`]): onto the anchors, centres and paths of
+//! the other art and of the path being drawn, into line with them, onto the construction guides
+//! through the last anchor; with Shift held it slides along its 45° step into line. Hovering shows
+//! where the next one would go.
 
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
@@ -23,6 +27,7 @@ use vectorcraft_geom::{BezPath, Point};
 
 use crate::direct::hit_handle;
 use crate::draw2::AnchorTool;
+use crate::guides::{DrawSnap, Leave};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Default)]
@@ -43,6 +48,8 @@ pub struct PenTool {
     handle: Option<(NodeId, usize, usize, Point)>,
     /// The Anchor Point tool, while an Alt gesture on a selected path's handle or anchor lasts.
     convert: Option<AnchorTool>,
+    /// Smart Guides for the anchors placed (and the pointer hovering).
+    snap: DrawSnap,
 }
 
 /// An anchor being placed, as the press decided: where it is, the path it goes on (none: the
@@ -116,8 +123,6 @@ impl Tool for PenTool {
         self.drag.is_some() || self.handle.is_some() || self.convert.is_some()
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
-        let exclude: Vec<vectorcraft_doc::NodeId> = if self.drawing { cx.selection.objects.clone() } else { vec![] };
-        let (mut p, _) = if matches!(ev.kind, PointerKind::Down) { crate::guides::snap_draw(cx, ev.pos, &exclude) } else { (ev.pos, vec![]) };
         let tol = cx.tol(5.0);
         // The path a press began is the selected one by the next event.
         if self.drawing && self.path.is_none() {
@@ -127,6 +132,14 @@ impl Tool for PenTool {
         if self.drawing && active.is_none() && ev.kind == PointerKind::Down {
             self.stop();
         }
+        // The path being drawn moves its bounds as it grows: only its anchors and segments pull.
+        let drawn = active.map(|a| a.0);
+        let from = active.map(|(_, _, last, _)| Leave::segment(cx, last, ev.mods.shift));
+        let p = match ev.kind {
+            PointerKind::Move => self.snap.hover(cx, ev.pos, drawn.as_slice(), from.as_ref()),
+            PointerKind::Down => self.snap.press(cx, ev.pos, drawn.as_slice(), from.as_ref()),
+            _ => ev.pos,
+        };
         match ev.kind {
             PointerKind::Move => {
                 self.hover = Some(p);
@@ -135,9 +148,6 @@ impl Tool for PenTool {
             PointerKind::Down => {
                 self.last = ev.pos;
                 if let Some((id, first, last, _)) = active {
-                    if ev.mods.shift {
-                        p = last + vectorcraft_geom::constrain_angle(p - last, 45.0);
-                    }
                     let end = last_anchor(cx, id);
                     // A one-anchor path doesn't close on itself: its anchor is the last one too.
                     if p.distance(first) <= tol && end.is_some_and(|(_, ai)| ai > 0) {
@@ -230,6 +240,7 @@ impl Tool for PenTool {
                 )]
             }
             PointerKind::Up => {
+                self.snap.clear();
                 if let Some(mut t) = self.convert.take() {
                     return t.pointer(cx, ev);
                 }
@@ -251,6 +262,7 @@ impl Tool for PenTool {
                 self.stop();
                 self.drag = None;
                 self.handle = None;
+                self.snap.clear();
                 // An Alt gesture under way ends as it stands.
                 self.convert.take().map(|mut t| t.deactivate(cx)).unwrap_or_default()
             }
@@ -259,25 +271,30 @@ impl Tool for PenTool {
     }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.stop();
+        self.snap.clear();
         self.convert.take().map(|mut t| t.deactivate(cx)).unwrap_or_default()
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         if let Some(t) = &self.convert {
             return t.overlays(cx);
         }
-        if !cx.pen_rubber_band || self.drag.is_some() || self.handle.is_some() {
-            return vec![];
+        let mut o = vec![];
+        if cx.pen_rubber_band
+            && self.drag.is_none()
+            && self.handle.is_none()
+            && let (Some((id, _, last, out)), Some(h)) = (self.active(cx), self.hover)
+        {
+            let mut bp = BezPath::new();
+            bp.move_to(last);
+            if out.distance(last) > 1e-9 {
+                bp.quad_to(out, h);
+            } else {
+                bp.line_to(h);
+            }
+            o.push(Overlay::Path { path: bp, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
         }
-        let (Some((id, _, last, out)), Some(h)) = (self.active(cx), self.hover) else { return vec![] };
-        let mut bp = BezPath::new();
-        bp.move_to(last);
-        if out.distance(last) > 1e-9 {
-            bp.quad_to(out, h);
-        } else {
-            bp.line_to(h);
-        }
-        let c = cx.doc.layer_color(id);
-        vec![Overlay::Path { path: bp, color: c, width: 1.0, dashed: false }]
+        o.extend_from_slice(self.snap.guides());
+        o
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         let tol = cx.tol(5.0);
@@ -612,6 +629,31 @@ mod tests {
         let mut t = PenTool::default();
         let a = click(&mut t, &cx, 325.0, 351.0, shift);
         assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.create"), "{a:?}");
+    }
+
+    /// Each anchor snaps to Smart Guides (#506): hovering shows where it goes (the rubber band ends
+    /// there), in line with another object's centre; Shift slides it along its 45° step into line.
+    #[test]
+    fn anchors_snap_to_smart_guides() {
+        let (d, id, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(10.0, 300.0), Point::new(60.0, 300.0)], false));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 152.0, 318.0));
+        let o = t.overlays(&cx);
+        assert!(o.iter().any(|o| matches!(o, Overlay::Label { text, p, .. } if text == "align" && *p == Point::new(150.0, 318.0))), "{o:?}");
+        assert!(o.iter().any(
+            |o| matches!(o, Overlay::Path { path, .. } if path.elements().last().and_then(|e| e.end_point()) == Some(Point::new(150.0, 318.0)))
+        ));
+        let a = click(&mut t, &cx, 152.0, 318.0, Mods::default());
+        assert_eq!(a[1], Action::Preview("path.appendAnchor".into(), json!({"id": id.0, "x": 150.0, "y": 318.0})));
+        let shift = Mods { shift: true, ..Mods::default() };
+        let a = click(&mut t, &cx, 152.0, 310.0, shift);
+        assert_eq!(a[1], Action::Preview("path.appendAnchor".into(), json!({"id": id.0, "x": 150.0, "y": 300.0})));
+        // The first anchor of a new path lands on the rect's corner.
+        let mut t = PenTool::default();
+        let a = click(&mut t, &cx, 102.0, 99.0, Mods::default());
+        assert_eq!(a[1], Action::Preview("path.create".into(), json!({"anchors": [{"x": 100.0, "y": 100.0}]})));
     }
 
     #[test]

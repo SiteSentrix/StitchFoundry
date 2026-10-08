@@ -1135,21 +1135,32 @@ size. The journal entry of a scaling command records the `strokes` and `corners`
 
 ## Live Corners
 
-`object.setLiveShape {id?, ids?, radius?, kind?, corners?}` sets the corners of live rectangles (one undo step):
-`radius` (pt) and `kind` (`round`, `invertedRound` or `chamfer`) go to the `corners` given (0 top-left, 1 top-right,
-2 bottom-right, 3 bottom-left), else to the corners holding a Direct-Selected anchor (`select.anchors`), else to all
-four. Each corner keeps its own radius and kind (the shape's `live` in queries has `radii` and, when a corner isn't
-round, `kinds`); a corner with no radius is one anchor, a cut one two, and Direct-Selected corners stay selected as
-that changes. Every corner is a circular arc, whatever the rectangle's proportions: a radius past half the shorter
-side draws at half of it (the same limit for every corner), and a rectangle from a file that kept an uneven scale in its
-transform (elliptical corners) gets circular ones in document units when its corners are next set. With the Selection or
-Direct Selection tool, dragging a corner widget rounds the corners whose widgets show (all four, or the Direct-Selected
-ones), outlining them in red once they reach that limit; Alt-clicking one cycles their kind and double-clicking one
-opens Corners (`ui.corners {id?, corners?}`, dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
+`object.setLiveShape {id?, ids?, radius?, kind?, corners?}` sets the corners of any path (one undo step): a live
+rectangle's or polygon's, a star's, a pen path's. A corner is an anchor without handles between two straight sides
+(not an open path's ends, not a smooth anchor, not one the sides run straight on through). `radius` (pt) and `kind`
+(`round`, `invertedRound` or `chamfer`) go to the `corners` given, else to the corners holding a Direct-Selected
+anchor (`select.anchors`), else to every corner. `corners` are anchor indices of the path with its corners uncut,
+counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a
+polygon's from its first vertex clockwise; a star's from its first tip; an index past the last anchor is an error.
+Each corner keeps its own radius and kind (the shape's `live` in queries has `radii` and, when a corner isn't round,
+`kinds`); a corner with no radius is one anchor, a cut one two, and Direct-Selected corners stay selected as that
+changes. A path that isn't a live shape keeps its uncut outline (`live` `{"shape": "path", "base", "radii"}`) so its
+corners stay editable, and is a plain path again once no corner is cut; a polygon stays a live polygon, its corners
+keeping the radius they shared when `sides` changes. Every corner is a circular arc tangent to both sides: a radius
+draws no larger than takes the cut halfway along the corner's shorter side (half the shorter side of a rectangle, the
+same limit for its four corners), the corners stay circular through uneven scales (the radius scales by the mean scale,
+or keeps its size with Scale Corners off), and a rectangle from a file that kept an uneven scale in its transform
+(elliptical corners) gets circular ones in document units when its corners are next set. Dragging a corner widget
+rounds the corners whose widgets show (every corner, or the Direct-Selected ones), outlining in red those that reach
+their limit; the Selection tool shows the widgets of live rectangles and polygons, the Direct Selection tool those of
+any path. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
+dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[1],"radius":16}}}
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[0,3],"radius":8,"kind":"chamfer"}}}
+{"name":"run_command","arguments":{"command":"shape.star","params":{"cx":200,"cy":200,"radius1":60,"radius2":30}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"radius":5}}}
 ```
 
 ## Use Preview Bounds
@@ -1215,8 +1226,8 @@ off, an empty window, and the Home button or `app.home` still shows the screen) 
 default: on, a click away from a panel popped out of the icon column puts it away).
 
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
-default view) and to the mouse; they change what the tools show and how far a target pulls, never where a snapped
-point lands:
+default view) and to the mouse; they change what the tools show and how far a target pulls, and only Construction
+Guides change where a snapped point lands:
 
 - `smartGuideColor` (`#ff3dfc` by default): the colour of the smart guides' lines and labels.
 - `alignmentGuides` (on by default): off, no line is drawn along the edge or centre the art lines up with; the art
@@ -1231,6 +1242,11 @@ point lands:
 - `snappingTolerance` (0–40 px, 4 by default): how near an anchor, edge, centre or artboard edge pulls a drawn point,
   a dragged selection, a bounding-box handle, a ruler guide or an artboard. With Smart Guides off, Snap to Point uses
   `snapToPointTolerance` instead.
+- `constructionGuides` (on by default) and `constructionAngles` (`90° & 45° Angles` by default; also `90° Angles`,
+  `45° Angles`, `60° Angles`, `30° Angles`, `90° & 45° & 30° Angles`): a point drawn near a line at one of those
+  angles through the point it leaves from (the Pen's or Curvature tool's last anchor, a line's start) lands on that
+  line, where a target's alignment line crosses it if one does nearby. "90°" gives the horizontal and the vertical,
+  "45°" the diagonals, "60°" and "30°" the multiples of those angles in between. Off, the point only lines up.
 
 With Smart Guides on, a bounding-box handle dragged with the Selection or Free Transform tool (`mods.shift`
 proportional, `mods.alt` from the centre) lands on another object's anchor or centre (labelled "anchor" or
@@ -1242,7 +1258,26 @@ snap the pointer as drawing tools do, so dragging a corner onto another object's
 {"name":"pointer_gesture","arguments":{"tool":"scale","events":[{"kind":"down","x":100,"y":100},{"kind":"up","x":100,"y":100},{"kind":"down","x":199,"y":198},{"kind":"drag","x":302,"y":262},{"kind":"up","x":302,"y":262}]}}
 ```
 
-Not read yet: Construction Guides and their Angles, and Spacing Guides (the tools draw neither).
+Every point a drawing tool places snaps the same way, through one snapper (#506): the Pen's and Curvature tool's
+anchors, the Pencil's first and last point, the shape tools' start and dragged corner or radius (`rectangle`,
+`roundedRectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, `arc`, `spiral`, `rectangularGrid`, `polarGrid`), the
+Type tool's click and frame, and a new artboard's corners. The point lands on another object's anchor, centre or
+path ("anchor", "center", "path"), else lines up with the anchors, edges and centres of the art and the artboards (a
+line from the target and "align"); the Pen's lands on the path being drawn too, so a click on its first anchor closes
+it exactly. With `mods.shift` the point keeps to its 45° step from the anchor before it (from `constrainAngle`; a box
+dragged keeps its corner on a diagonal) and slides along that way into line with the nearest target. A `move` event
+before the press shows where it would go, as hovering does with the mouse. The targets are the art in the window (all
+of it headless), gathered once per document state; the shape being drawn is never one of them:
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"rectangle","events":[{"kind":"down","x":202,"y":203},{"kind":"drag","x":330,"y":341},{"kind":"up","x":330,"y":341}]}}
+{"name":"pointer_gesture","arguments":{"tool":"pen","events":[{"kind":"down","x":300,"y":420},{"kind":"up","x":300,"y":420},{"kind":"down","x":151.5,"y":431},{"kind":"up","x":151.5,"y":431}]}}
+```
+
+With a 100 × 100 square at (100, 100), the first starts the rectangle on its corner (200, 200); the second puts the
+Pen's second anchor at (150, 431), in line with the square's centre.
+
+Not read yet: Spacing Guides (the tools draw none).
 
 ## Type preferences
 
@@ -2177,6 +2212,19 @@ undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"burasagari":"forced"}}}
+```
+
+## New type in a Japanese interface
+
+While the interface is in Japanese (VectorCraft › Language, or `auto` on a Japanese system), new type starts with em
+box top-to-top leading (`leadingModel: "emBoxTop"`) and em box centre character alignment (`charAlign: "emBoxCenter"`);
+in other languages it starts on the Roman baseline (#432). This covers the Type tools,
+`text.create` and `text.createInPath`, which also take `leadingModel` and `charAlign` to choose, and `paraStyle.new` /
+`charStyle.new` made with no `attrs` and no text selected. The values used are kept in the journal, so a replay sets the
+same in any language. Saved documents keep what they say, and imported text (PDF, SVG, DXF…) keeps the Roman baseline.
+
+```json
+{"name":"run_command","arguments":{"command":"text.create","params":{"x":40,"y":60,"text":"雅楽","leadingModel":"emBoxTop","charAlign":"emBoxCenter"}}}
 ```
 
 ## Moving and flipping type on a path

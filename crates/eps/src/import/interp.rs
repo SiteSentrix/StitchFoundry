@@ -49,6 +49,12 @@ pub(crate) struct Interp<'a> {
     /// Bytes asked for so far (see [`MAX_MEMORY`]).
     allocated: usize,
     seed: u32,
+    /// The `save`s not restored yet, oldest first.
+    saves: Vec<SaveMark>,
+    /// What dictionary entries were before they changed since the oldest `save` (dictionary,
+    /// key, old value): `restore` puts them back, as restoring local VM does (PLRM 3rd ed.,
+    /// §3.7.3 "Save and Restore": composite objects get the values they had at the `save`).
+    journal: Vec<(DictRef, Key, Option<Obj>)>,
     /// Where the error that is unwinding was raised (see [`Fault`]).
     pub fault: Option<Fault>,
     /// The width a Type 3 glyph procedure gave (`setcachedevice`, `setcharwidth`).
@@ -56,8 +62,8 @@ pub(crate) struct Interp<'a> {
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
-    /// The program is an Illustrator file's: its `u` … `U` (written at the top level, whatever
-    /// its prolog defines them as) are groups.
+    /// The program is in the legacy Illustrator format: its group operators `u` … `U` (at the top
+    /// level, whatever its prolog defines them as) are groups (see the module docs of `import`).
     pub illustrator: bool,
 }
 
@@ -71,6 +77,13 @@ pub(crate) struct Fault {
 
 /// Most procedure names a [`Fault`] keeps.
 const FAULT_PROCS: usize = 3;
+
+/// Where a `save` was made: the graphics states saved and the journal's length then.
+#[derive(Clone, Copy, Debug)]
+struct SaveMark {
+    gstates: usize,
+    journal: usize,
+}
 
 fn new_dict() -> DictRef {
     Rc::new(RefCell::new(Dict::new()))
@@ -143,6 +156,8 @@ impl<'a> Interp<'a> {
             ops: 0,
             allocated: 0,
             seed: 1,
+            saves: vec![],
+            journal: vec![],
             fault: None,
             glyph_width: None,
             g,
@@ -157,7 +172,7 @@ impl<'a> Interp<'a> {
         loop {
             let Some(o) = self.lex.next()? else { return Ok(()) };
             let o = self.scanned(o, self.lex.immediate)?;
-            // An Illustrator group begins before its `u` runs (`Some(true)`) and ends after its `U`
+            // A group begins before its `u` runs (`Some(true)`) and ends after its `U`
             // has (`Some(false)`).
             let group = match &o {
                 Obj::Exec(name) if self.illustrator => match &**name {
@@ -190,6 +205,7 @@ impl<'a> Interp<'a> {
         }
         self.dicts.clear();
         self.stack.clear();
+        self.journal.clear();
     }
 
     // ---------- the operand stack ----------
@@ -879,7 +895,7 @@ impl<'a> Interp<'a> {
                     }
                     Obj::Dict(d) => {
                         let key = k.key().ok_or(PsError::Ps("typecheck", String::new()))?;
-                        insert(&d, key, v)?;
+                        self.insert(&d, key, Some(v))?;
                         true
                     }
                     _ => return ps_err("typecheck", ""),
@@ -968,7 +984,7 @@ impl<'a> Interp<'a> {
                 let v = self.pop()?;
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
                 let d = self.dicts.last().cloned().ok_or(PsError::Ps("dictstackunderflow", String::new()))?;
-                insert(&d, k, v)?;
+                self.insert(&d, k, Some(v))?;
             }
             Load => {
                 let k = self.pop()?;
@@ -981,7 +997,7 @@ impl<'a> Interp<'a> {
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
                 let d = self.dicts.iter().rev().find(|d| d.borrow().contains_key(&k)).or(self.dicts.last()).cloned();
                 let d = d.ok_or(PsError::Ps("dictstackunderflow", String::new()))?;
-                insert(&d, k, v)?;
+                self.insert(&d, k, Some(v))?;
             }
             Known => {
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
@@ -1001,7 +1017,8 @@ impl<'a> Interp<'a> {
             }
             Undef => {
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
-                self.pop_dict()?.borrow_mut().remove(&k);
+                let d = self.pop_dict()?;
+                self.insert(&d, k, None)?;
             }
             CurrentDict => {
                 let d = self.dicts.last().cloned().ok_or(PsError::Ps("dictstackunderflow", String::new()))?;
@@ -1034,11 +1051,24 @@ impl<'a> Interp<'a> {
             }
             Save => {
                 self.gsave()?;
-                self.push(Obj::Save(self.saved.len()))?;
+                self.push(Obj::Save(self.saves.len()))?;
+                self.saves.push(SaveMark { gstates: self.saved.len(), journal: self.journal.len() });
             }
             Restore => {
-                let Obj::Save(level) = self.pop()? else { return ps_err("typecheck", "") };
-                while self.saved.len() >= level && !self.saved.is_empty() {
+                let Obj::Save(i) = self.pop()? else { return ps_err("typecheck", "") };
+                // A save restored already (or through an outer one) is no longer valid: §3.7.3,
+                // `invalidrestore`.
+                let mark = self.saves.get(i).copied().ok_or(PsError::Ps("invalidrestore", String::new()))?;
+                self.saves.truncate(i);
+                // The dictionaries as they were at the save, newest change undone first.
+                for (d, k, old) in self.journal.drain(mark.journal..).rev() {
+                    let mut d = d.borrow_mut();
+                    match old {
+                        Some(v) => d.insert(k, v),
+                        None => d.remove(&k),
+                    };
+                }
+                while self.saved.len() >= mark.gstates && !self.saved.is_empty() {
                     self.grestore();
                 }
             }
@@ -1083,9 +1113,12 @@ impl<'a> Interp<'a> {
                     self.push(Obj::Int(1 << 20))?;
                 }
             }
+            // An empty font cache of a device's sizes, in `cachestatus`'s order (PLRM 3rd ed.,
+            // chapter 8): bytes used and most, fonts used and most, glyphs used and most, and the
+            // most bytes one cached glyph may take (positive on a real device: programs divide by it).
             CacheStatus => {
-                for _ in 0..7 {
-                    self.push(Obj::Int(0))?;
+                for v in [0, 1 << 20, 0, 1000, 0, 10_000, 25_000] {
+                    self.push(Obj::Int(v))?;
                 }
             }
             StartJob => {
@@ -1143,7 +1176,9 @@ impl<'a> Interp<'a> {
             }
             Obj::Dict(d) => {
                 let from = self.pop_dict()?.borrow().clone();
-                d.borrow_mut().extend(from);
+                for (k, v) in from {
+                    self.insert(&d, k, Some(v))?;
+                }
                 self.push(Obj::Dict(d))?;
             }
             _ => return ps_err("typecheck", "copy"),
@@ -1219,6 +1254,26 @@ impl<'a> Interp<'a> {
         }
     }
 
+    /// Put `v` under `k` in `d` (`None`: remove it), within [`MAX_ALLOC`] entries; while a `save`
+    /// is open the old value is kept for `restore`.
+    fn insert(&mut self, d: &DictRef, k: Key, v: Option<Obj>) -> Res {
+        let old = {
+            let mut dm = d.borrow_mut();
+            if v.is_some() && dm.len() >= MAX_ALLOC && !dm.contains_key(&k) {
+                return Err(PsError::Limit("a dictionary grew too large"));
+            }
+            match v {
+                Some(v) => dm.insert(k.clone(), v),
+                None => dm.remove(&k),
+            }
+        };
+        if !self.saves.is_empty() {
+            self.alloc(2 * std::mem::size_of::<Obj>())?;
+            self.journal.push((d.clone(), k, old));
+        }
+        Ok(())
+    }
+
     // ---------- resources ----------
 
     /// The resources of `category`.
@@ -1291,16 +1346,6 @@ impl<'a> Interp<'a> {
             (t, n) = (st, sn + 1);
         }
     }
-}
-
-/// Put `v` under `k` in `d`, within [`MAX_ALLOC`] entries.
-fn insert(d: &DictRef, k: Key, v: Obj) -> Res {
-    let mut d = d.borrow_mut();
-    if d.len() >= MAX_ALLOC && !d.contains_key(&k) {
-        return Err(PsError::Limit("a dictionary grew too large"));
-    }
-    d.insert(k, v);
-    Ok(())
 }
 
 /// An array or string index.

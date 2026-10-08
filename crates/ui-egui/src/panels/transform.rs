@@ -7,12 +7,14 @@ use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_geom::Rect;
 
-use super::{corner_radius, first_selected, pstate, set_pstate};
+use super::{corner_radius_row, first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
 
 pub const ANGLE_PRESETS: [f64; 9] = [-180.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 180.0];
+/// The shear angle's presets: steep enough to be useful, short of the degenerate ±90°.
+pub const SHEAR_PRESETS: [f64; 9] = [-60.0, -45.0, -30.0, -15.0, 0.0, 15.0, 30.0, 45.0, 60.0];
 
 /// Proportional size: the other dimension when one changes with the link on.
 pub fn constrained(w: f64, h: f64, new_w: Option<f64>, new_h: Option<f64>) -> (f64, f64) {
@@ -151,8 +153,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.add_space(4.0);
             let icon = icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text(tl!("Shear"));
             crate::scrub::note_label(ui, icon.rect);
-            if let Some(a) = widgets::plain_field(ui, "xfp-shear", 0.0, "°", 1, 56.0)
+            // Shear is relative: the field rests at 0° and a new value shears by it.
+            if let Some(a) = widgets::spin_plain(ui, "xfp-shear", 0.0, "°", 2, 96.0, 15.0, -89.0, &SHEAR_PRESETS)
                 && a != 0.0
+                && a.abs() < 90.0
             {
                 app.run("object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin})).ok();
             }
@@ -166,20 +170,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("object.reflect", json!({"axis": "horizontal", "origin": origin})).ok();
         }
     });
-    // Live shape properties.
+    // Live shape properties (a path with live corners is no shape).
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
+        && !matches!(live, vectorcraft_doc::LiveShape::Path { .. })
     {
         widgets::divider(ui);
         match live {
             vectorcraft_doc::LiveShape::Rectangle { .. } => {
                 widgets::subheader(ui, tl!("Rectangle Properties:"));
-                ui.horizontal(|ui| {
-                    widgets::dim_label(ui, tl!("Corner Radius:"));
-                    if let Some(r) = widgets::num_field(ui, "xfp-radius", corner_radius(app, &n, live), units, 80.0) {
-                        app.run("object.setLiveShape", json!({"radius": r})).ok();
-                    }
-                });
+                corner_radius_row(app, ui, &n, "xfp-radius");
             }
             vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
                 widgets::subheader(ui, tl!("Polygon Properties:"));
@@ -189,6 +189,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         app.run("object.setLiveShape", json!({"sides": s.clamp(3.0, 20.0) as u32})).ok();
                     }
                 });
+                corner_radius_row(app, ui, &n, "xfp-radius");
             }
             _ => {
                 widgets::subheader(ui, tl!("Shape Properties:"));
@@ -207,6 +208,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
+}
+
+/// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
+/// popover under it, as the Stroke link does with the Stroke panel.
+pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let t = Tokens::get(ui.ctx());
+    let resp = ui.link(egui::RichText::new(tl!("Transform")).size(12.0).color(t.text).underline()).on_hover_text(tl!("Transform options"));
+    widgets::popover(&resp, resp.clicked(), |ui| {
+        ui.set_width(300.0);
+        show(app, ui);
+    });
 }
 
 /// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the

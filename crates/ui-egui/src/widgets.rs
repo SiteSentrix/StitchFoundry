@@ -806,18 +806,23 @@ pub fn opacity_blend(
     edit
 }
 
-/// The 3×3 reference point locator. Returns a new index when clicked.
+/// The 3×3 reference point locator: nine squares, the eight outer ones joined by a line around
+/// the box (the centre one stands alone), the current one filled. Returns a new index when clicked.
 pub fn reference_point(ui: &mut Ui, current: usize) -> Option<usize> {
     let t = Tokens::get(ui.ctx());
-    let size = 22.0;
+    // 5 pt squares with 4 pt gaps; the origin is snapped to whole points so the 1 pt lines through
+    // the squares' centres stay crisp.
+    let (sq, step) = (5.0, 9.0);
+    let size = 2.0 * step + sq;
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    let o = rect.min.round();
+    let centre = |i: usize| o + Vec2::new(sq / 2.0 + (i % 3) as f32 * step, sq / 2.0 + (i / 3) as f32 * step);
+    let line = Stroke::new(1.0, t.text_dim);
+    ui.painter().rect_stroke(Rect::from_two_pos(centre(0), centre(8)), 0.0, line, StrokeKind::Middle);
     let mut out = None;
-    let step = size / 2.0 - 2.5;
-    ui.painter().rect_stroke(rect.shrink(4.5), 0.0, Stroke::new(1.0, t.text_dim), StrokeKind::Middle);
     for i in 0..9 {
-        let c = Pos2::new(rect.left() + 3.0 + (i % 3) as f32 * step + 1.5, rect.top() + 3.0 + (i / 3) as f32 * step + 1.5);
-        let r = Rect::from_center_size(c, Vec2::splat(5.0));
-        let resp = ui.interact(r.expand(1.5), ui.id().with(("refpt", i)), Sense::click());
+        let r = Rect::from_center_size(centre(i), Vec2::splat(sq));
+        let resp = ui.interact(r.expand(2.0), ui.id().with(("refpt", i)), Sense::click());
         if resp.clicked() {
             out = Some(i);
         }
@@ -825,7 +830,7 @@ pub fn reference_point(ui: &mut Ui, current: usize) -> Option<usize> {
             ui.painter().rect_filled(r, 0.0, t.text);
         } else {
             ui.painter().rect_filled(r, 0.0, t.panel);
-            ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.text_dim), StrokeKind::Inside);
+            ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, if resp.hovered() { t.text } else { t.text_dim }), StrokeKind::Inside);
         }
     }
     out

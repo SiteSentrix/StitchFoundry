@@ -45,7 +45,7 @@ pub mod transparency;
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{LiveShape, Node, StrokeLayer};
+use vectorcraft_doc::{LiveCorners, Node, StrokeLayer};
 use vectorcraft_engine::inspect::StrokeMixed;
 
 use crate::theme::Tokens;
@@ -57,11 +57,24 @@ pub fn first_selected(app: &VectorcraftApp) -> Option<Node> {
     first_node(app).cloned()
 }
 
-/// The radius the Live Corners of live rectangle `n` show in the panels: that of the corners the
-/// panels set (the Direct-Selected ones, else all four), blank when they differ.
-pub(crate) fn corner_radius(app: &VectorcraftApp, n: &Node, live: &LiveShape) -> Option<f64> {
+/// The radius the Live Corners of path `n` show in the panels: that of the corners the panels set
+/// (the Direct-Selected ones, else every corner), blank when they differ.
+pub(crate) fn corner_radius(app: &VectorcraftApp, n: &Node) -> Option<f64> {
     let partial = app.session.active().and_then(|d| d.selection.partial(n.id));
-    live.corner_style(live.picked_corners(partial)).0
+    let corners = LiveCorners::of(n)?;
+    corners.style(&corners.picked(partial)).0
+}
+
+/// The Corner Radius field of a live rectangle's or polygon's properties: [`corner_radius`],
+/// which a new value sets on those corners.
+pub(crate) fn corner_radius_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str) {
+    let units = app.session.general_unit();
+    ui.horizontal(|ui| {
+        dim_label(ui, tl!("Corner Radius:"));
+        if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), units, 80.0) {
+            app.run("object.setLiveShape", json!({"radius": r})).ok();
+        }
+    });
 }
 
 /// Number of selected objects.

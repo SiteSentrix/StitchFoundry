@@ -1242,13 +1242,11 @@
 	Make a theme on Create and save it.	Crie um tema em Criar e salve-o.
 	Make all bleed settings the same	Tornar todas as configurações de sangria iguais
 	Make and Expand	Criar e Expandir
-	Make and Expand…	Criar e Expandir…
 	Make the bleed values differ	Fazer os valores de sangria diferirem
 	Make with Mesh…	Criar com Malha…
 	Make with Top Object	Criar com Objeto Superior
 	Make with Warp…	Criar com Distorção…
 	Make/Release Clipping Mask	Criar/Liberar Máscara de Recorte
-	Make…	Criar…
 	Manage Workspaces	Gerenciar Espaços de Trabalho
 	Manage Workspaces…	Gerenciar Espaços de Trabalho…
 	Manually	Manualmente
@@ -2248,6 +2246,7 @@
 	Character:	Caractere:
 	Character options	Opções de caractere
 	Stroke options	Opções de traçado
+	Transform options	Opções de transformação
 	Stroke:	Traçado:
 	Style	Estilo
 	Style Name:	Nome do Estilo:
@@ -2636,3 +2635,11 @@
 	Float Panel	Flutuar Painel
 	Dock Panel	Encaixar Painel
 	Float Tool Group	Flutuar Grupo de Ferramentas
+
+# The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
+	Services	Serviços
+	Hide VectorCraft	Ocultar o VectorCraft
+	Hide Others	Ocultar Outros
+	Zoom	Zoom
+	Bring All to Front	Trazer Todas para a Frente
+	Settings	Configurações

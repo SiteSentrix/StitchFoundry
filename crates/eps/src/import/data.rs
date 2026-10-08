@@ -635,31 +635,49 @@ impl Interp<'_> {
 
     /// The bytes a data procedure gives, called until it gives an empty string or `n` bytes.
     fn gather(&mut self, p: &Obj, n: usize) -> Res<Vec<u8>> {
-        let mut out = vec![];
-        while out.len() < n {
-            self.call(p.clone())?;
-            let s = self.pop_str()?;
-            let s = s.borrow();
-            if s.is_empty() {
-                break;
-            }
-            self.alloc(s.len())?;
-            out.extend_from_slice(&s);
-        }
-        out.truncate(n);
-        Ok(out)
+        Ok(self.read_sources(&[Source::Proc(p.clone())], n, n)?.pop().unwrap_or_default())
     }
 
     /// `n` bytes of image data from `src` (zeros past its end).
     fn source_bytes(&mut self, src: &Source, n: usize) -> Res<Vec<u8>> {
-        let mut v = match src {
-            Source::File(f) => self.read(f, n)?,
-            Source::Str(s) if !s.is_empty() => s.iter().copied().cycle().take(n).collect(),
-            Source::Str(_) => vec![],
-            Source::Proc(p) => self.gather(p, n)?,
-        };
+        let mut v = self.read_sources(std::slice::from_ref(src), n, n)?.pop().unwrap_or_default();
         v.resize(n, 0);
         Ok(v)
+    }
+
+    /// Up to `n` bytes from each of `sources`, read in turn as an image reads several data sources
+    /// (PLRM 3rd ed., §4.10 "Images" and `image`/`colorimage` in chapter 8: the sources are read
+    /// in turn, the same amount from each): each procedure called once a round (its string,
+    /// whatever its length), each file and string giving `step` bytes a round, until each has
+    /// given `n` bytes or ended. Procedures that read one file get their own rows that way.
+    fn read_sources(&mut self, sources: &[Source], n: usize, step: usize) -> Res<Vec<Vec<u8>>> {
+        let mut out: Vec<Vec<u8>> = vec![vec![]; sources.len()];
+        let mut ended = vec![false; sources.len()];
+        while out.iter().zip(&ended).any(|(o, e)| o.len() < n && !e) {
+            for ((src, o), e) in sources.iter().zip(out.iter_mut()).zip(ended.iter_mut()) {
+                if *e || o.len() >= n {
+                    continue;
+                }
+                let want = step.min(n - o.len());
+                let chunk = match src {
+                    Source::File(f) => self.read(f, want)?,
+                    // A string gives its bytes over and over.
+                    Source::Str(s) => {
+                        let at = o.len() % s.len().max(1);
+                        s.get(at..).unwrap_or_default().iter().chain(s.iter().cycle()).take(want).copied().collect()
+                    }
+                    Source::Proc(p) => {
+                        self.call(p.clone())?;
+                        let s = self.pop_str()?.to_vec();
+                        self.alloc(s.len())?;
+                        s
+                    }
+                };
+                *e = chunk.is_empty();
+                o.extend_from_slice(chunk.get(..chunk.len().min(n - o.len())).unwrap_or_default());
+            }
+        }
+        Ok(out)
     }
 
     /// `eexec`: an encrypted font program follows. It is skipped (type is drawn in the app's
@@ -849,16 +867,12 @@ impl Interp<'_> {
         let multi = s.sources.len() > 1;
         let row_bits = if multi { s.w * bpc } else { s.w * n * bpc };
         let row = row_bits.div_ceil(8);
-        let planes: Vec<Vec<u8>> = if multi {
-            let mut v = vec![];
-            for src in &s.sources {
-                v.push(self.source_bytes(src, row * s.h)?);
-            }
-            v
-        } else {
-            let src = s.sources.first().ok_or(PsError::Ps("undefined", "DataSource".into()))?;
-            vec![self.source_bytes(src, row * s.h)?]
-        };
+        // Several sources are read in turn, a row at a time each (zeros past their ends).
+        let sources = if multi { &s.sources[..] } else { s.sources.get(..1).ok_or(PsError::Ps("undefined", "DataSource".into()))? };
+        let mut planes = self.read_sources(sources, row * s.h, if multi { row } else { row * s.h })?;
+        for p in &mut planes {
+            p.resize(row * s.h, 0);
+        }
         let max = ((1u32 << bpc.min(16)) - 1) as f64;
         let sample = |plane: &[u8], y: usize, i: usize| -> u32 {
             let bit = y * row * 8 + i * bpc;

@@ -15,6 +15,10 @@ fn tags_map_to_languages() {
     for tag in ["es", "es_ES.UTF-8", "es-MX", "es_AR", "es-419", "es-US"] {
         assert_eq!(lang_from_tag(tag), Lang::from_code("es"), "{tag}");
     }
+    // Italian: Italy, Switzerland and San Marino share the one catalog.
+    for tag in ["it", "it_IT.UTF-8", "it-CH", "it_SM"] {
+        assert_eq!(lang_from_tag(tag), Lang::from_code("it"), "{tag}");
+    }
     // Traditional Chinese: by region, by script, and with a region after the script.
     assert_eq!(lang_from_tag("zh_TW.UTF-8"), Some(ZH()));
     assert_eq!(lang_from_tag("zh-TW"), Some(ZH()));
@@ -165,6 +169,29 @@ fn partial_catalogs_only_translate_strings_the_ui_shows() {
         let unknown: Vec<_> = entries.iter().filter(|(ctx, src, _)| ctx.is_empty() && !known.contains(src)).map(|(_, src, _)| src).collect();
         assert!(unknown.is_empty(), "{}: not UI strings: {unknown:?}", l.code);
     }
+}
+
+/// The engine learns the language the UI is drawn in each frame: new type takes the Japanese
+/// defaults while it is Japanese (#432). The frames stay in English: the drawing language is
+/// process-wide, and a Japanese frame would translate the tests running beside this one.
+#[test]
+fn the_engine_follows_the_interface_language() {
+    let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    let frame = |app: &mut crate::VectorcraftApp| {
+        ctx.run_ui(egui::RawInput::default(), |ui| app.logic(ui.ctx())).textures_delta.clear();
+    };
+    frame(&mut app);
+    assert_eq!(app.session.ui_language.as_deref(), Some("en"), "tests resolve `auto` to English");
+    assert!(!app.session.japanese_interface());
+    // Each frame hands the engine the language it draws in, whatever the engine had.
+    app.session.ui_language = Some("ja".into());
+    assert!(app.session.japanese_interface());
+    frame(&mut app);
+    assert_eq!(app.session.ui_language.as_deref(), Some("en"));
+    // The language a frame would draw in follows the preference.
+    app.session.prefs.interface_language = "ja".into();
+    assert_eq!(app.ui_language().code(), "ja");
 }
 
 /// VectorCraft › Language (`app.language`) sets the `interfaceLanguage` preference, which is what
@@ -391,9 +418,9 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 4] = ["cs", "es", "ja", "pt-br"];
+const KEEPS_MENU_NAMES: [&str; 5] = ["cs", "es", "it", "ja", "pt-br"];
 
-/// Menu labels the menu-complete catalogs (Czech, Spanish, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
+/// Menu labels the menu-complete catalogs (Czech, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
 /// Each language's own name in the Language menu is left alone too.
 const MENU_KEEP_AS_IS: &[&str] = &[
@@ -483,7 +510,7 @@ fn toggled_labels() -> Vec<String> {
     labels
 }
 
-/// Czech, Spanish, Japanese and Brazilian Portuguese cover every menu label, the Show/Hide pairs
+/// Czech, Spanish, Italian, Japanese and Brazilian Portuguese cover every menu label, the Show/Hide pairs
 /// and the canvas context menu included (panels and dialogs not yet).
 #[test]
 fn menu_catalogs_translate_every_menu_label() {
@@ -499,6 +526,9 @@ fn menu_catalogs_translate_every_menu_label() {
     let mut all: Vec<String> = labels.iter().filter(|l| interface(l)).map(|(l, ..)| l.to_string()).collect();
     all.extend(toggled_labels());
     all.extend(crate::menus::CONTEXT_LABELS.iter().map(|l| l.to_string()));
+    // The macOS menu bar's own labels, and its Settings submenu's Preferences pages.
+    all.extend(crate::native_menu::MAC_LABELS.iter().map(|l| l.to_string()));
+    all.extend(vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES.iter().map(|l| l.to_string()));
     all.sort();
     all.dedup();
     for code in KEEPS_MENU_NAMES {
@@ -514,10 +544,15 @@ fn menu_catalogs_translate_every_menu_label() {
     assert_eq!(tr(Lang::from_code("ja").expect("ja"), "File"), "ファイル");
     assert_eq!(tr(Lang::from_code("pt-br").expect("pt-br"), "File"), "Arquivo");
     assert_eq!(tr(es(), "File"), "Archivo");
+    assert_eq!(tr(it(), "Edit"), "Modifica");
 }
 
 fn es() -> Lang {
     Lang::from_code("es").expect("es registered")
+}
+
+fn it() -> Lang {
+    Lang::from_code("it").expect("it registered")
 }
 
 /// Spanish uses the vector-illustration vocabulary its users know, has two plural forms like
@@ -541,6 +576,27 @@ fn spanish_reads_as_spanish() {
     assert_eq!(trn(es(), 3, "{n} Layer", "{n} Layers"), "3 capas");
 }
 
+/// Italian uses the vector-illustration vocabulary its users know, has two plural forms like
+/// English (zero takes the plural), and reads the same in the menus and in the panels.
+#[test]
+fn italian_reads_as_italian() {
+    for (en, want) in [
+        ("Artboard Tool", "Strumento Tavola da disegno"),
+        ("Swatches", "Campioni"),
+        ("Pathfinder", "Elaborazione tracciati"),
+        ("Stroke", "Traccia"),
+        ("Fill", "Riempimento"),
+        ("Direct Selection Tool", "Strumento Selezione diretta"),
+        ("Save As…", "Salva con nome…"),
+        ("Undo", "Annulla"),
+    ] {
+        assert_eq!(tr(it(), en), want);
+    }
+    assert_eq!(trn(it(), 1, "{n} Layer", "{n} Layers"), "1 livello");
+    assert_eq!(trn(it(), 0, "{n} Layer", "{n} Layers"), "0 livelli");
+    assert_eq!(trn(it(), 3, "{n} Layer", "{n} Layers"), "3 livelli");
+}
+
 /// Catalogs written with spaces between words keep a fragment's leading and trailing spaces: the
 /// hint bar and a few labels are joined from pieces (" to finish", "Press ").
 #[test]
@@ -559,11 +615,11 @@ fn czech_plurals_have_three_forms() {
     assert_eq!(forms, [2, 0, 1, 1, 2, 2, 2]);
 }
 
-/// Czech and Spanish letters (and the punctuation their text uses) come from each family's own first font, not
+/// Czech, Spanish and Italian letters (and the punctuation their text uses) come from each family's own first font, not
 /// from a fallback further down the stack. (`has_glyph` can't tell: it counts characters of the
 /// face that draws missing glyphs, the first one, as missing.)
 #[test]
-fn czech_and_spanish_glyphs_are_available_without_system_fonts() {
+fn czech_spanish_and_italian_glyphs_are_available_without_system_fonts() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -574,7 +630,8 @@ fn czech_and_spanish_glyphs_are_available_without_system_fonts() {
             let first = first.unwrap();
             let mut font = fonts.fonts.font(&family);
             let chars = font.characters();
-            for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”".chars() {
+            for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”àèìòùÀÈÌÒÙ«»’".chars()
+            {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
             }
         }
@@ -651,7 +708,7 @@ fn complete_languages_translate_every_message() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["es"];
+const COMPLETE_MESSAGES: &[&str] = &["es", "it"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad"];

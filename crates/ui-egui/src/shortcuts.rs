@@ -82,10 +82,9 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
 
 /// Consume a press of `sc`. A `=` chord also takes [`Key::Plus`], which is how `+` arrives from
 /// the numpad and from layouts where it has its own key (Shift+`=` arrives as either; extra Shift
-/// is ignored). `native`: the system menu already handles the chord as written, so only that
-/// alias is left to match here.
-pub(crate) fn consume(i: &mut egui::InputState, sc: &KeyboardShortcut, native: bool) -> bool {
-    (!native && i.consume_shortcut(sc))
+/// is ignored).
+pub(crate) fn consume(i: &mut egui::InputState, sc: &KeyboardShortcut) -> bool {
+    i.consume_shortcut(sc)
         || (sc.logical_key == Key::Equals && i.consume_key(sc.modifiers, Key::Plus))
         || (sc.modifiers.shift && shifted(sc.logical_key).is_some_and(|k| i.consume_key(sc.modifiers, k)))
 }
@@ -281,14 +280,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // Editing keys with modifiers and the clipboard (Cmd+A is Select All's, below: the text).
         crate::panels::character::route_type_input(app, ctx);
         // Enter was already delivered above as ToolKey::Enter (newline).
-        let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| consume(i, sc, false)));
+        let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| consume(i, sc)));
         if let Some((_, id, p)) = fire {
             crate::menus::invoke(app, id, p);
         }
         return;
     }
-    // Clipboard keys arrive as events, not key presses (except where the native menu has them);
-    // the chord held says which paste.
+    // Clipboard keys arrive as events, not key presses; the chord held says which paste.
     let mut clip = vec![];
     ctx.input_mut(|i| {
         let held = i.modifiers;
@@ -299,17 +297,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 egui::Event::Paste(t) => (paste_command(held), Some(t.clone())),
                 _ => return true,
             };
-            if app.native_shortcuts.contains(id) {
-                return true;
-            }
             clip.push((id, text));
             false
         })
     });
-    // Only the system clipboard service reads what isn't text (the native menu has its own Paste).
+    // Only the system clipboard service reads what isn't text.
     if let Some(id) = textless_paste.map(paste_command)
         && app.services.system_clipboard.is_some()
-        && !app.native_shortcuts.contains(id)
     {
         clip.push((id, None));
     }
@@ -389,8 +383,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if plain && (sc.logical_key.name().len() == 1 || matches!(sc.logical_key, Key::Slash | Key::Comma | Key::Period)) {
             continue;
         }
-        let native = app.native_shortcuts.contains(id);
-        if ctx.input_mut(|i| consume(i, &sc, native)) {
+        if ctx.input_mut(|i| consume(i, &sc)) {
             fire = Some((id, p));
             break;
         }
@@ -669,13 +662,6 @@ mod tests {
         let before = zoom(&mut app);
         frame(&mut app, vec![press(Key::Minus, Modifiers::COMMAND)]);
         assert!(zoom(&mut app) < before, "Cmd+- zooms out");
-        // The system menu handles `Cmd+=` itself; the `+` key is still matched here.
-        app.native_shortcuts.insert("view.zoomIn".into());
-        let before = zoom(&mut app);
-        frame(&mut app, vec![press(Key::Equals, Modifiers::COMMAND)]);
-        assert_eq!(zoom(&mut app), before, "left to the system menu");
-        frame(&mut app, vec![press(Key::Plus, Modifiers::COMMAND)]);
-        assert!(zoom(&mut app) > before);
     }
 
     #[test]

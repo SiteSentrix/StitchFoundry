@@ -107,7 +107,7 @@ fn recent_files_show_as_many_as_the_preference_keeps() {
     assert!(menus::enabled(&app, "file.openRecent30"));
     app.session.prefs.recent_files_count = 0;
     assert_eq!((io::recent_files(&app).len(), listed(&app)), (0, 0), "0 hides the list");
-    assert_eq!(menus::listed_slots(&app), 0, "the native menu rebuilds without them");
+    assert!(menus::shown_state(&app, "file.openRecent1", &json!(null)).is_none(), "the slots leave the menus");
     assert!(app.run("file.openRecent1", json!({})).is_err());
     app.session.prefs.recent_files_count = 5;
     assert_eq!(io::recent_files(&app)[0], "/art/34.svg", "hiding them didn't forget them");
