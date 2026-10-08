@@ -149,10 +149,11 @@ fn text_composer_round_trips() {
         });
         v
     };
-    assert_eq!(composers(&d), [Composer::SingleLine]);
+    // The point type set to Single-line, then the area type left at the default.
+    assert_eq!(composers(&d), [Composer::SingleLine, Composer::EveryLine]);
     let bytes = save(&d, false);
     assert!(String::from_utf8_lossy(&bytes).contains("\"composer\":\"singleLine\""));
-    assert_eq!(composers(&load(&bytes).unwrap()), [Composer::SingleLine]);
+    assert_eq!(composers(&load(&bytes).unwrap()), [Composer::SingleLine, Composer::EveryLine]);
     // Files without the key (older files, Every-line text) read as Every-line.
     fn strip(v: &mut Value) {
         match v {
@@ -167,7 +168,7 @@ fn text_composer_round_trips() {
     let mut v = json_of(&bytes);
     strip(&mut v);
     let d2 = load(&serde_json::to_vec(&v).unwrap()).unwrap();
-    assert_eq!(composers(&d2), [Composer::EveryLine]);
+    assert_eq!(composers(&d2), [Composer::EveryLine, Composer::EveryLine]);
     assert!(!String::from_utf8_lossy(&save(&d2, false)).contains("composer"));
 }
 
