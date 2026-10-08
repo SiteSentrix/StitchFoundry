@@ -813,8 +813,10 @@ fn pref_color(hex: &str, fallback: Color32) -> Color32 {
 /// subdivisions instead.
 fn grid(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32, look: LineLook) {
     let r = xf.rect;
-    let a = xf.to_doc(r.min);
-    let b = xf.to_doc(r.max);
+    // The view in document space: the box round the canvas's corners (the view may be rotated;
+    // the painter clips to the canvas).
+    let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()].map(|c| xf.to_doc(c));
+    let view = corners.iter().fold(Rect::from_points(corners[0], corners[0]), |b, c| b.union_pt(*c));
     let sub = spacing / subdiv.max(1) as f64;
     let step = if sub * xf.zoom >= 6.0 { sub } else { spacing };
     // Dots crowd sooner than lines.
@@ -822,25 +824,16 @@ fn grid(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32, look: LineLook) {
         return;
     }
     let major = |v: f64| (v / spacing - (v / spacing).round()).abs() < 1e-6;
-    // The lines across the view, on screen, each with whether it is a gridline.
-    let lines = |from: f64, to: f64, screen: &dyn Fn(f64) -> f32| {
-        let mut v = (from / step).floor() * step;
-        let mut out = vec![];
-        while v <= to {
-            out.push((screen(v), major(v)));
-            v += step;
-        }
-        out
+    // The lines across the view (where along their axis), at least 4 px apart (and capped).
+    let lines = |from: f64, to: f64| {
+        let first = (from / step).floor();
+        (0..10_000u32).map(move |i| (first + f64::from(i)) * step).take_while(move |v| *v <= to)
     };
-    let xs = lines(a.x, b.x, &|x| xf.to_screen(Point::new(x, 0.0)).x);
-    let ys = lines(a.y, b.y, &|y| xf.to_screen(Point::new(0.0, y)).y);
     if look.dots {
         let mut mesh = egui::Mesh::default();
-        for &(x, mx) in &xs {
-            for &(y, my) in &ys {
-                if mx || my {
-                    mesh.add_colored_rect(egui::Rect::from_center_size(pos2(x, y), vec2(1.5, 1.5)), look.color);
-                }
+        for x in lines(view.x0, view.x1) {
+            for y in lines(view.y0, view.y1).filter(|y| major(x) || major(*y)) {
+                mesh.add_colored_rect(egui::Rect::from_center_size(xf.to_screen(Point::new(x, y)), vec2(1.5, 1.5)), look.color);
             }
         }
         p.add(Shape::mesh(mesh));
@@ -848,11 +841,11 @@ fn grid(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32, look: LineLook) {
     }
     let minor = look.color.gamma_multiply(0.4);
     let stroke = |major: bool| Stroke::new(1.0, if major { look.color } else { minor });
-    for (x, m) in xs {
-        p.line_segment([pos2(x, r.top()), pos2(x, r.bottom())], stroke(m));
+    for x in lines(view.x0, view.x1) {
+        p.line_segment([xf.to_screen(Point::new(x, view.y0)), xf.to_screen(Point::new(x, view.y1))], stroke(major(x)));
     }
-    for (y, m) in ys {
-        p.line_segment([pos2(r.left(), y), pos2(r.right(), y)], stroke(m));
+    for y in lines(view.y0, view.y1) {
+        p.line_segment([xf.to_screen(Point::new(view.x0, y)), xf.to_screen(Point::new(view.x1, y))], stroke(major(y)));
     }
 }
 
@@ -2044,6 +2037,19 @@ mod tests {
         app.ui.view.pixel_preview = true;
         app.session.execute("prefs.set", &json!({"key": "showPixelGrid", "value": false})).unwrap();
         assert_eq!(pixel_lines(&mut app).0, 0, "the option off: none");
+        // A rotated view: the lines turn with the pixels, across the whole canvas.
+        app.session.execute("prefs.set", &json!({"key": "showPixelGrid", "value": true})).unwrap();
+        app.view_mut().unwrap().rotation = 30.0;
+        let s = shapes(&mut app, &ctx);
+        let turned: Vec<_> = s
+            .iter()
+            .filter_map(|s| match s {
+                Shape::LineSegment { points: [a, b], stroke } if stroke.color == PIXEL_GRID => Some((b.x - a.x).atan2(b.y - a.y).to_degrees().abs()),
+                _ => None,
+            })
+            .collect();
+        assert!(turned.len() >= 200, "{}", turned.len());
+        assert!(turned.iter().all(|a| [30.0, 60.0, 120.0, 150.0].iter().any(|t| (a - t).abs() < 0.5)), "turned 30°: {turned:?}");
     }
 
     /// Guides & Grid (#394): the grid in Grid Color, behind the art or, with Grids In Back off,
