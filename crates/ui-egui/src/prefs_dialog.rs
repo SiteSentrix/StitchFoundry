@@ -77,6 +77,7 @@ struct Applied {
     brightness: Brightness,
     white_canvas: bool,
     threads: i32,
+    tool_tips: bool,
 }
 
 /// Per frame: push UI-side preferences into egui / the renderer when they change.
@@ -87,11 +88,16 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     {
         app.ui.brightness = b;
     }
-    let want = Applied { brightness: app.ui.brightness, white_canvas: p.canvas_color == "white", threads: p.render_threads };
+    let want =
+        Applied { brightness: app.ui.brightness, white_canvas: p.canvas_color == "white", threads: p.render_threads, tool_tips: p.show_tool_tips };
     let id = egui::Id::new("dc-applied-prefs");
     let prev: Option<Applied> = ctx.data(|d| d.get_temp::<Option<Applied>>(id)).flatten();
     if prev != Some(want) {
         theme::apply(ctx, want.brightness);
+        // General › Show Tool Tips: off, no button or field shows its tool tip (they never come
+        // due), whichever widget asks for one.
+        let delay = if want.tool_tips { egui::style::Interaction::default().tooltip_delay } else { f32::INFINITY };
+        ctx.global_style_mut(|s| s.interaction.tooltip_delay = delay);
         if want.white_canvas {
             let mut t = Tokens::get(ctx);
             t.pasteboard = egui::Color32::WHITE;
@@ -364,6 +370,52 @@ mod tests {
         assert_eq!(a.session.prefs.ui_brightness, "light");
         assert!(!a.ui.view.smart_guides);
         assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(4.0));
+    }
+
+    /// General › Show Tool Tips: off, a button held under the pointer shows no tool tip; back on,
+    /// it does again (#394).
+    #[test]
+    fn show_tool_tips_off_hides_tool_tips() {
+        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut a = app();
+        let ctx = egui::Context::default();
+        let mut time = 0.0;
+        // Come from elsewhere and hover the button for two seconds: did its tool tip show?
+        let mut hover = |a: &mut VectorcraftApp| {
+            let mut shown = vec![];
+            for i in 0..20 {
+                time += 0.1;
+                let events = match i {
+                    0 => vec![egui::Event::PointerGone],
+                    1 => vec![egui::Event::PointerMoved(egui::pos2(20.0, 12.0))],
+                    _ => vec![],
+                };
+                let raw = egui::RawInput {
+                    events,
+                    time: Some(time),
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0))),
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(raw, |ui| {
+                    apply_runtime(a, ui.ctx());
+                    ui.button("Button").on_hover_text("The tool tip");
+                });
+                out.textures_delta.clear();
+                out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+            }
+            shown.iter().any(|t| t == "The tool tip")
+        };
+        assert!(hover(&mut a), "on by default");
+        a.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
+        assert!(!hover(&mut a), "off: no tool tip");
+        a.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
+        assert!(hover(&mut a), "on again");
     }
 
     #[test]

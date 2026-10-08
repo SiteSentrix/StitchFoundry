@@ -24,6 +24,7 @@ so only enable it while you use it. Transport: `apps/vectorcraft/src/control_ser
 | `ui.tool.select` / `ui.tool.list` | `{tool}` | |
 | `ui.pointer` | `{events:[{kind: down|drag|up|move|doubleclick, x, y, space?: "doc"|"screen", mods?}]}` | drive the active tool exactly like the mouse |
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | synthetic keyboard input |
+| `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel zooms; with the `zoomWithMouseWheel` preference the wheel zooms about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?}` | |
 | `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` | fill and submit the open dialog |
 | `ui.screenshot` | `{path?}` | capture the window (PNG). Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
@@ -462,7 +463,7 @@ from)}` opens too: dialog `printPreset`, the Print dialog's settings fields plus
 Export… are `print.presets.delete`, `print.presets.import` and `print.presets.export`; `ui.dialog.confirm` closes.
 Opening a `.vcprintpresets` file with `app.open` imports its presets.
 
-Modifiers on synthetic input: `ui.key`, `ui.click` and `ui.drag` take `shift`, `alt`, `ctrl` and `cmd` (Command on
+Modifiers on synthetic input: `ui.key`, `ui.click`, `ui.drag` and `ui.wheel` take `shift`, `alt`, `ctrl` and `cmd` (Command on
 macOS, Ctrl elsewhere), and the app holds them for the frames the input spans, as if the keys were down: a key's
 press, its `text` and its release; a click's press and release; a drag from the press through every move to the
 release. Every handler sees them (Shift+arrow nudges by the big increment, Alt+arrow nudges a copy, Shift-clicking a

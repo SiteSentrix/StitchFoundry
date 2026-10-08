@@ -95,11 +95,13 @@ pub struct DirectSelectionTool {
     mesh: MeshEdit,
     /// Smart guides of the handle being dragged.
     guides: Vec<Overlay>,
+    /// The anchor under the pointer (Highlight anchors on mouse over): its path, where it is.
+    hover: Option<(NodeId, Point)>,
 }
 
 impl DirectSelectionTool {
     pub fn new(group: bool) -> Self {
-        Self { group, state: State::Idle, spine: None, mesh: MeshEdit::default(), guides: vec![] }
+        Self { group, state: State::Idle, spine: None, mesh: MeshEdit::default(), guides: vec![], hover: None }
     }
 }
 
@@ -236,7 +238,7 @@ impl Tool for DirectSelectionTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
-        let tol = cx.tol(4.0);
+        let tol = cx.pick_tol();
         match (ev.kind, self.state.clone()) {
             (PointerKind::Down, _) if self.group => {
                 let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else {
@@ -260,6 +262,10 @@ impl Tool for DirectSelectionTool {
                 }
             }
             (PointerKind::DoubleClick, _) if !self.group => corners::double_click(cx, p).into_iter().collect(),
+            (PointerKind::Move, State::Idle) => {
+                self.hover = if self.group || !cx.highlight_anchors { None } else { hovered_anchor(cx, p) };
+                vec![]
+            }
             (PointerKind::Down, _) => {
                 if let Some(c) = CornerDrag::hit(cx, ev) {
                     self.state = State::Corner(c);
@@ -492,6 +498,9 @@ impl Tool for DirectSelectionTool {
                 if matches!(self.state, State::Handle { .. }) {
                     out.extend(self.guides.iter().cloned());
                 }
+                if let Some((id, p)) = self.hover.filter(|_| matches!(self.state, State::Idle)) {
+                    out.push(Overlay::Anchor { p, color: cx.doc.layer_color(id), filled: false, size: 8.0 });
+                }
                 out
             }
         }
@@ -502,6 +511,17 @@ impl Tool for DirectSelectionTool {
         }
         Cursor::ArrowHollow
     }
+}
+
+/// The anchor within the selection tolerance of `p`, of a selected path or the path under `p`:
+/// what Highlight anchors on mouse over marks (a press there picks it).
+fn hovered_anchor(cx: &ToolContext, p: Point) -> Option<(NodeId, Point)> {
+    let under = hit_test(cx.doc, p, cx.hit_options()).map(|h| h.leaf);
+    let tol = cx.pick_tol();
+    cx.selection.objects.iter().copied().chain(under).find_map(|id| {
+        let path = cx.doc.node(id).and_then(editable_path)?;
+        path.anchors().find(|(_, _, a)| a.p.distance(p) <= tol).map(|(_, _, a)| (id, a.p))
+    })
 }
 
 /// The frame anchors of the selected area type, which Direct Selection drags.
@@ -562,6 +582,30 @@ mod tests {
         let b = vectorcraft_doc::Node::new(g, NodeKind::Blend { children: vec![key(k1, 100.0), key(k2, 200.0)], spec: Default::default() });
         d.insert(Some(l), 1, b).unwrap();
         (d, g, k1)
+    }
+
+    /// Highlight anchors on mouse over (#394): the anchor under the pointer, within the selection
+    /// tolerance, shows enlarged; none with the preference off or away from anchors.
+    #[test]
+    fn the_anchor_under_the_pointer_is_highlighted() {
+        let (d, id) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let big = |t: &DirectSelectionTool, cx: &ToolContext| {
+            t.overlays(cx).into_iter().find_map(|o| match o {
+                Overlay::Anchor { p, size, .. } if size > 5.0 => Some(p),
+                _ => None,
+            })
+        };
+        let mut t = DirectSelectionTool::new(false);
+        let on = cx(&d, &s, &p);
+        t.pointer(&on, &PointerEvent::new(PointerKind::Move, 102.0, 101.0));
+        assert_eq!(big(&t, &on), Some(Point::new(100.0, 100.0)), "the corner of {id:?}");
+        t.pointer(&on, &PointerEvent::new(PointerKind::Move, 150.0, 100.0));
+        assert_eq!(big(&t, &on), None, "mid-segment: no anchor");
+        let off = ToolContext { highlight_anchors: false, ..cx(&d, &s, &p) };
+        t.pointer(&off, &PointerEvent::new(PointerKind::Move, 102.0, 101.0));
+        assert_eq!(big(&t, &off), None, "off");
     }
 
     #[test]

@@ -493,7 +493,7 @@ impl VectorcraftApp {
                     let r = &mut self.ui.recent_fonts;
                     r.retain(|f| f != font);
                     r.insert(0, font.to_string());
-                    r.truncate(10);
+                    r.truncate(MAX_RECENT_FONTS);
                 }
             }
         }
@@ -659,7 +659,17 @@ pub fn now_ms() -> f64 {
     }
 }
 
+/// The most fonts Type › Recent Fonts lists (Preferences › Type › Number of Recent Fonts).
+pub const MAX_RECENT_FONTS: usize = 15;
+
 impl VectorcraftApp {
+    /// Type › Recent Fonts: the fonts used last, newest first, as many as Preferences › Type ›
+    /// Number of Recent Fonts says.
+    pub fn recent_fonts(&self) -> &[String] {
+        let n = usize::try_from(self.session.prefs.recent_fonts_count).unwrap_or(MAX_RECENT_FONTS).clamp(1, MAX_RECENT_FONTS);
+        self.ui.recent_fonts.get(..n).unwrap_or(&self.ui.recent_fonts)
+    }
+
     /// The selection's bounding box, rotated with rotated objects ([`Session::transform_box`]). The
     /// canvas and the transform fields read it every frame: it is measured once per revision.
     pub fn selection_box(&mut self) -> Option<vectorcraft_doc::OrientedBox> {
@@ -788,9 +798,9 @@ impl VectorcraftApp {
         place::drop_files(self, files, target);
     }
 
-    /// Inject synthetic events (one press/release step per frame). Handlers read the modifiers
-    /// egui holds (`i.modifiers`), so a synthetic key or button holds its own for the frames it
-    /// spans (a drag's moves included); the keyboard's come back after.
+    /// Inject synthetic events (one press/release step or wheel turn per frame). Handlers read the
+    /// modifiers egui holds (`i.modifiers`), so a synthetic key, button or wheel turn holds its own
+    /// for the frames it spans (a drag's moves included); the keyboard's come back after.
     pub fn raw_input_hook(&mut self, raw: &mut egui::RawInput) {
         for e in &raw.events {
             match e {
@@ -808,7 +818,7 @@ impl VectorcraftApp {
         // Pointer events go one per frame so egui sees presses, drags and releases as real input;
         // keyboard sequences go up to the key release.
         let n = match first {
-            egui::Event::PointerMoved(_) | egui::Event::PointerButton { .. } => 1,
+            egui::Event::PointerMoved(_) | egui::Event::PointerButton { .. } | egui::Event::MouseWheel { .. } => 1,
             _ => self.synthetic.iter().position(|e| matches!(e, egui::Event::Key { pressed: false, .. })).map_or(self.synthetic.len(), |i| i + 1),
         };
         if let egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } = first {
@@ -819,7 +829,9 @@ impl VectorcraftApp {
         let held = now
             .iter()
             .find_map(|e| match e {
-                egui::Event::Key { modifiers, .. } | egui::Event::PointerButton { modifiers, .. } => Some(*modifiers),
+                egui::Event::Key { modifiers, .. } | egui::Event::PointerButton { modifiers, .. } | egui::Event::MouseWheel { modifiers, .. } => {
+                    Some(*modifiers)
+                }
                 _ => None,
             })
             .or_else(|| match later.iter().find(|e| matches!(e, egui::Event::PointerButton { .. })) {

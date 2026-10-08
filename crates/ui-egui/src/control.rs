@@ -105,6 +105,13 @@ fn key_from(name: &str) -> Option<egui::Key> {
     })
 }
 
+/// The modifier keys a request holds down (`cmd`, `ctrl`, `alt`, `shift`; `cmd` is Command on
+/// macOS, Ctrl elsewhere).
+fn modifiers(p: &Value) -> egui::Modifiers {
+    let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
+    egui::Modifiers { alt: b("alt"), ctrl: b("ctrl"), shift: b("shift"), mac_cmd: b("cmd") && cfg!(target_os = "macos"), command: b("cmd") }
+}
+
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
@@ -159,14 +166,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         }
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };
-            let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
-            let m = egui::Modifiers {
-                alt: b("alt"),
-                ctrl: b("ctrl"),
-                shift: b("shift"),
-                mac_cmd: b("cmd") && cfg!(target_os = "macos"),
-                command: b("cmd"),
-            };
+            let m = modifiers(p);
             app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: m });
             // Typed text comes with the press, so it shares the key's frame and modifiers.
             if let Some(t) = s("text") {
@@ -189,14 +189,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 Some("right") | Some("secondary") => egui::PointerButton::Secondary,
                 _ => egui::PointerButton::Primary,
             };
-            let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
-            let modifiers = egui::Modifiers {
-                alt: b("alt"),
-                ctrl: b("ctrl"),
-                shift: b("shift"),
-                mac_cmd: b("cmd") && cfg!(target_os = "macos"),
-                command: b("cmd"),
-            };
+            let modifiers = modifiers(p);
             let a = egui::pos2(f("x"), f("y"));
             let end = if req.method == "ui.drag" { egui::pos2(f("toX"), f("toY")) } else { a };
             app.synthetic.push(egui::Event::PointerMoved(a));
@@ -214,6 +207,18 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: true, modifiers });
                 app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
             }
+            ctx.request_repaint();
+            ok(Value::Null)
+        }
+        "ui.wheel" => {
+            // Mouse wheel notches over screen point (x, y): `dy` up (+) or down, `dx` sideways
+            // (`unit: "point"` for trackpad-like points), with modifiers as `ui.click` takes them.
+            let f = |k: &str| p.get(k).and_then(Value::as_f64).unwrap_or(0.0) as f32;
+            let unit = if s("unit") == Some("point") { egui::MouseWheelUnit::Point } else { egui::MouseWheelUnit::Line };
+            // Notches, not a flood: a turn stays within what a real wheel sends.
+            let delta = egui::vec2(f("dx"), f("dy")).clamp(egui::Vec2::splat(-100.0), egui::Vec2::splat(100.0));
+            app.synthetic.push(egui::Event::PointerMoved(egui::pos2(f("x"), f("y"))));
+            app.synthetic.push(egui::Event::MouseWheel { unit, delta, phase: egui::TouchPhase::Move, modifiers: modifiers(p) });
             ctx.request_repaint();
             ok(Value::Null)
         }

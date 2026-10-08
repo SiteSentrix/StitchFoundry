@@ -253,6 +253,22 @@ pub struct ToolContext<'a> {
     /// General → Disable Auto Add/Delete is off: the Pen adds an anchor on a selected path's
     /// segment and deletes one of its anchors.
     pub auto_add_delete: bool,
+    /// Selection & Anchor Display → Tolerance: how near (screen pixels) a click must be to a path
+    /// or an anchor to pick it.
+    pub selection_tolerance: f64,
+    /// Selection & Anchor Display → Object Selection by Path Only: a click inside a filled path
+    /// doesn't pick it, only one on its path does.
+    pub path_only: bool,
+    /// General → Double Click To Isolate: a double-click on a group with the Selection tool
+    /// isolates it.
+    pub double_click_isolate: bool,
+    /// Selection & Anchor Display → Command Click to Select Objects Behind: Cmd/Ctrl-click with the
+    /// Selection tool selects the object under the selected one, the next click the one under
+    /// that.
+    pub select_behind: bool,
+    /// Selection & Anchor Display → Highlight anchors on mouse over: Direct Selection marks the
+    /// anchor under the pointer.
+    pub highlight_anchors: bool,
     /// The document window (none headless): screen-fixed widgets sit in it.
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
@@ -276,8 +292,12 @@ impl ToolContext<'_> {
     pub fn offset_label(&self, dx: f64, dy: f64) -> String {
         format!("dX: {}\ndY: {}", self.len(dx), self.len(dy))
     }
+    /// The selection tolerance in document units ([`Self::selection_tolerance`]).
+    pub fn pick_tol(&self) -> f64 {
+        self.tol(self.selection_tolerance)
+    }
     pub fn hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
-        vectorcraft_doc::hit::HitOptions { tol: self.tol(3.0), outline: self.outline, path_only: false }
+        vectorcraft_doc::hit::HitOptions { tol: self.pick_tol(), outline: self.outline, path_only: self.path_only }
     }
 }
 
@@ -354,6 +374,27 @@ pub enum Cursor {
     BlendObject,
     /// The Blend tool over an anchor point (the blend starts there): a crosshair with a target.
     BlendAnchor,
+}
+
+impl Cursor {
+    /// General › Use Precise Cursors: the drawing tools' pointers (the Pen's in every state, the
+    /// Eyedropper's, the Slice and Blend tools') become a plain crosshair at the hotspot.
+    pub fn precise(self) -> Self {
+        match self {
+            Cursor::Pen
+            | Cursor::PenAdd
+            | Cursor::PenDelete
+            | Cursor::PenClose
+            | Cursor::PenContinue
+            | Cursor::PenConvert
+            | Cursor::Eyedropper
+            | Cursor::Slice
+            | Cursor::Blend
+            | Cursor::BlendObject
+            | Cursor::BlendAnchor => Cursor::Crosshair,
+            c => c,
+        }
+    }
 }
 
 /// A tool state machine.
@@ -524,6 +565,11 @@ pub(crate) mod testutil {
             slices_hidden: false,
             slices_locked: false,
             auto_add_delete: true,
+            selection_tolerance: 3.0,
+            path_only: false,
+            double_click_isolate: true,
+            select_behind: true,
+            highlight_anchors: true,
             screen: None,
             plane_widget: Some(Default::default()),
         }
