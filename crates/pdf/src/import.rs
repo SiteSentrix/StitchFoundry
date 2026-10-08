@@ -537,12 +537,21 @@ struct Frame {
     children: Vec<Arc<Node>>,
     /// The first optional content group entered inside (where the frame's art goes).
     group: Option<usize>,
+    /// The group each child was drawn in, where the frame's art goes when the frame dissolves
+    /// into its parent (a layer's form drawing its sublayers' forms).
+    child_groups: Vec<Option<usize>>,
 }
 
 impl Frame {
     fn new(kind: FrameKind) -> Self {
-        Self { kind, children: vec![], group: None }
+        Self { kind, children: vec![], group: None, child_groups: vec![] }
     }
+}
+
+/// A dissolving frame's `children`, each with the group it was drawn in (`groups`, else the
+/// frame's `group`).
+fn grouped(children: Vec<Arc<Node>>, groups: Vec<Option<usize>>, group: Option<usize>) -> impl Iterator<Item = (Arc<Node>, Option<usize>)> {
+    children.into_iter().zip(groups.into_iter().map(move |g| g.or(group)).chain(std::iter::repeat(group)))
 }
 
 /// Glyphs drawn consecutively with the same paint, merged into one path.
@@ -846,8 +855,11 @@ impl<'p> Builder<'p> {
         // A frame's art goes where its first art was drawn (a clip can end in a later group).
         if root {
             self.root_groups.push(group.or(current));
-        } else if f.group.is_none() {
-            f.group = group.or(current);
+        } else {
+            f.child_groups.push(group.or(current));
+            if f.group.is_none() {
+                f.group = group.or(current);
+            }
         }
     }
 
@@ -925,7 +937,7 @@ impl<'p> Builder<'p> {
         let node = match f.kind {
             FrameKind::Root => None,
             FrameKind::Skip => {
-                f.children.into_iter().for_each(|c| self.emit(c, group));
+                grouped(f.children, f.child_groups, group).for_each(|(c, g)| self.emit(c, g));
                 None
             }
             FrameKind::Clip(clip) => {
@@ -934,7 +946,7 @@ impl<'p> Builder<'p> {
                     None
                 } else if noop.is_some_and(|r| bounds(&f.children).is_some_and(|b| contains(r, b))) {
                     // A rectangle around all of its art (a form's box) clips nothing.
-                    f.children.into_iter().for_each(|c| self.emit(c, group));
+                    grouped(f.children, f.child_groups, group).for_each(|(c, g)| self.emit(c, g));
                     None
                 } else {
                     let mut ch = vec![Arc::new(*clip)];
@@ -957,7 +969,7 @@ impl<'p> Builder<'p> {
                 if children.is_empty() {
                     None
                 } else if plain {
-                    children.into_iter().for_each(|c| self.emit(c, group));
+                    grouped(children, f.child_groups, group).for_each(|(c, g)| self.emit(c, g));
                     None
                 } else if let [only] = children.as_slice()
                     && !only.is_container()

@@ -453,11 +453,13 @@ pub(crate) struct Exporter<'a> {
     /// The fonts real text is written in, by face id, with their units per em; `None` for faces
     /// that can't be embedded.
     fonts: HashMap<u32, Option<(krilla::text::Font, f64)>>,
-    /// Top-level layers are drawn as forms marked for their optional content groups
+    /// Layers and sublayers are drawn as forms marked for their optional content groups
     /// ([`crate::forms`]).
     pub layers: bool,
-    /// A top-level layer's form is being drawn.
-    in_layer: bool,
+    /// Each layer's index in [`crate::forms::pdf_layers`], by address.
+    layer_index: HashMap<usize, usize>,
+    /// The address of the layer whose form is being drawn.
+    in_layer: usize,
     /// Overprinting fills and strokes are drawn as forms marked to overprint.
     pub overprint: bool,
     /// An overprinting fill or stroke was drawn so.
@@ -485,7 +487,8 @@ impl<'a> Exporter<'a> {
             outline_text: set.advanced.outline_text,
             fonts: HashMap::new(),
             layers: false,
-            in_layer: false,
+            layer_index: crate::forms::pdf_layers(doc).iter().enumerate().map(|(i, l)| (address(l.node), i)).collect(),
+            in_layer: 0,
             overprint: false,
             overprinted: false,
         }
@@ -599,6 +602,11 @@ fn constant_mask(s: &mut Surface, page: Rect, alpha: f32) -> krilla::mask::Mask 
     cover(&mut ms, page, 0, alpha);
     ms.finish();
     krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Alpha)
+}
+
+/// A node's address, to tell the very node apart from equal ones.
+fn address(n: &Node) -> usize {
+    std::ptr::from_ref(n).addr()
 }
 
 fn rects_overlap(a: Rect, b: Rect) -> bool {
@@ -885,15 +893,15 @@ impl Exporter<'_> {
 
     fn node(&mut self, s: &mut Surface, n: &Node, page: Rect, force: bool) {
         if self.layers
-            && !self.in_layer
-            && let NodeKind::Layer { template: false, printable, .. } = n.kind
+            && self.in_layer != address(n)
+            && let NodeKind::Layer { printable, .. } = n.kind
             && (printable || self.non_printing)
-            && let Some(i) = self.doc.layers.iter().position(|l| std::ptr::eq(&**l, n))
+            && let Some(&i) = self.layer_index.get(&address(n))
         {
-            // A PDF layer: hidden layers are written too (their group is off).
-            self.in_layer = true;
+            // A PDF layer: hidden layers and sublayers are written too (their group is off).
+            let enclosing = std::mem::replace(&mut self.in_layer, address(n));
             crate::forms::form(s, Mark::Layer(i), |s| self.node(s, n, page, true));
-            self.in_layer = false;
+            self.in_layer = enclosing;
             return;
         }
         if !force && !n.visible {

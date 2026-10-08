@@ -983,7 +983,7 @@
 	Create New Sublayer	新規サブレイヤーを作成
 	Create New Swatch…	新規スウォッチを作成…
 	Create New {kind} Style	新しい{kind}スタイルを作成
-	Create PDF layers from top-level layers	最上位レイヤーから PDF レイヤーを作成
+	Create PDF layers from layers and sublayers	レイヤーとサブレイヤーから PDF レイヤーを作成
 	Create PDF-Compatible File	PDF 互換ファイルを作成
 	Create Path	パスを作成
 	Create Slice	スライスを作成

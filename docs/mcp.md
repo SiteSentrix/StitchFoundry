@@ -355,9 +355,11 @@ A `security` password encrypts the file (RC4 40-bit at PDF 1.3, RC4 128-bit at 1
 Pattern fills and strokes are written as their tiles clipped to the area they paint (a stroke's outline, with its
 dashes, caps, profile, arrowheads and alignment), and freeform gradients as an image of their colour field at the
 document's raster effects resolution, clipped the same way.
-`createLayers` writes each top-level layer (template layers are left out) as a PDF layer, an optional content group
-named as the layer: hidden layers are off, non-printing ones have `/PrintState /OFF` and locked ones are locked. It needs
-PDF 1.5 or later (at 1.4 it warns), and the file reopens with those layers.
+`createLayers` writes each layer and sublayer (template layers are left out) as a PDF layer, an optional content group
+named as the layer and listed under its parent layer's: hidden layers are off (their art is written, for the reader to
+show), non-printing ones have `/PrintState /OFF` and locked ones are locked. It needs PDF 1.5 or later (at 1.4 it
+warns), and the file reopens with those layers and sublayers. A `.ai` file writes them unless `createLayers` is false,
+so apps that read its PDF part find the layers, hidden ones included; hidden objects aren't in the PDF part.
 Images follow the `compression` settings of their kind (`color`, `gray`, or `mono` for black-and-white images): above
 `abovePpi` as placed they are resampled (`downsample`: `average`, `subsample` or `bicubic`) to `ppi`, and compressed
 with `zip`, `jpeg` (at `quality`; images with transparency stay lossless) or `auto` (JPEGs stay JPEG, the others
