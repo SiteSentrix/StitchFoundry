@@ -48,6 +48,9 @@ pub fn file_name(name: &str) -> String {
 /// extension of `name`.
 pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     let by_name = format_for_name(name).filter(|f| f.read);
+    if vectorcraft_affinity::is_affinity(bytes) {
+        return format("affinity");
+    }
     if vectorcraft_format::sniff(bytes) {
         // A template keeps its meaning from the extension, like .ait.
         return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
@@ -174,6 +177,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let (doc, warnings) = super::metafile::import(bytes)?;
             (doc, warnings, false)
         }
+        "affinity" => {
+            let (doc, warnings) = super::affinity::import(&title, bytes)?;
+            (doc, warnings, false)
+        }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
@@ -220,7 +227,13 @@ pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<S
 /// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
 /// from there) as a new untitled document.
 pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value> {
-    open_loaded(s, load(name, bytes)?, path.map(str::to_string), &LoadOptions::default(), true)
+    let loaded = load(name, bytes)?;
+    if loaded.format.id == "affinity" {
+        return Err(err(
+            "Affinity templates are not supported: use File › Open to inspect the embedded preview with its warning, or export SVG, PDF or full-resolution PNG from Affinity first",
+        ));
+    }
+    open_loaded(s, loaded, path.map(str::to_string), &LoadOptions::default(), true)
 }
 
 /// Make a loaded file the new active document; `opts` are the options it was read with.
@@ -312,7 +325,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
 }
 
 /// An image as a document of its pixel size (1 px = 1 pt), the image named after the file.
-fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
+pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     let RasterImage { key, blob, width, height, .. } = raster_image(bytes)?;
     let mut d = Document::new(width as f64, height as f64);
     let layer = d.layers[0].id;

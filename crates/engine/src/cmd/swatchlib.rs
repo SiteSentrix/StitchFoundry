@@ -354,8 +354,11 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         match std::str::from_utf8(bytes).ok().filter(|t| palette_io::sniff(t)) {
             Some(t) => palette_io::read(t, stem(file)).map_err(|e| bad(C, e)),
             None => {
-                let doc = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?.doc;
-                document_library(&doc, &[], stem(file).to_string(), C)
+                let loaded = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?;
+                if loaded.format.id == "affinity" {
+                    return Err(bad(C, "Affinity swatches are not decoded; use File › Open to inspect the embedded preview with its warning"));
+                }
+                document_library(&loaded.doc, &[], stem(file).to_string(), C)
             }
         }
     })?;

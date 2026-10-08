@@ -1,0 +1,16 @@
+[package]
+name = "vectorcraft-affinity"
+description = "Bounded Affinity container inspection and embedded PNG preview extraction"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+crc32fast = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

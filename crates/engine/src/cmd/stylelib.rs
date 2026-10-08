@@ -222,8 +222,11 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         match std::str::from_utf8(bytes).ok().filter(|t| style_libs::sniff(t)) {
             Some(t) => style_libs::read(t, stem(file)).map_err(|e| bad(C, e)),
             None => {
-                let doc = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?.doc;
-                StyleLibrary::from_document(&doc, &[], stem(file).to_string()).map_err(|e| bad(C, e))
+                let loaded = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?;
+                if loaded.format.id == "affinity" {
+                    return Err(bad(C, "Affinity graphic styles are not decoded; use File › Open to inspect the embedded preview with its warning"));
+                }
+                StyleLibrary::from_document(&loaded.doc, &[], stem(file).to_string()).map_err(|e| bad(C, e))
             }
         }
     })?;

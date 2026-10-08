@@ -4320,6 +4320,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-affinity"
+version = "0.5.0"
+dependencies = [
+ "crc32fast",
+ "proptest",
+]
+
+[[package]]
 name = "vectorcraft-brush"
 version = "0.5.0"
 dependencies = [
@@ -4410,6 +4418,7 @@ dependencies = [
 name = "vectorcraft-engine"
 version = "0.5.0"
 dependencies = [
+ "crc32fast",
  "flate2",
  "image",
  "kurbo 0.13.1",
@@ -4418,6 +4427,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "vectorcraft-affinity",
  "vectorcraft-brush",
  "vectorcraft-cad",
  "vectorcraft-color",

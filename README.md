@@ -190,7 +190,11 @@ milestones, and honest time-to-parity estimates.
 **Where we are (2026-10-07):** roughly 69–75% of Illustrator's features exist and work, and about 40–55% of
 "a power user can't tell the difference". Everyday vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles, threading and Hebrew/Arabic bidirectional layout, and
-files (SVG, PDF and PDF-compatible `.ai` with PDF/X, EPS, DXF, EMF/WMF, raster formats and PSD, Print, Package). The interface
+files (SVG, PDF and PDF-compatible `.ai` with PDF/X, EPS, DXF, EMF/WMF, raster formats and PSD, Print, Package).
+Affinity `.af` files with a verified version-12 embedded PNG preview open as that preview,
+with a warning; native Affinity vectors, layers and full document resolution are not imported.
+Save makes a new VectorCraft copy. Place, templates and style/swatch library import are refused; export SVG, PDF or full-resolution PNG from Affinity first. [Preview scope and limits](crates/affinity/README.md).
+The interface
 speaks English, Japanese, Traditional and Simplified Chinese and Spanish (and Czech and Brazilian Portuguese in the menus).
 The scores are
 self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-05) explains how far to trust them.

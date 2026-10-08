@@ -4,7 +4,8 @@
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
-//! (damaged ones, hostile programs) read by the PostScript interpreter.
+//! (damaged ones, hostile programs) read by the PostScript interpreter, nor indexed PNG previews
+//! in Affinity containers (truncated or mutated records and hostile image dimensions).
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -23,6 +24,69 @@ fn config() -> ProptestConfig {
         c.cases = 64;
     }
     c
+}
+
+// ---------- Affinity previews ----------
+
+/// Original pixels in a synthetic container envelope, not an Affinity document writer.
+fn affinity_preview_sample() -> Vec<u8> {
+    let im = image::RgbaImage::from_pixel(2, 1, image::Rgba([220, 40, 60, 255]));
+    let mut png = Vec::new();
+    im.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut b = vec![0; 72];
+    b[..4].copy_from_slice(vectorcraft_affinity::MAGIC);
+    b[4..6].copy_from_slice(&12u16.to_le_bytes());
+    b[8..12].copy_from_slice(b"nsrP");
+    b[12..16].copy_from_slice(b"#Inf");
+    b[24..32].copy_from_slice(&72u64.to_le_bytes());
+    b[64..68].copy_from_slice(b"Prot");
+    b.extend(b"\xff\xff\xff\xffThmb");
+    b.extend(1u32.to_le_bytes());
+    b.extend((png.len() as u32 + 13).to_le_bytes());
+    b.extend(29u32.to_le_bytes());
+    b.extend(0u32.to_le_bytes());
+    b.extend((png.len() as u32).to_le_bytes());
+    b.push(1);
+    b.extend(png);
+    b
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn affinity_garbage_never_panics(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = vectorcraft_affinity::MAGIC.to_vec();
+        bytes.extend(tail);
+        survive("Affinity garbage", || vectorcraft_engine::cmd::fileio::load("x.af", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn affinity_mutated_previews_render_and_export_without_panicking(
+        cut in 0usize..400,
+        edits in prop::collection::vec((0usize..400, any::<u8>()), 0..16),
+    ) {
+        let mut bytes = affinity_preview_sample();
+        for (at, b) in edits {
+            if let Some(byte) = bytes.get_mut(at) { *byte = b; }
+        }
+        bytes.truncate(cut);
+        survive("Affinity preview", || vectorcraft_engine::cmd::fileio::load("x.af", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn affinity_placement_is_rejected_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = vectorcraft_affinity::MAGIC.to_vec();
+        bytes.extend(tail);
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"renamed.png", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            for cmd in ["file.place", "file.place.info"] { assert!(s.execute(cmd, &p).is_err()); }
+            assert!(s.execute("file.place.queue", &json!({"files":[p]})).is_err());
+        });
+        prop_assert!(r.is_ok(), "Affinity placement panicked: {:?}", r.err());
+    }
 }
 
 /// Import must not panic; whatever comes back must render and export without panicking either.
