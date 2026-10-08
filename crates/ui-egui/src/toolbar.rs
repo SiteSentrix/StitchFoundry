@@ -169,9 +169,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                                     Stroke::NONE,
                                 ));
                             }
-                            let press = flyout_press(ui, &resp, rect);
+                            let press = if slot.len() > 1 { flyout_press(ui, &resp, rect) } else { None };
                             let alt = ui.input(|inp| inp.modifiers.alt);
-                            if press.is_some() && slot.len() > 1 {
+                            if press.is_some() {
                                 open_flyout = Some((slot.clone(), rect));
                                 if press == Some(FlyoutPress::Primary) {
                                     ui.data_mut(|d| d.insert_temp(held_id, resp.id));
