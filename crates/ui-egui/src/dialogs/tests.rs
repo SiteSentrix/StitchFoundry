@@ -4,6 +4,7 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::theme;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

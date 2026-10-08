@@ -3002,3 +3002,11 @@
 	Version	バージョン
 	% of all commits	全コミットに占める割合
 	Lines +/−	行数 +/−
+	Joins	角の形状
+	Miter	マイター
+	Bevel	ベベル
+	Offset	オフセット
+	Axis	軸
+axis	Horizontal	水平方向
+axis	Vertical	垂直方向
+axis	Both	両方

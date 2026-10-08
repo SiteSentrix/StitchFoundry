@@ -9,6 +9,7 @@ use vectorcraft_engine::cmd::fileio;
 
 use super::*;
 use crate::Services;
+use crate::theme;
 
 pub(super) type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 

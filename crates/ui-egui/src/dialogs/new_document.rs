@@ -151,21 +151,9 @@ fn set_layout(d: &mut Dialog, key: &str, v: Value) {
     d.fields.insert("artboardLayout".into(), l);
 }
 
-/// The dimmed backdrop and a centred dialog window in the shared dialog style.
+/// The New Document dialog window `id` in the shared modal frame.
 fn window(ctx: &egui::Context, id: &str, margin: i8, add: impl FnOnce(&mut egui::Ui)) {
-    let t = Tokens::get(ctx);
-    egui::Area::new(egui::Id::new("modal-dim")).order(egui::Order::Middle).fixed_pos(egui::pos2(0.0, 0.0)).show(ctx, |ui| {
-        ui.allocate_rect(ctx.content_rect(), egui::Sense::click());
-    });
-    egui::Window::new(id)
-        .id(egui::Id::new(("dialog", id)))
-        .order(egui::Order::Foreground)
-        .collapsible(false)
-        .resizable(false)
-        .title_bar(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
-        .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(margin)))
-        .show(ctx, add);
+    super::modal::show(ctx, id, egui::Id::new(("dialog", id)), -20.0, margin, add);
 }
 
 /// What the buttons of a window asked for.
@@ -194,6 +182,9 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let mut b = Buttons::default();
     window(ctx, KIND, 0, |ui| {
+        // No heading: the top margin (14) and the empty part of the category tabs' row (30) move the
+        // window.
+        super::modal::drag_band(ui, ui.max_rect().top() + 44.0);
         ui.horizontal_top(|ui| {
             egui::Frame::NONE.inner_margin(egui::Margin { left: 22, right: 14, top: 14, bottom: 18 }).show(ui, |ui| {
                 ui.vertical(|ui| {
@@ -489,7 +480,7 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
     const L: f32 = 150.0;
     window(ctx, MORE, 22, |ui| {
         ui.set_width(560.0);
-        ui.label(egui::RichText::new(tl!("More Settings")).font(theme::semibold(16.0)).color(t.text));
+        super::modal::heading(ui, tl!("More Settings"));
         ui.add_space(12.0);
         widgets::label_row(ui, tl!("Name:"), L, |ui| {
             form::text(ui, &mut d, "name", 300.0);

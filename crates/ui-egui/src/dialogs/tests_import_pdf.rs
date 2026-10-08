@@ -7,6 +7,7 @@ use vectorcraft_testkit::pdf::{PdfPage, pdf};
 
 use super::*;
 use crate::io;
+use crate::theme;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

@@ -3260,3 +3260,11 @@
 	Version	版本
 	% of all commits	占全部提交的百分比
 	Lines +/−	行数 +/−
+	Joins	连接
+	Miter	斜接
+	Bevel	斜角
+	Offset	偏移
+	Axis	轴
+axis	Horizontal	水平
+axis	Vertical	垂直
+axis	Both	两者
