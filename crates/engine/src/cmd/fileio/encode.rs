@@ -417,6 +417,12 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
         "txt" => super::text::encode(doc, p)?,
         "svg" | "svgz" => return super::svg::encode(doc, p, f.id == "svgz").map_err(|e| bad(C, e)),
         "dxf" => return super::dxf::encode(doc, p, use_artboards),
+        // As Save As writes it (a PDF of every artboard carrying the native document).
+        "ai" => {
+            let mut q = p.clone();
+            super::save::ai_params(&mut q);
+            return super::save::encode_ai(C, f, doc, &q);
+        }
         // EPS reads its own `useArtboards` (the art's bounds unless asked).
         "eps" => return super::eps::encode(doc, p),
         "emf" => return super::metafile::encode(doc, p, use_artboards, vectorcraft_metafile::Kind::Emf),

@@ -465,8 +465,8 @@ pub const FORMATS: &[Format] = &[
         extensions: &["ai"],
         mime: "application/pdf",
         read: true,
-        // Saved (Save As), not exported.
-        write: false,
+        // Save As writes it; exports write the same file.
+        write: true,
         raster: false,
         options: native::AI_OPTIONS,
     },

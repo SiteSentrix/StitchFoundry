@@ -305,6 +305,35 @@ fn blank_pages(doc: &Document) -> Document {
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
 const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
 
+/// The encoder's params for a `.ai` file, from a save's or an export's: a PDF of every artboard
+/// with the PDF options, always carrying the native document; Use Compression compresses the
+/// PDF's content.
+pub(super) fn ai_params(params: &mut Value) {
+    let Some(o) = params.as_object_mut() else { return };
+    o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
+    if let Some(c) = o.get("compress").and_then(Value::as_bool) {
+        let compression = o.entry("compression").or_insert_with(|| json!({}));
+        if let Some(m) = compression.as_object_mut() {
+            m.insert("compressText".into(), json!(c));
+        }
+    }
+}
+
+/// Encode `doc` as a PDF-compatible `.ai` file (`params` as [`ai_params`] makes them) for command
+/// `cmd`: its pages (blank with `pdfCompatible: false`, which it then notes), carrying the native
+/// document. File › Save As writes it, and so do the exports (`document.export`, the CLI).
+pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, params: &Value) -> Result<Encoded> {
+    let compatible = bool_or(params, "pdfCompatible", true);
+    let pages = doc.without_edit_modes();
+    let pages = if compatible { pages } else { std::borrow::Cow::Owned(blank_pages(&pages)) };
+    let native = || super::native::ai_native(cmd, f, doc, params);
+    let (bytes, mut warnings) = super::pdf::encode_carrying(cmd, &pages, params, native)?;
+    if !compatible {
+        warnings.insert(0, NOT_PDF_COMPATIBLE.to_string());
+    }
+    Ok(Encoded { warnings, ..Encoded::one(bytes) })
+}
+
 /// Snapshot the active document for `plan` (stamping File Info's dates when the file becomes the
 /// document's own). Bad options fail here, before anything is encoded.
 pub fn save_job(s: &mut Session, plan: SavePlan) -> Result<SaveJob> {
@@ -339,16 +368,8 @@ pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<Save
     }
     let boards = separate_boards(cmd, plan.format, &doc, &params)?;
     let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
-    if let (Some(o), "ai") = (params.as_object_mut(), plan.format.id) {
-        // A PDF of every artboard with the PDF options, always carrying the native document.
-        o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
-        // Use Compression compresses the PDF's content.
-        if let Some(c) = o.get("compress").and_then(Value::as_bool) {
-            let compression = o.entry("compression").or_insert_with(|| json!({}));
-            if let Some(m) = compression.as_object_mut() {
-                m.insert("compressText".into(), json!(c));
-            }
-        }
+    if plan.format.id == "ai" {
+        ai_params(&mut params);
     }
     Ok(SaveJob { plan, doc, params, snapshot: st.doc.clone(), boards })
 }
@@ -372,25 +393,14 @@ impl SaveJob {
             let one = self.encode_one(&artboard_doc(&self.doc, b))?;
             enc.files.extend(one.files.into_iter().map(|(_, bytes)| (Some(b), bytes)));
         }
-        let pdf_less = self.plan.format.id == "ai" && !bool_or(&self.params, "pdfCompatible", true);
-        let notes = fidelity_warning(self.plan.format).into_iter().chain(pdf_less.then(|| NOT_PDF_COMPATIBLE.to_string()));
-        enc.warnings.splice(0..0, notes);
+        enc.warnings.splice(0..0, fidelity_warning(self.plan.format));
         Ok(enc)
     }
 
     /// Encode one file of `doc` in the job's format.
     fn encode_one(&self, doc: &Document) -> Result<Encoded> {
         let (cmd, f) = (self.plan.mode.command(), self.plan.format);
-        let enc = if f.id == "ai" {
-            // The pages (blank without PDF content), carrying the native document.
-            let pages = doc.without_edit_modes();
-            let pages = if bool_or(&self.params, "pdfCompatible", true) { pages } else { std::borrow::Cow::Owned(blank_pages(&pages)) };
-            let native = || super::native::ai_native(cmd, f, doc, &self.params);
-            let (bytes, warnings) = super::pdf::encode_carrying(cmd, &pages, &self.params, native)?;
-            Encoded { warnings, ..Encoded::one(bytes) }
-        } else {
-            encode_all(doc, f.id, &self.params)?
-        };
+        let enc = if f.id == "ai" { encode_ai(cmd, f, doc, &self.params)? } else { encode_all(doc, f.id, &self.params)? };
         if enc.files.len() != 1 {
             return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
         }
