@@ -9,6 +9,10 @@
 //! - `data`: data the program reads from itself through decoding filters, and images.
 //! - `text`: fonts by name and type as point type.
 //!
+//! Clipped art comes in as clipping groups. In an Illustrator file (Illustrator 3–8, written with
+//! the prolog that defines its operators), the groups it writes (`u` … `U`, nested) come in as
+//! groups.
+//!
 //! The page is the file's `%%BoundingBox` (`%%HiResBoundingBox` when it has one), the first page
 //! of a PostScript file without one. A file whose program can't be read (an operator the
 //! interpreter doesn't know, an error, a limit reached) or that draws nothing comes in as its TIFF
@@ -26,6 +30,8 @@ mod text;
 mod tests;
 #[cfg(test)]
 mod tests_fontnames;
+#[cfg(test)]
+mod tests_illustrator;
 
 use std::sync::Arc;
 
@@ -60,6 +66,8 @@ struct Dsc {
     /// `llx lly urx ury` in PostScript's default space.
     bbox: Option<[f64; 4]>,
     pages: Option<u32>,
+    /// Written by Illustrator (or in its format): `%AI…` comments, or Illustrator the creator.
+    illustrator: bool,
 }
 
 /// The four numbers of a bounding box comment's value, when it has them and they make a box.
@@ -90,6 +98,10 @@ impl Dsc {
                 }
             }
             let value = |key: &str| line.strip_prefix(key).map(str::trim);
+            let creator = value("%%Creator:").is_some_and(|v| v.contains("Illustrator")); // brand-ok: the creator its files name
+            if header && (line.starts_with("%AI") || line.starts_with("%%AI") || creator) {
+                d.illustrator = true;
+            }
             if let Some(v) = value("%%HiResBoundingBox:") {
                 if header || atend {
                     hires = box_of(v).or(hires);
@@ -136,6 +148,7 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     doc.layers.clear();
     let page = Affine::new([1.0, 0.0, 0.0, -1.0, -llx, ury]);
     let mut it = Interp::new(ps, GState::default(), Out::new(doc, page, frame));
+    it.illustrator = dsc.illustrator;
     let result = it.run();
     it.release();
     let mut out = it.out;
@@ -165,8 +178,8 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     }
 }
 
-/// The document of what `out` drew: one layer, clipped art in clipping groups, the spot inks as
-/// spot swatches, in CMYK when most process colours were.
+/// The document of what `out` drew: one layer, clipped art in clipping groups (grouped art in
+/// groups), the spot inks as spot swatches, in CMYK when most process colours were.
 fn finish(mut out: Out) -> Imported {
     let drawn = std::mem::take(&mut out.drawn);
     let mut children = vectorcraft_doc::clipnest::nest(&mut out.doc, drawn);

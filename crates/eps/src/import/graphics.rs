@@ -7,7 +7,7 @@ use std::sync::Arc;
 use kurbo::{PathEl, Shape};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
-use vectorcraft_doc::clipnest::{Clip, Drawn};
+use vectorcraft_doc::clipnest::{Clip, Drawn, MAX_NEST, deep_clips};
 use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
 
@@ -25,7 +25,7 @@ const HAIRLINE: f64 = 0.25;
 const MAX_HIVAL: usize = 4095;
 /// Most elements the current path may have.
 const MAX_PATH: usize = 1 << 20;
-/// Most path elements drawn in all.
+/// Most path elements drawn in all (each object's clips and groups counting as elements too).
 const MAX_DRAWN: usize = 1 << 24;
 /// Samples taken of a shading function that isn't a plain interpolation.
 const SHADING_SAMPLES: usize = 32;
@@ -147,8 +147,13 @@ pub(crate) struct Out {
     pub page: Affine,
     /// The page (the bounding box) in document space.
     pub frame: Rect,
+    /// Clip and group ids are given in the order they open, so a chain of both sorts by id.
     next_clip: u32,
-    /// Path elements drawn so far (see [`MAX_DRAWN`]).
+    /// The groups open (outermost first), and how many more opened past [`MAX_NEST`] (their art
+    /// goes in the innermost group kept).
+    groups: Vec<Arc<Clip>>,
+    too_deep: usize,
+    /// Path elements (and the clips and groups of each object) drawn so far (see [`MAX_DRAWN`]).
     elements: usize,
     /// The path the last object was filled with: a stroke of the same path right after joins it.
     merge: Option<BezPath>,
@@ -175,6 +180,8 @@ impl Out {
             page,
             frame,
             next_clip: 0,
+            groups: vec![],
+            too_deep: 0,
             elements: 0,
             merge: None,
             cmyk: 0,
@@ -190,10 +197,48 @@ impl Out {
         }
     }
 
-    /// Add `node` under `clips`; `None` when it was left out.
+    /// Open a group: what is drawn until it ends ([`Self::end_group`]) goes in it.
+    pub fn begin_group(&mut self) {
+        if self.groups.len() >= MAX_NEST {
+            self.too_deep += 1;
+            self.warn(&format!("groups nested more than {MAX_NEST} deep were read as part of the group around them"));
+            return;
+        }
+        self.next_clip += 1;
+        self.groups.push(Arc::new(Clip { id: self.next_clip, region: None }));
+    }
+
+    /// End the innermost group open (an end without a beginning ends nothing).
+    pub fn end_group(&mut self) {
+        if self.too_deep > 0 {
+            self.too_deep -= 1;
+        } else {
+            self.groups.pop();
+        }
+    }
+
+    /// The chain an object drawn under `clips` is drawn in: the clips and the groups open, in the
+    /// order they opened.
+    fn chain(&self, clips: &[Arc<Clip>]) -> Vec<Arc<Clip>> {
+        if self.groups.is_empty() {
+            return clips.to_vec();
+        }
+        let mut chain = Vec::with_capacity(clips.len() + self.groups.len());
+        let (mut a, mut b) = (clips.iter().peekable(), self.groups.iter().peekable());
+        while let (Some(x), Some(y)) = (a.peek(), b.peek()) {
+            let next = if x.id < y.id { a.next() } else { b.next() };
+            chain.extend(next.cloned());
+        }
+        chain.extend(a.chain(b).cloned());
+        chain
+    }
+
+    /// Add `node` under `clips` (in the groups open); `None` when it was left out.
     pub fn push(&mut self, mut node: Node, clips: &[Arc<Clip>]) -> Option<NodeId> {
         self.merge = None;
-        self.elements = self.elements.saturating_add(node.path_data().map_or(1, |p| p.subpaths.iter().map(|s| s.anchors.len()).sum()));
+        let chain = self.chain(clips);
+        let size = node.path_data().map_or(1, |p| p.subpaths.iter().map(|s| s.anchors.len()).sum()) + chain.len();
+        self.elements = self.elements.saturating_add(size);
         if self.drawn.len() >= MAX_NODES || self.elements > MAX_DRAWN {
             self.warn(TOO_MUCH);
             return None;
@@ -204,7 +249,7 @@ impl Out {
         }
         node.id = self.doc.alloc_id();
         let id = node.id;
-        self.drawn.push((clips.to_vec(), node));
+        self.drawn.push((chain, node));
         Some(id)
     }
 
@@ -234,14 +279,15 @@ impl Out {
     /// clips (`gsave fill grestore stroke`).
     fn stroke(&mut self, bp: BezPath, st: StrokeLayer, clips: &[Arc<Clip>]) {
         self.count(&st.paint);
-        if self.merge.as_ref() == Some(&bp)
-            && let Some((chain, last)) = self.drawn.last_mut()
-            && chain.len() == clips.len()
-            && chain.iter().zip(clips).all(|(a, b)| Arc::ptr_eq(a, b))
-        {
-            last.appearance.items.push(AppearanceItem::Stroke(st));
-            self.merge = None;
-            return;
+        if self.merge.as_ref() == Some(&bp) {
+            let here = self.chain(clips);
+            if let Some((chain, last)) = self.drawn.last_mut()
+                && chain.iter().map(|c| c.id).eq(here.iter().map(|c| c.id))
+            {
+                last.appearance.items.push(AppearanceItem::Stroke(st));
+                self.merge = None;
+                return;
+            }
         }
         let n = Node::path(NodeId(0), PathData::from_bezpath(&bp), Appearance { items: vec![AppearanceItem::Stroke(st)], ..Appearance::default() });
         self.push(n, clips);
@@ -256,7 +302,7 @@ impl Out {
             return None;
         }
         self.next_clip += 1;
-        Some(Arc::new(Clip { id: self.next_clip, path, rule }))
+        Some(Arc::new(Clip { id: self.next_clip, region: Some((path, rule)) }))
     }
 }
 
@@ -472,14 +518,17 @@ impl Interp<'_> {
     }
 
     fn clip_with(&mut self, path: BezPath, rule: FillRule) {
-        if let Some(c) = self.out.clip(path, rule) {
+        let Some(c) = self.out.clip(path, rule) else { return };
+        if self.g.clips.len() < MAX_NEST {
             self.g.clips.push(c);
+        } else {
+            self.out.warn(&deep_clips());
         }
     }
 
     /// The area the clip leaves, in document space (the page without a clip).
     fn clip_bounds(&self) -> Rect {
-        self.g.clips.last().map_or(self.out.frame, |c| c.path.bounding_box())
+        self.g.clips.iter().rev().find_map(|c| c.region.as_ref()).map_or(self.out.frame, |(p, _)| p.bounding_box())
     }
 
     // ---------- colour ----------

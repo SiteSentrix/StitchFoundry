@@ -196,6 +196,20 @@ fn clips_become_clipping_groups() {
 }
 
 #[test]
+fn clips_nest_only_so_deep() {
+    // Each clip inside the last one used to nest a clipping group one level deeper, past the stack.
+    let r = read("1 1 200000 { pop 0 0 50 50 rectclip } for 1 1 5 5 rectfill");
+    let mut depth = 0;
+    let mut n = objects(&r.document)[0].clone();
+    while let NodeKind::Group { children, clip: true } = &n.kind {
+        depth += 1;
+        n = children.last().unwrap().clone();
+    }
+    assert_eq!(depth, vectorcraft_doc::clipnest::MAX_NEST);
+    assert!(r.warnings.iter().any(|w| w.contains("clips nested more than")), "{:?}", r.warnings);
+}
+
+#[test]
 fn shadings_become_gradients() {
     let axial =
         "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >>";
