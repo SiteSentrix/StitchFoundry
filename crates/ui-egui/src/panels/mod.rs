@@ -346,10 +346,9 @@ pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool, si
         app.run("paint.toggleActive", json!({ "fill": !stroke })).ok();
         set_pstate(ui.ctx(), MIXER, ui.input(|i| i.modifiers.shift));
     }
-    egui::Popup::from_toggle_button_response(&resp)
-        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .width(POPOVER_WIDTH)
-        .show(|ui| paint_popover(app, ui));
+    // A popover that keeps its own open state: the Swatches body opens menus of its own (Swatch
+    // Libraries, Show Swatch Kinds), which a remembered egui popup would close with them (#536).
+    crate::widgets::popover(&resp, resp.clicked(), |ui| paint_popover(app, ui));
 }
 
 /// The chip popovers' width (a narrow Swatches or Color panel).

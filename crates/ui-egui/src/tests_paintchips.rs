@@ -270,3 +270,55 @@ fn the_transform_link_opens_the_transform_panel() {
     click(&mut app, &ctx, Pos2::new(1300.0, 900.0), Modifiers::NONE, control_bar);
     assert!(text_rect(&frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar), "Scale Corners").is_none());
 }
+
+/// The 24 pt icon buttons of the popover's bottom bar (its Swatch Libraries Menu first), left to
+/// right.
+fn popover_bottom_buttons(ctx: &egui::Context) -> Vec<Rect> {
+    let mut r: Vec<Rect> = ctx.viewport(|vp| {
+        vp.prev_pass
+            .widgets
+            .layers()
+            .filter(|(l, _)| l.order != egui::Order::Background)
+            .flat_map(|(_, w)| w.iter())
+            .filter(|w| w.rect.size() == vec2(24.0, 24.0))
+            .map(|w| w.rect)
+            .collect()
+    });
+    let bottom = r.iter().map(|r| r.top()).fold(f32::MIN, f32::max);
+    r.retain(|w| (w.top() - bottom).abs() < 1.0);
+    r.sort_by(|a, b| a.left().total_cmp(&b.left()));
+    r
+}
+
+/// A menu row's text (menu labels leave room for a check mark before them).
+fn menu_item_rect(shapes: &[Shape], s: &str) -> Option<Rect> {
+    shapes.iter().find_map(|sh| match sh {
+        Shape::Text(t) if t.galley.text().trim() == s => Some(t.visual_bounding_rect()),
+        Shape::Vec(v) => menu_item_rect(v, s),
+        _ => None,
+    })
+}
+
+/// #536: the Swatch Libraries Menu button at the foot of a Fill chip's popover opens the
+/// libraries menu (it used to close the popover and show nothing), and a library chosen there
+/// opens in the library panel.
+#[test]
+fn the_popover_swatch_libraries_button_opens_the_libraries_menu() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
+    let (fill, _) = chips(&ctx);
+    click(&mut app, &ctx, fill.center(), Modifiers::NONE, control_bar);
+    let libraries = *popover_bottom_buttons(&ctx).first().expect("the popover has a bottom bar");
+    click(&mut app, &ctx, libraries.center(), Modifiers::NONE, control_bar);
+    let shapes = frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
+    assert!(text_rect(&shapes, "Swatch Tiles").is_some(), "the popover stays open");
+    let defaults = menu_item_rect(&shapes, "Default Swatches").expect("the libraries menu is open");
+    assert!(menu_item_rect(&shapes, "Other Library…").is_some());
+    let earth = menu_item_rect(&shapes, "Earth Tones").expect("the menu lists the built-in libraries");
+    assert!(earth.top() > defaults.top());
+    click(&mut app, &ctx, earth.center(), Modifiers::NONE, control_bar);
+    let open = app.ui.library_panel.as_ref().map(|o| (o.kind.clone(), o.id.clone()));
+    assert_eq!(open, Some(("swatches".into(), "earth-tones".into())));
+}
