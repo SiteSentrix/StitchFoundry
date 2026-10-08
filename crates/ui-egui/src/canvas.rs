@@ -174,6 +174,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
+    if app.ui.view.rulers && app.ui.screen_mode < 3 {
+        ruler_guides(app, ui, full, rect, &xf);
+    }
     panel_drop(app, ui, &resp, &xf);
     context_menu(app, &resp, &xf);
     let painter = ui.painter_at(rect);
@@ -319,12 +322,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let picked = LineLook { color: t.selection, ..look };
         let selected: &[usize] = app.session.active().map_or(&[], |st| &st.selection.guides);
         for (i, g) in doc.guides.iter().enumerate() {
-            let (a, b) = if g.vertical {
-                let x = xf.to_screen(Point::new(g.pos, 0.0)).x;
-                (pos2(x, rect.top()), pos2(x, rect.bottom()))
-            } else {
-                let y = xf.to_screen(Point::new(0.0, g.pos)).y;
-                (pos2(rect.left(), y), pos2(rect.right(), y))
+            let at = |along: f64| xf.to_screen(if g.vertical { Point::new(g.pos, along) } else { Point::new(along, g.pos) });
+            // An artboard guide runs across its artboard, a canvas guide across the window.
+            let (a, b) = match doc.guide_span(g) {
+                Some((from, to)) => (at(from), at(to)),
+                None if g.vertical => {
+                    let x = at(0.0).x;
+                    (pos2(x, rect.top()), pos2(x, rect.bottom()))
+                }
+                None => {
+                    let y = at(0.0).y;
+                    (pos2(rect.left(), y), pos2(rect.right(), y))
+                }
             };
             if selected.contains(&i) { picked } else { look }.guide(&painter, a, b);
         }
@@ -359,7 +368,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
         rulers(ui, full, &xf, app.hover_doc, app.session.general_unit(), &t);
-        ruler_guides(app, ui, full, rect, &xf, &t);
     }
     if app.ui.task_bar && !app.session.tool_busy() && app.ui.screen_mode < 3 {
         task_bar(app, ui, &xf);
@@ -834,34 +842,30 @@ fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
     [top, left, egui::Rect::from_min_size(full.min, vec2(RULER, RULER))]
 }
 
-/// A drag from a ruler onto the canvas makes a guide where the button is released: a horizontal
-/// one from the top ruler, a vertical one from the left ruler; with Shift on the nearest ruler
-/// tick. Released anywhere else, it makes none.
-fn ruler_guides(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf, t: &Tokens) {
+/// A drag from a ruler onto the canvas makes a guide where the button is released (the engine's
+/// `Session::ruler_guide`): a horizontal one from the top ruler, a vertical one from the left
+/// ruler, snapped as a moved guide is (with Shift to the ruler's ticks). Released anywhere else,
+/// it makes none.
+fn ruler_guides(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf) {
     let [top, left, _] = ruler_rects(full);
-    let shift = ui.input(|i| i.modifiers.shift);
     for (r, vertical, id) in [(top, false, "ruler-top"), (left, true, "ruler-left")] {
         let resp = ui.interact(r, egui::Id::new(id), Sense::drag());
-        let Some(p) = resp.interact_pointer_pos().filter(|p| canvas.contains(*p)) else { continue };
-        let d = xf.to_doc(p);
-        let mut pos = if vertical { d.x } else { d.y };
-        if shift {
-            pos = app.session.general_unit().snap_to_ruler_tick(pos, xf.zoom);
-        }
-        if resp.drag_stopped() {
+        let kind = if resp.drag_stopped() {
+            PointerKind::Up
+        } else if resp.dragged() {
+            PointerKind::Drag
+        } else {
+            continue;
+        };
+        let p = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()));
+        let on_canvas = p.is_some_and(|p| canvas.contains(p));
+        if on_canvas {
             // The new guide shows even if guides were hidden.
             app.ui.view.guides = true;
-            if let Err(e) = app.run("guide.add", json!({ "vertical": vertical, "pos": pos })) {
-                app.status(e);
-            }
-        } else if resp.dragged() {
-            let at = xf.to_screen(if vertical { Point::new(pos, d.y) } else { Point::new(d.x, pos) });
-            let (a, b) = if vertical {
-                (pos2(at.x, canvas.top()), pos2(at.x, canvas.bottom()))
-            } else {
-                (pos2(canvas.left(), at.y), pos2(canvas.right(), at.y))
-            };
-            LineLook::guides(&app.session.prefs, t).guide(&ui.painter_at(canvas), a, b);
+        }
+        let ev = PointerEvent { kind, pos: p.map_or(Point::ZERO, |p| xf.to_doc(p)), mods: mods(ui.input(|i| i.modifiers), false), pressure: 1.0 };
+        if let Err(e) = app.session.ruler_guide(vertical, &ev, on_canvas, app.view_info()) {
+            app.status(e.to_string());
         }
     }
 }
@@ -1748,6 +1752,54 @@ mod tests {
         drag(&mut app, pos2(rect.center().x, rect.top() - RULER / 2.0), pos2(rect.center().x + 40.0, rect.top() - 4.0));
         assert_eq!(guides(&app).len(), 2);
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the tool drew nothing");
+    }
+
+    /// #451: a guide dragged out of a ruler lands on the art's side midpoints (halving an
+    /// artboard-sized rectangle) and on the artboard's edges; an artboard guide is drawn across
+    /// its artboard only.
+    #[test]
+    fn guides_from_the_rulers_snap_and_artboard_guides_span_their_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 400, "height": 300})).unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.ui.view.rulers = true;
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let drag = |app: &mut VectorcraftApp, from: Pos2, to: Pos2| {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(from)]);
+            frame(app, &ctx, vec![button(from, true)]);
+            frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
+            frame(app, &ctx, vec![button(to, false)]);
+        };
+        let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+        // 3 px off the middle of the top and bottom sides: onto the line through them.
+        let mid = xf.to_screen(Point::new(200.0, 150.0));
+        drag(&mut app, pos2(rect.left() - RULER / 2.0, mid.y), mid + vec2(3.0, 40.0));
+        // 3 px inside the artboard's bottom edge: onto it.
+        let bottom = xf.to_screen(Point::new(100.0, 300.0));
+        drag(&mut app, pos2(bottom.x, rect.top() - RULER / 2.0), bottom - vec2(0.0, 3.0));
+        assert_eq!(guides(&app), [(true, 200.0), (false, 300.0)]);
+        assert_eq!(app.session.active().unwrap().history.undo.last().unwrap().label, "New Guide");
+        // An artboard guide runs from the artboard's left edge to its right edge.
+        app.session.execute("guide.add", &json!({"vertical": false, "pos": 75, "artboard": 0})).unwrap();
+        let s = shapes(&mut app, &ctx);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let (a, b) = (xf.to_screen(Point::new(0.0, 75.0)), xf.to_screen(Point::new(400.0, 75.0)));
+        let at = |p: Pos2, q: Pos2| (p - q).length() < 0.01;
+        assert!(s.iter().any(|s| matches!(s, Shape::LineSegment { points, .. } if at(points[0], a) && at(points[1], b))), "across the artboard");
+        // A canvas guide crosses the whole window.
+        let y = xf.to_screen(Point::new(0.0, 300.0)).y;
+        let window = app.canvas_rect.unwrap();
+        assert!(
+            s.iter().any(
+                |s| matches!(s, Shape::LineSegment { points, .. } if points[0] == pos2(window.left(), y) && points[1] == pos2(window.right(), y))
+            )
+        );
     }
 
     /// #414: guides dragged out of the rulers are picked and dragged with the Selection tool

@@ -86,7 +86,7 @@ pub use vectorcraft_geom as geom;
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::{Swatch, SwatchGroup};
-use vectorcraft_geom::{Point, Rect};
+use vectorcraft_geom::{Point, Rect, Vec2};
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum DocError {
@@ -386,6 +386,22 @@ pub struct Guide {
     /// true = vertical guide at `pos` (x), false = horizontal at `pos` (y).
     pub vertical: bool,
     pub pos: f64,
+    /// An artboard guide: the [`Artboard::id`] it belongs to. It runs across that artboard only
+    /// and moves, is copied and is deleted with it. None: a canvas guide, across the whole canvas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artboard: Option<u32>,
+}
+
+impl Guide {
+    /// A canvas guide.
+    pub fn new(vertical: bool, pos: f64) -> Self {
+        Self { vertical, pos, artboard: None }
+    }
+
+    /// Moved by `d` (a vertical guide across, a horizontal one down).
+    pub fn moved(&self, d: Vec2) -> Self {
+        Self { pos: self.pos + if self.vertical { d.x } else { d.y }, ..self.clone() }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -939,6 +955,47 @@ impl Document {
             collect(l, rect, locked_and_hidden, &mut art);
         }
         art
+    }
+    /// Where ruler guide `g` runs along its line (the y range of a vertical guide): across its
+    /// artboard for an artboard guide, None (the whole canvas) for a canvas guide or one whose
+    /// artboard is gone.
+    pub fn guide_span(&self, g: &Guide) -> Option<(f64, f64)> {
+        let r = self.artboards.iter().find(|a| Some(a.id) == g.artboard)?.rect;
+        Some(if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) })
+    }
+    /// Does ruler guide `g` run past `p` (up to `tol` beyond its ends)?
+    pub fn guide_passes(&self, g: &Guide, p: Point, tol: f64) -> bool {
+        let along = if g.vertical { p.y } else { p.x };
+        self.guide_span(g).is_none_or(|(a, b)| along >= a - tol && along <= b + tol)
+    }
+    /// Keep the ruler guides `keep` accepts (by index), the selected ones left keeping their
+    /// place among the rest (the selected art stays selected). Returns how many went.
+    pub fn retain_guides(&mut self, sel: &mut Selection, keep: impl Fn(usize, &Guide) -> bool) -> usize {
+        let kept: Vec<bool> = self.guides.iter().enumerate().map(|(i, g)| keep(i, g)).collect();
+        // Where each kept guide ends up.
+        let (mut to, mut n) = (Vec::with_capacity(kept.len()), 0);
+        for k in &kept {
+            to.push(k.then_some(n));
+            n += usize::from(*k);
+        }
+        sel.guides = sel.guides.iter().filter_map(|i| to.get(*i).copied().flatten()).collect();
+        let before = self.guides.len();
+        let mut flags = kept.into_iter();
+        self.guides.retain(|_| flags.next().unwrap_or(true));
+        before - self.guides.len()
+    }
+    /// Move the guides of artboard `id` by `d` (along with their artboard).
+    pub fn move_artboard_guides(&mut self, id: u32, d: Vec2) {
+        for g in self.guides.iter_mut().filter(|g| g.artboard == Some(id)) {
+            *g = g.moved(d);
+        }
+    }
+    /// Copy the guides of artboard `from` onto artboard `to`, `d` away (with a copy of their
+    /// artboard).
+    pub fn copy_artboard_guides(&mut self, from: u32, to: u32, d: Vec2) {
+        let copies: Vec<Guide> =
+            self.guides.iter().filter(|g| g.artboard == Some(from)).map(|g| Guide { artboard: Some(to), ..g.moved(d) }).collect();
+        self.guides.extend(copies);
     }
     pub fn next_artboard_id(&self) -> u32 {
         self.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1

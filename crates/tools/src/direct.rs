@@ -655,7 +655,7 @@ mod tests {
     #[test]
     fn direct_and_group_selection_pick_ruler_guides() {
         let (mut d, id) = doc_with_rect();
-        d.guides.push(vectorcraft_doc::Guide { vertical: true, pos: 100.0 });
+        d.guides.push(vectorcraft_doc::Guide::new(true, 100.0));
         let (s, p) = (Selection::default(), paint());
         let c = cx(&d, &s, &p);
         let down = |t: &mut DirectSelectionTool, y: f64| t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, y));

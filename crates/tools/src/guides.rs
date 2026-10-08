@@ -44,6 +44,32 @@ pub struct Targets {
     /// Path segments and their control bounds, which a point lands on ("path"): gathered only for
     /// dragged anchors ([`Self::for_anchor_drag`]).
     segments: Vec<(Rect, PathSeg)>,
+    /// Ruler guides, which pull a point into line where they run (Snap to Point).
+    rulers: Vec<Ruler>,
+}
+
+/// A ruler guide as a snap target.
+struct Ruler {
+    vertical: bool,
+    pos: f64,
+    /// Where it runs along its line: an artboard guide across its artboard (see
+    /// [`vectorcraft_doc::Document::guide_span`]), else (None) the whole canvas.
+    span: Option<(f64, f64)>,
+}
+
+impl Ruler {
+    /// The line it pulls `p` into within `tol` of its ends (its position, where it starts, the
+    /// kind), as [`Targets::xs`] holds them: none where it doesn't run.
+    fn line_at(&self, p: Point, tol: f64) -> Option<(f64, Point, Kind)> {
+        let along = if self.vertical { p.y } else { p.x };
+        let start = match self.span {
+            Some((a, b)) if along < a - tol || along > b + tol => return None,
+            Some((a, _)) => a,
+            None => 0.0,
+        };
+        let from = if self.vertical { Point::new(self.pos, start) } else { Point::new(start, self.pos) };
+        Some((self.pos, from, Kind::Guide))
+    }
 }
 
 /// How many anchors, and how many segments, the targets gather at most.
@@ -151,20 +177,23 @@ impl Targets {
         t
     }
 
-    /// View → Snap to Point: only these targets' anchors pull, and the ruler guides (shown and
-    /// unlocked, as the selection tools pick them) pull the pointer into line.
-    fn for_snap_to_point(mut self, cx: &ToolContext) -> Self {
+    /// Only these targets' anchors pull (View → Snap to Point).
+    pub(crate) fn anchors_only(mut self) -> Self {
         self.points.retain(|(_, k)| *k == Kind::Anchor);
         self.xs.clear();
         self.ys.clear();
         self.segments.clear();
-        if cx.guides {
-            for g in &cx.doc.guides {
-                let (lines, at) = if g.vertical { (&mut self.xs, Point::new(g.pos, 0.0)) } else { (&mut self.ys, Point::new(0.0, g.pos)) };
-                lines.push((g.pos, at, Kind::Guide));
-            }
-        }
         self
+    }
+
+    /// View → Snap to Point: only these targets' anchors pull, and the ruler guides (shown and
+    /// unlocked, as the selection tools pick them) pull the pointer into line where they run.
+    fn for_snap_to_point(self, cx: &ToolContext) -> Self {
+        let mut t = self.anchors_only();
+        if cx.guides {
+            t.rulers = cx.doc.guides.iter().map(|g| Ruler { vertical: g.vertical, pos: g.pos, span: cx.doc.guide_span(g) }).collect();
+        }
+        t
     }
 
     /// What a dragged selection's grabbed point snaps to with View → Snap to Point and Smart
@@ -206,17 +235,19 @@ impl Targets {
         }
         let mut out = p;
         let mut ov = vec![];
-        if let Some((x, from, _)) =
-            self.xs.iter().filter(|(x, _, _)| (x - p.x).abs() <= tol).min_by(|a, b| (a.0 - p.x).abs().total_cmp(&(b.0 - p.x).abs()))
-        {
-            out.x = *x;
-            ov.push(Overlay::Line { a: *from, b: Point::new(*x, p.y), color: MAGENTA, dashed: false });
+        // The targets' lines along one axis and the ruler guides running past `p`, the nearest
+        // within reach of `v`.
+        let nearest = |lines: &[(f64, Point, Kind)], vertical: bool, v: f64| {
+            let rulers = self.rulers.iter().filter(|r| r.vertical == vertical).filter_map(|r| r.line_at(p, tol));
+            lines.iter().copied().chain(rulers).filter(|(t, ..)| (t - v).abs() <= tol).min_by(|a, b| (a.0 - v).abs().total_cmp(&(b.0 - v).abs()))
+        };
+        if let Some((x, from, _)) = nearest(&self.xs, true, p.x) {
+            out.x = x;
+            ov.push(Overlay::Line { a: from, b: Point::new(x, p.y), color: MAGENTA, dashed: false });
         }
-        if let Some((y, from, _)) =
-            self.ys.iter().filter(|(y, _, _)| (y - p.y).abs() <= tol).min_by(|a, b| (a.0 - p.y).abs().total_cmp(&(b.0 - p.y).abs()))
-        {
-            out.y = *y;
-            ov.push(Overlay::Line { a: *from, b: Point::new(p.x, *y), color: MAGENTA, dashed: false });
+        if let Some((y, from, _)) = nearest(&self.ys, false, p.y) {
+            out.y = y;
+            ov.push(Overlay::Line { a: from, b: Point::new(p.x, y), color: MAGENTA, dashed: false });
         }
         if !ov.is_empty() {
             ov.push(Overlay::Label { p: out, text: "align".into(), color: MAGENTA });

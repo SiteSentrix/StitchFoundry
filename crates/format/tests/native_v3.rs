@@ -184,3 +184,19 @@ fn pretty_files_are_indented_like_serde_json() {
     // The same JSON as the compact file.
     assert_eq!(json_of(&bytes), json_of(&save(&d, false)));
 }
+
+/// #451: a guide's artboard is written only for artboard guides, so canvas guides save as they
+/// did, and a file without it (an older version's) opens with canvas guides.
+#[test]
+fn artboard_guides_round_trip_and_canvas_guides_save_as_before() {
+    use vectorcraft_doc::Guide;
+    let mut d = Document::new(100.0, 100.0);
+    let id = d.artboards[0].id;
+    d.guides = vec![Guide::new(true, 10.0), Guide { artboard: Some(id), ..Guide::new(false, 20.0) }];
+    let mut v = json_of(&save(&d, false));
+    assert_eq!(v["document"]["guides"], json!([{"vertical": true, "pos": 10.0}, {"vertical": false, "pos": 20.0, "artboard": id}]));
+    assert_eq!(load(&save(&d, false)).unwrap().guides, d.guides);
+    v["document"]["guides"] = json!([{"vertical": false, "pos": 20.0}]);
+    let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+    assert_eq!(old.guides, [Guide::new(false, 20.0)]);
+}

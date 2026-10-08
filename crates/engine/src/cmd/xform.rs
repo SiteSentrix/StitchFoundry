@@ -381,6 +381,8 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let a = d.artboards.get_mut(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
         a.rect = a.rect + dv;
+        let id = a.id;
+        d.move_artboard_guides(id, dv);
         for id in &art {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(dv), scale_strokes);

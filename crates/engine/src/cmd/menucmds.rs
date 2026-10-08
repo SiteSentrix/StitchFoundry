@@ -769,8 +769,13 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
+        let mut moved = vec![];
         for (a, dl) in d.artboards.iter_mut().zip(&deltas) {
             a.rect = a.rect + *dl;
+            moved.push((a.id, *dl));
+        }
+        for (id, dl) in moved {
+            d.move_artboard_guides(id, dl);
         }
         Ok(())
     })?;

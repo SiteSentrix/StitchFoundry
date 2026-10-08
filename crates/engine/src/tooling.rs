@@ -206,6 +206,30 @@ impl Session {
         self.apply_actions(acts)
     }
 
+    /// A guide dragged out of a ruler, whatever the tool: a vertical one out of the left ruler, a
+    /// horizontal one out of the top ruler. `ev` is the pointer in document space (a drag, then the
+    /// release), over the canvas or not (`on_canvas`). The guide shows where the pointer is over
+    /// the canvas, snapped as a moved guide is, and is made where the button is released over it
+    /// (one undo step); released anywhere else, none is. With the Artboard tool it is an artboard
+    /// guide of the active artboard.
+    pub fn ruler_guide(&mut self, vertical: bool, ev: &PointerEvent, on_canvas: bool, view: ViewInfo) -> Result<()> {
+        let g = match self.ruler_guide.take() {
+            Some(g) => Some(g),
+            None => {
+                let boards = self.active().map_or(0, |d| d.doc.artboards.len());
+                let active = (self.tool.id() == "artboard").then(|| self.tool.options()["active"].as_u64()).flatten();
+                let artboard = active.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < boards);
+                self.with_tool_cx(view, |_, cx| Some(vectorcraft_tools::rulerguide::NewGuide::new(cx, vertical, artboard)))
+            }
+        };
+        let Some(mut g) = g else { return Ok(()) };
+        let acts = self.with_tool_cx(view, |_, cx| g.pointer(cx, ev, on_canvas));
+        if ev.kind != PointerKind::Up {
+            self.ruler_guide = Some(g);
+        }
+        self.apply_actions(acts).map(drop)
+    }
+
     /// Time passed while the pointer button is held (`dt` seconds; see [`Tool::tick`]): the
     /// desktop app ticks every frame of a press, agents with `holdMs` on a pointer event.
     pub fn tool_tick(&mut self, dt: f64, view: ViewInfo) -> Result<Vec<UiRequest>> {
@@ -273,6 +297,10 @@ impl Session {
 
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
         let mut v = self.with_tool_cx(view, |t, cx| t.overlays(cx));
+        if let Some(g) = self.ruler_guide.take() {
+            v.extend(self.with_tool_cx(view, |_, cx| g.overlays(cx)));
+            self.ruler_guide = Some(g);
+        }
         if let Some(d) = self.active() {
             let w = self.prefs.perspective_widget;
             let place = w.show.then_some(WidgetPlace { screen: view.screen.as_ref(), corner: w.position });
