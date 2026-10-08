@@ -315,7 +315,8 @@ pub fn cancel(app: &mut VectorcraftApp) {
 /// Apply the open dialog (OK).
 pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
-    (spec(&d.kind).confirm)(app, &d)
+    // A file dialog it shows off the UI thread confirms the dialog as it is again.
+    crate::picks::as_entry(app, || crate::picks::Entry::Confirm(Box::new(d.clone())), |app| (spec(&d.kind).confirm)(app, &d))
 }
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {

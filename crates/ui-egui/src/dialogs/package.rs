@@ -70,11 +70,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if !downloads(app) {
         widgets::label_row(ui, tl!("Location:"), LABEL, |ui| {
             form::text(ui, d, "folder", 230.0);
-            if let Some(pick) = app.services.pick_folder.as_mut()
-                && ui.button(tl!("Choose…")).clicked()
-                && let Some(f) = pick()
-            {
-                d.fields.insert("folder".into(), json!(f));
+            if app.services.pick_folder.is_some() && ui.button(tl!("Choose…")).clicked() {
+                crate::picks::folder_field(app, d, "folder");
             }
         });
         ui.add_space(4.0);

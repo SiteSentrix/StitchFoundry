@@ -36,6 +36,7 @@ pub mod menus;
 pub mod native_menu;
 pub mod palette;
 pub mod panels;
+pub mod picks;
 pub mod place;
 pub mod prefs_dialog;
 pub mod print;
@@ -94,6 +95,8 @@ mod tests_pastechords;
 mod tests_pathtype;
 #[cfg(test)]
 mod tests_pdfoutput;
+#[cfg(test)]
+mod tests_picks;
 #[cfg(test)]
 mod tests_place;
 #[cfg(test)]
@@ -233,6 +236,10 @@ pub struct Services {
     pub print: Option<Box<dyn print::PrintService>>,
     /// The macOS menu bar, when the desktop app installed one: the in-window menus are hidden then.
     pub native_menu: Option<native_menu::NativeMenu>,
+    /// Show file dialogs off the UI thread (desktop Linux, where a dialog in line holds the window
+    /// and the compositor finds it not answering): what asked runs again with the answer
+    /// ([`picks`]). Without it they are shown in line.
+    pub start_pick: Option<picks::StartPick>,
 }
 
 /// Cached canvas raster.
@@ -347,6 +354,8 @@ pub struct VectorcraftApp {
     /// The thread that checks the system clipboard for `system_paste` instead
     /// ([`Services::clipboard_probe`]).
     clipboard_probe: Option<clipboard_probe::Probe>,
+    /// File dialogs shown off the UI thread and what runs again with their answers.
+    pub(crate) picks: picks::Picks,
     /// The look for fonts installed or removed while the app was in the background, running
     /// ([`Self::refresh_installed_fonts`]): whether they were.
     font_check: Option<std::sync::mpsc::Receiver<bool>>,
@@ -426,6 +435,7 @@ impl VectorcraftApp {
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
             clipboard_probe: None,
+            picks: picks::Picks::default(),
             font_check: None,
             paste_chord: Default::default(),
             background: Default::default(),
@@ -489,6 +499,16 @@ impl VectorcraftApp {
 
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        // A file dialog it shows off the UI thread runs it again with the path picked.
+        if self.picks.is_entry_free() {
+            let entry = picks::Entry::Command(id.to_string(), params.clone());
+            return picks::as_entry(self, move || entry, |app| app.run_now(id, params));
+        }
+        self.run_now(id, params)
+    }
+
+    /// [`Self::run`] it, inside what asks for file dialogs.
+    fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
         self.run_count = self.run_count.wrapping_add(1);
         if let Some(r) = menus::run_ui_command(self, id, &params) {
             return r;
@@ -790,6 +810,7 @@ impl VectorcraftApp {
             self.system_paste = wanted && self.system_clipboard_pasteable();
         }
         self.poll_font_check(ctx);
+        picks::poll(self, ctx);
         background::poll(self);
         if !self.background.jobs.is_empty() {
             // Keep the status bar's progress moving and pick the result up when it arrives.

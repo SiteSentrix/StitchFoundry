@@ -135,10 +135,10 @@ fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
         f();
         return Ok(());
     }
-    let paths = match (app.services.pick_open_multi.as_mut(), app.services.pick_open.as_mut()) {
-        (Some(f), _) => f(),
-        (None, Some(f)) => f(&crate::FilePick { filters: fileio::place_filters().collect(), ..Default::default() }).into_iter().collect(),
-        (None, None) => vec![],
+    let paths = if app.services.pick_open_multi.is_some() {
+        crate::picks::open_many(app)
+    } else {
+        crate::picks::open(app, &crate::FilePick { filters: fileio::place_filters().collect(), ..Default::default() }).into_iter().collect()
     };
     if paths.is_empty() {
         return Err("cancelled".into());

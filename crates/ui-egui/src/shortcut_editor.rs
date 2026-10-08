@@ -458,7 +458,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
         "shortcuts.export" => {
             let v = export_json(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
             let bytes = serde_json::to_vec_pretty(&v).unwrap_or_default();
-            let path = s("path").or_else(|| app.services.pick_save.as_mut().and_then(|f| f(&crate::FilePick::named("VectorCraft Shortcuts.json"))));
+            let path = s("path").or_else(|| crate::picks::save(app, &crate::FilePick::named("VectorCraft Shortcuts.json")));
             match path {
                 Some(path) => match app.services.write.as_mut() {
                     Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
@@ -477,7 +477,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             let data = if let Some(v) = p.get("data") {
                 Ok(v.clone())
             } else {
-                let path = s("path").or_else(|| app.services.pick_open.as_mut().and_then(|f| f(&crate::FilePick::default())));
+                let path = s("path").or_else(|| crate::picks::open(app, &crate::FilePick::default()));
                 match (path, app.services.read.as_ref()) {
                     (Some(path), Some(r)) => r(&path).and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string())),
                     (None, _) => Err("cancelled".into()),
