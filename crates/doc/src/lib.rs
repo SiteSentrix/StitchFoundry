@@ -10,6 +10,7 @@ pub mod assets;
 pub mod blend;
 pub mod clipnest;
 pub mod cmyk;
+pub mod corners;
 pub mod graph;
 pub mod hit;
 pub mod inks;
@@ -58,6 +59,7 @@ pub use appearance::{
     StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
+pub use corners::LiveCorners;
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};

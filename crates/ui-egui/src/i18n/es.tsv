@@ -3072,7 +3072,7 @@ axis	Both	Ambos
 @msg	Convert to Artboards: selection has no area	Convertir en mesas de trabajo: la selección no tiene área
 @msg	Convert to Shape: no rectangles or ellipses selected	Convertir en forma: no hay rectángulos ni elipses seleccionados
 @msg	Copied the CSS of {rules} object(s)	Se copió el CSS de {rules} objeto(s)
-@msg	Corners edits a live rectangle	Esquinas edita un rectángulo interactivo
+@msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
 @msg	Couldn't copy to the system clipboard: {e}	No se pudo copiar al portapapeles del sistema: {e}
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	No se pudo colocar {name}: se cerró el documento en el que se soltó
@@ -3238,7 +3238,7 @@ axis	Both	Ambos
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	la versión de archivo {0} es más reciente de lo que admite este VectorCraft ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	el punto de forma libre {i} necesita `at` [x, y] y un `color` válido
 @msg	give both `start` and `end` [x, y] (or neither)	indica `start` y `end` [x, y] (o ninguno de los dos)
-@msg	give corners 0–3	indica esquinas de 0 a 3
+@msg	give corners of the path: anchors between two straight sides	indica esquinas del trazado: puntos de ancla entre dos lados rectos
 @msg	give the path `id` and the width point `index`	indica el `id` del trazado y el `index` del punto de anchura
 @msg	guides are locked	las guías están bloqueadas
 @msg	image '{key}' has no pixels and was left out	la imagen '{key}' no tiene píxeles y se omitió
@@ -3422,7 +3422,7 @@ axis	Both	Ambos
 @msg	select artwork (or a colour group) to recolor	selecciona la ilustración (o un grupo de colores) que quieres volver a colorear
 @msg	select at least two objects	selecciona al menos dos objetos
 @msg	select objects, not layers	selecciona objetos, no capas
-@msg	select one live rectangle, or give its `id`	selecciona un rectángulo interactivo o indica su `id`
+@msg	select one path, or give its `id`	selecciona un trazado o indica su `id`
 @msg	select paths to join	selecciona los trazados que quieres unir
 @msg	select the art to repeat	selecciona la ilustración que quieres repetir
 @msg	select the artwork to warp	selecciona la ilustración que quieres deformar

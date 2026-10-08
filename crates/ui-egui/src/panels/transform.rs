@@ -7,7 +7,7 @@ use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_geom::Rect;
 
-use super::{corner_radius, first_selected, pstate, set_pstate};
+use super::{corner_radius_row, first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -166,20 +166,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("object.reflect", json!({"axis": "horizontal", "origin": origin})).ok();
         }
     });
-    // Live shape properties.
+    // Live shape properties (a path with live corners is no shape).
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
+        && !matches!(live, vectorcraft_doc::LiveShape::Path { .. })
     {
         widgets::divider(ui);
         match live {
             vectorcraft_doc::LiveShape::Rectangle { .. } => {
                 widgets::subheader(ui, tl!("Rectangle Properties:"));
-                ui.horizontal(|ui| {
-                    widgets::dim_label(ui, tl!("Corner Radius:"));
-                    if let Some(r) = widgets::num_field(ui, "xfp-radius", corner_radius(app, &n, live), units, 80.0) {
-                        app.run("object.setLiveShape", json!({"radius": r})).ok();
-                    }
-                });
+                corner_radius_row(app, ui, &n, "xfp-radius");
             }
             vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
                 widgets::subheader(ui, tl!("Polygon Properties:"));
@@ -189,6 +185,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         app.run("object.setLiveShape", json!({"sides": s.clamp(3.0, 20.0) as u32})).ok();
                     }
                 });
+                corner_radius_row(app, ui, &n, "xfp-radius");
             }
             _ => {
                 widgets::subheader(ui, tl!("Shape Properties:"));

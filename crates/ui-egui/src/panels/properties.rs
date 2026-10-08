@@ -2,9 +2,9 @@
 
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_doc::{NodeKind, Unit};
+use vectorcraft_doc::{LiveShape, NodeKind, Unit};
 
-use super::{corner_radius, first_selected, pstate, set_pstate};
+use super::{corner_radius_row, first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, dim_label, divider, section_header};
 use crate::{VectorcraftApp, icons};
@@ -93,7 +93,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     divider(ui);
     section_header(ui, tl!("Quick Actions"));
     let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
-    let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(_), .. }));
+    let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(l, LiveShape::Path { .. }));
     let mut actions: Vec<(&str, &str)> = vec![];
     if n_sel > 1 {
         actions.push((tl!("Group"), "object.group"));
@@ -335,14 +335,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
     {
         match live {
-            vectorcraft_doc::LiveShape::Rectangle { .. } => {
-                ui.horizontal(|ui| {
-                    dim_label(ui, tl!("Corner Radius:"));
-                    if let Some(r) = widgets::num_field(ui, "radius", corner_radius(app, &n, live), units, 80.0) {
-                        app.run("object.setLiveShape", json!({"radius": r})).ok();
-                    }
-                });
-            }
+            vectorcraft_doc::LiveShape::Rectangle { .. } => corner_radius_row(app, ui, &n, "radius"),
             vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
                 ui.horizontal(|ui| {
                     dim_label(ui, tl!("Sides:"));
@@ -350,6 +343,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                         app.run("object.setLiveShape", json!({"sides": s as u32})).ok();
                     }
                 });
+                corner_radius_row(app, ui, &n, "radius");
             }
             _ => {}
         }
