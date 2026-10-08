@@ -634,7 +634,7 @@ impl Default for Prefs {
             object_highlighting: true,
             transform_tools_guides: true,
             construction_guides: true,
-            construction_angles: s("90° & 45° Angles"),
+            construction_angles: s(vectorcraft_tools::guides::DEFAULT_CONSTRUCTION_ANGLES),
             anchor_path_labels: true,
             measurement_labels: true,
             spacing_guides: true,
@@ -1476,6 +1476,8 @@ mod tests_saveoptions;
 mod tests_scalestrokes;
 #[cfg(test)]
 mod tests_slices;
+#[cfg(test)]
+mod tests_smartguides;
 #[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]

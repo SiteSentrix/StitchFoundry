@@ -1215,8 +1215,8 @@ off, an empty window, and the Home button or `app.home` still shows the screen) 
 default: on, a click away from a panel popped out of the icon column puts it away).
 
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
-default view) and to the mouse; they change what the tools show and how far a target pulls, never where a snapped
-point lands:
+default view) and to the mouse; they change what the tools show and how far a target pulls, and only Construction
+Guides change where a snapped point lands:
 
 - `smartGuideColor` (`#ff3dfc` by default): the colour of the smart guides' lines and labels.
 - `alignmentGuides` (on by default): off, no line is drawn along the edge or centre the art lines up with; the art
@@ -1231,6 +1231,11 @@ point lands:
 - `snappingTolerance` (0–40 px, 4 by default): how near an anchor, edge, centre or artboard edge pulls a drawn point,
   a dragged selection, a bounding-box handle, a ruler guide or an artboard. With Smart Guides off, Snap to Point uses
   `snapToPointTolerance` instead.
+- `constructionGuides` (on by default) and `constructionAngles` (`90° & 45° Angles` by default; also `90° Angles`,
+  `45° Angles`, `60° Angles`, `30° Angles`, `90° & 45° & 30° Angles`): a point drawn near a line at one of those
+  angles through the point it leaves from (the Pen's or Curvature tool's last anchor, a line's start) lands on that
+  line, where a target's alignment line crosses it if one does nearby. "90°" gives the horizontal and the vertical,
+  "45°" the diagonals, "60°" and "30°" the multiples of those angles in between. Off, the point only lines up.
 
 With Smart Guides on, a bounding-box handle dragged with the Selection or Free Transform tool (`mods.shift`
 proportional, `mods.alt` from the centre) lands on another object's anchor or centre (labelled "anchor" or
@@ -1242,7 +1247,26 @@ snap the pointer as drawing tools do, so dragging a corner onto another object's
 {"name":"pointer_gesture","arguments":{"tool":"scale","events":[{"kind":"down","x":100,"y":100},{"kind":"up","x":100,"y":100},{"kind":"down","x":199,"y":198},{"kind":"drag","x":302,"y":262},{"kind":"up","x":302,"y":262}]}}
 ```
 
-Not read yet: Construction Guides and their Angles, and Spacing Guides (the tools draw neither).
+Every point a drawing tool places snaps the same way, through one snapper (#506): the Pen's and Curvature tool's
+anchors, the Pencil's first and last point, the shape tools' start and dragged corner or radius (`rectangle`,
+`roundedRectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, `arc`, `spiral`, `rectangularGrid`, `polarGrid`), the
+Type tool's click and frame, and a new artboard's corners. The point lands on another object's anchor, centre or
+path ("anchor", "center", "path"), else lines up with the anchors, edges and centres of the art and the artboards (a
+line from the target and "align"); the Pen's lands on the path being drawn too, so a click on its first anchor closes
+it exactly. With `mods.shift` the point keeps to its 45° step from the anchor before it (from `constrainAngle`; a box
+dragged keeps its corner on a diagonal) and slides along that way into line with the nearest target. A `move` event
+before the press shows where it would go, as hovering does with the mouse. The targets are the art in the window (all
+of it headless), gathered once per document state; the shape being drawn is never one of them:
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"rectangle","events":[{"kind":"down","x":202,"y":203},{"kind":"drag","x":330,"y":341},{"kind":"up","x":330,"y":341}]}}
+{"name":"pointer_gesture","arguments":{"tool":"pen","events":[{"kind":"down","x":300,"y":420},{"kind":"up","x":300,"y":420},{"kind":"down","x":151.5,"y":431},{"kind":"up","x":151.5,"y":431}]}}
+```
+
+With a 100 × 100 square at (100, 100), the first starts the rectangle on its corner (200, 200); the second puts the
+Pen's second anchor at (150, 431), in line with the square's centre.
+
+Not read yet: Spacing Guides (the tools draw none).
 
 ## Type preferences
 

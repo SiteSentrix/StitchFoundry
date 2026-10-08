@@ -3,7 +3,8 @@
 //! Type: click places point type, drag draws an area-type frame, clicking into existing text
 //! places the caret. Area Type / Type on a Path: click a path to turn it into a text frame or a
 //! baseline (`text.createInPath`). Point type placed by a click and left empty is discarded when
-//! editing ends (`text.discardEmpty`); frames keep their shape.
+//! editing ends (`text.discardEmpty`); frames keep their shape. Where new type goes (the click, the
+//! frame's corners) snaps to Smart Guides ([`DrawSnap`]), hovering too.
 //!
 //! While editing: caret movement by character / word (Cmd or Alt) / line (Up/Down) / line ends
 //! (Home/End; Cmd = whole text), Shift extends the selection, drag selects, double-click selects a
@@ -27,6 +28,7 @@ use vectorcraft_doc::{NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use vectorcraft_text::{FontDb, TextLayout, edit};
 
+use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// Which of the Type tools this is.
@@ -68,8 +70,12 @@ pub struct TypeTool {
     goal_x: Option<f64>,
     typing: Option<Typing>,
     preedit: Option<Preedit>,
-    press: Option<Point>,
+    /// Where the button went down, and where new type goes from there (snapped to Smart Guides).
+    press: Option<(Point, Point)>,
+    /// The other corner of an area dragged out (snapped).
     drag: Option<Point>,
+    /// Smart Guides for where new type goes.
+    snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
     selecting: bool,
     /// Click counting for double/triple click (position of the last click, count).
@@ -252,7 +258,8 @@ impl TypeTool {
         Some(out)
     }
 
-    fn on_up(&mut self, cx: &ToolContext, start: Point) -> Vec<Action> {
+    /// The button released after a press at `start` (new type goes at `at`).
+    fn on_up(&mut self, cx: &ToolContext, start: Point, at: Point) -> Vec<Action> {
         // Click into existing text: place the caret.
         if let Some(out) = self.edit_at(cx, start) {
             return out;
@@ -272,10 +279,10 @@ impl TypeTool {
                 return out;
             }
         }
-        let area = drag.map(|d| Rect::from_points(start, d)).filter(|r| r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0));
+        let area = drag.map(|d| Rect::from_points(at, d)).filter(|r| r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0));
         let mut params = match area {
             Some(r) => json!({"x": r.x0, "y": r.y0, "text": "", "area": {"width": r.width(), "height": r.height()}}),
-            None => json!({"x": start.x, "y": start.y, "text": ""}),
+            None => json!({"x": at.x, "y": at.y, "text": ""}),
         };
         params["vertical"] = json!(self.vertical);
         params["placeholder"] = json!(cx.placeholder_text);
@@ -386,7 +393,7 @@ impl Tool for TypeTool {
                     self.selecting = true;
                     return out;
                 }
-                self.press = Some(ev.pos);
+                self.press = Some((ev.pos, self.snap.press(cx, ev.pos, self.editing.as_slice(), None)));
                 self.drag = None;
                 vec![]
             }
@@ -398,7 +405,7 @@ impl Tool for TypeTool {
                         self.clicks = (None, 0);
                     }
                 } else if self.press.is_some() {
-                    self.drag = Some(ev.pos);
+                    self.drag = Some(self.snap.drag(cx, ev.pos, None));
                 }
                 vec![]
             }
@@ -407,8 +414,9 @@ impl Tool for TypeTool {
                     self.selecting = false;
                     return vec![];
                 }
-                let Some(start) = self.press.take() else { return vec![] };
-                self.on_up(cx, start)
+                self.snap.clear();
+                let Some((start, at)) = self.press.take() else { return vec![] };
+                self.on_up(cx, start, at)
             }
             PointerKind::DoubleClick => {
                 if self.editing.is_some() && self.hit_edited(cx, ev.pos).is_some() {
@@ -417,7 +425,11 @@ impl Tool for TypeTool {
                 }
                 vec![]
             }
-            PointerKind::Move => vec![],
+            PointerKind::Move => {
+                // The type being edited is no target: its guides would only point at itself.
+                self.snap.hover(cx, ev.pos, self.editing.as_slice(), None);
+                vec![]
+            }
         }
     }
     fn text_input(&mut self, cx: &ToolContext, s: &str) -> Vec<Action> {
@@ -700,8 +712,8 @@ impl Tool for TypeTool {
         }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let mut o = vec![];
-        if let (Some(s), Some(d)) = (self.press, self.drag) {
+        let mut o = self.snap.guides().to_vec();
+        if let (Some((_, s)), Some(d)) = (self.press, self.drag) {
             o.push(Overlay::Marquee(Rect::from_points(s, d)));
         }
         // Overflow markers on selected text.
