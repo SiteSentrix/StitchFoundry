@@ -878,7 +878,8 @@ proptest! {
     }
 
     /// Hostile PostScript programs: operators in any order with any operands, opened and placed;
-    /// as Illustrator's too, its groups (`u` … `U`) unbalanced, deep and among clips.
+    /// as files in the legacy Illustrator format too (the creator line is what turns on its
+    /// documented `u` … `U` groups), the groups unbalanced, deep and among clips.
     #[test]
     fn eps_hostile_programs_never_panic(tokens in prop::collection::vec(arb_ps_token(), 0..60), illustrator in any::<bool>()) {
         let head = if illustrator { "%%Creator: Adobe Illustrator(R) 8.0\n%%EndComments\n/u {} def /U {} def" } else { "%%EndComments" };
@@ -952,7 +953,7 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             "/T3 << /FontType 3 /FontMatrix [0.1 0 0 0.1 0 0] /FontBBox [0 0 9 9] /Encoding [/a /b] /BuildChar { pop pop 9 0 setcharwidth 0 0 5 5 rectfill } >> definefont setfont",
             "/T4 << /FontType 3 /FontMatrix [1 0 0 1 0 0] /BuildGlyph { pop pop (x) show } /Encoding [/a] >> definefont setfont",
             "glyphshow", "xshow", "xyshow", "awidthshow", "kshow", "/a", "[1 2 3]",
-            // Executable strings and integer keys (Illustrator 8's procsets).
+            // Executable strings and keys other than names (PLRM 3rd ed., `cvx`, `load`).
             "(>>) cvx", "(1 2 add) cvx exec", "(x) cvx dup exec", "0 load", "1 { } def", "(mark) cvx cvlit"
         ])
         .prop_map(str::to_string),

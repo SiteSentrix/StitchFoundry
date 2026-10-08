@@ -56,8 +56,8 @@ pub(crate) struct Interp<'a> {
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
-    /// The program is an Illustrator file's: its `u` … `U` (written at the top level, whatever
-    /// its prolog defines them as) are groups.
+    /// The program is in the legacy Illustrator format: its group operators `u` … `U` (at the top
+    /// level, whatever its prolog defines them as) are groups (see the module docs of `import`).
     pub illustrator: bool,
 }
 
@@ -157,7 +157,7 @@ impl<'a> Interp<'a> {
         loop {
             let Some(o) = self.lex.next()? else { return Ok(()) };
             let o = self.scanned(o, self.lex.immediate)?;
-            // An Illustrator group begins before its `u` runs (`Some(true)`) and ends after its `U`
+            // A group begins before its `u` runs (`Some(true)`) and ends after its `U`
             // has (`Some(false)`).
             let group = match &o {
                 Obj::Exec(name) if self.illustrator => match &**name {
