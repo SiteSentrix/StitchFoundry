@@ -561,3 +561,82 @@ fn missing_glyph_protection_keeps_glyphs_a_new_font_lacks() {
     s.execute("text.setStyle", &json!({"font": to})).unwrap();
     assert_eq!(fonts(&s), [to, to, to]);
 }
+
+// ---------- #394, fourth batch ----------
+
+/// Type › Type Object Selection by Path Only (#394): on, a click among point type's glyphs no
+/// longer selects it with the Selection tool, a click on its baseline does; off (the default),
+/// anywhere in its bounds selects it.
+#[test]
+fn type_selection_by_path_only_picks_type_on_its_baseline() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = new_doc();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Hello world", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let b = s.doc().unwrap().doc.node(id).and_then(|n| n.geometric_bounds()).unwrap();
+    assert!(b.y0 < 95.0 && b.x1 > 130.0, "the glyphs rise above the baseline at y = 100: {b:?}");
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| {
+        for k in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(k, x, y), ViewInfo::default()).unwrap();
+        }
+        s.doc().unwrap().selection.objects.clone()
+    };
+    // Clear of the bounding box's handles: 15 px in from the left, halfway up the glyphs.
+    let (x, glyphs) = (b.x0 + 15.0, (b.y0 + 100.0) / 2.0);
+    assert_eq!(click(&mut s, x, glyphs), vec![id], "off: a click among the glyphs selects the type");
+    assert!(click(&mut s, x, 300.0).is_empty(), "empty canvas deselects");
+    set_pref(&mut s, "typeSelectionByPathOnly", json!(true));
+    assert!(click(&mut s, x, glyphs).is_empty(), "on: a click among the glyphs selects nothing");
+    assert_eq!(click(&mut s, x, 101.0), vec![id], "on: a click on the baseline selects it");
+    assert!(click(&mut s, x, 300.0).is_empty());
+    set_pref(&mut s, "typeSelectionByPathOnly", json!(false));
+    assert_eq!(click(&mut s, x, glyphs), vec![id], "off again: the glyphs select it");
+}
+
+/// Type Object Selection by Path Only (#394) with real layout: every line's baseline picks point
+/// type, between the lines nothing does; the Type tool still edits type clicked among its
+/// characters, and the Eyedropper still samples it there.
+#[test]
+fn type_selection_by_path_only_takes_every_line_and_spares_the_type_tool_and_eyedropper() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let v = ViewInfo::default();
+    let mut s = new_doc();
+    let created = s
+        .execute(
+            "text.create",
+            &json!({"x": 100, "y": 100, "text": "Hello
+world", "size": 20}),
+        )
+        .unwrap();
+    let src = NodeId(created["id"].as_u64().unwrap());
+    s.execute("text.setStyle", &json!({"fill": "#00ff00"})).unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(src).unwrap().kind else { panic!("not type") };
+    let [(a, _), (b, _)] = t.cached_baselines[..] else { panic!("two baselines: {:?}", t.cached_baselines) };
+    let (first, second) = (t.xf * a, t.xf * b);
+    assert!(first.y == 100.0 && second.y > 115.0, "{first:?} {second:?}");
+    let click = |s: &mut Session, tool: &str, x: f64, y: f64| {
+        s.select_tool(tool, v).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        s.doc().unwrap().selection.objects.clone()
+    };
+    set_pref(&mut s, "typeSelectionByPathOnly", json!(true));
+    let x = first.x + 15.0;
+    assert!(click(&mut s, "selection", x, 300.0).is_empty());
+    assert_eq!(click(&mut s, "selection", x, second.y + 1.0), vec![src], "the second line's baseline");
+    assert!(click(&mut s, "selection", x, (first.y + second.y) / 2.0).is_empty(), "between the lines");
+    // The Type tool: a click among the glyphs puts the caret in that type, it adds none.
+    assert_eq!(click(&mut s, "type", x, first.y - 7.0), vec![src]);
+    assert!(s.tool_wants_text(), "editing");
+    let texts =
+        |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.iter().filter(|n| matches!(n.kind, NodeKind::Text(_))).count());
+    assert_eq!(texts(&s), 1, "no new type");
+    // The Eyedropper: a click among the glyphs samples the type into the selected type.
+    s.select_tool("selection", v).unwrap();
+    let dst = NodeId(s.execute("text.create", &json!({"x": 100, "y": 300, "text": "Target"})).unwrap()["id"].as_u64().unwrap());
+    click(&mut s, "eyedropper", x, first.y - 7.0);
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(dst).unwrap().kind else { panic!("not type") };
+    assert_eq!((t.first_style().size, t.first_style().fill.color().map(|c| c.to_hex())), (20.0, Some("#00ff00".into())));
+}

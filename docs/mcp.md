@@ -1211,6 +1211,11 @@ Not read yet: Construction Guides and their Angles, and Spacing Guides (the tool
   selection (←/→), leading (↑/↓) and baseline shift (Shift+↑/↓), five steps with Cmd/Ctrl too.
 - `missingGlyphProtection` (on by default): `text.setStyle` and `text.setRangeStyle` changing the font leave the
   characters the new font has no glyph for in the font that had one.
+- `typeSelectionByPathOnly` (off by default): on, the Selection tools (`pointer_gesture` with `selection`, and the
+  mouse) pick type on its type path only — the baseline of each of its lines (a vertical column's centre line), area
+  type's frame, type on a path's path — within `selectionTolerance`; a click among the glyphs, between the lines or
+  inside the frame selects nothing. Off, anywhere in the type's bounds selects it. Marquee selection is unchanged, and
+  the Type tools (a click among the characters edits them) and the Eyedropper (`eyedropper`) are not affected.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeSizeIncrement":4,"trackingIncrement":50}}}}

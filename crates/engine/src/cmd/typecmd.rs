@@ -97,10 +97,11 @@ fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
     Ok(json!({"vertical": vertical, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
-/// Recompute the layout bounds cache after a text edit.
+/// Recompute the layout caches (bounds and baselines) after a text edit.
 pub(crate) fn refresh_bounds(t: &mut TextObject) {
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
+    t.cached_baselines = lay.baselines();
 }
 
 /// Text objects among `ids` and their descendants.
