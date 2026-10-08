@@ -91,6 +91,10 @@ fn drag_id() -> egui::Id {
 fn temp_tool_id() -> egui::Id {
     egui::Id::new("canvas-temp-tool")
 }
+/// Where the pointer was last seen during a press on the canvas.
+fn drag_pos_id() -> egui::Id {
+    egui::Id::new("canvas-drag-pos")
+}
 
 /// Selection, Direct Selection and Group Selection: the tools Cmd switches to for a drag.
 pub(crate) fn is_selection_tool(id: &str) -> bool {
@@ -465,6 +469,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
     let hover = pointer.hover_pos().filter(|p| rect.contains(*p));
+    // A lifted pen or finger takes the pointer away in the frame it lifts (egui's `PointerGone`),
+    // so a tap whose press and lift come in one frame has no hover position: it presses (and
+    // double-taps) where it was seen last (#491).
+    let at = hover.or_else(|| pointer.interact_pos().filter(|p| rect.contains(*p)));
     app.hover_doc = hover.map(|p| xf.to_doc(p));
     let view = app.view_info();
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
@@ -506,7 +514,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     if pointer.primary_pressed()
         && resp.hovered()
         && !middle_pan
-        && let Some(p) = hover
+        && let Some(p) = at
     {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
@@ -532,7 +540,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
             dispatch(app, &ev, view);
             kind
         };
-        ui.data_mut(|dd| dd.insert_temp(drag_id(), d));
+        ui.data_mut(|dd| {
+            dd.insert_temp(drag_id(), d);
+            dd.insert_temp(drag_pos_id(), p);
+        });
     } else if drag.is_none()
         && resp.hovered()
         && pointer.button_pressed(egui::PointerButton::Middle)
@@ -541,9 +552,11 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         // Middle-button drag pans the view whatever the tool.
         ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Pan { start, center: v.center, middle: true }));
     } else if let Some(d) = drag {
-        let p = pointer.interact_pos().unwrap_or(rect.center());
+        // The pointer gone (a pen lifted with its press), the drag ends where it was last seen.
+        let p = pointer.interact_pos().or_else(|| ui.data(|dd| dd.get_temp(drag_pos_id()))).unwrap_or(rect.center());
         let held = if middle_pan { pointer.button_down(egui::PointerButton::Middle) } else { pointer.primary_down() };
         if held {
+            ui.data_mut(|dd| dd.insert_temp(drag_pos_id(), p));
             match d {
                 Drag::Pan { start, center, .. } => {
                     let d = xf.delta_to_doc(p - start);
@@ -581,7 +594,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 }
             }
         } else {
-            ui.data_mut(|dd| dd.remove::<Drag>(drag_id()));
+            ui.data_mut(|dd| {
+                dd.remove::<Drag>(drag_id());
+                dd.remove::<Pos2>(drag_pos_id());
+            });
             match d {
                 Drag::ZoomBox { start } => {
                     let r = egui::Rect::from_two_pos(start, p);
@@ -620,7 +636,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         dispatch(app, &ev, view);
     }
     if resp.double_clicked()
-        && let Some(p) = hover
+        && let Some(p) = at
     {
         let ev = PointerEvent { kind: PointerKind::DoubleClick, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
         let before = app.session.tool_id().to_string();
@@ -2723,5 +2739,77 @@ mod tests {
         assert!(app.session.tool_composing());
         assert!(!app.take_ime_discard());
         assert_eq!(plain(&app, id), "雅がくらくか");
+    }
+
+    /// The events eframe's winit integration sends for a pen (Windows Ink) or a finger: a touch
+    /// with its pressure, and the mouse it stands in for (#491).
+    fn pen(phase: egui::TouchPhase, pos: Pos2, force: f32) -> Vec<egui::Event> {
+        let touch = egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(1), phase, pos, force: Some(force) };
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        match phase {
+            egui::TouchPhase::Start => vec![touch, egui::Event::PointerMoved(pos), button(true)],
+            egui::TouchPhase::Move => vec![touch, egui::Event::PointerMoved(pos)],
+            egui::TouchPhase::End | egui::TouchPhase::Cancel => vec![touch, button(false), egui::Event::PointerGone],
+        }
+    }
+
+    /// A pen stroke across `pts` (document points), one frame per sample, with its pressures.
+    fn pen_stroke(app: &mut VectorcraftApp, ctx: &egui::Context, pts: &[(f64, f64, f32)]) {
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let last = pts.len() - 1;
+        for (i, &(x, y, force)) in pts.iter().enumerate() {
+            let phase = if i == 0 { egui::TouchPhase::Start } else { egui::TouchPhase::Move };
+            frame(app, ctx, pen(phase, xf.to_screen(Point::new(x, y)), force));
+            if i == last {
+                frame(app, ctx, pen(egui::TouchPhase::End, xf.to_screen(Point::new(x, y)), force));
+            }
+        }
+    }
+
+    /// #491: a pen or a finger draws as the mouse does, and its pressure reaches the tools that
+    /// use it; the pointer leaving with the lift doesn't move the stroke's end.
+    #[test]
+    fn pen_and_touch_input_drive_the_tools_with_their_pressure() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("pencil");
+        pen_stroke(&mut app, &ctx, &[(100.0, 100.0, 0.5), (140.0, 120.0, 0.6), (180.0, 150.0, 0.7), (220.0, 200.0, 0.4)]);
+        let b = app.session.active().unwrap().doc.art_bounds().expect("the pen drew a path");
+        assert!(b.x0 > 90.0 && b.y0 > 90.0 && b.x1 < 230.0 && b.y1 < 210.0 && b.x1 > 200.0, "the stroke stays where the pen went: {b:?}");
+
+        // Bloat with Use Pressure Pen: each sample carries the pen's pressure.
+        app.session.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 200, "height": 200})).unwrap();
+        app.select_tool("bloat");
+        app.session.set_tool_option("usePressure", &json!(true));
+        pen_stroke(&mut app, &ctx, &[(500.0, 350.0, 0.2), (500.0, 400.0, 0.5), (500.0, 420.0, 0.8)]);
+        let (cmd, p) = app.session.journal.last().unwrap().clone();
+        assert_eq!(cmd, "object.liquify");
+        let pressures: Vec<f64> = p["points"].as_array().unwrap().iter().map(|s| (s[2].as_f64().unwrap() * 100.0).round() / 100.0).collect();
+        assert_eq!(pressures.first(), Some(&0.2), "the press's own pressure: {pressures:?}");
+        assert!(pressures.contains(&0.5) && pressures.contains(&0.8), "{pressures:?}");
+    }
+
+    /// #491: a pen tap whose press and lift come in one frame selects what it tapped, and the
+    /// lift (the pointer gone with it) doesn't drag the selection to the canvas's centre.
+    #[test]
+    fn a_pen_tap_within_one_frame_clicks_where_it_tapped() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("selection");
+        let before = app.session.active().unwrap().doc.art_bounds();
+        let at = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(150.0, 150.0));
+        let mut tap = pen(egui::TouchPhase::Start, at, 0.5);
+        tap.extend(pen(egui::TouchPhase::End, at, 0.5));
+        frame(&mut app, &ctx, tap);
+        frame(&mut app, &ctx, vec![]);
+        let doc = app.session.active().unwrap();
+        assert_eq!(doc.selection.objects, vec![vectorcraft_doc::NodeId(id)]);
+        assert_eq!(doc.doc.art_bounds(), before, "the tap moved nothing");
     }
 }
