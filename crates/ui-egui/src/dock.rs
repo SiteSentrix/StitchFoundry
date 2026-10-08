@@ -184,7 +184,7 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let tall = (screen.height() - FLYOUT_TOP - 26.0 - 20.0 - 40.0).clamp(160.0, 560.0);
     let mut open = true;
     let area = egui::Area::new(egui::Id::new("icon-panel")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP);
-    area.fixed_pos(egui::pos2(right, FLYOUT_TOP)).show(ctx, |ui| {
+    let shown = area.fixed_pos(egui::pos2(right, FLYOUT_TOP)).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).corner_radius(CornerRadius::same(4)).inner_margin(egui::Margin::ZERO).show(ui, |ui| {
             ui.set_width(width);
             let (strip, _) = ui.allocate_exact_size(vec2(width, 26.0), Sense::hover());
@@ -227,6 +227,16 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
+    // User Interface › Auto-Collapse Iconic Panels (#394): a press away from the flyout puts it
+    // away. Not one on the icon column (its icons swap or close the flyout themselves, on release),
+    // nor one in a popup the flyout opened (a panel menu, a dropdown), which lies outside its rect.
+    if open && app.session.prefs.auto_collapse_icon_panels {
+        let flyout = shown.response.rect;
+        let pressed_away = ctx.input(|i| i.pointer.any_pressed().then(|| i.pointer.interact_pos()).flatten());
+        if pressed_away.is_some_and(|p| !flyout.contains(p) && p.x < column) && !egui::Popup::is_any_open(ctx) {
+            open = false;
+        }
+    }
     if !open {
         app.ui.open_panel = None;
     }
@@ -414,6 +424,34 @@ mod tests {
         // Taller than the 400 points egui sizes a new area at: its sections (Align, Quick
         // Actions) aren't cut off below Appearance.
         assert!(rect.height() > 450.0 && rect.bottom() <= SCREEN.y, "Properties flyout {rect:?}");
+    }
+
+    /// User Interface › Auto-Collapse Iconic Panels (#394): on, a click away from a popped-out
+    /// panel puts it away; off (the default), the panel stays until its » or its icon.
+    #[test]
+    fn auto_collapse_puts_a_flyout_away_on_a_click_elsewhere() {
+        let mut h = Harness::new();
+        h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
+        h.settle();
+        let (properties, layers) = (h.icons()[0], h.icons()[1]);
+        let away = egui::pos2(300.0, 500.0);
+        h.click(layers.center());
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"));
+        h.click(away);
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "off: a click elsewhere leaves it");
+        h.app.session.execute("prefs.set", &json!({"key": "autoCollapseIconPanels", "value": true})).unwrap();
+        h.click(away);
+        assert_eq!(h.app.ui.open_panel, None, "on: a click elsewhere puts it away");
+        h.click(layers.center());
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "its icon still pops it out");
+        let rect = h.ctx.memory(|m| m.area_rect(egui::Id::new("icon-panel"))).unwrap();
+        h.click(egui::pos2(rect.center().x, rect.top() + 13.0 + 26.0 + 10.0));
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "a click inside keeps it");
+        // The icons still swap the flyout and put it away.
+        h.click(properties.center());
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("properties"), "another icon swaps it");
+        h.click(properties.center());
+        assert_eq!(h.app.ui.open_panel, None, "the same icon puts it away");
     }
 
     #[test]

@@ -1192,8 +1192,9 @@ default: in View › Pixel Preview at 600% zoom and above, a line at every docum
 painted when the art covers at least half of it — while raster effects and pattern tiles stay smooth; exports keep
 their own Anti-aliasing option),
 `scrubNumericFields` (on: a horizontal drag on a numeric field's label steps the field, one undo step per drag; the
-control channel's `ui.drag` scrubs) and `showHomeScreen` (on by default: the Home screen while no document is open;
-off, an empty window, and the Home button or `app.home` still shows the screen).
+control channel's `ui.drag` scrubs), `showHomeScreen` (on by default: the Home screen while no document is open;
+off, an empty window, and the Home button or `app.home` still shows the screen) and `autoCollapseIconPanels` (off by
+default: on, a click away from a panel popped out of the icon column puts it away).
 
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
 default view) and to the mouse; they change what the tools show and how far a target pulls, never where a snapped
