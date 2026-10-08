@@ -168,7 +168,7 @@
 	Area Type Tool	Strumento Testo in area
 	Around Object	Attorno all'oggetto
 	Arrange	Disponi
-	Arrange: Bring to Front	Disponi: Porta in primo piano
+	Arrange: Bring to Front	Porta in primo piano
 	Arrowheads:	Punte di freccia:
 	Art	Grafica
 	Art using a deleted global swatch keeps its colour.	La grafica che usa un campione globale eliminato mantiene il suo colore.
@@ -665,7 +665,7 @@
 	Document Raster Effects Settings Dialog	Finestra di dialogo Impostazioni effetti raster documento
 	Document Raster Effects Settings…	Impostazioni effetti raster documento…
 	Document Setup	Imposta documento
-	Document Setup…	Impostazione documento…
+	Document Setup…	Imposta documento…
 	Document Swatches	Campioni del documento
 	Document Title:	Titolo del documento:
 	Documents you create appear here.	I documenti che crei vengono visualizzati qui.
@@ -1904,7 +1904,7 @@
 	Proof Colors	Colori di prova
 	Proof Setup	Impostazione prova
 	Properties	Proprietà
-	Proportional Oldstyle	Proporzionale vecchio stile
+	Proportional Oldstyle	Proporzionali stile antico
 	Pucker & Bloat…	Contrai e gonfia…
 	Pucker Tool	Strumento Contrai
 	Punctuation	Punteggiatura
@@ -3053,6 +3053,12 @@ axis	Both	Entrambi
 	Drag to move	Trascina per spostare
 	Drag to float as a toolbar	Trascina per rendere mobile come barra degli strumenti
 	Put back in the toolbar	Riporta nella barra degli strumenti
+	Float Panel	Rendi mobile pannello
+	Dock Panel	Ancora pannello
+	Drag to float the panel group	Trascina per rendere mobile il gruppo di pannelli
+	Put back in the dock	Riporta nell'area dei pannelli
+	Drag to float the toolbar	Trascina per rendere mobile la barra degli strumenti
+	Drag to the window's left edge to dock	Trascina sul bordo sinistro della finestra per ancorare
 	Float Tool Group	Rendi mobile gruppo strumenti
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -3565,6 +3571,7 @@ axis	Both	Entrambi
 @msg	Sent to {_1}	Inviato a {_1}
 @msg	{_1} files	{_1} file
 @msg	The graphics were lost and have been restarted	Il contesto grafico è stato perso ed è stato riavviato
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Il processore grafico provato per primo non è riuscito a mostrare la finestra, quindi VectorCraft è stato riavviato con {summary}
 @msg	Loading VectorCraft…	Caricamento di VectorCraft…
 @msg	VectorCraft failed to start: {e}	Impossibile avviare VectorCraft: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	È necessario un browser con WebGPU o WebGL2.
@@ -3573,3 +3580,5 @@ axis	Both	Entrambi
 @msg	Reload the page to go on (changes not saved yet may be lost).	Ricarica la pagina per continuare (le modifiche non ancora salvate potrebbero andare perse).
 @msg	tool (a tool id) is required	tool (un id di strumento) è obbligatorio
 @msg	{tool} isn't in a toolbar group of several tools	{tool} non fa parte di un gruppo di più strumenti nella barra degli strumenti
+@msg	onto must name a panel floating in another group	onto deve indicare un pannello mobile in un altro gruppo
+@msg	x and y must both be numbers	x e y devono essere entrambi numeri

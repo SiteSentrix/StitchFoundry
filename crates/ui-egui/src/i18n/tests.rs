@@ -570,6 +570,7 @@ fn italian_reads_as_italian() {
     assert_eq!(trn(it(), 0, "{n} Layer", "{n} Layers"), "0 livelli");
     assert_eq!(trn(it(), 3, "{n} Layer", "{n} Layers"), "3 livelli");
 }
+
 /// Catalogs written with spaces between words keep a fragment's leading and trailing spaces: the
 /// hint bar and a few labels are joined from pieces (" to finish", "Press ").
 #[test]
