@@ -1088,9 +1088,12 @@ size. The journal entry of a scaling command records the `strokes` and `corners`
 2 bottom-right, 3 bottom-left), else to the corners holding a Direct-Selected anchor (`select.anchors`), else to all
 four. Each corner keeps its own radius and kind (the shape's `live` in queries has `radii` and, when a corner isn't
 round, `kinds`); a corner with no radius is one anchor, a cut one two, and Direct-Selected corners stay selected as
-that changes. With the Selection or Direct Selection tool, dragging a corner widget rounds the corners whose widgets
-show (all four, or the Direct-Selected ones), Alt-clicking one cycles their kind and double-clicking one opens Corners
-(`ui.corners {id?, corners?}`, dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
+that changes. Every corner is a circular arc, whatever the rectangle's proportions: a radius past half the shorter
+side draws at half of it (the same limit for every corner), and a rectangle from a file that kept an uneven scale in its
+transform (elliptical corners) gets circular ones in document units when its corners are next set. With the Selection or
+Direct Selection tool, dragging a corner widget rounds the corners whose widgets show (all four, or the Direct-Selected
+ones), outlining them in red once they reach that limit; Alt-clicking one cycles their kind and double-clicking one
+opens Corners (`ui.corners {id?, corners?}`, dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[1],"radius":16}}}

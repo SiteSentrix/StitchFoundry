@@ -1038,6 +1038,9 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Live Shape", |d, sel| {
         for id in &ids {
             let Some(NodeKind::Path { path, live: Some(live), .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            // Radii are document lengths and corners circular, also on a rectangle from a file
+            // that kept an uneven scale in its transform (#442).
+            live.fold_scale();
             let partial = sel.anchors.get_mut(id);
             let picked = corners.unwrap_or_else(|| live.picked_corners(partial.as_deref()));
             let (layout, selected) = (live.anchor_corners(), partial.as_deref().map(|a| live.corners_of(a)));

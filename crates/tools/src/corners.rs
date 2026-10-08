@@ -7,8 +7,8 @@
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Document, LiveShape, NodeId, NodeKind, Selection};
-use vectorcraft_geom::shapes::CornerKind;
-use vectorcraft_geom::{Affine, Point, Vec2};
+use vectorcraft_geom::shapes::{self, CornerKind};
+use vectorcraft_geom::{Affine, BezPath, Point, Rect, Vec2};
 
 use crate::{Action, Overlay, PointerEvent, ToolContext};
 
@@ -47,18 +47,20 @@ impl CornerWidgets {
             return None;
         }
         let Some(NodeKind::Path { live: Some(live), .. }) = doc.node(id).map(|n| &n.kind) else { return None };
-        let LiveShape::Rectangle { w, h, radii, kinds, xf } = live else { return None };
-        let (w, h, radii, kinds, xf) = (*w, *h, *radii, *kinds, *xf);
+        // In document units, as `object.setLiveShape` edits them.
+        let LiveShape::Rectangle { w, h, radii, kinds, xf } = live.folded() else { return None };
         // Screen pixels per shape unit along each side (the shape may be scaled or skewed).
         let c = xf.as_coeffs();
         let (px, py) = (Vec2::new(c[0], c[1]).hypot() * zoom, Vec2::new(c[2], c[3]).hypot() * zoom);
         if xf.determinant().abs() < 1e-12 || (w * px).min(h * py) < MIN_SIDE_PX {
             return None;
         }
+        // Each widget sits on its corner's diagonal, at the centre of the arc as drawn.
         let points = std::array::from_fn(|k| {
             let ((fx, fy), (sx, sy)) = CORNERS[k];
-            let ix = radii[k].max(MIN_INSET_PX / px).min(w / 2.0);
-            let iy = radii[k].max(MIN_INSET_PX / py).min(h / 2.0);
+            let r = shapes::fitted_corner_radius(w, h, radii[k]);
+            let ix = r.max(MIN_INSET_PX / px).min(w / 2.0);
+            let iy = r.max(MIN_INSET_PX / py).min(h / 2.0);
             xf * Point::new(fx * w + sx * ix, fy * h + sy * iy)
         });
         Some(Self { id, w, h, radii, kinds, xf, points, shown: live.picked_corners(selection.partial(id)) })
@@ -138,6 +140,8 @@ pub struct CornerDrag {
     began: bool,
     alt: bool,
     radius: f64,
+    /// The pointer went past fully round: the corners are at their largest radius.
+    at_limit: bool,
     at: Point,
 }
 
@@ -146,18 +150,41 @@ impl CornerDrag {
     pub fn hit(cx: &ToolContext, ev: &PointerEvent) -> Option<Self> {
         let (widgets, p) = (CornerWidgets::for_tool(cx)?, ev.pos);
         let corner = widgets.hit(p, cx.tol(5.0))?;
-        Some(Self { widgets, corner, start: p, began: false, alt: ev.mods.alt, radius: widgets.radii[corner], at: p })
+        Some(Self { widgets, corner, start: p, began: false, alt: ev.mods.alt, radius: widgets.radii[corner], at_limit: false, at: p })
     }
 
     /// The start radius (as drawn: no larger than fits) plus the pointer's travel along the
-    /// corner's inward diagonal (in the shape's own units), from square to fully round.
-    fn radius_at(&self, p: Point) -> f64 {
+    /// corner's inward diagonal (in the shape's own units), from square to fully round; and
+    /// whether the travel reached fully round (the limit every corner shares).
+    fn radius_at(&self, p: Point) -> (f64, bool) {
         let w = &self.widgets;
         let inv = w.xf.inverse();
         let d = inv * p - inv * self.start;
         let (_, (sx, sy)) = CORNERS[self.corner];
-        let max = (w.w.abs().min(w.h.abs()) / 2.0).max(0.0);
-        (w.radii[self.corner].min(max) + (d.x * sx + d.y * sy) / 2.0).clamp(0.0, max)
+        let max = shapes::max_corner_radius(w.w, w.h);
+        let r = shapes::fitted_corner_radius(w.w, w.h, w.radii[self.corner]) + (d.x * sx + d.y * sy) / 2.0;
+        (r.min(max).max(0.0), max > 0.0 && r >= max)
+    }
+
+    /// The edited corners' cuts at the dragged radius, in document coordinates.
+    fn edited_corners(&self) -> BezPath {
+        let w = &self.widgets;
+        let rect = Rect::new(0.0, 0.0, w.w, w.h);
+        let radii = std::array::from_fn(|k| if w.shown[k] { self.radius } else { w.radii[k] });
+        let corner_of = shapes::rectangle_anchor_corners(rect, radii);
+        let path = shapes::rectangle_with_corners(rect, radii, w.kinds).transformed(w.xf);
+        let mut out = BezPath::new();
+        let Some(sp) = path.subpaths.first() else { return out };
+        // A corner's cut is the segment between its two anchors (the last one, for the top-left).
+        for i in 0..sp.segment_count() {
+            let (a, b) = (corner_of.get(i), corner_of.get(i + 1).or(corner_of.first()));
+            if a == b && a.is_some_and(|k| w.shown.get(*k) == Some(&true)) {
+                let c = sp.segment(i);
+                out.move_to(c.p0);
+                out.curve_to(c.p1, c.p2, c.p3);
+            }
+        }
+        out
     }
 
     pub fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
@@ -169,7 +196,7 @@ impl CornerDrag {
             self.began = true;
             out.push(Action::Begin("Corner Radius".into()));
         }
-        self.radius = self.radius_at(p);
+        (self.radius, self.at_limit) = self.radius_at(p);
         self.at = p;
         out.push(Action::Preview("object.setLiveShape".into(), self.widgets.command("radius", json!(self.radius))));
         out
@@ -186,12 +213,16 @@ impl CornerDrag {
         }
     }
 
-    /// The radius readout next to the pointer.
+    /// The radius readout next to the pointer; at the largest radius, the edited corners in red.
     pub fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         if !self.began {
             return vec![];
         }
-        vec![Overlay::Measure { p: self.at, text: format!("Radius: {}", cx.len(self.radius)) }]
+        let mut out = vec![Overlay::Measure { p: self.at, text: format!("Radius: {}", cx.len(self.radius)) }];
+        if self.at_limit {
+            out.push(Overlay::Path { path: self.edited_corners(), color: crate::builder::HIGHLIGHT_RED, width: 2.0, dashed: false });
+        }
+        out
     }
 }
 
@@ -204,10 +235,15 @@ mod tests {
 
     /// A live 100 × 100 rectangle at (100, 100) with corner radius `r`.
     fn live_rect(r: f64, xf: Affine) -> (Document, NodeId) {
+        live_shape(100.0, 100.0, r, xf)
+    }
+
+    /// A live `w` × `h` rectangle with corner radius `r`.
+    fn live_shape(w: f64, h: f64, r: f64, xf: Affine) -> (Document, NodeId) {
         let mut d = Document::new(500.0, 500.0);
         let l = d.layers[0].id;
         let id = d.alloc_id();
-        let live = LiveShape::Rectangle { w: 100.0, h: 100.0, radii: [r; 4], kinds: Default::default(), xf };
+        let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), xf };
         let mut n = Node::path(id, live.to_path(), Appearance::default_art());
         if let NodeKind::Path { live: slot, .. } = &mut n.kind {
             *slot = Some(live);
@@ -262,6 +298,55 @@ mod tests {
             assert_eq!(radius(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 260.0, 260.0))[0]), 0.0);
             assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 260.0, 260.0)), vec![Action::Commit]);
         }
+    }
+
+    /// #442: on a 200 × 80 rectangle the widgets sit at the centres of the corners as drawn, also
+    /// with a radius past half the shorter side; a drag past fully round stops every corner there
+    /// and outlines them in red.
+    #[test]
+    fn widgets_of_a_non_square_rectangle_follow_the_drawn_corners() {
+        let (d, id) = live_shape(200.0, 80.0, 60.0, Affine::translate((100.0, 100.0)));
+        let s = selected(id);
+        let w = CornerWidgets::of(&d, &s, 1.0).unwrap();
+        let centres = [Point::new(140.0, 140.0), Point::new(260.0, 140.0), Point::new(260.0, 140.0), Point::new(140.0, 140.0)];
+        assert_eq!(w.points, centres);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let red = |t: &dyn crate::Tool| {
+            t.overlays(&cx).into_iter().find_map(|o| match o {
+                Overlay::Path { path, color, .. } if color == crate::builder::HIGHLIGHT_RED => Some(path),
+                _ => None,
+            })
+        };
+        let mut t = crate::create("selection");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 140.0, 140.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 200.0));
+        assert_eq!(radius(&a[1]), 40.0);
+        // The four arcs, each a quarter circle of radius 40 starting on a side.
+        let arcs = red(t.as_ref()).expect("the limit shows");
+        let starts: Vec<_> =
+            arcs.elements().iter().filter_map(|e| if let vectorcraft_geom::PathEl::MoveTo(p) = e { Some(*p) } else { None }).collect();
+        assert_eq!(starts, [Point::new(260.0, 100.0), Point::new(300.0, 140.0), Point::new(140.0, 180.0), Point::new(100.0, 140.0)]);
+        // Back below the limit, the outline goes.
+        assert_eq!(radius(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 130.0))[0]), 30.0);
+        assert!(red(t.as_ref()).is_none());
+    }
+
+    /// #442: a rectangle saved stretched (an uneven scale in its transform, before #291) shows its
+    /// widgets and drags its radius in document units, as `object.setLiveShape` sets it.
+    #[test]
+    fn a_stretched_rectangle_drags_its_radius_in_document_units() {
+        // 50 × 80 with 10 pt corners stretched 4 × 1: drawn 200 × 80, a mean radius of 20.
+        let (d, id) = live_shape(50.0, 80.0, 10.0, Affine::translate((100.0, 100.0)) * Affine::scale_non_uniform(4.0, 1.0));
+        let s = selected(id);
+        let w = CornerWidgets::of(&d, &s, 1.0).unwrap();
+        assert_eq!(w.points[0], Point::new(120.0, 120.0));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = crate::create("directSelection");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 120.0, 120.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 110.0, 110.0));
+        assert!((radius(&a[1]) - 10.0).abs() < 1e-9, "{a:?}");
     }
 
     #[test]

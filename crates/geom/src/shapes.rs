@@ -47,6 +47,18 @@ impl CornerKind {
     }
 }
 
+/// The largest corner radius a `w` × `h` rectangle draws: half its shorter side.
+pub fn max_corner_radius(w: f64, h: f64) -> f64 {
+    w.abs().min(h.abs()) / 2.0
+}
+
+/// The radius a corner of a `w` × `h` rectangle is drawn with: `radius`, no larger than
+/// [`max_corner_radius`] (the same limit for every corner, so opposite corners match), 0 when
+/// negative or not a number.
+pub fn fitted_corner_radius(w: f64, h: f64, radius: f64) -> f64 {
+    radius.max(0.0).min(max_corner_radius(w, h))
+}
+
 /// Rectangle whose corners (top-left, top-right, bottom-right, bottom-left, y down) each have
 /// their own radius and kind, every radius clamped to half the shorter side. A corner without a
 /// radius is one anchor, the others two (where the cut meets each side). Clockwise from the
@@ -63,7 +75,6 @@ pub fn rectangle_anchor_corners(r: Rect, radii: [f64; 4]) -> Vec<usize> {
 /// The anchors of [`rectangle_with_corners`], each with its corner.
 fn corner_anchors(r: Rect, radii: [f64; 4], kinds: [CornerKind; 4]) -> Vec<(usize, Anchor)> {
     let r = r.abs();
-    let max = r.width().min(r.height()) / 2.0;
     // Each corner, with the directions of the side arriving at it and of the side leaving it.
     let corners = [
         (Point::new(r.x0, r.y0), Vec2::new(0.0, -1.0), Vec2::new(1.0, 0.0)),
@@ -74,7 +85,7 @@ fn corner_anchors(r: Rect, radii: [f64; 4], kinds: [CornerKind; 4]) -> Vec<(usiz
     let mut out = Vec::with_capacity(8);
     let mut top_left_start = None;
     for (k, ((c, din, dout), (rad, kind))) in corners.into_iter().zip(radii.into_iter().zip(kinds)).enumerate() {
-        let rad = rad.max(0.0).min(max);
+        let rad = fitted_corner_radius(r.width(), r.height(), rad);
         if rad <= 1e-9 {
             out.push((k, Anchor::corner(c)));
             continue;
@@ -310,6 +321,24 @@ mod tests {
         assert_eq!(p.subpaths[0].anchors[0].p, Point::new(30.0, 0.0));
         assert_eq!(p.anchor_count(), 5);
         assert_eq!(CornerKind::ALL.map(CornerKind::next), [CornerKind::InvertedRound, CornerKind::Chamfer, CornerKind::Round]);
+    }
+
+    /// #442: on a rectangle that isn't square, every corner is a circular arc of the same radius,
+    /// and radii past the limit stop at half the shorter side, whichever side a corner is on.
+    #[test]
+    fn corners_of_a_non_square_rectangle_are_alike() {
+        let r = Rect::new(0.0, 0.0, 200.0, 80.0);
+        assert_eq!(max_corner_radius(-200.0, 80.0), 40.0);
+        assert_eq!([30.0, 60.0, -1.0, f64::NAN].map(|x| fitted_corner_radius(200.0, 80.0, x)), [30.0, 40.0, 0.0, 0.0]);
+        for (radius, drawn) in [(30.0, 30.0), (60.0, 40.0)] {
+            for kinds in [[CornerKind::Round; 4], [CornerKind::Chamfer, CornerKind::InvertedRound, CornerKind::Round, CornerKind::Chamfer]] {
+                let a: Vec<Point> = rectangle_with_corners(r, [radius; 4], kinds).subpaths[0].anchors.iter().map(|a| a.p).collect();
+                for (i, j) in [(7, 0), (1, 2), (3, 4), (5, 6)] {
+                    let (x, y) = ((a[j].x - a[i].x).abs(), (a[j].y - a[i].y).abs());
+                    assert!((x - drawn).abs() < 1e-9 && (y - drawn).abs() < 1e-9, "radius {radius}: a corner spans {x} × {y}");
+                }
+            }
+        }
     }
 
     #[test]

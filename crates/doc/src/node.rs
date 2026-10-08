@@ -143,24 +143,11 @@ impl LiveShape {
     /// scale in `xf` keep their exact geometry until they're next transformed).
     pub fn transform(&mut self, a: Affine) -> bool {
         match self {
-            LiveShape::Rectangle { w, h, radii, xf, .. } => {
-                let m = a * *xf;
+            LiveShape::Rectangle { xf, .. } => {
+                *xf = a * *xf;
                 let [a0, a1, a2, a3, _, _] = a.as_coeffs();
                 let moves_only = (a0 - 1.0).abs() < 1e-12 && a1.abs() < 1e-12 && a2.abs() < 1e-12 && (a3 - 1.0).abs() < 1e-12;
-                let [m0, m1, m2, m3, m4, m5] = m.as_coeffs();
-                let (sx, sy) = (m0.hypot(m1), m2.hypot(m3));
-                let orthogonal = sx > 1e-12 && sy > 1e-12 && (m0 * m2 + m1 * m3).abs() <= 1e-9 * sx * sy;
-                let finite = m.as_coeffs().iter().all(|c| c.is_finite()) && w.is_finite() && h.is_finite();
-                if moves_only || !orthogonal || !finite {
-                    *xf = m;
-                    return false;
-                }
-                let k = (sx * sy).sqrt();
-                radii.iter_mut().for_each(|r| *r *= k);
-                *w *= sx;
-                *h *= sy;
-                *xf = Affine::new([m0 / sx, m1 / sx, m2 / sy, m3 / sy, m4, m5]);
-                true
+                !moves_only && self.fold_scale()
             }
             LiveShape::Ellipse { xf, .. } | LiveShape::Polygon { xf, .. } => {
                 *xf = a * *xf;
@@ -172,6 +159,35 @@ impl LiveShape {
                 false
             }
         }
+    }
+    /// Move the scale of a rectangle's `xf` into `w`/`h` (and its radii, by the mean scale), so
+    /// `xf` keeps only a rotation or reflection plus a move and the corners are circular in the
+    /// document. False (and nothing changes) when there is no scale to move, when `xf` shears or
+    /// isn't finite, and for other shapes. Files saved before transforms did this (#291) carry an
+    /// uneven scale in `xf`: their corners are elliptical until this runs.
+    pub fn fold_scale(&mut self) -> bool {
+        let LiveShape::Rectangle { w, h, radii, xf, .. } = self else { return false };
+        let [m0, m1, m2, m3, m4, m5] = xf.as_coeffs();
+        let (sx, sy) = (m0.hypot(m1), m2.hypot(m3));
+        let orthogonal = sx > 1e-12 && sy > 1e-12 && (m0 * m2 + m1 * m3).abs() <= 1e-9 * sx * sy;
+        let finite = xf.as_coeffs().iter().all(|c| c.is_finite()) && w.is_finite() && h.is_finite();
+        let unscaled = (sx - 1.0).abs() < 1e-12 && (sy - 1.0).abs() < 1e-12;
+        if !orthogonal || !finite || unscaled {
+            return false;
+        }
+        let k = (sx * sy).sqrt();
+        radii.iter_mut().for_each(|r| *r *= k);
+        *w *= sx;
+        *h *= sy;
+        *xf = Affine::new([m0 / sx, m1 / sx, m2 / sy, m3 / sy, m4, m5]);
+        true
+    }
+    /// This shape with [`LiveShape::fold_scale`] applied: a rectangle's size and radii in document
+    /// units (what Live Corners show and edit).
+    pub fn folded(&self) -> Self {
+        let mut s = self.clone();
+        s.fold_scale();
+        s
     }
     /// Divide live corner radii by `k`, the mean scale of a transform just applied, so the corners
     /// keep their size (Scale Corners off). False when nothing changed.
@@ -212,15 +228,16 @@ impl LiveShape {
     pub fn corner_anchors(&self, corners: [bool; 4]) -> BTreeSet<AnchorRef> {
         self.anchor_corners().into_iter().enumerate().filter(|(_, k)| corners.get(*k) == Some(&true)).map(|(ai, _)| (0, ai)).collect()
     }
-    /// The radius and kind the `corners` of a rectangle share (each `None` when they differ).
+    /// The radius (in document units, see [`LiveShape::folded`]) and kind the `corners` of a
+    /// rectangle share (each `None` when they differ).
     pub fn corner_style(&self, corners: [bool; 4]) -> (Option<f64>, Option<CornerKind>) {
-        let LiveShape::Rectangle { radii, kinds, .. } = self else { return (None, None) };
+        let LiveShape::Rectangle { radii, kinds, .. } = self.folded() else { return (None, None) };
         fn shared<T: Copy>(v: [T; 4], corners: [bool; 4], same: impl Fn(T, T) -> bool) -> Option<T> {
             let mut it = v.into_iter().zip(corners).filter(|(_, on)| *on).map(|(x, _)| x);
             let first = it.next()?;
             it.all(|x| same(x, first)).then_some(first)
         }
-        (shared(*radii, corners, |a, b| (a - b).abs() < 1e-9), shared(*kinds, corners, |a, b| a == b))
+        (shared(radii, corners, |a, b| (a - b).abs() < 1e-9), shared(kinds, corners, |a, b| a == b))
     }
     /// Rotation angle of the live shape in degrees (shown in the Properties panel).
     pub fn angle_deg(&self) -> f64 {
@@ -1393,6 +1410,33 @@ mod tests {
         assert_live(&n, 400.0, 200.0, 20.0 * 2f64.sqrt() * 2.0);
         assert!(near(live_of(&n).3.determinant(), 1.0));
         assert_round_corners(&n, Affine::IDENTITY, 20.0 * 2f64.sqrt() * 2.0);
+    }
+
+    /// A rectangle saved with an uneven scale in `xf` (before #291) has elliptical corners; Live
+    /// Corners see and edit it in document units, with circular corners (#442).
+    #[test]
+    fn a_scale_left_in_the_transform_folds_into_the_size() {
+        let legacy = Affine::translate((5.0, 5.0)) * Affine::scale_non_uniform(4.0, 1.0);
+        let n = live_rect(50.0, 80.0, 20.0, legacy);
+        let NodeKind::Path { live: Some(live), .. } = &n.kind else { panic!("not live") };
+        let folded = live.folded();
+        assert_eq!(live_of(&n).3, legacy, "folded() leaves the shape alone");
+        let LiveShape::Rectangle { w, h, radii, xf, .. } = &folded else { panic!("not a rectangle") };
+        // Drawn 200 × 80 with 80 × 20 corners; folded, the corners are circles of the mean radius.
+        assert!(near(*w, 200.0) && near(*h, 80.0) && radii.iter().all(|r| near(*r, 40.0)), "{w} × {h} r {radii:?}");
+        assert!(near_xf(*xf, Affine::translate((5.0, 5.0))));
+        let (a, b) = (folded.to_path().bounds().unwrap(), live.to_path().bounds().unwrap());
+        assert!(near(a.x0, b.x0) && near(a.y0, b.y0) && near(a.x1, b.x1) && near(a.y1, b.y1), "same place and size: {a:?} {b:?}");
+        assert_eq!(live.corner_style([true; 4]).0, Some(40.0), "the radius in document units");
+        // Nothing to fold: a moved, rotated or reflected rectangle and a sheared one stay as they are.
+        let place = Affine::translate((5.0, 5.0)) * Affine::rotate(0.5) * Affine::scale_non_uniform(-1.0, 1.0);
+        let shear = Affine::new([1.0, 0.0, 0.5, 1.0, 0.0, 0.0]);
+        for xf in [place, shear] {
+            let mut l = live_rect(100.0, 160.0, 20.0, xf);
+            let NodeKind::Path { live: Some(live), .. } = &mut l.kind else { panic!("not live") };
+            assert!(!live.fold_scale());
+            assert_eq!(live_of(&l), (100.0, 160.0, [20.0; 4], xf));
+        }
     }
 
     #[test]
