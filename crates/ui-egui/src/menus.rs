@@ -2157,8 +2157,11 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 sub(
                     "Image Trace",
                     vec![
-                        cp("Make…", "imageTrace.make", json!({"preset": "Black and White Logo"})),
-                        cp("Make and Expand…", "imageTrace.makeAndExpand", json!({"preset": "6 Colors"})),
+                        // Traced at once with the Default preset, as the Control bar's Image Trace
+                        // button does; other presets come from its arrow or the Image Trace panel
+                        // (#543: the "…" form asked for a preset's name in a text box).
+                        cp("Make", "imageTrace.make", json!({"preset": "Default"})),
+                        cp("Make and Expand", "imageTrace.makeAndExpand", json!({"preset": "Default"})),
                         c("Release", "imageTrace.release"),
                         c("Expand", "imageTrace.expand"),
                     ],
@@ -3778,6 +3781,19 @@ mod tests {
             assert_eq!(pretty_shortcut("Cmd+Alt+2"), "⌥⌘2");
         }
         assert_eq!(pretty_shortcut(""), "");
+    }
+
+    /// #543: Object › Image Trace › Make and Make and Expand trace with the Default preset at once,
+    /// with no form asking for a preset's name.
+    #[test]
+    fn image_trace_make_traces_with_the_default_preset() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        for cmd in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+            let e = menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some(cmd)).unwrap();
+            assert_eq!(e.path, ["Object", "Image Trace"]);
+            assert_eq!(click_target(&e.label, cmd, &e.params), (cmd.to_string(), json!({"preset": "Default"})), "{}", e.label);
+        }
     }
 
     #[test]
