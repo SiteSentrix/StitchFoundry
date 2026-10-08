@@ -1,7 +1,7 @@
 //! The document canvas: rendering, rulers, navigation, pointer routing to tools and on-canvas
 //! selection visuals (bounding box, anchors, handles, smart-guide style labels).
 
-use egui::{Color32, CornerRadius, Pos2, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Color32, CornerRadius, Pos2, Sense, Shape, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use serde_json::json;
 use vectorcraft_doc::{Node, NodeKind, Unit};
 use vectorcraft_geom::{Affine, BezPath, PathEl, Point, Rect};
@@ -1629,7 +1629,20 @@ fn upload(app: &mut VectorcraftApp, ctx: &egui::Context, img: &vectorcraft_rende
     }
 }
 
+/// The Contextual Task Bar's area.
+fn task_bar_id() -> egui::Id {
+    egui::Id::new("task-bar")
+}
+
+/// Where the Contextual Task Bar was last drawn (none while it isn't shown).
+pub(crate) fn task_bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
+    let id = task_bar_id();
+    ctx.memory(|m| m.areas().is_visible(&egui::LayerId::new(egui::Order::Middle, id)).then(|| m.area_rect(id)).flatten())
+}
+
 /// The Contextual Task Bar: a floating pill under the selection with the most likely next actions.
+/// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
+/// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
 fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
@@ -1662,12 +1675,36 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     }
     items.push((tl!("Duplicate"), "copy", "edit.duplicate"));
     let fill = first.as_ref().map(|f| f.appearance.fill_paint()).unwrap_or_default();
+    let doc = st.uid;
     let anchor = xf.to_screen(Point::new(b.center().x, b.y1));
     let est_w = 118.0 + items.iter().map(|(l, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
-    let x = (anchor.x - est_w / 2.0).clamp(xf.rect.left() + 8.0, (xf.rect.right() - est_w - 8.0).max(xf.rect.left() + 8.0));
-    let y = (anchor.y + 28.0).min(xf.rect.bottom() - 56.0);
-    let mut run: Option<String> = None;
-    egui::Area::new(egui::Id::new("task-bar")).order(egui::Order::Middle).fixed_pos(pos2(x, y)).show(ui.ctx(), |ui| {
+    // Its place under the selection, then where the handle moved it, kept on the canvas (with the
+    // bar's size last frame, the estimate before it first shows).
+    let under = pos2(anchor.x - est_w / 2.0, anchor.y + 28.0);
+    let id = task_bar_id();
+    let size = egui::AreaState::load(ui.ctx(), id).and_then(|s| s.size).unwrap_or(vec2(est_w, 44.0));
+    let bounds = xf.rect.shrink(8.0);
+    let keep_in = |p: Pos2| p.clamp(bounds.min, (bounds.max - size).max(bounds.min));
+    let place = &mut app.ui.task_bar_place;
+    // Just unpinned: follow the selection from the pinned spot.
+    if !place.pinned
+        && let Some(at) = place.pin_at.take()
+    {
+        place.offset = Some((doc, xf.rect.min + at - under));
+    }
+    let pos = keep_in(match place.pin_at {
+        Some(at) => xf.rect.min + at,
+        None => under + place.offset.filter(|(d, _)| *d == doc).map_or(Vec2::ZERO, |(_, o)| o),
+    });
+    place.shown_at = Some(pos - xf.rect.min);
+    // Pinned before it ever showed: hold it here.
+    if place.pinned && place.pin_at.is_none() {
+        place.pin_at = place.shown_at;
+    }
+    let pinned = place.pinned;
+    let mut moved = Vec2::ZERO;
+    let mut run: Option<(&str, serde_json::Value)> = None;
+    egui::Area::new(id).order(egui::Order::Middle).fixed_pos(pos).show(ui.ctx(), |ui| {
         egui::Frame::NONE
             .fill(t.panel)
             .stroke(Stroke::new(1.0, t.tool_active))
@@ -1677,8 +1714,15 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
-                    let (g, _) = ui.allocate_exact_size(vec2(4.0, 28.0), Sense::hover());
-                    ui.painter().rect_filled(g.shrink2(vec2(0.5, 4.0)), CornerRadius::same(2), t.button_border);
+                    let (g, grip) = ui.allocate_exact_size(vec2(4.0, 28.0), Sense::drag());
+                    let active = grip.hovered() || grip.dragged();
+                    ui.painter().rect_filled(g.shrink2(vec2(0.5, 4.0)), CornerRadius::same(2), if active { t.text_dim } else { t.button_border });
+                    if grip.dragged() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+                        moved = grip.drag_delta();
+                    } else if grip.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                    }
                     for (label, icon, cmd) in &items {
                         let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), t.text_strong);
                         let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
@@ -1689,7 +1733,7 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                         crate::icons::paint(ui, icon, egui::Rect::from_min_size(r.min + vec2(8.0, 7.0), vec2(16.0, 16.0)), t.icon);
                         ui.painter().galley(pos2(r.left() + 30.0, r.center().y - galley.size().y / 2.0), galley, t.text_strong);
                         if resp.clicked() {
-                            run = Some(cmd.to_string());
+                            run = Some((*cmd, json!({})));
                         }
                     }
                     let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
@@ -1705,16 +1749,41 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                         app.ui.open_panel = Some("swatches".into());
                     }
                     if widgets::icon_button(ui, "lock", tl!("Lock (⌘2)"), false, 30.0).clicked() {
-                        run = Some("object.lock".into());
+                        run = Some(("object.lock", json!({})));
                     }
-                    if widgets::icon_button(ui, "ellipsis", tl!("Hide Contextual Task Bar"), false, 30.0).clicked() {
-                        run = Some("window.taskBar".into());
-                    }
+                    let more = widgets::icon_button(ui, "ellipsis", tl!("More Options"), false, 30.0);
+                    egui::Popup::menu(&more).show(|ui| {
+                        ui.set_min_width(170.0);
+                        let bar = [
+                            (tl!("Hide Bar"), "window.taskBar", false),
+                            (tl!("Pin Bar Position"), "window.taskBar.pin", pinned),
+                            (tl!("Reset Bar Position"), "window.taskBar.reset", false),
+                        ];
+                        for (label, cmd, checked) in bar {
+                            if widgets::menu_item(ui, label, true, checked) {
+                                run = Some((cmd, json!({})));
+                            }
+                        }
+                        ui.separator();
+                        if widgets::menu_item(ui, tl!("Show Properties Panel"), true, false) {
+                            run = Some(("window.panel", json!({"panel": "properties"})));
+                        }
+                    });
                 });
             });
     });
-    if let Some(c) = run {
-        crate::menus::invoke(app, &c, json!({}));
+    if moved != Vec2::ZERO {
+        let to = keep_in(pos + moved);
+        let place = &mut app.ui.task_bar_place;
+        if place.pinned {
+            place.pin_at = Some(to - xf.rect.min);
+        } else {
+            place.offset = Some((doc, to - under));
+        }
+        ui.ctx().request_repaint();
+    }
+    if let Some((c, p)) = run {
+        crate::menus::invoke(app, c, p);
     }
 }
 
@@ -2816,5 +2885,84 @@ mod tests {
         let doc = app.session.active().unwrap();
         assert_eq!(doc.selection.objects, vec![vectorcraft_doc::NodeId(id)]);
         assert_eq!(doc.doc.art_bounds(), before, "the tap moved nothing");
+    }
+
+    /// The Contextual Task Bar's handle drags it: unpinned it keeps that offset as it follows the
+    /// selection, pinned it stays put when the selection changes, unpinned again it follows from
+    /// there, and Reset Bar Position puts it back under the selection. It never leaves the canvas,
+    /// also when the window shrinks.
+    #[test]
+    fn the_task_bar_is_dragged_by_its_handle_pinned_and_reset() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let mut square =
+            |x: f64, y: f64| app.session.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 40, "height": 40})).unwrap()["id"].clone();
+        let (a, b) = (square(120.0, 40.0), square(220.0, 150.0));
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let bar = || task_bar_rect(&ctx).expect("the task bar shows");
+        let select = |app: &mut VectorcraftApp, id: &serde_json::Value| {
+            app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+            frame(app, &ctx, vec![]);
+            frame(app, &ctx, vec![]);
+            bar().min
+        };
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let drag = |app: &mut VectorcraftApp, by: Vec2| {
+            let grip = pos2(bar().left() + 11.0, bar().center().y);
+            frame(app, &ctx, vec![egui::Event::PointerMoved(grip)]);
+            frame(app, &ctx, vec![button(grip, true)]);
+            frame(app, &ctx, vec![egui::Event::PointerMoved(grip + by)]);
+            frame(app, &ctx, vec![button(grip + by, false)]);
+            frame(app, &ctx, vec![]);
+            bar().min
+        };
+        let near = |p: Pos2, q: Pos2| assert!((p - q).length() < 1.5, "{p:?} is not at {q:?}");
+        let (under_a, under_b) = (select(&mut app, &a), select(&mut app, &b));
+        assert!(under_b.y > under_a.y + 100.0, "each bar sits under its selection");
+
+        // Dragged unpinned: it keeps its offset from the selection.
+        select(&mut app, &a);
+        let by = vec2(40.0, -30.0);
+        near(drag(&mut app, by), under_a + by);
+        near(select(&mut app, &b), under_b + by);
+        assert!(!app.ui.task_bar_place.pinned);
+
+        // Pinned: it stays where it is across selection changes, and the handle still moves it.
+        assert_eq!(app.run("window.taskBar.pin", json!({})).unwrap(), json!(true));
+        assert_eq!(crate::menus::checked(&app, "window.taskBar.pin", &json!({})), Some(true));
+        near(select(&mut app, &a), under_b + by);
+        let spot = drag(&mut app, vec2(-20.0, 10.0));
+        near(spot, under_b + by + vec2(-20.0, 10.0));
+        near(select(&mut app, &b), spot);
+
+        // Unpinned: it follows the selection from where it is, kept on the canvas.
+        assert_eq!(app.run("window.taskBar.pin", json!({"pinned": false})).unwrap(), json!(false));
+        near(select(&mut app, &a), spot);
+        let canvas = app.canvas_rect.unwrap();
+        let last = canvas.max - vec2(8.0, 8.0) - bar().size();
+        near(select(&mut app, &b), (under_b + (spot - under_a)).min(last));
+        assert!(app.run("window.taskBar.pin", json!({"pinned": "yes"})).is_err());
+
+        // Kept on the canvas: dragged far off, then pinned in the corner of a shrinking window.
+        near(drag(&mut app, vec2(-2000.0, -2000.0)), canvas.min + vec2(8.0, 8.0));
+        app.run("window.taskBar.pin", json!({"pinned": true})).unwrap();
+        drag(&mut app, vec2(2000.0, 2000.0));
+        near(bar().max, canvas.max - vec2(8.0, 8.0));
+        let small = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(640.0, 480.0))), ..Default::default() };
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(small.clone(), |ui| show(&mut app, ui));
+            out.textures_delta.clear();
+        }
+        let canvas = app.canvas_rect.unwrap();
+        assert!(canvas.width() < 700.0, "the canvas shrank: {canvas:?}");
+        near(bar().max, canvas.max - vec2(8.0, 8.0));
+
+        // Reset: back under the selection, unpinned.
+        frame(&mut app, &ctx, vec![]);
+        app.run("window.taskBar.reset", json!({})).unwrap();
+        assert!(!app.ui.task_bar_place.pinned);
+        near(select(&mut app, &a), under_a);
+        near(select(&mut app, &b), under_b);
     }
 }

@@ -447,6 +447,8 @@
 	Construction Guides	Guias de Construção
 	Contextual Alternates	Variantes Contextuais
 	Contextual Task Bar	Barra de Tarefas Contextual
+	Pin Bar Position	Fixar Posição da Barra
+	Reset Bar Position	Redefinir Posição da Barra
 	Control	Controle
 	Convert	Converter
 	Convert All Spot Colors to Process	Converter Todas as Cores Spot em Processo
@@ -1006,7 +1008,9 @@
 	Hide Artboards	Ocultar Mesas de Trabalho
 	Hide Bounding Box	Ocultar Caixa Delimitadora
 	Hide Code	Ocultar Código
-	Hide Contextual Task Bar	Ocultar Barra de Tarefas Contextual
+	Hide Bar	Ocultar Barra
+	More Options	Mais Opções
+	Show Properties Panel	Mostrar Painel Propriedades
 	Hide Corner Widget	Ocultar Widget de Canto
 	Hide Corner Widget for angles greater than	Ocultar Widget de Canto para ângulos maiores que
 	Hide Edges	Ocultar Bordas

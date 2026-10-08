@@ -216,6 +216,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{tool: id, floating?: bool} float the toolbar group holding `tool` (in the current Basic or Advanced layout) as its own strip of tool buttons (true), put it back in the toolbar (false) or toggle (omitted), as dragging or clicking a flyout's tear-off bar and the strip's × do; returns the new state",
     ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
+    (
+        "window.taskBar.pin",
+        "Pin Bar Position",
+        "",
+        "{pinned?: bool} keep the Contextual Task Bar where it is instead of following the selection (true), let it follow the selection again from where it is (false) or toggle (omitted), as the bar's More Options menu does; returns the new state",
+    ),
+    ("window.taskBar.reset", "Reset Bar Position", "", "{} unpin the Contextual Task Bar and put it back under the selection"),
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
     ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too)"),
     (
@@ -770,6 +777,15 @@ fn normalize_panel(input: &str) -> Option<&'static str> {
     crate::state::all_panels().find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label)).map(|(id, _)| id)
 }
 
+/// An optional `{key?: bool}` param: none when it is omitted or null (the commands then toggle).
+fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(format!("`{key}` must be true or false")),
+    }
+}
+
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     if id == "app.language" {
@@ -994,25 +1010,38 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "window.control" => flag(&mut app.ui.control_bar),
         "window.toolbar" => flag(&mut app.ui.toolbar),
-        "window.toolbarColumns" => {
-            app.ui.toolbar_double = match p.get("double") {
-                None | Some(Value::Null) => !app.ui.toolbar_double,
-                Some(Value::Bool(b)) => *b,
-                Some(_) => return Some(Err("double must be true or false".into())),
-            };
-            Ok(json!(app.ui.toolbar_double))
-        }
+        "window.toolbarColumns" => opt_bool(p, "double").map(|on| {
+            let on = on.unwrap_or(!app.ui.toolbar_double);
+            app.ui.toolbar_double = on;
+            json!(on)
+        }),
         "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
         "window.floatTools" => {
-            let floating = match p.get("floating") {
-                None | Some(Value::Null) => None,
-                Some(Value::Bool(b)) => Some(*b),
-                Some(_) => return Some(Err("floating must be true or false".into())),
+            let floating = match opt_bool(p, "floating") {
+                Ok(on) => on,
+                Err(e) => return Some(Err(e)),
             };
             let Some(tool) = s("tool") else { return Some(Err("tool (a tool id) is required".into())) };
             crate::toolbar::float_group(app, &tool, floating).map(Value::Bool)
         }
         "window.taskBar" => flag(&mut app.ui.task_bar),
+        "window.taskBar.pin" => {
+            let place = &mut app.ui.task_bar_place;
+            opt_bool(p, "pinned").map(|pinned| {
+                let pinned = pinned.unwrap_or(!place.pinned);
+                // Pinning holds the bar where it shows; unpinning lets it follow the selection from
+                // there (the bar turns its pinned spot into an offset when it is next drawn).
+                if pinned && !place.pinned {
+                    place.pin_at = place.shown_at;
+                }
+                place.pinned = pinned;
+                json!(pinned)
+            })
+        }
+        "window.taskBar.reset" => {
+            app.ui.task_bar_place = Default::default();
+            Ok(Value::Null)
+        }
         "window.dock" => {
             let on = !(app.ui.dock && app.ui.toolbar);
             app.ui.dock = on;
@@ -1020,15 +1049,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.ui.control_bar = on;
             Ok(json!(on))
         }
-        "window.collapseDock" => {
-            let collapsed = match p.get("collapsed") {
-                None | Some(Value::Null) => !app.ui.dock_collapsed,
-                Some(Value::Bool(b)) => *b,
-                Some(_) => return Some(Err("collapsed must be true or false".into())),
-            };
+        "window.collapseDock" => opt_bool(p, "collapsed").map(|collapsed| {
+            let collapsed = collapsed.unwrap_or(!app.ui.dock_collapsed);
             crate::dock::set_collapsed(app, collapsed);
-            Ok(json!(collapsed))
-        }
+            json!(collapsed)
+        }),
         "window.panel" => {
             let raw = s("panel").unwrap_or_default();
             // Canonical id (case-insensitive; display labels work too), then the
@@ -1340,6 +1365,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             app.ui.floating_flyouts.iter().any(|f| f.tools.iter().any(|id| id == tool))
         }
         "window.taskBar" => app.ui.task_bar,
+        "window.taskBar.pin" => app.ui.task_bar_place.pinned,
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
             let canonical = normalize_panel(panel);
