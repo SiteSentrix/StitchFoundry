@@ -270,6 +270,23 @@ fn announced_areas_stay_held_while_their_app_is_paused() {
 }
 
 #[test]
+fn an_app_that_leaves_has_its_copies_offered_at_once() {
+    for store in [MemoryStore::without_locks(), MemoryStore::announcing(), MemoryStore::default()] {
+        let store = Arc::new(store);
+        let mut a = session_in(&store);
+        a.execute("file.recovery.save", &json!({})).unwrap();
+        let mut b = relaunch(&store);
+        assert!(offered(&mut b).is_empty(), "A still runs");
+        // A can't go on (its page lost its graphics): its copies stay, for the next app at once.
+        cmd::recovery::leave(&mut a);
+        assert!(a.doc().unwrap().recovery.is_none());
+        assert_eq!(copies(store.as_ref()), ["Untitled-1-1"]);
+        assert_eq!(offered(&mut b), ["Untitled-1"]);
+        assert_eq!(restored(b.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+    }
+}
+
+#[test]
 fn folder_areas_are_locked_by_running_apps() {
     let dir = std::env::temp_dir().join(format!("vc-recovery-locks-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

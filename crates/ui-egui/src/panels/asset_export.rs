@@ -49,7 +49,7 @@ pub(crate) fn paint_thumb(ui: &Ui, st: &DocState, a: &ExportAsset, r: Rect) {
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
         /// The addresses of each asset's objects in one document revision (no tree walks per frame).
         static KEYS: RefCell<(Revision, HashMap<u64, Look>)> = RefCell::new(Default::default());
-        static CACHE: RefCell<HashMap<(Look, u32), egui::TextureHandle>> = RefCell::new(HashMap::new());
+        static CACHE: crate::graphics::TexCache<HashMap<(Look, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
     }
     ui.painter().rect_filled(r, 0.0, Color32::WHITE);
     if !ui.is_rect_visible(r) {

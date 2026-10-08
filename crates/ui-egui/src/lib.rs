@@ -24,6 +24,7 @@ pub mod dialogs;
 pub mod dock;
 pub mod find_font;
 pub mod font_menu;
+pub mod graphics;
 pub mod i18n;
 pub mod icon_data;
 pub mod icons;
@@ -280,6 +281,9 @@ pub struct VectorcraftApp {
     pub synthetic: Vec<egui::Event>,
     styled: bool,
     fonts_ready: bool,
+    /// The egui context the UI's textures were uploaded to (0: none yet; see
+    /// [`Self::adopt_context`]).
+    context: u64,
     /// Installed fonts added to the UI's for characters its own fonts lack (CJK names…).
     ui_fonts: ui_fonts::UiFonts,
     frame: u64,
@@ -369,6 +373,7 @@ impl VectorcraftApp {
             synthetic: vec![],
             styled: false,
             fonts_ready: false,
+            context: 0,
             ui_fonts: Default::default(),
             frame: 0,
             last_time: 0.0,
@@ -689,6 +694,7 @@ impl VectorcraftApp {
 
     fn logic_frame(&mut self, ctx: &egui::Context) {
         i18n::set_current(self.ui_language());
+        self.adopt_context(ctx);
         if !self.styled {
             theme::install_fonts(ctx);
             theme::apply(ctx, self.ui.brightness);
