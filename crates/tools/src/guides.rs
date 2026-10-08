@@ -271,8 +271,8 @@ impl Targets {
     /// Snap a single point: onto the nearest anchor or centre, else onto the nearest segment, else
     /// into line with targets. Returns the snapped point and guide overlays.
     pub fn snap_point(&self, p: Point, tol: f64) -> (Point, Vec<Overlay>) {
-        if let Some((q, k)) = self.points.iter().filter(|(q, _)| q.distance(p) <= tol).min_by(|a, b| a.0.distance(p).total_cmp(&b.0.distance(p))) {
-            return (*q, self.label(*q, k.label()).into_iter().collect());
+        if let Some((q, k)) = self.nearest_point(p, tol) {
+            return (q, self.label(q, k.label()).into_iter().collect());
         }
         if let Some(q) = self.on_segment(p, tol) {
             return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
@@ -300,6 +300,11 @@ impl Targets {
             ov.extend(self.label(out, "align"));
         }
         (out, ov)
+    }
+
+    /// The anchor or centre nearest `p`, within `tol`.
+    fn nearest_point(&self, p: Point, tol: f64) -> Option<(Point, Kind)> {
+        self.points.iter().copied().filter(|(q, _)| q.distance(p) <= tol).min_by(|a, b| a.0.distance(p).total_cmp(&b.0.distance(p)))
     }
 
     /// The nearest point within `tol` of `p` on a target segment.
@@ -334,7 +339,7 @@ impl Targets {
     /// bleed edge beyond it): onto an anchor or centre near the point itself, otherwise into line
     /// with targets, each axis on whichever of them comes nearest.
     pub fn snap_point_with(&self, p: Point, offsets: &[Vec2], tol: f64) -> (Point, Vec<Overlay>) {
-        if self.points.iter().any(|(q, _)| q.distance(p) <= tol) {
+        if self.nearest_point(p, tol).is_some() {
             return self.snap_point(p, tol);
         }
         let rects: Vec<Rect> = std::iter::once(Vec2::ZERO).chain(offsets.iter().copied()).map(|o| Rect::from_points(p + o, p + o)).collect();
@@ -390,11 +395,14 @@ impl Targets {
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
     /// dragging `handle` of the box `bx` (about the centre when `from_center`), in the box's own
-    /// frame, and so is the result. The corners and the side that handle moves land on the nearest
-    /// target within `tol` on the page, whatever the box's angle. A handle with one way to go (a
-    /// side, or a proportional corner) slides along it until one of them is on a target.
+    /// frame, and so is the result. The handle lands on an anchor or centre within `tol` on the page
+    /// (labelled as [`Self::snap_point`] does), else the corners and the side it moves line up with
+    /// the nearest target ("align"), whatever the box's angle. A handle with one way to go (a side,
+    /// or a proportional corner) slides along it until one of them is on a target.
     pub fn snap_scale(&self, bx: &OrientedBox, handle: Handle, a: Affine, proportional: bool, from_center: bool, tol: f64) -> (Affine, Vec<Overlay>) {
         type Hit = Option<(f64, Point)>;
+        // Where a snap lands: in line with a target's x and/or y, or on an anchor or centre.
+        type Snap = (Hit, Hit, Option<(Point, Kind)>);
         let r = bx.rect;
         let origin = if from_center { r.center() } else { handle.opposite().pos(r) };
         let (d0, [sx, _, _, sy, _, _]) = (handle.pos(r) - origin, a.as_coeffs());
@@ -405,12 +413,14 @@ impl Targets {
             ts.iter().map(|(t, from, _)| (*t, *from)).filter(|(t, _)| (t - v).abs() <= tol).min_by(|p, q| (p.0 - v).abs().total_cmp(&(q.0 - v).abs()))
         };
         let (mut nx, mut ny) = (sx, sy);
-        let (mut hit_x, mut hit_y): (Hit, Hit) = (None, None);
+        let mut snap: Snap = (None, None, None);
         if handle.is_corner() && !proportional {
-            // The corner goes anywhere: it takes the target's x, its y, or both.
+            // The corner goes anywhere: onto an anchor or centre, else it takes the target's x, its
+            // y, or both.
             let p = to_doc * (a * handle.pos(r));
             let (hx, hy) = (nearest(p.x, &self.xs), nearest(p.y, &self.ys));
-            for (tx, ty) in [(hx, hy), (hx, None), (None, hy)] {
+            let on = self.nearest_point(p, tol).map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
+            for (tx, ty, at) in on.into_iter().chain([(hx, hy, None), (hx, None, None), (None, hy, None)]) {
                 if tx.is_none() && ty.is_none() {
                     continue;
                 }
@@ -421,7 +431,7 @@ impl Targets {
                     (cx, cy) = (if tx.is_some() { cx } else { sx }, if ty.is_some() { cy } else { sy });
                 }
                 if valid(cx, sx) && valid(cy, sy) {
-                    (nx, ny, hit_x, hit_y) = (cx, cy, tx, ty);
+                    (nx, ny, snap) = (cx, cy, (tx, ty, at));
                     break;
                 }
             }
@@ -441,34 +451,44 @@ impl Targets {
             // How far the handle travels per unit of `s`: a snap may not drag it far from the
             // pointer, as it would for a target the side runs almost along.
             let travel = (e.0 * d0.x).hypot(e.1 * d0.y);
-            let mut best: Option<(f64, f64, bool, (f64, Point))> = None;
+            // The snap so far: its `s`, whether it only lines up (an anchor or centre comes first),
+            // how far it moves the handle, and where it lands.
+            let mut best: Option<(f64, bool, f64, Snap)> = None;
+            let mut consider = |s: f64, in_line: bool, found: Snap| {
+                let moved = (s - s0).abs() * travel;
+                if valid(s, s0) && moved <= 2.0 * tol && best.as_ref().is_none_or(|k| (in_line, moved) < (k.1, k.2)) {
+                    best = Some((s, in_line, moved, found));
+                }
+            };
             for h in std::iter::once(handle).chain(ends.into_iter().flatten().copied()) {
                 let v = h.pos(r) - origin;
                 let base = to_doc * (origin + Vec2::new(c.0 * v.x, c.1 * v.y));
                 let dir = (to_doc * Point::new(e.0 * v.x, e.1 * v.y)).to_vec2();
                 let p = base + dir * s0;
+                // An anchor or centre beside its way: it stops at the nearest point of the way.
+                let l2 = dir.hypot2();
+                if l2 > 1e-18
+                    && let Some((q, k)) = self.nearest_point(p, tol)
+                {
+                    consider((q - base).dot(dir) / l2, false, (None, None, Some((q, k))));
+                }
                 for (is_x, at, b, d, ts) in [(true, p.x, base.x, dir.x, &self.xs), (false, p.y, base.y, dir.y, &self.ys)] {
                     if d.abs() <= 1e-9 {
                         continue;
                     }
                     let Some(hit) = nearest(at, ts) else { continue };
-                    let s = (hit.0 - b) / d;
-                    let moved = (s - s0).abs() * travel;
-                    if valid(s, s0) && moved <= 2.0 * tol && best.is_none_or(|k| moved < k.1) {
-                        best = Some((s, moved, is_x, hit));
-                    }
+                    consider((hit.0 - b) / d, true, if is_x { (Some(hit), None, None) } else { (None, Some(hit), None) });
                 }
             }
-            if let Some((s, _, is_x, hit)) = best {
-                (nx, ny) = (c.0 + s * e.0, c.1 + s * e.1);
-                if is_x {
-                    hit_x = Some(hit);
-                } else {
-                    hit_y = Some(hit);
-                }
+            if let Some((s, _, _, found)) = best {
+                (nx, ny, snap) = (c.0 + s * e.0, c.1 + s * e.1, found);
             }
         }
         let out = Affine::translate(origin.to_vec2()) * Affine::scale_non_uniform(nx, ny) * Affine::translate(-origin.to_vec2());
+        let (hit_x, hit_y, on) = snap;
+        if let Some((q, k)) = on {
+            return (out, self.label(q, k.label()).into_iter().collect());
+        }
         // The lines run from the target's own point across the resized box, on the page.
         let nr = (to_doc * out).transform_rect_bbox(r);
         let mut ov = vec![];
@@ -477,6 +497,9 @@ impl Targets {
         }
         if let Some((y, from)) = hit_y {
             ov.extend(self.line(Point::new(from.x.min(nr.x0), y), Point::new(from.x.max(nr.x1), y)));
+        }
+        if hit_x.is_some() || hit_y.is_some() {
+            ov.extend(self.label(to_doc * (out * handle.pos(r)), "align"));
         }
         (out, ov)
     }
@@ -612,13 +635,16 @@ mod tests {
             (a.transform_rect_bbox(r), ov)
         };
         // The bottom edge lands on the neighbour's bottom: same height.
+        let lines = |ov: &[Overlay]| ov.iter().filter(|o| matches!(o, Overlay::Line { .. })).count();
+        let align = |ov: &[Overlay]| ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align"));
         let (nr, ov) = snap(Handle::Bottom, Point::new(275.0, 197.0), false, false);
         assert_eq!(nr, Rect::new(250.0, 100.0, 300.0, 200.0));
-        assert_eq!(ov.len(), 1);
+        assert_eq!(lines(&ov), 1);
+        assert!(align(&ov), "{ov:?}");
         // A corner snaps each axis on its own: y to the neighbour, x stays free.
         let (nr, ov) = snap(Handle::BottomRight, Point::new(330.0, 202.0), false, false);
         assert_eq!(nr, Rect::new(250.0, 100.0, 330.0, 200.0));
-        assert_eq!(ov.len(), 1);
+        assert_eq!(lines(&ov), 1);
         // Proportional: the snapped axis carries the other one.
         let (nr, _) = snap(Handle::BottomRight, Point::new(340.0, 198.0), true, false);
         assert_eq!(nr, Rect::new(250.0, 100.0, 350.0, 200.0));
@@ -632,6 +658,41 @@ mod tests {
         let (nr, ov) = snap(Handle::Bottom, Point::new(275.0, 102.0), false, false);
         assert_eq!(nr, Rect::new(250.0, 100.0, 300.0, 102.0));
         assert!(ov.is_empty());
+    }
+
+    /// A resize handle lands on another object's anchor point (#482), not only in line with its
+    /// edges and centre, and says so; a side handle stops where its way passes the anchor.
+    #[test]
+    fn scale_snap_lands_the_handle_on_anchors() {
+        use crate::bbox::scale_for_drag;
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        // A triangle whose apex (320, 400) lines up with none of the edges or centres on x.
+        let tri = vectorcraft_geom::PathData::single(SubPath::polyline(
+            &[Point::new(300.0, 300.0), Point::new(380.0, 300.0), Point::new(320.0, 400.0)],
+            true,
+        ));
+        d.insert(Some(l), 1, Node::path(id, tri, Appearance::default_art())).unwrap();
+        let t = Targets::collect(&d, &[], None);
+        let snap = |r: Rect, h: Handle, p: Point, shift: bool| {
+            let (a, ov) = t.snap_scale(&OrientedBox::aligned(r), h, scale_for_drag(r, h, p, shift, false), shift, false, 4.0);
+            (a.transform_rect_bbox(r), ov)
+        };
+        let anchor = |ov: &[Overlay]| matches!(ov, [Overlay::Label { text, p, .. }] if text == "anchor" && *p == Point::new(320.0, 400.0));
+        // A free corner takes the anchor's x and y.
+        let (nr, ov) = snap(Rect::new(250.0, 350.0, 300.0, 390.0), Handle::BottomRight, Point::new(322.0, 398.0), false);
+        assert_eq!(nr, Rect::new(250.0, 350.0, 320.0, 400.0));
+        assert!(anchor(&ov), "{ov:?}");
+        // The right side, at the apex's height: its x lands on the anchor.
+        let (nr, ov) = snap(Rect::new(250.0, 380.0, 300.0, 420.0), Handle::Right, Point::new(318.0, 401.0), false);
+        assert_eq!(nr, Rect::new(250.0, 380.0, 320.0, 420.0));
+        assert!(anchor(&ov), "{ov:?}");
+        // A proportional corner slides along its diagonal onto it.
+        let (nr, ov) = snap(Rect::new(240.0, 320.0, 300.0, 380.0), Handle::BottomRight, Point::new(318.0, 398.0), true);
+        assert_eq!(nr, Rect::new(240.0, 320.0, 320.0, 400.0));
+        assert!(anchor(&ov), "{ov:?}");
     }
 
     /// Preferences › Smart Guides › Display Options (#394): the colour, and Alignment Guides and
