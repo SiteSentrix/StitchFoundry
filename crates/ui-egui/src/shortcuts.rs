@@ -190,6 +190,10 @@ fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) {
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Followed before anything returns, so a key typed in a field isn't taken for a paste.
     let textless_paste = ctx.input(|i| app.paste_chord.textless_paste(&i.events));
+    // A numeric field being scrubbed has the keyboard: Escape cancels the drag.
+    if crate::scrub::phase(ctx) != crate::scrub::Phase::Idle {
+        return;
+    }
     if app.ui.dialog.is_some() || app.ui.palette_open {
         if crate::shortcut_editor::is_recording(app) {
             return;

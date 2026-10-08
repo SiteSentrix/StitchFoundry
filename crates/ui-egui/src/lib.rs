@@ -38,6 +38,7 @@ pub mod prefs_dialog;
 pub mod print;
 pub mod recovery;
 pub mod render_worker;
+mod scrub;
 pub mod shortcut_editor;
 pub mod shortcuts;
 pub mod state;
@@ -106,6 +107,8 @@ mod tests_removeanchors;
 mod tests_save;
 #[cfg(test)]
 mod tests_saveext;
+#[cfg(test)]
+mod tests_scrub;
 #[cfg(test)]
 mod tests_selectall;
 #[cfg(test)]
@@ -331,6 +334,9 @@ pub struct VectorcraftApp {
     pub(crate) ime_marked: Option<String>,
     /// The IME must drop its marked text (see [`Self::take_ime_discard`]).
     pub(crate) ime_discard: bool,
+    /// A numeric field is being scrubbed: the document's edits meanwhile are one undo step
+    /// ([`scrub::begin_frame`]).
+    scrub_group: bool,
 }
 
 /// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
@@ -394,6 +400,7 @@ impl VectorcraftApp {
             synthetic_modifiers: false,
             ime_marked: None,
             ime_discard: false,
+            scrub_group: false,
         }
     }
 
@@ -864,6 +871,7 @@ impl VectorcraftApp {
             return;
         }
         let t0 = now_ms();
+        scrub::begin_frame(self, &ctx);
         font_menu::end_stale_preview(self, &ctx);
         let t = theme::Tokens::get(&ctx);
         if self.ui.screen_mode < 2 {
@@ -896,6 +904,7 @@ impl VectorcraftApp {
             titlebar::resize_zones(ui);
         }
         self.ui_fonts.frame(&ctx);
+        scrub::end_frame(self, &ctx);
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
     }

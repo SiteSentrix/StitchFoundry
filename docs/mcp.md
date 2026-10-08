@@ -1147,7 +1147,9 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 The preferences for the view need the desktop app (`vectorcraft-cli mcp --connect`): `zoomWithMouseWheel` (the
 wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel sideways; the control channel's
 `ui.wheel` turns the wheel), `zoomToSelection` (on: Zoom In and Zoom Out centre the selection), `showToolTips`,
-`anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle` and `recentFontsCount`.
+`anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle`, `recentFontsCount` and
+`scrubNumericFields` (on: a horizontal drag on a numeric field's label steps the field, one undo step per drag; the
+control channel's `ui.drag` scrubs).
 
 ## Type preferences
 
