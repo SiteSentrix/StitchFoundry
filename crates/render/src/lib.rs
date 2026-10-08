@@ -15,6 +15,7 @@ mod ink;
 mod live;
 mod paint;
 mod pattern;
+pub mod placed_document;
 pub mod proof;
 
 use std::collections::HashMap;
@@ -580,6 +581,23 @@ impl Renderer {
         self.render_node_thumbnail(doc, doc.node(id)?, size, None)
     }
 
+    /// Render node `n` of `doc` (its resources) into `w`×`h` transparent pixels through `view`.
+    pub fn render_node(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<Rendered> {
+        let inv = view.inverse();
+        let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
+        let mut ctx = single_threaded_context(w, h);
+        let opts = RenderOptions::default();
+        let frame = Frame { mt: false, doc, view, visible, px, opts: &opts, ink: Ink::Display };
+        (self.knockout, self.nested, self.backdrop) = (false, 0, None);
+        self.clip_paths.clear();
+        self.draw_arc(&mut ctx, &frame, n);
+        ctx.flush();
+        let mut pm = Pixmap::new(w, h);
+        ctx.render(&mut pm, &mut self.resources);
+        Some(Rendered { width: w as u32, height: h as u32, pixels: pm.data_as_u8_slice().to_vec() })
+    }
+
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
     /// `size`×`size` pixels, optionally over a solid premultiplied background.
     pub fn render_node_thumbnail(&mut self, doc: &Document, n: &Node, size: u32, background: Option<[u8; 4]>) -> Option<Rendered> {
@@ -916,7 +934,9 @@ impl Renderer {
                     self.draw_node(ctx, f, &art, true);
                 }
             }
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => self.draw_live_node(ctx, f, n),
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
+                self.draw_live_node(ctx, f, n)
+            }
         }
     }
 
@@ -1648,6 +1668,8 @@ mod tests_knockout;
 mod tests_layeropts;
 #[cfg(test)]
 mod tests_objectfx;
+#[cfg(test)]
+mod tests_placed_document;
 #[cfg(test)]
 mod tests_setup;
 #[cfg(test)]

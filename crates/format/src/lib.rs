@@ -23,7 +23,7 @@
 //! Versions: v1 wrote anchors as `{p: {x, y}, in: {x, y}, out: {x, y}, kind}`; v2 as
 //! `{p: [x, y], in?, out?, kind?}` with default-valued fields left out; v3 keeps the assigned colour
 //! profiles in `document.color_profiles` (before: `document.unknown.colorProfiles`) and may be
-//! compressed; v4 may keep large data (images, the PDF, profiles of at least
+//! compressed; v4 may keep large data (images, placed documents, the PDF, profiles of at least
 //! [`INLINE_MAX`] bytes) after the JSON instead of in it: the JSON is followed by [`BLOB_MAGIC`] and
 //! the bytes, and such an entry says where they are (`"blob": [offset, length]`) instead of giving
 //! `data`. Every version loads, and [`save_with`] writes any of them for older apps (under the
@@ -137,6 +137,11 @@ impl Blobs {
     }
 }
 
+/// The MIME type of a preview's bytes (JPEG or PNG).
+fn preview_mime(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(&[0xff, 0xd8]) { "image/jpeg" } else { vectorcraft_doc::links::PROXY_MIME }
+}
+
 /// The JSON of a file and the data after it (v4), split at [`BLOB_MAGIC`] after the first JSON
 /// value.
 fn split_tail(text: &[u8]) -> (&[u8], &[u8]) {
@@ -232,6 +237,14 @@ pub fn save_with(doc: &Document, o: &SaveOptions) -> Result<Vec<u8>, FormatError
     o.check()?;
     let pretty = o.pretty && !o.compress;
     let mut d = doc.without_edit_modes().into_owned();
+    // Older apps don't know placed documents: they get the art the objects show, with its
+    // resources. Otherwise resources only exporting adds are never saved.
+    if o.version < VERSION && d.has_placed() {
+        d = d.with_placed_art().into_owned();
+        d.placed_as_groups();
+    } else {
+        d.drop_placed_resources();
+    }
     let linked = d.linked_only_images();
     // The blobs go in the file's `images` (only those the document uses).
     let blobs = std::mem::take(&mut d.images);
@@ -256,7 +269,7 @@ pub fn save_with(doc: &Document, o: &SaveOptions) -> Result<Vec<u8>, FormatError
             // Include Linked Files keeps the file's bytes whenever they are loaded.
             let preview_only = linked.contains(k) && (!o.include_linked || b.is_proxy());
             let image = match b.proxy.as_ref().filter(|_| preview_only) {
-                Some(p) => out_blobs.image(vectorcraft_doc::links::PROXY_MIME, p, true),
+                Some(p) => out_blobs.image(preview_mime(p), p, true),
                 None => out_blobs.image(&b.mime, &b.bytes, false),
             };
             (k.as_str(), image)

@@ -423,6 +423,9 @@ pub enum NodeKind {
     Mesh(GradientMesh),
     /// Live Repeat (radial / grid / mirror) of source art.
     Repeat(RepeatSpec),
+    /// A placed document: an artboard of another VectorCraft file, linked and locked (see
+    /// [`crate::placed_document`]).
+    PlacedDocument(Box<crate::placed_document::PlacedDocument>),
 }
 
 fn yes() -> bool {
@@ -642,6 +645,7 @@ impl Node {
             NodeKind::Envelope { .. } => "Envelope",
             NodeKind::Mesh(_) => "Mesh",
             NodeKind::Repeat(r) => r.kind.label(),
+            NodeKind::PlacedDocument(_) => "Placed Document",
         }
     }
     /// Name shown in the Layers panel: explicit name or `<Kind>`.
@@ -715,6 +719,7 @@ impl Node {
             NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, *frame),
             NodeKind::Mesh(m) => m.bounds(),
             NodeKind::Repeat(r) => r.bounds(),
+            NodeKind::PlacedDocument(p) => Some(p.bounds()),
         }
     }
     /// Visual bounds: what the object paints, its strokes included (paths and compound paths
@@ -810,6 +815,7 @@ impl Node {
                 }
             }
             NodeKind::Image(im) => im.xf = a * im.xf,
+            NodeKind::PlacedDocument(p) => p.xf = a * p.xf,
             NodeKind::SymbolInstance { xf, .. } => *xf = a * *xf,
             NodeKind::Blend { children, spec } => {
                 for c in children.iter_mut() {
@@ -970,6 +976,10 @@ impl Node {
             }
             NodeKind::Image(im) => {
                 let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
+                out.push((frame.to_bezpath(), FillRule::NonZero));
+            }
+            NodeKind::PlacedDocument(p) => {
+                let frame = shapes::rectangle(p.natural()).transformed(p.xf);
                 out.push((frame.to_bezpath(), FillRule::NonZero));
             }
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {

@@ -24,6 +24,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
+pub mod placed_document;
 pub mod profiles;
 pub mod puppet;
 pub mod range;
@@ -72,6 +73,7 @@ pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, N
 pub use orient::OrientedBox;
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use perspective::PerspectiveAttachment;
+pub use placed_document::PlacedDocument;
 pub use profiles::ColorProfiles;
 pub use puppet::{PuppetPin, PuppetPins};
 pub use rastersettings::{RasterColorModel, RasterEffectsSettings};

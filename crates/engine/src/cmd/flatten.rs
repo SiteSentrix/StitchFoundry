@@ -1185,6 +1185,8 @@ impl Scratch {
                 let art = self.doc.symbols.iter().find(|s| &s.name == symbol).map(|s| vectorcraft_render::instance_art(&s.art, n));
                 art.and_then(|a| effects::outline_art(n, Some(&a))).map(|g| carry(n, g))
             }
+            // A placed document stays one: its art's resources aren't the document's.
+            NodeKind::PlacedDocument(_) => None,
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) => {
                 let hook: &dyn Fn(&Node) -> Option<Node> = &effects::outline_text;
                 Some(carry(n, vectorcraft_doc::live::expanded_group(n, Some(hook))))
