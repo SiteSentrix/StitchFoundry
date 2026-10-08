@@ -125,7 +125,7 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
         (
             tl!("Anchors:"),
             &[
-                ("dc-pen-delete", tl!("Remove Anchor Points"), "path.removeAnchors", None),
+                ("pen-tool-delete", tl!("Remove Anchor Points"), "path.removeAnchors", None),
                 ("dc-join", tl!("Connect Selected End Points"), "path.join", None),
                 ("scissors", tl!("Cut Path at Selected Anchor Points"), "path.cutAtAnchors", None),
             ],
