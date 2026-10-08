@@ -434,6 +434,20 @@ fn import_handmade_pdf() {
     assert!(close(l[2].geometric_bounds().unwrap(), Rect::new(150.0, 270.0, 190.0, 300.0), 1e-6));
 }
 
+/// Art off the page opens on the pasteboard round its artboard, not cut away (#472).
+#[test]
+fn import_keeps_art_outside_the_page() {
+    let content = "0 0 1 rg 10 10 50 30 re f 0 1 0 rg -300 -300 50 50 re f 1 0 0 rg 500 500 20 20 re f";
+    let d = import(&handmade_pdf(content, "[0 0 200 300]")).unwrap();
+    assert!(close(d.artboards[0].rect, Rect::new(0.0, 0.0, 200.0, 300.0), 1e-9));
+    let bounds: Vec<Rect> = leaves(&d).iter().map(|n| n.geometric_bounds().unwrap()).collect();
+    let want = [Rect::new(10.0, 260.0, 60.0, 290.0), Rect::new(-300.0, 550.0, -250.0, 600.0), Rect::new(500.0, -220.0, 520.0, -200.0)];
+    assert_eq!(bounds.len(), want.len(), "{bounds:?}");
+    for (b, w) in bounds.iter().zip(want) {
+        assert!(close(*b, w, 1e-6), "{b:?} vs {w:?}");
+    }
+}
+
 #[test]
 fn import_invalid_dash_array_strokes_solid() {
     // A dash array with a negative value is invalid (PDF 32000-1 §8.4.3.6): the line is solid. A valid

@@ -110,6 +110,8 @@ mod tests_save;
 #[cfg(test)]
 mod tests_saveext;
 #[cfg(test)]
+mod tests_screenmode;
+#[cfg(test)]
 mod tests_scrub;
 #[cfg(test)]
 mod tests_selectall;
@@ -790,26 +792,28 @@ impl VectorcraftApp {
         self.take_dropped_files(ctx);
     }
 
-    /// Files dropped on the window: placed where they were dropped on the canvas, else opened.
+    /// Files dropped on the window: documents opened, pictures and text placed on the canvas
+    /// ([`Self::drop_target`]).
     #[cfg(not(target_arch = "wasm32"))]
     fn take_dropped_files(&mut self, ctx: &egui::Context) {
-        let (dropped, pos, shift) = ctx.input(|i| (i.raw.dropped_files.clone(), i.pointer.latest_pos(), i.modifiers.shift));
+        let (dropped, shift) = ctx.input(|i| (i.raw.dropped_files.clone(), i.modifiers.shift));
         if dropped.is_empty() {
             return;
         }
-        let target = self.drop_target(pos, shift);
+        let pos = place::drag_pos(ctx);
         let mut files = vec![];
         for f in dropped {
             let path = Some(f.path().to_string_lossy().to_string()).filter(|s| !s.is_empty());
             let name = path.as_deref().map_or_else(|| "dropped".into(), vectorcraft_engine::cmd::fileio::file_name);
+            let target = self.drop_target(&name, pos, shift);
             // A file placed by its path is read by the engine.
             let bytes = if path.is_some() && target != place::DropTarget::Open { Ok(vec![]) } else { f.bytes() };
             match bytes {
-                Ok(b) => files.push((name, path, b)),
+                Ok(b) => files.push((target, (name, path, b))),
                 Err(e) => self.status(format!("Couldn't read {name}: {e}")),
             }
         }
-        place::drop_files(self, files, target);
+        place::drop_files(self, files);
     }
 
     /// Fonts installed or removed while the app was in the background are listed when it comes

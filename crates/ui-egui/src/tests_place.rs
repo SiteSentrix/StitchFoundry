@@ -10,6 +10,7 @@ use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
 use crate::canvas::Xf;
+use crate::place::{DropAt, DropTarget};
 
 /// A `w`×`h` red PNG declaring `ppi`.
 fn png(w: u32, h: u32, ppi: f64) -> Vec<u8> {
@@ -77,42 +78,94 @@ fn selected_image(app: &VectorcraftApp) -> vectorcraft_doc::Node {
     n
 }
 
+/// A tiny SVG document.
+const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="50" height="40"><rect width="20" height="10"/></svg>"#;
+
+/// Two frames: fonts, then the canvas lays out → the canvas.
+fn laid_out(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
+    frame(app, ctx, vec![], &[], false);
+    frame(app, ctx, vec![], &[], false);
+    app.canvas_rect.expect("the canvas is laid out")
+}
+
+/// Where the platform tells where files were dropped (the web), they go as in Illustrator: placed
+/// at the pointer on the canvas whatever they are, opened off it (the tab bar).
 #[test]
-fn a_dropped_png_is_centred_at_the_pointer() {
+fn a_drop_with_a_position_places_on_the_canvas_and_opens_off_it() {
     let mut app = app();
     let ctx = egui::Context::default();
-    // Two frames: fonts, then the canvas lays out.
-    frame(&mut app, &ctx, vec![], &[], false);
-    frame(&mut app, &ctx, vec![], &[], false);
-    let rect = app.canvas_rect.expect("the canvas is laid out");
+    let rect = laid_out(&mut app, &ctx);
     let pos = rect.center() + vec2(60.0, -40.0);
-    let path = temp_file("drop.png", &png(20, 10, 72.0));
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], &[&path], false);
-    let n = selected_image(&app);
     let want = Xf::new(rect, app.view().unwrap()).to_doc(pos);
+    let uid = app.session.active().unwrap().uid;
+    for name in ["a.png", "a.svg", "a.ai", "a.vectorcraft"] {
+        assert_eq!(app.drop_target(name, Some(pos), true), DropTarget::Place(DropAt { doc: uid, at: want, embed: true }), "{name}");
+        assert_eq!(app.drop_target(name, Some(Pos2::new(300.0, rect.top() - 10.0)), false), DropTarget::Open, "{name} on the tab bar");
+    }
+}
+
+/// Desktop drags carry no position (#472): a dropped document opens as a tab of its own, a
+/// picture or text is placed in the middle of the view.
+#[test]
+fn a_drop_without_a_position_opens_documents_and_places_pictures() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let center = app.view().unwrap().center;
+    let uid = app.session.active().unwrap().uid;
+    for name in ["a.svg", "a.svgz", "a.pdf", "a.ai", "a.eps", "a.vectorcraft", "a.drawcraft", "a.vctemplate", "a.dxf", "a.emf"] {
+        assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
+    }
+    for name in ["a.png", "a.jpg", "a.tiff", "a.webp", "a.txt"] {
+        assert_eq!(app.drop_target(name, None, false), DropTarget::Place(DropAt { doc: uid, at: center, embed: false }), "{name}");
+    }
+}
+
+#[test]
+fn a_dropped_png_is_placed_in_the_middle_of_the_view() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let path = temp_file("drop.png", &png(20, 10, 72.0));
+    // Where egui last saw the pointer is stale during a desktop drag: it doesn't count.
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(Pos2::new(5.0, 5.0))], &[&path], false);
+    let n = selected_image(&app);
+    let want = app.view().unwrap().center;
     let c = n.geometric_bounds().unwrap().center();
     assert!((c.x - want.x).abs() < 1e-6 && (c.y - want.y).abs() < 1e-6, "{c:?} vs {want:?}");
     assert!(matches!(&n.kind, NodeKind::Image(im) if im.link.as_ref().map(|l| l.path.as_str()) == Some(path.as_str())), "linked by default");
     assert_eq!(app.session.documents().len(), 1, "placed, not opened");
     // Shift embeds.
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], &[&path], true);
+    frame(&mut app, &ctx, vec![], &[&path], true);
     assert!(matches!(&selected_image(&app).kind, NodeKind::Image(im) if im.link.is_none()));
 }
 
+/// #472: a document dropped on the window opens as a new tab, not into the open document; the
+/// pictures dropped with it are placed in the document that was open, before it opens.
 #[test]
-fn files_dropped_off_the_canvas_or_with_no_document_open_and_are_recent() {
+fn a_dropped_document_opens_as_a_tab_of_its_own() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let svg = temp_file("dropped.svg", SVG.as_bytes());
+    let pic = temp_file("with-it.png", &png(8, 8, 72.0));
+    frame(&mut app, &ctx, vec![], &[&svg, &pic], false);
+    assert_eq!(app.session.documents().len(), 2, "opened, not placed");
+    assert_eq!(app.session.active_index(), Some(1), "the document opened is shown");
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some(svg.as_str()));
+    assert_eq!((images(&app, 0), images(&app, 1)), (1, 0), "the picture is placed in the document that was open");
+    assert_eq!(app.ui.recent_files.first(), Some(&svg));
+}
+
+#[test]
+fn files_dropped_with_no_document_open_open_and_are_recent() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let ctx = egui::Context::default();
     let path = temp_file("open-me.png", &png(8, 8, 72.0));
     frame(&mut app, &ctx, vec![], &[], false);
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(Pos2::new(400.0, 300.0))], &[&path], false);
+    frame(&mut app, &ctx, vec![], &[&path], false);
     assert_eq!(app.session.documents().len(), 1, "no document: the drop opens");
     assert_eq!(app.ui.recent_files.first(), Some(&path));
-    // Over the tab bar (above the canvas): opened too.
-    frame(&mut app, &ctx, vec![], &[], false);
-    let top = app.canvas_rect.unwrap().top();
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(Pos2::new(300.0, top - 10.0))], &[&path], false);
-    assert_eq!(app.session.documents().len(), 2);
 }
 
 /// The images in open document `i`.
@@ -134,8 +187,8 @@ fn a_file_read_after_another_document_became_active_lands_where_it_was_dropped()
     frame(&mut app, &ctx, vec![], &[], false);
     let rect = app.canvas_rect.expect("the canvas is laid out");
     let pos = rect.center() + vec2(60.0, -40.0);
-    let drop_on_active = |app: &VectorcraftApp| match app.drop_target(Some(pos), false) {
-        crate::place::DropTarget::Place(d) => d,
+    let drop_on_active = |app: &VectorcraftApp| match app.drop_target("late.png", Some(pos), false) {
+        DropTarget::Place(d) => d,
         t => panic!("{t:?}"),
     };
     let arrive =

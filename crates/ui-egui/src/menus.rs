@@ -974,7 +974,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "view.screenMode" => {
             app.ui.screen_mode = match p.get("mode").and_then(Value::as_u64) {
                 Some(m) => m.min(3) as u8,
-                None => (app.ui.screen_mode + 1) % 3,
+                // F cycles the three screen modes; from Presentation Mode (not in the cycle) it
+                // goes back to Normal.
+                None if app.ui.screen_mode >= 2 => 0,
+                None => app.ui.screen_mode + 1,
             };
             Ok(json!(app.ui.screen_mode))
         }

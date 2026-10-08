@@ -103,6 +103,11 @@ fn group_layer(
     Some(l)
 }
 
+/// The note on a file carrying an editor's private data (#472): its PDF part, the one read, holds
+/// only the art on its artboards (art on the pasteboard is in the private data alone).
+pub(crate) const OFF_ARTBOARD_NOTE: &str =
+    "only the PDF-compatible part of this file was read: art outside its artboards is kept in the editor's private data alone, so it doesn't open";
+
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open(bytes, opts.password.as_deref())?;
@@ -177,6 +182,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         let ai = crate::pages::has_private_data(page);
         if ai {
             drop_page_fill(&mut parts, xf.transform_rect_bbox(crate::pages::page_box(page, CropTo::Crop)));
+            b.warn(OFF_ARTBOARD_NOTE);
         }
         // A file with several artboards writes, on each page, the art of its neighbours that
         // reaches into the page's box: art lying wholly outside this page is theirs (each page
