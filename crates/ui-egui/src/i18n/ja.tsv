@@ -290,6 +290,9 @@
 	Release Selection	選択部分をリリース
 	Remove Threading	スレッドを解除
 	Fit Headline	ヘッドラインを合わせる
+	Decrease Font Size	フォントサイズを小さく
+	Increase Font Size	フォントサイズを大きく
+	Step Type	文字を段階的に調整
 	Find Font…	フォントの検索と置換…
 	Change Case	大文字と小文字の変更
 	UPPERCASE	すべて大文字

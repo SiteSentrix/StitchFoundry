@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area / Path Type",
             [],
             None,
-            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?, font?} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id}",
+            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?, font?, placeholder?: bool (placeholder text instead, as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id}",
             has_doc,
             create_in_path
         ),
@@ -57,6 +57,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?} track the first line of area type so it fills the frame width → {ids, tracking}",
             has_selection,
             fit_headline
+        ),
+        cmd!(
+            "type.step",
+            "Step Type",
+            [],
+            None,
+            "{attribute: \"size\"|\"leading\"|\"tracking\"|\"kerning\"|\"baselineShift\", by?: steps (1; negative steps down), id?, start?: byte, end?: byte} step type by the Preferences › Type increments (size and leading: typeSizeIncrement, pt; tracking and kerning: trackingIncrement, 1/1000 em; baseline shift: baselineShiftIncrement, pt), what the Type tool's Alt+arrows do (Cmd/Ctrl too: five steps; ←/→ kerning at the caret or tracking of the selection, ↑/↓ leading, Shift+↑/↓ baseline shift). The range of `id`, else the text the Type tool has selected (at a caret: kerning steps the character before it, leading its paragraph), else every selected type object → {ids}",
+            has_doc,
+            type_step
+        ),
+        cmd!(
+            "type.size.increase",
+            "Increase Font Size",
+            [],
+            Some("Cmd+Shift+."),
+            "{by?: steps (1)} type.step {attribute: size}",
+            has_selection,
+            |s, p| type_step(s, &json!({"attribute": "size", "by": f64_or(p, "by", 1.0)}))
+        ),
+        cmd!(
+            "type.size.decrease",
+            "Decrease Font Size",
+            [],
+            Some("Cmd+Shift+,"),
+            "{by?: steps (1)} type.step {attribute: size, by: -by}",
+            has_selection,
+            |s, p| type_step(s, &json!({"attribute": "size", "by": -f64_or(p, "by", 1.0)}))
         ),
         cmd!(
             "text.discardEmpty",
@@ -332,6 +359,45 @@ impl CharChange {
     }
 }
 
+/// Type › Enable Missing Glyph Protection: after a font change, the characters of `runs` their new
+/// font has no glyph for, but their font `before` the change had, keep that font.
+pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>) {
+    fn chars(runs: &[TextRun]) -> impl Iterator<Item = (usize, char, &CharStyle)> {
+        runs.iter()
+            .scan(0, |at, r| {
+                let start = *at;
+                *at += r.text.len();
+                Some(r.text.char_indices().map(move |(i, c)| (start + i, c, &r.style)))
+            })
+            .flatten()
+    }
+    let db = vectorcraft_text::FontDb::global();
+    let mut faces = std::collections::HashMap::new();
+    let mut covers = |st: &CharStyle, c: char| {
+        let face = faces.entry((st.font_family.clone(), st.font_style.clone())).or_insert_with(|| db.face(&st.font_family, &st.font_style));
+        face.as_ref().map(|f| f.covers(c))
+    };
+    // Byte ranges that keep a font (family, style).
+    let mut keep: Vec<(usize, usize, &CharStyle)> = vec![];
+    for ((at, c, old), (_, _, new)) in chars(before).zip(chars(runs)) {
+        let changed = (&old.font_family, &old.font_style) != (&new.font_family, &new.font_style);
+        if !changed || c.is_whitespace() || c.is_control() || covers(new, c) != Some(false) || covers(old, c) != Some(true) {
+            continue;
+        }
+        let end = at + c.len_utf8();
+        match keep.last_mut() {
+            Some((_, e, st)) if *e == at && (&st.font_family, &st.font_style) == (&old.font_family, &old.font_style) => *e = end,
+            _ => keep.push((at, end, old)),
+        }
+    }
+    for (a, b, old) in keep {
+        edit::style_range(runs, a, b, |st| {
+            st.font_family.clone_from(&old.font_family);
+            st.font_style.clone_from(&old.font_style);
+        });
+    }
+}
+
 fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setRangeStyle";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
@@ -339,6 +405,7 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
     if change.is_empty() {
         return Err(bad(C, "nothing to change"));
     }
+    let protect = s.prefs.missing_glyph_protection && (change.font.is_some() || change.style.is_some());
     let t = text_ref(s, id)?;
     let (a, b) = range_of(p, edit::runs_len(&t.runs));
     let n = s.edit("Character", |d, _| {
@@ -347,7 +414,11 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             // An empty range inside text styles nothing (Illustrator keeps it for the next typing).
             return Ok(t.runs.len());
         }
+        let before = protect.then(|| t.runs.clone());
         edit::style_range(&mut t.runs, a, b, |st| change.apply(st));
+        if let Some(before) = before {
+            protect_missing_glyphs(&before, &mut t.runs);
+        }
         refresh_bounds(t);
         Ok(t.runs.len())
     })?;
@@ -397,7 +468,11 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         wrap: Vec::new(),
         cached_bounds: None,
     };
-    refresh_bounds(&mut t);
+    if bool_or(p, "placeholder", false) {
+        super::typemenu::fill_with_placeholder(&mut t);
+    } else {
+        refresh_bounds(&mut t);
+    }
     let id = s.edit(if on_path { "Type on a Path" } else { "Area Type" }, |d, sel| {
         let (par, idx, _) = d.position(pid).ok_or(EngineError::NoNode(pid))?;
         d.remove(pid)?;
@@ -411,6 +486,95 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(id)
     })?;
     Ok(json!({"id": id.0}))
+}
+
+/// What `type.step` changes.
+#[derive(Clone, Copy, PartialEq)]
+enum Step {
+    Size,
+    Leading,
+    Tracking,
+    Kerning,
+    BaselineShift,
+}
+
+/// The Type tool's selected text while it edits (its typing session ends first: one undo step).
+fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, usize)>> {
+    let o = s.tool_options();
+    let Some(id) = o.get("editing").and_then(Value::as_u64).map(NodeId) else { return Ok(None) };
+    if super::edit::typing_in_progress(s) {
+        s.set_tool_option("commitTyping", &Value::Bool(true));
+        s.commit_interaction()?;
+    }
+    let at = |k: &str| byte_param(&o, k).unwrap_or(0);
+    Ok(Some((id, at("start"), at("end"))))
+}
+
+fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "type.step";
+    let step = match str_param(p, "attribute") {
+        Some("size") => Step::Size,
+        Some("leading") => Step::Leading,
+        Some("tracking") => Step::Tracking,
+        Some("kerning") => Step::Kerning,
+        Some("baselineShift") => Step::BaselineShift,
+        _ => return Err(bad(C, "attribute must be size|leading|tracking|kerning|baselineShift")),
+    };
+    let by = f64_or(p, "by", 1.0);
+    if !by.is_finite() {
+        return Err(bad(C, "by must be a number"));
+    }
+    let prefs = &s.prefs;
+    let inc = by.clamp(-1000.0, 1000.0)
+        * match step {
+            Step::Size | Step::Leading => prefs.type_size_increment,
+            Step::Tracking | Step::Kerning => prefs.tracking_increment,
+            Step::BaselineShift => prefs.baseline_shift_increment,
+        };
+    // (text, its range; None: all of it).
+    let targets: Vec<(NodeId, Option<(usize, usize)>)> = match id_param(p, "id") {
+        Some(id) => vec![(id, Some(range_of(p, edit::runs_len(&text_ref(s, id)?.runs))))],
+        None => match editing_range(s)? {
+            Some((id, a, b)) => vec![(id, Some((a.min(b), a.max(b))))],
+            None => super::typecmd::text_targets(s, p, C)?.into_iter().map(|id| (id, None)).collect(),
+        },
+    };
+    // The ranges stepped. At a caret: kerning is the space after the character before it, leading
+    // the paragraph's; the rest wait for a selection.
+    let mut ranges = vec![];
+    for (id, range) in targets {
+        let text = text_ref(s, id)?.plain_text();
+        let (a, b) = range.map_or((0, text.len()), |(a, b)| (a.min(text.len()), b.min(text.len())));
+        let (a, b) = match step {
+            _ if a < b => (a, b),
+            Step::Kerning => (edit::prev_char(&text, a), a),
+            Step::Leading => {
+                let para = edit::paragraph_at(&text, a);
+                (para.start, para.end)
+            }
+            _ => continue,
+        };
+        if a < b {
+            ranges.push((id, a, b));
+        }
+    }
+    if !ranges.is_empty() {
+        s.edit("Character", |d, _| {
+            for &(id, a, b) in &ranges {
+                let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+                edit::style_range(&mut t.runs, a, b, |st| match step {
+                    Step::Size => st.size = (st.size + inc).clamp(0.1, 1296.0),
+                    Step::Leading => st.leading = Some((st.effective_leading() + inc).clamp(0.1, 5000.0)),
+                    Step::Tracking => st.tracking = (st.tracking + inc).clamp(-1000.0, 10000.0),
+                    Step::Kerning => st.kerning = Some((st.kerning.unwrap_or(0.0) + inc).clamp(-1000.0, 10000.0)),
+                    Step::BaselineShift => st.baseline_shift = (st.baseline_shift + inc).clamp(-1296.0, 1296.0),
+                });
+                refresh_bounds(t);
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "ids": ranges.iter().map(|(id, ..)| id.0).collect::<Vec<_>>() }))
 }
 
 /// Tracking (1/1000 em) that makes the first paragraph of `t` exactly `target` wide, if it fits

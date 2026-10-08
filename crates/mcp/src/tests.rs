@@ -538,3 +538,29 @@ fn selection_preferences_apply_to_pointer_gestures() {
     assert_eq!(click(&mut s, 6, 225.0, json!({})), json!([]), "path only: the fill doesn't select");
     assert_eq!(click(&mut s, 7, 250.0, json!({})), json!([front]), "the path does");
 }
+
+/// Type preferences reach agents (#394): type the Type tool places starts with placeholder text,
+/// selected; Alt+→ tracks it by Tracking and Cmd+Shift+. steps its size by Size/Leading.
+#[test]
+fn type_preferences_apply_to_agents() {
+    let mut s = server();
+    let events = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "up", "x": 100, "y": 100}]);
+    let r = call(&mut s, 1, "pointer_gesture", json!({"tool": "type", "events": events}));
+    assert_eq!(r["isError"], false, "{r}");
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"][0].as_u64().unwrap();
+    let style = |s: &mut Server, n: u64| {
+        let r = call(s, n, "run_command", json!({"command": "text.getRange", "params": {"id": id}}));
+        let v = serde_json::from_str::<Value>(&text_of(&r)).unwrap();
+        assert!(v["text"].as_str().unwrap().len() > 10, "placeholder text: {v}");
+        let st = &v["runs"][0]["style"];
+        (st["size"].as_f64().unwrap(), st["tracking"].as_f64().unwrap())
+    };
+    let (size, tracking) = style(&mut s, 2);
+    let r = call(&mut s, 3, "run_command", json!({"command": "prefs.set", "params": {"values": {"typeSizeIncrement": 4, "trackingIncrement": 50}}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let r = call(&mut s, 4, "press_key", json!({"key": "Right", "mods": {"alt": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let r = call(&mut s, 5, "press_key", json!({"key": ".", "mods": {"cmd": true, "shift": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(style(&mut s, 6), (size + 4.0, tracking + 50.0));
+}

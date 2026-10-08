@@ -161,6 +161,13 @@ impl Session {
             double_click_isolate: self.prefs.double_click_to_isolate,
             select_behind: self.prefs.ctrl_click_selects_behind,
             highlight_anchors: self.prefs.highlight_anchors_on_hover,
+            snap_tolerance: self.prefs.snap_to_point_tolerance,
+            handles_multiple: self.prefs.show_handles_multiple_anchors,
+            corner_widget_max_angle: self.prefs.hide_corner_widget_above,
+            move_locked_with_artboard: self.prefs.move_locked_with_artboard,
+            pen_rubber_band: self.prefs.pen_rubber_band,
+            curvature_rubber_band: self.prefs.curvature_rubber_band,
+            placeholder_text: self.prefs.placeholder_text,
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
         };

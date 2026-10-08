@@ -914,16 +914,15 @@ impl Document {
     pub fn artboard_at(&self, p: Point) -> Option<usize> {
         self.artboards.iter().rposition(|a| a.rect.contains(p))
     }
-    /// The art that moves with an artboard at `rect`: unlocked top-level objects (children of
-    /// unlocked layers and sublayers) lying entirely inside it.
-    pub fn art_on_artboard(&self, rect: Rect) -> Vec<NodeId> {
-        fn collect(n: &Node, rect: Rect, out: &mut Vec<NodeId>) {
-            for c in n.children().into_iter().flatten() {
-                if c.locked {
-                    continue;
-                }
+    /// The art that moves with an artboard at `rect`: top-level objects (children of layers and
+    /// sublayers) lying entirely inside it. Locked and hidden objects and layers stay put unless
+    /// `locked_and_hidden` (Selection & Anchor Display › Move Locked and Hidden Artwork with
+    /// Artboard).
+    pub fn art_on_artboard(&self, rect: Rect, locked_and_hidden: bool) -> Vec<NodeId> {
+        fn collect(n: &Node, rect: Rect, all: bool, out: &mut Vec<NodeId>) {
+            for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
                 if c.is_layer() {
-                    collect(c, rect, out);
+                    collect(c, rect, all, out);
                 } else if let Some(b) = c.geometric_bounds()
                     && rect.contains(Point::new(b.x0, b.y0))
                     && rect.contains(Point::new(b.x1, b.y1))
@@ -933,8 +932,8 @@ impl Document {
             }
         }
         let mut art = vec![];
-        for l in self.layers.iter().filter(|l| !l.locked) {
-            collect(l, rect, &mut art);
+        for l in self.layers.iter().filter(|l| l.rides_with_artboard(locked_and_hidden)) {
+            collect(l, rect, locked_and_hidden, &mut art);
         }
         art
     }
@@ -1088,12 +1087,18 @@ mod tests {
     #[test]
     fn art_on_artboard_takes_unlocked_objects_wholly_inside() {
         let (mut d, a, b) = doc_with_rects();
-        assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 15.0, 15.0)), vec![a]);
-        assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 25.0, 15.0)), vec![a], "b only half inside");
+        let wide = Rect::new(-1.0, -1.0, 40.0, 15.0);
+        assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 15.0, 15.0), false), vec![a]);
+        assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 25.0, 15.0), false), vec![a], "b only half inside");
         d.node_mut(a).unwrap().locked = true;
-        assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 40.0, 15.0)), vec![b]);
+        assert_eq!(d.art_on_artboard(wide, false), vec![b]);
+        // Move Locked and Hidden Artwork with Artboard (#394): hidden art stays too, unless on.
+        d.node_mut(b).unwrap().visible = false;
+        assert!(d.art_on_artboard(wide, false).is_empty());
+        assert_eq!(d.art_on_artboard(wide, true), vec![a, b]);
         Arc::make_mut(&mut d.layers[0]).locked = true;
-        assert!(d.art_on_artboard(Rect::new(-1.0, -1.0, 40.0, 15.0)).is_empty());
+        assert!(d.art_on_artboard(wide, false).is_empty());
+        assert_eq!(d.art_on_artboard(wide, true), vec![a, b], "a locked layer's art too");
     }
 
     #[test]

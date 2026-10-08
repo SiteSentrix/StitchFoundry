@@ -1117,6 +1117,22 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   topmost again. Cmd held to borrow the selection tool from another tool clicks as usual.
 - `doubleClickToIsolate` (on by default): off, a `doubleclick` on a group with the Selection tool no longer isolates it.
 - `usePreciseCursors`: the Pen, Eyedropper, Slice and Blend tools' pointers are a crosshair.
+- `snapToPointTolerance` (1–8 px, 2 by default): with View › Snap to Point on and Smart Guides off (desktop app), the
+  point a selection is dragged by, a drawn point and a transform tool's reference point land on an anchor or a ruler
+  guide that near.
+- `moveLockedWithArtboard`: `artboard.move {moveArt: true}`, the Artboard tool and `artboard.rearrange` move locked and
+  hidden art with the artboard too; off (the default) it stays where it is.
+- `penRubberBand`, `curvatureRubberBand` (on by default): off, the Pen and Curvature tools draw no preview segment to
+  the pointer.
+- `showHandlesMultipleAnchors` (on by default): off, Direct Selection shows and drags direction handles only while a
+  single anchor is selected. `handleStyle` (`solid`, `hollow`, `large`) draws their ends (desktop app).
+- `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
+  angles hide below 90°).
+- `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,
+  `object.move`, `object.rotate`, `object.scale`, `object.reflect`, `object.shear`, `object.transformEach`, the
+  Selection and transform tools, the dialogs' Transform Patterns): pattern fills and strokes move with the art.
+- `selectSameTintPercent` (off by default): `select.same.fillColor`, `strokeColor` and `fillAndStroke` take every tint
+  of a global or spot swatch; on, only the same tint.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"objectSelectionByPathOnly","value":true}}}
@@ -1127,6 +1143,23 @@ The preferences for the view need the desktop app (`vectorcraft-cli mcp --connec
 wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel sideways; the control channel's
 `ui.wheel` turns the wheel), `zoomToSelection` (on: Zoom In and Zoom Out centre the selection), `showToolTips`,
 `anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle` and `recentFontsCount`.
+
+## Type preferences
+
+- `placeholderText` (on by default): type the Type tools place (`pointer_gesture` with `type`, `areaType`…) starts with
+  placeholder text, selected, so `type_text` replaces it; `text.create` and `text.createInPath` take `placeholder: true`.
+- `typeSizeIncrement`, `trackingIncrement`, `baselineShiftIncrement`: what `type.step {attribute: "size" | "leading" |
+  "tracking" | "kerning" | "baselineShift", by?}` steps by, on the text range given, the Type tool's selected text or the
+  selected type objects. `type.size.increase` / `type.size.decrease` (Cmd+Shift+. and Cmd+Shift+,) step the size; the
+  Type tool's Alt+arrows (`press_key {key: "Right", mods: {alt: true}}`) step kerning at a caret or tracking of the
+  selection (←/→), leading (↑/↓) and baseline shift (Shift+↑/↓), five steps with Cmd/Ctrl too.
+- `missingGlyphProtection` (on by default): `text.setStyle` and `text.setRangeStyle` changing the font leave the
+  characters the new font has no glyph for in the font that had one.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeSizeIncrement":4,"trackingIncrement":50}}}}
+{"name":"run_command","arguments":{"command":"type.step","params":{"attribute":"tracking","by":-2}}}
+```
 
 ## Width points
 

@@ -252,6 +252,9 @@ pub struct Scaling {
     pub keep_type_strokes: bool,
     /// Live corner radii keep their size.
     pub keep_corners: bool,
+    /// Pattern fills and strokes move with the art (Transform Patterns; General › Transform
+    /// Pattern Tiles is its default): their tiles transform too, instead of staying put.
+    pub patterns: bool,
 }
 
 impl Scaling {
@@ -526,6 +529,12 @@ impl Node {
             _ => None,
         }
     }
+    /// Does this object or layer move with its artboard? Locked and hidden ones only with
+    /// `locked_and_hidden` (Selection & Anchor Display › Move Locked and Hidden Artwork with
+    /// Artboard).
+    pub fn rides_with_artboard(&self, locked_and_hidden: bool) -> bool {
+        locked_and_hidden || (!self.locked && self.visible)
+    }
     pub fn is_layer(&self) -> bool {
         matches!(self.kind, NodeKind::Layer { .. })
     }
@@ -721,6 +730,9 @@ impl Node {
             }
         }
         self.appearance.transform_gradients(a);
+        if sc.patterns {
+            crate::pattern::transform_pattern_paints(self, a);
+        }
         match &mut self.kind {
             NodeKind::Path { path, live, .. } => {
                 path.transform(a);
@@ -1318,7 +1330,7 @@ mod tests {
         }
     }
 
-    const KEEP_CORNERS: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: true };
+    const KEEP_CORNERS: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: true, patterns: false };
 
     #[test]
     fn uneven_scales_keep_live_corners_circular() {

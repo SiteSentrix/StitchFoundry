@@ -79,7 +79,7 @@ impl ArtboardTool {
         self.guides.clear();
         self.targets = cx.smart_guides.then(|| {
             let art = match cx.doc.artboards.get(index) {
-                Some(a) if art_moves => cx.doc.art_on_artboard(a.rect),
+                Some(a) if art_moves => cx.doc.art_on_artboard(a.rect, cx.move_locked_with_artboard),
                 _ => vec![],
             };
             Targets::for_artboard(cx.doc, index, &art)

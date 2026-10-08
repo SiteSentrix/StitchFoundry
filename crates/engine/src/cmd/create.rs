@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height}} → {id}",
+            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText)} → {id}",
             has_doc,
             text_create
         ),
@@ -414,8 +414,11 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         let h = f64_or(a, "height", 100.0);
         t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, w, h)) };
     }
-    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
-    t.cached_bounds = Some(lay.bounds);
+    if bool_or(p, "placeholder", false) {
+        super::typemenu::fill_with_placeholder(&mut t);
+    } else {
+        super::typecmd::refresh_bounds(&mut t);
+    }
     add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)
 }
 

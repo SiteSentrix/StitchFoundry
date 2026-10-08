@@ -64,12 +64,27 @@ impl CornerWidgets {
         Some(Self { id, w, h, radii, kinds, xf, points, shown: live.picked_corners(selection.partial(id)) })
     }
 
+    /// Selection & Anchor Display → Hide Corner Widget for angles greater than: the widgets of
+    /// corners wider than `max` degrees (a skewed rectangle's obtuse ones) hide; none if all do.
+    pub fn within_angle(mut self, max: f64) -> Option<Self> {
+        // The angle between the shape's sides where they meet at the top-left corner; the
+        // top-right and bottom-left corners are its supplement.
+        let c = self.xf.as_coeffs();
+        let (u, v) = (Vec2::new(c[0], c[1]), Vec2::new(c[2], c[3]));
+        let a = u.cross(v).abs().atan2(u.dot(v)).to_degrees();
+        for (k, shown) in self.shown.iter_mut().enumerate() {
+            let angle = if k % 2 == 0 { a } else { 180.0 - a };
+            *shown &= angle <= max + 1e-9;
+        }
+        self.shown.contains(&true).then_some(self)
+    }
+
     /// The widgets the active tool can drag (View → Show Corner Widget on).
     pub fn for_tool(cx: &ToolContext) -> Option<Self> {
         if !cx.corner_widgets {
             return None;
         }
-        Self::of(cx.doc, cx.selection, cx.zoom)
+        Self::of(cx.doc, cx.selection, cx.zoom)?.within_angle(cx.corner_widget_max_angle)
     }
 
     /// The centres of the widgets that show.
@@ -316,6 +331,27 @@ mod tests {
         let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
         assert_eq!(a, vec![Action::Dialog(DIALOG.into(), json!({"id": id.0, "corners": [0, 1, 2, 3]}))]);
         assert!(crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 150.0, 150.0)).is_empty());
+    }
+
+    /// Hide Corner Widget for angles greater than (#394): a rectangle's right angles hide below
+    /// 90°; sheared, only its acute corners keep their widgets.
+    #[test]
+    fn corners_wider_than_the_preference_hide_their_widgets() {
+        let (d, id) = live_rect(0.0, Affine::translate((100.0, 100.0)));
+        let w = CornerWidgets::of(&d, &selected(id), 1.0).unwrap();
+        assert_eq!(w.within_angle(177.0).map(|w| w.shown), Some([true; 4]));
+        assert_eq!(w.within_angle(90.0).map(|w| w.shown), Some([true; 4]));
+        assert!(w.within_angle(89.0).is_none());
+        // Sheared by 30°: 60° at the top-left and bottom-right corners, 120° at the others.
+        let shear = Affine::translate((100.0, 100.0)) * Affine::new([1.0, 0.0, 30f64.to_radians().tan(), 1.0, 0.0, 0.0]);
+        let (d, id) = live_rect(0.0, shear);
+        let w = CornerWidgets::of(&d, &selected(id), 1.0).unwrap();
+        assert_eq!(w.within_angle(100.0).map(|w| w.shown), Some([true, false, true, false]));
+        let s = selected(id);
+        let p = paint();
+        let c = ToolContext { corner_widget_max_angle: 100.0, ..cx(&d, &s, &p) };
+        assert!(over_widget(&c, w.points[0]));
+        assert!(!over_widget(&c, w.points[1]), "the 120° corner's widget is hidden");
     }
 
     #[test]

@@ -21,17 +21,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform",
             [],
             None,
-            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool, typeAreas?: bool} apply an affine to the selection (or ids); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences); typeAreas: area type among them (not type inside a group) reshapes its frame by the matrix and its text reflows at its size, as a bounding-box handle drag does (default: the type transforms too)",
+            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool, typeAreas?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} apply an affine to the selection (or ids); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences); typeAreas: area type among them (not type inside a group) reshapes its frame by the matrix and its text reflows at its size, as a bounding-box handle drag does (default: the type transforms too)",
             has_doc,
             transform
         ),
-        cmd!("object.move", "Move…", ["Object", "Transform"], Some("Cmd+Shift+M"), "{dx, dy, copy?}", has_selection, move_cmd),
+        cmd!(
+            "object.move",
+            "Move…",
+            ["Object", "Transform"],
+            Some("Cmd+Shift+M"),
+            "{dx, dy, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
+            has_selection,
+            move_cmd
+        ),
         cmd!(
             "object.rotate",
             "Rotate…",
             ["Object", "Transform"],
             None,
-            "{angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?} → {ids}",
+            "{angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} → {ids}",
             has_selection,
             rotate
         ),
@@ -40,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Scale…",
             ["Object", "Transform"],
             None,
-            "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale)} (strokes/corners default to the preferences)",
+            "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} (strokes/corners default to the preferences)",
             has_selection,
             scale
         ),
@@ -49,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reflect…",
             ["Object", "Transform"],
             None,
-            "{axis: \"vertical\"|\"horizontal\"|deg, origin?, copy?}",
+            "{axis: \"vertical\"|\"horizontal\"|deg, origin?, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
             has_selection,
             reflect
         ),
@@ -58,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Shear…",
             ["Object", "Transform"],
             None,
-            "{angle: deg, axis?: \"horizontal\"|\"vertical\", origin?, copy?}",
+            "{angle: deg, axis?: \"horizontal\"|\"vertical\", origin?, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
             has_selection,
             shear
         ),
@@ -208,15 +216,39 @@ pub(crate) fn scaling(s: &mut Session, p: &Value) -> Scaling {
     let corners = bool_or(p, "corners", s.prefs.scale_corners);
     s.note_journal("strokes", json!(strokes));
     s.note_journal("corners", json!(corners));
-    Scaling { strokes, effects: strokes.then_some(vectorcraft_render::effects::scale_effect), keep_type_strokes: !strokes, keep_corners: !corners }
+    Scaling {
+        strokes,
+        effects: strokes.then_some(vectorcraft_render::effects::scale_effect),
+        keep_type_strokes: !strokes,
+        keep_corners: !corners,
+        ..Scaling::default()
+    }
+}
+
+/// Transform Patterns: do the pattern fills and strokes of `ids` transform with them (`patterns`
+/// param, else General › Transform Pattern Tiles)? Noted in the journal when they use a pattern,
+/// so a replay moves their tiles alike whatever the preference is then.
+pub(crate) fn transform_patterns(s: &mut Session, p: &Value, ids: &[NodeId]) -> Result<bool> {
+    let on = bool_or(p, "patterns", s.prefs.transform_pattern_tiles);
+    let d = &s.doc()?.doc;
+    let mut uses = false;
+    for n in ids.iter().filter_map(|id| d.node(*id)) {
+        n.walk(&mut |c| uses |= vectorcraft_doc::pattern::uses_pattern(c, None));
+    }
+    if uses {
+        s.note_journal("patterns", json!(on));
+    }
+    Ok(on)
 }
 
 /// Apply `xf` to `ids` (`copy` param: duplicate first; `strokes`/`corners`: see [`scaling`];
-/// `typeAreas`: see [`resize_type_area`]). Records Transform Again.
+/// `patterns`: see [`transform_patterns`]; `typeAreas`: see [`resize_type_area`]). Records
+/// Transform Again.
 pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, p: &Value) -> Result<Value> {
     let copy = bool_or(p, "copy", false);
     let areas = bool_or(p, "typeAreas", false);
-    let sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
+    let mut sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
+    sc.patterns = transform_patterns(s, p, &ids)?;
     let ids = s.edit(label, |d, sel| {
         let targets = if copy { duplicate_in(d, sel, &ids, Affine::IDENTITY)? } else { ids.clone() };
         for id in &targets {

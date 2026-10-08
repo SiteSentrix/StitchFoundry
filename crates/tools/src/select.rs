@@ -1,4 +1,5 @@
-//! The Selection tool (V): click/shift-click, marquee, move (Alt copies, Shift constrains),
+//! The Selection tool (V): click/shift-click, marquee, move (Alt copies, Shift constrains; Smart
+//! Guides, or with them off View › Snap to Point, snap it),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's corner widget to round its corners (Alt-click cycles their kind,
 //! double-click opens the Corners dialog), double-click to enter isolation mode (Double Click To
@@ -55,6 +56,9 @@ pub struct SelectionTool {
     measure: Option<(Point, String)>,
     guides: Vec<Overlay>,
     targets: Option<crate::guides::Targets>,
+    /// View → Snap to Point (Smart Guides off): the anchors and ruler guides the grabbed point
+    /// lands on while moving.
+    points: Option<crate::guides::Targets>,
     start_bounds: Option<Rect>,
     guide: GuideEdit,
 }
@@ -212,8 +216,15 @@ impl Tool for SelectionTool {
                 if !began {
                     self.start_bounds = selection_bounds(cx);
                     self.targets = cx.smart_guides.then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
+                    self.points = crate::guides::Targets::snap_to_point(cx, &cx.selection.objects);
                 }
                 self.guides.clear();
+                // Snap to Point: the point the selection was grabbed by lands on an anchor or guide.
+                if let Some(t) = &self.points {
+                    let (q, ov) = t.snap_point(start + d, cx.tol(cx.snap_tolerance));
+                    d = q - start;
+                    self.guides = ov;
+                }
                 if let (Some(t), Some(b)) = (&self.targets, self.start_bounds) {
                     let (adj, ov) = t.snap_rect(b + d, cx.tol(5.0));
                     d += adj;
@@ -269,6 +280,7 @@ impl Tool for SelectionTool {
                 self.measure = None;
                 self.guides.clear();
                 self.targets = None;
+                self.points = None;
                 match (began, deselect) {
                     (true, _) => vec![Action::Commit],
                     (false, Some(id)) => vec![Action::Exec("select.toggle".into(), json!({ "id": id.0 }))],

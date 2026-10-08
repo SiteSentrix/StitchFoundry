@@ -238,9 +238,11 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "nothing to change"));
     }
     let ids = text_targets(s, p, C)?;
+    let protect = s.prefs.missing_glyph_protection && (font.is_some() || style.is_some());
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            let before = protect.then(|| t.runs.clone());
             for r in &mut t.runs {
                 let st = &mut r.style;
                 if let Some(f) = &font {
@@ -264,6 +266,9 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(f) = &features {
                     st.features = f.clone();
                 }
+            }
+            if let Some(before) = before {
+                super::textedit::protect_missing_glyphs(&before, &mut t.runs);
             }
             if let Some(j) = justify {
                 t.para.justify = j;
