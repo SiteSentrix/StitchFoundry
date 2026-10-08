@@ -1615,7 +1615,7 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     // Direct-selected anchors take the place of a path's Offset Path and Simplify.
     let anchors = !st.selection.anchors.is_empty();
     if anchors {
-        items.push((tl!("Remove Anchor Points"), "dc-pen-delete", "path.removeAnchors"));
+        items.push((tl!("Remove Anchor Points"), "pen-tool-delete", "path.removeAnchors"));
         items.push((tl!("Cut Path"), "scissors", "path.cutAtAnchors"));
     }
     if n > 1 {
