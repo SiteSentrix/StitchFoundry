@@ -9,7 +9,9 @@
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000]
 //! ```
-#![forbid(unsafe_code)]
+// Denied, not forbidden: the DirectWrite font lister shared with the desktop app (Windows) allows
+// it for its COM calls, and nothing else may.
+#![deny(unsafe_code)]
 
 use std::io::Write;
 use std::process::ExitCode;
@@ -35,6 +37,10 @@ macro_rules! out {
 }
 
 mod perf;
+/// The desktop app's DirectWrite font lister, shared: exports and MCP find the same fonts.
+#[cfg(all(windows, not(target_vendor = "win7")))]
+#[path = "../../vectorcraft/src/system_fonts.rs"]
+mod system_fonts;
 
 use serde_json::{Value, json};
 use vectorcraft_mcp::{Backend, DEFAULT_ADDR, Headless, Remote, Server};
@@ -93,6 +99,9 @@ fn usage() -> String {
 }
 
 fn main() -> ExitCode {
+    // Before any font lookup: the fonts font services load (#579).
+    #[cfg(all(windows, not(target_vendor = "win7")))]
+    system_fonts::install();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let r = match args.first().map(String::as_str) {
         Some("mcp") => mcp(&args[1..]),
