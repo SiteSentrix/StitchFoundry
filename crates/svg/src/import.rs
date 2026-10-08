@@ -83,8 +83,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
     }
 
     // Top-level `<g id>` elements become layers (as in the reference app); otherwise all art goes
-    // into "Layer 1". Top-level text joins the layer below it (the first layer if none is).
-    let is_layer = |im: &Importer, c: &usvg::Node| matches!(c, usvg::Node::Group(g) if !g.id().is_empty() && !made_up(g.id()) && !im.links.contains_key(g.id()) && !im.uses.contains_key(g.id()) && is_plain(g) && im.text_slot(g).is_none());
+    // into "Layer 1". A clip path on one (as on an Inkscape layer, or our clipping layers) makes it
+    // a clipping layer. Top-level text joins the layer below it (the first layer if none is).
+    let is_layer = |im: &Importer, c: &usvg::Node| matches!(c, usvg::Node::Group(g) if !g.id().is_empty() && !made_up(g.id()) && !im.links.contains_key(g.id()) && !im.uses.contains_key(g.id()) && only_clips(g) && im.text_slot(g).is_none());
     let is_text = |im: &Importer, c: &usvg::Node| matches!(c, usvg::Node::Group(g) if im.text_slot(g).is_some());
     let layer_mode = top.children().iter().any(|c| is_layer(&im, c)) && top.children().iter().all(|c| is_layer(&im, c) || is_text(&im, c));
     if layer_mode {
@@ -93,22 +94,35 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         for c in top.children() {
             let usvg::Node::Group(g) = c else { continue };
             if !is_layer(&im, c) {
-                let n = im.node(c, base).map(Arc::new);
-                match im.doc.layers.last_mut().and_then(|l| Arc::make_mut(l).children_mut()) {
-                    Some(ch) => ch.extend(n),
+                let n: Vec<_> = im.node(c, base).map(Arc::new).into_iter().collect();
+                match im.doc.layers.pop() {
+                    Some(mut l) => {
+                        im.add_unclipped(Arc::make_mut(&mut l), usize::MAX, n);
+                        im.doc.layers.push(l);
+                    }
                     None => loose.extend(n),
                 }
                 continue;
             }
-            let mut children = std::mem::take(&mut loose);
-            children.extend(im.children(g, base * aff(g.transform())));
+            let ts = base * aff(g.transform());
+            let name = im.name_of(g.id()).to_string();
+            let mut art = im.children(g, ts);
+            // A clip path with no shape shows nothing of the layer: it stays, empty.
+            let clip = match g.clip_path() {
+                Some(cp) => {
+                    art = im.clipped(cp, ts, art, &format!("layer '{name}'")).unwrap_or_default();
+                    !art.is_empty()
+                }
+                None => false,
+            };
             let id = im.doc.alloc_id();
             let preset = (im.doc.layers.len() % vectorcraft_doc::LAYER_COLORS.len()) as u8;
-            let name = im.name_of(g.id()).to_string();
             let mut l = Node::layer(id, &name, LayerColor::Preset(preset));
+            l.set_clips(clip);
             if let Some(ch) = l.children_mut() {
-                *ch = children;
+                *ch = art;
             }
+            im.add_unclipped(&mut l, 0, std::mem::take(&mut loose));
             l.visible = !im.hidden.contains(g.id());
             im.doc.layers.push(Arc::new(l));
         }
@@ -472,7 +486,12 @@ fn aff(t: usvg::Transform) -> Affine {
 }
 
 fn is_plain(g: &usvg::Group) -> bool {
-    g.clip_path().is_none() && g.mask().is_none() && g.filters().is_empty() && g.opacity().get() >= 1.0 && g.blend_mode() == usvg::BlendMode::Normal
+    g.clip_path().is_none() && only_clips(g)
+}
+
+/// Does group `g` leave its art as it is, but for a clip path (no mask, filter, opacity or blend)?
+fn only_clips(g: &usvg::Group) -> bool {
+    g.mask().is_none() && g.filters().is_empty() && g.opacity().get() >= 1.0 && g.blend_mode() == usvg::BlendMode::Normal
 }
 
 fn blend(b: usvg::BlendMode) -> BlendMode {
@@ -758,27 +777,8 @@ impl Importer {
                 inner.appearance.effects = effects.clone();
                 children = vec![Arc::new(inner)];
             }
-            // A clip path clipped in turn (`<clipPath clip-path>`): one clip group in another, so
-            // the clips intersect.
-            let mut clips = vec![self.clip_node(cp, ts)?];
-            let mut next = cp.clip_path();
-            while let Some(c) = next {
-                if clips.len() > MAX_CLIP_NEST {
-                    self.warn(format!("clip paths nested more than {MAX_CLIP_NEST} deep on {label}: the deeper ones are ignored"));
-                    break;
-                }
-                clips.push(self.clip_node(c, ts)?);
-                next = c.clip_path();
-            }
-            let outer = clips.pop()?;
-            for clip in clips {
-                let mut ch = vec![Arc::new(clip)];
-                ch.extend(children);
-                children = vec![Arc::new(self.named("", NodeKind::Group { children: ch, clip: true }))];
-            }
-            let mut ch = vec![Arc::new(outer)];
-            ch.extend(children);
-            self.named(id, NodeKind::Group { children: ch, clip: true })
+            let children = self.clipped(cp, ts, children, &label)?;
+            self.named(id, NodeKind::Group { children, clip: true })
         } else {
             if children.is_empty() {
                 return None;
@@ -847,6 +847,49 @@ impl Importer {
         let mut mask = vectorcraft_doc::OpacityMask::new(art, clip);
         mask.invert = invert;
         Some(Box::new(mask))
+    }
+
+    /// `children` clipped by `cp` (on an element whose user space `ts` maps to the document): the
+    /// children of a clip group or clipping layer, its clipping path first. A clip path clipped in
+    /// turn (`<clipPath clip-path>`) nests one clip group in another, so the clips intersect.
+    /// `None` when the clip path has no shape (nothing shows).
+    fn clipped(&mut self, cp: &usvg::ClipPath, ts: Affine, mut children: Vec<Arc<Node>>, label: &str) -> Option<Vec<Arc<Node>>> {
+        let mut clips = vec![self.clip_node(cp, ts)?];
+        let mut next = cp.clip_path();
+        while let Some(c) = next {
+            if clips.len() > MAX_CLIP_NEST {
+                self.warn(format!("clip paths nested more than {MAX_CLIP_NEST} deep on {label}: the deeper ones are ignored"));
+                break;
+            }
+            clips.push(self.clip_node(c, ts)?);
+            next = c.clip_path();
+        }
+        let outer = clips.pop()?;
+        for clip in clips {
+            let mut ch = vec![Arc::new(clip)];
+            ch.extend(children);
+            children = vec![Arc::new(self.named("", NodeKind::Group { children: ch, clip: true }))];
+        }
+        let mut ch = vec![Arc::new(outer)];
+        ch.extend(children);
+        Some(ch)
+    }
+
+    /// Put `art` in layer `l` at `index` (at most its end) unclipped: a clipping mask on the layer
+    /// becomes a clip group in it, holding the art it clipped.
+    fn add_unclipped(&mut self, l: &mut Node, index: usize, art: Vec<Arc<Node>>) {
+        if art.is_empty() {
+            return;
+        }
+        if let NodeKind::Layer { children, clip: clip @ true, .. } = &mut l.kind {
+            *clip = false;
+            let clipped = std::mem::take(children);
+            children.push(Arc::new(self.named("", NodeKind::Group { children: clipped, clip: true })));
+        }
+        if let Some(ch) = l.children_mut() {
+            let i = index.min(ch.len());
+            ch.splice(i..i, art);
+        }
     }
 
     fn clip_node(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
