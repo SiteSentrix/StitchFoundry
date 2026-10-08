@@ -12,15 +12,82 @@
 //! - Hide and Hide Others are items of ours calling `NSApplication`: AppKit's own always take ⌘H
 //!   (View › Hide Edges) and ⌥⌘H.
 
+use std::sync::Once;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, channel};
+
+use block2::RcBlock;
 
 use egui::{Key, KeyboardShortcut};
 use muda::accelerator::{Accelerator, Code, Modifiers};
 use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use objc2::MainThreadMarker;
-use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSEventType};
+use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSEventType, NSMenuDidBeginTrackingNotification, NSMenuDidEndTrackingNotification};
+use objc2_foundation::{NSNotification, NSNotificationCenter};
 use vectorcraft_ui_egui::VectorcraftApp;
 use vectorcraft_ui_egui::native_menu::{self, Backend, Event, MenuBar, MenuRole, Node, Standard};
+
+// AppKit can deliver window input while its system menu is still tracking (especially with
+// asynchronous menu presentation). Keep the native tracking state separate from egui popups.
+static TRACKING: AtomicBool = AtomicBool::new(false);
+
+fn observe_tracking(ctx: &egui::Context) {
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        // SAFETY: AppKit initializes these immutable notification-name constants.
+        #[allow(unsafe_code)]
+        let notifications = unsafe { [(NSMenuDidBeginTrackingNotification, true), (NSMenuDidEndTrackingNotification, false)] };
+        for (name, tracking) in notifications {
+            let repaint = ctx.clone();
+            let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| {
+                TRACKING.store(tracking, Ordering::Relaxed);
+                // Apply any deferred menu updates as soon as the tracking session ends.
+                if !tracking {
+                    repaint.request_repaint();
+                }
+            });
+            // SAFETY: these are AppKit's notification names. The notification center retains
+            // the observer and block for the application's lifetime; callbacks update an atomic and request repaint.
+            #[allow(unsafe_code)]
+            unsafe {
+                NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(Some(name), None, None, &block);
+            }
+        }
+    });
+}
+
+fn cancel_tracking() {
+    if let Some(mtm) = MainThreadMarker::new()
+        && let Some(menu) = NSApplication::sharedApplication(mtm).mainMenu()
+    {
+        menu.cancelTracking();
+    }
+    TRACKING.store(false, Ordering::Relaxed);
+}
+
+/// A dismissing click belongs to the menu, so the canvas and panel controls must not see it.
+fn dismiss_input(raw: &mut egui::RawInput, tracking: bool) -> bool {
+    if !raw
+        .events
+        .iter()
+        .any(|e| matches!(e, egui::Event::PointerButton { pressed: true, .. } | egui::Event::Key { key: egui::Key::Escape, pressed: true, .. }))
+    {
+        return false;
+    }
+    if tracking {
+        raw.events.retain(|e| !matches!(e, egui::Event::PointerButton { .. } | egui::Event::Key { key: egui::Key::Escape, .. }));
+    }
+    true
+}
+
+/// Inspect real window input before native key equivalents and control events are added.
+pub fn raw_input_hook(raw: &mut egui::RawInput) {
+    // Asynchronous menu presentation may leave a displayed menu after its tracking notification.
+    // Still cancel it, but consume the dismissing input only during a reported tracking session.
+    if dismiss_input(raw, TRACKING.load(Ordering::Relaxed)) {
+        cancel_tracking();
+    }
+}
 
 enum Handle {
     Plain(MenuItem),
@@ -48,10 +115,13 @@ pub struct MacMenu {
     entries: Vec<Entry>,
     rx: Receiver<Chosen>,
     structure: u64,
+    /// Latest menu state to apply after AppKit finishes tracking; item ids stay stable meanwhile.
+    pending: Option<MenuBar>,
 }
 
 impl MacMenu {
     fn new(ctx: &egui::Context) -> MacMenu {
+        observe_tracking(ctx);
         let (tx, rx) = channel();
         let repaint = ctx.clone();
         MenuEvent::set_event_handler(Some(move |e: MenuEvent| {
@@ -67,7 +137,7 @@ impl MacMenu {
             // Wake egui, so the item runs now rather than on the next mouse move.
             repaint.request_repaint();
         }));
-        MacMenu { menu: None, entries: Vec::new(), rx, structure: 0 }
+        MacMenu { menu: None, entries: Vec::new(), rx, structure: 0, pending: None }
     }
 
     /// Build the menus of `bar` and make them the app's, in place of the ones before.
@@ -146,6 +216,13 @@ fn append(sub: &Submenu, nodes: &[Node], entries: &mut Vec<Entry>) -> muda::Resu
 
 impl Backend for MacMenu {
     fn sync(&mut self, bar: &MenuBar) {
+        // Replacing or mutating an NSMenu during tracking can strand its displayed menu. Keep
+        // the latest state: the shared model considers this sync complete and may not resend it.
+        if TRACKING.load(Ordering::Relaxed) {
+            self.pending = Some(bar.clone());
+            return;
+        }
+        self.pending = None;
         let items = bar.items();
         if self.menu.is_none() || native_menu::structure_key(bar) != self.structure || items.len() != self.entries.len() {
             if let Err(e) = self.build(bar) {
@@ -183,6 +260,7 @@ impl Backend for MacMenu {
     fn drain(&mut self) -> Vec<Event> {
         let mut out = Vec::new();
         while let Ok(chosen) = self.rx.try_recv() {
+            cancel_tracking();
             // Ids that aren't ours are AppKit's own items (Services, Zoom…), already handled.
             let Some(e) = chosen.id.strip_prefix("vc").and_then(|n| n.parse::<usize>().ok()).and_then(|i| self.entries.get(i)) else { continue };
             if let Some(command @ (native_menu::HIDE | native_menu::HIDE_OTHERS)) = e.item.command {
@@ -206,6 +284,12 @@ impl Backend for MacMenu {
                 Some(k) => Event::Key(k),
                 None => Event::Click(e.item.clone()),
             });
+        }
+        // Drain against the old item ids before a deferred structure change replaces them.
+        if !TRACKING.load(Ordering::Relaxed)
+            && let Some(bar) = self.pending.take()
+        {
+            self.sync(&bar);
         }
         out
     }
@@ -363,5 +447,41 @@ mod tests {
         let parse = |s| vectorcraft_ui_egui::shortcuts::parse(s).and_then(|c| accelerator(&c));
         assert_ne!(parse("Cmd+M"), parse("Ctrl+Cmd+M"));
         assert!(parse("Cmd+M").is_some());
+    }
+
+    fn press() -> egui::Event {
+        egui::Event::PointerButton {
+            pos: egui::pos2(300.0, 200.0),
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Default::default(),
+        }
+    }
+
+    #[test]
+    fn outside_press_dismisses_without_starting_a_canvas_gesture() {
+        let moved = egui::Event::PointerMoved(egui::pos2(300.0, 200.0));
+        let mut raw = egui::RawInput { events: vec![moved.clone(), press()], ..Default::default() };
+        assert!(dismiss_input(&mut raw, true));
+        assert_eq!(raw.events, [moved]);
+        assert!(!dismiss_input(&mut raw, true));
+        raw.events.push(press());
+        assert!(dismiss_input(&mut raw, false));
+        assert_eq!(raw.events.len(), 2, "ordinary canvas presses still reach egui");
+    }
+
+    #[test]
+    fn escape_dismisses_without_reaching_the_active_tool() {
+        let escape = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        let mut raw = egui::RawInput { events: vec![escape(true), escape(false)], ..Default::default() };
+        assert!(dismiss_input(&mut raw, true));
+        assert!(raw.events.is_empty());
+    }
+
+    #[test]
+    fn moving_the_pointer_does_not_dismiss_a_tracking_menu() {
+        let mut raw = egui::RawInput { events: vec![egui::Event::PointerMoved(egui::pos2(300.0, 200.0))], ..Default::default() };
+        assert!(!dismiss_input(&mut raw, true));
+        assert_eq!(raw.events.len(), 1);
     }
 }
