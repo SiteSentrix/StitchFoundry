@@ -1,5 +1,5 @@
-//! Optional content groups become layers: name, visibility, print state and lock; art that is
-//! off comes in as a hidden layer.
+//! Optional content groups become layers: name, visibility (the default configuration's or the
+//! view state's), print state, lock and nesting; art that is off comes in as a hidden layer.
 
 use vectorcraft_color::Color;
 use vectorcraft_doc::{Document, Node, NodeKind};
@@ -191,4 +191,110 @@ fn a_page_fill_that_is_art_stays() {
     let d = page_fill("", page, true);
     assert_eq!(names(&d), ["Shapes", "Page 1"]);
     assert_eq!(path_count(&d), 3);
+}
+
+/// A page drawing a red, a blue and a green square in groups `defs` (as `/MC0`–`/MC2`), the
+/// catalog listing them with default configuration `config`, plus `more` objects; in `config` and
+/// `more`, `{0}`–`{2}` stand for the groups.
+fn three_groups(defs: [&str; 3], more: &[&str], config: &str) -> Vec<u8> {
+    let refs = [0, 1, 2].map(|i| format!("{} 0 R", first_extra(1) + i));
+    let fill = |s: &str| (0..3).fold(s.to_string(), |s, i| s.replace(&format!("{{{i}}}"), &refs[i]));
+    let content = "/OC /MC0 BDC 1 0 0 rg 10 10 20 20 re f EMC /OC /MC1 BDC 0 0 1 rg 40 40 20 20 re f EMC /OC /MC2 BDC 0 1 0 rg 70 70 20 20 re f EMC";
+    let page = PdfPage { resources: fill("/Properties << /MC0 {0} /MC1 {1} /MC2 {2} >>"), ..PdfPage::new(100.0, 100.0, content) };
+    let catalog = format!("/OCProperties << /OCGs [{}] /D << {} >> >> ", refs.join(" "), fill(config));
+    let more: Vec<String> = more.iter().map(|m| fill(m)).collect();
+    let objs: Vec<&str> = defs.iter().copied().chain(more.iter().map(String::as_str)).collect();
+    pdf_with_catalog(&[page], &objs, &catalog, None)
+}
+
+fn ocg(name: &str, usage: &str) -> String {
+    format!("<< /Type /OCG /Name ({name}) {usage} >>")
+}
+
+fn visibility(layers: &[std::sync::Arc<Node>]) -> Vec<bool> {
+    layers.iter().map(|l| l.visible).collect()
+}
+
+#[test]
+fn a_view_state_that_is_off_hides_the_layer_with_its_art() {
+    let off = ocg("Off", "/Usage << /View << /ViewState /OFF >> >>");
+    // With an /AS entry for viewing, the view state wins over the default configuration.
+    let on = ocg("On", "/Usage << /View << /ViewState /ON >> >>");
+    let bytes = three_groups([&ocg("Plain", ""), &off, &on], &[], "/OFF [{2}] /AS [<< /Event /View /Category [/View] /OCGs [{1} {2}] >>]");
+    let d = import(&bytes).unwrap();
+    assert_eq!(names(&d), ["Plain", "Off", "On"]);
+    assert_eq!(visibility(&d.layers), [true, false, true]);
+    assert_eq!(colors(&d.layers[1]), [Color::rgb(0.0, 0.0, 1.0)]);
+    assert_eq!(colors(&d.layers[2]), [Color::rgb(0.0, 1.0, 0.0)], "the art the default configuration hides is read");
+    // Without one, a view state that is off still hides the layer.
+    let d = import(&three_groups([&ocg("Plain", ""), &off, &ocg("Other", "")], &[], "")).unwrap();
+    assert_eq!(visibility(&d.layers), [true, false, true]);
+    assert_eq!(colors(&d.layers[1]), [Color::rgb(0.0, 0.0, 1.0)]);
+}
+
+#[test]
+fn nested_groups_become_sublayers_and_hidden_ones_keep_their_art() {
+    // The order as an object of its own (as Illustrator writes it): "Top" holds "Sub", which is
+    // off; a label's groups stay at the level of the label.
+    let order = first_extra(1) + 3;
+    let bytes = three_groups(
+        [&ocg("Top", ""), &ocg("Sub", ""), &ocg("Other", "")],
+        &["[{0} [{1}] [(Label) {2}]]"],
+        &format!("/OFF [{{1}}] /Order {order} 0 R"),
+    );
+    let d = import(&bytes).unwrap();
+    assert_eq!(names(&d), ["Top", "Other"]);
+    assert_eq!(visibility(&d.layers), [true, true]);
+    let top = d.layers[0].children().unwrap();
+    assert_eq!(top.len(), 2, "its art, then its sublayer");
+    assert_eq!(top[0].appearance.fill().and_then(|f| f.paint.color()), Some(Color::rgb(1.0, 0.0, 0.0)));
+    let sub = &top[1];
+    assert!(matches!(sub.kind, NodeKind::Layer { .. }) && sub.name.as_deref() == Some("Sub"));
+    assert!(!sub.visible, "the sublayer that is off is hidden");
+    assert_eq!(colors(sub), [Color::rgb(0.0, 0.0, 1.0)], "with its art");
+    assert_eq!(d.layer_color(sub.id), d.layer_color(d.layers[0].id), "a sublayer takes its layer's colour");
+    assert_eq!(colors(&d.layers[1]), [Color::rgb(0.0, 1.0, 0.0)]);
+}
+
+#[test]
+fn a_sublayer_that_paints_first_brings_its_parent_layer() {
+    // "Sub" paints first; "Top", its parent, paints its own art last.
+    let bytes = three_groups([&ocg("Sub", ""), &ocg("Other", ""), &ocg("Top", "")], &[], "/Order [{2} [{0}] {1}]");
+    let d = import(&bytes).unwrap();
+    assert_eq!(names(&d), ["Top", "Other"]);
+    let top = d.layers[0].children().unwrap();
+    assert_eq!(top.len(), 2);
+    assert_eq!(top[0].name.as_deref(), Some("Sub"));
+    assert_eq!(colors(&top[0]), [Color::rgb(1.0, 0.0, 0.0)]);
+    assert_eq!(top[1].appearance.fill().and_then(|f| f.paint.color()), Some(Color::rgb(0.0, 1.0, 0.0)));
+}
+
+#[test]
+fn hostile_layer_orders_stay_bounded() {
+    // A group listed twice, under itself, and an order nested far deeper than layers go.
+    let deep = format!("{}{{2}}{}", "[".repeat(100), "]".repeat(100));
+    let order = format!("[{{0}} [{{0}} {{1}}] {{1}} [{{0}}] {deep}]");
+    let d = import(&three_groups([&ocg("A", ""), &ocg("B", ""), &ocg("C", "")], &[], &format!("/Order {order}"))).unwrap();
+    assert_eq!(names(&d), ["A", "C"], "C, listed too deep, stays a top-level layer");
+    assert_eq!(d.layers[0].children().unwrap()[1].name.as_deref(), Some("B"));
+    let mut count = 0;
+    d.walk(|n| count += usize::from(matches!(n.kind, NodeKind::Layer { .. })));
+    assert_eq!(count, 3, "each group is one layer");
+}
+
+#[test]
+fn thousands_of_layers_hidden_ones_included_all_come_in() {
+    const N: usize = 3000;
+    let first = first_extra(1);
+    let objs: Vec<String> = (0..N).map(|i| ocg(&format!("L{i}"), "")).collect();
+    let refs: Vec<String> = (0..N).map(|i| format!("{} 0 R", first + i)).collect();
+    let props: String = refs.iter().enumerate().map(|(i, r)| format!("/M{i} {r} ")).collect();
+    let content: String = (0..N).map(|i| format!("/OC /M{i} BDC {} {} 1 1 re f EMC ", i % 100, i / 100)).collect();
+    let off: Vec<&str> = refs.iter().step_by(2).map(String::as_str).collect();
+    let catalog = format!("/OCProperties << /OCGs [{}] /D << /OFF [{}] >> >> ", refs.join(" "), off.join(" "));
+    let page = PdfPage { resources: format!("/Properties << {props}>>"), ..PdfPage::new(100.0, 100.0, &content) };
+    let objs: Vec<&str> = objs.iter().map(String::as_str).collect();
+    let d = import(&pdf_with_catalog(&[page], &objs, &catalog, None)).unwrap();
+    assert_eq!(d.layers.len(), N);
+    assert!(d.layers.iter().enumerate().all(|(i, l)| l.visible == (i % 2 == 1) && l.children().is_some_and(|c| c.len() == 1)));
 }

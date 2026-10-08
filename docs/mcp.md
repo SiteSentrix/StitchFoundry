@@ -373,9 +373,12 @@ their stop opacity and stop where the shading doesn't extend. Text becomes point
 the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font, and
 every export that draws that type — PDF, EPS, EMF/WMF, raster images, SVG with outlined or embedded fonts — says in
 its `warnings` that it wrote the fallback font) — `textAs: "outlines"` keeps the glyph outlines the file draws instead
-(its embedded fonts, installed or not). Optional content groups (the layers of PDF and PDF-compatible `.ai`
-files) become layers with their name, visibility, print state and lock, art that is off coming in as a hidden layer;
-art outside them goes to a layer per page (except the opaque white page a `.ai` paints under its layers, which isn't art). `layers: false` gives one layer per page of only what shows:
+(its embedded fonts, installed or not). Strokes stay live strokes (width, cap, join, miter limit, dash and paint), and
+an object written as a fill and then a stroke of the same outline is one path with both. Optional content groups (the
+layers of PDF and PDF-compatible `.ai` files) become layers with their name, visibility (the default configuration's,
+or a view state that is off), print state and lock, nested as sublayers the way the file's layer order nests them; art
+that is off comes in as a hidden layer. Art outside them goes to a layer per page (except the opaque white page a `.ai`
+paints under its layers, which isn't art). `layers: false` gives one layer per page of only what shows:
 
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/map.pdf","textAs":"outlines","layers":false}}}

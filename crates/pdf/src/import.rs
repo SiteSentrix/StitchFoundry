@@ -11,7 +11,7 @@ use hayro_interpret::{
     MaskType, PathDrawMode, SoftMask, StrokeProps, interpret_page,
 };
 use hayro_syntax::object::Name;
-use kurbo::{Affine, BezPath, Rect, Shape};
+use kurbo::{Affine, BezPath, PathEl, Rect, Shape};
 use vectorcraft_color::{BlendMode, Color, Paint, Swatch};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
@@ -21,7 +21,7 @@ use vectorcraft_geom::{FillRule, PathData};
 
 use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
-use crate::import_scan::{Ocgs, Scan, all_on, hides_forms, scan_page};
+use crate::import_scan::{MAX_NESTING, Ocgs, Scan, all_on, hides_forms, scan_page};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
 use crate::import_text::{Families, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
@@ -46,6 +46,60 @@ enum Slot {
     Group(usize),
 }
 
+/// What each group's layer holds, in paint order: its sublayers (their groups) and, where its
+/// own group is listed, its art.
+type Nesting = HashMap<usize, Vec<usize>>;
+
+/// Group `g` paints (its first art): note where its art goes in its layer, and where that layer
+/// goes when it is new: in its parent's layer (placed the same way) or, for a top-level group, in
+/// `slots`.
+fn place_group(g: usize, ocgs: &Ocgs, slots: &mut Vec<Slot>, nesting: &mut Nesting) {
+    let placed = nesting.contains_key(&g);
+    nesting.entry(g).or_default().push(g);
+    if placed {
+        return;
+    }
+    let mut child = g;
+    // Each parent is placed before its sublayers, so the chain ends (within the nesting depth).
+    for _ in 0..=MAX_NESTING {
+        let Some(parent) = ocgs.list.get(child).and_then(|o| o.parent) else { break };
+        let placed = nesting.contains_key(&parent);
+        nesting.entry(parent).or_default().push(child);
+        if placed {
+            return;
+        }
+        child = parent;
+    }
+    slots.push(Slot::Group(child));
+}
+
+/// The layer of group `g`, in `color`: its art and sublayers. `None` for a group that isn't read.
+fn group_layer(
+    b: &mut Builder<'_>,
+    g: usize,
+    ocgs: &Ocgs,
+    nesting: &Nesting,
+    art: &mut HashMap<usize, Vec<Arc<Node>>>,
+    color: LayerColor,
+) -> Option<Node> {
+    let ocg = ocgs.list.get(g)?;
+    let mut l = Node::layer(b.id(), &ocg.name, color);
+    (l.visible, l.locked) = (ocg.on, ocg.locked);
+    let mut children = vec![];
+    for &c in nesting.get(&g).into_iter().flatten() {
+        if c == g {
+            children.extend(art.remove(&g).unwrap_or_default());
+        } else if let Some(sub) = group_layer(b, c, ocgs, nesting, art, color) {
+            children.push(Arc::new(sub));
+        }
+    }
+    if let NodeKind::Layer { children: c, printable, .. } = &mut l.kind {
+        *c = children;
+        *printable = ocg.print;
+    }
+    Some(l)
+}
+
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open(bytes, opts.password.as_deref())?;
@@ -54,7 +108,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let route = opts.layers && !ocgs.list.is_empty();
     // Content that is off imports as hidden layers: an update of the file turns every group on
     // (unless a form is hidden by its own group: its art couldn't be told apart).
-    let hide = route && ocgs.any_off();
+    let hide = route && ocgs.skips_any();
     let turned_on = (hide && !picked.iter().filter_map(|&n| original.pages().get(n)).any(|p| hides_forms(p, &mut ocgs)))
         .then(|| all_on(bytes, &original))
         .flatten()
@@ -100,6 +154,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let mut placeholder = true;
     let mut slots: Vec<Slot> = vec![];
     let mut group_art: HashMap<usize, Vec<Arc<Node>>> = HashMap::new();
+    let mut nesting = Nesting::new();
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
         // The chosen box sits at (x, 0); the page draws round it.
@@ -158,7 +213,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
                 None => slots.push(page_layer(&mut b, art)),
                 Some(g) => {
                     let into = group_art.entry(g).or_insert_with(|| {
-                        slots.push(Slot::Group(g));
+                        place_group(g, &ocgs, &mut slots, &mut nesting);
                         vec![]
                     });
                     into.extend(art);
@@ -172,16 +227,11 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     for (n, slot) in slots.into_iter().enumerate() {
         let layer = match slot {
             Slot::Page(l) => *l,
-            Slot::Group(g) => {
-                let Some(ocg) = ocgs.list.get(g) else { continue };
-                let mut l = Node::layer(b.id(), &ocg.name, LayerColor::Preset((n % 27) as u8));
-                (l.visible, l.locked) = (ocg.on, ocg.locked);
-                if let NodeKind::Layer { children, printable, .. } = &mut l.kind {
-                    *children = group_art.remove(&g).unwrap_or_default();
-                    *printable = ocg.print;
-                }
-                l
-            }
+            // Sublayers take their top-level layer's colour.
+            Slot::Group(g) => match group_layer(&mut b, g, &ocgs, &nesting, &mut group_art, LayerColor::Preset((n % 27) as u8)) {
+                Some(l) => l,
+                None => continue,
+            },
         };
         doc.layers.push(Arc::new(layer));
     }
@@ -497,6 +547,8 @@ struct Builder<'p> {
     /// A transparency group was just pushed: a form's (whose flags come next) or an image's.
     pending: bool,
     nested: u32,
+    /// The last filled path: its node and its outline (a stroke of the same outline joins it).
+    last_fill: Option<(NodeId, BezPath)>,
 }
 
 fn blend(b: hayro_interpret::BlendMode) -> BlendMode {
@@ -526,6 +578,29 @@ fn fill_rule(r: hayro_interpret::FillRule) -> FillRule {
         hayro_interpret::FillRule::NonZero => FillRule::NonZero,
         hayro_interpret::FillRule::EvenOdd => FillRule::EvenOdd,
     }
+}
+
+/// `p` with every subpath closed: how a fill reads it.
+fn closed_subpaths(p: &BezPath) -> BezPath {
+    let mut out = BezPath::new();
+    let mut open = false;
+    for el in p.elements() {
+        if open && matches!(el, PathEl::MoveTo(_)) {
+            out.push(PathEl::ClosePath);
+        }
+        out.push(*el);
+        open = !matches!(el, PathEl::ClosePath);
+    }
+    if open {
+        out.push(PathEl::ClosePath);
+    }
+    out
+}
+
+/// Do a fill of `fill` and a stroke of `stroke` paint one object's outline? Applications write the
+/// fill without closing the path (filling closes it) and the stroke closed.
+fn same_outline(fill: &BezPath, stroke: &BezPath) -> bool {
+    fill.elements() == stroke.elements() || closed_subpaths(fill).elements() == closed_subpaths(stroke).elements()
 }
 
 fn mean_scale(a: Affine) -> f64 {
@@ -606,6 +681,7 @@ impl<'p> Builder<'p> {
             marked: vec![],
             pending: false,
             nested: 0,
+            last_fill: None,
         }
     }
 
@@ -656,10 +732,15 @@ impl<'p> Builder<'p> {
         let children = self.close_frames();
         let groups = std::mem::take(&mut self.root_groups);
         let mut parts: Vec<(Option<usize>, Vec<Arc<Node>>)> = vec![];
+        // Thousands of groups: find each one's part by index.
+        let mut at: HashMap<Option<usize>, usize> = HashMap::new();
         for (n, g) in children.into_iter().zip(groups.into_iter().chain(std::iter::repeat(None))) {
-            match parts.iter_mut().find(|(k, _)| *k == g) {
-                Some((_, v)) => v.push(n),
-                None => parts.push((g, vec![n])),
+            let i = *at.entry(g).or_insert_with(|| {
+                parts.push((g, vec![]));
+                parts.len() - 1
+            });
+            if let Some((_, v)) = parts.get_mut(i) {
+                v.push(n);
             }
         }
         parts
@@ -1219,24 +1300,35 @@ impl<'a> Device<'a> for Builder<'_> {
                 if let NodeKind::Path { rule: r, .. } = &mut n.kind {
                     *r = fill_rule(*rule);
                 }
+                self.last_fill = Some((n.id, bp));
                 let n = wrap(self, n);
                 self.push_node(n);
             }
             PathDrawMode::Stroke(props) => {
                 let st = stroke_layer(paint, opacity, props, mean_scale(transform));
-                // Fill-then-stroke of the same path (the `B` operator) becomes one object.
+                // Fill-then-stroke of the same path (the `B` operator, or a fill and a stroke of
+                // the outline as Illustrator writes an object) becomes one object: a path with a
+                // fill and a live stroke.
                 let blend = self.blend;
+                let fill = self.last_fill.take();
                 let last = match self.mask {
                     Some(_) => self.masked.last_mut(),
                     None => self.stack.last_mut().and_then(|f| f.children.last_mut()),
                 };
                 if band.is_none()
                     && let Some(last) = last
+                    && let Some((id, outline)) = fill
+                    && last.id == id
                     && last.blend == blend
-                    && last.path_data() == Some(&pd)
                     && last.appearance.stroke().is_none()
+                    && same_outline(&outline, &bp)
                 {
-                    Arc::make_mut(last).appearance.items.push(AppearanceItem::Stroke(st));
+                    let last = Arc::make_mut(last);
+                    // The stroke's outline: closing it changes the stroke, not the fill.
+                    if let Some(p) = last.path_data_mut() {
+                        *p = pd;
+                    }
+                    last.appearance.items.push(AppearanceItem::Stroke(st));
                     return;
                 }
                 let n = Node::path(self.id(), pd, Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() });
