@@ -270,3 +270,51 @@ fn menus_that_only_pick_a_font_leave_the_document_alone() {
     assert_eq!(picked(&mut app, Some(FontPick::Favorite("inter".into()))), None);
     assert!(app.ui.favorite_fonts.is_empty());
 }
+
+/// #555: the menu's search field and filters stay at its top while the wheel scrolls the families,
+/// past the list's end too: the list is the menu's one scrolling part.
+#[test]
+fn the_search_field_stays_put_while_the_list_scrolls() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 500.0))), ..Default::default() };
+        let mut at = egui::Pos2::ZERO;
+        let mut out = ctx.run_ui(input, |ui| {
+            // Low in the window, as in a panel at the bottom of the dock: the menu opens upwards.
+            ui.add_space(390.0);
+            at = ui.next_widget_position();
+            font_menu(ui, "test-scroll", "Inter", 260.0, None, MenuLook::default());
+        });
+        out.textures_delta.clear();
+        let search = out.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == "Search" => Some(t.pos),
+            _ => None,
+        });
+        (at, search)
+    };
+    let (at, _) = frame(vec![]);
+    let click = at + egui::vec2(40.0, 10.0);
+    let button = |pressed| egui::Event::PointerButton { pos: click, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![egui::Event::PointerMoved(click), button(true)]);
+    frame(vec![button(false)]);
+    let mut field = None;
+    for _ in 0..5 {
+        field = frame(vec![]).1;
+    }
+    let field = field.expect("the search field shows");
+    let over_list = egui::pos2(field.x + 40.0, field.y + 120.0);
+    for dy in [-400.0, -4000.0, -4000.0] {
+        let wheel = egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, dy),
+            modifiers: Default::default(),
+            phase: egui::TouchPhase::Move,
+        };
+        frame(vec![egui::Event::PointerMoved(over_list), wheel]);
+        for _ in 0..10 {
+            assert_eq!(frame(vec![]).1, Some(field), "the field stays where it was");
+        }
+    }
+}

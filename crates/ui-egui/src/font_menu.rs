@@ -307,12 +307,10 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
         widgets::dim_label(ui, tl!("No matching fonts"));
         return None;
     }
-    // The rows: only those in view are laid out (there are thousands of families). The list fills
-    // what the popup shows below the filters (its clip: the popup doesn't grow past its own size,
-    // and a taller list would scroll inside a scrolling popup), down to the window's bottom.
-    const BOTTOM_GAP: f32 = 12.0;
-    let bottom = ui.clip_rect().bottom().min(ui.ctx().content_rect().bottom() - BOTTOM_GAP);
-    let room = (bottom - ui.next_widget_position().y).max(120.0);
+    // The rows: only those in view are laid out (there are thousands of families). The list is
+    // the menu's one scrolling part, under the search field and filters (#555): it fills the
+    // menu's room (its max rect) below them.
+    let room = (ui.max_rect().bottom() - ui.next_widget_position().y).clamp(120.0, 600.0);
     let mut area = egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room.min(row_h * rows.len() as f32));
     // The highlight in view: centred as the menu opens, scrolled just enough as the keys move it.
     if let Some(top) = st.highlight.map(|i| i as f32 * row_h) {
