@@ -31,7 +31,7 @@ use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
 pub use vectorcraft_doc::TextObject;
 
-pub use vectorcraft_doc::FirstBaseline;
+pub use vectorcraft_doc::{FirstBaseline, VerticalAlign};
 
 /// Paragraph composer; stored per text object in [`vectorcraft_doc::ParaStyle::composer`].
 pub use vectorcraft_doc::Composer;
@@ -50,6 +50,8 @@ pub struct LayoutOptions {
     pub first_baseline: FirstBaseline,
     /// Minimum first-baseline offset in points.
     pub first_baseline_min: f64,
+    /// Vertical alignment of the lines in each row/column (Area Type Options "Align").
+    pub vertical_align: VerticalAlign,
     /// Overrides the object's paragraph composer (`None` = use `ParaStyle::composer`).
     pub composer: Option<Composer>,
     pub features: OtFeatures,
@@ -64,6 +66,7 @@ impl Default for LayoutOptions {
             inset: 0.0,
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
+            vertical_align: VerticalAlign::Top,
             composer: None,
             features: OtFeatures::default(),
         }
@@ -124,6 +127,8 @@ pub struct LineInfo {
     /// Horizontal span available to the line (frame span minus indents; the content extent for
     /// point type). Used for hit testing across columns.
     pub avail: (f64, f64),
+    /// Area type: index of the frame cell ([`TextLayout::frames`]) the line sits in (0 otherwise).
+    pub region: usize,
 }
 
 #[derive(Clone, Debug, Default)]

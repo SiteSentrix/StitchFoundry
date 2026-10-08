@@ -13,7 +13,7 @@ use crate::composer::{Breakpoint, Params, compose};
 use crate::fontdb::FontDb;
 use crate::hyphen::hyphen_points;
 use crate::shape::{Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, no_line_end, no_line_start, punct, shape_range, style_metrics};
-use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout};
+use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
 const EPS: f64 = 1e-6;
 
@@ -127,6 +127,7 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
         inset: a.inset,
         first_baseline: a.first_baseline,
         first_baseline_min: a.first_baseline_min,
+        vertical_align: a.vertical_align,
         ..LayoutOptions::default()
     };
     layout_with(db, t, &opts)
@@ -183,9 +184,12 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
             } else {
                 t.wrap.clone()
             };
-            let regions = Region::cells(&(to_lines * frame.to_bezpath()), opts, &wrap);
+            let mut regions = Region::cells(&(to_lines * frame.to_bezpath()), opts, &wrap);
             cx.out.frames = regions.iter().map(|r| line_xf.transform_rect_bbox(r.cell)).collect();
             flow(&mut cx, &paras, &t.para, Some(&regions));
+            if opts.vertical_align != VerticalAlign::Top {
+                align_vertically(&mut cx, &paras, &t.para, &mut regions);
+            }
         }
         TextKind::OnPath { path, .. } => on_path(&mut cx, &paras, t, path),
     }
@@ -416,6 +420,125 @@ fn finish_bounds(out: &mut TextLayout) {
     out.bounds = b.unwrap_or_default();
 }
 
+/// Space left in each cell after flowing top-aligned: (space above the first line's ascent, space
+/// below the last line's descent, number of distinct baselines). Cells without lines are `None`.
+fn cell_space(out: &TextLayout, regions: &[Region]) -> Vec<Option<(f64, f64, usize)>> {
+    regions
+        .iter()
+        .enumerate()
+        .map(|(ri, r)| {
+            let mut top = f64::INFINITY;
+            let mut bottom = f64::NEG_INFINITY;
+            let mut baselines: Vec<f64> = vec![];
+            for l in out.lines.iter().filter(|l| l.region == ri) {
+                top = top.min(l.baseline - l.ascent);
+                bottom = bottom.max(l.baseline + l.descent);
+                if !baselines.iter().any(|b| (b - l.baseline).abs() < 1e-6) {
+                    baselines.push(l.baseline);
+                }
+            }
+            if baselines.is_empty() || !top.is_finite() || !bottom.is_finite() {
+                return None;
+            }
+            // Never negative: a full (or overflowing) cell stays where top alignment put it.
+            Some(((top - r.top()).max(0.0), (r.bottom() - bottom).max(0.0), baselines.len()))
+        })
+        .collect()
+}
+
+/// Area Type Options "Align" other than Top: move each cell's lines down. Rectangular cells
+/// without text wrap shift their lines (centre: half the space left below the last line;
+/// bottom: all of it; justify: the first line stays, each further line gets an equal share of it).
+/// Other frames give lines different widths at different heights, so the text flows again with
+/// each cell's lines started lower (or spaced wider) until it settles, at most eight passes; a
+/// pass that would push text out of the frame is undone and retried with half the step.
+fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: &mut [Region]) {
+    let align = cx.opts.vertical_align;
+    let plain = regions.iter().all(|r| (r.rect || r.polys.is_empty()) && r.wraps.is_empty());
+    if plain {
+        let space = cell_space(&cx.out, regions);
+        // Each distinct baseline's index within its cell, for justify.
+        let mut seen: Vec<Vec<f64>> = vec![vec![]; regions.len()];
+        let offs: Vec<f64> = cx
+            .out
+            .lines
+            .iter()
+            .map(|l| {
+                let Some(Some((_, below, n))) = space.get(l.region).copied() else { return 0.0 };
+                match align {
+                    VerticalAlign::Top => 0.0,
+                    VerticalAlign::Center => below * 0.5,
+                    VerticalAlign::Bottom => below,
+                    VerticalAlign::Justify => {
+                        let Some(s) = seen.get_mut(l.region) else { return 0.0 };
+                        let k = s.iter().position(|b| (b - l.baseline).abs() < 1e-6).unwrap_or_else(|| {
+                            s.push(l.baseline);
+                            s.len() - 1
+                        });
+                        if n > 1 { below * k as f64 / (n - 1) as f64 } else { 0.0 }
+                    }
+                }
+            })
+            .collect();
+        for (l, d) in cx.out.lines.iter_mut().zip(&offs) {
+            l.baseline += d;
+        }
+        for g in &mut cx.out.glyphs {
+            let d = offs.get(g.line).copied().unwrap_or(0.0);
+            if d != 0.0 {
+                let m = Affine::translate((0.0, d));
+                g.outline.apply_affine(m);
+                g.xf = m * g.xf;
+                g.origin.y += d;
+            }
+        }
+        return;
+    }
+    let laid_out = |out: &TextLayout| out.lines.last().map_or(0, |l| l.end);
+    // How much of the measured space a pass takes up: halved after a pass that lost text.
+    let mut step = 1.0;
+    for _ in 0..8 {
+        let space = cell_space(&cx.out, regions);
+        let mut moved = false;
+        let saved: Vec<(f64, f64)> = regions.iter().map(|r| (r.shift, r.gap)).collect();
+        for (r, s) in regions.iter_mut().zip(&space) {
+            let Some((above, below, n)) = *s else { continue };
+            let (shift, gap) = match align {
+                VerticalAlign::Top => (r.shift, r.gap),
+                VerticalAlign::Center => (r.shift + (below - above) * 0.5 * step, r.gap),
+                VerticalAlign::Bottom => (r.shift + below * step, r.gap),
+                VerticalAlign::Justify if n > 1 => (r.shift, r.gap + below * step / (n - 1) as f64),
+                VerticalAlign::Justify => (r.shift, r.gap),
+            };
+            let (shift, gap) = (shift.clamp(0.0, r.cell.height().max(0.0)), gap.clamp(0.0, r.cell.height().max(0.0)));
+            if (shift - r.shift).abs() > 0.25 || (gap - r.gap).abs() > 0.01 {
+                moved = true;
+            }
+            r.shift = shift;
+            r.gap = gap;
+        }
+        if !moved {
+            return;
+        }
+        let before = laid_out(&cx.out);
+        let prev = (std::mem::take(&mut cx.out.glyphs), std::mem::take(&mut cx.out.lines), std::mem::replace(&mut cx.out.overflow, false));
+        flow(cx, paras, para, Some(regions));
+        if laid_out(&cx.out) < before {
+            // Text no longer fits (lines got narrower, or flow around a wrap object): undo the
+            // pass and try a smaller step.
+            (cx.out.glyphs, cx.out.lines, cx.out.overflow) = prev;
+            for (r, (shift, gap)) in regions.iter_mut().zip(saved) {
+                r.shift = shift;
+                r.gap = gap;
+            }
+            step *= 0.5;
+            if step < 0.1 {
+                return;
+            }
+        }
+    }
+}
+
 /// One cell of a flattened area-type frame (the whole frame, or one row/column of it).
 struct Region {
     /// The cell (frame bounds, or a grid cell of them).
@@ -427,6 +550,10 @@ struct Region {
     rect: bool,
     /// Text Wrap shapes: (polygons, offset, invert).
     wraps: Vec<(Vec<Vec<Point>>, f64, bool)>,
+    /// Vertical alignment: how far below the top-aligned position the first line starts.
+    shift: f64,
+    /// Vertical justification: extra space added between consecutive lines.
+    gap: f64,
 }
 
 /// Flattened closed polygons of a path.
@@ -529,7 +656,7 @@ impl Region {
                 let x0 = bbox.x0 + c as f64 * (cw + gutter);
                 let y0 = bbox.y0 + r as f64 * (rh + gutter);
                 let cell = if rows * cols == 1 { bbox } else { Rect::new(x0, y0, x0 + cw, y0 + rh) };
-                out.push(Region { cell, inset: opts.inset.max(0.0), polys: polys.clone(), rect, wraps: wraps.clone() });
+                out.push(Region { cell, inset: opts.inset.max(0.0), polys: polys.clone(), rect, wraps: wraps.clone(), shift: 0.0, gap: 0.0 });
             }
         }
         out
@@ -674,9 +801,9 @@ impl Pen<'_> {
         loop {
             let r = regions.get(self.ri)?;
             let mut baseline = match self.prev {
-                None if self.model == LeadingModel::EmBoxTop => r.top() + est.top.max(self.fb_min),
-                None => r.top() + est.first_baseline(self.fb, self.fb_min),
-                Some(b) => self.next_baseline(b, est),
+                None if self.model == LeadingModel::EmBoxTop => r.top() + r.shift + est.top.max(self.fb_min),
+                None => r.top() + r.shift + est.first_baseline(self.fb, self.fb_min),
+                Some(b) => self.next_baseline(b, est) + r.gap,
             };
             loop {
                 if baseline + est.desc > r.bottom() + 0.01 {
@@ -761,10 +888,15 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
     let mut j = i;
     while j < g.len() {
         let gl = &g[j];
-        if j > i && !gl.is_space() && x + gl.adv > width + EPS {
+        let mut cluster_end = j + 1;
+        while g.get(cluster_end).is_some_and(|next| next.byte == gl.byte) {
+            cluster_end += 1;
+        }
+        let cluster_width: f64 = g[j..cluster_end].iter().map(|glyph| glyph.adv).sum();
+        if j > i && !gl.is_space() && x + cluster_width > width + EPS {
             // It ends the line with the spaces after it.
-            if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, j) && g.get(j + 1).is_none_or(|n| n.byte != gl.byte) {
-                let mut end = j + 1;
+            if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1) {
+                let mut end = cluster_end;
                 while g.get(end).is_some_and(SGlyph::is_space) {
                     end += 1;
                 }
@@ -772,17 +904,18 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
             }
             break;
         }
-        x += gl.adv;
-        if gl.break_after() && kinsoku_allows(g, j) {
-            if gl.is_soft_hyphen() {
-                if x + hyphen_glyph(gl).adv <= width + EPS {
-                    last_break = Some((j + 1, true));
+        x += cluster_width;
+        let last = &g[cluster_end - 1];
+        if last.break_after() && kinsoku_allows(g, cluster_end - 1) {
+            if last.is_soft_hyphen() {
+                if x + hyphen_glyph(last).adv <= width + EPS {
+                    last_break = Some((cluster_end, true));
                 }
             } else {
-                last_break = Some((j + 1, false));
+                last_break = Some((cluster_end, false));
             }
         }
-        j += 1;
+        j = cluster_end;
     }
     if j >= g.len() {
         return (g.len(), false);
@@ -805,14 +938,12 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
             }
         }
     }
-    // Don't separate a cluster's glyphs.
-    let (mut end, hy) = match last_break {
+    // Break candidates and greedy overflow are cluster boundaries; hyphenation also returns only
+    // cluster starts, so the resulting end always keeps each source cluster together.
+    let (end, hy) = match last_break {
         Some(b) if b.0 > i => b,
         _ => (j, false),
     };
-    while end > i + 1 && end < g.len() && g[end].byte == g[end - 1].byte {
-        end -= 1;
-    }
     (end, hy)
 }
 
@@ -833,6 +964,123 @@ fn kinsoku_allows(g: &[SGlyph], j: usize) -> bool {
 /// Kinsoku for a break between `before` and `after` (none: the end of the paragraph).
 fn kinsoku_between(before: char, after: Option<char>) -> bool {
     !no_line_end(before) && after.is_none_or(|c| !no_line_start(c))
+}
+
+#[cfg(test)]
+mod wrapping_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
+        // The face is only a required SGlyph field here; advances and cluster boundaries below are
+        // entirely synthetic, so the regressions don't depend on a particular font's shaping.
+        static DB: std::sync::OnceLock<FontDb> = std::sync::OnceLock::new();
+        let db = DB.get_or_init(|| FontDb::with_font_dirs(vec![]));
+        let face = db.face("Source Sans 3", "Regular").expect("bundled test face");
+        specs
+            .iter()
+            .map(|&(byte, len, adv, ch)| SGlyph {
+                face: Arc::clone(&face),
+                gid: 0,
+                byte,
+                len,
+                run: 0,
+                adv,
+                dx: 0.0,
+                dy: 0.0,
+                sx: 1.0,
+                sy: 1.0,
+                bshift: 0.0,
+                rotation: 0.0,
+                ascent: 8.0,
+                descent: 2.0,
+                leading: 0.0,
+                cap: 6.0,
+                xh: 4.0,
+                ch,
+                tcy: None,
+                lead: 0.0,
+                level: unicode_bidi::Level::ltr(),
+            })
+            .collect()
+    }
+
+    fn source_range(glyphs: &[SGlyph], start: usize, end: usize) -> Range<usize> {
+        let first = glyphs.get(start).expect("nonempty source range");
+        let last = glyphs.get(end - 1).expect("nonempty source range");
+        first.byte..last.byte + last.len
+    }
+
+    #[test]
+    fn greedy_wrap_keeps_an_oversized_first_cluster_and_its_source_range() {
+        let text = "بَت";
+        let glyphs = synthetic_glyphs(&[(0, 4, 2.0, 'ب'), (0, 4, 2.0, 'ب'), (4, 2, 1.0, 'ت')]);
+
+        let (end, hyphenated) = break_line(text, &glyphs, 0, 3.0, false, Burasagari::None);
+
+        assert!(!hyphenated);
+        assert_eq!(end, 2, "oversized base-plus-mark cluster must stay together");
+        assert_eq!(source_range(&glyphs, 0, end), 0..4);
+        assert_eq!(glyphs.get(end).map(|g| g.byte), Some(4));
+    }
+
+    #[test]
+    fn greedy_wrap_keeps_an_oversized_cluster_after_a_line_start_atomic() {
+        let text = "بَتَث";
+        let glyphs = synthetic_glyphs(&[(0, 4, 1.0, 'ب'), (4, 4, 2.0, 'ت'), (4, 4, 2.0, 'ت'), (8, 2, 1.0, 'ث')]);
+
+        let (first_end, _) = break_line(text, &glyphs, 0, 3.0, false, Burasagari::None);
+        assert_eq!(first_end, 1);
+        assert_eq!(source_range(&glyphs, 0, first_end), 0..4);
+
+        let (second_end, hyphenated) = break_line(text, &glyphs, first_end, 3.0, false, Burasagari::None);
+
+        assert!(!hyphenated);
+        assert_eq!(second_end, 3, "oversized cluster at the next line start must stay together");
+        assert_eq!(source_range(&glyphs, first_end, second_end), 4..8);
+        assert_eq!(glyphs.get(second_end).map(|g| g.byte), Some(8));
+    }
+
+    #[test]
+    fn narrow_arabic_area_wrap_keeps_base_and_mark_together_when_supported() {
+        let db = FontDb::global();
+        let Some(face) = db.face_covering('ب').filter(|face| face.covers('َ')) else {
+            // Arabic integration coverage depends on an installed font; synthetic tests above are
+            // the font-independent regression oracle.
+            return;
+        };
+        let text = "بَت";
+        let style = CharStyle { font_family: face.family.clone(), font_style: face.style.clone(), size: 20.0, ..CharStyle::default() };
+        let bidi = para_bidi(text, None);
+        let levels = bidi.as_ref().map_or(&[][..], |info| &info.levels);
+        let mut shaped = Vec::new();
+        shape_range(db, text, 0..text.len(), &[(0..text.len(), &style)], &OtFeatures::default(), levels, &mut shaped);
+        let Some(first) = shaped.first() else { return };
+        let first_end = shaped.iter().take_while(|g| g.byte == first.byte).count();
+        if first.byte != 0 || first_end < 2 || first_end >= shaped.len() {
+            return;
+        }
+        // Pick a narrow width that fits glyphs before one positive-advance glyph but not that next
+        // glyph. This ensures the old per-glyph loop would have returned inside the first cluster.
+        let mut prefix = shaped.first().map_or(0.0, |g| g.adv);
+        let width = (1..first_end).find_map(|k| {
+            let advance = shaped.get(k)?.adv;
+            if prefix > EPS && advance > EPS {
+                Some(prefix)
+            } else {
+                prefix += advance;
+                None
+            }
+        });
+        let Some(width) = width else { return };
+
+        let mut object = TextObject::point(Point::ZERO, text, style);
+        object.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, width, 100.0).to_path(0.1)) };
+        let result = layout_with(db, &object, &LayoutOptions::default());
+
+        let next_cluster_byte = shaped.get(first_end).map(|g| g.byte);
+        assert_eq!(result.lines.first().map(|line| line.end), next_cluster_byte);
+    }
 }
 
 #[cfg(test)]
@@ -1205,6 +1453,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 glyph_start,
                 glyph_end: cx.out.glyphs.len(),
                 avail: if regions.is_some() { (ax0, ax1) } else { (start_x, x_end) },
+                region: if regions.is_some() { pen.ri } else { 0 },
             });
             pen.settled(baseline, m);
             // Further spans of this line band share the settled baseline.
@@ -1281,6 +1530,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &Path
             glyph_start: 0,
             glyph_end: 0,
             avail: (0.0, 0.0),
+            region: 0,
         });
         return;
     }
@@ -1365,6 +1615,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &Path
         glyph_start: 0,
         glyph_end: cx.out.glyphs.len(),
         avail: (0.0, ap.len()),
+        region: 0,
     });
 }
 
