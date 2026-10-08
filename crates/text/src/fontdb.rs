@@ -782,8 +782,29 @@ pub(crate) fn sfnt_of(tables: &[(&[u8; 4], &[u8])]) -> Option<Vec<u8>> {
     Some(font)
 }
 
-/// The platform's font folders (the system's and the user's) and, on Windows, the font files
-/// registered with it outside them, scanned by [`FontDb::global`].
+/// Lists the font files the platform's font service knows, for [`set_platform_font_files`].
+pub type PlatformFontFiles = fn() -> Vec<String>;
+
+/// What lists the platform's font files, set by the app ([`set_platform_font_files`]).
+#[cfg(not(target_arch = "wasm32"))]
+static PLATFORM_FONT_FILES: std::sync::OnceLock<PlatformFontFiles> = std::sync::OnceLock::new();
+
+/// Have [`system_font_dirs`] add the font files `list` gives (full paths) outside the font
+/// folders, asked again by each scan and each check for installed fonts
+/// ([`FontDb::installed_fonts_changed`]). The desktop app lists DirectWrite's system font
+/// collection on Windows: fonts a font service such as Adobe Fonts loads in place, from files
+/// outside the font folders and unknown to the registry (#579). Only the first call counts.
+pub fn set_platform_font_files(list: PlatformFontFiles) {
+    #[cfg(not(target_arch = "wasm32"))]
+    // A second call keeps the first lister, as documented.
+    let _ = PLATFORM_FONT_FILES.set(list);
+    #[cfg(target_arch = "wasm32")]
+    let _ = list;
+}
+
+/// The platform's font folders (the system's and the user's) and the font files known to it
+/// outside them (on Windows those registered with it, and those [`set_platform_font_files`]
+/// lists), scanned by [`FontDb::global`].
 pub fn system_font_dirs() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
     if cfg!(target_arch = "wasm32") {
@@ -824,6 +845,11 @@ pub fn system_font_dirs() -> Vec<PathBuf> {
         // In a Flatpak sandbox, the host's fonts (system, local and the user's).
         dirs.extend(["/run/host/fonts", "/run/host/local-fonts", "/run/host/user-fonts"].map(Into::into));
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(list) = PLATFORM_FONT_FILES.get() {
+        let files = fonts_outside(list(), &dirs);
+        dirs.extend(files);
+    }
     dirs
 }
 
@@ -848,7 +874,7 @@ fn registered_font_files(font_dirs: &[PathBuf]) -> Vec<PathBuf> {
 /// The full paths among `registered` (font registrations' data) that aren't in `font_dirs`
 /// (ignoring case, as Windows paths do), sorted and deduplicated. File names alone are files in
 /// the Windows font folder, which is scanned anyway. The count is capped.
-#[cfg(any(windows, test))]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn fonts_outside(registered: impl IntoIterator<Item = String>, font_dirs: &[PathBuf]) -> Vec<PathBuf> {
     const MAX_REGISTERED: usize = 1 << 16;
     let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
@@ -1154,6 +1180,7 @@ impl FontDb {
         let mut n = 0;
         let paths = self.font_paths.get();
         let mut modified_at = Vec::new();
+        // Each file with whether it was named by itself rather than found in a folder.
         let mut files = Vec::new();
         let mut stack = paths.clone();
         // Each folder once, however links lead back to it.
@@ -1166,7 +1193,7 @@ impl FontDb {
             modified_at.push((d.clone(), modified(&d)));
             // Not a folder: a font file named by itself (or nothing, yet).
             let Ok(rd) = std::fs::read_dir(&d) else {
-                files.push(d);
+                files.push((d, true));
                 continue;
             };
             for e in rd.flatten() {
@@ -1174,13 +1201,15 @@ impl FontDb {
                 if p.is_dir() {
                     stack.push(p);
                 } else {
-                    files.push(p);
+                    files.push((p, false));
                 }
             }
         }
-        for p in files {
+        for (p, named) in files {
+            // A file named by itself is a font whatever its name (font services keep fonts in
+            // files without an extension); one of a folder's only with a font's extension.
             let ext = p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
-            if !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
+            if !named && !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
                 continue;
             }
             for FaceStyle { family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
