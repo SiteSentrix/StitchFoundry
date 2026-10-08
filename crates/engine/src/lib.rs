@@ -397,6 +397,8 @@ pub struct Prefs {
     pub units_stroke: String,
     pub units_type: String,
     pub units_asian_type: String,
+    /// Numbers Without Units Are Points: a number typed with no unit into a length field is read
+    /// in points instead of the field's unit (off by default, as in Illustrator).
     pub numbers_without_units_are_points: bool,
     pub identify_objects_by: String,
     // Guides & Grid
@@ -614,7 +616,7 @@ impl Default for Prefs {
             units_stroke: s("points"),
             units_type: s("points"),
             units_asian_type: s("points"),
-            numbers_without_units_are_points: true,
+            numbers_without_units_are_points: false,
             identify_objects_by: s("objectName"),
             guide_color: s("#4affff"),
             guide_style: s("lines"),

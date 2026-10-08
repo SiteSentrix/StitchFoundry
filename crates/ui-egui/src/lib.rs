@@ -725,6 +725,7 @@ impl VectorcraftApp {
 
     fn logic_frame(&mut self, ctx: &egui::Context) {
         i18n::set_current(self.ui_language());
+        widgets::set_bare_numbers_are_points(ctx, self.session.prefs.numbers_without_units_are_points);
         self.adopt_context(ctx);
         if !self.styled {
             theme::install_fonts(ctx);

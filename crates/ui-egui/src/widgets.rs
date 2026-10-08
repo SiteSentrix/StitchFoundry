@@ -146,8 +146,22 @@ pub fn dim_name(ui: &mut Ui, text: &str) -> Response {
     ui.label(egui::RichText::new(text).color(t.text).size(12.5))
 }
 
+/// Preferences › Units › Numbers Without Units Are Points (#394), for the frame: the app sets it
+/// from the preference before drawing (`VectorcraftApp::logic`), the length fields read it.
+pub(crate) fn set_bare_numbers_are_points(ctx: &egui::Context, on: bool) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("bare_numbers_are_points"), on));
+}
+
+/// The unit a number typed with no unit into a field in `unit` is read in: `unit`, or points with
+/// Numbers Without Units Are Points on. A typed unit (`12 mm`, `1in`) always wins.
+pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
+    let bare_points = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("bare_numbers_are_points"))).unwrap_or(false);
+    if bare_points { Unit::Points } else { unit }
+}
+
 /// A recessed numeric field showing `value` (points) in `unit`. Returns the new value (points)
-/// when the user commits (Enter / focus loss). Supports unit suffixes and arithmetic.
+/// when the user commits (Enter / focus loss). Supports unit suffixes and arithmetic; a number
+/// without a unit is in `unit`, or in points with Numbers Without Units Are Points on.
 pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
@@ -182,11 +196,12 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         .inner;
     select_all_on_focus(ui, &resp, &buf);
     // ↑/↓ and the wheel step in the field's unit; a drag on its label scrubs it.
-    let stepped = step_value(ui, &resp, &mut buf, |b| Some(unit.from_pt(unit.parse(b)?)), |v| unit.format(unit.to_pt(v)));
+    let read = typed_unit(ui.ctx(), unit);
+    let stepped = step_value(ui, &resp, &mut buf, |b| Some(unit.from_pt(read.parse(b)?)), |v| unit.format(unit.to_pt(v)));
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS);
     let commit = resp.lost_focus() && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
-    if commit { unit.parse(&buf) } else { stepped.or(scrubbed).map(|v| unit.to_pt(v)) }
+    if commit { read.parse(&buf) } else { stepped.or(scrubbed).map(|v| unit.to_pt(v)) }
 }
 
 /// The places a stepped value in a unit field keeps (no 12.300000001).
@@ -1319,7 +1334,7 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if resp.lost_focus() && buf != shown {
         let s = buf.trim();
-        if s.is_empty() { Some(None) } else { unit.parse(s).map(Some) }
+        if s.is_empty() { Some(None) } else { typed_unit(ui.ctx(), unit).parse(s).map(Some) }
     } else {
         stepped.or(scrubbed).map(|v| Some(unit.to_pt(v)))
     }

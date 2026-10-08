@@ -132,6 +132,31 @@ fn plain_fields_do_math_with_their_suffix() {
     assert_eq!(f.frame(vec![enter()], &draw), Some(90.0));
 }
 
+/// Preferences › Units › Numbers Without Units Are Points (#394): on, a number typed with no unit
+/// is read in points whatever the field's unit; a typed unit still wins; off (the default), a bare
+/// number is in the field's unit.
+#[test]
+fn bare_numbers_are_points_when_the_preference_says_so() {
+    let mut f = Field::new();
+    let u = Unit::Millimeters;
+    let pt = Cell::new(u.to_pt(4.0));
+    let draw = |ui: &mut egui::Ui| widgets::num_field(ui, "f", Some(pt.get()), u, 80.0).inspect(|&v| pt.set(v));
+    let typed = |f: &mut Field, text: &str| {
+        f.frame(vec![], &draw);
+        f.frame(f.click(1), &draw);
+        f.frame(vec![Event::Text(text.into())], &draw);
+        f.frame(vec![enter()], &draw)
+    };
+    assert_eq!(typed(&mut f, "12"), Some(u.to_pt(12.0)), "off: a bare number is in the field's unit");
+    widgets::set_bare_numbers_are_points(&f.ctx, true);
+    assert_eq!(typed(&mut f, "12"), Some(12.0), "on: points");
+    assert_eq!(typed(&mut f, "12 mm"), Some(u.to_pt(12.0)), "a typed unit wins");
+    assert_eq!(typed(&mut f, "1in"), Some(72.0));
+    assert_eq!(typed(&mut f, "10+5"), Some(15.0), "arithmetic in points too");
+    widgets::set_bare_numbers_are_points(&f.ctx, false);
+    assert_eq!(typed(&mut f, "12"), Some(u.to_pt(12.0)));
+}
+
 /// ↑/↓ step a focused numeric field by one of its unit (Shift: ten, Ctrl/Cmd: a tenth) and apply it
 /// at once, the new value selected so typing replaces it; an unfocused field leaves the arrows to
 /// the canvas (nudge).
