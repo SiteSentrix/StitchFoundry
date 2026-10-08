@@ -70,7 +70,7 @@ pub const OPTIONS: &[FormatOption] = &[
         name: "hiddenLayers",
         ty: "boolean",
         default: "false",
-        description: "keep hidden layers, not displayed (display:none); document.save sets it unless given",
+        description: "keep hidden layers and objects, not displayed (display=\"none\"); document.save sets it unless given",
     },
     FormatOption {
         name: "encoding",

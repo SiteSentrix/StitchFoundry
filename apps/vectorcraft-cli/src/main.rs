@@ -69,7 +69,8 @@ USAGE:
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
       formats). --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
       unless one of them is given, EPS the bounds of the art, the other formats the first artboard.
-      Live effects are kept; --outline-text writes SVG text as paths.
+      Live effects are kept, and hidden layers and objects (written hidden in SVG and PSD), with
+      SVG's data-* attributes; --outline-text writes SVG text as paths.
 
   vectorcraft-cli info FILE
       Print a JSON summary: the import warnings (what didn't come in as it was, such as an EPS
@@ -177,12 +178,10 @@ fn convert(args: &[String]) -> Result<(), String> {
     let [input, output] = <[String; 2]>::try_from(files).map_err(|_| "convert needs IN and OUT")?;
     let mut h = Headless::new();
     h.call("app.open", json!({"path": input})).map_err(|e| format!("open {input}: {e}"))?;
-    let r = h
-        .call(
-            "engine.execute",
-            json!({"command": "document.export", "params": {"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text}}),
-        )
-        .map_err(|e| format!("export {output}: {e}"))?;
+    // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
+    // PSD).
+    let params = json!({"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true});
+    let r = h.call("engine.execute", json!({"command": "document.export", "params": params})).map_err(|e| format!("export {output}: {e}"))?;
     outln!("{r}");
     Ok(())
 }
