@@ -115,11 +115,10 @@ fn text_lengths_in_physical_units() {
     assert!(close(o.x, 72.0) && close(o.y, 144.0), "{o:?}");
     let st = t.first_style();
     assert!(close(st.tracking, 100.0), "{}", st.tracking);
-    // User units of a physical root are CSS pixels (0.75 pt): the text carries that scale.
-    let scale = t.xf.as_coeffs()[0];
-    assert!(close(scale, 0.75), "{:?}", t.xf);
-    assert!(close(st.stroke_width * scale, 1.0), "{}", st.stroke_width);
-    assert!(close(st.size * scale, 15.0), "{}", st.size);
+    // User units of a physical root are CSS pixels (0.75 pt): that scale moves into the type.
+    assert!(close(t.xf.as_coeffs()[0], 1.0), "{:?}", t.xf);
+    assert!(close(st.stroke_width, 1.0), "{}", st.stroke_width);
+    assert!(close(st.size, 15.0), "{}", st.size);
 }
 
 #[test]
