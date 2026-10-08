@@ -3061,3 +3061,6 @@ theme	Appearance	外観
 	Images: link to the file instead of only embedding it.	画像：埋め込むだけでなく、ファイルにリンクします。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft ドキュメント：ロックされた 1 つのオブジェクト。ファイルの変更時に更新されます。
 	A file dialog is open: choose there first	ファイルダイアログが開いています。先にそちらで選択してください
+	Constrain	制限
+	Free Transform	自由変形
+	Perspective Distort	遠近変形

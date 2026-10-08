@@ -3597,3 +3597,6 @@ axis	Both	Оба
 	Images: link to the file instead of only embedding it.	Изображения: связывать с файлом вместо простого внедрения.
 	VectorCraft documents: one locked object, updated when the file changes.	Документы VectorCraft: один заблокированный объект, обновляемый при изменении файла.
 	A file dialog is open: choose there first	Открыто окно выбора файла: сначала сделайте выбор в нём
+	Constrain	Ограничить
+	Free Transform	Свободное трансформирование
+	Perspective Distort	Искажение перспективы

@@ -3599,3 +3599,6 @@ axis	Both	Ambos
 	Images: link to the file instead of only embedding it.	Imágenes: vincular al archivo en lugar de solo incrustarlo.
 	VectorCraft documents: one locked object, updated when the file changes.	Documentos de VectorCraft: un objeto bloqueado que se actualiza cuando cambia el archivo.
 	A file dialog is open: choose there first	Hay un cuadro de diálogo de archivos abierto: elija primero en él
+	Constrain	Restringir
+	Free Transform	Transformación libre
+	Perspective Distort	Distorsión de perspectiva
