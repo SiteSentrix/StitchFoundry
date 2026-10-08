@@ -122,7 +122,7 @@ pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weig
 /// The Stroke panel in a popover anchored to `resp` (the Control bar's and the Properties
 /// panel's Stroke links), which a click on it toggles.
 pub(crate) fn popover(app: &mut VectorcraftApp, resp: &egui::Response) {
-    egui::Popup::menu(resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+    widgets::popover(resp, resp.clicked(), |ui| {
         ui.set_width(260.0);
         show(app, ui);
     });
