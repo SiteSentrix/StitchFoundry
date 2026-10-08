@@ -473,6 +473,8 @@ mod tests_css_properties;
 #[cfg(test)]
 mod tests_effectedit;
 #[cfg(test)]
+mod tests_fontsize;
+#[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]
 mod tests_links;

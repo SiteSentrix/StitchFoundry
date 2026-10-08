@@ -388,29 +388,10 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let s = tx.first_style();
     section_header(ui, tl!("Character"));
-    let sample = crate::font_menu::sample_text(app);
-    if let Some(pick) =
-        crate::font_menu::font_menu(ui, "font", &s.font_family, ui.available_width() - 4.0, sample.as_deref(), crate::font_menu::MenuLook::of(app))
-    {
-        crate::font_menu::apply(app, ui.ctx(), pick);
-    }
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Size"));
-        let type_unit = app.session.type_unit();
-        if let Some(v) = widgets::num_field(ui, "fsize", Some(s.size), type_unit, 70.0) {
-            app.run("text.setStyle", json!({"size": v})).ok();
-        }
-        dim_label(ui, tl!("Leading"));
-        if let Some(v) = widgets::num_field(ui, "lead", Some(s.effective_leading()), type_unit, 70.0) {
-            app.run("text.setStyle", json!({"leading": v})).ok();
-        }
-    });
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Tracking"));
-        if let Some(v) = widgets::plain_field(ui, "track", s.tracking, "", 0, 60.0) {
-            app.run("text.setStyle", json!({"tracking": v})).ok();
-        }
-    });
+    // The font, Font Size, Leading, Kerning and Tracking as in the Character panel.
+    let w = ui.available_width();
+    super::character::font_pickers(app, ui, &s, ("font", "font-style"), (w - 4.0, w - 4.0));
+    super::character::metrics_grid(app, ui, "props-char", &s, w, false);
     section_header(ui, tl!("Paragraph"));
     ui.horizontal(|ui| {
         for (icon, j) in [("align-start-vertical", "left"), ("align-center-vertical", "center"), ("align-end-vertical", "right")] {
