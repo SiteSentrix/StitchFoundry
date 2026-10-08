@@ -2179,6 +2179,19 @@ undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"burasagari":"forced"}}}
 ```
 
+## New type in a Japanese interface
+
+While the interface is in Japanese (VectorCraft › Language, or `auto` on a Japanese system), new type starts with em
+box top-to-top leading (`leadingModel: "emBoxTop"`) and em box centre character alignment (`charAlign: "emBoxCenter"`);
+in other languages it starts on the Roman baseline (#432). This covers the Type tools,
+`text.create` and `text.createInPath`, which also take `leadingModel` and `charAlign` to choose, and `paraStyle.new` /
+`charStyle.new` made with no `attrs` and no text selected. The values used are kept in the journal, so a replay sets the
+same in any language. Saved documents keep what they say, and imported text (PDF, SVG, DXF…) keeps the Roman baseline.
+
+```json
+{"name":"run_command","arguments":{"command":"text.create","params":{"x":40,"y":60,"text":"雅楽","leadingModel":"emBoxTop","charAlign":"emBoxCenter"}}}
+```
+
 ## Moving and flipping type on a path
 
 Type on a path flows between a start and an end bracket, stored as fractions of its path's length.

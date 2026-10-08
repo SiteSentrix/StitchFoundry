@@ -726,7 +726,12 @@ impl VectorcraftApp {
     }
 
     fn logic_frame(&mut self, ctx: &egui::Context) {
-        i18n::set_current(self.ui_language());
+        let lang = self.ui_language();
+        i18n::set_current(lang);
+        // The engine gives new type the Japanese defaults while the UI is in Japanese.
+        if self.session.ui_language.as_deref() != Some(lang.code()) {
+            self.session.ui_language = Some(lang.code().to_string());
+        }
         self.adopt_context(ctx);
         if !self.styled {
             theme::install_fonts(ctx);
