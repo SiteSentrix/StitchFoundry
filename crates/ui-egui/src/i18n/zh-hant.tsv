@@ -450,6 +450,8 @@
 	Construction Guides	建構參考線
 	Contextual Alternates	前後關聯替代字
 	Contextual Task Bar	快捷工作列
+	Pin Bar Position	釘選工作列位置
+	Reset Bar Position	重設工作列位置
 	Contrast	對比
 	Control	控制
 	Convert	轉換
@@ -1106,7 +1108,9 @@
 	Hide Artboards	隱藏工作區域
 	Hide Bounding Box	隱藏邊框
 	Hide Code	隱藏程式碼
-	Hide Contextual Task Bar	隱藏快捷工作列
+	Hide Bar	隱藏工作列
+	More Options	更多選項
+	Show Properties Panel	顯示內容面板
 	Hide Corner Widget	隱藏轉角 Widget
 	Hide Corner Widget for angles greater than	角度大於以下數值時隱藏轉角 Widget
 	Hide Edges	隱藏邊緣

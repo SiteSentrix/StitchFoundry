@@ -511,6 +511,8 @@
 	Manage Workspaces…	ワークスペースを管理…
 	Control	コントロール
 	Contextual Task Bar	コンテキストタスクバー
+	Pin Bar Position	バーの位置を固定
+	Reset Bar Position	バーの位置をリセット
 	Tools	ツール
 	Toolbars	ツールバー
 	Advanced	詳細
@@ -1372,7 +1374,9 @@
 	Height:	高さ:
 	Help › Search Commands…	ヘルプ › コマンドを検索…
 	Hide Code	コードを隠す
-	Hide Contextual Task Bar	コンテキストタスクバーを隠す
+	Hide Bar	バーを隠す
+	More Options	その他のオプション
+	Show Properties Panel	プロパティパネルを表示
 	Hide Corner Widget for angles greater than	次の角度より大きい場合はコーナーウィジェットを隠す
 	Hide Note	メモを隠す
 	Hide Options	オプションを隠す

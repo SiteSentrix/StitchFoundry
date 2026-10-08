@@ -436,6 +436,8 @@
 	Construction Guides	构造参考线
 	Contextual Alternates	上下文替代
 	Contextual Task Bar	上下文任务栏
+	Pin Bar Position	固定任务栏位置
+	Reset Bar Position	重置任务栏位置
 	Contrast	对比
 	Control	控制栏
 	Convert	转换
@@ -1080,7 +1082,9 @@
 	Hide Artboards	隐藏画板
 	Hide Bounding Box	隐藏定界框
 	Hide Code	隐藏代码
-	Hide Contextual Task Bar	隐藏快捷工作列
+	Hide Bar	隐藏任务栏
+	More Options	更多选项
+	Show Properties Panel	显示属性面板
 	Hide Corner Widget	隐藏角控件
 	Hide Corner Widget for angles greater than	角度大于此值时隐藏圆角控件
 	Hide Edges	隐藏边缘
