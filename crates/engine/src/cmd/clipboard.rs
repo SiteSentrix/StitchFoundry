@@ -87,11 +87,14 @@ pub struct Clipboard {
     /// The open document the objects came from ([`DocState::uid`]): pasting back into it uses its
     /// own resources as they are now.
     pub source_doc: Option<u64>,
+    /// An artboard copied with the Artboard tool (`artboard.copy`); `nodes` are then its art. Pasting
+    /// adds a copy of it with the art.
+    pub artboard: Option<vectorcraft_doc::Artboard>,
 }
 
 impl Clipboard {
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.nodes.is_empty() && self.artboard.is_none()
     }
 
     /// Objects `roots` of `st`'s document with their resources, source artboard and layers.

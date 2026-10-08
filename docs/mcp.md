@@ -1328,7 +1328,21 @@ on top / at the bottom of the current layer. `edit.pasteOnAllArtboards` keeps th
 copied from. `layer.pasteRemembersLayers {on?}` (a document option, `document.inspect` → `pasteRemembersLayers`)
 pastes objects back into the layers they came from, by name, making missing ones.
 
+Artboards copy with their art. `artboard.copy {index?, art?}` puts an artboard on the clipboard together with the
+art fully inside it (`art` defaults to the Artboard tool's `moveArt` option, Move/Copy Artwork with Artboard; locked
+and hidden art only with prefs `moveLockedWithArtboard`); with the Artboard tool chosen, `edit.copy` does this for
+the tool's artboard and `edit.cut` runs `artboard.cut`, which also deletes them (never the only artboard). Then
+`edit.paste` adds a copy of the artboard right of the last one, with its art in the layers it came from, in one undo
+step (`edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` put it where it was; `edit.pasteOnAllArtboards`
+pastes only the art), in this document or another; the result's `artboard` is the new artboard's index.
+`artboard.duplicate {index?, art?}` (Window › Artboards › Duplicate Artboards, or a row dragged onto New Artboard)
+does the same in one step → `{index, ids}`, and `artboard.move {copy: true, moveArt: true}` is the Artboard tool's
+Alt-drag.
+
 ```json
+{"name":"run_command","arguments":{"command":"artboard.copy","params":{"index":0}}}
+{"name":"run_command","arguments":{"command":"edit.paste","params":{}}}
+{"name":"run_command","arguments":{"command":"artboard.duplicate","params":{"index":0,"art":true}}}
 {"name":"run_command","arguments":{"command":"clipboard.conflicts","params":{}}}
 {"name":"run_command","arguments":{"command":"edit.paste","params":{"center":[300,200],"swatchConflict":{"Brand":"add"}}}}
 {"name":"run_command","arguments":{"command":"layer.pasteRemembersLayers","params":{"on":true}}}
