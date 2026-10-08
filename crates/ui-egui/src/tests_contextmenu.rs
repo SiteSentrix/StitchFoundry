@@ -110,7 +110,7 @@ fn right_click_on_empty_canvas_offers_the_view_and_a_dismissing_click_does_nothi
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
 }
 
-/// #: right-clicking a ruler offers the document units, the current one checked, and choosing one
+/// #528: right-clicking a ruler offers the document units, the current one checked, and choosing one
 /// swaps them — the same effect as Preferences ▸ Units ▸ General (`document.setUnits`).
 #[test]
 fn right_clicking_a_ruler_swaps_the_document_units() {
