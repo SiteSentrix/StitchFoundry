@@ -63,7 +63,7 @@ jobs:
   macos:
     name: macOS universal
     needs: version
-    runs-on: macos-15
+    runs-on: macos-release  # org larger runner (M2 Pro), release.yml@release only; capped by the actions_macos_xl budget
     environment: release
     env:
       VECTORCRAFT_VERSION: ${{ needs.version.outputs.version }}
