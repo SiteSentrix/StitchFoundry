@@ -283,9 +283,6 @@ pub struct UiState {
     pub flyout: Option<usize>,
     /// Last tool shown for each toolbar group (flyout selection sticks).
     pub group_tool: Vec<String>,
-    /// The selection tool used last (Selection, Direct Selection or Group Selection): a Cmd press
-    /// with any other tool drags with it.
-    pub last_selection_tool: String,
     pub status: String,
     pub palette_open: bool,
     pub palette_query: String,
@@ -496,7 +493,6 @@ impl Default for UiState {
             dialog: None,
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
-            last_selection_tool: "selection".into(),
             status: String::new(),
             palette_open: false,
             palette_query: String::new(),

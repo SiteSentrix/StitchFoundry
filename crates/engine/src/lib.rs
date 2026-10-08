@@ -721,6 +721,12 @@ pub struct Session {
     /// Executed commands (for actions and debugging).
     pub journal: Vec<(String, Value)>,
     pub(crate) tool: Box<dyn Tool>,
+    /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
+    /// back as it was at the release ([`Session::pointer`]).
+    pub(crate) lender: Option<Box<dyn Tool>>,
+    /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
+    /// lends the other tools. None until one is chosen.
+    pub(crate) last_selection_tool: Option<&'static str>,
     pub(crate) last_view: ViewInfo,
     depth: u32,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
@@ -800,6 +806,8 @@ impl Session {
             clipboard: Clipboard::default(),
             journal: vec![],
             tool: vectorcraft_tools::create("selection"),
+            lender: None,
+            last_selection_tool: None,
             last_view: ViewInfo::default(),
             depth: 0,
             tool_panic: None,
@@ -858,6 +866,8 @@ impl Session {
             return;
         }
         let view = self.last_view;
+        // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
+        let _ = self.give_back_tool(view);
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
         let _ = self.apply_actions(acts);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
