@@ -143,6 +143,7 @@
 	Make Pixel Perfect	Zarovnat na obrazové body
 	Slice	Řez
 	Make	Vytvořit
+	Make and Expand	Vytvořit a rozložit
 	Release	Uvolnit
 	Create from Guides	Vytvořit z vodítek
 	Create from Selection	Vytvořit z výběru
@@ -199,8 +200,6 @@
 	Merge	Sloučit
 	Gap Options…	Možnosti mezer…
 	Image Trace	Vektorizace obrazu
-	Make…	Vytvořit…
-	Make and Expand…	Vytvořit a rozložit…
 	Text Wrap	Obtékání textu
 	Text Wrap Options…	Možnosti obtékání textu…
 	Clipping Mask	Ořezová maska
