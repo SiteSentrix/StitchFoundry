@@ -86,6 +86,23 @@ pub struct CharStyle {
     /// size (Document Setup → Type → Small Caps); None = off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub small_caps: Option<f64>,
+    /// Character Alignment (Character panel menu): where characters smaller than the largest on
+    /// their line line up with it.
+    #[serde(default, rename = "charAlign", skip_serializing_if = "crate::skip::is_default")]
+    pub char_align: CharAlign,
+}
+
+/// Where a character smaller than the largest on its line lines up with it: on the Roman
+/// baseline, or at the top (right, in vertical type), centre or bottom (left) of the ideographic
+/// em boxes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CharAlign {
+    #[default]
+    RomanBaseline,
+    EmBoxTop,
+    EmBoxCenter,
+    EmBoxBottom,
 }
 
 /// Superscript or subscript proportions in percent of the font size (Document Setup → Type).
@@ -178,6 +195,7 @@ impl Default for CharStyle {
             stroke_miter_limit: 10.0,
             stroke_dash: None,
             position: CharPosition::Normal,
+            char_align: CharAlign::RomanBaseline,
             small_caps: None,
         }
     }

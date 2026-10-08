@@ -395,6 +395,28 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         menu_item(ui, tl!(l), false, false);
     }
     ui.separator();
+    // Character Alignment: where characters smaller than the largest on their line line up, with
+    // the East Asian options.
+    if app.session.prefs.show_east_asian_options {
+        let align = s.as_ref().map(|s| s.char_align);
+        ui.add_enabled_ui(has, |ui| {
+            // Indented like the items beside it (their check column).
+            ui.menu_button(format!("   {}", tl!("Character Alignment")), |ui| {
+                use vectorcraft_doc::CharAlign;
+                for (label, a, key) in [
+                    (tl!("Roman Baseline"), CharAlign::RomanBaseline, "romanBaseline"),
+                    (tl!("Em Box Top/Right"), CharAlign::EmBoxTop, "emBoxTop"),
+                    (tl!("Em Box Center"), CharAlign::EmBoxCenter, "emBoxCenter"),
+                    (tl!("Em Box Bottom/Left"), CharAlign::EmBoxBottom, "emBoxBottom"),
+                ] {
+                    if menu_item(ui, label, true, align == Some(a)) {
+                        format(app, json!({"charAlign": key}));
+                    }
+                }
+            });
+        });
+        ui.separator();
+    }
     for l in ["Standard Vertical Roman Alignment", "Tate-chu-yoko", "Fractional Widths", "System Layout", "No Break"] {
         menu_item(ui, tl!(l), false, l == "Fractional Widths");
     }
@@ -412,5 +434,25 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             app,
             json!({"kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false, "allCaps": false}),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_engine::Session;
+
+    /// Character Alignment is in the panel menu with the East Asian options only (as Mojikumi Set
+    /// and Top-to-Top Leading are in the Paragraph panel).
+    #[test]
+    fn character_alignment_shows_with_the_east_asian_options() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "雅楽"})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let shown = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, menu).contains("Character Alignment");
+        assert!(!shown(&mut app));
+        app.session.prefs.show_east_asian_options = true;
+        assert!(shown(&mut app));
     }
 }

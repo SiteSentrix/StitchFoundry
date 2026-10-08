@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …]} style a character range (runs are split at the range ends) → {id, runs}",
+            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"} style a character range (runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -151,6 +151,7 @@ pub(crate) struct CharChange {
     features: Option<Vec<String>>,
     position: Option<vectorcraft_doc::CharPosition>,
     small_caps: Option<Option<f64>>,
+    char_align: Option<vectorcraft_doc::CharAlign>,
 }
 
 /// `features: ["dlig", "-liga", …]` → the canonical tag list (differences from the defaults).
@@ -161,6 +162,19 @@ pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>
         return Err(bad(cmd, format!("unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh; prefix - to turn off)")));
     }
     Ok(Some(vectorcraft_text::OtFeatures::default().with_tags(tags).to_tags()))
+}
+
+/// `charAlign: "romanBaseline"|"emBoxTop"|"emBoxCenter"|"emBoxBottom"` (Character Alignment).
+pub(crate) fn char_align_param(p: &Value, cmd: &str) -> Result<Option<vectorcraft_doc::CharAlign>> {
+    use vectorcraft_doc::CharAlign;
+    let Some(v) = p.get("charAlign").filter(|v| !v.is_null()) else { return Ok(None) };
+    Ok(Some(match v.as_str() {
+        Some("romanBaseline") => CharAlign::RomanBaseline,
+        Some("emBoxTop") => CharAlign::EmBoxTop,
+        Some("emBoxCenter") => CharAlign::EmBoxCenter,
+        Some("emBoxBottom") => CharAlign::EmBoxBottom,
+        _ => return Err(bad(cmd, "`charAlign` must be \"romanBaseline\", \"emBoxTop\", \"emBoxCenter\" or \"emBoxBottom\"")),
+    }))
 }
 
 fn paint_param(p: &Value, k: &str, cmd: &str) -> Result<Option<Paint>> {
@@ -213,6 +227,7 @@ impl CharChange {
             features: features_param(p, cmd)?,
             position,
             small_caps,
+            char_align: char_align_param(p, cmd)?,
         };
         if c.size.is_some_and(|v| v <= 0.0) {
             return Err(bad(cmd, "size must be positive"));
@@ -240,6 +255,7 @@ impl CharChange {
             && self.features.is_none()
             && self.position.is_none()
             && self.small_caps.is_none()
+            && self.char_align.is_none()
     }
 
     pub(crate) fn apply(&self, st: &mut CharStyle) {
@@ -309,6 +325,9 @@ impl CharChange {
         }
         if let Some(v) = self.small_caps {
             st.small_caps = v;
+        }
+        if let Some(v) = self.char_align {
+            st.char_align = v;
         }
     }
 }

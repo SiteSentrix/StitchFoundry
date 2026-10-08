@@ -299,6 +299,7 @@
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	Cambiar estos ajustes modifica el aspecto de los efectos ráster al exportar, acoplar o expandir.
 	Channel	Canal
 	Character	Carácter
+	Character Alignment	Alineación de caracteres
 	Character / Paragraph	Carácter / Párrafo
 	Character Rotation	Rotación de caracteres
 	Character Set:	Juego de caracteres:
@@ -752,6 +753,9 @@
 	Ellipse Tool	Herramienta Elipse
 	Ellipse…	Elipse…
 	Ellipsis	Puntos suspensivos
+	Em Box Bottom/Left	Abajo/izquierda del cuadro eme
+	Em Box Center	Centro del cuadro eme
+	Em Box Top/Right	Arriba/derecha del cuadro eme
 	Em Dash	Raya
 	Em Space	Espacio eme
 	Embed	Incrustar
@@ -2081,6 +2085,7 @@
 	Right-to-Left Paragraph Direction	Dirección de párrafo de derecha a izquierda
 	Right:	Derecha:
 	Rise…	Ascenso…
+	Roman Baseline	Línea de base latina
 	Roman Hanging Punctuation	Puntuación colgante romana
 	Rotate	Rotar
 	Rotate 90° CW	Rotar 90° en sentido horario

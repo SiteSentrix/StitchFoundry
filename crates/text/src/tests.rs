@@ -557,3 +557,31 @@ fn em_box_top_leading_hangs_lines_from_the_line_above() {
         em.lines[1].baseline - em.lines[0].baseline
     );
 }
+
+/// Character Alignment: a 20 pt character next to a 40 pt one lines its em box top, centre or
+/// bottom up with the big one's (the em box from 0.12 em below the baseline to 0.88 em above it,
+/// in fonts without vertical metrics), or stays on the baseline; in vertical type the same across
+/// the column (top → right).
+#[test]
+fn character_alignment_lines_small_characters_up_with_the_largest_em_box() {
+    use vectorcraft_doc::{CharAlign, TextRun};
+    for vertical_type in [false, true] {
+        let place = |a: CharAlign| {
+            let mut t = point("", style(40.0));
+            t.vertical = vertical_type;
+            t.runs = vec![
+                TextRun { text: "大".into(), style: style(40.0) },
+                TextRun { text: "小".into(), style: CharStyle { char_align: a, ..style(20.0) } },
+            ];
+            let l = layout(db(), &t);
+            // How far the small character's origin sits above the big one's (to the right, vertical).
+            let (big, small) = (l.glyphs[0].origin, l.glyphs[1].origin);
+            if vertical_type { small.x - big.x } else { big.y - small.y }
+        };
+        let near = |a: f64, b: f64| (a - b).abs() < 0.01;
+        assert!(near(place(CharAlign::RomanBaseline), 0.0), "vertical {vertical_type}");
+        assert!(near(place(CharAlign::EmBoxTop), 0.88 * 20.0), "top: {}", place(CharAlign::EmBoxTop));
+        assert!(near(place(CharAlign::EmBoxCenter), 0.38 * 20.0), "centre: {}", place(CharAlign::EmBoxCenter));
+        assert!(near(place(CharAlign::EmBoxBottom), -0.12 * 20.0), "bottom: {}", place(CharAlign::EmBoxBottom));
+    }
+}

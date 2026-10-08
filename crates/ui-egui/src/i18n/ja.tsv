@@ -12,7 +12,11 @@
 	All Scripts	すべての文字
 	Any Kind	すべての種類
 	Bottom-to-Bottom Leading	欧文ベースライン基準の行送り
+	Character Alignment	文字揃え
 	Decorative	装飾
+	Em Box Bottom/Left	仮想ボディの下 / 左
+	Em Box Center	仮想ボディの中央
+	Em Box Top/Right	仮想ボディの上 / 右
 	Favorites	お気に入り
 	Japanese	日本語
 	Join Our Discord	Discord に参加
@@ -20,6 +24,7 @@
 	Mojikumi Set	文字組み
 	Latin	欧文
 	Monospaced	等幅
+	Roman Baseline	欧文ベースライン
 	Rounded	丸ゴシック
 	Sans Serif / Gothic	ゴシック・サンセリフ
 	Script / Brush	筆書体・スクリプト
