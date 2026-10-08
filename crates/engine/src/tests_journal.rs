@@ -231,3 +231,21 @@ fn a_failed_batch_brings_back_a_document_it_reverted() {
     assert!(st.is_dirty() && st.interaction.is_none());
     assert!(st.revision > revision, "the restored document redraws");
 }
+
+#[test]
+fn a_failed_batch_gives_back_the_highlighted_rows_and_the_current_layer() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    // A step that highlights the layer's row, then one that fails: the highlight goes back too.
+    let steps = json!([{"command": "layer.setCurrent", "params": {"id": layer.0}}, {"command": "no.such.command"}]);
+    assert!(s.execute("command.batch", &json!({ "commands": steps })).is_err());
+    assert!(s.doc().unwrap().layer_rows.is_empty(), "no row stays highlighted");
+    assert_eq!(s.doc().unwrap().active_layer, Some(layer));
+    // So Collect in New Layer acts on the drawn rectangle, as it does when the journal is replayed
+    // (a failed batch isn't journaled).
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 1, "height": 1})).unwrap();
+    s.execute("layer.collectInNew", &json!({})).unwrap();
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+}
