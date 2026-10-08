@@ -306,11 +306,16 @@ fn blank_pages(doc: &Document) -> Document {
 const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
 
 /// The encoder's params for a `.ai` file, from a save's or an export's: a PDF of every artboard
-/// with the PDF options, always carrying the native document; Use Compression compresses the
-/// PDF's content.
+/// with the PDF options, always carrying the native document, its layers and sublayers PDF layers
+/// (hidden ones off) unless asked otherwise; Use Compression compresses the PDF's content.
 pub(super) fn ai_params(params: &mut Value) {
     let Some(o) = params.as_object_mut() else { return };
     o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
+    // Apps that read the PDF part (not the native document) then find the layers, the hidden ones
+    // with their art (#372); a PDF standard decides for itself.
+    if o.get("standard").is_none_or(Value::is_null) {
+        o.entry("createLayers").or_insert(json!(true));
+    }
     if let Some(c) = o.get("compress").and_then(Value::as_bool) {
         let compression = o.entry("compression").or_insert_with(|| json!({}));
         if let Some(m) = compression.as_object_mut() {
