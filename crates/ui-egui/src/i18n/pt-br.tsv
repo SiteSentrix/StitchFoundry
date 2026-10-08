@@ -2636,3 +2636,11 @@
 	Float Panel	Flutuar Painel
 	Dock Panel	Encaixar Painel
 	Float Tool Group	Flutuar Grupo de Ferramentas
+
+# The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
+	Services	Serviços
+	Hide VectorCraft	Ocultar o VectorCraft
+	Hide Others	Ocultar Outros
+	Zoom	Zoom
+	Bring All to Front	Trazer Todas para a Frente
+	Settings	Configurações
