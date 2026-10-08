@@ -45,3 +45,22 @@ fn cmd_with_the_pen_edits_the_path_being_drawn() {
     text(&call_tool(&mut h, "pointer_gesture", &gesture(&[(300.0, 350.0)])));
     assert_eq!(paths(&h).iter().map(Vec::len).collect::<Vec<_>>(), [3], "the same path, three anchors");
 }
+
+/// #501: a drag out of the first anchor closes the path, shaping the closing curve.
+#[test]
+fn a_drag_from_the_first_anchor_closes_the_path() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 800, "height": 600}})).unwrap();
+    text(&call_tool(&mut h, "select_tool", &json!({"tool": "pen"})));
+    for p in [(100.0, 300.0), (200.0, 300.0), (200.0, 400.0)] {
+        text(&call_tool(&mut h, "pointer_gesture", &gesture(&[p])));
+    }
+    let close: Vec<(f64, f64)> = (0..=12).map(|i| (100.0 + 5.0 * f64::from(i), 300.0 - 4.0 * f64::from(i))).collect();
+    text(&call_tool(&mut h, "pointer_gesture", &gesture(&close)));
+    let d = &h.session.doc().unwrap().doc;
+    let mut closed = vec![];
+    d.walk(|n| closed.extend(n.path_data().map(|p| p.is_closed())));
+    assert_eq!(closed, [true], "one path, closed");
+    let first = paths(&h)[0][0];
+    assert_eq!((first.h_in, first.h_out), (vectorcraft_geom::Point::new(40.0, 348.0), vectorcraft_geom::Point::new(160.0, 252.0)));
+}
