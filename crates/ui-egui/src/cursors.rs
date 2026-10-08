@@ -348,8 +348,7 @@ fn rasterize(c: Cursor, ppp: f32) -> Option<CustomCursorImage> {
     let (w, h) = (size.x as usize, size.y as usize);
     let mut px = vec![[0.0; 4]; w * h];
     let corner = |v: &Vertex| (v.pos.to_vec2() * ppp - min, v.color);
-    for tri in mesh.indices.chunks_exact(3) {
-        let &[i, j, k] = tri else { continue };
+    for &[i, j, k] in mesh.indices.as_chunks::<3>().0 {
         if let (Some(a), Some(b), Some(c)) = (mesh.vertices.get(i as usize), mesh.vertices.get(j as usize), mesh.vertices.get(k as usize)) {
             fill_triangle(&mut px, w, [corner(a), corner(b), corner(c)]);
         }
@@ -463,7 +462,7 @@ mod tests {
                 assert_eq!(img.rgba.len(), w * h * 4, "{c:?}");
                 assert!(img.hotspot[0] < img.size[0] && img.hotspot[1] < img.size[1], "{c:?} at {ppp}: {img:?}");
                 assert!(w as f32 <= 50.0 * ppp && h as f32 <= 50.0 * ppp, "{c:?} at {ppp}: {img:?}");
-                assert!(img.rgba.chunks_exact(4).any(|p| p[3] == 255), "{c:?}: nothing opaque");
+                assert!(img.rgba.as_chunks::<4>().0.iter().any(|p| p[3] == 255), "{c:?}: nothing opaque");
             }
         }
         for c in [Cursor::Hand, Cursor::HandGrab, Cursor::ZoomIn, Cursor::ZoomOut, Cursor::NotAllowed] {
@@ -482,7 +481,7 @@ mod tests {
         assert!(pixel(&img, hx, hy)[3] > 0, "{:?}", pixel(&img, hx, hy));
         let body = pixel(&img, hx + 2, hy + 8);
         assert!(body[3] == 255 && body[..3].iter().all(|&c| c < 40), "{body:?}");
-        assert!(img.rgba.chunks_exact(4).any(|p| p[3] == 255 && p[..3].iter().all(|&c| c > 215)), "no white halo");
+        assert!(img.rgba.as_chunks::<4>().0.iter().any(|p| p[3] == 255 && p[..3].iter().all(|&c| c > 215)), "no white halo");
         // Nothing left of or above the tip but the halo.
         assert!((0..img.size[1] as usize).all(|y| pixel(&img, 0, y)[..3].iter().all(|&c| c > 100) || pixel(&img, 0, y)[3] < 128));
         // At twice the pixels per point, twice the pixels.

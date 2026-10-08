@@ -8,14 +8,14 @@
 //! the Selection tool. Moving and resizing snap like drawing
 //! does: to whole pixels, to the grid, or with Smart Guides to other artboards, their bleed and
 //! objects (never to the dragged artboard or the art moving with it); the artboard's own bleed edges
-//! snap too.
+//! snap too. A new artboard's corners snap as drawn points do ([`DrawSnap`]).
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect, Vec2};
 
 use super::{BLUE, polygon, rect_corners};
 use crate::bbox::{Handle, hit_handle, move_delta, scale_for_drag};
-use crate::guides::Targets;
+use crate::guides::{DrawSnap, Leave, Targets};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug)]
@@ -57,11 +57,13 @@ pub struct ArtboardTool {
     copy_targets: Option<Targets>,
     /// Smart Guides shown while dragging.
     guides: Vec<Overlay>,
+    /// Smart Guides for the corners of a new artboard.
+    draw: DrawSnap,
 }
 
 impl Default for ArtboardTool {
     fn default() -> Self {
-        Self { active: 0, move_art: true, drag: None, preview: None, targets: None, copy_targets: None, guides: vec![] }
+        Self { active: 0, move_art: true, drag: None, preview: None, targets: None, copy_targets: None, guides: vec![], draw: DrawSnap::default() }
     }
 }
 
@@ -134,6 +136,7 @@ impl ArtboardTool {
         self.targets = None;
         self.copy_targets = None;
         self.guides.clear();
+        self.draw.clear();
     }
 }
 
@@ -171,7 +174,7 @@ impl Tool for ArtboardTool {
                     self.active = i;
                     self.drag = Some(Drag::Move { index: i, start: p, rect: a.rect, began: false, copy: false });
                 } else {
-                    let (p, _) = crate::guides::snap_draw(cx, p, &[]);
+                    let p = self.draw.press(cx, p, &[], None);
                     self.drag = Some(Drag::Create { start: p, cur: p });
                 }
                 vec![]
@@ -213,12 +216,7 @@ impl Tool for ArtboardTool {
                 out
             }
             (PointerKind::Drag, Some(Drag::Create { start, .. })) => {
-                let (mut cur, _) = crate::guides::snap_draw(cx, p, &[]);
-                if m.shift {
-                    let d = cur - start;
-                    let s = d.x.abs().max(d.y.abs());
-                    cur = start + Vec2::new(s.copysign(d.x), s.copysign(d.y));
-                }
+                let cur = self.draw.drag(cx, p, Some(&Leave::diagonal(start, m.shift)));
                 self.drag = Some(Drag::Create { start, cur });
                 vec![]
             }
@@ -289,6 +287,7 @@ impl Tool for ArtboardTool {
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = vec![];
         if let Some(Drag::Create { start, cur }) = self.drag {
+            o.extend_from_slice(self.draw.guides());
             let r = Rect::from_points(start, cur);
             o.push(Overlay::Marquee(r));
             if cx.measurement_labels {

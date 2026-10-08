@@ -178,6 +178,7 @@ impl Session {
         let (unit, stroke_unit) = (self.general_unit(), self.stroke_unit());
         let cx = ToolContext {
             doc: &st.doc,
+            revision: (st.uid, st.revision),
             selection: &st.selection,
             zoom: view.zoom,
             isolation: st.isolation,
@@ -222,6 +223,11 @@ impl Session {
             measurement_labels: self.prefs.measurement_labels,
             transform_tools_guides: self.prefs.transform_tools_guides,
             snapping_tolerance: self.prefs.snapping_tolerance,
+            construction_angles: if self.prefs.construction_guides {
+                vectorcraft_tools::guides::construction_angles(&self.prefs.construction_angles)
+            } else {
+                &[]
+            },
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
         };

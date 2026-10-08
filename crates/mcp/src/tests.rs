@@ -588,3 +588,30 @@ fn type_preferences_apply_to_agents() {
     assert_eq!(r["isError"], false, "{r}");
     assert_eq!(style(&mut s, 6), (size + 4.0, tracking + 50.0));
 }
+
+/// The drawing tools snap to Smart Guides over MCP as with the mouse (#506): a Rectangle drawn
+/// from near another object's corner starts on it, and a Pen anchor placed beside that object's
+/// centre lines up with it.
+#[test]
+fn drawing_gestures_snap_to_smart_guides() {
+    let mut s = server();
+    let r = call(&mut s, 1, "run_command", json!({"command": "file.new", "params": {"width": 800, "height": 600}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let r = call(&mut s, 2, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 100, "height": 100}));
+    assert_eq!(r["isError"], false, "{r}");
+    let bounds = |s: &mut Server, n: u64, events: Value, tool: &str| {
+        let r = call(s, n, "pointer_gesture", json!({"tool": tool, "events": events}));
+        assert_eq!(r["isError"], false, "{r}");
+        let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"][0].clone();
+        let doc: Value = serde_json::from_str(&text_of(&call(s, n + 1, "inspect_document", json!({})))).unwrap();
+        let made = doc["layers"][0]["children"].as_array().unwrap().iter().find(|c| c["id"] == id).expect("drawn").clone();
+        let b = &made["bounds"];
+        [&b["x"], &b["y"], &b["width"], &b["height"]].map(|v| v.as_f64().unwrap())
+    };
+    let events = json!([{"kind": "move", "x": 202, "y": 203}, {"kind": "down", "x": 202, "y": 203}, {"kind": "drag", "x": 330, "y": 341}, {"kind": "up", "x": 330, "y": 341}]);
+    assert_eq!(bounds(&mut s, 3, events, "rectangle"), [200.0, 200.0, 130.0, 141.0]);
+    let r = call(&mut s, 5, "run_command", json!({"command": "select.none", "params": {}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let events = json!([{"kind": "down", "x": 300, "y": 420}, {"kind": "up", "x": 300, "y": 420}, {"kind": "move", "x": 151.5, "y": 431}, {"kind": "down", "x": 151.5, "y": 431}, {"kind": "up", "x": 151.5, "y": 431}]);
+    assert_eq!(bounds(&mut s, 6, events, "pen"), [150.0, 420.0, 150.0, 11.0]);
+}

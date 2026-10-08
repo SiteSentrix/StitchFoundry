@@ -261,6 +261,26 @@ fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, V
     }
 }
 
+/// The attributes of a new style made from nothing (no `attrs`, no text selected): while the
+/// interface is in Japanese, new type's em box top-to-top leading (paragraph styles) and em box
+/// centre alignment (character styles); else none (the defaults).
+fn new_style_attrs(s: &Session, kind: Kind) -> Map<String, Value> {
+    if !s.japanese_interface() {
+        return Map::new();
+    }
+    let (set, default) = match kind {
+        Kind::Char => {
+            let st = CharStyle { char_align: vectorcraft_doc::CharAlign::EmBoxCenter, ..CharStyle::default() };
+            (to_attrs(&st), to_attrs(&CharStyle::default()))
+        }
+        Kind::Para => {
+            let st = ParaStyle { leading_model: vectorcraft_doc::LeadingModel::EmBoxTop, ..ParaStyle::default() };
+            (to_attrs(&st), to_attrs(&ParaStyle::default()))
+        }
+    };
+    set.into_iter().filter(|(k, v)| default.get(k) != Some(v)).collect()
+}
+
 // ---------- commands ----------
 
 fn list(s: &mut Session, kind: Kind) -> Result<Value> {
@@ -275,7 +295,14 @@ fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let c = kind.cmd("new");
     let attrs = match attrs_param(p, kind, "new")? {
         Some(a) => a,
-        None => selection_attrs(s, p, kind)?.unwrap_or_default(),
+        None => match selection_attrs(s, p, kind)? {
+            Some(a) => a,
+            None => {
+                let a = new_style_attrs(s, kind);
+                s.note_journal("attrs", Value::Object(a.clone()));
+                a
+            }
+        },
     };
     let d = &s.doc()?.doc;
     let base = if kind == Kind::Char { "Character Style" } else { "Paragraph Style" };

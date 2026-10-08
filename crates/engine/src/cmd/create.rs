@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText)} → {id}",
+            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id}",
             has_doc,
             text_create
         ),
@@ -188,7 +188,8 @@ fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
     let r = f64_req(p, "radius", "shape.polygon")?.abs();
     let sides = p.get("sides").and_then(Value::as_u64).unwrap_or(6).clamp(3, 1000) as u32;
     let rot = f64_or(p, "rotation", 0.0);
-    let live = LiveShape::Polygon { radius: r, sides, xf: Affine::translate(c.to_vec2()) * Affine::rotate(rot.to_radians()) };
+    let xf = Affine::translate(c.to_vec2()) * Affine::rotate(rot.to_radians());
+    let live = LiveShape::Polygon { radius: r, sides, xf, radii: vec![], kinds: vec![] };
     add_art(s, "Polygon", path_kind(live.to_path(), Some(live)), None)
 }
 
@@ -409,6 +410,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let mut t = TextObject::point(Point::new(x, y), text, new_type_style(s, p));
     t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
     t.para = new_type_para();
+    new_type_alignment(s, p, "text.create", &mut t)?;
     if let Some(a) = p.get("area") {
         let w = f64_or(a, "width", 200.0);
         let h = f64_or(a, "height", 100.0);
@@ -433,6 +435,40 @@ pub(crate) fn new_type_para() -> vectorcraft_doc::ParaStyle {
         burasagari: vectorcraft_doc::Burasagari::Standard,
         ..Default::default()
     }
+}
+
+/// The leading model and character alignment new type starts with (`t`'s paragraph and runs):
+/// `leadingModel` and `charAlign` from `p`, else em box top to top and em box centre while the
+/// interface is in Japanese (#432), else the Roman baseline for both. Noted in the journal, so a
+/// replay sets the same whatever the interface.
+pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut TextObject) -> Result<()> {
+    use vectorcraft_doc::{CharAlign, LeadingModel};
+    let japanese = s.japanese_interface();
+    let leading = match p.get("leadingModel").filter(|v| !v.is_null()) {
+        Some(v) => match v.as_str() {
+            Some("romanBaseline") => LeadingModel::RomanBaseline,
+            Some("emBoxTop") => LeadingModel::EmBoxTop,
+            _ => return Err(bad(cmd, "`leadingModel` must be \"romanBaseline\" or \"emBoxTop\"")),
+        },
+        None => {
+            let l = if japanese { LeadingModel::EmBoxTop } else { LeadingModel::RomanBaseline };
+            s.note_journal("leadingModel", json!(l));
+            l
+        }
+    };
+    let align = match super::textedit::char_align_param(p, cmd)? {
+        Some(a) => a,
+        None => {
+            let a = if japanese { CharAlign::EmBoxCenter } else { CharAlign::RomanBaseline };
+            s.note_journal("charAlign", json!(a));
+            a
+        }
+    };
+    t.para.leading_model = leading;
+    for r in &mut t.runs {
+        r.style.char_align = align;
+    }
+    Ok(())
 }
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p`, else the
