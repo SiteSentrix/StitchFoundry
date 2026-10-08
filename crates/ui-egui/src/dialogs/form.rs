@@ -238,9 +238,7 @@ pub(super) fn param_fields(
             }
             match v {
                 Value::Number(n) => {
-                    let mut x = n.as_f64().unwrap_or(0.0);
-                    let speed = if x.abs() > 20.0 { 1.0 } else { 0.1 };
-                    if ui.add(egui::DragValue::new(&mut x).speed(speed).max_decimals(2)).changed() {
+                    if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), "", 3, 140.0) {
                         d.fields.insert(k, json!(x));
                         changed = true;
                     }
@@ -288,13 +286,12 @@ pub(super) fn schema_fields(ui: &mut egui::Ui, d: &mut Dialog, specs: &[(String,
             let cur = d.fields.get(k).cloned().unwrap_or_else(|| spec.default_value());
             let new = match spec {
                 ParamSpec::Number { min, max, .. } => {
-                    let mut x = cur.as_f64().unwrap_or(*min).clamp(*min, *max);
-                    let speed = ((max - min) / 200.0).clamp(0.01, 10.0);
-                    ui.add(egui::DragValue::new(&mut x).range(*min..=*max).speed(speed).max_decimals(2)).changed().then(|| json!(x))
+                    let x = cur.as_f64().unwrap_or(*min);
+                    crate::widgets::range_field(ui, ("plugin-num", k), x, *min..=*max, "", 2, 100.0).map(|x| json!(x))
                 }
                 ParamSpec::Int { min, max, .. } => {
-                    let mut x = cur.as_i64().unwrap_or(*min).clamp(*min, *max);
-                    ui.add(egui::DragValue::new(&mut x).range(*min..=*max).speed(0.2)).changed().then(|| json!(x))
+                    let x = cur.as_i64().unwrap_or(*min) as f64;
+                    crate::widgets::range_field(ui, ("plugin-int", k), x, *min as f64..=*max as f64, "", 0, 100.0).map(|x| json!(x as i64))
                 }
                 ParamSpec::Bool { .. } => {
                     let mut b = cur.as_bool().unwrap_or(false);

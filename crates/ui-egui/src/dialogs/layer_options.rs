@@ -178,9 +178,10 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 toggle(ui, d, "preview", tl!("Preview"), true);
                 ui.horizontal(|ui| {
                     toggle(ui, d, "dimImages", tl!("Dim Images to:"), true);
-                    let mut v = d.f64("dimPercent", 50.0);
-                    if ui.add_enabled(d.bool("dimImages"), egui::DragValue::new(&mut v).range(0.0..=100.0).suffix("%")).changed() {
-                        d.fields.insert("dimPercent".into(), json!(v.round()));
+                    let v = d.f64("dimPercent", 50.0);
+                    let dim = d.bool("dimImages");
+                    if let Some(v) = ui.add_enabled_ui(dim, |ui| crate::widgets::range_field(ui, "dimPercent", v, 0.0..=100.0, "%", 0, 52.0)).inner {
+                        d.fields.insert("dimPercent".into(), json!(v));
                     }
                 });
             });
