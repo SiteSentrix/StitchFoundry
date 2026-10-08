@@ -8,7 +8,7 @@
 //! reads from a paste itself ([`VectorcraftApp::paste_from_host`]).
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::clipboard::{EMF, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg};
+use vectorcraft_engine::cmd::clipboard::{BITMAP, EMF, Flavour, PASTE_ORDER, PDF, SVG, TEXT, is_address, looks_like_svg};
 
 use crate::VectorcraftApp;
 
@@ -90,6 +90,8 @@ impl VectorcraftApp {
                     return Ok(());
                 }
                 let Some(f) = cb.read(&PASTE_ORDER) else { return Ok(()) };
+                // Text that is only an address goes with a browser's copied picture: the picture.
+                let f = if f.mime == TEXT && is_address(&String::from_utf8_lossy(&f.data)) { cb.read(&[BITMAP]).unwrap_or(f) } else { f };
                 import_command(&f, center)
             }
             // Text only: SVG markup is art, other text is left alone.

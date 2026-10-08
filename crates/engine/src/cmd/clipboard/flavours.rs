@@ -30,6 +30,15 @@ pub const EMF: &str = "image/emf";
 /// What Paste reads from other apps, best first: vector art before text, text before bitmaps
 /// (word processors offer a picture of copied text too).
 pub const PASTE_ORDER: [&str; 5] = [SVG, PDF, EMF, TEXT, BITMAP];
+/// Is `text` only an address (a web page's, an image's, a file's)? A browser's Copy Image puts the
+/// image's address as text next to the picture: then the picture is what Paste takes (#597). An
+/// address alone pastes as text, and nothing is fetched.
+pub fn is_address(text: &str) -> bool {
+    const SCHEMES: [&str; 6] = ["http://", "https://", "file://", "ftp://", "data:", "blob:"];
+    let t = text.trim();
+    !t.chars().any(char::is_whitespace) && SCHEMES.iter().any(|s| t.get(..s.len()).is_some_and(|h| h.eq_ignore_ascii_case(s)) && t.len() > s.len())
+}
+
 /// How much of a copied file [`file_flavour`] needs to tell what it is.
 pub const FILE_HEAD: usize = 4096;
 
