@@ -97,6 +97,9 @@ pub struct RenderOptions {
     pub highlight_substitutions: bool,
     /// Edge smoothing (raster export option).
     pub anti_alias: AntiAlias,
+    /// Screen view: placed documents draw from cached bitmaps made in the background (see
+    /// [`placed_document`]); off, they draw exactly, read when needed.
+    pub progressive_placed: bool,
 }
 
 /// How edges are rasterized (raster export option).
@@ -161,6 +164,7 @@ impl Default for RenderOptions {
             mask_view: None,
             highlight_substitutions: false,
             anti_alias: AntiAlias::Art,
+            progressive_placed: false,
         }
     }
 }

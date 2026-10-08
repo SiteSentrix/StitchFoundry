@@ -277,6 +277,8 @@ pub struct CacheKey {
     pub rot: f64,
     /// General › Anti-aliased Artwork.
     pub anti_alias: bool,
+    /// [`vectorcraft_render::placed_document::generation`]: placed documents' bitmaps made since.
+    pub placed: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
