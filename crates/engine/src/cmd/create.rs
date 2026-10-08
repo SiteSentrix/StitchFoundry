@@ -166,7 +166,13 @@ fn rect_of(p: &Value, cmd: &str) -> Result<Rect> {
 fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.rectangle")?;
     let radius = f64_or(p, "radius", 0.0).max(0.0);
-    let live = LiveShape::Rectangle { w: r.width(), h: r.height(), radii: [radius; 4], xf: Affine::translate(r.origin().to_vec2()) };
+    let live = LiveShape::Rectangle {
+        w: r.width(),
+        h: r.height(),
+        radii: [radius; 4],
+        kinds: Default::default(),
+        xf: Affine::translate(r.origin().to_vec2()),
+    };
     let label = if radius > 0.0 { "Rounded Rectangle" } else { "Rectangle" };
     add_art(s, label, path_kind(live.to_path(), Some(live)), None)
 }

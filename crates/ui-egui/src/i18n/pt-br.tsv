@@ -322,6 +322,7 @@
 	Cascade	Em Cascata
 	Center Artwork	Centralizar Arte
 	Centimeters	Centímetros
+	Chamfer	Chanfro
 	Change	Alterar
 	Change All	Alterar Tudo
 	Change Case	Alterar Maiúsculas/Minúsculas
@@ -477,6 +478,7 @@
 	Corner Radius:	Raio do Canto:
 	Corner:	Canto:
 	Corners	Cantos
+	Corners…	Cantos…
 	Create	Criar
 	Create Clipping Mask	Criar Máscara de Recorte
 	Create Document	Criar Documento
@@ -1085,6 +1087,7 @@
 	Invert	Inverter
 	Invert Colors	Inverter Cores
 	Invert Mask	Inverter Máscara
+	Inverted Round	Arredondado Invertido
 	Isolate	Isolar
 	Isolate Blending	Isolar Mesclagem
 	Isolate Group	Isolar Grupo
@@ -1703,6 +1706,7 @@
 	Radial	Radial
 	Radial Glows	Brilhos Radiais
 	Radial Gradient	Gradiente Radial
+	Radius:	Raio:
 	Rainbow	Arco-íris
 	Random	Aleatório
 	Randomize Colors	Randomizar Cores
@@ -1871,6 +1875,7 @@
 	Rotate…	Girar…
 	Rotation	Rotação
 	Roughen…	Enrugar…
+	Round	Arredondado
 	Round Cap	Extremidade Redonda
 	Round Corners…	Cantos Arredondados…
 	Round Join	Junção Redonda

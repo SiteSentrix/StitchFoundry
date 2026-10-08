@@ -940,6 +940,11 @@
 	Corner Radius:	角丸の半径:
 	Corner:	角の形状:
 	Corners	コーナー
+	Round	丸型
+	Radius:	半径:
+	Inverted Round	反転した丸型
+	Corners…	コーナー…
+	Chamfer	面取り
 	Create Clipping Mask	クリッピングマスクを作成
 	Create Document	ドキュメントを作成
 	Create From:	作成元:

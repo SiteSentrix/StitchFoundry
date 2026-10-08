@@ -3,6 +3,7 @@
 use std::f64::consts::{PI, TAU};
 
 use kurbo::{Point, Rect, Vec2};
+use serde::{Deserialize, Serialize};
 
 use crate::path::{Anchor, AnchorKind, PathData, SubPath};
 
@@ -17,25 +18,85 @@ pub fn rectangle(r: Rect) -> PathData {
 
 /// Rounded rectangle (8 anchors). The radius is clamped to half the shorter side.
 pub fn rounded_rectangle(r: Rect, radius: f64) -> PathData {
-    let r = r.abs();
-    let rad = radius.max(0.0).min(r.width() / 2.0).min(r.height() / 2.0);
-    if rad <= 1e-9 {
-        return rectangle(r);
+    rectangle_with_corners(r, [radius; 4], [CornerKind::Round; 4])
+}
+
+/// How a rectangle's corner is cut (Live Corners).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CornerKind {
+    /// A quarter circle, bulging outwards.
+    #[default]
+    Round,
+    /// A quarter circle cut into the shape, centred on the corner.
+    InvertedRound,
+    /// A straight bevel.
+    Chamfer,
+}
+
+impl CornerKind {
+    pub const ALL: [CornerKind; 3] = [CornerKind::Round, CornerKind::InvertedRound, CornerKind::Chamfer];
+
+    /// The kind after this one (Alt-clicking a corner widget cycles through them).
+    pub fn next(self) -> Self {
+        match self {
+            CornerKind::Round => CornerKind::InvertedRound,
+            CornerKind::InvertedRound => CornerKind::Chamfer,
+            CornerKind::Chamfer => CornerKind::Round,
+        }
     }
-    let k = rad * KAPPA;
-    let (x0, y0, x1, y1) = (r.x0, r.y0, r.x1, r.y1);
-    let a = |p: (f64, f64), hin: (f64, f64), hout: (f64, f64)| Anchor { p: p.into(), h_in: hin.into(), h_out: hout.into(), kind: AnchorKind::Corner };
-    let anchors = vec![
-        a((x0 + rad, y0), (x0 + rad - k, y0), (x0 + rad, y0)),
-        a((x1 - rad, y0), (x1 - rad, y0), (x1 - rad + k, y0)),
-        a((x1, y0 + rad), (x1, y0 + rad - k), (x1, y0 + rad)),
-        a((x1, y1 - rad), (x1, y1 - rad), (x1, y1 - rad + k)),
-        a((x1 - rad, y1), (x1 - rad + k, y1), (x1 - rad, y1)),
-        a((x0 + rad, y1), (x0 + rad, y1), (x0 + rad - k, y1)),
-        a((x0, y1 - rad), (x0, y1 - rad + k), (x0, y1 - rad)),
-        a((x0, y0 + rad), (x0, y0 + rad), (x0, y0 + rad - k)),
+}
+
+/// Rectangle whose corners (top-left, top-right, bottom-right, bottom-left, y down) each have
+/// their own radius and kind, every radius clamped to half the shorter side. A corner without a
+/// radius is one anchor, the others two (where the cut meets each side). Clockwise from the
+/// top-left corner, its anchor on the top side first.
+pub fn rectangle_with_corners(r: Rect, radii: [f64; 4], kinds: [CornerKind; 4]) -> PathData {
+    PathData::single(SubPath::new(corner_anchors(r, radii, kinds).into_iter().map(|(_, a)| a).collect(), true))
+}
+
+/// The corner (index into `radii`) of each anchor of [`rectangle_with_corners`].
+pub fn rectangle_anchor_corners(r: Rect, radii: [f64; 4]) -> Vec<usize> {
+    corner_anchors(r, radii, [CornerKind::Round; 4]).into_iter().map(|(k, _)| k).collect()
+}
+
+/// The anchors of [`rectangle_with_corners`], each with its corner.
+fn corner_anchors(r: Rect, radii: [f64; 4], kinds: [CornerKind; 4]) -> Vec<(usize, Anchor)> {
+    let r = r.abs();
+    let max = r.width().min(r.height()) / 2.0;
+    // Each corner, with the directions of the side arriving at it and of the side leaving it.
+    let corners = [
+        (Point::new(r.x0, r.y0), Vec2::new(0.0, -1.0), Vec2::new(1.0, 0.0)),
+        (Point::new(r.x1, r.y0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)),
+        (Point::new(r.x1, r.y1), Vec2::new(0.0, 1.0), Vec2::new(-1.0, 0.0)),
+        (Point::new(r.x0, r.y1), Vec2::new(-1.0, 0.0), Vec2::new(0.0, -1.0)),
     ];
-    PathData::single(SubPath::new(anchors, true))
+    let mut out = Vec::with_capacity(8);
+    let mut top_left_start = None;
+    for (k, ((c, din, dout), (rad, kind))) in corners.into_iter().zip(radii.into_iter().zip(kinds)).enumerate() {
+        let rad = rad.max(0.0).min(max);
+        if rad <= 1e-9 {
+            out.push((k, Anchor::corner(c)));
+            continue;
+        }
+        // The cut runs from `start` on the arriving side to `end` on the leaving one.
+        let (start, end, h) = (c - din * rad, c + dout * rad, rad * KAPPA);
+        let (h_out, h_in) = match kind {
+            CornerKind::Round => (start + din * h, end - dout * h),
+            CornerKind::InvertedRound => (start + dout * h, end - din * h),
+            CornerKind::Chamfer => (start, end),
+        };
+        let start = Anchor { p: start, h_in: start, h_out, kind: AnchorKind::Corner };
+        let end = Anchor { p: end, h_in, h_out: end, kind: AnchorKind::Corner };
+        if k == 0 {
+            top_left_start = Some(start);
+        } else {
+            out.push((k, start));
+        }
+        out.push((k, end));
+    }
+    out.extend(top_left_start.map(|a| (0, a)));
+    out
 }
 
 /// Ellipse inscribed in `r` with 4 smooth anchors (left, top, right, bottom).
@@ -201,6 +262,54 @@ mod tests {
         assert_eq!(p.anchor_count(), 8);
         assert_eq!(p.bounds(), Some(Rect::new(0.0, 0.0, 20.0, 10.0)));
         assert_eq!(rounded_rectangle(Rect::new(0.0, 0.0, 20.0, 10.0), 0.0).anchor_count(), 4);
+    }
+
+    #[test]
+    fn uniform_corners_keep_the_rounded_rectangle_layout() {
+        // The 8 anchors a rounded rectangle always had, from the top side's first one.
+        let (r, rad) = (Rect::new(10.0, 20.0, 110.0, 70.0), 7.5);
+        let (x0, y0, x1, y1, k) = (10.0, 20.0, 110.0, 70.0, rad * KAPPA);
+        let a =
+            |p: (f64, f64), hin: (f64, f64), hout: (f64, f64)| Anchor { p: p.into(), h_in: hin.into(), h_out: hout.into(), kind: AnchorKind::Corner };
+        let want = vec![
+            a((x0 + rad, y0), (x0 + rad - k, y0), (x0 + rad, y0)),
+            a((x1 - rad, y0), (x1 - rad, y0), (x1 - rad + k, y0)),
+            a((x1, y0 + rad), (x1, y0 + rad - k), (x1, y0 + rad)),
+            a((x1, y1 - rad), (x1, y1 - rad), (x1, y1 - rad + k)),
+            a((x1 - rad, y1), (x1 - rad + k, y1), (x1 - rad, y1)),
+            a((x0 + rad, y1), (x0 + rad, y1), (x0 + rad - k, y1)),
+            a((x0, y1 - rad), (x0, y1 - rad + k), (x0, y1 - rad)),
+            a((x0, y0 + rad), (x0, y0 + rad), (x0, y0 + rad - k)),
+        ];
+        assert_eq!(rounded_rectangle(r, rad).subpaths[0].anchors, want);
+        assert_eq!(rectangle_anchor_corners(r, [rad; 4]), [0, 1, 1, 2, 2, 3, 3, 0]);
+        assert_eq!(rounded_rectangle(r, 0.0), rectangle(r));
+    }
+
+    #[test]
+    fn each_corner_takes_its_own_radius_and_kind() {
+        let r = Rect::new(0.0, 0.0, 100.0, 60.0);
+        // Only the top-right corner rounded: 5 anchors, the corner's two on its sides.
+        let radii = [0.0, 10.0, 0.0, 0.0];
+        let p = rectangle_with_corners(r, radii, [CornerKind::Round; 4]);
+        let pts: Vec<Point> = p.subpaths[0].anchors.iter().map(|a| a.p).collect();
+        assert_eq!(pts, [Point::new(0.0, 0.0), Point::new(90.0, 0.0), Point::new(100.0, 10.0), Point::new(100.0, 60.0), Point::new(0.0, 60.0)]);
+        assert_eq!(rectangle_anchor_corners(r, radii), [0, 1, 1, 2, 3]);
+        let quarter = PI * 25.0;
+        assert!((p.subpaths[0].area() - (6000.0 - 100.0 + quarter)).abs() < 0.1, "a quarter circle off one corner");
+        // The top-left corner rounded: its top-side anchor first, its left-side one last.
+        assert_eq!(rectangle_anchor_corners(r, [10.0, 0.0, 0.0, 200.0]), [0, 1, 2, 3, 3, 0]);
+        // Inverted round cuts a quarter circle out; a chamfer cuts a triangle.
+        let inverted = rectangle_with_corners(r, radii, [CornerKind::InvertedRound; 4]);
+        assert!((inverted.subpaths[0].area() - (6000.0 - quarter)).abs() < 0.1);
+        let chamfer = rectangle_with_corners(r, radii, [CornerKind::Chamfer; 4]);
+        assert!((chamfer.subpaths[0].area() - (6000.0 - 50.0)).abs() < 1e-9);
+        assert!(chamfer.subpaths[0].anchors.iter().all(|a| !a.has_in() && !a.has_out()), "straight");
+        // Radii clamp to half the shorter side; negative and NaN radii are none.
+        let p = rectangle_with_corners(r, [500.0, -5.0, f64::NAN, 0.0], [CornerKind::Round; 4]);
+        assert_eq!(p.subpaths[0].anchors[0].p, Point::new(30.0, 0.0));
+        assert_eq!(p.anchor_count(), 5);
+        assert_eq!(CornerKind::ALL.map(CornerKind::next), [CornerKind::InvertedRound, CornerKind::Chamfer, CornerKind::Round]);
     }
 
     #[test]

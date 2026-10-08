@@ -1,6 +1,7 @@
 //! The Selection tool (V): click/shift-click, marquee, move (Alt copies, Shift constrains),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
-//! drag a live rectangle's corner widget to round its corners, double-click to enter isolation mode.
+//! drag a live rectangle's corner widget to round its corners (Alt-click cycles their kind,
+//! double-click opens the Corners dialog), double-click to enter isolation mode.
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
@@ -11,7 +12,7 @@ use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
-use crate::corners::{CornerDrag, over_widget};
+use crate::corners::{self, CornerDrag, over_widget};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
 
 #[derive(Clone, Debug, Default)]
@@ -108,6 +109,9 @@ impl Tool for SelectionTool {
         match (ev.kind, self.state.clone()) {
             (PointerKind::DoubleClick, _) => {
                 self.state = State::Idle;
+                if let Some(a) = corners::double_click(cx, p) {
+                    return vec![a];
+                }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     let top = h.top_object(cx.isolation);
                     if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. })) {
@@ -123,7 +127,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Down, _) => {
                 // 1. Live Corners widgets, then the bounding-box handles of the current selection.
-                if let Some(c) = CornerDrag::hit(cx, p) {
+                if let Some(c) = CornerDrag::hit(cx, ev) {
                     self.state = State::Corner(c);
                     return vec![];
                 }

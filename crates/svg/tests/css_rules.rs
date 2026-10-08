@@ -6,7 +6,8 @@
 
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Document, Effect, Justify, LiveShape, Node, NodeId, NodeKind, TextObject};
-use vectorcraft_geom::{Affine, Point, Rect, shapes};
+use vectorcraft_geom::shapes::{self, CornerKind};
+use vectorcraft_geom::{Affine, Point, Rect};
 use vectorcraft_svg::{CssOptions, CssRule, CssUnits, ExportOptions, Styling, css_rules, export};
 
 fn doc() -> Document {
@@ -29,7 +30,7 @@ fn rect(d: &mut Document, (x, y, w, h): (f64, f64, f64, f64), radius: f64) -> No
         Appearance::basic(fill, Paint::solid(Color::rgb8(0, 0, 255)), 2.0),
     );
     if let NodeKind::Path { live, .. } = &mut n.kind {
-        *live = Some(LiveShape::Rectangle { w, h, radii: [radius; 4], xf: Affine::translate((x, y)) });
+        *live = Some(LiveShape::Rectangle { w, h, radii: [radius; 4], kinds: Default::default(), xf: Affine::translate((x, y)) });
     }
     n
 }
@@ -67,6 +68,22 @@ fn rectangle_gives_background_border_and_radius() {
         r.text(),
         ".Hero_Card {\n  position: absolute;\n  left: 10px;\n  top: 20px;\n  width: 100px;\n  height: 50px;\n  background-color: #ff0000;\n  border: 2px solid #0000ff;\n  border-radius: 8px;\n}"
     );
+}
+
+#[test]
+fn live_corners_give_per_corner_radii_and_only_round_ones() {
+    let mut d = doc();
+    let mut n = rect(&mut d, (0.0, 0.0, 100.0, 50.0), 0.0);
+    if let NodeKind::Path { live: Some(LiveShape::Rectangle { radii, kinds, .. }), .. } = &mut n.kind {
+        *radii = [0.0, 8.0, 0.0, 4.0];
+        kinds[0] = CornerKind::Chamfer;
+    }
+    let id = add(&mut d, n);
+    assert_eq!(prop(&one(&d, id, &CssOptions::default()), "border-radius"), Some("0 8px 0 4px"), "a square corner's kind doesn't matter");
+    if let Some(NodeKind::Path { live: Some(LiveShape::Rectangle { kinds, .. }), .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+        kinds[1] = CornerKind::InvertedRound;
+    }
+    assert!(prop(&one(&d, id, &CssOptions::default()), "border-radius").is_none(), "CSS can't cut a corner in");
 }
 
 #[test]

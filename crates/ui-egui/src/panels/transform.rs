@@ -7,7 +7,7 @@ use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_geom::Rect;
 
-use super::{first_selected, pstate, set_pstate};
+use super::{corner_radius, first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -170,11 +170,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         widgets::divider(ui);
         match live {
-            vectorcraft_doc::LiveShape::Rectangle { radii, .. } => {
+            vectorcraft_doc::LiveShape::Rectangle { .. } => {
                 widgets::subheader(ui, tl!("Rectangle Properties:"));
                 ui.horizontal(|ui| {
                     widgets::dim_label(ui, tl!("Corner Radius:"));
-                    if let Some(r) = widgets::num_field(ui, "xfp-radius", Some(radii[0]), units, 80.0) {
+                    if let Some(r) = widgets::num_field(ui, "xfp-radius", corner_radius(app, &n, live), units, 80.0) {
                         app.run("object.setLiveShape", json!({"radius": r})).ok();
                     }
                 });

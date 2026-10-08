@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{AppearanceItem, CharStyle, Document, Justify, LineCap, LiveShape, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextKind};
 use vectorcraft_effects::RasterFx;
+use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 use crate::export::sanitize_id;
@@ -600,7 +601,10 @@ fn corners(path: &PathData, live: Option<&LiveShape>) -> Option<Corners> {
         b.abs() < 1e-9 && c.abs() < 1e-9
     };
     match live {
-        Some(LiveShape::Rectangle { radii, xf, .. }) if upright(xf) => {
+        // CSS rounds corners only: an inverted round or chamfered corner has no border radius.
+        Some(LiveShape::Rectangle { radii, kinds, xf, .. })
+            if upright(xf) && radii.iter().zip(kinds).all(|(r, k)| *r <= 0.0 || *k == CornerKind::Round) =>
+        {
             let [a, _, _, d, _, _] = xf.as_coeffs();
             let s = (a * d).abs().sqrt();
             if radii.iter().all(|r| *r <= 0.0) {

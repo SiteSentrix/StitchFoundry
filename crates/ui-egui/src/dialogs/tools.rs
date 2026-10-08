@@ -70,6 +70,13 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             }
             return;
         }
+        // Double-clicking a Live Corners widget: Corners.
+        super::corners::KIND => {
+            if let Err(e) = super::corners::open(app, &p) {
+                app.status(e);
+            }
+            return;
+        }
         // Double-clicking a slice with the Slice Selection tool: Slice Options.
         super::slices::OPTIONS => {
             if let Err(e) = super::slices::open_options(app) {
