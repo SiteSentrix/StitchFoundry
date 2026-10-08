@@ -7,7 +7,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use super::*;
-use crate::cmd::clipboard::{PDF, PNG, SVG, TEXT};
+use crate::cmd::clipboard::{BITMAP, FILE_HEAD, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour};
 
 fn session() -> Session {
     let mut s = Session::new();
@@ -116,6 +116,29 @@ fn import_image_then_paste_gives_an_image() {
     assert!(s.execute("clipboard.importImage", &json!({"dataBase64": png["dataBase64"], "mime": "image/svg+xml"})).is_err());
     assert!(s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(b"hello")})).is_err());
     assert!(s.execute("clipboard.importImage", &json!({"dataBase64": "!!"})).is_err());
+}
+
+#[test]
+fn copied_files_paste_by_their_content() {
+    let mut s = session();
+    copy_red_square(&mut s);
+    let png = decode(&run(&mut s, "clipboard.exportPng", json!({})));
+    let pdf = decode(&run(&mut s, "clipboard.exportPdf", json!({})));
+    let mut jpeg = vec![];
+    image::RgbImage::new(2, 2).write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+    let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"4\" height=\"4\"/></svg>";
+    let of = |name: &str, bytes: &[u8]| file_flavour(name, &bytes[..bytes.len().min(FILE_HEAD)], &PASTE_ORDER);
+    assert_eq!(of("red.png", &png), Some(PNG));
+    // The content tells, whatever the name says; bitmaps keep their own type.
+    assert_eq!(of("photo.txt", &jpeg), Some("image/jpeg"));
+    assert_eq!(of("art.svg", svg), Some(SVG));
+    assert_eq!(of("doc.pdf", &pdf), Some(PDF));
+    // Files that aren't art paste as nothing (not as their path).
+    assert_eq!(of("notes.txt", b"hello"), None);
+    assert_eq!(of("archive.zip", b"PK\x03\x04"), None);
+    // Only what was asked for.
+    assert_eq!(file_flavour("red.png", &png, &[TEXT, SVG]), None);
+    assert_eq!(file_flavour("art.svg", svg, &[BITMAP]), None);
 }
 
 #[test]

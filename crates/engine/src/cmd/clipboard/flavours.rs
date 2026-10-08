@@ -30,6 +30,23 @@ pub const EMF: &str = "image/emf";
 /// What Paste reads from other apps, best first: vector art before text, text before bitmaps
 /// (word processors offer a picture of copied text too).
 pub const PASTE_ORDER: [&str; 5] = [SVG, PDF, EMF, TEXT, BITMAP];
+/// How much of a copied file [`file_flavour`] needs to tell what it is.
+pub const FILE_HEAD: usize = 4096;
+
+/// What a file copied in a file manager pastes as, if one of `mimes` (`image/*`: any bitmap):
+/// SVG, PDF, a Windows metafile or a bitmap (its own `image/…` type), told from its first
+/// [`FILE_HEAD`] bytes and its name. The file's bytes are that flavour's data.
+pub fn file_flavour(name: &str, head: &[u8], mimes: &[&str]) -> Option<&'static str> {
+    let f = fileio::detect(name, head)?;
+    let (asked, mime) = match f.id {
+        "svg" => (SVG, SVG),
+        "pdf" => (PDF, PDF),
+        "emf" | "wmf" => (EMF, EMF),
+        _ if f.raster => (BITMAP, f.mime),
+        _ => return None,
+    };
+    mimes.contains(&asked).then_some(mime)
+}
 
 /// One representation of the clipboard's contents.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -1,9 +1,10 @@
 //! The system clipboard's formats: Copy and Cut publish every flavour the engine makes
 //! ([`Session::clipboard_flavours`](vectorcraft_engine::Session::clipboard_flavours): text, SVG,
-//! PDF, PNG), and a Paste first turns what another app copied (SVG, PDF, an EMF, text, a bitmap)
-//! into the internal clipboard with the `clipboard.import*` commands. The host installs the
-//! platform side as [`Services::system_clipboard`](crate::Services::system_clipboard); without it
-//! (the web) Copy publishes SVG text through egui and Paste takes SVG text only.
+//! PDF, PNG), and a Paste first turns what another app copied (SVG, PDF, an EMF, text, a bitmap,
+//! or a copied file that is one of them) into the internal clipboard with the `clipboard.import*`
+//! commands. The host installs the platform side as
+//! [`Services::system_clipboard`](crate::Services::system_clipboard); without it (the web) Copy
+//! publishes SVG text through egui and Paste takes SVG text only.
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::clipboard::{EMF, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg};
