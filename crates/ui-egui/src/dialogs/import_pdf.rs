@@ -203,7 +203,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         if !d.bool("allPages") && !range.trim().is_empty() {
             p["pages"] = json!(range);
         }
-        io::open_document(app, &name, &file.bytes, path, &p)
+        io::open_document(app, &name, &file.bytes, path, &p).map(|_| ())
     };
     match r {
         Ok(()) => {

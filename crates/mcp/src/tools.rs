@@ -262,7 +262,7 @@ pub fn tool_definitions() -> Vec<Value> {
             "open_file",
             "Open file",
             &format!(
-                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document.",
+                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read).",
                 OPEN_EXTS.join(", .")
             ),
             obj(json!({"path": string("File path")}), &["path"]),

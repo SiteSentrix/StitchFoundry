@@ -10,7 +10,7 @@ use std::rc::Rc;
 use vectorcraft_geom::Affine;
 
 use super::graphics::{GState, Out};
-use super::lex::Lexer;
+use super::lex::{IMMEDIATE, Lexer};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
 /// Most operations one file may run.
@@ -49,6 +49,10 @@ pub(crate) struct Interp<'a> {
     /// Bytes asked for so far (see [`MAX_MEMORY`]).
     allocated: usize,
     seed: u32,
+    /// Where the error that is unwinding was raised (see [`Fault`]).
+    pub fault: Option<Fault>,
+    /// The width a Type 3 glyph procedure gave (`setcachedevice`, `setcharwidth`).
+    pub glyph_width: Option<[f64; 2]>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -56,6 +60,17 @@ pub(crate) struct Interp<'a> {
     /// its prolog defines them as) are groups.
     pub illustrator: bool,
 }
+
+/// Where a PostScript error was raised: the operator that raised it (none for an unknown name)
+/// and the named procedures it ran in, innermost first, so the user and we can see the cause.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Fault {
+    pub op: Option<&'static str>,
+    pub procs: Vec<Rc<str>>,
+}
+
+/// Most procedure names a [`Fault`] keeps.
+const FAULT_PROCS: usize = 3;
 
 fn new_dict() -> DictRef {
     Rc::new(RefCell::new(Dict::new()))
@@ -128,6 +143,8 @@ impl<'a> Interp<'a> {
             ops: 0,
             allocated: 0,
             seed: 1,
+            fault: None,
+            glyph_width: None,
             g,
             saved: vec![],
             out,
@@ -139,6 +156,7 @@ impl<'a> Interp<'a> {
     pub fn run(&mut self) -> Res {
         loop {
             let Some(o) = self.lex.next()? else { return Ok(()) };
+            let o = self.scanned(o, self.lex.immediate)?;
             // An Illustrator group begins before its `u` runs (`Some(true)`) and ends after its `U`
             // has (`Some(false)`).
             let group = match &o {
@@ -242,7 +260,7 @@ impl<'a> Interp<'a> {
 
     pub fn pop_str(&mut self) -> Res<Shared<u8>> {
         match self.pop()? {
-            Obj::Str(s) => Ok(s),
+            Obj::Str(s) | Obj::ExecStr(s) => Ok(s),
             _ => ps_err("typecheck", "a string"),
         }
     }
@@ -273,8 +291,12 @@ impl<'a> Interp<'a> {
 
     /// The value of name `name` on the dictionary stack.
     pub fn lookup(&self, name: &Rc<str>) -> Option<Obj> {
-        let key = Key::Name(name.clone());
-        self.dicts.iter().rev().find_map(|d| d.borrow().get(&key).cloned())
+        self.lookup_key(&Key::Name(name.clone()))
+    }
+
+    /// The value of any key (`load` takes numbers too) on the dictionary stack.
+    fn lookup_key(&self, key: &Key) -> Option<Obj> {
+        self.dicts.iter().rev().find_map(|d| d.borrow().get(key).cloned())
     }
 
     /// Count `bytes` the program makes against [`MAX_MEMORY`].
@@ -306,10 +328,24 @@ impl<'a> Interp<'a> {
         self.tick()?;
         match o {
             Obj::Exec(name) => {
-                let v = self.lookup(&name).ok_or_else(|| PsError::Ps("undefined", name.to_string()))?;
-                self.call(v)
+                let Some(v) = self.lookup(&name) else {
+                    self.fault.get_or_insert_default();
+                    return ps_err("undefined", &name);
+                };
+                let proc = matches!(v, Obj::Array { exec: true, .. });
+                let r = self.call(v);
+                if proc
+                    && matches!(r, Err(PsError::Ps(..)))
+                    && let Some(f) = self.fault.as_mut()
+                    && f.procs.len() < FAULT_PROCS
+                {
+                    f.procs.push(name);
+                }
+                r
             }
             Obj::Op(op) => self.op(op),
+            // An executable string runs, as an operator does (procedures are pushed).
+            s @ Obj::ExecStr(_) => self.call(s),
             o => self.push(o),
         }
     }
@@ -319,7 +355,11 @@ impl<'a> Interp<'a> {
     pub fn call(&mut self, v: Obj) -> Res {
         match v {
             Obj::Array { items, exec: true } => self.run_proc(&items),
-            Obj::File { stream, exec: true } => self.run_file(&stream),
+            Obj::File { stream, exec: true } => match self.program_of(&stream)? {
+                Some(program) => self.run_program(&program),
+                None => Ok(()),
+            },
+            Obj::ExecStr(s) => self.run_program(&s.to_vec()),
             Obj::Op(op) => self.op(op),
             Obj::Exec(name) => {
                 self.enter()?;
@@ -349,15 +389,14 @@ impl<'a> Interp<'a> {
         r
     }
 
-    /// Run what is left of an executable file as a program, token by token.
-    fn run_file(&mut self, f: &Rc<RefCell<super::data::Stream>>) -> Res {
-        let Some(program) = self.program_of(f)? else { return Ok(()) };
+    /// Run `program` (what is left of an executable file, an executable string), token by token.
+    fn run_program(&mut self, program: &[u8]) -> Res {
         self.enter()?;
-        let mut lex = Lexer::new(&program);
+        let mut lex = Lexer::new(program);
         let r = loop {
             match lex.next() {
                 Ok(Some(o)) => {
-                    if let Err(e) = self.exec_token(o) {
+                    if let Err(e) = self.scanned(o, lex.immediate).and_then(|o| self.exec_token(o)) {
                         break Err(e);
                     }
                 }
@@ -367,6 +406,32 @@ impl<'a> Interp<'a> {
         };
         self.depth -= 1;
         r
+    }
+
+    /// An object as the scanner gives it: with `immediate`, its `//name`s replaced by their
+    /// values (down through procedures), as they are when read.
+    pub fn scanned(&self, o: Obj, immediate: bool) -> Res<Obj> {
+        if immediate { self.resolve(o, 0) } else { Ok(o) }
+    }
+
+    fn resolve(&self, o: Obj, depth: usize) -> Res<Obj> {
+        match o {
+            Obj::Exec(n) if n.starts_with(IMMEDIATE) => {
+                let name = n.get(IMMEDIATE.len()..).unwrap_or_default();
+                self.lookup(&Rc::from(name)).ok_or_else(|| PsError::Ps("undefined", name.to_string()))
+            }
+            Obj::Array { items, exec: true } if depth < MAX_DEPTH as usize => {
+                for i in 0..items.len() {
+                    let Some(item) = items.get(i) else { break };
+                    if matches!(&item, Obj::Exec(n) if n.starts_with(IMMEDIATE)) || matches!(&item, Obj::Array { exec: true, .. }) {
+                        // A procedure the scanner just made: nothing else reads it.
+                        items.write(i, &[self.resolve(item, depth + 1)?]);
+                    }
+                }
+                Ok(Obj::Array { items, exec: true })
+            }
+            o => Ok(o),
+        }
     }
 
     fn run_items(&mut self, items: &Shared<Obj>) -> Res {
@@ -401,7 +466,11 @@ impl<'a> Interp<'a> {
 
     pub fn op(&mut self, op: Op) -> Res {
         self.op_inner(op).map_err(|e| match e {
-            PsError::Ps(name, at) if at.is_empty() => PsError::Ps(name, op.name().to_string()),
+            PsError::Ps(name, at) => {
+                // The innermost operator raised it (`exec` running a procedure doesn't).
+                self.fault.get_or_insert(Fault { op: Some(op.name()), procs: vec![] });
+                PsError::Ps(name, if at.is_empty() { op.name().to_string() } else { at })
+            }
             e => e,
         })
     }
@@ -683,6 +752,7 @@ impl<'a> Interp<'a> {
                     Ok(()) => self.push(Obj::Bool(false))?,
                     Err(PsError::Ps(..) | PsError::Stop | PsError::Exit) => {
                         self.depth = depth;
+                        self.fault = None;
                         self.push(Obj::Bool(true))?;
                     }
                     Err(e) => return Err(e),
@@ -699,6 +769,7 @@ impl<'a> Interp<'a> {
                 let o = match self.pop()? {
                     Obj::Array { items, .. } => Obj::Array { items, exec: true },
                     Obj::File { stream, .. } => Obj::File { stream, exec: true },
+                    Obj::Str(s) => Obj::ExecStr(s),
                     Obj::Name(n) => Obj::Exec(n),
                     o => o,
                 };
@@ -708,6 +779,7 @@ impl<'a> Interp<'a> {
                 let o = match self.pop()? {
                     Obj::Array { items, .. } => Obj::Array { items, exec: false },
                     Obj::File { stream, .. } => Obj::File { stream, exec: false },
+                    Obj::ExecStr(s) => Obj::Str(s),
                     Obj::Exec(n) => Obj::Name(n),
                     o => o,
                 };
@@ -715,7 +787,10 @@ impl<'a> Interp<'a> {
             }
             Xcheck => {
                 let o = self.pop()?;
-                self.push(Obj::Bool(matches!(o, Obj::Array { exec: true, .. } | Obj::File { exec: true, .. } | Obj::Exec(_) | Obj::Op(_))))?;
+                self.push(Obj::Bool(matches!(
+                    o,
+                    Obj::Array { exec: true, .. } | Obj::File { exec: true, .. } | Obj::ExecStr(_) | Obj::Exec(_) | Obj::Op(_)
+                )))?;
             }
             Cvn => {
                 let s = self.pop_str()?;
@@ -768,7 +843,7 @@ impl<'a> Interp<'a> {
             Length => {
                 let n = match self.pop()? {
                     Obj::Array { items, .. } => items.len(),
-                    Obj::Str(s) => s.len(),
+                    Obj::Str(s) | Obj::ExecStr(s) => s.len(),
                     Obj::Dict(d) => d.borrow().len(),
                     Obj::Name(n) | Obj::Exec(n) => n.len(),
                     _ => return ps_err("typecheck", ""),
@@ -784,7 +859,7 @@ impl<'a> Interp<'a> {
                 let k = self.pop()?;
                 let o = match self.pop()? {
                     Obj::Array { items, .. } => items.get(index(&k)?).ok_or(PsError::Ps("rangecheck", String::new()))?,
-                    Obj::Str(s) => Obj::Int(i64::from(s.get(index(&k)?).ok_or(PsError::Ps("rangecheck", String::new()))?)),
+                    Obj::Str(s) | Obj::ExecStr(s) => Obj::Int(i64::from(s.get(index(&k)?).ok_or(PsError::Ps("rangecheck", String::new()))?)),
                     Obj::Dict(d) => {
                         let key = k.key().ok_or(PsError::Ps("typecheck", String::new()))?;
                         let v = d.borrow().get(&key).cloned();
@@ -897,8 +972,8 @@ impl<'a> Interp<'a> {
             }
             Load => {
                 let k = self.pop()?;
-                let name = k.text().ok_or(PsError::Ps("typecheck", String::new()))?;
-                let v = self.lookup(&name).ok_or_else(|| PsError::Ps("undefined", name.to_string()))?;
+                let key = k.key().ok_or(PsError::Ps("typecheck", String::new()))?;
+                let v = self.lookup_key(&key).ok_or_else(|| PsError::Ps("undefined", show_text(&k)))?;
                 self.push(v)?;
             }
             Store => {
@@ -973,12 +1048,60 @@ impl<'a> Interp<'a> {
                 }
             }
             Version => self.push(Obj::string(b"3010".to_vec()))?,
+            Revision => self.push(Obj::Int(1))?,
+            SerialNumber => self.push(Obj::Int(0))?,
             Product => self.push(Obj::string(b"VectorCraft".to_vec()))?,
             RealTime | UserTime => self.push(Obj::Int(0))?,
             Print | EqPrint | EqEqPrint => {
                 self.pop()?;
             }
             Pstack | Stack | Flush => {}
+            // What every interpreter (not only a distiller) answers, as Ghostscript does: the marks
+            // are dropped.
+            PdfMark => {
+                self.pop_to_mark()?;
+            }
+            Gcheck | Scheck => {
+                self.pop()?;
+                self.push(Obj::Bool(false))?;
+            }
+            CurrentShared => self.push(Obj::Bool(false))?,
+            SetShared | SetVmThreshold | VmReclaim | Echo => {
+                self.pop()?;
+            }
+            ClearDictStack => self.dicts.truncate(3),
+            ExecStack => {
+                let items = self.pop_array()?;
+                self.push_interval(Obj::Array { items, exec: false }, 0, 0)?;
+            }
+            SetCacheParams => {
+                self.pop_to_mark()?;
+            }
+            CurrentCacheParams | UCacheStatus => {
+                self.push(Obj::Mark)?;
+                for _ in 0..if op == UCacheStatus { 5 } else { 2 } {
+                    self.push(Obj::Int(1 << 20))?;
+                }
+            }
+            CacheStatus => {
+                for _ in 0..7 {
+                    self.push(Obj::Int(0))?;
+                }
+            }
+            StartJob => {
+                self.pop()?;
+                self.pop()?;
+                self.push(Obj::Bool(false))?;
+            }
+            CurrentObjectFormat => self.push(Obj::Int(0))?,
+            SetDevParams => {
+                self.pop_dict()?;
+                self.pop()?;
+            }
+            CurrentDevParams => {
+                self.pop()?;
+                self.push(Obj::dict(Dict::new()))?;
+            }
             _ => self.graphics_op(op)?,
         }
         Ok(())
@@ -1034,6 +1157,7 @@ impl<'a> Interp<'a> {
         let r = match o {
             Obj::Array { items, exec } => Obj::Array { items: items.sub(at, n).ok_or_else(range)?, exec },
             Obj::Str(s) => Obj::Str(s.sub(at, n).ok_or_else(range)?),
+            Obj::ExecStr(s) => Obj::ExecStr(s.sub(at, n).ok_or_else(range)?),
             _ => return ps_err("typecheck", "getinterval"),
         };
         self.push(r)
@@ -1052,7 +1176,7 @@ impl<'a> Interp<'a> {
                     }
                 }
             }
-            Obj::Str(s) => {
+            Obj::Str(s) | Obj::ExecStr(s) => {
                 for b in s.to_vec() {
                     self.push(Obj::Int(i64::from(b)))?;
                     if !self.body(&p)? {
@@ -1212,7 +1336,7 @@ fn show_text(o: &Obj) -> String {
         }
         Obj::Bool(b) => b.to_string(),
         Obj::Name(n) | Obj::Exec(n) => n.to_string(),
-        Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).into_owned(),
+        Obj::Str(s) | Obj::ExecStr(s) => String::from_utf8_lossy(&s.borrow()).into_owned(),
         Obj::Op(op) => op.name().to_string(),
         _ => "--nostringval--".into(),
     }

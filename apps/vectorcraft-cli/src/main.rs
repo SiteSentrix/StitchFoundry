@@ -72,7 +72,9 @@ USAGE:
       Live effects are kept; --outline-text writes SVG text as paths.
 
   vectorcraft-cli info FILE
-      Print a JSON summary: title, colour mode, units, artboards, object counts by kind, fonts.
+      Print a JSON summary: the import warnings (what didn't come in as it was, such as an EPS
+      read from its preview and why), title, colour mode, units, artboards, object counts by
+      kind, fonts.
 
   vectorcraft-cli bench FILE [--size WxH] [--iters N]
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
@@ -188,7 +190,7 @@ fn convert(args: &[String]) -> Result<(), String> {
 fn info(args: &[String]) -> Result<(), String> {
     let file = args.first().ok_or("info needs a FILE")?;
     let mut h = Headless::new();
-    h.call("app.open", json!({"path": file})).map_err(|e| format!("open {file}: {e}"))?;
+    let opened = h.call("app.open", json!({"path": file})).map_err(|e| format!("open {file}: {e}"))?;
     let base = h.call("engine.execute", json!({"command": "file.info", "params": {}}))?;
     let doc = h.session.doc().map_err(|e| e.to_string())?.doc.clone();
     let mut kinds: std::collections::BTreeMap<&'static str, usize> = Default::default();
@@ -196,7 +198,8 @@ fn info(args: &[String]) -> Result<(), String> {
     let fonts = h.call("engine.execute", json!({"command": "text.fonts", "params": {}})).unwrap_or(Value::Null);
     let artboards: Vec<Value> =
         doc.artboards.iter().map(|a| json!({"name": a.name, "rect": [a.rect.x0, a.rect.y0, a.rect.width(), a.rect.height()]})).collect();
-    let v = json!({"file": file, "info": base, "artboards": artboards, "kinds": kinds, "fonts": fonts});
+    // What didn't come in as it was (an EPS read from its preview says why).
+    let v = json!({"file": file, "warnings": opened["warnings"], "info": base, "artboards": artboards, "kinds": kinds, "fonts": fonts});
     outln!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
     Ok(())
 }

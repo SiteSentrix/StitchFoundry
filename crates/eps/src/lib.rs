@@ -377,6 +377,19 @@ pub fn sections(bytes: &[u8]) -> Option<(&[u8], Option<&[u8]>)> {
     Some((ps, tiff))
 }
 
+/// The Windows metafile preview behind an EPS file's binary header, if it has one.
+pub fn metafile_preview(bytes: &[u8]) -> Option<&[u8]> {
+    if !bytes.starts_with(&DOS_MAGIC) {
+        return None;
+    }
+    let word = |at: usize| bytes.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(|b| u32::from_le_bytes(b) as usize);
+    let (start, len) = (word(12)?, word(16)?);
+    if start == 0 || len == 0 {
+        return None;
+    }
+    bytes.get(start..start.checked_add(len)?)
+}
+
 /// The native document an EPS file written by [`export`] carries, if any.
 pub fn native(bytes: &[u8]) -> Option<Vec<u8>> {
     let (ps, _) = sections(bytes)?;
