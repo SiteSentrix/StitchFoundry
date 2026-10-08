@@ -27,6 +27,8 @@ mod mac_menu;
 #[cfg(target_os = "macos")]
 mod open_documents;
 mod printing;
+#[cfg(all(windows, not(target_vendor = "win7")))]
+mod system_fonts;
 mod window;
 
 use vectorcraft_engine::Session;
@@ -314,6 +316,9 @@ fn main() -> std::process::ExitCode {
     // First, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
+    // Before the first font scan (the app's start): the fonts font services load (#579).
+    #[cfg(all(windows, not(target_vendor = "win7")))]
+    system_fonts::install();
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
