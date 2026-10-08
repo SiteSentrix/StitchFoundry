@@ -24,10 +24,9 @@ pub trait SystemClipboard {
     fn has(&mut self, mimes: &[&'static str]) -> bool;
 }
 
-/// Builds a second, independent system-clipboard handle, used only to check (off the UI thread)
-/// whether Paste has something to take. It is called on that thread and the value it returns lives
-/// and dies there, so it needs no `Send` bound: an unresponsive clipboard owner must never stall the
-/// thread that draws the window.
+/// Makes a second system-clipboard handle, to check off the UI thread whether Paste has something
+/// to take ([`Services::clipboard_probe`](crate::Services::clipboard_probe)). It is called on that
+/// thread and the handle lives and dies there, so the handle needn't be `Send`.
 pub type ClipboardProbeFactory = Box<dyn FnOnce() -> Box<dyn SystemClipboard> + Send>;
 
 /// The command (and its params) that loads `f` into the internal clipboard, centred on `center`.
