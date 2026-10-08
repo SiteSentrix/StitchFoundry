@@ -159,7 +159,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Align",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\", bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the key object when the selection has one, select.key, else the selection), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
             has_selection,
             align
         ),
@@ -177,7 +177,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute Spacing",
             ["Window", "Align"],
             None,
-            "{axis: \"horizontal\"|\"vertical\", spacing?: pt, bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
+            "{axis: \"horizontal\"|\"vertical\", spacing?: pt (the key object, select.key, stays put and the others are spaced from it), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
             has_multi,
             distribute_spacing
         ),
@@ -813,9 +813,15 @@ fn items_bounds(d: &Document, ids: &[NodeId], preview: bool) -> Vec<(NodeId, Rec
     ids.iter().filter_map(|id| Some((*id, d.bounds_of(&[*id], preview)?))).collect()
 }
 
+/// What `object.align` aligns to: `to`, else the key object when there is one, else the
+/// selection.
+fn align_to<'a>(s: &Session, p: &'a Value) -> Option<&'a str> {
+    str_param(p, "to").or_else(|| s.doc().ok()?.selection.key.map(|_| "key"))
+}
+
 fn reference_rect(s: &Session, p: &Value, ids: &[NodeId], preview: bool) -> Result<Rect> {
     let st = s.doc()?;
-    match str_param(p, "to") {
+    match align_to(s, p) {
         Some("artboard") => {
             let b = st.doc.bounds_of(ids, preview).unwrap_or_default();
             let i = st.doc.artboard_at(b.center()).unwrap_or(0);
@@ -840,7 +846,7 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
         let d = &s.doc()?.doc;
         items_bounds(d, &ids, preview)
             .into_iter()
-            .filter(|(id, _)| Some(*id) != key || str_param(p, "to") != Some("key"))
+            .filter(|(id, _)| Some(*id) != key || align_to(s, p) != Some("key"))
             .map(|(id, b)| {
                 let dx = match h {
                     Some("left") => r.x0 - b.x0,
@@ -926,22 +932,31 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let mut items = items_bounds(&s.doc()?.doc, &ids, preview);
     items.sort_by(|a, b| if horiz { a.1.x0.total_cmp(&b.1.x0) } else { a.1.y0.total_cmp(&b.1.y0) });
     let n = items.len();
+    let &[(_, first), .., (_, last)] = items.as_slice() else {
+        return Err(EngineError::Other("select two or more objects to distribute".into()));
+    };
     let size = |r: &Rect| if horiz { r.width() } else { r.height() };
     let start = |r: &Rect| if horiz { r.x0 } else { r.y0 };
-    let gap = match p.get("spacing").and_then(Value::as_f64) {
+    let spacing = p.get("spacing").and_then(Value::as_f64).filter(|g| g.is_finite());
+    let gap = match spacing {
         Some(g) => g,
         None => {
-            let span = if horiz { items[n - 1].1.x1 - items[0].1.x0 } else { items[n - 1].1.y1 - items[0].1.y0 };
+            let span = if horiz { last.x1 - first.x0 } else { last.y1 - first.y0 };
             (span - items.iter().map(|i| size(&i.1)).sum::<f64>()) / (n - 1) as f64
         }
     };
-    let mut pos = start(&items[0].1);
-    let mut moves = vec![];
+    let mut pos = start(&first);
+    let mut deltas = vec![];
     for (id, r) in &items {
-        let delta = pos - start(r);
-        moves.push((*id, if horiz { Vec2::new(delta, 0.0) } else { Vec2::new(0.0, delta) }));
+        deltas.push((*id, pos - start(r)));
         pos += size(r) + gap;
     }
+    // With a spacing (aligning to a key object) the key object stays where it is: the others
+    // are spaced from it.
+    let key = s.doc()?.selection.key;
+    let fixed = spacing.and_then(|_| deltas.iter().find(|(id, _)| Some(*id) == key)).map_or(0.0, |k| k.1);
+    let moves: Vec<(NodeId, Vec2)> =
+        deltas.into_iter().map(|(id, d)| (id, if horiz { Vec2::new(d - fixed, 0.0) } else { Vec2::new(0.0, d - fixed) })).collect();
     s.edit("Distribute Spacing", |d, _| {
         for (id, dv) in &moves {
             if let Some(n) = d.node_mut(*id) {

@@ -3117,6 +3117,7 @@ axis	Both	Entrambi
 @msg	Release Guides: no guides	Rilascia guide: nessuna guida
 @msg	Release: no layer to put the rectangle in	Rilascia: nessun livello in cui inserire il rettangolo
 @msg	Replace Spine: select a blend and a path	Sostituisci dorsale: seleziona una fusione e un tracciato
+@msg	select two or more objects to distribute	seleziona due o più oggetti da distribuire
 @msg	select paths or anchor points	seleziona tracciati o punti di ancoraggio
 @msg	SVG parse error: {0}	Errore di analisi SVG: {0}
 @msg	Save for Web: the image is empty	Salva per il web: l'immagine è vuota
