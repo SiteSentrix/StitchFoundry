@@ -146,22 +146,24 @@ pub fn dim_name(ui: &mut Ui, text: &str) -> Response {
     ui.label(egui::RichText::new(text).color(t.text).size(12.5))
 }
 
-/// Preferences › Units › Numbers Without Units Are Points (#394), for the frame: the app sets it
-/// from the preference before drawing (`VectorcraftApp::logic`), the length fields read it.
+/// Preferences › Units › Numbers Without Units Are Points (#394; on until set): the app sets it
+/// when the preference changes (`prefs_dialog::apply_runtime`), the length fields read it.
 pub(crate) fn set_bare_numbers_are_points(ctx: &egui::Context, on: bool) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::new("bare_numbers_are_points"), on));
 }
 
-/// The unit a number typed with no unit into a field in `unit` is read in: `unit`, or points with
-/// Numbers Without Units Are Points on. A typed unit (`12 mm`, `1in`) always wins.
+/// The unit a number typed with no unit into a field in `unit` is read in: `unit`, or for a field
+/// in picas points with Numbers Without Units Are Points on (where `12` could be either). A typed
+/// unit (`12 mm`, `2p6`, `1in`) always wins.
 pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
-    let bare_points = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("bare_numbers_are_points"))).unwrap_or(false);
-    if bare_points { Unit::Points } else { unit }
+    let bare_points = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("bare_numbers_are_points"))).unwrap_or(true);
+    if bare_points && unit == Unit::Picas { Unit::Points } else { unit }
 }
 
 /// A recessed numeric field showing `value` (points) in `unit`. Returns the new value (points)
 /// when the user commits (Enter / focus loss). Supports unit suffixes and arithmetic; a number
-/// without a unit is in `unit`, or in points with Numbers Without Units Are Points on.
+/// without a unit is in `unit` ([`typed_unit`]: in points in a picas field with Numbers Without
+/// Units Are Points on).
 pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
