@@ -79,6 +79,19 @@ pub struct FontFace {
     pub(crate) instance: Option<harfrust::ShaperInstance>,
     /// [`Self::ideographic_centre`], read once: layout asks for it per glyph.
     ideographic_centre: std::sync::OnceLock<f64>,
+    /// [`Self::icf_margins`], read once.
+    icf_margins: std::sync::OnceLock<IcfMargins>,
+}
+
+/// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
+/// from each edge of the em box, in ems. `top` and `bottom` along a horizontal line, `right` and
+/// `left` across a vertical one.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct IcfMargins {
+    pub top: f64,
+    pub bottom: f64,
+    pub right: f64,
+    pub left: f64,
 }
 
 impl std::fmt::Debug for FontFace {
@@ -177,6 +190,69 @@ impl FontFace {
             gid.and_then(|g| self.vertical_glyph(g)).map_or(0.38, |(advance, origin)| (origin - advance * 0.5) / self.upem)
         })
     }
+    /// The ideographic character face as margins inside the em box ([`IcfMargins`]): from the
+    /// font's BASE table as the OpenType baseline tags define it (`icfb`, `icft` against `ideo`,
+    /// `idtp`), else, as that definition allows, from the bounds of some ideographs and kana
+    /// averaged, else none (the ICF is the em box).
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/baselinetags>
+    pub fn icf_margins(&self) -> IcfMargins {
+        *self.icf_margins.get_or_init(|| self.icf_from_base().or_else(|| self.icf_from_glyphs()).unwrap_or_default())
+    }
+
+    /// [`Self::icf_margins`] from the BASE table: the ICF's bottom edge `icfb` (top edge `icft`, else
+    /// as far below the em box top) against the em box `ideo` .. `idtp` (else the OS/2 typographic
+    /// descender, and one em above it); across vertical lines, `icfb` and `icft` of the vertical
+    /// axis against 0 .. `idtp` (else the horizontal margin, and one em).
+    pub(crate) fn icf_from_base(&self) -> Option<IcfMargins> {
+        use skrifa::raw::TableProvider;
+        let f = self.skrifa()?;
+        let base = f.base().ok()?;
+        let em = self.upem;
+        let h = base_values(base.horiz_axis()?.ok()?)?;
+        let icfb = *h.get(b"icfb")?;
+        let em_bottom = match h.get(b"ideo") {
+            Some(v) => *v,
+            None => f64::from(f.os2().ok()?.s_typo_descender()),
+        };
+        let em_top = h.get(b"idtp").copied().unwrap_or(em_bottom + em);
+        let margin = icfb - em_bottom;
+        let icf_top = h.get(b"icft").copied().unwrap_or(em_top - margin);
+        let v = base.vert_axis().and_then(Result::ok).and_then(base_values).unwrap_or_default();
+        let icf_left = v.get(b"icfb").copied().unwrap_or(margin);
+        let em_right = v.get(b"idtp").copied().unwrap_or(em);
+        let icf_right = v.get(b"icft").copied().unwrap_or(em_right - icf_left);
+        let m = IcfMargins { top: (em_top - icf_top) / em, bottom: margin / em, right: (em_right - icf_right) / em, left: icf_left / em };
+        // Inside the em box, short of its middle: anything else is a damaged table.
+        [m.top, m.bottom, m.right, m.left].iter().all(|x| (0.0..0.5).contains(x)).then_some(m)
+    }
+
+    /// [`Self::icf_margins`] from the ink of some ideographs and kana: each edge's margin to the em
+    /// box (its centre [`Self::ideographic_centre`], one em high and wide), averaged.
+    pub(crate) fn icf_from_glyphs(&self) -> Option<IcfMargins> {
+        let f = self.skrifa()?;
+        let metrics = f.glyph_metrics(Size::unscaled(), self.location());
+        let em = self.upem;
+        let (em_bottom, em_top) = ((self.ideographic_centre() - 0.5) * em, (self.ideographic_centre() + 0.5) * em);
+        let boxes: Vec<_> = ['国', '東', '永', '書', 'あ', 'ア']
+            .into_iter()
+            .map(|c| self.glyph_for(c))
+            .filter(|g| *g != 0)
+            .filter_map(|g| metrics.bounds(GlyphId::new(g)))
+            .collect();
+        if boxes.is_empty() {
+            return None;
+        }
+        let n = boxes.len() as f64;
+        let mean = |v: &dyn Fn(&skrifa::metrics::BoundingBox) -> f32| boxes.iter().map(|b| f64::from(v(b))).sum::<f64>() / n;
+        let m = IcfMargins {
+            top: (em_top - mean(&|b| b.y_max)) / em,
+            bottom: (mean(&|b| b.y_min) - em_bottom) / em,
+            right: (em - mean(&|b| b.x_max)) / em,
+            left: mean(&|b| b.x_min) / em,
+        };
+        [m.top, m.bottom, m.right, m.left].iter().all(|x| (0.0..0.5).contains(x)).then_some(m)
+    }
+
     /// Glyph id for `c` (0 = .notdef).
     pub fn glyph_for(&self, c: char) -> u32 {
         self.skrifa().and_then(|f| f.charmap().map(c)).map(|g| g.to_u32()).unwrap_or(0)
@@ -926,7 +1002,26 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         index,
         path,
         ideographic_centre: std::sync::OnceLock::new(),
+        icf_margins: std::sync::OnceLock::new(),
     })
+}
+
+/// An axis of a BASE table: its default baseline values for Han ideographs (`hani`), else kana
+/// (`kana`), else its first script, by tag, in font units.
+fn base_values(axis: skrifa::raw::tables::base::Axis<'_>) -> Option<HashMap<[u8; 4], f64>> {
+    let tags = axis.base_tag_list()?.ok()?;
+    let list = axis.base_script_list().ok()?;
+    let records = list.base_script_records();
+    let record =
+        [b"hani", b"kana"].into_iter().find_map(|t| records.iter().find(|r| r.base_script_tag() == Tag::new(t))).or_else(|| records.first())?;
+    let values = record.base_script(list.offset_data()).ok()?.base_values()?.ok()?;
+    let mut out = HashMap::new();
+    for (tag, coord) in tags.baseline_tags().iter().zip(values.base_coords().iter()) {
+        if let Ok(c) = coord {
+            out.insert(tag.get().to_be_bytes(), f64::from(c.coordinate()));
+        }
+    }
+    Some(out)
 }
 
 /// `s` lowercased, without anything but letters and digits.

@@ -513,6 +513,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                     (tl!("Em Box Top/Right"), CharAlign::EmBoxTop, "emBoxTop"),
                     (tl!("Em Box Center"), CharAlign::EmBoxCenter, "emBoxCenter"),
                     (tl!("Em Box Bottom/Left"), CharAlign::EmBoxBottom, "emBoxBottom"),
+                    (tl!("ICF Top/Right"), CharAlign::IcfTop, "icfTop"),
+                    (tl!("ICF Bottom/Left"), CharAlign::IcfBottom, "icfBottom"),
                 ] {
                     if menu_item(ui, label, true, align == Some(a)) {
                         format(app, json!({"charAlign": key}));

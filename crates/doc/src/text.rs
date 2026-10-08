@@ -93,8 +93,9 @@ pub struct CharStyle {
 }
 
 /// Where a character smaller than the largest on its line lines up with it: on the Roman
-/// baseline, or at the top (right, in vertical type), centre or bottom (left) of the ideographic
-/// em boxes.
+/// baseline, at the top (right, in vertical type), centre or bottom (left) of the ideographic
+/// em boxes, or at the top (right) or bottom (left) of the ideographic character faces (ICF, the
+/// average box of the ideographs inside the em box: OpenType's `icft` and `icfb` baselines).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CharAlign {
@@ -103,6 +104,8 @@ pub enum CharAlign {
     EmBoxTop,
     EmBoxCenter,
     EmBoxBottom,
+    IcfTop,
+    IcfBottom,
 }
 
 /// Superscript or subscript proportions in percent of the font size (Document Setup → Type).

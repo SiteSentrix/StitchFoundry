@@ -412,15 +412,19 @@ fn glyph_em(g: &SGlyph) -> f64 {
 
 /// How far up (line space) Character Alignment `a` moves glyph `g` on a line whose largest em is
 /// `line_em`: the glyph's em box top, centre or bottom onto the line's (the em box running from
-/// its centre less half an em to its centre plus half an em above the baseline). Nothing on the
-/// Roman baseline, or for the line's largest characters.
-fn align_shift(g: &SGlyph, a: vectorcraft_doc::CharAlign, line_em: f64) -> f64 {
+/// its centre less half an em to its centre plus half an em above the baseline), or its ICF's top
+/// or bottom (the em box's less the face's [`crate::IcfMargins`]; across a vertical line, its
+/// right and left). Nothing on the Roman baseline, or for the line's largest characters.
+fn align_shift(g: &SGlyph, a: vectorcraft_doc::CharAlign, line_em: f64, vertical: bool) -> f64 {
     use vectorcraft_doc::CharAlign;
+    let icf = || g.face.icf_margins();
     let k = match a {
         CharAlign::RomanBaseline => return 0.0,
         CharAlign::EmBoxTop => 0.5,
         CharAlign::EmBoxCenter => 0.0,
         CharAlign::EmBoxBottom => -0.5,
+        CharAlign::IcfTop => 0.5 - if vertical { icf().right } else { icf().top },
+        CharAlign::IcfBottom => -0.5 + if vertical { icf().left } else { icf().bottom },
     };
     (g.face.ideographic_centre() + k) * (line_em - glyph_em(g)).max(0.0)
 }
@@ -1508,7 +1512,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, regions: Optio
                         adv += per_gap;
                     }
                 }
-                let y = baseline - align_shift(g, cx.style_at(g.byte).char_align, line_em);
+                let y = baseline - align_shift(g, cx.style_at(g.byte).char_align, line_em, cx.vertical);
                 cx.emit(g, Affine::translate((x, y)), Point::new(x, y), 0.0, adv, li);
                 x += adv;
                 if j < trimmed {
