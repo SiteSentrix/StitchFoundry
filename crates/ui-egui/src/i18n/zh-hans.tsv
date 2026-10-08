@@ -3298,4 +3298,10 @@ axis	Both	两者
 	Drag to move	拖动以移动
 	Drag to float as a toolbar	拖动使其浮动为工具栏
 	Put back in the toolbar	放回工具栏
+	Float Panel	浮动面板
+	Dock Panel	停放面板
+	Drag to float the panel group	拖动以浮动面板组
+	Put back in the dock	放回停放区
+	Drag to float the toolbar	拖动以浮动工具栏
+	Drag to the window's left edge to dock	拖到窗口左边缘以停放
 	Float Tool Group	浮动工具组

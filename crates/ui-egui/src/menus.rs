@@ -226,6 +226,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
     ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too)"),
     (
+        "window.panel.float",
+        "Float Panel",
+        "",
+        "{panel: id or \"tools\", x?, y?, onto?: id, group?: bool} float a panel out of the dock (or out of its floating group) as its own floating group with its top-left corner at x, y in window points (default: cascaded), as dragging its tab out of the dock does; `onto` stacks it with the floating group holding that panel instead; `group` takes its whole group (its floating group, or the Properties | Layers | Libraries tabs left in the dock); a panel alone in its group is moved. \"tools\" floats the Tools panel. Returns {panel, floating, group, pos}",
+    ),
+    (
+        "window.panel.dock",
+        "Dock Panel",
+        "",
+        "{panel: id or \"tools\", group?: bool} put a floating panel (with `group`, its whole group) back in the dock, as dropping it on the dock or its group's × does: Properties, Layers and Libraries in the tabbed group, the other panels in the icon column; \"tools\" docks the Tools panel at the window's left edge",
+    ),
+    (
         "window.collapseDock",
         "Collapse Panels to Icons",
         "",
@@ -772,13 +784,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
 
 /// Canonical panel id for `window.panel`: a dock tab's or an icon panel's id or display label,
 /// matched case-insensitively (`"Layers"`, `"swatches"`, `"Color Guide"`).
-fn normalize_panel(input: &str) -> Option<&'static str> {
+pub(crate) fn normalize_panel(input: &str) -> Option<&'static str> {
     let name = input.trim();
     crate::state::all_panels().find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label)).map(|(id, _)| id)
 }
 
 /// An optional `{key?: bool}` param: none when it is omitted or null (the commands then toggle).
-fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
+pub(crate) fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
     match p.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Bool(b)) => Ok(Some(*b)),
@@ -803,7 +815,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     if let Some(r) = crate::panels::character::intercept_text_command(app, id) {
         return Some(r);
     }
-    if let Some(r) = crate::shortcut_editor::run_command(app, id, p).or_else(|| crate::workspaces::run_command(app, id, p)) {
+    if let Some(r) = crate::shortcut_editor::run_command(app, id, p)
+        .or_else(|| crate::workspaces::run_command(app, id, p))
+        .or_else(|| crate::floating::command(app, id, p))
+    {
         return Some(r);
     }
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
@@ -1059,6 +1074,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             // Canonical id (case-insensitive; display labels work too), then the
             // dock tab it names, if any.
             let canonical = normalize_panel(&raw);
+            // A floating panel shows its tab in its group.
+            if let Some(p) = canonical
+                && let Some(g) = crate::floating::group_of(&app.ui, p).and_then(|i| app.ui.floating_panels.get_mut(i))
+            {
+                g.active = g.panels.iter().position(|q| q == p).unwrap_or(g.active);
+                let out = json!({ "floating": g.panels });
+                app.ui.dock = true;
+                return Some(Ok(out));
+            }
             let tab = canonical.and_then(DockTab::from_id);
             match (canonical, tab) {
                 // A collapsed dock pops the panel out of its icon, like the icon panels.
@@ -1370,7 +1394,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
             let canonical = normalize_panel(panel);
             match canonical.and_then(DockTab::from_id) {
-                Some(tab) if !app.ui.dock_collapsed => app.ui.dock_tab == tab,
+                _ if canonical.is_some_and(|id| crate::floating::group_of(&app.ui, id).is_some()) => true,
+                Some(tab) if !app.ui.dock_collapsed => crate::floating::shown_tab(&app.ui) == Some(tab),
                 _ => canonical.is_some_and(|id| app.ui.open_panel.as_deref() == Some(id)),
             }
         }

@@ -9,8 +9,15 @@ use crate::{icons, scrub};
 
 /// Square icon button; `selected` draws the pressed well.
 pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, size: f32) -> Response {
+    let (_, resp) = ui.allocate_exact_size(Vec2::splat(size), Sense::click());
+    paint_icon_button(ui, resp, icon, tip, selected)
+}
+
+/// [`icon_button`] drawn for a response the caller made (its own id or sense).
+pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, selected: bool) -> Response {
     let t = Tokens::get(ui.ctx());
-    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), Sense::click());
+    let rect = resp.rect;
+    let size = rect.width();
     let bg = if selected {
         t.tool_active
     } else if resp.hovered() {

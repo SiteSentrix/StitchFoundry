@@ -24,6 +24,7 @@ pub mod cursors;
 pub mod dialogs;
 pub mod dock;
 pub mod find_font;
+pub mod floating;
 pub mod font_menu;
 pub mod graphics;
 pub mod i18n;
@@ -895,6 +896,7 @@ impl VectorcraftApp {
         let t0 = now_ms();
         scrub::begin_frame(self, &ctx);
         font_menu::end_stale_preview(self, &ctx);
+        floating::track(self, &ctx);
         let t = theme::Tokens::get(&ctx);
         if self.ui.screen_mode < 2 {
             chrome::app_bar(self, ui);
@@ -919,6 +921,7 @@ impl VectorcraftApp {
             canvas::show(self, ui);
         });
         dock::floating_panel(self, &ctx);
+        floating::show(self, &ctx);
         panels::library_panel::show_window(self, &ctx);
         dialogs::show(self, &ctx);
         palette::show(self, &ctx);

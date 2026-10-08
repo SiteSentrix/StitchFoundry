@@ -214,6 +214,20 @@ Bar Position (`window.taskBar.reset`), which unpins it and puts it back under th
 Panel. As in Illustrator, neither the position nor the pin is saved: each launch starts with the bar under the
 selection.
 
+Floating panels: dragging a dock tab, a panel icon or a popped-out panel's title out of the dock floats that panel
+inside the window, and the strip right of the dock's tabs floats the whole Properties | Layers | Libraries group. A
+floating group moves by its title bar (or the strip right of its tabs); a tab dragged out of it floats on its own;
+dropped on another group's title bar or tabs it stacks with that group, and dropped on the dock (lit up while the
+pointer is over it) or closed with its × its panels go back to the tabbed group or the icon column.
+`window.panel.float {panel, x?, y?, onto?, group?}` floats a panel (with `group`, its whole group) with its top-left
+corner at `x`, `y` (window points; default cascaded), or stacks it with the floating group holding `onto`;
+`window.panel.dock {panel, group?}` puts it back. `panel` takes the `window.panel` ids and labels, and `"tools"` for
+the Tools panel, which floats by its title bar and docks on the window's left edge. `window.panel` on a floating
+panel shows its tab. `ui.floating_panels` in `ui.inspect` lists the groups (panel ids, the index of the tab shown,
+the top-left corner) and `ui.toolbar_pos` the Tools panel's corner (null: docked); both are saved with the
+preferences and in user workspaces (the built-in workspaces dock everything), and a corner saved on a bigger window
+is clamped into this one when drawn. Floating panels stay inside the app window (no separate OS windows).
+
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of
 `object.flattenTransparency`: `balance` 0–100, `lineArtPpi` and `gradientPpi` 1–2400, `textToOutlines`,
