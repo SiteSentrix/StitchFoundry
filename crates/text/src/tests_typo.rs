@@ -617,7 +617,11 @@ fn vertical_align_with_top_to_top_leading() {
     t.para.leading_model = LeadingModel::EmBoxTop;
     let top = layout(db(), &t);
     assert_eq!(top.lines.len(), 3);
-    assert!((top.lines[0].baseline - 0.88 * 40.0).abs() < 0.01, "first em box at the top: {}", top.lines[0].baseline);
+    // The em box top sits 0.88 em above the baseline in the craft-fonts CJK faces; a system
+    // fallback (no craft-fonts) has its own metrics, which the relative checks below don't need.
+    if !crate::CRAFT_FONTS.is_empty() {
+        assert!((top.lines[0].baseline - 0.88 * 40.0).abs() < 0.01, "first em box at the top: {}", top.lines[0].baseline);
+    }
     let gaps = |l: &TextLayout| l.lines.windows(2).map(|w| w[1].baseline - w[0].baseline).collect::<Vec<_>>();
     let bottom = layout_with(db(), &t, &valign(VerticalAlign::Bottom));
     assert!(block_space(&bottom, 300.0).1.abs() < 1e-6, "{:?}", block_space(&bottom, 300.0));
