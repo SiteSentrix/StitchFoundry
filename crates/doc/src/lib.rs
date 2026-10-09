@@ -41,6 +41,7 @@ pub mod style_libs;
 pub mod swatches;
 pub mod text;
 pub mod trace;
+pub mod variables;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -91,6 +92,7 @@ pub use text::{
     TextWrap, VerticalAlign, WrapShape,
 };
 pub use trace::TraceView;
+pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;
 pub use vectorcraft_geom as geom;
 
@@ -561,6 +563,9 @@ pub struct Document {
     /// Select → Save Selection… (at most [`SavedSelection::MAX`]); saved with the document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub saved_selections: Vec<SavedSelection>,
+    /// Variables (data merge): named values bound to objects, applied per dataset.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub variables: Variables,
     #[serde(default)]
     pub grid: GridPrefs,
     #[serde(default = "ppi72")]
@@ -693,6 +698,7 @@ impl Document {
             guides: vec![],
             views: vec![],
             saved_selections: vec![],
+            variables: Variables::default(),
             grid: GridPrefs::default(),
             raster_effects_ppi: 72.0,
             images: BTreeMap::new(),
