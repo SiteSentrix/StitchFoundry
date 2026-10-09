@@ -319,10 +319,12 @@ fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool) -> Stri
     format!("{}{} @ {} ({mode})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom).replace('%', " %"))
 }
 
-/// Document tab strip: "Name* @ 66.67% (RGB/Preview)".
+/// Document tab strip: "Name* @ 66.67% (RGB/Preview)". User Interface › Large Tabs makes the tabs
+/// taller, with larger titles.
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), 35.0), Sense::hover());
+    let (height, title_size) = if app.session.prefs.large_tabs { (44.0, 14.0) } else { (35.0, 12.5) };
+    let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     ui.painter().rect_filled(strip, 0.0, t.tab_strip);
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
     let mut x = strip.left();
@@ -334,7 +336,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         let title = tab_title(d, zoom, app.ui.view.outline);
         // On the Home screen no tab is the current one.
         let is_active = Some(i) == active && app.ui.home.is_none();
-        let galley = ui.painter().layout_no_wrap(title, theme::semibold(12.5), if is_active { t.text_strong } else { t.text_dim });
+        let galley = ui.painter().layout_no_wrap(title, theme::semibold(title_size), if is_active { t.text_strong } else { t.text_dim });
         let w = galley.size().x + 50.0;
         let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
         let resp = ui.interact(r, ui.id().with(("tab", i)), Sense::click());
@@ -517,6 +519,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Contextual hint for the active tool: segments of (text, bold). Keys in bold segments are
 /// written as shortcuts are ("Alt+Click"); [`hint_segments`] names them for the platform.
+/// The hint of the Zoom tool with Performance › Animated Zoom on.
+const ANIMATED_ZOOM_HINT: &str = "zoom.animated";
+
 fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
     Some(match tool {
         "selection" => &[
@@ -587,6 +592,16 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             (" to zoom out  |  ", false),
             ("Drag", true),
             (" to zoom into an area", false),
+        ],
+        ANIMATED_ZOOM_HINT => &[
+            ("Click", true),
+            (" to zoom in  |  ", false),
+            ("Alt+Click", true),
+            (" to zoom out  |  ", false),
+            ("Drag", true),
+            (" right or left to zoom in or out  |  ", false),
+            ("Hold", true),
+            (" to keep zooming", false),
         ],
         "eyedropper" => &[
             ("Click", true),
@@ -674,8 +689,8 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
 /// can insist a complete language covers them.
 pub fn hint_strings() -> Vec<&'static str> {
     let mut v = Vec::new();
-    for tool in vectorcraft_tools::catalog::all_tools() {
-        for &(text, bold) in hint_for(tool.id).unwrap_or(&[]) {
+    for tool in vectorcraft_tools::catalog::all_tools().map(|t| t.id).chain([ANIMATED_ZOOM_HINT]) {
+        for &(text, bold) in hint_for(tool).unwrap_or(&[]) {
             let text = if bold { text.rsplit_once('+').map_or(text, |(_, k)| k) } else { text };
             if !text.is_empty() && !text.chars().all(|c| c.is_ascii_digit()) && !v.contains(&text) {
                 v.push(text);
@@ -729,7 +744,10 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", theme::semibold(11.0), t.text);
                 ui.add_space(6.0);
                 let mut job = egui::text::LayoutJob::default();
-                for (txt, bold) in hint_segments(app.session.tool_id()) {
+                let tool = app.session.tool_id();
+                // The Zoom tool's drag zooms to an area, or with Animated Zoom zooms as it goes.
+                let hint = if tool == "zoom" && crate::canvas::animated_zoom(&app.session.prefs) { ANIMATED_ZOOM_HINT } else { tool };
+                for (txt, bold) in hint_segments(hint) {
                     let font = if bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
                     job.append(&txt, 0.0, egui::TextFormat { font_id: font, color: if bold { t.text_strong } else { t.text }, ..Default::default() });
                 }
@@ -831,5 +849,34 @@ mod tests {
         assert!(title(&s).ends_with("(<Opacity Mask>/Opacity Mask)"), "{}", title(&s));
         s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
         assert!(title(&s).ends_with("(RGB/Preview)"));
+    }
+
+    /// The Zoom tool's hint follows Performance › Animated Zoom (#394): a drag zooms as it goes,
+    /// or (off) zooms into the area dragged across.
+    #[test]
+    fn the_zoom_hint_follows_animated_zoom() {
+        fn texts(s: &egui::Shape, out: &mut String) {
+            match s {
+                egui::Shape::Text(t) => out.push_str(t.galley.text()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.select_tool("zoom");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let hint = |app: &mut crate::VectorcraftApp| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::hint_bar(app, ui));
+            out.textures_delta.clear();
+            let mut shown = String::new();
+            out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+            shown
+        };
+        let on = hint(&mut app);
+        assert!(on.contains(" right or left to zoom in or out") && on.contains("Hold"), "{on}");
+        app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
+        let off = hint(&mut app);
+        assert!(off.contains(" to zoom into an area") && !off.contains("Hold"), "{off}");
     }
 }

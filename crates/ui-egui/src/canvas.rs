@@ -69,8 +69,16 @@ enum Drag {
         center: Point,
         middle: bool,
     },
+    /// A Zoom tool drag without Animated Zoom: the area to zoom to.
     ZoomBox {
         start: Pos2,
+    },
+    /// A Zoom tool press with Animated Zoom ([`animated_zoom`]): dragged sideways it zooms about
+    /// `start`, held still (for `held` seconds so far) it zooms on, else it's a click.
+    ZoomScrub {
+        start: Pos2,
+        held: f32,
+        moved: bool,
     },
     RotateView {
         start_angle: f64,
@@ -221,6 +229,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // View › Pixel Preview: the art as it rasterizes, one pixel per point, while a document pixel
     // is bigger than a screen pixel (below that the screen render already shows it).
     let pixel = (app.ui.view.pixel_preview && v.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
+    // File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview: off, images show
+    // their pixels as they rasterize, hard-edged.
+    let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let key = CacheKey {
         doc: st.uid as usize,
         revision: st.revision,
@@ -237,6 +248,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         anti_alias: app.session.prefs.anti_aliased_artwork,
         placed: vectorcraft_render::placed_document::generation(),
         pixel,
+        smooth_images,
     };
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
@@ -285,6 +297,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             anti_alias: if app.session.prefs.anti_aliased_artwork { vectorcraft_render::AntiAlias::Art } else { vectorcraft_render::AntiAlias::None },
             progressive_placed: true,
             trace_views: true,
+            smooth_images,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
@@ -438,15 +451,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             // Caps Lock gives precise (crosshair) cursors, like Illustrator; env opt-out for system cursors.
             let custom = std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none();
+            // User Interface › Scale Cursor Proportional to UI: the glyphs grow with UI Scaling;
+            // off, they keep their size.
+            let ui_scale = if app.session.prefs.scale_cursor_with_ui { 1.0 } else { ui.ctx().zoom_factor() };
             match ui.input(|i| i.pointer.hover_pos()) {
                 // An OS cursor: the system moves it at once, where a painted one trails the pointer
                 // (#444). The system cursor stands in for cursors without a glyph.
                 Some(_) if custom && crate::cursors::OS_CURSORS => {
-                    let ppp = ui.ctx().native_pixels_per_point().unwrap_or_else(|| ui.ctx().pixels_per_point());
+                    let ppp = ui.ctx().pixels_per_point() / ui_scale;
                     ui.ctx().set_cursor_image(app.canvas.cursors.get(c, ppp));
                     cursor_icon(c)
                 }
-                Some(hp) if custom && crate::cursors::paint(&painter, c, hp) => egui::CursorIcon::None,
+                Some(hp) if custom && crate::cursors::paint(&painter, c, hp, 1.0 / ui_scale) => egui::CursorIcon::None,
                 _ => cursor_icon(c),
             }
         } else {
@@ -522,11 +538,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         if (factor - 1.0).abs() > 1e-6
             && let (Some(p), Some(vm)) = (hover, app.view_mut())
         {
-            let before = xf.to_doc(p);
-            vm.zoom = (vm.zoom * factor).clamp(0.0313, 640.0);
-            let nx = Xf { rect, zoom: vm.zoom, center: vm.center, rot: vm.rotation.to_radians() };
-            let after = nx.to_doc(p);
-            vm.center += before - after;
+            zoom_about(vm, rect, p, vm.zoom * factor);
         }
         if scroll != egui::Vec2::ZERO
             && let Some(vm) = app.view_mut()
@@ -552,7 +564,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
         let d = if zoom_mode {
-            Drag::ZoomBox { start: p }
+            if animated_zoom(&app.session.prefs) { Drag::ZoomScrub { start: p, held: 0.0, moved: false } } else { Drag::ZoomBox { start: p } }
         } else if pan_mode {
             Drag::Pan { start: p, center: v.center, middle: false }
         } else if tool == "rotateView" {
@@ -599,7 +611,26 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                         vm.rotation = vectorcraft_geom::normalize_deg(deg);
                     }
                 }
-                Drag::ZoomBox { .. } | Drag::Art | Drag::Gesture => {}
+                Drag::ZoomBox { start } => marquee(ui.painter(), egui::Rect::from_two_pos(start, p)),
+                Drag::ZoomScrub { start, held, moved } => {
+                    let dt = ui.input(|i| i.unstable_dt).min(0.25);
+                    let (held, moved) = (held + dt, moved || (p - start).length() > SCRUB_SLOP);
+                    // Dragged sideways it zooms with the pointer, held still it zooms on (Alt: out).
+                    let exponent = if moved {
+                        f64::from(pointer.delta().x) * SCRUB_ZOOM
+                    } else if held > HOLD_DELAY {
+                        f64::from(dt) * HOLD_ZOOM * if m.alt { -1.0 } else { 1.0 }
+                    } else {
+                        0.0
+                    };
+                    if exponent != 0.0
+                        && let Some(vm) = app.view_mut()
+                    {
+                        zoom_about(vm, rect, start, vm.zoom * exponent.exp());
+                    }
+                    ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::ZoomScrub { start, held, moved }));
+                }
+                Drag::Art | Drag::Gesture => {}
                 Drag::Tool if drag_art_out(app, ui, resp, p, view) => {
                     ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Art));
                 }
@@ -632,13 +663,17 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                             vm.center = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
                             vm.zoom = (rect.width() as f64 / (b.x - a.x)).min(rect.height() as f64 / (b.y - a.y)).clamp(0.0313, 640.0);
                         } else {
-                            let before = xf.to_doc(p);
-                            vm.zoom = crate::state::next_zoom(vm.zoom, !m.alt);
-                            let nx = Xf { rect, zoom: vm.zoom, center: vm.center, rot: vm.rotation.to_radians() };
-                            vm.center += before - nx.to_doc(p);
+                            zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt));
                         }
                     }
                 }
+                // A click (not held, not dragged) steps the zoom as with the marquee.
+                Drag::ZoomScrub { held, moved: false, .. } if held <= HOLD_DELAY => {
+                    if let Some(vm) = app.view_mut() {
+                        zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt));
+                    }
+                }
+                Drag::ZoomScrub { .. } => {}
                 Drag::Tool => {
                     let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                     dispatch(app, &ev, view);
@@ -674,6 +709,36 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
 
 /// How much one point of wheel motion zooms (as `exp(points × WHEEL_ZOOM)`).
 const WHEEL_ZOOM: f64 = 0.01;
+/// Animated Zoom: how much one point of sideways drag zooms (100 points to the right double it).
+const SCRUB_ZOOM: f64 = std::f64::consts::LN_2 / 100.0;
+/// Animated Zoom: how far the pointer moves before a press is a drag, in points.
+const SCRUB_SLOP: f32 = 3.0;
+/// Animated Zoom: how long a press is held still before it zooms on, in seconds…
+const HOLD_DELAY: f32 = 0.3;
+/// …and how fast it zooms then (as `exp(seconds × HOLD_ZOOM)`: twice as close each second).
+const HOLD_ZOOM: f64 = std::f64::consts::LN_2;
+
+/// Performance › Animated Zoom, which needs GPU Performance as in Illustrator: the Zoom tool zooms
+/// as it is dragged sideways or held, instead of zooming to the area dragged across.
+pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
+    p.animated_zoom && p.gpu_performance
+}
+
+/// Zoom view `vm` of the canvas `rect` to `zoom` (clamped to the zoom range), keeping the document
+/// point under screen point `p` where it is.
+fn zoom_about(vm: &mut View, rect: egui::Rect, p: Pos2, zoom: f64) {
+    let before = Xf::new(rect, vm).to_doc(p);
+    vm.zoom = zoom.clamp(0.0313, 640.0);
+    vm.center += before - Xf::new(rect, vm).to_doc(p);
+}
+
+/// A dashed marquee around screen rectangle `r`.
+fn marquee(p: &egui::Painter, r: egui::Rect) {
+    let pts = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+    for w in pts.windows(2) {
+        p.extend(Shape::dashed_line(&[w[0], w[1]], Stroke::new(1.0, Color32::from_gray(90)), 3.0, 3.0));
+    }
+}
 
 /// What the wheel, a pinch and a two-finger drag on a touch screen did over the canvas this frame:
 /// a zoom factor (about the pointer) and a scroll (screen points the content moves). The wheel scrolls, Cmd- and Alt-wheel (Option
@@ -1635,13 +1700,7 @@ fn names_an_artboard(text: &str) -> bool {
 fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook) {
     for o in overlays {
         match o {
-            Overlay::Marquee(r) => {
-                let sr = xf.rect_to_screen(*r);
-                let pts = [sr.left_top(), sr.right_top(), sr.right_bottom(), sr.left_bottom(), sr.left_top()];
-                for w in pts.windows(2) {
-                    p.extend(Shape::dashed_line(&[w[0], w[1]], Stroke::new(1.0, Color32::from_gray(90)), 3.0, 3.0));
-                }
-            }
+            Overlay::Marquee(r) => marquee(p, xf.rect_to_screen(*r)),
             Overlay::Path { path, color, width, dashed } => {
                 let s = Stroke::new(*width, c32(*color));
                 if *dashed {
@@ -2410,6 +2469,28 @@ mod tests {
         assert!(partial(&alphas(&mut app).expect("re-rendered")) > 50, "smooth again");
     }
 
+    /// File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview (#394): off, Pixel
+    /// Preview draws images with each pixel taking its nearest image pixel; on, smoothly, as the
+    /// canvas always does out of Pixel Preview.
+    #[test]
+    fn pixel_preview_smooths_bitmaps_only_when_asked() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        let ctx = egui::Context::default();
+        let smooth = |app: &mut VectorcraftApp| {
+            let (_, mut delta) = frame_output(app, &ctx);
+            delta.clear();
+            app.canvas.key.as_ref().map(|k| k.smooth_images).unwrap()
+        };
+        assert!(smooth(&mut app), "out of Pixel Preview");
+        app.ui.view.pixel_preview = true;
+        app.view_mut().unwrap().zoom = 8.0;
+        assert!(!smooth(&mut app), "Pixel Preview, off by default");
+        app.run("prefs.set", json!({"key": "antiAliasedBitmaps", "value": true})).unwrap();
+        assert!(smooth(&mut app), "Pixel Preview, on");
+    }
+
     /// Guides & Grid › Show Pixel Grid (Above 600% Zoom) (#394): in Pixel Preview at 600% zoom and
     /// above, a line at every document pixel over the art; none below 600%, out of Pixel Preview,
     /// or with the option off.
@@ -2720,6 +2801,77 @@ mod tests {
             assert!((moved.x + 30.0).abs() < 0.5 && (moved.y + 24.0).abs() < 0.5, "the content follows the fingers ({wheel_zooms}): {moved:?}");
             assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 0, "nothing drawn");
         }
+    }
+
+    /// Performance › Animated Zoom (#394): the Zoom tool dragged sideways zooms about where it was
+    /// pressed (right in, left out), held still it zooms on, and a click still steps. Off, or with
+    /// GPU Performance off, a drag zooms to the area dragged across.
+    #[test]
+    fn animated_zoom_scrubs_and_holds_else_the_zoom_tool_zooms_to_an_area() {
+        use egui::Event;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("zoom");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let at = rect.center() - vec2(100.0, 50.0);
+        let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        // Press at `at`, move by `by` and hold for `frames` frames (a 60th of a second each), let go.
+        let press = |app: &mut VectorcraftApp, by: egui::Vec2, frames: usize| {
+            frame(app, &ctx, vec![Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(at, true)]);
+            frame(app, &ctx, vec![Event::PointerMoved(at + by)]);
+            for _ in 0..frames {
+                frame(app, &ctx, vec![]);
+            }
+            frame(app, &ctx, vec![button(at + by, false)]);
+        };
+        let doc_at = |app: &VectorcraftApp, p: Pos2| Xf::new(rect, app.view().unwrap()).to_doc(p);
+        let pinned = doc_at(&app, at);
+        let z0 = app.view().unwrap().zoom;
+        press(&mut app, vec2(100.0, 0.0), 0);
+        let z1 = app.view().unwrap().zoom;
+        assert!((z1 / z0 - 2.0).abs() < 1e-6, "100 points right doubles the zoom: {z0} → {z1}");
+        assert!(doc_at(&app, at).distance(pinned) < 1e-6, "about the press");
+        press(&mut app, vec2(-100.0, 0.0), 0);
+        assert!((app.view().unwrap().zoom - z0).abs() < 1e-6, "and back to the left");
+        press(&mut app, vec2(0.0, 0.0), 0);
+        assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z0, true), "a click steps");
+        let z2 = app.view().unwrap().zoom;
+        press(&mut app, vec2(0.0, 0.0), 40);
+        assert!(app.view().unwrap().zoom > z2 * 1.2, "held, it zooms on");
+        assert!(doc_at(&app, at).distance(pinned) < 1e-6, "about the press");
+        // Off (or without GPU Performance): the area dragged across fills the view.
+        for key in ["animatedZoom", "gpuPerformance"] {
+            app.run("prefs.reset", json!({})).unwrap();
+            app.run("prefs.set", json!({"key": key, "value": false})).unwrap();
+            app.view_mut().unwrap().zoom = z0;
+            press(&mut app, vec2(100.0, 50.0), 0);
+            let z = app.view().unwrap().zoom;
+            assert!((z - z0 * (rect.width() / 100.0).min(rect.height() / 50.0) as f64).abs() < 1e-6, "{key} off: {z0} → {z}");
+        }
+    }
+
+    /// User Interface › Large Tabs (#394): the document tabs are taller, so the canvas starts lower.
+    #[test]
+    fn large_tabs_make_the_document_tabs_taller() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let canvas_top = |app: &mut VectorcraftApp| {
+            let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                crate::chrome::doc_tabs(app, ui);
+                show(app, ui);
+            });
+            out.textures_delta.clear();
+            app.canvas_rect.unwrap().top()
+        };
+        let small = canvas_top(&mut app);
+        app.run("prefs.set", json!({"key": "largeTabs", "value": true})).unwrap();
+        assert_eq!(canvas_top(&mut app) - small, 9.0, "44 points instead of 35");
     }
 
     #[test]
