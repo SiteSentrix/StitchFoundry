@@ -431,7 +431,21 @@ fn main() -> std::process::ExitCode {
     #[cfg(feature = "wgpu")]
     let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
     #[cfg(feature = "wgpu")]
-    let power = gpu::power_preference(gpu_pref, eframe::wgpu::PowerPreference::from_env());
+    let power_env = eframe::wgpu::PowerPreference::from_env();
+    #[cfg(feature = "wgpu")]
+    let power = gpu::power_preference(gpu_pref, power_env);
+    // Automatic draws on the GPU that drives the (primary) display: a GPU without a monitor reset
+    // its driver and took every monitor down (pdfcraft#378). Logged first: the first question in
+    // every black-window report.
+    #[cfg(feature = "wgpu")]
+    let displays = gpu::preferred_displays(gpu_pref, power_env);
+    #[cfg(feature = "wgpu")]
+    if gpu::automatic(gpu_pref, power_env) {
+        let listed: Vec<String> = displays.iter().map(ToString::to_string).collect();
+        log::info!("display GPUs (PCI vendor:device): {}", if listed.is_empty() { "unknown".to_string() } else { listed.join(", ") });
+    } else {
+        log::info!("graphics processor chosen by the user ({power:?}): which GPU drives the display isn't considered");
+    }
     #[cfg(feature = "wgpu")]
     let startup = std::sync::Arc::new(gpu::Startup::default());
     let options = eframe::NativeOptions {
@@ -458,7 +472,7 @@ fn main() -> std::process::ExitCode {
         options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-            create.native_adapter_selector = Some(gpu::selector(power, startup.clone()));
+            create.native_adapter_selector = Some(gpu::selector(power, displays, startup.clone()));
             // Nothing draws or dispatches indirectly, so wgpu's check of indirect arguments only
             // costs a compute shader at start-up, one some drivers can't compile (OCLP-patched
             // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
