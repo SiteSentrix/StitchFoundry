@@ -1514,7 +1514,7 @@ impl Writer<'_> {
         let mut opened = 0;
         for f in fx.iter().rev() {
             if matches!(f, RasterFx::Pixel(_)) {
-                self.warn("SVG has no Photoshop-style raster effects (Radial Blur, Smart Blur, Unsharp Mask…): they are left out");
+                self.warn("SVG has no pixel effects such as Radial Blur, Smart Blur or Unsharp Mask: they are left out");
                 continue;
             }
             let fid = self.fresh_id("filter");
