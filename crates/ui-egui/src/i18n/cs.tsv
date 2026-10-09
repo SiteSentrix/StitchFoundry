@@ -643,3 +643,9 @@
 	Constrain	Omezit
 	Free Transform	Volná transformace
 	Perspective Distort	Perspektivní deformace
+
+# Photoshop-style raster effects (Effect menu, their dialogs).
+	Radial Blur…	Radiální rozostření…
+	Smart Blur…	Chytré rozostření…
+	Sharpen	Zostření
+	Unsharp Mask…	Maska rozostření…

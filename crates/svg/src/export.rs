@@ -1486,7 +1486,9 @@ impl Writer<'_> {
     }
 
     /// Raster effects (drop shadow, glows, Gaussian blur, feather) as SVG filters: one `<g filter>`
-    /// per effect, the first effect innermost (the reference app's stacking order).
+    /// per effect, the first effect innermost (the reference app's stacking order). Photoshop-style
+    /// filters have no SVG equivalent: they are left out with a warning (exports from the app turn
+    /// such objects into images first).
     fn filtered(&mut self, n: &Node) {
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
@@ -1506,9 +1508,15 @@ impl Writer<'_> {
             }
             return 0;
         }
-        let reach: f64 = fx.iter().map(RasterFx::outset).sum::<f64>() + 2.0;
-        let region = n.visual_bounds().map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
+        let bounds = n.visual_bounds();
+        let reach: f64 = fx.iter().map(|f| f.outset(bounds.unwrap_or_default())).sum::<f64>() + 2.0;
+        let region = bounds.map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
+        let mut opened = 0;
         for f in fx.iter().rev() {
+            if matches!(f, RasterFx::Pixel(_)) {
+                self.warn("SVG has no Photoshop-style raster effects (Radial Blur, Smart Blur, Unsharp Mask…): they are left out");
+                continue;
+            }
             let fid = self.fresh_id("filter");
             let region_attr = match region {
                 Some(r) => format!(
@@ -1557,6 +1565,7 @@ impl Writer<'_> {
                     sd(*radius)
                 ),
                 RasterFx::GaussianBlur { radius } => format!("<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"/>", sd(*radius)),
+                RasterFx::Pixel(_) => continue,
             };
             // Filters composite normally: a shadow's or glow's other blend mode is recorded for import.
             let mode = match f {
@@ -1570,8 +1579,9 @@ impl Writer<'_> {
             self.def(1, &format!("<filter id=\"{fid}\"{region_attr}{mode} color-interpolation-filters=\"sRGB\">{body}</filter>"));
             self.line(&format!("<g filter=\"url(#{fid})\">"));
             self.depth += 1;
+            opened += 1;
         }
-        fx.len()
+        opened
     }
 
     fn close_filters(&mut self, opened: usize) {

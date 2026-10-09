@@ -1552,6 +1552,8 @@ mod tests_proxyitems;
 #[cfg(test)]
 mod tests_puppetwarp;
 #[cfg(test)]
+mod tests_rasterfilters;
+#[cfg(test)]
 mod tests_rastersettings;
 #[cfg(test)]
 mod tests_recolor;

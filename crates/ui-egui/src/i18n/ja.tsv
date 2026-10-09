@@ -3105,3 +3105,20 @@ theme	Appearance	外観
 	Constrain	制限
 	Free Transform	自由変形
 	Perspective Distort	遠近変形
+
+# Photoshop-style raster effects (Effect menu, their dialogs).
+	Radial Blur…	ぼかし (放射状)…
+	Smart Blur…	ぼかし (詳細)…
+	Sharpen	シャープ
+	Unsharp Mask…	アンシャープマスク…
+	Radial Blur	ぼかし (放射状)
+	Smart Blur	ぼかし (詳細)
+	Unsharp Mask	アンシャープマスク
+	Gaussian Blur	ぼかし (ガウス)
+	Method	方法
+	Quality	画質
+	Radius	半径
+	Spin	回転
+	Draft	ドラフト
+	Good	標準
+	Best	高品質
