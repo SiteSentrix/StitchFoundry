@@ -288,7 +288,13 @@ fn package_keeps_distinct_linked_documents_with_colliding_file_names() {
     assert_eq!(result["links"], 4, "{result}");
     assert_eq!(result["missingLinks"], json!([]));
     let folder = dir.0.join("delivery/poster Folder");
-    let packaged: Vec<_> = result["files"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|name| name.ends_with(".vectorcraft")).collect();
+    let packaged: Vec<_> = result["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|name| name.ends_with(".vectorcraft"))
+        .collect();
     assert_eq!(packaged.len(), 3, "both nested documents must be retained: {packaged:?}");
     std::fs::remove_dir_all(dir.0.join("art1")).unwrap();
     std::fs::remove_dir_all(dir.0.join("art2")).unwrap();
@@ -299,4 +305,23 @@ fn package_keeps_distinct_linked_documents_with_colliding_file_names() {
         let result = open(&mut inner, &folder.join(name).to_string_lossy());
         assert_eq!(result["missingLinks"], json!([]), "{name}: {result}");
     }
+}
+
+#[test]
+fn package_finds_nested_assets_after_the_source_tree_moves() {
+    let dir = Folder::new("package-moved-nested");
+    let _original = poster_with_placed_document(&dir);
+    let moved = dir.0.join("moved");
+    std::fs::create_dir_all(&moved).unwrap();
+    std::fs::rename(dir.0.join("art"), moved.join("art")).unwrap();
+    std::fs::rename(dir.0.join("poster.vectorcraft"), moved.join("poster.vectorcraft")).unwrap();
+    // The file paths embedded in both documents still point to the old location.
+    // Opening the parent repairs its direct link, but the child must resolve
+    // the image from the folder where it was actually found.
+    let mut opened = session();
+    open(&mut opened, &moved.join("poster.vectorcraft").to_string_lossy());
+    let result = run(&mut opened, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["missingLinks"], json!([]), "moved file's nested link wasn't found: {result}");
+    std::fs::remove_dir_all(moved.join("art")).unwrap();
+    verify_portable_nested_package(&dir.0.join("delivery/poster Folder"));
 }
