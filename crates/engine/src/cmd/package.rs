@@ -107,10 +107,14 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
         let db = vectorcraft_text::FontDb::global();
         let mut files = HashSet::new();
         lines.push("FONTS".to_string());
-        for (family, style) in super::fonts::used_fonts(&st.doc) {
-            let font = format!("{family} {style}");
-            // Found by any of its names, as the canvas draws it.
-            let resolved = db.resolve(&family, &style).filter(|(_, m)| *m != vectorcraft_text::FontMatch::Missing);
+        for used in super::fonts::used_fonts(&st.doc) {
+            let font = super::fonts::font_label(&used);
+            let (family, style, version) = used;
+            // Found by any of its names, as the canvas draws it (in the version the type names).
+            let resolved = db
+                .resolve(&family, &style)
+                .filter(|(_, m)| *m != vectorcraft_text::FontMatch::Missing)
+                .map(|(f, m)| (db.face_version(&family, &style, version.as_deref()).unwrap_or(f), m));
             // A style the family lacks is shown in its closest style, whose file is copied.
             let shown = match &resolved {
                 Some((f, vectorcraft_text::FontMatch::Style)) => format!(" (shown in {} {})", f.family, f.style),

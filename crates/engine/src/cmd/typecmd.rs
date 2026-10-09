@@ -416,6 +416,10 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(f) = &style {
                     st.font_style = f.clone();
                 }
+                // Another font: none of the old one's versions.
+                if font.is_some() || style.is_some() {
+                    st.font_version = None;
+                }
                 if let Some(v) = size {
                     st.size = v.clamp(0.1, 1296.0);
                 }

@@ -460,8 +460,12 @@ fn matching_face(
         return Some(face.clone());
     }
     let db = vectorcraft_text::FontDb::global();
-    let others =
+    // Other installed versions of its family and style (a font library keeps old ones), then the
+    // family's other styles.
+    let versions = db.versions(face).into_iter().skip(1).take(16);
+    let styles =
         db.styles(&face.family).into_iter().filter(|s| !s.eq_ignore_ascii_case(&face.style)).take(64).filter_map(|s| db.face(&face.family, &s));
+    let others = versions.chain(styles);
     let mut best = own.map(|d| (d, face.clone()));
     for f in others {
         if let Some(d) = glyph_deviation(&f, text, o, vertical)
@@ -636,6 +640,9 @@ struct Builder<'p> {
     /// Font (cache key) → the installed face that draws its glyphs, decided from its first glyph
     /// that can be compared ([`matching_face`]); `None`: its glyphs differ, so it stays outlines.
     matched: HashMap<u128, Option<Arc<vectorcraft_text::FontFace>>>,
+    /// Per font: the installed version its type names, when it isn't the one its family and style
+    /// resolve to (see `CharStyle::font_version`).
+    versions: HashMap<u128, Option<String>>,
     /// The soft mask of the graphics state, the art drawn through it so far, and the masks read.
     mask: Option<Arc<MaskSpec>>,
     masked: Vec<Arc<Node>>,
@@ -784,6 +791,7 @@ impl<'p> Builder<'p> {
             cid_text: HashMap::new(),
             font_chars: HashMap::new(),
             matched: HashMap::new(),
+            versions: HashMap::new(),
             mask: None,
             masked: vec![],
             masks: HashMap::new(),
@@ -1356,12 +1364,25 @@ impl<'p> Builder<'p> {
             };
             info = FontInfo { family: f.family.clone(), style: f.style.clone(), face: Some(f) };
         }
+        // A version of the family and style that the two alone don't resolve to: the type names it.
+        // Kept per font once its face is decided (until then each glyph asks).
+        let named = |f: &Option<Arc<vectorcraft_text::FontFace>>| {
+            let f = f.as_ref()?;
+            let default = vectorcraft_text::FontDb::global().face(&f.family, &f.style)?;
+            (default.version != f.version).then(|| f.version.clone())
+        };
+        let version = match self.versions.get(&key) {
+            Some(v) => v.clone(),
+            None if self.matched.contains_key(&key) => self.versions.entry(key).or_insert_with(|| named(&info.face)).clone(),
+            None => named(&info.face),
+        };
         let (paint, opacity) = self.paint(paint, stroke.is_some());
         let stroke = stroke.map(|p| (paint.clone(), p.line_width as f64 * scale));
         let look = Look {
             font: key,
             family: info.family,
             style: info.style,
+            version,
             size: at.size,
             h_scale: at.h_scale,
             fill: stroke.is_none().then_some(paint),

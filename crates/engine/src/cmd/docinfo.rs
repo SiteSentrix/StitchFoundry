@@ -97,7 +97,7 @@ type ImageRow = (String, u32, u32, Option<String>);
 
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
 /// `document.info` reports), its fonts `(family, style)`, image objects and used patterns.
-fn sections(d: &Document, info: &Value, fonts: &BTreeSet<(String, String)>, images: &[ImageRow], category: Option<&str>) -> Vec<Section> {
+fn sections(d: &Document, info: &Value, fonts: &BTreeSet<super::fonts::UsedFont>, images: &[ImageRow], category: Option<&str>) -> Vec<Section> {
     let names = |k: &str| -> Vec<(String, String)> {
         info[k].as_array().into_iter().flatten().filter_map(Value::as_str).map(|n| (n.to_string(), String::new())).collect()
     };
@@ -135,14 +135,18 @@ fn sections(d: &Document, info: &Value, fonts: &BTreeSet<(String, String)>, imag
                 "patterns" => names("patternNames"),
                 "gradients" => d.swatches_iter().filter(|s| matches!(s.paint, Paint::Gradient(_))).map(|s| (s.name.clone(), String::new())).collect(),
                 "symbols" => names("symbols"),
-                "fonts" => fonts.iter().map(|(f, s)| (format!("{f} {s}"), String::new())).collect(),
+                "fonts" => fonts.iter().map(|f| (super::fonts::font_label(f), String::new())).collect(),
                 "fontDetails" => {
                     let db = vectorcraft_text::FontDb::global();
                     fonts
                         .iter()
-                        .map(|(family, style)| {
-                            // Found by any of its names; a style the family lacks shows in another.
-                            let detail = match db.resolve(family, style) {
+                        .map(|used| {
+                            let (family, style, version) = used;
+                            // Found by any of its names (in the version the type names); a style the
+                            // family lacks shows in another.
+                            let resolved =
+                                db.resolve(family, style).map(|(f, m)| (db.face_version(family, style, version.as_deref()).unwrap_or(f), m));
+                            let detail = match resolved {
                                 Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => {
                                     let file =
                                         f.path().and_then(|p| p.file_name()).map_or_else(|| "built in".into(), |n| n.to_string_lossy().into_owned());
@@ -156,7 +160,7 @@ fn sections(d: &Document, info: &Value, fonts: &BTreeSet<(String, String)>, imag
                                 Some((f, _)) => format!("missing: shown in {} {}", f.family, f.style),
                                 None => "missing".into(),
                             };
-                            (format!("{family} {style}"), detail)
+                            (super::fonts::font_label(used), detail)
                         })
                         .collect()
                 }
@@ -243,7 +247,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 NodeKind::Compound { .. } => Some("compoundPaths"),
                 NodeKind::Text(t) => {
                     for run in &t.runs {
-                        fonts.insert((run.style.font_family.clone(), run.style.font_style.clone()));
+                        fonts.insert((run.style.font_family.clone(), run.style.font_style.clone(), run.style.font_version.clone()));
                     }
                     Some("textObjects")
                 }
@@ -300,7 +304,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             }
         });
     }
-    let font_names: Vec<String> = fonts.iter().map(|(f, s)| format!("{f} {s}")).collect();
+    let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
     let mut out = json!({
         "document": document_summary(d),
         "objects": counts,

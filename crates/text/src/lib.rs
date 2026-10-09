@@ -522,6 +522,8 @@ mod tests_typo;
 #[cfg(test)]
 mod tests_variable;
 #[cfg(test)]
+mod tests_versions;
+#[cfg(test)]
 mod tests_vertical;
 #[cfg(test)]
 #[path = "../build/web_fonts.rs"]
