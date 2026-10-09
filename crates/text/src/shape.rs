@@ -133,6 +133,41 @@ pub(crate) fn no_line_start(c: char) -> bool {
         | '！' | '）' | '，' | '．' | '：' | '；' | '？' | '］' | '｝' | '～' | '｡' | '｣' | '､' | '･' | 'ｰ' | 'ｧ'..='ｯ')
 }
 
+/// Soft kinsoku: a character of [`no_line_start`] that may start a line all the same: 々, the
+/// prolonged sound mark ー (JLREQ cl-10) and small kana (cl-11), as JLREQ's level 3 rules allow
+/// (Appendix C.3, https://www.w3.org/TR/jlreq/#addendum_a3).
+pub(crate) fn soft_line_start(c: char) -> bool {
+    matches!(
+        c,
+        '々' | 'ー'
+            | '\u{3041}'
+            | '\u{3043}'
+            | '\u{3045}'
+            | '\u{3047}'
+            | '\u{3049}'
+            | '\u{3063}'
+            | '\u{3083}'
+            | '\u{3085}'
+            | '\u{3087}'
+            | '\u{308E}'
+            | '\u{3095}'
+            | '\u{3096}'
+            | '\u{30A1}'
+            | '\u{30A3}'
+            | '\u{30A5}'
+            | '\u{30A7}'
+            | '\u{30A9}'
+            | '\u{30C3}'
+            | '\u{30E3}'
+            | '\u{30E5}'
+            | '\u{30E7}'
+            | '\u{30EE}'
+            | '\u{30F5}'
+            | '\u{30F6}'
+            | '\u{31F0}'..='\u{31FF}'
+    )
+}
+
 /// Kinsoku: a character that can't end a line (opening brackets).
 pub(crate) fn no_line_end(c: char) -> bool {
     matches!(
