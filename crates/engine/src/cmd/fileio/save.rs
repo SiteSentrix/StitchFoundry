@@ -216,15 +216,20 @@ fn is_svg(f: &Format) -> bool {
     matches!(f.id, "svg" | "svgz")
 }
 
-/// The document as written: native files carry the view to reopen at.
+/// The document as written: native files carry the view to reopen at and the Layers panel's open
+/// rows.
 fn doc_to_save(st: &DocState, f: &Format) -> Arc<Document> {
-    if is_native(f) && st.doc.last_view != st.view {
-        let mut d = (*st.doc).clone();
-        d.last_view = st.view.clone();
-        Arc::new(d)
-    } else {
-        st.doc.clone()
+    if !is_native(f) {
+        return st.doc.clone();
     }
+    let open = st.layers_open.saved(&st.doc);
+    if st.doc.last_view == st.view && st.doc.layers_open == open {
+        return st.doc.clone();
+    }
+    let mut d = (*st.doc).clone();
+    d.last_view = st.view.clone();
+    d.layers_open = open;
+    Arc::new(d)
 }
 
 /// What a format loses against a native file (reported whenever a save writes it).
@@ -274,6 +279,7 @@ fn artboard_doc(doc: &Document, i: usize) -> Document {
     d.artboards = vec![a.clone()];
     // It opens fitted to its artboard, not at the master file's view.
     d.last_view = None;
+    d.layers_open = None;
     for layer in &mut d.layers {
         keep_on(layer, r);
     }

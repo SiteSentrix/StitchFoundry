@@ -882,6 +882,7 @@ and `layerRows`, the rows highlighted in the panel.
   dimImages, dimPercent; OK is one undo step), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
   layersOnly, rowSize small|medium|large|other, otherSize, thumbLayers, thumbGroups, thumbObjects), and
   `ui.layersExpand {ids?, open?}` opens or closes rows as their triangles do (Alt-click: everything inside).
+  A document opens with only its top-level layers open; the open rows are saved in the native file and reopen that way.
 
 ```json
 {"name":"run_command","arguments":{"command":"layer.newSublayer","params":{"name":"Shadows"}}}
