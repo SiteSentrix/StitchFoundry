@@ -165,9 +165,10 @@ fn an_ai_file_notes_that_its_art_off_the_artboards_is_not_read() {
     }
 }
 
+/// Paths that are art (not clipping paths: art reaching past the page keeps a clip to it).
 fn path_count(d: &Document) -> usize {
     let mut n = 0;
-    d.walk(|c| n += usize::from(matches!(c.kind, NodeKind::Path { .. })));
+    d.walk(|c| n += usize::from(matches!(c.kind, NodeKind::Path { clipping: false, .. })));
     n
 }
 
