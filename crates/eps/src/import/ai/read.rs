@@ -78,7 +78,12 @@ pub(crate) const TEXT_SLOT: &str = "\u{0}text";
 
 /// Is `name` that of a text slot, and which story is it of?
 pub(crate) fn slot_of(name: Option<&str>) -> Option<Option<u32>> {
-    name?.strip_prefix(TEXT_SLOT).map(|rest| rest.parse().ok())
+    name?.strip_prefix(TEXT_SLOT).map(|rest| rest.split(':').next().and_then(|s| s.parse().ok()))
+}
+
+/// Which of its story's frames a text slot named `name` is (0 when it doesn't say).
+pub(crate) fn slot_frame(name: Option<&str>) -> usize {
+    name.and_then(|n| n.strip_prefix(TEXT_SLOT)).and_then(|rest| rest.split_once(':')).and_then(|(_, f)| f.parse().ok()).unwrap_or(0)
 }
 
 /// Read the structure of the editing data `data`.
@@ -844,10 +849,11 @@ impl<'a> Reader<'a> {
 
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
     fn text_slot(&mut self, o: &Obj) -> Result<(), String> {
-        let story = o.nums("StoryIndex").first().copied().filter(|v| (0.0..f64::from(u32::MAX)).contains(v)).map(|v| v as u32);
+        let index = |key: &str| o.nums(key).first().copied().filter(|v| (0.0..f64::from(u32::MAX)).contains(v)).map(|v| v as u32);
+        let (story, frame) = (index("StoryIndex"), index("FrameIndex").unwrap_or(0));
         let gs = self.gs.clone();
         let mut n = self.new_node(NodeKind::Group { children: vec![], clip: false }, &gs);
-        n.name = Some(story.map_or_else(|| TEXT_SLOT.to_string(), |s| format!("{TEXT_SLOT}{s}")));
+        n.name = Some(story.map_or_else(|| TEXT_SLOT.to_string(), |s| format!("{TEXT_SLOT}{s}:{frame}")));
         let hidden = self.obj_hidden;
         self.add(n, hidden)
     }

@@ -412,8 +412,11 @@ An Illustrator EPS (version 9 on) or `.ai` file opens from the editing data it c
 colour), groups as they were nested, compound paths, clipping groups, object names, hidden and locked objects, fills and
 strokes (spot colours as spot swatches), linear and radial gradients, opacity, blend modes, isolation and knockout,
 embedded images with their alpha channel, guides, and every artboard where it is. An object with several fills or
-strokes, effects or a brush comes in as its drawn look (a group named after it). Type that shows is the page's, in its
-text object's place; hidden point type is made from the file's text document. A file whose editing data has symbols,
+strokes, effects or a brush comes in as its drawn look (a group named after it). Type is made from the file's text
+document, whole and editable: point type, area type (a story in several frames as threaded type) and type on a path,
+with its fonts, size, leading, tracking, scaling, baseline shift, fill and stroke (grey, RGB or CMYK), alignment,
+indents and paragraph spacing. Where the text document can't say, type that shows is the page's, in its text object's
+place. A file whose editing data has symbols,
 pattern fills, placed files or anything else the reader doesn't read on a layer that shows, or whose layers look
 different from its page, opens as before: an EPS as its printed page, a `.ai` file from its PDF content (where plain
 groups open ungrouped), with a warning saying why. Layers look different when they draw an object the page doesn't (or
@@ -449,9 +452,10 @@ CMYK too.
 
 PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) open through the EPS
 reader (see EPS and PostScript import). An `.ai` saved without PDF compatibility (its PDF part is only a placeholder
-page) opens from its editing data alone: its type is made from the file's text document where it can be (point type), and
-what can't be is left out with a warning; so is non-native art (the content of a placed PDF, which Illustrator shows but
-doesn't edit and keeps as a PDF inside the editing data); without editing data it says it can't be opened.
+page) opens from its editing data alone: its type is made from the file's text document where it can be (point type,
+area type and type on a path), and what can't be is left out with a warning; so is non-native art (the content of a
+placed PDF, which Illustrator shows but doesn't edit and keeps as a PDF inside the editing data); without editing data
+it says it can't be opened.
 
 What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,

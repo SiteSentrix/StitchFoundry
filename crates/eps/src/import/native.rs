@@ -69,6 +69,8 @@ fn few(names: BTreeSet<String>) -> String {
 /// A text slot of the layers.
 struct SlotInfo {
     story: Option<u32>,
+    /// Which of the story's frames it is.
+    frame: usize,
     /// It, its layer and the objects round it show.
     shown: bool,
 }
@@ -78,7 +80,7 @@ fn collect_slots(nodes: &[Arc<Node>], shown: bool, out: &mut Vec<SlotInfo>) {
     for n in nodes {
         let shown = shown && n.visible;
         if let Some(story) = slot_of(n.name.as_deref()) {
-            out.push(SlotInfo { story, shown });
+            out.push(SlotInfo { story, frame: ai::slot_frame(n.name.as_deref()), shown });
         } else if let Some(c) = n.children().filter(|_| !matches!(n.kind, NodeKind::Compound { .. })) {
             collect_slots(c, shown, out);
         }
@@ -182,8 +184,10 @@ fn assign(objects: &[Vec<Arc<Node>>], slots: usize) -> Vec<Vec<&[Arc<Node>]>> {
 enum Content {
     /// Text objects (with the strokes round them) of the page.
     Page(Vec<Arc<Node>>),
-    /// A text object made from the file's text document.
-    Made(Box<Node>),
+    /// A text object made from the file's text document, where it lies on the document, whether
+    /// the page has type where it is, and the page's type of no text object that is nearest it
+    /// (kept after it).
+    Made(Box<Node>, Option<Rect>, bool, Vec<Arc<Node>>),
     /// Nothing the file lets this read.
     Empty,
     /// Its type is on the page with another text object's; there is nothing to put here.
@@ -199,13 +203,15 @@ fn fill_slots(
     content: &mut std::vec::IntoIter<Content>,
     names: &std::collections::HashMap<NodeId, String>,
     empty: &mut usize,
+    made: &mut Vec<(u32, usize, NodeId)>,
 ) {
     let mut i = 0;
     while i < nodes.len() {
         let Some(n) = nodes.get(i) else { break };
-        if slot_of(n.name.as_deref()).is_some() {
+        if let Some(story) = slot_of(n.name.as_deref()) {
             let visible = n.visible;
             let name = names.get(&n.id);
+            let frame = ai::slot_frame(n.name.as_deref());
             let replacement = match content.next() {
                 Some(Content::Page(parts)) if !parts.is_empty() => {
                     // The page's type (and the strokes round it) take the slot's place as they are.
@@ -227,11 +233,20 @@ fn fill_slots(
                     i += n;
                     continue;
                 }
-                Some(Content::Made(mut text)) => {
+                Some(Content::Made(mut text, _, seen, extra)) => {
                     text.id = doc.alloc_id();
+                    if let Some(story) = story {
+                        made.push((story, frame, text.id));
+                    }
                     text.visible = visible;
-                    text.name = Some(format!("{MADE}{}", name.map_or("", String::as_str)));
-                    Some(*text)
+                    // Type the page shows is kept; other made type is weighed against the page.
+                    text.name = if seen { name.cloned() } else { Some(format!("{MADE}{}", name.map_or("", String::as_str))) };
+                    let mut parts = vec![Arc::new(*text)];
+                    parts.extend(extra.iter().map(|p| reid(doc, p)));
+                    let n = parts.len();
+                    nodes.splice(i..=i, parts);
+                    i += n;
+                    continue;
                 }
                 Some(Content::Merged) => {
                     nodes.remove(i);
@@ -256,7 +271,7 @@ fn fill_slots(
                 && !matches!(n.kind, NodeKind::Compound { .. })
                 && let Some(c) = nodes.get_mut(i).map(Arc::make_mut).and_then(Node::children_mut)
             {
-                fill_slots(doc, c, content, names, empty);
+                fill_slots(doc, c, content, names, empty, made);
             }
             i += 1;
         }
@@ -399,6 +414,14 @@ fn join_pieces(parts: &mut Vec<Arc<Node>>, lines: &[(String, Point)]) {
     });
 }
 
+/// Do the regions of made type cover most of `object`?
+fn covered(object: &[Arc<Node>], content: &[Content]) -> bool {
+    let Some(r) = extent(object) else { return false };
+    let inside: f64 =
+        content.iter().filter_map(|c| if let Content::Made(_, Some(region), ..) = c { Some(region.intersect(r).area()) } else { None }).sum();
+    inside >= 0.5 * r.area().max(1e-9)
+}
+
 /// The box round `parts`.
 fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
     parts.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))
@@ -440,19 +463,46 @@ fn plan(
             *o = Some(k);
         }
     }
-    // The file's text document is trusted where it agrees with the page about something, or where the
-    // page has no type to disagree with.
-    let trusted = owner.iter().any(Option::is_some) || shown.is_empty();
-    let readable = |k: usize| trusted && lines.get(k).is_some_and(Option::is_some);
+    // Type the text document makes, shown or not: the page's pieces of it aren't needed.
     let mut content: Vec<Content> = infos.iter().map(|_| Content::Empty).collect();
+    if let Some(t) = template {
+        for (k, info) in infos.iter().enumerate() {
+            let Some(Some(story)) = stories.get(k) else { continue };
+            let Some(node) = story.node(NodeId(0), info.frame, t, to_doc) else { continue };
+            let region = story.region(t, to_doc);
+            if let Some(c) = content.get_mut(k) {
+                *c = Content::Made(Box::new(node), region.filter(|_| info.shown), false, vec![]);
+            }
+        }
+    }
+    // The file's text document is trusted where it agrees with the page about something (its lines
+    // start where the page's type does, or the page has type where it lays type out), or where the
+    // page has no type to disagree with.
+    let in_region = |object: &[Arc<Node>]| covered(object, &content);
+    let trusted = owner.iter().any(Option::is_some) || shown.is_empty() || shown.iter().any(|o| in_region(o));
+    if !trusted {
+        content.iter_mut().for_each(|c| *c = Content::Empty);
+    }
     let mut spare: Vec<Vec<Arc<Node>>> = vec![];
     for (j, object) in shown.iter().enumerate() {
         match owner.get(j).copied().flatten().filter(|_| trusted) {
             Some(k) => match content.get_mut(k) {
+                Some(Content::Made(_, _, seen, _)) => *seen = true,
                 Some(Content::Page(p)) => p.extend(object.iter().cloned()),
                 Some(c) => *c = Content::Page(object.clone()),
                 None => {}
             },
+            // What lies where made type is, is that type as the page draws it.
+            None if covered(object, &content) => {
+                let r = extent(object).unwrap_or(Rect::ZERO);
+                for c in &mut content {
+                    if let Content::Made(_, Some(region), seen, _) = c
+                        && !region.intersect(r).is_zero_area()
+                    {
+                        *seen = true;
+                    }
+                }
+            }
             None => spare.push(object.clone()),
         }
     }
@@ -461,23 +511,9 @@ fn plan(
             join_pieces(parts, l);
         }
     }
-    // Type of the text document where the page has none: hidden type, and shown type off the page.
-    for (k, c) in content.iter_mut().enumerate() {
-        if matches!(c, Content::Empty)
-            && readable(k)
-            && let (Some(Some(story)), Some(t)) = (stories.get(k), template)
-            && let Some(node) = story.node(NodeId(0), t, to_doc)
-        {
-            *c = Content::Made(Box::new(node));
-        }
-    }
     // What is left of the page goes by painting order into the shown slots the file can't say.
-    let loose: Vec<usize> = infos
-        .iter()
-        .enumerate()
-        .filter(|(k, i)| i.shown && matches!(content.get(*k), Some(Content::Empty)) && !readable(*k))
-        .map(|(k, _)| k)
-        .collect();
+    let loose: Vec<usize> =
+        infos.iter().enumerate().filter(|(k, i)| i.shown && matches!(content.get(*k), Some(Content::Empty))).map(|(k, _)| k).collect();
     if loose.is_empty() {
         // Type of the page that no text object says it owns goes with the nearest text object that has
         // type of the page; with none, it is left out.
@@ -485,6 +521,7 @@ fn plan(
         for object in &spare {
             let (centre, near) = (extent(object).map(|r| r.center()), |c: &Content| match c {
                 Content::Page(parts) => extent(parts).map(|r| r.center()),
+                Content::Made(_, region, ..) => region.map(|r| r.center()),
                 _ => None,
             });
             let nearest = content
@@ -492,7 +529,7 @@ fn plan(
                 .filter_map(|c| near(c).zip(centre).map(|(p, q)| ((p.x - q.x).hypot(p.y - q.y), c)))
                 .min_by(|a, b| a.0.total_cmp(&b.0));
             match nearest {
-                Some((_, Content::Page(parts))) => parts.extend(object.iter().cloned()),
+                Some((_, Content::Page(parts) | Content::Made(_, _, _, parts))) => parts.extend(object.iter().cloned()),
                 _ => left_out = true,
             }
         }
@@ -658,7 +695,7 @@ fn compared(x: &vectorcraft_render::Rendered, y: &vectorcraft_render::Rendered, 
     let differs: Vec<bool> = x.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).map(|(p, q)| differ(p, q)).collect();
     let (w, h) = (x.width as usize, x.height as usize);
     let at = |i: usize, j: usize| j.checked_mul(w).and_then(|row| row.checked_add(i)).and_then(|k| differs.get(k)).copied().unwrap_or(false);
-    let typed = covered(areas, w, h);
+    let typed = in_areas(areas, w, h);
     // A pixel on the region's edge has neighbours outside it, which don't count as differing.
     let solid = (1..h.saturating_sub(1))
         .flat_map(|j| (1..w.saturating_sub(1)).map(move |i| (i, j)))
@@ -685,7 +722,7 @@ fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>
 }
 
 /// Which of `w` × `h` pixels (row by row) lie in one of `areas`.
-fn covered(areas: &[Rect], w: usize, h: usize) -> Vec<bool> {
+fn in_areas(areas: &[Rect], w: usize, h: usize) -> Vec<bool> {
     // Each area adds one inside it: corners marked, then summed along the rows and down the columns.
     let stride = w + 1;
     let mut count = vec![0i64; stride * (h + 1)];
@@ -814,8 +851,16 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool) ->
     let content = plan(&infos, &stories, template, to_doc, [&shown, &hidden], &mut notes);
     let mut empty = 0;
     let mut layers = std::mem::take(&mut doc.layers);
-    fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty);
+    let mut made = vec![];
+    fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty, &mut made);
     doc.layers = layers;
+    // A story in several frames is threaded type: its frames in order (the first holds the story).
+    made.sort();
+    for thread in made.chunk_by(|a, b| a.0 == b.0) {
+        if thread.len() > 1 {
+            doc.text_threads.push(thread.iter().map(|(_, _, id)| *id).collect());
+        }
+    }
     if empty > 0 {
         notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }

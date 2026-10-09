@@ -1691,12 +1691,69 @@ fn text_document_text() -> String {
         .to_string()
 }
 
+/// The text document of area type threaded through two frames and of type on a path, as an
+/// editing copy keeps it (frames on the canvas, y down).
+fn frames_document_text() -> String {
+    let area = |x0: f64, x1: f64| {
+        let (y0, y1) = (8201.5, 8221.5);
+        let corners = [(x0, y0), (x0, y1), (x1, y1), (x1, y0), (x0, y0)];
+        let segments: Vec<String> = corners.windows(2).map(|w| format!("{0} {1} {0} {1} {2} {3} {2} {3}", w[0].0, w[0].1, w[1].0, w[1].1)).collect();
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 /7 18 >> >> >>", segments.join(" "))
+    };
+    let path = "<< /0 << /0 [ 0 0 ] /1 << /0 [ 8151.5 8171.5 8151.5 8171.5 8191.5 8161.5 8191.5 8171.5 8191.5 8171.5 8211.5 8181.5 8231.5 8171.5 8231.5 8171.5 ] >> /2 << /0 2 /6 [ 0.5 2.0 ] >> >> >>";
+    let story = |text: &str, frames: &str, style: &str| {
+        let n = text.chars().count() - text.matches('\\').count();
+        format!(
+            "<< /0 << /0 ({text}) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 2 /1 4 /2 6 >> /6 0 >> >> /1 {n} >> ] >> \
+             /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << {style} >> >> >> /1 {n} >> ] >> >> /1 << /0 [ {frames} ] >> >>"
+        )
+    };
+    format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ {} {} {path} ] >> >>\n/1 << /1 [ {} {} ] /2 << /1 12.0 >> >>\n",
+        area(8151.5, 8201.5),
+        area(8211.5, 8241.5),
+        story(
+            "A story in two frames\\rand more\\r",
+            "<< /0 0 >> << /0 1 >>",
+            "/1 9.0 /8 50 /53 << /99 /CAITextPaint /0 << /0 1 /1 [ 1.0 1.0 0.0 0.0 ] >> >>"
+        ),
+        story("On a path\\r", "<< /0 2 >>", "/1 8.0"),
+    )
+}
+
+/// The text objects of [`frames_document_text`]: story 0 in its two frames, story 1 in its one (a
+/// text object names its frame among its story's).
+const FRAME_OBJECTS: &str = "/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n/AI11Text :\n1 /FrameIndex ,\n0 /StoryIndex ,\n;\n/AI11Text :\n0 /FrameIndex ,\n1 /StoryIndex ,\n;\n";
+
+/// The fuzzed fixture, as it is, reads as area type in two threaded frames and type on a path.
+#[test]
+fn the_frames_fixture_reads_as_threaded_area_type_and_type_on_a_path() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.eps", &text_eps_of(&frames_document_text(), FRAME_OBJECTS)).unwrap();
+    let mut kinds = vec![];
+    l.doc.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            kinds.push(match t.kind {
+                vectorcraft_doc::TextKind::Area { .. } => "area",
+                vectorcraft_doc::TextKind::OnPath { .. } => "path",
+                _ => "point",
+            });
+        }
+    });
+    assert_eq!(kinds, ["area", "area", "path"], "{:?}", l.warnings);
+    assert_eq!(l.doc.text_threads.len(), 1);
+}
+
 /// An EPS with a hidden text object whose story is in `document`.
 fn text_eps(document: &str) -> Vec<u8> {
+    text_eps_of(document, "/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n")
+}
+
+/// An EPS with the text `objects` on a hidden layer, their stories in `document`.
+fn text_eps_of(document: &str, objects: &str) -> Vec<u8> {
     let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
     let editing = format!(
         "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
-         %AI5_BeginLayer\n0 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(Spare) Ln\n/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nLB\n%AI5_EndLayer--\n\
+         %AI5_BeginLayer\n0 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(Spare) Ln\n{objects}LB\n%AI5_EndLayer--\n\
          %AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
         lines.join("\n")
     );
@@ -1712,6 +1769,15 @@ proptest! {
         let text = mutate_text(&text_document_text(), cut, &edits);
         let bytes = text_eps(&text);
         survive("mutated EPS text document", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// The same for area type threaded through frames and type on a path, opened as a document
+    /// (its threads flow).
+    #[test]
+    fn eps_text_frames_never_panic(cut in 0usize..2_500, edits in prop::collection::vec((0usize..2_500, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '[', ']', '<', '>', '\\', 'e', '1', '2'])), 0..12)) {
+        let text = mutate_text(&frames_document_text(), cut, &edits);
+        let bytes = text_eps_of(&text, FRAME_OBJECTS);
+        survive("mutated EPS text frames", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
     }
 
     /// An Illustrator EPS whose editing data is damaged or hostile: read as its layers, or as its page.
