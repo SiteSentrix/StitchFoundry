@@ -414,12 +414,18 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     {
         let _ = app.run("edit.clear", json!({}));
     }
-    // Single-key tool shortcuts (no Cmd/Ctrl/Alt).
+    // Single-key tool shortcuts (no Cmd/Ctrl/Alt). With a layout without Latin letters (Persian,
+    // Arabic, Russian, Greek…) the key's position stands in for what it types (#793).
     let events: Vec<(String, Modifiers)> = ctx.input(|i| {
+        let mut physical = None;
         i.events
             .iter()
             .filter_map(|e| match e {
-                egui::Event::Text(t) => Some((t.clone(), i.modifiers)),
+                egui::Event::Key { physical_key, pressed: true, .. } => {
+                    physical = *physical_key;
+                    None
+                }
+                egui::Event::Text(t) => Some((latin(t, physical), i.modifiers)),
                 _ => None,
             })
             .collect()
@@ -442,6 +448,16 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if let Some(t) = lookup(crate::shortcut_editor::tool_for_key) {
             app.select_tool(t);
         }
+    }
+}
+
+/// What a single-key shortcut reads for `text`, typed by the key at `physical`: the text itself,
+/// or, when it holds no ASCII character (a layout without Latin letters), what that key types on a
+/// US layout, so V selects the Selection tool whatever the V key types.
+fn latin(text: &str, physical: Option<Key>) -> String {
+    match physical {
+        Some(k) if !text.is_ascii() => k.symbol_or_name().to_lowercase(),
+        _ => text.to_string(),
     }
 }
 
@@ -676,6 +692,27 @@ mod tests {
         // The Curvature tool's Shift+~ arrives as the text `~` with Shift.
         frame(&mut app, vec![egui::Event::ModifiersChanged(Modifiers::SHIFT), egui::Event::Text("~".into())]);
         assert_eq!(app.session.tool_id(), "curvature");
+    }
+
+    /// #793: with a layout without Latin letters the one-key shortcuts go by the key's position:
+    /// the P key typing Persian `ح` chooses the Pen, the V key typing Russian `м` the Selection
+    /// tool. A Latin layout keeps the letter typed: AZERTY's A (the Q key's place) is A.
+    #[test]
+    fn one_key_shortcuts_follow_the_key_on_layouts_without_latin_letters() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let typed = |key, physical, text: &str| {
+            vec![
+                egui::Event::Key { key, physical_key: Some(physical), pressed: true, repeat: false, modifiers: Modifiers::NONE },
+                egui::Event::Text(text.into()),
+            ]
+        };
+        frame(&mut app, typed(Key::P, Key::P, "ح"));
+        assert_eq!(app.session.tool_id(), "pen");
+        frame(&mut app, typed(Key::V, Key::V, "м"));
+        assert_eq!(app.session.tool_id(), "selection");
+        frame(&mut app, typed(Key::A, Key::Q, "a"));
+        assert_eq!(app.session.tool_id(), "directSelection", "AZERTY: the letter typed");
     }
 
     #[test]

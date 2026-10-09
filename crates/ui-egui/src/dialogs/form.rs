@@ -67,6 +67,7 @@ fn order(kind: &str) -> &'static [&'static str] {
     match kind {
         "offsetPath" => &["offset", "joins", "miterLimit"],
         "splitIntoGrid" => &["rows", "columns", "gutter"],
+        "artboardOptions" => &["name", "width", "height"],
         _ => &[],
     }
 }

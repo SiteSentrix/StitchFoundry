@@ -370,3 +370,14 @@ fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     let after = bounds(&app);
     assert!((after.x0 - before.x0 - 15.0).abs() < 1e-6 && (after.y0 - before.y0).abs() < 1e-6, "{before:?} → {after:?}");
 }
+
+/// #793: Artboard Options lists its fields as Name, Width, Height, not by key.
+#[test]
+fn artboard_options_lists_name_then_width_and_height() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 612, "height": 792})).unwrap();
+    open(&mut app, "artboardOptions", json!({"index": 0, "name": "Artboard 1", "width": 612, "height": 792, "x": 0, "y": 0}));
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in {text}"));
+    assert!(at("Name") < at("Width") && at("Width") < at("Height"), "{text}");
+}
