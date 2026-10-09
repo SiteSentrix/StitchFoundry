@@ -4,7 +4,8 @@
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
-//! (damaged ones, hostile programs) read by the PostScript interpreter, nor Affinity documents
+//! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
+//! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions).
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
@@ -1582,5 +1583,127 @@ proptest! {
         s.execute("perspective.presets.save", &json!({"name": "Flat", "preset": "[1P-Low View]", "gridline": 4, "groundColor": "#00ff00"})).unwrap();
         let text = s.execute("perspective.presets.export", &json!({"names": ["Tall", "Flat", "[2P-High View]"]})).unwrap()["data"].as_str().unwrap().to_string();
         perspective_presets("mutated perspective presets", &mutate_text(&text, cut, &edits))?;
+    }
+}
+
+// ---------- the editing data of Illustrator files ----------
+
+/// `data` as ASCII85, up to the `~>`.
+fn ascii85(data: &[u8]) -> String {
+    let mut out = String::new();
+    for chunk in data.chunks(4) {
+        let mut x = chunk.iter().enumerate().fold(0u32, |v, (i, b)| v | u32::from(*b) << (24 - 8 * i));
+        let mut d = [0u8; 5];
+        for c in d.iter_mut().rev() {
+            *c = (x % 85) as u8 + b'!';
+            x /= 85;
+        }
+        out.extend(d.iter().take(chunk.len() + 1).map(|c| char::from(*c)));
+    }
+    out.push_str("~>");
+    out
+}
+
+/// The editing data of a file with every sort of object the layers reader knows, and some it doesn't.
+fn editing_text() -> String {
+    let square = |x: u32| format!("0 0 1 0 k\n{x} 10 m\n{} 10 L\n{} 14 L\n{x} 14 L\nf", x + 4, x + 4);
+    let body = [
+        "u".to_string(),
+        square(10),
+        "U".into(),
+        "*u".into(),
+        square(20),
+        square(30),
+        "*U".into(),
+        "q".into(),
+        square(40),
+        "50 10 m 60 10 L 60 20 L 50 20 L h W f".into(),
+        "Q".into(),
+        "1 Xw".into(),
+        "u".into(),
+        "/AI11Text :\n0 /FreeUndo ,\n;".into(),
+        "U".into(),
+        "0 Xw".into(),
+        "1 0 0 0 1 0 Bg".into(),
+        "0 1 w 2 J 0 j 4 M [3 2]0 d 1 D".into(),
+    ]
+    .join("\n");
+    let layer = |name: &str, visible: u8, body: &str| {
+        format!("%AI5_BeginLayer\n{visible} 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n")
+    };
+    format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n{}{}%%Trailer\n",
+        layer("One", 1, &format!("{body}\n{}", layer("Sub", 1, &square(70)))),
+        layer("Two", 0, &square(80))
+    )
+}
+
+fn zstd(text: &str) -> Vec<u8> {
+    ruzstd::encoding::compress_to_vec(text.as_bytes(), ruzstd::encoding::CompressionLevel::Fastest)
+}
+
+/// An EPS drawing a square whose private data holds `editing`.
+fn editing_eps(editing: &str) -> Vec<u8> {
+    let lines: Vec<String> = ascii85(&zstd(editing)).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 1 0 setcmykcolor 10 10 moveto 14 10 lineto 14 14 lineto closepath fill\nshowpage\n%%EOF\n%AI9_PrivateDataBegin\n%AI24_DataStream\n{}\n%AI9_PrivateDataEnd\n",
+        lines.join("\n")
+    )
+    .into_bytes()
+}
+
+/// The text document of a story of centred type with two styles, as an editing copy keeps it.
+fn text_document_text() -> String {
+    "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 3 4 ] >> >> >> ] >> >>\n\
+     /1 << /1 [ << /0 << /0 (Hi\\rthere\\r) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 2 >> /6 0 >> >> /1 9 >> ] >> \
+     /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 9 >> ] >> >> \
+     /1 << /0 [ << /0 0 >> ] /2 [ << /99 /PC /6 [ << /99 /F /0 << /0 [ 8200.0 8180.0 ] >> /6 [ << /99 /R /6 [ << /99 /R /6 [ << /99 /L /6 [ \
+     << /99 /S /0 << /0 [ -5.0 0.0 ] >> /15 << /0 3 >> >> ] >> << /99 /L /0 << /0 [ 0.0 16.8 ] >> /6 [ << /99 /S /0 << /0 [ -9.0 0.0 ] >> /15 << /0 6 >> >> ] >> ] >> ] >> ] >> ] >> ] >> >> ] /2 << /1 12.0 >> >>\n"
+        .to_string()
+}
+
+/// An EPS with a hidden text object whose story is in `document`.
+fn text_eps(document: &str) -> Vec<u8> {
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let editing = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
+         %AI5_BeginLayer\n0 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(Spare) Ln\n/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nLB\n%AI5_EndLayer--\n\
+         %AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
+        lines.join("\n")
+    );
+    editing_eps(&editing)
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// An Illustrator EPS whose text document is damaged or hostile: read as its type, or without it.
+    #[test]
+    fn eps_text_document_never_panics(cut in 0usize..1_500, edits in prop::collection::vec((0usize..1_500, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '[', ']', '<', '>', '\\', 'e', '1'])), 0..12)) {
+        let text = mutate_text(&text_document_text(), cut, &edits);
+        let bytes = text_eps(&text);
+        survive("mutated EPS text document", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// An Illustrator EPS whose editing data is damaged or hostile: read as its layers, or as its page.
+    #[test]
+    fn eps_editing_data_never_panics(cut in 0usize..3_000, edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', '[', ']', '%', 'q', 'Q', 'W', 'u', 'U', 'L', 'k', 'x'])), 0..12)) {
+        let text = mutate_text(&editing_text(), cut, &edits);
+        let bytes = editing_eps(&text);
+        survive("mutated EPS editing data", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// A `.ai` whose editing data is damaged or hostile.
+    #[test]
+    fn ai_editing_data_never_panics(cut in 0usize..3_000, edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', '[', ']', '%', 'q', 'Q', 'W', 'u', 'U', 'L', 'k', 'x'])), 0..12), damage in prop::collection::vec((0usize..4_000, any::<u8>()), 0..4)) {
+        let text = mutate_text(&editing_text(), cut, &edits);
+        let mut private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        for (at, b) in damage {
+            let n = private.len();
+            if let Some(x) = private.get_mut(at % n) {
+                *x = b;
+            }
+        }
+        survive("mutated .ai editing data", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![]).0))?;
     }
 }

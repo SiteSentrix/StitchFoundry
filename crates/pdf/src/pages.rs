@@ -1,7 +1,7 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
-use hayro_syntax::object::Dict;
+use hayro_syntax::object::{Dict, Stream};
 use hayro_syntax::page::Page;
 use hayro_syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
@@ -126,6 +126,30 @@ pub(crate) fn frame(page: &Page<'_>, which: CropTo) -> (Affine, Rect) {
     let b = init.transform_rect_bbox(page_box(page, which));
     let (w, h) = page.render_dimensions();
     (init, if b.is_finite() && b.area() > 0.0 { b } else { Rect::new(0.0, 0.0, w as f64, h as f64) })
+}
+
+/// The `PieceInfo` key such files keep their private data under.
+const PRIVATE_DATA_OWNER: &[u8] = b"Illustrator"; // brand-ok: the key the files use
+
+/// Most bytes of an editor's private data read.
+const MAX_PRIVATE: usize = 512 << 20;
+
+/// The private data of an Illustrator `.ai` (its first page's `PieceInfo`): the `AIPrivateData`
+/// streams in order, joined. `None` for a PDF without them (or with a stream that can't be read).
+/// What it holds is the editor's own copy of the art (see `vectorcraft_eps::layered_ai`).
+pub fn illustrator_data(bytes: &[u8], password: Option<&str>) -> Option<Vec<u8>> {
+    let pdf = open(bytes, password).ok()?;
+    let page = pdf.pages().first()?;
+    let private = page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private")?;
+    let mut data = vec![];
+    for n in 1..=100_000u32 {
+        let Some(stream) = private.get::<Stream<'_>>(format!("AIPrivateData{n}").as_bytes()) else { break };
+        data.extend_from_slice(&stream.decoded().ok()?);
+        if data.len() > MAX_PRIVATE {
+            return None;
+        }
+    }
+    (!data.is_empty()).then_some(data)
 }
 
 /// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData`)?

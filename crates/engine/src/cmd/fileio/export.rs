@@ -45,6 +45,9 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path");
+    if let Some(path) = path {
+        super::check_not_lossy_overwrite(s.doc()?, path, p, "document.export")?;
+    }
     let f = writable("document.export", str_param(p, "format"), path)?;
     let expanded = expand_presets(s, "document.export", p)?;
     let p = &*expanded;

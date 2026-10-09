@@ -3118,6 +3118,16 @@ axis	Both	Ambos
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	a layer couldn't be read	no se pudo leer una capa
+@msg	it has more than one artboard	tiene más de una mesa de trabajo
+@msg	it has no page	no tiene página
+@msg	its editing data doesn't say where its artboard is	sus datos de edición no indican dónde está su mesa de trabajo
+@msg	its editing data has no layers	sus datos de edición no tienen capas
+@msg	its editing data is damaged	sus datos de edición están dañados
+@msg	its editing data is for a different page	sus datos de edición son de otra página
+@msg	its layers use {_1}, which aren't read yet	sus capas usan {_1}, que aún no se leen
+@msg	its page has text, and its layers have no text objects to put it in	su página tiene texto y sus capas no tienen objetos de texto donde ponerlo
+@msg	the art on them differs from the page's in {_1}% of it	el arte de las capas difiere del de la página en el {_1} % de su superficie
 @msg	`to` must be "corner" or "smooth"	`to` debe ser "corner" o "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	los archivos BMP son RGB o en escala de grises: colorModel rgb o gray
 @msg	Blend colors: select at least three objects with filled colours	Fusionar colores: selecciona al menos tres objetos con relleno de color

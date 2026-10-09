@@ -700,7 +700,7 @@ impl Player {
             return self.warn(&deep_clips());
         }
         self.next_clip += 1;
-        self.dc.clips.push(Arc::new(Clip { id: self.next_clip, region: Some((path, rule)) }));
+        self.dc.clips.push(Arc::new(Clip { id: self.next_clip, region: Some((path, rule)), hidden: false }));
     }
 
     /// SelectClipPath (`mode`: 1 and, 5 copy; the others cut out, which isn't read).

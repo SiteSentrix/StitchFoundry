@@ -40,3 +40,5 @@ crc32fast = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }
 wat = { workspace = true }
+# Zstandard streams for the Illustrator editing data fuzz tests.
+ruzstd = { workspace = true }

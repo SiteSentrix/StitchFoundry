@@ -155,6 +155,11 @@ pub struct DocState {
     pub print_tiling: bool,
     /// The rows open in the Layers panel (view state: not undoable; native files keep it).
     pub layers_open: OpenRows,
+    /// The file this document was read from, and what reading it left out (hidden text, art or
+    /// layers it could not read): writing the document over that file would lose those for good,
+    /// so an export or save to it asks first ([`cmd::fileio::check_not_lossy_overwrite`]). Not saved.
+    pub imported_from: Option<String>,
+    pub import_losses: Vec<String>,
     /// Transform Again after a perspective move or scale (Perspective Selection tool): the
     /// `perspective.transform` params it repeats. `None` once an ordinary transform follows.
     pub last_perspective: Option<Value>,
@@ -243,6 +248,8 @@ impl DocState {
             recovery: None,
             print_tiling: false,
             layers_open,
+            imported_from: None,
+            import_losses: vec![],
             last_perspective: None,
         }
     }
@@ -1016,6 +1023,8 @@ impl Session {
         st.format = old.format;
         st.save_options = old.save_options.clone();
         st.converted = old.converted;
+        st.imported_from = old.imported_from.clone();
+        st.import_losses = old.import_losses.clone();
         st.view = old.view.clone();
         st.layers_open = old.layers_open.clone();
         let old = std::mem::replace(&mut self.docs[index], st);
