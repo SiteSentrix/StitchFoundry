@@ -260,8 +260,9 @@ Floating panels: dragging a dock tab, a panel icon or a popped-out panel's title
 inside the window, and the strip right of the dock's tabs floats the whole Properties | Layers | Libraries group. A
 floating group moves by its title bar (or the strip right of its tabs); a tab dragged out of it floats on its own;
 dropped on another group's title bar or tabs it stacks with that group, and dropped on the dock (lit up while the
-pointer is over it) or closed with its × its panels go back to the tabbed group or the icon column. Dropped on another
-group's bottom or top edge (a line shows where), a group joins it in a set: the groups stack top to bottom, each
+pointer is over it) or closed with its × its panels go back to the tabbed group or the icon column. Dropped on the upper or
+lower half of another group, floating or docked (a line shows where), a group joins it in a set right above or below
+it: the groups stack top to bottom, each
 showing one of its panels, and move together by the top group's title bar, whose × docks them all; a group dragged by
 its tab strip (a lone panel's tab or the strip right of the tabs) leaves the set. A double-click on a tab collapses a
 group to its tabs, and another expands it. Dropped on the left edge of the icon column or of a dock column, a set

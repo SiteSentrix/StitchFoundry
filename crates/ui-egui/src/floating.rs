@@ -9,9 +9,10 @@
 //! × of a group puts its panels back in the dock too. The Tools panel floats the same way by its
 //! title bar ([`crate::toolbar`]) and docks again on the window's left edge.
 //!
-//! Dropped on the top or bottom edge of another group (a line shows where), a group joins it in a
-//! set: the groups stack top to bottom, each showing one of its panels, and move together by the
-//! top group's title bar, whose × docks them all. A group dragged by its tab strip (a lone panel's
+//! Dropped on the upper or lower half of another group (a line shows where), a group joins it in
+//! a set right above or below it: the groups stack top to bottom, each showing one of its panels,
+//! and move together by the top group's title bar, whose × docks them all; dropped on its tabs (lit
+//! up), its panels join that group as tabs. A group dragged by its tab strip (a lone panel's
 //! tab, or the strip right of the tabs) leaves its set and floats on its own. A double-click on a
 //! tab collapses a group to its tabs, and another expands it.
 //!
@@ -317,23 +318,35 @@ fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2
             }
         }
     }
-    // Another group's top or bottom edge puts the moved groups in a set with it; its title bar and
-    // tabs stack them as tabs.
+    // Another group (floating or docked): its tabs (and a set's title bar) stack the moved groups
+    // with it as tabs; the upper half of the group (and just above a set) puts them in its set
+    // right above it, the lower half (and just below it) right below it.
     for (i, g) in app.ui.floating_panels.iter().enumerate() {
         let Some((first, _)) = g.panels.first().and_then(|p| panel(p)).filter(|_| !moving.contains(&i)) else { continue };
         let Some(r) = ctx.data(|d| d.get_temp::<Rect>(group_rect_id(first))) else { continue };
         let line = |y: f32| Rect::from_x_y_ranges(r.x_range(), (y - 2.0)..=(y + 2.0));
-        if Rect::from_x_y_ranges(r.x_range(), (r.bottom() - EDGE)..=(r.bottom() + EDGE)).contains(at) {
-            return Some((Drop::Below(first), line(r.bottom())));
-        }
         let lead = leads(&app.ui, i);
-        if lead && Rect::from_x_y_ranges(r.x_range(), (r.top() - EDGE)..=r.top()).contains(at) {
-            return Some((Drop::Above(first), line(r.top())));
-        }
         let head = Rect::from_min_size(r.min, vec2(r.width(), if lead { 1.0 + TITLE + STRIP } else { GAP + STRIP }));
         if head.contains(at) {
             return Some((Drop::Stack(first), head));
         }
+        let above = if lead { EDGE } else { 0.0 };
+        if Rect::from_x_y_ranges(r.x_range(), (r.top() - above)..=(r.bottom() + EDGE)).contains(at) {
+            let mid = (head.bottom() + r.bottom()) / 2.0;
+            return Some(if at.y < mid { (Drop::Above(first), line(r.top())) } else { (Drop::Below(first), line(r.bottom())) });
+        }
+    }
+    // A dock column's room under its groups puts them at its bottom.
+    let columns = ctx.data(|d| d.get_temp::<Vec<Rect>>(columns_id())).unwrap_or_default();
+    for ((_, set), col) in docked_sets(&app.ui).into_iter().zip(columns) {
+        if !col.contains(at) || set.iter().any(|i| moving.contains(i)) {
+            continue;
+        }
+        let Some(last) = set.last().and_then(|&i| app.ui.floating_panels.get(i)).and_then(|g| g.panels.first()).and_then(|p| panel(p)) else {
+            continue;
+        };
+        let y = ctx.data(|d| d.get_temp::<Rect>(group_rect_id(last.0))).map_or(col.bottom(), |r| r.bottom());
+        return Some((Drop::Below(last.0), Rect::from_x_y_ranges(col.x_range(), (y - 2.0)..=(y + 2.0))));
     }
     let dock = zone(dock_rect_id()).filter(|_| app.ui.dock && app.ui.screen_mode < 3)?;
     // Panels that aren't tabs of the tabbed group (or all of them, with it collapsed) go back to
@@ -349,6 +362,13 @@ fn highlight(ctx: &egui::Context, zone: Rect) {
     let t = Tokens::get(ctx);
     let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Background, Id::new("floating-drop-zone")));
     painter.rect(zone.shrink(1.0), CornerRadius::same(2), t.accent.gamma_multiply(0.2), Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
+}
+
+/// Light up the tabs a drop stacks the moved panels with, over the floating and docked groups.
+fn tab_zone(ctx: &egui::Context, tabs: Rect) {
+    let t = Tokens::get(ctx);
+    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, Id::new("floating-drop-tabs")));
+    painter.rect(tabs.shrink(1.0), CornerRadius::same(2), t.accent.gamma_multiply(0.25), Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
 }
 
 /// Show where a drop puts the moved groups in a set: a line over the floating groups.
@@ -381,6 +401,7 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         match target {
             Some((Drop::Below(_) | Drop::Above(_) | Drop::Column(_), line)) => insertion_line(ctx, line),
+            Some((Drop::Stack(_), tabs)) => tab_zone(ctx, tabs),
             Some((_, zone)) => highlight(ctx, zone),
             None => {}
         }
@@ -757,7 +778,8 @@ fn draw_groups(
         if !g.collapsed {
             dock::panel_body(app, ui, g.active, width, tall);
         }
-        let bottom = ui.min_rect().bottom().max(strip.bottom());
+        // Where the next widget would go: in a dock column, the ui's own bounds reach its bottom.
+        let bottom = ui.cursor().top().max(strip.bottom());
         if let Some(&id) = g.ids.first() {
             let rect = Rect::from_min_max(pos2(strip.left(), top), pos2(strip.left() + width, bottom));
             ui.ctx().data_mut(|d| d.insert_temp(group_rect_id(id), rect));
@@ -1494,6 +1516,43 @@ mod tests {
         let edited = edited.sanitized();
         let d = docked_of(&edited.floating_panels);
         assert_eq!(d, [(vec!["layers"], Some(2)), (vec!["color"], Some(1)), (vec!["stroke"], Some(1))]);
+    }
+
+    #[test]
+    fn a_dock_column_takes_groups_anywhere_in_it_and_as_tabs() {
+        let mut h = Harness::new();
+        h.app.run("window.panel.dock", json!({"panel": "color", "column": true})).unwrap();
+        h.app.run("window.panel.float", json!({"panel": "swatches", "below": "color"})).unwrap();
+        h.app.run("window.panel.float", json!({"panel": "stroke", "below": "swatches"})).unwrap();
+        h.settle();
+        let order = |h: &Harness| h.app.ui.floating_panels.iter().map(|g| g.panels.join("+")).collect::<Vec<_>>();
+        // Dropped on the upper half of Swatches, Gradient goes in right above it.
+        h.app.run("window.panel.float", json!({"panel": "gradient", "x": 300, "y": 200})).unwrap();
+        h.settle();
+        let r = h.temp_rect(group_rect_id("swatches"));
+        let tabs_bottom = r.top() + GAP + STRIP;
+        let upper = pos2(r.center().x, tabs_bottom + (r.bottom() - tabs_bottom) / 4.0);
+        h.hold(h.title("gradient"), upper);
+        assert_eq!(drop_target(&h.app, &h.ctx, Moving::Panel("gradient"), upper).map(|t| t.0), Some(Drop::Above("swatches")));
+        h.release(upper);
+        assert_eq!(order(&h), ["color", "gradient", "swatches", "stroke"]);
+        assert!(h.app.ui.floating_panels.iter().all(|g| g.docked == Some(1)), "all in the column");
+        // Dropped on Stroke's tabs, Transparency joins Stroke's group as a tab.
+        h.app.run("window.panel.float", json!({"panel": "transparency", "x": 300, "y": 200})).unwrap();
+        h.settle();
+        let r = h.temp_rect(group_rect_id("stroke"));
+        let tabs = pos2(r.left() + 120.0, r.top() + GAP + STRIP / 2.0);
+        h.hold(h.title("transparency"), tabs);
+        assert_eq!(drop_target(&h.app, &h.ctx, Moving::Panel("transparency"), tabs).map(|t| t.0), Some(Drop::Stack("stroke")));
+        h.release(tabs);
+        assert_eq!(order(&h), ["color", "gradient", "swatches", "stroke+transparency"]);
+        // Dropped low in the column, Align goes at its bottom.
+        h.app.run("window.panel.float", json!({"panel": "align", "x": 300, "y": 200})).unwrap();
+        h.settle();
+        let col = columns(&h)[0];
+        h.drag(h.title("align"), pos2(col.center().x, col.bottom() - 6.0));
+        assert_eq!(order(&h), ["color", "gradient", "swatches", "stroke+transparency", "align"]);
+        assert!(h.app.ui.floating_panels.iter().all(|g| g.docked == Some(1)));
     }
 
     fn floating_pos(app: &VectorcraftApp, id: &str) -> [f32; 2] {
