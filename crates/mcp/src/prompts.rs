@@ -294,9 +294,10 @@ with the {effect} effect.
 
 Method:
 1. open_file the image: it becomes a document of its own pixel size.
-2. imageTrace.make with the preset name, adjusting `params` — mode blackAndWhite, grayscale or
+2. imageTrace.make with the preset name, adjusting `params` — mode blackAndWhite, grayscale,
    color (palette limited, fullTone for photos, automatic, or documentLibrary to trace with
-   the document's swatches or a swatch `library`), then threshold, colors (colorDetail for
+   the document's swatches or a swatch `library`) or logo (flat-colour logos only; the Flat Logo
+   preset; colours via logoColors), then threshold, colors (colorDetail for
    fullTone and automatic), paths, corners, noise, method abutting or overlapping,
    ignoreWhite, snapCurvesToLines; for line art, strokes: true (with strokeWidth, the widest
    line in pixels) traces lines as stroked centre lines instead of filled outlines. Run

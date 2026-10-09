@@ -750,12 +750,59 @@ fn image_trace_presets_query_and_errors() {
     let mut s = session();
     let r = s.execute("imageTrace.presets", &json!({})).unwrap();
     let names: Vec<&str> = r["presets"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
-    assert_eq!(names.len(), 12);
-    assert!(names.contains(&"Technical Drawing") && names.contains(&"Shades of Gray"));
+    assert_eq!(names.len(), 13);
+    assert!(names.contains(&"Technical Drawing") && names.contains(&"Shades of Gray") && names.contains(&"Flat Logo"));
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
     assert!(s.execute("imageTrace.make", &json!({"id": a.0})).is_err(), "not an image");
     assert!(find_command("imageTrace.make").unwrap().menu == ["Object", "Image Trace"]);
     assert!(find_command("livePaint.make").unwrap().menu == ["Object", "Live Paint"]);
+}
+
+/// A soft-edged red disc (r = 30 px at (50.3, 49.6)) on transparency, placed at (50, 50) scaled ×2.
+fn soft_logo_doc(s: &mut Session) -> NodeId {
+    let r = vectorcraft_trace::Raster::from_fn(100, 100, |x, y| {
+        let d = (x as f64 + 0.5 - 50.3).hypot(y as f64 + 0.5 - 49.6);
+        let cover = (0.5 + (30.0 - d) * 0.7).clamp(0.0, 1.0);
+        [200, 40, 60, (cover * 255.0).round() as u8]
+    });
+    add_image(s, &r, Affine::translate((50.0, 50.0)) * Affine::scale(2.0))
+}
+
+#[test]
+fn image_trace_flat_logo_preset_makes_a_true_circle() {
+    let mut s = session();
+    soft_logo_doc(&mut s);
+    let r = s.execute("imageTrace.make", &json!({"preset": "Flat Logo"})).unwrap();
+    assert_eq!((r["paths"].as_u64(), r["colors"].as_u64()), (Some(1), Some(1)));
+    assert!(r["anchors"].as_u64().unwrap() <= 6, "a circle is four anchors: {r}");
+    let g = NodeId(r["id"].as_u64().unwrap());
+    let n = node(&s, g);
+    let t = n.trace.clone().expect("settings stored");
+    assert_eq!((t["preset"].as_str(), t["params"]["mode"].as_str()), (Some("Flat Logo"), Some("logo")));
+    let paths = traced_paths(&n);
+    let (p, rule) = outline(&paths[0]);
+    let want = std::f64::consts::PI * 60.0 * 60.0;
+    let got = vectorcraft_pathops::area(&p, rule);
+    assert!((got - want).abs() / want < 0.01, "area {got} vs {want}");
+    let bb = p.bounds().unwrap();
+    // The disc is at (50.3, 49.6) in a x2 image placed at (50, 50): centre (150.6, 149.2).
+    assert!((bb.center().x - 150.6).abs() < 0.3 && (bb.center().y - 149.2).abs() < 0.3, "{bb:?}");
+}
+
+#[test]
+fn image_trace_flat_logo_refuses_a_gradient_and_a_bad_palette() {
+    let mut s = session();
+    let grad = vectorcraft_trace::Raster::from_fn(64, 32, |x, y| [(x * 4) as u8, 255 - (x * 4) as u8, (y * 6) as u8, 255]);
+    add_image(&mut s, &grad, Affine::IDENTITY);
+    let e = s.execute("imageTrace.make", &json!({"preset": "Flat Logo"})).unwrap_err().to_string();
+    assert!(e.contains("flat-colour") && e.contains("Color mode"), "{e}");
+    let mut s = session();
+    soft_logo_doc(&mut s);
+    let e = s.execute("imageTrace.make", &json!({"preset": "Flat Logo", "params": {"logoColors": ["crimson"]}})).unwrap_err().to_string();
+    assert!(e.contains("#rrggbb"), "{e}");
+    // The named colours are used as given.
+    let r = s.execute("imageTrace.makeAndExpand", &json!({"preset": "Flat Logo", "params": {"logoColors": ["#c8283c"]}})).unwrap();
+    assert_eq!(r["colors"], 1);
 }
 
 #[test]
