@@ -18,10 +18,15 @@
 //! 5. **Curves**: the polygon is fitted with cubic Béziers (`vectorcraft_pathops::simplify_with`,
 //!    least squares with corner detection); optionally nearly-straight curves snap to lines.
 //!
+//! With **Create: Strokes**, the parts of a colour layer no wider than the stroke width are traced
+//! as stroked centre lines instead (see `centerline`); without Fills, wider parts become stroked
+//! outlines.
+//!
 //! Colour layers are traced either *abutting* (each colour's own area; shapes share edges) or
 //! *overlapping* (stacked: each layer also covers every layer above it, so no hairline gaps).
 #![forbid(unsafe_code)]
 
+mod centerline;
 mod contour;
 mod fit;
 mod mosaic;
@@ -152,6 +157,12 @@ pub struct TraceParams {
     pub ignore_white: bool,
     /// Replace nearly-straight curves with straight lines.
     pub snap_curves_to_lines: bool,
+    /// Create: trace areas as filled shapes.
+    pub fills: bool,
+    /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
+    pub strokes: bool,
+    /// Stroke: the widest feature (px) traced as a stroke.
+    pub stroke_width: f64,
 }
 
 impl Default for TraceParams {
@@ -167,6 +178,9 @@ impl Default for TraceParams {
             method: Method::Abutting,
             ignore_white: false,
             snap_curves_to_lines: false,
+            fills: true,
+            strokes: false,
+            stroke_width: 10.0,
         }
     }
 }
@@ -250,7 +264,8 @@ pub fn presets() -> Vec<(&'static str, TraceParams)> {
     PRESET_NAMES.iter().filter_map(|n| Some((*n, preset(n)?))).collect()
 }
 
-/// One traced shape: an outer contour plus its holes, filled with `color`.
+/// One traced shape: an outer contour plus its holes, filled with `color`, or (with `stroke`)
+/// lines stroked with it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TracedPath {
     /// In pixel coordinates (x right, y down; the image spans `0..width × 0..height`).
@@ -258,6 +273,9 @@ pub struct TracedPath {
     pub color: [u8; 3],
     /// Filled pixel count of the component the path came from.
     pub pixels: usize,
+    /// Create Strokes: the path is stroked this wide (px), not filled (centre lines, or the
+    /// outlines of wider areas without Fills).
+    pub stroke: Option<f64>,
 }
 
 /// The traced result, bottom-most path first.
@@ -357,15 +375,37 @@ impl Layers<'_> {
         let (params, opts) = (self.params, &self.opts);
         let color = *self.q.palette.get(ci)?;
         let overlapping = params.method == Method::Overlapping;
+        let (w, h) = (self.w, self.h);
+        // Create Strokes: this colour's lines, left out of its areas.
+        let (thin, lines) = if params.strokes {
+            centerline::lines(&self.q.labels, u16::try_from(ci).unwrap_or(TRANSPARENT), w, h, params.stroke_width, opts)
+        } else {
+            (vec![], vec![])
+        };
         let mask: Vec<bool> = self
             .q
             .labels
             .iter()
-            .map(|&l| l != TRANSPARENT && if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) } else { l as usize == ci })
+            .enumerate()
+            .map(|(i, &l)| {
+                l != TRANSPARENT
+                    && !thin.get(i).copied().unwrap_or(false)
+                    && if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) } else { l as usize == ci }
+            })
             .collect();
+        // Without Fills, areas are outlined with a 1 px stroke.
+        let area_stroke = (params.strokes && !params.fills).then_some(1.0);
         let min_hole = params.noise.max(1) as i64;
         let mut paths = vec![];
-        for comp in trace_mask(&mask, self.w, self.h) {
+        let mut add = |path: PathData, pixels: usize, stroke: Option<f64>| {
+            let n = path.anchor_count();
+            if self.anchors.fetch_add(n, Ordering::Relaxed).saturating_add(n) > self.max_anchors {
+                return false;
+            }
+            paths.push(TracedPath { path, color, pixels, stroke });
+            true
+        };
+        for comp in trace_mask(&mask, w, h) {
             let Some(outer) = fit::fit_loop(&comp.outer, opts) else { continue };
             let mut subs = vec![outer];
             for hole in &comp.holes {
@@ -374,12 +414,14 @@ impl Layers<'_> {
                 }
                 subs.extend(fit::fit_loop(hole, opts));
             }
-            let path = PathData::new(subs);
-            let n = path.anchor_count();
-            if self.anchors.fetch_add(n, Ordering::Relaxed).saturating_add(n) > self.max_anchors {
+            if !add(PathData::new(subs), comp.pixels, area_stroke) {
                 return None;
             }
-            paths.push(TracedPath { path, color, pixels: comp.pixels });
+        }
+        for line in lines {
+            if !add(line.path, line.pixels, Some(line.width)) {
+                return None;
+            }
         }
         Some(paths)
     }

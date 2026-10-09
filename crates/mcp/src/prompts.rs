@@ -296,7 +296,8 @@ Method:
 1. open_file the image: it becomes a document of its own pixel size.
 2. imageTrace.make with the preset name, adjusting `params` — mode blackAndWhite, grayscale or
    color, then threshold, colors, paths, corners, noise, method abutting or overlapping,
-   ignoreWhite, snapCurvesToLines. Run imageTrace.presets to see every preset with its numbers.
+   ignoreWhite, snapCurvesToLines; for line art, strokes: true (with strokeWidth, the widest
+   line in pixels) traces lines as stroked centre lines instead of filled outlines. Run imageTrace.presets to see every preset with its numbers.
    Lower paths and higher corners give the clean, logo-like result; high fidelity needs paths
    near 90.
 3. apply_effect {effect} on the traced shapes. Call apply_effect with no `effect` for the

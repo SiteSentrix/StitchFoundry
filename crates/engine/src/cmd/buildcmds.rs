@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::appearance::{AppearanceItem, FillLayer, StrokeLayer};
+use vectorcraft_doc::appearance::{AppearanceItem, FillLayer, LineCap, LineJoin, StrokeLayer};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{FillRule, PathData, Point, Rect, SubPath};
 use vectorcraft_pathops as po;
@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\", threshold: 0-255, colors: 2-256, paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite, snapCurvesToLines}} → {id, paths, anchors, colors}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\", threshold: 0-255, colors: 2-256, paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite, snapCurvesToLines, fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10)}} → {id, paths, anchors, colors}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -648,7 +648,14 @@ fn trace_params(p: &Value) -> Result<tr::TraceParams> {
     for (k, val) in src {
         o.insert(k.clone(), val.clone());
     }
-    serde_json::from_value(v).map_err(|e| bad("imageTrace.make", e.to_string()))
+    let params: tr::TraceParams = serde_json::from_value(v).map_err(|e| bad("imageTrace.make", e.to_string()))?;
+    if !params.fills && !params.strokes {
+        return Err(bad("imageTrace.make", "Create needs fills, strokes or both"));
+    }
+    if !(params.stroke_width.is_finite() && params.stroke_width > 0.0) {
+        return Err(bad("imageTrace.make", "strokeWidth must be a positive number of pixels"));
+    }
+    Ok(params)
 }
 
 /// The most anchor points an Image Trace may make: a photo traced at high fidelity can make
@@ -692,6 +699,8 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     let sx = img.width.max(1) as f64 / raster.width.max(1) as f64;
     let sy = img.height.max(1) as f64 / raster.height.max(1) as f64;
     let xf = img.xf * vectorcraft_geom::Affine::scale_non_uniform(sx, sy);
+    // Document units per raster pixel (stroke widths).
+    let unit = xf.determinant().abs().sqrt();
     let (npaths, anchors, colors) = (res.paths.len(), res.anchor_count(), res.palette.len());
     let label = if expand { "Image Trace (Make and Expand)" } else { "Image Trace" };
     let id = s.edit(label, |d, sel| {
@@ -714,7 +723,19 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
         for tp in res.paths {
             let path = tp.path.transformed(xf);
             let mut n = shape_node(d, path, None);
-            n.appearance = fill_only(Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])));
+            let paint = Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2]));
+            n.appearance = match tp.stroke {
+                // Traced lines: round ends and corners, as drawn lines have.
+                Some(width) => Appearance {
+                    items: vec![AppearanceItem::Stroke(StrokeLayer {
+                        cap: LineCap::Round,
+                        join: LineJoin::Round,
+                        ..StrokeLayer::new(paint, width * unit)
+                    })],
+                    ..Default::default()
+                },
+                None => fill_only(paint),
+            };
             children.push(Arc::new(n));
         }
         let gid = d.alloc_id();
