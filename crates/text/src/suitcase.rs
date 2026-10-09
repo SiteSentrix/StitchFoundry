@@ -35,6 +35,7 @@ fn collect<'a>(fork: &'a [u8], fonts: &mut Vec<&'a [u8]>) -> Option<()> {
     let types = be16(map, 24)?;
     // Counts are stored less one, so a list of none is 0xFFFF.
     let n_types = (be16(map, types)? + 1) & 0xFFFF;
+    let mut total = 0usize;
     for t in 0..n_types.min(MAX_TYPES) {
         let at = types + 2 + t * 8;
         if map.get(at..at + 4)? != b"sfnt" {
@@ -44,11 +45,13 @@ fn collect<'a>(fork: &'a [u8], fonts: &mut Vec<&'a [u8]>) -> Option<()> {
         // Each reference: its data's offset is the low three bytes of the word 4 bytes in.
         let refs = types + be16(map, at + 6)?;
         for r in 0..count {
-            if fonts.len() >= MAX_FONTS {
-                return Some(());
-            }
             let start = data.checked_add(be32(map, refs + r * 12 + 4)? & 0x00FF_FFFF)?;
             let len = be32(fork, start)?;
+            // References can share data: cap the total too, as every font is copied out.
+            total = total.checked_add(len)?;
+            if fonts.len() >= MAX_FONTS || total as u64 > MAX_FORK {
+                return Some(());
+            }
             fonts.push(fork.get(start + 4..start.checked_add(4)?.checked_add(len)?)?);
         }
     }
@@ -65,7 +68,8 @@ pub(crate) fn read_fonts(path: &Path) -> Vec<Vec<u8>> {
 /// Whether the file at `path` is a suitcase font: nothing in its data fork and something in its
 /// resource fork.
 pub(crate) fn is_suitcase(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == 0) && fork_len(path) > 0
+    // Off macOS no file has a fork: don't look at every font file twice.
+    cfg!(target_os = "macos") && std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == 0) && fork_len(path) > 0
 }
 
 #[cfg(target_os = "macos")]

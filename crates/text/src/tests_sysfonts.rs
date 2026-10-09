@@ -274,6 +274,8 @@ fn a_resource_fork_gives_up_its_font_files() {
         let _ = crate::suitcase::sfnt_resources(&fork[..cut]);
     }
     assert!(crate::suitcase::sfnt_resources(&[0xFF; 600]).is_empty());
+    // A fork can't make the scan read more than so many fonts.
+    assert_eq!(crate::suitcase::sfnt_resources(&crate::suitcase::fork_of(&vec![b"font".to_vec(); 300])).len(), 256);
 }
 
 /// Office's fonts: a file with nothing in it but a resource fork holding the fonts, named
