@@ -407,3 +407,44 @@ fn a_vectorcraft_document_places_linked_and_edit_original_opens_it() {
     let d = app.ui.dialog.as_ref().unwrap();
     assert!(crate::dialogs::place::link_tip(d).contains("VectorCraft documents"));
 }
+
+/// Tool key `key` as the Control bar's Apply (Enter) and Cancel (Escape) send it.
+fn tool_key(app: &mut VectorcraftApp, key: vectorcraft_tools::ToolKey) {
+    let view = app.view_info();
+    let r = app.session.tool_key(key, vectorcraft_tools::Mods::default(), view);
+    crate::canvas::apply_requests(app, r);
+}
+
+/// #734: Crop Image shows a crop box on the image instead of cropping to the artboard at once (an
+/// image inside the artboard had nothing to cut); Apply crops to the box in one undo step, Cancel
+/// leaves the image whole, and both go back to the Selection tool.
+#[test]
+fn crop_image_shows_a_box_that_apply_crops_to() {
+    use vectorcraft_tools::ToolKey;
+    let mut app = app();
+    place_picked(&mut app, &temp_file("crop.png", &png(100, 50, 72.0)));
+    app.ui.dialog.as_mut().unwrap().fields.insert("link".into(), json!(false));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let whole = selected_image(&app).geometric_bounds().unwrap();
+    assert!(crate::menus::enabled(&app, "ui.cropImage"));
+    app.run("ui.cropImage", json!({})).unwrap();
+    assert_eq!(app.session.tool_id(), "cropImage");
+    tool_key(&mut app, ToolKey::Escape);
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(selected_image(&app).geometric_bounds(), Some(whole), "Cancel leaves it whole");
+    // The box set to the image's left half, as the Control bar's fields set it, then Apply.
+    app.run("ui.cropImage", json!({})).unwrap();
+    app.run("tool.setOption", json!({"key": "rect", "value": [whole.x0, whole.y0, whole.width() / 2.0, whole.height()]})).unwrap();
+    tool_key(&mut app, ToolKey::Enter);
+    assert_eq!(app.session.tool_id(), "selection");
+    let b = selected_image(&app).geometric_bounds().unwrap();
+    assert!(
+        (b.x0 - whole.x0).abs() < 1e-6 && (b.width() - whole.width() / 2.0).abs() < 1e-6 && (b.height() - whole.height()).abs() < 1e-6,
+        "{b:?} of {whole:?}"
+    );
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(selected_image(&app).geometric_bounds(), Some(whole), "one undo step");
+    // Without an image selected there's nothing to crop.
+    app.run("select.none", json!({})).unwrap();
+    assert!(!crate::menus::enabled(&app, "ui.cropImage") && app.run("ui.cropImage", json!({})).is_err());
+}

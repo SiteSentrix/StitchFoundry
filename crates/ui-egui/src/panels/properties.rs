@@ -119,7 +119,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if is_image {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
-        actions.push((tl!("Crop Image"), "object.cropImage"));
+        actions.push((tl!("Crop Image"), "ui.cropImage"));
         actions.push((tl!("Mask"), "object.maskImage"));
     }
     actions.push((tl!("Offset Path"), "object.path.offsetPath"));
