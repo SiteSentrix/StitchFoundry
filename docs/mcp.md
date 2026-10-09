@@ -809,6 +809,31 @@ with); without `path` it returns `{data}`, and `user: true` saves into the user 
 (category `user`, User Defined). `graphicStyle.loadLibrary {path? | data? | dataBase64?, name?}` loads a `.vcstyles`
 file, or another document's graphic styles, as a library to add from.
 
+## Libraries
+
+The Libraries panel's libraries hold graphics, colours and character and paragraph styles that any document can use.
+They are kept on this machine: each is a `.vclibrary` file (JSON) in the `Libraries` folder next to the preferences
+(none in the web app and headless sessions, where they last for the session). `library.list` lists them (`id`, `name`,
+the count of each kind, `current`, `folder`); `library.get {library?}` returns one's items (graphics with `id`, `name`,
+size and a PNG `thumbnail` in base64; colours with `name`, `hex` and `color`; styles with `name` and `attrs`).
+`library.create {name?}`, `library.rename {library?, name}`, `library.delete {library?}` and
+`library.setCurrent {library}` manage them; `library` is an id or a name, and without it the current library (the one
+the panel shows) is meant.
+
+`library.add {library?, kind, ids?, name?, color?}` adds from the selection: `graphic` (a copy of the objects with the
+images, symbols, patterns, swatches, styles and brushes they use, as Copy takes them), `fillColor` / `strokeColor` (the
+first selected object's solid colour, else the default one, or `color`), `charStyle` / `paraStyle` (the selected
+text's attributes). An item the library already has is reported as `existing`. `library.use {library?, kind, item,
+center?, to?}` uses one: a graphic is placed centred on `center` (pasted with its resources; a swatch name the document
+gives another colour merges into the document's), a colour paints the selection's fill or stroke, and a style is added
+to the document (numbered when its name is taken by other attributes) and applied to the selected text, each as one
+undo step. `library.removeItem {library?, kind, item}` removes one.
+
+```json
+{"name":"run_command","arguments":{"command":"library.add","params":{"kind":"graphic","name":"Logo"}}}
+{"name":"run_command","arguments":{"command":"library.use","params":{"kind":"graphic","item":"Logo","center":[300,200]}}}
+```
+
 ## Strokes on type
 
 `stroke.set` without an `item` gives type its characters' stroke: weight, cap, join, miter limit and the dash

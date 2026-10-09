@@ -2645,6 +2645,24 @@
 	Swatch Tiles	Carreaux de nuances
 	Swatches	Nuancier
 	Switch workspace	Changer d’espace de travail
+	Add Content	Ajouter du contenu
+	Click to apply to the selected type	Cliquez pour l’appliquer au texte sélectionné
+	Create New Library	Créer une bibliothèque
+	Create New Library…	Créer une bibliothèque…
+	Rename Library…	Renommer la bibliothèque…
+	Delete the library “{name}”?	Supprimer la bibliothèque « {name} » ?
+	Drag art or swatches here, or use + to add the selection's colors and text styles.	Faites glisser ici des illustrations ou des nuances, ou utilisez + pour ajouter les couleurs et les styles de texte de la sélection.
+	Its graphics, colors and text styles are deleted from this machine.	Ses graphismes, couleurs et styles de texte sont supprimés de cet ordinateur.
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	Conservez ici des graphismes, des couleurs et des styles de texte pour les utiliser dans n’importe quel document. Les bibliothèques sont stockées sur cet ordinateur, sans compte.
+	This library is empty	Cette bibliothèque est vide
+	Add to Library	Ajouter à la bibliothèque
+	Delete Library	Supprimer la bibliothèque
+	Delete Library Item	Supprimer l’élément de la bibliothèque
+	Library	Bibliothèque
+	Rename Library	Renommer la bibliothèque
+	Show Library	Afficher la bibliothèque
+	Use Library Item	Utiliser l’élément de la bibliothèque
+	Graphic	Graphisme
 	Show all open documents	Afficher tous les documents ouverts
 	Symbol Instance	Occurrence de symbole
 	Symbol Libraries	Bibliothèques de symboles
@@ -3127,6 +3145,7 @@ axis	Both	Les deux
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	no library `{id}`	aucune bibliothèque `{id}`
 @msg	select some type first	sélectionnez d’abord du texte
 @msg	{_1} has no {_2} style	{_1} n’a pas de style {_2}
 @msg	a layer couldn't be read	un calque n’a pas pu être lu

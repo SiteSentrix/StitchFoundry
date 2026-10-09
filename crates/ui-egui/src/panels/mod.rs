@@ -24,6 +24,7 @@ pub mod history;
 pub mod image_trace;
 pub mod info;
 pub mod layers;
+pub mod libraries;
 pub mod library_panel;
 pub mod links;
 pub mod magic_wand;
@@ -169,6 +170,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         "paraStyles" => text_styles::menu(app, ui, text_styles::Kind::Para),
         "magicWand" => magic_wand::menu(app, ui),
         "tabs" => tabs::menu(app, ui),
+        "libraries" => libraries::menu(app, ui),
         flattener_preview::ID => flattener_preview::menu(app, ui),
         "attributes" => attributes::menu(app, ui),
         "colorThemes" => color_themes::menu(app, ui),
@@ -208,18 +210,8 @@ pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, rect: Rect) {
     });
 }
 
-pub fn libraries(_app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    ui.add_space(20.0);
-    ui.vertical_centered(|ui| {
-        icons::icon(ui, "library", 40.0, t.text_dim);
-        ui.add_space(8.0);
-        ui.label(egui::RichText::new(tl!("Local Libraries")).size(14.0).color(t.text));
-        dim_label(
-            ui,
-            "Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.",
-        );
-    });
+pub fn libraries(app: &mut VectorcraftApp, ui: &mut Ui) {
+    libraries::show(app, ui);
 }
 
 // ---------- shared helpers ----------

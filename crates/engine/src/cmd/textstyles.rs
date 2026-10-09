@@ -241,6 +241,17 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<Stri
     }))
 }
 
+/// The selected text's character (`para`: paragraph) attributes, every one of them: what a
+/// library keeps of a text style. `None` without text selected.
+pub(crate) fn selected_style_attrs(s: &Session, para: bool) -> Result<Option<Map<String, Value>>> {
+    selection_attrs(s, &json!({}), if para { Kind::Para } else { Kind::Char })
+}
+
+/// Whether the document has a character (`para`: paragraph) style `name`, and its attributes.
+pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<String, Value>> {
+    if para { Kind::Para } else { Kind::Char }.attrs(d, name)
+}
+
 fn name_param<'a>(p: &'a Value, kind: Kind, verb: &str) -> Result<&'a str> {
     str_param(p, "name").ok_or_else(|| bad(&kind.cmd(verb), "missing `name`"))
 }
