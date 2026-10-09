@@ -1723,6 +1723,7 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
             app.run("file.open", json!({})).ok();
         }
     });
+    recent(app, ui);
     ui.add_space(28.0);
     ui.label(egui::RichText::new(tl!("Quickly start a new file")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
@@ -1741,6 +1742,35 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
     crate::community::links(app, ui);
+}
+
+/// The Home screen's Recent Files (#663): the first of File › Open Recent Files, each its name and
+/// folder; a click opens it. Nothing when there are none.
+fn recent(app: &mut VectorcraftApp, ui: &mut Ui) {
+    const SHOWN: usize = 6;
+    let files: Vec<String> = crate::io::recent_files(app).iter().take(SHOWN).cloned().collect();
+    if files.is_empty() {
+        return;
+    }
+    let t = Tokens::get(ui.ctx());
+    ui.add_space(28.0);
+    ui.label(egui::RichText::new(tl!("Recent Files")).font(theme::semibold(14.0)).color(t.text));
+    ui.add_space(8.0);
+    for path in files {
+        let p = std::path::Path::new(&path);
+        let name = p.file_name().map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
+        let folder = p.parent().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+        ui.horizontal(|ui| {
+            crate::icons::icon(ui, "history", 16.0, t.icon);
+            let r = ui.add(egui::Button::new(egui::RichText::new(&name).color(t.accent).size(13.0)).frame(false)).on_hover_text(&path);
+            ui.add(egui::Label::new(egui::RichText::new(&folder).size(12.0).color(t.text_dim)).truncate());
+            if r.clicked()
+                && let Err(e) = crate::io::open_path(app, &path)
+            {
+                app.status(e);
+            }
+        });
+    }
 }
 
 fn kurbo_flatten(p: &BezPath, tol: f64, f: &mut impl FnMut(PathEl)) {
