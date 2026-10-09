@@ -247,10 +247,13 @@ fn artboard_tool_moves_with_art_creates_and_deletes() {
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 2);
     assert_eq!(s.tool_options()["active"], 1);
     assert_eq!(s.doc().unwrap().doc.artboards[1].rect, Rect::new(1000.0, 0.0, 1200.0, 100.0));
-    // Delete it.
+    // Delete it: the tool takes the key ahead of the Clear shortcut (the UI only hands Delete to a
+    // tool that claims it).
+    assert!(s.tool_claims_key(ToolKey::Delete, ViewInfo::default()));
     s.tool_key(ToolKey::Delete, Mods::default(), ViewInfo::default()).unwrap();
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 1);
-    // The last artboard can't be deleted.
+    // The last artboard can't be deleted, so Delete stays the shortcut's.
+    assert!(!s.tool_claims_key(ToolKey::Delete, ViewInfo::default()));
     s.tool_key(ToolKey::Delete, Mods::default(), ViewInfo::default()).unwrap();
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 1);
 }
