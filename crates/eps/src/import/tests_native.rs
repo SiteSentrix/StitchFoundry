@@ -454,3 +454,21 @@ fn a_commented_copy_of_a_story_that_has_a_plain_text_object_is_not_another_objec
     let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
     assert_eq!(texts, ["One", "Two"], "{:?}", r.warnings);
 }
+
+#[test]
+fn a_shown_text_object_on_the_page_that_the_page_doesnt_draw_is_left_out() {
+    // Story 1 is at (58.5, 61.5) on the 100 × 100 page, where the page paints no type: the file
+    // keeps it but the app that wrote it doesn't draw it (type turned to outlines leaves one).
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Ghost\r", 0, (8200.0, 8200.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    assert_eq!(all, ["Hi there"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("doesn't draw")), "{:?}", r.warnings);
+}

@@ -656,6 +656,7 @@ fn fill_slots(doc: &mut Document, nodes: &mut Vec<Arc<Node>>, content: &mut std:
                 Some(Content::Made(mut text)) => {
                     text.id = doc.alloc_id();
                     text.visible = visible;
+                    text.name = Some(MADE.into());
                     Some(*text)
                 }
                 Some(Content::Merged) => {
@@ -1044,6 +1045,79 @@ fn build(data: &[u8], visible: &Document, base: Document, page: Page) -> Result<
     Ok(Built { out, layers })
 }
 
+/// Marks (in a node's name, until [`prune_unseen`] has looked) the text objects made from the file's
+/// text document.
+const MADE: &str = "\u{1}made";
+/// How many such objects are weighed against the page (each takes a render of the page's size).
+const MAX_WEIGHED: usize = 12;
+/// The text objects the file keeps that the page doesn't draw.
+const UNSEEN_TEXT: &str = "text objects that the file keeps but its page doesn't draw (what is left of type turned to outlines) are left out";
+/// How much more of the page (0 to 1) the layers may differ without a text object and still look no worse.
+const UNSEEN_MARGIN: f64 = 5e-5;
+
+/// Clear the marks in `nodes` and say which marked objects show, by id.
+fn unmark(nodes: &mut [Arc<Node>], shown: bool, found: &mut Vec<(NodeId, Option<Rect>)>) {
+    for n in nodes {
+        let shown = shown && n.visible;
+        if n.name.as_deref() == Some(MADE) {
+            if shown {
+                found.push((n.id, n.visual_bounds()));
+            }
+            Arc::make_mut(n).name = None;
+        } else if !matches!(n.kind, NodeKind::Compound { .. })
+            && let Some(c) = Arc::make_mut(n).children_mut()
+        {
+            unmark(c, shown, found);
+        }
+    }
+}
+
+/// Take object `id` out of `nodes` (`hide`: leave it, hidden); whether it was there.
+fn take_out(nodes: &mut Vec<Arc<Node>>, id: NodeId, hide: bool) -> bool {
+    if let Some(i) = nodes.iter().position(|n| n.id == id) {
+        if hide {
+            if let Some(n) = nodes.get_mut(i) {
+                Arc::make_mut(n).visible = false;
+            }
+        } else {
+            nodes.remove(i);
+        }
+        return true;
+    }
+    nodes.iter_mut().any(|n| !matches!(n.kind, NodeKind::Compound { .. }) && Arc::make_mut(n).children_mut().is_some_and(|c| take_out(c, id, hide)))
+}
+
+/// The text objects made from the file's text document that show on the page's area, where the page
+/// has no type to match them, and that the layers look no worse without, are not drawn by the app
+/// that wrote the file (which paints every shown text object; it keeps the type of what was turned
+/// to outlines): they are taken out. How many.
+fn prune_unseen(page: &Document, doc: &mut Document) -> usize {
+    let mut found = vec![];
+    unmark(&mut doc.layers, true, &mut found);
+    let Some(rect) = page.artboards.first().map(|a| a.rect) else { return 0 };
+    if found.is_empty() || found.len() > MAX_WEIGHED {
+        return 0;
+    }
+    let mut with = difference(page, doc, rect);
+    let mut removed = 0;
+    for (id, bounds) in found {
+        if !bounds.is_some_and(|b| !b.intersect(rect).is_zero_area()) {
+            continue;
+        }
+        let mut without = doc.clone();
+        if !take_out(&mut without.layers, id, true) {
+            continue;
+        }
+        let d = difference(page, &without, rect);
+        if d - with <= UNSEEN_MARGIN {
+            take_out(&mut doc.layers, id, false);
+            with = d;
+            removed += 1;
+        }
+    }
+    removed
+}
+
 /// Do the layers' art and the page's own look alike? An error says they don't; `Ok` has the note
 /// to give when they differ a little.
 fn compare(page: &Document, layered: &Document) -> Result<Option<String>, String> {
@@ -1070,6 +1144,10 @@ pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
     let base = Document::new(page.width(), page.height());
     let result = build(&data, &visible.document, base, Page::Art).and_then(|built| {
         let mut done = finish_with(built.out, built.layers);
+        let unseen = prune_unseen(&visible.document, &mut done.document);
+        if unseen > 0 {
+            done.warnings.push(format!("{unseen} {UNSEEN_TEXT}"));
+        }
         let note = compare(&visible.document, &done.document)?;
         done.warnings.extend(note);
         Ok(done)
@@ -1100,7 +1178,11 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>) -> (
     let Some(data) = decode_ai(private) else { return (visible, warnings) };
     let result = build(&data, &visible, visible.clone(), Page::Artboard).and_then(|built| {
         let mut notes = built.out.warnings.clone();
-        let done = finish_layers(built.out, built.layers);
+        let mut done = finish_layers(built.out, built.layers);
+        let unseen = prune_unseen(&visible, &mut done);
+        if unseen > 0 {
+            notes.push(format!("{unseen} {UNSEEN_TEXT}"));
+        }
         notes.extend(compare(&visible, &done)?);
         Ok((done, notes))
     });
