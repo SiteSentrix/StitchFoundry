@@ -42,17 +42,12 @@ complete font-file validation.
 |---|---|---|---|
 | [samuel-etver/vector-art](https://github.com/samuel-etver/vector-art/tree/255f8add3c8f0740196e22bd59502b811b532f0b/simple) | Four `.af` files already pinned by this project | Mexican character illustrations and playing cards; real vector art | CC0. Retain the current-version vector examples; no paired PSD identified. |
 | [SethRobinson/Patchy fixture data](https://github.com/SethRobinson/Patchy/tree/de84eab550758b30fa062e479f5778cce7693b73/test-fixtures/af) | 29 `.af` blobs at commit `de84eab550758b30fa062e479f5778cce7693b73`; author states Affinity 3.2.3, with one separately identified derived file | Artboards, text, placed images, groups, vectors, masks, shapes, transforms, raster depth, color spaces and unsupported-feature examples | MIT, copyright Seth A. Robinson, 2026; original fixture content per notice. Fetch pinned data only, SHA-256 verify, preserve attribution. No paired PSD identified in this directory. |
-| [AoStock manuscript-line material](https://booth.pm/ja/items/8639126) | Publisher explicitly identifies the `.af` as Affinity Studio; build unverified | Original line/grid art; `Allfile.zip` advertises `.af`, SVG and PNG together | Explicit CC0. The archive download redirects to Pixiv sign-in, so it was not fetched or validated. Useful future small vector/export oracle, not a complex font/artboard example. |
-| [N.C. A&T poster template](https://www.ncat.edu/caes/agricultural-communications/poster-guidelines-and-printing.php) | University explicitly marks its native template Affinity 3.x only | Large poster, layout and university branding; PowerPoint and Canva alternatives | No open redistribution license located. Do not add to the corpus. Public download is [caes-36x48-poster-affinity.af](https://www.ncat.edu/caes/agricultural-communications/files/caes-36x48-poster-affinity.af), but authoring version and contents were not parsed: an ordinary private download was blocked by this cloud’s restricted network policy. The page permits poster-template use, without granting corpus redistribution. |
-| [ALDC summer campaigning templates](https://www.aldc.org/latest-templates-summer-of-campaigning/) | Page says most current templates use Affinity 3; individual files unverified | A3/A4 leaflets, surveys and mailings, with paired PDF links and a handwriting font requirement | No permissive redistribution grant located; exclude. A useful example of why a downloadable template and a free font are not sufficient provenance. |
-| [JREAMI Instagram interface templates](https://shop.jreamidesign.com/products/instagram-interface-templates-6-canva-affinity) | Product explicitly advertises `.af` documents; build unverified | Six artboards with embedded images; Canva equivalents | Commercial product; no corpus redistribution grant located. Not purchased or downloaded. |
-| [Beauty-clinic flyer templates](https://www.etsy.com/listing/4435225062/aesthetic-beauty-clinic-flyer-template) | Seller advertises six `.af` files | Six matching PSD files, A4/US Letter variants, editable typography | Commercial product; no corpus redistribution grant located. The pairing is advertised, not inspected. Not purchased or downloaded. |
-| [Wrapping-paper mockup](https://creativemarket.com/SDMockup/292120862-Wrapping-Paper-with-Sticker-Mockup) | Seller advertises native `.af` | PSD and `.af` together; large photographic mockup | Commercial Creative Market asset; no corpus redistribution grant located. Not purchased or downloaded. |
-| [OpenGameArt VR controller diagrams](https://opengameart.org/content/vr-controller-diagrams) | Published 2021-11-22, before the unified format; the page's “.AF” wording does not establish Affinity 3 | Author advertises Affinity vector sources, PSD and PNG for controller diagrams | CC0 by psychicparrot. Exclude from the current-version corpus. ZIP retrieval returned HTTP 403 in this environment; filenames and PSD generator were not inspected. |
 
-Searches combined `.af`, Affinity 3, artboards, sample files, templates, CC0,
-Creative Commons and PSD on public web/GitHub listings. This is a documented
-sample of discovered sources, not a claim that every public file was found.
+Other public `.af` sources found while searching (commercial templates and mockups, and
+pages offering files without a redistribution licence) were left out: a downloadable
+template, or a free font it uses, isn't permission to redistribute it. Files published
+before the unified format aren't current-version evidence. This is a sample of
+discovered sources, not a claim that every public file was found.
 No openly redistributable, inspected Affinity 3 `.af`/PSD pair covering complex
 typography and artboards was located in this audit.
 
@@ -154,9 +149,6 @@ in the Affinity 3 artboard probe match exactly; the embedded JPEG probe has a me
 difference of 0.50/255. Per-file ceilings preserve measured regression limits;
 unsupported text layout and effects are tested structurally and through warnings.
 
-The cloud runs Linux with no Affinity installation, exposed Affinity MCP, graphical
-display or GPU/VM device. [Current Affinity supports Windows and macOS](https://www.affinity.studio/download);
-ordinary prerequisite installation also failed because this sandbox has no root
-access or sudo. A supported desktop with ordinary Canva activation is needed for
-the independent Affinity reopen procedure above. No Affinity reference reopen or
-`.af` export is claimed by this change.
+No check reopens VectorCraft's output in Affinity yet, and no `.af` export is
+claimed by this change: the independent reopen procedure above needs Affinity on a
+supported desktop.

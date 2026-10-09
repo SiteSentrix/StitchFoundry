@@ -114,8 +114,8 @@ The reader also has an independent copy in PhotoCraft's `photocraft-affinity`.
   ```
 
 The source audit, licensing decisions and remaining complex-document/font cases are recorded in
-[affinity-validation.md](../../docs/affinity-validation.md). Affinity was unavailable in this cloud
-environment: reopening VectorCraft exports in Affinity remains an independent validation step.
+[affinity-validation.md](../../docs/affinity-validation.md). Reopening VectorCraft's exports in
+Affinity remains an independent validation step that hasn't been done.
 
 What has not been verified: files from Affinity builds or platforms outside the public set, files
 written by other applications, rotated or skewed images against Affinity's render, mask polarity
