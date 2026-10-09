@@ -364,6 +364,18 @@ fn app_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(png).unwrap_or_default()
 }
 
+/// Windows shows a window's big icon (`ICON_BIG`) in the taskbar and Alt+Tab; eframe sets only the
+/// small one (the title bar's), so the taskbar showed a generic icon. Set the big one too.
+#[cfg(windows)]
+fn set_taskbar_icon(w: &winit::window::Window) {
+    use winit::platform::windows::WindowExtWindows as _;
+    let icon = app_icon();
+    // An icon that can't be made leaves the generic one: nothing else depends on it.
+    if let Ok(i) = winit::window::Icon::from_rgba(icon.rgba, icon.width, icon.height) {
+        w.set_taskbar_icon(Some(i));
+    }
+}
+
 /// "name (backend, kind)" of the adapter the window renders with, for Help › About and bug reports.
 #[cfg(feature = "wgpu")]
 fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
@@ -469,6 +481,8 @@ fn main() -> std::process::ExitCode {
                 // Fit the window to its monitor, or put it back where it was (still hidden).
                 if let Some(w) = cc.winit_window() {
                     app.ui.window = Some(window::restore(w, saved_window));
+                    #[cfg(windows)]
+                    set_taskbar_icon(w);
                 }
                 // User Defined swatch and graphic style libraries live next to the preferences.
                 let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
