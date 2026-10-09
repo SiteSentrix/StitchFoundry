@@ -25,8 +25,8 @@ pub mod thread;
 pub use craft_fonts::{CRAFT_FONTS, CraftFont};
 pub use features::{LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
-    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, set_platform_font_files, style_weight,
-    system_font_dirs,
+    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, set_platform_font_files, set_user_font_dirs,
+    style_weight, system_font_dirs, user_font_dirs,
 };
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
