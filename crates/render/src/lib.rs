@@ -103,6 +103,9 @@ pub struct RenderOptions {
     /// Screen view: Image Trace objects draw as their View asks (outlines, the source image…);
     /// off, they draw their tracing result, as exports and printing do.
     pub trace_views: bool,
+    /// Images are sampled smoothly when scaled or rotated; off, each pixel takes its nearest image
+    /// pixel (Pixel Preview with File Handling › Display Bitmaps as Anti-aliased Images off).
+    pub smooth_images: bool,
 }
 
 /// How edges are rasterized (raster export option).
@@ -169,6 +172,7 @@ impl Default for RenderOptions {
             anti_alias: AntiAlias::Art,
             progressive_placed: false,
             trace_views: false,
+            smooth_images: true,
         }
     }
 }
@@ -1419,7 +1423,9 @@ impl Renderer {
             let pm = if outline { pm } else { self.ink_image(&cache_key, &pm, f.ink, f.doc.images.get(&im.key)) };
             let sx = im.width as f64 / pm.width().max(1) as f64;
             let sy = im.height as f64 / pm.height().max(1) as f64;
-            ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(pm), sampler: peniko::ImageSampler::default() });
+            let quality = if f.opts.smooth_images { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };
+            let sampler = peniko::ImageSampler { quality, ..Default::default() };
+            ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(pm), sampler });
             match area {
                 Some((bp, rule)) => {
                     ctx.set_transform(f.view);

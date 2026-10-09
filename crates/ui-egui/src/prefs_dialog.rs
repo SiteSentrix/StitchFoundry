@@ -244,6 +244,10 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
             PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
                 ui.add_enabled_ui(picas_in_use(d), |ui| bool_row(ui, d, sp.key, sp.label));
             }
+            // Performance › Animated Zoom needs GPU Performance: dimmed while it is off.
+            PrefKind::Bool if sp.key == "animatedZoom" => {
+                ui.add_enabled_ui(d.bool("gpuPerformance"), |ui| bool_row(ui, d, sp.key, sp.label));
+            }
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
             PrefKind::Num { min, max, unit } => {
                 labeled(ui, sp.label, |ui| {
