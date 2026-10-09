@@ -2484,6 +2484,13 @@
 	Smooth Color	Couleur lissée
 	Smooth Tool	Outil Arrondi
 	Snap Curves To Lines	Aimanter les courbes aux lignes
+	View:	Affichage :
+	Tracing Result	Résultat de la vectorisation
+	Tracing Result with Outlines	Résultat de la vectorisation avec contours
+	Outlines	Contours
+	Outlines with Source Image	Contours avec l’image source
+	Source Image	Image source
+	Image Trace View	Affichage de la vectorisation de l’image
 	Snap Options	Options de magnétisme
 	Snap to Glyph	Aimanter au glyphe
 	Snap to Grid	Aimanter à la grille

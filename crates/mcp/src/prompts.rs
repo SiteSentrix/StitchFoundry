@@ -298,7 +298,8 @@ Method:
    color, then threshold, colors, paths, corners, noise, method abutting or overlapping,
    ignoreWhite, snapCurvesToLines. Run imageTrace.presets to see every preset with its numbers.
    Lower paths and higher corners give the clean, logo-like result; high fidelity needs paths
-   near 90.
+   near 90. imageTrace.setView {view: \"outlinesWithSourceImage\"} draws the traced outlines
+   over the image on screen to compare them (screenshots show it; exports keep the result).
 3. apply_effect {effect} on the traced shapes. Call apply_effect with no `effect` for the
    catalogue and each effect's parameters.
 4. set_paint over the traced shapes to give the artwork its own colours.

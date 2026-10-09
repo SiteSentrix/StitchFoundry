@@ -705,6 +705,85 @@ fn image_trace_object_remembers_its_settings() {
     assert!(st.doc.node(id).unwrap().trace.is_none());
 }
 
+/// A black disc (r = 30 px) on light blue, 100 × 100 px, placed at 2× from (50, 50): traced in
+/// Black and White with Ignore White, the blue drops out and one disc (r = 60 pt at (150, 150))
+/// remains.
+fn disc_on_blue(s: &mut Session) -> NodeId {
+    let r = vectorcraft_trace::Raster::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (x as f64 + 0.5 - 50.0, y as f64 + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { [0, 0, 0, 255] } else { [170, 210, 255, 255] }
+    });
+    add_image(s, &r, Affine::translate((50.0, 50.0)) * Affine::scale(2.0));
+    let r = s.execute("imageTrace.make", &json!({"params": {"ignoreWhite": true}})).unwrap();
+    assert_eq!(r["paths"], 1);
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+/// The document rendered as the canvas draws it (`trace_views`) or as exports do.
+fn render_doc(s: &Session, trace_views: bool) -> vectorcraft_render::Rendered {
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), trace_views, ..Default::default() };
+    vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, Affine::IDENTITY, &opts)
+}
+
+#[test]
+fn image_trace_view_is_stored_kept_and_validated() {
+    let mut s = session();
+    let g = disc_on_blue(&mut s);
+    assert_eq!(node(&s, g).trace.unwrap()["view"], "tracingResult");
+    let r = s.execute("imageTrace.setView", &json!({"view": "outlinesWithSourceImage"})).unwrap();
+    assert_eq!((ids(&r), r["view"].as_str()), (vec![g], Some("outlinesWithSourceImage")));
+    assert_eq!(node(&s, g).trace_view(), vectorcraft_doc::TraceView::OutlinesWithSource);
+    // Setting the view it has already adds no undo step.
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("imageTrace.setView", &json!({"id": g.0, "view": "outlinesWithSourceImage"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // Tracing again keeps it, unless another one is asked for; it survives save and open.
+    let g = NodeId(s.execute("imageTrace.make", &json!({"id": g.0, "params": {"ignoreWhite": true, "noise": 30}})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(node(&s, g).trace_view(), vectorcraft_doc::TraceView::OutlinesWithSource);
+    let g = NodeId(s.execute("imageTrace.make", &json!({"id": g.0, "view": "SourceImage"})).unwrap()["id"].as_u64().unwrap());
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(back.node(g).unwrap().trace_view(), vectorcraft_doc::TraceView::Source);
+    // Bad views and other objects are refused.
+    assert!(s.execute("imageTrace.setView", &json!({"view": "sepia"})).is_err());
+    assert!(s.execute("imageTrace.setView", &json!({})).is_err());
+    assert!(s.execute("imageTrace.make", &json!({"view": 3})).is_err());
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    assert!(s.execute("imageTrace.setView", &json!({"id": a.0, "view": "outlines"})).is_err());
+}
+
+#[test]
+fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
+    let mut s = session();
+    let g = disc_on_blue(&mut s);
+    let dark = |p: [u8; 4]| p[0] < 60 && p[1] < 60 && p[2] < 60;
+    let white = |p: [u8; 4]| p[0] > 245 && p[1] > 245 && p[2] > 245;
+    let blue = |p: [u8; 4]| p[0] < 200 && p[2] > 245;
+    let (centre, beside) = ((150, 150), (70, 70));
+    let at = |img: &vectorcraft_render::Rendered, (x, y): (u32, u32)| img.pixel(x, y);
+    // The outline is a 1 px line where the disc's right side is (x = 210, anti-aliased).
+    let outlined = |img: &vectorcraft_render::Rendered| (205..=215).any(|x| img.pixel(x, 150)[0] < 128);
+    let mut expanded = None;
+    for view in vectorcraft_doc::TraceView::ALL {
+        s.execute("imageTrace.setView", &json!({"id": g.0, "view": view.id()})).unwrap();
+        let screen = render_doc(&s, true);
+        let (c, b) = (at(&screen, centre), at(&screen, beside));
+        assert_eq!(dark(c), view.shows_result() || view.shows_source(), "{view:?}: the disc's middle {c:?}");
+        assert_eq!(blue(b), view.shows_source(), "{view:?}: the image's background {b:?}");
+        assert!(view.shows_source() || white(b), "{view:?}: nothing beside the disc {b:?}");
+        if view == vectorcraft_doc::TraceView::Outlines {
+            assert!(outlined(&screen), "{view:?}: the disc's outline");
+        }
+        // Exports draw the tracing result whatever the view.
+        let export = render_doc(&s, false);
+        assert!(dark(at(&export, centre)) && white(at(&export, beside)), "{view:?}: export");
+        // Expand keeps the traced shapes, as traced, whatever the view.
+        s.execute("imageTrace.expand", &json!({"id": g.0})).unwrap();
+        let shapes: Vec<_> = node(&s, g).children().unwrap().iter().map(|c| (c.path_data().cloned(), c.appearance.clone())).collect();
+        assert_eq!(*expanded.get_or_insert_with(|| shapes.clone()), shapes, "{view:?}: expanded");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
 /// #569: merging the regions of a rosette of unfilled ellipses (each off the centre, petals
 /// overlapping) merges every region the drags touch into one shape whose outline is only the
 /// merged area's border: no edge between merged regions stays in, as a stray line or a spur.

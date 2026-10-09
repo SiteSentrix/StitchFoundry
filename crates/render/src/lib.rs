@@ -21,7 +21,7 @@ pub mod proof;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject, TraceView};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
 use vello_cpu::peniko::{self, BlendMode, Compose, Mix};
@@ -100,6 +100,9 @@ pub struct RenderOptions {
     /// Screen view: placed documents draw from cached bitmaps made in the background (see
     /// [`placed_document`]); off, they draw exactly, read when needed.
     pub progressive_placed: bool,
+    /// Screen view: Image Trace objects draw as their View asks (outlines, the source image…);
+    /// off, they draw their tracing result, as exports and printing do.
+    pub trace_views: bool,
 }
 
 /// How edges are rasterized (raster export option).
@@ -165,6 +168,7 @@ impl Default for RenderOptions {
             highlight_substitutions: false,
             anti_alias: AntiAlias::Art,
             progressive_placed: false,
+            trace_views: false,
         }
     }
 }
@@ -646,8 +650,10 @@ impl Renderer {
         let b = match &a.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(a) => {
                 let mut acc: Option<Rect> = None;
+                // An Image Trace object's hidden source image shows in some of its views.
+                let source = a.trace.is_some().then(|| children.first()).flatten();
                 for c in children {
-                    if c.visible {
+                    if c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)) {
                         acc = vectorcraft_geom::union_opt(acc, self.bounds_of(c));
                     }
                 }
@@ -883,6 +889,9 @@ impl Renderer {
     /// What `n` draws inside its transparency group (`knockout`: its children knock each other out).
     fn draw_content(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, knockout: bool) {
         match &n.kind {
+            NodeKind::Group { children, clip: false } if f.opts.trace_views && !f.opts.outline && n.trace_view() != TraceView::Result => {
+                self.draw_trace_view(ctx, f, children, n.trace_view(), knockout)
+            }
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 self.draw_children(ctx, f, children, knockout)
             }
@@ -951,6 +960,25 @@ impl Renderer {
             }
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
                 self.draw_live_node(ctx, f, n)
+            }
+        }
+    }
+
+    /// An Image Trace object's `children` (the hidden source image, then the traced shapes) as
+    /// `view` shows them on screen.
+    fn draw_trace_view(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>], view: TraceView, knockout: bool) {
+        let Some((source, shapes)) = children.split_first() else { return };
+        if view.shows_source() && matches!(source.kind, NodeKind::Image(_)) {
+            self.draw_node(ctx, f, source, true);
+        }
+        if view.shows_result() {
+            self.draw_children(ctx, f, shapes, knockout);
+        }
+        if view.shows_outlines() {
+            let opts = RenderOptions { outline: true, ..f.opts.clone() };
+            let frame = Frame { opts: &opts, ..*f };
+            for c in shapes {
+                self.draw_node(ctx, &frame, c, false);
             }
         }
     }

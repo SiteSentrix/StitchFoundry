@@ -15,7 +15,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer, StrokeLayer};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection, TraceView};
 use vectorcraft_geom::{FillRule, PathData, Point, Rect, SubPath};
 use vectorcraft_pathops as po;
 use vectorcraft_tools::builder::{
@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\", threshold: 0-255, colors: 2-256, paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite, snapCurvesToLines}} → {id, paths, anchors, colors}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\", threshold: 0-255, colors: 2-256, paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite, snapCurvesToLines}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult)} → {id, paths, anchors, colors}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -150,6 +150,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id?} keep only the traced paths (drop the source image) → {ids}",
             has_selection_or_ids,
             trace_expand
+        ),
+        cmd!(
+            "imageTrace.setView",
+            "Image Trace View",
+            [],
+            None,
+            "{id?|ids?: Image Trace objects (default: selection), view: \"tracingResult\"|\"tracingResultWithOutlines\"|\"outlines\"|\"outlinesWithSourceImage\"|\"sourceImage\"} how they draw on screen; exports, printing and Expand keep the tracing result → {ids, view}",
+            has_selection_or_ids,
+            trace_set_view
         ),
         cmd!(query "imageTrace.presets", "Image Trace Presets", [], None, "{} → {presets: [{name, params}]}", always, |_, _| {
             Ok(json!({ "presets": tr::presets().into_iter().map(|(n, p)| json!({ "name": n, "params": p })).collect::<Vec<_>>() }))
@@ -639,6 +648,13 @@ fn is_trace_group(n: &Node) -> bool {
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
 }
 
+/// The `view` param ([`TraceView`] id), if given.
+fn view_param(cmd: &str, p: &Value) -> Result<Option<TraceView>> {
+    let Some(v) = p.get("view").filter(|v| !v.is_null()) else { return Ok(None) };
+    let ids = || TraceView::ALL.map(TraceView::id).join(", ");
+    v.as_str().and_then(TraceView::from_id).map(Some).ok_or_else(|| bad(cmd, format!("view must be one of {}", ids())))
+}
+
 fn trace_params(p: &Value) -> Result<tr::TraceParams> {
     let name = str_param(p, "preset").unwrap_or("Default");
     let base = tr::preset(name).ok_or_else(|| bad("imageTrace.make", format!("unknown preset `{name}` (see imageTrace.presets)")))?;
@@ -659,6 +675,7 @@ pub const MAX_TRACE_ANCHORS: usize = 2_000_000;
 fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     const C: &str = "imageTrace.make";
     let params = trace_params(p)?;
+    let view = view_param(C, p)?;
     let params_json = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
     // The preset's name if the parameters are exactly that preset's, else "Custom".
     let named = str_param(p, "preset").unwrap_or("Default");
@@ -721,7 +738,9 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
         let mut g = Node::group(gid, children);
         g.name = if expand { None } else { Some(TRACE_NAME.into()) };
         if !expand {
-            g.trace = Some(Box::new(json!({ "preset": preset_label, "params": params_json })));
+            // Tracing again keeps the object's view unless another is asked for.
+            let view = view.unwrap_or_else(|| src.trace_view());
+            g.trace = Some(Box::new(json!({ "preset": preset_label, "params": params_json, "view": view.id() })));
         }
         let (par, idx, _) = d.position(target).ok_or(EngineError::NoNode(target))?;
         d.remove(target)?;
@@ -739,6 +758,28 @@ fn trace_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
         return Err(EngineError::Other("select an Image Trace object".into()));
     }
     Ok(v)
+}
+
+fn trace_set_view(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "imageTrace.setView";
+    let view = view_param(C, p)?.ok_or_else(|| bad(C, "view is required"))?;
+    let targets = trace_targets(s, p)?;
+    let d = &s.doc()?.doc;
+    if targets.iter().all(|g| d.node(*g).is_some_and(|n| n.trace_view() == view)) {
+        return Ok(json!({ "ids": ids_json(&targets), "view": view.id() }));
+    }
+    s.edit("Image Trace View", |d, _| {
+        for g in &targets {
+            let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
+            if let Some(t) = n.trace.as_deref_mut().and_then(Value::as_object_mut) {
+                t.insert("view".into(), json!(view.id()));
+            } else {
+                n.trace = Some(Box::new(json!({ "preset": "Custom", "view": view.id() })));
+            }
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "ids": ids_json(&targets), "view": view.id() }))
 }
 
 fn trace_release(s: &mut Session, p: &Value) -> Result<Value> {

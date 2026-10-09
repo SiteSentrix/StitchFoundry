@@ -44,8 +44,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         image_section(app, ui);
         divider(ui);
     }
-    if let Some(preset) = crate::panels::image_trace::selected_preset(app) {
-        trace_section(app, ui, &preset);
+    if let Some((preset, view)) = crate::panels::image_trace::selected_trace(app) {
+        trace_section(app, ui, &preset, view);
         divider(ui);
     }
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
@@ -162,13 +162,14 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The one selected Image Trace object: its preset (choosing another traces it again with that
-/// one), Expand and Release.
-fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str) {
+/// one), view, Expand and Release.
+fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vectorcraft_doc::TraceView) {
     section_header(ui, tl!("Image Trace"));
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Preset:"));
         crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
     });
+    ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
     let w = (ui.available_width() - 6.0) / 2.0;
     ui.horizontal(|ui| {
         for (label, id) in [(tl!("Expand"), "imageTrace.expand"), (tl!("Release"), "imageTrace.release")] {

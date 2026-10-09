@@ -121,6 +121,21 @@ pub fn section_header(ui: &mut Ui, text: &str) {
     ui.add_space(2.0);
 }
 
+/// A collapsible section's header across the panel: a chevron (down while `open`) and `text`;
+/// a click anywhere on it toggles the section. Whether it was clicked.
+pub fn section_toggle(ui: &mut Ui, text: &str, open: bool) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, 3.0, t.hover);
+    }
+    let chevron = Rect::from_center_size(pos2(rect.left() + 8.0, rect.center().y), vec2(12.0, 12.0));
+    icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, chevron, if resp.hovered() { t.text_strong } else { t.icon });
+    ui.painter().text(pos2(rect.left() + 18.0, rect.center().y), egui::Align2::LEFT_CENTER, tl!(text), theme::semibold(12.5), t.text);
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::CollapsingHeader, true, open, tl!(text)));
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+}
+
 /// Full-width 1 px divider with vertical margins.
 pub fn divider(ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
