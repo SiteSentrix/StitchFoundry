@@ -187,6 +187,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
+    p!("fontsFolder", "Type", "Options", "Additional Fonts Folder", text),
     // Units
     p!("unitsGeneral", "Units", "", "General", choice(UNITS)),
     p!("unitsStroke", "Units", "", "Stroke", choice(UNITS)),
@@ -460,7 +461,18 @@ impl Session {
         let grid_changed = p.gridline_every != self.prefs.gridline_every || p.grid_subdivisions != self.prefs.grid_subdivisions;
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
+        let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         self.prefs = p;
+        if fonts_folder_changed {
+            let folder = self.prefs.fonts_folder.trim();
+            vectorcraft_text::set_user_font_dirs(if folder.is_empty() { vec![] } else { vec![folder.into()] });
+            // Once the fonts were scanned, scan again now: the folder's fonts appear (or go) in the
+            // font menus, and type in them lays out again. The first scan reads it anyway.
+            if vectorcraft_text::FontDb::global().installed_fonts_changed() {
+                // Its result only counts the faces cataloged.
+                let _ = super::fonts::rescan(self, &serde_json::Value::Null);
+            }
+        }
         vectorcraft_render::set_default_threads(u16::try_from(self.prefs.render_threads).ok());
         for st in &mut self.docs {
             if history_changed {

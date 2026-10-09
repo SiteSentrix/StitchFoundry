@@ -878,6 +878,31 @@ pub fn set_platform_font_files(list: PlatformFontFiles) {
     let _ = list;
 }
 
+/// Folders the user adds to the font scan (Preferences › Type › Additional Fonts Folder, #683),
+/// read with their subfolders after the platform's.
+#[cfg(not(target_arch = "wasm32"))]
+static USER_FONT_DIRS: std::sync::RwLock<Vec<PathBuf>> = std::sync::RwLock::new(Vec::new());
+
+/// Have [`system_font_dirs`] also read `dirs` (#683), so the fonts in them are listed and used as
+/// if installed. The next check for installed fonts ([`FontDb::installed_fonts_changed`]) then
+/// reports the change, and a scan catalogs them.
+pub fn set_user_font_dirs(dirs: Vec<PathBuf>) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        *USER_FONT_DIRS.write().unwrap_or_else(std::sync::PoisonError::into_inner) = dirs;
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = dirs;
+}
+
+/// The folders [`set_user_font_dirs`] added (none on wasm).
+pub fn user_font_dirs() -> Vec<PathBuf> {
+    #[cfg(not(target_arch = "wasm32"))]
+    return USER_FONT_DIRS.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    #[cfg(target_arch = "wasm32")]
+    Vec::new()
+}
+
 /// The platform's font folders (the system's and the user's) and the font files known to it
 /// outside them (on Windows those registered with it, and those [`set_platform_font_files`]
 /// lists), scanned by [`FontDb::global`].
@@ -926,6 +951,7 @@ pub fn system_font_dirs() -> Vec<PathBuf> {
         let files = fonts_outside(list(), &dirs);
         dirs.extend(files);
     }
+    dirs.extend(user_font_dirs());
     dirs
 }
 
