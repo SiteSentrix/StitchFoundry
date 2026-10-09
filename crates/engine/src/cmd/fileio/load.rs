@@ -283,8 +283,9 @@ pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The most memory decoding one image may take: a 60 in print sheet at 300 ppi (18000 × 6600 px)
-/// is ~475 MB as RGBA, past the decoder's 512 MB default once it is converted.
-const MAX_RASTER_ALLOC: u64 = 2 << 30;
+/// is ~475 MB as RGBA, past the decoder's 512 MB default once it is converted. The web app keeps
+/// that default: wasm32 has 4 GB to address and aborts when an allocation fails.
+const MAX_RASTER_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else { 2 << 30 };
 
 /// Decode an image's header (and, for formats stored as PNG, its pixels). CMYK TIFFs are kept as
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]); CMYK TIFFs with an alpha channel, which
