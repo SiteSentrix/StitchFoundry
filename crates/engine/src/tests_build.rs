@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ImageBlob, ImageObject, Node, NodeKind};
+use vectorcraft_doc::{AppearanceItem, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
@@ -710,6 +710,39 @@ fn image_trace_palettes_and_swatch_libraries() {
     let mut bad = |p: Value| s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": p})).is_err();
     assert!(bad(json!({"palette": "documentLibrary", "library": "No Such Library"})));
     assert!(bad(json!({"palette": "rainbow"})));
+}
+
+#[test]
+fn image_trace_create_strokes_makes_stroked_centre_lines() {
+    let mut s = session();
+    // A 3 px wide horizontal line from x = 10 to 90 at y = 50, placed at 2× from (100, 100).
+    let r =
+        vectorcraft_trace::Raster::from_fn(100, 100, |x, y| if (10..90).contains(&x) && (49..52).contains(&y) { [0, 0, 0, 255] } else { [255; 4] });
+    add_image(&mut s, &r, Affine::translate((100.0, 100.0)) * Affine::scale(2.0));
+    let res = s.execute("imageTrace.make", &json!({"params": {"ignoreWhite": true, "strokes": true, "strokeWidth": 5}})).unwrap();
+    assert_eq!(res["paths"], 1);
+    let g = NodeId(res["id"].as_u64().unwrap());
+    let paths = traced_paths(&node(&s, g));
+    let line = &paths[0];
+    assert!(line.appearance.fill_paint().color().is_none(), "not filled");
+    let st = line.appearance.items.iter().find_map(|i| if let AppearanceItem::Stroke(st) = i { Some(st) } else { None }).expect("stroked");
+    assert!((st.width - 6.0).abs() < 1.0, "3 px at 2× is about 6 pt: {}", st.width);
+    assert_eq!((st.cap, st.join), (LineCap::Round, LineJoin::Round));
+    assert_eq!(st.paint, Paint::solid(Color::rgb8(0, 0, 0)));
+    let sp = &line.path_data().unwrap().subpaths[0];
+    assert!(!sp.closed);
+    let (a, b) = (sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p);
+    assert!((a.y - 201.0).abs() < 1.5 && (b.y - 201.0).abs() < 1.5 && (a.x - b.x).abs() > 140.0, "{a:?} … {b:?}");
+    let t = node(&s, g).trace.unwrap();
+    assert_eq!((t["params"]["strokes"].as_bool(), t["params"]["strokeWidth"].as_f64()), (Some(true), Some(5.0)));
+    // Expand keeps the stroked line.
+    s.execute("imageTrace.expand", &json!({})).unwrap();
+    assert!(node(&s, g).children().unwrap()[0].appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))));
+    // Create needs Fills or Strokes, and a stroke width.
+    s.execute("edit.undo", &json!({})).unwrap();
+    for p in [json!({"fills": false, "strokes": false}), json!({"strokes": true, "strokeWidth": 0}), json!({"strokeWidth": -3})] {
+        assert!(s.execute("imageTrace.make", &json!({"id": g.0, "params": p})).is_err(), "{p}");
+    }
 }
 
 #[test]

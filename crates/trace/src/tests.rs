@@ -1,4 +1,5 @@
 use super::*;
+use vectorcraft_geom::Point;
 
 const BLACK: [u8; 4] = [0, 0, 0, 255];
 const WHITE: [u8; 4] = [255, 255, 255, 255];
@@ -437,4 +438,117 @@ fn document_library_uses_the_most_used_swatches_exactly() {
     // Without library colours, it traces as Limited.
     let none = TraceParams { swatches: vec![], ..p(4) };
     assert_eq!(trace(&hard, &none).palette.len(), 4);
+}
+
+fn strokes(fills: bool) -> TraceParams {
+    TraceParams { strokes: true, fills, stroke_width: 6.0, noise: 4, ..bw() }
+}
+
+/// Endpoints (first and last anchor) of each open subpath of the stroked paths.
+fn stroked(res: &TraceResult) -> Vec<(&TracedPath, &vectorcraft_geom::SubPath)> {
+    res.paths.iter().filter(|p| p.stroke.is_some()).flat_map(|p| p.path.subpaths.iter().map(move |s| (p, s))).collect()
+}
+
+#[test]
+fn a_thin_line_traces_as_one_stroked_centre_line() {
+    // A 3 px wide diagonal line from (20, 20) to (180, 100).
+    let img = Raster::from_fn(200, 120, |x, y| {
+        let (px, py) = (x as f64 + 0.5, y as f64 + 0.5);
+        let t = (((px - 20.0) * 160.0 + (py - 20.0) * 80.0) / (160.0f64.powi(2) + 80.0f64.powi(2))).clamp(0.0, 1.0);
+        let (cx, cy) = (20.0 + 160.0 * t, 20.0 + 80.0 * t);
+        if (px - cx).hypot(py - cy) <= 1.5 { BLACK } else { WHITE }
+    });
+    let res = trace(&img, &strokes(true));
+    assert_eq!(res.paths.len(), 1, "{:?}", res.paths.iter().map(|p| p.stroke).collect::<Vec<_>>());
+    let p = &res.paths[0];
+    let width = p.stroke.expect("stroked");
+    assert!((2.0..=4.0).contains(&width), "width {width}");
+    assert_eq!(p.path.subpaths.len(), 1);
+    let sp = &p.path.subpaths[0];
+    assert!(!sp.closed);
+    let (a, b) = (sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p);
+    let (a, b) = if a.x < b.x { (a, b) } else { (b, a) };
+    assert!(a.distance(Point::new(20.0, 20.0)) < 3.0 && b.distance(Point::new(180.0, 100.0)) < 3.0, "{a:?} … {b:?}");
+    // A straight line: a few anchors, all on it.
+    assert!(sp.anchors.len() <= 4, "{} anchors", sp.anchors.len());
+    // Without Create Strokes, the same line is a filled outline.
+    let filled = trace(&img, &bw());
+    assert!(filled.paths.iter().all(|p| p.stroke.is_none()) && filled.paths[0].path.subpaths[0].closed);
+}
+
+#[test]
+fn a_thin_ring_traces_as_a_closed_centre_line() {
+    let img = Raster::from_fn(120, 120, |x, y| {
+        let d = (x as f64 + 0.5 - 60.0).hypot(y as f64 + 0.5 - 60.0);
+        if (d - 40.0).abs() <= 1.5 { BLACK } else { WHITE }
+    });
+    let res = trace(&img, &strokes(true));
+    let lines = stroked(&res);
+    assert_eq!(lines.len(), 1, "one ring");
+    let sp = lines[0].1;
+    assert!(sp.closed);
+    let len = PathData::single(sp.clone()).length();
+    let want = std::f64::consts::TAU * 40.0;
+    assert!((len - want).abs() / want < 0.05, "length {len} vs {want}");
+}
+
+#[test]
+fn wide_areas_stay_filled_and_lines_cross_at_junctions() {
+    // A disc (r = 20) and, apart from it, a plus sign of 3 px wide bars.
+    let img = Raster::from_fn(200, 100, |x, y| {
+        let (px, py) = (x as f64 + 0.5, y as f64 + 0.5);
+        let disc = (px - 50.0).hypot(py - 50.0) <= 20.0;
+        let plus = ((px - 150.0).abs() <= 1.5 && (20.0..=80.0).contains(&py)) || ((py - 50.0).abs() <= 1.5 && (120.0..=180.0).contains(&px));
+        if disc || plus { BLACK } else { WHITE }
+    });
+    let res = trace(&img, &strokes(true));
+    let fills: Vec<_> = res.paths.iter().filter(|p| p.stroke.is_none()).collect();
+    assert_eq!(fills.len(), 1, "the disc");
+    let a = net_area(&fills[0].path);
+    assert!((a - std::f64::consts::PI * 400.0).abs() < 60.0, "disc area {a}");
+    let lines = stroked(&res);
+    assert!((2..=4).contains(&lines.len()), "{} centre lines", lines.len());
+    // The centre lines stop about half a width short of each end of the bars (their round caps
+    // cover it).
+    let total: f64 = lines.iter().map(|(_, s)| PathData::single((*s).clone()).length()).sum();
+    assert!((106.0..=120.0).contains(&total), "both bars' length: {total}");
+    let ends: Vec<Point> = lines.iter().flat_map(|(_, s)| [s.anchors[0].p, s.anchors[s.anchors.len() - 1].p]).collect();
+    for want in [Point::new(150.0, 20.0), Point::new(150.0, 80.0), Point::new(120.0, 50.0), Point::new(180.0, 50.0)] {
+        assert!(ends.iter().any(|e| e.distance(want) < 4.0), "a line ends near {want:?}: {ends:?}");
+    }
+    // Strokes only: the disc is outlined.
+    let res = trace(&img, &strokes(false));
+    assert!(res.paths.iter().all(|p| p.stroke.is_some()));
+    assert!(res.paths.iter().any(|p| p.stroke == Some(1.0) && p.path.subpaths[0].closed), "the disc's outline");
+}
+
+#[test]
+fn create_settings_parse_with_defaults() {
+    let p: TraceParams = serde_json::from_value(serde_json::json!({ "strokes": true, "strokeWidth": 4 })).unwrap();
+    assert!(p.fills && p.strokes && p.stroke_width == 4.0);
+    let d = TraceParams::default();
+    assert!(d.fills && !d.strokes && d.stroke_width == 10.0);
+}
+
+#[test]
+fn create_strokes_survives_noise_and_tiny_images() {
+    let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    let noise: Vec<u8> = (0..120 * 120).flat_map(|_| if next() % 3 == 0 { BLACK } else { WHITE }).collect();
+    let noise = Raster::new(120, 120, noise);
+    for img in [noise, Raster::from_fn(1, 1, |_, _| BLACK), Raster::from_fn(3, 2, |x, _| if x == 1 { BLACK } else { WHITE })] {
+        for (fills, width) in [(true, 1.0), (false, 4.0), (true, 100.0)] {
+            for noise in [0, 1, 4] {
+                let p = TraceParams { strokes: true, fills, stroke_width: width, noise, ..TraceParams::default() };
+                for t in trace(&img, &p).paths {
+                    assert!(t.stroke.is_none_or(|w| w.is_finite() && w >= 1.0), "{:?}", t.stroke);
+                }
+            }
+        }
+    }
 }

@@ -1,8 +1,8 @@
 //! Image Trace panel: preset, view, mode, palette (Color), threshold or colour count, and the
-//! Advanced section's fidelity options (open or closed as it was last left). With an Image Trace
-//! object selected, changing a setting re-traces it (one undo step per change; sliders apply when
-//! released) and changing the view redraws it without tracing again. With an image selected, Trace
-//! makes a new Image Trace object.
+//! Advanced section (open or closed as it was last left): fidelity, method, and Create: Fills /
+//! Strokes with the widest line stroked. With an Image Trace object selected, changing a setting
+//! re-traces it (one undo step per change; sliders apply when released) and changing the view
+//! redraws it without tracing again. With an image selected, Trace makes a new Image Trace object.
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -311,6 +311,27 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
         });
+        // Create: Fills and/or Strokes (one of them stays on), and the widest line stroked.
+        let create = |p: &Value, key: &str| p[key].as_bool().unwrap_or(key == "fills");
+        let strokes = create(&st.params, "strokes");
+        ui.horizontal(|ui| {
+            widgets::dim_label(ui, tl!("Create:"));
+            for (key, other, label) in [("fills", "strokes", tl!("Fills")), ("strokes", "fills", tl!("Strokes"))] {
+                let on = create(&st.params, key);
+                if widgets::check(ui, label, on, !on || create(&st.params, other)) {
+                    st.params[key] = json!(!on);
+                    st.preset = "Custom".into();
+                    retrace = true;
+                }
+            }
+        });
+        let mut v = st.params["strokeWidth"].as_f64().unwrap_or(10.0);
+        let (changed, release) = ui.add_enabled_ui(strokes, |ui| slider(ui, tl!("Stroke"), &mut v, 1.0..=100.0, " px")).inner;
+        if changed {
+            st.params["strokeWidth"] = json!(v.round());
+            st.preset = "Custom".into();
+        }
+        retrace |= release;
         for (key, label) in [("snapCurvesToLines", tl!("Snap Curves To Lines")), ("ignoreWhite", tl!("Ignore White"))] {
             let on = st.params[key].as_bool().unwrap_or(false);
             if widgets::check(ui, label, on, true) {
@@ -453,6 +474,27 @@ mod tests {
         assert_eq!(palette(&app), Some(json!("fullTone")));
         let texts = frame(&mut app, &ctx, vec![]);
         assert!(has(&texts, "50") && !has(&texts, "Library:"), "{texts:?}");
+    }
+
+    #[test]
+    fn create_strokes_traces_again_and_keeps_one_kind_on() {
+        let mut app = traced_app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let create = |app: &VectorcraftApp| target(app).2.map(|t| (t["params"]["fills"].clone(), t["params"]["strokes"].clone()));
+        let texts = frame(&mut app, &ctx, vec![]);
+        for s in ["Create:", "Fills", "Strokes", "Stroke", "10"] {
+            assert!(texts.iter().any(|(t, _)| t == s), "{s}: {texts:?}");
+        }
+        // Fills alone can't be turned off.
+        click(&mut app, &ctx, "Fills");
+        assert_eq!(create(&app), Some((json!(true), json!(false))));
+        click(&mut app, &ctx, "Strokes");
+        assert_eq!(create(&app), Some((json!(true), json!(true))), "traced again with strokes");
+        click(&mut app, &ctx, "Fills");
+        assert_eq!(create(&app), Some((json!(false), json!(true))));
+        click(&mut app, &ctx, "Strokes");
+        assert_eq!(create(&app), Some((json!(false), json!(true))), "Strokes alone stays on");
     }
 
     #[test]
