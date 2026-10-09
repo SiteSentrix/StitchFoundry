@@ -13,7 +13,7 @@ use super::{first_selected, library_panel, pstate, set_pstate, swatches};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
-const MODES: [(&str, &str); 3] = [("blackAndWhite", "Black and White"), ("grayscale", "Grayscale"), ("color", "Color")];
+const MODES: [(&str, &str); 4] = [("blackAndWhite", "Black and White"), ("grayscale", "Grayscale"), ("color", "Color"), ("logo", "Flat Logo")];
 
 /// Color mode's palettes (`palette` param ids), in panel order.
 const PALETTES: [&str; 4] = ["limited", "fullTone", "automatic", "documentLibrary"];
@@ -273,6 +273,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (key, label, range, suffix) = match mode.as_str() {
         "blackAndWhite" => ("threshold", tl!("Threshold"), 0.0..=255.0, ""),
         "grayscale" => ("colors", tl!("Grays"), 2.0..=256.0, ""),
+        // Flat Logo finds a handful of flat colours: more than ten is almost always noise.
+        "logo" => ("colors", tl!("Colors"), 2.0..=10.0, ""),
         _ if matches!(palette.as_str(), "fullTone" | "automatic") => ("colorDetail", tl!("Colors"), 0.0..=100.0, "%"),
         _ => ("colors", tl!("Colors"), 2.0..=256.0, ""),
     };
@@ -301,37 +303,40 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             retrace |= release;
         }
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, tl!("Method:"));
-            for (m, l) in [("abutting", tl!("Abutting")), ("overlapping", tl!("Overlapping"))] {
-                if ui.selectable_label(st.params["method"] == m, l).clicked() && st.params["method"] != m {
-                    st.params["method"] = json!(m);
-                    st.preset = "Custom".into();
-                    retrace = true;
+        // Flat Logo always paints biggest shapes first with a hair of overlap, so there is no choice.
+        if st.params["mode"] != "logo" {
+            ui.horizontal(|ui| {
+                widgets::dim_label(ui, tl!("Method:"));
+                for (m, l) in [("abutting", tl!("Abutting")), ("overlapping", tl!("Overlapping"))] {
+                    if ui.selectable_label(st.params["method"] == m, l).clicked() && st.params["method"] != m {
+                        st.params["method"] = json!(m);
+                        st.preset = "Custom".into();
+                        retrace = true;
+                    }
                 }
-            }
-        });
-        // Create: Fills and/or Strokes (one of them stays on), and the widest line stroked.
-        let create = |p: &Value, key: &str| p[key].as_bool().unwrap_or(key == "fills");
-        let strokes = create(&st.params, "strokes");
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, tl!("Create:"));
-            for (key, other, label) in [("fills", "strokes", tl!("Fills")), ("strokes", "fills", tl!("Strokes"))] {
-                let on = create(&st.params, key);
-                if widgets::check(ui, label, on, !on || create(&st.params, other)) {
-                    st.params[key] = json!(!on);
-                    st.preset = "Custom".into();
-                    retrace = true;
+            });
+            // Create: Fills and/or Strokes (one of them stays on), and the widest line stroked.
+            let create = |p: &Value, key: &str| p[key].as_bool().unwrap_or(key == "fills");
+            let strokes = create(&st.params, "strokes");
+            ui.horizontal(|ui| {
+                widgets::dim_label(ui, tl!("Create:"));
+                for (key, other, label) in [("fills", "strokes", tl!("Fills")), ("strokes", "fills", tl!("Strokes"))] {
+                    let on = create(&st.params, key);
+                    if widgets::check(ui, label, on, !on || create(&st.params, other)) {
+                        st.params[key] = json!(!on);
+                        st.preset = "Custom".into();
+                        retrace = true;
+                    }
                 }
+            });
+            let mut v = st.params["strokeWidth"].as_f64().unwrap_or(10.0);
+            let (changed, release) = ui.add_enabled_ui(strokes, |ui| slider(ui, tl!("Stroke"), &mut v, 1.0..=100.0, " px")).inner;
+            if changed {
+                st.params["strokeWidth"] = json!(v.round());
+                st.preset = "Custom".into();
             }
-        });
-        let mut v = st.params["strokeWidth"].as_f64().unwrap_or(10.0);
-        let (changed, release) = ui.add_enabled_ui(strokes, |ui| slider(ui, tl!("Stroke"), &mut v, 1.0..=100.0, " px")).inner;
-        if changed {
-            st.params["strokeWidth"] = json!(v.round());
-            st.preset = "Custom".into();
+            retrace |= release;
         }
-        retrace |= release;
         for (key, label) in [("snapCurvesToLines", tl!("Snap Curves To Lines")), ("ignoreWhite", tl!("Ignore White"))] {
             let on = st.params[key].as_bool().unwrap_or(false);
             if widgets::check(ui, label, on, true) {
