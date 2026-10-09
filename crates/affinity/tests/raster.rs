@@ -54,8 +54,8 @@ fn source_backed_tiles_retain_the_embedded_jpeg_pixels() {
     let Pixels::Rgba8(pixels) = &image.pixels else { panic!("expected retained level-zero pixels") };
     let expected = image::load_from_memory(&source(&bytes)).unwrap().into_rgba8();
     assert_eq!(pixels.as_slice(), expected.as_raw());
-    assert!(pixels.chunks_exact(4).all(|p| p[3] == 255));
-    assert!(pixels.chunks_exact(4).any(|p| p[0] != p[1]));
+    assert!(pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
+    assert!(pixels.as_chunks::<4>().0.iter().any(|p| p[0] != p[1]));
 }
 
 #[test]
@@ -80,8 +80,8 @@ fn eight_and_sixteen_bit_channels_retain_the_same_pixel_pattern() {
     let Pixels::Rgba8(pixels) = &images8[0].pixels else { panic!() };
     assert_eq!(pixels.len(), 64 * 48 * 4);
     assert_eq!(&pixels[..4], &[0, 0, 0, 128]);
-    assert!(pixels.chunks_exact(4).any(|p| p[3] < 255));
-    assert!(pixels.chunks_exact(4).any(|p| p[0] != p[1]));
+    assert!(pixels.as_chunks::<4>().0.iter().any(|p| p[3] < 255));
+    assert!(pixels.as_chunks::<4>().0.iter().any(|p| p[0] != p[1]));
     // Frozen pixel-retention baseline, including every alpha sample. It is not a render oracle.
     assert_eq!(crc32fast::hash(pixels), 0xc8ee4dc1);
 }
@@ -98,7 +98,7 @@ fn rotated_scaled_pixels_keep_the_full_affine_transform() {
     }
     let Pixels::Rgba8(pixels) = &images[0].pixels else { panic!() };
     assert_eq!(pixels.len(), 80 * 60 * 4);
-    assert!(pixels.chunks_exact(4).all(|p| p[3] == 255));
+    assert!(pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
     assert_eq!(crc32fast::hash(pixels), 0x3720a442);
 }
 
