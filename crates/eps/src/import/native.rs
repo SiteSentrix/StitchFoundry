@@ -22,21 +22,20 @@
 //!   one is on a layer that shows, the art of this copy would differ from the page's, so the layers
 //!   aren't used: the file comes in as its page, as it did before.
 //!
-//! Sources (public documentation only; no Adobe software was run and no Adobe file is in this repo):
+//! Sources (no Adobe software was run, no Adobe file is in this repo, and no Adobe specification,
+//! SDK or installation was used):
 //!
-//! - The legacy format: *Adobe Illustrator File Format Specification*, version 7.0, published by its
-//!   maker for third-party developers; PRONOM lists it at
-//!   <https://www.nationalarchives.gov.uk/PRONOM/fmt/423> (the record links the document itself).
-//!   The layer, group, compound-path and clipping vocabulary is that format's; PRONOM's record for
-//!   versions 5.0/5.5 (<https://pronom.nationalarchives.gov.uk/fmt/420>) shows the layer-era comments
-//!   date from then.
+//! - The layer, group, compound-path and clipping vocabulary of the legacy format, the container
+//!   (`%AI9_PrivateDataBegin`, `%AI24_DataStream`, `%AI24_ZStandard_Data`, the `AIPrivateData`
+//!   streams), the meaning of the `Xw` hidden flag and the text document were worked out from `.eps`
+//!   and `.ai` files their users own, used locally and never committed. (Adobe published a
+//!   specification of the legacy format, listed by PRONOM at
+//!   <https://www.nationalarchives.gov.uk/PRONOM/fmt/423>; it was not used here.)
 //! - The wrappers: ASCII85 is PostScript Level 2 (*PostScript Language Reference*, 3rd ed.); the
-//!   compressed stream is Zstandard, RFC 8878 (<https://www.rfc-editor.org/rfc/rfc8878>).
-//! - The container (`%AI9_PrivateDataBegin`, `%AI24_DataStream`, `%AI24_ZStandard_Data`, the
-//!   `AIPrivateData` streams), the meaning of the `Xw` hidden flag and the text document are NOT in
-//!   those documents: they
-//!   were worked out from `.eps` and `.ai` files their users own, used locally. Where a file doesn't
-//!   match what this module expects, it is left alone and its page is imported.
+//!   compressed stream is Zstandard, RFC 8878 (<https://www.rfc-editor.org/rfc/rfc8878>), read with
+//!   the permissively licensed `ruzstd` crate.
+//!
+//! Where a file doesn't match what this module expects, it is left alone and its page is imported.
 
 use std::collections::BTreeSet;
 use std::io::Read;
