@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Package",
         [],
         None,
-        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder",
+        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder",
         has_doc,
         package
     )]
@@ -221,7 +221,8 @@ impl<'a> Collector<'a> {
         }
         if self.opts.copy_fonts {
             let db = vectorcraft_text::FontDb::global();
-            self.lines.push(format!("FONTS IN {source}"));
+            self.lines.push("FONTS".into());
+            self.lines.push(format!("Document: {source}"));
             for (family, style) in super::fonts::used_fonts(doc) {
                 let font = format!("{family} {style}");
                 let reason = match db.face(&family, &style) {
