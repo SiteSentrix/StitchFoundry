@@ -92,12 +92,20 @@ pub const MAX_DEPTH: usize = 384;
 
 const MAX_OBJECTS: usize = 8_000_000;
 
+/// Most values (fields and array elements) one stream may decode. A value takes about 40 bytes
+/// in memory however few it took in the file (a bool array packs eight in a byte), so the size
+/// of the input alone doesn't bound what parsing allocates: a small compressed entry could
+/// otherwise ask for tens of gigabytes. Real documents stay far below.
+pub const MAX_VALUES: usize = 1 << 24;
+
 struct Parser<'a> {
     c: Cursor<'a>,
     objects: Vec<Object>,
     /// Shared ids, defined at first use and referenced backwards.
     shared: std::collections::HashMap<u32, ObjId>,
     depth: usize,
+    /// Values decoded so far, against [`MAX_VALUES`].
+    values: usize,
 }
 
 /// Parse a stream (`00 FF 4B 53` header). Bytes after the root's terminator are ignored.
@@ -115,7 +123,7 @@ pub fn parse(bytes: &[u8]) -> Result<Stream, Error> {
     if version == 2 {
         c.u32()?;
     }
-    let mut p = Parser { c, objects: Vec::new(), shared: std::collections::HashMap::new(), depth: 0 };
+    let mut p = Parser { c, objects: Vec::new(), shared: std::collections::HashMap::new(), depth: 0, values: 0 };
     let root = p.push(Object { class, kind: Kind::Root, chain: vec![class], fields: Vec::new() })?;
     let fields = p.fields(true, class)?;
     if let Some(o) = p.objects.get_mut(root) {
@@ -131,6 +139,21 @@ impl Parser<'_> {
         }
         self.objects.push(o);
         Ok(self.objects.len() - 1)
+    }
+
+    /// Counts `n` more values against [`MAX_VALUES`], before anything is allocated for them.
+    fn spend(&mut self, n: usize) -> Result<(), Error> {
+        self.values = self.values.checked_add(n).filter(|&v| v <= MAX_VALUES).ok_or(Error::Limit("too many values in the document stream"))?;
+        Ok(())
+    }
+
+    /// An empty array with room for `n` values, paid for first; an allocation that still fails
+    /// is an error, not an abort.
+    fn vec<T>(&mut self, n: usize) -> Result<Vec<T>, Error> {
+        self.spend(n)?;
+        let mut v = Vec::new();
+        v.try_reserve_exact(n).map_err(|_| Error::Limit("not enough memory for the document stream"))?;
+        Ok(v)
     }
 
     /// Element count of an array: each element takes at least `min` bytes, so a count the
@@ -155,6 +178,7 @@ impl Parser<'_> {
             if code == 0 {
                 break;
             }
+            self.spend(1)?;
             let tag = if tagged { Tag(self.c.u32()?) } else { Tag(0) };
             let v = if t & 0x80 != 0 { self.array(code, class)? } else { self.scalar(code, tagged, class)? };
             out.push((tag, v));
@@ -254,12 +278,14 @@ impl Parser<'_> {
             0x29 => {
                 let n = usize::try_from(self.c.u32()?).map_err(|_| Error::Malformed("array length"))?;
                 let bits = self.c.take(n.div_ceil(8))?;
-                Ok(Value::Array((0..n).map(|i| Value::Bool(bits.get(i / 8).is_some_and(|b| b >> (i % 8) & 1 != 0))).collect()))
+                let mut v = self.vec(n)?;
+                v.extend((0..n).map(|i| Value::Bool(bits.get(i / 8).is_some_and(|b| b >> (i % 8) & 1 != 0))));
+                Ok(Value::Array(v))
             }
             0x2a => {
                 let n = self.count(2)?;
                 let version = self.c.u16()?;
-                let mut v = Vec::with_capacity(n);
+                let mut v = self.vec(n)?;
                 for _ in 0..n {
                     v.push(Value::Enum { id: self.c.u16()?, version });
                 }
@@ -268,7 +294,7 @@ impl Parser<'_> {
             0x2b | 0x2e => {
                 self.c.u32()?;
                 let n = self.count(4)?;
-                let mut v = Vec::with_capacity(n);
+                let mut v = self.vec(n)?;
                 for _ in 0..n {
                     v.push(Value::Str(self.string()?));
                 }
@@ -280,7 +306,7 @@ impl Parser<'_> {
                 if n.checked_mul(size).is_none_or(|b| b > self.c.remaining()) {
                     return Err(Error::Malformed("array longer than its data"));
                 }
-                let mut v = Vec::with_capacity(n);
+                let mut v = self.vec(n)?;
                 for _ in 0..n {
                     v.push(Value::Bytes(self.c.take(size)?.to_vec()));
                 }
@@ -290,7 +316,7 @@ impl Parser<'_> {
                 let n = self.count(1)?;
                 let class = Tag(self.c.u32()?);
                 self.c.u16()?;
-                let mut v = Vec::with_capacity(n);
+                let mut v = self.vec(n)?;
                 for _ in 0..n {
                     v.push(self.inline(Some(class))?);
                 }
@@ -299,7 +325,7 @@ impl Parser<'_> {
             0x2d | 0x33 | 0x75 => Err(Error::Malformed("array of an unarrayable type")),
             _ => {
                 let n = self.count(min)?;
-                let mut v = Vec::with_capacity(n);
+                let mut v = self.vec(n)?;
                 for _ in 0..n {
                     v.push(self.scalar(code, true, class)?);
                 }

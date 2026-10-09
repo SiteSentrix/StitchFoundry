@@ -305,6 +305,29 @@ mod archive {
         }
     }
 
+    #[test]
+    fn a_small_compressed_entry_cannot_make_the_stream_allocate_gigabytes() {
+        // Each decoded value takes about 40 bytes, and a bool array packs eight in a byte: 16 MiB
+        // of zero bits, a few KiB once compressed, would ask for 2^27 values (about 4 GiB). An
+        // array of one-byte values just past the budget fails the same way, before allocating.
+        let field = |code: u8, n: u32, data: usize| {
+            let mut f = vec![0x80 | code];
+            f.extend(tag(b"Big_").0.to_le_bytes());
+            f.extend(n.to_le_bytes());
+            f.resize(f.len() + data, 0);
+            F::Raw(f)
+        };
+        let bools = 1u32 << 27;
+        let bytes = u32::try_from(stream::MAX_VALUES).unwrap() + 1;
+        for f in [field(0x29, bools, (bools / 8) as usize), field(0x01, bytes, bytes as usize)] {
+            let d = synth::stream(&[(tag(b"Big_"), f)]);
+            let file = synth::container(&[("doc.dat", &d, Method::Zstd)], None);
+            assert!(file.len() < d.len() / 100, "{} of {}", file.len(), d.len());
+            let entry = Archive::open(&file, Limits::default()).unwrap().read("doc.dat").unwrap();
+            assert_eq!(stream::parse(&entry).unwrap_err(), Error::Limit("too many values in the document stream"));
+        }
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(512))]
         #[test]
