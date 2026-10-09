@@ -304,6 +304,21 @@ pub(crate) fn id_param(p: &Value, key: &str) -> Option<NodeId> {
 pub(crate) fn ids_param(p: &Value, key: &str) -> Option<Vec<NodeId>> {
     p.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).map(NodeId).collect())
 }
+/// Validate all explicit targets before a command changes the document or selection.
+pub(crate) fn checked_ids_param(s: &Session, p: &Value, key: &str, command: &str) -> Result<Vec<NodeId>> {
+    let values =
+        p.get(key).and_then(Value::as_array).ok_or_else(|| bad(command, format!("{key} must be an array of non-negative integer object ids")))?;
+    values.iter().map(|value| checked_id(s, value, command)).collect()
+}
+
+pub(crate) fn checked_id(s: &Session, value: &Value, command: &str) -> Result<NodeId> {
+    let id = value.as_u64().map(NodeId).ok_or_else(|| bad(command, format!("invalid object id {value}: expected a non-negative integer")))?;
+    if s.doc()?.doc.node(id).is_none() {
+        return Err(bad(command, format!("no such object id {value}")));
+    }
+    Ok(id)
+}
+
 pub(crate) fn point_param(p: &Value, key: &str) -> Option<Point> {
     let a = p.get(key)?.as_array()?;
     Some(Point::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?))
