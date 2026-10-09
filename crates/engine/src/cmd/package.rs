@@ -66,8 +66,8 @@ struct Options {
 #[derive(Clone)]
 struct Copied {
     name: String,
-    size: u64,
-    hash: String,
+    size: Option<u64>,
+    hash: Option<String>,
 }
 
 /// The parent of a packaged document and its asset both live inside the package.
@@ -94,19 +94,20 @@ fn safe_asset_name(name: &str) -> String {
 
 /// Collect dependencies depth-first so nested VectorCraft files are rewritten before
 /// their parents: each parent can record the final hash of the rewritten child.
-/// Cycles or excessive nesting must not silently yield incomplete packages.
+/// Cycles, excessive nesting, and unreadable children are reported, not fatal.
 struct Collector<'a> {
     opts: &'a Options,
     root: Option<PathBuf>,
     entries: Vec<Entry>,
     copies: BTreeMap<String, Copied>,
-    visiting: HashSet<String>,
+    visiting: BTreeMap<String, String>,
     taken: HashSet<String>,
     link_names: HashSet<String>,
     font_files: HashSet<String>,
     fonts: usize,
     missing: Vec<String>,
     skipped: Vec<Value>,
+    warnings: Vec<String>,
     lines: Vec<String>,
 }
 
@@ -115,19 +116,31 @@ impl<'a> Collector<'a> {
         let mut taken = HashSet::new();
         taken.insert(doc_name.to_lowercase());
         Self {
-            opts, root, entries: Vec::new(), copies: BTreeMap::new(), visiting: HashSet::new(),
-            taken, link_names: HashSet::new(), font_files: HashSet::new(), fonts: 0,
-            missing: Vec::new(), skipped: Vec::new(), lines: Vec::new(),
+            opts,
+            root,
+            entries: Vec::new(),
+            copies: BTreeMap::new(),
+            visiting: BTreeMap::new(),
+            taken,
+            link_names: HashSet::new(),
+            font_files: HashSet::new(),
+            fonts: 0,
+            missing: Vec::new(),
+            skipped: Vec::new(),
+            warnings: Vec::new(),
+            lines: Vec::new(),
         }
     }
 
+    fn warn(&mut self, message: String) {
+        self.lines.push(format!("WARNING: {message}"));
+        self.warnings.push(message);
+    }
+
     fn collect(&mut self, doc: &mut Document, source: &str, destination: &str, depth: usize) -> Result<()> {
-        if depth > vectorcraft_doc::placed_document::MAX_DEPTH {
-            return Err(bad(C, "placed-document links exceed the supported nesting depth (8)"));
-        }
-        if !self.visiting.insert(source.to_string()) {
-            return Err(bad(C, format!("circular placed-document link involving {source}")));
-        }
+        // The caller checks cycles and depth before descending; active documents have
+        // a destination reserved so back-links can point at their single packaged copy.
+        self.visiting.insert(source.to_string(), destination.to_string());
         // A file's saved path is only meaningful inside its own document.
         // Different linked documents can reuse the same stale absolute path yet
         // resolve it to distinct local assets. Keep a mapping per document.
@@ -135,11 +148,18 @@ impl<'a> Collector<'a> {
         if self.opts.copy_links {
             let mut placed = HashSet::new();
             doc.visit_placed(|_, p| { placed.insert(p.link.path.clone()); });
-            self.lines.push(format!("LINKED FILES IN {source}"));
+            // Keep this exact header for programs parsing Package reports.
+            self.lines.push("LINKED FILES".into());
+            self.lines.push(format!("Document: {source}"));
             for file in super::links::linked_files(doc, Some(source)) {
                 let found_path = file.found_path.as_deref().unwrap_or(&file.path);
-                if self.visiting.contains(found_path) {
-                    return Err(bad(C, format!("circular placed-document link involving {}", file.path)));
+                if let Some(ancestor) = self.visiting.get(found_path).cloned() {
+                    // The ancestor is already included (possibly the root document). A
+                    // cyclic reference cannot have a final content hash until both files
+                    // have been written, so leave its size/hash unspecified, not stale.
+                    self.warn(format!("{}: circular placed-document link to {ancestor}; stopped following the cycle", file.path));
+                    local.insert(file.path.clone(), Copied { name: ancestor, size: None, hash: None });
+                    continue;
                 }
                 if let Some(existing) = self.copies.get(found_path) {
                     local.insert(file.path.clone(), existing.clone());
@@ -158,32 +178,40 @@ impl<'a> Collector<'a> {
                 let unique = free_name(&name, if self.opts.links_folder { &mut self.link_names } else { &mut self.taken });
                 let destination_file = format!("{dir}{unique}");
                 if placed.contains(&file.path) {
-                    let saved = vectorcraft_format::load_file(&bytes)
-                        .map_err(|e| bad(C, format!("linked VectorCraft document {} cannot be packaged: {e}", file.path)))?;
-                    let preview = vectorcraft_format::preview(&bytes);
-                    let pdf = vectorcraft_format::pdf_content(&bytes);
-                    let compressed = bytes.starts_with(&[0x1f, 0x8b]);
-                    let include_linked = saved
-                        .doc
-                        .linked_only_images()
-                        .iter()
-                        .any(|key| saved.doc.images.get(key).is_some_and(|blob| !blob.is_proxy()));
-                    let mut nested = saved.doc;
-                    self.collect(&mut nested, found_path, &destination_file, depth + 1)?;
-                    if self.opts.relink {
-                        // Preserve each native file's auxiliary content during relinking:
-                        // thumbnails, PDF-compatible pages, ICC profiles, and embedded linked art.
-                        let mut options = vectorcraft_format::SaveOptions::for_doc(&nested);
-                        options.preview = preview;
-                        options.pdf = pdf;
-                        options.profiles = saved.profiles;
-                        options.compress = compressed;
-                        options.include_linked = include_linked;
-                        bytes = vectorcraft_format::save_with(&nested, &options)
-                            .map_err(|e| bad(C, format!("could not rewrite packaged document {}: {e}", file.path)))?;
+                    if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
+                        self.warn(format!("{}: nesting limit reached; copied unchanged without collecting its own links", file.path));
+                    } else {
+                        match vectorcraft_format::load_file(&bytes) {
+                            Ok(saved) => {
+                                let preview = vectorcraft_format::preview(&bytes);
+                                let pdf = vectorcraft_format::pdf_content(&bytes);
+                                let compressed = bytes.starts_with(&[0x1f, 0x8b]);
+                                let include_linked = saved
+                                    .doc
+                                    .linked_only_images()
+                                    .iter()
+                                    .any(|key| saved.doc.images.get(key).is_some_and(|blob| !blob.is_proxy()));
+                                let mut nested = saved.doc;
+                                self.collect(&mut nested, found_path, &destination_file, depth + 1)?;
+                                if self.opts.relink {
+                                    // Preserve auxiliary native-file content when rewriting.
+                                    let mut options = vectorcraft_format::SaveOptions::for_doc(&nested);
+                                    options.preview = preview;
+                                    options.pdf = pdf;
+                                    options.profiles = saved.profiles;
+                                    options.compress = compressed;
+                                    options.include_linked = include_linked;
+                                    match vectorcraft_format::save_with(&nested, &options) {
+                                        Ok(rewritten) => bytes = rewritten,
+                                        Err(e) => self.warn(format!("{}: could not rewrite linked document ({e}); copied unchanged, its own links were not relinked", file.path)),
+                                    }
+                                }
+                            }
+                            Err(e) => self.warn(format!("{}: unreadable linked document ({e}); copied unchanged, its own links were not collected", file.path)),
+                        }
                     }
                 }
-                let copy = Copied { name: destination_file.clone(), size: bytes.len() as u64, hash: hash_bytes(&bytes) };
+                let copy = Copied { name: destination_file.clone(), size: Some(bytes.len() as u64), hash: Some(hash_bytes(&bytes)) };
                 self.copies.insert(found_path.to_string(), copy.clone());
                 local.insert(file.path.clone(), copy);
                 self.lines.push(format!("{} → {destination_file}", file.path));
@@ -275,6 +303,7 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let mut lines = std::mem::take(&mut collector.lines);
     let missing = std::mem::take(&mut collector.missing);
     let skipped = std::mem::take(&mut collector.skipped);
+    let warnings = std::mem::take(&mut collector.warnings);
     let fonts = collector.fonts;
     let links = collector.copies.len();
 
@@ -288,7 +317,7 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
     }
 
     let files: Vec<&str> = entries.iter().map(|(p, _)| p.as_str()).collect();
-    let mut out = json!({ "files": files, "links": links, "fonts": fonts, "missingLinks": missing, "skippedFonts": skipped });
+    let mut out = json!({ "files": files, "links": links, "fonts": fonts, "missingLinks": missing, "skippedFonts": skipped, "warnings": warnings });
     match root {
         Some(root) => {
             for (rel, bytes) in &entries {
