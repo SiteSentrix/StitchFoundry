@@ -415,6 +415,26 @@ fn hyphenated_layout_adds_hyphens() {
     }
 }
 
+/// Preferences › Hyphenation › Exceptions (#394): listing a word stops the layout from breaking it.
+#[test]
+fn hyphenation_exceptions_keep_listed_words_whole_in_layout() {
+    // Same copy as `hyphenated_layout_adds_hyphens` (known to produce soft hyphens at 120pt width).
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    let mut t = area(text, style(14.0), Rect::new(0.0, 0.0, 120.0, 600.0), Justify::Left);
+    t.para.hyphenate = true;
+    let with_breaks = layout(db(), &t);
+    let hyphens = |l: &TextLayout| l.glyphs.iter().filter(|g| g.len == 0).count();
+    assert!(hyphens(&with_breaks) > 0, "pattern produces soft hyphens");
+    hyphen::with_hyphenation_exceptions_for_test(
+        "extraordinarily, comprehensive, typographical, considerations, notwithstanding, everything",
+        || {
+            let blocked = layout(db(), &t);
+            assert_eq!(hyphens(&blocked), 0, "every long word listed: no soft hyphens");
+            assert!(blocked.lines.len() >= with_breaks.lines.len());
+        },
+    );
+}
+
 #[test]
 fn soft_hyphen_is_invisible_mid_line() {
     let l = layout(db(), &TextObject::point(Point::ZERO, "co\u{00AD}operate", style(20.0)));

@@ -670,3 +670,27 @@ world", "size": 20}),
     let NodeKind::Text(t) = &s.doc().unwrap().doc.node(dst).unwrap().kind else { panic!("not type") };
     assert_eq!((t.first_style().size, t.first_style().fill.color().map(|c| c.to_hex())), (20.0, Some("#00ff00".into())));
 }
+
+/// Preferences › Hyphenation › Exceptions (#394): `prefs.set` pushes the list into the hyphenator
+/// and bumps open documents so type reflows. Parsing of the list is covered in `vectorcraft-text`.
+#[test]
+fn hyphenation_exceptions_preference_reaches_the_hyphenator() {
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            vectorcraft_text::set_hyphenation_exceptions("");
+        }
+    }
+    let _clear = Clear;
+    let mut s = Session::new();
+    set_pref(&mut s, "hyphenationExceptions", json!(""));
+    assert!(vectorcraft_text::hyphenation_exceptions().is_empty());
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let before = s.doc().unwrap().revision;
+    set_pref(&mut s, "hyphenationExceptions", json!("typography, hap-pen"));
+    assert_eq!(s.prefs.hyphenation_exceptions, "typography, hap-pen");
+    assert_eq!(vectorcraft_text::hyphenation_exceptions(), "typography, hap-pen");
+    assert!(s.doc().unwrap().revision > before, "type reflows");
+    set_pref(&mut s, "hyphenationExceptions", json!(""));
+    assert!(vectorcraft_text::hyphenation_exceptions().is_empty());
+}

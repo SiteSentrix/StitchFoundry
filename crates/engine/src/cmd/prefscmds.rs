@@ -475,6 +475,7 @@ impl Session {
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
+        let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         self.prefs = p;
         if fonts_folder_changed {
             let folder = self.prefs.fonts_folder.trim();
@@ -485,6 +486,10 @@ impl Session {
                 // Its result only counts the faces cataloged.
                 let _ = super::fonts::rescan(self, &serde_json::Value::Null);
             }
+        }
+        if hyphen_exceptions_changed {
+            // Preferences › Hyphenation › Exceptions (#394): the layout reads the process-wide list.
+            vectorcraft_text::set_hyphenation_exceptions(&self.prefs.hyphenation_exceptions);
         }
         vectorcraft_render::set_default_threads(u16::try_from(self.prefs.render_threads).ok());
         for st in &mut self.docs {
@@ -501,6 +506,10 @@ impl Session {
                 let d = std::sync::Arc::make_mut(&mut st.doc);
                 d.grid.spacing = self.prefs.gridline_every;
                 d.grid.subdivisions = self.prefs.grid_subdivisions;
+                st.revision += 1;
+            }
+            // Hyphenation exceptions change every text object's line breaks.
+            if hyphen_exceptions_changed {
                 st.revision += 1;
             }
         }
