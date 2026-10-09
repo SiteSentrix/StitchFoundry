@@ -106,17 +106,21 @@ fn double_arrow(p: &mut Ink, o: Pos2, dir: egui::Vec2) {
     }
 }
 
+/// A curved double arrow over the hotspot: an arc with an arrowhead at each end, pointing on along
+/// the arc (#701).
 fn rotate(p: &mut Ink, o: Pos2) {
-    let pts: Vec<Pos2> = (0..=10)
-        .map(|i| {
-            let a = std::f32::consts::PI * (0.15 + 0.7 * i as f32 / 10.0);
-            o + vec2(a.cos() * 9.0, -a.sin() * 9.0)
-        })
-        .collect();
-    p.add(Shape::line(pts.clone(), Stroke::new(3.0, HALO)));
-    p.add(Shape::line(pts.clone(), Stroke::new(1.2, INK)));
-    for end in [pts[0], pts[pts.len() - 1]] {
-        poly(p, vec![end + vec2(-3.0, -1.0), end + vec2(3.0, -1.0), end + vec2(0.0, 4.0)], INK, INK);
+    const R: f32 = 8.0;
+    let (a0, a1) = (std::f32::consts::PI * 0.12, std::f32::consts::PI * 0.88);
+    let at = |a: f32| o + vec2(a.cos() * R, -a.sin() * R);
+    let pts: Vec<Pos2> = (0..=12).map(|i| at(a0 + (a1 - a0) * i as f32 / 12.0)).collect();
+    p.add(Shape::line(pts.clone(), Stroke::new(3.2, HALO)));
+    p.add(Shape::line(pts, Stroke::new(1.3, INK)));
+    // Each head points away from the arc, along its tangent there.
+    for (a, away) in [(a0, -1.0f32), (a1, 1.0)] {
+        let t = vec2(-a.sin(), -a.cos()) * away;
+        let n = vec2(-t.y, t.x);
+        let (end, tip) = (at(a) - t * 1.5, at(a) + t * 4.5);
+        poly(p, vec![tip, end + n * 1.8, end - n * 1.8], INK, INK);
     }
 }
 
