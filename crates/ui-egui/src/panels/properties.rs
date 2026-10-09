@@ -198,7 +198,8 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
 }
 
 /// Edit Artboards (the Artboard tool): the active artboard's name, position and size, its preset and
-/// orientation (#671), New Artboard and Delete Artboard, and Exit back to the Selection tool (#530).
+/// orientation (#671), New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
+/// Exit back to the Selection tool (#530).
 fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     let units = app.session.general_unit();
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
@@ -235,8 +236,18 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     divider(ui);
     section_header(ui, tl!("Quick Actions"));
-    if widgets::flat_button(ui, tl!("Exit"), w).clicked() {
-        app.select_tool("selection");
+    ui.horizontal(|ui| {
+        rearrange_button(app, ui, n, w);
+        if widgets::flat_button(ui, tl!("Exit"), w).clicked() {
+            app.select_tool("selection");
+        }
+    });
+}
+
+/// Rearrange All (#681): opens Rearrange All Artboards; disabled with fewer than two artboards.
+fn rearrange_button(app: &mut VectorcraftApp, ui: &mut Ui, artboards: usize, w: f32) {
+    if ui.add_enabled_ui(artboards > 1, |ui| widgets::flat_button(ui, tl!("Rearrange All"), w)).inner.clicked() {
+        super::artboards::open_rearrange(app);
     }
 }
 
@@ -308,6 +319,10 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.select_tool("artboard");
         }
     });
+    let artboards = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    if artboards > 1 {
+        rearrange_button(app, ui, artboards, w);
+    }
     divider(ui);
     section_header(ui, tl!("Appearance"));
     fill_stroke_rows(app, ui);
@@ -570,6 +585,26 @@ mod tests {
         let texts = frame(&mut app, &ctx, vec![]);
         click(&mut app, &ctx, &texts, "Exit");
         assert_eq!(app.session.tool_id(), "selection");
+    }
+
+    /// #681: Rearrange All opens Rearrange All Artboards in one click, from the Document section
+    /// (only with several artboards) and from Edit Artboards' Quick Actions.
+    #[test]
+    fn rearrange_all_opens_the_dialog() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        assert!(!frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Rearrange All"), "one artboard: nothing to rearrange");
+        app.run("artboard.new", json!({})).unwrap();
+        let texts = frame(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, &texts, "Rearrange All");
+        let kind = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.kind.clone());
+        assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::rearrange_artboards::KIND));
+        app.ui.dialog = None;
+        app.select_tool("artboard");
+        let texts = frame(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, &texts, "Rearrange All");
+        assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::rearrange_artboards::KIND));
     }
 
     /// #671: Edit Artboards shows the artboard's preset (Custom when it matches none) and its

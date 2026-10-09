@@ -1928,7 +1928,16 @@
 	Rating:	等级：
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
-	Rearrange All Artboards (on the roadmap)	重新排列所有画板 (规划中)
+	Rearrange All Artboards	重新排列所有画板
+	Rearrange All	全部重新排列
+	Layout Order:	布局顺序：
+	Change to Left-to-Right Layout	更改为由左至右版面配置
+	Grid by Row	按行网格排列
+	Grid by Column	按列网格排列
+	Arrange by Row	排成一行
+	Arrange by Column	排成一列
+	Move Artwork with Artboard	随画板移动图稿
+	Artboards: {n}	画板：{n}
 	Rearrange All Artboards…	重新排列所有画板…
 	Recall Selection	召回选区
 	RECENT	最近使用

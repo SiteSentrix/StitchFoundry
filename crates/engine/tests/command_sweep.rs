@@ -98,13 +98,19 @@ fn known_bug(id: &str, p: &Value) -> bool {
     KNOWN_BUGS.iter().any(|(c, k)| *c == id && p.get(*k).is_some())
 }
 
-/// Regression: huge column counts used to panic with `capacity overflow`.
+/// Regression: huge column counts used to panic with `capacity overflow`; in every layout and
+/// order (#681), with huge and negative spacing too.
 #[test]
 fn artboard_rearrange_huge_columns() {
     for fx in Fixture::ALL {
-        for cols in [json!(u64::MAX), json!(1e308)] {
-            let p = json!({ "columns": cols });
-            assert_eq!(probe(fx, "artboard.rearrange", &p), None);
+        for layout in ["gridByRow", "gridByColumn", "row", "column"] {
+            for order in ["leftToRight", "rightToLeft"] {
+                for (cols, spacing) in [(json!(u64::MAX), json!(1e308)), (json!(1e308), json!(-1e308)), (json!(0), json!(0)), (json!(-5), json!(20))]
+                {
+                    let p = json!({ "layout": layout, "order": order, "columns": cols, "spacing": spacing });
+                    assert_eq!(probe(fx, "artboard.rearrange", &p), None);
+                }
+            }
         }
     }
 }

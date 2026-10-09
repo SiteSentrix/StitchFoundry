@@ -60,6 +60,7 @@ pub mod print;
 pub mod print_presets;
 mod psd_options;
 pub mod raster_effects;
+pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
 pub mod saturate;
@@ -278,6 +279,7 @@ registry! {
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
+    RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
 }
 
 /// The button labels the shared dialog frame can show (OK, discard and the fixed Cancel/Close),

@@ -1984,7 +1984,16 @@
 	Rating:	評価:
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
-	Rearrange All Artboards (on the roadmap)	すべてのアートボードを再配置 (今後対応予定)
+	Rearrange All Artboards	すべてのアートボードを再配置
+	Rearrange All	すべて再配置
+	Layout Order:	レイアウト順序:
+	Change to Left-to-Right Layout	左から右のレイアウトに変更
+	Grid by Row	行ごとのグリッド
+	Grid by Column	列ごとのグリッド
+	Arrange by Row	1 行に配置
+	Arrange by Column	1 列に配置
+	Move Artwork with Artboard	アートボードと一緒にアートワークを移動
+	Artboards: {n}	アートボード: {n}
 	Recall Selection	選択範囲を呼び出し
 	Recent Colors	最近使用したカラー
 	Recent Files	最近使ったファイル
