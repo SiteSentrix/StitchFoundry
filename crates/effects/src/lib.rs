@@ -290,6 +290,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "{amount: % 1..500 (50), radius: pt 0.1..250 (1; σ of the blur edges are found against), threshold: levels 0..255 (0; smaller differences are left alone)}",
             json!({"amount": 50.0, "radius": 1.0, "threshold": 0.0}),
         ),
+        r("stylize.findEdges", "Find Edges", STYLIZE, "{} replaces colour with a Sobel edge map while preserving transparency", json!({})),
     ];
     v.extend([
         g(

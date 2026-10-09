@@ -55,6 +55,7 @@ fn params_take_defaults_and_stay_in_range() {
         fx("sharpen.unsharpMask", json!({"amount": 1e9, "radius": 0, "threshold": 1e9})),
         PixelFx::UnsharpMask { amount: 5.0, radius: 0.1, threshold: 255.0 }
     );
+    assert_eq!(fx("stylize.findEdges", json!({})), PixelFx::FindEdges);
     for id in PIXEL_EFFECTS {
         assert!(crate::is_raster(id) && crate::effect_info(id).is_some_and(|e| e.raster), "{id}");
     }
@@ -118,6 +119,16 @@ fn every_effect_is_deterministic() {
         // Premultiplied stays premultiplied.
         assert!(a.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]), "{id}");
     }
+}
+
+#[test]
+fn find_edges_detects_a_boundary_and_preserves_alpha() {
+    let (w, h) = (9, 9);
+    let src = image(w, h, |x, _| if x < 4 { [0, 0, 0, 200] } else { [200, 200, 200, 200] });
+    let mut out = src.clone();
+    fx("stylize.findEdges", json!({})).apply(&mut out, w, h, &space(w, h));
+    assert!(at(&out, w, 3, 4)[0] > 0 || at(&out, w, 4, 4)[0] > 0);
+    assert!(out.chunks_exact(4).all(|p| p[3] == 200 && p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
 }
 
 #[test]
