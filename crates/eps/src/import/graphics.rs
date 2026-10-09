@@ -35,8 +35,8 @@ const MAX_DRAWN: usize = 1 << 24;
 /// Samples taken of a shading function that isn't a plain interpolation.
 const SHADING_SAMPLES: usize = 32;
 
-const FAR_AWAY: &str = "objects far outside the page were left out";
-const TOO_MUCH: &str = "the file draws more than VectorCraft reads: the rest was left out";
+pub(super) const FAR_AWAY: &str = "objects far outside the page were left out";
+pub(super) const TOO_MUCH: &str = "the file draws more than VectorCraft reads: the rest was left out";
 const NESTED_PATTERNS: &str = "patterns nested too deeply are filled with mid-grey";
 /// Deepest patterns and glyph procedures drawn inside each other's art.
 pub(crate) const MAX_APART: u32 = 8;
@@ -153,6 +153,18 @@ impl Default for GState {
     }
 }
 
+/// The name of the empty group that stands for a text object (see [`Out::text_slot`]), followed by
+/// the number of its story in the text document when the file says.
+pub(crate) const TEXT_SLOT: &str = "\u{0}text";
+
+/// Is `name` that of a text slot, and which story is it of?
+pub(crate) fn slot_of(name: Option<&str>) -> Option<Option<u32>> {
+    name?.strip_prefix(TEXT_SLOT).map(|rest| rest.parse().ok())
+}
+
+/// An object drawn, with its chain of clips and groups.
+type DrawnItem = (Vec<Arc<Clip>>, Node);
+
 /// What the program draws.
 pub(crate) struct Out {
     /// The document being made: ids, images and swatches.
@@ -169,6 +181,14 @@ pub(crate) struct Out {
     /// goes in the innermost group kept).
     groups: Vec<Arc<Clip>>,
     too_deep: usize,
+    /// Illustrator clipping groups open (`q` … `Q`): the group's id (none when it opened past
+    /// [`MAX_NEST`]) and how many objects were drawn before it.
+    open_clips: Vec<(Option<u32>, usize)>,
+    /// Illustrator compound paths open (`*u` … `*U`): how many objects were drawn before each.
+    compounds: Vec<(usize, bool)>,
+    /// What the file says of the objects it draws now: hidden (Illustrator's `Xw`, a state it
+    /// changes only when the next object differs).
+    pub hidden: bool,
     /// Path elements (and the clips and groups of each object) drawn so far (see [`MAX_DRAWN`]).
     elements: usize,
     /// The path the last object was filled with: a stroke of the same path right after joins it.
@@ -204,6 +224,9 @@ impl Out {
             next_clip: 0,
             groups: vec![],
             too_deep: 0,
+            open_clips: vec![],
+            compounds: vec![],
+            hidden: false,
             elements: 0,
             merge: None,
             cmyk: 0,
@@ -229,7 +252,7 @@ impl Out {
             return;
         }
         self.next_clip += 1;
-        self.groups.push(Arc::new(Clip { id: self.next_clip, region: None }));
+        self.groups.push(Arc::new(Clip { id: self.next_clip, region: None, hidden: self.hidden }));
     }
 
     /// End the innermost group open (an end without a beginning ends nothing).
@@ -239,6 +262,76 @@ impl Out {
         } else {
             self.groups.pop();
         }
+    }
+
+    /// Open an Illustrator clipping group (`q`): a group that [`Self::end_clip_group`] clips with
+    /// the clip path the file gives at its end.
+    pub fn begin_clip_group(&mut self) {
+        let deep = self.too_deep;
+        self.begin_group();
+        let id = if self.too_deep == deep { self.groups.last().map(|c| c.id) } else { None };
+        self.open_clips.push((id, self.drawn.len()));
+    }
+
+    /// End the innermost clipping group open (`Q`), clipped to `region` when the file gave one
+    /// (without, it stays a plain group). An end without a beginning ends nothing.
+    pub fn end_clip_group(&mut self, region: Option<(BezPath, FillRule)>) {
+        let Some((id, start)) = self.open_clips.pop() else { return };
+        let hidden = self.groups.last().is_some_and(|c| Some(c.id) == id && c.hidden);
+        self.end_group();
+        let (Some(id), Some(region)) = (id, region) else { return };
+        // The objects drawn in the group hold the group's clip as it was when they were drawn,
+        // without its region.
+        let clip = Arc::new(Clip { id, region: Some(region), hidden });
+        for (chain, _) in self.drawn.iter_mut().skip(start) {
+            for c in chain.iter_mut().filter(|c| c.id == id) {
+                *c = clip.clone();
+            }
+        }
+    }
+
+    /// Open an Illustrator compound path (`*u`): the paths drawn until [`Self::end_compound`] are
+    /// its parts.
+    pub fn begin_compound(&mut self) {
+        self.compounds.push((self.drawn.len(), self.hidden));
+    }
+
+    /// End the innermost compound path open (`*U`): its parts become one compound path painted
+    /// with the first part's appearance (what Illustrator does). One part stays a plain path.
+    pub fn end_compound(&mut self) {
+        let Some((start, hidden)) = self.compounds.pop() else { return };
+        let parts = self.drawn.get(start..).unwrap_or_default();
+        let same_chain = |a: &DrawnItem, b: &DrawnItem| a.0.iter().map(|c| c.id).eq(b.0.iter().map(|c| c.id));
+        let Some(first) = parts.first() else { return };
+        if parts.len() < 2 || !parts.iter().all(|p| matches!(p.1.kind, NodeKind::Path { .. }) && same_chain(first, p)) {
+            return;
+        }
+        let parts = self.drawn.split_off(start);
+        let chain = parts.first().map(|p| p.0.clone()).unwrap_or_default();
+        let (mut rule, mut appearance) = (FillRule::NonZero, Appearance::default());
+        let mut children = Vec::with_capacity(parts.len());
+        for (i, (_, mut part)) in parts.into_iter().enumerate() {
+            if i == 0 {
+                appearance = std::mem::take(&mut part.appearance);
+                if let NodeKind::Path { rule: r, .. } = &part.kind {
+                    rule = *r;
+                }
+            }
+            part.appearance = Appearance::default();
+            children.push(Arc::new(part));
+        }
+        let mut compound = Node::new(self.doc.alloc_id(), NodeKind::Compound { children, rule });
+        compound.appearance = appearance;
+        compound.visible = !hidden;
+        self.drawn.push((chain, compound));
+    }
+
+    /// Where a text object of the file's editing data goes: an empty group named [`TEXT_SLOT`],
+    /// which the importer replaces with the text it read from the file's page.
+    pub fn text_slot(&mut self, story: Option<u32>) {
+        let mut n = Node::group(NodeId(0), vec![]);
+        n.name = Some(story.map_or_else(|| TEXT_SLOT.to_string(), |s| format!("{TEXT_SLOT}{s}")));
+        self.push(n, &[]);
     }
 
     /// The chain an object drawn under `clips` is drawn in: the clips and the groups open, in the
@@ -272,6 +365,7 @@ impl Out {
             return None;
         }
         node.id = self.doc.alloc_id();
+        node.visible = !self.hidden;
         let id = node.id;
         self.drawn.push((chain, node));
         Some(id)
@@ -326,7 +420,7 @@ impl Out {
             return None;
         }
         self.next_clip += 1;
-        Some(Arc::new(Clip { id: self.next_clip, region: Some((path, rule)) }))
+        Some(Arc::new(Clip { id: self.next_clip, region: Some((path, rule)), hidden: false }))
     }
 }
 

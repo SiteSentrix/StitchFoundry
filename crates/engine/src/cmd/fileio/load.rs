@@ -133,6 +133,23 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
     load_with(name, bytes, &LoadOptions::default())
 }
 
+/// A PDF-compatible `.ai` read through the editor's own copy of its art, which it carries: its
+/// layers and hidden objects as they were, and the art outside its artboard (its PDF part has
+/// only what is on the artboards), as an EPS of the editor is read. Anything else as it was.
+fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>) -> (Document, Vec<String>) {
+    if opts.pages.is_some() || !opts.layers {
+        return (doc, warnings);
+    }
+    let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings) };
+    let (doc, mut warnings) = vectorcraft_eps::layered_ai(&private, doc, warnings);
+    // The note that the art outside the artboard is lost is the reason the layers weren't read.
+    if warnings.iter().any(|w| w.starts_with("the file's layers weren't read from its editing data")) {
+        return (doc, warnings);
+    }
+    warnings.retain(|w| w != vectorcraft_pdf::OFF_ARTBOARD_NOTE);
+    (doc, warnings)
+}
+
 /// [`load`] with `document.open` options (the PDF pages, box and password; the DXF options).
 pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded> {
     let format = detect(name, bytes).ok_or_else(|| match super::unsupported(&super::extension(name)) {
@@ -171,7 +188,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 .then(|| vectorcraft_pdf::editing_with(bytes, opts.password.as_deref()))
                 .flatten()
                 .map(|e| (e.intact, move || Some(e.data)));
-            restore_or_import(editing, || super::pdfimport::import(bytes, opts))?
+            restore_or_import(editing, || {
+                let (doc, warnings) = super::pdfimport::import(bytes, opts)?;
+                Ok(through_editing_data(bytes, opts, doc, warnings))
+            })?
         }
         "dxf" => {
             let (doc, warnings) = super::dxfimport::import(bytes, &opts.dxf)?;
@@ -244,6 +264,9 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 /// Make a loaded file the new active document; `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
     let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded;
+    // What reading the file left out of the document, if anything.
+    let losses: Vec<String> = warnings.iter().filter(|w| is_loss(w)).cloned().collect();
+    let source_path = path.clone().filter(|_| !losses.is_empty());
     let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
     // document.
@@ -266,6 +289,8 @@ fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &Loa
         st.format = format.id;
     }
     st.converted = converted;
+    st.imported_from = source_path;
+    st.import_losses = losses;
     let title = s.documents()[index].title();
     Ok(super::merge(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings, "restored": restored }), links.to_json()))
 }
@@ -359,4 +384,48 @@ pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
     Ok(d)
+}
+
+/// Does this import note say that the file has something the document doesn't?
+fn is_loss(note: &str) -> bool {
+    note == vectorcraft_pdf::OFF_ARTBOARD_NOTE || vectorcraft_eps::is_loss(note)
+}
+
+/// Writing the file `target` for document `st`: not over the file `st` was read from when reading
+/// it left something out (hidden text, art or layers), unless `p` has `acknowledgeLoss: true`.
+/// Another name keeps the original file, with all it has.
+pub(crate) fn check_not_lossy_overwrite(st: &crate::DocState, target: &str, p: &Value, cmd: &str) -> Result<()> {
+    let Some(losses) = overwrite_losses(st, target, p) else { return Ok(()) };
+    let what = losses_summary(losses);
+    Err(bad(
+        cmd,
+        format!(
+            "{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway"
+        ),
+    ))
+}
+
+/// What writing the file `target` for document `st` would lose for good: the notes of what reading
+/// it left out when `target` is the file `st` was read from, unless `p` has `acknowledgeLoss: true`.
+/// The UI asks before such a write and repeats it with `acknowledgeLoss` ([`check_not_lossy_overwrite`]).
+pub fn overwrite_losses<'a>(st: &'a crate::DocState, target: &str, p: &Value) -> Option<&'a [String]> {
+    let source = st.imported_from.as_deref().filter(|_| !st.import_losses.is_empty())?;
+    (!bool_or(p, "acknowledgeLoss", false) && same_file(source, target)).then_some(st.import_losses.as_slice())
+}
+
+/// Up to three of `losses`, quoted, and how many more.
+pub fn losses_summary(losses: &[String]) -> String {
+    let mut what = losses.iter().take(3).map(|n| format!("“{n}”")).collect::<Vec<_>>().join("; ");
+    if losses.len() > 3 {
+        what.push_str(&format!("; {} more", losses.len() - 3));
+    }
+    what
+}
+
+/// Do `a` and `b` name one file (spelled differently, or through a link)?
+fn same_file(a: &str, b: &str) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
 }

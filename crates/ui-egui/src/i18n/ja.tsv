@@ -2115,6 +2115,8 @@
 	Reverse Path Direction Off	パスの方向を反転: オフ
 	Reverse Path Direction On	パスの方向を反転: オン
 	Revert to the saved version of “{name}”?	「{name}」を保存済みの状態に戻しますか？
+	Replace “{name}”, the file this document was opened from?	このドキュメントの開き元のファイル「{name}」を置き換えますか？
+	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	開いたときに VectorCraft がまだ読み込めない内容（{what}）が除外されたため、置き換えるとそれは完全に失われます。保持するには別の名前で保存してください。
 	Right Grid:	右グリッド:
 	Right Indent	右インデント
 	Right Plane	右面

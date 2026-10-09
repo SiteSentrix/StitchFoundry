@@ -232,6 +232,9 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         _ => st.path.as_deref().and_then(parent_folder),
     };
     let modified = date_param(p, "modified", cmd)?;
+    if let Some(path) = &path {
+        super::check_not_lossy_overwrite(st, path, p, cmd)?;
+    }
     Ok(SavePlan { mode, path, format, options, name, folder, modified })
 }
 

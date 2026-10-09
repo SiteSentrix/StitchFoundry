@@ -166,3 +166,42 @@ fn a_document_reopens_at_its_saved_view() {
     assert!(!app.view().unwrap().fitted);
     let _ = std::fs::remove_dir_all(d);
 }
+
+#[test]
+fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
+    let d = dir("lossy");
+    let path = d.join("a.vectorcraft").to_string_lossy().to_string();
+    let mut app = app();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    rect(&mut app);
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    // As if reading the file had left out text it can't read yet.
+    let st = app.session.doc_mut().unwrap();
+    st.imported_from = Some(path.clone());
+    st.import_losses = vec!["hidden type".into()];
+    let saved = std::fs::read(&path).unwrap();
+    rect(&mut app);
+    let r = app.run("file.save", json!({})).unwrap();
+    assert_eq!(r["pending"], dialogs::confirm::KIND);
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert!(dialog.str("detail").contains("“hidden type”"), "{:?}", dialog.fields);
+    assert_eq!(std::fs::read(&path).unwrap(), saved, "nothing is written before OK");
+    // Export As over it asks too; Cancel leaves the file.
+    app.ui.dialog = None;
+    assert_eq!(app.run("file.exportAs", json!({"path": path, "format": "svg"})).unwrap()["pending"], dialogs::confirm::KIND);
+    app.ui.dialog = None;
+    assert_eq!(std::fs::read(&path).unwrap(), saved);
+    // Another name doesn't ask.
+    let copy = d.join("b.svg").to_string_lossy().to_string();
+    assert!(app.run("file.exportAs", json!({"path": copy, "format": "svg"})).unwrap().get("pending").is_none());
+    crate::background::wait_all(&mut app);
+    assert!(app.ui.dialog.is_none());
+    // OK replaces it.
+    app.run("file.save", json!({})).unwrap();
+    press_ok(&mut app);
+    crate::background::wait_all(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_ne!(std::fs::read(&path).unwrap(), saved);
+    assert!(!app.session.active().unwrap().is_dirty());
+    let _ = std::fs::remove_dir_all(d);
+}
