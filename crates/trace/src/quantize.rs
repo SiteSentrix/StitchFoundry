@@ -55,7 +55,8 @@ pub fn quantize(img: &Raster, params: &TraceParams) -> Quantized {
             });
             compact(labels, palette.collect())
         }
-        Mode::Color => {
+        // Logo mode traces without quantising; asked directly, it quantises like Color.
+        Mode::Color | Mode::Logo => {
             // 15-bit colour histogram with per-bin sums (exact bin means).
             let mut bins: Vec<Bin> = vec![Bin::default(); 1 << 15];
             for p in img.rgba.as_chunks::<4>().0 {

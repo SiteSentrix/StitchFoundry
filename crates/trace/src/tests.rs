@@ -220,13 +220,14 @@ fn snap_curves_to_lines_straightens_near_lines() {
 
 #[test]
 fn presets_resolve() {
-    assert_eq!(presets().len(), 12);
+    assert_eq!(presets().len(), 13);
     for n in PRESET_NAMES {
         assert!(preset(n).is_some(), "{n}");
     }
     assert!(preset("[Default]").is_some());
     assert_eq!(preset("16 colors").unwrap().colors, 16);
     assert_eq!(preset("Shades of Gray").unwrap().mode, Mode::Grayscale);
+    assert_eq!(preset("flat logo").unwrap().mode, Mode::Logo);
     assert!(preset("nope").is_none());
 }
 
@@ -256,6 +257,10 @@ fn decode_png() {
 fn all_presets_trace_a_colour_image() {
     let img = Raster::from_fn(64, 64, |x, y| [(x * 4) as u8, (y * 4) as u8, ((x + y) * 2) as u8, 255]);
     for (name, p) in presets() {
+        // Flat Logo refuses a gradient on purpose (see logo::tests); every other preset traces it.
+        if p.mode == Mode::Logo {
+            continue;
+        }
         let r = trace(&img, &p);
         assert!(!r.paths.is_empty() || p.ignore_white, "{name}");
         for tp in &r.paths {

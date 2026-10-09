@@ -1,5 +1,5 @@
 //! Paragraph panel: seven alignment buttons, Paragraph Direction (with the Indic options), indents,
-//! space before/after, Hyphenate and Mojikumi Set (with the East Asian options); the panel menu
+//! space before/after, Hyphenate, Mojikumi Set and Kinsoku Set (with the East Asian options); the panel menu
 //! picks the Single-line or Every-line Composer.
 
 use egui::{Ui, vec2};
@@ -141,6 +141,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 format(app, json!({"mojikumi": if i == 1 { "lineEndHalf" } else { "none" }}));
             }
         });
+        // Which characters may not start or end a line.
+        ui.horizontal(|ui| {
+            use vectorcraft_doc::Kinsoku;
+            widgets::dim_label(ui, tl!("Kinsoku Set"));
+            let sets = [(tl!("None"), Kinsoku::None, "none"), (tl!("Hard"), Kinsoku::Hard, "hard"), (tl!("Soft"), Kinsoku::Soft, "soft")];
+            let names = sets.map(|s| s.0);
+            let current = sets.iter().find(|s| s.1 == para.kinsoku).map_or(names[1], |s| s.0);
+            // Already translated: shown as they are.
+            if let Some(i) = widgets::dropdown_names(ui, "pa-kinsoku", current, &names, ui.available_width() - 4.0)
+                && let Some((_, _, key)) = sets.get(i)
+            {
+                format(app, json!({"kinsoku": key}));
+            }
+        });
     }
 }
 
@@ -198,7 +212,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
         format(
             app,
-            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard", "composer": "everyLine"}),
+            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard", "kinsoku": "hard", "composer": "everyLine"}),
         );
     }
 }

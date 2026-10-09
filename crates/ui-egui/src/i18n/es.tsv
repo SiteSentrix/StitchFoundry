@@ -975,6 +975,7 @@
 	Flare Tool	Herramienta Destello
 	Flare Tool Options	Opciones de la herramienta Destello
 	Flat Image	Imagen acoplada
+	Flat Logo	Logotipo plano
 	Flatness:	Lisura:
 	Flatten Artwork	Acoplar ilustración
 	Flatten Transparency	Acoplar transparencia
@@ -1474,6 +1475,9 @@
 	Modify	Modificar
 	Mojikumi	Mojikumi
 	Mojikumi Set	Conjunto de mojikumi
+	Kinsoku Set	Conjunto de kinsoku
+	Hard	Fuerte
+	Soft	Suave
 	Monitor RGB	RGB del monitor
 	Mono	Mono
 	Monochrome images	Imágenes monocromas
@@ -3654,6 +3658,8 @@ axis	Both	Ambos
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no está en un grupo de la barra de herramientas con varias herramientas
 @msg	onto must name a panel floating in another group	onto debe nombrar un panel que flote en otro grupo
 @msg	x and y must both be numbers	x e y deben ser números
+@msg	"{0}" is not a colour: write it as #rrggbb	"{0}" no es un color: escríbelo como #rrggbb
+@msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	esto no es un logotipo de colores planos ({_1}% de sus zonas sólidas coinciden con unos pocos colores planos), así que el modo Logotipo plano convertiría sus degradados en manchas: usa el modo Color
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios

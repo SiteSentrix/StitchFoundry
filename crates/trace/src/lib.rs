@@ -32,6 +32,7 @@
 mod centerline;
 mod contour;
 mod fit;
+mod logo;
 mod mosaic;
 mod quantize;
 
@@ -53,6 +54,10 @@ pub enum TraceError {
     Empty,
     #[error("the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)")]
     TooLarge { width: u32, height: u32, max: u64 },
+    #[error("this isn't a flat-colour logo ({:.0}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead", (.fraction * 100.0).floor())]
+    NotFlat { fraction: f64 },
+    #[error("\"{0}\" is not a colour: write it as #rrggbb")]
+    BadPalette(String),
     #[error(
         "this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset"
     )]
@@ -127,6 +132,9 @@ pub enum Mode {
     Grayscale,
     #[serde(alias = "Color")]
     Color,
+    /// Flat-colour logos: sub-pixel edges, sharp corners restored, true lines and circles.
+    #[serde(alias = "Logo", alias = "flat", alias = "flatLogo")]
+    Logo,
 }
 
 /// How colour layers relate (Advanced → Method).
@@ -187,12 +195,14 @@ pub struct TraceParams {
     pub paths: f64,
     /// Corners 0–100: higher keeps more corners.
     pub corners: f64,
-    /// Noise: areas smaller than this many pixels are ignored.
+    /// Noise: areas smaller than this many pixels are ignored. (Flat Logo mode: areas smaller than
+    /// `noise / 10` pixels of the source image.)
     pub noise: u32,
     pub method: Method,
     /// Drop white areas (no white background shape).
     pub ignore_white: bool,
-    /// Replace nearly-straight curves with straight lines.
+    /// Replace nearly-straight curves with straight lines. In Logo mode this also snaps tight arcs
+    /// to true circles.
     pub snap_curves_to_lines: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
@@ -200,6 +210,10 @@ pub struct TraceParams {
     pub strokes: bool,
     /// Stroke: the widest feature (px) traced as a stroke.
     pub stroke_width: f64,
+    /// Flat Logo mode: the flat colours (`#rrggbb`) to use; empty finds them automatically. White is
+    /// always traced on its own and cannot be named, colours closer than about 12 (RGB distance)
+    /// count as one, and at most ten are used. (Not `palette`: that is Color mode's colour source.)
+    pub logo_colors: Vec<String>,
 }
 
 impl Default for TraceParams {
@@ -222,6 +236,7 @@ impl Default for TraceParams {
             fills: true,
             strokes: false,
             stroke_width: 10.0,
+            logo_colors: Vec::new(),
         }
     }
 }
@@ -258,6 +273,7 @@ pub const PRESET_NAMES: &[&str] = &[
     "Silhouettes",
     "Line Art",
     "Technical Drawing",
+    "Flat Logo",
 ];
 
 /// A built-in preset by name (case-insensitive; `[Default]` is accepted).
@@ -296,6 +312,8 @@ pub fn preset(name: &str) -> Option<TraceParams> {
         "silhouettes" => bw(200, 40.0, 60.0, 30, false),
         "line art" => bw(128, 80.0, 70.0, 10, false),
         "technical drawing" => bw(128, 95.0, 90.0, 4, true),
+        // Flat-colour logos: colours found automatically, edges placed to a fraction of a pixel.
+        "flat logo" => TraceParams { mode: Mode::Logo, colors: 8, paths: 60.0, corners: 50.0, noise: 6, snap_curves_to_lines: true, ..d },
         _ => return None,
     })
 }
@@ -337,7 +355,8 @@ fn is_white(c: [u8; 3]) -> bool {
     c.iter().all(|&v| v >= 245)
 }
 
-/// Trace `img` with `params`.
+/// Trace `img` with `params`. Failures (an image Logo mode refuses, say) give an empty result: use
+/// [`trace_within`] to see why.
 pub fn trace(img: &Raster, params: &TraceParams) -> TraceResult {
     // No trace has more than `usize::MAX` anchors.
     trace_within(img, params, usize::MAX).unwrap_or_default()
@@ -350,6 +369,9 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     let (w, h) = (img.width as usize, img.height as usize);
     if w == 0 || h == 0 || img.rgba.len() != w * h * 4 {
         return Ok(TraceResult::default());
+    }
+    if params.mode == Mode::Logo {
+        return logo::trace_logo(img, params, max_anchors);
     }
     let mut q = quantize(img, params);
     denoise(&mut q.labels, w, h, params.noise as usize);

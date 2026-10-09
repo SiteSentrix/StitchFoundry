@@ -1054,6 +1054,7 @@
 	Grays	灰度级数
 	Grays and Neutrals	灰色和中性色
 	Grayscale	灰度
+	Flat Logo	扁平徽标
 	Grayscale images	灰度图像
 	Greek & Cyrillic	希腊文与西里尔文
 	Green	绿
@@ -3268,6 +3269,9 @@
 	Right-to-Left Paragraph Direction	从右到左段落方向
 	Line-end Punctuation Half Width	行尾标点半角
 	Mojikumi Set	标点挤压集
+	Kinsoku Set	Kinsoku 集
+	Hard	强
+	Soft	弱
 	Saved Selection 1	已保存的选区 1
 	Saved Selection 2	已保存的选区 2
 	Saved Selection 3	已保存的选区 3

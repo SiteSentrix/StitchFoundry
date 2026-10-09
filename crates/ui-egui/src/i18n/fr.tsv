@@ -974,6 +974,7 @@
 	Flare Tool	Outil Halo
 	Flare Tool Options	Options de l’outil Halo
 	Flat Image	Image aplatie
+	Flat Logo	Logo en aplats
 	Flatness:	Planéité :
 	Flatten Artwork	Aplatir l’illustration
 	Flatten Transparency	Aplatir la transparence
@@ -1473,6 +1474,9 @@
 	Modify	Modifier
 	Mojikumi	Mojikumi
 	Mojikumi Set	Jeu de mojikumi
+	Kinsoku Set	Jeu de kinsoku
+	Hard	Fort
+	Soft	Souple
 	Monitor RGB	RVB du moniteur
 	Mono	Mono
 	Monochrome images	Images monochromes
@@ -3651,6 +3655,8 @@ axis	Both	Les deux
 @msg	{tool} isn't in a toolbar group of several tools	{tool} ne fait pas partie d’un groupe de plusieurs outils dans la barre d’outils
 @msg	onto must name a panel floating in another group	onto doit désigner un panneau flottant dans un autre groupe
 @msg	x and y must both be numbers	x et y doivent tous deux être des nombres
+@msg	"{0}" is not a colour: write it as #rrggbb	« {0} » n’est pas une couleur : écrivez-la sous la forme #rrggbb
+@msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ce n’est pas un logo en aplats ({_1} % de ses zones pleines correspondent à quelques couleurs unies), donc le mode Logo en aplats transformerait ses dégradés en taches : utilisez le mode Couleur
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services

@@ -510,3 +510,32 @@ fn burasagari_hangs_a_comma_or_full_stop_outside_the_line() {
     let l = lay("一二三四五、六七", Burasagari::Standard, false);
     assert!((l.glyphs[5].origin.x - 100.0).abs() < 0.01, "{:?}", l.glyphs[5].origin);
 }
+
+/// Kinsoku Set: in a measure of two ems, あカッ breaks before ッ with Soft (a small kana may start a
+/// line) and before カ with Hard (ッ goes with the character before it); None breaks as Soft here.
+/// Horizontal and vertical. Needs a font with full-width Japanese (skipped without one).
+#[test]
+fn kinsoku_set_decides_whether_a_small_kana_may_start_a_line() {
+    use vectorcraft_doc::Kinsoku;
+    let lay = |text: &str, k: Kinsoku, vertical_type: bool| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.vertical = vertical_type;
+        t.para.kinsoku = k;
+        let frame = if vertical_type { Rect::new(0.0, 0.0, 200.0, 40.0) } else { Rect::new(0.0, 0.0, 40.0, 200.0) };
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame.to_path(0.1)) };
+        layout(FontDb::global(), &t)
+    };
+    if (lay("雅", Kinsoku::Hard, false).glyphs[0].advance - 20.0).abs() > 2.0 {
+        return; // no font with full-width Japanese here
+    }
+    for vertical_type in [false, true] {
+        let lines = |k| lay("あカッ", k, vertical_type).glyphs.iter().map(|g| g.line).collect::<Vec<_>>();
+        assert_eq!(lines(Kinsoku::Hard), [0, 1, 1], "vertical {vertical_type}");
+        assert_eq!(lines(Kinsoku::Soft), [0, 0, 1], "vertical {vertical_type}");
+        assert_eq!(lines(Kinsoku::None), [0, 0, 1], "vertical {vertical_type}");
+        // A full stop never starts a line, Soft or not.
+        let stop = |k| lay("あカ。", k, vertical_type).glyphs.iter().map(|g| g.line).collect::<Vec<_>>();
+        assert_eq!(stop(Kinsoku::Soft), [0, 1, 1], "vertical {vertical_type}");
+    }
+}
