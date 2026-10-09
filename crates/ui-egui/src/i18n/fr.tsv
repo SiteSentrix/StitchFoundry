@@ -3064,6 +3064,18 @@
 	Next Data Set	Jeu de données suivant
 	Previous Data Set	Jeu de données précédent
 	Data Sets	Jeux de données
+	New Variable…	Nouvelle variable…
+	Bind Variable…	Lier la variable…
+	New Data Set…	Nouveau jeu de données…
+	Edit Data Set…	Modifier le jeu de données…
+	Select Data Set…	Sélectionner le jeu de données…
+	Variables Panel	Panneau des variables
+	Data Set	Jeu de données
+	Kind	Type
+	Variable	Variable
+	no document	aucun document
+	no data set to edit	aucun jeu de données à modifier
+	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Variation:	Variation :
 	Vector Effects	Effets vectoriels
 	Vector Halftone	Trame de demi-teintes vectorielle

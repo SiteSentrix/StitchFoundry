@@ -1226,6 +1226,10 @@ impl Session {
                     if !st.doc.assets.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_assets();
                     }
+                    // Variables: bindings let go of deleted art.
+                    if !st.doc.variables.bindings.is_empty() {
+                        Arc::make_mut(&mut st.doc).prune_variable_bindings();
+                    }
                     if doc_sane(&st.doc, &st.selection) {
                         Ok(v)
                     } else {

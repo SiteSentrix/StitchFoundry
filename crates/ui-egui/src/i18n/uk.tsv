@@ -3059,6 +3059,18 @@
 	Next Data Set	Наступний набір даних
 	Previous Data Set	Попередній набір даних
 	Data Sets	Набори даних
+	New Variable…	Нова змінна…
+	Bind Variable…	Прив’язати змінну…
+	New Data Set…	Новий набір даних…
+	Edit Data Set…	Змінити набір даних…
+	Select Data Set…	Вибрати набір даних…
+	Variables Panel	Панель змінних
+	Data Set	Набір даних
+	Kind	Тип
+	Variable	Змінна
+	no document	немає документа
+	no data set to edit	немає набору даних для зміни
+	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Variation:	Варіація:
 	Vector Effects	Векторні ефекти
 	Vector Halftone	Векторний напівтон

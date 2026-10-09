@@ -3063,6 +3063,18 @@
 	Next Data Set	Следующий набор данных
 	Previous Data Set	Предыдущий набор данных
 	Data Sets	Наборы данных
+	New Variable…	Новая переменная…
+	Bind Variable…	Привязать переменную…
+	New Data Set…	Новый набор данных…
+	Edit Data Set…	Изменить набор данных…
+	Select Data Set…	Выбрать набор данных…
+	Variables Panel	Панель переменных
+	Data Set	Набор данных
+	Kind	Тип
+	Variable	Переменная
+	no document	нет документа
+	no data set to edit	нет набора данных для изменения
+	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Variation:	Вариация:
 	Vector Effects	Векторные эффекты
 	Vector Halftone	Векторный полутон

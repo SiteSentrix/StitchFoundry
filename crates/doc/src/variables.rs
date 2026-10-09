@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::NodeId;
+use super::{Document, NodeId};
 
 /// What a variable drives.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,7 +20,8 @@ pub enum VariableKind {
 }
 
 impl VariableKind {
-    /// Parse the `kind` of `variable.define` (`text` or `visibility`).
+    /// Parse the `kind` of `variable.define`: `text` or `visibility` (`visible` is accepted
+    /// as the same thing, as the panel and the docs call it both).
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "text" => Some(Self::Text),
@@ -29,6 +30,7 @@ impl VariableKind {
         }
     }
 
+    /// The kind's own name, as `variable.define` takes it and `variable.list` reports it.
     pub fn label(self) -> &'static str {
         match self {
             Self::Text => "text",
@@ -83,19 +85,47 @@ pub struct Variables {
 }
 
 impl Variables {
+    /// The variable `name`, if the document defines it.
     pub fn variable(&self, name: &str) -> Option<&Variable> {
         self.variables.iter().find(|v| v.name == name)
     }
 
-    /// Drop the bindings (and the active dataset) that name what is gone.
-    pub fn prune(&mut self, names: &[String]) {
+    /// The dataset `name`, if the document has it.
+    pub fn dataset(&self, name: &str) -> Option<&DataSet> {
+        self.datasets.iter().find(|d| d.name == name)
+    }
+
+    /// The objects bound to the variable `name`, in document order.
+    pub fn objects_of(&self, name: &str) -> Vec<NodeId> {
+        let mut ids: Vec<NodeId> = self.bindings.iter().filter(|(_, v)| *v == name).map(|(id, _)| *id).collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// Drop the variables `names`, the dataset values that name them and the bindings to
+    /// them. Datasets named here are left alone: their names are their own namespace (the
+    /// active one is dropped by whoever deletes the dataset).
+    pub fn prune(&mut self, names: &[String]) -> usize {
+        let before = self.variables.len();
         self.variables.retain(|v| !names.contains(&v.name));
         for dataset in &mut self.datasets {
             dataset.values.retain(|k, _| !names.contains(k));
         }
         self.bindings.retain(|_, v| !names.contains(v));
-        if self.active_dataset.as_ref().is_some_and(|a| names.contains(a)) {
-            self.active_dataset = None;
+        before - self.variables.len()
+    }
+}
+
+impl Document {
+    /// Forget the bindings of objects that are no longer in the document (after every edit),
+    /// like [`Document::prune_assets`] does for Asset Export's. A binding outliving its object
+    /// would count as a skip in every dataset application and grow the saved file forever.
+    pub fn prune_variable_bindings(&mut self) {
+        if self.variables.bindings.keys().all(|id| self.node(*id).is_some()) {
+            return;
         }
+        let mut bindings = std::mem::take(&mut self.variables.bindings);
+        bindings.retain(|id, _| self.node(*id).is_some());
+        self.variables.bindings = bindings;
     }
 }

@@ -534,6 +534,17 @@
 	Paragraph Styles	Styly odstavců
 	Tabs	Tabulátory
 	Variables	Proměnné
+	New Variable…	Nová proměnná…
+	Bind Variable…	Přiřadit proměnnou…
+	Unbind Variable	Zrušit přiřazení proměnné
+	Delete Variable	Odstranit proměnnou
+	New Data Set…	Nová sada dat…
+	Edit Data Set…	Upravit sadu dat…
+	Delete Data Set	Odstranit sadu dat
+	Select Data Set…	Vybrat sadu dat…
+	Next Data Set	Další sada dat
+	Previous Data Set	Předchozí sada dat
+	Variables Panel	Panel proměnných
 	Brush Libraries	Knihovny štětců
 	Built-in Libraries	Vestavěné knihovny
 	User Defined	Uživatelské

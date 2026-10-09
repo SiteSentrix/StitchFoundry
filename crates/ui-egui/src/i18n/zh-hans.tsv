@@ -2959,6 +2959,18 @@
 	Next Data Set	下一个数据集
 	Previous Data Set	上一个数据集
 	Data Sets	数据集
+	New Variable…	新建变量…
+	Bind Variable…	绑定变量…
+	New Data Set…	新建数据集…
+	Edit Data Set…	编辑数据集…
+	Select Data Set…	选择数据集…
+	Variables Panel	变量面板
+	Data Set	数据集
+	Kind	类型
+	Variable	变量
+	no document	没有文档
+	no data set to edit	没有可编辑的数据集
+	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Variation:	变化：
 	Vector Effects	矢量效果
 	Vector Halftone	矢量半色调

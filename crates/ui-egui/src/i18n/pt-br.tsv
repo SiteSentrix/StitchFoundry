@@ -2530,6 +2530,17 @@
 	V:	V:
 	Variable Width Profile	Perfil de Largura Variável
 	Variables	Variáveis
+	New Variable…	Nova variável…
+	Bind Variable…	Associar variável…
+	Unbind Variable	Desassociar variável
+	Delete Variable	Excluir variável
+	New Data Set…	Novo conjunto de dados…
+	Edit Data Set…	Editar conjunto de dados…
+	Delete Data Set	Excluir conjunto de dados
+	Select Data Set…	Selecionar conjunto de dados…
+	Next Data Set	Próximo conjunto de dados
+	Previous Data Set	Conjunto de dados anterior
+	Variables Panel	Painel de variáveis
 	Variation:	Variação:
 	Vector Effects	Efeitos Vetoriais
 	Vector Halftone	Meio-tom Vetorial

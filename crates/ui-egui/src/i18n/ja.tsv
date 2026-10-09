@@ -581,6 +581,18 @@
 	Next Data Set	次のデータセット
 	Previous Data Set	前のデータセット
 	Data Sets	データセット
+	New Variable…	新規変数…
+	Bind Variable…	変数をバインド…
+	New Data Set…	新規データセット…
+	Edit Data Set…	データセットを編集…
+	Select Data Set…	データセットを選択…
+	Variables Panel	変数パネル
+	Data Set	データセット
+	Kind	種類
+	Variable	変数
+	no document	ドキュメントがありません
+	no data set to edit	編集するデータセットがありません
+	{name} · {kind} · {count}	{name} · {kind} · {count} 件
 	Brush Libraries	ブラシライブラリ
 	Built-in Libraries	内蔵ライブラリ
 	User Defined	ユーザー定義

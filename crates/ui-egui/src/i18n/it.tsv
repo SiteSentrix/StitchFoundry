@@ -3067,6 +3067,18 @@
 	Next Data Set	Set di dati successivo
 	Previous Data Set	Set di dati precedente
 	Data Sets	Set di dati
+	New Variable…	Nuova variabile…
+	Bind Variable…	Associa variabile…
+	New Data Set…	Nuovo set di dati…
+	Edit Data Set…	Modifica set di dati…
+	Select Data Set…	Seleziona set di dati…
+	Variables Panel	Pannello variabili
+	Data Set	Set di dati
+	Kind	Tipo
+	Variable	Variabile
+	no document	nessun documento
+	no data set to edit	nessun set di dati da modificare
+	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Variation:	Variazione:
 	Vector Effects	Effetti vettoriali
 	Vector Halftone	Retino vettoriale
