@@ -37,6 +37,8 @@ mod tests;
 pub const MAX_DATA: u64 = 256 << 20;
 /// Largest Zstandard window accepted (a frame asking for more is damaged data).
 const MAX_ZSTD_WINDOW: u64 = 64 << 20;
+/// Most Zstandard frames read (the app writes one).
+const MAX_FRAMES: usize = 4096;
 
 const EPS_BEGIN: &[u8] = b"%AI9_PrivateDataBegin";
 const EPS_END: &[u8] = b"%AI9_PrivateDataEnd";
@@ -126,20 +128,22 @@ impl Codec {
                 flate2::read::ZlibDecoder::new(data).take(max + 1).read_to_end(&mut out).map_err(|_| damaged("its zlib compression"))?;
             }
             Codec::Zstd => {
-                let mut src = data;
-                // The data may be several frames one after the other.
-                while src.iter().any(|b| *b != 0) {
+                // The data may be several frames one after the other, padded with zeros.
+                let end = data.iter().rposition(|b| *b != 0).map_or(0, |i| i + 1);
+                let mut src = data.get(..end).unwrap_or_default();
+                let mut frames = 0usize;
+                while !src.is_empty() {
+                    frames += 1;
+                    if frames > MAX_FRAMES {
+                        return Err(damaged("its Zstandard compression"));
+                    }
                     let left = (max + 1).saturating_sub(out.len() as u64);
                     if left == 0 {
                         break;
                     }
                     let d = ruzstd::decoding::StreamingDecoder::new_with_max_window_size(&mut src, MAX_ZSTD_WINDOW)
                         .map_err(|_| damaged("its Zstandard compression"))?;
-                    let before = out.len();
                     d.take(left).read_to_end(&mut out).map_err(|_| damaged("its Zstandard compression"))?;
-                    if out.len() == before {
-                        break;
-                    }
                 }
             }
         }

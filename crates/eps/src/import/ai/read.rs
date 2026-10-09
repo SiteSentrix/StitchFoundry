@@ -47,7 +47,7 @@ const MAX_NODES: usize = 4_000_000;
 /// Most points in one path.
 const MAX_POINTS: usize = 4_000_000;
 /// Largest image read (pixels).
-const MAX_PIXELS: u64 = 1 << 28;
+const MAX_PIXELS: u64 = 1 << 25;
 /// Largest side of the document and its artboards (points).
 const MAX_SIDE: f64 = 1e6;
 
@@ -200,6 +200,8 @@ struct Raster {
 struct Reader<'a> {
     lex: Lexer<'a>,
     stack: Vec<V>,
+    /// Where the `[` marks are on the stack, innermost last (some may have gone with operands).
+    marks: Vec<usize>,
     gs: GState,
     frames: Vec<Frame>,
     path: BezPath,
@@ -323,6 +325,7 @@ impl<'a> Reader<'a> {
         Self {
             lex: Lexer::new(data),
             stack: Vec::new(),
+            marks: Vec::new(),
             gs: GState::default(),
             frames: Vec::new(),
             path: BezPath::new(),
@@ -622,9 +625,19 @@ impl<'a> Reader<'a> {
 
     fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
         match w {
-            "[" => return self.push(V::Mark),
+            "[" => {
+                self.marks.push(self.stack.len());
+                return self.push(V::Mark);
+            }
             "]" => {
-                let at = self.stack.iter().rposition(|v| matches!(v, V::Mark)).unwrap_or(self.stack.len());
+                // The innermost `[` still on the stack (the stack is cut back by operators).
+                let mut at = self.stack.len();
+                while let Some(m) = self.marks.pop() {
+                    if matches!(self.stack.get(m), Some(V::Mark)) {
+                        at = m;
+                        break;
+                    }
+                }
                 let items: Vec<V> = self.stack.split_off(at).into_iter().skip(1).collect();
                 return self.push(V::Arr(items));
             }

@@ -407,3 +407,22 @@ fn ai_private_data() {
     }
     assert!(decode_private(b"%AI12_CompressedDataxx").is_err());
 }
+
+#[test]
+fn many_zstandard_frames_are_read_in_one_pass_and_capped() {
+    let frame = zstd(b" ");
+    let frames = |n: usize| -> Vec<u8> { [&b"%AI24_ZStandard_Data"[..], &frame.repeat(n), &[0; 64]].concat() };
+    let started = std::time::Instant::now();
+    assert_eq!(decode_private(&frames(4000)).unwrap().len(), 4000);
+    assert!(decode_private(&frames(50_000)).unwrap_err().contains("Zstandard"));
+    assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+}
+
+#[test]
+fn closing_brackets_without_their_opening_dont_rescan_the_stack() {
+    let n = 200_000;
+    let body = format!("{}\n{}\n", "1 ".repeat(n), "] ".repeat(n));
+    let started = std::time::Instant::now();
+    let _ = read(stream(&layer(&body)).as_bytes());
+    assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+}
