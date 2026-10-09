@@ -2442,6 +2442,8 @@
 	Show Guides	Показать направляющие
 	Show handles when multiple anchors are selected	Показывать маркеры при выделении нескольких опорных точек
 	Show Hidden Characters	Показать скрытые символы
+	Bold	Полужирный
+	Italic	Курсив
 	Show Images in Outline Mode	Показывать изображения в режиме контуров
 	Show in Folder	Показать в папке
 	Show Indic Options	Показать параметры индийских языков
@@ -3122,6 +3124,8 @@ axis	Both	Оба
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	select some type first	сначала выделите текст
+@msg	{_1} has no {_2} style	у {_1} нет начертания {_2}
 @msg	a layer couldn't be read	не удалось прочитать слой
 @msg	it has more than one artboard	в нём несколько монтажных областей
 @msg	it has no page	в нём нет страницы

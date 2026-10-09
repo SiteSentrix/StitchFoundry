@@ -2446,6 +2446,8 @@
 	Show Guides	Mostrar guías
 	Show handles when multiple anchors are selected	Mostrar manejadores al seleccionar varias anclas
 	Show Hidden Characters	Mostrar caracteres ocultos
+	Bold	Negrita
+	Italic	Cursiva
 	Show Images in Outline Mode	Mostrar imágenes en modo de contorno
 	Show in Folder	Mostrar en carpeta
 	Show Indic Options	Mostrar opciones índicas
@@ -3126,6 +3128,8 @@ axis	Both	Ambos
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	select some type first	selecciona primero algún texto
+@msg	{_1} has no {_2} style	{_1} no tiene el estilo {_2}
 @msg	a layer couldn't be read	no se pudo leer una capa
 @msg	it has more than one artboard	tiene más de una mesa de trabajo
 @msg	it has no page	no tiene página
