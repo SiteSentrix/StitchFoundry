@@ -365,6 +365,9 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
+    /// The Image Trace panel's Advanced section is open (as it was last left).
+    #[serde(default = "yes")]
+    pub image_trace_advanced: bool,
     /// The desktop window's size, position and maximized state, saved when the app quits and
     /// restored at the next launch (the desktop host reads and writes it; none on the web).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -518,6 +521,7 @@ impl Default for UiState {
             dxf_import: Value::Null,
             home: None,
             layers_panel: Default::default(),
+            image_trace_advanced: true,
             window: None,
         }
     }

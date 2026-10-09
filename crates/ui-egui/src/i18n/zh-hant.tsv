@@ -2507,6 +2507,13 @@
 	Smooth Color	平滑顏色
 	Smooth Tool	平滑工具
 	Snap Curves To Lines	將曲線靠齊線條
+	View:	檢視：
+	Tracing Result	描圖結果
+	Tracing Result with Outlines	描圖結果（含外框）
+	Outlines	外框
+	Outlines with Source Image	外框（含來源影像）
+	Source Image	來源影像
+	Image Trace View	影像描圖檢視
 	Snap Options	靠齊選項
 	Snap to Glyph	靠齊字符
 	Snap to Grid	靠齊格點

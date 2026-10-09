@@ -2424,6 +2424,13 @@
 	Smooth Color	平滑颜色
 	Smooth Tool	平滑工具
 	Snap Curves To Lines	将曲线对齐到直线
+	View:	视图：
+	Tracing Result	描摹结果
+	Tracing Result with Outlines	描摹结果（带轮廓）
+	Outlines	轮廓
+	Outlines with Source Image	轮廓（带源图像）
+	Source Image	源图像
+	Image Trace View	图像描摹视图
 	Snap Options	对齐选项
 	Snap to Glyph	靠齐字符
 	Snap to Grid	对齐网格

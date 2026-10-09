@@ -284,6 +284,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // pattern tiles stay smooth), as in Illustrator.
             anti_alias: if app.session.prefs.anti_aliased_artwork { vectorcraft_render::AntiAlias::Art } else { vectorcraft_render::AntiAlias::None },
             progressive_placed: true,
+            trace_views: true,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
