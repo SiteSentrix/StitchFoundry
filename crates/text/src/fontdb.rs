@@ -773,16 +773,37 @@ fn enumerate_faces(data: &[u8]) -> Vec<(u32, FaceStyle)> {
         .collect()
 }
 
+/// The font files held by the file at `path`: its contents, or for a suitcase font the fonts in
+/// its resource fork ([`crate::suitcase`]). None when it can't be read.
+#[cfg(not(target_arch = "wasm32"))]
+fn font_files(path: &Path) -> Vec<Vec<u8>> {
+    if crate::suitcase::is_suitcase(path) {
+        return crate::suitcase::read_fonts(path);
+    }
+    std::fs::read(path).into_iter().collect()
+}
+
 /// The styles of every face in the font file at `path` ([`face_styles`]), reading only its table
 /// directories and `name` and `fvar` tables: a scan opens hundreds of font files, many of them
 /// megabytes long.
 #[cfg(not(target_arch = "wasm32"))]
 fn file_face_names(path: &Path) -> Vec<FaceStyle> {
-    use std::io::{Read, Seek, SeekFrom};
+    if crate::suitcase::is_suitcase(path) {
+        return crate::suitcase::read_fonts(path).into_iter().flat_map(|font| reader_face_names(std::io::Cursor::new(font))).collect();
+    }
+    match std::fs::File::open(path) {
+        Ok(file) => reader_face_names(file),
+        Err(_) => vec![],
+    }
+}
+
+/// [`file_face_names`] for the font file `file` reads.
+#[cfg(not(target_arch = "wasm32"))]
+fn reader_face_names(mut file: impl std::io::Read + std::io::Seek) -> Vec<FaceStyle> {
+    use std::io::SeekFrom;
     /// Caps on what a (possibly damaged) file can make the scan read.
     const MAX_FACES: u32 = 256;
     const MAX_NAME_TABLE: u32 = 1 << 20;
-    let Ok(mut file) = std::fs::File::open(path) else { return vec![] };
     let mut read_at = |offset: u64, len: usize| -> Option<Vec<u8>> {
         let mut buf = vec![0; len];
         file.seek(SeekFrom::Start(offset)).ok()?;
@@ -1328,9 +1349,10 @@ impl FontDb {
         }
         for (p, named) in files {
             // A file named by itself is a font whatever its name (font services keep fonts in
-            // files without an extension); one of a folder's only with a font's extension.
+            // files without an extension); one of a folder's only with a font's extension, or
+            // a suitcase font (whose fonts are in its resource fork, whatever its name).
             let ext = p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
-            if !named && !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
+            if !named && !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) && !crate::suitcase::is_suitcase(&p) {
                 continue;
             }
             for FaceStyle { family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
@@ -1451,7 +1473,7 @@ impl FontDb {
         paths.dedup();
         let mut any = false;
         for p in paths {
-            if let Ok(data) = std::fs::read(&p) {
+            for data in font_files(&p) {
                 any |= self.add_font_from(data, Some(&p)) > 0;
             }
         }
@@ -1592,10 +1614,12 @@ impl FontDb {
             if std::fs::metadata(&p).map(|m| m.len() > 40 << 20).unwrap_or(true) {
                 continue;
             }
-            let Ok(data) = std::fs::read(&p) else { continue };
-            let hit = enumerate_faces(&data).iter().any(|(i, _)| skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some()));
-            if hit && self.add_font_from(data, Some(&p)) > 0 && covered(self) {
-                return true;
+            for data in font_files(&p) {
+                let hit =
+                    enumerate_faces(&data).iter().any(|(i, _)| skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some()));
+                if hit && self.add_font_from(data, Some(&p)) > 0 && covered(self) {
+                    return true;
+                }
             }
         }
         self.sys.lock().unwrap_or_else(|e| e.into_inner()).misses.insert(c);
