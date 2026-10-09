@@ -556,25 +556,41 @@ fn lightness(p: &[u8; 4]) -> u8 {
     ((on_white(p[0]) * 299 + on_white(p[1]) * 587 + on_white(p[2]) * 114) / 1000).min(255) as u8
 }
 
-/// How much two documents draw differently (0 to 1), `a` on `ra` and `b` on `rb` (rectangles of
-/// the same size), each seen on white. Pixels are compared by lightness: the page of an RGB
-/// document is written in the colours' CMYK equivalents, and what the comparison looks for is art
-/// that is missing or out of place.
-fn difference(a: &Document, ra: Rect, b: &Document, rb: Rect) -> f64 {
-    // The page doesn't print what isn't printed.
-    let printed = as_printed(b);
-    let b = printed.as_ref().unwrap_or(b);
-    let scale = (400.0 / ra.width().max(ra.height()).max(1.0)).min(4.0);
-    let mut r = vectorcraft_render::Renderer::new();
-    // Drawn on nothing and then seen on white: blending modes have no page to blend with, as in
-    // the app that wrote the file.
-    let (x, y) = (r.render_region(a, ra, scale, false), r.render_region(b, rb, scale, false));
-    if x.width != y.width || x.height != y.height {
-        return 1.0;
+/// The page drawn once, to weigh the layers' art against it: [`Self::difference`] draws the layers
+/// with a renderer of their own, which keeps their decoded images between draws (the page's images
+/// can share their keys and not their pixels, so the two don't share one).
+struct PageView {
+    page: vectorcraft_render::Rendered,
+    layers: vectorcraft_render::Renderer,
+    scale: f64,
+}
+
+impl PageView {
+    fn new(frame: &Frame<'_>) -> Self {
+        let ra = frame.page_rect;
+        let scale = (400.0 / ra.width().max(ra.height()).max(1.0)).min(4.0);
+        // Drawn on nothing and then seen on white: blending modes have no page to blend with, as in
+        // the app that wrote the file.
+        let page = vectorcraft_render::Renderer::new().render_region(frame.page, ra, scale, false);
+        Self { page, layers: vectorcraft_render::Renderer::new(), scale }
     }
-    let differing =
-        x.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).filter(|(p, q)| lightness(p).abs_diff(lightness(q)) > 48).count();
-    differing as f64 / (f64::from(x.width) * f64::from(x.height)).max(1.0)
+
+    /// How much `b` on `rb` (a rectangle the page's size) draws differently from the page (0 to 1),
+    /// each seen on white. Pixels are compared by lightness: the page of an RGB document is written in
+    /// the colours' CMYK equivalents, and what the comparison looks for is art that is missing or out
+    /// of place.
+    fn difference(&mut self, b: &Document, rb: Rect) -> f64 {
+        // The page doesn't print what isn't printed.
+        let printed = as_printed(b);
+        let b = printed.as_ref().unwrap_or(b);
+        let (x, y) = (&self.page, self.layers.render_region(b, rb, self.scale, false));
+        if x.width != y.width || x.height != y.height {
+            return 1.0;
+        }
+        let differing =
+            x.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).filter(|(p, q)| lightness(p).abs_diff(lightness(q)) > 48).count();
+        differing as f64 / (f64::from(x.width) * f64::from(x.height)).max(1.0)
+    }
 }
 
 /// More of the page than this differing between the layers' art and the page's own, and the
@@ -671,11 +687,12 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page) -> Result<(Documen
     }
     match frame {
         Some(frame) => {
-            let unseen = prune_unseen(&frame, &mut doc);
+            let mut view = PageView::new(&frame);
+            let unseen = prune_unseen(&frame, &mut view, &mut doc);
             if unseen > 0 {
                 notes.push(format!("{unseen} {UNSEEN_TEXT}"));
             }
-            notes.extend(compare(&frame, &doc)?);
+            notes.extend(compare(&frame, &mut view, &doc)?);
         }
         None => unmark(&mut doc.layers, true, &mut vec![]),
     }
@@ -729,14 +746,14 @@ fn take_out(nodes: &mut Vec<Arc<Node>>, id: NodeId, hide: bool) -> bool {
 /// has no type to match them, and that the layers look no worse without, are not drawn by the app
 /// that wrote the file (which paints every shown text object; it keeps the type of what was turned
 /// to outlines): they are taken out. How many.
-fn prune_unseen(frame: &Frame<'_>, doc: &mut Document) -> usize {
+fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Document) -> usize {
     let mut found = vec![];
     unmark(&mut doc.layers, true, &mut found);
     let rect = frame.rect;
     if found.is_empty() || found.len() > MAX_WEIGHED {
         return 0;
     }
-    let mut with = difference(frame.page, frame.page_rect, doc, rect);
+    let mut with = view.difference(doc, rect);
     let mut removed = 0;
     for (id, bounds) in found {
         if bounds.is_none_or(|b| b.intersect(rect).is_zero_area()) {
@@ -746,7 +763,7 @@ fn prune_unseen(frame: &Frame<'_>, doc: &mut Document) -> usize {
         if !take_out(&mut without.layers, id, true) {
             continue;
         }
-        let d = difference(frame.page, frame.page_rect, &without, rect);
+        let d = view.difference(&without, rect);
         if d - with <= UNSEEN_MARGIN {
             take_out(&mut doc.layers, id, false);
             with = d;
@@ -758,8 +775,8 @@ fn prune_unseen(frame: &Frame<'_>, doc: &mut Document) -> usize {
 
 /// Do the layers' art and the page's own look alike? An error says they don't; `Ok` has the note
 /// to give when they differ a little.
-fn compare(frame: &Frame<'_>, layered: &Document) -> Result<Option<String>, String> {
-    let diff = difference(frame.page, frame.page_rect, layered, frame.rect);
+fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document) -> Result<Option<String>, String> {
+    let diff = view.difference(layered, frame.rect);
     if diff > MAX_DIFFERENCE {
         return Err(format!("the art on them differs from the page's in {:.0}% of it", diff * 100.0));
     }
