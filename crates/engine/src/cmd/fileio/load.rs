@@ -282,10 +282,18 @@ pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
     open_template(s, src.name, &src.bytes, src.path)
 }
 
+/// The most memory decoding one image may take: a 60 in print sheet at 300 ppi (18000 × 6600 px)
+/// is ~475 MB as RGBA, past the decoder's 512 MB default once it is converted.
+const MAX_RASTER_ALLOC: u64 = 2 << 30;
+
 /// Decode an image's header (and, for formats stored as PNG, its pixels). CMYK TIFFs are kept as
-/// they are, with their ink amounts ([`ImageBlob::cmyk`]).
+/// they are, with their ink amounts ([`ImageBlob::cmyk`]); CMYK TIFFs with an alpha channel, which
+/// the decoder can't read, become RGBA in the active colour settings' CMYK.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
-    let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
+    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(MAX_RASTER_ALLOC);
+    reader.limits(limits);
     let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     let ppi = super::ppi::resolution(bytes);
@@ -293,7 +301,14 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let (bytes, mime, (width, height)) = if matches!(f.id, "png" | "jpg" | "gif" | "webp") || (f.id == "tiff" && cmyk()) {
         (bytes.to_vec(), f.mime, reader.into_dimensions().map_err(err)?)
     } else {
-        let img = reader.decode().map_err(err)?.to_rgba8();
+        let cmyka = || {
+            let cms = vectorcraft_color::cms::active();
+            vectorcraft_doc::cmyk::cmyka_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
+        };
+        let img = match (f.id == "tiff").then(cmyka).flatten() {
+            Some(img) => img,
+            None => reader.decode().map_err(err)?.to_rgba8(),
+        };
         let size = img.dimensions();
         let mut png = Vec::new();
         img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
