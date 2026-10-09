@@ -276,7 +276,11 @@ impl Document {
                 walk(child, f);
             }
         }
-        let roots = self.layers.iter_mut().chain(self.symbols.iter_mut().map(|s| &mut s.art)).chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
         for root in roots {
             walk(root, &mut f);
         }
