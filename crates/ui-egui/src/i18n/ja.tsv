@@ -3797,6 +3797,9 @@ theme	Appearance	外観
 @msg	give the path `id` and the width point `index`	パスの `id` と幅ポイントの `index` を指定してください
 @msg	no such width point	指定された幅ポイントが見つかりません
 @msg	onto must name a panel floating in another group	onto には、別のグループでフローティングしているパネルを指定してください
+@msg	below and above must name a panel floating in another group	below と above には別のグループでフローティングしているパネルを指定してください
+@msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
+@msg	column must be true or a number from 1	column には true または 1 以上の数値を指定してください
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
