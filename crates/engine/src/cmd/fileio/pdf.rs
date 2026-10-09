@@ -356,6 +356,9 @@ fn without_non_printing(layers: &[Arc<Node>]) -> Option<Vec<Arc<Node>>> {
 }
 
 fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(path) = str_param(p, "path") {
+        super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
+    }
     let expanded = expand_preset(s, C, p)?;
     let p = &*expanded;
     let (bytes, warnings) = encode(C, &s.doc()?.doc, p)?;

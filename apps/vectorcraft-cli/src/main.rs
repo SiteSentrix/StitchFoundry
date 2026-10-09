@@ -4,7 +4,7 @@
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless]
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg]... [--scale 2]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--replace-lossy]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000]
@@ -71,12 +71,14 @@ USAGE:
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text]
+  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--replace-lossy]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
       formats). --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
       unless one of them is given, EPS the bounds of the art, the other formats the first artboard.
       Live effects are kept, and hidden layers and objects (written hidden in SVG and PSD), with
-      SVG's data-* attributes; --outline-text writes SVG text as paths.
+      SVG's data-* attributes; --outline-text writes SVG text as paths. OUT may not be IN when reading
+      IN left things out (hidden text, art or layers it could not read; the notes say which) unless
+      --replace-lossy is given.
 
   vectorcraft-cli info FILE
       Print a JSON summary: the import warnings (what didn't come in as it was, such as an EPS
@@ -173,7 +175,7 @@ fn commands() -> Result<(), String> {
 
 fn convert(args: &[String]) -> Result<(), String> {
     let mut files = vec![];
-    let (mut scale, mut artboard, mut range, mut outline_text) = (1.0f64, None::<u64>, None::<String>, false);
+    let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy) = (1.0f64, None::<u64>, None::<String>, false, false);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -181,6 +183,7 @@ fn convert(args: &[String]) -> Result<(), String> {
             "--artboard" | "-a" => artboard = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--artboard needs an index")?),
             "--range" | "-r" => range = Some(it.next().cloned().ok_or("--range needs artboards such as 1-3,5")?),
             "--outline-text" => outline_text = true,
+            "--replace-lossy" => replace_lossy = true,
             f => files.push(f.to_string()),
         }
     }
@@ -189,7 +192,7 @@ fn convert(args: &[String]) -> Result<(), String> {
     h.call("app.open", json!({"path": input})).map_err(|e| format!("open {input}: {e}"))?;
     // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
     // PSD).
-    let params = json!({"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true});
+    let params = json!({"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
     let r = h.call("engine.execute", json!({"command": "document.export", "params": params})).map_err(|e| format!("export {output}: {e}"))?;
     outln!("{r}");
     Ok(())

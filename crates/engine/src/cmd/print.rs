@@ -109,6 +109,9 @@ fn to_postscript(p: &Value) -> Result<bool> {
 }
 
 fn print(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(path) = str_param(p, "path") {
+        super::fileio::check_not_lossy_overwrite(s.doc()?, path, p, PRINT)?;
+    }
     let postscript = to_postscript(p)?;
     let doc = &s.doc()?.doc;
     let mut set = settings(PRINT, doc, p)?;

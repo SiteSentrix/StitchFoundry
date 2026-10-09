@@ -18,6 +18,27 @@ use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, ps_err};
 /// The font a program uses before it sets one.
 const DEFAULT_FONT: &str = "Helvetica";
 
+/// A word of a style as PostScript names abbreviate it (`AkzidenzGroteskPro-BoldCnIt`), in full.
+fn style_word(w: &str) -> String {
+    match w {
+        "Lt" => "Light",
+        "Md" | "Med" => "Medium",
+        "Bd" => "Bold",
+        "XBd" => "Extra Bold",
+        "Blk" => "Black",
+        "Hv" => "Heavy",
+        "Th" => "Thin",
+        "Rg" => "Regular",
+        "Sb" | "Smbd" => "Semibold",
+        "Cn" | "Cond" => "Condensed",
+        "Ext" | "Ex" => "Extended",
+        "It" => "Italic",
+        "Obl" => "Oblique",
+        w => w,
+    }
+    .to_string()
+}
+
 /// A font's family and style from its PostScript name: `Helvetica-BoldOblique` → (`Helvetica`,
 /// `Bold Oblique`), `TimesNewRomanPS-BoldMT` → (`Times New Roman`, `Bold`), without a subset
 /// prefix (`ABCDEF+`) or the `*1` of a re-encoded copy (`ABCDEF+RollerBabyBV*1`).
@@ -47,7 +68,7 @@ pub fn family_style(name: &str) -> (String, String) {
     };
     let style = match trim(style).as_str() {
         "" | "Roman" | "Regular" | "Book" | "Normal" => "Regular".to_string(),
-        s => s.to_string(),
+        s => s.split(' ').map(style_word).collect::<Vec<_>>().join(" "),
     };
     (trim(family), style)
 }
