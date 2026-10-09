@@ -90,3 +90,42 @@ fn conventions_tool_panics_are_tool_errors() {
     assert!(r["content"][0]["text"].as_str().unwrap().contains("backend bug"));
     assert_eq!(rpc(&mut s, "ping", json!({}))["result"], json!({}));
 }
+
+#[test]
+fn conventions_resources_and_versioned_results() {
+    let mut s = Server::new(Box::new(Headless::with_document()));
+    let modern = json!({"io.modelcontextprotocol/protocolVersion":"2026-07-28"});
+    for (method, extra, ttl) in [
+        ("tools/list", json!({}), 600_000),
+        ("resources/list", json!({}), 600_000),
+        ("resources/templates/list", json!({}), 600_000),
+        ("prompts/list", json!({}), 600_000),
+        ("resources/read", json!({"uri":"vectorcraft://document"}), 0),
+        ("resources/read", json!({"uri":"vectorcraft://commands"}), 0),
+    ] {
+        let legacy = rpc(&mut s, method, extra.clone());
+        assert!(legacy["result"].is_object(), "{legacy}");
+        assert!(legacy["result"].get("resultType").is_none());
+        let mut params = extra.clone();
+        params["_meta"] = modern.clone();
+        let r = rpc(&mut s, method, params);
+        assert_eq!(r["result"]["resultType"], "complete", "{r}");
+        assert_eq!(r["result"]["ttlMs"], ttl);
+        assert_eq!(r["result"]["cacheScope"], "private");
+        let mut stripped = r["result"].clone();
+        for key in ["resultType", "ttlMs", "cacheScope"] {
+            stripped.as_object_mut().unwrap().remove(key);
+        }
+        assert_eq!(stripped, legacy["result"]);
+        assert!(rpc(&mut s, method, extra)["result"].get("resultType").is_none());
+    }
+    let r = rpc(&mut s, "resources/list", json!({}));
+    assert!(r["result"]["resources"].as_array().unwrap().iter().any(|r| r["uri"] == "vectorcraft://commands"));
+    let commands = rpc(&mut s, "resources/read", json!({"uri":"vectorcraft://commands"}));
+    let commands: Value = serde_json::from_str(commands["result"]["contents"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(commands, payload(&call(&mut s, "command_list", json!({}))));
+    assert_eq!(rpc(&mut s, "initialize", json!({"protocolVersion":"2026-07-28"}))["result"]["protocolVersion"], "2026-07-28");
+    assert_eq!(rpc(&mut s, "tools/list", json!({}))["result"]["resultType"], "complete");
+    rpc(&mut s, "initialize", json!({"protocolVersion":"2025-06-18"}));
+    assert!(rpc(&mut s, "tools/list", json!({}))["result"].get("resultType").is_none());
+}

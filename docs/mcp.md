@@ -1,7 +1,7 @@
 # VectorCraft MCP server
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
-(newline-delimited JSON-RPC 2.0, protocol `2025-06-18`; `2025-03-26` and `2024-11-05` also accepted). Agents use it to
+(newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
 draw, inspect and look at VectorCraft documents.
 
 It has two backends:
@@ -35,16 +35,18 @@ For a live session, start the app first: `cargo run --release -p vectorcraft -- 
 ## Protocol
 
 Newline-delimited JSON-RPC 2.0 on stdio. The revision is **`2025-06-18`**; `2025-03-26` and `2024-11-05` are
-accepted too, and `initialize` answers with whichever of those the client asked for. The specs' own
-`resultType` fields and the `2026-07-28` revision are not implemented — see
-[Not implemented](#not-implemented).
+accepted too. Clients requesting `2026-07-28` through `initialize`, or through a request's
+`_meta["io.modelcontextprotocol/protocolVersion"]`, receive `resultType: "complete"`,
+`ttlMs` and `cacheScope: "private"` on tool/resource/template/prompt lists and resource/prompt reads.
+List TTL is 600000 ms; live reads use zero. Older clients keep the original response shapes.
+This does not add streaming or input requests — see [Not implemented](#not-implemented).
 
 `initialize` advertises:
 
 | Capability | What it covers |
 |---|---|
 | `tools` | The tools below |
-| `resources` | Two fixed documents and four templates |
+| `resources` | Three fixed resources and four templates |
 | `prompts` | Five ready-made workflows |
 | `completions` | `completion/complete` for prompt arguments and template variables |
 | `logging` | `logging/setLevel` and `notifications/message` |
@@ -69,8 +71,8 @@ echo '{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"poster","
 
 ### Resource templates
 
-`vectorcraft://document` (summary) and `vectorcraft://document/json` (the whole model) are the fixed
-resources. The templates read one thing at a time, which matters on a real document: the full model
+`vectorcraft://document` (summary), `vectorcraft://document/json` (the whole model), and
+`vectorcraft://commands` (the live command catalog with enabled state) are the fixed resources. The templates read one thing at a time, which matters on a real document: the full model
 is thousands of lines an agent pays for again on every change.
 
 | `uriTemplate` | Reads |
@@ -175,6 +177,7 @@ Every tool declares read-only, destructive, idempotent and open-world hints. Fil
 argument keys return JSON-RPC `-32602`; command failures and caught tool panics return `isError`
 content, and the server continues serving. Command `params` are passed through: the registry
 currently describes them in prose, so MCP does not guess schemas or silently remove keys.
+
 
 Coordinates are points in document space: y points down, the origin is the first artboard's top-left, and a new
 document is 612 × 792 (US Letter). New objects become the selection. Most commands act on the selection or on
