@@ -293,6 +293,22 @@ mod tests {
         assert!(crate::icons::exists(row.2), "{} is not a bundled icon", row.2);
     }
 
+    /// The collapsed column draws `ICON_PANEL_GROUPS`, not `ICON_PANELS`: a panel registered
+    /// but in no group opens from the Window menu and then has nowhere to collapse to. Both
+    /// lists need an entry, and this is the one that was missing.
+    #[test]
+    fn the_panel_reaches_the_collapsed_icon_column() {
+        let in_column = crate::state::ICON_PANEL_GROUPS.iter().any(|g| g.contains(&ID));
+        assert!(in_column, "{ID} is in ICON_PANELS but in no ICON_PANEL_GROUPS row, so the collapsed column never draws it");
+        // Every id in a group names a panel that is registered with a label and an icon.
+        for group in crate::state::ICON_PANEL_GROUPS {
+            for id in *group {
+                let row = crate::state::ICON_PANELS.iter().find(|p| p.0 == *id).unwrap_or_else(|| panic!("{id} is in a group but not registered"));
+                assert!(!row.1.is_empty() && crate::icons::exists(row.2), "{id}: {} / {}", row.1, row.2);
+            }
+        }
+    }
+
     /// Every Variables command is in the Window menu, so the feature is reachable without an
     /// agent: the palette runs these with empty params, which the dialogs turn into a form.
     #[test]
