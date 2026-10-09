@@ -1146,7 +1146,7 @@ fn prune_unseen(page: &Document, doc: &mut Document) -> usize {
     let mut with = difference(page, doc, rect);
     let mut removed = 0;
     for (id, bounds) in found {
-        if !bounds.is_some_and(|b| !b.intersect(rect).is_zero_area()) {
+        if bounds.is_none_or(|b| b.intersect(rect).is_zero_area()) {
             continue;
         }
         let mut without = doc.clone();
