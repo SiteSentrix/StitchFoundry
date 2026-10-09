@@ -156,7 +156,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{columns?: n (2), spacing?: pt (20), byColumn?: false, moveArtwork?: true (locked and hidden art only with prefs moveLockedWithArtboard)} lay artboards out in a grid",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (locked and hidden art only with prefs moveLockedWithArtboard)} lay the artboards out in their order, the grid's top-left at the first artboard's → {artboards, rows, columns}",
             has_doc,
             rearrange_artboards
         ),
@@ -823,10 +823,32 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
-    let n_ab = s.doc()?.doc.artboards.len().max(1);
-    let cols = (f64_or(p, "columns", 2.0).clamp(1.0, n_ab as f64)) as usize;
+    const CMD: &str = "artboard.rearrange";
+    use super::newdoc::ArtboardLayout as L;
+    // A value given (not null) must be one of the names.
+    let named = |key: &str| p.get(key).filter(|v| !v.is_null()).map(|v| v.as_str().unwrap_or_default());
+    let layout = match named("layout") {
+        Some(l) => L::parse(l).ok_or_else(|| bad(CMD, "layout must be gridByRow, gridByColumn, row or column"))?,
+        None if bool_or(p, "byColumn", false) => L::GridByColumn,
+        None => L::GridByRow,
+    };
+    let rtl = match named("order") {
+        None => false,
+        Some(o) if o.eq_ignore_ascii_case("leftToRight") => false,
+        Some(o) if o.eq_ignore_ascii_case("rightToLeft") => true,
+        Some(_) => return Err(bad(CMD, "order must be leftToRight or rightToLeft")),
+    };
+    let count = s.doc()?.doc.artboards.len();
+    let n_ab = count.max(1);
+    // Columns of a grid by row, rows of a grid by column (NaN casts to 0).
+    let lines = (f64_or(p, "columns", 2.0).clamp(1.0, n_ab as f64) as usize).max(1);
+    let (rows, cols) = match layout {
+        L::GridByRow => (n_ab.div_ceil(lines), lines),
+        L::GridByColumn => (lines, n_ab.div_ceil(lines)),
+        L::Row => (1, n_ab),
+        L::Column => (n_ab, 1),
+    };
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
-    let by_col = bool_or(p, "byColumn", false);
     let move_art = bool_or(p, "moveArtwork", true);
     let locked_and_hidden = s.prefs.move_locked_with_artboard;
     let scale_strokes = false;
@@ -834,7 +856,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
         let Some(first) = rects.first().copied() else { return Ok(()) };
         let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
-        let origins = super::newdoc::grid_origins(&sizes, first.origin(), cols, spacing, by_col, false);
+        let origins = super::newdoc::grid_origins_rc(&sizes, first.origin(), (rows, cols), spacing, layout == L::GridByColumn, rtl);
         let deltas: Vec<Vec2> = rects.iter().zip(origins).map(|(r, o)| o - r.origin()).collect();
         if move_art {
             let tops: Vec<(NodeId, Point)> = d
@@ -846,11 +868,11 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
                 .filter_map(|n| Some((n.id, n.geometric_bounds()?.center())))
                 .collect();
             for (id, c) in tops {
-                if let Some(i) = rects.iter().position(|r| r.contains(c))
-                    && deltas[i] != Vec2::ZERO
+                if let Some(&dl) = rects.iter().position(|r| r.contains(c)).and_then(|i| deltas.get(i))
+                    && dl != Vec2::ZERO
                     && let Some(n) = d.node_mut(id)
                 {
-                    n.transform(Affine::translate(deltas[i]), scale_strokes);
+                    n.transform(Affine::translate(dl), scale_strokes);
                 }
             }
         }
@@ -864,5 +886,5 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    ok()
+    Ok(json!({ "artboards": count, "rows": rows, "columns": cols }))
 }

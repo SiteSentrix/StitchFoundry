@@ -1694,6 +1694,51 @@ pub fn orientation_button(ui: &mut Ui, landscape: bool, selected: bool, tip: &st
     resp.on_hover_text(tl!(tip)).clicked()
 }
 
+/// An artboard-layout toggle drawn in code (Rearrange All Artboards): small artboards in the grid
+/// cells `tiles` (column, row), tinted, and over them their order as a line from a dot on the first
+/// to an arrowhead on the last; accent-drawn in a pressed well when `selected`, greyed in a disabled
+/// `ui`. `tip` is shown as it is (the caller translates it). Returns clicked.
+pub fn layout_button(ui: &mut Ui, tiles: &[(u8, u8)], selected: bool, tip: &str) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::click());
+    let enabled = ui.is_enabled();
+    let bg = if selected {
+        t.tool_active
+    } else if resp.hovered() && enabled {
+        t.hover
+    } else {
+        Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, CornerRadius::same(3), bg);
+    let color = if !enabled {
+        t.text_disabled
+    } else if selected {
+        t.accent
+    } else {
+        t.icon
+    };
+    // Cells at most 10 points a side in a 20-point square: a row's artboards stand tall, a
+    // column's lie flat.
+    let (cols, rows) = tiles.iter().fold((1u8, 1u8), |(c, r), &(x, y)| (c.max(x.saturating_add(1)), r.max(y.saturating_add(1))));
+    let cell = vec2((20.0 / f32::from(cols)).min(10.0), (20.0 / f32::from(rows)).min(10.0));
+    let origin = rect.center() - vec2(f32::from(cols) * cell.x, f32::from(rows) * cell.y) / 2.0;
+    let centre = |&(x, y): &(u8, u8)| origin + vec2((f32::from(x) + 0.5) * cell.x, (f32::from(y) + 0.5) * cell.y);
+    for tile in tiles {
+        ui.painter().rect_filled(Rect::from_center_size(centre(tile), cell - vec2(2.0, 2.0)), 1.0, color.gamma_multiply(0.35));
+    }
+    let path: Vec<Pos2> = tiles.iter().map(centre).collect();
+    if let ([first, ..], [.., from, to]) = (path.as_slice(), path.as_slice()) {
+        let (first, from, to) = (*first, *from, *to);
+        let dir = (to - from).normalized();
+        let side = dir.rot90() * 2.5;
+        let head = vec![to + dir * 1.5, to - dir * 2.5 + side, to - dir * 2.5 - side];
+        ui.painter().circle_filled(first, 1.6, color);
+        ui.painter().add(egui::Shape::line(path, Stroke::new(1.2, color)));
+        ui.painter().add(egui::Shape::convex_polygon(head, color, Stroke::NONE));
+    }
+    resp.on_hover_text(tip).clicked()
+}
+
 /// `region` of `doc` rendered on white, its longest side `px` pixels, as a texture named `name`
 /// (artboard and page thumbnails).
 pub fn region_texture(

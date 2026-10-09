@@ -1954,7 +1954,16 @@
 	Rating:	Рейтинг:
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
-	Rearrange All Artboards (on the roadmap)	Переставить все монтажные области (в плане развития)
+	Rearrange All Artboards	Переставить все монтажные области
+	Rearrange All	Переставить все
+	Layout Order:	Порядок макета:
+	Change to Left-to-Right Layout	Переключить на макет слева направо
+	Grid by Row	Сетка по строкам
+	Grid by Column	Сетка по столбцам
+	Arrange by Row	Расположить в строку
+	Arrange by Column	Расположить в столбец
+	Move Artwork with Artboard	Перемещать иллюстрацию вместе с монтажной областью
+	Artboards: {n}	Монтажные области: {n}
 	Rearrange All Artboards…	Переставить все монтажные области…
 	Recall Selection	Восстановить выделение
 	RECENT	ПОСЛЕДНИЕ

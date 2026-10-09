@@ -1955,7 +1955,16 @@
 	Rating:	Classement :
 	Real World:	Monde réel :
 	Real-time Drawing and Editing	Dessin et édition en temps réel
-	Rearrange All Artboards (on the roadmap)	Réorganiser tous les plans de travail (prévu)
+	Rearrange All Artboards	Réorganiser tous les plans de travail
+	Rearrange All	Tout réorganiser
+	Layout Order:	Ordre de disposition :
+	Change to Left-to-Right Layout	Passer à la disposition de gauche à droite
+	Grid by Row	Grille par ligne
+	Grid by Column	Grille par colonne
+	Arrange by Row	Disposer en ligne
+	Arrange by Column	Disposer en colonne
+	Move Artwork with Artboard	Déplacer l’illustration avec le plan de travail
+	Artboards: {n}	Plans de travail : {n}
 	Rearrange All Artboards…	Réorganiser tous les plans de travail…
 	Recall Selection	Rappeler la sélection
 	RECENT	RÉCENTS

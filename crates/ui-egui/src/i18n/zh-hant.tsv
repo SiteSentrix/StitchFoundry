@@ -1978,7 +1978,16 @@
 	Rating:	評等：
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
-	Rearrange All Artboards (on the roadmap)	重新排列所有工作區域 (規劃中)
+	Rearrange All Artboards	重新排列所有工作區域
+	Rearrange All	全部重新排列
+	Layout Order:	版面配置順序：
+	Change to Left-to-Right Layout	變更為由左至右版面配置
+	Grid by Row	依列格狀排列
+	Grid by Column	依欄格狀排列
+	Arrange by Row	排成一列
+	Arrange by Column	排成一欄
+	Move Artwork with Artboard	隨工作區域移動圖稿
+	Artboards: {n}	工作區域：{n}
 	Rearrange All Artboards…	重新排列所有工作區域…
 	Recall Selection	叫出選取範圍
 	RECENT	最近使用

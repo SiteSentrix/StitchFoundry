@@ -24,7 +24,6 @@ fn lengths(command: &str) -> &'static [&'static str] {
     match command {
         "graph.create" => &["width", "height"],
         "shape.flare" => &["diameter", "pathLength"],
-        "artboard.rearrange" => &["spacing"],
         "perspective.grid.set" => &["cell", "distance"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
         "text.areaOptions" => &["width", "height", "gutter", "inset", "firstBaselineMin"],
