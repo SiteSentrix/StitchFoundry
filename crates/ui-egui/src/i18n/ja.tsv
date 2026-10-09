@@ -978,6 +978,7 @@
 	Copy All Styles	すべてのスタイルをコピー
 	Copy Color Value (Hex)	カラー値をコピー (16 進)
 	Copy Selected Style	選択したスタイルをコピー
+	Copy to User Defined	ユーザー定義にコピー
 	Copy Width Point	幅ポイントをコピー
 	Copyright	著作権
 	Copyright Info URL:	著作権情報の URL:
@@ -3682,6 +3683,7 @@ theme	Appearance	外観
 @msg	Unembedded to {_1}	埋め込みを解除して {_1} に保存しました
 @msg	Updated {_1} image(s)	画像を {_1} 枚更新しました
 @msg	no swatch library `{l}` (see swatch.library.list)	スウォッチライブラリ `{l}` が見つかりません (swatch.library.list を参照)
+@msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
 @msg	no files to place	配置するファイルがありません
 @msg	paths: give at least one file	paths: ファイルを 1 つ以上指定してください

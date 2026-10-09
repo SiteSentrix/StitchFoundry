@@ -493,6 +493,7 @@
 	Copy Fonts Used in the Document	Copia i font usati nel documento
 	Copy Links	Copia collegamenti
 	Copy Selected Style	Copia stile selezionato
+	Copy to User Defined	Copia in Definito dall'utente
 	Copy Width Point	Copia punto di larghezza
 	Copyright	Copyright
 	Copyright Info URL:	URL informazioni copyright:
@@ -3454,6 +3455,7 @@ axis	Both	Entrambi
 @msg	no symbol instances selected	nessuna istanza di simbolo selezionata
 @msg	no target object has an opacity mask: select one or give `id`	nessun oggetto di destinazione ha una maschera di opacità: selezionane uno o specifica `id`
 @msg	no threaded text selected	nessun testo concatenato selezionato
+@msg	no user library folder here	nessuna cartella di librerie utente qui
 @msg	no user workspace `{from}`	nessuna area di lavoro utente `{from}`
 @msg	node {_1} is not text	il nodo {_1} non è testo
 @msg	not a DXF drawing	non è un disegno DXF
