@@ -595,6 +595,15 @@ fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, re
                 g.origin.y += d;
             }
         }
+        // Inline art moves with its glyph's line.
+        for i in &mut cx.out.inlines {
+            let d = cx.out.glyphs.get(i.glyph).and_then(|g| offs.get(g.line)).copied().unwrap_or(0.0);
+            if d != 0.0 {
+                let m = Affine::translate((0.0, d));
+                i.xf = m * i.xf;
+                i.bounds = m.transform_rect_bbox(i.bounds);
+            }
+        }
         return;
     }
     let laid_out = |out: &TextLayout| out.lines.last().map_or(0, |l| l.end);
@@ -624,12 +633,17 @@ fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, re
             return;
         }
         let before = laid_out(&cx.out);
-        let prev = (std::mem::take(&mut cx.out.glyphs), std::mem::take(&mut cx.out.lines), std::mem::replace(&mut cx.out.overflow, false));
+        let prev = (
+            std::mem::take(&mut cx.out.glyphs),
+            std::mem::take(&mut cx.out.lines),
+            std::mem::take(&mut cx.out.inlines),
+            std::mem::replace(&mut cx.out.overflow, false),
+        );
         flow(cx, paras, t, Some(regions));
         if laid_out(&cx.out) < before {
             // Text no longer fits (lines got narrower, or flow around a wrap object): undo the
             // pass and try a smaller step.
-            (cx.out.glyphs, cx.out.lines, cx.out.overflow) = prev;
+            (cx.out.glyphs, cx.out.lines, cx.out.inlines, cx.out.overflow) = prev;
             for (r, (shift, gap)) in regions.iter_mut().zip(saved) {
                 r.shift = shift;
                 r.gap = gap;
