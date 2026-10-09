@@ -396,3 +396,61 @@ fn packaging_nested_files_preserves_embedded_preview_pdf_and_compression() {
     assert_eq!(images.len(), 1);
     assert_eq!(images[0].as_ref().unwrap().relative.as_deref(), Some("photo.png"));
 }
+
+/// A damaged or newer-format linked native file is still an asset worth delivering.
+/// Package must preserve the exact bytes instead of failing the entire handoff.
+#[test]
+fn unreadable_placed_document_is_copied_unchanged_with_warning() {
+    let dir = Folder::new("package-unreadable-placed");
+    let mut parent = poster_with_placed_document(&dir);
+    let damaged = dir.file("art/part.vectorcraft");
+    let bytes = b"not a parseable VectorCraft file".to_vec();
+    write(&damaged, &bytes);
+
+    let result = run(&mut parent, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["links"], 1, "{result}");
+    assert_eq!(result["missingLinks"], json!([]), "{result}");
+    let warnings = result["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 1, "{result}");
+    assert!(warnings[0].as_str().unwrap().contains("unreadable linked document"), "{result}");
+
+    let packaged = dir.0.join("delivery/poster Folder");
+    assert_eq!(std::fs::read(packaged.join("Links/part.vectorcraft")).unwrap(), bytes);
+    let report = std::fs::read_to_string(packaged.join("poster Report.txt")).unwrap();
+    assert!(report.lines().any(|line| line == "LINKED FILES"), "{report}");
+    assert!(report.contains("copied unchanged") && report.contains("its own links were not collected"), "{report}");
+}
+
+#[test]
+fn circular_placed_links_copy_each_document_once_and_warn() {
+    let dir = Folder::new("package-placed-cycle");
+    let source = dir.file("root.vectorcraft");
+    let child_path = dir.file("child.vectorcraft");
+
+    let mut root = session();
+    save(&mut root, &source);
+    let mut child = session();
+    run(&mut child, "file.place", json!({ "path": source, "link": true }));
+    save(&mut child, &child_path);
+    run(&mut root, "file.place", json!({ "path": child_path, "link": true }));
+    save(&mut root, &source);
+
+    let result = run(&mut root, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["links"], 1, "the root must not be copied a second time: {result}");
+    assert_eq!(result["missingLinks"], json!([]), "{result}");
+    assert!(result["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("circular placed-document link")), "{result}");
+    let packaged = dir.0.join("delivery/root Folder");
+    let root_doc = vectorcraft_format::load(&std::fs::read(packaged.join("root.vectorcraft")).unwrap()).unwrap();
+    let child_doc = vectorcraft_format::load(&std::fs::read(packaged.join("Links/child.vectorcraft")).unwrap()).unwrap();
+    let mut direct = Vec::new();
+    root_doc.visit_placed(|_, p| direct.push(p.link.relative.clone()));
+    assert_eq!(direct, [Some("Links/child.vectorcraft".into())]);
+    let mut back = Vec::new();
+    child_doc.visit_placed(|_, p| {
+        back.push((p.link.relative.clone(), p.link.hash.clone(), p.link.size));
+    });
+    assert_eq!(back, [(Some("../root.vectorcraft".into()), None, None)]);
+    let report = std::fs::read_to_string(packaged.join("root Report.txt")).unwrap();
+    assert!(report.lines().any(|line| line == "LINKED FILES"), "{report}");
+    assert!(report.contains("stopped following the cycle"), "{report}");
+}
