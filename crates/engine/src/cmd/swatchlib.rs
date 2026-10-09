@@ -362,8 +362,11 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         if palette_io::sniff_bytes(bytes) {
             palette_io::read_bytes(bytes, stem(file)).map_err(|e| bad(C, e))
         } else {
-            let doc = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?.doc;
-            document_library(&doc, &[], stem(file).to_string(), C)
+            let loaded = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?;
+            if loaded.preview_only {
+                return Err(bad(C, "only this Affinity file's embedded preview could be read; use File › Open to see it with its warning"));
+            }
+            document_library(&loaded.doc, &[], stem(file).to_string(), C)
         }
     })?;
     Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))

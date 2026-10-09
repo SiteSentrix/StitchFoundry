@@ -21,6 +21,9 @@ pub struct Loaded {
     /// An older native file (the former `.drawcraft` name or format version): saving it again
     /// rewrites it in today's format.
     pub converted: bool,
+    /// Only a stand-in picture of the file (an Affinity document whose native data couldn't be
+    /// read): Open shows it with its warning; Place, templates and libraries refuse it.
+    pub preview_only: bool,
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
@@ -48,6 +51,9 @@ pub fn file_name(name: &str) -> String {
 /// extension of `name`.
 pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     let by_name = format_for_name(name).filter(|f| f.read);
+    if vectorcraft_affinity::is_affinity(bytes) {
+        return format("affinity");
+    }
     if vectorcraft_format::sniff(bytes) {
         // A template keeps its meaning from the extension, like .ait.
         return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
@@ -135,6 +141,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     })?;
     let title = file_name(name);
     let mut converted = false;
+    let mut preview_only = false;
     let (mut doc, warnings, restored) = match format.id {
         // EPS and PostScript .ai: the document our EPS files carry, else the PostScript read.
         _ if format.id == "eps" || vectorcraft_pdf::is_postscript(bytes) => {
@@ -174,6 +181,11 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let (doc, warnings) = super::metafile::import(bytes)?;
             (doc, warnings, false)
         }
+        "affinity" => {
+            let i = super::affinity::import(&title, bytes)?;
+            preview_only = i.preview_only;
+            (i.doc, i.warnings, false)
+        }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
@@ -185,7 +197,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
         doc.title = title;
     }
-    Ok(Loaded { doc, format, warnings, restored, converted })
+    Ok(Loaded { doc, format, warnings, restored, converted, preview_only })
 }
 
 /// Import SVG text, reading the files its images link to (relative links from `folder`, the SVG's
@@ -220,12 +232,18 @@ pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<S
 /// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
 /// from there) as a new untitled document.
 pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value> {
-    open_loaded(s, load(name, bytes)?, path.map(str::to_string), &LoadOptions::default(), true)
+    let loaded = load(name, bytes)?;
+    if loaded.preview_only {
+        return Err(err(
+            "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
+        ));
+    }
+    open_loaded(s, loaded, path.map(str::to_string), &LoadOptions::default(), true)
 }
 
 /// Make a loaded file the new active document; `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted } = loaded;
+    let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded;
     let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
     // document.
@@ -329,7 +347,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
 
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
 /// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
-fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
+pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     let RasterImage { key, blob, width, height, ppi } = raster_image(bytes)?;
     let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
     let mut d = Document::new(width as f64 * sx, height as f64 * sy);

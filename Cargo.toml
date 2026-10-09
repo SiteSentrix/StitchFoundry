@@ -33,6 +33,7 @@ vectorcraft-cad = { path = "crates/cad" }
 vectorcraft-eps = { path = "crates/eps" }
 vectorcraft-metafile = { path = "crates/metafile" }
 vectorcraft-plugins = { path = "crates/plugins" }
+vectorcraft-affinity = { path = "crates/affinity" }
 
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }
@@ -42,6 +43,7 @@ serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 log = "0.4"
 proptest = "1"
+crc32fast = "1.5"
 # tests: a TCP port bound without listening (connections to it are refused)
 socket2 = "0.6"
 # Sandboxed WebAssembly plug-ins: a pure-Rust interpreter (MIT OR Apache-2.0) that builds for wasm32
