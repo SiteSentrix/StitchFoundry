@@ -163,6 +163,10 @@ impl Tool for SelectionTool {
         !matches!(self.state, State::Idle) || self.guide.busy()
     }
 
+    fn transforming(&self) -> bool {
+        matches!(self.state, State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. })
+    }
+
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         if let Some(out) = self.guide.pointer(cx, ev) {
             return out;

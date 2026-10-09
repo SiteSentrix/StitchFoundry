@@ -517,6 +517,11 @@ pub trait Tool: Send {
     fn busy(&self) -> bool {
         false
     }
+    /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
+    /// so only the art is seen going with the pointer)?
+    fn transforming(&self) -> bool {
+        false
+    }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
     /// with a stop selected takes Delete and the arrows)?
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {

@@ -1541,8 +1541,10 @@ fn print_tiling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
 const PRINT_TILING: Color32 = Color32::from_gray(96);
 
 fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    // The Selection tool's bounding box (rotated with the objects after a rotation).
+    // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
+    // a drag moves or resizes the selection, so only the art is seen going with the pointer (#712).
     let show_box = app.session.tool_id() == "selection"
+        && !app.session.tool_transforming()
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
     let bbox = if show_box { app.selection_box() } else { None };
