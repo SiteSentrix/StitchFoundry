@@ -423,6 +423,9 @@ fn a_line_the_page_draws_in_pieces_goes_to_its_text_object_whole() {
     let texts: Vec<String> =
         group.children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None }).collect();
     assert_eq!(texts, ["Hi there"]);
+    // Its bounds are laid out afresh for the whole text, not those of the first piece.
+    let NodeKind::Text(t) = &group.children().unwrap()[0].kind else { panic!("text") };
+    assert!(t.cached_bounds.is_none() && t.cached_baselines.is_empty());
 }
 
 #[test]

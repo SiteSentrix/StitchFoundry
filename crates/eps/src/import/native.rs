@@ -798,6 +798,9 @@ fn join_pieces(parts: &mut Vec<Arc<Node>>, lines: &[(String, Point)]) {
             && let NodeKind::Text(t) = &mut node.kind
         {
             t.runs = runs.into_iter().flatten().collect();
+            // The layout cached for the first piece is not this text's.
+            t.cached_bounds = None;
+            t.cached_baselines.clear();
         }
         let mut gone: Vec<usize> = rest.clone();
         gone.sort_unstable_by(|a, b| b.cmp(a));
