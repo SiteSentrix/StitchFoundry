@@ -2593,11 +2593,12 @@ returns the last search's state with the files found so far for each font: `sear
 `stopped`: `stop`, `time` or `limit`) or `failed` (with `error`); before the first search it returns
 `{state: "idle", fonts: []}`, without an `id`. `{stop: true}` stops the search. A search reads the table directories
 and the `name`, `fvar` and `OS/2` tables of `.ttf`, `.otf`, `.ttc` and `.otc` files and, on macOS, of suitcase fonts
-(files without an extension whose fonts are in their resource fork), and it lists a file for a font only when adding
+(extensionless or `.suit` files whose fonts are in their resource fork), and it lists a file for a font only when adding
 the file makes the font resolve exactly as `text.fonts` resolves it. It ends after `maxSeconds` (60 by default, 1 to
 600), at its limits on the entries listed (10,000,000), the folders waiting to be listed (1,000,000), the font files
 read (10,000) and the files kept (1,000), or once every font has a file. Folders more than 64 levels below the picked
-one are skipped and counted in `skipped`. A search does not read a suitcase font whose resource fork is larger than 8 MB.
+one are skipped and counted in `skipped`. A search does not read a font file larger than 256 MB, which
+`text.addFontFiles` does not copy, or a suitcase font whose resource fork is larger than 8 MB.
 
 A search does not enter app and media library packages (`.app`, `.bundle`, `.framework`, `.photoslibrary` and the like),
 folders named `Program Files` (also `Program Files (x86)` and `Program Files (Arm)`), `ProgramData`, `$Recycle.Bin` or

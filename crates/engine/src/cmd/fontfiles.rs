@@ -40,8 +40,8 @@ const GENERIC_FAMILIES: &[&str] = &[
 const MAX_PATH: usize = 4096;
 /// The most files one `text.addFontFiles` copies: as many as a search keeps.
 const MAX_ADD_FILES: usize = 1_000;
-/// The largest font file copied, and the most bytes one `text.addFontFiles` copies.
-#[cfg(not(target_arch = "wasm32"))]
+/// The largest font file a search reads and `text.addFontFiles` copies, and the most bytes one
+/// `text.addFontFiles` copies.
 pub(crate) const MAX_FONT_FILE: u64 = 256 << 20;
 #[cfg(not(target_arch = "wasm32"))]
 const MAX_ADD_BYTES: u64 = 1 << 30;
@@ -79,7 +79,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find Font Files",
             [],
             None,
-            "{folder?: an absolute path, fonts?: [{family, style?}] (1 to 1000; default: the active document's missing fonts, as text.missingFonts lists them), maxSeconds?: 60 (1 to 600), stop?: false (true: stop the last search)} with folder: look in it and its subfolders for font files that make the fonts available, on separate threads, and answer at once (state: searching); without folder: the last search's state, with the files found so far. A search reads the table directories and the name, fvar and OS/2 tables of .ttf, .otf, .ttc and .otc files and, on macOS, of suitcase fonts (files without an extension whose fonts are in their resource fork), and lists a file for a font when the file, added with text.addFontFiles, makes the font resolve exactly as text.fonts resolves it; fonts that resolve exactly already are left out. It doesn't enter app packages, folders named Program Files (also x86 and Arm), ProgramData, $Recycle.Bin or System Volume Information, the system's folders at the root of a volume, the Shared and Public folders in Users, a home folder's Library, AppData, Applications, snap and dot folders, a Library folder's app data folders or the folders the environment names for apps' data, and a search of a folder inside one of them fails; the walk also skips other hidden folders, folders whose contents are in the cloud and folders more than 64 levels deep, and follows no links (a picked path is resolved through its links); none on the web → {id (absent while idle), state: idle|searching|done|stopped|failed, folder?, fonts: [{family, style, status, files: [paths]}], searched?: {folders, files, fontFiles}, skipped?, unreadable?, stopped?: stop|time|limit, error?, seconds?}",
+            "{folder?: an absolute path, fonts?: [{family, style?}] (1 to 1000; default: the active document's missing fonts, as text.missingFonts lists them), maxSeconds?: 60 (1 to 600), stop?: false (true: stop the last search)} with folder: look in it and its subfolders for font files that make the fonts available, on separate threads, and answer at once (state: searching); without folder: the last search's state, with the files found so far. A search reads the table directories and the name, fvar and OS/2 tables of .ttf, .otf, .ttc and .otc files of at most 256 MB and, on macOS, of suitcase fonts (files without an extension or with .suit, whose fonts are in a resource fork of at most 8 MB), and lists a file for a font when the file, added with text.addFontFiles, makes the font resolve exactly as text.fonts resolves it; fonts that resolve exactly already are left out. It doesn't enter app packages, folders named Program Files (also x86 and Arm), ProgramData, $Recycle.Bin or System Volume Information, the system's folders at the root of a volume, the Shared and Public folders in Users, a home folder's Library, AppData, Applications, snap and dot folders, a Library folder's app data folders or the folders the environment names for apps' data, and a search of a folder inside one of them fails; the walk also skips other hidden folders, folders whose contents are in the cloud and folders more than 64 levels deep, and follows no links (a picked path is resolved through its links); none on the web → {id (absent while idle), state: idle|searching|done|stopped|failed, folder?, fonts: [{family, style, status, files: [paths]}], searched?: {folders, files, fontFiles}, skipped?, unreadable?, stopped?: stop|time|limit, error?, seconds?}",
             always,
             find
         ),
@@ -192,12 +192,14 @@ struct FontFiles(WantedFonts);
 impl Visitor for FontFiles {
     fn wants(&self, name: &str) -> bool {
         let path = Path::new(name);
-        // A suitcase font (macOS) often has no extension.
-        vectorcraft_text::is_font_file(path) || cfg!(target_os = "macos") && path.extension().is_none()
+        // A suitcase font (macOS) has no extension, or `.suit`.
+        vectorcraft_text::is_font_file(path) || cfg!(target_os = "macos") && path.extension().is_none_or(|e| e.eq_ignore_ascii_case("suit"))
     }
     fn worth_reading(&self, path: &Path) -> bool {
-        // A file without an extension is read only when it is a suitcase font.
-        path.extension().is_some() || vectorcraft_text::is_suitcase(path)
+        // A search reads font files and suitcase fonts of at most [`MAX_FONT_FILE`] bytes, the files
+        // `text.addFontFiles` copies.
+        (vectorcraft_text::is_font_file(path) || vectorcraft_text::is_suitcase(path))
+            && std::fs::metadata(path).is_ok_and(|m| m.len() <= MAX_FONT_FILE)
     }
     fn items(&self, path: &Path) -> Vec<usize> {
         self.0.provided_by(path)

@@ -356,8 +356,28 @@ fn only_font_files_are_copied() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A suitcase font: a file without an extension, empty but for the fonts in its resource fork,
-/// which only macOS keeps. A search finds it, and Add Fonts copies it with its fork.
+/// A search reads no font file larger than Add Fonts copies, and finds a smaller copy of the font.
+#[test]
+fn a_search_skips_font_files_too_large_to_add() {
+    let root = folder("too-large");
+    let (big, small) = (root.join("big/Sizeme.otf"), root.join("small/Sizeme.otf"));
+    let font = vectorcraft_testkit::fonts::renamed("Sizeme Sans 3");
+    for path in [&big, &small] {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, &font).unwrap();
+    }
+    // One byte past the limit, without writing it: the file system leaves the rest unallocated.
+    std::fs::File::options().write(true).open(&big).unwrap().set_len(MAX_FONT_FILE + 1).unwrap();
+    let mut s = session_for(&root);
+    // A font no file has keeps the search going through every folder.
+    s.execute("text.findFontFiles", &json!({"folder": root, "fonts": [{"family": "Sizeme Sans 3"}, {"family": "No Such Sans"}]})).unwrap();
+    let r = finished(&mut s);
+    assert_eq!(r["fonts"][0]["files"], json!([small]), "{r}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A suitcase font: a file without an extension or with `.suit`, empty but for the fonts in its
+/// resource fork, which only macOS keeps. A search finds it, and Add Fonts copies it with its fork.
 #[cfg(target_os = "macos")]
 #[test]
 fn suitcase_fonts_are_found_and_copied_with_their_fork() {
@@ -380,6 +400,14 @@ fn suitcase_fonts_are_found_and_copied_with_their_fork() {
     s.execute("text.findFontFiles", &json!({"folder": src, "fonts": [{"family": "Suitme Sans 3"}]})).unwrap();
     let r = finished(&mut s);
     assert_eq!(r["fonts"][0]["files"], json!([found]), "{r}");
+    // A suitcase with the `.suit` extension is found too, and a `.suit` file that isn't one is left out.
+    let suit = src.join("Suited.SUIT");
+    suitcase(&suit, "Suited Sans 3");
+    std::fs::write(src.join("Plain.suit"), b"text").unwrap();
+    // A font no file has keeps the search going through every folder.
+    s.execute("text.findFontFiles", &json!({"folder": src, "fonts": [{"family": "Suited Sans 3"}, {"family": "No Such Sans"}]})).unwrap();
+    let r = finished(&mut s);
+    assert_eq!((r["fonts"][0]["files"].clone(), r["searched"]["fontFiles"].as_u64()), (json!([suit]), Some(2)), "{r}");
     let r = copy_into(std::slice::from_ref(&found), &dest);
     assert_eq!(r.copied, [(found.clone(), dest.join("Suitme"))]);
     assert!(vectorcraft_text::is_suitcase(&dest.join("Suitme")));
