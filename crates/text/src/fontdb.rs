@@ -1130,9 +1130,10 @@ impl FontDb {
 
     fn new(font_paths: FontPaths) -> Self {
         let mut faces = Vec::new();
-        // The bundled fonts, then the Japanese craft-fonts faces (when built with them), Mincho
-        // first: fallbacks for Japanese text after the requested and bundled fonts.
-        let craft = crate::craft_fonts::japanese_document_fonts().into_iter().map(|f| f.bytes);
+        // The bundled fonts, then the craft-fonts faces (when built with them): Japanese, Mincho
+        // first, then Arabic with Noto Sans Arabic first. They are fallbacks for those scripts
+        // after the requested and bundled fonts, and families users can pick by name.
+        let craft = crate::craft_fonts::document_fonts().into_iter().map(|f| f.bytes);
         for data in BUNDLED.iter().copied().chain(craft) {
             for (i, spec) in enumerate_faces(data) {
                 if let Some(f) = make_face(FontBytes::Static(data), i, spec, None) {
