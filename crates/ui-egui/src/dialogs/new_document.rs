@@ -255,7 +255,7 @@ fn is_builtin_preset(name: &str) -> bool {
 }
 
 /// A preset's name as shown: a built-in one translated, the user's as it is.
-fn preset_name(name: &str) -> &str {
+pub(crate) fn preset_name(name: &str) -> &str {
     if is_builtin_preset(name) { tl!(name) } else { name }
 }
 
