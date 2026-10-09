@@ -222,6 +222,14 @@ mod tests {
         assert!(d.guide_shown(&gone) && d.guide_editable(&gone));
         d.guides.push(g);
         assert_eq!(d.guides_on(layer).count(), 1);
+        // Guides on no layer, or a gone one, are adopted by the top visible, unlocked layer.
+        d.node_mut(layer).unwrap().visible = true;
+        d.node_mut(layer).unwrap().locked = false;
+        d.guides.push(crate::Guide::new(false, 5.0));
+        d.guides.push(gone);
+        assert_eq!(d.adopt_guides(), 2);
+        assert!(d.guides.iter().all(|g| g.layer == Some(layer)));
+        assert_eq!(d.adopt_guides(), 0, "once");
     }
 
     #[test]

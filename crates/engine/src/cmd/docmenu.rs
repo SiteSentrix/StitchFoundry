@@ -205,7 +205,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Guide to Layer",
             [],
             None,
-            "{index?, layer: id} put ruler guide `index`, else the selected guides, on layer `layer` (a layer or sublayer), as for art moved to another layer → {count}",
+            "{index?, indexes?: [index…], layer: id} put ruler guide `index` (or guides `indexes`), else the selected guides, on layer `layer` (a layer or sublayer), as dragging their rows onto that layer's row in the Layers panel does → {count}",
             guides_unlocked,
             guide_set_layer
         ),
@@ -591,9 +591,10 @@ pub(crate) fn guide_remove(s: &mut Session, p: &Value) -> Result<Value> {
 fn guide_set_layer(s: &mut Session, p: &Value) -> Result<Value> {
     let layer = id_param(p, "layer").filter(|l| s.doc().is_ok_and(|st| st.doc.node(*l).is_some_and(Node::is_layer)));
     let layer = layer.ok_or_else(|| bad("guide.setLayer", "layer must name a layer or sublayer"))?;
-    let moving: Vec<usize> = match p.get("index") {
-        Some(v) => vec![guide_index(s, Some(v), "guide.setLayer")?],
-        None => s.doc()?.selection.guides.clone(),
+    let moving: Vec<usize> = match (p.get("index"), p.get("indexes").and_then(Value::as_array)) {
+        (Some(v), _) => vec![guide_index(s, Some(v), "guide.setLayer")?],
+        (None, Some(list)) => list.iter().take(10_000).map(|v| guide_index(s, Some(v), "guide.setLayer")).collect::<Result<Vec<_>>>()?,
+        (None, None) => s.doc()?.selection.guides.clone(),
     };
     if moving.is_empty() {
         return Err(bad("guide.setLayer", "no guide selected (or give an index)"));

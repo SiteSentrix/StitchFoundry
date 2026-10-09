@@ -98,6 +98,9 @@ enum LayersDrag {
     Rows(Vec<NodeId>),
     /// The selected-art square: the selected objects go to the row it is dropped on.
     Art,
+    /// Ruler guide rows (indexes into the document's guides): they go to the layer of the row
+    /// they are dropped on.
+    Guides(Vec<usize>),
 }
 
 /// A drag down the eye or lock column: every row it passes takes `value`.
@@ -549,6 +552,7 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
         NodeKind::Group { .. } => match drag {
             LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
             LayersDrag::Art => true,
+            LayersDrag::Guides(_) => false,
         },
         _ => false,
     }
@@ -559,7 +563,7 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
 /// from) the selected guides.
 fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     let (t, h) = (&view.t, view.h);
-    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
     let Some(g) = view.doc.guides.get(i) else { return };
     let selected = view.guides.contains(&i);
     if resp.hovered() {
@@ -587,6 +591,29 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     if resp.clicked() {
         let m = ui.input(|i| i.modifiers);
         out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
+    }
+    // Dragged: the selected guides when this is one of them, else this one, to another layer's row.
+    if resp.drag_started() {
+        let guides = if selected { view.guides.clone() } else { vec![i] };
+        egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Guides(guides));
+    }
+    if resp.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    }
+    // Guides dropped here go to this guide's layer.
+    if let Some(drag) = resp.dnd_hover_payload::<LayersDrag>()
+        && let LayersDrag::Guides(guides) = &*drag
+    {
+        guide_drop(ui, view, guides, item.node.id, r, &resp, out);
+    }
+}
+
+/// Guide rows `guides` dragged over row `r` (`resp`) of layer `layer`: the row lights up, and the
+/// release puts them on that layer (`guide.setLayer`, one undo step).
+fn guide_drop(ui: &Ui, view: &View, guides: &[usize], layer: NodeId, r: egui::Rect, resp: &egui::Response, out: &mut Out) {
+    ui.painter().rect_stroke(r.shrink(1.0), 0.0, Stroke::new(2.0, view.t.accent), StrokeKind::Inside);
+    if resp.dnd_release_payload::<LayersDrag>().is_some() {
+        out.actions.push(("guide.setLayer".into(), json!({"indexes": guides, "layer": layer.0})));
     }
 }
 
@@ -828,6 +855,13 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
     let moving: Vec<NodeId> = match &*drag {
         LayersDrag::Rows(ids) => ids.clone(),
         LayersDrag::Art => view.sel.iter().copied().collect(),
+        LayersDrag::Guides(guides) => {
+            // Guides go to the layer of the row (the row's own, for a layer).
+            if let Some(layer) = if n.is_layer() { Some(n.id) } else { doc.layer_containing(n.id) } {
+                guide_drop(ui, view, guides, layer, r, resp, out);
+            }
+            return;
+        }
     };
     // Never into itself or a row inside it.
     let around = doc.ancestry(n.id).unwrap_or_default();
@@ -842,7 +876,7 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
         LayersDrag::Art => Place::Above,
         LayersDrag::Rows(_) if inside && rel >= 0.25 && (rel <= 0.75 || open) => Place::Inside,
         LayersDrag::Rows(_) if rel < 0.5 => Place::Above,
-        LayersDrag::Rows(_) => Place::Below,
+        LayersDrag::Rows(_) | LayersDrag::Guides(_) => Place::Below,
     };
     let stroke = Stroke::new(2.0, view.t.accent);
     match place {
@@ -862,6 +896,7 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
             // The selection's top objects, as Arrange and Group take them.
             LayersDrag::Art => doc.paint_order(moving.iter().copied()).iter().map(|i| i.0).collect(),
             LayersDrag::Rows(ids) => ids.iter().map(|i| i.0).collect(),
+            LayersDrag::Guides(_) => return,
         };
         out.actions.push(("layer.move".into(), json!({"ids": ids, "target": n.id.0, "place": place.id(), "copy": copy})));
     }

@@ -914,7 +914,10 @@ fn artboard_guides_go_with_their_artboard() {
     let n = undo_len(&s);
     s.execute("artboard.delete", &json!({"index": 0})).unwrap();
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
-    assert_eq!(list(&mut s)[0], json!({"index": 0, "vertical": false, "pos": 100.0, "selected": true}));
+    assert_eq!(
+        list(&mut s)[0],
+        json!({"index": 0, "vertical": false, "pos": 100.0, "selected": true, "layer": layer, "shown": true, "editable": true})
+    );
     assert_eq!(undo_len(&s), n + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!((guides(&s).len(), selected_guides(&s)), (4, vec![1, 2]));
@@ -963,6 +966,19 @@ fn guides_dragged_out_of_a_ruler_snap_and_take_the_artboard_tool_s_artboard() {
     );
 }
 
+/// Guides saved before guides had layers are put on a layer when the document opens.
+#[test]
+fn guides_from_older_files_are_put_on_a_layer() {
+    let mut s = Session::new();
+    let mut d = vectorcraft_doc::Document::new(400.0, 300.0);
+    d.guides.push(vectorcraft_doc::Guide::new(true, 50.0));
+    d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+    s.add_document(d, None);
+    let st = s.doc().unwrap();
+    let top = st.doc.default_layer();
+    assert!(top.is_some() && st.doc.guides.iter().all(|g| g.layer == top), "{:?}", st.doc.guides);
+}
+
 /// Ruler guides are layer objects: made on the current layer, hidden, locked and deleted with it,
 /// and moved to another layer.
 #[test]
@@ -987,6 +1003,11 @@ fn ruler_guides_live_on_layers() {
     assert_eq!(s.doc().unwrap().doc.guides[1].layer, Some(first));
     s.execute("guide.setLayer", &json!({"index": 1, "layer": second.0})).unwrap();
     assert!(s.execute("guide.setLayer", &json!({"index": 1, "layer": 99999})).is_err());
+    // Several at once, as dragging their rows onto a layer's row does.
+    s.execute("guide.setLayer", &json!({"indexes": [0, 1], "layer": first.0})).unwrap();
+    assert!(s.doc().unwrap().doc.guides.iter().all(|g| g.layer == Some(first)));
+    s.execute("guide.setLayer", &json!({"indexes": [1], "layer": second.0})).unwrap();
+    assert!(s.execute("guide.setLayer", &json!({"indexes": [7], "layer": first.0})).is_err());
     // Deleting a layer deletes its guides; undo brings them back.
     s.execute("layer.delete", &json!({"ids": [second.0]})).unwrap();
     assert_eq!(guides(&s), [(true, 200.0)]);

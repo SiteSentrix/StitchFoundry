@@ -1004,6 +1004,24 @@ impl Document {
     pub fn guide_editable(&self, g: &Guide) -> bool {
         g.layer.is_none_or(|l| self.node(l).is_none() || self.is_editable(l))
     }
+    /// Put the ruler guides on no layer (from files saved before guides had layers), or on one that
+    /// is gone, on the top visible, unlocked layer ([`Self::default_layer`]). Returns how many.
+    pub fn adopt_guides(&mut self) -> usize {
+        let Some(home) = self.default_layer() else { return 0 };
+        let lost: Vec<usize> = self
+            .guides
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| g.layer.is_none_or(|l| !self.node(l).is_some_and(Node::is_layer)))
+            .map(|(i, _)| i)
+            .collect();
+        for i in &lost {
+            if let Some(g) = self.guides.get_mut(*i) {
+                g.layer = Some(home);
+            }
+        }
+        lost.len()
+    }
     /// The ruler guides on layer `layer` (not its sublayers'), by index.
     pub fn guides_on(&self, layer: NodeId) -> impl Iterator<Item = (usize, &Guide)> + '_ {
         self.guides.iter().enumerate().filter(move |(_, g)| g.layer == Some(layer))

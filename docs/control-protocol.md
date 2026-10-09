@@ -257,9 +257,10 @@ where it is greyed. The modifier keys still work while dragging (Cmd on a corner
 perspective, Cmd on a side shears).
 
 Ruler guides are layer objects: `guide.add` puts a guide on the current layer (or `layer`), where it shows, hides,
-locks and is deleted with its layer and is listed in the Layers panel (a click on its row selects it);
-`guide.setLayer {index?, layer}` moves guides to another layer, and `guide.list` gives each
-guide's `layer`, `shown` and `editable`.
+locks and is deleted with its layer and is listed in the Layers panel (a click on its row selects it, a drag onto
+another layer's rows moves it there); `guide.setLayer {index?, indexes?, layer}` moves guides to another layer, and
+`guide.list` gives each guide's `layer`, `shown` and `editable`. Guides in files saved before guides had layers go on
+the top visible, unlocked layer when the document opens.
 
 Floating panels: dragging a dock tab, a panel icon or a popped-out panel's title out of the dock floats that panel
 inside the window, and the strip right of the dock's tabs floats the whole Properties | Layers | Libraries group. A
