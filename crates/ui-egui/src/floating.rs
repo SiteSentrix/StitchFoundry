@@ -9,9 +9,16 @@
 //! × of a group puts its panels back in the dock too. The Tools panel floats the same way by its
 //! title bar ([`crate::toolbar`]) and docks again on the window's left edge.
 //!
-//! `window.panel.float` / `window.panel.dock` do the same for agents. The groups and the Tools
-//! panel's position are kept with the preferences and in user workspaces, and a position saved on
-//! a bigger window is clamped into this one when drawn.
+//! Dropped on the top or bottom edge of another group (a line shows where), a group joins it in a
+//! set: the groups stack top to bottom, each showing one of its panels, and move together by the
+//! top group's title bar, whose × docks them all. A group dragged by its tab strip (a lone panel's
+//! tab, or the strip right of the tabs) leaves its set and floats on its own. A double-click on a
+//! tab collapses a group to its tabs, and another expands it.
+//!
+//! `window.panel.float` (`onto`, `below`, `above`, `collapsed`) / `window.panel.dock` do the same
+//! for agents. The groups, their sets and the Tools panel's position are kept with the preferences
+//! and in user workspaces, and a position saved on a bigger window is clamped into this one when
+//! drawn.
 
 use egui::{CornerRadius, Id, Pos2, Rect, Sense, Stroke, Vec2, pos2, vec2};
 use serde_json::{Value, json};
@@ -24,6 +31,10 @@ use crate::{VectorcraftApp, dock, icons, panels};
 pub const TITLE: f32 = 14.0;
 /// Height of a floating group's tab strip.
 pub const STRIP: f32 = 26.0;
+/// Height of the bar between two groups of a set.
+pub const GAP: f32 = 3.0;
+/// How far from a group's top or bottom edge a drop stacks it above or below the group.
+const EDGE: f32 = 7.0;
 /// Where `window.panel.float` floats a group given no position; each further group 24 points
 /// lower right.
 const FLOAT_AT: [f32; 2] = [420.0, 120.0];
@@ -58,6 +69,10 @@ enum Drop {
     Dock,
     /// Stacked with the floating group holding this panel.
     Stack(&'static str),
+    /// In a set with the floating group holding this panel, below it.
+    Below(&'static str),
+    /// In a set with the floating group holding this panel, above it (the top group of its set).
+    Above(&'static str),
 }
 
 fn move_id() -> Id {
@@ -80,9 +95,15 @@ pub(crate) fn tools_zone_id() -> Id {
     Id::new("floating-tools-zone")
 }
 
-/// The area of the floating group whose first panel is `first`.
+/// The area of the floating group whose first panel is `first` (of the set it heads).
 pub fn area_id(first: &str) -> Id {
     Id::new(("floating-panels", first))
+}
+
+/// The floating group whose first panel is `first`, as last drawn (egui temp memory): in a set,
+/// from the bar above its tabs to its panel's bottom.
+pub(crate) fn group_rect_id(first: &str) -> Id {
+    Id::new(("floating-group-rect", first))
 }
 
 /// Panel `id` (`window.panel`) as a static string and its English label, if it is a panel.
@@ -93,6 +114,71 @@ fn panel(id: &str) -> Option<(&'static str, &'static str)> {
 /// The floating group holding panel `id`.
 pub fn group_of(ui: &UiState, id: &str) -> Option<usize> {
     ui.floating_panels.iter().position(|g| g.panels.iter().any(|p| p == id))
+}
+
+/// The floating groups drawn with group `gi`, top to bottom: the groups of its set, or it alone.
+pub fn set_of(ui: &UiState, gi: usize) -> Vec<usize> {
+    match ui.floating_panels.get(gi).and_then(|g| g.column) {
+        Some(c) => ui.floating_panels.iter().enumerate().filter(|(_, g)| g.column == Some(c)).map(|(i, _)| i).collect(),
+        None => vec![gi],
+    }
+}
+
+/// Group `gi` heads its set (or floats alone): it draws the set's title bar.
+fn leads(ui: &UiState, gi: usize) -> bool {
+    set_of(ui, gi).first() == Some(&gi)
+}
+
+/// Move the set of group `gi` to `pos`.
+fn set_pos(ui: &mut UiState, gi: usize, pos: [f32; 2]) {
+    for i in set_of(ui, gi) {
+        if let Some(g) = ui.floating_panels.get_mut(i) {
+            g.pos = pos;
+        }
+    }
+}
+
+/// The panels of the groups `set`, in order.
+fn ids_in(ui: &UiState, set: &[usize]) -> Vec<&'static str> {
+    set.iter().filter_map(|&i| ui.floating_panels.get(i)).flat_map(ids_of).collect()
+}
+
+/// The panel shown by group `gi`.
+fn shown(ui: &UiState, gi: usize) -> Option<&'static str> {
+    let g = ui.floating_panels.get(gi)?;
+    let ids = ids_of(g);
+    ids.get(g.active).or(ids.first()).copied()
+}
+
+/// Put the groups `moved` in a set with the group holding `onto` (not one of them), right below or
+/// right above it, at its position.
+pub fn attach(ui: &mut UiState, moved: &[usize], onto: &str, below: bool) {
+    let Some(target) = group_of(ui, onto).filter(|t| !moved.contains(t)) else { return };
+    let column = match ui.floating_panels.get(target).and_then(|g| g.column) {
+        Some(c) => c,
+        None => ui.floating_panels.iter().filter_map(|g| g.column).max().map_or(1, |c| c.saturating_add(1)),
+    };
+    let Some(pos) = ui.floating_panels.get(target).map(|g| g.pos) else { return };
+    let (mut taken, mut kept) = (vec![], vec![]);
+    for (i, mut g) in ui.floating_panels.drain(..).enumerate() {
+        if i == target {
+            g.column = Some(column);
+        }
+        if moved.contains(&i) {
+            g.column = Some(column);
+            g.pos = pos;
+            taken.push(g);
+        } else {
+            kept.push(g);
+        }
+    }
+    let at = kept.iter().position(|g| g.panels.iter().any(|p| p == onto)).map_or(kept.len(), |i| if below { i + 1 } else { i });
+    kept.splice(at..at, taken);
+    ui.floating_panels = kept;
+    FloatingPanels::tidy(&mut ui.floating_panels);
+    if let Some(tab) = shown_tab(ui) {
+        ui.dock_tab = tab;
+    }
 }
 
 /// The panels of group `g`, as static ids.
@@ -118,6 +204,7 @@ fn take(ui: &mut UiState, ids: &[&str]) {
         g.active = active.and_then(|a| g.panels.iter().position(|p| *p == a)).unwrap_or(0);
         !g.panels.is_empty()
     });
+    FloatingPanels::tidy(&mut ui.floating_panels);
 }
 
 /// Float `ids` (out of the dock or of the group they were in) as a new group with its top-left
@@ -129,7 +216,7 @@ pub fn float(ui: &mut UiState, ids: &[&str], active: &str, pos: Pos2) {
     }
     let panels: Vec<String> = ids.iter().map(|id| id.to_string()).collect();
     let active = panels.iter().position(|p| p == active).unwrap_or(0);
-    ui.floating_panels.push(FloatingPanels { panels, active, pos: [pos.x, pos.y], width: None });
+    ui.floating_panels.push(FloatingPanels { panels, active, pos: [pos.x, pos.y], ..Default::default() });
     // The tabbed group shows another of its tabs when the one it showed floats.
     if let Some(tab) = shown_tab(ui) {
         ui.dock_tab = tab;
@@ -214,11 +301,22 @@ fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2
     let zone = |id: Id| ctx.data(|d| d.get_temp::<Rect>(id)).filter(|r| r.contains(at));
     let Moving::Panel(id) = what else { return zone(tools_zone_id()).map(|r| (Drop::Dock, r)) };
     let own = group_of(&app.ui, id);
-    // Another group's title bar and tabs stack with it.
+    let moving = own.map(|i| set_of(&app.ui, i)).unwrap_or_default();
+    // Another group's top or bottom edge puts the moved groups in a set with it; its title bar and
+    // tabs stack them as tabs.
     for (i, g) in app.ui.floating_panels.iter().enumerate() {
-        let Some((first, _)) = g.panels.first().and_then(|p| panel(p)).filter(|_| Some(i) != own) else { continue };
-        let head = ctx.memory(|m| m.area_rect(area_id(first))).map(|r| Rect::from_min_size(r.min, vec2(r.width(), 1.0 + TITLE + STRIP)));
-        if let Some(head) = head.filter(|h| h.contains(at)) {
+        let Some((first, _)) = g.panels.first().and_then(|p| panel(p)).filter(|_| !moving.contains(&i)) else { continue };
+        let Some(r) = ctx.data(|d| d.get_temp::<Rect>(group_rect_id(first))) else { continue };
+        let line = |y: f32| Rect::from_x_y_ranges(r.x_range(), (y - 2.0)..=(y + 2.0));
+        if Rect::from_x_y_ranges(r.x_range(), (r.bottom() - EDGE)..=(r.bottom() + EDGE)).contains(at) {
+            return Some((Drop::Below(first), line(r.bottom())));
+        }
+        let lead = leads(&app.ui, i);
+        if lead && Rect::from_x_y_ranges(r.x_range(), (r.top() - EDGE)..=r.top()).contains(at) {
+            return Some((Drop::Above(first), line(r.top())));
+        }
+        let head = Rect::from_min_size(r.min, vec2(r.width(), if lead { 1.0 + TITLE + STRIP } else { GAP + STRIP }));
+        if head.contains(at) {
             return Some((Drop::Stack(first), head));
         }
     }
@@ -238,6 +336,13 @@ fn highlight(ctx: &egui::Context, zone: Rect) {
     painter.rect(zone.shrink(1.0), CornerRadius::same(2), t.accent.gamma_multiply(0.2), Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
 }
 
+/// Show where a drop puts the moved groups in a set: a line over the floating groups.
+fn insertion_line(ctx: &egui::Context, line: Rect) {
+    let t = Tokens::get(ctx);
+    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, Id::new("floating-drop-line")));
+    painter.rect_filled(line, CornerRadius::same(2), t.accent);
+}
+
 /// Carry a move on (at the start of a frame, before the panels are drawn): the group or Tools panel
 /// follows the pointer and the zone it would drop on lights up; the release drops it there.
 pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -251,16 +356,18 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         {
             match m.what {
                 Moving::Panel(id) => {
-                    if let Some(g) = group_of(&app.ui, id).and_then(|i| app.ui.floating_panels.get_mut(i)) {
-                        g.pos = [p.x, p.y];
+                    if let Some(gi) = group_of(&app.ui, id) {
+                        set_pos(&mut app.ui, gi, [p.x, p.y]);
                     }
                 }
                 Moving::Tools if app.ui.toolbar_pos.is_some() => app.ui.toolbar_pos = Some([p.x, p.y]),
                 Moving::Tools => {}
             }
         }
-        if let Some((_, zone)) = target {
-            highlight(ctx, zone);
+        match target {
+            Some((Drop::Below(_) | Drop::Above(_), line)) => insertion_line(ctx, line),
+            Some((_, zone)) => highlight(ctx, zone),
+            None => {}
         }
         return;
     }
@@ -270,9 +377,11 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.toolbar_pos = None;
         return;
     };
-    let Some(g) = group_of(&app.ui, id).and_then(|i| app.ui.floating_panels.get(i)) else { return };
-    let ids = ids_of(g);
-    let active = ids.get(g.active).copied().unwrap_or(id);
+    // The moved set: its groups' panels, showing the top group's.
+    let Some(gi) = group_of(&app.ui, id) else { return };
+    let set = set_of(&app.ui, gi);
+    let ids = ids_in(&app.ui, &set);
+    let active = set.first().and_then(|&i| shown(&app.ui, i)).unwrap_or(id);
     match drop {
         Drop::Dock => {
             dock(&mut app.ui, &ids, active);
@@ -282,6 +391,8 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         }
         Drop::Stack(onto) => stack(&mut app.ui, &ids, active, onto),
+        Drop::Below(onto) => attach(&mut app.ui, &set, onto, true),
+        Drop::Above(onto) => attach(&mut app.ui, &set, onto, false),
     }
 }
 
@@ -289,130 +400,217 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
 enum Action {
     /// Show the group's `k`th tab.
     Activate(usize, usize),
-    /// Its × puts the group's panels back in the dock.
-    Close(usize),
-    /// Move the group holding this panel, drawn at this corner.
+    /// A double-click on a tab collapses the group to its tabs, or expands it.
+    Collapse(usize),
+    /// Its × puts the panels of the set's groups back in the dock.
+    Close(Vec<usize>),
+    /// Move the set of the group holding this panel, drawn at this corner.
     Move(&'static str, Pos2),
+    /// Take this group out of its set and move it on its own; its tab strip began this far right.
+    Detach(usize, f32),
     /// Float this panel out of its group; its tab began this far right.
     Tear(&'static str, f32),
 }
 
-/// The floating groups, each a stack of tabs under a title bar. Hidden with the dock (Tab,
-/// Presentation Mode).
+/// A floating group as drawn: its index, panels, the one shown and whether it's collapsed.
+struct Shown {
+    gi: usize,
+    ids: Vec<&'static str>,
+    active: &'static str,
+    collapsed: bool,
+}
+
+/// The floating groups, each a stack of tabs, stacked in their sets under a title bar. Hidden with
+/// the dock (Tab, Presentation Mode).
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if app.ui.floating_panels.is_empty() || !app.ui.dock || app.ui.screen_mode >= 3 {
         return;
     }
+    let mut action = None;
+    for gi in 0..app.ui.floating_panels.len() {
+        if leads(&app.ui, gi) {
+            let set = set_of(&app.ui, gi);
+            show_set(app, ctx, &set, &mut action);
+        }
+    }
+    match action {
+        Some(Action::Activate(gi, k)) => {
+            if let Some(g) = app.ui.floating_panels.get_mut(gi)
+                && g.active != k
+            {
+                g.active = k;
+                g.collapsed = false;
+            }
+        }
+        Some(Action::Collapse(gi)) => {
+            if let Some(g) = app.ui.floating_panels.get_mut(gi) {
+                g.collapsed = !g.collapsed;
+            }
+        }
+        Some(Action::Close(set)) => {
+            let ids = ids_in(&app.ui, &set);
+            let active = set.first().and_then(|&i| shown(&app.ui, i)).unwrap_or_default();
+            dock(&mut app.ui, &ids, active);
+        }
+        Some(Action::Move(id, pos)) => {
+            // From where it is drawn (a position saved on a bigger window was clamped into this one).
+            if let Some(gi) = group_of(&app.ui, id) {
+                set_pos(&mut app.ui, gi, [pos.x, pos.y]);
+            }
+            if let Some(at) = ctx.input(|i| i.pointer.interact_pos()) {
+                start(ctx, Moving::Panel(id), at - pos);
+            }
+        }
+        Some(Action::Detach(gi, left)) => detach(app, ctx, gi, left),
+        Some(Action::Tear(id, left)) => tear(app, ctx, &[id], id, strip_grab(ctx, left)),
+        None => {}
+    }
+}
+
+/// Take group `gi` out of its set under the pointer, its tab strip having begun `left` points from
+/// the window's left, and carry on moving it with the pointer.
+fn detach(app: &mut VectorcraftApp, ctx: &egui::Context, gi: usize, left: f32) {
+    let Some(at) = ctx.input(|i| i.pointer.interact_pos()) else { return };
+    let Some(id) = shown(&app.ui, gi) else { return };
+    let grab = strip_grab(ctx, left);
+    let p = at - grab;
+    if let Some(g) = app.ui.floating_panels.get_mut(gi) {
+        g.column = None;
+        g.pos = [p.x, p.y];
+    }
+    FloatingPanels::tidy(&mut app.ui.floating_panels);
+    start(ctx, Moving::Panel(id), grab);
+}
+
+/// Draw the set of floating groups `set` (top to bottom) as one floating box.
+fn show_set(app: &mut VectorcraftApp, ctx: &egui::Context, set: &[usize], action: &mut Option<Action>) {
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
     let pointer = ctx.input(|i| i.pointer.interact_pos());
-    let mut action = None;
-    for gi in 0..app.ui.floating_panels.len() {
-        let Some(g) = app.ui.floating_panels.get(gi) else { break };
-        let ids = ids_of(g);
-        let Some(&first) = ids.first() else { continue };
-        let active = ids.get(g.active).copied().unwrap_or(first);
-        let given = g.width.map(|w| w.min(screen.width() - 16.0));
-        let area = area_id(first);
-        let size = ctx.memory(|m| m.area_rect(area)).map_or(vec2(dock::panel_width(active), 200.0), |r| r.size());
-        let pos = clamp(g.pos, size, screen);
-        // The tabbed group's panels fill (Layers) or scroll (Properties) to near the window's bottom,
-        // leaving room for their margins (a group that only just fitted would creep up a little each
-        // frame).
-        let tall = (screen.bottom() - pos.y - TITLE - STRIP - 60.0).clamp(120.0, 560.0);
-        let lone = ids.len() == 1;
-        egui::Area::new(area).order(egui::Order::Middle).fixed_pos(pos).show(ctx, |ui| {
-            let frame = egui::Frame::popup(ui.style()).fill(t.panel).corner_radius(CornerRadius::same(4)).inner_margin(egui::Margin::ZERO);
-            frame.show(ui, |ui| {
-                ui.spacing_mut().item_spacing = Vec2::ZERO;
-                let tabs: Vec<_> = ids
-                    .iter()
-                    .map(|id| {
-                        let label = panel(id).map_or(*id, |(_, label)| label);
-                        let color = if *id == active { t.text_strong } else { t.text_dim };
-                        ui.painter().layout_no_wrap(tl!(label).to_string(), theme::semibold(12.0), color)
-                    })
-                    .collect();
-                let tabs_width: f32 = tabs.iter().map(|g| g.size().x + 24.0).sum();
-                let width = ids.iter().map(|id| dock::panel_width(id)).fold(tabs_width + 32.0, f32::max).max(given.unwrap_or(0.0));
-                ui.set_width(width);
-                // Title bar: a grip that moves the group, and the × that docks it.
-                let (bar, _) = ui.allocate_exact_size(vec2(width, TITLE), Sense::hover());
-                ui.painter().rect_filled(bar, CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, t.tab_strip);
-                let close = Rect::from_center_size(bar.right_center() - vec2(10.0, 0.0), vec2(TITLE, TITLE));
-                let grip = ui.interact(Rect::from_min_max(bar.min, pos2(close.left(), bar.bottom())), ui.id().with("title"), Sense::drag());
-                for k in 0..2 {
-                    let y = bar.center().y - 1.5 + k as f32 * 3.0;
-                    ui.painter().line_segment([pos2(bar.center().x - 9.0, y), pos2(bar.center().x + 9.0, y)], Stroke::new(0.6, t.text_disabled));
-                }
-                if grip.drag_started() {
-                    action = Some(Action::Move(active, pos));
-                }
-                grip.on_hover_cursor(egui::CursorIcon::Grab).on_hover_text(tl!("Drag to move"));
-                let x = ui.interact(close, ui.id().with("close"), Sense::click());
-                icons::paint(ui, "x", close.shrink(3.0), if x.hovered() { t.text_strong } else { t.text_dim });
-                if x.on_hover_text(tl!("Put back in the dock")).clicked() {
-                    action = Some(Action::Close(gi));
-                }
-                // Tab strip: a click shows a tab, a drag out of the strip floats it on its own.
+    let groups: Vec<Shown> = set
+        .iter()
+        .filter_map(|&gi| {
+            let g = app.ui.floating_panels.get(gi)?;
+            let ids = ids_of(g);
+            let active = ids.get(g.active).or(ids.first()).copied()?;
+            Some(Shown { gi, ids, active, collapsed: g.collapsed })
+        })
+        .collect();
+    let Some((lead, first)) = groups.first().and_then(|g| Some((g, *g.ids.first()?))) else { return };
+    let Some(saved) = app.ui.floating_panels.get(lead.gi).map(|g| g.pos) else { return };
+    let given = set.iter().filter_map(|&i| app.ui.floating_panels.get(i)?.width).reduce(f32::max).map(|w| w.min(screen.width() - 16.0));
+    let area = area_id(first);
+    let size = ctx.memory(|m| m.area_rect(area)).map_or(vec2(dock::panel_width(lead.active), 200.0), |r| r.size());
+    let pos = clamp(saved, size, screen);
+    let alone = groups.len() == 1;
+    // The tabbed group's panels fill (Layers) or scroll (Properties) to near the window's bottom,
+    // leaving room for their margins (a group that only just fitted would creep up a little each
+    // frame); the open panels of a set share that height.
+    let n = groups.len() as f32;
+    let open = groups.iter().filter(|g| !g.collapsed).count().max(1) as f32;
+    let tall = ((screen.bottom() - pos.y - TITLE - n * STRIP - (n - 1.0) * GAP - 60.0) / open).clamp(120.0, 560.0);
+    let lead_active = lead.active;
+    egui::Area::new(area).order(egui::Order::Middle).fixed_pos(pos).show(ctx, |ui| {
+        let frame = egui::Frame::popup(ui.style()).fill(t.panel).corner_radius(CornerRadius::same(4)).inner_margin(egui::Margin::ZERO);
+        frame.show(ui, |ui| {
+            ui.spacing_mut().item_spacing = Vec2::ZERO;
+            let tabs: Vec<Vec<_>> = groups
+                .iter()
+                .map(|g| {
+                    g.ids
+                        .iter()
+                        .map(|id| {
+                            let label = panel(id).map_or(*id, |(_, label)| label);
+                            let color = if *id == g.active { t.text_strong } else { t.text_dim };
+                            ui.painter().layout_no_wrap(tl!(label).to_string(), theme::semibold(12.0), color)
+                        })
+                        .collect()
+                })
+                .collect();
+            let width = groups
+                .iter()
+                .zip(&tabs)
+                .map(|(g, tabs)| {
+                    let tabs_width: f32 = tabs.iter().map(|tab| tab.size().x + 24.0).sum();
+                    g.ids.iter().map(|id| dock::panel_width(id)).fold(tabs_width + 32.0, f32::max)
+                })
+                .fold(given.unwrap_or(0.0), f32::max);
+            ui.set_width(width);
+            // Title bar: a grip that moves the set, and the × that docks it.
+            let (bar, _) = ui.allocate_exact_size(vec2(width, TITLE), Sense::hover());
+            ui.painter().rect_filled(bar, CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, t.tab_strip);
+            let close = Rect::from_center_size(bar.right_center() - vec2(10.0, 0.0), vec2(TITLE, TITLE));
+            let grip = ui.interact(Rect::from_min_max(bar.min, pos2(close.left(), bar.bottom())), ui.id().with("title"), Sense::drag());
+            for k in 0..2 {
+                let y = bar.center().y - 1.5 + k as f32 * 3.0;
+                ui.painter().line_segment([pos2(bar.center().x - 9.0, y), pos2(bar.center().x + 9.0, y)], Stroke::new(0.6, t.text_disabled));
+            }
+            if grip.drag_started() {
+                *action = Some(Action::Move(lead_active, pos));
+            }
+            grip.on_hover_cursor(egui::CursorIcon::Grab).on_hover_text(tl!("Drag to move"));
+            let x = ui.interact(close, ui.id().with("close"), Sense::click());
+            icons::paint(ui, "x", close.shrink(3.0), if x.hovered() { t.text_strong } else { t.text_dim });
+            if x.on_hover_text(tl!("Put back in the dock")).clicked() {
+                *action = Some(Action::Close(set.to_vec()));
+            }
+            for (k, (g, tabs)) in groups.iter().zip(tabs).enumerate() {
+                let top = if k == 0 {
+                    bar.top()
+                } else {
+                    let (gap, _) = ui.allocate_exact_size(vec2(width, GAP), Sense::hover());
+                    ui.painter().rect_filled(gap, 0.0, t.tab_strip);
+                    gap.top()
+                };
+                // Tab strip: a click shows a tab, a double-click collapses the group, a drag out of
+                // the strip floats a tab on its own; a lone tab or the strip right of the tabs moves
+                // the group (out of its set).
                 let (strip, _) = ui.allocate_exact_size(vec2(width, STRIP), Sense::hover());
                 ui.painter().rect_filled(strip, 0.0, t.panel_darker);
+                let lone = g.ids.len() == 1;
                 let mut left = strip.left();
-                for (k, (&id, galley)) in ids.iter().zip(tabs).enumerate() {
+                for (j, (&id, galley)) in g.ids.iter().zip(tabs).enumerate() {
                     let r = Rect::from_min_size(pos2(left, strip.top()), vec2(galley.size().x + 24.0, STRIP));
                     left = r.right();
                     let resp = ui.interact(r, ui.id().with(("tab", id)), Sense::click_and_drag());
-                    if id == active {
+                    if id == g.active && !g.collapsed {
                         ui.painter().rect_filled(r, 0.0, t.panel);
                     }
                     ui.painter().galley(pos2(r.left() + 12.0, r.center().y - galley.size().y / 2.0), galley, t.text);
-                    if resp.clicked() {
-                        action = Some(Action::Activate(gi, k));
+                    if resp.double_clicked() {
+                        *action = Some(Action::Collapse(g.gi));
+                    } else if resp.clicked() {
+                        *action = Some(Action::Activate(g.gi, j));
+                    } else if lone && alone && resp.drag_started() {
+                        *action = Some(Action::Move(id, pos));
                     } else if lone && resp.drag_started() {
-                        action = Some(Action::Move(id, pos));
+                        *action = Some(Action::Detach(g.gi, strip.left()));
                     } else if !lone && resp.dragged() && pointer.is_some_and(|p| !strip.expand(4.0).contains(p)) {
-                        action = Some(Action::Tear(id, r.left()));
+                        *action = Some(Action::Tear(id, r.left()));
                     }
                 }
                 let menu = Rect::from_center_size(strip.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0));
                 let rest = Rect::from_min_max(pos2(left, strip.top()), pos2(menu.left() - 4.0, strip.bottom()));
                 if rest.width() > 0.0 {
-                    let resp = ui.interact(rest, ui.id().with("strip"), Sense::drag());
+                    let resp = ui.interact(rest, ui.id().with(("strip", g.gi)), Sense::drag());
                     if resp.drag_started() {
-                        action = Some(Action::Move(active, pos));
+                        *action = Some(if alone { Action::Move(g.active, pos) } else { Action::Detach(g.gi, strip.left()) });
                     }
-                    resp.on_hover_cursor(egui::CursorIcon::Grab).on_hover_text(tl!("Drag to move"));
+                    let tip = if alone { tl!("Drag to move") } else { tl!("Drag to move out of the set") };
+                    resp.on_hover_cursor(egui::CursorIcon::Grab).on_hover_text(tip);
                 }
-                panels::panel_menu(app, ui, active, menu);
-                dock::panel_body(app, ui, active, width, tall);
-            });
+                panels::panel_menu(app, ui, g.active, menu);
+                if !g.collapsed {
+                    dock::panel_body(app, ui, g.active, width, tall);
+                }
+                let bottom = ui.min_rect().bottom().max(strip.bottom());
+                if let Some(&id) = g.ids.first() {
+                    let rect = Rect::from_min_max(pos2(strip.left(), top), pos2(strip.left() + width, bottom));
+                    ui.ctx().data_mut(|d| d.insert_temp(group_rect_id(id), rect));
+                }
+            }
         });
-    }
-    match action {
-        Some(Action::Activate(gi, k)) => {
-            if let Some(g) = app.ui.floating_panels.get_mut(gi) {
-                g.active = k;
-            }
-        }
-        Some(Action::Close(gi)) => {
-            if let Some(g) = app.ui.floating_panels.get(gi) {
-                let ids = ids_of(g);
-                let active = ids.get(g.active).copied().unwrap_or_default();
-                dock(&mut app.ui, &ids, active);
-            }
-        }
-        Some(Action::Move(id, pos)) => {
-            // From where it is drawn (a position saved on a bigger window was clamped into this one).
-            if let Some(g) = group_of(&app.ui, id).and_then(|i| app.ui.floating_panels.get_mut(i)) {
-                g.pos = [pos.x, pos.y];
-            }
-            if let Some(at) = pointer {
-                start(ctx, Moving::Panel(id), at - pos);
-            }
-        }
-        Some(Action::Tear(id, left)) => tear(app, ctx, &[id], id, strip_grab(ctx, left)),
-        None => {}
-    }
+    });
 }
 
 /// `window.panel.float` and `window.panel.dock`; `None` for other commands.
@@ -455,35 +653,82 @@ fn float_or_dock(app: &mut VectorcraftApp, float_it: bool, p: &Value) -> Result<
         (true, None) if DockTab::from_id(id).is_some() => docked_tabs(&app.ui).map(|t| t.info().0).collect(),
         _ => vec![id],
     };
+    let collapsed = crate::menus::opt_bool(p, "collapsed")?;
+    let onto = p.get("onto").and_then(Value::as_str);
+    let below = p.get("below").and_then(Value::as_str);
+    let above = p.get("above").and_then(Value::as_str);
+    if [onto, below, above].iter().filter(|o| o.is_some()).count() > 1 {
+        return Err("give only one of onto, below and above".into());
+    }
     app.ui.dock = true;
     if !float_it {
         dock(&mut app.ui, &ids, id);
         return Ok(json!({ "panel": id, "floating": false }));
     }
-    match p.get("onto").and_then(Value::as_str) {
+    if let Some((next, under)) = below.map(|b| (b, true)).or(above.map(|a| (a, false))) {
+        let next = crate::menus::normalize_panel(next)
+            .filter(|o| !ids.contains(o) && group_of(&app.ui, o).is_some())
+            .ok_or("below and above must name a panel floating in another group")?;
+        // The panels as a group of their own (their group already, or floated out), in the set.
+        let own = own.filter(|&i| app.ui.floating_panels.get(i).is_some_and(|g| g.panels.len() == ids.len()));
+        if own.is_none() {
+            float(&mut app.ui, &ids, id, Pos2::ZERO);
+        }
+        if let Some(gi) = group_of(&app.ui, id) {
+            attach(&mut app.ui, &[gi], next, under);
+        }
+    } else {
+        float_onto(app, &ids, id, own, onto, at)?;
+    }
+    if let Some(g) = group_of(&app.ui, id).and_then(|i| app.ui.floating_panels.get_mut(i)) {
+        g.active = g.panels.iter().position(|q| q == id).unwrap_or(g.active);
+        if let Some(c) = collapsed {
+            g.collapsed = c;
+        }
+    }
+    let gi = group_of(&app.ui, id);
+    let g = gi.and_then(|i| app.ui.floating_panels.get(i));
+    let set: Vec<&Vec<String>> =
+        gi.map(|i| set_of(&app.ui, i)).unwrap_or_default().iter().filter_map(|&i| app.ui.floating_panels.get(i)).map(|g| &g.panels).collect();
+    let (group, pos, collapsed) = (g.map(|g| &g.panels), g.map(|g| g.pos), g.is_some_and(|g| g.collapsed));
+    Ok(json!({ "panel": id, "floating": true, "group": group, "set": set, "pos": pos, "collapsed": collapsed }))
+}
+
+/// Float `ids` (`id` among them; `own`, the group holding `id`) as their own group at `at`, or
+/// stacked as tabs `onto` another group.
+fn float_onto(
+    app: &mut VectorcraftApp,
+    ids: &[&'static str],
+    id: &'static str,
+    own: Option<usize>,
+    onto: Option<&str>,
+    at: Option<Pos2>,
+) -> Result<(), String> {
+    match onto {
         Some(onto) => {
             let onto = crate::menus::normalize_panel(onto)
                 .filter(|o| !ids.contains(o) && group_of(&app.ui, o).is_some_and(|g| Some(g) != own))
                 .ok_or("onto must name a panel floating in another group")?;
-            stack(&mut app.ui, &ids, id, onto);
+            stack(&mut app.ui, ids, id, onto);
         }
         // Its own group already: moved there (or left where it is), showing the panel.
         None => match own.and_then(|i| app.ui.floating_panels.get_mut(i)).filter(|g| g.panels.len() == ids.len()) {
+            // Moved to `at` takes it out of its set; else it stays where it is.
             Some(g) => {
-                g.active = g.panels.iter().position(|p| p == id).unwrap_or(g.active);
                 if let Some(at) = at {
                     g.pos = [at.x, at.y];
+                    g.column = None;
+                    FloatingPanels::tidy(&mut app.ui.floating_panels);
                 }
             }
             None => {
                 let n = app.ui.floating_panels.len() as f32;
                 let at = at.unwrap_or(pos2(FLOAT_AT[0] + 24.0 * n, FLOAT_AT[1] + 24.0 * n));
-                float(&mut app.ui, &ids, id, at);
+                float(&mut app.ui, ids, id, at);
             }
         },
     }
-    let g = group_of(&app.ui, id).and_then(|i| app.ui.floating_panels.get(i));
-    Ok(json!({ "panel": id, "floating": true, "group": g.map(|g| &g.panels), "pos": g.map(|g| g.pos) }))
+    Ok(())
 }
 
 #[cfg(test)]
@@ -775,7 +1020,7 @@ mod tests {
         }))
         .unwrap();
         let edited = edited.sanitized();
-        assert_eq!(edited.floating_panels, [FloatingPanels { panels: vec!["layers".into()], active: 0, pos: [1.0, 2.0], width: None }]);
+        assert_eq!(edited.floating_panels, [FloatingPanels { panels: vec!["layers".into()], active: 0, pos: [1.0, 2.0], ..Default::default() }]);
         h.settle();
         let g = h.group("layers");
         let screen = Rect::from_min_size(Pos2::ZERO, SCREEN);
@@ -809,6 +1054,149 @@ mod tests {
         app.ui.toolbar = false;
         app.run("window.panel.float", json!({"panel": "Toolbar"})).unwrap();
         assert!(app.ui.toolbar && app.ui.toolbar_pos == Some(TOOLS_AT), "floating shows the Tools panel");
+    }
+
+    /// The groups' sets: each group's panels and its column, in list order.
+    fn sets(groups: &[FloatingPanels]) -> Vec<(Vec<&str>, Option<u32>)> {
+        groups.iter().map(|g| (g.panels.iter().map(String::as_str).collect(), g.column)).collect()
+    }
+
+    #[test]
+    fn groups_dropped_on_an_edge_stack_into_a_set_that_moves_together_and_tears_apart() {
+        let mut h = Harness::new();
+        h.app.run("window.panel.float", json!({"panel": "color", "x": 500, "y": 150})).unwrap();
+        h.app.run("window.panel.float", json!({"panel": "swatches", "x": 950, "y": 450})).unwrap();
+        h.settle();
+        // Swatches' title bar held over Color's bottom edge: a line shows it goes below.
+        let color = h.temp_rect(group_rect_id("color"));
+        let below = pos2(color.center().x, color.bottom() + 2.0);
+        h.hold(h.title("swatches"), below);
+        let target = drop_target(&h.app, &h.ctx, Moving::Panel("swatches"), below);
+        assert_eq!(target.map(|t| t.0), Some(Drop::Below("color")));
+        assert!(target.is_some_and(|t| t.1.height() <= 4.0), "a line, not a box: {target:?}");
+        h.release(below);
+        let s = sets(&h.app.ui.floating_panels);
+        assert_eq!((s[0].0.clone(), s[1].0.clone()), (vec!["color"], vec!["swatches"]), "Color, then Swatches");
+        assert!(s[0].1.is_some() && s[0].1 == s[1].1, "one set: {s:?}");
+        assert_eq!(h.app.ui.floating_panels[0].pos, h.app.ui.floating_panels[1].pos, "at the set's corner");
+        // Drawn as one box: Swatches right under Color.
+        let (color, swatches) = (h.temp_rect(group_rect_id("color")), h.temp_rect(group_rect_id("swatches")));
+        assert!((swatches.top() - color.bottom()).abs() < 1.0 && swatches.left() == color.left(), "{color:?} {swatches:?}");
+        assert!(h.group("color").contains_rect(swatches.shrink(1.0)), "in Color's area");
+        // The set moves by its title bar.
+        let to = pos2(300.0, 120.0);
+        let grab = h.title("color") - h.group("color").min;
+        h.drag(h.title("color"), to);
+        let moved = [to.x - grab.x, to.y - grab.y];
+        assert!(h.app.ui.floating_panels.iter().all(|g| (g.pos[0] - moved[0]).abs() < 1.0 && (g.pos[1] - moved[1]).abs() < 1.0));
+        assert_eq!(sets(&h.app.ui.floating_panels).len(), 2);
+        // Swatches' lone tab dragged away takes it out of the set: both float on their own.
+        let swatches = h.temp_rect(group_rect_id("swatches"));
+        let tab = pos2(swatches.left() + 20.0, swatches.top() + GAP + STRIP / 2.0);
+        let away = pos2(1000.0, 600.0);
+        h.drag(tab, away);
+        assert_eq!(sets(&h.app.ui.floating_panels), [(vec!["color"], None), (vec!["swatches"], None)]);
+        assert!(h.group("swatches").contains(away), "under the pointer: {:?}", h.group("swatches"));
+        // Dropped on Color's top edge, it goes above Color, which it now heads.
+        let color = h.temp_rect(group_rect_id("color"));
+        let above = pos2(color.center().x, color.top() - 3.0);
+        h.hold(h.title("swatches"), above);
+        assert_eq!(drop_target(&h.app, &h.ctx, Moving::Panel("swatches"), above).map(|t| t.0), Some(Drop::Above("color")));
+        h.release(above);
+        let s = sets(&h.app.ui.floating_panels);
+        assert_eq!((s[0].0.clone(), s[1].0.clone()), (vec!["swatches"], vec!["color"]));
+        assert!(s[0].1.is_some() && s[0].1 == s[1].1);
+        // A group's tab strip still takes tabs: Stroke dropped on Color's tabs joins Color's group.
+        h.app.run("window.panel.float", json!({"panel": "stroke", "x": 1000, "y": 650})).unwrap();
+        h.settle();
+        let color = h.temp_rect(group_rect_id("color"));
+        let tabs = pos2(color.center().x, color.top() + GAP + STRIP / 2.0);
+        h.drag(h.title("stroke"), tabs);
+        assert_eq!(sets(&h.app.ui.floating_panels).iter().map(|s| s.0.clone()).collect::<Vec<_>>(), [vec!["swatches"], vec!["color", "stroke"]]);
+        // The set's × docks every group.
+        let g = h.group("swatches");
+        h.click(pos2(g.right() - 11.0, g.top() + 1.0 + TITLE / 2.0));
+        assert!(h.groups().is_empty(), "docked: {:?}", h.groups());
+    }
+
+    #[test]
+    fn a_double_click_on_a_tab_collapses_a_floating_group_and_another_expands_it() {
+        let mut h = Harness::new();
+        h.app.run("window.panel.float", json!({"panel": "layers", "x": 500, "y": 150})).unwrap();
+        h.app.run("window.panel.float", json!({"panel": "stroke", "below": "layers"})).unwrap();
+        h.settle();
+        let open = h.temp_rect(group_rect_id("layers"));
+        let tab = pos2(open.left() + 20.0, open.top() + 1.0 + TITLE + STRIP / 2.0);
+        let double = |h: &mut Harness| {
+            // Well after any earlier click, so the first click doesn't make a double-click with it.
+            h.time += 1.0;
+            h.frame(vec![Event::PointerMoved(tab), button(tab, true)]);
+            h.frame(vec![button(tab, false)]);
+            h.frame(vec![button(tab, true)]);
+            h.frame(vec![button(tab, false)]);
+            h.settle();
+        };
+        double(&mut h);
+        assert!(h.app.ui.floating_panels[0].collapsed, "collapsed");
+        let shut = h.temp_rect(group_rect_id("layers"));
+        assert!(shut.height() < 1.0 + TITLE + STRIP + 2.0, "only its tabs: {shut:?}");
+        assert!(h.temp_rect(group_rect_id("stroke")).top() < open.bottom(), "Stroke moved up under it");
+        double(&mut h);
+        assert!(!h.app.ui.floating_panels[0].collapsed, "expanded");
+        // Collapsed by command, Window › Layers expands it.
+        h.app.run("window.panel.float", json!({"panel": "layers", "collapsed": true})).unwrap();
+        assert!(h.app.ui.floating_panels[0].collapsed);
+        h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+        assert!(!h.app.ui.floating_panels[0].collapsed);
+    }
+
+    #[test]
+    fn sets_by_command_are_checked_and_kept_in_workspaces_and_preferences() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("window.panel.float", json!({"panel": "layers", "x": 100, "y": 50})).unwrap();
+        assert!(app.run("window.panel.float", json!({"panel": "color", "below": "swatches"})).is_err(), "Swatches isn't floating");
+        assert!(app.run("window.panel.float", json!({"panel": "color", "onto": "layers", "below": "layers"})).is_err(), "one of them");
+        assert!(app.run("window.panel.float", json!({"panel": "layers", "below": "layers"})).is_err(), "not below itself");
+        assert!(app.run("window.panel.float", json!({"panel": "layers", "collapsed": "yes"})).is_err());
+        assert_eq!(app.ui.floating_panels.len(), 1, "nothing floated by the errors");
+        // Color floats straight into the set, below Layers; Stroke above it.
+        let r = app.run("window.panel.float", json!({"panel": "color", "below": "Layers"})).unwrap();
+        assert_eq!(r["set"], json!([["layers"], ["color"]]));
+        let r = app.run("window.panel.float", json!({"panel": "stroke", "above": "color"})).unwrap();
+        assert_eq!(r["set"], json!([["layers"], ["stroke"], ["color"]]));
+        assert!(app.ui.floating_panels.iter().all(|g| g.pos == [100.0, 50.0]), "at the set's corner");
+        // Stroke's whole group moves to the set's bottom.
+        app.run("window.panel.float", json!({"panel": "stroke", "below": "color"})).unwrap();
+        assert_eq!(sets(&app.ui.floating_panels).iter().map(|s| s.0.clone()).collect::<Vec<_>>(), [vec!["layers"], vec!["color"], vec!["stroke"]]);
+        // Kept in a workspace and the preferences.
+        app.run("window.panel.float", json!({"panel": "color", "collapsed": true})).unwrap();
+        app.run("window.workspace.new", json!({"name": "Sets"})).unwrap();
+        let saved = app.ui.floating_panels.clone();
+        app.run("window.workspace", json!({"name": "Essentials"})).unwrap();
+        assert!(app.ui.floating_panels.is_empty());
+        app.run("window.workspace", json!({"name": "Sets"})).unwrap();
+        assert_eq!(app.ui.floating_panels, saved);
+        let prefs: UiState = serde_json::from_slice(&serde_json::to_vec(&app.ui).unwrap()).unwrap();
+        assert_eq!(prefs.sanitized().floating_panels, saved);
+        // Moved to x, y, a group leaves its set; the set left with one group floats on its own.
+        let r = app.run("window.panel.float", json!({"panel": "color", "x": 600, "y": 400})).unwrap();
+        assert_eq!((r["set"].clone(), r["pos"].clone()), (json!([["color"]]), json!([600.0, 400.0])));
+        app.run("window.panel.dock", json!({"panel": "layers"})).unwrap();
+        assert_eq!(sets(&app.ui.floating_panels), [(vec!["stroke"], None), (vec!["color"], None)]);
+        // A hand-edited file: a set's groups kept together at its first group's corner, a lone one alone.
+        let edited: UiState = serde_json::from_value(json!({
+            "floating_panels": [
+                {"panels": ["layers"], "pos": [1, 2], "column": 4},
+                {"panels": ["color"], "pos": [9, 9]},
+                {"panels": ["stroke"], "pos": [5, 6], "column": 4},
+                {"panels": ["swatches"], "pos": [7, 8], "column": 9},
+            ],
+        }))
+        .unwrap();
+        let edited = edited.sanitized();
+        let s = sets(&edited.floating_panels);
+        assert_eq!(s, [(vec!["layers"], Some(4)), (vec!["stroke"], Some(4)), (vec!["color"], None), (vec!["swatches"], None)]);
+        assert_eq!(edited.floating_panels[1].pos, [1.0, 2.0]);
     }
 
     fn floating_pos(app: &VectorcraftApp, id: &str) -> [f32; 2] {

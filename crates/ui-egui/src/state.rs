@@ -434,7 +434,12 @@ pub struct TaskBarPlace {
 }
 
 /// A group of panels dragged out of the dock: it floats as a stack of tabs, one panel shown.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+///
+/// Groups sharing a `column` float as one set, stacked top to bottom in list order, like the panel
+/// groups of a dock in Illustrator's workspace
+/// (<https://helpx.adobe.com/illustrator/using/workspace-basics.html>): the set moves by the top
+/// group's title bar, and a group dragged by its tab strip leaves it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct FloatingPanels {
     /// Panel ids (`window.panel`), in tab order.
     pub panels: Vec<String>,
@@ -446,6 +451,13 @@ pub struct FloatingPanels {
     /// A width the group was given (the Tabs panel sized over its text), else its panels' own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub width: Option<f32>,
+    /// The set this group is stacked in with others (the same number), top to bottom in list
+    /// order; none when it floats on its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<u32>,
+    /// Collapsed to its tabs (a double-click on a tab), its panel hidden.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub collapsed: bool,
 }
 
 impl FloatingPanels {
@@ -458,9 +470,34 @@ impl FloatingPanels {
             g.active = g.active.min(g.panels.len().saturating_sub(1));
             !g.panels.is_empty()
         });
+        Self::tidy(groups);
         if toolbar_pos.is_some_and(|p| !p.iter().all(|v| v.is_finite())) {
             *toolbar_pos = None;
         }
+    }
+
+    /// Keep each set's groups together in the list, after its first one and in the order they
+    /// come, at its first one's position; a set left with one group floats on its own.
+    pub fn tidy(groups: &mut Vec<FloatingPanels>) {
+        let mut out: Vec<FloatingPanels> = Vec::with_capacity(groups.len());
+        for mut g in groups.drain(..) {
+            match g.column.and_then(|c| out.iter().rposition(|o| o.column == Some(c))) {
+                Some(i) => {
+                    if let Some(first) = out.iter().find(|o| o.column == g.column) {
+                        g.pos = first.pos;
+                    }
+                    out.insert(i + 1, g);
+                }
+                None => out.push(g),
+            }
+        }
+        let alone: Vec<u32> = out.iter().filter_map(|g| g.column).filter(|c| out.iter().filter(|g| g.column == Some(*c)).count() < 2).collect();
+        for g in &mut out {
+            if g.column.is_some_and(|c| alone.contains(&c)) {
+                g.column = None;
+            }
+        }
+        *groups = out;
     }
 }
 
