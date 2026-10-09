@@ -2318,6 +2318,19 @@ Type and Convert To Point Type. Either keeps the text and its styles and is one 
 {"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
 ```
 
+## Kinsoku Set
+
+`text.setFormat {kinsoku: "hard"|"soft"|"none"}` sets the Paragraph panel's Kinsoku Set of the selected type (or `ids`):
+which Japanese characters may not start or end a line. **Hard** (the default; new type and documents from before the
+setting) keeps closing brackets, commas, full stops, middle dots, iteration marks, the prolonged sound mark ー and small
+kana off the line start, and opening brackets off the line end. **Soft** lets 々, ー and small kana start a line, as
+JLREQ's level 3 line-breaking rules do (https://www.w3.org/TR/jlreq/#addendum_a3); the rest of the set stays.
+**None** applies no kinsoku. `hard` isn't saved. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsoku":"soft"}}}
+```
+
 ## Hanging punctuation (burasagari)
 
 `text.setFormat {burasagari: "none"|"standard"|"forced"}` sets the Paragraph panel menu's Burasagari (None / Regular /

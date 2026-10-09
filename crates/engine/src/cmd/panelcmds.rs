@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
             has_doc,
             set_format
         ),
@@ -218,6 +218,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "spaceAfter",
         "hyphenate",
         "mojikumi",
+        "kinsoku",
         "direction",
         "leadingModel",
         "charAlign",
@@ -243,6 +244,15 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             Some("none") => vectorcraft_doc::Mojikumi::None,
             Some("lineEndHalf") => vectorcraft_doc::Mojikumi::LineEndHalf,
             _ => return Err(bad(C, "`mojikumi` must be \"none\" or \"lineEndHalf\"")),
+        }),
+    };
+    let kinsoku = match p.get("kinsoku") {
+        None => None,
+        Some(v) => Some(match v.as_str() {
+            Some("none") => vectorcraft_doc::Kinsoku::None,
+            Some("hard") => vectorcraft_doc::Kinsoku::Hard,
+            Some("soft") => vectorcraft_doc::Kinsoku::Soft,
+            _ => return Err(bad(C, "`kinsoku` must be \"none\", \"hard\" or \"soft\"")),
         }),
     };
     let direction = match p.get("direction") {
@@ -332,6 +342,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 if let Some(v) = mojikumi {
                     para.mojikumi = v;
+                }
+                if let Some(v) = kinsoku {
+                    para.kinsoku = v;
                 }
                 if let Some(v) = direction {
                     para.direction = v;
