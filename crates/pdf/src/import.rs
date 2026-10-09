@@ -235,11 +235,13 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         // dropped as redundant (by hayro and by `push_clip_path`), so restore the box here:
         // each object reaching past it keeps its own clip, which Fit to Artwork Bounds and
         // `CropTo::Bounding` then respect.
-        // The crop box is what viewers show, whichever box the artboard takes.
+        // The crop box is what viewers show, whichever box the artboard takes. Not in a
+        // PDF-compatible `.ai`: its PDF part stands in for the editable document, whose art
+        // crossing the artboard edge isn't clipped, so it opens whole (#646).
         let shown = xf.transform_rect_bbox(crate::pages::page_box(page, CropTo::Crop));
         let page_box = shown.inflate(0.01, 0.01);
         let mut clipped = false;
-        for (_, art) in &mut parts {
+        for (_, art) in parts.iter_mut().filter(|_| !ai) {
             for n in art.iter_mut() {
                 if n.visual_bounds().is_some_and(|r| !contains(page_box, r)) {
                     let clip = Arc::new(b.clip_node(&shown.to_path(0.1), FillRule::NonZero));
