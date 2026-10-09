@@ -147,6 +147,8 @@ fn auto_height(t: &mut TextObject) -> bool {
     let col_w = if cols > 1 { ((b.width() - t.area.gutter.max(0.0) * (cols - 1) as f64) / cols as f64).max(1.0) } else { b.width() };
     with_size(&mut probe, col_w, tall);
     probe.area.columns = 1;
+    // Measured from the top: aligned in the tall probe the lines would sit far below.
+    probe.area.vertical_align = vectorcraft_doc::VerticalAlign::Top;
     let lay = vectorcraft_text::layout(db, &probe);
     let inset = t.area.inset.max(0.0);
     let Some(bottom) = lay.lines.iter().map(|l| l.baseline + l.descent).filter(|y| y.is_finite()).reduce(f64::max) else { return false };
