@@ -311,16 +311,16 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi })
 }
 
-/// An image as a document of its pixel size (1 px = 1 pt), the image named after the file.
+/// An image as a document of its physical size at the resolution it declares (as Place sizes it;
+/// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height, .. } = raster_image(bytes)?;
-    let mut d = Document::new(width as f64, height as f64);
+    let RasterImage { key, blob, width, height, ppi } = raster_image(bytes)?;
+    let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
+    let mut d = Document::new(width as f64 * sx, height as f64 * sy);
     let layer = d.layers[0].id;
     let id = d.alloc_id();
-    let mut n = Node::new(
-        id,
-        NodeKind::Image(ImageObject { key: key.clone(), width, height, xf: Affine::IDENTITY, link: None, placement: Default::default() }),
-    );
+    let xf = Affine::scale_non_uniform(sx, sy);
+    let mut n = Node::new(id, NodeKind::Image(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default() }));
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
