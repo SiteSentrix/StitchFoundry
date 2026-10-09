@@ -20,10 +20,14 @@ const DEFAULT_FONT: &str = "Helvetica";
 
 /// A font's family and style from its PostScript name: `Helvetica-BoldOblique` → (`Helvetica`,
 /// `Bold Oblique`), `TimesNewRomanPS-BoldMT` → (`Times New Roman`, `Bold`), without a subset
-/// prefix (`ABCDEF+`).
+/// prefix (`ABCDEF+`) or the `*1` of a re-encoded copy (`ABCDEF+RollerBabyBV*1`).
 pub fn family_style(name: &str) -> (String, String) {
     let name = match name.split_once('+') {
         Some((prefix, rest)) if prefix.len() == 6 && prefix.bytes().all(|b| b.is_ascii_uppercase()) => rest,
+        _ => name,
+    };
+    let name = match name.rsplit_once('*') {
+        Some((base, n)) if !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => base,
         _ => name,
     };
     let (family, style) = name.split_once('-').unwrap_or((name, ""));

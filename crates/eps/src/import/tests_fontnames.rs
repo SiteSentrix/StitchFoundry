@@ -36,3 +36,13 @@ fn postscript_names_resolve_to_the_available_family() {
     });
     assert_eq!(styles, [("MyFaceYaHei 3".to_string(), "Bold".to_string())]);
 }
+
+#[test]
+fn reencoded_copies_of_a_font_name_the_font() {
+    // A program that re-encodes a font sets the copy under `<subset>+<name>*<n>`.
+    assert_eq!(crate::family_style("KBKNNM+RollerBabyBV*1"), ("Roller Baby BV".to_string(), "Regular".to_string()));
+    assert_eq!(crate::family_style("ABCDEF+Helvetica-Bold*12"), ("Helvetica".to_string(), "Bold".to_string()));
+    // Only `*` and digits at the end go; other names are as they were.
+    assert_eq!(crate::family_style("Odd*Name").0, "Odd*Name");
+    assert_eq!(crate::family_style("*1").0, "*1");
+}
