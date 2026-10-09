@@ -1304,6 +1304,9 @@ impl Exporter<'_> {
         let (below, above) = n.appearance.split_contents();
         let all = (!n.appearance.items.is_empty()).then(|| {
             let mut all = layout.to_bezpath();
+            for (_, bar) in vectorcraft_text::decorations(&layout, vectorcraft_text::FontDb::global(), t) {
+                all.extend(bar.iter());
+            }
             all.apply_affine(t.xf);
             to_path(&all).map(|p| (all, p))
         });
@@ -1314,16 +1317,27 @@ impl Exporter<'_> {
         s.push_transform(&xf(t.xf));
         // Real text: the characters' fills as text in embedded fonts.
         let plain = (!self.outline_text).then(|| t.plain_text());
+        let bars = vectorcraft_text::decorations(&layout, vectorcraft_text::FontDb::global(), t);
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
             for g in layout.glyphs.iter().filter(|g| g.run == i) {
                 bp.extend(g.outline.iter());
             }
+            // Underline and strikethrough bars are paths, with real text too (#847).
+            let mut run_bars = BezPath::new();
+            for (_, bar) in bars.iter().filter(|(r, _)| *r == i) {
+                run_bars.extend(bar.iter());
+            }
+            bp.extend(run_bars.iter());
             let fill = &run.style.fill;
             self.overprinting(s, run.style.overprint_fill, fill, |ex, s| {
                 // The outlines left to fill as paths: all of them, or those real text leaves.
                 let outlines = match plain.as_deref().filter(|_| !fill.is_none() && !ex.area_paint(fill)) {
-                    Some(text) => Cow::Owned(ex.glyph_text(s, &layout, i, text, fill)),
+                    Some(text) => {
+                        let mut left = ex.glyph_text(s, &layout, i, text, fill);
+                        left.extend(run_bars.iter());
+                        Cow::Owned(left)
+                    }
                     None => Cow::Borrowed(&bp),
                 };
                 let opaque = (1.0, BlendMode::Normal);
