@@ -811,11 +811,15 @@ fn file_face_names(path: &Path) -> Vec<FaceStyle> {
     file_face_names_within(path, MAX_FACES, u64::MAX)
 }
 
-/// [`file_face_names`], reading at most `max_faces` faces and `max_read` bytes of the file in all
-/// (of each font in all, for a suitcase font).
+/// [`file_face_names`], reading at most `max_faces` faces and `max_read` bytes of the file in all.
+/// A suitcase font's resource fork is read whole when it is at most `max_read` bytes long, and the
+/// limits then apply to each of its fonts; a longer fork gives none.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn file_face_names_within(path: &Path, max_faces: u32, max_read: u64) -> Vec<FaceStyle> {
     if crate::suitcase::is_suitcase(path) {
+        if crate::suitcase::fork_len(path) > max_read {
+            return vec![];
+        }
         return crate::suitcase::read_fonts(path)
             .into_iter()
             .flat_map(|font| reader_face_names_within(std::io::Cursor::new(font), max_faces, max_read))
@@ -961,8 +965,8 @@ impl WantedFonts {
     /// font scan reads, the file makes [`FontDb::resolve`] find each of them exactly, in one of its
     /// faces or a variable font's named instances. The file is read as the scan reads it (its
     /// table directories and its `name`, `fvar` and `OS/2` tables), at most 64 faces and 8 MB of
-    /// it, when it is a font file by its extension ([`is_font_file`]) or a suitcase font. Sorted;
-    /// none on the web.
+    /// it, when it is a font file by its extension ([`is_font_file`]) or a suitcase font whose
+    /// resource fork is at most 8 MB long. Sorted; none on the web.
     pub fn provided_by(&self, path: &Path) -> Vec<usize> {
         #[cfg(not(target_arch = "wasm32"))]
         {

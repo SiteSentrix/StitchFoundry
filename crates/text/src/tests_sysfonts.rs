@@ -500,6 +500,31 @@ fn a_search_reads_at_most_its_share_of_a_font_file() {
     assert!(wanted.provided_by(&dir.join("No Such.ttf")).is_empty());
 }
 
+/// A search reads a suitcase font only when its whole resource fork fits in the 8 MB a search reads
+/// of one file.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_search_reads_a_suitcase_font_only_within_its_share() {
+    use crate::fontdb::file_face_names_within;
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-big-suitcase", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let suitcase = dir.join("Sysfont Sans3");
+    std::fs::write(&suitcase, b"").unwrap();
+    let fork = crate::suitcase::fork_of(&[renamed("SourceSans3-Regular.ttf")]);
+    let len = fork.len() as u64;
+    std::fs::write(suitcase.join("..namedfork/rsrc"), &fork).unwrap();
+    assert_eq!(file_face_names_within(&suitcase, 64, len).len(), 1);
+    assert!(file_face_names_within(&suitcase, 64, len - 1).is_empty());
+    let wanted = WantedFonts::new(&[WantedFont { family: FAMILY.into(), style: "Regular".into(), installed: None }]);
+    assert_eq!(wanted.provided_by(&suitcase), [0]);
+    // Past the 8 MB a search reads of one file.
+    let mut big = fork;
+    big.resize((8 << 20) + 1, 0);
+    std::fs::write(suitcase.join("..namedfork/rsrc"), big).unwrap();
+    assert!(wanted.provided_by(&suitcase).is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn font_files_are_told_by_their_extension() {
     for name in ["a/B.TTF", "c.otf", "d.Ttc", "e.otc"] {
