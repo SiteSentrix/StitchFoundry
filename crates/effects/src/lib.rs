@@ -6,7 +6,7 @@
 //! - **Geometry effects** (Distort & Transform, Path, Convert to Shape, Round Corners, Scribble,
 //!   Warp) rewrite a path: [`apply_geometry`] evaluates them in stack order.
 //! - **Raster effects** (Drop Shadow, Inner/Outer Glow, Feather, Gaussian Blur, and the
-//!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Unsharp Mask) are described by
+//!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Unsharp Mask and Glowing Edges) are described by
 //!   [`raster_effects`] and painted by the renderer; [`outset`] says how far they reach beyond
 //!   the geometry.
 //! - **Stroke geometry** ([`stroke`]): arrowheads, dash patterns and width profiles, shared by the
@@ -125,6 +125,7 @@ fn lengths_of(id: &str) -> Lengths {
         "stylize.scribble" => always(&["overlap", "strokeWidth", "spacing", "variation"]),
         "stylize.dropShadow" => always(&["x", "y", "blur"]),
         "stylize.innerGlow" | "stylize.outerGlow" => always(&["blur"]),
+        "stylize.glowingEdges" => always(&["edgeWidth", "smoothness"]),
         _ => Lengths::default(),
     }
 }
@@ -290,7 +291,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "{amount: % 1..500 (50), radius: pt 0.1..250 (1; σ of the blur edges are found against), threshold: levels 0..255 (0; smaller differences are left alone)}",
             json!({"amount": 50.0, "radius": 1.0, "threshold": 0.0}),
         ),
-        r("stylize.findEdges", "Find Edges", STYLIZE, "{} replaces colour with a Sobel edge map while preserving transparency", json!({})),
+        r(
+            "stylize.glowingEdges",
+            "Glowing Edges…",
+            STYLIZE,
+            "{edgeWidth: pt 1..14 (2), edgeBrightness: 0..20 (6), smoothness: pt 1..15 (5)} finds alpha-weighted Sobel edges and draws bright coloured outlines on black",
+            json!({"edgeWidth": 2.0, "edgeBrightness": 6.0, "smoothness": 5.0}),
+        ),
     ];
     v.extend([
         g(
