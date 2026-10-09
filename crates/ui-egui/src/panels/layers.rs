@@ -24,13 +24,20 @@
 //!   on the trash clears it.
 //!
 //! While an opacity mask is edited the panel lists only its art, under an `<Opacity Mask>` entry.
+//!
+//! The rows open are the document's ([`OpenRows`], saved in native files): a document opens with
+//! only its top-level layers open. The rows shown are listed once per document change, and only
+//! those scrolled into view are laid out, so a document of many thousand objects costs no more
+//! per frame than a small one.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use egui::{Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_engine::OpenRows;
 
 use crate::theme::Tokens;
 use crate::widgets::{Live, PanelDrag};
@@ -198,9 +205,97 @@ fn opens(n: &Node, opts: &PanelOptions) -> bool {
     }
 }
 
-/// Whether `n` or anything in it has a name containing `q` (lowercase).
-fn matches(n: &Node, q: &str) -> bool {
-    n.display_name().to_lowercase().contains(q) || n.children().is_some_and(|c| c.iter().any(|c| matches(c, q)))
+/// One row of the panel.
+#[derive(Clone)]
+struct Row {
+    node: Arc<Node>,
+    /// Nesting level (0: a top-level layer).
+    depth: usize,
+    /// A clipping path: its group or layer clips.
+    clip_path: bool,
+    /// It holds rows ([`opens`]), and shows them.
+    opens: bool,
+    open: bool,
+    /// The colour of its layer (its own, for a layer).
+    colour: Color32,
+    /// Drawn dimmed: hidden itself or in a hidden layer or group, or a template layer.
+    dim: bool,
+}
+
+/// What the rows were listed from: listed again when any of it changes.
+#[derive(Clone, PartialEq)]
+struct RowsKey {
+    uid: u64,
+    revision: u64,
+    open: u64,
+    layers_only: bool,
+    query: String,
+}
+
+/// The rows the panel shows, top down: the layers (only the opacity mask's while one is edited)
+/// with the rows of the open ones inside them. A search shows every row whose name, or the name of
+/// anything inside it, contains `query` (lowercase).
+fn list_rows(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str) -> Vec<Row> {
+    let mask_layer = doc.mask_edit.map(|m| m.layer);
+    let mut out = vec![];
+    for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
+        push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query), &mut out);
+    }
+    out
+}
+
+/// Add the rows of `n` and those open inside it to `out`; `(colour, shown)` are those of what holds
+/// it (the layer's colour, and whether it is visible).
+fn push_rows(
+    n: &Arc<Node>,
+    depth: usize,
+    clip_path: bool,
+    (colour, shown): (Color32, bool),
+    cx: (&OpenRows, &PanelOptions, &str),
+    out: &mut Vec<Row>,
+) {
+    let (open_rows, opts, query) = cx;
+    if opts.layers_only && !n.is_layer() {
+        return;
+    }
+    let colour = match &n.kind {
+        NodeKind::Layer { color, .. } => {
+            let [r, g, b] = color.rgb();
+            Color32::from_rgb(r, g, b)
+        }
+        _ => colour,
+    };
+    let shown = shown && n.visible;
+    let opens = opens(n, opts);
+    let searching = !query.is_empty();
+    let open = opens && (searching || open_rows.contains(n.id));
+    let at = out.len();
+    out.push(Row { node: n.clone(), depth, clip_path, opens, open, colour, dim: !shown || n.is_template() });
+    if open && let Some(children) = n.children() {
+        for (i, c) in children.iter().enumerate().rev() {
+            push_rows(c, depth + 1, i == 0 && n.clips(), (colour, shown), cx, out);
+        }
+    }
+    // Searching, a row stays for its own name or for a row it keeps inside it.
+    if searching && out.len() == at + 1 && !n.display_name().to_lowercase().contains(query) {
+        out.truncate(at);
+    }
+}
+
+/// The rows of the active document as [`list_rows`] lists them, listed again only when the
+/// document, its open rows, the search or Show Layers Only changed.
+fn rows_of_doc(ui: &Ui, st: &vectorcraft_engine::DocState, opts: &PanelOptions, query: &str) -> Arc<Vec<Row>> {
+    let now =
+        RowsKey { uid: st.uid, revision: st.revision, open: st.layers_open.generation(), layers_only: opts.layers_only, query: query.to_string() };
+    let id = key("rows");
+    if let Some((was, rows)) = ui.data(|d| d.get_temp::<(RowsKey, Arc<Vec<Row>>)>(id))
+        && was == now
+    {
+        return rows;
+    }
+    let rows = Arc::new(list_rows(&st.doc, &st.layers_open, opts, query));
+    ui.data_mut(|d| d.insert_temp(id, (now, rows.clone())));
+    rows
 }
 
 /// Everything one frame of the panel reads.
@@ -213,8 +308,6 @@ struct View<'a> {
     opts: PanelOptions,
     t: Tokens,
     h: f32,
-    /// The search field's text, lowercase (empty: every row).
-    query: String,
     column: Option<ColumnDrag>,
     /// The row to scroll into view.
     reveal: Option<NodeId>,
@@ -224,8 +317,6 @@ struct View<'a> {
 #[derive(Default)]
 struct Out {
     actions: Vec<(String, Value)>,
-    /// The rows shown, top down.
-    order: Vec<NodeId>,
     /// A row clicked with these modifiers (resolved once every row is listed).
     click: Option<(NodeId, egui::Modifiers)>,
     /// The column drag after this frame (`Some(None)`: it ended).
@@ -249,23 +340,25 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             d.insert_temp(shown_doc, st.uid);
         });
     }
-    let uid = st.uid;
     let doc = st.doc.clone();
     let rows = st.highlighted_rows();
     // Rows highlighted anew (a click, Locate Object, a new layer): open the layers around them.
     let seen: Vec<NodeId> = ui.data(|d| d.get_temp(key("seen"))).unwrap_or_default();
     let mut reveal = None;
-    let expanded = app.ui.layers_expanded.entry(uid).or_insert_with(|| doc.layers.iter().map(|l| l.id.0).collect());
     if rows != seen {
-        for r in &rows {
-            for a in doc.ancestry(*r).unwrap_or_default().split_last().map(|(_, a)| a.to_vec()).unwrap_or_default() {
-                expanded.insert(a.0);
+        let around: Vec<NodeId> =
+            rows.iter().flat_map(|r| doc.ancestry(*r).unwrap_or_default().split_last().map(|(_, a)| a.to_vec()).unwrap_or_default()).collect();
+        if let Some(st) = app.session.active_mut() {
+            for a in around {
+                st.layers_open.set(a, true);
             }
         }
         reveal = rows.first().copied();
         ui.data_mut(|d| d.insert_temp(key("seen"), rows.clone()));
     }
     let query = crate::widgets::search_field(ui, egui::Id::new("layers-search"), tl!("Search All")).trim().to_lowercase();
+    let Some(st) = app.session.active() else { return };
+    let list = rows_of_doc(ui, st, &app.ui.layers_panel, &query);
     let view = View {
         doc: &doc,
         sel: st.selection.objects.iter().copied().collect(),
@@ -275,30 +368,31 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         opts: app.ui.layers_panel.clone(),
         t,
         h: app.ui.layers_panel.row(),
-        query,
         column: ui.data(|d| d.get_temp(key("column"))),
         reveal,
     };
-    // While an opacity mask is edited only its art is listed.
-    let mask_layer = doc.mask_edit.map(|m| m.layer);
     let mut out = Out::default();
     ui.add_space(6.0);
     let list_h = ui.available_height() - 34.0;
-    let list = egui::ScrollArea::vertical().max_height(list_h).auto_shrink([false, false]).show(ui, |ui| {
+    // Only the rows in view are laid out; one revealed out of view is scrolled to.
+    let revealed = reveal.and_then(|id| list.iter().position(|r| r.node.id == id));
+    let scrolled = ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        let expanded = app.ui.layers_expanded.entry(uid).or_default();
-        for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
-            row(ui, &view, l, 0, false, expanded, &mut out);
-        }
+        egui::ScrollArea::vertical().max_height(list_h).auto_shrink([false, false]).show_rows(ui, view.h, list.len(), |ui, range| {
+            if let Some(i) = revealed.filter(|i| !range.contains(i)) {
+                let top = ui.max_rect().top() + (i as f32 - range.start as f32) * view.h;
+                ui.scroll_to_rect(egui::Rect::from_min_size(egui::pos2(ui.max_rect().left(), top), vec2(ui.max_rect().width(), view.h)), None);
+            }
+            for r in list.get(range).unwrap_or_default() {
+                row(ui, &view, r, &mut out);
+            }
+        })
     });
-    let list_rect = list.inner_rect;
-    resolve_click(ui, &view, &mut out);
-    let expanded = app.ui.layers_expanded.entry(uid).or_default();
-    for (id, open) in out.toggle.drain(..) {
-        if open {
-            expanded.insert(id.0);
-        } else {
-            expanded.remove(&id.0);
+    let list_rect = scrolled.inner.inner_rect;
+    resolve_click(ui, &view, &list, &mut out);
+    if let Some(st) = app.session.active_mut() {
+        for (id, open) in out.toggle.drain(..) {
+            st.layers_open.set(id, open);
         }
     }
     // The column drag: live while it lasts, one undo step when the button is released.
@@ -415,15 +509,16 @@ fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc: &Document
 
 /// Resolve the row clicked this frame: plain (highlight it), Ctrl/Cmd (toggle it) or Shift
 /// (highlight the rows from the last one clicked down to it).
-fn resolve_click(ui: &Ui, view: &View, out: &mut Out) {
+fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     let Some((id, m)) = out.click.take() else { return };
     let anchor: Option<NodeId> = ui.data(|d| d.get_temp(key("anchor")));
     ui.data_mut(|d| d.insert_temp(key("focus"), true));
+    let at = |id: NodeId| list.iter().position(|r| r.node.id == id);
     if m.shift
         && let Some(a) = anchor.or(view.rows.last().copied())
-        && let (Some(i), Some(j)) = (out.order.iter().position(|r| *r == a), out.order.iter().position(|r| *r == id))
+        && let (Some(i), Some(j)) = (at(a), at(id))
     {
-        let range: Vec<u64> = out.order.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.0).collect();
+        let range: Vec<u64> = list.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.node.id.0).collect();
         out.actions.push(("layer.highlight".into(), json!({"ids": range, "mode": if m.command { "add" } else { "set" }})));
         return;
     }
@@ -447,19 +542,14 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expanded: &mut HashSet<u64>, out: &mut Out) {
+/// The widgets of row `item`.
+fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
+    let n = &*item.node;
+    let (depth, clip_path, has_children, open, color) = (item.depth, item.clip_path, item.opens, item.open, item.colour);
     let doc = view.doc;
     let t = &view.t;
-    if !view.query.is_empty() && !matches(n, &view.query) {
-        return;
-    }
-    if view.opts.layers_only && !n.is_layer() {
-        return;
-    }
     let h = view.h;
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
-    out.order.push(n.id);
     if view.reveal == Some(n.id) {
         ui.scroll_to_rect(r, None);
     }
@@ -470,7 +560,6 @@ fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expand
             n.walk(&mut |c| any |= c.id != n.id && view.sel.contains(&c.id));
             any
         });
-    let color = layer_colour(doc, n.id);
     // Highlighted rows (else the current layer's).
     let highlighted = if view.rows.is_empty() { n.is_layer() && Some(n.id) == view.current } else { view.rows.contains(&n.id) };
     if highlighted {
@@ -490,9 +579,6 @@ fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expand
     colour_bar(ui, n, r, x, color);
     x += 6.0 + depth as f32 * INDENT;
     // Disclosure triangle; Alt opens or closes everything inside too.
-    let searching = !view.query.is_empty();
-    let has_children = opens(n, &view.opts);
-    let open = has_children && (searching || expanded.contains(&n.id.0));
     if has_children {
         let dr = egui::Rect::from_min_size(egui::pos2(x, r.center().y - 8.0), vec2(14.0, 16.0));
         let dresp = ui.interact(dr, ui.id().with(("disc", n.id.0)), Sense::click());
@@ -548,8 +634,7 @@ fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expand
             } else {
                 painted_name(n, &name, crate::i18n::current())
             };
-            let dim = !doc.is_visible(n.id) || n.is_template();
-            let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, shown, font, if dim { t.text_dim } else { t.text });
+            let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, shown, font, if item.dim { t.text_dim } else { t.text });
             name_end = text.right();
             // A clipping path's name is underlined, a masked object's with a dashed line.
             if clip_path {
@@ -605,11 +690,6 @@ fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expand
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
-    if open && let Some(children) = n.children() {
-        for (i, c) in children.iter().enumerate().rev() {
-            row(ui, view, c, depth + 1, i == 0 && n.clips(), expanded, out);
-        }
-    }
 }
 
 /// Alt-clicking row `n`'s eye (`eye`) or lock: Hide Others or Lock Others, every top-level layer
@@ -951,15 +1031,9 @@ pub fn expand(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             v
         }
     };
-    let uid = st.uid;
-    let layers: Vec<u64> = st.doc.layers.iter().map(|l| l.id.0).collect();
-    let set = app.ui.layers_expanded.entry(uid).or_insert_with(|| layers.into_iter().collect());
+    let st = app.session.active_mut().ok_or("no document open")?;
     for i in &ids {
-        if open {
-            set.insert(*i);
-        } else {
-            set.remove(i);
-        }
+        st.layers_open.set(NodeId(*i), open);
     }
     Ok(json!({ "count": ids.len() }))
 }
@@ -1622,5 +1696,54 @@ mod tests {
         frame(&mut app, vec![]);
         assert_eq!(rows_of(&app), vec![sub]);
         assert_eq!(app.session.active().unwrap().current_layer(), Some(sub));
+    }
+
+    /// A layer of 2,000 groups of 10 paths with every row open: one frame lays out only the rows
+    /// in view, and a row highlighted far below them is scrolled to.
+    #[test]
+    fn only_the_rows_in_view_are_laid_out() {
+        use vectorcraft_doc::Appearance;
+        use vectorcraft_geom::{Rect, shapes};
+        let mut d = Document::new(1000.0, 1000.0);
+        let mut groups = vec![];
+        let mut needle = None;
+        for g in 0..2000 {
+            let kids = (0..10)
+                .map(|k| {
+                    let r = Rect::new(k as f64, g as f64 * 0.1, k as f64 + 1.0, g as f64 * 0.1 + 1.0);
+                    let mut n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default());
+                    if g == 0 && k == 0 {
+                        n.name = Some("Needle".into());
+                        needle = Some(n.id);
+                    }
+                    Arc::new(n)
+                })
+                .collect();
+            groups.push(Arc::new(Node::group(d.alloc_id(), kids)));
+        }
+        *Arc::make_mut(&mut d.layers[0]).children_mut().unwrap() = groups;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.add_document(d, None);
+        expand(&mut app, &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        // (shapes drawn, whether the needle's name is among them); a second passes per frame, so
+        // scrolling ends.
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp| {
+            time += 1.0;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 800.0));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let found = out.shapes.iter().any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == "Needle"));
+            (out.shapes.len(), found)
+        };
+        let (shapes, found) = frame(&mut app);
+        // 22,001 rows; about 30 fit.
+        assert!(shapes < 1000 && !found, "{shapes} shapes");
+        let needle = needle.unwrap();
+        app.session.execute("layer.highlight", &json!({"ids": [needle.0], "mode": "set"})).unwrap();
+        let found = (0..4).any(|_| frame(&mut app).1);
+        assert_eq!(app.session.active().unwrap().highlighted_rows(), [needle]);
+        assert!(found, "the highlighted row is scrolled into view");
     }
 }
