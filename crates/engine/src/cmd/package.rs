@@ -228,15 +228,15 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let mut doc = (*st.doc).clone();
     let doc_name = format!("{stem}.{}", vectorcraft_format::EXTENSION);
-    let mut collector = Collector::new(&o, root.clone(), &doc_name);
-    collector.collect(&mut doc, &doc_path, &doc_name, 0)?;
-    // Keep original paths relative to this new folder for assets intentionally
-    // excluded from the package (copyLinks:false, missing links, relink:false).
+    // Prepare original links for the destination *before* rebasing copied links.
+    // Recalculating afterward would overwrite the portable relative paths.
     if let Some(root) = &root
         && let Some(d) = super::links::with_relative_paths(&doc, &root.join(&doc_name).to_string_lossy())
     {
         doc = d;
     }
+    let mut collector = Collector::new(&o, root.clone(), &doc_name);
+    collector.collect(&mut doc, &doc_path, &doc_name, 0)?;
     let mut entries = std::mem::take(&mut collector.entries);
     entries.insert(0, (doc_name.clone(), vectorcraft_format::save_file(&doc)));
     let mut taken = std::mem::take(&mut collector.taken);
