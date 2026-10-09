@@ -2144,6 +2144,8 @@
 	Reverse Spine	Inverser la colonne vertébrale
 	Revert	Version précédente
 	Revert to the saved version of “{name}”?	Revenir à la version enregistrée de « {name} » ?
+	Replace “{name}”, the file this document was opened from?	Remplacer « {name} », le fichier à partir duquel ce document a été ouvert ?
+	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Son ouverture a laissé de côté ce que VectorCraft ne sait pas encore lire ({what}) : le remplacer le perd définitivement. Enregistrez sous un autre nom pour le conserver.
 	Revolve…	Révolution…
 	RGB Color	Couleur RVB
 	Right	Droite
@@ -3115,18 +3117,18 @@ axis	Both	Les deux
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
-@msg	a layer couldn't be read	une couche n’a pas pu être lue
+@msg	a layer couldn't be read	un calque n’a pas pu être lu
 @msg	it has more than one artboard	il a plus d'un plan de travail
 @msg	it has no page	il n’a pas de page
 @msg	it has too many text objects	il a trop d’objets texte
 @msg	it has too much text	il a trop de texte
 @msg	its editing data doesn't say where its artboard is	ses données de modification n’indiquent pas où se trouve son plan de travail
-@msg	its editing data has no layers	ses données de modification n’ont pas de couches
+@msg	its editing data has no layers	ses données de modification n’ont pas de calques
 @msg	its editing data is damaged	ses données de modification sont endommagées
 @msg	its editing data is for a different page	ses données de modification concernent une autre page
-@msg	its layers use {_1}, which aren't read yet	ses couches utilisent {_1}, qui ne sont pas encore lus
-@msg	its page has text, and its layers have no text objects to put it in	sa page contient du texte, et ses couches n’ont aucun objet texte où le mettre
-@msg	the art on them differs from the page's in {_1}% of it	le dessin des couches diffère de celui de la page sur {_1} % de sa surface
+@msg	its layers use {_1}, which aren't read yet	ses calques utilisent {_1}, qui ne sont pas encore lus
+@msg	its page has text, and its layers have no text objects to put it in	sa page contient du texte, et ses calques n’ont aucun objet texte où le mettre
+@msg	the art on them differs from the page's in {_1}% of it	le dessin des calques diffère de celui de la page sur {_1} % de sa surface
 @msg	`to` must be "corner" or "smooth"	`to` doit être "corner" ou "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Les fichiers BMP sont en RVB ou en niveaux de gris : colorModel rgb ou gray
 @msg	Blend colors: select at least three objects with filled colours	Fusion des couleurs : sélectionnez au moins trois objets dotés d’un fond de couleur
