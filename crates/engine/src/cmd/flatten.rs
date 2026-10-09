@@ -1265,11 +1265,11 @@ fn reach(n: &Node) -> Option<Rect> {
     if !n.visible {
         return None;
     }
-    let fx = n.appearance.items.iter().map(|i| effects::outset(i.effects())).fold(effects::outset(&n.appearance.effects), f64::max);
     let b = match n.children() {
         Some(ch) if !n.clips() && !matches!(n.kind, NodeKind::Compound { .. }) => ch.iter().filter_map(|c| reach(c)).reduce(|a, b| a.union(b))?,
         _ => n.visual_bounds()?,
     };
+    let fx = n.appearance.items.iter().map(|i| effects::outset(i.effects(), b)).fold(effects::outset(&n.appearance.effects, b), f64::max);
     Some(b.inflate(fx + 1.0, fx + 1.0))
 }
 

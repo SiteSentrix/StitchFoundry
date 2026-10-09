@@ -12,6 +12,23 @@
 # Coverage: the whole interface — every menu string and every `tl!` literal (`complete_menus`,
 # tested). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
+# Photoshop-style raster effects (Effect menu, their dialogs).
+	Radial Blur…	Flou radial…
+	Smart Blur…	Flou intelligent…
+	Sharpen	Netteté
+	Unsharp Mask…	Masque de netteté…
+	Radial Blur	Flou radial
+	Smart Blur	Flou intelligent
+	Unsharp Mask	Masque de netteté
+	Gaussian Blur	Flou gaussien
+	Method	Méthode
+	Quality	Qualité
+	Radius	Rayon
+	Spin	Rotation
+	Draft	Brouillon
+	Good	Bonne
+	Best	Optimale
+
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the
 # leading/trailing spaces of fragments exactly as they are.

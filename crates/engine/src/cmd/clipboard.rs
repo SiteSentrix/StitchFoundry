@@ -170,8 +170,10 @@ impl Session {
             return None;
         }
         let d = self.clipboard.to_document();
+        // SVG has no filters for the Photoshop-style effects: their objects go in as images.
+        let flat = super::rasterfx::flatten_pixel_effects(&d);
         Some(vectorcraft_svg::export(
-            &d,
+            flat.as_ref().unwrap_or(&d),
             &vectorcraft_svg::ExportOptions { artboard: None, object_ids: vectorcraft_svg::ObjectIds::Minimal, ..Default::default() },
         ))
     }

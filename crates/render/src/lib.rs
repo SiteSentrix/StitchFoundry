@@ -316,6 +316,9 @@ pub struct Renderer {
     live: live::LiveCache,
     /// Blurred, tinted drop shadow / outer glow rasters per object and effect (see `fx`).
     shadows: PtrMap<(usize, usize, Ink), fx::ShadowEntry>,
+    /// Objects' content run through Photoshop-style effects, per object and content slot (see
+    /// `fx`): kept only while drawn.
+    pixel_fx: PtrMap<(usize, usize, Ink), fx::PixelEntry>,
     /// Whether the group being drawn is a knockout group (what its neutral children inherit).
     knockout: bool,
     /// Address of the knockout-group element being drawn as its knockout shape: at full object
@@ -421,6 +424,7 @@ impl Renderer {
             stats: FrameStats::default(),
             brushes: Default::default(),
             shadows: PtrMap::default(),
+            pixel_fx: PtrMap::default(),
             live: live::LiveCache::default(),
             knockout: false,
             shape_of: 0,
@@ -491,6 +495,8 @@ impl Renderer {
         if self.shadows.len() > 256 {
             self.shadows.retain(|_, e| g - e.stamp <= 3);
         }
+        // Filtered rasters are large: only those of the last frame stay.
+        self.pixel_fx.retain(|_, e| e.stamp == g);
         if !inks {
             proof::post(&mut pixels, opts);
         }
