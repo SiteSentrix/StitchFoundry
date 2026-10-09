@@ -68,6 +68,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         symbol_nest: 0,
         fonts: Vec::new(),
         shared_images: HashMap::new(),
+        layer_nest: 0,
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -266,6 +267,8 @@ struct Writer<'a> {
     /// Images written once in the defs and drawn with `<use>`, by key and size: the pieces an
     /// envelope cuts a distorted image into share its pixels.
     shared_images: HashMap<(String, u32, u32), String>,
+    /// Layers being written inside one another (more than one: a sublayer).
+    layer_nest: usize,
 }
 
 /// The characters type uses from one face, under one `@font-face` description: the family the
@@ -545,8 +548,8 @@ impl Writer<'_> {
     }
     /// ` id="…"` for a named object, plus ` data-name="…"` with the name itself when the id had to
     /// differ from it (spaces, punctuation, duplicates, the unique prefix).
-    /// The id of `n`'s element (with its name when the id isn't it), then the object's own data
-    /// as `data-*` attributes.
+    /// The id of `n`'s element (with its name when the id isn't it), a sublayer's mark
+    /// ([`crate::import::SUBLAYER`]), then the object's own data as `data-*` attributes.
     fn id_attr(&self, n: &Node) -> String {
         if self.anonymous {
             return String::new();
@@ -556,6 +559,10 @@ impl Writer<'_> {
             (Some(id), _) => format!(" id=\"{}\"", xml_escape(id)),
             (None, _) => String::new(),
         };
+        // A sublayer is marked as one, so import makes it a sublayer again, not a group.
+        if !out.is_empty() && n.is_layer() && self.layer_nest > 1 {
+            out.push_str(&format!(" {}=\"sublayer\"", crate::import::SUBLAYER));
+        }
         for (k, v) in n.attrs.as_deref().map_or(&[][..], |a| a.data.as_slice()) {
             // Names as XML takes them; ours (`name`, `vc-…`) are written by the export itself.
             let valid = k.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) && k != "name" && !k.starts_with("vc-");
@@ -1215,6 +1222,8 @@ impl Writer<'_> {
 
     /// An object, inside `<a>` when it links to a URL (Attributes panel).
     fn node(&mut self, n: &Node) {
+        let layer = usize::from(n.is_layer());
+        self.layer_nest += layer;
         match n.url().filter(|_| n.visible && !self.anonymous) {
             Some(url) => {
                 self.line(&format!("<a xlink:href=\"{}\">", xml_escape(url)));
@@ -1225,6 +1234,7 @@ impl Writer<'_> {
             }
             None => self.node_body(n),
         }
+        self.layer_nest -= layer;
     }
 
     fn node_body(&mut self, n: &Node) {
