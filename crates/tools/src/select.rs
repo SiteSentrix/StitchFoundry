@@ -73,9 +73,10 @@ pub struct SelectionTool {
     guide: GuideEdit,
 }
 
-/// Snapping for the selection moved as a whole, its targets gathered when the move begins: Smart
-/// Guides line its bounds up with the other art; with them off, View → Snap to Point lands the
-/// point it was grabbed by on an anchor or a ruler guide; Snap to Pixel puts its top-left on whole
+/// Snapping for the selection moved as a whole, its targets gathered when the move begins: View →
+/// Snap to Grid lands its bounds on the grid (#740), taking over from the rest; otherwise Smart
+/// Guides line its bounds up with the other art, and with them off, View → Snap to Point lands the
+/// point it was grabbed by on an anchor or a ruler guide. Snap to Pixel puts its top-left on whole
 /// pixels.
 pub(crate) struct MoveSnap {
     bounds: Option<Rect>,
@@ -87,14 +88,19 @@ impl MoveSnap {
     pub(crate) fn new(cx: &ToolContext) -> Self {
         Self {
             bounds: selection_bounds(cx),
-            targets: cx.smart_guides.then(|| Targets::for_move(cx)),
-            points: Targets::snap_to_point(cx, &cx.selection.objects),
+            targets: (cx.smart_guides && !cx.snap_to_grid).then(|| Targets::for_move(cx)),
+            points: if cx.snap_to_grid { None } else { Targets::snap_to_point(cx, &cx.selection.objects) },
         }
     }
 
     /// The move by `d` of the selection grabbed at `start`, snapped, and its guides.
     pub(crate) fn snap(&self, cx: &ToolContext, start: Point, mut d: Vec2) -> (Vec2, Vec<Overlay>) {
         let mut guides = vec![];
+        if cx.snap_to_grid
+            && let Some(b) = self.bounds
+        {
+            d += grid_pull(b + d, cx.grid_step());
+        }
         if let Some(t) = &self.points {
             let (q, ov) = t.snap_point(start + d, cx.tol(cx.snap_tolerance));
             d = q - start;
@@ -113,6 +119,15 @@ impl MoveSnap {
         }
         (d, guides)
     }
+}
+
+/// The shift that lands `r` on the grid (a gridline every `step`), on each axis by whichever of its
+/// two edges and its centre is nearest a gridline, however far that is.
+fn grid_pull(r: Rect, step: f64) -> Vec2 {
+    let pull = |vs: [f64; 3]| {
+        vs.iter().map(|v| vectorcraft_geom::snap::snap_to_grid(*v, step, 0.0) - v).min_by(|a, b| a.abs().total_cmp(&b.abs())).unwrap_or(0.0)
+    };
+    Vec2::new(pull([r.x0, r.center().x, r.x1]), pull([r.y0, r.center().y, r.y1]))
 }
 
 pub fn matrix_json(a: Affine) -> Value {
@@ -515,6 +530,32 @@ mod tests {
         assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["matrix"][4] == 10.0));
         let a = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 150.0));
         assert_eq!(a, vec![Action::Commit]);
+    }
+
+    /// #740: with Snap to Grid on, a moved object lands on the grid (every 9 pt by default) by
+    /// whichever of its edges or its centre is nearest a gridline, on each axis.
+    #[test]
+    fn a_move_lands_the_nearest_edge_or_centre_on_the_grid() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = ToolContext { snap_to_grid: true, smart_guides: true, ..cx(&d, &s, &p) };
+        let moved = |to: (f64, f64)| {
+            let mut t = SelectionTool::default();
+            t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+            let a = t.pointer(&cx, &ev(PointerKind::Drag, to.0, to.1));
+            match a.get(1) {
+                Some(Action::Preview(_, v)) => (v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()),
+                other => panic!("{other:?}"),
+            }
+        };
+        // Bounds 100–200 moved by (13, 4): the centres (163, 154) are nearest gridlines (162, 153).
+        let (x, y) = moved((163.0, 154.0));
+        assert!((x - 12.0).abs() < 1e-9 && (y - 3.0).abs() < 1e-9, "{x} {y}");
+        // Moved by (7, 0): the right edge is on a gridline (207) and the top goes up to one (99).
+        let (x, y) = moved((157.0, 150.0));
+        assert!((x - 7.0).abs() < 1e-9 && (y + 1.0).abs() < 1e-9, "{x} {y}");
     }
 
     #[test]
