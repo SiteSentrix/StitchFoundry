@@ -730,6 +730,85 @@ fn same_type(n: &Node, lines: &[(String, Point)]) -> Option<f64> {
         .min_by(f64::total_cmp)
 }
 
+/// The page draws a line in pieces where its kerning or styles change ("swe", "ep"), and the file
+/// has it as one line of one text object: the pieces that on one baseline add up to a line of
+/// `lines` become one text (each keeping its own style, the line's spaces between them).
+fn join_pieces(parts: &mut Vec<Arc<Node>>, lines: &[(String, Point)]) {
+    let text_of = |n: &Arc<Node>| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None };
+    let texts: Vec<usize> = parts.iter().enumerate().filter(|(_, n)| matches!(n.kind, NodeKind::Text(_))).map(|(i, _)| i).collect();
+    let mut taken: Vec<usize> = vec![];
+    // The first piece of each line to join, the others, and the spaces to put after each piece.
+    let mut joins: Vec<(usize, Vec<usize>, Vec<String>)> = vec![];
+    for &i in &texts {
+        if taken.contains(&i) {
+            continue;
+        }
+        let Some(line) = parts.get(i).and_then(|n| baseline(n)) else { continue };
+        let group: Vec<usize> = texts
+            .iter()
+            .copied()
+            .filter(|j| !taken.contains(j) && parts.get(*j).and_then(|n| baseline(n)).is_some_and(|b| (b - line).abs() <= SAME_LINE))
+            .collect();
+        taken.extend(&group);
+        let pieces: Vec<String> = group.iter().filter_map(|j| parts.get(*j).and_then(text_of)).collect();
+        let places: Vec<(f64, f64)> = group
+            .iter()
+            .filter_map(|j| parts.get(*j))
+            .filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((t.xf.as_coeffs()[4], t.xf.as_coeffs()[5])) } else { None })
+            .collect();
+        let distinct = places.iter().enumerate().all(|(a, p)| places.iter().skip(a + 1).all(|q| (p.0 - q.0).hypot(p.1 - q.1) > 0.01));
+        let joined: String = pieces.iter().map(|p| letters(p)).collect();
+        if group.len() < 2 || !distinct || joined.is_empty() {
+            continue;
+        }
+        let Some((whole, _)) = lines.iter().find(|(text, _)| letters(text) == joined) else { continue };
+        // Where the line has spaces after a piece's last character that the page doesn't draw.
+        let line_chars: Vec<char> = whole.chars().collect();
+        let mut at = 0;
+        let mut gaps = vec![];
+        for (k, piece) in pieces.iter().enumerate() {
+            for _ in piece.chars().filter(|c| !c.is_whitespace()) {
+                while line_chars.get(at).is_some_and(|c| c.is_whitespace()) {
+                    at += 1;
+                }
+                at += 1;
+            }
+            let space: String = line_chars.iter().skip(at).take_while(|c| c.is_whitespace()).collect();
+            let next = pieces.get(k + 1);
+            let drawn = piece.ends_with(char::is_whitespace) || next.is_none_or(|n| n.starts_with(char::is_whitespace));
+            gaps.push(if drawn { String::new() } else { space });
+        }
+        if at <= line_chars.len() {
+            joins.push((group[0], group[1..].to_vec(), gaps));
+        }
+    }
+    for (first, rest, gaps) in joins.iter().rev() {
+        let mut runs: Vec<Vec<vectorcraft_doc::TextRun>> = [first]
+            .into_iter()
+            .chain(rest)
+            .filter_map(|j| parts.get(*j))
+            .filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.runs.clone()) } else { None })
+            .collect();
+        for (r, gap) in runs.iter_mut().zip(gaps) {
+            if let Some(last) = r.last_mut() {
+                last.text.push_str(gap);
+            }
+        }
+        if let Some(node) = parts.get_mut(*first).map(Arc::make_mut)
+            && let NodeKind::Text(t) = &mut node.kind
+        {
+            t.runs = runs.into_iter().flatten().collect();
+        }
+        let mut gone: Vec<usize> = rest.clone();
+        gone.sort_unstable_by(|a, b| b.cmp(a));
+        for j in gone {
+            if j < parts.len() {
+                parts.remove(j);
+            }
+        }
+    }
+}
+
 /// The box round `parts`.
 fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
     parts.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))
@@ -785,6 +864,11 @@ fn plan(
                 None => {}
             },
             None => spare.push(object.clone()),
+        }
+    }
+    for (k, c) in content.iter_mut().enumerate() {
+        if let (Content::Page(parts), Some(Some(l))) = (c, lines.get(k)) {
+            join_pieces(parts, l);
         }
     }
     // Type of the text document where the page has none: hidden type, and shown type off the page.

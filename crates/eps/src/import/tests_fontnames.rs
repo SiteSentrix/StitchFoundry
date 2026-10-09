@@ -46,3 +46,13 @@ fn reencoded_copies_of_a_font_name_the_font() {
     assert_eq!(crate::family_style("Odd*Name").0, "Odd*Name");
     assert_eq!(crate::family_style("*1").0, "*1");
 }
+
+#[test]
+fn abbreviated_styles_in_postscript_names_are_spelled_out() {
+    // A style word PostScript names shorten is the style the installed font names in full.
+    assert_eq!(crate::family_style("AkzidenzGroteskPro-Md"), ("Akzidenz Grotesk Pro".to_string(), "Medium".to_string()));
+    assert_eq!(crate::family_style("AkzidenzGroteskPro-XBdCnIt").1, "Extra Bold Condensed Italic");
+    assert_eq!(crate::family_style("AkzidenzGroteskPro-LightCn").1, "Light Condensed");
+    // Whole words stay as they were.
+    assert_eq!(crate::family_style("Helvetica-BoldOblique").1, "Bold Oblique");
+}

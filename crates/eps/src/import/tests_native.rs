@@ -417,9 +417,12 @@ fn a_line_the_page_draws_in_pieces_goes_to_its_text_object_whole() {
     let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
     let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi) show 70 61.5 moveto (there) show";
     let r = import(&eps(page, &art)).unwrap();
+    // One text, with the line's space between the pieces.
     let group = &r.document.layers[0].children().unwrap()[0];
-    assert_eq!(kinds(group), ["text", "text"], "{:?}", r.warnings);
-    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(kinds(group), ["text"], "{:?}", r.warnings);
+    let texts: Vec<String> =
+        group.children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None }).collect();
+    assert_eq!(texts, ["Hi there"]);
 }
 
 #[test]
