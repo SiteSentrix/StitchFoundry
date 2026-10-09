@@ -27,6 +27,11 @@ pub struct CharStyle {
     pub font_family: String,
     #[serde(default = "regular")]
     pub font_style: String,
+    /// Which installed version of the font (its version string) when several versions of the
+    /// family and style are installed and the text was set in one the family and style alone
+    /// wouldn't pick (an imported file's type matched to it); None = the one they pick.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_version: Option<String>,
     /// Size in points.
     pub size: f64,
     /// Leading in points; None = Auto (120% of size).
@@ -175,6 +180,7 @@ impl Default for CharStyle {
         Self {
             font_family: "Source Sans 3".into(),
             font_style: "Regular".into(),
+            font_version: None,
             size: 12.0,
             leading: None,
             tracking: 0.0,

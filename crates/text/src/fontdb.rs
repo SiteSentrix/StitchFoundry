@@ -52,6 +52,9 @@ pub struct FontFace {
     pub family: String,
     /// Typographic style name (e.g. "Semibold", "Italic").
     pub style: String,
+    /// The font's version string (name ID 5, e.g. "Version 7.200"; empty when it has none). Two
+    /// installed versions of one family and style are told apart by it (see [`FontDb::face_version`]).
+    pub version: String,
     /// usWeightClass-style weight (400 = regular).
     pub weight: f32,
     pub italic: bool,
@@ -324,6 +327,10 @@ pub struct FontDb {
     /// scan, so what they find never depends on what ran before them.
     #[cfg(not(target_arch = "wasm32"))]
     cataloged: std::sync::OnceLock<()>,
+    /// Families (lowercased) whose installed files were all loaded to find other versions of their
+    /// faces (see [`FontDb::versions`]); a rescan forgets them.
+    #[cfg(not(target_arch = "wasm32"))]
+    version_scanned: RwLock<std::collections::HashSet<String>>,
     /// [`FontDb::family_list`], built on demand and dropped when fonts are added or rescanned.
     family_cache: Mutex<Option<Arc<[String]>>>,
     menu_cache: Mutex<Option<MenuFamilies>>,
@@ -1032,6 +1039,7 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
     };
     let f = skrifa::FontRef::from_index(data, index).ok()?;
     let FaceStyle { family, style, keys, variations, weight, italic, traits } = spec;
+    let version = name(&f, &[StringId::VERSION_STRING]).unwrap_or_default();
     // A named instance: outlines, metrics and advances at its axis settings.
     let location = if variations.is_empty() { Location::default() } else { f.axes().location(variations.iter().map(|(t, v)| (Tag::new(t), *v))) };
     let m = f.metrics(Size::unscaled(), &location);
@@ -1046,6 +1054,7 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
         family,
         style,
+        version,
         weight: weight.unwrap_or(a.weight.value()),
         italic: italic || !matches!(a.style, skrifa::attribute::Style::Normal),
         variations,
@@ -1150,6 +1159,8 @@ impl FontDb {
             aliases: RwLock::new(HashMap::new()),
             #[cfg(not(target_arch = "wasm32"))]
             cataloged: std::sync::OnceLock::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            version_scanned: RwLock::new(std::collections::HashSet::new()),
             family_cache: Mutex::new(None),
             menu_cache: Mutex::new(None),
             generation: AtomicU64::new(0),
@@ -1242,8 +1253,13 @@ impl FontDb {
     pub fn styles(&self, family: &str) -> Vec<String> {
         let (family, _) = self.canonical(family, "");
         let family = family.as_str();
-        let mut v: Vec<(bool, f32, String)> =
-            self.read_faces().iter().filter(|f| f.family.eq_ignore_ascii_case(family)).map(|f| (f.italic, f.weight, f.style.clone())).collect();
+        let mut v: Vec<(bool, f32, String)> = Vec::new();
+        // Each style once, as its first loaded version describes it (versions can disagree on weight).
+        for f in self.read_faces().iter().filter(|f| f.family.eq_ignore_ascii_case(family)) {
+            if !v.iter().any(|(_, _, s)| s.eq_ignore_ascii_case(&f.style)) {
+                v.push((f.italic, f.weight, f.style.clone()));
+            }
+        }
         if let Some(c) = self.read_catalog().get(&family.to_ascii_lowercase()) {
             for cf in &c.faces {
                 if !v.iter().any(|(_, _, s)| s.eq_ignore_ascii_case(&cf.style)) {
@@ -1267,7 +1283,14 @@ impl FontDb {
         let data = Arc::new(bytes);
         let mut added = 0;
         for (i, spec) in enumerate_faces(&data) {
-            if self.read_faces().iter().any(|f| f.family.eq_ignore_ascii_case(&spec.family) && f.style.eq_ignore_ascii_case(&spec.style)) {
+            // Another version of a family and style is kept: a document may name it (the first one
+            // loaded stays the one the family and style alone resolve to).
+            let version = skrifa::FontRef::from_index(&data, i).ok().and_then(|f| name(&f, &[StringId::VERSION_STRING])).unwrap_or_default();
+            if self
+                .read_faces()
+                .iter()
+                .any(|f| f.family.eq_ignore_ascii_case(&spec.family) && f.style.eq_ignore_ascii_case(&spec.style) && f.version == version)
+            {
                 continue;
             }
             if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, spec, path.map(Path::to_path_buf)) {
@@ -1329,6 +1352,8 @@ impl FontDb {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn scan_font_dirs(&self) -> usize {
+        // Files may have been installed since: other versions are looked for again.
+        self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
         let mut catalog = Catalog::new();
         let mut aliases: HashMap<String, Vec<Alias>> = HashMap::new();
         let mut postscript = PostScriptNames::new();
@@ -1518,6 +1543,49 @@ impl FontDb {
             .or_else(|| self.find(FALLBACK_FAMILY, style))
             .or_else(|| self.find(FALLBACK_FAMILY, "Regular"))
             .or_else(|| self.read_faces().first().cloned())
+    }
+
+    /// [`FontDb::face`] in version `version` of the family and style (a [`FontFace::version`]), when
+    /// that version is installed; otherwise (or without a version) the face [`FontDb::face`] gives.
+    pub fn face_version(&self, family: &str, style: &str, version: Option<&str>) -> Option<Arc<FontFace>> {
+        let face = self.face(family, style)?;
+        let Some(version) = version.filter(|v| *v != face.version) else { return Some(face) };
+        let same =
+            |f: &&Arc<FontFace>| f.family.eq_ignore_ascii_case(&face.family) && f.style.eq_ignore_ascii_case(&face.style) && f.version == version;
+        if let Some(f) = self.read_faces().iter().find(same) {
+            return Some(f.clone());
+        }
+        // Not loaded: the family's installed files may hold it (the catalog doesn't list versions).
+        self.load_family_files(&face.family);
+        let found = self.read_faces().iter().find(same).cloned();
+        Some(found.unwrap_or(face))
+    }
+
+    /// Every installed version of `face`'s family and style, `face` itself first.
+    pub fn versions(&self, face: &Arc<FontFace>) -> Vec<Arc<FontFace>> {
+        self.load_family_files(&face.family);
+        let mut out = vec![face.clone()];
+        out.extend(
+            self.read_faces()
+                .iter()
+                .filter(|f| f.family.eq_ignore_ascii_case(&face.family) && f.style.eq_ignore_ascii_case(&face.style) && f.id != face.id)
+                .cloned(),
+        );
+        out
+    }
+
+    /// Load the installed files of `family` once (other versions of faces already loaded from
+    /// elsewhere); a no-op on wasm, where no fonts are installed.
+    fn load_family_files(&self, family: &str) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let key = family.to_ascii_lowercase();
+            if self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).insert(key) {
+                self.load_cataloged(family);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = family;
     }
 
     /// Is `style` of `family` among the installed fonts?
