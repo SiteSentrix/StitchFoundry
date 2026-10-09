@@ -14,7 +14,8 @@
 //! and move together by the top group's title bar, whose × docks them all; dropped on its tabs (lit
 //! up), its panels join that group as tabs. A group dragged by its tab strip (a lone panel's
 //! tab, or the strip right of the tabs) leaves its set and floats on its own. A double-click on a
-//! tab collapses a group to its tabs, and another expands it.
+//! tab collapses a group to its tabs, and another expands it. A dock column whose panels don't fit
+//! the window scrolls.
 //!
 //! `window.panel.float` (`onto`, `below`, `above`, `collapsed`) / `window.panel.dock` do the same
 //! for agents. The groups, their sets and the Tools panel's position are kept with the preferences
@@ -34,6 +35,8 @@ pub const TITLE: f32 = 14.0;
 pub const STRIP: f32 = 26.0;
 /// Height of the bar between two groups of a set.
 pub const GAP: f32 = 3.0;
+/// The least height of an open panel in a dock column: more panels than fit scroll.
+const MIN_TALL: f32 = 160.0;
 /// How far from a group's top or bottom edge a drop stacks it above or below the group.
 const EDGE: f32 = 7.0;
 /// Where `window.panel.float` floats a group given no position; each further group 24 points
@@ -321,9 +324,17 @@ fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2
     // Another group (floating or docked): its tabs (and a set's title bar) stack the moved groups
     // with it as tabs; the upper half of the group (and just above a set) puts them in its set
     // right above it, the lower half (and just below it) right below it.
+    let columns = ctx.data(|d| d.get_temp::<Vec<Rect>>(columns_id())).unwrap_or_default();
     for (i, g) in app.ui.floating_panels.iter().enumerate() {
         let Some((first, _)) = g.panels.first().and_then(|p| panel(p)).filter(|_| !moving.contains(&i)) else { continue };
-        let Some(r) = ctx.data(|d| d.get_temp::<Rect>(group_rect_id(first))) else { continue };
+        let Some(mut r) = ctx.data(|d| d.get_temp::<Rect>(group_rect_id(first))) else { continue };
+        // In a dock column that scrolls, only the part in view: a group scrolled away takes nothing.
+        if let Some(col) = g.docked.and_then(|d| columns.get(usize::try_from(d).ok()?.checked_sub(1)?)) {
+            r = r.intersect(*col);
+            if r.height() <= 0.0 || r.width() <= 0.0 {
+                continue;
+            }
+        }
         let line = |y: f32| Rect::from_x_y_ranges(r.x_range(), (y - 2.0)..=(y + 2.0));
         let lead = leads(&app.ui, i);
         let head = Rect::from_min_size(r.min, vec2(r.width(), if lead { 1.0 + TITLE + STRIP } else { GAP + STRIP }));
@@ -337,7 +348,6 @@ fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2
         }
     }
     // A dock column's room under its groups puts them at its bottom.
-    let columns = ctx.data(|d| d.get_temp::<Vec<Rect>>(columns_id())).unwrap_or_default();
     for ((_, set), col) in docked_sets(&app.ui).into_iter().zip(columns) {
         if !col.contains(at) || set.iter().any(|i| moving.contains(i)) {
             continue;
@@ -345,7 +355,7 @@ fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2
         let Some(last) = set.last().and_then(|&i| app.ui.floating_panels.get(i)).and_then(|g| g.panels.first()).and_then(|p| panel(p)) else {
             continue;
         };
-        let y = ctx.data(|d| d.get_temp::<Rect>(group_rect_id(last.0))).map_or(col.bottom(), |r| r.bottom());
+        let y = ctx.data(|d| d.get_temp::<Rect>(group_rect_id(last.0))).map_or(col.bottom(), |r| r.bottom()).min(col.bottom() - 2.0);
         return Some((Drop::Below(last.0), Rect::from_x_y_ranges(col.x_range(), (y - 2.0)..=(y + 2.0))));
     }
     let dock = zone(dock_rect_id()).filter(|_| app.ui.dock && app.ui.screen_mode < 3)?;
@@ -633,8 +643,15 @@ pub(crate) fn docked_columns(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> Vec
                 }
                 let n = groups.len() as f32;
                 let open = groups.iter().filter(|g| !g.collapsed).count().max(1) as f32;
-                let tall = ((ui.available_height() - n * STRIP - (n - 1.0) * GAP - 24.0 * open) / open).max(80.0);
-                draw_groups(app, ui, &groups, width, tall, bar.top(), None, &mut action);
+                // The open panels share the column's height, each at least `MIN_TALL`: more than fit
+                // scroll, with the column.
+                let tall = ((ui.available_height() - n * STRIP - (n - 1.0) * GAP - 24.0 * open) / open).max(MIN_TALL);
+                egui::ScrollArea::vertical().id_salt(("dock-column-scroll", first)).auto_shrink([false, false]).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = Vec2::ZERO;
+                    let width = ui.available_width();
+                    let top = ui.cursor().top();
+                    draw_groups(app, ui, &groups, width, tall, top, None, &mut action);
+                });
             });
         rects.push(panel.response.rect);
     }
@@ -1537,7 +1554,11 @@ mod tests {
         h.release(upper);
         assert_eq!(order(&h), ["color", "gradient", "swatches", "stroke"]);
         assert!(h.app.ui.floating_panels.iter().all(|g| g.docked == Some(1)), "all in the column");
-        // Dropped on Stroke's tabs, Transparency joins Stroke's group as a tab.
+        // Dropped on Stroke's tabs, Transparency joins Stroke's group as a tab (Color and Gradient
+        // collapsed, so Stroke is in view in the column, which scrolls).
+        for g in h.app.ui.floating_panels.iter_mut().take(2) {
+            g.collapsed = true;
+        }
         h.app.run("window.panel.float", json!({"panel": "transparency", "x": 300, "y": 200})).unwrap();
         h.settle();
         let r = h.temp_rect(group_rect_id("stroke"));
@@ -1546,13 +1567,43 @@ mod tests {
         assert_eq!(drop_target(&h.app, &h.ctx, Moving::Panel("transparency"), tabs).map(|t| t.0), Some(Drop::Stack("stroke")));
         h.release(tabs);
         assert_eq!(order(&h), ["color", "gradient", "swatches", "stroke+transparency"]);
-        // Dropped low in the column, Align goes at its bottom.
+        // Dropped in the room under the groups (three collapsed to make some), Align goes at the
+        // column's bottom.
+        for g in h.app.ui.floating_panels.iter_mut().take(3) {
+            g.collapsed = true;
+        }
         h.app.run("window.panel.float", json!({"panel": "align", "x": 300, "y": 200})).unwrap();
         h.settle();
         let col = columns(&h)[0];
         h.drag(h.title("align"), pos2(col.center().x, col.bottom() - 6.0));
         assert_eq!(order(&h), ["color", "gradient", "swatches", "stroke+transparency", "align"]);
         assert!(h.app.ui.floating_panels.iter().all(|g| g.docked == Some(1)));
+    }
+
+    #[test]
+    fn a_dock_column_too_tall_for_the_window_scrolls() {
+        let mut h = Harness::new();
+        h.app.run("window.panel.dock", json!({"panel": "layers", "column": true})).unwrap();
+        let mut above = "layers";
+        for p in ["properties", "color", "swatches", "stroke", "gradient", "transparency", "align"] {
+            h.app.run("window.panel.float", json!({"panel": p, "below": above})).unwrap();
+            above = p;
+        }
+        h.settle();
+        let col = columns(&h)[0];
+        assert!(col.bottom() <= SCREEN.y + 1.0, "the column stays in the window: {col:?}");
+        let last = h.temp_rect(group_rect_id("align"));
+        assert!(last.top() > col.bottom(), "Align starts below the window: {last:?} {col:?}");
+        // The wheel over the column (Color's tabs, outside any panel's own scrolling) scrolls it,
+        // bringing Align up.
+        let color = h.temp_rect(group_rect_id("color"));
+        let over = pos2(color.left() + 150.0, color.top() + GAP + STRIP / 2.0);
+        for _ in 0..4 {
+            h.frame(crate::toolbar::tests::wheel(over, 300.0));
+        }
+        h.settle();
+        let moved = h.temp_rect(group_rect_id("align"));
+        assert!(moved.top() < last.top() - 100.0, "scrolled up: {moved:?} from {last:?}");
     }
 
     fn floating_pos(app: &VectorcraftApp, id: &str) -> [f32; 2] {
