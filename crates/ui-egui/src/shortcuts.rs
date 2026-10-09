@@ -466,6 +466,31 @@ mod tests {
         out
     }
 
+    /// Cmd+Shift+B while the Type tool edits text is Type › Bold, not Hide Bounding Box (#724).
+    #[test]
+    fn cmd_shift_b_while_typing_is_bold_not_the_bounding_box() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.select_tool("type");
+        let view = app.view_info();
+        for kind in [vectorcraft_tools::PointerKind::Down, vectorcraft_tools::PointerKind::Up] {
+            app.session.pointer(&vectorcraft_tools::PointerEvent::new(kind, 50.0, 50.0), view).unwrap();
+        }
+        frame(&mut app, vec![egui::Event::Text("Bold".into())]);
+        assert!(app.session.tool_wants_text());
+        let chord =
+            egui::Event::Key { key: Key::B, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND | Modifiers::SHIFT };
+        frame(&mut app, vec![chord.clone()]);
+        assert!(app.ui.view.bounding_box, "the bounding box stays");
+        // The chord reached Bold: the text is in a bold face, or its family has none and says so.
+        let face = crate::panels::character::text_style(&app).map(|(s, _)| s.font_style).unwrap_or_default();
+        assert!(face.contains("Bold") || app.ui.status.contains("has no Bold style"), "{face:?} {:?}", app.ui.status);
+        // Out of the text, the chord hides the bounding box as before.
+        app.select_tool("selection");
+        frame(&mut app, vec![chord]);
+        assert!(!app.ui.view.bounding_box);
+    }
+
     /// Tab shows and hides the panels, and in the Type tool it types a tab, without moving the
     /// keyboard focus on to a field: the keys after it (a tool letter, the next letter typed) still
     /// work.

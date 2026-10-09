@@ -111,6 +111,90 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
     range_style(app, p);
 }
 
+/// The faces Type › Bold and Type › Italic switch to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Face {
+    Bold,
+    Italic,
+}
+
+/// Words of a style name that set its weight: a style without any is the family's regular weight.
+const WEIGHTS: [&str; 16] = [
+    "thin",
+    "hairline",
+    "extralight",
+    "ultralight",
+    "light",
+    "book",
+    "medium",
+    "semibold",
+    "demibold",
+    "demi",
+    "bold",
+    "extrabold",
+    "ultrabold",
+    "heavy",
+    "black",
+    "ultra",
+];
+
+/// Words that name the regular weight, upright: not part of what Bold and Italic keep.
+const PLAIN: [&str; 5] = ["regular", "normal", "roman", "plain", "upright"];
+
+/// A style name's (bold, regular weight, italic, the other words): `Bold Italic` is (true, false,
+/// true, []), `Narrow Italic` (false, true, true, ["narrow"]), `SemiBold` (false, false, false, []).
+fn face_of(style: &str) -> (bool, bool, bool, Vec<String>) {
+    let words: Vec<String> = style.split([' ', '-', '_']).filter(|w| !w.is_empty()).map(str::to_ascii_lowercase).collect();
+    let italic = words.iter().any(|w| w == "italic" || w == "oblique");
+    let bold = words.iter().any(|w| w == "bold");
+    let regular = !words.iter().any(|w| WEIGHTS.contains(&w.as_str()));
+    let mut rest: Vec<String> =
+        words.into_iter().filter(|w| !WEIGHTS.contains(&w.as_str()) && !PLAIN.contains(&w.as_str()) && w != "italic" && w != "oblique").collect();
+    rest.sort();
+    (bold, regular, italic, rest)
+}
+
+/// The style of `styles` that is bold (else of regular weight) and italic (else upright), with the
+/// same other words as style `like` (a Narrow face stays Narrow, a plain one plain).
+fn pick_face<'a>(styles: &'a [String], bold: bool, italic: bool, like: &str) -> Option<&'a str> {
+    let (.., keep) = face_of(like);
+    styles
+        .iter()
+        .map(String::as_str)
+        .filter(|s| {
+            let (b, r, i, rest) = face_of(s);
+            i == italic && (if bold { b } else { r }) && rest == keep
+        })
+        // `Regular` before `Regular Text`-like doubles: the plainest name is the family's own face.
+        .min_by_key(|s| s.len())
+}
+
+/// Type › Bold and Type › Italic (Cmd+Shift+B / Cmd+Shift+I while the Type tool edits text, as in
+/// page layout apps): the family's own Bold or Italic face for the text the panels act on, or back
+/// to its regular weight (upright) when it already is bold (italic). No fake bold or slant: a family
+/// without that face is left as it is, and the message says so (#724).
+pub(crate) fn toggle_face(app: &mut VectorcraftApp, face: Face) -> Result<Value, String> {
+    let (s, _) = text_style(app).ok_or("select some type first")?;
+    let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
+    let (bold, _, italic, _) = face_of(&s.font_style);
+    let (want_bold, want_italic) = match face {
+        Face::Bold => (!bold, italic),
+        Face::Italic => (bold, !italic),
+    };
+    let Some(name) = pick_face(&styles, want_bold, want_italic, &s.font_style) else {
+        let wanted = match (want_bold, want_italic) {
+            (true, true) => "Bold Italic",
+            (true, false) => "Bold",
+            (false, true) => "Italic",
+            (false, false) => "Regular",
+        };
+        return Err(format!("{} has no {} style", s.font_family, wanted));
+    };
+    let name = name.to_string();
+    style(app, json!({ "style": name }));
+    Ok(json!({ "style": name }))
+}
+
 /// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
@@ -213,6 +297,7 @@ enum TextInput {
     Copy,
     Cut,
     Paste(Option<String>),
+    Face(Face),
 }
 
 /// Route editing keys (with modifiers), clipboard events and Cmd+C/X/V to the Type tool (Cmd+A is
@@ -254,6 +339,13 @@ pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                     return false;
                 }
+                // Type › Bold and Italic, as page layout apps have them while text is edited.
+                if m.command && m.shift && !m.alt && matches!(key, Key::B | Key::I) {
+                    if *pressed {
+                        todo.push(TextInput::Face(if *key == Key::B { Face::Bold } else { Face::Italic }));
+                    }
+                    return false;
+                }
                 if m.command && !m.shift && !m.alt && matches!(key, Key::C | Key::X | Key::V) {
                     if *pressed {
                         todo.push(match key {
@@ -281,6 +373,11 @@ pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             }
             TextInput::Paste(s) => text_paste(app, s),
+            TextInput::Face(f) => {
+                if let Err(e) = toggle_face(app, f) {
+                    app.status(e);
+                }
+            }
         }
     }
 }
@@ -548,6 +645,33 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
+
+    /// Bold and Italic pick the family's own faces by name, and toggle back (#724).
+    #[test]
+    fn bold_and_italic_pick_the_familys_own_faces() {
+        let styles: Vec<String> =
+            ["Light", "Narrow", "Regular", "Italic", "Narrow Italic", "SemiBold", "Bold", "Bold Condensed", "Narrow Bold", "Bold Italic", "Black"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+        assert_eq!(pick_face(&styles, true, false, "Regular"), Some("Bold"), "not Bold Condensed, Narrow Bold or SemiBold");
+        assert_eq!(pick_face(&styles, true, true, "Italic"), Some("Bold Italic"));
+        assert_eq!(pick_face(&styles, false, true, "Regular"), Some("Italic"));
+        assert_eq!(pick_face(&styles, false, false, "Italic"), Some("Regular"), "upright again, not Narrow");
+        assert_eq!(pick_face(&styles, true, false, "Narrow"), Some("Narrow Bold"), "a Narrow face stays Narrow");
+        assert_eq!(pick_face(&styles, false, true, "Narrow"), Some("Narrow Italic"));
+        let oblique: Vec<String> = ["Book", "Oblique", "Bold-Oblique"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(pick_face(&oblique, true, true, "Oblique"), Some("Bold-Oblique"));
+        assert_eq!(pick_face(&oblique, false, false, "Oblique"), None, "Book has a weight word: no regular face");
+        assert_eq!(face_of("Bold Italic"), (true, false, true, vec![]));
+        assert_eq!(face_of("SemiBold"), (false, false, false, vec![]));
+        assert_eq!(face_of("Narrow Italic"), (false, true, true, vec!["narrow".to_string()]));
+        // No type selected: a message, nothing changed.
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        assert!(toggle_face(&mut app, Face::Bold).is_err());
+        assert!(!crate::menus::enabled(&app, "type.bold"));
+    }
 
     /// Character Alignment is in the panel menu with the East Asian options only (as Mojikumi Set
     /// and Top-to-Top Leading are in the Paragraph panel).

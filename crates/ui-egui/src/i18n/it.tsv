@@ -2446,6 +2446,8 @@
 	Show Guides	Mostra guide
 	Show handles when multiple anchors are selected	Mostra le maniglie quando sono selezionati più punti di ancoraggio
 	Show Hidden Characters	Mostra caratteri nascosti
+	Bold	Grassetto
+	Italic	Corsivo
 	Show Images in Outline Mode	Mostra immagini in modalità Contorno
 	Show in Folder	Mostra nella cartella
 	Show Indic Options	Mostra opzioni per lingue indiane
@@ -3126,6 +3128,8 @@ axis	Both	Entrambi
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	select some type first	seleziona prima del testo
+@msg	{_1} has no {_2} style	{_1} non ha lo stile {_2}
 @msg	a layer couldn't be read	non è stato possibile leggere un livello
 @msg	it has more than one artboard	ha più di una tavola da disegno
 @msg	it has no page	non ha pagine

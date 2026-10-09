@@ -11,6 +11,7 @@ use vectorcraft_engine::cmd::fileio::SaveMode;
 
 use crate::VectorcraftApp;
 use crate::io;
+use crate::panels::character::Face;
 use crate::state::{DockTab, next_zoom};
 use crate::theme::{self, Brightness, Tokens};
 use crate::widgets;
@@ -175,6 +176,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.textThreads", "Hide Text Threads", "Cmd+Shift+Y", "{} toggle the thread lines between threaded text frames"),
     ("view.gradientAnnotator", "Hide Gradient Annotator", "Cmd+Alt+G", "{} toggle the Gradient tool's annotator"),
     ("type.hiddenCharacters", "Show Hidden Characters", "Cmd+Alt+I", "{} toggle markers for spaces, paragraph ends and story ends"),
+    (
+        "type.bold",
+        "Bold",
+        "",
+        "{} the selected type (or the Type tool's selection) in its family's Bold face, or back to the regular face when it is bold; keeps italics. A family without that face is left as it is, with a message. While the Type tool edits text, Cmd+Shift+B",
+    ),
+    (
+        "type.italic",
+        "Italic",
+        "",
+        "{} the selected type (or the Type tool's selection) in its family's Italic (or Oblique) face, or back upright when it is italic; keeps the weight. A family without that face is left as it is, with a message. While the Type tool edits text, Cmd+Shift+I",
+    ),
     ("effect.last", "Last Effect…", "Cmd+Alt+Shift+E", "{} open the dialog of the last effect applied"),
     ("view.zoomIn", "Zoom In", "Cmd+=", "{}"),
     ("view.zoomOut", "Zoom Out", "Cmd+-", "{}"),
@@ -930,6 +943,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "view.snapToPixel" => flag(&mut app.ui.view.snap_to_pixel),
         "view.textThreads" => flag(&mut app.ui.view.text_threads),
         "type.hiddenCharacters" => flag(&mut app.ui.view.hidden_chars),
+        "type.bold" => crate::panels::character::toggle_face(app, Face::Bold),
+        "type.italic" => crate::panels::character::toggle_face(app, Face::Italic),
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "effect.last" => match app.last_effect.clone() {
             Some((e, params)) => {
@@ -1801,6 +1816,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
+        "type.bold" | "type.italic" => crate::panels::character::text_style(app).is_some(),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.place"
         | "file.export.svg"
@@ -2220,6 +2236,8 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 sub("Font", font_items()),
                 sub("Recent Fonts", RECENT_FONT_IDS.iter().map(|id| c("Recent Font", id)).collect()),
                 sub("Size", TYPE_SIZES.iter().map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n }))).collect()),
+                c("Bold", "type.bold"),
+                c("Italic", "type.italic"),
                 Sep,
                 panel("Glyphs", "glyphs"),
                 sub("Insert Special Character", insert_items(INSERT_SPECIAL)),
