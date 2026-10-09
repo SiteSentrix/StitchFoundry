@@ -3135,3 +3135,20 @@ axis	Both	兩者
 	Constrain	強制
 	Free Transform	任意變形
 	Perspective Distort	透視扭曲
+
+# Photoshop-style raster effects (Effect menu, their dialogs).
+	Radial Blur…	放射狀模糊…
+	Smart Blur…	智慧型模糊…
+	Sharpen	銳利化
+	Unsharp Mask…	反銳利化遮罩…
+	Radial Blur	放射狀模糊
+	Smart Blur	智慧型模糊
+	Unsharp Mask	反銳利化遮罩
+	Gaussian Blur	高斯模糊
+	Method	方法
+	Quality	品質
+	Radius	半徑
+	Spin	旋轉
+	Draft	草稿
+	Good	良好
+	Best	最佳

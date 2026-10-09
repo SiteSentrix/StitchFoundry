@@ -197,19 +197,22 @@ pub(super) type Choices = &'static [(&'static str, &'static str)];
 
 /// Generic editor for command/effect parameters: numbers, booleans, strings and colours; the
 /// parameters `is_length` names are distances shown and typed in `unit`, those `choices` gives
-/// choices for are dropdowns. Returns true when a value changed.
+/// choices for are dropdowns. Fields come in `rank` order (by name among equals). Returns true when
+/// a value changed.
 pub(super) fn param_fields(
     ui: &mut egui::Ui,
     d: &mut Dialog,
     is_length: &dyn Fn(&str) -> bool,
     choices: &dyn Fn(&str) -> Option<Choices>,
+    rank: &dyn Fn(&str) -> usize,
     unit: Unit,
 ) -> bool {
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     egui::Grid::new("fxgrid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-        let keys: Vec<(String, Value)> =
+        let mut keys: Vec<(String, Value)> =
             d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect();
+        keys.sort_by_key(|(k, _)| rank(k));
         for (k, v) in keys {
             ui.label(egui::RichText::new(humanized(&k)).color(t.text));
             if let Some(cur) = crate::widgets::blend_param(&k, &v) {

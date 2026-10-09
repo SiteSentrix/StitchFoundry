@@ -3357,3 +3357,20 @@ axis	Both	两者
 	Select Shaper Face	选择 Shaper 区域
 	Constrain	约束
 	Perspective Distort	透视扭曲
+
+# Photoshop-style raster effects (Effect menu, their dialogs).
+	Radial Blur…	径向模糊…
+	Smart Blur…	智能模糊…
+	Sharpen	锐化
+	Unsharp Mask…	反锐化遮罩…
+	Radial Blur	径向模糊
+	Smart Blur	智能模糊
+	Unsharp Mask	反锐化遮罩
+	Gaussian Blur	高斯模糊
+	Method	方法
+	Quality	质量
+	Radius	半径
+	Spin	旋转
+	Draft	草稿
+	Good	良好
+	Best	最佳
