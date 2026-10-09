@@ -335,10 +335,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             // No save dialog for an agent: the bytes come back, as in headless mode.
             None => wrap(app.run("document.export", p.clone())),
         },
-        "app.quit" => {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            ok(Value::Null)
-        }
+        // As the menu's Quit: `{"pending": "saveChanges"}` while a modified document is asked
+        // about; otherwise null, and the host closes the window (#830).
+        "app.quit" => wrap(app.run("app.quit", json!({}))),
         other => err(format!("unknown method `{other}`")),
     }
 }
