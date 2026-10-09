@@ -491,6 +491,7 @@
 	Copy Fonts Used in the Document	Копіювати шрифти, використані у документі
 	Copy Links	Копіювати зв’язки
 	Copy Selected Style	Копіювати вибраний стиль
+	Copy to User Defined	Копіювати в «Користувацькі»
 	Copy Width Point	Копіювати точку ширини
 	Copyright	Авторські права
 	Copyright Info URL:	URL інформації про авторські права:
@@ -3441,6 +3442,7 @@ axis	Both	Обидві
 @msg	no symbol instances selected	екземпляри символів не виділені
 @msg	no target object has an opacity mask: select one or give `id`	у жодного цільового об’єкта немає маски непрозорості: виділіть один або вкажіть `id`
 @msg	no threaded text selected	пов’язаний текст не виділено
+@msg	no user library folder here	тут немає папки користувацьких бібліотек
 @msg	no user workspace `{from}`	немає користувача робочого середовища `{from}`
 @msg	node {_1} is not text	вузол {_1} не є текстом
 @msg	not a DXF drawing	не є кресленням DXF

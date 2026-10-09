@@ -804,7 +804,13 @@ it returns `{data}`, or `{dataBase64}` for `.ase`, and `user: true` saves into t
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
 dataBase64?, name?}` loads a `.vcswatches`, `.gpl` or swatch exchange (`.ase`) file, or another document's swatches,
 as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global, spot or process
-swatches and keeps their color groups.
+swatches and keeps their color groups. A file in the user library folder, or a file with the
+same extension and bytes as one there, loads as that User Defined library (category `user`).
+`swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
+app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
+as `.vcswatches`) under a name no file there has, and lists it as User Defined from then on; until the app
+quits, commands given its loaded id use the copy → `{library, name, count, path, copied}` (`copied: false`
+when the folder already held the same file). Without a user library folder the command is disabled.
 
 ## Graphic style libraries
 
@@ -827,7 +833,8 @@ its bounds.
 the styles unlinked from swatches, with their opacity, blend mode, isolate and knockout, and the patterns they paint
 with); without `path` it returns `{data}`, and `user: true` saves into the user library folder of the desktop app
 (category `user`, User Defined). `graphicStyle.loadLibrary {path? | data? | dataBase64?, name?}` loads a `.vcstyles`
-file, or another document's graphic styles, as a library to add from.
+file, or another document's graphic styles, as a library to add from; a file in the user library folder, or a file
+with the same extension and bytes as one there, loads as that User Defined library.
 
 ## Libraries
 

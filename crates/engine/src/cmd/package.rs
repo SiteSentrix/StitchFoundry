@@ -32,7 +32,7 @@ type Entry = (String, Vec<u8>);
 
 /// `name`, else the first free `stem 2.ext`, `stem 3.ext`… (compared without case, as most
 /// desktop file systems do); the name is taken.
-fn free_name(name: &str, taken: &mut HashSet<String>) -> String {
+pub(crate) fn free_name(name: &str, taken: &mut HashSet<String>) -> String {
     let p = Path::new(name);
     let stem = p.file_stem().map_or_else(|| name.to_string(), |s| s.to_string_lossy().into_owned());
     let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();

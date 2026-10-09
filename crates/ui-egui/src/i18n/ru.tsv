@@ -495,6 +495,7 @@
 	Copy Fonts Used in the Document	Копировать шрифты, использованные в документе
 	Copy Links	Копировать связи
 	Copy Selected Style	Копировать выбранный стиль
+	Copy to User Defined	Копировать в «Пользовательский»
 	Copy Width Point	Копировать точку ширины
 	Copyright	Copyright
 	Copyright Info URL:	URL информации об авторских правах:
@@ -3454,6 +3455,7 @@ axis	Both	Оба
 @msg	no symbol instances selected	экземпляры символов не выделены
 @msg	no target object has an opacity mask: select one or give `id`	ни у одного целевого объекта нет непрозрачной маски: выделите один или укажите `id`
 @msg	no threaded text selected	связанный текст не выделен
+@msg	no user library folder here	здесь нет папки пользовательских библиотек
 @msg	no user workspace `{from}`	нет пользовательской рабочей среды `{from}`
 @msg	node {_1} is not text	узел {_1} не является текстом
 @msg	not a DXF drawing	не является чертежом DXF
