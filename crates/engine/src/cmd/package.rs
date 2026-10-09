@@ -6,7 +6,10 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use vectorcraft_doc::{Document, LinkInfo};
+use vectorcraft_doc::links::hash_bytes;
 
 use serde_json::{Value, json};
 
@@ -59,6 +62,152 @@ struct Options {
     report: bool,
 }
 
+/// An asset that has been copied to the package, including rewritten linked documents.
+#[derive(Clone)]
+struct Copied {
+    name: String,
+    size: u64,
+    hash: String,
+}
+
+/// The parent of a packaged document and its asset both live inside the package.
+/// Use paths relative to that *document*, not the package's root: a linked document
+/// in Links/ must reference its own sibling image as "image.png".
+fn relative_in_package(document: &str, asset: &str) -> String {
+    let parent = document.rsplit_once('/').map_or("", |(dir, _)| dir);
+    let a: Vec<&str> = parent.split('/').filter(|s| !s.is_empty()).collect();
+    let b: Vec<&str> = asset.split('/').filter(|s| !s.is_empty()).collect();
+    let common = a.iter().zip(&b).take_while(|(a, b)| a == b).count();
+    let mut out = vec![".."; a.len() - common];
+    out.extend_from_slice(&b[common..]);
+    out.join("/")
+}
+
+fn safe_asset_name(name: &str) -> String {
+    let name: String = name.chars().map(|c| if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }).collect();
+    let name = name.trim().trim_matches('.');
+    if name.is_empty() { "asset".into() } else { name.into() }
+}
+
+/// Collect dependencies depth-first so nested VectorCraft files are rewritten before
+/// their parents: each parent can record the final hash of the rewritten child.
+/// Cycles or excessive nesting must not silently yield incomplete packages.
+struct Collector<'a> {
+    opts: &'a Options,
+    root: Option<PathBuf>,
+    entries: Vec<Entry>,
+    copies: BTreeMap<String, Copied>,
+    visiting: HashSet<String>,
+    taken: HashSet<String>,
+    link_names: HashSet<String>,
+    font_files: HashSet<String>,
+    fonts: usize,
+    missing: Vec<String>,
+    skipped: Vec<Value>,
+    lines: Vec<String>,
+}
+
+impl<'a> Collector<'a> {
+    fn new(opts: &'a Options, root: Option<PathBuf>, doc_name: &str) -> Self {
+        let mut taken = HashSet::new();
+        taken.insert(doc_name.to_lowercase());
+        Self {
+            opts, root, entries: Vec::new(), copies: BTreeMap::new(), visiting: HashSet::new(),
+            taken, link_names: HashSet::new(), font_files: HashSet::new(), fonts: 0,
+            missing: Vec::new(), skipped: Vec::new(), lines: Vec::new(),
+        }
+    }
+
+    fn collect(&mut self, doc: &mut Document, source: &str, destination: &str, depth: usize) -> Result<()> {
+        if depth > vectorcraft_doc::placed_document::MAX_DEPTH {
+            return Err(bad(C, "placed-document links exceed the supported nesting depth (8)"));
+        }
+        if !self.visiting.insert(source.to_string()) {
+            return Err(bad(C, format!("circular placed-document link involving {source}")));
+        }
+        if self.opts.copy_links {
+            let mut placed = HashSet::new();
+            doc.visit_placed(|_, p| { placed.insert(p.link.path.clone()); });
+            self.lines.push(format!("LINKED FILES IN {source}"));
+            for file in super::links::linked_files(doc, Some(source)) {
+                if self.visiting.contains(&file.path) {
+                    return Err(bad(C, format!("circular placed-document link involving {}", file.path)));
+                }
+                if self.copies.contains_key(&file.path) {
+                    continue;
+                }
+                let Some(mut bytes) = file.bytes else {
+                    self.lines.push(format!("{}: not found ({}), not copied", file.name, file.path));
+                    self.missing.push(format!("{} ({source})", file.name));
+                    continue;
+                };
+                if self.copies.len() >= 10_000 {
+                    return Err(bad(C, "more than 10000 linked files: package dependencies in smaller parts"));
+                }
+                let dir = if self.opts.links_folder { "Links/" } else { "" };
+                let name = safe_asset_name(&file.name);
+                let unique = free_name(&name, if self.opts.links_folder { &mut self.link_names } else { &mut self.taken });
+                let destination_file = format!("{dir}{unique}");
+                if placed.contains(&file.path) {
+                    let mut nested = vectorcraft_format::load(&bytes).map_err(|e| bad(C, format!("linked VectorCraft document {} cannot be packaged: {e}", file.path)))?;
+                    self.collect(&mut nested, &file.path, &destination_file, depth + 1)?;
+                    if self.opts.relink {
+                        bytes = vectorcraft_format::save_file(&nested);
+                    }
+                }
+                let copy = Copied { name: destination_file.clone(), size: bytes.len() as u64, hash: hash_bytes(&bytes) };
+                self.copies.insert(file.path.clone(), copy);
+                self.lines.push(format!("{} → {destination_file}", file.path));
+                self.entries.push((destination_file, bytes));
+            }
+            self.lines.push(String::new());
+        }
+        if self.opts.copy_fonts {
+            let db = vectorcraft_text::FontDb::global();
+            self.lines.push(format!("FONTS IN {source}"));
+            for (family, style) in super::fonts::used_fonts(doc) {
+                let font = format!("{family} {style}");
+                let reason = match db.face(&family, &style) {
+                    Some(f) if f.family.eq_ignore_ascii_case(&family) && f.embeddable() => {
+                        let data = f.file_data();
+                        let file = f.path().and_then(Path::file_name).map_or_else(
+                            || format!("{}-{}.{}", f.family, f.style, font_ext(data)).replace(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)), ""),
+                            |n| n.to_string_lossy().into_owned(),
+                        );
+                        if self.font_files.insert(file.to_lowercase()) {
+                            self.entries.push((format!("Fonts/{file}"), data.to_vec()));
+                            self.fonts += 1;
+                        }
+                        self.lines.push(format!("{font} → Fonts/{file}"));
+                        continue;
+                    }
+                    Some(f) if f.family.eq_ignore_ascii_case(&family) => "its licence doesn't allow embedding",
+                    _ => "not available on this computer",
+                };
+                self.lines.push(format!("{font}: {reason}, not copied"));
+                self.skipped.push(json!({ "font": font, "reason": reason }));
+            }
+            self.lines.push(String::new());
+        }
+        if self.opts.relink {
+            // The child files have already been rewritten; the hash and size of each
+            // target must reflect the *packaged* bytes rather than the original.
+            doc.update_links(|link: &mut LinkInfo| {
+                if let Some(copy) = self.copies.get(&link.path) {
+                    let relative = relative_in_package(destination, &copy.name);
+                    link.path = self.root.as_ref().map_or_else(|| copy.name.clone(), |r| r.join(&copy.name).to_string_lossy().into_owned());
+                    link.relative = Some(relative);
+                    link.size = Some(copy.size);
+                    link.hash = Some(copy.hash.clone());
+                    link.modified = None;
+                }
+            });
+        }
+        self.visiting.remove(source);
+        Ok(())
+    }
+}
+
 fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let o = Options {
         copy_links: bool_or(p, "copyLinks", true),
@@ -77,83 +226,25 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let root = folder.map(|f| Path::new(f).join(&name));
     let info = if o.report { Some(super::docinfo::report(s, false)?) } else { None };
     let st = s.doc()?;
-    let mut entries: Vec<Entry> = vec![];
-    let mut taken = HashSet::new();
-    let mut lines = vec![];
-
-    // The linked files.
-    let (mut copies, mut missing) = (BTreeMap::new(), vec![]);
-    if o.copy_links {
-        let dir = if o.links_folder { "Links/" } else { "" };
-        let mut names = HashSet::new();
-        lines.push("LINKED FILES".to_string());
-        for f in super::links::linked_files(&st.doc, Some(&doc_path)) {
-            let Some(bytes) = f.bytes else {
-                lines.push(format!("{}: not found ({}), not copied", f.name, f.path));
-                missing.push(f.name);
-                continue;
-            };
-            let rel = format!("{dir}{}", free_name(&f.name, if o.links_folder { &mut names } else { &mut taken }));
-            lines.push(format!("{} → {rel}", f.path));
-            copies.insert(f.path, rel.clone());
-            entries.push((rel, bytes));
-        }
-        lines.push(String::new());
-    }
-
-    // The fonts.
-    let (mut fonts, mut skipped) = (0, vec![]);
-    if o.copy_fonts {
-        let db = vectorcraft_text::FontDb::global();
-        let mut files = HashSet::new();
-        lines.push("FONTS".to_string());
-        for (family, style) in super::fonts::used_fonts(&st.doc) {
-            let font = format!("{family} {style}");
-            let reason = match db.face(&family, &style) {
-                Some(f) if f.family.eq_ignore_ascii_case(&family) && f.embeddable() => {
-                    let data = f.file_data();
-                    let file = f.path().and_then(Path::file_name).map_or_else(
-                        || format!("{}-{}.{}", f.family, f.style, font_ext(data)).replace(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)), ""),
-                        |n| n.to_string_lossy().into_owned(),
-                    );
-                    // A collection, or a style shown in another face's file, is copied once.
-                    if files.insert(file.to_lowercase()) {
-                        entries.push((format!("Fonts/{file}"), data.to_vec()));
-                        fonts += 1;
-                    }
-                    lines.push(format!("{font} → Fonts/{file}"));
-                    continue;
-                }
-                Some(f) if f.family.eq_ignore_ascii_case(&family) => "its licence doesn't allow embedding",
-                _ => "not available on this computer",
-            };
-            lines.push(format!("{font}: {reason}, not copied"));
-            skipped.push(json!({ "font": font, "reason": reason }));
-        }
-        lines.push(String::new());
-    }
-
-    // The document, linking to the copies.
     let mut doc = (*st.doc).clone();
     let doc_name = format!("{stem}.{}", vectorcraft_format::EXTENSION);
+    let mut collector = Collector::new(&o, root.clone(), &doc_name);
+    collector.collect(&mut doc, &doc_path, &doc_name, 0)?;
+    // Keep original paths relative to this new folder for assets intentionally
+    // excluded from the package (copyLinks:false, missing links, relink:false).
     if let Some(root) = &root
         && let Some(d) = super::links::with_relative_paths(&doc, &root.join(&doc_name).to_string_lossy())
     {
         doc = d;
     }
-    if o.relink && !copies.is_empty() {
-        let copied = |im: &vectorcraft_doc::ImageObject| im.link.as_ref().is_some_and(|l| copies.contains_key(&l.path));
-        doc.update_images(copied, |im| {
-            if let Some(l) = &mut im.link
-                && let Some(rel) = copies.get(&l.path)
-            {
-                l.path = root.as_ref().map_or_else(|| rel.clone(), |r| r.join(rel).to_string_lossy().into_owned());
-                (l.relative, l.modified) = (Some(rel.clone()), None);
-            }
-        });
-    }
+    let mut entries = std::mem::take(&mut collector.entries);
     entries.insert(0, (doc_name.clone(), vectorcraft_format::save_file(&doc)));
-    taken.insert(doc_name.to_lowercase());
+    let mut taken = std::mem::take(&mut collector.taken);
+    let mut lines = std::mem::take(&mut collector.lines);
+    let missing = std::mem::take(&mut collector.missing);
+    let skipped = std::mem::take(&mut collector.skipped);
+    let fonts = collector.fonts;
+    let links = collector.copies.len();
 
     // The report.
     if let Some(info) = info {
@@ -165,7 +256,7 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
     }
 
     let files: Vec<&str> = entries.iter().map(|(p, _)| p.as_str()).collect();
-    let mut out = json!({ "files": files, "links": copies.len(), "fonts": fonts, "missingLinks": missing, "skippedFonts": skipped });
+    let mut out = json!({ "files": files, "links": links, "fonts": fonts, "missingLinks": missing, "skippedFonts": skipped });
     match root {
         Some(root) => {
             for (rel, bytes) in &entries {
