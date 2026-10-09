@@ -194,7 +194,9 @@ parameters. Shipped code therefore never panics. Anything that can fail returns 
 ### Enforced by lints
 
 `Cargo.toml` denies these clippy lints for the whole workspace, and `cargo xtask ci` runs clippy with
-`-D warnings`:
+`-D warnings`. The gate targets the current stable Rust (`rust-version` in `Cargo.toml` is only the
+minimum that builds the app, and no toolchain is pinned): when a new stable adds lints, they are fixed
+in the code:
 
 | Banned in shipped code | Use instead |
 |---|---|

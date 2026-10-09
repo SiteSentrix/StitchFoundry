@@ -60,7 +60,7 @@ fn difference(a: &[u8], b: &[u8]) -> f64 {
         [0, 1, 2].map(|i| f64::from(p[i]) * al + 255.0 * (1.0 - al))
     };
     let (mut sum, mut n) = (0.0, 0usize);
-    for (p, q) in a.chunks_exact(4).zip(b.chunks_exact(4)) {
+    for (p, q) in a.as_chunks::<4>().0.iter().zip(b.as_chunks::<4>().0.iter()) {
         let (x, y) = (white(p), white(q));
         sum += (0..3).map(|i| (x[i] - y[i]).abs()).sum::<f64>();
         n += 3;
