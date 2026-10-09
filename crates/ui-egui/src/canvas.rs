@@ -349,8 +349,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.view.pixel_preview && v.zoom >= PIXEL_GRID_ZOOM && app.session.prefs.show_pixel_grid {
         grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
     }
-    // Artboard edges and names.
+    // Artboard edges and names. The Artboard tool labels its active artboard itself (following
+    // a move or resize): that one isn't named twice.
     let active_ab = 0;
+    let artboard_tool = app.session.tool_id() == "artboard";
+    let tool_labelled = artboard_tool.then(|| app.session.tool_options()["active"].as_u64()).flatten();
     for (i, ab) in doc.artboards.iter().enumerate() {
         let r = xf.rect_to_screen(ab.rect);
         let c = if i == active_ab { Color32::from_gray(0) } else { Color32::from_gray(120) };
@@ -359,7 +362,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if doc.setup.has_bleed() {
             painter.add(Shape::closed_line(xf.quad(doc.setup.bleed_rect(ab.rect)), Stroke::new(1.0, t.bleed)));
         }
-        if app.session.tool_id() == "artboard" || doc.artboards.len() > 1 {
+        if (artboard_tool || doc.artboards.len() > 1) && tool_labelled != u64::try_from(i).ok() {
             painter.text(
                 r.left_top() - vec2(0.0, 4.0),
                 egui::Align2::LEFT_BOTTOM,
