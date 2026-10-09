@@ -502,6 +502,8 @@ mod tests;
 #[cfg(test)]
 mod tests_bidi;
 #[cfg(test)]
+mod tests_combos;
+#[cfg(test)]
 mod tests_embed;
 #[cfg(test)]
 mod tests_fit;

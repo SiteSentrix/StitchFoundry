@@ -296,3 +296,33 @@ fn top_to_top_leading_spaces_inline_art_by_its_run() {
     let (tall0, tall1) = lines(3.0);
     assert!((small0 - tall0).abs() < 1e-6 && (small1 - tall1).abs() < 1e-6, "{small0} {small1} / {tall0} {tall1}");
 }
+
+#[test]
+fn inline_art_moves_with_vertically_aligned_lines() {
+    use vectorcraft_doc::text::{AreaOptions, VerticalAlign};
+    // A rectangle (lines shift) and a triangle (text flows again lower down).
+    let rect = Rect::new(0.0, 0.0, 400.0, 400.0).to_path(0.1);
+    let mut tri = kurbo::BezPath::new();
+    tri.move_to((0.0, 0.0));
+    tri.line_to((800.0, 0.0));
+    tri.line_to((400.0, 400.0));
+    tri.close_path();
+    for frame in [rect, tri] {
+        for align in [VerticalAlign::Center, VerticalAlign::Bottom] {
+            let mut t = text("A", art(1.0), "B", 20.0);
+            t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame) };
+            t.area = AreaOptions { vertical_align: align, ..AreaOptions::default() };
+            let l = layout(db(), &t);
+            assert_eq!(l.inlines.len(), 1, "{align:?}");
+            let g = inline_glyph(&l);
+            let line = &l.lines[g.line];
+            assert!(line.baseline > 100.0, "{align:?}: not aligned, baseline {}", line.baseline);
+            // Still centred on the cap height above its (moved) baseline.
+            let face = db().face("Source Sans 3", "Regular").unwrap();
+            let cap = face.cap_height * 20.0 / face.upem;
+            let b = l.inlines[0].bounds;
+            assert!((b.center().y - (line.baseline - cap * 0.5)).abs() < 1e-6, "{align:?}: {b:?} baseline {}", line.baseline);
+            assert!((b.x0 - g.origin.x).abs() < 1e-6, "{align:?}: {b:?}");
+        }
+    }
+}
