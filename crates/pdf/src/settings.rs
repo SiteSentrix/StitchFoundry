@@ -373,7 +373,7 @@ pub struct AdvancedSettings {
 
 impl Default for AdvancedSettings {
     fn default() -> Self {
-        Self { font_subset_percent: 100.0, outline_text: true, overprint: Overprint::Preserve }
+        Self { font_subset_percent: 100.0, outline_text: false, overprint: Overprint::Preserve }
     }
 }
 

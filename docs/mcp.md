@@ -1184,9 +1184,9 @@ for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a 
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve. `outputIntent` embeds a profile as the file's
 `/GTS_PDFX` output intent with `outputCondition`, `outputConditionId` and `registry`, and `trapped` sets `/Trapped`
-(PDF/A files keep their own output intent). `advanced: {outlineText: false}` writes type as selectable, searchable
-text in embedded subset fonts with a ToUnicode map; fonts whose licence forbids embedding stay outlines, with a
-warning.
+(PDF/A files keep their own output intent). Type is written as selectable, searchable text in embedded subset fonts
+with a ToUnicode map (fonts whose licence forbids embedding stay outlines, with a warning); `advanced: {outlineText:
+true}` writes every glyph as an outline instead.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","output":{"conversion":"preserveNumbers","destination":"VectorCraft Generic CMYK (SWOP-like)","profiles":"destination","outputIntent":"VectorCraft Generic CMYK (SWOP-like)","trapped":true},"advanced":{"outlineText":false}}}}
