@@ -436,3 +436,15 @@ fn type_of_the_page_that_no_story_places_stays_with_the_nearest_text_object() {
     });
     assert!(all.contains(&"Extra".to_string()), "{all:?} {:?}", r.warnings);
 }
+
+#[test]
+fn a_commented_copy_of_a_story_that_has_a_plain_text_object_is_not_another_object() {
+    // The file writes some stories twice (plain, then as comments) and others only as comments.
+    let doc = text_document(&[("One\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Two\r", 0, (8300.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let commented = |story| -> String { text_object(story).lines().map(|l| format!("%_{l}\n")).collect() };
+    let body = text_object(0) + &commented(0) + &commented(1);
+    let art = native_with_text(&layer("Spare", false, &body), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["One", "Two"], "{:?}", r.warnings);
+}

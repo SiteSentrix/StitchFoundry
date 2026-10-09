@@ -266,6 +266,16 @@ fn unzstd(packed: &[u8]) -> Option<Vec<u8>> {
     (data.len() as u64 != MAX_DECODED).then_some(data)
 }
 
+/// The stories that text objects written plainly (not as comments) name.
+fn plain_stories(data: &[u8]) -> BTreeSet<u32> {
+    data.split(|b| matches!(b, b'\r' | b'\n'))
+        .filter_map(|raw| {
+            let line = String::from_utf8_lossy(raw);
+            line.trim().strip_suffix("/StoryIndex ,").and_then(|n| n.trim().parse().ok())
+        })
+        .collect()
+}
+
 /// The layers of the editing copy `data`.
 fn parse(data: &[u8]) -> Option<Parsed> {
     let (mut bbox, mut hires, mut artboard, mut template) = (None, None, None, None);
@@ -274,6 +284,10 @@ fn parse(data: &[u8]) -> Option<Parsed> {
     let mut dict_depth = 0usize;
     // In a text object's dictionary: the story it names, once the dictionary says.
     let mut text_story: Option<Option<u32>> = None;
+    // Whether that text object is written as comments, which the file does for some of its stories
+    // twice (once plain, once commented) and for others only commented.
+    let mut text_commented = false;
+    let plain = plain_stories(data);
     let mut count = 0usize;
     for raw in data.split(|b| matches!(b, b'\r' | b'\n')) {
         let line = String::from_utf8_lossy(raw);
@@ -284,8 +298,18 @@ fn parse(data: &[u8]) -> Option<Parsed> {
         // A text object's dictionary may be written as comments (`%_`), which a reader that doesn't
         // know text objects skips: what that reader skips is read here, for the text object only.
         let line = match line.strip_prefix("%_") {
-            Some(rest) if dict_depth > 0 || rest.starts_with("/AI11Text") && rest.ends_with(':') => rest.trim(),
-            _ => line,
+            Some(rest) if dict_depth > 0 || rest.starts_with("/AI11Text") && rest.ends_with(':') => {
+                if dict_depth == 0 {
+                    text_commented = true;
+                }
+                rest.trim()
+            }
+            _ => {
+                if dict_depth == 0 {
+                    text_commented = false;
+                }
+                line
+            }
         };
         if line.starts_with('%') {
             match line {
@@ -331,7 +355,10 @@ fn parse(data: &[u8]) -> Option<Parsed> {
                 if dict_depth == 0
                     && let Some(story) = text_story.take()
                 {
-                    layer.code.push_str(&format!("{} __txt\n", story.map_or(-1, i64::from)));
+                    // A commented copy of a story that has a plain text object is not another object.
+                    if !(text_commented && story.is_some_and(|n| plain.contains(&n))) {
+                        layer.code.push_str(&format!("{} __txt\n", story.map_or(-1, i64::from)));
+                    }
                 }
             } else if line.ends_with(':') {
                 dict_depth += 1;
