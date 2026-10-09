@@ -128,7 +128,19 @@ fn glowing_edges_draw_a_bright_outline_and_preserve_premultiplication() {
     let mut out = src.clone();
     fx("stylize.glowingEdges", json!({"edgeWidth": 1, "smoothness": 1, "edgeBrightness": 20})).apply(&mut out, w, h, &space(w, h));
     assert!(at(&out, w, 3, 4)[0] > 0 || at(&out, w, 4, 4)[0] > 0);
-    assert!(out.chunks_exact(4).all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
+    assert!(out.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
+}
+
+/// Glowing Edges sees transparency beyond every side of the raster: a solid square glows alike at
+/// its left and right edges (the right one doesn't read the next row's first pixel).
+#[test]
+fn glowing_edges_glow_alike_on_every_side() {
+    let (w, h) = (9, 9);
+    let mut out = image(w, h, |_, _| [180, 180, 180, 255]);
+    fx("stylize.glowingEdges", json!({"edgeWidth": 1, "smoothness": 1, "edgeBrightness": 20})).apply(&mut out, w, h, &space(w, h));
+    let (left, right, top, bottom) = (at(&out, w, 0, 4), at(&out, w, 8, 4), at(&out, w, 4, 0), at(&out, w, 4, 8));
+    assert!(left[0] > 0 && left == right && top == bottom, "{left:?} {right:?} {top:?} {bottom:?}");
+    assert!(at(&out, w, 4, 4)[0] < left[0], "the inside stays darker than the edges");
 }
 
 #[test]
