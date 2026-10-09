@@ -1151,6 +1151,11 @@
 	Ignore	Ignora
 	Ignore Artboards (all the art as one page)	Ignora tavole da disegno (tutta la grafica come una sola pagina)
 	Ignore White	Ignora bianco
+	Palette:	Palette:
+	Limited	Limitata
+	Full Tone	Tono continuo
+	Document Library	Libreria del documento
+	Library:	Libreria:
 	Image	Immagine
 	Image Info	Informazioni immagine
 	Image Map:	Mappa immagine:
@@ -1566,6 +1571,9 @@
 	No text selected	Nessun testo selezionato
 	No Thumbnails	Nessuna miniatura
 	Noise	Disturbo
+	Create:	Crea:
+	Fills	Riempimenti
+	Strokes	Tracce
 	Nonbreaking Hyphen	Trattino indivisibile
 	Nonbreaking Space	Spazio indivisibile
 	None	Nessuno
@@ -2487,6 +2495,13 @@
 	Smooth Color	Colore graduale
 	Smooth Tool	Strumento Smussa
 	Snap Curves To Lines	Aggancia curve a linee
+	View:	Vista:
+	Tracing Result	Risultato ricalco
+	Tracing Result with Outlines	Risultato ricalco con contorni
+	Outlines	Contorni
+	Outlines with Source Image	Contorni con immagine di origine
+	Source Image	Immagine di origine
+	Image Trace View	Vista del ricalco immagine
 	Snap Options	Opzioni di aggancio
 	Snap to Glyph	Aggancia a glifo
 	Snap to Grid	Aggancia alla griglia

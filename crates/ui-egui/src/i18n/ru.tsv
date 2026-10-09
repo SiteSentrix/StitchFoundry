@@ -1149,6 +1149,11 @@
 	Ignore	Игнорировать
 	Ignore Artboards (all the art as one page)	Игнорировать монтажные области (весь рисунок как одна страница)
 	Ignore White	Игнорировать белый
+	Palette:	Палитра:
+	Limited	Ограниченная
+	Full Tone	Полутоновая
+	Document Library	Библиотека документа
+	Library:	Библиотека:
 	Image	Изображение
 	Image Info	Сведения об изображении
 	Image Map:	Карта изображения:
@@ -1562,6 +1567,9 @@
 	No text selected	Текст не выделен
 	No Thumbnails	Без миниатюр
 	Noise	Шум
+	Create:	Создать:
+	Fills	Заливки
+	Strokes	Обводки
 	Nonbreaking Hyphen	Неразрывный дефис
 	Nonbreaking Space	Неразрывный пробел
 	None	Нет
@@ -2483,6 +2491,13 @@
 	Smooth Color	Сглаженный цвет
 	Smooth Tool	Инструмент «Сглаживание»
 	Snap Curves To Lines	Привязывать кривые к линиям
+	View:	Просмотр:
+	Tracing Result	Результат трассировки
+	Tracing Result with Outlines	Результат трассировки с контурами
+	Outlines	Контуры
+	Outlines with Source Image	Контуры с исходным изображением
+	Source Image	Исходное изображение
+	Image Trace View	Просмотр трассировки изображения
 	Snap Options	Параметры привязки
 	Snap to Glyph	Привязать к глифу
 	Snap to Grid	Привязать к сетке

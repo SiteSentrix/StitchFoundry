@@ -4,8 +4,11 @@
 //! and classic colour quantisation), not from any existing implementation:
 //!
 //! 1. **Quantise** the image into a small palette: a luminance threshold (Black and White), 1-D
-//!    k-means over the luminance histogram (Grayscale), or median cut followed by weighted
-//!    k-means over a 15-bit colour histogram (Color). Transparent pixels are left out.
+//!    k-means over the luminance histogram (Grayscale), or, in Color, over a 15-bit colour
+//!    histogram as the [`Palette`] asks: median cut to a colour count followed by weighted k-means
+//!    (Limited), median cut until every colour box is tight (Full Tone), one of those two by
+//!    whether the image is flat art (Automatic), or the most used colours of a swatch library
+//!    (Document Library). Transparent pixels are left out.
 //! 2. **Remove noise**: 4-connected same-colour components smaller than `noise` pixels are merged
 //!    into their most common neighbouring colour.
 //! 3. **Follow boundaries**: for each colour layer, the pixel-crack edges between inside and
@@ -18,10 +21,15 @@
 //! 5. **Curves**: the polygon is fitted with cubic Béziers (`vectorcraft_pathops::simplify_with`,
 //!    least squares with corner detection); optionally nearly-straight curves snap to lines.
 //!
+//! With **Create: Strokes**, the parts of a colour layer no wider than the stroke width are traced
+//! as stroked centre lines instead (see `centerline`); without Fills, wider parts become stroked
+//! outlines.
+//!
 //! Colour layers are traced either *abutting* (each colour's own area; shapes share edges) or
 //! *overlapping* (stacked: each layer also covers every layer above it, so no hairline gaps).
 #![forbid(unsafe_code)]
 
+mod centerline;
 mod contour;
 mod fit;
 mod mosaic;
@@ -34,7 +42,7 @@ use vectorcraft_geom::PathData;
 
 pub use contour::{Component, Loop, trace_mask};
 pub use mosaic::mosaic;
-pub use quantize::{Quantized, TRANSPARENT, denoise, quantize};
+pub use quantize::{FULL_TONE_MAX, Quantized, TRANSPARENT, denoise, quantize};
 
 /// Errors decoding a raster.
 #[derive(Debug, thiserror::Error)]
@@ -132,6 +140,28 @@ pub enum Method {
     Overlapping,
 }
 
+/// Where Color mode's colours come from (the Palette popup).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Palette {
+    /// The `colors` colours that best represent the image.
+    #[default]
+    #[serde(alias = "Limited")]
+    Limited,
+    /// As many colours as the image's tones need, up to [`FULL_TONE_MAX`] (photos, gradients):
+    /// `color_detail` sets how close two colours may be and stay apart.
+    #[serde(alias = "Full Tone")]
+    FullTone,
+    /// Flat art (a few colours cover nearly all of it) traces with exactly those colours, anything
+    /// else as Full Tone.
+    #[serde(alias = "Automatic")]
+    Automatic,
+    /// The most used colours of a swatch library ([`TraceParams::swatches`]), at most `colors` of
+    /// them, exactly as they are.
+    #[serde(alias = "library", alias = "Document Library")]
+    DocumentLibrary,
+}
+
 /// Image Trace parameters (the Image Trace panel).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -139,8 +169,20 @@ pub struct TraceParams {
     pub mode: Mode,
     /// Black and White: pixels darker than this (luminance 0–255) are black.
     pub threshold: u8,
-    /// Palette size for Color, number of grays for Grayscale (2–256).
+    /// Color: where the colours come from.
+    pub palette: Palette,
+    /// Palette size for Color (Limited; at most this many for Document Library), number of grays
+    /// for Grayscale (2–256).
     pub colors: u32,
+    /// Full Tone and Automatic: how many colours, 0 (few) – 100 (many).
+    pub color_detail: f64,
+    /// Document Library: the swatch library, `"document"` (the document's swatches) or a library id
+    /// or name. The caller looks its colours up into `swatches`.
+    pub library: String,
+    /// Document Library: the library's colours (sRGB). Not saved: they are looked up from
+    /// `library` at every trace.
+    #[serde(skip)]
+    pub swatches: Vec<[u8; 3]>,
     /// Paths (fidelity) 0–100: higher follows the pixels more tightly.
     pub paths: f64,
     /// Corners 0–100: higher keeps more corners.
@@ -152,6 +194,12 @@ pub struct TraceParams {
     pub ignore_white: bool,
     /// Replace nearly-straight curves with straight lines.
     pub snap_curves_to_lines: bool,
+    /// Create: trace areas as filled shapes.
+    pub fills: bool,
+    /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
+    pub strokes: bool,
+    /// Stroke: the widest feature (px) traced as a stroke.
+    pub stroke_width: f64,
 }
 
 impl Default for TraceParams {
@@ -160,13 +208,20 @@ impl Default for TraceParams {
         Self {
             mode: Mode::BlackAndWhite,
             threshold: 128,
+            palette: Palette::Limited,
             colors: 6,
+            color_detail: 50.0,
+            library: "document".into(),
+            swatches: vec![],
             paths: 50.0,
             corners: 75.0,
             noise: 25,
             method: Method::Abutting,
             ignore_white: false,
             snap_curves_to_lines: false,
+            fills: true,
+            strokes: false,
+            stroke_width: 10.0,
         }
     }
 }
@@ -250,7 +305,8 @@ pub fn presets() -> Vec<(&'static str, TraceParams)> {
     PRESET_NAMES.iter().filter_map(|n| Some((*n, preset(n)?))).collect()
 }
 
-/// One traced shape: an outer contour plus its holes, filled with `color`.
+/// One traced shape: an outer contour plus its holes, filled with `color`, or (with `stroke`)
+/// lines stroked with it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TracedPath {
     /// In pixel coordinates (x right, y down; the image spans `0..width × 0..height`).
@@ -258,6 +314,9 @@ pub struct TracedPath {
     pub color: [u8; 3],
     /// Filled pixel count of the component the path came from.
     pub pixels: usize,
+    /// Create Strokes: the path is stroked this wide (px), not filled (centre lines, or the
+    /// outlines of wider areas without Fills).
+    pub stroke: Option<f64>,
 }
 
 /// The traced result, bottom-most path first.
@@ -357,15 +416,37 @@ impl Layers<'_> {
         let (params, opts) = (self.params, &self.opts);
         let color = *self.q.palette.get(ci)?;
         let overlapping = params.method == Method::Overlapping;
+        let (w, h) = (self.w, self.h);
+        // Create Strokes: this colour's lines, left out of its areas.
+        let (thin, lines) = if params.strokes {
+            centerline::lines(&self.q.labels, u16::try_from(ci).unwrap_or(TRANSPARENT), w, h, params.stroke_width, opts)
+        } else {
+            (vec![], vec![])
+        };
         let mask: Vec<bool> = self
             .q
             .labels
             .iter()
-            .map(|&l| l != TRANSPARENT && if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) } else { l as usize == ci })
+            .enumerate()
+            .map(|(i, &l)| {
+                l != TRANSPARENT
+                    && !thin.get(i).copied().unwrap_or(false)
+                    && if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) } else { l as usize == ci }
+            })
             .collect();
+        // Without Fills, areas are outlined with a 1 px stroke.
+        let area_stroke = (params.strokes && !params.fills).then_some(1.0);
         let min_hole = params.noise.max(1) as i64;
         let mut paths = vec![];
-        for comp in trace_mask(&mask, self.w, self.h) {
+        let mut add = |path: PathData, pixels: usize, stroke: Option<f64>| {
+            let n = path.anchor_count();
+            if self.anchors.fetch_add(n, Ordering::Relaxed).saturating_add(n) > self.max_anchors {
+                return false;
+            }
+            paths.push(TracedPath { path, color, pixels, stroke });
+            true
+        };
+        for comp in trace_mask(&mask, w, h) {
             let Some(outer) = fit::fit_loop(&comp.outer, opts) else { continue };
             let mut subs = vec![outer];
             for hole in &comp.holes {
@@ -374,12 +455,14 @@ impl Layers<'_> {
                 }
                 subs.extend(fit::fit_loop(hole, opts));
             }
-            let path = PathData::new(subs);
-            let n = path.anchor_count();
-            if self.anchors.fetch_add(n, Ordering::Relaxed).saturating_add(n) > self.max_anchors {
+            if !add(PathData::new(subs), comp.pixels, area_stroke) {
                 return None;
             }
-            paths.push(TracedPath { path, color, pixels: comp.pixels });
+        }
+        for line in lines {
+            if !add(line.path, line.pixels, Some(line.width)) {
+                return None;
+            }
         }
         Some(paths)
     }

@@ -40,6 +40,7 @@ pub mod slices;
 pub mod style_libs;
 pub mod swatches;
 pub mod text;
+pub mod trace;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -89,6 +90,7 @@ pub use text::{
     ParaDirection, ParaStyle, PathAlign, PathEffect, ScriptMetrics, TabAlign, TabStop, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
     VerticalAlign, WrapShape,
 };
+pub use trace::TraceView;
 pub use vectorcraft_color as color;
 pub use vectorcraft_geom as geom;
 

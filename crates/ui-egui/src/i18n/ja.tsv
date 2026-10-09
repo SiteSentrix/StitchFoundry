@@ -1410,6 +1410,11 @@
 	Ignore	無視
 	Ignore Artboards (all the art as one page)	アートボードを無視 (すべてのアートを 1 ページとして扱う)
 	Ignore White	白を無視
+	Palette:	パレット:
+	Limited	限定
+	Full Tone	フルトーン
+	Document Library	ドキュメントライブラリ
+	Library:	ライブラリ:
 	Image Info	画像情報
 	Image Map:	イメージマップ:
 	Image Size	イメージサイズ
@@ -1696,6 +1701,9 @@
 	No symbols in this document	このドキュメントにシンボルはありません
 	No text selected	テキストが選択されていません
 	Noise	ノイズ
+	Create:	作成:
+	Fills	塗り
+	Strokes	線
 	None	なし
 	None.	なし。
 	Normal	通常
@@ -2314,6 +2322,13 @@
 	Smooth	スムーズ
 	Smooth Tool	スムーズツール
 	Snap Curves To Lines	曲線を直線にスナップ
+	View:	表示:
+	Tracing Result	トレース結果
+	Tracing Result with Outlines	トレース結果（アウトライン付き）
+	Outlines	アウトライン
+	Outlines with Source Image	アウトライン（元画像付き）
+	Source Image	元画像
+	Image Trace View	画像トレースの表示
 	Snap Options	スナップオプション
 	Snapping Tolerance	スナップ許容値
 	Soft Light	ソフトライト

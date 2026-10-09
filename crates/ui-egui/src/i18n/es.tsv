@@ -1152,6 +1152,11 @@
 	Ignore	Ignorar
 	Ignore Artboards (all the art as one page)	Ignorar mesas de trabajo (toda la ilustración como una página)
 	Ignore White	Ignorar blanco
+	Palette:	Paleta:
+	Limited	Limitada
+	Full Tone	Tono completo
+	Document Library	Biblioteca del documento
+	Library:	Biblioteca:
 	Image	Imagen
 	Image Info	Información de imagen
 	Image Map:	Mapa de imagen:
@@ -1566,6 +1571,9 @@
 	No text selected	No hay texto seleccionado
 	No Thumbnails	Sin miniaturas
 	Noise	Ruido
+	Create:	Crear:
+	Fills	Rellenos
+	Strokes	Trazos
 	Nonbreaking Hyphen	Guion de no separación
 	Nonbreaking Space	Espacio de no separación
 	None	Ninguno
@@ -2487,6 +2495,13 @@
 	Smooth Color	Color suavizado
 	Smooth Tool	Herramienta Suavizar
 	Snap Curves To Lines	Ajustar curvas a líneas
+	View:	Vista:
+	Tracing Result	Resultado de calco
+	Tracing Result with Outlines	Resultado de calco con contornos
+	Outlines	Contornos
+	Outlines with Source Image	Contornos con imagen de origen
+	Source Image	Imagen de origen
+	Image Trace View	Vista del calco de imagen
 	Snap Options	Opciones de ajuste
 	Snap to Glyph	Ajustar a glifo
 	Snap to Grid	Ajustar a cuadrícula

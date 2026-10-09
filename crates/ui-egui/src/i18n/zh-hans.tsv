@@ -1140,6 +1140,11 @@
 	Ignore	忽略
 	Ignore Artboards (all the art as one page)	忽略画板 (所有图稿作为一页)
 	Ignore White	忽略白色
+	Palette:	调板：
+	Limited	有限
+	Full Tone	全色调
+	Document Library	文档库
+	Library:	库：
 	Image	图像
 	Image Info	图像信息
 	Image Map:	图像映射：
@@ -1541,6 +1546,9 @@
 	No text selected	未选择文字
 	No Thumbnails	无缩略图
 	Noise	杂色
+	Create:	创建：
+	Fills	填色
+	Strokes	描边
 	Nonbreaking Hyphen	不断行连字号
 	Nonbreaking Space	不断行空格
 	None	无
@@ -2424,6 +2432,13 @@
 	Smooth Color	平滑颜色
 	Smooth Tool	平滑工具
 	Snap Curves To Lines	将曲线对齐到直线
+	View:	视图：
+	Tracing Result	描摹结果
+	Tracing Result with Outlines	描摹结果（带轮廓）
+	Outlines	轮廓
+	Outlines with Source Image	轮廓（带源图像）
+	Source Image	源图像
+	Image Trace View	图像描摹视图
 	Snap Options	对齐选项
 	Snap to Glyph	靠齐字符
 	Snap to Grid	对齐网格
