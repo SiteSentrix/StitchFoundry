@@ -73,11 +73,20 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
             v.push((sc, "window.panel", json!({ "panel": panel })));
         }
     }
+    settings_chord(&mut v, cfg!(target_os = "macos"));
     // Most specific (most modifiers) first so Cmd+Shift+Z isn't eaten by Cmd+Z.
     v.sort_by_key(|(sc, ..)| {
         std::cmp::Reverse(sc.modifiers.shift as u8 + sc.modifiers.alt as u8 + sc.modifiers.command as u8 + sc.modifiers.ctrl as u8)
     });
     v
+}
+
+/// On a Mac, Cmd+, opens Settings as in every Mac app (#663), beside Preferences' own shortcut,
+/// unless a command or a user's shortcut already took it.
+fn settings_chord(v: &mut Vec<(KeyboardShortcut, &'static str, serde_json::Value)>, mac: bool) {
+    if let Some(sc) = parse("Cmd+,").filter(|sc| mac && !v.iter().any(|(s, ..)| s == sc)) {
+        v.push((sc, "edit.preferences", json!({})));
+    }
 }
 
 /// Consume a press of `sc`. A `=` chord also takes [`Key::Plus`], which is how `+` arrives from
@@ -685,6 +694,24 @@ mod tests {
         assert_eq!((preview.0.as_str(), &preview.1["perpendicular"]), ("perspective.move", &json!(true)));
         assert_eq!(digit_of(Key::Num0), Some(0));
         assert_eq!(digit_of(Key::A), None);
+    }
+
+    /// Cmd+, opens Settings on a Mac only, and never takes a chord a command already has.
+    #[test]
+    fn cmd_comma_opens_settings_on_a_mac() {
+        let comma = parse("Cmd+,").unwrap();
+        let mut v = vec![];
+        super::settings_chord(&mut v, false);
+        assert!(v.is_empty(), "not elsewhere");
+        super::settings_chord(&mut v, true);
+        assert_eq!(v.len(), 1);
+        assert_eq!((v[0].0, v[0].1), (comma, "edit.preferences"));
+        let mut taken = vec![(comma, "view.zoomIn", json!({}))];
+        super::settings_chord(&mut taken, true);
+        assert_eq!(taken.len(), 1, "a command that has it keeps it");
+        if cfg!(target_os = "macos") {
+            assert!(super::all_shortcuts().iter().any(|(sc, id, _)| *sc == comma && *id == "edit.preferences"));
+        }
     }
 
     #[test]

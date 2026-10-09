@@ -169,7 +169,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         let mut raise: Option<&'static str> = None;
         let mut i = 0;
         while i < all.len() {
-            if let Some(cat) = all[i].0 {
+            if all[i].0.is_some() && !app.session.prefs.tool_group_labels {
+                // User Interface › Show Tool Group Labels off: a faint dash between the groups.
+                let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
+                ui.painter().line_segment([r.center() - vec2(6.0, 0.0), r.center() + vec2(6.0, 0.0)], egui::Stroke::new(1.0, t.divider));
+            } else if let Some(cat) = all[i].0 {
                 let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
                 // A long name is cut to its first four characters in the single column.
                 let cat = tl!(cat);
@@ -1203,6 +1207,35 @@ pub(crate) mod tests {
         frame(&mut app, &ctx, 2.0, vec![]);
         let r = ctx.memory(|m| m.area_rect(floating_area("pen"))).unwrap();
         assert!(r.min.x.is_finite() && r.min.y.is_finite() && r.left() >= 0.0, "on screen: {r:?}");
+    }
+
+    /// User Interface › Show Tool Group Labels (#663): on, the toolbar names its groups; off, it
+    /// shows none of the names, a faint dash between the groups instead.
+    #[test]
+    fn tool_group_labels_can_be_hidden() {
+        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let draw = |app: &mut VectorcraftApp| {
+            let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1600.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let mut shown = vec![];
+            out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+            shown
+        };
+        let with = draw(&mut app);
+        assert!(with.iter().any(|t| t == "Shapes") && with.iter().any(|t| t == "Draw"), "{with:?}");
+        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": false})).unwrap();
+        let without = draw(&mut app);
+        assert!(!without.iter().any(|t| ["Select", "Shapes", "Draw", "Modify", "Type"].contains(&t.as_str())), "{without:?}");
     }
 
     /// Hover `at` for two seconds, coming from elsewhere: the texts painted meanwhile.
