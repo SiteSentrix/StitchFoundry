@@ -4341,6 +4341,7 @@ version = "0.7.0"
 dependencies = [
  "crc32fast",
  "flate2",
+ "image",
  "proptest",
  "ruzstd",
 ]

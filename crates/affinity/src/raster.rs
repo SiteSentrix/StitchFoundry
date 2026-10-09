@@ -13,6 +13,11 @@ const MAX_PIXELS: u64 = 64 << 20;
 const TILE: usize = 256;
 const TILE_BYTES: usize = TILE * TILE;
 
+struct CachedPixels {
+    tiles: HashMap<String, Vec<u8>>,
+    source: Option<(usize, Vec<u8>)>,
+}
+
 pub(crate) fn node_image(r: &mut Reader, id: ObjId, world: Affine) -> Result<Option<Image>, Error> {
     let s = r.s;
     let Some(bitmap) = s.obj(id, b"Bitm") else {
@@ -53,7 +58,9 @@ pub(crate) fn node_image(r: &mut Reader, id: ObjId, world: Affine) -> Result<Opt
             )
         })
         .unwrap_or((0, 0, width, height));
-    if s.field(bitmap, b"Bckg").is_some() && has_tiles && !s.is(id, b"ImgN") {
+    let source_tiles_only =
+        (1..=4).all(|c| matches!(s.field(bitmap, &tag(b"Sta", c)), Some(Value::Array(a)) if !a.is_empty() && a.iter().all(|v| *v == Value::UInt(5))));
+    if s.field(bitmap, b"Bckg").is_some() && has_tiles && !source_tiles_only && !s.is(id, b"ImgN") {
         r.warn("edited placed images use their stored pixels");
     }
     decode(r, bitmap, crop, world)
@@ -118,7 +125,27 @@ fn decode(r: &mut Reader, bitmap: ObjId, crop: (u32, u32, u32, u32), world: Affi
         }
     };
     let mut planes = Vec::with_capacity(channels);
-    let mut cache = HashMap::new();
+    // Current .af documents can keep level-zero tiles in their embedded JPEG/PNG instead of
+    // duplicating the pixels. State 5 is checked in the public Patchy embedded-jpeg fixture.
+    // Support only the observed, same-size RGBA8 image with a zero bitmap origin; other
+    // representations still receive the existing loss warning rather than guessing a mapping.
+    let needs_source = (1..=channels).any(|c| matches!(s.field(bitmap, &tag(b"Sta", c)), Some(Value::Array(a)) if a.contains(&Value::UInt(5))));
+    let source = if needs_source && format == Some(0) && s.int(bitmap, b"LInf") == Some(0) && s.int(bitmap, b"TInf") == Some(0) {
+        if let Some(name) = s.entry(bitmap, b"Bckg") {
+            let width = s.int(bitmap, b"BmpW").and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
+            let height = s.int(bitmap, b"BmpH").and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
+            match original(r, name).and_then(|bytes| source_pixels(&bytes, width, height)) {
+                Ok(pixels) => Some((width as usize, pixels)),
+                Err(Error::Limit(e)) => return Err(Error::Limit(e)),
+                Err(_) => None,
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let mut cache = CachedPixels { tiles: HashMap::new(), source };
     for c in 1..=channels {
         planes.push(plane(r, bitmap, c, bps, (x0, y0, w, h), &mut cache)?);
     }
@@ -158,6 +185,39 @@ fn original(r: &mut Reader, name: &str) -> Result<Vec<u8>, Error> {
     }
 }
 
+/// Decode the source under the same pixel budget as tiled layers, checking its actual
+/// dimensions before allocating decoded pixels. Only JPEG and PNG sources are supported.
+fn source_pixels(bytes: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> {
+    use image::{ImageFormat, ImageReader};
+    use std::io::Cursor;
+
+    if u64::from(width) * u64::from(height) > MAX_PIXELS {
+        return Err(Error::Limit("embedded image pixels"));
+    }
+    let mut reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(|_| Error::Malformed("embedded image format"))?;
+    if !matches!(reader.format(), Some(ImageFormat::Jpeg | ImageFormat::Png)) {
+        return Err(Error::Unsupported("embedded source pixel format"));
+    }
+    let dimensions = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|_| Error::Malformed("embedded image format"))?
+        .into_dimensions()
+        .map_err(|_| Error::Malformed("embedded image dimensions"))?;
+    if dimensions != (width, height) || width == 0 || height == 0 {
+        return Err(Error::Malformed("embedded source and bitmap dimensions differ"));
+    }
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(width);
+    limits.max_image_height = Some(height);
+    limits.max_alloc = Some(MAX_PIXELS * 8);
+    reader.limits(limits);
+    let decoded = reader.decode().map_err(|e| match e {
+        image::ImageError::Limits(_) => Error::Limit("embedded image decoding"),
+        _ => Error::Malformed("embedded image decoding"),
+    })?;
+    Ok(decoded.into_rgba8().into_raw())
+}
+
 fn tag(prefix: &[u8; 3], c: usize) -> [u8; 4] {
     [prefix[0], prefix[1], prefix[2], b'0' + c as u8]
 }
@@ -169,8 +229,9 @@ fn plane(
     c: usize,
     bps: usize,
     (x0, y0, w, h): (u32, u32, u32, u32),
-    cache: &mut HashMap<String, Vec<u8>>,
+    cache: &mut CachedPixels,
 ) -> Result<Vec<u8>, Error> {
+    let CachedPixels { tiles: cache, source } = cache;
     let s = r.s;
     let width = s.int(bitmap, b"BmpW").and_then(|v| usize::try_from(v).ok()).unwrap_or(0);
     let height = s.int(bitmap, b"BmpH").and_then(|v| usize::try_from(v).ok()).unwrap_or(0);
@@ -219,6 +280,13 @@ fn plane(
                 None
             }
             5 => {
+                if let Some((source_width, pixels)) = source.as_ref() {
+                    let (ox, oy) = (tx * TILE, ty * TILE);
+                    copy(&mut out, row, (bx0, py0, bx1, py1), (ox, oy), |x, y| {
+                        pixels.get(((oy + y) * source_width + ox + x) * 4 + c - 1).copied().unwrap_or(0)
+                    });
+                    continue;
+                }
                 r.warn("pixel layers drawn from an embedded image (left empty)");
                 None
             }
@@ -239,5 +307,108 @@ fn copy(out: &mut [u8], row: usize, (bx0, py0, bx1, py1): (usize, usize, usize, 
                 *b = at(x - ox, y - oy);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Kind;
+    use crate::synth::{self, F, Method, tag};
+
+    fn png() -> Vec<u8> {
+        let pixels = image::RgbaImage::from_fn(300, 2, |x, y| image::Rgba([(x % 251) as u8, (y * 31) as u8, 77, 255]));
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        pixels.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+        bytes.into_inner()
+    }
+
+    /// An original synthetic mixed source/cache bitmap. It exercises reader recovery,
+    /// not a claim that Affinity itself accepts the synthetic container.
+    fn fixture(source: &[u8], origin: i32) -> Vec<u8> {
+        let mut bitmap = vec![
+            (tag(b"Frmt"), F::Enum(0, 0)),
+            (tag(b"BmpW"), F::I32(300)),
+            (tag(b"BmpH"), F::I32(2)),
+            (tag(b"LInf"), F::I32(origin)),
+            (tag(b"TInf"), F::I32(0)),
+            (tag(b"Bckg"), F::Entry("c/1".into())),
+        ];
+        for c in 1..=4 {
+            bitmap.push((tag(&super::tag(b"TWi", c)), F::I32(2)));
+            bitmap.push((tag(&super::tag(b"THi", c)), F::I32(1)));
+            bitmap.push((tag(&super::tag(b"Sta", c)), F::U8s(vec![5, 4])));
+            bitmap.push((
+                tag(&super::tag(b"Idx", c)),
+                F::Shared(vec![F::Def(c as u32, vec![tag(b"Blck")], vec![(tag(b"Data"), F::Entry(format!("d/{c}")))])]),
+            ));
+        }
+        let mut crop = vec![0x17];
+        crop.extend(tag(b"BitR").0.to_le_bytes());
+        crop.extend([250i32, 0, 270, 2].into_iter().flat_map(i32::to_le_bytes));
+        let raster = F::Def(
+            10,
+            vec![tag(b"Rstr")],
+            vec![
+                (tag(b"Bitm"), F::Obj(tag(b"DyBm"), bitmap)),
+                (tag(b"BitR"), F::Raw(crop)),
+                (tag(b"Xfrm"), F::F64s(vec![0.0, -2.0, 10.0, 2.0, 0.0, 20.0])),
+            ],
+        );
+        let spread = F::Def(11, vec![tag(b"Sprd")], vec![(tag(b"Chld"), F::Shared(vec![raster]))]);
+        let doc = synth::stream(&[(tag(b"DocR"), F::Obj(tag(b"DocN"), vec![(tag(b"Chld"), F::Shared(vec![spread]))]))]);
+        let mut blob = vec![0x2d];
+        blob.extend(tag(b"Data").0.to_le_bytes());
+        blob.extend((source.len() as u32).to_le_bytes());
+        blob.extend(source);
+        let block = synth::stream(&[(tag(b"Data"), F::Raw(blob))]);
+        let tiles: Vec<_> = [200u8, 10, 30, 255].into_iter().map(|v| vec![v; TILE_BYTES]).collect();
+        synth::container(
+            &[
+                ("doc.dat", &doc, Method::Zlib),
+                ("c/1", &block, Method::Zlib),
+                ("d/1", &tiles[0], Method::Zlib),
+                ("d/2", &tiles[1], Method::Zlib),
+                ("d/3", &tiles[2], Method::Zlib),
+                ("d/4", &tiles[3], Method::Zlib),
+            ],
+            None,
+        )
+    }
+
+    #[test]
+    fn source_tiles_and_cached_edits_survive_crop_rotation_and_tile_boundaries() {
+        let doc = crate::read(&fixture(&png(), 0), crate::Limits::default()).unwrap();
+        assert_eq!(doc.warnings, ["edited placed images use their stored pixels"]);
+        let Kind::Image(image) = &doc.spreads[0].nodes[0].kind else { panic!() };
+        assert_eq!((image.width, image.height), (20, 2));
+        assert_eq!(image.transform, Affine([0.0, 2.0, -2.0, 0.0, 10.0, 520.0]));
+        let Pixels::Rgba8(pixels) = &image.pixels else { panic!() };
+        for y in 0..2 {
+            for x in 0..20 {
+                let expected = if x + 250 < 256 { [((x + 250) % 251) as u8, (y * 31) as u8, 77, 255] } else { [200, 10, 30, 255] };
+                assert_eq!(&pixels[(y * 20 + x) * 4..(y * 20 + x + 1) * 4], &expected);
+            }
+        }
+    }
+
+    #[test]
+    fn unreadable_sources_and_unknown_origins_preserve_cached_edits_and_warn() {
+        for bytes in [fixture(b"invalid image", 0), fixture(&png(), 1)] {
+            let doc = crate::read(&bytes, crate::Limits::default()).unwrap();
+            assert!(doc.warnings.iter().any(|w| w == "pixel layers drawn from an embedded image (left empty) (4×)"));
+            let Kind::Image(image) = &doc.spreads[0].nodes[0].kind else { panic!() };
+            let Pixels::Rgba8(pixels) = &image.pixels else { panic!() };
+            assert_eq!(&pixels[..4], &[0, 0, 0, 0]);
+            assert_eq!(&pixels[6 * 4..7 * 4], &[200, 10, 30, 255]);
+        }
+    }
+
+    #[test]
+    fn embedded_source_dimensions_and_pixel_budget_are_checked_before_decode() {
+        let bytes = png();
+        assert!(matches!(source_pixels(&bytes, 299, 2), Err(Error::Malformed(_))));
+        assert!(matches!(source_pixels(&bytes, u32::MAX, u32::MAX), Err(Error::Limit(_))));
+        assert_eq!(source_pixels(&bytes, 300, 2).unwrap().len(), 300 * 2 * 4);
     }
 }
