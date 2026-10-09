@@ -276,11 +276,18 @@ pub const DOCUMENT_SWATCHES: &str = "document";
 /// [`DOCUMENT_SWATCHES`], of the active document's swatches and colour groups. `None` when there is
 /// no such library (or document).
 pub fn limit_palette(s: &Session, key: &str) -> Option<Palette> {
+    Some(Palette::new(library_colors(s, key)?))
+}
+
+/// The solid colours of library `key` (an id or name) or, for [`DOCUMENT_SWATCHES`], of the
+/// active document's swatches and colour groups. `None` when there is no such library (or
+/// document).
+pub fn library_colors(s: &Session, key: &str) -> Option<Vec<Color>> {
     let colors = |sw: &Swatch| sw.paint.color();
     if key == DOCUMENT_SWATCHES {
-        return Some(Palette::new(s.active()?.doc.swatches_iter().filter_map(colors)));
+        return Some(s.active()?.doc.swatches_iter().filter_map(colors).collect());
     }
-    Some(Palette::new(library(s, key)?.1.iter().filter_map(colors)))
+    Some(library(s, key)?.1.iter().filter_map(colors).collect())
 }
 
 /// The `limitTo` parameter's palette ([`limit_palette`]); `None` without one (or for "").

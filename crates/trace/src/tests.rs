@@ -348,3 +348,93 @@ fn an_image_too_large_to_trace_is_refused_before_decoding() {
     assert!(matches!(err, TraceError::TooLarge { width: 30_000, height: 30_000, .. }), "{err}");
     assert!(matches!(Raster::decode(&png_header(64, 64)), Err(TraceError::Decode(_))), "a small header goes on to decoding");
 }
+
+/// Four flat colours with anti-aliased (blended) edges between the quadrants.
+fn flat_quads() -> Raster {
+    const C: [[u8; 3]; 4] = [[220, 30, 30], [30, 200, 40], [30, 40, 210], [240, 220, 20]];
+    Raster::from_fn(100, 100, |x, y| {
+        let at = |x: u32, y: u32| C[usize::from(x >= 50) + 2 * usize::from(y >= 50)];
+        let (a, b) = (at(x, y), at(x.saturating_sub(1), y.saturating_sub(1)));
+        // Blend the pixels along the quadrant edges, as an anti-aliased picture has them.
+        let c: Vec<u8> = a.iter().zip(b).map(|(p, q)| ((u16::from(*p) + u16::from(q)) / 2) as u8).collect();
+        [c[0], c[1], c[2], 255]
+    })
+}
+
+/// A smooth two-dimensional colour gradient (continuous tone).
+fn gradient() -> Raster {
+    Raster::from_fn(128, 128, |x, y| [(x * 2) as u8, (y * 2) as u8, (255 - x - y / 2) as u8, 255])
+}
+
+fn palette(img: &Raster, palette: Palette, colors: u32, color_detail: f64) -> Vec<[u8; 3]> {
+    let p = TraceParams { mode: Mode::Color, palette, colors, color_detail, noise: 4, ..TraceParams::default() };
+    trace(img, &p).palette
+}
+
+#[test]
+fn palettes_parse_from_their_ids_and_names() {
+    for (id, want) in [
+        ("limited", Palette::Limited),
+        ("fullTone", Palette::FullTone),
+        ("Automatic", Palette::Automatic),
+        ("documentLibrary", Palette::DocumentLibrary),
+        ("library", Palette::DocumentLibrary),
+    ] {
+        let p: TraceParams = serde_json::from_value(serde_json::json!({ "palette": id })).unwrap();
+        assert_eq!(p.palette, want, "{id}");
+    }
+    assert_eq!(TraceParams::default().palette, Palette::Limited);
+    // The library's colours are looked up at every trace, not saved with the settings.
+    let v = serde_json::to_value(TraceParams { swatches: vec![[1, 2, 3]], ..TraceParams::default() }).unwrap();
+    assert!(v.get("swatches").is_none() && v["library"] == "document" && v["colorDetail"] == 50.0, "{v}");
+}
+
+#[test]
+fn full_tone_follows_the_tones_the_image_has() {
+    // Flat art keeps its few colours (and the tones of its blended edges); a gradient gets many,
+    // more with more detail.
+    let flat = palette(&flat_quads(), Palette::FullTone, 6, 50.0);
+    assert!((4..=10).contains(&flat.len()), "flat art: {flat:?}");
+    let few = palette(&gradient(), Palette::FullTone, 6, 10.0).len();
+    let many = palette(&gradient(), Palette::FullTone, 6, 90.0).len();
+    assert!(few > 6 && many > few && many <= FULL_TONE_MAX, "{few} then {many} colours");
+}
+
+#[test]
+fn automatic_traces_flat_art_with_its_colours_and_photos_in_full_tone() {
+    let flat = palette(&flat_quads(), Palette::Automatic, 2, 50.0);
+    assert_eq!(flat.len(), 4, "the four flat colours, whatever `colors` says: {flat:?}");
+    assert!(flat.iter().any(|c| c[0] > 200 && c[1] < 60 && c[2] < 60), "red is one of them: {flat:?}");
+    let tone = palette(&gradient(), Palette::Automatic, 2, 50.0);
+    assert_eq!(tone.len(), palette(&gradient(), Palette::FullTone, 2, 50.0).len(), "continuous tone: as Full Tone");
+}
+
+#[test]
+fn document_library_uses_the_most_used_swatches_exactly() {
+    let swatches = vec![[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [0, 0, 0], [255, 255, 255]];
+    let p = |colors| TraceParams {
+        mode: Mode::Color,
+        palette: Palette::DocumentLibrary,
+        colors,
+        swatches: swatches.clone(),
+        noise: 4,
+        ..TraceParams::default()
+    };
+    let hard = Raster::from_fn(100, 100, |x, y| match (x < 50, y < 50) {
+        (true, true) => [220, 30, 30, 255],
+        (false, true) => [30, 200, 40, 255],
+        (true, false) => [30, 40, 210, 255],
+        (false, false) => [240, 220, 20, 255],
+    });
+    let res = trace(&hard, &p(6));
+    let mut got = res.palette.clone();
+    got.sort_unstable();
+    assert_eq!(got, [[0, 0, 255], [0, 255, 0], [255, 0, 0], [255, 255, 0]], "the nearest swatch of each colour, as it is");
+    assert!(res.paths.iter().all(|t| swatches.contains(&t.color)));
+    // At most `colors` of them: the ones the most pixels are nearest to.
+    let two = trace(&hard, &p(2)).palette;
+    assert!(two.len() <= 2 && two.iter().all(|c| swatches.contains(c)), "{two:?}");
+    // Without library colours, it traces as Limited.
+    let none = TraceParams { swatches: vec![], ..p(4) };
+    assert_eq!(trace(&hard, &none).palette.len(), 4);
+}

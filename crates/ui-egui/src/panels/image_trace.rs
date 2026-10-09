@@ -1,18 +1,50 @@
-//! Image Trace panel: preset, view, mode, threshold or colour count, and the Advanced section's
-//! fidelity options (open or closed as it was last left). With an Image Trace object selected,
-//! changing a setting re-traces it (one undo step per change; sliders apply when released) and
-//! changing the view redraws it without tracing again. With an image selected, Trace makes a new
-//! Image Trace object.
+//! Image Trace panel: preset, view, mode, palette (Color), threshold or colour count, and the
+//! Advanced section's fidelity options (open or closed as it was last left). With an Image Trace
+//! object selected, changing a setting re-traces it (one undo step per change; sliders apply when
+//! released) and changing the view redraws it without tracing again. With an image selected, Trace
+//! makes a new Image Trace object.
 
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind, TraceView};
+use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
-use super::{first_selected, pstate, set_pstate};
+use super::{first_selected, library_panel, pstate, set_pstate, swatches};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
 const MODES: [(&str, &str); 3] = [("blackAndWhite", "Black and White"), ("grayscale", "Grayscale"), ("color", "Color")];
+
+/// Color mode's palettes (`palette` param ids), in panel order.
+const PALETTES: [&str; 4] = ["limited", "fullTone", "automatic", "documentLibrary"];
+
+/// Palette `id`, in the UI language.
+fn palette_label(id: &str) -> &'static str {
+    match id {
+        "fullTone" => tl!("Full Tone"),
+        "automatic" => tl!("Automatic"),
+        "documentLibrary" => tl!("Document Library"),
+        _ => tl!("Limited"),
+    }
+}
+
+/// The name of Document Library's library `key` (the document's swatches or a swatch library); a
+/// library that is gone shows its key.
+fn library_label(app: &VectorcraftApp, key: &str) -> String {
+    match swatches::limit_name(app, key) {
+        Some(_) if key == DOCUMENT_SWATCHES => tl!(swatches::DOCUMENT_SWATCHES).to_string(),
+        Some(name) => library_panel::library_name(key, &name).to_string(),
+        None => key.to_string(),
+    }
+}
+
+/// Document Library's choices: the document's swatches, then the colour libraries (`current`
+/// checked) → the key chosen.
+fn library_list(app: &VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
+    let document = menu_item(ui, swatches::DOCUMENT_SWATCHES, true, current == DOCUMENT_SWATCHES).then(|| DOCUMENT_SWATCHES.to_string());
+    ui.separator();
+    library_panel::library_items(ui, &swatches::colour_libraries(app), Some(current)).or(document)
+}
 
 /// Panel state: the preset name, the current parameters, the view and the last result's counts.
 #[derive(Clone, Default)]
@@ -213,16 +245,41 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             retrace = true;
         }
     });
-    let bw = st.params["mode"].as_str() == Some("blackAndWhite");
-    let (key, label, range) = if bw {
-        ("threshold", tl!("Threshold"), 0.0..=255.0)
-    } else {
-        ("colors", if st.params["mode"] == "grayscale" { tl!("Grays") } else { tl!("Colors") }, 2.0..=256.0)
+    let mode = st.params["mode"].as_str().unwrap_or("blackAndWhite").to_string();
+    let palette = st.params["palette"].as_str().unwrap_or("limited").to_string();
+    if mode == "color" {
+        ui.horizontal(|ui| {
+            widgets::dim_label(ui, tl!("Palette:"));
+            let labels = PALETTES.map(palette_label);
+            if let Some(p) = widgets::dropdown_names(ui, "it-palette", palette_label(&palette), &labels, 170.0).and_then(|i| PALETTES.get(i)) {
+                st.params["palette"] = json!(p);
+                st.preset = "Custom".into();
+                retrace = true;
+            }
+        });
+        if palette == "documentLibrary" {
+            ui.horizontal(|ui| {
+                widgets::dim_label(ui, tl!("Library:"));
+                let key = st.params["library"].as_str().unwrap_or(DOCUMENT_SWATCHES).to_string();
+                if let Some(k) = widgets::combo(ui, "it-library", &library_label(app, &key), 170.0, false, |ui| library_list(app, ui, &key)) {
+                    st.params["library"] = json!(k);
+                    st.preset = "Custom".into();
+                    retrace = true;
+                }
+            });
+        }
+    }
+    // Full Tone and Automatic: how many colours (Less … More); else a count or the threshold.
+    let (key, label, range, suffix) = match mode.as_str() {
+        "blackAndWhite" => ("threshold", tl!("Threshold"), 0.0..=255.0, ""),
+        "grayscale" => ("colors", tl!("Grays"), 2.0..=256.0, ""),
+        _ if matches!(palette.as_str(), "fullTone" | "automatic") => ("colorDetail", tl!("Colors"), 0.0..=100.0, "%"),
+        _ => ("colors", tl!("Colors"), 2.0..=256.0, ""),
     };
     let mut v = st.params[key].as_f64().unwrap_or(0.0);
-    let (changed, release) = slider(ui, label, &mut v, range, "");
+    let (changed, release) = slider(ui, label, &mut v, range, suffix);
     if changed {
-        st.params[key] = json!(v.round() as u64);
+        st.params[key] = if key == "colorDetail" { json!(v.round()) } else { json!(v.round() as u64) };
         st.preset = "Custom".into();
     }
     retrace |= release;
@@ -371,6 +428,31 @@ mod tests {
         // Another object's view is shown when it is selected.
         app.run("imageTrace.setView", json!({"view": "outlines"})).unwrap();
         assert!(frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Outlines"));
+    }
+
+    #[test]
+    fn the_palette_shows_in_color_mode_and_traces_again() {
+        let mut app = traced_app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
+        let palette = |app: &VectorcraftApp| target(app).2.map(|t| t["params"]["palette"].clone());
+        assert!(!has(&frame(&mut app, &ctx, vec![]), "Palette:"), "Black and White has no palette");
+        app.run("imageTrace.make", json!({"preset": "6 Colors"})).unwrap();
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(has(&texts, "Palette:") && has(&texts, "Limited") && !has(&texts, "Library:"), "{texts:?}");
+        // Document Library traces again with the document's swatches, and names them.
+        click(&mut app, &ctx, "Limited");
+        click(&mut app, &ctx, "Document Library");
+        assert_eq!(palette(&app), Some(json!("documentLibrary")));
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(has(&texts, "Library:") && has(&texts, "Document Swatches"), "{texts:?}");
+        // Full Tone's Colors is how many, Less (0%) … More (100%).
+        click(&mut app, &ctx, "Document Library");
+        click(&mut app, &ctx, "Full Tone");
+        assert_eq!(palette(&app), Some(json!("fullTone")));
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(has(&texts, "50") && !has(&texts, "Library:"), "{texts:?}");
     }
 
     #[test]

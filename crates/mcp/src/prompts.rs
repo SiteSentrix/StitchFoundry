@@ -295,7 +295,9 @@ with the {effect} effect.
 Method:
 1. open_file the image: it becomes a document of its own pixel size.
 2. imageTrace.make with the preset name, adjusting `params` — mode blackAndWhite, grayscale or
-   color, then threshold, colors, paths, corners, noise, method abutting or overlapping,
+   color (palette limited, fullTone for photos, automatic, or documentLibrary to trace with
+   the document's swatches or a swatch `library`), then threshold, colors (colorDetail for
+   fullTone and automatic), paths, corners, noise, method abutting or overlapping,
    ignoreWhite, snapCurvesToLines. Run imageTrace.presets to see every preset with its numbers.
    Lower paths and higher corners give the clean, logo-like result; high fidelity needs paths
    near 90. imageTrace.setView {view: \"outlinesWithSourceImage\"} draws the traced outlines
