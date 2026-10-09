@@ -371,7 +371,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.saveSwatchLibrary",
         "Save Swatch Library…",
         "",
-        "{names?: [the swatches selected in the Swatches panel]} open Save Swatch Library (dialog `saveSwatchLibrary`: name, format: vcswatches|gpl|css, user: save to the user library folder, selectedOnly); OK runs swatch.library.save",
+        "{names?: [the swatches selected in the Swatches panel]} open Save Swatch Library (dialog `saveSwatchLibrary`: name, format: vcswatches|gpl|ase|css, user: save to the user library folder, selectedOnly); OK runs swatch.library.save",
     ),
     ("window.userSwatchLibrary1", "User Swatch Library 1", "", "{} open the 1. User Defined swatch library (swatch.library.list, category user)"),
     ("window.userSwatchLibrary2", "User Swatch Library 2", "", "{} open the 2. User Defined swatch library"),
