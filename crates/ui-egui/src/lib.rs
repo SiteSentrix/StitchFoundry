@@ -534,6 +534,14 @@ impl VectorcraftApp {
             {
                 p.insert("center".into(), serde_json::json!([c.x, c.y]));
             }
+            // In place, in front, in back: onto the active artboard (#693).
+            if matches!(id, "edit.pasteInPlace" | "edit.pasteInFront" | "edit.pasteInBack")
+                && params.get("artboard").is_none()
+                && let Some(i) = self.view().map(|v| v.artboard)
+                && let Some(p) = params.as_object_mut()
+            {
+                p.insert("artboard".into(), serde_json::json!(i));
+            }
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;
             }
