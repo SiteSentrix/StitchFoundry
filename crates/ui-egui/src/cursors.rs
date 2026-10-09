@@ -288,10 +288,19 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
     Some(std::mem::take(&mut ink.0))
 }
 
-/// Paint cursor `c` at `p` on the given (foreground) painter, where the window can't show it as an
-/// OS cursor ([`OS_CURSORS`]). Returns false for cursors that stay system cursors.
-pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
-    glyph(c, p).map(|shapes| painter.extend(shapes)).is_some()
+/// Paint cursor `c` at `p`, `scale` times its size, on the given (foreground) painter, where the
+/// window can't show it as an OS cursor ([`OS_CURSORS`]). Returns false for cursors that stay
+/// system cursors.
+pub fn paint(painter: &Painter, c: Cursor, p: Pos2, scale: f32) -> bool {
+    let place = egui::emath::TSTransform::new(p.to_vec2(), scale);
+    glyph(c, Pos2::ZERO)
+        .map(|shapes| {
+            painter.extend(shapes.into_iter().map(|mut s| {
+                s.transform(place);
+                s
+            }))
+        })
+        .is_some()
 }
 
 /// Does the window show the glyphs as OS cursors ([`Images`])? Not on macOS, which sizes a cursor
@@ -553,6 +562,43 @@ mod tests {
         // Off the canvas, the panels' cursors.
         let off = frame(&mut app, &ctx, vec![egui::Event::PointerMoved(Pos2::new(canvas.left() - 20.0, canvas.center().y))]);
         assert!(off.platform_output.cursor_image.is_none());
+    }
+
+    /// User Interface › Scale Cursor Proportional to UI (#394): off, the tool cursors keep their
+    /// size whatever the UI Scaling; on, they grow with it.
+    #[test]
+    fn tool_cursors_scale_with_the_ui_only_when_asked() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("prefs.set", json!({"key": "uiScaling", "value": 2.0})).unwrap();
+        let ctx = egui::Context::default();
+        for _ in 0..3 {
+            frame(&mut app, &ctx, vec![]);
+        }
+        assert_eq!(ctx.zoom_factor(), 2.0);
+        let over = app.canvas_rect.unwrap().center();
+        let shown =
+            |app: &mut VectorcraftApp, d: f32| frame(app, &ctx, vec![egui::Event::PointerMoved(over + vec2(d, 0.0))]).platform_output.cursor_image;
+        if OS_CURSORS {
+            assert_eq!(shown(&mut app, 0.0).unwrap(), app.canvas.cursors.get(Cursor::Arrow, 1.0).unwrap(), "off: its own size");
+            app.run("prefs.set", json!({"key": "scaleCursorWithUi", "value": true})).unwrap();
+            assert_eq!(shown(&mut app, 4.0).unwrap(), app.canvas.cursors.get(Cursor::Arrow, 2.0).unwrap(), "on: twice as big");
+        }
+        // Painted into the window (macOS, the web), the glyph is drawn at the scale asked for, its
+        // hotspot where the pointer is.
+        let painted = |scale: f32| {
+            let ctx = egui::Context::default();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("probe"));
+                assert!(paint(&ui.ctx().layer_painter(layer), Cursor::Arrow, pos2(100.0, 100.0), scale));
+            });
+            out.textures_delta.clear();
+            out.textures_delta.clear();
+            out.shapes.iter().fold(egui::Rect::NOTHING, |r, c| r.union(c.shape.visual_bounding_rect()))
+        };
+        let (full, half) = (painted(1.0), painted(0.5));
+        assert!((half.height() * 2.0 - full.height()).abs() < 1.5 && full.height() > 15.0, "{full:?} {half:?}");
+        assert!(full.contains(pos2(100.0, 100.0)) && half.contains(pos2(100.0, 100.0)), "{full:?} {half:?}");
     }
 
     #[test]

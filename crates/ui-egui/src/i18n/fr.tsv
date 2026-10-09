@@ -2984,6 +2984,9 @@
 	 to zoom in  |  	 pour effectuer un zoom avant  |  
 	 to zoom out  |  	 pour effectuer un zoom arrière  |  
 	 to zoom into an area	 pour zoomer sur une zone
+	Hold	Maintenir
+	 right or left to zoom in or out  |  	 vers la droite ou la gauche pour effectuer un zoom avant ou arrière  |  
+	 to keep zooming	 pour continuer le zoom
 	 an object to copy its attributes  |  	 sur un objet pour copier ses attributs  |  
 	 to apply the selection's to it  |  	 pour lui appliquer ceux de la sélection  |  
 	 to sample a color	 pour prélever une couleur
