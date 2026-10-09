@@ -1650,9 +1650,10 @@ without its formatting, taking the style at the caret.
 `document.exportDxf` (also `document.export` / `export` with format `dxf`) writes a CAD drawing, ASCII DXF R12 to 2018
 (`version`: `R12`, `R13`, `R14`, `2000`, `2004`, `2007`, `2010`, `2013`, `2018`; default `2018`). Each layer becomes a
 DXF layer (hidden layers switched off, locked ones locked, non-printing ones not plotted; template layers left out),
-straight paths become polylines, curved ones cubic splines through every anchor, fills solid hatches (R12 has none:
-their outlines), strokes lines with their lineweight and a linetype per dash pattern, and placed images image entities
-linked to PNG or JPEG files (`rasterFormat`) written next to the drawing (`linked` in the result). Coordinates are y up
+straight paths become polylines, curved ones cubic splines through every anchor, fills their outlines followed by
+solid hatches (laser and cutter software reads the outlines and skips hatches; R12 has no hatches: the outlines
+alone), strokes lines with their lineweight and a linetype per dash pattern, and placed images image entities linked
+to PNG or JPEG files (`rasterFormat`) written next to the drawing (`linked` in the result). Coordinates are y up
 from the bottom-left corner of the first artboard (or `artboard`), in drawing units: `scale` units per `unit` (default
 1 mm = 1 unit, which sets `$INSUNITS`); `scaleLineweights` scales the lineweights with them. `colors` is `8`, `16` or
 `256` indexed colours, or `true` (default; true colour with the nearest index, DXF 2004 and later). `preserve:
