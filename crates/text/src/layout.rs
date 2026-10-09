@@ -206,14 +206,17 @@ fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) ->
     Some(best.unwrap_or_else(|| at(lo)))
 }
 
-/// `t` with every run's size, explicit leading and baseline shift scaled by `f` (auto leading
-/// follows the size; paragraph spacing stays).
+/// `t` with every run's size, explicit leading and baseline shift scaled by `f`, inline art's own
+/// shift included (auto leading and the art's size follow the size; paragraph spacing stays).
 fn scaled(t: &TextObject, f: f64) -> TextObject {
     let mut s = t.clone();
     for r in &mut s.runs {
         r.style.size *= f;
         r.style.leading = r.style.leading.map(|l| l * f);
         r.style.baseline_shift *= f;
+        if let Some(a) = &mut r.inline {
+            a.baseline_shift *= f;
+        }
     }
     s
 }
