@@ -670,6 +670,49 @@ fn image_trace_make_and_expand_and_color_presets() {
 }
 
 #[test]
+fn image_trace_palettes_and_swatch_libraries() {
+    let mut s = session();
+    let quads = vectorcraft_trace::Raster::from_fn(60, 60, |x, y| match (x < 30, y < 30) {
+        (true, true) => [230, 20, 20, 255],
+        (false, true) => [20, 200, 30, 255],
+        (true, false) => [20, 30, 220, 255],
+        (false, false) => [250, 230, 10, 255],
+    });
+    add_image(&mut s, &quads, Affine::IDENTITY);
+    let fills = |s: &Session, id: &Value| -> Vec<Color> {
+        traced_paths(&node(s, NodeId(id.as_u64().unwrap()))).iter().filter_map(|n| n.appearance.fill_paint().color()).collect()
+    };
+    // Document Library: every fill is one of the document's swatch colours, as it is.
+    let r = s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": {"palette": "documentLibrary"}})).unwrap();
+    let doc = crate::cmd::swatchlib::library_colors(&s, "document").unwrap();
+    let got = fills(&s, &r["id"]);
+    assert!(!got.is_empty() && got.iter().all(|c| doc.contains(c)), "{got:?}");
+    let t = node(&s, NodeId(r["id"].as_u64().unwrap())).trace.unwrap();
+    assert_eq!((t["params"]["palette"].as_str(), t["params"]["library"].as_str()), (Some("documentLibrary"), Some("document")));
+    assert!(t["params"].get("swatches").is_none(), "looked up again at every trace");
+    // A swatch library by id: the web-safe colours.
+    let r = s
+        .execute(
+            "imageTrace.make",
+            &json!({"id": r["id"], "preset": "6 Colors", "params": {"palette": "documentLibrary", "library": "web-safe-216", "colors": 3}}),
+        )
+        .unwrap();
+    let got = fills(&s, &r["id"]);
+    assert!((1..=3).contains(&got.len()), "{got:?}");
+    assert!(got.iter().all(|c| c.to_rgba8(1.0)[..3].iter().all(|v| v % 51 == 0)), "{got:?}");
+    // Full Tone and Automatic keep the four flat colours.
+    let mut id = r["id"].clone();
+    for palette in ["fullTone", "automatic"] {
+        let r = s.execute("imageTrace.make", &json!({"id": id, "preset": "6 Colors", "params": {"palette": palette, "colorDetail": 50}})).unwrap();
+        assert_eq!(r["colors"], 4, "{palette}");
+        id = r["id"].clone();
+    }
+    let mut bad = |p: Value| s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": p})).is_err();
+    assert!(bad(json!({"palette": "documentLibrary", "library": "No Such Library"})));
+    assert!(bad(json!({"palette": "rainbow"})));
+}
+
+#[test]
 fn image_trace_presets_query_and_errors() {
     let mut s = session();
     let r = s.execute("imageTrace.presets", &json!({})).unwrap();

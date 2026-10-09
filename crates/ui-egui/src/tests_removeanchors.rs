@@ -37,7 +37,7 @@ fn labels(items: &[Item]) -> Vec<&'static str> {
         .collect()
 }
 
-fn shapes_text(shapes: &[Shape]) -> Vec<(String, Rect)> {
+pub(crate) fn shapes_text(shapes: &[Shape]) -> Vec<(String, Rect)> {
     fn walk(s: &Shape, v: &mut Vec<(String, Rect)>) {
         match s {
             Shape::Text(t) => v.push((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size()))),

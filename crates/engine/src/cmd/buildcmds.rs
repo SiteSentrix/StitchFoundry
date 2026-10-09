@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\", threshold: 0-255, colors: 2-256, paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite, snapCurvesToLines}} → {id, paths, anchors, colors}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite, snapCurvesToLines}} → {id, paths, anchors, colors}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -651,6 +651,30 @@ fn trace_params(p: &Value) -> Result<tr::TraceParams> {
     serde_json::from_value(v).map_err(|e| bad("imageTrace.make", e.to_string()))
 }
 
+/// Document Library in Color mode: look the library's colours up into `params.swatches` → each
+/// one as traced (sRGB) with the colour to fill with.
+fn trace_library(s: &Session, params: &mut tr::TraceParams) -> Result<Vec<([u8; 3], Color)>> {
+    const C: &str = "imageTrace.make";
+    if params.mode != tr::Mode::Color || params.palette != tr::Palette::DocumentLibrary {
+        return Ok(vec![]);
+    }
+    let key = params.library.as_str();
+    let colors = super::swatchlib::library_colors(s, key)
+        .ok_or_else(|| bad(C, format!("no swatch library `{key}` (see swatch.library.list; \"document\": the document's swatches)")))?;
+    if colors.is_empty() {
+        return Err(bad(C, format!("`{key}` has no colours")));
+    }
+    let library: Vec<([u8; 3], Color)> = colors
+        .into_iter()
+        .map(|c| {
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            ([r, g, b], c)
+        })
+        .collect();
+    params.swatches = library.iter().map(|l| l.0).collect();
+    Ok(library)
+}
+
 /// The most anchor points an Image Trace may make: a photo traced at high fidelity can make
 /// millions, more than the canvas draws smoothly or a laptop has memory for, so the trace is
 /// refused with advice instead (#525).
@@ -658,7 +682,7 @@ pub const MAX_TRACE_ANCHORS: usize = 2_000_000;
 
 fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     const C: &str = "imageTrace.make";
-    let params = trace_params(p)?;
+    let mut params = trace_params(p)?;
     let params_json = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
     // The preset's name if the parameters are exactly that preset's, else "Custom".
     let named = str_param(p, "preset").unwrap_or("Default");
@@ -687,6 +711,7 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     };
     let blob = s.doc()?.doc.images.get(&img.key).ok_or_else(|| EngineError::Other(format!("image data `{}` is missing", img.key)))?;
     let raster = tr::Raster::decode(&blob.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
+    let library = trace_library(s, &mut params)?;
     let res = tr::trace_within(&raster, &params, MAX_TRACE_ANCHORS).map_err(|e| EngineError::Other(e.to_string()))?;
     // Pixel space of the decoded raster → the image object's pixel space → document.
     let sx = img.width.max(1) as f64 / raster.width.max(1) as f64;
@@ -714,7 +739,9 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
         for tp in res.paths {
             let path = tp.path.transformed(xf);
             let mut n = shape_node(d, path, None);
-            n.appearance = fill_only(Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])));
+            // A library colour fills with the swatch's own colour (its model kept).
+            let color = library.iter().find(|(rgb, _)| *rgb == tp.color).map_or_else(|| Color::rgb8(tp.color[0], tp.color[1], tp.color[2]), |l| l.1);
+            n.appearance = fill_only(Paint::solid(color));
             children.push(Arc::new(n));
         }
         let gid = d.alloc_id();

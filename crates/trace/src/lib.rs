@@ -4,8 +4,11 @@
 //! and classic colour quantisation), not from any existing implementation:
 //!
 //! 1. **Quantise** the image into a small palette: a luminance threshold (Black and White), 1-D
-//!    k-means over the luminance histogram (Grayscale), or median cut followed by weighted
-//!    k-means over a 15-bit colour histogram (Color). Transparent pixels are left out.
+//!    k-means over the luminance histogram (Grayscale), or, in Color, over a 15-bit colour
+//!    histogram as the [`Palette`] asks: median cut to a colour count followed by weighted k-means
+//!    (Limited), median cut until every colour box is tight (Full Tone), one of those two by
+//!    whether the image is flat art (Automatic), or the most used colours of a swatch library
+//!    (Document Library). Transparent pixels are left out.
 //! 2. **Remove noise**: 4-connected same-colour components smaller than `noise` pixels are merged
 //!    into their most common neighbouring colour.
 //! 3. **Follow boundaries**: for each colour layer, the pixel-crack edges between inside and
@@ -34,7 +37,7 @@ use vectorcraft_geom::PathData;
 
 pub use contour::{Component, Loop, trace_mask};
 pub use mosaic::mosaic;
-pub use quantize::{Quantized, TRANSPARENT, denoise, quantize};
+pub use quantize::{FULL_TONE_MAX, Quantized, TRANSPARENT, denoise, quantize};
 
 /// Errors decoding a raster.
 #[derive(Debug, thiserror::Error)]
@@ -132,6 +135,28 @@ pub enum Method {
     Overlapping,
 }
 
+/// Where Color mode's colours come from (the Palette popup).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Palette {
+    /// The `colors` colours that best represent the image.
+    #[default]
+    #[serde(alias = "Limited")]
+    Limited,
+    /// As many colours as the image's tones need, up to [`FULL_TONE_MAX`] (photos, gradients):
+    /// `color_detail` sets how close two colours may be and stay apart.
+    #[serde(alias = "Full Tone")]
+    FullTone,
+    /// Flat art (a few colours cover nearly all of it) traces with exactly those colours, anything
+    /// else as Full Tone.
+    #[serde(alias = "Automatic")]
+    Automatic,
+    /// The most used colours of a swatch library ([`TraceParams::swatches`]), at most `colors` of
+    /// them, exactly as they are.
+    #[serde(alias = "library", alias = "Document Library")]
+    DocumentLibrary,
+}
+
 /// Image Trace parameters (the Image Trace panel).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -139,8 +164,20 @@ pub struct TraceParams {
     pub mode: Mode,
     /// Black and White: pixels darker than this (luminance 0–255) are black.
     pub threshold: u8,
-    /// Palette size for Color, number of grays for Grayscale (2–256).
+    /// Color: where the colours come from.
+    pub palette: Palette,
+    /// Palette size for Color (Limited; at most this many for Document Library), number of grays
+    /// for Grayscale (2–256).
     pub colors: u32,
+    /// Full Tone and Automatic: how many colours, 0 (few) – 100 (many).
+    pub color_detail: f64,
+    /// Document Library: the swatch library, `"document"` (the document's swatches) or a library id
+    /// or name. The caller looks its colours up into `swatches`.
+    pub library: String,
+    /// Document Library: the library's colours (sRGB). Not saved: they are looked up from
+    /// `library` at every trace.
+    #[serde(skip)]
+    pub swatches: Vec<[u8; 3]>,
     /// Paths (fidelity) 0–100: higher follows the pixels more tightly.
     pub paths: f64,
     /// Corners 0–100: higher keeps more corners.
@@ -160,7 +197,11 @@ impl Default for TraceParams {
         Self {
             mode: Mode::BlackAndWhite,
             threshold: 128,
+            palette: Palette::Limited,
             colors: 6,
+            color_detail: 50.0,
+            library: "document".into(),
+            swatches: vec![],
             paths: 50.0,
             corners: 75.0,
             noise: 25,
