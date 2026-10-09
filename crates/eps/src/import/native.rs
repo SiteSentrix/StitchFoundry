@@ -1,84 +1,46 @@
 //! The layers of an Illustrator EPS or `.ai`.
 //!
 //! Besides the page it prints, such a file carries the app's own copy of the art: an EPS after its
-//! `%%EOF`, between `%AI9_PrivateDataBegin` and `%AI9_PrivateDataEnd` (ASCII85 text of a Zstandard
-//! stream, `%AI24_DataStream`; older files: zlib, `%AI9_DataStream`); a PDF-compatible `.ai` in its `AIPrivateData` streams (the Zstandard
-//! stream after `%AI24_ZStandard_Data`). It is the document as the legacy Illustrator format writes
-//! it (`%AI5_BeginLayer`, `Lb`, `Ln`, `u` … `U`, `*u` … `*U`, `q` … `Q`, `m` `l` `c` `f` `S` …). It
-//! has what the page doesn't: the layers with their names, which of them are hidden (and what is on
-//! them), the hidden objects, the art outside the artboards, the groups, the compound paths and the
-//! clipping groups.
+//! `%%EOF`, a `.ai` in its `AIPrivateData` streams (see `ai` for the containers). It has what the
+//! page doesn't: the layers with their names and options, the groups, compound paths and clipping
+//! groups, the objects' names, the hidden objects and layers, the art outside the artboards and
+//! every artboard. `ai` reads that structure into a document, with the colours, gradients,
+//! transparency and images of the art.
 //!
-//! The page stays the source of what the art looks like; this copy only gives it its structure. Only
-//! the legacy format's own operators and comments are read, never what the app keeps in its private
-//! comments (`%_`) and dictionaries. So:
+//! Text objects are slots in that document: their characters, fonts and places are in the file's
+//! text document (see `ate`). Type that shows comes from the page, which draws it, into the slot
+//! whose text is where the page has it. Type that doesn't show (a hidden layer or object, or off
+//! the page) is made from the text document; where that can't be read (area type, type on a path)
+//! it's left out, with a warning.
 //!
-//! - Text objects are stubs here: their characters, fonts and places are in the file's text document
-//!   (see `ate`). Type that shows comes from the page, which draws it, into the slot whose text is
-//!   where the page has it. Type that doesn't show (a hidden layer or object, or off the page) is made
-//!   from the text document; where that can't be read (area type, type on a path) it's left out, with
-//!   a warning.
-//! - A line with an operator that isn't read (gradients, patterns, images, blends, …) isn't read. If
-//!   one is on a layer that shows, the art of this copy would differ from the page's, so the layers
-//!   aren't used: the file comes in as its page, as it did before.
-//!
-//! Sources (no Adobe software was run, no Adobe file is in this repo, and no Adobe specification,
-//! SDK or installation was used):
-//!
-//! - The layer, group, compound-path and clipping vocabulary of the legacy format, the container
-//!   (`%AI9_PrivateDataBegin`, `%AI24_DataStream`, `%AI24_ZStandard_Data`, the `AIPrivateData`
-//!   streams), the meaning of the `Xw` hidden flag and the text document were worked out from `.eps`
-//!   and `.ai` files their users own, used locally and never committed. (Adobe published a
-//!   specification of the legacy format, listed by PRONOM at
-//!   <https://www.nationalarchives.gov.uk/PRONOM/fmt/423>; it was not used here.)
-//! - The wrappers: the text is the standard ASCII85 encoding; the compressed stream is Zstandard,
-//!   RFC 8878 (<https://www.rfc-editor.org/rfc/rfc8878>), read with the permissively licensed
-//!   `ruzstd` crate (MIT); the older one is zlib, read with `flate2`. The PostScript the layers are
-//!   translated into is run by this project's own interpreter (`interp`).
+//! What a layer that shows has that `ai` doesn't read makes the file come in as its page, as it did
+//! before; on a layer that doesn't show it is left out of that layer, with a warning. The page is
+//! also the safety net: when the layers' art looks different from it, the page is used.
 //!
 //! Where a file doesn't match what this module expects, it is left alone and its page is imported.
 
 use std::collections::BTreeSet;
-use std::io::Read;
 use std::sync::Arc;
 
-use vectorcraft_doc::clipnest::nest;
-use vectorcraft_doc::{AppearanceItem, Document, LayerColor, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Affine, Point, Rect};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
+use super::Imported;
+use super::ai::{self, Structure, slot_of};
 use super::ate::{Story, Texts};
-use super::graphics::{GState, Out, slot_of};
-use super::interp::Interp;
-use super::{Imported, box_of, finish_with, reason};
 
-const BEGIN: &[u8] = b"%AI9_PrivateDataBegin";
-const END: &[u8] = b"%AI9_PrivateDataEnd";
-const STREAM: &[u8] = b"%AI24_DataStream";
-/// The same, in files from before Zstandard.
-const STREAM_ZLIB: &[u8] = b"%AI9_DataStream";
-/// What a `.ai`'s private data starts with, before its Zstandard stream.
-const ZSTD_MARK: &[u8] = b"%AI24_ZStandard_Data";
-/// Most bytes the editing copy may have once decompressed.
-const MAX_DECODED: u64 = 256 << 20;
-/// The largest Zstandard window a frame may ask for: the decoder allocates it before reading.
-const MAX_ZSTD_WINDOW: u64 = 64 << 20;
 /// The notes that say the import left out something the file has (see [`is_loss`]).
 const TEXT_LEFT_OUT: &str = "text objects on hidden layers or hidden objects couldn't be read, so they are left out";
 const ART_LEFT_OUT: &str = "hidden layers have art this can't read";
-const PART_LEFT_OUT: &str = "part of a layer was left out";
 const LAYERS_UNREAD: &str = "the file's layers weren't read";
 
 /// Does this import note say that the file has something the document doesn't (hidden text, art or
 /// layers that could not be read)? Writing the document over the file would lose it for good.
 pub fn is_loss(note: &str) -> bool {
     note.ends_with(TEXT_LEFT_OUT)
-        || [ART_LEFT_OUT, PART_LEFT_OUT, LAYERS_UNREAD, super::graphics::TOO_MUCH, super::graphics::FAR_AWAY].iter().any(|n| note.starts_with(n))
+        || [ART_LEFT_OUT, LAYERS_UNREAD, super::graphics::TOO_MUCH, super::graphics::FAR_AWAY].iter().any(|n| note.starts_with(n))
 }
 
-/// Deepest nesting of layers read (a file with deeper ones comes in as its page).
-const MAX_DEPTH: usize = 32;
-/// Most layers read.
-const MAX_LAYERS: usize = 4096;
 /// Most text objects in the layers, and most pieces of type in one place on the page, that are matched
 /// to each other (more than this and the layers aren't used).
 const MAX_SLOTS: usize = 5000;
@@ -87,378 +49,6 @@ const MAX_PIECES: usize = 2000;
 const MAX_TEXT: usize = 16 << 20;
 /// Most pairs of a text object and a piece of the page's type compared.
 const MAX_PAIRS: usize = 4_000_000;
-
-/// What the operators of the format do, as PostScript: paths are the path operators, a fill or a
-/// stroke uses the colour the last `k` `K` `g` `G` set (a file's objects each set their own).
-const PROLOGUE: &str = "\
-/m {moveto} def /l {lineto} def /L {lineto} def /c {curveto} def /C {curveto} def
-/v {currentpoint 6 2 roll curveto} def /V {currentpoint 6 2 roll curveto} def
-/y {2 copy curveto} def /Y {2 copy curveto} def
-/h {closepath} def /N {newpath} def /n {closepath newpath} def
-/fc [0 0 0 0] def /sc [0 0 0 1] def /eo false def
-/setc {dup length 1 eq {0 get setgray} {dup length 3 eq {aload pop setrgbcolor} {aload pop setcmykcolor} ifelse} ifelse} def
-/k {4 array astore /fc exch def} def /K {4 array astore /sc exch def} def
-/g {1 exch sub 0 0 0 4 -1 roll 4 array astore /fc exch def} def /G {1 exch sub 0 0 0 4 -1 roll 4 array astore /sc exch def} def
-/Xk {pop pop pop 4 array astore /fc exch def} def /XK {pop pop pop 4 array astore /sc exch def} def
-/x {pop pop 4 array astore /fc exch def} def /X {pop pop 4 array astore /sc exch def} def
-/Xx {6 {pop} repeat 4 array astore /fc exch def} def /XX {6 {pop} repeat 4 array astore /sc exch def} def
-/H {} def
-/D {1 eq /eo exch def} def
-/doF {fc setc eo {eofill} {fill} ifelse} def /doS {sc setc stroke} def
-/F {doF} def /f {closepath doF} def /S {doS} def /s {closepath doS} def
-/B {gsave doF grestore doS} def /b {closepath B} def
-/w {setlinewidth} def /J {setlinecap} def /j {setlinejoin} def /M {setmiterlimit} def /d {setdash} def
-/u {} def /U {} def
-";
-
-/// Operators that draw, set the state they draw with, or group (`q` `Q` `W` `*u` `*U` are the
-/// interpreter's own, see `Interp::native_op`).
-const KEEP: &[&str] = &[
-    "m", "l", "L", "c", "C", "v", "V", "y", "Y", "h", "n", "N", "f", "F", "s", "S", "b", "B", "k", "K", "g", "G", "Xk", "XK", "x", "X", "Xx", "XX",
-    "H", "w", "J", "j", "M", "d", "D", "u", "U", "*u", "*U", "q", "Q", "W", "Xw",
-];
-/// Operators that only describe an object to the app (its lock, its overprint, its name's id, …):
-/// the line is left out.
-const IGNORE: &[&str] = &["A", "Ae", "AE", "As", "Ap", "O", "R", "i", "Xd", "Xy", "XR", "XW", "XP"];
-
-/// One token of a line.
-enum Tok<'a> {
-    Num(f64),
-    Str(Vec<u8>),
-    Name(&'a str),
-}
-
-/// The tokens of `line`: numbers, strings, names (the brackets of an array are left out); `None`
-/// for a string that doesn't end.
-fn tokens(line: &str) -> Option<Vec<Tok<'_>>> {
-    let b = line.as_bytes();
-    let mut out = vec![];
-    let mut i = 0;
-    while let Some(&c) = b.get(i) {
-        match c {
-            c if c.is_ascii_whitespace() || c == b'[' || c == b']' => i += 1,
-            b'(' => {
-                let (mut depth, mut s) = (1, vec![]);
-                i += 1;
-                loop {
-                    let c = *b.get(i)?;
-                    i += 1;
-                    match c {
-                        b'\\' => {
-                            let e = *b.get(i)?;
-                            i += 1;
-                            s.push(match e {
-                                b'n' => b'\n',
-                                b'r' => b'\r',
-                                b't' => b'\t',
-                                b'0'..=b'7' => {
-                                    let mut v = u32::from(e - b'0');
-                                    for _ in 0..2 {
-                                        match b.get(i) {
-                                            Some(d @ b'0'..=b'7') => {
-                                                v = v * 8 + u32::from(d - b'0');
-                                                i += 1;
-                                            }
-                                            _ => break,
-                                        }
-                                    }
-                                    (v & 0xff) as u8
-                                }
-                                other => other,
-                            });
-                        }
-                        b'(' => {
-                            depth += 1;
-                            s.push(c);
-                        }
-                        b')' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                break;
-                            }
-                            s.push(c);
-                        }
-                        _ => s.push(c),
-                    }
-                }
-                out.push(Tok::Str(s));
-            }
-            _ => {
-                let start = i;
-                while b.get(i).is_some_and(|c| !c.is_ascii_whitespace() && !matches!(c, b'[' | b']' | b'(')) {
-                    i += 1;
-                }
-                let word = line.get(start..i)?;
-                out.push(word.parse::<f64>().map_or(Tok::Name(word), Tok::Num));
-            }
-        }
-    }
-    Some(out)
-}
-
-/// What the editing copy holds of a layer.
-#[derive(Default)]
-struct Layer {
-    name: String,
-    visible: bool,
-    color: Option<[u8; 3]>,
-    items: Vec<Item>,
-    /// The code read since the last sublayer.
-    code: String,
-    /// Operators on this layer that aren't read.
-    unsupported: BTreeSet<String>,
-}
-
-enum Item {
-    Code(String),
-    Sub(Layer),
-}
-
-impl Layer {
-    fn flush(&mut self) {
-        if !self.code.is_empty() {
-            self.items.push(Item::Code(std::mem::take(&mut self.code)));
-        }
-    }
-}
-
-struct Parsed {
-    /// The art's bounding box `llx lly urx ury`.
-    bbox: [f64; 4],
-    /// The first artboard (`%AI3_Cropmarks`), in the same space.
-    artboard: Option<[f64; 4]>,
-    /// The template box (`%AI3_TemplateBox`): its centre is the centre of the app's canvas.
-    template: Option<[f64; 4]>,
-    layers: Vec<Layer>,
-}
-
-/// The editing copy of the art, decompressed.
-fn decode(ps: &[u8]) -> Option<Vec<u8>> {
-    fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
-        h.get(from..)?.windows(n.len()).position(|w| w == n).map(|p| p + from)
-    }
-    let begin = find(ps, BEGIN, 0)?;
-    let end = find(ps, END, begin).unwrap_or(ps.len());
-    let block = ps.get(begin..end)?;
-    // Newer files compress with Zstandard, older ones (CS-era) with zlib.
-    let (at, zstd) = match find(block, STREAM, 0) {
-        Some(at) => (at + STREAM.len(), true),
-        None => (find(block, STREAM_ZLIB, 0)? + STREAM_ZLIB.len(), false),
-    };
-    // The stream's lines each start with a `%`.
-    let text: String = block
-        .get(at..)?
-        .split(|b| matches!(b, b'\r' | b'\n'))
-        .filter(|l| !l.is_empty())
-        .flat_map(|l| l.strip_prefix(b"%").unwrap_or(l).iter())
-        .map(|b| char::from(*b))
-        .collect();
-    let packed = crate::ps::ascii85_decode(&text)?;
-    if zstd { unzstd(&packed) } else { unzlib(&packed) }
-}
-
-/// The editing copy of a PDF-compatible `.ai`'s `AIPrivateData` streams, joined, decompressed.
-fn decode_ai(private: &[u8]) -> Option<Vec<u8>> {
-    unzstd(private.strip_prefix(ZSTD_MARK)?)
-}
-
-/// `packed` as a zlib stream decompressed (up to [`MAX_DECODED`] bytes).
-fn unzlib(packed: &[u8]) -> Option<Vec<u8>> {
-    let mut data = vec![];
-    flate2::read::ZlibDecoder::new(packed).take(MAX_DECODED).read_to_end(&mut data).ok()?;
-    (data.len() as u64 != MAX_DECODED).then_some(data)
-}
-
-/// `packed` as a Zstandard stream decompressed (up to [`MAX_DECODED`] bytes).
-fn unzstd(packed: &[u8]) -> Option<Vec<u8>> {
-    let mut zstd = ruzstd::decoding::StreamingDecoder::new_with_max_window_size(packed, MAX_ZSTD_WINDOW).ok()?;
-    let mut data = vec![];
-    (&mut zstd).take(MAX_DECODED).read_to_end(&mut data).ok()?;
-    (data.len() as u64 != MAX_DECODED).then_some(data)
-}
-
-/// The stories that text objects written plainly (not as comments) name.
-fn plain_stories(data: &[u8]) -> BTreeSet<u32> {
-    data.split(|b| matches!(b, b'\r' | b'\n'))
-        .filter_map(|raw| {
-            let line = String::from_utf8_lossy(raw);
-            line.trim().strip_suffix("/StoryIndex ,").and_then(|n| n.trim().parse().ok())
-        })
-        .collect()
-}
-
-/// The layers of the editing copy `data`.
-fn parse(data: &[u8]) -> Option<Parsed> {
-    let (mut bbox, mut hires, mut artboard, mut template) = (None, None, None, None);
-    let mut stack: Vec<Layer> = vec![];
-    let mut done: Vec<Layer> = vec![];
-    let mut dict_depth = 0usize;
-    // In a text object's dictionary: the story it names, once the dictionary says.
-    let mut text_story: Option<Option<u32>> = None;
-    // Whether that text object is written as comments, which the file does for some of its stories
-    // twice (once plain, once commented) and for others only commented.
-    let mut text_commented = false;
-    let plain = plain_stories(data);
-    let mut count = 0usize;
-    for raw in data.split(|b| matches!(b, b'\r' | b'\n')) {
-        let line = String::from_utf8_lossy(raw);
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        // A text object's dictionary may be written as comments (`%_`), which a reader that doesn't
-        // know text objects skips: what that reader skips is read here, for the text object only.
-        let line = match line.strip_prefix("%_") {
-            Some(rest) if dict_depth > 0 || rest.starts_with("/AI11Text") && rest.ends_with(':') => {
-                if dict_depth == 0 {
-                    text_commented = true;
-                }
-                rest.trim()
-            }
-            _ => {
-                if dict_depth == 0 {
-                    text_commented = false;
-                }
-                line
-            }
-        };
-        if line.starts_with('%') {
-            match line {
-                "%AI5_BeginLayer" => {
-                    count += 1;
-                    // Too many, too deep, or in the middle of a dictionary: not a file this reads.
-                    if count > MAX_LAYERS || stack.len() > MAX_DEPTH || dict_depth > 0 {
-                        return None;
-                    }
-                    if let Some(parent) = stack.last_mut() {
-                        parent.flush();
-                    }
-                    stack.push(Layer { visible: true, ..Layer::default() });
-                }
-                "%AI5_EndLayer--" => {
-                    if dict_depth > 0 {
-                        return None;
-                    }
-                    let mut l = stack.pop()?;
-                    l.flush();
-                    match stack.last_mut() {
-                        Some(parent) => parent.items.push(Item::Sub(l)),
-                        None => done.push(l),
-                    }
-                }
-                _ if stack.is_empty() => {
-                    if let Some(v) = line.strip_prefix("%%HiResBoundingBox:") {
-                        hires = box_of(v.trim()).or(hires);
-                    } else if let Some(v) = line.strip_prefix("%%BoundingBox:") {
-                        bbox = box_of(v.trim()).or(bbox);
-                    } else if let Some(v) = line.strip_prefix("%AI3_Cropmarks:") {
-                        artboard = box_of(v.trim()).or(artboard);
-                    } else if let Some(v) = line.strip_prefix("%AI3_TemplateBox:") {
-                        template = four_numbers(v).or(template);
-                    }
-                }
-                _ => {}
-            }
-            continue;
-        }
-        let Some(layer) = stack.last_mut() else { continue };
-        // The app's dictionaries (`/Name :` … `;`): a text object's is a slot for its text.
-        if dict_depth > 0 {
-            // A dictionary ends with `;`, which may have its key after it (`; /ConfiningPath ,`).
-            if line == ";" || line.starts_with("; /") {
-                dict_depth -= 1;
-                if dict_depth == 0
-                    && let Some(story) = text_story.take()
-                {
-                    // A commented copy of a story that has a plain text object is not another object.
-                    if !(text_commented && story.is_some_and(|n| plain.contains(&n))) {
-                        layer.code.push_str(&format!("{} __txt\n", story.map_or(-1, i64::from)));
-                    }
-                }
-            } else if line.ends_with(':') {
-                dict_depth += 1;
-            } else if text_story.is_some()
-                && let Some(n) = line.strip_suffix("/StoryIndex ,")
-            {
-                text_story = Some(n.trim().parse().ok());
-            }
-            continue;
-        }
-        if line.starts_with('/') {
-            if line.ends_with(':') {
-                dict_depth = 1;
-                if line.starts_with("/AI11Text") {
-                    text_story = Some(None);
-                } else {
-                    layer.unsupported.insert("an object with its own dictionary".into());
-                }
-            } else {
-                layer.unsupported.insert("an unknown object".into());
-            }
-            continue;
-        }
-        let Some(toks) = tokens(line) else {
-            layer.unsupported.insert("an unreadable line".into());
-            continue;
-        };
-        let last = toks.last().and_then(|t| if let Tok::Name(n) = t { Some(*n) } else { None });
-        match last {
-            Some("Lb") => {
-                let n: Vec<f64> = toks.iter().filter_map(|t| if let Tok::Num(v) = t { Some(*v) } else { None }).collect();
-                layer.visible = n.first().is_none_or(|v| *v != 0.0);
-                if let [r, g, b] = n.get(8..11).unwrap_or_default() {
-                    let byte = |v: &f64| (v.is_finite() && (0.0..=255.0).contains(v)).then_some(*v as u8);
-                    layer.color = byte(r).zip(byte(g)).zip(byte(b)).map(|((r, g), b)| [r, g, b]);
-                }
-                continue;
-            }
-            Some("Ln") => {
-                if let Some(Tok::Str(s)) = toks.first() {
-                    layer.name = String::from_utf8_lossy(s).into_owned();
-                }
-                continue;
-            }
-            Some("LB") => continue,
-            _ => {}
-        }
-        let mut ignored = false;
-        let mut missing: Option<&str> = None;
-        for t in &toks {
-            if let Tok::Name(n) = t {
-                if IGNORE.contains(n) {
-                    ignored = true;
-                } else if !KEEP.contains(n) {
-                    missing = missing.or(Some(n));
-                }
-            }
-        }
-        if let Some(n) = missing {
-            let shown = n.len() <= 8 && n.chars().all(|c| c.is_ascii_graphic());
-            layer.unsupported.insert(if shown { format!("`{n}`") } else { "binary data".to_string() });
-        } else if !ignored {
-            layer.code.push_str(line);
-            layer.code.push('\n');
-        }
-    }
-    if dict_depth > 0 {
-        return None;
-    }
-    while let Some(mut l) = stack.pop() {
-        l.flush();
-        match stack.last_mut() {
-            Some(parent) => parent.items.push(Item::Sub(l)),
-            None => done.push(l),
-        }
-    }
-    Some(Parsed { bbox: hires.or(bbox)?, artboard, template, layers: done })
-}
-
-/// Four numbers (a box that may be a point).
-fn four_numbers(v: &str) -> Option<[f64; 4]> {
-    let n: Vec<f64> = v.split_whitespace().map_while(|w| w.parse::<f64>().ok()).collect();
-    let [a, b, c, d] = n.as_slice() else { return None };
-    [a, b, c, d].iter().all(|v| v.is_finite() && v.abs() <= 1e7).then_some([*a, *b, *c, *d])
-}
 
 /// `names` for a note: the first few, and how many more.
 fn few(names: BTreeSet<String>) -> String {
@@ -469,19 +59,6 @@ fn few(names: BTreeSet<String>) -> String {
         list.push(format!("{more} more"));
     }
     list.join(", ")
-}
-
-/// What the operators not read are, on layers that show and on layers that don't.
-fn unread(layers: &[Layer], shown: bool, on: &mut BTreeSet<String>, off: &mut BTreeSet<String>) {
-    for l in layers {
-        let shown = shown && l.visible;
-        let set = if shown { &mut *on } else { &mut *off };
-        set.extend(l.unsupported.iter().cloned());
-        let subs: Vec<&Layer> = l.items.iter().filter_map(|i| if let Item::Sub(s) = i { Some(s) } else { None }).collect();
-        for s in subs {
-            unread(std::slice::from_ref(s), shown, on, off);
-        }
-    }
 }
 
 /// A text slot of the layers.
@@ -500,54 +77,6 @@ fn collect_slots(nodes: &[Arc<Node>], shown: bool, out: &mut Vec<SlotInfo>) {
         } else if let Some(c) = n.children().filter(|_| !matches!(n.kind, NodeKind::Compound { .. })) {
             collect_slots(c, shown, out);
         }
-    }
-}
-
-/// Builds the layers' nodes by running each stretch of their code.
-struct Builder {
-    out: Option<Out>,
-}
-
-impl Builder {
-    /// What `code` draws, as the nodes of a layer.
-    fn run(&mut self, code: &str) -> Vec<Arc<Node>> {
-        let Some(out) = self.out.take() else { return vec![] };
-        let src = format!("{PROLOGUE}{code}");
-        let mut out = out;
-        out.hidden = false;
-        let mut it = Interp::new(src.as_bytes(), GState::default(), out);
-        it.illustrator = true;
-        it.native = true;
-        let result = it.run();
-        it.release();
-        let fault = it.fault.take();
-        let mut out = it.out;
-        if let Err(e) = result {
-            out.warn(&format!("{PART_LEFT_OUT}: {}", reason(&e, fault.as_ref())));
-        }
-        let drawn = std::mem::take(&mut out.drawn);
-        let nodes = nest(&mut out.doc, drawn);
-        self.out = Some(out);
-        nodes
-    }
-
-    fn layer(&mut self, l: &Layer, depth: usize) -> Option<Arc<Node>> {
-        let mut children = vec![];
-        for item in &l.items {
-            match item {
-                Item::Code(code) => children.extend(self.run(code)),
-                Item::Sub(sub) if depth < MAX_DEPTH => children.extend(self.layer(sub, depth + 1)),
-                Item::Sub(_) => {}
-            }
-        }
-        let out = self.out.as_mut()?;
-        let name = if l.name.is_empty() { "Layer" } else { &l.name };
-        let mut node = Node::layer(out.doc.alloc_id(), name, l.color.map_or(LayerColor::Preset(0), LayerColor::Custom));
-        node.visible = l.visible;
-        if let Some(c) = node.children_mut() {
-            *c = children;
-        }
-        Some(Arc::new(node))
     }
 }
 
@@ -657,24 +186,46 @@ enum Content {
 }
 
 /// Replace the text slots in `nodes` with what `content` has for each, in order (a slot given none is
-/// left out). `empty` counts those.
-fn fill_slots(doc: &mut Document, nodes: &mut Vec<Arc<Node>>, content: &mut std::vec::IntoIter<Content>, empty: &mut usize) {
+/// left out): the page's type takes its place as it is, made type keeps the slot's name. `empty`
+/// counts those left out.
+fn fill_slots(
+    doc: &mut Document,
+    nodes: &mut Vec<Arc<Node>>,
+    content: &mut std::vec::IntoIter<Content>,
+    names: &std::collections::HashMap<NodeId, String>,
+    empty: &mut usize,
+) {
     let mut i = 0;
     while i < nodes.len() {
         let Some(n) = nodes.get(i) else { break };
         if slot_of(n.name.as_deref()).is_some() {
             let visible = n.visible;
+            let name = names.get(&n.id);
             let replacement = match content.next() {
                 Some(Content::Page(parts)) if !parts.is_empty() => {
-                    let children = parts.iter().map(|p| reid(doc, p)).collect();
-                    let mut group = Node::group(doc.alloc_id(), children);
-                    group.visible = visible;
-                    Some(group)
+                    // The page's type (and the strokes round it) take the slot's place as they are.
+                    let parts: Vec<Arc<Node>> = parts
+                        .iter()
+                        .map(|p| {
+                            let mut p = reid(doc, p);
+                            if !visible {
+                                Arc::make_mut(&mut p).visible = false;
+                            }
+                            if let Some(name) = name.filter(|_| matches!(p.kind, NodeKind::Text(_))) {
+                                Arc::make_mut(&mut p).name = Some(name.clone());
+                            }
+                            p
+                        })
+                        .collect();
+                    let n = parts.len();
+                    nodes.splice(i..=i, parts);
+                    i += n;
+                    continue;
                 }
                 Some(Content::Made(mut text)) => {
                     text.id = doc.alloc_id();
                     text.visible = visible;
-                    text.name = Some(MADE.into());
+                    text.name = Some(format!("{MADE}{}", name.map_or("", String::as_str)));
                     Some(*text)
                 }
                 Some(Content::Merged) => {
@@ -700,7 +251,7 @@ fn fill_slots(doc: &mut Document, nodes: &mut Vec<Arc<Node>>, content: &mut std:
                 && !matches!(n.kind, NodeKind::Compound { .. })
                 && let Some(c) = nodes.get_mut(i).map(Arc::make_mut).and_then(Node::children_mut)
             {
-                fill_slots(doc, c, content, empty);
+                fill_slots(doc, c, content, names, empty);
             }
             i += 1;
         }
@@ -976,22 +527,50 @@ fn plan(
     content
 }
 
-/// How much of `page` two documents draw differently (0 to 1), each seen on white.
-fn difference(a: &Document, b: &Document, page: Rect) -> f64 {
-    let scale = (400.0 / page.width().max(page.height()).max(1.0)).min(4.0);
+/// `doc` with its layers that don't print hidden, when it has any.
+fn as_printed(doc: &Document) -> Option<Document> {
+    fn hide(nodes: &mut [Arc<Node>]) -> bool {
+        let mut any = false;
+        for n in nodes {
+            if matches!(n.kind, NodeKind::Layer { printable: false, .. }) && n.visible {
+                Arc::make_mut(n).visible = false;
+                any = true;
+            } else if matches!(n.kind, NodeKind::Layer { .. })
+                && let Some(c) = Arc::make_mut(n).children_mut()
+            {
+                any |= hide(c);
+            }
+        }
+        any
+    }
+    let mut d = doc.clone();
+    hide(&mut d.layers).then_some(d)
+}
+
+/// The lightness (0 to 255, Rec. 601 weights) of a premultiplied pixel seen on white.
+fn lightness(p: &[u8; 4]) -> u8 {
+    let on_white = |c: u8| u32::from(c) + 255 - u32::from(p[3]).min(255);
+    ((on_white(p[0]) * 299 + on_white(p[1]) * 587 + on_white(p[2]) * 114) / 1000).min(255) as u8
+}
+
+/// How much two documents draw differently (0 to 1), `a` on `ra` and `b` on `rb` (rectangles of
+/// the same size), each seen on white. Pixels are compared by lightness: the page of an RGB
+/// document is written in the colours' CMYK equivalents, and what the comparison looks for is art
+/// that is missing or out of place.
+fn difference(a: &Document, ra: Rect, b: &Document, rb: Rect) -> f64 {
+    // The page doesn't print what isn't printed.
+    let printed = as_printed(b);
+    let b = printed.as_ref().unwrap_or(b);
+    let scale = (400.0 / ra.width().max(ra.height()).max(1.0)).min(4.0);
     let mut r = vectorcraft_render::Renderer::new();
-    let (x, y) = (r.render_region(a, page, scale, true), r.render_region(b, page, scale, true));
+    // Drawn on nothing and then seen on white: blending modes have no page to blend with, as in
+    // the app that wrote the file.
+    let (x, y) = (r.render_region(a, ra, scale, false), r.render_region(b, rb, scale, false));
     if x.width != y.width || x.height != y.height {
         return 1.0;
     }
-    let differing = x
-        .pixels
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .zip(y.pixels.as_chunks::<4>().0)
-        .filter(|(p, q)| p.iter().zip(q.iter()).any(|(a, b)| a.abs_diff(*b) > 48))
-        .count();
+    let differing =
+        x.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).filter(|(p, q)| lightness(p).abs_diff(lightness(q)) > 48).count();
     differing as f64 / (f64::from(x.width) * f64::from(x.height)).max(1.0)
 }
 
@@ -1010,49 +589,45 @@ enum Page {
     Artboard,
 }
 
-/// What [`build`] made: the layers, and the drawing state they were made in (swatches, warnings).
-struct Built {
-    out: Out,
-    layers: Vec<Arc<Node>>,
+/// The page (`visible`, the file read as its page) and the place of its area in the layers'
+/// document.
+struct Frame<'a> {
+    page: &'a Document,
+    /// The page's area in `page`.
+    page_rect: Rect,
+    /// The same area in the layers' document.
+    rect: Rect,
 }
 
-/// The layers of the editing copy `data`, with the text (and strokes round it) of `visible`, the
-/// file read as its page, put on them. `base` is the document they go in.
-fn build(data: &[u8], visible: &Document, base: Document, page: Page) -> Result<Built, String> {
-    let parsed = parse(data).ok_or("its editing data is damaged")?;
-    if parsed.layers.is_empty() {
-        return Err("its editing data has no layers".into());
-    }
-    let [llx, lly, urx, ury] = match page {
-        Page::Art => parsed.bbox,
-        Page::Artboard => parsed.artboard.ok_or("its editing data doesn't say where its artboard is")?,
+/// The document of the editing copy `data`, with the text (and strokes round it) of `visible`, the
+/// file read as its page, put in its text objects → the document, its notes and where the page is
+/// in it.
+fn build(data: &[u8], visible: &Document, page: Page) -> Result<(Document, Vec<String>, Rect), String> {
+    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data)?;
+    let art_box = match page {
+        Page::Art => bbox.map(|[a, b, c, d]| Rect::new(a, b, c, d)).ok_or("its editing data doesn't say where its art is")?,
+        Page::Artboard => artboard.ok_or("its editing data doesn't say where its artboard is")?,
     };
-    let artboard = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
-    if matches!(page, Page::Artboard) && visible.artboards.len() != 1 {
-        return Err("it has more than one artboard".into());
-    }
-    if ((urx - llx) - artboard.width()).abs() > 0.5 || ((ury - lly) - artboard.height()).abs() > 0.5 {
+    let page_rect = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
+    if (art_box.width() - page_rect.width()).abs() > 0.5 || (art_box.height() - page_rect.height()).abs() > 0.5 {
         return Err("its editing data is for a different page".into());
     }
-    let (mut on, mut off) = (BTreeSet::new(), BTreeSet::new());
-    unread(&parsed.layers, true, &mut on, &mut off);
-    if !on.is_empty() {
-        return Err(format!("its layers use {}, which aren't read yet", few(on)));
-    }
+    // The page's area in the layers' document, and the page's type moved there.
+    let rect = to_doc.transform_rect_bbox(art_box);
+    let shift = Affine::translate(Vec2::new(rect.x0 - page_rect.x0, rect.y0 - page_rect.y0));
     let (mut shown, mut hidden) = (vec![], vec![]);
     for l in &visible.layers {
         if let Some(c) = l.children() {
             text_objects(c, l.visible, &mut shown, &mut hidden);
         }
     }
-    let mut doc = base;
-    doc.layers.clear();
-    let to_doc = Affine::translate((artboard.x0, artboard.y0)) * Affine::new([1.0, 0.0, 0.0, -1.0, -llx, ury]);
-    let mut b = Builder { out: Some(Out::new(doc, to_doc, artboard)) };
-    let mut layers: Vec<Arc<Node>> = parsed.layers.iter().filter_map(|l| b.layer(l, 0)).collect();
-    let mut out = b.out.ok_or("a layer couldn't be read")?;
+    for object in shown.iter_mut().chain(hidden.iter_mut()) {
+        for n in object.iter_mut() {
+            Arc::make_mut(n).transform(shift, false);
+        }
+    }
     let mut infos = vec![];
-    collect_slots(&layers, true, &mut infos);
+    collect_slots(&doc.layers, true, &mut infos);
     if infos.iter().all(|i| !i.shown) && !shown.is_empty() {
         return Err("its page has text, and its layers have no text objects to put it in".into());
     }
@@ -1073,21 +648,26 @@ fn build(data: &[u8], visible: &Document, base: Document, page: Page) -> Result<
     if stories.iter().flatten().map(|s| s.len()).sum::<usize>() > MAX_TEXT {
         return Err("it has too much text".into());
     }
-    let template = parsed.template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
-    let mut notes = vec![];
+    let template = template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
+    let mut notes = warnings;
     let content = plan(&infos, &stories, template, to_doc, [&shown, &hidden], &mut notes);
     let mut empty = 0;
-    fill_slots(&mut out.doc, &mut layers, &mut content.into_iter(), &mut empty);
-    for n in notes {
-        out.warn(&n);
-    }
+    let mut layers = std::mem::take(&mut doc.layers);
+    fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty);
+    doc.layers = layers;
     if empty > 0 {
-        out.warn(&format!("{empty} {TEXT_LEFT_OUT}"));
+        notes.push(format!("{empty} {TEXT_LEFT_OUT}"));
     }
-    if !off.is_empty() {
-        out.warn(&format!("{ART_LEFT_OUT} ({}), left out of them", few(off)));
+    if !hidden_unread.is_empty() {
+        notes.push(format!("{ART_LEFT_OUT} ({}), left out of them", few(hidden_unread)));
     }
-    Ok(Built { out, layers })
+    let frame = Frame { page: visible, page_rect, rect };
+    let unseen = prune_unseen(&frame, &mut doc);
+    if unseen > 0 {
+        notes.push(format!("{unseen} {UNSEEN_TEXT}"));
+    }
+    notes.extend(compare(&frame, &doc)?);
+    Ok((doc, notes, rect))
 }
 
 /// Marks (in a node's name, until [`prune_unseen`] has looked) the text objects made from the file's
@@ -1104,11 +684,12 @@ const UNSEEN_MARGIN: f64 = 5e-5;
 fn unmark(nodes: &mut [Arc<Node>], shown: bool, found: &mut Vec<(NodeId, Option<Rect>)>) {
     for n in nodes {
         let shown = shown && n.visible;
-        if n.name.as_deref() == Some(MADE) {
+        if let Some(name) = n.name.as_deref().and_then(|m| m.strip_prefix(MADE)) {
             if shown {
                 found.push((n.id, n.visual_bounds()));
             }
-            Arc::make_mut(n).name = None;
+            let name = (!name.is_empty()).then(|| name.to_string());
+            Arc::make_mut(n).name = name;
         } else if !matches!(n.kind, NodeKind::Compound { .. })
             && let Some(c) = Arc::make_mut(n).children_mut()
         {
@@ -1136,14 +717,14 @@ fn take_out(nodes: &mut Vec<Arc<Node>>, id: NodeId, hide: bool) -> bool {
 /// has no type to match them, and that the layers look no worse without, are not drawn by the app
 /// that wrote the file (which paints every shown text object; it keeps the type of what was turned
 /// to outlines): they are taken out. How many.
-fn prune_unseen(page: &Document, doc: &mut Document) -> usize {
+fn prune_unseen(frame: &Frame<'_>, doc: &mut Document) -> usize {
     let mut found = vec![];
     unmark(&mut doc.layers, true, &mut found);
-    let Some(rect) = page.artboards.first().map(|a| a.rect) else { return 0 };
+    let rect = frame.rect;
     if found.is_empty() || found.len() > MAX_WEIGHED {
         return 0;
     }
-    let mut with = difference(page, doc, rect);
+    let mut with = difference(frame.page, frame.page_rect, doc, rect);
     let mut removed = 0;
     for (id, bounds) in found {
         if bounds.is_none_or(|b| b.intersect(rect).is_zero_area()) {
@@ -1153,7 +734,7 @@ fn prune_unseen(page: &Document, doc: &mut Document) -> usize {
         if !take_out(&mut without.layers, id, true) {
             continue;
         }
-        let d = difference(page, &without, rect);
+        let d = difference(frame.page, frame.page_rect, &without, rect);
         if d - with <= UNSEEN_MARGIN {
             take_out(&mut doc.layers, id, false);
             with = d;
@@ -1165,9 +746,8 @@ fn prune_unseen(page: &Document, doc: &mut Document) -> usize {
 
 /// Do the layers' art and the page's own look alike? An error says they don't; `Ok` has the note
 /// to give when they differ a little.
-fn compare(page: &Document, layered: &Document) -> Result<Option<String>, String> {
-    let Some(rect) = page.artboards.first().map(|a| a.rect) else { return Ok(None) };
-    let diff = difference(page, layered, rect);
+fn compare(frame: &Frame<'_>, layered: &Document) -> Result<Option<String>, String> {
+    let diff = difference(frame.page, frame.page_rect, layered, frame.rect);
     if diff > MAX_DIFFERENCE {
         return Err(format!("the art on them differs from the page's in {:.0}% of it", diff * 100.0));
     }
@@ -1180,38 +760,20 @@ fn compare(page: &Document, layered: &Document) -> Result<Option<String>, String
 }
 
 /// The EPS `visible` (read as its page) read through its editing copy instead: its layers (the
-/// hidden ones too), groups, compound paths and clipping groups, with the text and the strokes
-/// around it of the page. When the file has no editing copy this reads, `visible` as it was; when
-/// it has one that can't be used, `visible` with a warning that says why.
-pub(super) fn layered(ps: &[u8], mut visible: Imported) -> Imported {
-    let Some(data) = decode(ps) else {
-        // A file that says it has the editing copy but has none that can be read is a loss too.
-        let has = |n: &[u8]| ps.windows(n.len()).any(|w| w == n);
-        if has(BEGIN) && (has(STREAM) || has(STREAM_ZLIB)) {
-            visible.warnings.push(format!("{LAYERS_UNREAD} (its editing data is damaged or too large): it comes in as its page, in one layer"));
-        }
-        return visible;
-    };
-    let Some(page) = visible.document.artboards.first().map(|a| a.rect) else { return visible };
-    let base = Document::new(page.width(), page.height());
-    let result = build(&data, &visible.document, base, Page::Art).and_then(|built| {
-        let mut done = finish_with(built.out, built.layers);
-        let unseen = prune_unseen(&visible.document, &mut done.document);
-        if unseen > 0 {
-            done.warnings.push(format!("{unseen} {UNSEEN_TEXT}"));
-        }
-        let note = compare(&visible.document, &done.document)?;
-        done.warnings.extend(note);
-        Ok(done)
-    });
+/// hidden ones too), groups, compound paths, clipping groups and artboards, with the text and the
+/// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
+/// has one that can't be used, `visible` with a warning that says why.
+pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
+    let Some(data) = ai::eps_data(ps) else { return visible };
+    let result = data.and_then(|data| build(&data, &visible.document, Page::Art));
     match result {
-        Ok(mut done) => {
+        Ok((document, mut warnings, _)) => {
             for w in &visible.warnings {
-                if !done.warnings.contains(w) {
-                    done.warnings.push(w.clone());
+                if !warnings.contains(w) {
+                    warnings.push(w.clone());
                 }
             }
-            done
+            Imported { document, warnings, preview: false }
         }
         Err(why) => {
             let mut v = visible;
@@ -1221,25 +783,17 @@ pub(super) fn layered(ps: &[u8], mut visible: Imported) -> Imported {
     }
 }
 
-/// The PDF-compatible `.ai` `visible` (read as its PDF part) read through its editing copy
-/// (`private`, the joined `AIPrivateData` streams) instead, as [`layered`] reads an EPS: with the
-/// layers and objects of the file, and the art that lies outside its artboard, which its PDF part
-/// doesn't have. `warnings` are the notes of reading the PDF part; the notes returned are those,
-/// and the layers'.
+/// The `.ai` `visible` (read as its PDF part) read through its editing copy (`private`, the joined
+/// `AIPrivateData` streams) instead, as [`layered`] reads an EPS: with the layers and objects of the
+/// file, its artboards, and the art that lies outside them, which its PDF part doesn't have.
+/// `warnings` are the notes of reading the PDF part; the notes returned are those, and the layers'.
 pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>) -> (Document, Vec<String>) {
-    let Some(data) = decode_ai(private) else { return (visible, warnings) };
-    let result = build(&data, &visible, visible.clone(), Page::Artboard).and_then(|built| {
-        let mut notes = built.out.warnings.clone();
-        let mut done = finish_layers(built.out, built.layers);
-        let unseen = prune_unseen(&visible, &mut done);
-        if unseen > 0 {
-            notes.push(format!("{unseen} {UNSEEN_TEXT}"));
-        }
-        notes.extend(compare(&visible, &done)?);
-        Ok((done, notes))
-    });
-    match result {
-        Ok((done, notes)) => {
+    let Ok(data) = ai::decode_private(private) else { return (visible, warnings) };
+    if !data.windows(15).any(|w| w == b"%AI5_BeginLayer") {
+        return (visible, warnings);
+    }
+    match build(&data, &visible, Page::Artboard) {
+        Ok((done, notes, _)) => {
             let mut all = warnings;
             all.extend(notes.into_iter().filter(|n| !all.contains(n)).collect::<Vec<_>>());
             (done, all)
@@ -1250,12 +804,6 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>) -> (
             (visible, all)
         }
     }
-}
-
-fn finish_layers(out: Out, layers: Vec<Arc<Node>>) -> Document {
-    let mut doc = out.doc;
-    doc.layers = layers;
-    doc
 }
 
 #[cfg(test)]

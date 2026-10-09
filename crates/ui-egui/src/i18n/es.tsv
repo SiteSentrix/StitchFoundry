@@ -3660,6 +3660,22 @@ axis	Both	Ambos
 @msg	x and y must both be numbers	x e y deben ser números
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" no es un color: escríbelo como #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	esto no es un logotipo de colores planos ({_1}% de sus zonas sólidas coinciden con unos pocos colores planos), así que el modo Logotipo plano convertiría sus degradados en manchas: usa el modo Color
+@msg	`{what}` closes nothing	`{what}` no cierra nada
+@msg	`{what}` closes something it didn't open	`{what}` cierra algo que no abrió
+@msg	a path has too many points	un trazado tiene demasiados puntos
+@msg	it ends inside a layer	terminan dentro de una capa
+@msg	it has art outside its layers	tienen ilustraciones fuera de sus capas
+@msg	it has more than {MAX_NODES} objects	tienen más de {MAX_NODES} objetos
+@msg	it has no layers	no tienen capas
+@msg	it has too many values in a row	tienen demasiados valores seguidos
+@msg	it has {_1}, which VectorCraft doesn't read from it yet	tienen {_1}, que VectorCraft aún no lee de ellos
+@msg	its objects are nested too deeply	sus objetos están anidados a demasiada profundidad
+@msg	its section ending with `%{end}` doesn't end	su sección que termina con `%{end}` no termina
+@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	los objetos con varios rellenos o trazos, efectos o pinceles se importaron con su aspecto dibujado ({_1}): su aspecto aún no se puede editar
+@msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	el degradado “{name}” no está definido en el archivo: lo sustituye un color sólido
+@msg	an image VectorCraft can't read was left out	se omitió una imagen que VectorCraft no puede leer
+@msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos
+@msg	its editing data doesn't say where its art is	sus datos de edición no dicen dónde está su ilustración
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios

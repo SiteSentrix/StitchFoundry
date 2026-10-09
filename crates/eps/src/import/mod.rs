@@ -25,6 +25,7 @@
 //! error, the operator and the procedures it ran in; without a preview, what was drawn before the
 //! error is kept (with that warning), else the file is refused.
 
+mod ai;
 mod ate;
 mod data;
 mod graphics;

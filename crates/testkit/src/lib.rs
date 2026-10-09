@@ -10,6 +10,7 @@
 //! - [`raster`]: rendering helpers and image comparison with a perceptual tolerance.
 //! - [`geom`]: geometry assertions (approximate equality, curve sampling, Hausdorff distance).
 //! - [`pdf`]: hand-written PDF files (page boxes, colour spaces, encryption) for import tests.
+//! - [`ai`]: hand-written Illustrator editing data, and the EPS and `.ai` files that carry it.
 //! - [`ase`]: hand-written swatch exchange (`.ase`) files for swatch library tests.
 //!
 //! This crate may only be used as a dev-dependency (enforced by `cargo xtask layers`).
@@ -19,6 +20,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![forbid(unsafe_code)]
 
+pub mod ai;
 pub mod ase;
 pub mod fixtures;
 pub mod geom;

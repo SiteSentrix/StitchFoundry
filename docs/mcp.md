@@ -407,6 +407,17 @@ and `flattener` options over it (as `object.flattenTransparency` takes them); im
 transparency and rasterized areas are clipped to their regions. A file that would still have transparency fails the
 export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too.
 
+An Illustrator EPS (version 9 on) or `.ai` file opens from the editing data it carries (after the EPS page; in the
+`.ai` file's PDF private data): layers and sublayers (name, order, visibility, lock, printing, preview, dimming,
+colour), groups as they were nested, compound paths, clipping groups, object names, hidden and locked objects, fills and
+strokes (spot colours as spot swatches), linear and radial gradients, opacity, blend modes, isolation and knockout,
+embedded images with their alpha channel, guides, and every artboard where it is. An object with several fills or
+strokes, effects or a brush comes in as its drawn look (a group named after it). Type that shows is the page's, in its
+text object's place; hidden point type is made from the file's text document. A file whose editing data has symbols,
+pattern fills, placed files or anything else the reader doesn't read on a layer that shows, or whose layers look
+different from its page, opens as before: an EPS as its printed page, a `.ai` file from its PDF content (where plain
+groups open ungrouped), with a warning saying why.
+
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)
 and `password` for an encrypted file. `document.pdfInfo` reads a file without opening it: the page count, each page's
@@ -2128,9 +2139,7 @@ runs their data; `flushfile` skips it), axial and radial shadings and shading pa
 masks (data in the file through ASCII85, hex, run-length, Flate, LZW or DCT filters, or from procedures), and type as
 point type in the font the file names (embedded font programs are skipped). In a file in Illustrator's own format
 (Illustrator 3–8 `.ai` and their EPS, written with the prolog that defines its operators) the groups it writes (`u` …
-`U`) come in as groups, nested as they were; clips and groups nest at most 128 deep. A PDF-compatible `.ai` doesn't
-mark its plain groups (only layers, clipping groups and groups with opacity, blending or a mask), so they open
-ungrouped. The artboard is the `%%HiResBoundingBox`
+`U`) come in as groups, nested as they were; clips and groups nest at most 128 deep. The artboard is the `%%HiResBoundingBox`
 (else `%%BoundingBox`; a letter page without one). A program the interpreter can't run (an operator it doesn't know,
 an error, a runaway loop) or that draws nothing comes in as its TIFF preview (palette previews with an alpha channel
 too) with a warning; without a preview, the art drawn up to the error is kept with a warning, and a file with none is

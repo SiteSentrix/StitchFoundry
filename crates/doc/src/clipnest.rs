@@ -21,8 +21,6 @@ pub struct Clip {
     pub id: u32,
     /// The region and its rule; `None` for a plain group.
     pub region: Option<(BezPath, FillRule)>,
-    /// The group is hidden (its art is in it, not shown).
-    pub hidden: bool,
 }
 
 /// Deepest nesting of clips, and of groups, an importer records ([`nest`] goes one level deeper
@@ -80,7 +78,5 @@ fn clip_group(doc: &mut Document, c: &Clip, items: Drawn, depth: usize) -> Arc<N
         children.push(Arc::new(path));
     }
     children.extend(nest_at(doc, items, depth + 1));
-    let mut group = Node::new(doc.alloc_id(), NodeKind::Group { children, clip: c.region.is_some() });
-    group.visible = !c.hidden;
-    Arc::new(group)
+    Arc::new(Node::new(doc.alloc_id(), NodeKind::Group { children, clip: c.region.is_some() }))
 }
