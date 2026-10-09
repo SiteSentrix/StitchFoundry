@@ -732,11 +732,13 @@ fn zoom_about(vm: &mut View, rect: egui::Rect, p: Pos2, zoom: f64) {
     vm.center += before - Xf::new(rect, vm).to_doc(p);
 }
 
-/// A dashed marquee around screen rectangle `r`.
+/// A marquee around screen rectangle `r`: dark dashes over a light line, so it shows on a white
+/// artboard and on the grey pasteboard alike (#725).
 fn marquee(p: &egui::Painter, r: egui::Rect) {
     let pts = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+    p.add(Shape::line(pts.to_vec(), Stroke::new(1.0, Color32::from_white_alpha(230))));
     for w in pts.windows(2) {
-        p.extend(Shape::dashed_line(&[w[0], w[1]], Stroke::new(1.0, Color32::from_gray(90)), 3.0, 3.0));
+        p.extend(Shape::dashed_line(&[w[0], w[1]], Stroke::new(1.0, Color32::from_gray(40)), 3.0, 3.0));
     }
 }
 
