@@ -3673,6 +3673,7 @@ axis	Both	Les deux
 @msg	an image VectorCraft can't read was left out	une image que VectorCraft ne peut pas lire a été ignorée
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
 @msg	its editing data doesn't say where its art is	ses données d’édition ne disent pas où se trouve son illustration
+@msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ce fichier a été enregistré sans compatibilité PDF et ses données d’édition sont illisibles ({why})
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
