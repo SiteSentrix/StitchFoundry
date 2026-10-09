@@ -287,6 +287,8 @@ enum PasteMode {
     Back,
     InPlace,
     AllArtboards,
+    /// A graphic from the Libraries panel: centred where it is placed, as Paste centres.
+    Library,
 }
 
 impl PasteMode {
@@ -297,6 +299,7 @@ impl PasteMode {
             PasteMode::InPlace => "Paste in Place",
             PasteMode::AllArtboards => "Paste on All Artboards",
             PasteMode::Offset => "Paste",
+            PasteMode::Library => "Place from Library",
         }
     }
 }
@@ -308,6 +311,14 @@ fn paste(s: &mut Session, p: &Value, mode: PasteMode) -> Result<Value> {
     let r = paste_clip(s, p, mode, &clip, &choices);
     s.clipboard = clip;
     r
+}
+
+/// Place the objects of `clip` (a library graphic) into the active document centred on `center`,
+/// as one undo step: their resources come along as a paste's do, a swatch whose name the document
+/// gives another colour merged into the document's.
+pub(crate) fn place_clip(s: &mut Session, clip: &Clipboard, center: vectorcraft_geom::Point) -> Result<Value> {
+    let choices = SwatchChoices::parse(PasteMode::Library.label(), &json!({}))?;
+    paste_clip(s, &json!({ "center": [center.x, center.y] }), PasteMode::Library, clip, &choices)
 }
 
 /// Paste in Place, in Front or in Back onto artboard `artboard` (the active one, #693): where the
@@ -348,7 +359,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     };
     let placements: Vec<Affine> = match (mode, board) {
         (_, Some((_, dv))) => vec![Affine::translate(dv)],
-        (PasteMode::Offset, None) => vec![match point_param(p, "center") {
+        (PasteMode::Offset | PasteMode::Library, None) => vec![match point_param(p, "center") {
             Some(c) => clip.bounds().map_or(Affine::IDENTITY, |b| Affine::translate(c - b.center())),
             None => Affine::translate((f64_or(p, "dx", off), f64_or(p, "dy", off))),
         }],

@@ -741,7 +741,8 @@ impl Document {
         }
         max = self.slices.iter().fold(max, |m, s| m.max(s.id.0));
         max = self.assets.iter().fold(max, |m, a| m.max(a.id));
-        self.next_id = self.next_id.max(max + 1);
+        // An id of u64::MAX (a damaged file) can't overflow: ids after it are reused at worst.
+        self.next_id = self.next_id.max(max.saturating_add(1));
     }
 
     /// Find a node anywhere in the tree.

@@ -2648,6 +2648,24 @@
 	Swatch Tiles	Riquadri campioni
 	Swatches	Campioni
 	Switch workspace	Cambia area di lavoro
+	Add Content	Aggiungi contenuto
+	Click to apply to the selected type	Fai clic per applicarlo al testo selezionato
+	Create New Library	Crea nuova libreria
+	Create New Library…	Crea nuova libreria…
+	Rename Library…	Rinomina libreria…
+	Delete the library “{name}”?	Eliminare la libreria “{name}”?
+	Drag art or swatches here, or use + to add the selection's colors and text styles.	Trascina qui grafica o campioni, oppure usa + per aggiungere i colori e gli stili di testo della selezione.
+	Its graphics, colors and text styles are deleted from this machine.	Grafiche, colori e stili di testo vengono eliminati da questo computer.
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	Conserva qui grafiche, colori e stili di testo per usarli in qualsiasi documento. Le librerie restano su questo computer: non serve un account.
+	This library is empty	Questa libreria è vuota
+	Add to Library	Aggiungi alla libreria
+	Delete Library	Elimina libreria
+	Delete Library Item	Elimina elemento della libreria
+	Library	Libreria
+	Rename Library	Rinomina libreria
+	Show Library	Mostra libreria
+	Use Library Item	Usa elemento della libreria
+	Graphic	Grafica
 	Show all open documents	Mostra tutti i documenti aperti
 	Symbol Instance	Istanza di simbolo
 	Symbol Libraries	Librerie simboli
@@ -3130,6 +3148,7 @@ axis	Both	Entrambi
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	no library `{id}`	nessuna libreria `{id}`
 @msg	select some type first	seleziona prima del testo
 @msg	{_1} has no {_2} style	{_1} non ha lo stile {_2}
 @msg	a layer couldn't be read	non è stato possibile leggere un livello

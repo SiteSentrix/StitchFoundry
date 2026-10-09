@@ -2422,6 +2422,24 @@
 	Swatch Options…	スウォッチオプション…
 	Swatch Tiles	スウォッチタイル
 	Switch workspace	ワークスペースを切り替え
+	Add Content	コンテンツを追加
+	Click to apply to the selected type	クリックして選択したテキストに適用
+	Create New Library	新規ライブラリを作成
+	Create New Library…	新規ライブラリを作成…
+	Rename Library…	ライブラリ名を変更…
+	Delete the library “{name}”?	ライブラリ「{name}」を削除しますか？
+	Drag art or swatches here, or use + to add the selection's colors and text styles.	ここにアートやスウォッチをドラッグするか、+ で選択範囲のカラーやテキストスタイルを追加します。
+	Its graphics, colors and text styles are deleted from this machine.	グラフィック、カラー、テキストスタイルはこのコンピューターから削除されます。
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	グラフィック、カラー、テキストスタイルをここに保存すると、どのドキュメントでも使えます。ライブラリはこのコンピューターに保存され、アカウントは不要です。
+	This library is empty	このライブラリは空です
+	Add to Library	ライブラリに追加
+	Delete Library	ライブラリを削除
+	Delete Library Item	ライブラリ項目を削除
+	Library	ライブラリ
+	Rename Library	ライブラリ名を変更
+	Show Library	ライブラリを表示
+	Use Library Item	ライブラリ項目を使用
+	Graphic	グラフィック
 	Show all open documents	開いているすべてのドキュメントを表示
 	Symbol Libraries (on the roadmap)	シンボルライブラリ (今後対応予定)
 	Symbol Screener Tool	シンボルスクリーナーツール

@@ -32,6 +32,7 @@ pub mod help;
 pub(crate) mod inline;
 mod layer;
 mod layerpanel;
+pub mod library;
 pub mod links;
 mod live;
 pub(crate) mod maskedit;
@@ -245,6 +246,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(freeform::specs());
         v.extend(flatten::specs());
         v.extend(stylelib::specs());
+        v.extend(library::specs());
         v.extend(expand::specs());
         v.extend(attributes::specs());
         v.extend(newart::specs());

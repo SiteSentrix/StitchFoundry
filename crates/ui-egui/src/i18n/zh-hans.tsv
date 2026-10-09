@@ -2565,6 +2565,24 @@
 	Swatch Tiles	色板拼贴
 	Swatches	色板
 	Switch workspace	切换工作区
+	Add Content	添加内容
+	Click to apply to the selected type	单击以应用到所选文字
+	Create New Library	创建新库
+	Create New Library…	创建新库…
+	Rename Library…	重命名库…
+	Delete the library “{name}”?	要删除库“{name}”吗？
+	Drag art or swatches here, or use + to add the selection's colors and text styles.	将图稿或色板拖到此处，或使用 + 添加所选对象的颜色和文字样式。
+	Its graphics, colors and text styles are deleted from this machine.	其图形、颜色和文字样式将从此计算机中删除。
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	在此保存图形、颜色和文字样式，即可在任何文档中使用。库存储在此计算机上，无需帐户。
+	This library is empty	此库为空
+	Add to Library	添加到库
+	Delete Library	删除库
+	Delete Library Item	删除库项目
+	Library	库
+	Rename Library	重命名库
+	Show Library	显示库
+	Use Library Item	使用库项目
+	Graphic	图形
 	Show all open documents	显示所有打开的文档
 	Symbol Instance	符号实例
 	Symbol Libraries	符号库

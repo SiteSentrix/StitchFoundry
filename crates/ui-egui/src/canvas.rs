@@ -1295,6 +1295,14 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
         return;
     }
     let Some(d) = resp.dnd_release_payload::<widgets::PanelDrag>() else { return };
+    // A Libraries panel graphic: a copy centred where it is dropped.
+    if let widgets::PanelDrag::LibraryGraphic { library, item } = &*d {
+        let at = xf.to_doc(pos);
+        if let Err(e) = app.run("library.use", json!({"library": library, "kind": "graphic", "item": item, "center": [at.x, at.y]})) {
+            app.status(e);
+        }
+        return;
+    }
     // A symbol from the Symbols panel: an instance centred where it is dropped, on art or not.
     if let widgets::PanelDrag::Symbol(name) = &*d {
         let at = xf.to_doc(pos);
@@ -1333,7 +1341,7 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
         }
         // Art dragged back onto the canvas: its move was already dropped. (A symbol was placed
         // above.)
-        widgets::PanelDrag::Art(_) | widgets::PanelDrag::Symbol(_) => return,
+        widgets::PanelDrag::Art(_) | widgets::PanelDrag::Symbol(_) | widgets::PanelDrag::LibraryGraphic { .. } => return,
     };
     if let Err(e) = app.run(cmd, params) {
         app.status(e);
