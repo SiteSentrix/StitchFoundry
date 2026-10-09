@@ -423,6 +423,11 @@ fn main() -> std::process::ExitCode {
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
             create.native_adapter_selector = Some(gpu::selector(power, startup.clone()));
+            // Nothing draws or dispatches indirectly, so wgpu's check of indirect arguments only
+            // costs a compute shader at start-up, one some drivers can't compile (OCLP-patched
+            // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
+            create.instance_descriptor.flags =
+                (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
         }
         options
     };

@@ -22,8 +22,9 @@ use std::sync::{Arc, OnceLock};
 use eframe::egui_wgpu::NativeAdapterSelectorMethod;
 use eframe::wgpu::{self, Backend, DeviceType, PowerPreference};
 
-/// The adapters a restart leaves out, those the window failed on, as comma-separated
-/// `backend:vendor:device` keys (`Vulkan:1002:164e`). Set by the app itself when it starts again.
+/// The adapters a restart leaves out, those the window failed on, as comma-separated [`key`]s
+/// (`Vulkan:1002:164e`, `Metal:Intel Iris Pro Graphics`). Set by the app itself when it starts
+/// again.
 pub const SKIP_ENV: &str = "VECTORCRAFT_GPU_SKIP";
 
 /// wgpu's variable for choosing an adapter by (part of) its name, any case.
@@ -60,7 +61,7 @@ pub fn power_preference(pref: Option<&str>, env: Option<PowerPreference>) -> Pow
 /// One adapter, as [`adapter_order`] sees it.
 #[derive(Clone, Debug)]
 pub struct Candidate {
-    /// Identifies the adapter across a restart: `backend:vendor:device` ([`key`]).
+    /// Identifies the adapter across a restart ([`key`]).
     pub key: String,
     pub name: String,
     pub backend: Backend,
@@ -73,7 +74,7 @@ impl Candidate {
     fn new(adapter: &wgpu::Adapter, surface: Option<&wgpu::Surface<'_>>) -> Self {
         let info = adapter.get_info();
         Self {
-            key: key(info.backend, info.vendor, info.device),
+            key: key(info.backend, info.vendor, info.device, &info.name),
             presents: surface.is_none_or(|s| adapter.is_surface_supported(s)),
             name: info.name,
             backend: info.backend,
@@ -83,8 +84,15 @@ impl Candidate {
 }
 
 /// `backend:vendor:device`, e.g. `Vulkan:1002:164e` (PCI ids, as `MESA_VK_DEVICE_SELECT` takes them).
-fn key(backend: Backend, vendor: u32, device: u32) -> String {
-    format!("{backend:?}:{vendor:04x}:{device:04x}")
+/// Metal reports no ids (`0000:0000` for every GPU), so an adapter without them is `backend:name`
+/// (`Metal:Intel Iris Pro Graphics`): otherwise leaving out the one that failed would leave out
+/// every GPU of a dual-GPU Mac (#651). Commas, which separate [`SKIP_ENV`]'s keys, become spaces.
+fn key(backend: Backend, vendor: u32, device: u32, name: &str) -> String {
+    if vendor == 0 && device == 0 {
+        format!("{backend:?}:{}", name.replace(',', " ").trim())
+    } else {
+        format!("{backend:?}:{vendor:04x}:{device:04x}")
+    }
 }
 
 /// The order to try `candidates` in (their indices): only those that present to the window and
@@ -307,6 +315,27 @@ mod tests {
 
     /// A restart leaves out the adapter the window failed on, so Power Saving on the machine of
     /// #502 ends up on the NVIDIA GPU, and once every adapter failed there is nothing to try.
+    /// A dual-GPU Mac reports both GPUs under Metal with no PCI ids (#651): their keys still
+    /// differ, so when the integrated GPU fails, the restart renders on the discrete one.
+    #[test]
+    fn gpus_without_pci_ids_are_told_apart_by_name() {
+        let mac = |name: &str, device_type| Candidate {
+            key: key(Backend::Metal, 0, 0, name),
+            name: name.into(),
+            backend: Backend::Metal,
+            device_type,
+            presents: true,
+        };
+        let c = vec![mac("NVIDIA GeForce GT 750M", DeviceType::DiscreteGpu), mac("Intel Iris Pro Graphics", DeviceType::IntegratedGpu)];
+        assert_eq!((c[0].key.as_str(), c[1].key.as_str()), ("Metal:NVIDIA GeForce GT 750M", "Metal:Intel Iris Pro Graphics"));
+        let first = adapter_order(&c, PowerPreference::LowPower, None, &[]);
+        assert_eq!(names(&c, &first)[0], "Intel Iris Pro Graphics");
+        let skip = parse_skip(&c[first[0]].key);
+        assert_eq!(names(&c, &adapter_order(&c, PowerPreference::LowPower, None, &skip)), ["NVIDIA GeForce GT 750M"]);
+        // A comma in a name can't split the list.
+        assert_eq!(parse_skip(&key(Backend::Gl, 0, 0, "Mesa, llvmpipe")), ["Gl:Mesa  llvmpipe"]);
+    }
+
     #[test]
     fn a_restart_tries_the_next_adapter() {
         let c = issue_502();
@@ -433,8 +462,8 @@ mod tests {
     fn skipped_adapters_parse_from_a_comma_separated_list() {
         assert_eq!(parse_skip("Vulkan:1002:164e, Gl:10de:2f04,,"), ["Vulkan:1002:164e", "Gl:10de:2f04"]);
         assert!(parse_skip("").is_empty());
-        assert_eq!(key(Backend::Vulkan, 0x1002, 0x164e), "Vulkan:1002:164e");
-        assert_eq!(key(Backend::Gl, 0x10de, 0x2f04), "Gl:10de:2f04");
+        assert_eq!(key(Backend::Vulkan, 0x1002, 0x164e, "AMD Radeon"), "Vulkan:1002:164e");
+        assert_eq!(key(Backend::Gl, 0x10de, 0x2f04, "NVIDIA"), "Gl:10de:2f04");
     }
 
     #[test]
