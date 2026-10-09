@@ -132,7 +132,7 @@ fn group_layer(
 
 /// The note on a file carrying an editor's private data (#472): its PDF part, the one read, holds
 /// only the art on its artboards (art on the pasteboard is in the private data alone).
-pub(crate) const OFF_ARTBOARD_NOTE: &str =
+pub const OFF_ARTBOARD_NOTE: &str =
     "only the PDF-compatible part of this file was read: art outside its artboards is kept in the editor's private data alone, so it doesn't open";
 
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.

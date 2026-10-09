@@ -366,3 +366,26 @@ fn art_past_the_scan_limit_of_shown_layers_stays_shown() {
     assert_eq!(colors(&d.layers[1]), [Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0)]);
     assert!(r.warnings.iter().any(|w| w.contains("went to its page's layer")), "{:?}", r.warnings);
 }
+
+/// The editor's private data of a `.ai` is its `AIPrivateData` streams, joined in order.
+#[test]
+fn an_ai_files_private_data_is_its_streams_joined() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let page = |ai: bool| PdfPage {
+        entries: if ai {
+            format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {a} 0 R /AIPrivateData2 {b} 0 R /NumBlock 2 >> >> >>")
+        } else {
+            String::new()
+        },
+        ..PdfPage::new(100.0, 100.0, "1 0 0 rg 10 10 30 30 re f")
+    };
+    let (one, two) = (stream("", "%AI24_ZStandard_Data first "), stream("", "second"));
+    let ai = pdf_with_catalog(&[page(true)], &[&one, &two], "", None);
+    assert_eq!(illustrator_data(&ai, None).unwrap(), b"%AI24_ZStandard_Data first second");
+    // A PDF without them has none; neither has bytes that aren't a PDF.
+    assert!(illustrator_data(&pdf_with_catalog(&[page(false)], &[&one, &two], "", None), None).is_none());
+    assert!(illustrator_data(b"not a pdf", None).is_none());
+    // Only a plain or a deflated stream is read: a chain of filters is refused, not run unbounded.
+    let chained = stream("/Filter [/ASCIIHexDecode /ASCIIHexDecode]", "61>");
+    assert!(illustrator_data(&pdf_with_catalog(&[page(true)], &[&chained, &two], "", None), None).is_none());
+}

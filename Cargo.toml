@@ -62,6 +62,8 @@ skrifa = "0.47"
 harfrust = "0.13"
 linesweeper = "0.4"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# Zstandard decoder (pure Rust, builds for wasm32 too): the editing copy an EPS carries of its art.
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
 gif = { version = "0.14", default-features = false, features = ["std", "raii_no_panic"] }
 # CMYK image samples (vectorcraft-doc's cmyk module): the image crate's own TIFF and JPEG

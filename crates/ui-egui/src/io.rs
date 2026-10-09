@@ -239,9 +239,13 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
 /// path?}` while a dialog is open.
 pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bool) -> Result<Value, String> {
     remember_view(app);
-    let first = plan(app, mode, p)?;
+    // Writing over the file the document was read from is asked about here, not refused.
+    let first = plan(app, mode, &acknowledged(p))?;
     let ask = ask_options && !has_options(p);
     if let Some(path) = first.path.clone() {
+        if let Some(r) = ask_before_losing(app, &path, save_command(mode), p) {
+            return Ok(r);
+        }
         if ask && matches!(mode, SaveMode::SaveAs | SaveMode::Copy) && matches!(first.format.id, "svg" | "svgz") {
             return ask_format_options(app, mode, first.format, &path);
         }
@@ -261,12 +265,51 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         o.remove("format");
         o.insert("path".into(), json!(with_save_extension(&picked, first.format)));
     }
-    let chosen = plan(app, mode, &q)?;
+    let chosen = plan(app, mode, &acknowledged(&q))?;
+    if let Some(r) = chosen.path.as_deref().and_then(|path| ask_before_losing(app, path, save_command(mode), &q)) {
+        return Ok(r);
+    }
     if ask && asks_options(mode, chosen.format) {
         let path = chosen.path.clone().unwrap_or_default();
         return ask_format_options(app, mode, chosen.format, &path);
     }
     write_plan(app, chosen)
+}
+
+/// The UI command that runs a save in `mode`.
+fn save_command(mode: SaveMode) -> &'static str {
+    match mode {
+        SaveMode::Save => "file.save",
+        SaveMode::SaveAs => "file.saveAs",
+        SaveMode::Copy => "file.saveCopy",
+        SaveMode::Template => "file.saveAsTemplate",
+    }
+}
+
+/// `p` with `acknowledgeLoss: true`.
+fn acknowledged(p: &Value) -> Value {
+    let mut p = if p.is_object() { p.clone() } else { json!({}) };
+    p["acknowledgeLoss"] = json!(true);
+    p
+}
+
+/// Writing `path` over the file the active document was read from, when reading it left things
+/// out (hidden text, art or layers VectorCraft can't read yet): asks first, and OK runs `command`
+/// with `params` and `acknowledgeLoss` → `{pending}` while it asks, `None` when nothing is lost.
+fn ask_before_losing(app: &mut VectorcraftApp, path: &str, command: &str, params: &Value) -> Option<Value> {
+    let what = fileio::losses_summary(fileio::overwrite_losses(app.session.active()?, path, params)?);
+    let name = fileio::file_name(path);
+    let message = crate::i18n::fmt(tl!("Replace “{name}”, the file this document was opened from?"), &[("name", &name)]);
+    let detail = crate::i18n::fmt(
+        tl!("Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it."),
+        &[("what", &what)],
+    );
+    let mut params = acknowledged(params);
+    if command != "file.save" {
+        params["path"] = json!(path);
+    }
+    dialogs::confirm::ask(app, &message, &detail, command, params);
+    Some(json!({ "pending": dialogs::confirm::KIND }))
 }
 
 /// Does a save (`mode`) to a picked file of format `f` ask for its options first? Native and `.ai`
@@ -421,6 +464,13 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
     };
     let path = target_path(app, path, f.extensions[0])?;
+    let mut again = params.clone();
+    if let Some(o) = again.as_object_mut() {
+        o.insert("format".into(), json!(f.id));
+    }
+    if let Some(r) = ask_before_losing(app, &path, "file.exportAs", &again) {
+        return Ok(r);
+    }
     // An SVG given a .svgz name is written compressed.
     let f = match fileio::format_for_name(&path) {
         Some(z) if f.id == "svg" && z.id == "svgz" => z,
