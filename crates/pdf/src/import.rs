@@ -387,6 +387,33 @@ impl CidText {
     }
 }
 
+/// A ToUnicode value that names no character: U+FFFD alone (#708).
+fn replacement(u: &hayro_interpret::hayro_cmap::BfString) -> bool {
+    use hayro_interpret::hayro_cmap::BfString;
+    match u {
+        BfString::Char(c) => *c == char::REPLACEMENT_CHARACTER,
+        BfString::String(s) => !s.is_empty() && s.chars().all(|c| c == char::REPLACEMENT_CHARACTER),
+    }
+}
+
+/// The character of each glyph of an embedded TrueType or OpenType font program, from its own
+/// `cmap` (the first character mapped to each glyph); `None` for a bare CFF or a font without one.
+pub(crate) fn font_chars(data: &[u8]) -> Option<HashMap<u32, char>> {
+    use skrifa::MetadataProvider;
+    // As for CidText: whole fonts are some megabytes.
+    if data.len() > 64 << 20 {
+        return None;
+    }
+    let font = skrifa::FontRef::new(data).ok()?;
+    let mut chars = HashMap::new();
+    for (c, g) in font.charmap().mappings() {
+        if let Some(c) = char::from_u32(c).filter(|c| !c.is_control()) {
+            chars.entry(g.to_u32()).or_insert(c);
+        }
+    }
+    (!chars.is_empty()).then_some(chars)
+}
+
 /// The ideographs of the Kangxi radicals U+2F00–U+2FD5 (their NFKC forms): the CID → Unicode
 /// tables of some PDFs map 龍 to the radical ⿓, which looks the same but isn't the character.
 const KANGXI: &str = "一丨丶丿乙亅二亠人儿入八冂冖冫几凵刀力勹匕匚匸十卜卩厂厶又口囗土士夂夊夕大女子宀寸小尢尸屮山巛工己巾干幺广廴廾弋弓彐彡彳心戈戶手支攴文斗斤方无日曰月木欠止歹殳毋比毛氏气水火爪父爻爿片牙牛犬玄玉瓜瓦甘生用田疋疒癶白皮皿目矛矢石示禸禾穴立竹米糸缶网羊羽老而耒耳聿肉臣自至臼舌舛舟艮色艸虍虫血行衣襾見角言谷豆豕豸貝赤走足身車辛辰辵邑酉釆里金長門阜隶隹雨靑非面革韋韭音頁風飛食首香馬骨高髟鬥鬯鬲鬼魚鳥鹵鹿麥麻黃黍黑黹黽鼎鼓鼠鼻齊齒龍龜龠";
@@ -603,6 +630,9 @@ struct Builder<'p> {
     /// Font (cache key) → its characters by glyph, for CID-keyed fonts embedded without a
     /// ToUnicode map.
     cid_text: HashMap<u128, Option<Arc<CidText>>>,
+    /// Font (cache key) → the character of each glyph its embedded font program maps
+    /// ([`font_chars`]), for glyphs the file's ToUnicode map doesn't name (#708).
+    font_chars: HashMap<u128, Option<Arc<HashMap<u32, char>>>>,
     /// Font (cache key) → the installed face that draws its glyphs, decided from its first glyph
     /// that can be compared ([`matching_face`]); `None`: its glyphs differ, so it stays outlines.
     matched: HashMap<u128, Option<Arc<vectorcraft_text::FontFace>>>,
@@ -752,6 +782,7 @@ impl<'p> Builder<'p> {
             families: None,
             missing_fonts: vec![],
             cid_text: HashMap::new(),
+            font_chars: HashMap::new(),
             matched: HashMap::new(),
             mask: None,
             masked: vec![],
@@ -1267,17 +1298,34 @@ impl<'p> Builder<'p> {
             return false;
         }
         let key = o.font_cache_key();
-        let (unicode, from_cid) = match o.as_unicode() {
+        let glyph = o.glyph_id().to_u32();
+        let (unicode, from_cid) = match o.as_unicode().filter(|u| !replacement(u)) {
             Some(u) => (Some(u), false),
+            // No mapping, or one to U+FFFD (#708): the font program may still name the character.
             None => {
                 let cid = self.cid_text.entry(key).or_insert_with(|| o.font_data().and_then(|d| CidText::of(d.data.as_ref().as_ref())).map(Arc::new));
-                (cid.as_ref().and_then(|c| c.unicode(o.glyph_id().to_u32())), true)
+                match cid.as_ref().and_then(|c| c.unicode(glyph)) {
+                    Some(u) => (Some(u), true),
+                    None => {
+                        let chars = self
+                            .font_chars
+                            .entry(key)
+                            .or_insert_with(|| o.font_data().and_then(|d| font_chars(d.data.as_ref().as_ref())).map(Arc::new));
+                        (chars.as_ref().and_then(|m| m.get(&glyph)).map(|c| BfString::Char(*c)), false)
+                    }
+                }
             }
         };
         let text: String = match unicode {
             Some(BfString::Char(c)) => c.to_string(),
             Some(BfString::String(s)) => s,
-            None => return false,
+            None => {
+                if o.as_unicode().is_some_and(|u| replacement(&u)) {
+                    let name = self.font_name(key, o).family;
+                    self.warn(&format!("text in {name} whose characters the file doesn't name (U+FFFD) was kept as outlines"));
+                }
+                return false;
+            }
         };
         // Adobe's CID tables map some ideographs to their look-alike Kangxi radicals.
         let text: String = if from_cid { text.chars().map(unify_radical).collect() } else { text };
