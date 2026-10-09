@@ -128,6 +128,10 @@ impl<'a> Collector<'a> {
         if !self.visiting.insert(source.to_string()) {
             return Err(bad(C, format!("circular placed-document link involving {source}")));
         }
+        // A file's saved path is only meaningful inside its own document.
+        // Different linked documents can reuse the same stale absolute path yet
+        // resolve it to distinct local assets. Keep a mapping per document.
+        let mut local = BTreeMap::<String, Copied>::new();
         if self.opts.copy_links {
             let mut placed = HashSet::new();
             doc.visit_placed(|_, p| { placed.insert(p.link.path.clone()); });
@@ -137,7 +141,8 @@ impl<'a> Collector<'a> {
                 if self.visiting.contains(found_path) {
                     return Err(bad(C, format!("circular placed-document link involving {}", file.path)));
                 }
-                if self.copies.contains_key(&file.path) {
+                if let Some(existing) = self.copies.get(found_path) {
+                    local.insert(file.path.clone(), existing.clone());
                     continue;
                 }
                 let Some(mut bytes) = file.bytes else {
@@ -166,7 +171,8 @@ impl<'a> Collector<'a> {
                     }
                 }
                 let copy = Copied { name: destination_file.clone(), size: bytes.len() as u64, hash: hash_bytes(&bytes) };
-                self.copies.insert(file.path.clone(), copy);
+                self.copies.insert(found_path.to_string(), copy.clone());
+                local.insert(file.path.clone(), copy);
                 self.lines.push(format!("{} → {destination_file}", file.path));
                 self.entries.push((destination_file, bytes));
             }
@@ -206,7 +212,7 @@ impl<'a> Collector<'a> {
             // The child files have already been rewritten; the hash and size of each
             // target must reflect the *packaged* bytes rather than the original.
             doc.update_links(|link: &mut LinkInfo| {
-                if let Some(copy) = self.copies.get(&link.path) {
+                if let Some(copy) = local.get(&link.path) {
                     let relative = relative_in_package(destination, &copy.name);
                     link.path = self.root.as_ref().map_or_else(|| copy.name.clone(), |r| r.join(&copy.name).to_string_lossy().into_owned());
                     link.relative = Some(relative);
