@@ -4755,6 +4755,7 @@ dependencies = [
  "rfd",
  "vectorcraft-engine",
  "vectorcraft-format",
+ "vectorcraft-text",
  "vectorcraft-ui-egui",
  "wasm-bindgen",
  "wasm-bindgen-futures",

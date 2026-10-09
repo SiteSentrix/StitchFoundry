@@ -359,3 +359,15 @@ fn new_type_snaps_to_smart_guides() {
     let area = json!({"width": 100.0, "height": 100.0});
     assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, v) if cmd == "text.create" && v["x"] == 100.0 && v["area"] == area)), "{acts:?}");
 }
+
+#[test]
+fn layout_cache_follows_fonts_added_later() {
+    // The web build adds fonts after startup: a caret layout cached before one arrived is stale.
+    let (d, id, tool) = editing("abc");
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("not text") };
+    let before = tool.layout(t);
+    assert!(Arc::ptr_eq(&before, &tool.layout(t)), "cached while the fonts don't change");
+    let font = vectorcraft_text::test_fonts::variable_font().unwrap();
+    assert!(FontDb::global().add_font(font) > 0, "the test font is new to this process");
+    assert!(!Arc::ptr_eq(&before, &tool.layout(t)), "a font added after the layout must refresh it");
+}

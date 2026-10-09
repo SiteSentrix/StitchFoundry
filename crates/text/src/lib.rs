@@ -22,7 +22,7 @@ mod shape;
 pub mod test_fonts;
 pub mod thread;
 
-pub use craft_fonts::{CRAFT_FONTS, CraftFont};
+pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
     FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, set_platform_font_files, set_user_font_dirs,
@@ -521,3 +521,6 @@ mod tests_typo;
 mod tests_variable;
 #[cfg(test)]
 mod tests_vertical;
+#[cfg(test)]
+#[path = "../build/web_fonts.rs"]
+mod web_fonts_build;

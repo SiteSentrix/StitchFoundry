@@ -344,3 +344,21 @@ fn paragraph_direction_is_per_paragraph() {
     assert!(l.lines[0].x1.abs() < 1e-6, "Auto aligns the right-to-left paragraph right: {}", l.lines[0].x1);
     assert!(l.lines[1].x0.abs() < 1e-6, "…and the left-to-right one left: {}", l.lines[1].x0);
 }
+
+#[test]
+fn craft_arabic_fonts_load_and_noto_sans_arabic_is_the_arabic_fallback() {
+    let arabic: Vec<_> = crate::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Arab")).collect();
+    if arabic.is_empty() {
+        eprintln!("skipping: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout)");
+        return;
+    }
+    let db = FontDb::with_font_dirs(vec![]);
+    for f in &arabic {
+        assert!(db.has_family(f.family), "{} {} isn't loaded", f.family, f.style);
+    }
+    let beh = db.face_covering('ب').expect("some face covers U+0628");
+    assert_eq!(beh.family, "Noto Sans Arabic");
+    // Latin still falls back to a bundled face, not to one of the Arabic families.
+    let a = db.face_covering('a').expect("some face covers 'a'");
+    assert!(!arabic.iter().any(|f| f.family == a.family), "Latin now falls back to {}", a.family);
+}

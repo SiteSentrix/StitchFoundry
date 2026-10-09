@@ -124,6 +124,23 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
 
+### Arabic fonts and the web build
+
+Desktop builds load craft-fonts' Arabic families into the document font database (Noto Sans
+Arabic first, the fallback for Arabic text; the others are picked by name).
+
+The web build doesn't embed them (wasm size). Instead `crates/text/web-fonts.txt` lists the faces
+it fetches from beside the wasm, `startup` (before the app starts) or `background` (after):
+
+- `crates/text/build.rs` turns the list into `vectorcraft_text::WEB_FONTS` (URL
+  `fonts/<sha16>/<file>` and the SRI hash, from the craft-fonts manifest).
+- `packaging/web/copy-fonts.sh`, a Trunk `post_build` hook, copies the files there.
+- `apps/vectorcraft-web/src/fonts.rs` fetches and registers them, logging `web font …` for any
+  that fail.
+
+Try it: `cd apps/vectorcraft-web && CRAFT_FONTS_DIR=$PWD/../../../craft-fonts trunk serve`. To serve
+another craft-fonts face on the web, add a line to `web-fonts.txt`.
+
 ## Localisation
 
 Strings in code stay English and are the default lookup keys. `crates/ui-egui/src/i18n` maps them to display
