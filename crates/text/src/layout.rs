@@ -1406,10 +1406,10 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, regions: Optio
             let est = if i < n { Metrics::of(&sg[i]) } else { pm };
             let first_line = li_para == 0;
             let ind_l = para.left_indent + if first_line { para.first_line_indent } else { 0.0 };
-            // Mojikumi: an opening bracket starting a wrapped line is set flush with the line's
-            // start (the space before it goes), and the line has that much more room.
-            if !first_line
-                && !rtl
+            // Mojikumi: an opening bracket starting a line is set flush with the line's start (the
+            // space before it goes), and the line has that much more room. At a paragraph's start
+            // that is the first-line indent: JIS X 4051's principle (JLREQ 3.1.5, Figure 71 ①).
+            if !rtl
                 && para.mojikumi == Mojikumi::LineEndHalf
                 && let Some(g) = sg.get_mut(i)
                 && g.lead <= 0.0
