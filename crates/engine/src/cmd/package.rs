@@ -84,7 +84,10 @@ fn relative_in_package(document: &str, asset: &str) -> String {
 }
 
 fn safe_asset_name(name: &str) -> String {
-    let name: String = name.chars().map(|c| if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }).collect();
+    let name: String = name
+        .chars()
+        .map(|c| if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c })
+        .collect();
     let name = name.trim().trim_matches('.');
     if name.is_empty() { "asset".into() } else { name.into() }
 }
@@ -130,7 +133,8 @@ impl<'a> Collector<'a> {
             doc.visit_placed(|_, p| { placed.insert(p.link.path.clone()); });
             self.lines.push(format!("LINKED FILES IN {source}"));
             for file in super::links::linked_files(doc, Some(source)) {
-                if self.visiting.contains(&file.path) {
+                let found_path = file.found_path.as_deref().unwrap_or(&file.path);
+                if self.visiting.contains(found_path) {
                     return Err(bad(C, format!("circular placed-document link involving {}", file.path)));
                 }
                 if self.copies.contains_key(&file.path) {
@@ -149,9 +153,10 @@ impl<'a> Collector<'a> {
                 let unique = free_name(&name, if self.opts.links_folder { &mut self.link_names } else { &mut self.taken });
                 let destination_file = format!("{dir}{unique}");
                 if placed.contains(&file.path) {
-                    let saved = vectorcraft_format::load_file(&bytes).map_err(|e| bad(C, format!("linked VectorCraft document {} cannot be packaged: {e}", file.path)))?;
+                    let saved = vectorcraft_format::load_file(&bytes)
+                        .map_err(|e| bad(C, format!("linked VectorCraft document {} cannot be packaged: {e}", file.path)))?;
                     let mut nested = saved.doc;
-                    self.collect(&mut nested, &file.path, &destination_file, depth + 1)?;
+                    self.collect(&mut nested, found_path, &destination_file, depth + 1)?;
                     if self.opts.relink {
                         // Preserve embedded ICC profiles when rewriting a linked native file.
                         let mut options = vectorcraft_format::SaveOptions::for_doc(&nested);
