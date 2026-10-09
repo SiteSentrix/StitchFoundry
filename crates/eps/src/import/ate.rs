@@ -475,11 +475,11 @@ impl Story {
             if piece.is_empty() {
                 continue;
             }
-            runs.push(TextRun { text: piece, style: char_style(st, scale, leading) });
+            runs.push(TextRun::new(piece, char_style(st, scale, leading)));
         }
         if from < chars.len() {
             let last = self.runs.last().map(|r| &r.1)?;
-            runs.push(TextRun { text: chars.get(from..).unwrap_or_default().iter().collect(), style: char_style(last, scale, leading) });
+            runs.push(TextRun::new(chars.get(from..).unwrap_or_default().iter().collect::<String>(), char_style(last, scale, leading)));
         }
         if runs.is_empty() {
             return None;
