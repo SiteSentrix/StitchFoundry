@@ -395,20 +395,31 @@ fn is_loss(note: &str) -> bool {
 /// it left something out (hidden text, art or layers), unless `p` has `acknowledgeLoss: true`.
 /// Another name keeps the original file, with all it has.
 pub(crate) fn check_not_lossy_overwrite(st: &crate::DocState, target: &str, p: &Value, cmd: &str) -> Result<()> {
-    let Some(source) = st.imported_from.as_deref().filter(|_| !st.import_losses.is_empty()) else { return Ok(()) };
-    if bool_or(p, "acknowledgeLoss", false) || !same_file(source, target) {
-        return Ok(());
-    }
-    let mut what = st.import_losses.iter().take(3).map(|n| format!("“{n}”")).collect::<Vec<_>>().join("; ");
-    if st.import_losses.len() > 3 {
-        what.push_str(&format!("; {} more", st.import_losses.len() - 3));
-    }
+    let Some(losses) = overwrite_losses(st, target, p) else { return Ok(()) };
+    let what = losses_summary(losses);
     Err(bad(
         cmd,
         format!(
             "{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway"
         ),
     ))
+}
+
+/// What writing the file `target` for document `st` would lose for good: the notes of what reading
+/// it left out when `target` is the file `st` was read from, unless `p` has `acknowledgeLoss: true`.
+/// The UI asks before such a write and repeats it with `acknowledgeLoss` ([`check_not_lossy_overwrite`]).
+pub fn overwrite_losses<'a>(st: &'a crate::DocState, target: &str, p: &Value) -> Option<&'a [String]> {
+    let source = st.imported_from.as_deref().filter(|_| !st.import_losses.is_empty())?;
+    (!bool_or(p, "acknowledgeLoss", false) && same_file(source, target)).then_some(st.import_losses.as_slice())
+}
+
+/// Up to three of `losses`, quoted, and how many more.
+pub fn losses_summary(losses: &[String]) -> String {
+    let mut what = losses.iter().take(3).map(|n| format!("“{n}”")).collect::<Vec<_>>().join("; ");
+    if losses.len() > 3 {
+        what.push_str(&format!("; {} more", losses.len() - 3));
+    }
+    what
 }
 
 /// Do `a` and `b` name one file (spelled differently, or through a link)?

@@ -53,6 +53,7 @@ pub(crate) use load::import_svg;
 pub(crate) use load::native_file;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
+pub use load::{losses_summary, overwrite_losses};
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;

@@ -104,7 +104,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     // The package holds the document as saved.
     if app.session.active().is_some_and(|st| st.is_dirty()) {
-        io::save(app, vectorcraft_engine::cmd::fileio::SaveMode::Save, &json!({}), false)?;
+        let r = io::save(app, vectorcraft_engine::cmd::fileio::SaveMode::Save, &json!({}), false)?;
+        // The save asks first (it would replace a file that loses what opening it left out).
+        if r.get("pending").is_some() {
+            return Ok(r);
+        }
     }
     let r = app.run("file.package", params)?;
     app.ui.dialog = None;
