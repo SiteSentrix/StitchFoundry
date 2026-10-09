@@ -1159,3 +1159,35 @@ fn saved_selection_names_are_trimmed_and_capped() {
     let list = s.execute("select.savedList", &json!({})).unwrap();
     assert_eq!(list[0].as_str().map(|n| n.chars().count()), Some(vectorcraft_doc::SavedSelection::MAX_NAME));
 }
+
+#[test]
+fn crop_image_trim_cuts_to_the_opaque_pixels_as_they_are() {
+    // 100 × 80 px, transparent but for a block at (20, 10)–(50, 40) px; placed at 2 pt a pixel.
+    let mut px = image::RgbaImage::new(100, 80);
+    for y in 10..40 {
+        for x in 20..50 {
+            px.put_pixel(x, y, image::Rgba([x as u8, y as u8, 7, if x == 20 { 1 } else { 255 }]));
+        }
+    }
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "art.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (30, 30), "{r}");
+    // Placed where those pixels were: (40, 20) pt, 60 × 60 pt at 2 pt a pixel.
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 40.0) && close(b.y0, 20.0) && close(b.width(), 60.0) && close(b.height(), 60.0), "{b:?}");
+    // Pixel for pixel, a barely visible (alpha 1) edge included.
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!(out, image::imageops::crop_imm(&px, 20, 10, 30, 30).to_image());
+    assert_eq!(r["trimmed"], true);
+    // Nothing transparent left to cut: left as it is, and not an error (scripts trim every image).
+    let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
+    assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64()), (Some(false), Some(30)), "{r}");
+    assert_eq!(bounds(&s, img), b);
+}
