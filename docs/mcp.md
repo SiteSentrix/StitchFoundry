@@ -621,6 +621,14 @@ A malformed or unknown id is an error naming that value; the entire selection is
 All three commands return `{count, ids}` for the resulting selection, in selection order.
 An empty array clears the selection for `select.set` and leaves it alone for Add and Toggle.
 
+`edit.clear {ids?}` deletes the exact selected objects, including individual compound-path members;
+their unselected siblings remain in the compound. Supplying `ids` works without a selection and
+overrides selected anchors or guides. Every explicit id is validated before any deletion; a malformed
+or unknown id leaves the document unchanged. An empty `ids` array does nothing. Layers themselves
+are kept, and selecting an ancestor together with its descendants deletes that subtree once.
+Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
+Cut still removes the objects it copied, including a whole compound when a member is selected.
+
 ## Saved selections
 
 Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default

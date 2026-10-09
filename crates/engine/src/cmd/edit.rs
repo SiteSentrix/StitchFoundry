@@ -1,6 +1,6 @@
 //! File (document-level) and Edit commands, plus document queries.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -250,29 +250,39 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     if s.tool_id() == "artboard" {
         return super::panelcmds::artboard_copy(s, &json!({}), true);
     }
+    // Copy promotes a compound member to its compound. Cut must remove the same objects it
+    // copied, while Clear on its own deletes exactly the selected members.
+    let ids = selected_roots(s)?;
     copy(s, p)?;
-    clear(s, &json!({}))
+    if s.doc()?.selection.anchors.is_empty() { clear(s, &json!({ "ids": ids })) } else { clear(s, &json!({})) }
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
+    let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
     // Direct-selected anchors: delete those anchors instead of whole objects.
-    if ids_param(p, "ids").is_none() && !s.doc()?.selection.anchors.is_empty() {
+    if explicit.is_none() && !s.doc()?.selection.anchors.is_empty() {
         return super::path::delete_anchors(s, p);
     }
     // Selected ruler guides (selected on their own).
-    if ids_param(p, "ids").is_none() && s.doc()?.selection.is_empty() {
+    if explicit.is_none() && s.doc()?.selection.is_empty() {
         return super::docmenu::guide_remove(s, &json!({}));
     }
-    let ids = match ids_param(p, "ids") {
-        Some(v) => v,
-        None => selected_roots(s)?,
-    };
+    let st = s.doc()?;
+    let targets = explicit.unwrap_or_else(|| st.selection.in_paint_order(&st.doc));
+    // Keep the selected ids themselves, without promoting compound members. Delete a selected
+    // ancestor just once; its selected descendants leave with it. Layers themselves are kept.
+    let targets: BTreeSet<_> = targets.into_iter().filter(|id| st.doc.node(*id).is_some_and(|n| !n.is_layer())).collect();
+    let ids: Vec<_> = targets
+        .iter()
+        .copied()
+        .filter(|id| !st.doc.ancestry(*id).unwrap_or_default().iter().rev().skip(1).any(|ancestor| targets.contains(ancestor)))
+        .collect();
+    if ids.is_empty() {
+        return ok();
+    }
     s.edit("Clear", |d, sel| {
         for id in &ids {
-            if d.node(*id).is_some_and(|n| n.is_layer()) {
-                continue;
-            }
-            let _ = d.remove(*id);
+            d.remove(*id)?;
         }
         sel.clear();
         Ok(())

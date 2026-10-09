@@ -1055,7 +1055,10 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
-        if let Err(why) = (spec.enabled)(self) {
+        // Clear's menu needs a selection; an agent supplying explicit targets only needs a
+        // document. The command validates those targets before making any edit.
+        let enabled = if id == "edit.clear" && params.get("ids").is_some() { cmd::has_doc(self) } else { (spec.enabled)(self) };
+        if let Err(why) = enabled {
             return Err(EngineError::Disabled(id.to_string(), why));
         }
         // Only top-level commands are journaled (commands that call other commands would otherwise
