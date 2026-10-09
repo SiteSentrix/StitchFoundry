@@ -206,6 +206,13 @@ impl Builder {
     /// One Affinity node (and its subtree) as VectorCraft art; `to_doc` maps document pixels to
     /// points. `layer_level`: the node is directly in a spread or a layer, so a layer stays a layer.
     fn node(&mut self, n: &af::Node, to_doc: Affine, boards: &mut Vec<(String, Rect)>, layer_level: bool) -> Option<Arc<Node>> {
+        // Register before descending so nested artboards keep their document order.
+        if let Kind::Artboard { rect, .. } = &n.kind {
+            boards.push((
+                if n.name.is_empty() { format!("Artboard {}", boards.len() + 1) } else { n.name.clone() },
+                to_doc.transform_rect_bbox(rect_of(*rect)),
+            ));
+        }
         let child_level = matches!(n.kind, Kind::Layer) && layer_level;
         let children: Vec<Arc<Node>> = n.children.iter().filter_map(|c| self.node(c, to_doc, boards, child_level)).collect();
         let mut out = match &n.kind {
@@ -241,14 +248,18 @@ impl Builder {
                     self.base(n, NodeKind::Group { children: kids, clip: true })
                 }
             }
-            Kind::Artboard { rect, background } => {
-                let r = to_doc.transform_rect_bbox(rect_of(*rect));
-                boards.push((if n.name.is_empty() { format!("Artboard {}", boards.len() + 1) } else { n.name.clone() }, r));
+            Kind::Artboard { path, even_odd, background, strokes, .. } => {
                 let mut clip = Node::new(
                     self.doc.alloc_id(),
-                    NodeKind::Path { path: shapes::rectangle(r), rule: FillRule::NonZero, live: None, clipping: true, guide: false },
+                    NodeKind::Path {
+                        path: self.path(path, to_doc),
+                        rule: if *even_odd { FillRule::EvenOdd } else { FillRule::NonZero },
+                        live: None,
+                        clipping: true,
+                        guide: false,
+                    },
                 );
-                clip.appearance = self.appearance(background, &[], to_doc);
+                clip.appearance = self.appearance(background, strokes, to_doc);
                 let mut kids = vec![Arc::new(clip)];
                 kids.extend(children);
                 let mut g = self.base(n, NodeKind::Group { children: kids, clip: true });
@@ -432,9 +443,27 @@ impl Builder {
             .runs
             .iter()
             .map(|r| {
-                let mut style =
-                    CharStyle { font_family: if r.family.is_empty() { r.postscript.clone() } else { r.family.clone() }, ..CharStyle::default() };
-                style.font_style = font_style(r.weight, r.italic);
+                let mut style = CharStyle::default();
+                if !r.family.is_empty() {
+                    style.font_family = r.family.clone();
+                } else if !r.postscript.is_empty() {
+                    style.font_family = r.postscript.clone();
+                } else {
+                    self.warn("text without a font name uses the default font");
+                }
+                // A family/weight pair cannot identify width variants such as Arial Narrow.
+                // Resolve a known PostScript identity to the exact installed family and style.
+                if let Some((family, face_style)) = vectorcraft_text::FontDb::global().by_postscript_name(&r.postscript) {
+                    style.font_family = family;
+                    style.font_style = face_style;
+                } else {
+                    style.font_style = font_style(r.weight, r.italic);
+                }
+                style.features = r.features.clone();
+                if r.features.iter().any(|feature| !vectorcraft_text::OtFeatures::known_tag(feature)) {
+                    self.warn("unsupported text OpenType features (retained but not rendered)");
+                }
+                style.all_caps = r.all_caps;
                 style.size = r.size * k;
                 style.leading = r.leading.map(|l| l * k);
                 style.tracking = r.tracking * 1000.0;
