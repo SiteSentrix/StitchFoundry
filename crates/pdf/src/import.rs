@@ -592,6 +592,8 @@ struct Builder<'p> {
     image_keys: HashMap<u128, (String, u32, u32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     cmyk_keys: HashSet<u128>,
+    /// Mask keys of CMYK images whose mask turned out to hide nothing.
+    opaque: HashSet<u128>,
     warnings: Vec<String>,
     /// Fonts by cache key → base font name (from [`scan_page`]).
     fonts: HashMap<u128, String>,
@@ -743,6 +745,7 @@ impl<'p> Builder<'p> {
             images: HashMap::new(),
             image_keys: HashMap::new(),
             cmyk_keys: HashSet::new(),
+            opaque: HashSet::new(),
             warnings: vec![],
             fonts: HashMap::new(),
             font_names: HashMap::new(),
@@ -1146,6 +1149,40 @@ impl<'p> Builder<'p> {
     }
 
     fn add_image(&mut self, key: u128, make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>, xf: Affine) {
+        self.add_image_masked(key, make, xf, None);
+    }
+
+    /// An image's alpha (its soft mask, stencil mask or colour key, at its own resolution) as a
+    /// greyscale image over the image's `w` × `h` pixels (`transform`): its opacity mask. `None`
+    /// when it masks nothing.
+    fn alpha_mask(&mut self, key: u128, r: &hayro_interpret::RasterImage<'_>, w: u32, h: u32, transform: Affine) -> Option<OpacityMask> {
+        let mkey = key ^ 0x5_3a5c;
+        if self.opaque.contains(&mkey) {
+            return None;
+        }
+        let (k, mw, mh) = if let Some(v) = self.image_keys.get(&mkey).cloned() {
+            v
+        } else {
+            let mut alpha = None;
+            r.with_rgba(|_, a| alpha = a, None);
+            let Some(a) = alpha.filter(|a| a.data.iter().any(|v| *v < 255)) else {
+                self.opaque.insert(mkey);
+                return None;
+            };
+            let mut png = Vec::new();
+            image::GrayImage::from_raw(a.width, a.height, a.data)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+            let blob = ImageBlob::new("image/png", png);
+            let k = blob.content_key();
+            self.images.insert(k.clone(), blob);
+            self.image_keys.insert(mkey, (k.clone(), a.width, a.height));
+            (k, a.width, a.height)
+        };
+        let xf = transform * Affine::scale_non_uniform(f64::from(w) / f64::from(mw.max(1)), f64::from(h) / f64::from(mh.max(1)));
+        let art = Node::new(self.id(), NodeKind::Image(ImageObject { key: k, width: mw, height: mh, xf, link: None, placement: Default::default() }));
+        Some(OpacityMask::new(art, true))
+    }
+
+    fn add_image_masked(&mut self, key: u128, make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>, xf: Affine, mask: Option<OpacityMask>) {
         let (k, w, h) = if let Some(v) = self.image_keys.get(&key).cloned() {
             v
         } else {
@@ -1160,7 +1197,9 @@ impl<'p> Builder<'p> {
             (k, w, h)
         };
         let id = self.id();
-        self.push_node(Node::new(id, NodeKind::Image(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default() })));
+        let mut n = Node::new(id, NodeKind::Image(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default() }));
+        n.mask = mask.map(Box::new);
+        self.push_node(n);
     }
 
     /// Mesh shadings filling `region` (document space): gradient meshes, clipped to the region
@@ -1542,7 +1581,10 @@ impl<'a> Device<'a> for Builder<'_> {
                 };
                 if known || cmyk.is_some() {
                     self.cmyk_keys.insert(key);
-                    return self.add_image(key, || cmyk.map(|blob| (blob, w, h)), transform);
+                    // Its mask (read by the interpreter, whatever its kind) becomes an opacity
+                    // mask, so the inks stay as they are.
+                    let mask = if crate::import_image::has_mask(st) { self.alpha_mask(key, &r, w, h, transform) } else { None };
+                    return self.add_image_masked(key, || cmyk.map(|blob| (blob, w, h)), transform, mask);
                 }
                 // JPEG passthrough for plain DeviceRGB/DeviceGray DCT images.
                 let dict = st.dict();

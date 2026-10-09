@@ -675,6 +675,9 @@
 	 to transform  |  	：変形  |  
 	 to zoom in  |  	：拡大  |  
 	 to zoom into an area	：範囲を拡大
+	Hold	長押し
+	 right or left to zoom in or out  |  	：右で拡大、左で縮小  |  
+	 to keep zooming	：拡大または縮小し続ける
 	 to zoom out  |  	：縮小  |  
 	 while dragging to move perpendicular to the plane  |  	：ドラッグ中に面と垂直に移動  |  
 	(closest)	(最も近い)
@@ -721,6 +724,7 @@
 	Add to Selection	選択範囲に追加
 	Add to Swatches	スウォッチに追加
 	Additional Plug-ins Folder	追加プラグインフォルダー
+	Additional Fonts Folder	追加フォントフォルダー
 	Adjust Adjoining Width Points	隣接する幅ポイントを調整
 	Adjust Colors	カラーを調整
 	Adjust Options:	調整オプション:

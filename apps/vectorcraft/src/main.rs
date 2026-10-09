@@ -43,10 +43,13 @@ struct App {
     graphics_loss: GraphicsLoss,
     /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
     graphics_lost: bool,
+    /// Frames the UI has run (see [`end_before_teardown`]).
+    frames: u64,
 }
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.frames = ctx.cumulative_frame_nr();
         if let Some(why) = self.graphics_loss.take() {
             // eframe can't give a window a new device: the user saves and starts again.
             self.graphics_lost = self.app.graphics_lost(&why);
@@ -87,10 +90,27 @@ impl eframe::App for App {
     #[cfg(not(feature = "windows7"))]
     fn on_exit(&mut self) {
         save_prefs(&self.app);
+        end_before_teardown(self.frames);
     }
     #[cfg(feature = "windows7")]
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         save_prefs(&self.app);
+    }
+}
+
+/// On macOS with accessibility, end the process once the app has saved what it keeps on quitting,
+/// before eframe tears the window down (#661). AccessKit then gives the window's content view back
+/// its own class, which AppKit's Touch Bar support was observing it under, and AppKit aborts the
+/// app as it quits on Macs with a Touch Bar. Nothing after the window is needed on a normal quit.
+/// Not while the window is still starting up (`frames` below [`gpu::STARTUP_FRAMES`]): a graphics
+/// failure then starts the app again on another adapter (#651).
+#[allow(unused_variables)]
+fn end_before_teardown(frames: u64) {
+    #[cfg(all(target_os = "macos", feature = "accessibility", feature = "wgpu"))]
+    if frames >= gpu::STARTUP_FRAMES {
+        log::info!("quitting");
+        log::logger().flush();
+        std::process::exit(0);
     }
 }
 
@@ -495,7 +515,7 @@ fn main() -> std::process::ExitCode {
                 #[cfg(not(target_os = "macos"))]
                 let _ = in_window_menus;
                 open_files(&mut app, files);
-                Ok(Box::new(App { app, graphics_loss, graphics_lost: false }))
+                Ok(Box::new(App { app, graphics_loss, graphics_lost: false, frames: 0 }))
             }),
         )
     });

@@ -480,6 +480,9 @@ pub struct Prefs {
     // Hyphenation
     pub hyphenation_language: String,
     pub hyphenation_exceptions: String,
+    /// Type › Options › Additional Fonts Folder: a folder (read with its subfolders) whose fonts
+    /// are listed and used as if installed (#683); empty for none.
+    pub fonts_folder: String,
     // Performance & Storage (Plug-ins & Scratch Disks)
     pub plugins_folder: String,
     pub scratch_primary: String,
@@ -696,6 +699,7 @@ impl Default for Prefs {
             slice_line_color: s("#ff3f3f"),
             hyphenation_language: s("English: USA"),
             hyphenation_exceptions: String::new(),
+            fonts_folder: String::new(),
             plugins_folder: String::new(),
             scratch_primary: s("Startup"),
             scratch_secondary: s("None"),

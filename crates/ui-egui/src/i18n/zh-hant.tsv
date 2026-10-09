@@ -87,6 +87,7 @@
 	Add to Swatches	新增至色票
 	Add Used Colors	新增使用中的顏色
 	Additional Plug-ins Folder	額外的增效模組資料夾
+	Additional Fonts Folder	額外的字體資料夾
 	Adjust Adjoining Width Points	調整相鄰寬度點
 	Adjust Color Balance…	調整色彩平衡…
 	Adjust Colors	調整顏色
@@ -3012,6 +3013,9 @@
 	 to zoom in  |  	可放大  |  
 	 to zoom out  |  	可縮小  |  
 	 to zoom into an area	可放大至指定區域
+	Hold	按住
+	 right or left to zoom in or out  |  	向右可放大、向左可縮小  |  
+	 to keep zooming	可持續縮放
 	 an object to copy its attributes  |  	物件可複製其屬性  |  
 	 to apply the selection's to it  |  	可將選取範圍的屬性套用至該物件  |  
 	 to sample a color	可取樣顏色

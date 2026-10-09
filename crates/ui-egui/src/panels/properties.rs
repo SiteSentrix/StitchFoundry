@@ -3,6 +3,7 @@
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{LiveShape, NodeKind, Unit};
+use vectorcraft_engine::cmd::newdoc;
 
 use super::{corner_radius_row, first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
@@ -196,8 +197,8 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     }
 }
 
-/// Edit Artboards (the Artboard tool): the active artboard's name, position and size, New Artboard
-/// and Delete Artboard, and Exit back to the Selection tool (#530).
+/// Edit Artboards (the Artboard tool): the active artboard's name, position and size, its preset and
+/// orientation (#671), New Artboard and Delete Artboard, and Exit back to the Selection tool (#530).
 fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     let units = app.session.general_unit();
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
@@ -220,6 +221,7 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.end_row();
             }
         });
+        artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
     }
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
@@ -235,6 +237,55 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Quick Actions"));
     if widgets::flat_button(ui, tl!("Exit"), w).clicked() {
         app.select_tool("selection");
+    }
+}
+
+/// Artboard `i`'s size preset (New Document's saved and built-in presets, by category, either way
+/// round; Custom when its `w` × `h` points match none) and its orientation. A preset sizes it in its
+/// current orientation; the other orientation swaps its width and height. Its top-left corner stays
+/// put either way.
+fn artboard_size_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, w: f64, h: f64) {
+    let landscape = w > h;
+    // A preset `pw` × `ph` turned to the artboard's orientation.
+    let turned = |pw: f64, ph: f64| if (pw > ph) == landscape || pw == ph { (pw, ph) } else { (ph, pw) };
+    let same = |s: &newdoc::DocSettings| {
+        let (pw, ph) = turned(s.width, s.height);
+        (pw - w).abs() < 0.01 && (ph - h).abs() < 0.01
+    };
+    // Recent holds documents made, not presets.
+    let cats: Vec<(&str, Vec<newdoc::DocSettings>)> = newdoc::category_names()
+        .filter(|c| !c.eq_ignore_ascii_case("Recent"))
+        .filter_map(|c| Some((c, newdoc::category(&app.session, c)?)))
+        .filter(|(_, l)| !l.is_empty())
+        .collect();
+    let current = cats.iter().flat_map(|(_, l)| l).find(|s| same(s)).map_or(tl!("Custom"), |s| crate::dialogs::preset_name(&s.name)).to_string();
+    let mut size = None;
+    ui.horizontal(|ui| {
+        dim_label(ui, tl!("Preset:"));
+        size = widgets::combo(ui, "ab-preset", &current, 140.0, false, |ui| {
+            let mut chosen = None;
+            for (cat, list) in &cats {
+                ui.menu_button(tl!(cat), |ui| {
+                    widgets::menu_scroll(ui, |ui| {
+                        for s in list {
+                            if widgets::menu_item_name(ui, crate::dialogs::preset_name(&s.name), true, same(s)) {
+                                chosen = Some(turned(s.width, s.height));
+                            }
+                        }
+                    });
+                });
+            }
+            chosen
+        });
+        ui.spacing_mut().item_spacing.x = 2.0;
+        for (is_landscape, tip) in [(false, tl!("Portrait")), (true, tl!("Landscape"))] {
+            if widgets::orientation_button(ui, is_landscape, landscape == is_landscape, tip) && landscape != is_landscape {
+                size = Some((h, w));
+            }
+        }
+    });
+    if let Some((width, height)) = size {
+        app.run("artboard.setProps", json!({"index": i, "width": width, "height": height})).ok();
     }
 }
 
@@ -519,5 +570,42 @@ mod tests {
         let texts = frame(&mut app, &ctx, vec![]);
         click(&mut app, &ctx, &texts, "Exit");
         assert_eq!(app.session.tool_id(), "selection");
+    }
+
+    /// #671: Edit Artboards shows the artboard's preset (Custom when it matches none) and its
+    /// orientation; the other orientation swaps its width and height, its corner staying put.
+    #[test]
+    fn edit_artboards_shows_the_preset_and_flips_the_orientation() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"preset": "Letter"})).unwrap();
+        app.run("artboard.setProps", json!({"index": 0, "x": 10, "y": 20})).unwrap();
+        app.select_tool("artboard");
+        let ctx = egui::Context::default();
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(texts.iter().any(|(t, _)| t == "Preset:") && texts.iter().any(|(t, _)| t == "Letter"), "{texts:?}");
+        // The row's clickable widgets, left to right: the preset combo, Portrait, Landscape.
+        let row = texts.iter().find(|(t, _)| t == "Preset:").map(|(_, r)| *r).unwrap();
+        let buttons: Vec<Rect> = ctx.viewport(|vp| {
+            let mut r: Vec<Rect> = vp
+                .prev_pass
+                .widgets
+                .layers()
+                .flat_map(|(_, w)| w.iter())
+                .filter(|w| w.sense.senses_click() && w.rect.y_range().contains(row.center().y) && w.rect.left() > row.right())
+                .map(|w| w.rect)
+                .collect();
+            r.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            r
+        });
+        let landscape = buttons.last().unwrap().center();
+        let press = |pressed| Event::PointerButton { pos: landscape, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(landscape), press(true)]);
+        frame(&mut app, &ctx, vec![press(false)]);
+        let rect = app.session.active().unwrap().doc.artboards[0].rect;
+        assert_eq!((rect.x0, rect.y0, rect.width(), rect.height()), (10.0, 20.0, 792.0, 612.0), "landscape, same corner");
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(texts.iter().any(|(t, _)| t == "Letter"), "still Letter, turned: {texts:?}");
+        app.run("artboard.setProps", json!({"index": 0, "width": 333})).unwrap();
+        assert!(frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Custom"));
     }
 }

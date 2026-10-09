@@ -78,6 +78,9 @@
 	 to transform  |  	 para transformar  |  
 	 to zoom in  |  	 para ampliar  |  
 	 to zoom into an area	 para ampliar uma área
+	Hold	Manter pressionado
+	 right or left to zoom in or out  |  	 para a direita ou a esquerda para ampliar ou reduzir  |  
+	 to keep zooming	 para continuar o zoom
 	 to zoom out  |  	 para reduzir  |  
 	 while dragging to move perpendicular to the plane  |  	 ao arrastar para mover perpendicularmente ao plano  |  
 	(closest)	(mais próximo)
@@ -135,6 +138,7 @@
 	Add to Selection	Adicionar à Seleção
 	Add to Swatches	Adicionar às Amostras
 	Additional Plug-ins Folder	Pasta Adicional de Plug-ins
+	Additional Fonts Folder	Pasta Adicional de Fontes
 	Adjust Adjoining Width Points	Ajustar Pontos de Largura Adjacentes
 	Adjust Color Balance…	Ajustar Equilíbrio de Cores…
 	Adjust Colors	Ajustar Cores

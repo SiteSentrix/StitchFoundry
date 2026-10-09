@@ -300,10 +300,19 @@ pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
     open_template(s, src.name, &src.bytes, src.path)
 }
 
+/// The most memory decoding one image may take: a 60 in print sheet at 300 ppi (18000 × 6600 px)
+/// is ~475 MB as RGBA, past the decoder's 512 MB default once it is converted. The web app keeps
+/// that default: wasm32 has 4 GB to address and aborts when an allocation fails.
+const MAX_RASTER_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else { 2 << 30 };
+
 /// Decode an image's header (and, for formats stored as PNG, its pixels). CMYK TIFFs are kept as
-/// they are, with their ink amounts ([`ImageBlob::cmyk`]).
+/// they are, with their ink amounts ([`ImageBlob::cmyk`]); CMYK TIFFs with an alpha channel, which
+/// the decoder can't read, become RGBA in the active colour settings' CMYK.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
-    let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
+    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(MAX_RASTER_ALLOC);
+    reader.limits(limits);
     let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     let ppi = super::ppi::resolution(bytes);
@@ -311,7 +320,14 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let (bytes, mime, (width, height)) = if matches!(f.id, "png" | "jpg" | "gif" | "webp") || (f.id == "tiff" && cmyk()) {
         (bytes.to_vec(), f.mime, reader.into_dimensions().map_err(err)?)
     } else {
-        let img = reader.decode().map_err(err)?.to_rgba8();
+        let cmyka = || {
+            let cms = vectorcraft_color::cms::active();
+            vectorcraft_doc::cmyk::cmyka_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
+        };
+        let img = match (f.id == "tiff").then(cmyka).flatten() {
+            Some(img) => img,
+            None => reader.decode().map_err(err)?.to_rgba8(),
+        };
         let size = img.dimensions();
         let mut png = Vec::new();
         img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
@@ -329,16 +345,16 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi })
 }
 
-/// An image as a document of its pixel size (1 px = 1 pt), the image named after the file.
+/// An image as a document of its physical size at the resolution it declares (as Place sizes it;
+/// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height, .. } = raster_image(bytes)?;
-    let mut d = Document::new(width as f64, height as f64);
+    let RasterImage { key, blob, width, height, ppi } = raster_image(bytes)?;
+    let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
+    let mut d = Document::new(width as f64 * sx, height as f64 * sy);
     let layer = d.layers[0].id;
     let id = d.alloc_id();
-    let mut n = Node::new(
-        id,
-        NodeKind::Image(ImageObject { key: key.clone(), width, height, xf: Affine::IDENTITY, link: None, placement: Default::default() }),
-    );
+    let xf = Affine::scale_non_uniform(sx, sy);
+    let mut n = Node::new(id, NodeKind::Image(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default() }));
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
