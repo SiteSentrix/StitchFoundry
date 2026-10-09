@@ -12,6 +12,24 @@ use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
 
+/// The Artboard tool's Move Artwork with Artboard and Scale Artwork with Artboard options (#602) as
+/// check boxes: the Control bar and Properties show them while the tool is in use.
+pub(crate) fn art_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let opts = app.session.tool_options();
+    for (key, label, default) in [("moveArt", tl!("Move Artwork with Artboard"), true), ("scaleArt", tl!("Scale Artwork with Artboard"), false)] {
+        let on = opts[key].as_bool().unwrap_or(default);
+        if widgets::check(ui, label, on, true) {
+            app.run("tool.setOption", json!({ "key": key, "value": !on })).ok();
+        }
+    }
+}
+
+/// Whether artboards resized while the Artboard tool is in use take their art along (its Scale
+/// Artwork with Artboard option): the panels' sizes pass it to `artboard.setProps` as `scaleArt`.
+pub(crate) fn scale_art(app: &VectorcraftApp) -> bool {
+    app.session.tool_id() == "artboard" && app.session.tool_options()["scaleArt"].as_bool().unwrap_or(false)
+}
+
 /// The active artboard (of `n`).
 pub(crate) fn selected(app: &VectorcraftApp, n: usize) -> usize {
     app.view().map_or(0, |v| v.artboard).min(n.saturating_sub(1))

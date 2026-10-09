@@ -96,7 +96,7 @@ pub use vectorcraft_geom as geom;
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::{Swatch, SwatchGroup};
-use vectorcraft_geom::{Point, Rect, Vec2};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum DocError {
@@ -1004,6 +1004,13 @@ impl Document {
     pub fn move_artboard_guides(&mut self, id: u32, d: Vec2) {
         for g in self.guides.iter_mut().filter(|g| g.artboard == Some(id)) {
             *g = g.moved(d);
+        }
+    }
+    /// Map the guides of artboard `id` through `xf`, an axis-aligned scale and move (Scale Artwork
+    /// with Artboard).
+    pub fn map_artboard_guides(&mut self, id: u32, xf: Affine) {
+        for g in self.guides.iter_mut().filter(|g| g.artboard == Some(id)) {
+            g.pos = if g.vertical { (xf * Point::new(g.pos, 0.0)).x } else { (xf * Point::new(0.0, g.pos)).y };
         }
     }
     /// Copy the guides of artboard `from` onto artboard `to`, `d` away (with a copy of their

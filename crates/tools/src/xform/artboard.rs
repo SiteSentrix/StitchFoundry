@@ -3,15 +3,16 @@
 //! Click an artboard to make it active (dashed bounds, 8 handles and its name). Drag inside moves
 //! it (with its artwork when the `moveArt` option is on, Shift constrains; Alt moves a copy and
 //! leaves the artboard where it was), drag a handle resizes it
-//! (Shift proportional, Alt from centre), drag on the pasteboard draws a new artboard, Delete removes
+//! (Shift proportional, Alt from centre; with the `scaleArt` option on, Scale Artwork with Artboard,
+//! always proportional, and the art fully inside scales with it), drag on the pasteboard draws a new artboard, Delete removes
 //! the active one (Copy, Cut and Paste take it with its art: `artboard.copy`) and Escape returns to
 //! the Selection tool. Moving and resizing snap like drawing
 //! does: to whole pixels, to the grid, or with Smart Guides to other artboards, their bleed and
-//! objects (never to the dragged artboard or the art moving with it); the artboard's own bleed edges
+//! objects (never to the dragged artboard or the art moving or scaling with it); the artboard's own bleed edges
 //! snap too. A new artboard's corners snap as drawn points do ([`DrawSnap`]).
 
 use serde_json::{Value, json};
-use vectorcraft_geom::{Point, Rect, Vec2};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::{BLUE, polygon, rect_corners};
 use crate::bbox::{Handle, hit_handle, move_delta, scale_for_drag};
@@ -49,6 +50,9 @@ pub struct ArtboardTool {
     pub active: usize,
     /// Move artwork with the artboard.
     pub move_art: bool,
+    /// Scale artwork with the artboard: a resize takes the art fully inside it along, and keeps the
+    /// artboard's proportions.
+    pub scale_art: bool,
     drag: Option<Drag>,
     preview: Option<Rect>,
     /// Smart Guide targets, gathered when a move or resize starts.
@@ -63,7 +67,17 @@ pub struct ArtboardTool {
 
 impl Default for ArtboardTool {
     fn default() -> Self {
-        Self { active: 0, move_art: true, drag: None, preview: None, targets: None, copy_targets: None, guides: vec![], draw: DrawSnap::default() }
+        Self {
+            active: 0,
+            move_art: true,
+            scale_art: false,
+            drag: None,
+            preview: None,
+            targets: None,
+            copy_targets: None,
+            guides: vec![],
+            draw: DrawSnap::default(),
+        }
     }
 }
 
@@ -140,6 +154,20 @@ impl ArtboardTool {
     }
 }
 
+/// An artboard's shortest side (as `artboard.setProps` keeps it).
+const MIN_SIDE: f64 = 1.0;
+
+/// `r` grown about `anchor` until both sides are at least [`MIN_SIDE`], by one factor, so a
+/// proportional resize keeps its proportions where the command would lengthen only the short side.
+fn keep_min_side(r: Rect, anchor: Point) -> Rect {
+    let short = r.width().min(r.height());
+    if short >= MIN_SIDE || short <= 0.0 || !short.is_finite() {
+        return r;
+    }
+    let k = MIN_SIDE / short;
+    (Affine::translate(anchor.to_vec2()) * Affine::scale(k) * Affine::translate(-anchor.to_vec2())).transform_rect_bbox(r)
+}
+
 /// Where the bleed edge lies beyond a handle, along the axes the handle moves.
 fn bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle) -> Vec2 {
     let d = handle.pos(cx.doc.setup.bleed_rect(rect)) - handle.pos(rect);
@@ -206,13 +234,21 @@ impl Tool for ArtboardTool {
                 let mut out = vec![];
                 if !began {
                     out.push(Action::Begin("Resize Artboard".into()));
-                    self.begin_snapping(cx, index, false);
+                    self.begin_snapping(cx, index, self.scale_art);
                 }
                 self.drag = Some(Drag::Resize { index, handle, rect, grab, began: true });
                 let h = self.snap_handle(cx, p + grab, bleed_offset(cx, rect, handle));
-                let nr = scale_for_drag(rect, handle, h, m.shift, m.alt).transform_rect_bbox(rect);
+                let proportional = m.shift || self.scale_art;
+                let mut nr = scale_for_drag(rect, handle, h, proportional, m.alt).transform_rect_bbox(rect);
+                if proportional {
+                    nr = keep_min_side(nr, if m.alt { rect.center() } else { handle.opposite().pos(rect) });
+                }
                 self.preview = Some(nr);
-                out.push(Action::Preview("artboard.setProps".into(), rect_json(index, nr)));
+                let mut v = rect_json(index, nr);
+                if self.scale_art {
+                    v["scaleArt"] = json!(true);
+                }
+                out.push(Action::Preview("artboard.setProps".into(), v));
                 out
             }
             (PointerKind::Drag, Some(Drag::Create { start, .. })) => {
@@ -338,13 +374,14 @@ impl Tool for ArtboardTool {
     }
 
     fn options(&self) -> Value {
-        json!({ "active": self.active, "moveArt": self.move_art })
+        json!({ "active": self.active, "moveArt": self.move_art, "scaleArt": self.scale_art })
     }
 
     fn set_option(&mut self, key: &str, value: &Value) {
         match key {
             "active" => self.active = value.as_u64().unwrap_or(0) as usize,
             "moveArt" => self.move_art = value.as_bool().unwrap_or(true),
+            "scaleArt" => self.scale_art = value.as_bool().unwrap_or(false),
             _ => {}
         }
     }
@@ -481,6 +518,49 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 798.0, 100.0));
         let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 808.0, 100.0)));
         assert_eq!(v["width"].as_f64(), Some(210.0));
+    }
+
+    /// Scale Artwork with Artboard (#602): the resize asks for the art to scale, keeps the artboard's
+    /// proportions, and never snaps to the art scaling with it.
+    #[test]
+    fn scale_art_resizes_proportionally_without_snapping_to_its_art() {
+        let mut d = two_boards();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let art = vectorcraft_geom::shapes::rectangle(Rect::new(700.0, 50.0, 710.0, 60.0));
+        d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, art, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        // Off: the right handle 3 pt past the art's right edge (710) lands on it; the height stays.
+        let mut t = ArtboardTool { active: 1, ..Default::default() };
+        t.pointer(&c, &ev(PointerKind::Down, 800.0, 100.0));
+        let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 713.0, 100.0)));
+        assert_eq!((v["width"].as_f64(), v["height"].as_f64(), v.get("scaleArt")), (Some(110.0), Some(200.0), None));
+        t.pointer(&c, &ev(PointerKind::Up, 713.0, 100.0));
+        // On: the art scales along, so it's no target, and the height follows the width.
+        t.set_option("scaleArt", &json!(true));
+        assert_eq!(t.options()["scaleArt"], true);
+        t.pointer(&c, &ev(PointerKind::Down, 800.0, 100.0));
+        let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 713.0, 100.0)));
+        assert_eq!((v["width"].as_f64(), v["scaleArt"].as_bool()), (Some(113.0), Some(true)));
+        assert!((v["height"].as_f64().unwrap() - 113.0).abs() < 1e-9);
+    }
+
+    /// A proportional resize never asks for a side under 1 pt, which the command would lengthen
+    /// alone (scaling the art unevenly): both sides grow by one factor instead.
+    #[test]
+    fn a_proportional_resize_keeps_its_proportions_at_the_smallest_size() {
+        let mut d = two_boards();
+        d.artboards[1].rect = Rect::new(600.0, 0.0, 800.0, 20.0);
+        let (s, p) = (Selection::default(), paint());
+        let mut c = cx(&d, &s, &p);
+        c.smart_guides = false;
+        let mut t = ArtboardTool { active: 1, scale_art: true, ..Default::default() };
+        // The right handle to 2.5 % of the width: 5 × 0.5, grown to 10 × 1 about the left middle.
+        t.pointer(&c, &ev(PointerKind::Down, 800.0, 10.0));
+        let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 605.0, 10.0)));
+        let got = ["x", "y", "width", "height"].map(|k| v[k].as_f64().unwrap());
+        assert!(got.iter().zip([600.0, 9.5, 10.0, 1.0]).all(|(a, b)| (a - b).abs() < 1e-9), "{got:?}");
     }
 
     #[test]

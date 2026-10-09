@@ -629,7 +629,7 @@ repeated names, and ids the document doesn't have are dropped.
 Ruler guides are numbered in the order they were made. `guide.add {vertical, pos, artboard?}` makes one (the x of a
 vertical guide, the y of a horizontal one, in points) → `{index}`. With `artboard` (an artboard's index) it is an
 artboard guide: it runs across that artboard only, moves with it (`artboard.move`, a pure move in
-`artboard.setProps`, `artboard.rearrange`), is copied with it (`artboard.duplicate`, `artboard.move {copy}`) and is
+`artboard.setProps`, `artboard.rearrange`), scales with it (`artboard.setProps {scaleArt}`), is copied with it (`artboard.duplicate`, `artboard.move {copy}`) and is
 deleted with it (`artboard.delete`); without, a canvas guide runs across the whole canvas. `guide.list` →
 `[{index, vertical, pos, selected, artboard?}…]` (`artboard` only for artboard guides).
 `guide.select {indexes: [index…], toggle?}` selects guides on their own (the art is deselected; `toggle` adds or
@@ -1268,7 +1268,8 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   point a selection is dragged by, a drawn point and a transform tool's reference point land on an anchor or a ruler
   guide that near.
 - `moveLockedWithArtboard`: `artboard.move {moveArt: true}`, the Artboard tool and `artboard.rearrange` move locked and
-  hidden art with the artboard too; off (the default) it stays where it is.
+  hidden art with the artboard too, and `artboard.setProps {scaleArt: true}` scales it too; off (the default) it stays
+  where it is.
 - `penRubberBand`, `curvatureRubberBand` (on by default): off, the Pen and Curvature tools draw no preview segment to
   the pointer.
 - `showHandlesMultipleAnchors` (on by default): off, Direct Selection (and the Anchor Point tool, and the Pen with Alt)
@@ -1550,6 +1551,17 @@ pastes only the art), in this document or another; the result's `artboard` is th
 `artboard.duplicate {index?, art?}` (Window › Artboards › Duplicate Artboards, or a row dragged onto New Artboard)
 does the same in one step → `{index, ids}`, and `artboard.move {copy: true, moveArt: true}` is the Artboard tool's
 Alt-drag.
+
+Scale Artwork with Artboard (#602): `artboard.setProps {index, x?, y?, width?, height?, scaleArt: true}` resizes an
+artboard and scales the art fully inside it, and its artboard guides, from the old rectangle onto the new one, each side
+by its own ratio (keep the proportions for an even scale), in one undo step → `{scaled: [id…]}`. Locked and hidden art
+scales only with `lockedAndHidden: true` (default: prefs `moveLockedWithArtboard`); strokes, effects and corners scale
+as with `object.scale` (`strokes?`, `corners?`, default: Scale Strokes & Effects and Scale Corners), pattern tiles with
+`patterns?` (default: Transform Pattern Tiles). A move that keeps the size scales nothing (art moves with
+`artboard.move {moveArt}`). The Artboard tool's `scaleArt` option (`tool.setOption {tool: "artboard", key: "scaleArt",
+value: true}`; the Control bar's and Properties' Scale Artwork with Artboard check box, beside Move Artwork with
+Artboard) makes its handle drags proportional and passes `scaleArt`, as do Properties' and the Transform panel's
+artboard size fields while the tool is in use.
 
 ```json
 {"name":"run_command","arguments":{"command":"artboard.copy","params":{"index":0}}}

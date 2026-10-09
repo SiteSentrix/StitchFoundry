@@ -1987,6 +1987,7 @@
 	Arrange by Row	Расположить в строку
 	Arrange by Column	Расположить в столбец
 	Move Artwork with Artboard	Перемещать иллюстрацию вместе с монтажной областью
+	Scale Artwork with Artboard	Масштабировать иллюстрацию вместе с монтажной областью
 	Artboards: {n}	Монтажные области: {n}
 	Rearrange All Artboards…	Переставить все монтажные области…
 	Recall Selection	Восстановить выделение
