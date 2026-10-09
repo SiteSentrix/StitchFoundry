@@ -35,8 +35,8 @@ const MAX_DRAWN: usize = 1 << 24;
 /// Samples taken of a shading function that isn't a plain interpolation.
 const SHADING_SAMPLES: usize = 32;
 
-const FAR_AWAY: &str = "objects far outside the page were left out";
-const TOO_MUCH: &str = "the file draws more than VectorCraft reads: the rest was left out";
+pub(super) const FAR_AWAY: &str = "objects far outside the page were left out";
+pub(super) const TOO_MUCH: &str = "the file draws more than VectorCraft reads: the rest was left out";
 const NESTED_PATTERNS: &str = "patterns nested too deeply are filled with mid-grey";
 /// Deepest patterns and glyph procedures drawn inside each other's art.
 pub(crate) const MAX_APART: u32 = 8;

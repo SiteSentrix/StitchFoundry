@@ -24,6 +24,8 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{CharStyle, Justify, Node, NodeId, NodeKind, ParaStyle, TextObject, TextRun};
 use vectorcraft_geom::{Affine, Point};
 
+/// Longest story read (bytes).
+const MAX_STORY: usize = 1 << 20;
 /// Biggest text document read (bytes, decoded).
 const MAX_BYTES: usize = 64 << 20;
 /// Deepest nesting read.
@@ -289,6 +291,10 @@ impl Texts {
         let from = find(data, b"/ASCII85Decode", start)? + b"/ASCII85Decode".len();
         let end = find(data, b"~>", from)? + 2;
         // Each line after the first starts with a `%`.
+        // ASCII85 makes at most four bytes of a character (`z`): more than this would be over `MAX_BYTES`.
+        if end - from > MAX_BYTES / 4 {
+            return None;
+        }
         let packed: String = String::from_utf8_lossy(data.get(from..end)?)
             .split(['\r', '\n'])
             .enumerate()
@@ -321,7 +327,7 @@ impl Texts {
     /// Story `i`, if it is one of point type this reads.
     pub(super) fn story(&self, i: usize) -> Option<Story> {
         let s = self.stories.get(i)?;
-        let text = s.get("0")?.get("0")?.str()?.to_string();
+        let text = s.get("0")?.get("0")?.str().filter(|t| t.len() <= MAX_STORY)?.to_string();
         // The frame the story is in: a matrix and nothing else but its place.
         let frame = self.frames.get(s.get("1")?.get("0")?.at(0)?.get("0")?.num()? as usize)?.get("0")?;
         let carries = frame.get("2")?;
@@ -425,6 +431,11 @@ fn find_nodes<'a>(v: &'a Val, name: &str, out: &mut Vec<&'a Val>) {
 
 /// Where a story's first line starts: on the canvas of the app (what [`Story::place`] gives).
 impl Story {
+    /// How many bytes of text the story has.
+    pub(super) fn len(&self) -> usize {
+        self.text.len()
+    }
+
     /// The anchor of the story on the file's canvas: `(x, y)` in the units of the art, y up, given
     /// the centre `(tx, ty)` of the file's template box.
     pub(super) fn place(&self, template: (f64, f64)) -> (f64, f64) {
@@ -466,10 +477,10 @@ impl Story {
         let leading = self.lines.windows(2).map(|w| (w[1].1 - w[0].1) * scale).find(|l| l.is_finite() && *l > 0.0);
         let chars: Vec<char> = text.chars().collect();
         let mut runs = vec![];
-        let mut from = 0;
+        let mut from = 0usize;
         let styles: Vec<&(usize, Style)> = self.runs.iter().collect();
         for (n, st) in styles {
-            let to = (from + n).min(chars.len());
+            let to = from.saturating_add(*n).min(chars.len());
             let piece: String = chars.get(from..to).unwrap_or_default().iter().collect();
             from = to;
             if piece.is_empty() {

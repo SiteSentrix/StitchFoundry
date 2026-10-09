@@ -188,6 +188,9 @@ fn a_damaged_editing_copy_leaves_the_page() {
         let r = import(&bytes).unwrap();
         assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
     }
+    // A file that has the data but not in a form that can be read says so (and a write over it asks).
+    let r = import(&plain("this is not ascii85 {{{~>")).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("damaged") && crate::is_loss(w)), "{:?}", r.warnings);
 }
 
 /// The `.ai`'s editing data: its marker, then the Zstandard stream.
@@ -472,4 +475,49 @@ fn a_shown_text_object_on_the_page_that_the_page_doesnt_draw_is_left_out() {
     });
     assert_eq!(all, ["Hi there"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("doesn't draw")), "{:?}", r.warnings);
+}
+
+#[test]
+fn pieces_of_two_lines_the_page_draws_alternately_go_each_to_its_own_text() {
+    // "Hello" is drawn as "He" and "llo", with "abcd" ("ab", "cd") drawn between them.
+    let doc = text_document(&[("Hello\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("abcd\r", 0, (8200.0, 8160.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (He) show 58.5 81.5 moveto (ab) show \
+                74.1 81.5 moveto (cd) show 76.4 61.5 moveto (llo) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    all.sort();
+    assert_eq!(all, ["Hello", "abcd"], "{:?}", r.warnings);
+}
+
+#[test]
+fn a_run_longer_than_any_text_doesnt_overflow() {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]).replace("/1 9 >>", "/1 1e30 >>");
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Back", "Spare"], "{:?}", r.warnings);
+}
+
+#[test]
+fn more_text_objects_than_are_matched_leave_the_page() {
+    let many = text_object(0).repeat(5001);
+    let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &many)), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("too many text objects") && crate::is_loss(w)), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_dictionary_left_open_at_the_end_of_a_layer_is_a_damaged_file() {
+    let open = "/AI11Text :\n0 /FreeUndo ,\n";
+    let art = native(&(layer("A", true, &(square(10, 10) + open)) + &layer("B", true, &square(20, 20))));
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| crate::is_loss(w)), "{:?}", r.warnings);
 }

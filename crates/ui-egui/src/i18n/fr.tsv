@@ -3118,6 +3118,8 @@ axis	Both	Les deux
 @msg	a layer couldn't be read	une couche n’a pas pu être lue
 @msg	it has more than one artboard	il a plus d'un plan de travail
 @msg	it has no page	il n’a pas de page
+@msg	it has too many text objects	il a trop d’objets texte
+@msg	it has too much text	il a trop de texte
 @msg	its editing data doesn't say where its artboard is	ses données de modification n’indiquent pas où se trouve son plan de travail
 @msg	its editing data has no layers	ses données de modification n’ont pas de couches
 @msg	its editing data is damaged	ses données de modification sont endommagées

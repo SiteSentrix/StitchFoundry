@@ -385,4 +385,7 @@ fn an_ai_files_private_data_is_its_streams_joined() {
     // A PDF without them has none; neither has bytes that aren't a PDF.
     assert!(illustrator_data(&pdf_with_catalog(&[page(false)], &[&one, &two], "", None), None).is_none());
     assert!(illustrator_data(b"not a pdf", None).is_none());
+    // Only a plain or a deflated stream is read: a chain of filters is refused, not run unbounded.
+    let chained = stream("/Filter [/ASCIIHexDecode /ASCIIHexDecode]", "61>");
+    assert!(illustrator_data(&pdf_with_catalog(&[page(true)], &[&chained, &two], "", None), None).is_none());
 }

@@ -132,7 +132,7 @@ pub(crate) fn frame(page: &Page<'_>, which: CropTo) -> (Affine, Rect) {
 const PRIVATE_DATA_OWNER: &[u8] = b"Illustrator"; // brand-ok: the key the files use
 
 /// Most bytes of an editor's private data read.
-const MAX_PRIVATE: usize = 512 << 20;
+const MAX_PRIVATE: usize = 256 << 20;
 
 /// The private data of an Illustrator `.ai` (its first page's `PieceInfo`): the `AIPrivateData`
 /// streams in order, joined. `None` for a PDF without them (or with a stream that can't be read).
@@ -144,12 +144,31 @@ pub fn illustrator_data(bytes: &[u8], password: Option<&str>) -> Option<Vec<u8>>
     let mut data = vec![];
     for n in 1..=100_000u32 {
         let Some(stream) = private.get::<Stream<'_>>(format!("AIPrivateData{n}").as_bytes()) else { break };
-        data.extend_from_slice(&stream.decoded().ok()?);
-        if data.len() > MAX_PRIVATE {
-            return None;
-        }
+        data.extend_from_slice(&inflated(&stream, MAX_PRIVATE - data.len())?);
     }
     (!data.is_empty()).then_some(data)
+}
+
+/// `stream` decoded, up to `most` bytes: the decoder is run here rather than by the PDF reader's
+/// `decoded()`, which has no limit, so a stream of zeros can't grow to the size of the memory. Only a
+/// stream that is plain or only deflated is read (the private data is no other); else, or when it
+/// is larger once decoded, `None`.
+fn inflated(stream: &Stream<'_>, most: usize) -> Option<Vec<u8>> {
+    use std::io::Read;
+    if stream.dict().get::<Dict<'_>>(b"DecodeParms").is_some() {
+        return None;
+    }
+    let raw = stream.raw_data();
+    let mut out = vec![];
+    let limit = u64::try_from(most).ok()?.checked_add(1)?;
+    match stream.filters().len() {
+        0 => out.extend_from_slice(&raw),
+        1 => {
+            flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).ok()?;
+        }
+        _ => return None,
+    }
+    (out.len() <= most).then_some(out)
 }
 
 /// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData`)?

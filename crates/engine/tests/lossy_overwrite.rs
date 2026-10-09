@@ -84,3 +84,27 @@ fn a_file_the_import_read_whole_is_written_over_as_before() {
     s.execute("document.export", &json!({ "path": src.to_string_lossy(), "format": "eps" })).unwrap();
     std::fs::remove_dir_all(d).ok();
 }
+
+#[test]
+fn the_other_ways_of_writing_a_file_ask_too() {
+    let d = dir("c");
+    let src = d.join("art.eps");
+    let original = lossy_eps();
+    std::fs::write(&src, &original).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({ "path": src.to_string_lossy() })).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    for (cmd, params) in [
+        ("document.exportPdf", json!({})),
+        ("document.exportSelection", json!({ "format": "eps" })),
+        ("document.exportForOffice", json!({})),
+        ("file.print", json!({ "format": "pdf" })),
+    ] {
+        let mut p = params;
+        p["path"] = json!(src.to_string_lossy());
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("left things out"), "{cmd}: {e}");
+        assert_eq!(std::fs::read(&src).unwrap(), original, "{cmd}");
+    }
+    std::fs::remove_dir_all(d).ok();
+}

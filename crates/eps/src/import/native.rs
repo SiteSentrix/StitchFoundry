@@ -69,13 +69,22 @@ const LAYERS_UNREAD: &str = "the file's layers weren't read";
 /// Does this import note say that the file has something the document doesn't (hidden text, art or
 /// layers that could not be read)? Writing the document over the file would lose it for good.
 pub fn is_loss(note: &str) -> bool {
-    note.ends_with(TEXT_LEFT_OUT) || [ART_LEFT_OUT, PART_LEFT_OUT, LAYERS_UNREAD].iter().any(|n| note.starts_with(n))
+    note.ends_with(TEXT_LEFT_OUT)
+        || [ART_LEFT_OUT, PART_LEFT_OUT, LAYERS_UNREAD, super::graphics::TOO_MUCH, super::graphics::FAR_AWAY].iter().any(|n| note.starts_with(n))
 }
 
-/// Deepest nesting of layers read (deeper ones are left out).
+/// Deepest nesting of layers read (a file with deeper ones comes in as its page).
 const MAX_DEPTH: usize = 32;
 /// Most layers read.
 const MAX_LAYERS: usize = 4096;
+/// Most text objects in the layers, and most pieces of type in one place on the page, that are matched
+/// to each other (more than this and the layers aren't used).
+const MAX_SLOTS: usize = 5000;
+const MAX_PIECES: usize = 2000;
+/// Most bytes of text in the text objects of the layers (a story named twice counts twice).
+const MAX_TEXT: usize = 16 << 20;
+/// Most pairs of a text object and a piece of the page's type compared.
+const MAX_PAIRS: usize = 4_000_000;
 
 /// What the operators of the format do, as PostScript: paths are the path operators, a fill or a
 /// stroke uses the colour the last `k` `K` `g` `G` set (a file's objects each set their own).
@@ -315,7 +324,8 @@ fn parse(data: &[u8]) -> Option<Parsed> {
             match line {
                 "%AI5_BeginLayer" => {
                     count += 1;
-                    if count > MAX_LAYERS {
+                    // Too many, too deep, or in the middle of a dictionary: not a file this reads.
+                    if count > MAX_LAYERS || stack.len() > MAX_DEPTH || dict_depth > 0 {
                         return None;
                     }
                     if let Some(parent) = stack.last_mut() {
@@ -324,6 +334,9 @@ fn parse(data: &[u8]) -> Option<Parsed> {
                     stack.push(Layer { visible: true, ..Layer::default() });
                 }
                 "%AI5_EndLayer--" => {
+                    if dict_depth > 0 {
+                        return None;
+                    }
                     let mut l = stack.pop()?;
                     l.flush();
                     match stack.last_mut() {
@@ -424,6 +437,9 @@ fn parse(data: &[u8]) -> Option<Parsed> {
             layer.code.push_str(line);
             layer.code.push('\n');
         }
+    }
+    if dict_depth > 0 {
+        return None;
     }
     while let Some(mut l) = stack.pop() {
         l.flush();
@@ -737,20 +753,30 @@ fn same_type(n: &Node, lines: &[(String, Point)]) -> Option<f64> {
 fn join_pieces(parts: &mut Vec<Arc<Node>>, lines: &[(String, Point)]) {
     let text_of = |n: &Arc<Node>| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None };
     let texts: Vec<usize> = parts.iter().enumerate().filter(|(_, n)| matches!(n.kind, NodeKind::Text(_))).map(|(i, _)| i).collect();
-    let mut taken: Vec<usize> = vec![];
+    // A page with this many pieces of type in one place isn't one of lines of a story.
+    if texts.len() > MAX_PIECES {
+        return;
+    }
+    let mut taken = vec![false; parts.len()];
     // The first piece of each line to join, the others, and the spaces to put after each piece.
     let mut joins: Vec<(usize, Vec<usize>, Vec<String>)> = vec![];
     for &i in &texts {
-        if taken.contains(&i) {
+        if taken.get(i).copied().unwrap_or(true) {
             continue;
         }
         let Some(line) = parts.get(i).and_then(|n| baseline(n)) else { continue };
         let group: Vec<usize> = texts
             .iter()
             .copied()
-            .filter(|j| !taken.contains(j) && parts.get(*j).and_then(|n| baseline(n)).is_some_and(|b| (b - line).abs() <= SAME_LINE))
+            .filter(|j| {
+                !taken.get(*j).copied().unwrap_or(true) && parts.get(*j).and_then(|n| baseline(n)).is_some_and(|b| (b - line).abs() <= SAME_LINE)
+            })
             .collect();
-        taken.extend(&group);
+        for j in &group {
+            if let Some(t) = taken.get_mut(*j) {
+                *t = true;
+            }
+        }
         let pieces: Vec<String> = group.iter().filter_map(|j| parts.get(*j).and_then(text_of)).collect();
         let places: Vec<(f64, f64)> = group
             .iter()
@@ -783,7 +809,8 @@ fn join_pieces(parts: &mut Vec<Arc<Node>>, lines: &[(String, Point)]) {
             joins.push((group[0], group[1..].to_vec(), gaps));
         }
     }
-    for (first, rest, gaps) in joins.iter().rev() {
+    let mut gone: BTreeSet<usize> = BTreeSet::new();
+    for (first, rest, gaps) in &joins {
         let mut runs: Vec<Vec<vectorcraft_doc::TextRun>> = [first]
             .into_iter()
             .chain(rest)
@@ -803,14 +830,15 @@ fn join_pieces(parts: &mut Vec<Arc<Node>>, lines: &[(String, Point)]) {
             t.cached_bounds = None;
             t.cached_baselines.clear();
         }
-        let mut gone: Vec<usize> = rest.clone();
-        gone.sort_unstable_by(|a, b| b.cmp(a));
-        for j in gone {
-            if j < parts.len() {
-                parts.remove(j);
-            }
-        }
+        gone.extend(rest);
     }
+    // The pieces that went into a text, removed once the joins are done: removing as each is made
+    // would move the places of the pieces that the others still name.
+    let mut keep = 0;
+    parts.retain(|_| {
+        keep += 1;
+        !gone.contains(&(keep - 1))
+    });
 }
 
 /// The box round `parts`.
@@ -823,7 +851,7 @@ fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
 /// the page's type in painting order.
 fn plan(
     infos: &[SlotInfo],
-    stories: &[Option<Story>],
+    stories: &[Option<Arc<Story>>],
     template: Option<(f64, f64)>,
     to_doc: Affine,
     pages: [&[Vec<Arc<Node>>]; 2],
@@ -1026,8 +1054,23 @@ fn build(data: &[u8], visible: &Document, base: Document, page: Page) -> Result<
     if infos.iter().all(|i| !i.shown) && !shown.is_empty() {
         return Err("its page has text, and its layers have no text objects to put it in".into());
     }
+    // The page's type is compared with every text object of the layers: that has its limits.
+    if infos.len() > MAX_SLOTS || infos.len().saturating_mul(shown.len()) > MAX_PAIRS {
+        return Err("it has too many text objects".into());
+    }
     let texts = Texts::read(data);
-    let stories: Vec<Option<Story>> = infos.iter().map(|i| texts.as_ref().and_then(|t| t.story(i.story? as usize))).collect();
+    // Each story is read once, however many text objects name it.
+    let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
+    let stories: Vec<Option<Arc<Story>>> = infos
+        .iter()
+        .map(|i| {
+            let n = i.story?;
+            read.entry(n).or_insert_with(|| texts.as_ref().and_then(|t| t.story(n as usize)).map(Arc::new)).clone()
+        })
+        .collect();
+    if stories.iter().flatten().map(|s| s.len()).sum::<usize>() > MAX_TEXT {
+        return Err("it has too much text".into());
+    }
     let template = parsed.template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
     let mut notes = vec![];
     let content = plan(&infos, &stories, template, to_doc, [&shown, &hidden], &mut notes);
@@ -1138,8 +1181,15 @@ fn compare(page: &Document, layered: &Document) -> Result<Option<String>, String
 /// hidden ones too), groups, compound paths and clipping groups, with the text and the strokes
 /// around it of the page. When the file has no editing copy this reads, `visible` as it was; when
 /// it has one that can't be used, `visible` with a warning that says why.
-pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
-    let Some(data) = decode(ps) else { return visible };
+pub(super) fn layered(ps: &[u8], mut visible: Imported) -> Imported {
+    let Some(data) = decode(ps) else {
+        // A file that says it has the editing copy but has none that can be read is a loss too.
+        let has = |n: &[u8]| ps.windows(n.len()).any(|w| w == n);
+        if has(BEGIN) && (has(STREAM) || has(STREAM_ZLIB)) {
+            visible.warnings.push(format!("{LAYERS_UNREAD} (its editing data is damaged or too large): it comes in as its page, in one layer"));
+        }
+        return visible;
+    };
     let Some(page) = visible.document.artboards.first().map(|a| a.rect) else { return visible };
     let base = Document::new(page.width(), page.height());
     let result = build(&data, &visible.document, base, Page::Art).and_then(|built| {
@@ -1204,4 +1254,25 @@ fn finish_layers(out: Out, layers: Vec<Arc<Node>>) -> Document {
     let mut doc = out.doc;
     doc.layers = layers;
     doc
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_doc::{CharStyle, TextObject};
+
+    fn piece(text: &str, x: f64, y: f64) -> Arc<Node> {
+        Arc::new(Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(x, y), text, CharStyle::default())))))
+    }
+
+    /// Lines that the page draws in pieces, the pieces of one between those of the other, are each
+    /// joined, and only their own pieces go.
+    #[test]
+    fn interleaved_lines_are_joined_without_taking_each_others_pieces() {
+        let mut parts = vec![piece("He", 0.0, 0.0), piece("ab", 0.0, -20.0), piece("cd", 16.0, -20.0), piece("llo", 20.0, 0.0)];
+        let lines = [("Hello".to_string(), Point::new(0.0, 0.0)), ("abcd".to_string(), Point::new(0.0, -20.0))];
+        join_pieces(&mut parts, &lines);
+        let texts: Vec<String> = parts.iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None }).collect();
+        assert_eq!(texts, ["Hello", "abcd"]);
+    }
 }

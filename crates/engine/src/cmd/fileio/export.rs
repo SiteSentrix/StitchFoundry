@@ -169,6 +169,9 @@ pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Do
 /// template layers are guides, not artwork, and are left out.
 pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportSelection";
+    if let Some(path) = str_param(p, "path") {
+        super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
+    }
     let path = str_param(p, "path");
     let f = writable(C, str_param(p, "format"), path)?;
     let expanded = expand_presets(s, C, p)?;
@@ -184,6 +187,9 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
 /// `transparent`.
 pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportForOffice";
+    if let Some(path) = str_param(p, "path") {
+        super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
+    }
     let path = str_param(p, "path");
     let ppi = f64_or(p, "ppi", 150.0);
     let doc = &s.doc()?.doc;
