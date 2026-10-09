@@ -90,3 +90,46 @@ fn cmd_n_opens_the_new_document_dialog() {
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("newDocument"));
     assert_eq!(app.session.documents().len(), 1, "no document is made until the dialog's OK");
 }
+
+/// One Home screen frame (no document open) with `events`: the texts drawn and where.
+fn home_texts(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let raw =
+        egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 900.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let mut texts = vec![];
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+    texts
+}
+
+/// The Home screen lists the first recent files (#663), each by name and folder; a click opens it,
+/// and one that can't be opened says so. With none, there is no Recent Files section.
+#[test]
+fn home_lists_recent_files_and_a_click_opens_one() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let has = |texts: &[(String, egui::Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
+    assert!(!has(&home_texts(&mut app, &ctx, vec![]), "Recent Files"), "none: no section");
+    let dir = std::env::temp_dir().join("vectorcraft-home-recent");
+    let missing = dir.join("Gone.svg").to_string_lossy().into_owned();
+    app.ui.recent_files = (0..9).map(|i| dir.join(format!("Drawing {i}.svg")).to_string_lossy().into_owned()).collect();
+    app.ui.recent_files.insert(0, missing);
+    let texts = home_texts(&mut app, &ctx, vec![]);
+    assert!(has(&texts, "Recent Files") && has(&texts, "Gone.svg") && has(&texts, "Drawing 4.svg"), "{texts:?}");
+    assert!(!has(&texts, "Drawing 5.svg"), "the first six only");
+    assert!(has(&texts, &dir.to_string_lossy()), "with its folder");
+    let at = texts.iter().find(|(t, _)| t == "Gone.svg").map(|(_, r)| r.center()).unwrap();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    home_texts(&mut app, &ctx, vec![egui::Event::PointerMoved(at), press(true)]);
+    home_texts(&mut app, &ctx, vec![press(false)]);
+    assert!(app.session.documents().is_empty());
+    assert!(!app.ui.status.is_empty(), "a file that can't be opened says so");
+}
