@@ -331,9 +331,11 @@ fn pdf_a_overprint_mode_is_0() {
 #[test]
 fn overprinting_art_imports_as_it_was_drawn() {
     let d = overprinting(RED);
-    let plain = leaves(&import(&export(&d, json!({"advanced": {"overprint": "discard"}})).bytes).unwrap());
+    // What is drawn (a form's bounds may come back as an unpainted clipping path).
+    let painted = |bytes: &[u8]| leaves(&import(bytes).unwrap()).into_iter().filter(|l| l.2.is_some()).collect::<Vec<_>>();
+    let plain = painted(&export(&d, json!({"advanced": {"overprint": "discard"}})).bytes);
     for v in [json!({}), json!({"createLayers": true})] {
-        assert_eq!(leaves(&import(&export(&d, v.clone()).bytes).unwrap()), plain, "{v}: the marks draw nothing");
+        assert_eq!(painted(&export(&d, v.clone()).bytes), plain, "{v}: the marks draw nothing");
     }
 }
 

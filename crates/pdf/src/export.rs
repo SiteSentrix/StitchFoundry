@@ -270,10 +270,12 @@ impl Writer {
             // The drawing space the page shows (the marks' area).
             let shown = sheet.view.inverse().transform_rect_bbox(paper);
             let knockout = std::mem::replace(&mut ex.knockout, false);
-            // Marks keep their inks: they aren't converted to the destination.
+            // Marks keep their inks: they aren't converted to the destination. The page
+            // information is drawn as glyph shapes, like the other marks, not as text.
             let convert = std::mem::replace(&mut ex.convert, false);
+            let outline = std::mem::replace(&mut ex.outline_text, true);
             ex.node(&mut s, art, sheet.window.map_or(shown, |r| r.intersect(shown)), true);
-            (ex.knockout, ex.convert) = (knockout, convert);
+            (ex.knockout, ex.convert, ex.outline_text) = (knockout, convert, outline);
         }
         if window.is_some() {
             s.pop();

@@ -342,9 +342,13 @@ fn text_exported_as_outlines() {
     let mut d = doc(300.0, 100.0);
     let t = TextObject::point(Point::new(10.0, 50.0), "Hello", CharStyle { size: 24.0, ..CharStyle::default() });
     add(&mut d, Node::new(NodeId(0), NodeKind::Text(Box::new(t))));
-    let s = uncompressed(&d);
+    let mut outlined = PdfOptions::uncompressed();
+    outlined.settings.advanced.outline_text = true;
+    let s = String::from_utf8_lossy(&export(&d, &outlined).unwrap()).into_owned();
     assert!(!s.contains("/Font"), "no fonts when outlining text");
-    let r = import_with_report(&export(&d, &PdfOptions::default()).unwrap(), &ImportOptions::default()).unwrap();
+    // Real text in an embedded font by default, as a PDF from Illustrator has it (#733).
+    assert!(uncompressed(&d).contains("/FontFile"), "a font embedded by default");
+    let r = import_with_report(&export(&d, &outlined).unwrap(), &ImportOptions::default()).unwrap();
     let l = leaves(&r.document);
     assert!(!l.is_empty());
     assert!(l.iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
