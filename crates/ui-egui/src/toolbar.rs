@@ -338,7 +338,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 }
 
 /// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps, Puppet
-/// Warp's mesh and pins (set through `tool.setOption`).
+/// Warp's mesh and pins, the Artboard tool's Move and Scale Artwork with Artboard (set through
+/// `tool.setOption`).
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     /// (value, label) of each choice.
     type Choices = &'static [(&'static str, &'static str)];
@@ -348,6 +349,11 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ];
     if app.session.tool_id() == "puppetWarp" {
         return puppet_warp_options(app, ui);
+    }
+    if app.session.tool_id() == "artboard" {
+        crate::panels::artboards::art_options(app, ui);
+        ui.separator();
+        return;
     }
     if app.session.tool_id() != "mirrorCut" {
         return;

@@ -1994,6 +1994,7 @@
 	Arrange by Row	排成一列
 	Arrange by Column	排成一欄
 	Move Artwork with Artboard	隨工作區域移動圖稿
+	Scale Artwork with Artboard	隨工作區域縮放圖稿
 	Artboards: {n}	工作區域：{n}
 	Rearrange All Artboards…	重新排列所有工作區域…
 	Recall Selection	叫出選取範圍

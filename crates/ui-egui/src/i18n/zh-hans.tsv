@@ -1945,6 +1945,7 @@
 	Arrange by Row	排成一行
 	Arrange by Column	排成一列
 	Move Artwork with Artboard	随画板移动图稿
+	Scale Artwork with Artboard	随画板缩放图稿
 	Artboards: {n}	画板：{n}
 	Rearrange All Artboards…	重新排列所有画板…
 	Recall Selection	召回选区

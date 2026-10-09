@@ -2006,6 +2006,7 @@
 	Arrange by Row	1 行に配置
 	Arrange by Column	1 列に配置
 	Move Artwork with Artboard	アートボードと一緒にアートワークを移動
+	Scale Artwork with Artboard	アートボードと一緒にアートワークを拡大・縮小
 	Artboards: {n}	アートボード: {n}
 	Recall Selection	選択範囲を呼び出し
 	Recent Colors	最近使用したカラー

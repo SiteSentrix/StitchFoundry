@@ -198,12 +198,14 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
 }
 
 /// Edit Artboards (the Artboard tool): the active artboard's name, position and size, its preset and
-/// orientation (#671), New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
+/// orientation (#671) (with Scale Artwork with Artboard on, a new size scales its art, #602), Move
+/// and Scale Artwork with Artboard, New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
 /// Exit back to the Selection tool (#530).
 fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     let units = app.session.general_unit();
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     let i = super::artboards::selected(app, n);
+    let scale_art = super::artboards::scale_art(app);
     if let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() {
         // Its name as it is (names are never translated).
         ui.label(egui::RichText::new(&ab.name).size(13.0).color(Tokens::get(ui.ctx()).text));
@@ -216,13 +218,15 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                 for (label, key, v) in [(l1, k1, v1), (l2, k2, v2)] {
                     dim_label(ui, label);
                     if let Some(v) = widgets::num_field(ui, ("ab", key, row), Some(v), units, fw) {
-                        app.run("artboard.setProps", json!({"index": i, key: v})).ok();
+                        app.run("artboard.setProps", json!({"index": i, key: v, "scaleArt": scale_art})).ok();
                     }
                 }
                 ui.end_row();
             }
         });
         artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
+        ui.add_space(2.0);
+        super::artboards::art_options(app, ui);
     }
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
@@ -296,7 +300,8 @@ fn artboard_size_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, w: f64, h:
         }
     });
     if let Some((width, height)) = size {
-        app.run("artboard.setProps", json!({"index": i, "width": width, "height": height})).ok();
+        let scale_art = super::artboards::scale_art(app);
+        app.run("artboard.setProps", json!({"index": i, "width": width, "height": height, "scaleArt": scale_art})).ok();
     }
 }
 
@@ -674,5 +679,44 @@ mod tests {
         assert!(texts.iter().any(|(t, _)| t == "Letter"), "still Letter, turned: {texts:?}");
         app.run("artboard.setProps", json!({"index": 0, "width": 333})).unwrap();
         assert!(frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Custom"));
+    }
+
+    /// #602: Edit Artboards shows Move and Scale Artwork with Artboard; with Scale on, a new size
+    /// (here the other orientation) takes the art on the artboard along.
+    #[test]
+    fn edit_artboards_scales_the_art_with_scale_artwork_with_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let r = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool("artboard");
+        let ctx = egui::Context::default();
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(texts.iter().any(|(t, _)| t == "Move Artwork with Artboard"), "{texts:?}");
+        assert_eq!(app.session.tool_options()["scaleArt"], false);
+        click(&mut app, &ctx, &texts, "Scale Artwork with Artboard");
+        assert_eq!(app.session.tool_options()["scaleArt"], true);
+        // Portrait: 100 × 200, the art scaled by ½ across and 2 down.
+        let texts = frame(&mut app, &ctx, vec![]);
+        let row = texts.iter().find(|(t, _)| t == "Preset:").map(|(_, r)| *r).unwrap();
+        let portrait = ctx.viewport(|vp| {
+            let mut r: Vec<Rect> = vp
+                .prev_pass
+                .widgets
+                .layers()
+                .flat_map(|(_, w)| w.iter())
+                .filter(|w| w.sense.senses_click() && w.rect.y_range().contains(row.center().y) && w.rect.left() > row.right())
+                .map(|w| w.rect)
+                .collect();
+            r.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            r[r.len() - 2].center()
+        });
+        let press = |pressed| Event::PointerButton { pos: portrait, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(portrait), press(true)]);
+        frame(&mut app, &ctx, vec![press(false)]);
+        let d = &app.session.active().unwrap().doc;
+        let ab = d.artboards[0].rect;
+        assert_eq!((ab.width(), ab.height()), (100.0, 200.0));
+        let b = d.node(vectorcraft_doc::NodeId(r)).unwrap().geometric_bounds().unwrap();
+        assert_eq!((b.x0, b.y0, b.width(), b.height()), (10.0, 40.0, 20.0, 80.0));
     }
 }
