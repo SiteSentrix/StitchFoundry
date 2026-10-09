@@ -85,7 +85,8 @@ pub struct RenderOptions {
     pub overprint_preview: bool,
     /// Trim View: clip the artwork to the artboards (nothing on the pasteboard is drawn).
     pub trim: bool,
-    /// Leave template layers out (exports and thumbnails: templates are guides, not artwork).
+    /// Leave template layers and guides out (exports and thumbnails: they're aids to drawing, not
+    /// artwork).
     pub skip_templates: bool,
     /// Pattern editing mode's tile edge and swatch bounds colour (Object → Pattern → Tile Edge
     /// Color), RGB.
@@ -725,9 +726,9 @@ impl Renderer {
         Some(p)
     }
 
-    /// Whether `a` is left out of this frame: hidden, a skipped template, or culled.
+    /// Whether `a` is left out of this frame: hidden, a skipped template or guide, or culled.
     fn skipped(&mut self, f: &Frame, a: &Arc<Node>) -> bool {
-        let skipped_template = f.opts.skip_templates && matches!(a.kind, NodeKind::Layer { template: true, .. });
+        let skipped_template = f.opts.skip_templates && matches!(a.kind, NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. });
         if !a.visible || skipped_template || f.opts.hidden.contains(&a.id) {
             return true;
         }
