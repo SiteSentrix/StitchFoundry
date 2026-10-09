@@ -181,7 +181,10 @@ impl<'a> Collector<'a> {
                     Some(f) if f.family.eq_ignore_ascii_case(&family) && f.embeddable() => {
                         let data = f.file_data();
                         let file = f.path().and_then(Path::file_name).map_or_else(
-                            || format!("{}-{}.{}", f.family, f.style, font_ext(data)).replace(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)), ""),
+                            || {
+                                format!("{}-{}.{}", f.family, f.style, font_ext(data))
+                                    .replace(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)), "")
+                            },
                             |n| n.to_string_lossy().into_owned(),
                         );
                         if self.font_files.insert(file.to_lowercase()) {
