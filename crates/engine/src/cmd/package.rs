@@ -149,10 +149,15 @@ impl<'a> Collector<'a> {
                 let unique = free_name(&name, if self.opts.links_folder { &mut self.link_names } else { &mut self.taken });
                 let destination_file = format!("{dir}{unique}");
                 if placed.contains(&file.path) {
-                    let mut nested = vectorcraft_format::load(&bytes).map_err(|e| bad(C, format!("linked VectorCraft document {} cannot be packaged: {e}", file.path)))?;
+                    let saved = vectorcraft_format::load_file(&bytes).map_err(|e| bad(C, format!("linked VectorCraft document {} cannot be packaged: {e}", file.path)))?;
+                    let mut nested = saved.doc;
                     self.collect(&mut nested, &file.path, &destination_file, depth + 1)?;
                     if self.opts.relink {
-                        bytes = vectorcraft_format::save_file(&nested);
+                        // Preserve embedded ICC profiles when rewriting a linked native file.
+                        let mut options = vectorcraft_format::SaveOptions::for_doc(&nested);
+                        options.profiles = saved.profiles;
+                        bytes = vectorcraft_format::save_with(&nested, &options)
+                            .map_err(|e| bad(C, format!("could not rewrite packaged document {}: {e}", file.path)))?;
                     }
                 }
                 let copy = Copied { name: destination_file.clone(), size: bytes.len() as u64, hash: hash_bytes(&bytes) };
