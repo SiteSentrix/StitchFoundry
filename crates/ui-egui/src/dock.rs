@@ -1,5 +1,6 @@
 //! The right dock: Properties | Layers | Libraries tabs, plus the collapsed icon-panel column
-//! whose panels pop out to the left. The double arrow at the top of the dock collapses the tabbed
+//! whose panels pop out to the left, and left of it the floating sets docked as columns
+//! ([`floating::docked_columns`]). The double arrow at the top of the dock collapses the tabbed
 //! group to icons at the top of the icon column (`window.collapseDock`); the arrow above the column
 //! then expands it again.
 
@@ -21,6 +22,12 @@ const FLYOUT_TOP: f32 = 110.0;
 /// Where the icon column's left edge was drawn last (egui temp memory, one frame old).
 fn column_left_id() -> egui::Id {
     egui::Id::new("dock-icon-column-left")
+}
+
+/// Where the dock's left edge was drawn last: the icon column's, or the leftmost dock column's
+/// (egui temp memory, one frame old). Popped-out panels open left of it.
+fn dock_left_id() -> egui::Id {
+    egui::Id::new("dock-left")
 }
 
 /// Collapse the tabbed group to icons or expand it again (`window.collapseDock`). Expanding while
@@ -148,7 +155,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     let column = column.response.rect;
     let dock = group.map_or(column, |g| g.union(column));
+    // Floating sets docked as columns, left of the icon column.
+    let left = floating::docked_columns(app, ui).iter().map(|r| r.left()).fold(column.left(), f32::min);
     ui.ctx().data_mut(|d| {
+        d.insert_temp(dock_left_id(), left);
         d.insert_temp(column_left_id(), column.left());
         d.insert_temp(floating::dock_rect_id(), dock);
         d.insert_temp(floating::icons_rect_id(), column);
@@ -226,7 +236,9 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     } else {
         screen.right()
     };
-    let right = column - 6.0;
+    let left = ctx.data(|d| d.get_temp::<f32>(dock_left_id())).filter(|x| x.is_finite() && *x > screen.left() && *x <= column).unwrap_or(column);
+    let right = if app.ui.dock && app.ui.screen_mode < 3 { left } else { column };
+    let right = right - 6.0;
     // The tabbed group's panels fill their height (Layers) or scroll (Properties): give them one
     // that keeps the flyout on screen.
     let width = panel_width(id);

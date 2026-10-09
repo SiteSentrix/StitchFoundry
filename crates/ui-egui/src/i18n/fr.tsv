@@ -3873,6 +3873,7 @@ axis	Both	Les deux
 @msg	onto must name a panel floating in another group	onto doit désigner un panneau flottant dans un autre groupe
 @msg	below and above must name a panel floating in another group	below et above doivent désigner un panneau flottant dans un autre groupe
 @msg	give only one of onto, below and above	indiquez un seul de onto, below et above
+@msg	column must be true or a number from 1	column doit être true ou un nombre à partir de 1
 @msg	x and y must both be numbers	x et y doivent tous deux être des nombres
 @msg	"{0}" is not a colour: write it as #rrggbb	« {0} » n’est pas une couleur : écrivez-la sous la forme #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ce n’est pas un logo en aplats ({_1} % de ses zones pleines correspondent à quelques couleurs unies), donc le mode Logo en aplats transformerait ses dégradés en taches : utilisez le mode Couleur

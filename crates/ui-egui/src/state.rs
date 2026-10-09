@@ -458,6 +458,10 @@ pub struct FloatingPanels {
     /// Collapsed to its tabs (a double-click on a tab), its panel hidden.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub collapsed: bool,
+    /// Docked as a column of the dock (with the rest of its set) instead of floating: the columns
+    /// stand left of the icon column, 1 next to it, counting left.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docked: Option<u32>,
 }
 
 impl FloatingPanels {
@@ -477,7 +481,8 @@ impl FloatingPanels {
     }
 
     /// Keep each set's groups together in the list, after its first one and in the order they
-    /// come, at its first one's position; a set left with one group floats on its own.
+    /// come, at its first one's position and in its dock column; a set left with one group floats
+    /// (or stays docked) on its own; the dock columns are numbered 1, 2… without gaps.
     pub fn tidy(groups: &mut Vec<FloatingPanels>) {
         let mut out: Vec<FloatingPanels> = Vec::with_capacity(groups.len());
         for mut g in groups.drain(..) {
@@ -485,6 +490,7 @@ impl FloatingPanels {
                 Some(i) => {
                     if let Some(first) = out.iter().find(|o| o.column == g.column) {
                         g.pos = first.pos;
+                        g.docked = first.docked;
                     }
                     out.insert(i + 1, g);
                 }
@@ -495,6 +501,14 @@ impl FloatingPanels {
         for g in &mut out {
             if g.column.is_some_and(|c| alone.contains(&c)) {
                 g.column = None;
+            }
+        }
+        let mut numbers: Vec<u32> = out.iter().filter_map(|g| g.docked).collect();
+        numbers.sort_unstable();
+        numbers.dedup();
+        for g in &mut out {
+            if let Some(d) = g.docked {
+                g.docked = numbers.iter().position(|n| *n == d).and_then(|k| u32::try_from(k + 1).ok());
             }
         }
         *groups = out;
