@@ -3657,6 +3657,22 @@ axis	Both	Les deux
 @msg	x and y must both be numbers	x et y doivent tous deux être des nombres
 @msg	"{0}" is not a colour: write it as #rrggbb	« {0} » n’est pas une couleur : écrivez-la sous la forme #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ce n’est pas un logo en aplats ({_1} % de ses zones pleines correspondent à quelques couleurs unies), donc le mode Logo en aplats transformerait ses dégradés en taches : utilisez le mode Couleur
+@msg	`{what}` closes nothing	`{what}` ne ferme rien
+@msg	`{what}` closes something it didn't open	`{what}` ferme quelque chose qu’il n’a pas ouvert
+@msg	a path has too many points	un tracé a trop de points
+@msg	it ends inside a layer	elles se terminent à l’intérieur d’un calque
+@msg	it has art outside its layers	elles contiennent des illustrations hors de leurs calques
+@msg	it has more than {MAX_NODES} objects	elles contiennent plus de {MAX_NODES} objets
+@msg	it has no layers	elles n’ont aucun calque
+@msg	it has too many values in a row	elles contiennent trop de valeurs à la suite
+@msg	it has {_1}, which VectorCraft doesn't read from it yet	elles contiennent {_1}, que VectorCraft n’y lit pas encore
+@msg	its objects are nested too deeply	leurs objets sont imbriqués trop profondément
+@msg	its section ending with `%{end}` doesn't end	leur section qui se termine par `%{end}` ne se termine pas
+@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
+@msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	le dégradé « {name} » n’est pas défini dans le fichier : une couleur unie le remplace
+@msg	an image VectorCraft can't read was left out	une image que VectorCraft ne peut pas lire a été ignorée
+@msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
+@msg	its editing data doesn't say where its art is	ses données d’édition ne disent pas où se trouve son illustration
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services

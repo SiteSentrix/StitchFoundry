@@ -95,7 +95,8 @@ fn layers_come_in_with_their_names_colours_and_hidden_state() {
     assert_eq!([d.layers[0].visible, d.layers[1].visible], [true, false]);
     // What is on a hidden layer stays: the page doesn't have it.
     assert_eq!(kinds(&d.layers[1]), ["path"]);
-    assert!(matches!(&d.layers[0].kind, NodeKind::Layer { color: LayerColor::Custom([79, 128, 255]), .. }));
+    // Colour 0 of the layer colours (light blue), by its place in the list.
+    assert!(matches!(&d.layers[0].kind, NodeKind::Layer { color: LayerColor::Preset(0), .. }));
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
     // The page is where the page's art was.
     let b = d.layers[0].children().unwrap()[0].visual_bounds().unwrap();
@@ -143,13 +144,13 @@ fn sublayers_groups_compounds_clip_groups_and_hidden_objects_come_in() {
 
 #[test]
 fn what_the_layers_cant_say_keeps_the_page_when_it_shows_and_not_when_it_doesnt() {
-    // A gradient (`Bg`) on a layer that shows: the layers would draw it as a flat colour.
-    let shown = native(&layer("Art", true, &format!("{}\n0 0 0 1 0 0 Bg", square(10, 10))));
+    // An operator that isn't read (`Zq`) on a layer that shows: the layers would draw without it.
+    let shown = native(&layer("Art", true, &format!("{}\n0 0 0 1 0 0 Zq", square(10, 10))));
     let r = import(&eps(&page_square(10, 10), &shown)).unwrap();
     assert_eq!(names(&r.document), ["Layer 1"]);
-    assert!(r.warnings.iter().any(|w| w.contains("layers weren't read") && w.contains("`Bg`")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("layers weren't read") && w.contains("`Zq`")), "{:?}", r.warnings);
     // On a hidden layer it only costs that layer's look.
-    let hidden = native(&(layer("Art", true, &square(10, 10)) + &layer("Old", false, "0 0 0 1 0 0 Bg")));
+    let hidden = native(&(layer("Art", true, &square(10, 10)) + &layer("Old", false, "0 0 0 1 0 0 Zq")));
     let r = import(&eps(&page_square(10, 10), &hidden)).unwrap();
     assert_eq!(names(&r.document), ["Art", "Old"]);
     assert!(r.warnings.iter().any(|w| w.contains("hidden layers have art this can't read")), "{:?}", r.warnings);
@@ -166,9 +167,8 @@ fn text_and_its_strokes_come_from_the_page_into_the_layer_of_its_text_object() {
     let r = import(&eps(&page, &art)).unwrap();
     assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
     assert_eq!(kinds(&r.document.layers[0]), ["path"]);
-    // The text and the path of its stroke, together where the text object is.
-    let group = &r.document.layers[1].children().unwrap()[0];
-    assert_eq!(kinds(group), ["text", "path"], "{:?}", r.warnings);
+    // The text and the path of its stroke, where the text object is (no group of their own).
+    assert_eq!(kinds(&r.document.layers[1]), ["text", "path"], "{:?}", r.warnings);
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
@@ -238,14 +238,15 @@ fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
 }
 
 #[test]
-fn a_gray_is_the_black_ink_as_in_a_cmyk_document() {
-    // `g` is a gray: 0.25 is 75 % of the black ink, as the page's own CMYK black says.
+fn a_gray_is_a_grayscale_colour() {
+    // `g` is a gray: 0.25 is 75 % of the black ink, as the page's own CMYK black says; the colour
+    // stays in its grayscale model.
     let art = native(&layer("Art", true, "0.25 g\n10 10 m\n14 10 L\n14 14 L\n10 14 L\nf"));
     let page = "0 0 0 0.75 setcmykcolor 10 10 moveto 14 10 lineto 14 14 lineto 10 14 lineto closepath fill";
     let r = import(&eps(page, &art)).unwrap();
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
     let fill = r.document.layers[0].children().unwrap()[0].appearance.fill().and_then(|f| f.paint.color());
-    assert_eq!(fill, Some(vectorcraft_color::Color::cmyk(0.0, 0.0, 0.0, 0.75)));
+    assert_eq!(fill, Some(vectorcraft_color::Color::gray(0.75)));
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
@@ -378,7 +379,7 @@ fn shown_type_keeps_the_pages_and_type_off_the_page_comes_from_the_text_document
     let r = import(&eps(page, &art)).unwrap();
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
     let texts = text_of(&r.document.layers[0]);
-    // The page's own object is a group (its type and strokes), and the other is made from the file.
+    // The page's own object, and the other made from the file.
     let all: Vec<String> = {
         let mut v = vec![];
         r.document.walk(|n| {
@@ -390,7 +391,7 @@ fn shown_type_keeps_the_pages_and_type_off_the_page_comes_from_the_text_document
     };
     assert_eq!(all.len(), 2, "{all:?} {:?}", r.warnings);
     assert!(all.contains(&"Hi there".to_string()) && all.contains(&"Away".to_string()), "{all:?}");
-    assert_eq!(texts.len(), 1, "the type of the page sits in a group of its own");
+    assert_eq!(texts.len(), 2, "the page's type is in the layer as it is, not in a group");
     assert!(!r.warnings.iter().any(|w| w.contains("order the page paints")), "{:?}", r.warnings);
 }
 
@@ -422,13 +423,12 @@ fn a_line_the_page_draws_in_pieces_goes_to_its_text_object_whole() {
     let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi) show 70 61.5 moveto (there) show";
     let r = import(&eps(page, &art)).unwrap();
     // One text, with the line's space between the pieces.
-    let group = &r.document.layers[0].children().unwrap()[0];
-    assert_eq!(kinds(group), ["text"], "{:?}", r.warnings);
-    let texts: Vec<String> =
-        group.children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None }).collect();
+    let art = &r.document.layers[0];
+    assert_eq!(kinds(art), ["text"], "{:?}", r.warnings);
+    let texts: Vec<String> = text_of(art).iter().map(|t| t.plain_text()).collect();
     assert_eq!(texts, ["Hi there"]);
     // Its bounds are laid out afresh for the whole text, not those of the first piece.
-    let NodeKind::Text(t) = &group.children().unwrap()[0].kind else { panic!("text") };
+    let NodeKind::Text(t) = &art.children().unwrap()[0].kind else { panic!("text") };
     assert!(t.cached_bounds.is_none() && t.cached_baselines.is_empty());
 }
 

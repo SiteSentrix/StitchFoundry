@@ -7,7 +7,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use vectorcraft_geom::{Affine, BezPath, FillRule};
+use vectorcraft_geom::Affine;
 
 use super::graphics::{GState, Out};
 use super::lex::{IMMEDIATE, Lexer};
@@ -65,11 +65,6 @@ pub(crate) struct Interp<'a> {
     /// The program is in the legacy Illustrator format: its group operators `u` … `U` (at the top
     /// level, whatever its prolog defines them as) are groups (see the module docs of `import`).
     pub illustrator: bool,
-    /// The program is the editing copy of an Illustrator file's art (see `native`): its clipping
-    /// groups, compound paths and text objects have operators of their own too.
-    pub native: bool,
-    /// The clip path `W` set for the clipping group about to end.
-    clip_region: Option<(BezPath, FillRule)>,
 }
 
 /// Where a PostScript error was raised: the operator that raised it (none for an unknown name)
@@ -169,8 +164,6 @@ impl<'a> Interp<'a> {
             saved: vec![],
             out,
             illustrator: false,
-            native: false,
-            clip_region: None,
         }
     }
 
@@ -179,9 +172,6 @@ impl<'a> Interp<'a> {
         loop {
             let Some(o) = self.lex.next()? else { return Ok(()) };
             let o = self.scanned(o, self.lex.immediate)?;
-            if self.native && self.native_op(&o)? {
-                continue;
-            }
             // A group begins before its `u` runs (`Some(true)`) and ends after its `U`
             // has (`Some(false)`).
             let group = match &o {
@@ -203,32 +193,6 @@ impl<'a> Interp<'a> {
                 self.out.end_group();
             }
         }
-    }
-
-    /// The operators only the editing copy of an Illustrator file's art has (`native`), run
-    /// instead of defined; `false` for any other token.
-    fn native_op(&mut self, o: &Obj) -> Res<bool> {
-        let Obj::Exec(name) = o else { return Ok(false) };
-        match &**name {
-            "q" => self.out.begin_clip_group(),
-            "Q" => {
-                let region = self.clip_region.take();
-                self.out.end_clip_group(region);
-            }
-            "W" => {
-                let path = self.take_path();
-                self.clip_region = (!path.elements().is_empty()).then_some((path, FillRule::NonZero));
-            }
-            "*u" => self.out.begin_compound(),
-            "*U" => self.out.end_compound(),
-            "Xw" => self.out.hidden = self.pop_num()? != 0.0,
-            "__txt" => {
-                let story = self.pop_num()?;
-                self.out.text_slot((story >= 0.0 && story < f64::from(u32::MAX)).then_some(story as u32));
-            }
-            _ => return Ok(false),
-        }
-        Ok(true)
     }
 
     /// Empty the standard dictionaries, so the memory they hold is freed with the interpreter:

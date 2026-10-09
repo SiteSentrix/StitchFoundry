@@ -939,6 +939,9 @@ mod tests_psd;
 mod tests_epsimport;
 
 #[cfg(test)]
+mod tests_aiimport;
+
+#[cfg(test)]
 mod tests_pdflayers;
 
 #[cfg(test)]
