@@ -192,6 +192,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 });
                 corner_radius_row(app, ui, &n, "xfp-radius");
             }
+            vectorcraft_doc::LiveShape::Ellipse { pie, .. } => {
+                widgets::subheader(ui, tl!("Ellipse Properties:"));
+                pie_rows(app, ui, *pie, "xfp-pie");
+            }
             _ => {
                 widgets::subheader(ui, tl!("Shape Properties:"));
                 widgets::dim_label(ui, tl!(n.kind_label()));
@@ -208,6 +212,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
+    }
+}
+
+/// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the
+/// whole ellipse) and Invert Pie, which shows the other part of it (Transform and Properties panels).
+pub(crate) fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64), id: &str) {
+    for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
+        ui.horizontal(|ui| {
+            widgets::dim_label(ui, label);
+            if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
+                app.run("object.setLiveShape", json!({ key: a })).ok();
+            }
+        });
+    }
+    if widgets::flat_button(ui, tl!("Invert Pie"), 90.0).clicked() {
+        app.run("object.setLiveShape", json!({"invertPie": true})).ok();
     }
 }
 
