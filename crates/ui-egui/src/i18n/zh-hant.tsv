@@ -1372,6 +1372,46 @@
 	Keyboard Shortcut Conflicts	鍵盤快速鍵衝突
 	Keyboard Shortcut Set	鍵盤快速鍵組
 	Keyboard Shortcuts…	鍵盤快速鍵…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	匯入快速鍵組
+	Import Shortcut Set…	匯入快速鍵組…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	檔案中的每個項目都會對應到 VectorCraft 的工具、指令或面板。請檢查對應結果，並回答其餘項目。
+	Keys	按鍵
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	檔案以代碼記錄按鍵與輔助鍵。請檢查建議的意義，並回答尚未得知的代碼。
+	Click, then press the key this code stands for (Esc cancels)	按一下，然後按下此代碼代表的按鍵 (Esc 取消)
+	Press a key…	請按下按鍵…
+	from your earlier imports	依據您先前的匯入
+	from the format's public description	依據格式的公開說明
+	not known yet	尚未得知
+	Shortcuts	快速鍵
+	Shortcut	快速鍵
+	In the File	檔案中的名稱
+	In VectorCraft	VectorCraft 中的對應
+	Needs Attention Only	僅顯示需要處理的項目
+	Ready	就緒
+	Needs a choice	需要選擇
+	Needs a key	需要按鍵
+	No equivalent	沒有對應項目
+	Tools take a single key (optionally with Shift)	工具只能指定單一按鍵 (可搭配 Shift)
+	A later row takes this shortcut	後面的列會使用此快速鍵
+	Same item as a later row	與後面某一列的項目相同
+	Start from VectorCraft Defaults	從 VectorCraft 預設值開始
+	Add to the Current Shortcuts	加入目前的快速鍵
+	Remember My Choices	記住我的選擇
+	{ready} of {total} ready	{total} 個中有 {ready} 個就緒
+	The file is too large to read in full, so only its first part is listed.	檔案太大，無法完整讀取，因此只列出開頭的部分。
+	Copy Report	複製報告
+	Report copied	已複製報告
+	Line {line}	第 {line} 行
+	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
+	Not read	未讀取
+	Imported. Press OK to keep the imported set.	已匯入。按一下「確定」以保留匯入的快速鍵組。
+	Read Shortcut Set File	讀取快速鍵組檔案
+	Import Matches	匯入對應
+	Remember Import Matches	記住匯入對應
+	Forget Import Matches	清除匯入對應
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	與 {n} 個預設快速鍵一致
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	檔案中有 {n} 個部分未讀取
 	Keywords:	關鍵字：
 	Knife	美工刀
 	Knockout Group	去底群組

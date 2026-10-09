@@ -300,6 +300,32 @@ fn keyboard_shortcuts_import_and_export_ask_off_the_ui_thread() {
     assert_eq!(*written.borrow(), ["/keys/out.json", "/keys/command.json"]);
 }
 
+/// Keyboard Shortcuts' Import… opens a shortcut set another app saved as text (`.kys`) in Import
+/// Shortcut Set over the dialog when its file dialog answers, and the dialog's working set stays in
+/// Keyboard Shortcuts, which Cancel shows again.
+#[test]
+fn keyboard_shortcuts_import_opens_a_text_set_over_the_dialog() {
+    let (mut app, shown, _) = app();
+    let dir = std::env::temp_dir().join(format!("vc-picks-kys-import-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let set = dir.join("Mine.kys");
+    std::fs::write(&set, "/Menus {\n /Acme\\ Undo { /Modifiers 11 /Key 902 }\n}\n").unwrap();
+    let path = set.to_string_lossy().into_owned();
+    app.run("edit.keyboardShortcuts", json!({})).unwrap();
+    click(&mut app, "Import…", dialogs);
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(_)]));
+    shown.answer(&[&path]);
+    poll(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("no dialog: {}", app.ui.status));
+    assert_eq!(d.kind.as_str(), crate::dialogs::shortcut_import::KIND, "{}", app.ui.status);
+    for field in ["overrides", "set", "__message"] {
+        assert!(!d.fields.contains_key(field), "Keyboard Shortcuts' `{field}` stays in Keyboard Shortcuts");
+    }
+    crate::dialogs::cancel(&mut app);
+    assert_eq!(dialog_kind(&app), Some("shortcuts"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// A dialog's folder button answered after the dialog closed fills nothing, and the status says
 /// why.
 #[test]
@@ -494,6 +520,27 @@ fn an_open_answer_goes_on_after_the_active_document_closes() {
     poll(&mut app);
     assert_eq!(app.session.documents().iter().map(|d| d.path.clone()).collect::<Vec<_>>(), [Some("/art/b.svg".to_string())]);
     assert_ne!(app.ui.status, CLOSED);
+}
+
+/// Import Shortcut Set… acts on no document either: its answer opens the set picked in Import
+/// Shortcut Set even when the document active at the time closed meanwhile (Linux).
+#[test]
+fn an_import_shortcut_set_answer_goes_on_after_the_active_document_closes() {
+    let (mut app, shown, _) = with_dialogs(false);
+    let dir = std::env::temp_dir().join(format!("vc-picks-kys-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let set = dir.join("Mine.kys");
+    std::fs::write(&set, "/Menus {\n /Acme\\ Undo { /Modifiers 11 /Key 902 }\n}\n").unwrap();
+    let path = set.to_string_lossy().into_owned();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    assert!(app.run("ui.shortcutImportDialog", json!({})).is_err());
+    app.run("file.close", json!({})).unwrap();
+    assert!(app.session.documents().is_empty());
+    shown.answer(&[&path]);
+    poll(&mut app);
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::shortcut_import::KIND), "{}", app.ui.status);
+    assert_ne!(app.ui.status, CLOSED);
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// Save Changes' Save, answered by its Save dialog, saves and closes the document it asked about,

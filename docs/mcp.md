@@ -65,7 +65,7 @@ the suite) keep the agent to the folders you give it:
 
 - Every file a command reads must lie inside the **read root**: `open_file`, `file.place`, relinking and
   updating links, the images an SVG links to, swatch library, graphic style library and colour-profile loads, plug-ins,
-  `file.newFromTemplate`, preset imports, the folders `text.findFontFiles` and `links.findFiles` search, the
+  `file.newFromTemplate`, preset imports, shortcut sets (`shortcutSet.read`), the folders `text.findFontFiles` and `links.findFiles` search, the
   scripts `script.check` reads and the files they include.
 - Every file a command writes must lie inside the **write root**: `save_file`, `export`, the save and
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
@@ -3439,4 +3439,32 @@ Envelope Options.
 ```json
 {"name":"run_command","arguments":{"command":"object.envelope.editContents","params":{"editing":true}}}
 {"name":"run_command","arguments":{"command":"object.mesh.movePoint","params":{"id":12,"index":4,"x":220,"y":140,"handle":0}}}
+```
+
+## Shortcut sets from other apps
+
+`shortcutSet.read {path? | data? | dataBase64?, name?}` reads a shortcut set another app saved as text (a `.kys` file
+that starts with `/Menus {`) without changing the document or the preferences. Each block that sets `/Key` is an
+entry, listed with its `name`, its `section` (the names of the blocks around it), its codes as the file writes them
+(`key`, `modifiers`, `context`, `represent`) and its `line`. `codes` counts the entries that use each key and modifier
+code, and `unread` lists the tokens the reader skipped, with their lines. The reader stops at 4 MiB, 16 open blocks and
+20,000 entries, cuts names at 1,024 bytes, and sets `truncated` when it reaches one of these limits. An XML shortcut
+file fails with "This shortcut file is in a form VectorCraft can't read."
+
+The import matches record what the names and codes in such files stand for in VectorCraft. They are kept with the
+preferences, and resetting the preferences keeps them. `importMatches.set {matches: [{kind, name, target, label?}]}`
+records them: kind `name` maps an entry name to a command id, `tool:<id>` or `panel:<id>`, and kinds `key` and
+`modifiers` map a code, written in decimal, to a key or to modifiers as Edit › Keyboard Shortcuts writes them (`K`,
+`Cmd+Shift`). A `target` of `""` records that there is no equivalent (for kind `modifiers`, no modifiers), and `null`
+removes the match. `importMatches.list {kind?, query?}` lists them and `importMatches.reset {kind?}` removes them.
+`shortcutSet.read` then adds the saved `target` to each entry, a `chord` to each entry whose codes are both known, and
+the saved `key` or `mods` to each code.
+
+In the desktop app, Edit › Keyboard Shortcuts › Import… and File › Open show such a file in Import Shortcut Set
+(`ui.shortcutImportDialog {path? | dataBase64?, name?}` over the control channel). The dialog proposes targets from
+the entry names and decodes the codes that VectorCraft's default shortcuts agree on.
+
+```json
+{"name":"run_command","arguments":{"command":"shortcutSet.read","params":{"path":"/Users/me/Studio.kys"}}}
+{"name":"run_command","arguments":{"command":"importMatches.set","params":{"matches":[{"kind":"name","name":"Group","target":"object.group"},{"kind":"key","name":"901","target":"G"}]}}}
 ```

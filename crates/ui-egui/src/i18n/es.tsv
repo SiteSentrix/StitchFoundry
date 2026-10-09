@@ -1397,6 +1397,46 @@
 	Keyboard Shortcut Conflicts	Conflictos de métodos abreviados de teclado
 	Keyboard Shortcut Set	Conjunto de métodos abreviados de teclado
 	Keyboard Shortcuts…	Métodos abreviados de teclado…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Importar conjunto de métodos abreviados
+	Import Shortcut Set…	Importar conjunto de métodos abreviados…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Cada entrada del archivo se asocia con una herramienta, un comando o un panel de VectorCraft. Revisa las asociaciones y responde lo que falta.
+	Keys	Teclas
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	El archivo guarda las teclas y los modificadores como códigos. Revisa los significados propuestos y responde los códigos que aún no se conocen.
+	Click, then press the key this code stands for (Esc cancels)	Haz clic y luego presiona la tecla que representa este código (Esc cancela)
+	Press a key…	Presiona una tecla…
+	from your earlier imports	de tus importaciones anteriores
+	from the format's public description	según la descripción pública del formato
+	not known yet	aún desconocido
+	Shortcuts	Métodos abreviados
+	Shortcut	Método abreviado
+	In the File	En el archivo
+	In VectorCraft	En VectorCraft
+	Needs Attention Only	Solo lo que requiere atención
+	Ready	Listo
+	Needs a choice	Requiere una elección
+	Needs a key	Requiere una tecla
+	No equivalent	Sin equivalente
+	Tools take a single key (optionally with Shift)	Las herramientas usan una sola tecla (opcionalmente con Shift)
+	A later row takes this shortcut	Una fila posterior usa este método abreviado
+	Same item as a later row	Mismo elemento que una fila posterior
+	Start from VectorCraft Defaults	Partir de los valores predeterminados de VectorCraft
+	Add to the Current Shortcuts	Agregar a los métodos abreviados actuales
+	Remember My Choices	Recordar mis elecciones
+	{ready} of {total} ready	{ready} de {total} listos
+	The file is too large to read in full, so only its first part is listed.	El archivo es demasiado grande para leerlo completo, así que solo se muestra su primera parte.
+	Copy Report	Copiar informe
+	Report copied	Informe copiado
+	Line {line}	Línea {line}
+	Line {line}: {name}: {status}	Línea {line}: {name}: {status}
+	Not read	No leído
+	Imported. Press OK to keep the imported set.	Importado. Haz clic en Aceptar para conservar el conjunto importado.
+	Read Shortcut Set File	Leer archivo de conjunto de métodos abreviados
+	Import Matches	Asociaciones de importación
+	Remember Import Matches	Recordar asociaciones de importación
+	Forget Import Matches	Olvidar asociaciones de importación
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	coincide con {n} método abreviado predeterminado|coincide con {n} métodos abreviados predeterminados
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	no se leyó {n} parte del archivo|no se leyeron {n} partes del archivo
 	Keywords:	Palabras clave:
 	Knife	Cuchilla
 	Knockout Group	Grupo de exclusión
@@ -3526,6 +3566,7 @@ axis	Both	Ambos
 @msg	Split Into Grid: select paths large enough for the grid	Dividir en cuadrícula: selecciona trazados lo bastante grandes para la cuadrícula
 @msg	Targa files are RGB: colorModel rgb	los archivos Targa son RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Ceñir texto: selecciona un objeto para ceñir
+@msg	This shortcut file is in a form VectorCraft can't read.	Este archivo de métodos abreviados tiene un formato que VectorCraft no puede leer.
 @msg	`aspect` must be a number (%)	`aspect` debe ser un número (%)
 @msg	`at` must be [x, y]	`at` debe ser [x, y]
 @msg	`color` must be a colour	`color` debe ser un color
@@ -3759,6 +3800,7 @@ axis	Both	Ambos
 @msg	not a VectorCraft file: {0}	no es un archivo de VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no es un conjunto de atajos de VectorCraft (falta `overrides`)
 @msg	not a graphic style library (format `{_1}`)	no es una biblioteca de estilos gráficos (formato `{_1}`)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	no es un conjunto de métodos abreviados: el texto no empieza con un nombre con barra y una llave de apertura
 @msg	not a stored central record	no es un registro central almacenado
 @msg	not a valid plug-in module: {0}	no es un módulo de plugin válido: {0}
 @msg	not an EMF or WMF file	no es un archivo EMF ni WMF

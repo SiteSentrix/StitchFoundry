@@ -1397,6 +1397,46 @@
 	Keyboard Shortcut Conflicts	Conflitti tra scelte rapide da tastiera
 	Keyboard Shortcut Set	Set di scelte rapide da tastiera
 	Keyboard Shortcuts…	Scelte rapide da tastiera…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Importa set di scelte rapide
+	Import Shortcut Set…	Importa set di scelte rapide…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Ogni voce del file viene abbinata a uno strumento, un comando o un pannello di VectorCraft. Controlla gli abbinamenti e rispondi a ciò che resta.
+	Keys	Tasti
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	Il file registra tasti e modificatori come codici. Controlla i significati proposti e indica i codici ancora sconosciuti.
+	Click, then press the key this code stands for (Esc cancels)	Fai clic, quindi premi il tasto che questo codice rappresenta (Esc annulla)
+	Press a key…	Premi un tasto…
+	from your earlier imports	dalle tue importazioni precedenti
+	from the format's public description	dalla descrizione pubblica del formato
+	not known yet	ancora sconosciuto
+	Shortcuts	Scelte rapide
+	Shortcut	Scelta rapida
+	In the File	Nel file
+	In VectorCraft	In VectorCraft
+	Needs Attention Only	Solo da controllare
+	Ready	Pronto
+	Needs a choice	Serve una scelta
+	Needs a key	Serve un tasto
+	No equivalent	Nessun equivalente
+	Tools take a single key (optionally with Shift)	Gli strumenti accettano un solo tasto (facoltativamente con Shift)
+	A later row takes this shortcut	Una riga successiva usa questa scelta rapida
+	Same item as a later row	Stessa voce di una riga successiva
+	Start from VectorCraft Defaults	Parti dai valori predefiniti di VectorCraft
+	Add to the Current Shortcuts	Aggiungi alle scelte rapide attuali
+	Remember My Choices	Ricorda le mie scelte
+	{ready} of {total} ready	{ready} su {total} pronti
+	The file is too large to read in full, so only its first part is listed.	Il file è troppo grande per essere letto per intero, quindi ne viene elencata solo la prima parte.
+	Copy Report	Copia rapporto
+	Report copied	Rapporto copiato
+	Line {line}	Riga {line}
+	Line {line}: {name}: {status}	Riga {line}: {name}: {status}
+	Not read	Non letto
+	Imported. Press OK to keep the imported set.	Importato. Premi OK per mantenere il set importato.
+	Read Shortcut Set File	Leggi file di set di scelte rapide
+	Import Matches	Abbinamenti di importazione
+	Remember Import Matches	Ricorda abbinamenti di importazione
+	Forget Import Matches	Dimentica abbinamenti di importazione
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	concorda con {n} scelta rapida predefinita|concorda con {n} scelte rapide predefinite
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} parte del file non è stata letta|{n} parti del file non sono state lette
 	Keywords:	Parole chiave:
 	Knife	Coltello
 	Knockout Group	Gruppo con foratura
@@ -3526,6 +3566,7 @@ axis	Both	Entrambi
 @msg	Split Into Grid: select paths large enough for the grid	Dividi in griglia: seleziona tracciati abbastanza grandi per la griglia
 @msg	Targa files are RGB: colorModel rgb	I file Targa sono RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Testo attorno: seleziona un oggetto di avvolgimento
+@msg	This shortcut file is in a form VectorCraft can't read.	Questo file di scelte rapide è in un formato che VectorCraft non può leggere.
 @msg	`aspect` must be a number (%)	`aspect` deve essere un numero (%)
 @msg	`at` must be [x, y]	`at` deve essere [x, y]
 @msg	`color` must be a colour	`color` deve essere un colore
@@ -3759,6 +3800,7 @@ axis	Both	Entrambi
 @msg	not a VectorCraft file: {0}	non è un file VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	non è un set di scelte rapide VectorCraft (manca `overrides`)
 @msg	not a graphic style library (format `{_1}`)	non è una libreria di stili grafici (formato `{_1}`)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	non è un set di scelte rapide: il testo non inizia con un nome preceduto da una barra e una parentesi graffa aperta
 @msg	not a stored central record	non è un record centrale archiviato
 @msg	not a valid plug-in module: {0}	non è un modulo plug-in valido: {0}
 @msg	not an EMF or WMF file	non è un file EMF o WMF

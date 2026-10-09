@@ -3293,6 +3293,44 @@ imageTrace	Outline	轮廓
 	Set:	集：
 	Shortcut	快捷键
 	Use Default	使用默认值
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	导入快捷键组
+	Import Shortcut Set…	导入快捷键组…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	文件中的每个条目都会对应到 VectorCraft 的工具、命令或面板。请检查对应结果，并回答剩余的条目。
+	Keys	按键
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	文件以代码记录按键和修饰键。请检查建议的含义，并回答尚未确定的代码。
+	Click, then press the key this code stands for (Esc cancels)	单击后按下此代码代表的键 (Esc 取消)
+	Press a key…	请按一个键…
+	from your earlier imports	来自你之前的导入
+	from the format's public description	依据格式的公开说明
+	not known yet	尚未确定
+	Shortcuts	快捷键
+	In the File	文件中的名称
+	In VectorCraft	VectorCraft 中的对应
+	Needs Attention Only	仅显示需要处理的条目
+	Ready	就绪
+	Needs a choice	需要选择
+	Needs a key	需要按键
+	No equivalent	无对应项
+	Tools take a single key (optionally with Shift)	工具只能使用单个键 (可搭配 Shift)
+	A later row takes this shortcut	后面的行会使用此快捷键
+	Same item as a later row	与后面某一行的项目相同
+	Start from VectorCraft Defaults	从 VectorCraft 默认开始
+	Add to the Current Shortcuts	添加到当前快捷键
+	Remember My Choices	记住我的选择
+	{ready} of {total} ready	{total} 个中有 {ready} 个就绪
+	The file is too large to read in full, so only its first part is listed.	文件太大，无法完整读取，因此只列出开头部分。
+	Copy Report	复制报告
+	Report copied	已复制报告
+	Line {line}	第 {line} 行
+	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
+	Not read	未读取
+	Read Shortcut Set File	读取快捷键组文件
+	Import Matches	导入对应
+	Remember Import Matches	记住导入对应
+	Forget Import Matches	清除导入对应
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	与 {n} 个默认快捷键一致
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	文件中有 {n} 个部分未读取
 	RGB:	RGB：
 	Anchors	锚点
 	Image Trace (Make and Expand)	图像描摹 (创建并扩展)

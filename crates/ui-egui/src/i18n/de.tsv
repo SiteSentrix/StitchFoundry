@@ -1379,6 +1379,46 @@
 	Keyboard Shortcut Conflicts	Konflikte bei Tastaturbefehlen
 	Keyboard Shortcut Set	Tastaturbefehlssatz
 	Keyboard Shortcuts…	Tastaturbefehle…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Tastaturbefehlssatz importieren
+	Import Shortcut Set…	Tastaturbefehlssatz importieren…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Jeder Eintrag der Datei wird einem Werkzeug, einem Befehl oder einem Bedienfeld von VectorCraft zugeordnet. Prüfen Sie die Zuordnungen und beantworten Sie, was noch offen ist.
+	Keys	Tasten
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	Die Datei speichert Tasten und Sondertasten als Codes. Prüfen Sie die vorgeschlagenen Bedeutungen und beantworten Sie die Codes, die noch nicht bekannt sind.
+	Click, then press the key this code stands for (Esc cancels)	Klicken Sie und drücken Sie dann die Taste, für die dieser Code steht (Esc bricht ab)
+	Press a key…	Taste drücken…
+	from your earlier imports	aus Ihren früheren Importen
+	from the format's public description	aus der öffentlichen Beschreibung des Formats
+	not known yet	noch nicht bekannt
+	Shortcuts	Tastaturbefehle
+	Shortcut	Tastaturbefehl
+	In the File	In der Datei
+	In VectorCraft	In VectorCraft
+	Needs Attention Only	Nur Einträge mit Handlungsbedarf
+	Ready	Bereit
+	Needs a choice	Auswahl erforderlich
+	Needs a key	Taste erforderlich
+	No equivalent	Keine Entsprechung
+	Tools take a single key (optionally with Shift)	Werkzeuge verwenden eine einzelne Taste (optional mit Shift)
+	A later row takes this shortcut	Eine spätere Zeile übernimmt diesen Tastaturbefehl
+	Same item as a later row	Gleiches Element wie eine spätere Zeile
+	Start from VectorCraft Defaults	Von den VectorCraft-Standardwerten ausgehen
+	Add to the Current Shortcuts	Zu den aktuellen Tastaturbefehlen hinzufügen
+	Remember My Choices	Meine Auswahl merken
+	{ready} of {total} ready	{ready} von {total} bereit
+	The file is too large to read in full, so only its first part is listed.	Die Datei ist zu groß, um sie vollständig zu lesen. Daher wird nur ihr erster Teil aufgeführt.
+	Copy Report	Bericht kopieren
+	Report copied	Bericht kopiert
+	Line {line}	Zeile {line}
+	Line {line}: {name}: {status}	Zeile {line}: {name}: {status}
+	Not read	Nicht gelesen
+	Imported. Press OK to keep the imported set.	Importiert. Klicken Sie auf „OK“, um den importierten Satz zu behalten.
+	Read Shortcut Set File	Tastaturbefehlssatz-Datei lesen
+	Import Matches	Import-Zuordnungen
+	Remember Import Matches	Import-Zuordnungen merken
+	Forget Import Matches	Import-Zuordnungen vergessen
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	stimmt mit {n} Standard-Tastaturbefehl überein|stimmt mit {n} Standard-Tastaturbefehlen überein
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} Teil der Datei wurde nicht gelesen|{n} Teile der Datei wurden nicht gelesen
 	Keywords:	Stichwörter:
 	Knife	Messer
 	Knockout Group	Aussparungsgruppe
@@ -3426,6 +3466,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Split Into Grid: select paths large enough for the grid	In Raster teilen: Wählen Sie Pfade aus, die groß genug für das Raster sind
 @msg	Targa files are RGB: colorModel rgb	Targa-Dateien sind RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Textumfluss: Wählen Sie ein Umflussobjekt aus
+@msg	This shortcut file is in a form VectorCraft can't read.	Diese Tastaturbefehlsdatei liegt in einem Format vor, das VectorCraft nicht lesen kann.
 @msg	`aspect` must be a number (%)	`aspect` muss eine Zahl sein (%)
 @msg	`at` must be [x, y]	`at` muss [x, y] sein
 @msg	`color` must be a colour	`color` muss eine Farbe sein
@@ -3660,6 +3701,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a VectorCraft file: {0}	keine VectorCraft-Datei: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	kein VectorCraft-Tastaturbefehlssatz (`overrides` fehlt)
 @msg	not a graphic style library (format `{_1}`)	keine Grafikstil-Bibliothek (Format `{_1}`)
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	kein Tastaturbefehlssatz: Der Text beginnt nicht mit einem Namen mit Schrägstrich und einer öffnenden geschweiften Klammer
 @msg	not a stored central record	kein gespeicherter zentraler Eintrag
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei

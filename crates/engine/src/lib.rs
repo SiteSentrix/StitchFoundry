@@ -12,6 +12,7 @@ pub mod guard;
 pub mod inspect;
 pub mod journal;
 pub mod link_watch;
+pub mod namematch;
 pub mod steps;
 mod tooling;
 pub mod units;
@@ -856,6 +857,11 @@ pub struct Prefs {
     /// Perspective Grid Options (double-click the Perspective Grid tool): whether the Plane
     /// Switching Widget shows and where (`perspective.widget.options`).
     pub perspective_widget: vectorcraft_tools::distort::perspective::widget::WidgetOptions,
+    /// What names and codes in other apps' shortcut sets stand for, as the user confirmed them on
+    /// import (`importMatches.*`). A local library, not a Preferences dialog field: resetting the
+    /// preferences keeps it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub import_matches: Vec<cmd::importmatches::ImportMatch>,
 }
 
 impl Default for Prefs {
@@ -1001,6 +1007,7 @@ impl Default for Prefs {
             perspective_presets: vec![],
             blend_options: None,
             perspective_widget: Default::default(),
+            import_matches: vec![],
         }
     }
 }
@@ -1958,6 +1965,8 @@ mod tests_scalestrokes;
 mod tests_scripts;
 #[cfg(test)]
 mod tests_shaper;
+#[cfg(test)]
+mod tests_shortcutset;
 #[cfg(test)]
 mod tests_slices;
 #[cfg(test)]
