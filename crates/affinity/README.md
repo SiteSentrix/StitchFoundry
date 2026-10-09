@@ -42,16 +42,42 @@ When the native document can't be read at all, the engine opens the embedded PNG
 with a warning that names the reason; that preview can't be placed, used as a template or mined
 for swatches and styles. Save never writes back over the Affinity file.
 
-## Provenance
+## Provenance and clean-room
 
-The container and object-stream layout was learned from [VMDevCpp/afread](https://github.com/VMDevCpp/afread)
-(MIT, at `04b672334a43e3e37ded6b5ffc57af231d589774`, written for container versions 7–11) and
-re-described in our own words before this Rust code was written; no code was translated. Its
-meaning was then worked out from public documents only, without running Affinity: the semantics of
-shapes, paints, text and pixel data were fitted to the thumbnail every Affinity document embeds
-(Affinity's own render of it) on 176 public documents saved by Affinity 1.x, 2.x and 3.0/3.1 on
-Windows, macOS and iPad. No GPL/AGPL code (such as Inkscape's Affinity extension) was read, and no
-Affinity application code, asset or document is part of this repository.
+Affinity has no published file-format specification, so this reader is built only from a public
+description of the format and from public files, never from Affinity itself. This is how the sibling app PhotoCraft already treats formats that
+are only partly documented:
+its PSD reader fills the gaps in Adobe's specification from the MIT-licensed psd-tools and
+ag-psd, and its camera raw decoder recovered Nikon's compression tables by black-box analysis
+of CC0 sample files.
+
+* **No Affinity software.** Affinity was never downloaded, installed, run, scripted, screenshotted or
+  disassembled for this work, and nothing from an Affinity installation (program code, resources,
+  presets, fonts, colour profiles) was read. No file was made with Affinity for it: every sample
+  is a document its author published.
+* **A public, permissively licensed description.** The container and object-stream layout was
+  learned from [VMDevCpp/afread](https://github.com/VMDevCpp/afread) (MIT, at
+  `04b672334a43e3e37ded6b5ffc57af231d589774`, written for container versions 7–11) and re-described
+  in our own words before this Rust code was written; no code was translated. No GPL/AGPL code (such
+  as Inkscape's Affinity extension) was read.
+* **Every structure checked against public files.** afread doesn't say how its author learned the
+  format, so nothing here rests on it alone: each structure the reader relies on is confirmed by
+  the public documents. Every archive entry carries a CRC-32 that must match, and every field in
+  the object stream names its own type, so a misread layout fails loudly instead of producing
+  plausible wrong data.
+* **Meaning fitted to Affinity's own pictures.** What shapes, paints, text and pixel data mean was
+  worked out by comparing our render with the thumbnail every Affinity document embeds (Affinity's
+  render of itself), on 176 public documents saved by Affinity 1.x, 2.x and 3.0/3.1 on Windows,
+  macOS and iPad. Most are published under CC0, MIT, BSD, Apache-2.0 or CC BY (-SA); the others
+  (no licence stated, or GPL or non-commercial terms) were only opened locally to compare
+  pictures, never committed or redistributed. The corpus test keeps the comparison for the pinned
+  files, which are CC0, MIT or Apache-2.0 only.
+* **Nothing of Affinity's is in this repository**: no program code, assets or documents. The test
+  files are fetched at pinned commits and sha256-verified, never committed.
+* **Read-only.** Nothing is written in Affinity's format; export waits until someone can check
+  written files in Affinity itself.
+
+The same reader is shared, as an independent copy, with PhotoCraft's `photocraft-affinity`.
 
 ## Validation
 
