@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Front",
             ["Edit"],
             Some("Cmd+F"),
-            "{swatchConflict?} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index (the active artboard: the objects go where they were on the artboard they were copied from, on this one)} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Front)
         ),
@@ -64,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Back",
             ["Edit"],
             Some("Cmd+B"),
-            "{swatchConflict?} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index (as edit.pasteInFront)} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Back)
         ),
@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Place",
             ["Edit"],
             Some("Cmd+Shift+V"),
-            "{swatchConflict?} paste where the objects were copied (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index (as edit.pasteInFront)} paste where the objects were copied (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::InPlace)
         ),
@@ -310,6 +310,17 @@ fn paste(s: &mut Session, p: &Value, mode: PasteMode) -> Result<Value> {
     r
 }
 
+/// Paste in Place, in Front or in Back onto artboard `artboard` (the active one, #693): where the
+/// objects were on the artboard they were copied from, on that one; without it (or a copy from no
+/// artboard), where they were.
+fn onto_artboard(doc: &Document, p: &Value, clip: &Clipboard) -> Affine {
+    let target = p.get("artboard").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()).and_then(|i| doc.artboards.get(i));
+    match (target, clip.source_artboard) {
+        (Some(t), Some(src)) => Affine::translate(t.rect.origin() - src.origin()),
+        _ => Affine::IDENTITY,
+    }
+}
+
 fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, choices: &SwatchChoices) -> Result<Value> {
     let off = s.prefs.paste_offset;
     let st = s.doc()?;
@@ -345,7 +356,8 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             let src = clip.source_artboard.or_else(|| st.doc.artboards.first().map(|a| a.rect)).map(|r| r.origin()).unwrap_or_default();
             st.doc.artboards.iter().map(|a| Affine::translate(a.rect.origin() - src)).collect()
         }
-        _ => vec![Affine::IDENTITY],
+        // In place, in front, in back: onto the active artboard when the UI names it.
+        _ => vec![onto_artboard(&st.doc, p, clip)],
     };
     let (ids, imported, artboard) = s.edit(mode.label(), |d, sel| {
         let imported = clip.import_into(d, choices, same_doc);
