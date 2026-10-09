@@ -516,17 +516,19 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         prev.is_some_and(|prev| prev != m)
     });
 
-    // Zoom around the pointer, or scroll ([`wheel`]).
+    // Zoom around the pointer, and scroll ([`wheel`]): fingers pinching on a touch screen may also
+    // slide.
     if resp.hovered() {
-        if (factor - 1.0).abs() > 1e-6 {
-            if let (Some(p), Some(vm)) = (hover, app.view_mut()) {
-                let before = xf.to_doc(p);
-                vm.zoom = (vm.zoom * factor).clamp(0.0313, 640.0);
-                let nx = Xf { rect, zoom: vm.zoom, center: vm.center, rot: vm.rotation.to_radians() };
-                let after = nx.to_doc(p);
-                vm.center += before - after;
-            }
-        } else if scroll != egui::Vec2::ZERO
+        if (factor - 1.0).abs() > 1e-6
+            && let (Some(p), Some(vm)) = (hover, app.view_mut())
+        {
+            let before = xf.to_doc(p);
+            vm.zoom = (vm.zoom * factor).clamp(0.0313, 640.0);
+            let nx = Xf { rect, zoom: vm.zoom, center: vm.center, rot: vm.rotation.to_radians() };
+            let after = nx.to_doc(p);
+            vm.center += before - after;
+        }
+        if scroll != egui::Vec2::ZERO
             && let Some(vm) = app.view_mut()
         {
             let d = Xf { rect, zoom: vm.zoom, center: vm.center, rot: vm.rotation.to_radians() }.delta_to_doc(scroll);
@@ -673,13 +675,15 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
 /// How much one point of wheel motion zooms (as `exp(points × WHEEL_ZOOM)`).
 const WHEEL_ZOOM: f64 = 0.01;
 
-/// What the wheel and a pinch did over the canvas this frame: a zoom factor (about the pointer)
-/// and a scroll (screen points the content moves). The wheel scrolls, Cmd- and Alt-wheel (Option
+/// What the wheel, a pinch and a two-finger drag on a touch screen did over the canvas this frame:
+/// a zoom factor (about the pointer) and a scroll (screen points the content moves). The wheel scrolls, Cmd- and Alt-wheel (Option
 /// on the Mac) zoom. With General › Zoom with Mouse Wheel (`wheel_zooms`) the wheel and Alt-wheel
 /// zoom, Shift-wheel scrolls up and down and Cmd/Ctrl-wheel sideways. `line` and `page`: points
 /// per wheel line and page. `alt_turn`: the last wheel turn was an Alt-wheel one (kept by the
 /// caller across frames).
 fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, alt_turn: &mut bool) -> (f64, egui::Vec2) {
+    // Fingers on a touch screen pan the content with them (a trackpad sends scrolls instead).
+    let pan = i.multi_touch().map_or(egui::Vec2::ZERO, |t| t.translation_delta);
     if !wheel_zooms {
         // egui makes Cmd-wheel (and a pinch) its zoom and the rest a scroll it spreads over a few
         // frames: the rest of an Alt-wheel turn zooms too, however soon Alt is let go.
@@ -688,14 +692,14 @@ fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, alt_turn
         }
         let (zoom, scroll) = (f64::from(i.zoom_delta()), i.smooth_scroll_delta);
         return if *alt_turn && scroll != egui::Vec2::ZERO {
-            (zoom * (f64::from(scroll.x + scroll.y) * WHEEL_ZOOM).exp(), egui::Vec2::ZERO)
+            (zoom * (f64::from(scroll.x + scroll.y) * WHEEL_ZOOM).exp(), pan)
         } else {
-            (zoom, scroll)
+            (zoom, scroll + pan)
         };
     }
     // The wheel events themselves: egui's own handling turns Cmd-wheel into a zoom.
     let mut zoom = i.multi_touch().map_or(1.0, |t| f64::from(t.zoom_delta));
-    let mut scroll = egui::Vec2::ZERO;
+    let mut scroll = pan;
     for e in &i.events {
         match e {
             egui::Event::MouseWheel { unit, delta, modifiers, .. } => {
@@ -2656,6 +2660,36 @@ mod tests {
         assert!((zoom - 1.0).abs() < 1e-9 && scroll.x == 0.0 && scroll.y < -1.0, "on: Shift-wheel scrolls up ({zoom}, {scroll:?})");
         let (zoom, scroll, _) = turn(&mut app, "cmd");
         assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "on: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})");
+    }
+
+    /// Two fingers dragged together on a touch screen pan the canvas with them, under either
+    /// Zoom with Mouse Wheel setting, and draw nothing (#449).
+    #[test]
+    fn two_fingers_dragged_together_pan_the_canvas() {
+        for wheel_zooms in [false, true] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+            app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": wheel_zooms})).unwrap();
+            app.select_tool("rectangle");
+            let ctx = egui::Context::default();
+            frame(&mut app, &ctx, vec![]);
+            let c = app.canvas_rect.unwrap().center();
+            let touch = |n: u64, phase, pos| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(n), phase, pos, force: None };
+            let fingers = |phase, d: egui::Vec2| vec![touch(1, phase, c - vec2(40.0, 0.0) + d), touch(2, phase, c + vec2(40.0, 0.0) + d)];
+            let before = *app.view().unwrap();
+            // egui-winit moves the pointer with the first finger, as here.
+            frame(&mut app, &ctx, vec![egui::Event::PointerMoved(c - vec2(40.0, 0.0))]);
+            frame(&mut app, &ctx, fingers(egui::TouchPhase::Start, Vec2::ZERO));
+            for k in 1..=3 {
+                frame(&mut app, &ctx, fingers(egui::TouchPhase::Move, vec2(10.0, 8.0) * k as f32));
+            }
+            frame(&mut app, &ctx, fingers(egui::TouchPhase::End, vec2(30.0, 24.0)));
+            let after = *app.view().unwrap();
+            let moved = (after.center - before.center) * after.zoom;
+            assert!((after.zoom / before.zoom - 1.0).abs() < 1e-9, "no zoom: {wheel_zooms}");
+            assert!((moved.x + 30.0).abs() < 0.5 && (moved.y + 24.0).abs() < 0.5, "the content follows the fingers ({wheel_zooms}): {moved:?}");
+            assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 0, "nothing drawn");
+        }
     }
 
     #[test]
