@@ -215,7 +215,7 @@ fn pdf_part(x: f64, y: f64) -> Document {
 fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
     // A square on the artboard, and one above it (the artboard is y 0 to 100 here).
     let art = native(&(layer("Jig", true, &square(10, 10)) + &layer("Parts", true, &square(30, 110)) + &layer("Old", false, &square(60, 60))));
-    let (d, warnings) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec!["a note".into()]);
+    let (d, warnings) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec!["a note".into()], false);
     assert_eq!(names(&d), ["Jig", "Parts", "Old"], "{warnings:?}");
     assert_eq!(warnings, ["a note"], "nothing else to say");
     let above = d.layers[1].children().unwrap()[0].visual_bounds().unwrap();
@@ -227,12 +227,12 @@ fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
 fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
     let pdf = pdf_part(10.0, 86.0);
     // No editing data this reads.
-    let (d, w) = crate::layered_ai(b"nothing", pdf.clone(), vec![]);
+    let (d, w) = crate::layered_ai(b"nothing", pdf.clone(), vec![], false);
     assert_eq!(d.layers.len(), pdf.layers.len());
     assert!(w.is_empty());
     // Editing data that isn't for this page.
     let other = native(&layer("Jig", true, &square(10, 10))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
-    let (d, w) = crate::layered_ai(&private(&other), pdf.clone(), vec![]);
+    let (d, w) = crate::layered_ai(&private(&other), pdf.clone(), vec![], false);
     assert_eq!(names(&d), names(&pdf));
     assert!(w.iter().any(|w| w.contains("different page")), "{w:?}");
 }
@@ -280,7 +280,7 @@ fn custom_colours_open_paths_and_planar_group_marks_are_read() {
     let body = "0.1 0.2 0.3 0.4 (Spot) 0 x\n0 0 0 1 (Edge) 0 X\n10 10 m\n14 10 L\n14 14 L\n10 14 L\nf\n\
                 0.8 0.1 0 0 62.7 -28 -42 (Blue) 0 2 Xx\n(Adobe Planar Group) 1 0 0 XP\n20 20 m\n24 20 L\n24 24 L\nH\nF";
     let r = import(&older_eps(
-        "0 0 0 0 setcmykcolor 10 10 moveto 14 10 lineto 14 14 lineto 10 14 lineto closepath fill",
+        "0.1 0.2 0.3 0.4 setcmykcolor 10 10 moveto 14 10 lineto 14 14 lineto 10 14 lineto closepath fill          0.8 0.1 0 0 setcmykcolor 20 20 moveto 24 20 lineto 24 24 lineto closepath fill",
         &native(&layer("Art", true, body)),
     ))
     .unwrap();
@@ -399,9 +399,9 @@ fn shown_type_keeps_the_pages_and_type_off_the_page_comes_from_the_text_document
 fn a_text_object_written_as_comments_is_read_like_any_other() {
     let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
     let commented: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
-    let art = native_with_text(&layer("Spare", false, &(square(10, 10) + "\n" + &commented)), &doc);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &commented)), &doc);
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
-    let texts = text_of(&r.document.layers[0]);
+    let texts = text_of(&r.document.layers[1]);
     assert_eq!(texts.len(), 1, "{:?}", r.warnings);
     assert_eq!(texts[0].plain_text(), "Hi");
 }
@@ -453,9 +453,9 @@ fn a_commented_copy_of_a_story_that_has_a_plain_text_object_is_not_another_objec
     let doc = text_document(&[("One\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Two\r", 0, (8300.0, 8180.0), (0.0, 0.0), 0.0)]);
     let commented = |story| -> String { text_object(story).lines().map(|l| format!("%_{l}\n")).collect() };
     let body = text_object(0) + &commented(0) + &commented(1);
-    let art = native_with_text(&layer("Spare", false, &body), &doc);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &body)), &doc);
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
-    let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+    let texts: Vec<String> = text_of(&r.document.layers[1]).iter().map(|t| t.plain_text()).collect();
     assert_eq!(texts, ["One", "Two"], "{:?}", r.warnings);
 }
 
@@ -541,4 +541,68 @@ fn an_ai_file_without_its_pdf_part_reads_its_layers_and_makes_its_type() {
     assert!(left.starts_with("1 ") && crate::is_loss(left), "{notes:?}");
     assert!(!notes.iter().any(|n| n.contains("order the page paints")), "{notes:?}");
     assert!(crate::ai_alone(b"%AI24_ZStandard_Data nothing").is_err());
+}
+
+#[test]
+fn an_object_the_page_doesnt_draw_makes_the_file_come_in_as_its_page() {
+    // A 20-point square that the page doesn't draw: 4% of the page, and an object all the same.
+    let extra = "0 0 1 0 k\n50 50 m\n70 50 L\n70 70 L\n50 70 L\nf";
+    let art = native(&layer("Back", true, &(square(10, 10) + "\n" + extra)));
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("layers weren't read") && w.contains("differs from the page's")), "{:?}", r.warnings);
+}
+
+/// An EPS whose page is its art's box `[x0 y0 x1 y1]` (not its artboard, 0 0 100 100), drawing
+/// `page`, with the editing copy of `layers`.
+fn eps_of_art(art_box: [u32; 4], page: &str, layers: &str) -> Vec<u8> {
+    let [x0, y0, x1, y1] = art_box;
+    let native = native(layers).replace(
+        "%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100",
+        &format!("%%BoundingBox: {x0} {y0} {x1} {y1}\n%%HiResBoundingBox: {x0} {y0} {x1} {y1}"),
+    );
+    String::from_utf8(eps(page, &native))
+        .unwrap()
+        .replacen("%%BoundingBox: 0 0 100 100", &format!("%%BoundingBox: {x0} {y0} {x1} {y1}"), 1)
+        .into_bytes()
+}
+
+#[test]
+fn art_the_layers_print_outside_an_eps_page_of_its_art_makes_it_come_in_as_its_page() {
+    // The page is the box of the art it prints, round the square at (10, 10).
+    let file = |far: &str| eps_of_art([10, 10, 14, 14], &page_square(10, 10), &(layer("Art", true, &square(10, 10)) + far));
+    // A square the layers print far from it: the page would have it.
+    let r = import(&file(&layer("Far", true, &square(80, 80)))).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("layers weren't read")), "{:?}", r.warnings);
+    // Hidden, or on a layer that doesn't print, the page doesn't have it.
+    let r = import(&file(&layer("Far", false, &square(80, 80)))).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Far"], "{:?}", r.warnings);
+    let not_printed = format!("%AI5_BeginLayer\n1 1 1 0 0 0 1 0 79 128 255 0 50 0 Lb\n(Notes) Ln\n{}\nLB\n%AI5_EndLayer--\n", square(80, 80));
+    let r = import(&file(&not_printed)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Notes"], "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
+fn an_eps_saved_as_its_artboard_keeps_the_art_outside_it() {
+    // The page is the artboard (0 0 100 100): the art beyond it is the pasteboard's.
+    let art = native(&(layer("Art", true, &square(10, 10)) + &layer("Scraps", true, &square(120, 10))));
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Scraps"], "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
+fn type_asked_for_as_outlines_leaves_a_file_whose_type_shows_as_its_pdf_part() {
+    let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    // Type that shows: the PDF part's outlines are its type, which the text objects can't hold.
+    let shown = native_with_text(&layer("Art", true, &(square(10, 10) + "\n" + &text_object(0))), &doc);
+    let (d, w) = crate::layered_ai(&private(&shown), pdf_part(10.0, 86.0), vec![], true);
+    assert_eq!(names(&d), ["Layer 1"], "{w:?}");
+    assert!(w.iter().any(|w| w.contains("layers weren't read") && w.contains("outlines")), "{w:?}");
+    // Type only on a hidden layer: the layers come in.
+    let hidden = native_with_text(&(layer("Art", true, &square(10, 10)) + &layer("Notes", false, &text_object(0))), &doc);
+    let (d, w) = crate::layered_ai(&private(&hidden), pdf_part(10.0, 86.0), vec![], true);
+    assert_eq!(names(&d), ["Art", "Notes"], "{w:?}");
 }

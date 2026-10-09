@@ -189,3 +189,35 @@ fn art_bounds_cover_visible_art_only() {
     let empty = Document::new(10.0, 10.0);
     assert_eq!(art_bounds(&empty), None);
 }
+
+/// A black path round `r` in the first layer of `d`, made a guide when `guide`.
+fn add_rect(d: &mut Document, r: Rect, guide: bool) {
+    let id = d.alloc_id();
+    let mut n = Node::path(id, shapes::rectangle(r), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    if let NodeKind::Path { guide: g, .. } = &mut n.kind {
+        *g = guide;
+    }
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+}
+
+#[test]
+fn guides_dont_count_in_the_arts_bounds() {
+    let mut d = circle_doc();
+    add_rect(&mut d, Rect::new(0.0, 15.0, 400.0, 15.0), true);
+    let b = art_bounds(&d).unwrap();
+    assert!((b.x0 - 5.3).abs() < 1e-6 && (b.x1 - 31.1).abs() < 1e-6, "the guide doesn't count: {b:?}");
+}
+
+#[test]
+fn art_bounds_end_at_a_clipping_layers_clip() {
+    let mut d = Document::new(40.0, 30.0);
+    // The layer clips its art to its first object (added last): what lies beyond isn't drawn.
+    add_rect(&mut d, Rect::new(-100.0, -100.0, 200.0, 200.0), false);
+    add_rect(&mut d, Rect::new(2.0, 3.0, 20.0, 10.0), false);
+    let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
+    if let NodeKind::Layer { clip, .. } = &mut layer.kind {
+        *clip = true;
+    }
+    assert_eq!(art_bounds(&d), Some(Rect::new(2.0, 3.0, 20.0, 10.0)));
+}

@@ -416,7 +416,19 @@ strokes, effects or a brush comes in as its drawn look (a group named after it).
 text object's place; hidden point type is made from the file's text document. A file whose editing data has symbols,
 pattern fills, placed files or anything else the reader doesn't read on a layer that shows, or whose layers look
 different from its page, opens as before: an EPS as its printed page, a `.ai` file from its PDF content (where plain
-groups open ungrouped), with a warning saying why.
+groups open ungrouped), with a warning saying why. Layers look different when they draw an object the page doesn't (or
+miss one it draws), and, for an EPS whose page is the box of its art, when they print art outside it. With
+`textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines.
+
+The document then has what the file's page doesn't print: hidden objects and layers, layers that don't print, guides and
+the art outside the artboards, as the app that wrote the file shows them. Exports and `artboard.fitToArt` leave out the
+hidden art, the guides and template layers; an EPS's artboard is the file's artboard, not the page's bounding box. A
+print pipeline that wants only what the page prints opens the file with `editingData: false` (default `true`):
+an EPS as its page, a `.ai` file from its PDF content (a `.ai` saved without PDF compatibility then can't be opened).
+
+```json
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/label.eps","editingData":false}}}
+```
 
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)

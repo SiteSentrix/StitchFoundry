@@ -582,7 +582,7 @@ impl Renderer {
     }
 
     /// Render one artboard (or any document rect) at `scale` pixels per point, transparent or on white,
-    /// as exported: template layers are left out.
+    /// as exported: template layers and guides are left out.
     pub fn render_region(&mut self, doc: &Document, region: Rect, scale: f64, white: bool) -> Rendered {
         let opts = RenderOptions { background: white.then_some([255, 255, 255, 255]), skip_templates: true, ..Default::default() };
         self.render_region_with(doc, region, scale, &opts)

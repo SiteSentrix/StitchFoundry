@@ -3166,6 +3166,7 @@ axis	Both	Оба
 @msg	its editing data is for a different page	его данные для редактирования относятся к другой странице
 @msg	its layers use {_1}, which aren't read yet	его слои используют {_1}, что пока не читается
 @msg	its page has text, and its layers have no text objects to put it in	на его странице есть текст, а на слоях нет текстовых объектов, куда его поместить
+@msg	its type is to come in as outlines, which only its page has	его текст должен прийти в виде контуров, а они есть только на его странице
 @msg	the art on them differs from the page's in {_1}% of it	изображение на слоях отличается от изображения на странице на {_1} % площади
 @msg	`to` must be "corner" or "smooth"	`to` должно быть "corner" или "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	файлы BMP бывают RGB или в оттенках серого: colorModel rgb или gray
