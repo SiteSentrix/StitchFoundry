@@ -50,9 +50,13 @@ pub(crate) fn blend_css(b: BlendMode) -> &'static str {
     }
 }
 
-/// An object's opacity, blend mode and isolation.
+/// An object's opacity, blend mode and isolation, and `display: none` when it is hidden (written
+/// only when hidden objects are kept).
 pub(crate) fn transparency(n: &Node) -> Props {
     let mut p = Props::new();
+    if !n.visible {
+        p.push(("display", "none".into()));
+    }
     if n.opacity < 1.0 {
         p.push(("opacity", fmt_num(n.opacity as f64, 3)));
     }
@@ -544,6 +548,10 @@ impl Rules<'_> {
         art.props.extend(type_props(&st, &len));
         if let Some(l) = st.leading {
             art.props.push(("line-height", self.len(l)));
+        }
+        // One element: the first paragraph's alignment.
+        if (1..t.paragraph_count()).any(|i| t.para_at(i).justify != t.para.justify) {
+            art.unsupported("paragraphs aligned differently");
         }
         let align = match t.para.justify {
             Justify::Auto | Justify::Left => None,

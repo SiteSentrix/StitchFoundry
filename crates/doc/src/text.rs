@@ -93,8 +93,9 @@ pub struct CharStyle {
 }
 
 /// Where a character smaller than the largest on its line lines up with it: on the Roman
-/// baseline, or at the top (right, in vertical type), centre or bottom (left) of the ideographic
-/// em boxes.
+/// baseline, at the top (right, in vertical type), centre or bottom (left) of the ideographic
+/// em boxes, or at the top (right) or bottom (left) of the ideographic character faces (ICF, the
+/// average box of the ideographs inside the em box: OpenType's `icft` and `icfb` baselines).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CharAlign {
@@ -103,6 +104,8 @@ pub enum CharAlign {
     EmBoxTop,
     EmBoxCenter,
     EmBoxBottom,
+    IcfTop,
+    IcfBottom,
 }
 
 /// Superscript or subscript proportions in percent of the font size (Document Setup → Type).
@@ -285,6 +288,24 @@ fn default_align_on() -> char {
 /// Distance between default tab stops when no explicit stop applies (½ inch).
 pub const DEFAULT_TAB_INTERVAL: f64 = 36.0;
 
+/// Paragraph composer (Paragraph panel menu): how lines are broken.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Composer {
+    /// Break each line as soon as it is full.
+    SingleLine,
+    /// Total fit over the whole paragraph (Illustrator's default): justified lines get even word
+    /// spacing, ragged lines an even rag.
+    #[default]
+    EveryLine,
+}
+
+impl Composer {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// Paragraph attributes (the Paragraph panel).
 ///
 /// Saved through [`ParaStyleFile`], which keeps files with text openable by builds from before
@@ -299,6 +320,8 @@ pub struct ParaStyle {
     pub space_before: f64,
     pub space_after: f64,
     pub hyphenate: bool,
+    /// Line breaking: Single-line or Every-line Composer.
+    pub composer: Composer,
     /// Tab stops (Tabs panel), sorted by position.
     pub tabs: Vec<TabStop>,
     /// Paragraph style (Paragraph Styles panel) these attributes come from; None = Normal.
@@ -341,6 +364,8 @@ struct ParaStyleFile {
     space_after: f64,
     #[serde(default)]
     hyphenate: bool,
+    #[serde(default, skip_serializing_if = "Composer::is_default")]
+    composer: Composer,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     tabs: Vec<TabStop>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -370,6 +395,7 @@ impl From<ParaStyle> for ParaStyleFile {
             space_before,
             space_after,
             hyphenate,
+            composer,
             tabs,
             style_name,
             mojikumi,
@@ -387,6 +413,7 @@ impl From<ParaStyle> for ParaStyleFile {
             space_before,
             space_after,
             hyphenate,
+            composer,
             tabs,
             style_name,
             mojikumi,
@@ -407,6 +434,7 @@ impl From<ParaStyleFile> for ParaStyle {
             space_before,
             space_after,
             hyphenate,
+            composer,
             tabs,
             style_name,
             mojikumi,
@@ -423,6 +451,7 @@ impl From<ParaStyleFile> for ParaStyle {
             space_before,
             space_after,
             hyphenate,
+            composer,
             tabs,
             style_name,
             mojikumi,
@@ -504,6 +533,34 @@ pub enum FirstBaseline {
     Leading,
     /// Exactly `first_baseline_min` below the top.
     Fixed,
+}
+
+/// Area Type Options "Align" (vertical): where the lines of each row/column sit in it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VerticalAlign {
+    /// Lines start at the top of the cell (the default).
+    #[default]
+    Top,
+    /// The block of lines is centred in the cell.
+    Center,
+    /// The last line's descent touches the cell bottom.
+    Bottom,
+    /// The first line stays at the top, the last one moves to the bottom and the space left over
+    /// is shared equally between the lines (no paragraph spacing limit).
+    Justify,
+}
+
+impl VerticalAlign {
+    pub const ALL: [VerticalAlign; 4] = [VerticalAlign::Top, VerticalAlign::Center, VerticalAlign::Bottom, VerticalAlign::Justify];
+    pub fn id(self) -> &'static str {
+        match self {
+            VerticalAlign::Top => "top",
+            VerticalAlign::Center => "center",
+            VerticalAlign::Bottom => "bottom",
+            VerticalAlign::Justify => "justify",
+        }
+    }
 }
 
 /// Text Wrap Options of a wrap object (Object → Text Wrap).
@@ -608,11 +665,85 @@ pub struct AreaOptions {
     pub first_baseline: FirstBaseline,
     /// Minimum first-baseline offset in points.
     pub first_baseline_min: f64,
+    /// Vertical alignment of the lines in each row/column.
+    pub vertical_align: VerticalAlign,
+    /// How the frame and its text fit each other (Auto Size, Shrink Text to Fit).
+    #[serde(skip_serializing_if = "crate::skip::is_default")]
+    pub fit: AreaFit,
 }
 
 impl Default for AreaOptions {
     fn default() -> Self {
-        Self { rows: 1, columns: 1, gutter: 18.0, inset: 0.0, first_baseline: FirstBaseline::Ascent, first_baseline_min: 0.0 }
+        Self {
+            rows: 1,
+            columns: 1,
+            gutter: 18.0,
+            inset: 0.0,
+            first_baseline: FirstBaseline::Ascent,
+            first_baseline_min: 0.0,
+            vertical_align: VerticalAlign::Top,
+            fit: AreaFit::None,
+        }
+    }
+}
+
+/// How area type and its frame fit each other. Serialized as `"none"`, `"autoHeight"` or
+/// `{"shrinkText": {"minPercent": 50}}`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AreaFit {
+    /// The frame keeps its size; text that doesn't fit overflows.
+    #[default]
+    None,
+    /// The frame's height follows the text (Illustrator's Auto Size): resolved by the engine after
+    /// each edit, for rectangular frames of horizontal type in one row.
+    AutoHeight,
+    /// Text that overflows is scaled down (size, leading and baseline shift; not paragraph
+    /// spacing) by the largest factor down to `min_percent` % that makes it fit, at layout time.
+    ShrinkText {
+        #[serde(rename = "minPercent", default = "AreaFit::default_min_percent")]
+        min_percent: f64,
+    },
+}
+
+impl AreaFit {
+    /// The smallest Shrink Text to Fit percentage allowed.
+    pub const MIN_PERCENT: f64 = 10.0;
+    /// The Shrink Text to Fit percentage new settings start with.
+    pub const DEFAULT_MIN_PERCENT: f64 = 50.0;
+    fn default_min_percent() -> f64 {
+        Self::DEFAULT_MIN_PERCENT
+    }
+    /// Its id: `none`, `autoHeight` or `shrinkText`.
+    pub fn id(self) -> &'static str {
+        match self {
+            AreaFit::None => "none",
+            AreaFit::AutoHeight => "autoHeight",
+            AreaFit::ShrinkText { .. } => "shrinkText",
+        }
+    }
+    /// The fit an id names (case, spaces, dashes and underscores ignored), with `min_percent`
+    /// for Shrink Text (clamped to 10..100; a non-finite value gives the default).
+    pub fn parse(id: &str, min_percent: Option<f64>) -> Option<Self> {
+        match id.to_ascii_lowercase().replace([' ', '-', '_'], "").as_str() {
+            "none" | "off" => Some(AreaFit::None),
+            "autoheight" | "autosize" => Some(AreaFit::AutoHeight),
+            "shrinktext" | "shrinktexttofit" | "shrink" => {
+                Some(AreaFit::ShrinkText { min_percent: Self::clamp_percent(min_percent.unwrap_or(Self::DEFAULT_MIN_PERCENT)) })
+            }
+            _ => None,
+        }
+    }
+    /// A Shrink Text minimum percentage within 10..100 (the default when not finite).
+    pub fn clamp_percent(p: f64) -> f64 {
+        if p.is_finite() { p.clamp(Self::MIN_PERCENT, 100.0) } else { Self::DEFAULT_MIN_PERCENT }
+    }
+    /// Shrink Text's minimum scale factor (0.1..1), if this is Shrink Text.
+    pub fn min_scale(self) -> Option<f64> {
+        match self {
+            AreaFit::ShrinkText { min_percent } => Some(Self::clamp_percent(min_percent) / 100.0),
+            _ => None,
+        }
     }
 }
 
@@ -630,6 +761,70 @@ pub struct TextStyleDef {
 pub struct TextRun {
     pub text: String,
     pub style: CharStyle,
+    /// An inline graphic: the run is one [`INLINE_CHAR`] drawn as a document symbol that flows
+    /// with the text like a glyph (InDesign-style inline anchored object). Its `style` still sets
+    /// the size and tracking; fills and strokes don't apply to the art.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inline: Option<InlineArt>,
+}
+
+impl TextRun {
+    /// A plain text run.
+    pub fn new(text: impl Into<String>, style: CharStyle) -> Self {
+        Self { text: text.into(), style, inline: None }
+    }
+    /// An inline graphic run showing `art`.
+    pub fn inline(art: InlineArt, style: CharStyle) -> Self {
+        Self { text: INLINE_CHAR.to_string(), style, inline: Some(art) }
+    }
+}
+
+/// The object replacement character: the plain text of an inline graphic run.
+pub const INLINE_CHAR: char = '\u{FFFC}';
+
+/// Largest inline graphic scale (× the run's size) accepted from input.
+pub const INLINE_MAX_SCALE: f64 = 100.0;
+
+/// A document symbol placed inline in text ([`TextRun::inline`]).
+///
+/// Placement: the art is scaled uniformly so its height (visual bounds) is `scale` × the run's
+/// font size, its left edge at the pen position, and its vertical centre on the middle of the
+/// run's cap height, raised by `baseline_shift` (points, positive = up). Centred on the cap
+/// height the art lines up with capitals and figures (like a mana symbol in rules text) and, at
+/// the default scale, stays inside the font's ascent and descent so the leading doesn't change.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct InlineArt {
+    /// Name of the document symbol ([`crate::Symbol::name`]).
+    pub symbol: String,
+    /// Art height as a multiple of the run's font size.
+    #[serde(default = "one")]
+    pub scale: f64,
+    /// Extra raise in points (positive = up).
+    #[serde(default)]
+    pub baseline_shift: f64,
+    /// The symbol art's visual bounds at its natural size, resolved from the document's symbols by
+    /// [`crate::Document::resolve_inline_art`] (not saved). `None`: not resolved or missing; the
+    /// layout then reserves a one-em square and nothing is drawn.
+    #[serde(skip)]
+    pub bounds: Option<Rect>,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+impl InlineArt {
+    pub fn new(symbol: impl Into<String>) -> Self {
+        Self { symbol: symbol.into(), scale: 1.0, baseline_shift: 0.0, bounds: None }
+    }
+    /// `scale`, made finite and positive (untrusted input).
+    pub fn safe_scale(&self) -> f64 {
+        if self.scale.is_finite() && self.scale > 0.0 { self.scale.min(INLINE_MAX_SCALE) } else { 1.0 }
+    }
+    /// `baseline_shift`, made finite (untrusted input).
+    pub fn safe_shift(&self) -> f64 {
+        if self.baseline_shift.is_finite() { self.baseline_shift.clamp(-1e5, 1e5) } else { 0.0 }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -684,6 +879,11 @@ fn reverse_from_end(path: &mut PathData) {
 }
 
 /// A text object. `runs` split into paragraphs at `\n`.
+///
+/// Paragraph attributes: `para` is paragraph 0's (and, while `paras` is empty, every
+/// paragraph's). Invariant (kept by [`TextObject::normalize_paras`]): `paras` is either empty —
+/// every paragraph uses `para` — or holds one style per paragraph with `paras[0] == para` and at
+/// least two different styles. Readers that only know `para` see the first paragraph's style.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TextObject {
     /// Top-to-bottom, right-to-left writing. Defaults to horizontal for old documents.
@@ -695,6 +895,9 @@ pub struct TextObject {
     pub runs: Vec<TextRun>,
     #[serde(default)]
     pub para: ParaStyle,
+    /// Per-paragraph attributes (see the type's docs); empty = every paragraph uses `para`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paras: Vec<ParaStyle>,
     /// Area Type Options (area type only).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub area: AreaOptions,
@@ -727,8 +930,9 @@ impl TextObject {
             vertical: false,
             kind: TextKind::Point,
             xf: Affine::translate(origin.to_vec2()),
-            runs: vec![TextRun { text: text.into(), style }],
+            runs: vec![TextRun::new(text, style)],
             para: ParaStyle::default(),
+            paras: Vec::new(),
             area: AreaOptions::default(),
             path_effect: PathEffect::default(),
             path_align: PathAlign::default(),
@@ -740,6 +944,103 @@ impl TextObject {
     }
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
+    }
+    /// Number of paragraphs (`\n`-separated; empty text has one).
+    pub fn paragraph_count(&self) -> usize {
+        1 + self.runs.iter().map(|r| r.text.bytes().filter(|&b| b == b'\n').count()).sum::<usize>()
+    }
+    /// Attributes of paragraph `i` (the last paragraph's past the end).
+    pub fn para_at(&self, i: usize) -> &ParaStyle {
+        self.paras.get(i).or(self.paras.last()).unwrap_or(&self.para)
+    }
+    /// Every paragraph's attributes, one per paragraph.
+    pub fn paragraph_styles(&self) -> Vec<ParaStyle> {
+        (0..self.paragraph_count()).map(|i| self.para_at(i).clone()).collect()
+    }
+    /// Set every paragraph's attributes from `styles` (one per paragraph; a short list repeats its
+    /// last entry, a long one is cut).
+    pub fn set_paragraph_styles(&mut self, styles: Vec<ParaStyle>) {
+        if let Some(first) = styles.first() {
+            self.para = first.clone();
+        }
+        self.paras = styles;
+        self.normalize_paras();
+    }
+    /// The same attributes for every paragraph.
+    pub fn set_all_paras(&mut self, style: ParaStyle) {
+        self.para = style;
+        self.paras.clear();
+    }
+    /// Re-establish the `paras` invariant: one entry per paragraph (cut, or extended with the
+    /// last), `paras[0] == para`, and empty when every paragraph is alike.
+    pub fn normalize_paras(&mut self) {
+        if self.paras.is_empty() {
+            return;
+        }
+        let n = self.paragraph_count();
+        let last = self.paras.last().cloned().unwrap_or_default();
+        self.paras.resize(n, last);
+        if let Some(first) = self.paras.first_mut() {
+            first.clone_from(&self.para);
+        }
+        if self.paras.iter().all(|p| *p == self.para) {
+            self.paras.clear();
+        }
+    }
+    /// Indices of the paragraphs that byte range `start..end` of the plain text touches (a caret
+    /// touches its paragraph).
+    pub fn paragraphs_in(&self, start: usize, end: usize) -> std::ops::Range<usize> {
+        let text = self.plain_text();
+        let (a, b) = (start.min(end).min(text.len()), start.max(end).min(text.len()));
+        let index = |byte: usize| text.as_bytes().get(..byte).map_or(0, |s| s.iter().filter(|&&c| c == b'\n').count());
+        index(a)..index(b) + 1
+    }
+    /// Apply `f` to the attributes of paragraphs `range` (indices; None = every paragraph).
+    pub fn edit_paras(&mut self, range: Option<std::ops::Range<usize>>, mut f: impl FnMut(&mut ParaStyle)) {
+        match range {
+            None => {
+                f(&mut self.para);
+                for p in &mut self.paras {
+                    f(p);
+                }
+            }
+            Some(r) => {
+                let mut v = self.paragraph_styles();
+                for p in v.iter_mut().take(r.end).skip(r.start) {
+                    f(p);
+                }
+                self.set_paragraph_styles(v);
+            }
+        }
+        self.normalize_paras();
+    }
+    /// Every stored paragraph style (`para` and the per-paragraph ones), for scans and renames.
+    pub fn para_styles_mut(&mut self) -> impl Iterator<Item = &mut ParaStyle> {
+        std::iter::once(&mut self.para).chain(self.paras.iter_mut())
+    }
+    /// Every stored paragraph style (`para` and the per-paragraph ones).
+    pub fn para_styles(&self) -> impl Iterator<Item = &ParaStyle> {
+        std::iter::once(&self.para).chain(self.paras.iter())
+    }
+    /// Update the paragraph styles for replacing bytes `start..end` of the current plain text by
+    /// `insert` (call before changing the runs). The paragraph the range starts in keeps its
+    /// style (merging paragraphs: the first one's wins); paragraphs the insertion starts take that
+    /// style too (Return continues the paragraph it splits); later paragraphs keep theirs.
+    pub fn splice_paras(&mut self, start: usize, end: usize, insert: &str) {
+        if self.paras.is_empty() {
+            return;
+        }
+        let r = self.paragraphs_in(start, end);
+        let v = self.paragraph_styles();
+        let Some(keep) = v.get(r.start).cloned() else { return };
+        let added = insert.bytes().filter(|&b| b == b'\n').count();
+        let mut out: Vec<ParaStyle> = v.iter().take(r.start + 1).cloned().collect();
+        out.extend(std::iter::repeat_n(keep, added));
+        out.extend(v.iter().skip(r.end).cloned());
+        self.paras = out;
+        if let Some(first) = self.paras.first() {
+            self.para = first.clone();
+        }
     }
     pub fn first_style(&self) -> CharStyle {
         self.runs.first().map(|r| r.style.clone()).unwrap_or_default()
@@ -866,6 +1167,56 @@ mod tests {
         let b = t.bounds().unwrap();
         assert!(b.x0 >= 10.0 - 1e-9 && b.y1 > 20.0);
         assert_eq!(CharStyle::default().effective_leading(), 14.399999999999999);
+    }
+
+    fn justified(j: Justify) -> ParaStyle {
+        ParaStyle { justify: j, ..ParaStyle::default() }
+    }
+
+    #[test]
+    fn paragraph_styles_split_merge_and_normalize() {
+        let mut t = TextObject::point(Point::ZERO, "one\ntwo\nthree", CharStyle::default());
+        assert_eq!((t.paragraph_count(), t.paras.len()), (3, 0), "one style for all: nothing stored");
+        assert_eq!(t.paragraphs_in(0, 0), 0..1);
+        assert_eq!(t.paragraphs_in(4, 4), 1..2);
+        assert_eq!(t.paragraphs_in(2, 9), 0..3);
+        assert_eq!(t.paragraphs_in(99, 99), 2..3, "clamped to the text");
+        t.edit_paras(Some(1..2), |p| p.justify = Justify::Center);
+        let js = |t: &TextObject| t.paragraph_styles().iter().map(|p| p.justify).collect::<Vec<_>>();
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Left]);
+        // Return inside "two": the new paragraph continues its style.
+        t.splice_paras(5, 5, "\n");
+        t.runs[0].text.insert(5, '\n');
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Center, Justify::Left]);
+        // Deleting the break between "one" and "t": the first paragraph's style wins.
+        t.splice_paras(3, 4, "");
+        t.runs[0].text.remove(3);
+        assert_eq!(t.plain_text(), "onet\nwo\nthree");
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Left]);
+        // An edit that skips the splice is repaired by normalizing (the last style continues).
+        t.runs[0].text.push_str("\nfour");
+        t.normalize_paras();
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Left, Justify::Left]);
+        // `para` is paragraph 0's; all alike collapses to `para` alone.
+        t.edit_paras(Some(0..1), |p| p.justify = Justify::Right);
+        assert_eq!(t.para.justify, Justify::Right);
+        t.edit_paras(None, |p| p.justify = Justify::Right);
+        assert!(t.paras.is_empty() && t.para.justify == Justify::Right);
+        // A short list repeats its last entry, a long one is cut.
+        t.set_paragraph_styles(vec![justified(Justify::Left), justified(Justify::Center)]);
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Center, Justify::Center]);
+        t.set_paragraph_styles(vec![justified(Justify::Center); 9]);
+        assert!(t.paras.is_empty() && t.para.justify == Justify::Center);
+        // Old documents (no `paras`) load; new ones keep paragraph 0 in `para`.
+        t.edit_paras(Some(3..4), |p| p.space_before = 4.0);
+        let json = serde_json::to_value(&t).unwrap();
+        assert_eq!(json["para"]["justify"], json["paras"][0]["justify"]);
+        let mut old = json.clone();
+        old.as_object_mut().unwrap().remove("paras");
+        let back: TextObject = serde_json::from_value(old).unwrap();
+        assert!(back.paras.is_empty() && back.para_at(3).justify == Justify::Center);
+        let back: TextObject = serde_json::from_value(json).unwrap();
+        assert_eq!(back.para_at(3).space_before, 4.0);
     }
 
     /// 120 × 40 area type at (40, 40), its text drawn at twice its size.

@@ -339,3 +339,38 @@ fn the_type_widget_converts_point_and_area_type() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(text(&s, id), before);
 }
+
+#[test]
+fn area_type_options_align_the_lines_vertically() {
+    use vectorcraft_doc::VerticalAlign;
+    let mut s = session();
+    let id = area(&mut s, 40.0, 40.0, 200.0, 300.0, "Short story");
+    sel(&mut s, &[id]);
+    assert_eq!(s.execute("text.areaOptions", &json!({})).unwrap()["verticalAlign"], "top");
+    let top = layout(&s, id).lines[0].baseline;
+    let before = text(&s, id).cached_bounds;
+    let n = undo_len(&s);
+    let r = s.execute("text.areaOptions", &json!({"verticalAlign": "bottom"})).unwrap();
+    assert_eq!(r["verticalAlign"], "bottom");
+    assert_eq!(text(&s, id).area.vertical_align, VerticalAlign::Bottom);
+    let l = layout(&s, id);
+    let last = l.lines.last().unwrap();
+    assert!((last.baseline + last.descent - 300.0).abs() < 1e-6);
+    assert!(l.lines[0].baseline > top + 200.0);
+    assert_ne!(text(&s, id).cached_bounds, before, "the cached bounds follow the text");
+    assert_eq!((undo_len(&s), last_step(&s).as_str()), (n + 1, "Area Type Options"));
+    s.execute("text.areaOptions", &json!({"verticalAlign": "center"})).unwrap();
+    assert_eq!(text(&s, id).area.vertical_align, VerticalAlign::Center);
+    // Unknown values are refused and change nothing.
+    for bad in [json!({"verticalAlign": "middle"}), json!({"verticalAlign": 3}), json!({"verticalAlign": null})] {
+        assert!(s.execute("text.areaOptions", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(undo_len(&s), n + 2);
+    assert_eq!(text(&s, id).area.vertical_align, VerticalAlign::Center);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(text(&s, id).area.vertical_align, VerticalAlign::Top);
+    assert_eq!(layout(&s, id).lines[0].baseline, top);
+    assert_eq!(text(&s, id).cached_bounds, before);
+    assert!(cmd::find_command("text.areaOptions").unwrap().params.contains("verticalAlign?: top|center|bottom|justify"));
+}

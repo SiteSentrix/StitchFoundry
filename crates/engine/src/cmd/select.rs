@@ -36,7 +36,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             toggle
         ),
-        cmd!("select.key", "Set Key Object", [], None, "{id?} (none clears)", has_doc, key),
+        cmd!(
+            "select.key",
+            "Set Key Object",
+            [],
+            None,
+            "{id?: a selected object (the Selection tool: a click on one object of a selection of several; on the key again: none)} the key object Align aligns to and Distribute Spacing spaces from; none clears it",
+            has_doc,
+            key
+        ),
         cmd!("select.anchors", "Select Anchors", [], None, "{id, anchors: [[subpath, anchor]…], mode: \"set\"|\"add\"|\"toggle\"}", has_doc, anchors),
         cmd!(
             "select.anchorsMany",

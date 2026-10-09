@@ -44,6 +44,8 @@ impl Hit {
 /// Options for hit testing.
 #[derive(Clone, Copy, Debug)]
 pub struct HitOptions {
+    /// The isolated construction container, whose retained Shaper sources are hittable.
+    pub scope: Option<NodeId>,
     /// Tolerance in document units (screen tolerance / zoom).
     pub tol: f64,
     /// Outline mode: only outlines are hittable.
@@ -58,7 +60,7 @@ pub struct HitOptions {
 
 impl Default for HitOptions {
     fn default() -> Self {
-        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false }
+        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false, scope: None }
     }
 }
 
@@ -70,6 +72,7 @@ pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
 /// The objects under `p` that [`Hit::top_object`] picks in `scope` (isolation mode), topmost
 /// first: what clicks there select, one below the other (Cmd/Ctrl-click selects behind).
 pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
+    let opt = HitOptions { scope: scope.or(opt.scope), ..opt };
     let mut tops: Vec<NodeId> = vec![];
     // Each round leaves out the objects found so far (and everything inside them).
     while let Some(top) = hit_test_skipping(doc, p, opt, &|id| tops.contains(&id)).map(|h| h.top_object(scope)) {
@@ -131,13 +134,20 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) 
     {
         return None;
     }
-    for c in children.iter().rev() {
+    for (i, c) in children.iter().enumerate().rev() {
+        if parent.shaper.is_some() {
+            let construction = children.first().is_some_and(|source| Some(source.id) == opt.scope);
+            if (i == 0) != construction {
+                continue;
+            }
+        }
         // Hidden, locked and template sublayers block clicks like top-level layers do.
         if !c.visible || c.locked || c.is_template() || skip(c.id) {
             continue;
         }
         // (An envelope's content sits where it was, not where the envelope draws it.)
-        if !edits_contents(c)
+        if !(edits_contents(c)
+            || c.shaper.is_some() && c.children().and_then(|children| children.first()).is_some_and(|source| Some(source.id) == opt.scope))
             && let Some(b) = c.reach_bounds()
             && !b.inflate(opt.tol, opt.tol).contains(p)
         {
@@ -199,9 +209,12 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
             n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p))?;
             on_type_path(n, t, p, opt.tol).then_some(HitKind::Outline)
         }
-        NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } | NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
-            n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
-        }
+        NodeKind::Text(_)
+        | NodeKind::Image(_)
+        | NodeKind::PlacedDocument(_)
+        | NodeKind::SymbolInstance { .. }
+        | NodeKind::Blend { .. }
+        | NodeKind::Envelope { .. } => n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds),
         NodeKind::Repeat(r) => r.expand().iter().find_map(|g| hit_any(g, p, opt)),
         NodeKind::Mesh(m) => {
             let bp = m.outline().to_bezpath();

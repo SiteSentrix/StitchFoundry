@@ -43,11 +43,12 @@ The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (
   - **Automatic on Windows and macOS** is power saving: the system shows frames from any GPU, and presenting frames rendered on a discrete GPU through the integrated one made the window flicker on some hybrid laptops (#306).
   - **Automatic on Linux and the BSDs** keeps the system's order: Mesa's Vulkan device-select layer puts the GPU the desktop runs on first (the integrated one on hybrid laptops; `DRI_PRIME` and `MESA_VK_DEVICE_SELECT` steer it). A Wayland compositor may not accept frames from another GPU: on a desktop whose compositor ran on an NVIDIA GPU, rendering on the Ryzen's integrated GPU made KWin end the window's connection ("importing the supplied dmabufs failed") and 0.5.0 crashed at startup (#502).
   - 0.5.0 saved `powerSaving`, its default, for everyone; it reads as `automatic`.
-- **If the window fails on its adapter while starting up** (an error from wgpu, or a panic inside wgpu or egui-wgpu during the first frames), the app starts again without that adapter and tries the next one, telling which in the status bar; the run that failed keeps its log as `vectorcraft.1.log`. On Unix the new app replaces the process (an AppImage stays mounted); on Windows it starts beside it. The adapters left out travel in `VECTORCRAFT_GPU_SKIP` (`backend:vendor:device`, such as `Vulkan:1002:164e`), one more on each restart, so the restarts end. When no adapter is left, the app logs why and exits with an error instead of panicking.
+- **If the window fails on its adapter while starting up** (an error from wgpu, or a panic inside wgpu or egui-wgpu during the first frames), the app starts again without that adapter and tries the next one, telling which in the status bar; the run that failed keeps its log as `vectorcraft.1.log`. On Unix the new app replaces the process (an AppImage stays mounted); on Windows it starts beside it. Adapters are told apart by backend and PCI ids, or by name where the backend reports no ids (Metal lists every GPU of a dual-GPU Mac as `0000:0000`, #651). The adapters left out travel in `VECTORCRAFT_GPU_SKIP` (`backend:vendor:device`, such as `Vulkan:1002:164e`), one more on each restart, so the restarts end. When no adapter is left, the app logs why and exits with an error instead of panicking.
 - **Environment variables** for when the choice still goes wrong, all read at startup and stronger than the preference:
   - `WGPU_POWER_PREF`: `low`, `high` or `none` (the system's order).
   - `WGPU_ADAPTER_NAME`: part of an adapter's name, any case (`WGPU_ADAPTER_NAME=nvidia`, `=radv`, `=intel`); the names are in the log.
   - `WGPU_BACKEND`: the backends to use, such as `vulkan`, `dx12`, `metal` or `gl`.
+  - `WGPU_VALIDATION_INDIRECT_CALL=1`: turns wgpu's check of indirect draw arguments back on. VectorCraft draws nothing indirectly and turns it off, since the compute shader it needs fails to compile on some drivers (#651).
   - On Linux with Mesa, `MESA_VK_DEVICE_SELECT=10de:2f04!` (vendor:device as `vulkaninfo --summary` or `lspci -nn` show it) leaves only that GPU to Vulkan, and `DRI_PRIME=1` picks the other GPU.
 - Help › About and the control channel's `ui.inspect` (`graphicsAdapter`) show the adapter in use, and the app logs it at startup.
 
@@ -134,8 +135,10 @@ Languages shipped: English (`en`, the source), Traditional Chinese (`zh-hant`, c
 in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Simplified Chinese (`zh-hans`,
 complete, in the vocabulary used in mainland China; `zh-CN`, `zh-SG`, `zh-Hans-*` and a bare `zh` resolve to it,
 so the two scripts never mix), Japanese (`ja`, complete), Spanish (`es`, complete, in neutral
-international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or `es-419` resolves to it), Italian (`it`,
-complete; `it-IT`, `it-CH` and every other `it-*` locale resolve to it), Czech (`cs`, every menu label) and Brazilian Portuguese
+international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or `es-419` resolves to it), French (`fr`,
+complete; `fr-FR`, `fr-BE`, `fr-CA`, `fr-CH` and every other `fr-*` locale resolve to it), Italian (`it`,
+complete; `it-IT`, `it-CH` and every other `it-*` locale resolve to it), Russian (`ru`, complete; every `ru-*`
+locale such as `ru-RU`, `ru-BY` or `ru-KZ` resolves to it), Czech (`cs`, every menu label) and Brazilian Portuguese
 (`pt-br`, every menu label and every `tl!` literal). Untranslated text falls back to English until its rows are added.
 
 - `tl!("…")` translates a literal into the language the UI is drawn in; `i18n::t(s)` is the same for a
@@ -163,10 +166,10 @@ complete; `it-IT`, `it-CH` and every other `it-*` locale resolve to it), Czech (
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish and Italian cover every
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish, French, Italian and Russian cover every
   message literal the test scan finds (`complete_languages_translate_every_message`, languages listed in
-  `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs an `es.tsv`
-  and an `it.tsv` row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
+  `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs an `es.tsv`,
+  a `fr.tsv`, an `it.tsv` and a `ru.tsv` row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
   complete_languages_translate_every_message` lists them all). Other languages show messages in English
   until they add `@msg` rows.
 - Not translated on purpose: names that are user data (layers, swatches, fonts, documents), the tab
@@ -237,7 +240,7 @@ web build has no net at all.
 Untrusted input has property tests that must never panic:
 
 - `crates/engine/tests/import_fuzz.rs`: garbage, hostile and mutated SVG and PDF, and swatch
-  (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset (`.vcflattener`)
+  (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset (`.vcflattener`)
   libraries, loaded and used, then rendered and exported.
 - `crates/engine/tests/command_sweep.rs`: every command with junk parameters.
 - `crates/format/tests/prop_format.rs`: garbage and mutated `.vectorcraft` files.

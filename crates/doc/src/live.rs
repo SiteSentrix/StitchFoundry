@@ -1447,6 +1447,8 @@ fn map_node(n: &Node, w: &Warper) -> Node {
             let im = im.clone();
             return warp_image(&out, &im, w);
         }
+        // Its art is plain, so it warps at this depth.
+        NodeKind::PlacedDocument(_) => return map_node(&expanded_group_hooks(n, w.hooks), w),
     }
     out
 }
@@ -1607,7 +1609,7 @@ pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine
 
 /// Is this one of the live kinds?
 pub fn is_live(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_))
+    matches!(n.kind, NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_))
 }
 
 /// Mesh tessellation as filled quad paths (no stroke), `n`×`n` per patch.
@@ -1641,6 +1643,7 @@ pub fn expand_live_hooks(n: &Node, hooks: Hooks) -> Vec<Node> {
         NodeKind::Envelope { content, kind, fidelity, options, frame, .. } => expand_envelope(content, kind, *fidelity, *options, *frame, hooks),
         NodeKind::Mesh(m) => mesh_quad_nodes(m, 8),
         NodeKind::Repeat(r) => r.expand(),
+        NodeKind::PlacedDocument(p) => p.art(n),
         _ => vec![n.clone()],
     }
 }

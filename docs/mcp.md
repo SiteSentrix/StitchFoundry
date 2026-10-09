@@ -251,7 +251,7 @@ colour group (one undo step).
 SVG Options: `export` to SVG takes them in `options`, flat or as `{"svg": {…}}`: `styling` (`presentation`,
 `style`, `entities`, `css`), `outlineText`, `images` (`embed`, or `link`: embedded images are written next to the
 SVG, or returned as `linked`), `objectIds` (`layerNames`, `minimal`, `unique`), `decimals` (1–7), `minify`,
-`responsive`, `useArtboards`, `range: "all"` (one SVG per artboard, listed in `files`), `preserveEditing` (the SVG
+`responsive`, `useArtboards`, `range: "all"` (one SVG per artboard, listed in `files`, each holding only the art over its artboard), `preserveEditing` (the SVG
 reopens as the full document), `metadata` and `fewerTspans` (one `<tspan>` per line of type). Unknown keys inside `svg` are rejected; `run_command document.formats`
 lists every option with its default. `encoding` is `utf8`, `utf16` (big-endian after a byte order mark) or `latin1`
 (ISO 8859-1, other characters as `&#x…;` references); `document.serialize` still answers `text`, plus `dataBase64`
@@ -266,9 +266,10 @@ place and paste). `run_command document.save {path: "x.svg", svg: {…}}` saves 
 Symbols export as one `<symbol>` with a `<use>` per instance. An instance the def can't stand for is written as its
 own art: one stained by its fill; one scaled while the symbol has strokes (their weight doesn't scale), or rotated or
 scaled while it has effects, brushes or live objects; and every instance of a symbol with pattern paints or unlinked
-opacity masks (those stay on the page). `hiddenLayers: true` keeps hidden layers as groups that aren't displayed
-(`display:none`); `document.save` keeps them unless told otherwise, exports leave them out, and they reopen as
-hidden layers. A `preserveEditing` SVG carries the native document (CDATA in `<metadata>`) and a hash of the
+opacity masks (those stay on the page). `hiddenLayers: true` keeps hidden layers and objects, not displayed
+(`display="none"`); `document.save` and the CLI's `convert` keep them unless told otherwise, other exports leave
+them out, and they reopen hidden. An object's own data (`object.setProps {data: {pivot: "100,180"}}`) is written as
+`data-*` attributes (`data-pivot="100,180"`), and an SVG's `data-*` attributes come in as it. A `preserveEditing` SVG carries the native document (CDATA in `<metadata>`) and a hash of the
 markup around it: if another app changed the SVG since, `document.open` reads it as plain SVG and says so in
 `warnings`.
 
@@ -354,9 +355,11 @@ A `security` password encrypts the file (RC4 40-bit at PDF 1.3, RC4 128-bit at 1
 Pattern fills and strokes are written as their tiles clipped to the area they paint (a stroke's outline, with its
 dashes, caps, profile, arrowheads and alignment), and freeform gradients as an image of their colour field at the
 document's raster effects resolution, clipped the same way.
-`createLayers` writes each top-level layer (template layers are left out) as a PDF layer, an optional content group
-named as the layer: hidden layers are off, non-printing ones have `/PrintState /OFF` and locked ones are locked. It needs
-PDF 1.5 or later (at 1.4 it warns), and the file reopens with those layers.
+`createLayers` writes each layer and sublayer (template layers are left out) as a PDF layer, an optional content group
+named as the layer and listed under its parent layer's: hidden layers are off (their art is written, for the reader to
+show), non-printing ones have `/PrintState /OFF` and locked ones are locked. It needs PDF 1.5 or later (at 1.4 it
+warns), and the file reopens with those layers and sublayers. A `.ai` file writes them unless `createLayers` is false,
+so apps that read its PDF part find the layers, hidden ones included; hidden objects aren't in the PDF part.
 Images follow the `compression` settings of their kind (`color`, `gray`, or `mono` for black-and-white images): above
 `abovePpi` as placed they are resampled (`downsample`: `average`, `subsample` or `bicubic`) to `ppi`, and compressed
 with `zip`, `jpeg` (at `quality`; images with transparency stay lossless) or `auto` (JPEGs stay JPEG, the others
@@ -423,6 +426,8 @@ document exactly (`restored: true`); when another app changed the pages, or the 
 imported instead and the first warning says why. Choosing a standard turns it off (PDF/A refuses it). Save to a `.ai`
 path (`document.save {path: "art.ai"}` or `{format: "ai"}`) writes a PDF-compatible file that always carries the
 document, takes the PDF options and keeps its path when reopened, so Save writes `.ai` again; a `.ait` opens untitled.
+`document.export` / `serialize` to `.ai` (and the CLI's `run --export x.ai` and `convert in.svg out.ai`) write the same file
+without giving the document a path.
 
 Drive a tool like a mouse:
 
@@ -735,7 +740,9 @@ swatch in the library panel does). `swatch.resetDefaults {replace?}` brings back
 as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour groups; `.gpl` is 8-bit RGB;
 CSS writes custom properties); without `path` it returns `{data}`, and `user: true` saves into the user library
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
-dataBase64?, name?}` loads a `.vcswatches` or `.gpl` file, or another document's swatches, as a library to add from.
+dataBase64?, name?}` loads a `.vcswatches`, `.gpl` or swatch exchange (`.ase`) file, or another document's swatches,
+as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global, spot or process
+swatches and keeps their color groups.
 
 ## Graphic style libraries
 
@@ -769,6 +776,31 @@ characters as its place relative to the Characters row says. To stroke
 some characters, use `text.setRangeStyle {id, start, end, strokeOptions: {weight?, cap?, join?, miterLimit?, dash?,
 dashOffset?, alignDashes?}}`. `inspect_document` reports each object's stroke as `strokeOptions` (type: its first
 run's) in `stroke.set` terms. `stroke.set` on a group leaves the images and symbol instances in it alone.
+
+## Inline graphics in type
+
+A document symbol can sit in a line of type like a character (beyond Illustrator; like InDesign's inline
+anchored objects), e.g. mana symbols in card rules text. `text.insertInline {id?, at?, symbol?, scale?: 1,
+shift?: 0}` inserts one at byte offset `at` (default: the Type tool's selection, which it replaces) of text `id`
+(default: the text being edited), showing `symbol` (default: the Symbols panel's current symbol) → `{id, caret}`;
+Type → Insert Inline Symbol does the same at the caret. The graphic is one character, U+FFFC, in a run of its own:
+`text.getRange` reports it as `{text: "\uFFFC", style, inline: {symbol, scale, baseline_shift}}`, plain text (and
+copied text) shows U+FFFC, and `text.editRange` with styled `runs` can insert one. Typing over it, Backspace and
+Delete remove it whole; neighbouring text never merges into it.
+
+Layout: the art is scaled uniformly to `scale` × the run's font size tall, its left edge on the pen and its
+vertical centre on the middle of the cap height raised by `shift` points. Its advance is the scaled art width plus
+the run's tracking, so it breaks like a word (no break between it and punctuation stuck to it) and justifies like
+a glyph; a graphic taller than the font's ascent or descent opens up its line. Its art follows the symbol
+(Redefine Symbol resizes it); a missing or deleted symbol leaves an empty slot one em square that draws nothing.
+Its em box is its run's, whatever its scale: Character Alignment moves it with its run's text (it is one of
+the line's largest characters only when its run's size is), and Top-to-Top leading spaces its line by its run's
+em box (Roman leading by its run's leading). In right-to-left text it is a bidi neutral (U+FFFC): it takes the
+direction of the text around it and the line's reordering places it.
+The canvas draws the art inside the type's transparency (its opacity and blend mode apply). SVG keeps the text live
+(the text after a graphic is positioned after it) and writes each graphic as a `<use>` of the symbol's `<symbol>`
+def (or a copy of its art); type on a path with graphics is written as outlines. PDF draws the art as vector paths
+where the layout puts it.
 
 ## Flatten Transparency
 
@@ -852,6 +884,7 @@ and `layerRows`, the rows highlighted in the panel.
   dimImages, dimPercent; OK is one undo step), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
   layersOnly, rowSize small|medium|large|other, otherSize, thumbLayers, thumbGroups, thumbObjects), and
   `ui.layersExpand {ids?, open?}` opens or closes rows as their triangles do (Alt-click: everything inside).
+  A document opens with only its top-level layers open; the open rows are saved in the native file and reopen that way.
 
 ```json
 {"name":"run_command","arguments":{"command":"layer.newSublayer","params":{"name":"Shadows"}}}
@@ -1424,8 +1457,11 @@ passed straight back to `file.new`. Print presets and sizes without `units` star
 
 `file.place` puts another file's art into the active document as one undo step without touching the clipboard:
 a raster image at 100% of its physical size (the resolution its file declares, else 72 ppi; linked to its `path`
-unless `link: false`), an SVG as one group, a PDF/.ai page or a native document's artboard (`page`, `crop`) as one
-clipped group, with the images, symbols, patterns and swatches it uses. `at` centres it, `rect` fits it, `replace`
+unless `link: false`), an SVG as one group, a PDF/.ai page as one clipped group, with the images, symbols, patterns
+and swatches it uses. A VectorCraft document read from `path` is a placed document: one locked object showing its
+artboard `page` (or, with `crop: "bounding"`, its art's bounds), linked to the file and read again when it changes
+(see Linked images), and vectors in every output; with `link: false` (or from `dataBase64`) it is an editable copy
+of its art, as one clipped group. `at` centres it, `rect` fits it, `replace`
 swaps the selected object (keeping its place and transform), `template` puts it on a new template layer.
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
@@ -1533,6 +1569,14 @@ in `updatedLinks`), each as `{name, path, ids}`. `links.check` reports every lin
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. Without a
 file system (the web), linked images show their previews.
+
+Placed documents (a `.vectorcraft` file placed linked) work the same way: the document keeps the file's bytes and a
+preview (JPEG or PNG, 1 px per point, at most 1024 px a side), and a save writes the preview (Include Linked Files:
+the file); output reads the file again, or uses the preview with a warning when it is gone or changed.
+`links.list` and `links.info` give them `document: true` and the artboard's `pageWidth` and `pageHeight` (pt).
+Saving the file in the app updates the open documents that place it. `links.embed` (the Links panel's Break Link)
+turns one into the editable copy placing without link gives, its symbols, patterns, swatches and images joining
+the document; so does `object.expand`.
 
 ```json
 {"name":"run_command","arguments":{"command":"links.check","params":{}}}
@@ -2187,6 +2231,50 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
 ```
 
+### Vertical alignment
+
+`text.areaOptions {verticalAlign: top|center|bottom|justify}` (Area Type Options › Align) places the lines of each
+row/column cell on its own: `center` centres the block of lines in the cell, `bottom` puts the last line's descent on
+the cell's bottom (inside the inset), `justify` keeps the first line at the top, moves the last one to the bottom and
+shares the space left over equally between the lines (there is no paragraph spacing limit: every line gap grows by
+the same amount). A cell with a single line justifies to the top, and a full or overflowing cell only moves by the
+less-than-a-line of space it has left. In rectangular frames without text wrap the lines just move; in other
+frames (and around wrap objects) the text flows again starting lower until it settles, never losing text that fit
+top-aligned. Vertical type aligns along its block axis (`bottom` is the frame's left edge). Exports lay type out
+again, so SVG, PDF and EPS show the aligned text.
+
+```json
+{"name":"run_command","arguments":{"command":"text.areaOptions","params":{"verticalAlign":"center"}}}
+```
+
+## Fitting area type: Auto Size, Shrink Text to Fit, overflow
+
+`text.areaOptions` (and `text.create`'s `area`, `text.createInPath` in area mode) take a `fit`:
+
+- `none` (default): the frame keeps its size; text that doesn't fit overflows (the red "+").
+- `autoHeight`: Auto Size. After every edit (typing, `text.editRange`, character and paragraph changes, a new
+  width) the frame's bottom moves to just below the last line plus the inset, in the same undo step as the edit.
+  In several columns the frame gets the least height (to 0.01 pt) at which the columns hold the text. It applies
+  to rectangular frames of horizontal type in one row; `height` is ignored while it is on, and setting the height
+  by hand (a handle drag, `text.reshapeArea` moving the bottom) turns it off, as does threading the frame. The
+  `autoSizeAreaType` preference ("Auto Size New Area Type") gives new area type `autoHeight`.
+- `shrinkText` (beyond the reference app), with `fitMinPercent` (10–100, default 50): when the text overflows,
+  every run's size, leading (explicit leading; auto leading follows the size) and baseline shift are scaled by the
+  largest factor down to `fitMinPercent` % that makes it fit. Paragraph spacing and indents stay. The stored
+  sizes don't change: the scaling happens at layout time, so rendering and every export see it. The factor is
+  found by bisection over the first run's size in steps of 0.1 pt (its scaled size is a whole number of tenths of
+  a point, so the result is deterministic); at `fitMinPercent` the text may still overflow.
+
+The file stores `"fit": "autoHeight"` or `"fit": {"shrinkText": {"minPercent": 40}}` in the object's `area`; the
+command also accepts that object form. The query (and every reply) of `text.areaOptions` reports `fit` as its id,
+`fitMinPercent`, `overflow` (the text doesn't fit its frame) and `fitScale` (Shrink Text's factor, 1 unshrunk).
+`document.inspect` (and `document.node {summary: true}`) reports `overflow` for area type and type on a path (text past
+the end of the path), and `fit` and `fitScale` for area type.
+
+```json
+{"name":"run_command","arguments":{"command":"text.areaOptions","params":{"fit":"shrinkText","fitMinPercent":60}}}
+```
+
 ## Converting between point type and area type
 
 With the Selection tool, a single selected point or area type object shows the type widget: a small circle beside
@@ -2212,6 +2300,19 @@ undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"burasagari":"forced"}}}
+```
+
+## Character Alignment
+
+`text.setFormat {charAlign}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end, charAlign}` (a range)
+set where characters smaller than the largest on their line line up with it: `romanBaseline` (the default), the em box's
+`emBoxTop`, `emBoxCenter` or `emBoxBottom`, or the ideographic character face's (ICF) `icfTop` or `icfBottom`. In
+vertical type top and bottom are the right and left of the column. The ICF comes from the font's BASE table (`icfb`,
+`icft`, as the OpenType baseline tags define them), else from the average ink box of some ideographs and kana; a font
+without ideographs uses its em box. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"charAlign":"icfTop"}}}
 ```
 
 ## New type in a Japanese interface
@@ -2244,6 +2345,32 @@ begins or ends, dragging the centre bracket slides the type along its path and, 
 
 ```json
 {"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
+```
+
+## Paragraph attributes per paragraph
+
+Each paragraph (text split at `\n`) has its own alignment, indents, space before and after, hyphenation,
+punctuation spacing (`mojikumi`), hanging punctuation (`burasagari`), direction, leading model, tab stops and
+paragraph style. `text.setStyle {justify}`, `text.setFormat {leftIndent, rightIndent, firstLineIndent,
+spaceBefore, spaceAfter, hyphenate, mojikumi, burasagari, direction, leadingModel}`, `text.tabs.set` / `text.tabs.clear` and `paraStyle.apply` take optional
+`start` / `end` byte offsets of the plain text (as `text.setRangeStyle` does): they change the paragraphs the range
+touches (a caret, `start == end`, touches its paragraph). Without a range they change every paragraph of the
+targeted objects, as before. With a range, the character attributes of `text.setStyle` and `text.setFormat` style
+that range of characters. `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
+paragraph at `start`; `paraStyle.list` counts paragraphs as uses. A Return the Type tool types (or `text.editRange`
+inserting `\n`) continues the style of the paragraph it splits; deleting a break keeps the first paragraph's style;
+`text.setText` gives every paragraph the first one's attributes. Threaded text keeps each paragraph's attributes as
+the story re-flows (a paragraph split between frames has them in both).
+
+In the native file a text object's `para` holds the first paragraph's attributes and `paras` (left out when every
+paragraph is alike) one entry per paragraph, so older readers keep the first paragraph's. SVG export anchors each
+centred or right-aligned line on its own (`<tspan text-anchor>`), and SVG import gives each line's paragraph its
+alignment back, with indents that keep it in place.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setStyle","params":{"id":42,"justify":"center","start":0,"end":0}}}
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"ids":[42],"spaceBefore":6,"start":12,"end":30}}}
+{"name":"run_command","arguments":{"command":"paraStyle.apply","params":{"name":"Heading","id":42,"start":0,"end":0}}}
 ```
 
 ## Constrain proportions
@@ -2296,7 +2423,8 @@ tone (mono, or CMYK screens multiplied over each other), clipped to the art's ou
 
 Type can use the bundled fonts, fonts added to the session and the fonts installed on the system (none on the web):
 the system's and the user's font folders (Windows: `Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, plus fonts
-registered outside them, such as fonts installed as shortcuts; macOS: `/System/Library/Fonts`, `/Library/Fonts`,
+registered outside them, such as fonts installed as shortcuts, and in the desktop app and `vectorcraft-cli` (MCP
+included) the fonts in DirectWrite's system font collection, such as those Adobe Fonts activates while Creative Cloud runs; macOS: `/System/Library/Fonts`, `/Library/Fonts`,
 `/Network/Library/Fonts`, `~/Library/Fonts` and downloaded system fonts; Linux and BSD: `/usr/share/fonts`,
 `/usr/local/share/fonts`, `~/.fonts` and the XDG data folders' `fonts`, `~/.local/share/fonts` among them, and in a
 Flatpak sandbox the host's fonts). The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
@@ -2534,6 +2662,20 @@ symbol switch halfway). New blends are knockout groups (`object.setProps {knocko
 canvas as they export. `object.blend.expand` and `object.blend.release` keep the blend's name, transparency,
 opacity mask and appearance (Release on a group around the keys and spine when the blend has any), and
 `object.expand` with `object: true` expands the blends in the selection.
+
+## Paragraph composer
+
+`text.setFormat {ids?, composer: "singleLine"|"everyLine"}` sets how a text object's lines are broken (the Paragraph
+panel menu's Single-line and Every-line Composer; stored in the paragraph attributes as `para.composer`, saved only
+when it is Single-line). Every-line, the default, picks the breaks of the whole paragraph together in area type:
+justified text gets even word spacing, ragged text (left, centre or right aligned) an even rag, so it may move a word
+that fits to the next line to avoid a lone short word on the last line or a full line next to a short one.
+Single-line fills each line as far as it goes. Point type and type on a path have no line width, so both composers
+give the same result there; paragraphs that mix type sizes fall back to Single-line.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"ids":[7],"composer":"singleLine"}}}
+```
 
 ## Editing envelopes
 

@@ -308,7 +308,8 @@ fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
 
 #[test]
 fn the_control_bar_and_properties_trace_a_selected_image() {
-    use crate::panels::image_trace::{TRACE_BUTTON_W, selected_preset};
+    use crate::panels::image_trace::{TRACE_BUTTON_W, selected_trace};
+    let selected_preset = |app: &VectorcraftApp| selected_trace(app).map(|t| t.0);
     use crate::tests_removeanchors::{at, click_control, control_frame, has, properties_frame};
     let mut app = app();
     let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
@@ -332,19 +333,27 @@ fn the_control_bar_and_properties_trace_a_selected_image() {
     app.run("edit.undo", json!({})).unwrap();
     click_label(&mut app, &ctx, "Image Trace");
     assert_eq!(selected_preset(&app).as_deref(), Some("Default"));
-    // An Image Trace object: its preset (another traces it again), the panel and Expand.
+    // An Image Trace object: its preset (another traces it again), view, the panel and Expand.
     let bar = control_frame(&mut app, &ctx, vec![]);
-    for s in ["Image Tracing", "Preset:", "Default", "Expand"] {
+    for s in ["Image Tracing", "Preset:", "Default", "View:", "Tracing Result", "Expand"] {
         assert!(has(&bar, s), "{s}");
     }
-    assert!(has(&properties_frame(&mut app, 260.0), "Release"));
+    let props = properties_frame(&mut app, 260.0);
+    assert!(has(&props, "Release") && has(&props, "View:"));
+    // Another view redraws it without tracing again.
+    let traced = app.session.active().unwrap().selection.objects.clone();
+    click_control(&mut app, &ctx, at(&bar, "Tracing Result"));
+    click_label(&mut app, &ctx, "Outlines with Source Image");
+    assert_eq!(selected_trace(&app).map(|t| t.1), Some(vectorcraft_doc::TraceView::OutlinesWithSource));
+    assert_eq!(app.session.active().unwrap().selection.objects, traced, "the same object");
+    let bar = control_frame(&mut app, &ctx, vec![]);
     click_control(&mut app, &ctx, at(&bar, "Default"));
     click_label(&mut app, &ctx, "3 Colors");
     assert_eq!(selected_preset(&app).as_deref(), Some("3 Colors"));
     click_label(&mut app, &ctx, "Expand");
     let st = app.session.active().unwrap();
     let g = st.doc.node(st.selection.objects[0]).unwrap();
-    assert!(selected_preset(&app).is_none() && g.children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Image(_))), "expanded");
+    assert!(selected_trace(&app).is_none() && g.children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Image(_))), "expanded");
 }
 
 #[test]
@@ -360,4 +369,41 @@ fn the_control_bars_mask_clips_the_image_and_selects_the_clipping_path() {
     assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }));
     let ids: Vec<u64> = group.children().unwrap().iter().map(|c| c.id.0).collect();
     assert_eq!((ids[1], st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>()), (img, vec![ids[0]]));
+}
+
+#[test]
+fn a_vectorcraft_document_places_linked_and_edit_original_opens_it() {
+    let mut app = app();
+    // A one-artboard document with a rectangle.
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    let bytes = vectorcraft_format::save_file(&src.active().unwrap().doc);
+    let path = temp_file("badge.vectorcraft", &bytes);
+    place_picked(&mut app, &path);
+    let d = app.ui.dialog.as_ref().expect("the Place dialog");
+    assert!(d.bool("link") && d.bool("__documents") && !d.bool("__others"), "Link on, for a document");
+    // Link's tooltip says what it does for a document.
+    assert!(crate::dialogs::place::link_tip(d).contains("editable copy"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    let id = st.selection.objects[0];
+    let vectorcraft_doc::NodeKind::PlacedDocument(p) = &st.doc.node(id).unwrap().kind else { panic!("not a placed document") };
+    assert_eq!(p.link.path, path);
+    // Edit Original opens the document in a new tab.
+    let tabs = app.session.documents().len();
+    app.run("links.editOriginal", json!({})).unwrap();
+    assert_eq!(app.session.documents().len(), tabs + 1);
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some(path.as_str()));
+    // A PNG keeps the image tooltip; a PNG and a document, both.
+    let pic = temp_file("pic.png", &png(10, 10, 72.0));
+    place_picked(&mut app, &pic);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.bool("__documents") && crate::dialogs::place::link_tip(d).contains("image file"));
+    app.ui.dialog = None;
+    let both = vec![pic.clone(), path.clone()];
+    app.services.pick_open_multi = Some(Box::new(move || both.clone()));
+    app.run("file.place", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(crate::dialogs::place::link_tip(d).contains("VectorCraft documents"));
 }

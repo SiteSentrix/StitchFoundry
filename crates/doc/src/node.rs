@@ -423,6 +423,9 @@ pub enum NodeKind {
     Mesh(GradientMesh),
     /// Live Repeat (radial / grid / mirror) of source art.
     Repeat(RepeatSpec),
+    /// A placed document: an artboard of another VectorCraft file, linked and locked (see
+    /// [`crate::placed_document`]).
+    PlacedDocument(Box<crate::placed_document::PlacedDocument>),
 }
 
 fn yes() -> bool {
@@ -460,7 +463,8 @@ pub struct Node {
     /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mask: Option<Box<OpacityMask>>,
-    /// Image Trace object: `{preset, params}` it was traced with (the Image Trace panel shows them).
+    /// Image Trace object: `{preset, params, view?}` it was traced with (the Image Trace panel shows
+    /// them; `view` is its [`crate::TraceView`] id, absent for the tracing result).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trace: Option<Box<serde_json::Value>>,
     /// Object → Text Wrap: area type below this object (in the same layer) flows around it.
@@ -469,6 +473,9 @@ pub struct Node {
     /// Graph object: the group's children are generated from this spec (Object → Graph).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<Box<crate::graph::GraphSpec>>,
+    /// Editable Shaper composition; the original art is retained in its source child.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
     pub kind: NodeKind,
     /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
     /// that style's look: editing its appearance or transparency breaks the link.
@@ -533,6 +540,7 @@ impl Node {
             trace: None,
             wrap: None,
             graph: None,
+            shaper: None,
             kind,
             graphic_style: None,
             attrs: None,
@@ -642,6 +650,7 @@ impl Node {
             NodeKind::Envelope { .. } => "Envelope",
             NodeKind::Mesh(_) => "Mesh",
             NodeKind::Repeat(r) => r.kind.label(),
+            NodeKind::PlacedDocument(_) => "Placed Document",
         }
     }
     /// Name shown in the Layers panel: explicit name or `<Kind>`.
@@ -703,6 +712,7 @@ impl Node {
             }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => children
                 .iter()
+                .skip(usize::from(self.shaper.is_some()))
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds())),
             NodeKind::Text(t) => self.projected(t.bounds()),
@@ -715,6 +725,7 @@ impl Node {
             NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, *frame),
             NodeKind::Mesh(m) => m.bounds(),
             NodeKind::Repeat(r) => r.bounds(),
+            NodeKind::PlacedDocument(p) => Some(p.bounds()),
         }
     }
     /// Visual bounds: what the object paints, its strokes included (paths and compound paths
@@ -733,7 +744,11 @@ impl Node {
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
                 // The container's own strokes paint around its members.
                 let o = self.appearance.outset();
-                children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds())).map(|b| b.inflate(o, o))
+                children
+                    .iter()
+                    .skip(usize::from(self.shaper.is_some()))
+                    .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()))
+                    .map(|b| b.inflate(o, o))
             }
             NodeKind::Blend { children, spec } => {
                 let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()));
@@ -810,6 +825,7 @@ impl Node {
                 }
             }
             NodeKind::Image(im) => im.xf = a * im.xf,
+            NodeKind::PlacedDocument(p) => p.xf = a * p.xf,
             NodeKind::SymbolInstance { xf, .. } => *xf = a * *xf,
             NodeKind::Blend { children, spec } => {
                 for c in children.iter_mut() {
@@ -959,7 +975,7 @@ impl Node {
                 }
             }
             NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
-                for c in children.iter().filter(|c| c.visible) {
+                for c in children.iter().skip(usize::from(self.shaper.is_some())).filter(|c| c.visible) {
                     c.push_clip_shapes(text, out);
                 }
             }
@@ -970,6 +986,10 @@ impl Node {
             }
             NodeKind::Image(im) => {
                 let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
+                out.push((frame.to_bezpath(), FillRule::NonZero));
+            }
+            NodeKind::PlacedDocument(p) => {
+                let frame = shapes::rectangle(p.natural()).transformed(p.xf);
                 out.push((frame.to_bezpath(), FillRule::NonZero));
             }
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
@@ -1204,6 +1224,10 @@ pub struct ObjectAttributes {
     /// The note shown in the Attributes panel.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+    /// The object's own data, in order: SVG's `data-*` attributes (`data-pivot="100,180"` is
+    /// `("pivot", "100,180")`), kept from import to export (`object.setProps {data}`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub data: Vec<(String, String)>,
 }
 
 /// The Attributes panel's Image Map shapes.

@@ -1,9 +1,10 @@
 //! Paragraph panel: seven alignment buttons, Paragraph Direction (with the Indic options), indents,
-//! space before/after, Hyphenate and Mojikumi Set (with the East Asian options).
+//! space before/after, Hyphenate and Mojikumi Set (with the East Asian options); the panel menu
+//! picks the Single-line or Every-line Composer.
 
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Justify, NodeKind, ParaDirection, ParaStyle};
+use vectorcraft_doc::{Composer, Justify, NodeKind, ParaDirection, ParaStyle};
 
 use super::character::text_style;
 use super::{pstate, set_pstate};
@@ -21,15 +22,18 @@ pub const ALIGNMENTS: [(Justify, &str, &str, &str); 7] = [
     (Justify::JustifyAll, "dc-para-justify-all", "Justify all lines", "justifyAll"),
 ];
 
-/// Paragraph attributes apply to the whole text object (ending a Type tool typing session first).
+/// Paragraph attributes apply to the selected text objects' paragraphs or, while the Type tool
+/// edits text, to the paragraphs its selection (or caret) touches (ending its typing session).
 fn format(app: &mut VectorcraftApp, p: Value) {
     para_cmd(app, "text.setFormat", p);
 }
 
 fn para_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
-    if let Some((id, _, _)) = super::character::text_editing(app) {
+    if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
         p["ids"] = json!([id.0]);
+        p["start"] = json!(a);
+        p["end"] = json!(b);
     }
     app.run(cmd, p).ok();
 }
@@ -181,14 +185,20 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     }
     ui.separator();
-    menu_item(ui, tl!("Single-line Composer"), false, false);
-    menu_item(ui, tl!("Every-line Composer"), false, true);
+    let composer = style.as_ref().map(|(_, p)| p.composer);
+    for (c, label, id) in
+        [(Composer::SingleLine, tl!("Single-line Composer"), "singleLine"), (Composer::EveryLine, tl!("Every-line Composer"), "everyLine")]
+    {
+        if menu_item(ui, label, has, composer == Some(c)) {
+            format(app, json!({ "composer": id }));
+        }
+    }
     ui.separator();
     if menu_item(ui, tl!("Reset Panel"), has, false) {
         para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
         format(
             app,
-            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard"}),
+            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard", "composer": "everyLine"}),
         );
     }
 }

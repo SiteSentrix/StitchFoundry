@@ -48,7 +48,7 @@ impl AnchorTool {
     }
 
     fn delete(cx: &ToolContext, p: Point) -> Vec<Action> {
-        hit_anchor(cx, p, cx.pick_tol()).map(remove_anchor).into_iter().collect()
+        hit_anchor(cx, p, cx.point_tol()).map(remove_anchor).into_iter().collect()
     }
 }
 
@@ -61,7 +61,8 @@ impl Tool for AnchorTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
-        let tol = cx.pick_tol();
+        // Anchors and handle ends are picked from a little further than segments.
+        let (tol, point) = (cx.pick_tol(), cx.point_tol());
         match (self.id, ev.kind) {
             ("addAnchor", PointerKind::Down) => {
                 if ev.mods.alt {
@@ -78,7 +79,7 @@ impl Tool for AnchorTool {
                 }
             }
             ("scissors", PointerKind::Down) => {
-                if let Some((id, si, ai)) = hit_anchor(cx, p, tol) {
+                if let Some((id, si, ai)) = hit_anchor(cx, p, point) {
                     return vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "anchor": ai}))];
                 }
                 match hit_segment(cx, p, tol) {
@@ -87,10 +88,10 @@ impl Tool for AnchorTool {
                 }
             }
             ("anchorPoint", PointerKind::Down) => {
-                if let Some((id, si, ai, out)) = hit_handle(cx, p, tol) {
+                if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {
                     self.state = State::Handle { id, si, ai, out, began: false };
                     self.snap = HandleSnap::default();
-                } else if let Some((id, si, ai)) = hit_anchor(cx, p, tol) {
+                } else if let Some((id, si, ai)) = hit_anchor(cx, p, point) {
                     self.state = State::Convert { id, si, ai, start: p, began: false };
                 } else if let Some((id, si, seg, t)) = hit_segment(cx, p, tol) {
                     self.state = State::Reshape { id, si, seg, t, start: p, began: false };

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ImageBlob, ImageObject, Node, NodeKind};
+use vectorcraft_doc::{AppearanceItem, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
@@ -670,6 +670,82 @@ fn image_trace_make_and_expand_and_color_presets() {
 }
 
 #[test]
+fn image_trace_palettes_and_swatch_libraries() {
+    let mut s = session();
+    let quads = vectorcraft_trace::Raster::from_fn(60, 60, |x, y| match (x < 30, y < 30) {
+        (true, true) => [230, 20, 20, 255],
+        (false, true) => [20, 200, 30, 255],
+        (true, false) => [20, 30, 220, 255],
+        (false, false) => [250, 230, 10, 255],
+    });
+    add_image(&mut s, &quads, Affine::IDENTITY);
+    let fills = |s: &Session, id: &Value| -> Vec<Color> {
+        traced_paths(&node(s, NodeId(id.as_u64().unwrap()))).iter().filter_map(|n| n.appearance.fill_paint().color()).collect()
+    };
+    // Document Library: every fill is one of the document's swatch colours, as it is.
+    let r = s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": {"palette": "documentLibrary"}})).unwrap();
+    let doc = crate::cmd::swatchlib::library_colors(&s, "document").unwrap();
+    let got = fills(&s, &r["id"]);
+    assert!(!got.is_empty() && got.iter().all(|c| doc.contains(c)), "{got:?}");
+    let t = node(&s, NodeId(r["id"].as_u64().unwrap())).trace.unwrap();
+    assert_eq!((t["params"]["palette"].as_str(), t["params"]["library"].as_str()), (Some("documentLibrary"), Some("document")));
+    assert!(t["params"].get("swatches").is_none(), "looked up again at every trace");
+    // A swatch library by id: the web-safe colours.
+    let r = s
+        .execute(
+            "imageTrace.make",
+            &json!({"id": r["id"], "preset": "6 Colors", "params": {"palette": "documentLibrary", "library": "web-safe-216", "colors": 3}}),
+        )
+        .unwrap();
+    let got = fills(&s, &r["id"]);
+    assert!((1..=3).contains(&got.len()), "{got:?}");
+    assert!(got.iter().all(|c| c.to_rgba8(1.0)[..3].iter().all(|v| v % 51 == 0)), "{got:?}");
+    // Full Tone and Automatic keep the four flat colours.
+    let mut id = r["id"].clone();
+    for palette in ["fullTone", "automatic"] {
+        let r = s.execute("imageTrace.make", &json!({"id": id, "preset": "6 Colors", "params": {"palette": palette, "colorDetail": 50}})).unwrap();
+        assert_eq!(r["colors"], 4, "{palette}");
+        id = r["id"].clone();
+    }
+    let mut bad = |p: Value| s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": p})).is_err();
+    assert!(bad(json!({"palette": "documentLibrary", "library": "No Such Library"})));
+    assert!(bad(json!({"palette": "rainbow"})));
+}
+
+#[test]
+fn image_trace_create_strokes_makes_stroked_centre_lines() {
+    let mut s = session();
+    // A 3 px wide horizontal line from x = 10 to 90 at y = 50, placed at 2× from (100, 100).
+    let r =
+        vectorcraft_trace::Raster::from_fn(100, 100, |x, y| if (10..90).contains(&x) && (49..52).contains(&y) { [0, 0, 0, 255] } else { [255; 4] });
+    add_image(&mut s, &r, Affine::translate((100.0, 100.0)) * Affine::scale(2.0));
+    let res = s.execute("imageTrace.make", &json!({"params": {"ignoreWhite": true, "strokes": true, "strokeWidth": 5}})).unwrap();
+    assert_eq!(res["paths"], 1);
+    let g = NodeId(res["id"].as_u64().unwrap());
+    let paths = traced_paths(&node(&s, g));
+    let line = &paths[0];
+    assert!(line.appearance.fill_paint().color().is_none(), "not filled");
+    let st = line.appearance.items.iter().find_map(|i| if let AppearanceItem::Stroke(st) = i { Some(st) } else { None }).expect("stroked");
+    assert!((st.width - 6.0).abs() < 1.0, "3 px at 2× is about 6 pt: {}", st.width);
+    assert_eq!((st.cap, st.join), (LineCap::Round, LineJoin::Round));
+    assert_eq!(st.paint, Paint::solid(Color::rgb8(0, 0, 0)));
+    let sp = &line.path_data().unwrap().subpaths[0];
+    assert!(!sp.closed);
+    let (a, b) = (sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p);
+    assert!((a.y - 201.0).abs() < 1.5 && (b.y - 201.0).abs() < 1.5 && (a.x - b.x).abs() > 140.0, "{a:?} … {b:?}");
+    let t = node(&s, g).trace.unwrap();
+    assert_eq!((t["params"]["strokes"].as_bool(), t["params"]["strokeWidth"].as_f64()), (Some(true), Some(5.0)));
+    // Expand keeps the stroked line.
+    s.execute("imageTrace.expand", &json!({})).unwrap();
+    assert!(node(&s, g).children().unwrap()[0].appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))));
+    // Create needs Fills or Strokes, and a stroke width.
+    s.execute("edit.undo", &json!({})).unwrap();
+    for p in [json!({"fills": false, "strokes": false}), json!({"strokes": true, "strokeWidth": 0}), json!({"strokeWidth": -3})] {
+        assert!(s.execute("imageTrace.make", &json!({"id": g.0, "params": p})).is_err(), "{p}");
+    }
+}
+
+#[test]
 fn image_trace_presets_query_and_errors() {
     let mut s = session();
     let r = s.execute("imageTrace.presets", &json!({})).unwrap();
@@ -703,4 +779,147 @@ fn image_trace_object_remembers_its_settings() {
     let st = s.doc().unwrap();
     let id = st.selection.in_paint_order(&st.doc)[0];
     assert!(st.doc.node(id).unwrap().trace.is_none());
+}
+
+/// A black disc (r = 30 px) on light blue, 100 × 100 px, placed at 2× from (50, 50): traced in
+/// Black and White with Ignore White, the blue drops out and one disc (r = 60 pt at (150, 150))
+/// remains.
+fn disc_on_blue(s: &mut Session) -> NodeId {
+    let r = vectorcraft_trace::Raster::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (x as f64 + 0.5 - 50.0, y as f64 + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { [0, 0, 0, 255] } else { [170, 210, 255, 255] }
+    });
+    add_image(s, &r, Affine::translate((50.0, 50.0)) * Affine::scale(2.0));
+    let r = s.execute("imageTrace.make", &json!({"params": {"ignoreWhite": true}})).unwrap();
+    assert_eq!(r["paths"], 1);
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+/// The document rendered as the canvas draws it (`trace_views`) or as exports do.
+fn render_doc(s: &Session, trace_views: bool) -> vectorcraft_render::Rendered {
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), trace_views, ..Default::default() };
+    vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, Affine::IDENTITY, &opts)
+}
+
+#[test]
+fn image_trace_view_is_stored_kept_and_validated() {
+    let mut s = session();
+    let g = disc_on_blue(&mut s);
+    assert_eq!(node(&s, g).trace.unwrap()["view"], "tracingResult");
+    let r = s.execute("imageTrace.setView", &json!({"view": "outlinesWithSourceImage"})).unwrap();
+    assert_eq!((ids(&r), r["view"].as_str()), (vec![g], Some("outlinesWithSourceImage")));
+    assert_eq!(node(&s, g).trace_view(), vectorcraft_doc::TraceView::OutlinesWithSource);
+    // Setting the view it has already adds no undo step.
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("imageTrace.setView", &json!({"id": g.0, "view": "outlinesWithSourceImage"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // Tracing again keeps it, unless another one is asked for; it survives save and open.
+    let g = NodeId(s.execute("imageTrace.make", &json!({"id": g.0, "params": {"ignoreWhite": true, "noise": 30}})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(node(&s, g).trace_view(), vectorcraft_doc::TraceView::OutlinesWithSource);
+    let g = NodeId(s.execute("imageTrace.make", &json!({"id": g.0, "view": "SourceImage"})).unwrap()["id"].as_u64().unwrap());
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(back.node(g).unwrap().trace_view(), vectorcraft_doc::TraceView::Source);
+    // Bad views and other objects are refused.
+    assert!(s.execute("imageTrace.setView", &json!({"view": "sepia"})).is_err());
+    assert!(s.execute("imageTrace.setView", &json!({})).is_err());
+    assert!(s.execute("imageTrace.make", &json!({"view": 3})).is_err());
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    assert!(s.execute("imageTrace.setView", &json!({"id": a.0, "view": "outlines"})).is_err());
+}
+
+#[test]
+fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
+    let mut s = session();
+    let g = disc_on_blue(&mut s);
+    let dark = |p: [u8; 4]| p[0] < 60 && p[1] < 60 && p[2] < 60;
+    let white = |p: [u8; 4]| p[0] > 245 && p[1] > 245 && p[2] > 245;
+    let blue = |p: [u8; 4]| p[0] < 200 && p[2] > 245;
+    let (centre, beside) = ((150, 150), (70, 70));
+    let at = |img: &vectorcraft_render::Rendered, (x, y): (u32, u32)| img.pixel(x, y);
+    // The outline is a 1 px line where the disc's right side is (x = 210, anti-aliased).
+    let outlined = |img: &vectorcraft_render::Rendered| (205..=215).any(|x| img.pixel(x, 150)[0] < 128);
+    let mut expanded = None;
+    for view in vectorcraft_doc::TraceView::ALL {
+        s.execute("imageTrace.setView", &json!({"id": g.0, "view": view.id()})).unwrap();
+        let screen = render_doc(&s, true);
+        let (c, b) = (at(&screen, centre), at(&screen, beside));
+        assert_eq!(dark(c), view.shows_result() || view.shows_source(), "{view:?}: the disc's middle {c:?}");
+        assert_eq!(blue(b), view.shows_source(), "{view:?}: the image's background {b:?}");
+        assert!(view.shows_source() || white(b), "{view:?}: nothing beside the disc {b:?}");
+        if view == vectorcraft_doc::TraceView::Outlines {
+            assert!(outlined(&screen), "{view:?}: the disc's outline");
+        }
+        // Exports draw the tracing result whatever the view.
+        let export = render_doc(&s, false);
+        assert!(dark(at(&export, centre)) && white(at(&export, beside)), "{view:?}: export");
+        // Expand keeps the traced shapes, as traced, whatever the view.
+        s.execute("imageTrace.expand", &json!({"id": g.0})).unwrap();
+        let shapes: Vec<_> = node(&s, g).children().unwrap().iter().map(|c| (c.path_data().cloned(), c.appearance.clone())).collect();
+        assert_eq!(*expanded.get_or_insert_with(|| shapes.clone()), shapes, "{view:?}: expanded");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+/// #569: merging the regions of a rosette of unfilled ellipses (each off the centre, petals
+/// overlapping) merges every region the drags touch into one shape whose outline is only the
+/// merged area's border: no edge between merged regions stays in, as a stray line or a spur.
+#[test]
+fn shape_builder_merges_rosette_rings_cleanly() {
+    let mut s = session();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    let c = [400.0, 320.0];
+    let mut petals = vec![];
+    for k in 0..8 {
+        let id =
+            s.execute("shape.ellipse", &json!({"x": c[0] - 60.0, "y": c[1] - 172.0, "width": 120, "height": 324})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        s.execute("object.rotate", &json!({"angle": 45.0 * f64::from(k), "origin": c})).unwrap();
+        petals.push(id);
+    }
+    s.execute("select.set", &json!({"ids": petals})).unwrap();
+    // Drags around the ring of petals, from its inside out; the outer ones miss the petals.
+    let mut merged = None;
+    for radius in [110.0, 150.0, 190.0, 230.0] {
+        let pts: Vec<[f64; 2]> = (0..=120)
+            .map(|i| {
+                let a = std::f64::consts::TAU * f64::from(i) / 120.0;
+                [c[0] + radius * a.cos(), c[1] + radius * a.sin()]
+            })
+            .collect();
+        if let Ok(r) = s.execute("shapeBuilder.merge", &json!({"points": pts})) {
+            merged = r["merged"].as_u64().map(NodeId);
+        }
+    }
+    let (ring, rule) = outline(&node(&s, merged.expect("the drags merged")));
+    let inside = |p: kurbo::Point| kurbo::Shape::winding(&ring.to_bezpath(), p) != 0;
+    for k in 0..8 {
+        let a = std::f64::consts::FRAC_PI_4 * f64::from(k) - std::f64::consts::FRAC_PI_2;
+        let tip = kurbo::Point::new(c[0] + 165.0 * a.cos(), c[1] + 165.0 * a.sin());
+        assert!(inside(tip), "petal {k}'s tip at {tip:?} is in the merged shape");
+    }
+    // What is left of the petals stays out of the merged area (a piece left over it is a stray
+    // outline inside it).
+    let merged = merged.unwrap();
+    for id in s.doc().unwrap().selection.objects.clone().into_iter().filter(|id| *id != merged) {
+        let (p, r) = outline(&node(&s, id));
+        let over = vectorcraft_pathops::boolean(&p, r, &ring, rule, vectorcraft_pathops::BoolOp::Intersect);
+        let a = vectorcraft_pathops::area(&over, FillRule::NonZero);
+        assert!(a < 1.0, "{id:?} overlaps the merged shape by {a} pt²");
+    }
+    // No outline is a sliver or carries a spur (2 × area / length: its mean width).
+    for id in s.doc().unwrap().selection.objects.clone() {
+        let (p, r) = outline(&node(&s, id));
+        for sp in &p.subpaths {
+            let one = PathData::new(vec![sp.clone()]);
+            let width = 2.0 * vectorcraft_pathops::area(&one, r) / one.length();
+            assert!(width > 1.0, "{id:?} has an outline {width:.3} pt wide on average, {:.1} pt long", one.length());
+        }
+    }
+    // The ring is one outline around the centre (the regions the drags missed aside): the
+    // petals' tips are no outlines of their own beside it, apart by a hairline.
+    let big = ring.subpaths.iter().filter(|sp| vectorcraft_pathops::area(&PathData::new(vec![(*sp).clone()]), rule) > 100.0).count();
+    assert_eq!(big, 2, "{:?}", ring.subpaths.iter().map(|sp| vectorcraft_pathops::area(&PathData::new(vec![sp.clone()]), rule)).collect::<Vec<_>>());
+    // An inner edge would be a second outline over the merged area: normalising would drop it.
+    let clean = vectorcraft_pathops::normalize(&ring, rule);
+    assert!((ring.length() - clean.length()).abs() < 1.0, "{} pt of outline, {} without inner edges", ring.length(), clean.length());
 }

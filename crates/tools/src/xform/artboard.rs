@@ -259,10 +259,19 @@ impl Tool for ArtboardTool {
         }
     }
 
+    /// Delete/Backspace remove the active artboard ahead of the Clear shortcut, which would only
+    /// delete selected art; with one artboard left (it can't be deleted) they stay the shortcut's.
+    fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
+        matches!(key, ToolKey::Delete | ToolKey::Backspace)
+            && self.drag.is_none()
+            && cx.doc.artboards.len() > 1
+            && self.active < cx.doc.artboards.len()
+    }
+
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         match key {
-            ToolKey::Delete | ToolKey::Backspace if self.drag.is_none() => {
-                if cx.doc.artboards.len() <= 1 || self.active >= cx.doc.artboards.len() {
+            ToolKey::Delete | ToolKey::Backspace => {
+                if !self.claims_key(cx, key) {
                     return vec![];
                 }
                 let i = self.active;
@@ -522,7 +531,8 @@ mod tests {
         let a = t.pointer(&cx, &ev(PointerKind::Up, 1100.0, 1050.0));
         assert_eq!(a[0], Action::Exec("artboard.new".into(), json!({"x": 1000.0, "y": 1000.0, "width": 100.0, "height": 50.0})));
         assert_eq!(a[1], Action::Notify("created".into()));
-        // Delete removes the active artboard.
+        // Delete removes the active artboard, ahead of the Clear shortcut.
+        assert!(t.claims_key(&cx, ToolKey::Delete) && t.claims_key(&cx, ToolKey::Backspace));
         assert_eq!(t.key(&cx, ToolKey::Delete, Mods::default()), vec![Action::Exec("artboard.delete".into(), json!({"index": 1}))]);
         assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::SwitchTool("selection".into())]);
     }

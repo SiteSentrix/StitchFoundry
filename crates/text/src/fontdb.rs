@@ -79,6 +79,19 @@ pub struct FontFace {
     pub(crate) instance: Option<harfrust::ShaperInstance>,
     /// [`Self::ideographic_centre`], read once: layout asks for it per glyph.
     ideographic_centre: std::sync::OnceLock<f64>,
+    /// [`Self::icf_margins`], read once.
+    icf_margins: std::sync::OnceLock<IcfMargins>,
+}
+
+/// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
+/// from each edge of the em box, in ems. `top` and `bottom` along a horizontal line, `right` and
+/// `left` across a vertical one.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct IcfMargins {
+    pub top: f64,
+    pub bottom: f64,
+    pub right: f64,
+    pub left: f64,
 }
 
 impl std::fmt::Debug for FontFace {
@@ -177,6 +190,69 @@ impl FontFace {
             gid.and_then(|g| self.vertical_glyph(g)).map_or(0.38, |(advance, origin)| (origin - advance * 0.5) / self.upem)
         })
     }
+    /// The ideographic character face as margins inside the em box ([`IcfMargins`]): from the
+    /// font's BASE table as the OpenType baseline tags define it (`icfb`, `icft` against `ideo`,
+    /// `idtp`), else, as that definition allows, from the bounds of some ideographs and kana
+    /// averaged, else none (the ICF is the em box).
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/baselinetags>
+    pub fn icf_margins(&self) -> IcfMargins {
+        *self.icf_margins.get_or_init(|| self.icf_from_base().or_else(|| self.icf_from_glyphs()).unwrap_or_default())
+    }
+
+    /// [`Self::icf_margins`] from the BASE table: the ICF's bottom edge `icfb` (top edge `icft`, else
+    /// as far below the em box top) against the em box `ideo` .. `idtp` (else the OS/2 typographic
+    /// descender, and one em above it); across vertical lines, `icfb` and `icft` of the vertical
+    /// axis against 0 .. `idtp` (else the horizontal margin, and one em).
+    pub(crate) fn icf_from_base(&self) -> Option<IcfMargins> {
+        use skrifa::raw::TableProvider;
+        let f = self.skrifa()?;
+        let base = f.base().ok()?;
+        let em = self.upem;
+        let h = base_values(base.horiz_axis()?.ok()?)?;
+        let icfb = *h.get(b"icfb")?;
+        let em_bottom = match h.get(b"ideo") {
+            Some(v) => *v,
+            None => f64::from(f.os2().ok()?.s_typo_descender()),
+        };
+        let em_top = h.get(b"idtp").copied().unwrap_or(em_bottom + em);
+        let margin = icfb - em_bottom;
+        let icf_top = h.get(b"icft").copied().unwrap_or(em_top - margin);
+        let v = base.vert_axis().and_then(Result::ok).and_then(base_values).unwrap_or_default();
+        let icf_left = v.get(b"icfb").copied().unwrap_or(margin);
+        let em_right = v.get(b"idtp").copied().unwrap_or(em);
+        let icf_right = v.get(b"icft").copied().unwrap_or(em_right - icf_left);
+        let m = IcfMargins { top: (em_top - icf_top) / em, bottom: margin / em, right: (em_right - icf_right) / em, left: icf_left / em };
+        // Inside the em box, short of its middle: anything else is a damaged table.
+        [m.top, m.bottom, m.right, m.left].iter().all(|x| (0.0..0.5).contains(x)).then_some(m)
+    }
+
+    /// [`Self::icf_margins`] from the ink of some ideographs and kana: each edge's margin to the em
+    /// box (its centre [`Self::ideographic_centre`], one em high and wide), averaged.
+    pub(crate) fn icf_from_glyphs(&self) -> Option<IcfMargins> {
+        let f = self.skrifa()?;
+        let metrics = f.glyph_metrics(Size::unscaled(), self.location());
+        let em = self.upem;
+        let (em_bottom, em_top) = ((self.ideographic_centre() - 0.5) * em, (self.ideographic_centre() + 0.5) * em);
+        let boxes: Vec<_> = ['国', '東', '永', '書', 'あ', 'ア']
+            .into_iter()
+            .map(|c| self.glyph_for(c))
+            .filter(|g| *g != 0)
+            .filter_map(|g| metrics.bounds(GlyphId::new(g)))
+            .collect();
+        if boxes.is_empty() {
+            return None;
+        }
+        let n = boxes.len() as f64;
+        let mean = |v: &dyn Fn(&skrifa::metrics::BoundingBox) -> f32| boxes.iter().map(|b| f64::from(v(b))).sum::<f64>() / n;
+        let m = IcfMargins {
+            top: (em_top - mean(&|b| b.y_max)) / em,
+            bottom: (mean(&|b| b.y_min) - em_bottom) / em,
+            right: (em - mean(&|b| b.x_max)) / em,
+            left: mean(&|b| b.x_min) / em,
+        };
+        [m.top, m.bottom, m.right, m.left].iter().all(|x| (0.0..0.5).contains(x)).then_some(m)
+    }
+
     /// Glyph id for `c` (0 = .notdef).
     pub fn glyph_for(&self, c: char) -> u32 {
         self.skrifa().and_then(|f| f.charmap().map(c)).map(|g| g.to_u32()).unwrap_or(0)
@@ -782,8 +858,29 @@ pub(crate) fn sfnt_of(tables: &[(&[u8; 4], &[u8])]) -> Option<Vec<u8>> {
     Some(font)
 }
 
-/// The platform's font folders (the system's and the user's) and, on Windows, the font files
-/// registered with it outside them, scanned by [`FontDb::global`].
+/// Lists the font files the platform's font service knows, for [`set_platform_font_files`].
+pub type PlatformFontFiles = fn() -> Vec<String>;
+
+/// What lists the platform's font files, set by the app ([`set_platform_font_files`]).
+#[cfg(not(target_arch = "wasm32"))]
+static PLATFORM_FONT_FILES: std::sync::OnceLock<PlatformFontFiles> = std::sync::OnceLock::new();
+
+/// Have [`system_font_dirs`] add the font files `list` gives (full paths) outside the font
+/// folders, asked again by each scan and each check for installed fonts
+/// ([`FontDb::installed_fonts_changed`]). The desktop app lists DirectWrite's system font
+/// collection on Windows: fonts a font service such as Adobe Fonts loads in place, from files
+/// outside the font folders and unknown to the registry (#579). Only the first call counts.
+pub fn set_platform_font_files(list: PlatformFontFiles) {
+    #[cfg(not(target_arch = "wasm32"))]
+    // A second call keeps the first lister, as documented.
+    let _ = PLATFORM_FONT_FILES.set(list);
+    #[cfg(target_arch = "wasm32")]
+    let _ = list;
+}
+
+/// The platform's font folders (the system's and the user's) and the font files known to it
+/// outside them (on Windows those registered with it, and those [`set_platform_font_files`]
+/// lists), scanned by [`FontDb::global`].
 pub fn system_font_dirs() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
     if cfg!(target_arch = "wasm32") {
@@ -824,6 +921,11 @@ pub fn system_font_dirs() -> Vec<PathBuf> {
         // In a Flatpak sandbox, the host's fonts (system, local and the user's).
         dirs.extend(["/run/host/fonts", "/run/host/local-fonts", "/run/host/user-fonts"].map(Into::into));
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(list) = PLATFORM_FONT_FILES.get() {
+        let files = fonts_outside(list(), &dirs);
+        dirs.extend(files);
+    }
     dirs
 }
 
@@ -848,7 +950,7 @@ fn registered_font_files(font_dirs: &[PathBuf]) -> Vec<PathBuf> {
 /// The full paths among `registered` (font registrations' data) that aren't in `font_dirs`
 /// (ignoring case, as Windows paths do), sorted and deduplicated. File names alone are files in
 /// the Windows font folder, which is scanned anyway. The count is capped.
-#[cfg(any(windows, test))]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn fonts_outside(registered: impl IntoIterator<Item = String>, font_dirs: &[PathBuf]) -> Vec<PathBuf> {
     const MAX_REGISTERED: usize = 1 << 16;
     let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
@@ -900,7 +1002,26 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         index,
         path,
         ideographic_centre: std::sync::OnceLock::new(),
+        icf_margins: std::sync::OnceLock::new(),
     })
+}
+
+/// An axis of a BASE table: its default baseline values for Han ideographs (`hani`), else kana
+/// (`kana`), else its first script, by tag, in font units.
+fn base_values(axis: skrifa::raw::tables::base::Axis<'_>) -> Option<HashMap<[u8; 4], f64>> {
+    let tags = axis.base_tag_list()?.ok()?;
+    let list = axis.base_script_list().ok()?;
+    let records = list.base_script_records();
+    let record =
+        [b"hani", b"kana"].into_iter().find_map(|t| records.iter().find(|r| r.base_script_tag() == Tag::new(t))).or_else(|| records.first())?;
+    let values = record.base_script(list.offset_data()).ok()?.base_values()?.ok()?;
+    let mut out = HashMap::new();
+    for (tag, coord) in tags.baseline_tags().iter().zip(values.base_coords().iter()) {
+        if let Ok(c) = coord {
+            out.insert(tag.get().to_be_bytes(), f64::from(c.coordinate()));
+        }
+    }
+    Some(out)
 }
 
 /// `s` lowercased, without anything but letters and digits.
@@ -1154,6 +1275,7 @@ impl FontDb {
         let mut n = 0;
         let paths = self.font_paths.get();
         let mut modified_at = Vec::new();
+        // Each file with whether it was named by itself rather than found in a folder.
         let mut files = Vec::new();
         let mut stack = paths.clone();
         // Each folder once, however links lead back to it.
@@ -1166,7 +1288,7 @@ impl FontDb {
             modified_at.push((d.clone(), modified(&d)));
             // Not a folder: a font file named by itself (or nothing, yet).
             let Ok(rd) = std::fs::read_dir(&d) else {
-                files.push(d);
+                files.push((d, true));
                 continue;
             };
             for e in rd.flatten() {
@@ -1174,13 +1296,15 @@ impl FontDb {
                 if p.is_dir() {
                     stack.push(p);
                 } else {
-                    files.push(p);
+                    files.push((p, false));
                 }
             }
         }
-        for p in files {
+        for (p, named) in files {
+            // A file named by itself is a font whatever its name (font services keep fonts in
+            // files without an extension); one of a folder's only with a font's extension.
             let ext = p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
-            if !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
+            if !named && !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
                 continue;
             }
             for FaceStyle { family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {

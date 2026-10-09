@@ -15,12 +15,13 @@ mod ink;
 mod live;
 mod paint;
 mod pattern;
+pub mod placed_document;
 pub mod proof;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject, TraceView};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
 use vello_cpu::peniko::{self, BlendMode, Compose, Mix};
@@ -96,6 +97,12 @@ pub struct RenderOptions {
     pub highlight_substitutions: bool,
     /// Edge smoothing (raster export option).
     pub anti_alias: AntiAlias,
+    /// Screen view: placed documents draw from cached bitmaps made in the background (see
+    /// [`placed_document`]); off, they draw exactly, read when needed.
+    pub progressive_placed: bool,
+    /// Screen view: Image Trace objects draw as their View asks (outlines, the source image…);
+    /// off, they draw their tracing result, as exports and printing do.
+    pub trace_views: bool,
 }
 
 /// How edges are rasterized (raster export option).
@@ -160,6 +167,8 @@ impl Default for RenderOptions {
             mask_view: None,
             highlight_substitutions: false,
             anti_alias: AntiAlias::Art,
+            progressive_placed: false,
+            trace_views: false,
         }
     }
 }
@@ -335,7 +344,16 @@ pub struct Renderer {
     /// Layer Options → Dim Images to, of the layer being drawn (screen views only): images show
     /// faded to this opacity over white.
     dim_images: Option<f32>,
+    /// Inline graphics being drawn inside inline graphics (a symbol whose art holds text showing
+    /// it): drawing stops at [`MAX_INLINE_DEPTH`].
+    inline_depth: u32,
 }
+
+/// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
+const MAX_INLINE_DEPTH: u32 = 4;
+
+/// Set once a missing inline symbol has been logged (it would log every frame otherwise).
+static MISSING_INLINE_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameStats {
@@ -413,6 +431,7 @@ impl Renderer {
             stroke_slices: PtrMap::default(),
             adjusted: Default::default(),
             dim_images: None,
+            inline_depth: 0,
         }
     }
 
@@ -580,6 +599,23 @@ impl Renderer {
         self.render_node_thumbnail(doc, doc.node(id)?, size, None)
     }
 
+    /// Render node `n` of `doc` (its resources) into `w`×`h` transparent pixels through `view`.
+    pub fn render_node(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<Rendered> {
+        let inv = view.inverse();
+        let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
+        let mut ctx = single_threaded_context(w, h);
+        let opts = RenderOptions::default();
+        let frame = Frame { mt: false, doc, view, visible, px, opts: &opts, ink: Ink::Display };
+        (self.knockout, self.nested, self.backdrop) = (false, 0, None);
+        self.clip_paths.clear();
+        self.draw_arc(&mut ctx, &frame, n);
+        ctx.flush();
+        let mut pm = Pixmap::new(w, h);
+        ctx.render(&mut pm, &mut self.resources);
+        Some(Rendered { width: w as u32, height: h as u32, pixels: pm.data_as_u8_slice().to_vec() })
+    }
+
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
     /// `size`×`size` pixels, optionally over a solid premultiplied background.
     pub fn render_node_thumbnail(&mut self, doc: &Document, n: &Node, size: u32, background: Option<[u8; 4]>) -> Option<Rendered> {
@@ -614,8 +650,10 @@ impl Renderer {
         let b = match &a.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(a) => {
                 let mut acc: Option<Rect> = None;
+                // An Image Trace object's hidden source image shows in some of its views.
+                let source = a.trace.is_some().then(|| children.first()).flatten();
                 for c in children {
-                    if c.visible {
+                    if c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)) {
                         acc = vectorcraft_geom::union_opt(acc, self.bounds_of(c));
                     }
                 }
@@ -772,6 +810,7 @@ impl Renderer {
             && a.blend == vectorcraft_color::BlendMode::Normal
             && !fx::has_fx(a)
         {
+            let t = &*f.doc.inline_resolved(t);
             let g = match f.text_snap(t) {
                 Some(xf) => Arc::new(text_geom_snapped(t, Some(xf))),
                 None => self.text_geom_of(a, t),
@@ -850,6 +889,9 @@ impl Renderer {
     /// What `n` draws inside its transparency group (`knockout`: its children knock each other out).
     fn draw_content(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, knockout: bool) {
         match &n.kind {
+            NodeKind::Group { children, clip: false } if f.opts.trace_views && !f.opts.outline && n.trace_view() != TraceView::Result => {
+                self.draw_trace_view(ctx, f, children, n.trace_view(), knockout)
+            }
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 self.draw_children(ctx, f, children, knockout)
             }
@@ -916,7 +958,28 @@ impl Renderer {
                     self.draw_node(ctx, f, &art, true);
                 }
             }
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => self.draw_live_node(ctx, f, n),
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
+                self.draw_live_node(ctx, f, n)
+            }
+        }
+    }
+
+    /// An Image Trace object's `children` (the hidden source image, then the traced shapes) as
+    /// `view` shows them on screen.
+    fn draw_trace_view(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>], view: TraceView, knockout: bool) {
+        let Some((source, shapes)) = children.split_first() else { return };
+        if view.shows_source() && matches!(source.kind, NodeKind::Image(_)) {
+            self.draw_node(ctx, f, source, true);
+        }
+        if view.shows_result() {
+            self.draw_children(ctx, f, shapes, knockout);
+        }
+        if view.shows_outlines() {
+            let opts = RenderOptions { outline: true, ..f.opts.clone() };
+            let frame = Frame { opts: &opts, ..*f };
+            for c in shapes {
+                self.draw_node(ctx, &frame, c, false);
+            }
         }
     }
 
@@ -1182,8 +1245,36 @@ impl Renderer {
     }
 
     fn draw_text(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject) {
+        let t = &*f.doc.inline_resolved(t);
         let g = text_geom_snapped(t, f.text_snap(t));
         self.draw_text_geom(ctx, f, n, t, &g);
+    }
+
+    /// Draw the inline graphics of type `t` (laid out in `g`): each symbol's art through the
+    /// normal node path, placed by the layout (inside the text's own transparency group, so its
+    /// opacity and blend mode apply). A missing symbol draws nothing.
+    fn draw_inlines(&mut self, ctx: &mut RenderContext, f: &Frame, t: &TextObject, g: &TextGeom) {
+        if g.inlines.is_empty() && !t.runs.iter().any(|r| r.inline.is_some()) {
+            return;
+        }
+        if self.inline_depth >= MAX_INLINE_DEPTH {
+            return;
+        }
+        for r in t.runs.iter().filter_map(|r| r.inline.as_ref()) {
+            if !f.doc.symbols.iter().any(|s| s.name == r.symbol) && !MISSING_INLINE_LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                log::warn!("inline graphic shows symbol {:?}, which the document doesn't have: it draws nothing", r.symbol);
+            }
+        }
+        self.inline_depth += 1;
+        for ig in &g.inlines {
+            let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
+            let Some(sym) = f.doc.symbols.iter().find(|s| s.name == art.symbol) else { continue };
+            let mut node = (*sym.art).clone();
+            // Strokes scale with the art (it is sized to the type, as in the SVG `<use>`).
+            node.transform(t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true);
+            self.draw_node(ctx, f, &node, true);
+        }
+        self.inline_depth -= 1;
     }
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).
@@ -1216,6 +1307,7 @@ impl Renderer {
             ctx.set_stroke(kurbo::Stroke::new(1.0));
             ctx.set_paint(peniko::Color::BLACK);
             ctx.stroke_path(&p);
+            self.draw_inlines(ctx, f, t, g);
             return;
         }
         let tb = t.xf.transform_rect_bbox(g.bounds);
@@ -1269,6 +1361,7 @@ impl Renderer {
             }
         }
         overprint(ctx, false);
+        self.draw_inlines(ctx, f, t, g);
         if let Some(all) = &all {
             self.draw_text_items(ctx, f, n, above, all, tb);
         }
@@ -1525,6 +1618,8 @@ struct TextGeom {
     /// font lacks (drawn from a fallback font): Document Setup's substitution highlights.
     substituted_fonts: BezPath,
     substituted_glyphs: BezPath,
+    /// Inline graphics placed by the layout.
+    inlines: Vec<vectorcraft_text::InlineGlyph>,
 }
 
 fn text_geom(t: &TextObject) -> TextGeom {
@@ -1568,7 +1663,7 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
         cell.apply_affine(Affine::rotate_about(g.angle, g.origin));
         target.extend(cell.iter());
     }
-    TextGeom { runs, all, bounds: layout.bounds, substituted_fonts, substituted_glyphs }
+    TextGeom { runs, all, bounds: layout.bounds, substituted_fonts, substituted_glyphs, inlines: layout.inlines }
 }
 
 /// Document Setup's highlight behind substituted fonts and glyphs (screen only).
@@ -1648,6 +1743,8 @@ mod tests_knockout;
 mod tests_layeropts;
 #[cfg(test)]
 mod tests_objectfx;
+#[cfg(test)]
+mod tests_placed_document;
 #[cfg(test)]
 mod tests_setup;
 #[cfg(test)]

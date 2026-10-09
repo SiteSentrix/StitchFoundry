@@ -91,9 +91,9 @@ fn real_text_lands_within_half_a_point_of_the_outlines() {
     turned.xf *= Affine::rotate(-0.5) * Affine::skew(0.2, 0.0);
     let mut mixed = TextObject::point(Point::new(200.0, 60.0), "", style(20.0));
     mixed.runs = vec![
-        TextRun { text: "x".into(), style: style(20.0) },
-        TextRun { text: "2".into(), style: CharStyle { baseline_shift: 8.0, v_scale: 140.0, ..style(12.0) } },
-        TextRun { text: " ok".into(), style: CharStyle { rotation: 20.0, ..style(20.0) } },
+        TextRun { text: "x".into(), style: style(20.0), inline: None },
+        TextRun { text: "2".into(), style: CharStyle { baseline_shift: 8.0, v_scale: 140.0, ..style(12.0) }, inline: None },
+        TextRun { text: " ok".into(), style: CharStyle { rotation: 20.0, ..style(20.0) }, inline: None },
     ];
     let mut on_path = TextObject::point(Point::ZERO, "along the arc", style(18.0));
     on_path.kind = TextKind::OnPath { path: arc(), start: 0.0, end: None };

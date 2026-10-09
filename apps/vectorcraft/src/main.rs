@@ -27,11 +27,14 @@ mod mac_menu;
 #[cfg(target_os = "macos")]
 mod open_documents;
 mod printing;
+#[cfg(all(windows, not(target_vendor = "win7")))]
+mod system_fonts;
 mod window;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
+use vectorcraft_ui_egui::picks::PickRequest;
 use vectorcraft_ui_egui::{ClipboardProbeFactory, FilePick, Services, VectorcraftApp};
 
 struct App {
@@ -68,6 +71,10 @@ impl eframe::App for App {
         }
     }
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        #[cfg(target_os = "macos")]
+        if self.app.services.native_menu.is_some() {
+            mac_menu::raw_input_hook(raw);
+        }
         self.app.raw_input_hook(raw);
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -179,14 +186,49 @@ fn save_prefs(app: &VectorcraftApp) {
     }
 }
 
-/// A native file dialog showing `pick`'s file types, folder and suggested name.
-fn file_dialog(pick: &FilePick) -> rfd::FileDialog {
-    let d = pick.filters.iter().fold(rfd::FileDialog::new(), |d, (name, exts)| d.add_filter(*name, exts));
+/// The window file dialogs belong to.
+type Parent = Option<std::sync::Arc<winit::window::Window>>;
+
+/// A native file dialog for `request` over `parent` (Windows and Linux, where the portal then
+/// shows it over the window and keeps it in front; macOS shows them as before).
+fn file_dialog(request: &PickRequest, parent: &Parent) -> rfd::FileDialog {
+    let d = match parent {
+        Some(w) if !cfg!(target_os = "macos") => rfd::FileDialog::new().set_parent(&**w),
+        _ => rfd::FileDialog::new(),
+    };
+    let pick = match request {
+        PickRequest::Open(pick) | PickRequest::Save(pick) => pick,
+        PickRequest::OpenMany => return fileio::place_filters().fold(d.set_title("Place"), |d, (name, exts)| d.add_filter(name, exts)),
+        PickRequest::Folder => return d,
+    };
+    let d = pick.filters.iter().fold(d, |d, (name, exts)| d.add_filter(*name, exts));
     let d = match &pick.folder {
         Some(folder) => d.set_directory(folder),
         None => d,
     };
     if pick.name.is_empty() { d } else { d.set_file_name(&pick.name) }
+}
+
+/// Show `dialog` for `request` (on the calling thread, until it closes) → the paths picked.
+fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest) -> Vec<String> {
+    let paths = match request {
+        PickRequest::Open(_) => dialog.pick_file().into_iter().collect(),
+        PickRequest::OpenMany => dialog.pick_files().unwrap_or_default(),
+        PickRequest::Save(pick) => {
+            // The Templates folder may not exist yet.
+            if let Some(folder) = &pick.folder {
+                let _ = std::fs::create_dir_all(folder);
+            }
+            dialog.save_file().into_iter().collect()
+        }
+        PickRequest::Folder => dialog.pick_folder().into_iter().collect(),
+    };
+    paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect()
+}
+
+/// Show the dialog for `request` over `parent` now → the paths picked.
+fn pick_now(request: PickRequest, parent: &Parent) -> Vec<String> {
+    show_dialog(file_dialog(&request, parent), &request)
 }
 
 /// File → Show in Folder: select `path` in Finder / Explorer, or open its folder elsewhere.
@@ -224,25 +266,31 @@ fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
     fileio::write_atomic(std::path::Path::new(path), bytes).map_err(|e| e.to_string())
 }
 
-fn services() -> Services {
+/// Linux: show the dialog for `request` over `parent` on a thread of its own, answering on the
+/// receiver. Shown on the UI thread, nothing would answer the compositor meanwhile, which then
+/// offers to kill the window as not responding (#592).
+fn start_pick(request: PickRequest, parent: &Parent) -> Option<std::sync::mpsc::Receiver<Vec<String>>> {
+    let dialog = file_dialog(&request, parent);
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("file-dialog".into())
+        .spawn(move || {
+            // The app gone meanwhile has no use for the answer.
+            let _ = tx.send(show_dialog(dialog, &request));
+        })
+        .ok()?;
+    Some(rx)
+}
+
+fn services(parent: Parent) -> Services {
+    let (p1, p2, p3, p4, p5) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
     Services {
-        pick_open: Some(Box::new(|pick: &FilePick| file_dialog(pick).pick_file().map(|p| p.to_string_lossy().to_string()))),
-        pick_open_multi: Some(Box::new(|| {
-            fileio::place_filters()
-                .fold(rfd::FileDialog::new().set_title("Place"), |d, (name, exts)| d.add_filter(name, exts))
-                .pick_files()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|p| p.to_string_lossy().to_string())
-                .collect()
-        })),
-        pick_save: Some(Box::new(|pick: &FilePick| {
-            // The Templates folder may not exist yet.
-            if let Some(folder) = &pick.folder {
-                let _ = std::fs::create_dir_all(folder);
-            }
-            file_dialog(pick).save_file().map(|p| p.to_string_lossy().to_string())
-        })),
+        pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
+        pick_open_multi: Some(Box::new(move || pick_now(PickRequest::OpenMany, &p2))),
+        pick_save: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Save(pick.clone()), &p3).into_iter().next())),
+        // Windows and macOS dialogs run the window's events while they are open; Linux's don't.
+        start_pick: cfg!(all(unix, not(target_os = "macos")))
+            .then(|| Box::new(move |request: PickRequest| start_pick(request, &p5)) as vectorcraft_ui_egui::picks::StartPick),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(write_file)),
         // Background Save and Export write from a worker thread.
@@ -260,7 +308,7 @@ fn services() -> Services {
         reveal: Some(Box::new(reveal)),
         // Links panel: Edit Original; Package: Show Package. Relink to Folder and Package pick folders.
         open_file: Some(Box::new(open_file)),
-        pick_folder: Some(Box::new(|| rfd::FileDialog::new().pick_folder().map(|p| p.to_string_lossy().to_string()))),
+        pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
         // File → Print: the system's printers and print queue.
         print: Some(Box::new(printing::SystemPrint)),
         ..Default::default()
@@ -310,6 +358,9 @@ fn main() -> std::process::ExitCode {
     // First, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
+    // Before the first font scan (the app's start): the fonts font services load (#579).
+    #[cfg(all(windows, not(target_vendor = "win7")))]
+    system_fonts::install();
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
@@ -372,6 +423,11 @@ fn main() -> std::process::ExitCode {
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
             create.native_adapter_selector = Some(gpu::selector(power, startup.clone()));
+            // Nothing draws or dispatches indirectly, so wgpu's check of indirect arguments only
+            // costs a compute shader at start-up, one some drivers can't compile (OCLP-patched
+            // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
+            create.instance_descriptor.flags =
+                (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
         }
         options
     };
@@ -388,7 +444,7 @@ fn main() -> std::process::ExitCode {
             "VectorCraft",
             options,
             Box::new(move |cc| {
-                let mut app = VectorcraftApp::new(Session::new(), services());
+                let mut app = VectorcraftApp::new(Session::new(), services(cc.winit_window().cloned()));
                 load_prefs(&mut app, saved);
                 // Fit the window to its monitor, or put it back where it was (still hidden).
                 if let Some(w) = cc.winit_window() {

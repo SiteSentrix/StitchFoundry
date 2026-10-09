@@ -23,23 +23,19 @@ pub mod test_fonts;
 pub mod thread;
 
 pub use craft_fonts::{CRAFT_FONTS, CraftFont};
-pub use features::OtFeatures;
-pub use fontdb::{FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, style_weight, system_font_dirs};
+pub use features::{LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
+pub use fontdb::{
+    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, set_platform_font_files, style_weight,
+    system_font_dirs,
+};
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
 pub use vectorcraft_doc::TextObject;
 
-pub use vectorcraft_doc::FirstBaseline;
+pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
 
-/// Paragraph composer (Paragraph panel menu).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Composer {
-    /// Break each line as soon as it is full.
-    SingleLine,
-    /// Knuth–Plass total fit over the paragraph (justified area text only).
-    #[default]
-    EveryLine,
-}
+/// Paragraph composer; stored per text object in [`vectorcraft_doc::ParaStyle::composer`].
+pub use vectorcraft_doc::Composer;
 
 /// Layout parameters that the document model doesn't store per object (Area Type Options,
 /// composer, OpenType features). [`layout`] takes rows/columns/inset/first baseline from the object.
@@ -55,7 +51,13 @@ pub struct LayoutOptions {
     pub first_baseline: FirstBaseline,
     /// Minimum first-baseline offset in points.
     pub first_baseline_min: f64,
-    pub composer: Composer,
+    /// Vertical alignment of the lines in each row/column (Area Type Options "Align").
+    pub vertical_align: VerticalAlign,
+    /// Area type only: Shrink Text to Fit scales overflowing text down at layout time (see
+    /// [`TextLayout::fit_scale`]); the other fits are the engine's business and lay out as `None`.
+    pub fit: AreaFit,
+    /// Overrides the object's paragraph composer (`None` = use `ParaStyle::composer`).
+    pub composer: Option<Composer>,
     pub features: OtFeatures,
 }
 
@@ -68,7 +70,9 @@ impl Default for LayoutOptions {
             inset: 0.0,
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
-            composer: Composer::EveryLine,
+            vertical_align: VerticalAlign::Top,
+            fit: AreaFit::None,
+            composer: None,
             features: OtFeatures::default(),
         }
     }
@@ -128,9 +132,27 @@ pub struct LineInfo {
     /// Horizontal span available to the line (frame span minus indents; the content extent for
     /// point type). Used for hit testing across columns.
     pub avail: (f64, f64),
+    /// Area type: index of the frame cell ([`TextLayout::frames`]) the line sits in (0 otherwise).
+    pub region: usize,
 }
 
-#[derive(Clone, Debug, Default)]
+/// An inline graphic ([`vectorcraft_doc::TextRun::inline`]) placed by the layout: draw the art of
+/// the run's symbol through `xf`. Missing symbols reserve their room but get no entry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InlineGlyph {
+    /// Index of the run (`TextObject::runs`).
+    pub run: usize,
+    /// Byte offset of its character in the plain text.
+    pub byte: usize,
+    /// Index of its (outline-less) glyph in [`TextLayout::glyphs`].
+    pub glyph: usize,
+    /// The symbol's art at its natural size (`Document::symbol_natural_xf`) → text space.
+    pub xf: Affine,
+    /// The art's bounds in text space.
+    pub bounds: Rect,
+}
+
+#[derive(Clone, Debug)]
 pub struct TextLayout {
     /// Lines retain inline/block coordinates; glyph geometry is in physical text space.
     pub vertical: bool,
@@ -148,6 +170,28 @@ pub struct TextLayout {
     pub on_path: bool,
     /// Area type: the frame cells text flowed into (one per row/column).
     pub frames: Vec<Rect>,
+    /// Shrink Text to Fit: the factor the text's sizes, leading and baseline shifts were scaled
+    /// by to fit its frame (1.0 when the text is not shrunk).
+    pub fit_scale: f64,
+    /// Inline graphics, in text order.
+    pub inlines: Vec<InlineGlyph>,
+}
+
+impl Default for TextLayout {
+    fn default() -> Self {
+        Self {
+            vertical: false,
+            line_xf: Affine::IDENTITY,
+            glyphs: Vec::new(),
+            lines: Vec::new(),
+            bounds: Rect::ZERO,
+            overflow: false,
+            on_path: false,
+            frames: Vec::new(),
+            fit_scale: 1.0,
+            inlines: Vec::new(),
+        }
+    }
 }
 
 impl TextLayout {
@@ -193,7 +237,8 @@ impl TextLayout {
             return false;
         }
         let mut moved = false;
-        for g in self.glyphs.iter_mut().filter(|g| g.angle == 0.0) {
+        let mut shifts = vec![];
+        for (gi, g) in self.glyphs.iter_mut().enumerate().filter(|(_, g)| g.angle == 0.0) {
             let p = to_device * g.origin;
             let shift = Vec2::new((p.x.round() - p.x) / a, (p.y.round() - p.y) / d);
             if shift == Vec2::ZERO {
@@ -202,7 +247,17 @@ impl TextLayout {
             g.origin += shift;
             g.outline.apply_affine(Affine::translate(shift));
             g.xf = Affine::translate(shift) * g.xf;
+            if !self.inlines.is_empty() {
+                shifts.push((gi, shift));
+            }
             moved = true;
+        }
+        // Inline graphics move with their glyphs.
+        for i in &mut self.inlines {
+            if let Some(&(_, s)) = shifts.iter().find(|(gi, _)| *gi == i.glyph) {
+                i.xf = Affine::translate(s) * i.xf;
+                i.bounds = i.bounds + s;
+            }
         }
         moved
     }
@@ -447,7 +502,13 @@ mod tests;
 #[cfg(test)]
 mod tests_bidi;
 #[cfg(test)]
+mod tests_combos;
+#[cfg(test)]
 mod tests_embed;
+#[cfg(test)]
+mod tests_fit;
+#[cfg(test)]
+mod tests_inline;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]

@@ -346,7 +346,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.swatchLibrary.other",
         "Other Library…",
         "",
-        "{path?} (default: pick a file) load a .vcswatches or .gpl library, or another document's swatches (engine: swatch.library.load), and open it in the library panel",
+        "{path?} (default: pick a file) load a .vcswatches, .gpl or .ase library, or another document's swatches (engine: swatch.library.load), and open it in the library panel",
     ),
     (
         "ui.saveSwatchLibrary",
@@ -560,7 +560,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "links.editOriginal",
         "Edit Original",
         "",
-        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original) → {path}; edits saved there show after links.update",
+        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original); a placed document's file opens here in a new tab, and saving it updates the documents placing it → {path}; edits saved elsewhere show after links.update",
     ),
     (
         "links.reveal",
@@ -1837,8 +1837,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.spotColors" => app.session.active().is_some(),
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
-        "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()),
-        "ui.placementOptionsDialog" => selected_image(app, |_| true),
+        "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
+        "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
@@ -1853,6 +1853,13 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.perspectivePlane" => app.session.active().is_some(),
         _ => true,
     }
+}
+
+/// Is a placed document selected?
+fn selected_placed(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|st| {
+        st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::PlacedDocument(_))))
+    })
 }
 
 /// Is an image `keep` accepts selected?
@@ -2256,6 +2263,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 todo("Optical Margin Alignment"),
                 Sep,
                 c("Fill with Placeholder Text", "type.fillPlaceholder"),
+                c("Insert Inline Symbol", "text.insertInline"),
                 Sep,
                 c("Show Hidden Characters", "type.hiddenCharacters"),
                 sub("Type Orientation", vec![c("Horizontal", "type.orientation.horizontal"), c("Vertical", "type.orientation.vertical")]),
@@ -2841,7 +2849,8 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
 /// are.
 fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     Some(match id {
-        "text.areaOptions" => ("Area Type Options", &[]),
+        // Whether the text overflows, and Shrink Text's factor, are read-only facts.
+        "text.areaOptions" => ("Area Type Options", &["overflow", "fitScale"]),
         "type.pathOptions" => ("Type on a Path Options", &["start", "end"]),
         _ => return None,
     })

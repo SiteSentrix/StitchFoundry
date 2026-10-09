@@ -14,6 +14,8 @@ pub mod corners;
 pub mod graph;
 pub mod hit;
 pub mod inks;
+mod inline;
+pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub mod links;
 pub mod live;
 pub mod marks;
@@ -24,6 +26,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
+pub mod placed_document;
 pub mod profiles;
 pub mod puppet;
 pub mod range;
@@ -32,10 +35,12 @@ mod reach;
 pub mod recolor;
 pub mod selection;
 pub mod setup;
+pub mod shaper;
 pub mod slices;
 pub mod style_libs;
 pub mod swatches;
 pub mod text;
+pub mod trace;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -72,6 +77,7 @@ pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, N
 pub use orient::OrientedBox;
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use perspective::PerspectiveAttachment;
+pub use placed_document::PlacedDocument;
 pub use profiles::ColorProfiles;
 pub use puppet::{PuppetPin, PuppetPins};
 pub use rastersettings::{RasterColorModel, RasterEffectsSettings};
@@ -80,9 +86,11 @@ pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
 pub use text::{
-    AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, FirstBaseline, Justify, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign,
-    PathEffect, ScriptMetrics, TabAlign, TabStop, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, WrapShape,
+    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, FirstBaseline, InlineArt, Justify, LeadingModel, Mojikumi,
+    ParaDirection, ParaStyle, PathAlign, PathEffect, ScriptMetrics, TabAlign, TabStop, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
+    VerticalAlign, WrapShape,
 };
+pub use trace::TraceView;
 pub use vectorcraft_color as color;
 pub use vectorcraft_geom as geom;
 
@@ -604,6 +612,11 @@ pub struct Document {
     /// save time only, so changing the view never marks the document modified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_view: Option<SavedView>,
+    /// The layers, sublayers and groups open in the Layers panel when the document was saved; they
+    /// reopen that way. `None`: the default, only the top-level layers open. Written at save time
+    /// only, like [`Document::last_view`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layers_open: Option<Vec<NodeId>>,
     /// Edit → Assign Profile: the profiles the document is tagged with (files before format v3
     /// kept them in `unknown`, see [`Document::migrate_color_profiles`]).
     #[serde(default, skip_serializing_if = "ColorProfiles::is_empty")]
@@ -696,6 +709,7 @@ impl Document {
             metadata: DocMetadata::default(),
             raster_effects: RasterEffectsSettings::default(),
             last_view: None,
+            layers_open: None,
             color_profiles: ColorProfiles::default(),
             export_settings: Default::default(),
             extra: Default::default(),

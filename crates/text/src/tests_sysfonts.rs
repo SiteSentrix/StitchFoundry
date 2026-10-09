@@ -237,3 +237,29 @@ fn the_database_tells_when_fonts_were_installed_or_removed_since_its_scan() {
     assert_eq!(db.load_system_fonts(), 2);
     assert_eq!(db.styles(FAMILY), ["Bold"]);
 }
+
+/// A font a font service loads from a file without an extension, outside the font folders.
+fn service_font() -> PathBuf {
+    std::env::temp_dir().join(format!("vc-sysfonts-{}-service", std::process::id())).join(".29457")
+}
+
+/// The fonts a font service (Adobe Fonts on Windows, through DirectWrite) loads in place are
+/// cataloged: named by the platform's lister, read whatever their file is called (#579).
+#[test]
+fn fonts_the_platform_lists_outside_the_font_folders_are_cataloged() {
+    let file = service_font();
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, renamed_to("SourceSans3-Regular.ttf", "Service Sans3")).unwrap();
+    // The lister's files outside the font folders are scanned with them, each once (a collection
+    // lists its file once per face).
+    fn lister() -> Vec<String> {
+        vec![service_font().to_string_lossy().into_owned(); 2]
+    }
+    set_platform_font_files(lister);
+    let dirs = system_font_dirs();
+    assert_eq!(dirs.iter().filter(|d| **d == file).count(), 1, "{dirs:?}");
+    // A file named by itself is read without a font's extension, one in a folder isn't.
+    let db = FontDb::with_font_dirs(vec![file.clone()]);
+    assert_eq!(db.styles("Service Sans3"), ["Regular"]);
+    assert!(!FontDb::with_font_dirs(vec![file.parent().unwrap().to_path_buf()]).has_family("Service Sans3"));
+}

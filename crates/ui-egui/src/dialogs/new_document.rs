@@ -441,17 +441,8 @@ fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(Value, Strin
 
 /// The collapsible Advanced Options: Color Mode, Raster Effects and Preview Mode.
 fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
-    let t = Tokens::get(ui.ctx());
     let open = d.bool("advanced");
-    let resp = ui
-        .horizontal(|ui| {
-            let (r, _) = ui.allocate_exact_size(egui::vec2(14.0, 18.0), egui::Sense::hover());
-            crate::icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, r, t.icon);
-            ui.label(egui::RichText::new(tl!("Advanced Options")).color(t.text));
-        })
-        .response
-        .interact(egui::Sense::click());
-    if resp.clicked() {
+    if widgets::section_toggle(ui, tl!("Advanced Options"), open) {
         d.fields.insert("advanced".into(), json!(!open));
     }
     if !open {

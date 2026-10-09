@@ -21,16 +21,17 @@ pub const TRACKING_PRESETS: [f64; 14] = [-100.0, -75.0, -50.0, -25.0, -10.0, -5.
 pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0, 150.0];
 
 /// The character style shown by the panel: the selected range's (or the caret's) while the Type
-/// tool edits text, else the first selected text object's first run.
+/// tool edits text, else the first selected text object's first run. With it, the paragraph
+/// attributes of the paragraph the selection starts in (else of the first paragraph).
 pub(crate) fn text_style(app: &VectorcraftApp) -> Option<(CharStyle, vectorcraft_doc::ParaStyle)> {
     if let Some((id, a, b)) = text_editing(app)
         && let Some(NodeKind::Text(t)) = app.session.active().and_then(|d| d.doc.node(id)).map(|n| &n.kind)
     {
-        return Some((vectorcraft_text::edit::insertion_style(&t.runs, a, b), t.para.clone()));
+        return Some((vectorcraft_text::edit::insertion_style(&t.runs, a, b), t.para_at(t.paragraphs_in(a, a).start).clone()));
     }
     let n = first_selected(app)?;
     match &n.kind {
-        NodeKind::Text(t) => Some((t.first_style(), t.para.clone())),
+        NodeKind::Text(t) => Some((t.first_style(), t.para_at(0).clone())),
         _ => None,
     }
 }
@@ -512,6 +513,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                     (tl!("Em Box Top/Right"), CharAlign::EmBoxTop, "emBoxTop"),
                     (tl!("Em Box Center"), CharAlign::EmBoxCenter, "emBoxCenter"),
                     (tl!("Em Box Bottom/Left"), CharAlign::EmBoxBottom, "emBoxBottom"),
+                    (tl!("ICF Top/Right"), CharAlign::IcfTop, "icfTop"),
+                    (tl!("ICF Bottom/Left"), CharAlign::IcfBottom, "icfBottom"),
                 ] {
                     if menu_item(ui, label, true, align == Some(a)) {
                         format(app, json!({"charAlign": key}));

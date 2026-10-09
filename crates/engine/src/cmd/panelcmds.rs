@@ -2,7 +2,7 @@
 //! Character/Paragraph attributes.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::{Composer, NodeKind};
 use vectorcraft_geom::{Rect, Vec2};
 
 use super::*;
@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\" (where characters smaller than the largest on their line line up with it), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\")}",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
             has_doc,
             set_format
         ),
@@ -180,6 +180,9 @@ pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vector
 
 // ---------- text ----------
 
+/// Largest indent or paragraph spacing (points; Illustrator's limit).
+const MAX_PARA: f64 = 1296.0;
+
 fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setFormat";
     let ids: Vec<NodeId> = {
@@ -219,10 +222,19 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "leadingModel",
         "charAlign",
         "burasagari",
+        "composer",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         return Err(bad(C, "nothing to change"));
     }
+    let composer = match p.get("composer") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(match v.as_str() {
+            Some("singleLine") => Composer::SingleLine,
+            Some("everyLine") => Composer::EveryLine,
+            _ => return Err(bad(C, "composer must be \"singleLine\" or \"everyLine\"")),
+        }),
+    };
     let (position, small_caps) = super::docsetup::script_params(p, &s.doc()?.doc.setup, C)?;
     let char_align = super::textedit::char_align_param(p, C)?;
     let mojikumi = match p.get("mojikumi") {
@@ -259,11 +271,11 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(bad(C, "`burasagari` must be \"none\", \"standard\" or \"forced\"")),
         }),
     };
+    let range = super::typecmd::TextRange::parse(p, C)?;
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            for r in &mut t.runs {
-                let st = &mut r.style;
+            super::typecmd::style_chars(t, range, |st| {
                 if let Some(k) = kerning {
                     st.kerning = k;
                 }
@@ -297,38 +309,43 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(v) = char_align {
                     st.char_align = v;
                 }
-            }
-            let para = &mut t.para;
-            if let Some(v) = num("leftIndent") {
-                para.left_indent = v;
-            }
-            if let Some(v) = num("rightIndent") {
-                para.right_indent = v;
-            }
-            if let Some(v) = num("firstLineIndent") {
-                para.first_line_indent = v;
-            }
-            if let Some(v) = num("spaceBefore") {
-                para.space_before = v;
-            }
-            if let Some(v) = num("spaceAfter") {
-                para.space_after = v;
-            }
-            if let Some(v) = flag("hyphenate") {
-                para.hyphenate = v;
-            }
-            if let Some(v) = mojikumi {
-                para.mojikumi = v;
-            }
-            if let Some(v) = direction {
-                para.direction = v;
-            }
-            if let Some(v) = leading_model {
-                para.leading_model = v;
-            }
-            if let Some(v) = burasagari {
-                para.burasagari = v;
-            }
+            });
+            let span = super::typecmd::para_span(range, t);
+            t.edit_paras(span, |para| {
+                if let Some(v) = num("leftIndent") {
+                    para.left_indent = v.clamp(-MAX_PARA, MAX_PARA);
+                }
+                if let Some(v) = num("rightIndent") {
+                    para.right_indent = v.clamp(-MAX_PARA, MAX_PARA);
+                }
+                if let Some(v) = num("firstLineIndent") {
+                    para.first_line_indent = v.clamp(-MAX_PARA, MAX_PARA);
+                }
+                if let Some(v) = num("spaceBefore") {
+                    para.space_before = v.clamp(-MAX_PARA, MAX_PARA);
+                }
+                if let Some(v) = num("spaceAfter") {
+                    para.space_after = v.clamp(-MAX_PARA, MAX_PARA);
+                }
+                if let Some(v) = flag("hyphenate") {
+                    para.hyphenate = v;
+                }
+                if let Some(v) = mojikumi {
+                    para.mojikumi = v;
+                }
+                if let Some(v) = direction {
+                    para.direction = v;
+                }
+                if let Some(v) = leading_model {
+                    para.leading_model = v;
+                }
+                if let Some(v) = burasagari {
+                    para.burasagari = v;
+                }
+                if let Some(v) = composer {
+                    para.composer = v;
+                }
+            });
             super::typecmd::refresh_bounds(t);
         }
         Ok(())

@@ -29,6 +29,8 @@
 	Em Box Bottom/Left	仮想ボディの下 / 左
 	Em Box Center	仮想ボディの中央
 	Em Box Top/Right	仮想ボディの上 / 右
+	ICF Top/Right	平均字面の上 / 右
+	ICF Bottom/Left	平均字面の下 / 左
 	Favorites	お気に入り
 	Flip	反転
 	Japanese	日本語
@@ -319,6 +321,7 @@
 	Create Outlines	アウトラインを作成
 	Optical Margin Alignment	最適なマージン揃え
 	Fill with Placeholder Text	サンプルテキストの割り付け
+	Insert Inline Symbol	インラインシンボルを挿入
 	Show Hidden Characters	制御文字を表示
 	Type Orientation	組み方向
 	Horizontal	横書き
@@ -983,7 +986,7 @@
 	Create New Sublayer	新規サブレイヤーを作成
 	Create New Swatch…	新規スウォッチを作成…
 	Create New {kind} Style	新しい{kind}スタイルを作成
-	Create PDF layers from top-level layers	最上位レイヤーから PDF レイヤーを作成
+	Create PDF layers from layers and sublayers	レイヤーとサブレイヤーから PDF レイヤーを作成
 	Create PDF-Compatible File	PDF 互換ファイルを作成
 	Create Path	パスを作成
 	Create Slice	スライスを作成
@@ -1407,6 +1410,11 @@
 	Ignore	無視
 	Ignore Artboards (all the art as one page)	アートボードを無視 (すべてのアートを 1 ページとして扱う)
 	Ignore White	白を無視
+	Palette:	パレット:
+	Limited	限定
+	Full Tone	フルトーン
+	Document Library	ドキュメントライブラリ
+	Library:	ライブラリ:
 	Image Info	画像情報
 	Image Map:	イメージマップ:
 	Image Size	イメージサイズ
@@ -1635,6 +1643,8 @@
 	New Art Brush from Selection	選択範囲から新規アートブラシ
 	New Art Has Basic Appearance	新規アートに基本アピアランスを使用
 	New Artboard	新規アートボード
+	Artboard	アートボード
+	Exit	終了
 	New Bristle Brush	新規剛毛ブラシ
 	New Brush…	新規ブラシ…
 	New Calligraphic Brush	新規絵筆ブラシ
@@ -1691,6 +1701,9 @@
 	No symbols in this document	このドキュメントにシンボルはありません
 	No text selected	テキストが選択されていません
 	Noise	ノイズ
+	Create:	作成:
+	Fills	塗り
+	Strokes	線
 	None	なし
 	None.	なし。
 	Normal	通常
@@ -2309,6 +2322,13 @@
 	Smooth	スムーズ
 	Smooth Tool	スムーズツール
 	Snap Curves To Lines	曲線を直線にスナップ
+	View:	表示:
+	Tracing Result	トレース結果
+	Tracing Result with Outlines	トレース結果（アウトライン付き）
+	Outlines	アウトライン
+	Outlines with Source Image	アウトライン（元画像付き）
+	Source Image	元画像
+	Image Trace View	画像トレースの表示
 	Snap Options	スナップオプション
 	Snapping Tolerance	スナップ許容値
 	Soft Light	ソフトライト
@@ -3055,3 +3075,16 @@ axis	Both	両方
 	Bring All to Front	すべてを手前に移動
 	Settings	環境設定
 theme	Appearance	外観
+	Break Link	リンクを解除
+	On: one locked object showing the document, updated when it changes.	オン：ドキュメントを表示するロックされた 1 つのオブジェクト。ドキュメントの変更時に更新されます。
+	Off: an editable copy of its art, embedded in this document.	オフ：アートの編集可能なコピーをこのドキュメントに埋め込みます。
+	Images: link to the file instead of only embedding it.	画像：埋め込むだけでなく、ファイルにリンクします。
+	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft ドキュメント：ロックされた 1 つのオブジェクト。ファイルの変更時に更新されます。
+	A file dialog is open: choose there first	ファイルダイアログが開いています。先にそちらで選択してください
+	Shaper	Shaper
+	Expand Shaper Group	Shaper グループを拡張
+	Release Shaper Group	Shaper グループを解除
+	Select Shaper Face	Shaper の面を選択
+	Constrain	制限
+	Free Transform	自由変形
+	Perspective Distort	遠近変形

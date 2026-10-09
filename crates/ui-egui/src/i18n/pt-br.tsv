@@ -497,7 +497,7 @@
 	Create New {kind} Style	Criar Novo Estilo de {kind}
 	Create Object Mosaic…	Criar Mosaico de Objetos…
 	Create Outlines	Criar Contornos
-	Create PDF layers from top-level layers	Criar camadas de PDF a partir das camadas de nível superior
+	Create PDF layers from layers and sublayers	Criar camadas de PDF a partir das camadas e subcamadas
 	Create PDF-Compatible File	Criar Arquivo Compatível com PDF
 	Create Path	Criar Caminho
 	Create Slice	Criar Fatia
@@ -730,6 +730,8 @@
 	Em Box Bottom/Left	Base/Esquerda da Caixa Eme
 	Em Box Center	Centro da Caixa Eme
 	Em Box Top/Right	Topo/Direita da Caixa Eme
+	ICF Top/Right	Topo/Direita do ICF
+	ICF Bottom/Left	Base/Esquerda do ICF
 	Em Dash	Travessão
 	Em Space	Espaço Em
 	Embed	Incorporar
@@ -863,6 +865,7 @@
 	Fill and Stroke	Preenchimento e Traçado
 	Fill new strokes	Preencher novos traçados
 	Fill with Placeholder Text	Preencher com Texto de Placeholder
+	Insert Inline Symbol	Inserir Símbolo no Texto
 	Fill:	Preenchimento:
 	Find	Localizar
 	Find Font	Localizar Fonte
@@ -2643,3 +2646,16 @@
 	Zoom	Zoom
 	Bring All to Front	Trazer Todas para a Frente
 	Settings	Configurações
+	Break Link	Quebrar Vínculo
+	On: one locked object showing the document, updated when it changes.	Ativado: um objeto bloqueado que mostra o documento, atualizado quando ele muda.
+	Off: an editable copy of its art, embedded in this document.	Desativado: uma cópia editável da arte, incorporada neste documento.
+	Images: link to the file instead of only embedding it.	Imagens: vincular ao arquivo em vez de apenas incorporá-lo.
+	VectorCraft documents: one locked object, updated when the file changes.	Documentos do VectorCraft: um objeto bloqueado, atualizado quando o arquivo muda.
+	A file dialog is open: choose there first	Há uma caixa de diálogo de arquivos aberta: escolha nela primeiro
+	Shaper	Formador
+	Expand Shaper Group	Expandir Grupo Formador
+	Release Shaper Group	Liberar Grupo Formador
+	Select Shaper Face	Selecionar Face do Formador
+	Constrain	Restringir
+	Free Transform	Transformação Livre
+	Perspective Distort	Distorção de Perspectiva

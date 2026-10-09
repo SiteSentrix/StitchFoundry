@@ -19,7 +19,7 @@ pub use edit::{
     split_into_grid,
 };
 pub use offset::{Cap, Join, offset_path, outline_stroke, stroke_region};
-pub use pathfinder::{PathfinderOp, Region, Shape, merge_regions, pathfinder, region_at, regions};
+pub use pathfinder::{FaceMerger, PathfinderOp, Region, Shape, merge_regions, pathfinder, region_at, regions};
 pub use planar::{BuilderArrangement, SHAPE_BUILDER_MAX_SEGMENTS, cut_out, encloses_area, interior_point, live_paint, shape_builder};
 
 /// Errors from fallible operations.

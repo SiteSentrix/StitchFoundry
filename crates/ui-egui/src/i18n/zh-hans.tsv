@@ -508,7 +508,7 @@
 	Create Object Mosaic…	创建对象马赛克…
 	Create Outlines	创建轮廓
 	Create Path	创建路径
-	Create PDF layers from top-level layers	从顶层图层创建 PDF 图层
+	Create PDF layers from layers and sublayers	从图层和子图层创建 PDF 图层
 	Create PDF-Compatible File	创建与 PDF 兼容的文件
 	Create Report	创建报告
 	Create Slice	创建切片
@@ -768,6 +768,8 @@
 	Em Box Bottom/Left	全角字框下 / 左
 	Em Box Center	全角字框居中
 	Em Box Top/Right	全角字框上 / 右
+	ICF Top/Right	ICF 上 / 右
+	ICF Bottom/Left	ICF 下 / 左
 	Em Dash	长破折号
 	Em Space	全角空格
 	Embed	嵌入
@@ -916,6 +918,7 @@
 	Fill New Type Objects With Placeholder Text	用占位文本填充新文字对象
 	Fill Rule	填充规则
 	Fill with Placeholder Text	用占位文本填充
+	Insert Inline Symbol	插入行内符号
 	Fill:	填色：
 	Fill: click for swatches, Shift-click for the color mixer	填色：单击开启色板，按住 Shift 单击开启混色器
 	Find	查找
@@ -1137,6 +1140,11 @@
 	Ignore	忽略
 	Ignore Artboards (all the art as one page)	忽略画板 (所有图稿作为一页)
 	Ignore White	忽略白色
+	Palette:	调板：
+	Limited	有限
+	Full Tone	全色调
+	Document Library	文档库
+	Library:	库：
 	Image	图像
 	Image Info	图像信息
 	Image Map:	图像映射：
@@ -1469,6 +1477,7 @@
 	New Art Brush from Selection	从选区新建艺术画笔
 	New Art Has Basic Appearance	新建图稿使用基本外观
 	New Artboard	新建画板
+	Exit	退出
 	New Bristle Brush	新建鬃毛画笔
 	New Brush…	新建画笔…
 	New Calligraphic Brush	新建书法画笔
@@ -1537,6 +1546,9 @@
 	No text selected	未选择文字
 	No Thumbnails	无缩略图
 	Noise	杂色
+	Create:	创建：
+	Fills	填色
+	Strokes	描边
 	Nonbreaking Hyphen	不断行连字号
 	Nonbreaking Space	不断行空格
 	None	无
@@ -2420,6 +2432,13 @@
 	Smooth Color	平滑颜色
 	Smooth Tool	平滑工具
 	Snap Curves To Lines	将曲线对齐到直线
+	View:	视图：
+	Tracing Result	描摹结果
+	Tracing Result with Outlines	描摹结果（带轮廓）
+	Outlines	轮廓
+	Outlines with Source Image	轮廓（带源图像）
+	Source Image	源图像
+	Image Trace View	图像描摹视图
 	Snap Options	对齐选项
 	Snap to Glyph	靠齐字符
 	Snap to Grid	对齐网格
@@ -3310,3 +3329,14 @@ axis	Both	两者
 	Hide VectorCraft	隐藏 VectorCraft
 	Bring All to Front	前置全部窗口
 	Settings	设置
+	Break Link	断开链接
+	On: one locked object showing the document, updated when it changes.	开启：以一个锁定对象显示文档，文档更改时随之更新。
+	Off: an editable copy of its art, embedded in this document.	关闭：将其图稿的可编辑副本嵌入此文档。
+	Images: link to the file instead of only embedding it.	图像：链接到文件，而不只是嵌入。
+	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft 文档：一个锁定对象，文件更改时随之更新。
+	A file dialog is open: choose there first	文件对话框已打开：请先在其中选择
+	Expand Shaper Group	扩展 Shaper 组
+	Release Shaper Group	释放 Shaper 组
+	Select Shaper Face	选择 Shaper 区域
+	Constrain	约束
+	Perspective Distort	透视扭曲

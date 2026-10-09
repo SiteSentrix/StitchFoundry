@@ -210,6 +210,27 @@ fn indents_and_paragraph_spacing() {
 }
 
 #[test]
+fn each_paragraph_has_its_own_attributes() {
+    let frame = Rect::new(0.0, 0.0, 200.0, 400.0);
+    let mut t = area("left\ncentred\nright", style(10.0), frame, Justify::Left);
+    let centred = vectorcraft_doc::ParaStyle { justify: Justify::Center, space_before: 20.0, ..Default::default() };
+    let right = vectorcraft_doc::ParaStyle { justify: Justify::Right, left_indent: 7.0, ..Default::default() };
+    t.set_paragraph_styles(vec![t.para.clone(), centred, right]);
+    let l = layout(db(), &t);
+    assert_eq!(l.lines.len(), 3);
+    assert!(l.lines[0].x0.abs() < 1e-9, "the first paragraph stays left");
+    let mid = (l.lines[1].x0 + l.lines[1].x1) / 2.0;
+    assert!((mid - 100.0).abs() < 1e-6, "the second is centred: {mid}");
+    assert!((l.lines[2].x1 - 200.0).abs() < 1e-6, "the third is right-aligned");
+    // Space before applies to the second paragraph only (leading 12 + 20).
+    assert!((l.lines[1].baseline - l.lines[0].baseline - 32.0).abs() < 1e-9);
+    assert!((l.lines[2].baseline - l.lines[1].baseline - 12.0).abs() < 1e-9);
+    // Paragraph 0's style is `para` (what readers that predate per-paragraph styles see).
+    assert_eq!(t.paras.len(), 3);
+    assert_eq!(t.para_at(0), &t.para);
+}
+
+#[test]
 fn non_rect_frame_narrows_lines() {
     // Triangle pointing up: lines get wider towards the bottom.
     let tri = PathData::from_bezpath(&{
@@ -365,8 +386,8 @@ fn fallback_font_per_character() {
 fn multiple_runs_and_styles() {
     let mut t = point("", style(10.0));
     t.runs = vec![
-        TextRun { text: "Big".into(), style: style(40.0) },
-        TextRun { text: "small".into(), style: CharStyle { font_family: "Inter".into(), ..style(10.0) } },
+        TextRun { text: "Big".into(), style: style(40.0), inline: None },
+        TextRun { text: "small".into(), style: CharStyle { font_family: "Inter".into(), ..style(10.0) }, inline: None },
     ];
     let l = layout(db(), &t);
     assert_eq!(l.glyphs.len(), 8);
@@ -546,7 +567,7 @@ fn em_box_top_leading_hangs_lines_from_the_line_above() {
     }
     // 40 pt over 20 pt (leading 60 and 30).
     let mut mixed = point("", st(40.0));
-    mixed.runs = vec![TextRun { text: "大\n".into(), style: st(40.0) }, TextRun { text: "小".into(), style: st(20.0) }];
+    mixed.runs = vec![TextRun { text: "大\n".into(), style: st(40.0), inline: None }, TextRun { text: "小".into(), style: st(20.0), inline: None }];
     let roman = lay(&mixed, LeadingModel::RomanBaseline);
     assert!((roman.lines[1].baseline - roman.lines[0].baseline - 30.0).abs() < 0.01, "the small line's leading, above it");
     let em = lay(&mixed, LeadingModel::EmBoxTop);
@@ -556,6 +577,46 @@ fn em_box_top_leading_hangs_lines_from_the_line_above() {
         "the big line's leading, below it: {} vs {want}",
         em.lines[1].baseline - em.lines[0].baseline
     );
+}
+
+/// The leading model is a paragraph attribute: in "大 / 小 / 大 / 小" (40 pt over 20 pt) with
+/// only the second paragraph top-to-top, its line hangs from the big line's em box (the big
+/// line's leading, below it) while the fourth, baseline to baseline, takes its own leading above
+/// it; in area type a top-to-top first paragraph puts its em box on the frame's top.
+#[test]
+fn leading_model_is_per_paragraph() {
+    use vectorcraft_doc::{LeadingModel, ParaStyle, TextRun};
+    let st = |size: f64| CharStyle { size, leading: Some(size * 1.5), ..style(size) };
+    let model = |m: LeadingModel| ParaStyle { leading_model: m, ..ParaStyle::default() };
+    let top = |size: f64| 0.88 * size;
+    let mut t = point("", st(40.0));
+    t.runs = vec![
+        TextRun { text: "大\n".into(), style: st(40.0), inline: None },
+        TextRun { text: "小\n".into(), style: st(20.0), inline: None },
+        TextRun { text: "大\n".into(), style: st(40.0), inline: None },
+        TextRun { text: "小".into(), style: st(20.0), inline: None },
+    ];
+    t.set_paragraph_styles(vec![
+        model(LeadingModel::RomanBaseline),
+        model(LeadingModel::EmBoxTop),
+        model(LeadingModel::RomanBaseline),
+        model(LeadingModel::RomanBaseline),
+    ]);
+    assert_eq!(t.paras.len(), 4);
+    let l = layout(db(), &t);
+    let gap = |i: usize| l.lines[i].baseline - l.lines[i - 1].baseline;
+    let em = -top(40.0) + 60.0 + top(20.0);
+    assert!((gap(1) - em).abs() < 0.01, "top to top: {} vs {em}", gap(1));
+    assert!((gap(3) - 30.0).abs() < 0.01, "baseline to baseline: {}", gap(3));
+    // Area type: only a top-to-top first paragraph moves the first line up to the frame's top.
+    let mut a = area("一\n二", st(20.0), Rect::new(0.0, 0.0, 300.0, 300.0), Justify::Left);
+    a.set_paragraph_styles(vec![model(LeadingModel::RomanBaseline), model(LeadingModel::EmBoxTop)]);
+    let roman_first = layout(db(), &a).lines[0].baseline;
+    a.set_paragraph_styles(vec![model(LeadingModel::EmBoxTop), model(LeadingModel::RomanBaseline)]);
+    let em_first = layout(db(), &a);
+    assert!((em_first.lines[0].baseline - top(20.0)).abs() < 0.01, "{}", em_first.lines[0].baseline);
+    assert!((roman_first - em_first.lines[0].baseline).abs() > 0.5);
+    assert!((em_first.lines[1].baseline - em_first.lines[0].baseline - 30.0).abs() < 0.01);
 }
 
 /// Character Alignment: a 20 pt character next to a 40 pt one lines its em box top, centre or
@@ -570,8 +631,8 @@ fn character_alignment_lines_small_characters_up_with_the_largest_em_box() {
             let mut t = point("", style(40.0));
             t.vertical = vertical_type;
             t.runs = vec![
-                TextRun { text: "大".into(), style: style(40.0) },
-                TextRun { text: "小".into(), style: CharStyle { char_align: a, ..style(20.0) } },
+                TextRun { text: "大".into(), style: style(40.0), inline: None },
+                TextRun { text: "小".into(), style: CharStyle { char_align: a, ..style(20.0) }, inline: None },
             ];
             let l = layout(db(), &t);
             // How far the small character's origin sits above the big one's (to the right, vertical).
@@ -583,6 +644,45 @@ fn character_alignment_lines_small_characters_up_with_the_largest_em_box() {
         assert!(near(place(CharAlign::EmBoxTop), 0.88 * 20.0), "top: {}", place(CharAlign::EmBoxTop));
         assert!(near(place(CharAlign::EmBoxCenter), 0.38 * 20.0), "centre: {}", place(CharAlign::EmBoxCenter));
         assert!(near(place(CharAlign::EmBoxBottom), -0.12 * 20.0), "bottom: {}", place(CharAlign::EmBoxBottom));
+    }
+}
+
+/// Character Alignment on the ICF: a 20 pt character next to a 40 pt one lines its ideographic
+/// character face's top (right, vertical) or bottom (left) up with the big one's, which lies inside
+/// the em box by the face's ICF margins. A face without ideographs has none (the ICF is the em
+/// box). The Japanese faces need craft-fonts (skipped without them).
+#[test]
+fn character_alignment_on_the_icf_lines_small_characters_up_with_the_largest_face() {
+    use vectorcraft_doc::{CharAlign, TextRun};
+    let place = |family: &str, a: CharAlign, vertical_type: bool| {
+        let st = |size: f64| CharStyle { font_family: family.into(), ..style(size) };
+        let mut t = point("", st(40.0));
+        t.vertical = vertical_type;
+        t.runs = vec![
+            TextRun { text: "大".into(), style: st(40.0), inline: None },
+            TextRun { text: "小".into(), style: CharStyle { char_align: a, ..st(20.0) }, inline: None },
+        ];
+        let l = layout(db(), &t);
+        let (big, small) = (l.glyphs[0].origin, l.glyphs[1].origin);
+        if vertical_type { small.x - big.x } else { big.y - small.y }
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 0.01;
+    // No ideographs: the ICF is the em box.
+    assert_eq!(db().face("Source Sans 3", "Regular").unwrap().icf_margins(), crate::IcfMargins::default());
+    let Some(face) = db().face("Shippori Mincho", "Regular").filter(|f| f.family == "Shippori Mincho") else {
+        return; // no Japanese font here
+    };
+    let m = face.icf_margins();
+    assert!([m.top, m.bottom, m.right, m.left].iter().all(|x| *x > 0.01 && *x < 0.2), "{m:?}");
+    for vertical_type in [false, true] {
+        let (top, bottom) = if vertical_type { (m.right, m.left) } else { (m.top, m.bottom) };
+        // The big character's ICF top is `top` ems below its em box top: 20 pt of difference.
+        let em_top = place("Shippori Mincho", CharAlign::EmBoxTop, vertical_type);
+        let icf_top = place("Shippori Mincho", CharAlign::IcfTop, vertical_type);
+        assert!(near(em_top - icf_top, top * 20.0), "vertical {vertical_type}: {em_top} {icf_top} {m:?}");
+        let em_bottom = place("Shippori Mincho", CharAlign::EmBoxBottom, vertical_type);
+        let icf_bottom = place("Shippori Mincho", CharAlign::IcfBottom, vertical_type);
+        assert!(near(icf_bottom - em_bottom, bottom * 20.0), "vertical {vertical_type}: {em_bottom} {icf_bottom} {m:?}");
     }
 }
 

@@ -448,7 +448,7 @@ impl Builder {
                     None => Paint::None,
                 };
                 // Affinity separates paragraphs with U+2029 and lines with U+2028.
-                TextRun { text: r.text.replace(['\u{2029}', '\u{2028}'], "\n"), style }
+                TextRun::new(r.text.replace(['\u{2029}', '\u{2028}'], "\n"), style)
             })
             .collect();
         obj.para.justify = match t.align {

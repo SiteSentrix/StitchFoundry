@@ -21,7 +21,7 @@ use vectorcraft_color::Swatch;
 use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, PatternDef, Symbol, TextStyleDef};
 use vectorcraft_geom::Rect;
 
-pub use flavours::{BITMAP, EMF, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour};
+pub use flavours::{BITMAP, EMF, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address};
 pub(crate) use resources::SwatchChoices;
 
 use super::*;
@@ -220,6 +220,25 @@ mod tests {
         s
     }
 
+    /// The address a browser's Copy Image puts next to the picture (#597), and text that isn't one.
+    #[test]
+    fn an_address_alone_is_told_from_other_text() {
+        for a in [
+            "https://example.com/cat.png",
+            " http://x.org/a?b=1
+",
+            "HTTPS://EXAMPLE.COM",
+            "file:///C:/art/cat.png",
+            "data:image/png;base64,iVBOR",
+            "blob:https://x.org/1",
+        ] {
+            assert!(is_address(a), "{a}");
+        }
+        for t in ["Pasted words", "see https://example.com", "https://a.org https://b.org", "https://", "example.com/cat.png", ""] {
+            assert!(!is_address(t), "{t}");
+        }
+    }
+
     #[test]
     fn copy_exports_svg_that_round_trips_through_paste() {
         let mut s = session();
@@ -238,6 +257,26 @@ mod tests {
         let b = st.doc.bounds_of(&st.selection.in_paint_order(&st.doc), false).unwrap();
         assert!((b.center().x - 200.0).abs() < 1e-6 && (b.center().y - 150.0).abs() < 1e-6, "{b:?}");
         assert!((b.width() - 30.0).abs() < 1e-6 && (b.height() - 40.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pasted_type_gets_its_layout_bounds_cache() {
+        // Reported from Illustrator: pasted type kept no layout bounds, so its box (and alignment)
+        // fell back to the rough estimate until the file was saved and reopened.
+        let mut s = session();
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="120"><text x="0" y="80" font-family="Source Sans 3" font-size="40">WWWWWWWW</text></svg>"#;
+        s.execute("clipboard.importSvg", &json!({"svg": svg})).unwrap();
+        s.execute("edit.paste", &json!({})).unwrap();
+        let mut checked = 0;
+        s.doc().unwrap().doc.walk(|n| {
+            let vectorcraft_doc::NodeKind::Text(t) = &n.kind else { return };
+            let cached = t.cached_bounds.expect("pasted type computed its bounds");
+            let real = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds;
+            assert!((cached.width() - real.width()).abs() < 1e-6, "{cached:?} {real:?}");
+            assert!(cached.width() > t.estimate_bounds().width() + 1.0, "{cached:?} is just the estimate");
+            checked += 1;
+        });
+        assert_eq!(checked, 1, "one text object pasted");
     }
 
     #[test]

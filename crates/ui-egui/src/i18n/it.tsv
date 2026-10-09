@@ -508,7 +508,7 @@
 	Create Object Mosaic…	Crea mosaico di oggetti…
 	Create Outlines	Crea contorni
 	Create Path	Crea tracciato
-	Create PDF layers from top-level layers	Crea livelli PDF dai livelli principali
+	Create PDF layers from layers and sublayers	Crea livelli PDF dai livelli e sottolivelli
 	Create PDF-Compatible File	Crea file compatibile PDF
 	Create Report	Crea rapporto
 	Create Slice	Crea sezione
@@ -773,6 +773,8 @@
 	Em Box Bottom/Left	Riquadro em in basso/a sinistra
 	Em Box Center	Riquadro em al centro
 	Em Box Top/Right	Riquadro em in alto/a destra
+	ICF Top/Right	ICF in alto/a destra
+	ICF Bottom/Left	ICF in basso/a sinistra
 	Em Dash	Lineetta
 	Em Space	Spazio em
 	Embed	Incorpora
@@ -1149,6 +1151,11 @@
 	Ignore	Ignora
 	Ignore Artboards (all the art as one page)	Ignora tavole da disegno (tutta la grafica come una sola pagina)
 	Ignore White	Ignora bianco
+	Palette:	Palette:
+	Limited	Limitata
+	Full Tone	Tono continuo
+	Document Library	Libreria del documento
+	Library:	Libreria:
 	Image	Immagine
 	Image Info	Informazioni immagine
 	Image Map:	Mappa immagine:
@@ -1189,6 +1196,7 @@
 	Input White	Bianco di input
 	Insert Break Character	Inserisci carattere di interruzione
 	Insert Character	Inserisci carattere
+	Insert Inline Symbol	Inserisci simbolo nel testo
 	Insert Special Character	Inserisci carattere speciale
 	Insert Whitespace Character	Inserisci carattere spazio
 	Inspect Document	Ispeziona documento
@@ -1492,6 +1500,8 @@
 	New Art Brush from Selection	Nuovo pennello artistico dalla selezione
 	New Art Has Basic Appearance	La nuova grafica ha aspetto di base
 	New Artboard	Nuova tavola da disegno
+	Artboard	Tavola da disegno
+	Exit	Esci
 	New Bristle Brush	Nuovo pennello a setole
 	New Brush…	Nuovo pennello…
 	New Calligraphic Brush	Nuovo pennello calligrafico
@@ -1561,6 +1571,9 @@
 	No text selected	Nessun testo selezionato
 	No Thumbnails	Nessuna miniatura
 	Noise	Disturbo
+	Create:	Crea:
+	Fills	Riempimenti
+	Strokes	Tracce
 	Nonbreaking Hyphen	Trattino indivisibile
 	Nonbreaking Space	Spazio indivisibile
 	None	Nessuno
@@ -2482,6 +2495,13 @@
 	Smooth Color	Colore graduale
 	Smooth Tool	Strumento Smussa
 	Snap Curves To Lines	Aggancia curve a linee
+	View:	Vista:
+	Tracing Result	Risultato ricalco
+	Tracing Result with Outlines	Risultato ricalco con contorni
+	Outlines	Contorni
+	Outlines with Source Image	Contorni con immagine di origine
+	Source Image	Immagine di origine
+	Image Trace View	Vista del ricalco immagine
 	Snap Options	Opzioni di aggancio
 	Snap to Glyph	Aggancia a glifo
 	Snap to Grid	Aggancia alla griglia
@@ -3117,6 +3137,7 @@ axis	Both	Entrambi
 @msg	Release Guides: no guides	Rilascia guide: nessuna guida
 @msg	Release: no layer to put the rectangle in	Rilascia: nessun livello in cui inserire il rettangolo
 @msg	Replace Spine: select a blend and a path	Sostituisci dorsale: seleziona una fusione e un tracciato
+@msg	select two or more objects to distribute	seleziona due o più oggetti da distribuire
 @msg	select paths or anchor points	seleziona tracciati o punti di ancoraggio
 @msg	SVG parse error: {0}	Errore di analisi SVG: {0}
 @msg	Save for Web: the image is empty	Salva per il web: l'immagine è vuota
@@ -3415,6 +3436,10 @@ axis	Both	Entrambi
 @msg	select a stroke with a variable width	seleziona una traccia con larghezza variabile
 @msg	select a symbol instance	seleziona un'istanza di simbolo
 @msg	select an Image Trace object	seleziona un oggetto di ricalco immagine
+@msg	could not decode image: {0}	impossibile decodificare l'immagine: {0}
+@msg	image is empty	l'immagine è vuota
+@msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	l'immagine misura {width} × {height} pixel, più di quanto accetti Ricalco immagine ({max} megapixel)
+@msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	questo ricalco creerebbe più di {max} punti di ancoraggio, più di quanti il documento possa mostrare in modo fluido: aumenta Disturbo, riduci Tracciati o Colori, oppure scegli un preset a fedeltà inferiore
 @msg	select an envelope	seleziona un involucro
 @msg	select an image	seleziona un'immagine
 @msg	select an object in perspective	seleziona un oggetto in prospettiva
@@ -3588,3 +3613,16 @@ axis	Both	Entrambi
 	Zoom	Zoom
 	Bring All to Front	Porta tutto in primo piano
 	Settings	Impostazioni
+	Break Link	Interrompi collegamento
+	On: one locked object showing the document, updated when it changes.	Attivato: un unico oggetto bloccato che mostra il documento, aggiornato quando cambia.
+	Off: an editable copy of its art, embedded in this document.	Disattivato: una copia modificabile della sua grafica, incorporata in questo documento.
+	Images: link to the file instead of only embedding it.	Immagini: collega il file invece di incorporarlo soltanto.
+	VectorCraft documents: one locked object, updated when the file changes.	Documenti VectorCraft: un unico oggetto bloccato, aggiornato quando il file cambia.
+	A file dialog is open: choose there first	È aperta una finestra di dialogo dei file: scegli prima lì
+	Shaper	Shaper
+	Expand Shaper Group	Espandi gruppo Shaper
+	Release Shaper Group	Rilascia gruppo Shaper
+	Select Shaper Face	Seleziona faccia Shaper
+	Constrain	Vincola
+	Free Transform	Trasformazione libera
+	Perspective Distort	Distorsione prospettica

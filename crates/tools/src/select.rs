@@ -36,6 +36,9 @@ enum State {
         /// Shift-pressed on this selected object: released without a drag, it leaves the
         /// selection.
         deselect: Option<NodeId>,
+        /// Pressed (no modifier) on this object of a selection of several: released without a
+        /// drag, it becomes the key object that Align aligns to (the key again: no key).
+        key: Option<NodeId>,
     },
     Scaling {
         handle: Handle,
@@ -235,14 +238,14 @@ impl Tool for SelectionTool {
                     && cx.select_behind
                     && let Some(behind) = object_behind(cx, p)
                 {
-                    self.state = State::Moving { start: p, began: false, deselect: None };
+                    self.state = State::Moving { start: p, began: false, deselect: None, key: None };
                     return vec![Action::Exec("select.set".into(), json!({ "ids": [behind.0] }))];
                 }
                 match hit_test(cx.doc, p, cx.hit_options()) {
                     Some(h) => {
                         let top = h.top_object(cx.isolation);
                         let mut out = vec![];
-                        let mut deselect = None;
+                        let (mut deselect, mut key) = (None, None);
                         if m.shift {
                             // A Shift-click takes a selected object out of the selection when it
                             // is released; a Shift-drag moves the selection, constrained.
@@ -253,8 +256,10 @@ impl Tool for SelectionTool {
                             }
                         } else if !cx.selection.contains(top) {
                             out.push(Action::Exec("select.set".into(), json!({ "ids": [top.0] })));
+                        } else if cx.selection.objects.len() > 1 && !m.cmd && !m.alt {
+                            key = Some(top);
                         }
-                        self.state = State::Moving { start: p, began: false, deselect };
+                        self.state = State::Moving { start: p, began: false, deselect, key };
                         out
                     }
                     None => {
@@ -276,7 +281,7 @@ impl Tool for SelectionTool {
                 if let Some(snap) = &self.moving {
                     (d, self.guides) = snap.snap(cx, start, d);
                 }
-                self.state = State::Moving { start, began: true, deselect: None };
+                self.state = State::Moving { start, began: true, deselect: None, key: None };
                 self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
                 out.push(Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt })));
                 out
@@ -323,15 +328,18 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 b.finish()
             }
-            (PointerKind::Up, State::Moving { began, deselect, .. }) => {
+            (PointerKind::Up, State::Moving { began, deselect, key, .. }) => {
                 self.state = State::Idle;
                 self.measure = None;
                 self.guides.clear();
                 self.moving = None;
-                match (began, deselect) {
-                    (true, _) => vec![Action::Commit],
-                    (false, Some(id)) => vec![Action::Exec("select.toggle".into(), json!({ "id": id.0 }))],
-                    (false, None) => vec![],
+                match (began, deselect, key) {
+                    (true, ..) => vec![Action::Commit],
+                    (false, Some(id), _) => vec![Action::Exec("select.toggle".into(), json!({ "id": id.0 }))],
+                    // A click on the key object again: no key.
+                    (false, None, Some(id)) if cx.selection.key == Some(id) => vec![Action::Exec("select.key".into(), json!({}))],
+                    (false, None, Some(id)) => vec![Action::Exec("select.key".into(), json!({ "id": id.0 }))],
+                    (false, None, None) => vec![],
                 }
             }
             (PointerKind::Up, State::Scaling { .. } | State::Rotating { .. }) => {
@@ -356,6 +364,13 @@ impl Tool for SelectionTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = pathtype::overlays(cx);
+        if let Some(source) = cx.isolation.and_then(|id| cx.doc.node(id)).filter(|n| n.name.as_deref() == Some(vectorcraft_doc::shaper::SOURCES)) {
+            for n in source.children().into_iter().flatten() {
+                if let Some(path) = n.path_data() {
+                    o.push(Overlay::Path { path: path.to_bezpath(), color: [0x80, 0x80, 0x80], width: 1.0, dashed: true });
+                }
+            }
+        }
         match &self.state {
             State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             State::Corner(c) => o.extend(c.overlays(cx)),
@@ -538,6 +553,37 @@ mod tests {
         let mut t = SelectionTool::default();
         assert_eq!(t.pointer(&cx2, &shift(PointerKind::Down, 150.0, 150.0)), toggle);
         assert!(t.pointer(&cx2, &shift(PointerKind::Up, 150.0, 150.0)).is_empty());
+    }
+
+    /// #541: a click on one object of a selection of several makes it the key object; a click on
+    /// the key again lets it go. A drag moves them all, a lone object has no key.
+    #[test]
+    fn a_click_on_a_selected_object_makes_it_the_key() {
+        let (d, id) = doc_with_area_type();
+        let rect = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+        let p = paint();
+        let click = |s: &Selection, x, y| {
+            let c = cx(&d, s, &p);
+            let mut t = SelectionTool::default();
+            assert!(t.pointer(&c, &ev(PointerKind::Down, x, y)).is_empty());
+            t.pointer(&c, &ev(PointerKind::Up, x, y))
+        };
+        let mut s = Selection::default();
+        s.add(rect);
+        s.add(id);
+        assert_eq!(click(&s, 150.0, 150.0), vec![Action::Exec("select.key".into(), json!({"id": rect.0}))]);
+        s.key = Some(rect);
+        assert_eq!(click(&s, 150.0, 150.0), vec![Action::Exec("select.key".into(), json!({}))], "the key again: no key");
+        // A drag moves the selection and leaves the key alone.
+        let c = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0));
+        t.pointer(&c, &ev(PointerKind::Drag, 170.0, 150.0));
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 170.0, 150.0)), vec![Action::Commit]);
+        // One object selected: a click on it does nothing.
+        let mut one = Selection::default();
+        one.add(rect);
+        assert!(click(&one, 150.0, 150.0).is_empty());
     }
 
     #[test]

@@ -9,8 +9,16 @@ use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("shape.rectangle", "Rectangle", [], None, "{x, y, width, height, radius?: pt} → {id}", has_doc, rectangle),
-        cmd!("shape.ellipse", "Ellipse", [], None, "{x, y, width, height} → {id}", has_doc, ellipse),
+        cmd!(
+            "shape.rectangle",
+            "Rectangle",
+            [],
+            None,
+            "{x, y, width, height, radius?: pt, rotation?: deg (about centre)} → {id}",
+            has_doc,
+            rectangle
+        ),
+        cmd!("shape.ellipse", "Ellipse", [], None, "{x, y, width, height, rotation?: deg (about centre)} → {id}", has_doc, ellipse),
         cmd!("shape.polygon", "Polygon", [], None, "{cx, cy, radius, sides=6, rotation?: deg} → {id}", has_doc, polygon),
         cmd!("shape.star", "Star", [], None, "{cx, cy, radius1, radius2, points=5, rotation?: deg} → {id}", has_doc, star),
         cmd!(
@@ -50,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id}",
+            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -163,6 +171,17 @@ fn rect_of(p: &Value, cmd: &str) -> Result<Rect> {
     Ok(Rect::new(x, y, x + w, y + h).abs())
 }
 
+fn rect_transform(r: Rect, p: &Value, cmd: &str) -> Result<Affine> {
+    let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", cmd)? } else { 0.0 };
+    if !rotation.is_finite() {
+        return Err(bad(cmd, "rotation must be finite"));
+    }
+    if rotation == 0.0 {
+        return Ok(Affine::translate(r.origin().to_vec2()));
+    }
+    Ok(Affine::translate(r.center().to_vec2()) * Affine::rotate(rotation.to_radians()) * Affine::translate((-r.width() / 2.0, -r.height() / 2.0)))
+}
+
 fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.rectangle")?;
     let radius = f64_or(p, "radius", 0.0).max(0.0);
@@ -171,7 +190,7 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
         h: r.height(),
         radii: [radius; 4],
         kinds: Default::default(),
-        xf: Affine::translate(r.origin().to_vec2()),
+        xf: rect_transform(r, p, "shape.rectangle")?,
     };
     let label = if radius > 0.0 { "Rounded Rectangle" } else { "Rectangle" };
     add_art(s, label, path_kind(live.to_path(), Some(live)), None)
@@ -179,7 +198,7 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.ellipse")?;
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: rect_transform(r, p, "shape.ellipse")? };
     add_art(s, "Ellipse", path_kind(live.to_path(), Some(live)), None)
 }
 
@@ -415,10 +434,12 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         let w = f64_or(a, "width", 200.0);
         let h = f64_or(a, "height", 100.0);
         t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, w, h)) };
+        t.area.fit = new_area_fit(s, a, "text.create")?;
     }
     if bool_or(p, "placeholder", false) {
         super::typemenu::fill_with_placeholder(&mut t);
     } else {
+        // Lays the text out (and sizes an Auto Size frame).
         super::typecmd::refresh_bounds(&mut t);
     }
     add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)
@@ -426,8 +447,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The paragraph attributes new type gets (the Type tools, `text.create`): aligned to the start of
 /// each paragraph's direction (left, right for Hebrew and Arabic), Japanese punctuation composed
-/// with Line-end Punctuation Half Width and Standard burasagari (as in Illustrator). Imported text
-/// keeps its own.
+/// with Line-end Punctuation Half Width and Standard burasagari. Imported text keeps its own.
 pub(crate) fn new_type_para() -> vectorcraft_doc::ParaStyle {
     vectorcraft_doc::ParaStyle {
         justify: vectorcraft_doc::Justify::Auto,
@@ -469,6 +489,13 @@ pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut 
         r.style.char_align = align;
     }
     Ok(())
+}
+
+/// The fit new area type gets: `fit`/`fitMinPercent` from `p` (as `text.areaOptions` takes
+/// them), else Auto Size when the "Auto Size New Area Type" preference is on.
+pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str) -> Result<vectorcraft_doc::AreaFit> {
+    let default = if s.prefs.auto_size_area_type { vectorcraft_doc::AreaFit::AutoHeight } else { vectorcraft_doc::AreaFit::None };
+    Ok(super::typecmd::fit_param(p, default, c)?.unwrap_or(default))
 }
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p`, else the

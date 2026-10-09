@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use vectorcraft_engine::Session;
-use vectorcraft_engine::cmd::clipboard::{FILE_HEAD, Flavour, PASTE_ORDER, file_flavour};
+use vectorcraft_engine::cmd::clipboard::{FILE_HEAD, Flavour, PASTE_ORDER, file_flavour, is_address};
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::cmd::recovery::{self, Hold, RecoveryStore};
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
@@ -200,7 +200,8 @@ fn track_paste(pasted: &Rc<RefCell<Pasted>>) {
     let on_paste = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::ClipboardEvent)>::new(move |e: web_sys::ClipboardEvent| {
         let Some(data) = e.clipboard_data() else { return };
         let Some(files) = data.files().filter(|f| f.length() > 0) else { return };
-        if data.get_data("text").is_ok_and(|t| !t.is_empty()) {
+        // Text is egui's, but for the address a browser's Copy Image puts next to the picture.
+        if data.get_data("text").is_ok_and(|t| !t.is_empty() && !is_address(&t)) {
             return;
         }
         e.prevent_default();
