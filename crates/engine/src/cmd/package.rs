@@ -140,7 +140,8 @@ impl<'a> Collector<'a> {
     fn collect(&mut self, doc: &mut Document, source: &str, destination: &str, depth: usize) -> Result<()> {
         // The caller checks cycles and depth before descending; active documents have
         // a destination reserved so back-links can point at their single packaged copy.
-        self.visiting.insert(source.to_string(), destination.to_string());
+        let previous = self.visiting.insert(source.to_string(), destination.to_string());
+        debug_assert!(previous.is_none(), "collector visits each document once");
         // A file's saved path is only meaningful inside its own document.
         // Different linked documents can reuse the same stale absolute path yet
         // resolve it to distinct local assets. Keep a mapping per document.
@@ -258,13 +259,13 @@ impl<'a> Collector<'a> {
                     let relative = relative_in_package(destination, &copy.name);
                     link.path = self.root.as_ref().map_or_else(|| copy.name.clone(), |r| r.join(&copy.name).to_string_lossy().into_owned());
                     link.relative = Some(relative);
-                    link.size = Some(copy.size);
-                    link.hash = Some(copy.hash.clone());
+                    link.size = copy.size;
+                    link.hash = copy.hash.clone();
                     link.modified = None;
                 }
             });
         }
-        self.visiting.remove(source);
+        let _ = self.visiting.remove(source);
         Ok(())
     }
 }
