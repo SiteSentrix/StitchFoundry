@@ -43,6 +43,8 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
     if swatches || ext == vectorcraft_doc::style_libs::STYLES_EXT {
         let p = match path {
             Some(path) => serde_json::json!({ "path": path }),
+            // `.ase` swatch libraries are binary.
+            None if swatches => serde_json::json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)}),
             None => serde_json::json!({"name": name, "data": String::from_utf8_lossy(bytes)}),
         };
         let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };

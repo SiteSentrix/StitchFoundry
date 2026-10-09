@@ -70,8 +70,8 @@ pub fn specs() -> Vec<CommandSpec> {
 
 impl LibraryFile for StyleLibrary {
     const EXTS: &'static [&'static str] = &[STYLES_EXT];
-    fn read(text: &str, stem: &str) -> std::result::Result<Self, String> {
-        style_libs::read(text, stem)
+    fn read(bytes: &[u8], stem: &str) -> std::result::Result<Self, String> {
+        style_libs::read(&String::from_utf8_lossy(bytes), stem)
     }
     fn name(&self) -> &str {
         &self.name
