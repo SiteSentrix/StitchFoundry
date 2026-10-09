@@ -185,7 +185,12 @@ fn polygon_rotation(corners: &[Point], step: f64) -> f64 {
             })
             .sum::<f64>()
     };
-    [0.0, 90.0, 180.0, 270.0].into_iter().filter(|r| r % step == 0.0).min_by(|a, b| error(*a).total_cmp(&error(*b))).unwrap_or(0.0)
+    // A candidate a whole number of periods from an earlier one is the same polygon (a hexagon at 270°
+    // is the one at 90°) and scores the same up to rounding, so it is dropped: otherwise the platform's
+    // `atan2` rounding picks between them (FreeBSD's libm gave 270° where Linux gives 90°).
+    let candidates = [0.0, 90.0, 180.0, 270.0].into_iter().filter(|r| r % step == 0.0);
+    let distinct = candidates.clone().enumerate().filter(|&(i, r)| !candidates.clone().take(i).any(|q| (r - q) % period == 0.0));
+    distinct.map(|(_, r)| r).min_by(|a, b| error(*a).total_cmp(&error(*b))).unwrap_or(0.0)
 }
 
 fn rectangle_rotation(corners: &[Point]) -> f64 {
@@ -531,6 +536,31 @@ mod tests {
                 .collect();
             assert!(matches!(recognize(&wobbly(&corners, 24, 0.5)), Some(Recognized::Polygon { sides: 3, rotation: 0.0 | 180.0, .. })));
         }
+    }
+
+    #[test]
+    fn hexagon_rotation_never_depends_on_rounding_between_equivalent_angles() {
+        // 0° and 180° (and 90° and 270°) are the same hexagon, so only 0° and 90° may come back, whatever
+        // rounding does to the tied scores: on FreeBSD the tilted test above got 270°.
+        for direction in [0.0_f64, 90.0] {
+            for tilt in [-9.0_f64, -7.0, -3.0, 3.0, 7.0, 9.0] {
+                for offset in [0.0, 1e-7, 0.1, 1e3, 1e6] {
+                    let corners: Vec<Point> = (0..6)
+                        .map(|i| {
+                            let a = (direction + tilt - 90.0).to_radians() + std::f64::consts::TAU * i as f64 / 6.0;
+                            Point::new(offset + 70.0 * a.cos(), offset + 70.0 * a.sin())
+                        })
+                        .collect();
+                    assert_eq!(polygon_rotation(&corners, 90.0), direction, "tilt {tilt}, offset {offset}");
+                    let mut shifted = corners.clone();
+                    shifted.rotate_left(3);
+                    assert_eq!(polygon_rotation(&shifted, 90.0), direction, "tilt {tilt}, offset {offset}, from the opposite corner");
+                }
+            }
+        }
+        // Triangles have no such twin among the candidates: 0° and 180° stay distinct.
+        let down: Vec<Point> = (0..3).map(|i| Point::new(0.0, 0.0) + Vec2::from_angle((90.0_f64 + 120.0 * i as f64).to_radians()) * 50.0).collect();
+        assert_eq!(polygon_rotation(&down, 180.0), 180.0);
     }
 
     #[test]
