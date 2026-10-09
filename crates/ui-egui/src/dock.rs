@@ -151,6 +151,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.ctx().data_mut(|d| {
         d.insert_temp(column_left_id(), column.left());
         d.insert_temp(floating::dock_rect_id(), dock);
+        d.insert_temp(floating::icons_rect_id(), column);
     });
 }
 

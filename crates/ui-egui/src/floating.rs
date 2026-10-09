@@ -70,6 +70,12 @@ pub(crate) fn dock_rect_id() -> Id {
 }
 
 /// The strip along the window's left edge where the Tools panel docks, as last laid out.
+/// The icon column's bounds (egui temp memory, one frame old), where panels without a tab in the
+/// tabbed group go back to when docked.
+pub(crate) fn icons_rect_id() -> Id {
+    Id::new("floating-icons-rect")
+}
+
 pub(crate) fn tools_zone_id() -> Id {
     Id::new("floating-tools-zone")
 }
@@ -216,7 +222,13 @@ fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2
             return Some((Drop::Stack(first), head));
         }
     }
-    zone(dock_rect_id()).filter(|_| app.ui.dock && app.ui.screen_mode < 3).map(|r| (Drop::Dock, r))
+    let dock = zone(dock_rect_id()).filter(|_| app.ui.dock && app.ui.screen_mode < 3)?;
+    // Panels that aren't tabs of the tabbed group (or all of them, with it collapsed) go back to
+    // their icons: light up the icon column, where they land, rather than the tabs.
+    let tabbed = !app.ui.dock_collapsed
+        && own.and_then(|i| app.ui.floating_panels.get(i)).is_some_and(|g| ids_of(g).into_iter().any(|p| DockTab::from_id(p).is_some()));
+    let lit = if tabbed { dock } else { ctx.data(|d| d.get_temp::<Rect>(icons_rect_id())).unwrap_or(dock) };
+    Some((Drop::Dock, lit))
 }
 
 /// Light up a drop zone: over the docked panels, under the floating ones (the moved one too).
@@ -262,7 +274,13 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let ids = ids_of(g);
     let active = ids.get(g.active).copied().unwrap_or(id);
     match drop {
-        Drop::Dock => dock(&mut app.ui, &ids, active),
+        Drop::Dock => {
+            dock(&mut app.ui, &ids, active);
+            // One that went back to its icon pops out of it, so it doesn't seem to vanish.
+            if app.ui.dock_collapsed || DockTab::from_id(active).is_none() {
+                app.ui.open_panel = Some(active.to_string());
+            }
+        }
         Drop::Stack(onto) => stack(&mut app.ui, &ids, active, onto),
     }
 }
@@ -607,7 +625,7 @@ mod tests {
         h.hold(h.title("layers"), over);
         assert!(h.group("layers").contains(over), "the group follows the pointer");
         let target = drop_target(&h.app, &h.ctx, Moving::Panel("layers"), over);
-        assert_eq!(target.map(|t| t.0), Some(Drop::Dock), "the dock is the drop zone");
+        assert_eq!(target, Some((Drop::Dock, dock)), "the dock is the drop zone, lit whole: its tab comes back");
         h.release(over);
         assert!(h.groups().is_empty(), "docked: {:?}", h.groups());
         assert_eq!((h.dock_tabs().len(), h.app.ui.dock_tab), (3, DockTab::Layers), "back in the dock, shown");
@@ -664,6 +682,24 @@ mod tests {
         h.app.run("window.panel.dock", json!({"panel": "color"})).unwrap();
         h.settle();
         assert_eq!(h.icons().len(), count - 1, "Color is back in the column");
+    }
+
+    #[test]
+    fn a_panel_dropped_on_the_dock_lights_up_and_pops_out_of_its_icon() {
+        let mut h = Harness::new();
+        let count = h.icons().len();
+        h.drag(h.icons()[0].center(), pos2(500.0, 400.0));
+        assert_eq!(h.groups(), [["color"]]);
+        // Over the tabbed group: Color has no tab there, so the icon column lights up, not the tabs.
+        let (dock, column) = (h.temp_rect(dock_rect_id()), h.temp_rect(icons_rect_id()));
+        let over = h.dock_tabs()[1].center();
+        h.hold(h.title("color"), over);
+        assert_eq!(drop_target(&h.app, &h.ctx, Moving::Panel("color"), over), Some((Drop::Dock, column)));
+        assert!(column.width() < dock.width(), "the column, not the whole dock: {column:?} {dock:?}");
+        // Dropped, it's back in the column and pops out of its icon rather than vanishing.
+        h.release(over);
+        assert!(h.groups().is_empty());
+        assert_eq!((h.icons().len(), h.app.ui.open_panel.as_deref()), (count, Some("color")));
     }
 
     #[test]
