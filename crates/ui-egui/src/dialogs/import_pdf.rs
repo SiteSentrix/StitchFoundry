@@ -114,9 +114,15 @@ pub(super) fn show_preview(ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>,
 
 /// Open `bytes` (or place them with the `file.place` params `place`) through the dialog when the
 /// file is a PDF (or `.ai`/`.ait`) with several pages or a password; false when there's nothing to
-/// ask (the caller goes on).
+/// ask (the caller goes on), including a file that carries its VectorCraft document when opening.
 pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, place: Option<&Value>) -> bool {
     if !fileio::detect(name, bytes).is_some_and(|f| matches!(f.id, "pdf" | "ai" | "ait")) {
+        return false;
+    }
+    // A file carrying its VectorCraft document (a saved .ai, or a PDF saved with Preserve Editing)
+    // opens as that document, every artboard and layer: there are no pages to pick. Placing still
+    // asks, since a place takes one page.
+    if place.is_none() && vectorcraft_pdf::editing_with(bytes, None).is_some() {
         return false;
     }
     let (pages, locked) = match vectorcraft_pdf::info(bytes, None) {
