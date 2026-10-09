@@ -19,6 +19,7 @@
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
 
+mod affinity;
 mod batch;
 pub mod dxf;
 pub mod dxfimport;
@@ -555,6 +556,9 @@ pub const FORMATS: &[Format] = &[
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "tga", label: "Targa", extensions: &["tga"], mime: "image/x-tga", read: false, write: true, raster: true, options: TGA_OPTIONS },
     Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: false, write: true, raster: true, options: PSD_OPTIONS },
+    // Affinity Photo's `.afphoto` opens by its content but isn't listed: Finder shouldn't offer a
+    // vector app for a raster editor's documents.
+    reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/vnd.affinity", false),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -579,6 +583,9 @@ pub const OPEN_EXTS: &[&str] = &[
     "emf",
     "wmf",
     "eps",
+    "af",
+    "afdesign",
+    "afpub",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -618,6 +625,9 @@ pub const PLACE_EXTS: &[&str] = &[
     "emf",
     "wmf",
     "eps",
+    "af",
+    "afdesign",
+    "afpub",
     "txt",
 ];
 
@@ -638,9 +648,11 @@ pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static 
         .chain(std::iter::once(("Plug-ins", super::plugin::EXTS)))
 }
 
-/// File → Place dialog filters: "All placeable files", then one per readable format, then text.
+/// File → Place dialog filters: "All placeable files", then one per placeable format, then text.
 pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once(("All placeable files", PLACE_EXTS)).chain(format_filters()).chain(std::iter::once(("Text", TEXT_EXTS)))
+    std::iter::once(("All placeable files", PLACE_EXTS))
+        .chain(format_filters().filter(|(_, exts)| exts.iter().all(|ext| PLACE_EXTS.contains(ext))))
+        .chain(std::iter::once(("Text", TEXT_EXTS)))
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`).
@@ -859,6 +871,8 @@ pub(crate) fn write_or_return(path: Option<&str>, bytes: &[u8], extra: Value) ->
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_affinity;
 #[cfg(test)]
 mod tests_pdf;
 #[cfg(test)]

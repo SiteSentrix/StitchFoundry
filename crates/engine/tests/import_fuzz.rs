@@ -4,7 +4,8 @@
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
-//! (damaged ones, hostile programs) read by the PostScript interpreter.
+//! (damaged ones, hostile programs) read by the PostScript interpreter, nor Affinity documents
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions).
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -23,6 +24,244 @@ fn config() -> ProptestConfig {
         c.cases = 64;
     }
     c
+}
+
+// ---------- Affinity previews ----------
+
+/// Original pixels in a synthetic container envelope, not an Affinity document writer.
+fn affinity_preview_sample() -> Vec<u8> {
+    let im = image::RgbaImage::from_pixel(2, 1, image::Rgba([220, 40, 60, 255]));
+    let mut png = Vec::new();
+    im.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut b = vec![0; 72];
+    b[..4].copy_from_slice(vectorcraft_affinity::MAGIC);
+    b[4..6].copy_from_slice(&12u16.to_le_bytes());
+    b[8..12].copy_from_slice(b"nsrP");
+    b[12..16].copy_from_slice(b"#Inf");
+    b[24..32].copy_from_slice(&72u64.to_le_bytes());
+    b[64..68].copy_from_slice(b"Prot");
+    b.extend(b"\xff\xff\xff\xffThmb");
+    b.extend(1u32.to_le_bytes());
+    b.extend((png.len() as u32 + 13).to_le_bytes());
+    b.extend(29u32.to_le_bytes());
+    b.extend(0u32.to_le_bytes());
+    b.extend((png.len() as u32).to_le_bytes());
+    b.push(1);
+    b.extend(png);
+    b
+}
+
+/// A synthetic native document exercising the reader's paths: curves (with live corners), every
+/// parametric shape it knows, a compound, gradients, a stroke, text, a mask and an artboard. Not
+/// an Affinity writer: the layout is the one the reader accepts.
+fn affinity_native_stream() -> Vec<u8> {
+    use vectorcraft_affinity::synth::{self, F, tag};
+    let f32s = |v: &[f32]| F::Struct(v.iter().flat_map(|x| x.to_le_bytes()).collect());
+    let rec = |x: f64, y: f64, role: u8| {
+        let mut r = x.to_le_bytes().to_vec();
+        r.extend(y.to_le_bytes());
+        r.extend([1, role]);
+        r
+    };
+    let mut id = 100;
+    let mut next = || {
+        id += 1;
+        id
+    };
+    let colour = |id: u32| F::Def(id, vec![tag(b"RGBA")], vec![(tag(b"_col"), f32s(&[0.2, 0.4, 0.6, 0.8]))]);
+    let gradient = |a: u32, b: u32, c: u32, kind: u16| {
+        F::Def(
+            a,
+            vec![tag(b"FDsc")],
+            vec![
+                (
+                    tag(b"FDeF"),
+                    F::Def(
+                        b,
+                        vec![tag(b"FilG")],
+                        vec![
+                            (tag(b"Type"), F::Enum(kind, 0)),
+                            (tag(b"Grad"), F::Obj(tag(b"Grad"), vec![(tag(b"Cols"), F::Shared(vec![colour(c), F::Ref(c)]))])),
+                        ],
+                    ),
+                ),
+                (tag(b"FDeX"), F::F64s(vec![10.0, 0.0, 5.0, 0.0, 20.0, 5.0])),
+            ],
+        )
+    };
+    let curve = F::Obj(
+        tag(b"PCvD"),
+        vec![(
+            tag(b"Data"),
+            F::Pos(vec![
+                F::U8(0),
+                F::U32(1),
+                F::Bool(true),
+                F::Records(18, vec![rec(0.0, 0.0, 0), rec(5.0, 0.0, 1), rec(10.0, 5.0, 2), rec(10.0, 10.0, 0), rec(0.0, 10.0, 0), rec(0.0, 0.0, 0)]),
+            ]),
+        )],
+    );
+    let mut kids = vec![F::Def(
+        next(),
+        vec![tag(b"PCrv")],
+        vec![(tag(b"Crvs"), curve.clone()), (tag(b"BFFl"), F::Shared(vec![gradient(next(), next(), next(), 0)]))],
+    )];
+    for (i, class) in [b"ShNR", b"ShpE", b"ShPy", b"ShSt", b"ShSS", b"ShPi", b"ShpT", b"ShTz", b"ShCl"].into_iter().enumerate() {
+        let fields = vec![
+            (tag(b"Side"), F::U32(6)),
+            (tag(b"Smth"), F::Bool(i % 2 == 0)),
+            (tag(b"Curv"), F::F32(0.5)),
+            (tag(b"CTyp"), F::Raw(vec![0xaa, b'p', b'y', b'T', b'C', 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 4, 0, 4, 0])),
+            (tag(b"ShCR"), f32s(&[0.25, 0.0, 0.0, 0.0])),
+            (tag(b"AngE"), F::F32(1.0)),
+        ];
+        kids.push(F::Def(
+            next(),
+            vec![tag(b"ShpN")],
+            vec![
+                (tag(b"Shpe"), F::Def(next(), vec![tag(class)], fields)),
+                (tag(b"ShpB"), F::F64s(vec![0.0, 0.0, 40.0 + i as f64, 30.0])),
+                (tag(b"Xfrm"), F::F64s(vec![1.0, 0.2, i as f64 * 10.0, 0.0, 1.0, 5.0])),
+                (tag(b"BFFl"), F::Shared(vec![gradient(next(), next(), next(), (i % 4) as u16)])),
+                (tag(b"AdCh"), F::Shared(vec![F::Def(next(), vec![tag(b"PCrv")], vec![(tag(b"Crvs"), curve.clone())])])),
+            ],
+        ));
+    }
+    kids.push(F::Def(
+        next(),
+        vec![tag(b"Comp")],
+        vec![(tag(b"Chld"), F::Shared(vec![F::Def(next(), vec![tag(b"PCrv")], vec![(tag(b"Crvs"), curve.clone()), (tag(b"ComO"), F::Enum(2, 0))])]))],
+    ));
+    let run = F::Def(
+        next(),
+        vec![tag(b"GAtt")],
+        vec![(tag(b"Doub"), F::Raw(vec![0x8a, b'b', b'u', b'o', b'D', 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28, 0x40]))],
+    );
+    let block = F::Def(
+        next(),
+        vec![tag(b"StBl")],
+        vec![
+            (tag(b"Glyp"), F::Obj(tag(b"GStr"), vec![(tag(b"Utf8"), F::Str("Hi\u{2029}there\0".into()))])),
+            (
+                tag(b"GAtt"),
+                F::Obj(tag(b"GlAS"), vec![(tag(b"Runs"), F::Objs(tag(b"GlAR"), vec![vec![(tag(b"Indx"), F::I32(9)), (tag(b"Item"), run)]]))]),
+            ),
+        ],
+    );
+    kids.push(F::Def(
+        next(),
+        vec![tag(b"TxtA")],
+        vec![
+            (tag(b"StSt"), F::Def(next(), vec![tag(b"Stry")], vec![(tag(b"Blok"), F::Shared(vec![block]))])),
+            (
+                tag(b"TxtH"),
+                F::Def(next(), vec![tag(b"ArFr")], vec![(tag(b"FrmB"), F::F64s(vec![0.0, -10.0, 30.0, 0.0])), (tag(b"ArtV"), F::F64(10.0))]),
+            ),
+        ],
+    ));
+    let board = F::Def(
+        next(),
+        vec![tag(b"ShpN")],
+        vec![
+            (tag(b"ABEn"), F::Bool(true)),
+            (tag(b"Shpe"), F::Def(next(), vec![tag(b"ShNR")], vec![])),
+            (tag(b"ShpB"), F::F64s(vec![0.0, 0.0, 200.0, 100.0])),
+            (tag(b"Chld"), F::Shared(kids)),
+        ],
+    );
+    synth::stream(&[
+        (tag(b"UVCn"), F::Obj(tag(b"UVCn"), vec![(tag(b"UPPI"), F::F64(96.0))])),
+        (
+            tag(b"DocR"),
+            F::Def(
+                1,
+                vec![tag(b"DocN")],
+                vec![(tag(b"Chld"), F::Shared(vec![F::Def(2, vec![tag(b"Sprd")], vec![(tag(b"Chld"), F::Shared(vec![board]))])]))],
+            ),
+        ),
+    ])
+}
+
+fn affinity_native(stream: &[u8], method: vectorcraft_affinity::synth::Method) -> Vec<u8> {
+    vectorcraft_affinity::synth::container(&[("doc.dat", stream, method)], None)
+}
+
+#[test]
+fn the_native_affinity_sample_reaches_every_reader_path() {
+    let bytes = affinity_native(&affinity_native_stream(), vectorcraft_affinity::synth::Method::Zstd);
+    let l = vectorcraft_engine::cmd::fileio::load("x.af", &bytes).unwrap();
+    assert!(!l.preview_only, "{:?}", l.warnings);
+    let kinds = l.doc.layers.iter().flat_map(|l| l.children().into_iter().flatten()).count();
+    assert!(kinds > 0);
+    let all = format!("{:?}", l.doc.layers);
+    for want in ["Path", "Text", "Compound"].iter().take(2) {
+        assert!(all.contains(want), "{want} missing");
+    }
+    assert_eq!(l.doc.artboards.len(), 1);
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn affinity_native_documents_with_mutated_streams_render_and_export(
+        cut in 0usize..4096,
+        edits in prop::collection::vec((0usize..4096, any::<u8>()), 0..24),
+    ) {
+        let mut stream = affinity_native_stream();
+        let n = stream.len();
+        for (at, b) in edits { stream[at % n] = b; }
+        stream.truncate(cut.max(16));
+        let bytes = affinity_native(&stream, vectorcraft_affinity::synth::Method::Stored);
+        survive("Affinity native stream", || vectorcraft_engine::cmd::fileio::load("x.af", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn affinity_native_containers_with_mutated_bytes_render_and_export(
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 1..16),
+        method in 0u8..3,
+    ) {
+        use vectorcraft_affinity::synth::Method;
+        let m = [Method::Stored, Method::Zlib, Method::Zstd][usize::from(method)];
+        let mut bytes = affinity_native(&affinity_native_stream(), m);
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        survive("Affinity native container", || vectorcraft_engine::cmd::fileio::load("x.af", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn affinity_garbage_never_panics(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = vectorcraft_affinity::MAGIC.to_vec();
+        bytes.extend(tail);
+        survive("Affinity garbage", || vectorcraft_engine::cmd::fileio::load("x.af", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn affinity_mutated_previews_render_and_export_without_panicking(
+        cut in 0usize..400,
+        edits in prop::collection::vec((0usize..400, any::<u8>()), 0..16),
+    ) {
+        let mut bytes = affinity_preview_sample();
+        for (at, b) in edits {
+            if let Some(byte) = bytes.get_mut(at) { *byte = b; }
+        }
+        bytes.truncate(cut);
+        survive("Affinity preview", || vectorcraft_engine::cmd::fileio::load("x.af", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn affinity_placement_is_rejected_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = vectorcraft_affinity::MAGIC.to_vec();
+        bytes.extend(tail);
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"renamed.png", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            for cmd in ["file.place", "file.place.info"] { assert!(s.execute(cmd, &p).is_err()); }
+            assert!(s.execute("file.place.queue", &json!({"files":[p]})).is_err());
+        });
+        prop_assert!(r.is_ok(), "Affinity placement panicked: {:?}", r.err());
+    }
 }
 
 /// Import must not panic; whatever comes back must render and export without panicking either.

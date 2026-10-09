@@ -3461,6 +3461,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruzstd"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a252f5e20f038fe7b4ea53e073e65398d652c864cc162fc77c56c2f13717b888"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
 name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4124,6 +4133,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "twox-hash"
+version = "2.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86a801b3cea342a06d468c8710662aa29e5e05e4f5c0d62f00bbb7f2ad7941c2"
+
+[[package]]
 name = "type-map"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4321,6 +4336,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-affinity"
+version = "0.7.0"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "proptest",
+ "ruzstd",
+]
+
+[[package]]
 name = "vectorcraft-brush"
 version = "0.7.0"
 dependencies = [
@@ -4414,6 +4439,7 @@ dependencies = [
 name = "vectorcraft-engine"
 version = "0.7.0"
 dependencies = [
+ "crc32fast",
  "flate2",
  "image",
  "kurbo 0.13.1",
@@ -4422,6 +4448,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "vectorcraft-affinity",
  "vectorcraft-brush",
  "vectorcraft-cad",
  "vectorcraft-color",
