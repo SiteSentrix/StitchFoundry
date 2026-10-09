@@ -432,6 +432,8 @@ pub enum Cursor {
     PenDelete,
     PenClose,
     PenContinue,
+    /// While drawing, over an end of another open path (a click joins the two).
+    PenJoin,
     /// Over the last anchor of the path being drawn (a click retracts its outgoing handle), or with
     /// Alt held over a selected path's handle or anchor (the Anchor Point tool's gesture).
     PenConvert,

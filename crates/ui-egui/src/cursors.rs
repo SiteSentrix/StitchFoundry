@@ -84,6 +84,12 @@ fn pen(p: &mut Ink, o: Pos2, badge: &str) {
         }
         "-" => line(p, b + vec2(0.0, 3.0), b + vec2(6.0, 3.0)),
         "/" => line(p, b + vec2(0.0, 6.0), b + vec2(5.0, 0.0)),
+        // Join: a segment running into a square end point.
+        "j" => {
+            line(p, b + vec2(0.0, 6.0), b + vec2(3.5, 2.5));
+            let sq = [(3.0, -1.0), (7.0, -1.0), (7.0, 3.0), (3.0, 3.0)].map(|(x, y)| b + vec2(x, y));
+            poly(p, sq.to_vec(), INK, INK);
+        }
         "^" => {
             line(p, b + vec2(0.0, 6.0), b + vec2(3.0, 0.0));
             line(p, b + vec2(3.0, 0.0), b + vec2(6.0, 6.0));
@@ -270,6 +276,7 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PenDelete => pen(ink, p, "-"),
         Cursor::PenClose => pen(ink, p, "o"),
         Cursor::PenContinue => pen(ink, p, "/"),
+        Cursor::PenJoin => pen(ink, p, "j"),
         Cursor::PenConvert => pen(ink, p, "^"),
         Cursor::Text => ibeam(ink, p),
         Cursor::AddStop => stop_badge(ink, p, true),
@@ -425,7 +432,7 @@ mod tests {
     use crate::VectorcraftApp;
 
     /// Every cursor with a glyph.
-    const GLYPHS: [Cursor; 32] = [
+    const GLYPHS: [Cursor; 33] = [
         Cursor::Arrow,
         Cursor::ArrowHollow,
         Cursor::Move,
@@ -441,6 +448,7 @@ mod tests {
         Cursor::PenDelete,
         Cursor::PenClose,
         Cursor::PenContinue,
+        Cursor::PenJoin,
         Cursor::PenConvert,
         Cursor::Text,
         Cursor::Eyedropper,

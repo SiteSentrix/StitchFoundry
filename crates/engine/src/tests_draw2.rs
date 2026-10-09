@@ -790,3 +790,57 @@ fn pen_with_alt_converts_the_anchors_of_the_path_being_drawn() {
     gesture(&mut s, &[(500.0, 400.0)], none);
     assert_eq!((paths(&s).len(), path(&s, id).subpaths[0].anchors.len()), (1, 5));
 }
+
+/// #776: the Pen continues any open path from the end clicked, selected or not, and while drawing a
+/// click on an end of another open path joins the two into one path, in one undo step, which
+/// finishes it.
+#[test]
+fn the_pen_continues_any_open_path_and_joins_another() {
+    use vectorcraft_tools::Cursor;
+    let (v, none) = (view(), Mods::default());
+    let mut s = session();
+    let a = line(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let b = line(&mut s, 300.0, 200.0, 400.0, 200.0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("pen", v).unwrap();
+    assert_eq!(s.cursor(Point::new(200.0, 100.0), none, v), Cursor::PenContinue, "an end of a path that isn't selected");
+    gesture(&mut s, &[(200.0, 100.0)], none);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert_eq!(s.cursor(Point::new(300.0, 200.0), none, v), Cursor::PenJoin);
+    assert_eq!(s.cursor(Point::new(350.0, 200.0), none, v), Cursor::Pen, "the middle of the other path");
+    assert_eq!(gesture(&mut s, &[(300.0, 200.0)], none), 1);
+    let pts = |s: &Session, id| path(s, id).subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|x| (x.p.x, x.p.y))).collect::<Vec<_>>();
+    assert_eq!(pts(&s, a), [(100.0, 100.0), (200.0, 100.0), (300.0, 200.0), (400.0, 200.0)]);
+    assert!(s.doc().unwrap().doc.node(b).is_none() && paths(&s).len() == 1, "one path");
+    // The join finished it: the next click starts a new path.
+    gesture(&mut s, &[(500.0, 500.0)], none);
+    assert_eq!(paths(&s).len(), 2);
+    // From a path's first end, drawing goes on from there: the path is reversed.
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    s.select_tool("pen", v).unwrap();
+    gesture(&mut s, &[(100.0, 100.0)], none);
+    gesture(&mut s, &[(50.0, 50.0)], none);
+    assert_eq!(pts(&s, a), [(400.0, 200.0), (300.0, 200.0), (200.0, 100.0), (100.0, 100.0), (50.0, 50.0)]);
+}
+
+/// `path.join {ids, ends}` joins the ends asked for, not the nearest pair; bad requests are errors.
+#[test]
+fn join_takes_the_paths_and_the_ends_to_join() {
+    let mut s = session();
+    let a = line(&mut s, 0.0, 0.0, 100.0, 0.0);
+    let b = line(&mut s, 110.0, 0.0, 200.0, 0.0);
+    // The far ends: a's first to b's last (the nearest pair would be a's last and b's first).
+    s.execute("path.join", &json!({"ids": [a.0, b.0], "ends": ["first", "last"]})).unwrap();
+    let pts: Vec<(f64, f64)> = path(&s, a).subpaths[0].anchors.iter().map(|x| (x.p.x, x.p.y)).collect();
+    assert_eq!(pts, [(100.0, 0.0), (0.0, 0.0), (200.0, 0.0), (110.0, 0.0)]);
+    let r = rect(&mut s, 0.0, 50.0, 10.0, 10.0);
+    for bad in [
+        json!({"ids": [a.0, a.0]}),
+        json!({"ids": [a.0, 999]}),
+        json!({"ids": [a.0, r.0], "ends": ["first"]}),
+        json!({"ids": [a.0, b.0], "ends": ["first", "middle"]}),
+    ] {
+        assert!(s.execute("path.join", &bad).is_err(), "{bad}");
+    }
+}
