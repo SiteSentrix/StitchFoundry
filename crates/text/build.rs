@@ -9,9 +9,9 @@
 //! limits (Cloudflare Pages: 25 MiB).
 //!
 //! It also writes `WEB_FONTS`: the faces listed in `web-fonts.txt`, which web builds fetch from
-//! `fonts/<sha16>/` beside the wasm instead of embedding (`packaging/web/copy-fonts.sh` copies them
-//! there; `apps/vectorcraft-web/src/fonts.rs` fetches them). A list line the manifest lacks is a
-//! warning, or an error with `CRAFT_FONTS_REQUIRED=1`, and never costs the desktop its fonts.
+//! `fonts/<sha16>/` beside the wasm instead of embedding (`cargo xtask web-fonts` copies them
+//! there; `apps/vectorcraft-web/src/fonts.rs` fetches them). A list line the manifest lacks is left
+//! out with a warning, never an error, and never costs the desktop its fonts.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

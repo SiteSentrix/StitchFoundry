@@ -12,6 +12,13 @@ trunk build --release              # writes ../../dist/web (index.html, .js glue
 trunk serve --release              # dev server on http://127.0.0.1:8766
 ```
 
+What the web build needs: `trunk`, the `wasm32-unknown-unknown` target and `cargo`, nothing else (no
+POSIX shell, so it works the same on Windows). Optionally, `CRAFT_FONTS_DIR` set to an absolute
+craft-fonts checkout adds the fonts the site serves beside the wasm: Trunk's `post_build` hook runs
+`cargo xtask web-fonts`, which copies them into `dist/web/fonts/` (it does nothing without
+`CRAFT_FONTS_DIR`, and skips with a warning any listed face an older checkout lacks). See
+[Arabic fonts and the web build](#arabic-fonts-and-the-web-build).
+
 Any static file server works for `dist/web`, for example `python3 -m http.server 8766` inside that directory. The release `.wasm` is about 17.5 MB, or 7.1 MB gzipped, so serve it with compression.
 
 URL flag: `?webgl` forces the WebGL2 backend.
@@ -134,7 +141,9 @@ it fetches from beside the wasm, `startup` (before the app starts) or `backgroun
 
 - `crates/text/build.rs` turns the list into `vectorcraft_text::WEB_FONTS` (URL
   `fonts/<sha16>/<file>` and the SRI hash, from the craft-fonts manifest).
-- `packaging/web/copy-fonts.sh`, a Trunk `post_build` hook, copies the files there.
+- `cargo xtask web-fonts` (`xtask/src/web_fonts.rs`), the Trunk `post_build` hook, copies the files
+  there, checking each one's SHA-256. A listed face the checkout lacks is skipped with a warning, as
+  in `build.rs`, so an older craft-fonts just means fewer fonts.
 - `apps/vectorcraft-web/src/fonts.rs` fetches and registers them, logging `web font …` for any
   that fail.
 
