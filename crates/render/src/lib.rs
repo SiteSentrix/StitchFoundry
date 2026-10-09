@@ -1760,6 +1760,8 @@ mod tests_fontchange;
 #[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]
+mod tests_fxzoom;
+#[cfg(test)]
 mod tests_isolation;
 #[cfg(test)]
 mod tests_knockout;
