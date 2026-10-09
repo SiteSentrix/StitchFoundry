@@ -25,14 +25,30 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("select.inverse", "Inverse", ["Select"], None, "{}", has_doc, inverse),
         cmd!("select.nextAbove", "Next Object Above", ["Select"], Some("Cmd+Alt+]"), "{}", has_selection, |s, _| step(s, 1)),
         cmd!("select.nextBelow", "Next Object Below", ["Select"], Some("Cmd+Alt+["), "{}", has_selection, |s, _| step(s, -1)),
-        cmd!("select.set", "Select Objects", [], None, "{ids: [id…]}", has_doc, set),
-        cmd!("select.add", "Add to Selection", [], None, "{ids: [id…]}", has_doc, add),
+        cmd!(
+            "select.set",
+            "Select Objects",
+            [],
+            None,
+            "{ids: [id…]} all ids must be non-negative integers naming existing objects → {count, ids} (resulting selection)",
+            has_doc,
+            set
+        ),
+        cmd!(
+            "select.add",
+            "Add to Selection",
+            [],
+            None,
+            "{ids: [id…]} all ids must be non-negative integers naming existing objects → {count, ids} (resulting selection)",
+            has_doc,
+            add
+        ),
         cmd!(
             "select.toggle",
             "Toggle Selection",
             [],
             None,
-            "{id} or {ids: [id…]}: each selected one leaves the selection, the others join it",
+            "{id} or {ids: [id…]}: each selected one leaves the selection, the others join it; all ids must be non-negative integers naming existing objects → {count, ids} (resulting selection)",
             has_doc,
             toggle
         ),
@@ -225,29 +241,39 @@ fn step(s: &mut Session, dir: i64) -> Result<Value> {
 }
 
 fn set(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = ids_param(p, "ids").ok_or_else(|| bad("select.set", "missing ids"))?;
-    s.select(|d, sel| sel.set(ids.iter().copied().filter(|i| d.node(*i).is_some())))?;
-    ok()
+    let ids = checked_ids_param(s, p, "ids", "select.set")?;
+    s.select(|_, sel| sel.set(ids.iter().copied()))?;
+    selection_result(s)
 }
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = ids_param(p, "ids").ok_or_else(|| bad("select.add", "missing ids"))?;
+    let ids = checked_ids_param(s, p, "ids", "select.add")?;
     s.select(|_, sel| {
         for i in ids {
             sel.add(i);
         }
     })?;
-    ok()
+    selection_result(s)
 }
 
 fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = ids_param(p, "ids").or_else(|| id_param(p, "id").map(|id| vec![id])).ok_or_else(|| bad("select.toggle", "missing id or ids"))?;
+    let ids = if p.get("ids").is_some() {
+        checked_ids_param(s, p, "ids", "select.toggle")?
+    } else {
+        let value = p.get("id").ok_or_else(|| bad("select.toggle", "missing id or ids"))?;
+        vec![checked_id(s, value, "select.toggle")?]
+    };
     s.select(|_, sel| {
         for id in ids {
             sel.toggle(id);
         }
     })?;
-    ok()
+    selection_result(s)
+}
+
+fn selection_result(s: &Session) -> Result<Value> {
+    let selection = &s.doc()?.selection;
+    Ok(json!({ "count": selection.len(), "ids": selection.objects }))
 }
 
 fn key(s: &mut Session, p: &Value) -> Result<Value> {
