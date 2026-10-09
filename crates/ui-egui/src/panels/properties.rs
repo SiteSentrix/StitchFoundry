@@ -207,7 +207,7 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() {
         // Its name as it is (names are never translated).
         ui.label(egui::RichText::new(&ab.name).size(13.0).color(Tokens::get(ui.ctx()).text));
-        let fw = ((ui.available_width() - 50.0) / 2.0).clamp(60.0, 110.0);
+        let fw = super::field_width(ui);
         egui::Grid::new("ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             let r = ab.rect;
             for (row, [(l1, k1, v1), (l2, k2, v2)]) in
@@ -364,9 +364,10 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     divider(ui);
     section_header(ui, tl!("Preferences"));
+    let fw = super::field_width(ui);
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Keyboard Increment"));
-        if let Some(v) = widgets::num_field(ui, "kbinc", Some(app.session.prefs.keyboard_increment), units, 80.0) {
+        if let Some(v) = widgets::num_field(ui, "kbinc", Some(app.session.prefs.keyboard_increment), units, fw) {
             app.session.prefs.keyboard_increment = v.max(0.001);
         }
     });
@@ -401,14 +402,13 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
     let rp = bx.reference_point(refi);
     section_header(ui, tl!("Transform"));
+    let fw = super::field_width(ui);
     ui.horizontal(|ui| {
         if let Some(i) = widgets::reference_point(ui, refi) {
             ui.data_mut(|d| d.insert_temp(egui::Id::new("refpt"), i));
         }
         ui.add_space(6.0);
         let link = app.session.prefs.constrain_proportions;
-        // Room for the labels and the W/H link.
-        let fw = ((ui.available_width() - 70.0) / 2.0).clamp(60.0, 110.0);
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             dim_label(ui, "X:");
             if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x), units, fw) {
@@ -431,11 +431,12 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
         super::transform::constrain_link(app, ui);
     });
+    let fw = super::field_width(ui);
     ui.horizontal(|ui| {
         let icon = icons::icon(ui, "rotate-ccw", 16.0, Tokens::get(ui.ctx()).icon);
         crate::scrub::note_label(ui, icon.rect);
         // The bounding box's angle: a new value turns the selection to it.
-        if let Some(a) = widgets::plain_field(ui, "rot", bx.angle, "°", 2, 70.0) {
+        if let Some(a) = widgets::plain_field(ui, "rot", bx.angle, "°", 2, fw) {
             app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
         }
         ui.add_space(10.0);
@@ -453,9 +454,10 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         match live {
             vectorcraft_doc::LiveShape::Rectangle { .. } => corner_radius_row(app, ui, &n, "radius"),
             vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
+                let fw = super::field_width(ui);
                 ui.horizontal(|ui| {
                     dim_label(ui, tl!("Sides:"));
-                    if let Some(s) = widgets::plain_field(ui, "sides", *sides as f64, "", 0, 60.0) {
+                    if let Some(s) = widgets::plain_field(ui, "sides", *sides as f64, "", 0, fw) {
                         app.run("object.setLiveShape", json!({"sides": s as u32})).ok();
                     }
                 });
@@ -470,10 +472,11 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(n) = first_selected(app) else { return };
     section_header(ui, tl!("Appearance"));
     fill_stroke_rows(app, ui);
+    let fw = super::field_width(ui);
     ui.horizontal(|ui| {
         widgets::field_label(ui, egui::RichText::new(tl!("Opacity")).size(12.0));
         ui.add_space(8.0);
-        if let Some(o) = widgets::plain_field(ui, "ap-op", n.opacity as f64 * 100.0, "%", 0, 64.0) {
+        if let Some(o) = widgets::plain_field(ui, "ap-op", n.opacity as f64 * 100.0, "%", 0, fw) {
             app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
         }
         if widgets::icon_button(ui, "ellipsis", tl!("Transparency"), false, 22.0).clicked() {
@@ -496,6 +499,7 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn fill_stroke_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let weight = super::stroke::shown_weight(app, super::current_stroke(app).as_ref(), &super::stroke_mixed(app, ui.ctx()));
+    let fw = super::field_width(ui);
     ui.horizontal(|ui| {
         super::paint_chip(app, ui, false, 22.0, true);
         ui.label(egui::RichText::new(tl!("Fill")).size(12.0).color(t.text));
@@ -504,7 +508,7 @@ fn fill_stroke_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
         super::paint_chip(app, ui, true, 22.0, true);
         super::stroke::link(app, ui, tl!("Stroke"));
         ui.add_space(8.0);
-        super::stroke::weight_field(app, ui, "ap-w", weight, 90.0);
+        super::stroke::weight_field(app, ui, "ap-w", weight, fw);
     });
 }
 
@@ -562,6 +566,34 @@ mod tests {
         let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, ctx, vec![Event::PointerMoved(at), b(true)]);
         frame(app, ctx, vec![b(false)]);
+    }
+
+    /// #696: the number fields are all as wide: the Transform fields, the rotation, the corner
+    /// radius, Opacity and the stroke weight.
+    #[test]
+    fn the_number_fields_are_all_as_wide() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        // The field each value is shown in: the narrowest widget around its text that isn't the
+        // text alone.
+        let field = |value: &str| {
+            let at = texts.iter().find(|(t, _)| t == value).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{value}: {texts:?}"));
+            ctx.viewport(|vp| {
+                vp.prev_pass
+                    .widgets
+                    .layers()
+                    .flat_map(|(_, w)| w.iter())
+                    .filter(|w| w.rect.contains(at) && w.rect.width() > 30.0 && w.rect.height() < 40.0)
+                    .map(|w| w.rect.width())
+                    .fold(f32::INFINITY, f32::min)
+            })
+        };
+        let widths = [field("35 pt"), field("0°"), field("0 pt"), field("100%")];
+        assert!(widths.iter().all(|w| (w - widths[0]).abs() < 1.0), "X, rotation, corner radius, opacity: {widths:?}");
     }
 
     /// #530: Edit Artboards shows the active artboard, with New Artboard, Delete Artboard and Exit.

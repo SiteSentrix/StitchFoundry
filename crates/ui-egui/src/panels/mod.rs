@@ -67,11 +67,21 @@ pub(crate) fn corner_radius(app: &VectorcraftApp, n: &Node) -> Option<f64> {
 
 /// The Corner Radius field of a live rectangle's or polygon's properties: [`corner_radius`],
 /// which a new value sets on those corners.
+/// The width of a panel's number fields: the Transform fields', two to a row beside the reference
+/// point, their labels and the W/H link, so every field in the panel is as wide (#696). Measured
+/// from the full row, before its widgets.
+pub(crate) fn field_width(ui: &Ui) -> f32 {
+    // The reference point and its gap, the four labels and the W/H link.
+    const AROUND: f32 = 37.0 + 70.0;
+    ((ui.available_width() - AROUND) / 2.0).clamp(60.0, 110.0)
+}
+
 pub(crate) fn corner_radius_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str) {
     let units = app.session.general_unit();
+    let fw = field_width(ui);
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Corner Radius:"));
-        if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), units, 80.0) {
+        if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), units, fw) {
             app.run("object.setLiveShape", json!({"radius": r})).ok();
         }
     });
