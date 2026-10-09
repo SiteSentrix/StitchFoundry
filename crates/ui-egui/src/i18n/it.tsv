@@ -3055,6 +3055,18 @@
 	V:	V:
 	Variable Width Profile	Profilo larghezza variabile
 	Variables	Variabili
+	New Variable	Nuova variabile
+	Delete Variable	Elimina variabile
+	List Variables	Elenca variabili
+	Bind Variable	Collega variabile
+	Unbind Variable	Scollega variabile
+	New Data Set	Nuovo set di dati
+	Delete Data Set	Elimina set di dati
+	List Data Sets	Elenca set di dati
+	Select Data Set	Seleziona set di dati
+	Next Data Set	Set di dati successivo
+	Previous Data Set	Set di dati precedente
+	Data Sets	Set di dati
 	Variation:	Variazione:
 	Vector Effects	Effetti vettoriali
 	Vector Halftone	Retino vettoriale

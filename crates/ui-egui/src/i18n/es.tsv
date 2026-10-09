@@ -3055,6 +3055,18 @@
 	V:	V:
 	Variable Width Profile	Perfil de anchura variable
 	Variables	Variables
+	New Variable	Nueva variable
+	Delete Variable	Eliminar variable
+	List Variables	Enumerar variables
+	Bind Variable	Vincular variable
+	Unbind Variable	Desvincular variable
+	New Data Set	Nuevo conjunto de datos
+	Delete Data Set	Eliminar conjunto de datos
+	List Data Sets	Enumerar conjuntos de datos
+	Select Data Set	Seleccionar conjunto de datos
+	Next Data Set	Conjunto de datos siguiente
+	Previous Data Set	Conjunto de datos anterior
+	Data Sets	Conjuntos de datos
 	Variation:	Variación:
 	Vector Effects	Efectos vectoriales
 	Vector Halftone	Semitono vectorial

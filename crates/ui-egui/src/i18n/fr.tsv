@@ -3052,6 +3052,18 @@
 	V:	V :
 	Variable Width Profile	Profil de largeur variable
 	Variables	Variables
+	New Variable	Nouvelle variable
+	Delete Variable	Supprimer la variable
+	List Variables	Lister les variables
+	Bind Variable	Lier la variable
+	Unbind Variable	Délier la variable
+	New Data Set	Nouveau jeu de données
+	Delete Data Set	Supprimer le jeu de données
+	List Data Sets	Lister les jeux de données
+	Select Data Set	Sélectionner le jeu de données
+	Next Data Set	Jeu de données suivant
+	Previous Data Set	Jeu de données précédent
+	Data Sets	Jeux de données
 	Variation:	Variation :
 	Vector Effects	Effets vectoriels
 	Vector Halftone	Trame de demi-teintes vectorielle

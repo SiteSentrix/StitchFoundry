@@ -3051,6 +3051,18 @@
 	V:	В:
 	Variable Width Profile	Профиль переменной ширины
 	Variables	Переменные
+	New Variable	Новая переменная
+	Delete Variable	Удалить переменную
+	List Variables	Перечислить переменные
+	Bind Variable	Привязать переменную
+	Unbind Variable	Отвязать переменную
+	New Data Set	Новый набор данных
+	Delete Data Set	Удалить набор данных
+	List Data Sets	Перечислить наборы данных
+	Select Data Set	Выделить набор данных
+	Next Data Set	Следующий набор данных
+	Previous Data Set	Предыдущий набор данных
+	Data Sets	Наборы данных
 	Variation:	Вариация:
 	Vector Effects	Векторные эффекты
 	Vector Halftone	Векторный полутон

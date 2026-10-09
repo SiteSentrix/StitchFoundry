@@ -569,6 +569,18 @@
 	Paragraph Styles	段落スタイル
 	Tabs	タブ
 	Variables	変数
+	New Variable	新規変数
+	Delete Variable	変数を削除
+	List Variables	変数一覧
+	Bind Variable	変数をバインド
+	Unbind Variable	変数のバインドを解除
+	New Data Set	新規データセット
+	Delete Data Set	データセットを削除
+	List Data Sets	データセット一覧
+	Select Data Set	データセットを選択
+	Next Data Set	次のデータセット
+	Previous Data Set	前のデータセット
+	Data Sets	データセット
 	Brush Libraries	ブラシライブラリ
 	Built-in Libraries	内蔵ライブラリ
 	User Defined	ユーザー定義

@@ -2947,6 +2947,18 @@
 	V:	V：
 	Variable Width Profile	变量宽度配置文件
 	Variables	变量
+	New Variable	新建变量
+	Delete Variable	删除变量
+	List Variables	列出变量
+	Bind Variable	绑定变量
+	Unbind Variable	解除变量绑定
+	New Data Set	新建数据集
+	Delete Data Set	删除数据集
+	List Data Sets	列出数据集
+	Select Data Set	选择数据集
+	Next Data Set	下一个数据集
+	Previous Data Set	上一个数据集
+	Data Sets	数据集
 	Variation:	变化：
 	Vector Effects	矢量效果
 	Vector Halftone	矢量半色调

@@ -3038,6 +3038,18 @@
 	V:	V：
 	Variable Width Profile	可變寬度描述檔
 	Variables	變數
+	New Variable	新增變數
+	Delete Variable	刪除變數
+	List Variables	列出變數
+	Bind Variable	綁定變數
+	Unbind Variable	解除變數綁定
+	New Data Set	新增資料集
+	Delete Data Set	刪除資料集
+	List Data Sets	列出資料集
+	Select Data Set	選取資料集
+	Next Data Set	下一個資料集
+	Previous Data Set	上一個資料集
+	Data Sets	資料集
 	Variation:	變化：
 	Vector Effects	向量效果
 	Vector Halftone	向量半色調
