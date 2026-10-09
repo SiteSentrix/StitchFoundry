@@ -1750,7 +1750,16 @@
 	Rating:	Avaliação:
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
-	Rearrange All Artboards (on the roadmap)	Reorganizar Todas as Mesas de Trabalho (no roadmap)
+	Rearrange All Artboards	Reorganizar Todas as Mesas de Trabalho
+	Rearrange All	Reorganizar Tudo
+	Layout Order:	Ordem do Layout:
+	Change to Left-to-Right Layout	Mudar para Layout da Esquerda para a Direita
+	Grid by Row	Grade por Linha
+	Grid by Column	Grade por Coluna
+	Arrange by Row	Organizar em Linha
+	Arrange by Column	Organizar em Coluna
+	Move Artwork with Artboard	Mover Arte com a Mesa de Trabalho
+	Artboards: {n}	Mesas de Trabalho: {n}
 	Rearrange All Artboards…	Reorganizar Todas as Mesas de Trabalho…
 	Recall Selection	Relembrar Seleção
 	Recent Colors	Cores Recentes

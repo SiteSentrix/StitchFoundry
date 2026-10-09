@@ -1958,7 +1958,16 @@
 	Rating:	Valutazione:
 	Real World:	Mondo reale:
 	Real-time Drawing and Editing	Disegno e modifica in tempo reale
-	Rearrange All Artboards (on the roadmap)	Ridisponi tutte le tavole da disegno (in programma)
+	Rearrange All Artboards	Ridisponi tutte le tavole da disegno
+	Rearrange All	Ridisponi tutto
+	Layout Order:	Ordine del layout:
+	Change to Left-to-Right Layout	Passa al layout da sinistra a destra
+	Grid by Row	Griglia per righe
+	Grid by Column	Griglia per colonne
+	Arrange by Row	Disponi in una riga
+	Arrange by Column	Disponi in una colonna
+	Move Artwork with Artboard	Sposta la grafica con la tavola da disegno
+	Artboards: {n}	Tavole da disegno: {n}
 	Rearrange All Artboards…	Ridisponi tutte le tavole da disegno…
 	Recall Selection	Richiama selezione
 	RECENT	RECENTI
