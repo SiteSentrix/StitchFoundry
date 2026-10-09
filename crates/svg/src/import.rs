@@ -33,6 +33,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
     let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() })
         .map_err(|e| SvgError::Parse(e.to_string()))?;
     let units = RootUnits::of(xml.root_element());
+    let root_name = root_layer_name(xml.root_element());
     let mut warnings = found.warnings;
     let (src, slots) = text::prepare(svg, &xml, units.dpi, &mut warnings);
     let files = found.files;
@@ -141,11 +142,17 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
             im.doc.layers.push(Arc::new(l));
         }
     } else {
+        // An export of a one-layer document names the layer on the root element, its art (groups
+        // among it) loose inside: the one layer takes that name.
         let children = im.children(top, base);
-        if let Some(l) = im.doc.layers.first_mut()
-            && let Some(ch) = Arc::make_mut(l).children_mut()
-        {
-            *ch = children;
+        if let Some(l) = im.doc.layers.first_mut() {
+            let l = Arc::make_mut(l);
+            if let Some(ch) = l.children_mut() {
+                *ch = children;
+            }
+            if root_name.is_some() {
+                l.name = root_name;
+            }
         }
     }
     if !im.sublayer_groups.is_empty() {
@@ -162,6 +169,13 @@ pub(crate) const SUBLAYER: &str = "data-vc-layer";
 
 /// The Inkscape namespace (its layers and their labels).
 const INKSCAPE: &str = "http://www.inkscape.org/namespaces/inkscape";
+
+/// The layer name on root element `root` (`<svg id="Main">`, or its `data-name`), as exports of
+/// one-layer documents write it. An Inkscape root's id (`svg8`) is one Inkscape made up, not a name.
+fn root_layer_name(root: XNode) -> Option<String> {
+    let id = root.attribute("id").filter(|_| root.attribute((INKSCAPE, "version")).is_none());
+    root.attribute("data-name").or(id).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string)
+}
 
 /// Is element `g` a `<g>` marked as a layer ([`SUBLAYER`])? Only one with an id counts: the id (or
 /// the label beside it) is its name.

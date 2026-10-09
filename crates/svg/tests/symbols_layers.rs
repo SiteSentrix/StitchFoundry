@@ -1,7 +1,8 @@
 //! Symbols export as one `<symbol>` def and a `<use>` per instance (instances the def can't stand
 //! for get their own art), hidden layers and objects are kept hidden when asked and come back
 //! hidden with their `data-*` attributes, clipped layers come in as clipping layers, layers and
-//! sublayers keep their names and nesting, and the editing data notices edits made elsewhere.
+//! sublayers keep their names and nesting (a one-layer file's from its root element), and the
+//! editing data notices edits made elsewhere.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -480,6 +481,25 @@ fn sublayers_round_trip() {
         outline(&plain),
         ["Layer Base", "  Path", "  Group Pair", "    Path", "    Path", "  Layer Window", "    Path", "    Path", "Layer Top", "  Path"]
     );
+}
+
+#[test]
+fn a_root_element_names_the_one_layer() {
+    // A one-layer document exported with its art loose under the root, which carries the name.
+    let svg = r##"<svg version="1.1" id="Main" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect x="20" y="50" width="120" height="60" style="fill:none;stroke:#000;stroke-width:4"/>
+  <g id="HiddenSub" style="display:none;"><circle cx="45" cy="175" r="25"/></g>
+</svg>"##;
+    assert_eq!(outline(&import(svg).unwrap()), ["Layer Main", "  Path", "  Group HiddenSub (hidden)", "    Path"]);
+    // `data-name` when the id can't hold the name.
+    let named = svg.replace("id=\"Main\"", "id=\"Main_Art\" data-name=\"Main Art\"");
+    assert_eq!(import(&named).unwrap().layers[0].name.as_deref(), Some("Main Art"));
+    let names = |svg: &str| import(svg).unwrap().layers.iter().map(|l| l.name.clone().unwrap()).collect::<Vec<_>>();
+    // Not when the groups at the top are the layers.
+    assert_eq!(names(&svg.replace("<rect", "<g id=\"Art\"><rect").replace("stroke-width:4\"/>", "stroke-width:4\"/></g>")), ["Art", "HiddenSub"]);
+    // Nor from the id Inkscape gives its root.
+    let inkscape = svg.replace("id=\"Main\"", "id=\"svg8\" xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\" inkscape:version=\"1.3\"");
+    assert_eq!(names(&inkscape), ["Layer 1"]);
 }
 
 #[test]
