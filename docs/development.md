@@ -138,7 +138,8 @@ so the two scripts never mix), Japanese (`ja`, complete), Spanish (`es`, complet
 international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or `es-419` resolves to it), French (`fr`,
 complete; `fr-FR`, `fr-BE`, `fr-CA`, `fr-CH` and every other `fr-*` locale resolve to it), Italian (`it`,
 complete; `it-IT`, `it-CH` and every other `it-*` locale resolve to it), Russian (`ru`, complete; every `ru-*`
-locale such as `ru-RU`, `ru-BY` or `ru-KZ` resolves to it), Czech (`cs`, every menu label) and Brazilian Portuguese
+locale such as `ru-RU`, `ru-BY` or `ru-KZ` resolves to it), Ukrainian (`uk`, complete; `uk-UA`,
+`uk_UA.UTF-8` and every other `uk-*` locale resolve to it; integer plurals use one/few/many), Czech (`cs`, every menu label) and Brazilian Portuguese
 (`pt-br`, every menu label and every `tl!` literal). Untranslated text falls back to English until its rows are added.
 
 - `tl!("…")` translates a literal into the language the UI is drawn in; `i18n::t(s)` is the same for a
@@ -166,17 +167,17 @@ locale such as `ru-RU`, `ru-BY` or `ru-KZ` resolves to it), Czech (`cs`, every m
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish, French, Italian and Russian cover every
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish, French, Italian, Russian and Ukrainian cover every
   message literal the test scan finds (`complete_languages_translate_every_message`, languages listed in
   `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs an `es.tsv`,
-  a `fr.tsv`, an `it.tsv` and a `ru.tsv` row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
+  a `fr.tsv`, an `it.tsv`, a `ru.tsv` and a `uk.tsv` row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
   complete_languages_translate_every_message` lists them all). Other languages show messages in English
   until they add `@msg` rows.
 - Not translated on purpose: names that are user data (layers, swatches, fonts, documents), the tab
   title's colour mode, command ids and parameter names inside messages. Not done yet: locale-aware number
   and date formats, right-to-left layout. Chinese and Japanese UI text
   is drawn with craft-fonts' BIZ UDPGothic when the build embeds it (see Fonts above), else with an installed
-  system font; the glyph test checks Latin-script catalogs always and the CJK ones only with craft-fonts.
+  system font; the glyph test checks Latin and Cyrillic catalogs always and the CJK ones only with craft-fonts.
   A Traditional Chinese UI font is still to be added to craft-fonts for the web build.
 
 ## Vendor names gate

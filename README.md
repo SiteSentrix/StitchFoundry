@@ -200,7 +200,7 @@ and masks, text and images, with what didn't come in (effects, adjustments, brus
 import warning; a file whose native data can't be read opens as its embedded preview, saying why. VectorCraft
 doesn't write Affinity files. [Scope and limits](crates/affinity/README.md).
 The interface
-speaks English, Japanese, Traditional and Simplified Chinese, Spanish, French, Italian and Russian (and Czech and Brazilian Portuguese in the menus).
+speaks English, Japanese, Traditional and Simplified Chinese, Spanish, French, Italian, Russian and Ukrainian (and Czech and Brazilian Portuguese in the menus).
 The scores are
 self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-05) explains how far to trust them.
 
