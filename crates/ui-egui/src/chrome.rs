@@ -323,26 +323,55 @@ fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool) -> Stri
 /// Linux and the web).
 const CLOSE_BEFORE_TITLE: bool = cfg!(target_os = "macos");
 
+/// The first of tabs `widths` wide that the strip shows in `room`: the first one, or a later one so
+/// that the `active` tab fits.
+fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) -> usize {
+    let Some(a) = active else { return 0 };
+    let mut first = 0;
+    while first < a && widths.get(first..=a).map_or(0.0, |w| w.iter().sum::<f32>()) > room {
+        first += 1;
+    }
+    first
+}
+
 /// Document tab strip: "Name* @ 66.67% (RGB/Preview)". User Interface › Large Tabs makes the tabs
-/// taller, with larger titles.
+/// taller, with larger titles. Tabs that don't fit are reached from a » button at the strip's
+/// right end, which lists every open document, and the active tab is always in view (#746).
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
+    /// The width of the » button.
+    const MORE: f32 = 30.0;
     let t = Tokens::get(ui.ctx());
     let (height, title_size) = if app.session.prefs.large_tabs { (44.0, 14.0) } else { (35.0, 12.5) };
     let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     ui.painter().rect_filled(strip, 0.0, t.tab_strip);
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
+    // On the Home screen no tab is the current one.
+    let active = app.session.active_index().filter(|_| app.ui.home.is_none());
+    let tabs: Vec<(String, std::sync::Arc<egui::Galley>)> = app
+        .session
+        .documents()
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
+            let title = tab_title(d, zoom, app.ui.view.outline);
+            let color = if Some(i) == active { t.text_strong } else { t.text_dim };
+            (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
+        })
+        .collect();
+    let widths: Vec<f32> = tabs.iter().map(|(_, g)| g.size().x + 50.0).collect();
+    let overflow = widths.iter().sum::<f32>() > strip.width();
+    let room = strip.width() - if overflow { MORE } else { 0.0 };
+    let first = if overflow { first_tab_shown(&widths, active, room) } else { 0 };
     let mut x = strip.left();
     let mut activate = None;
     let mut close = None;
-    let active = app.session.active_index();
-    for (i, d) in app.session.documents().iter().enumerate() {
-        let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
-        let title = tab_title(d, zoom, app.ui.view.outline);
-        // On the Home screen no tab is the current one.
-        let is_active = Some(i) == active && app.ui.home.is_none();
-        let galley = ui.painter().layout_no_wrap(title, theme::semibold(title_size), if is_active { t.text_strong } else { t.text_dim });
-        let w = galley.size().x + 50.0;
-        let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
+    for (i, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
+        if x + w > strip.left() + room && Some(i) != active {
+            break;
+        }
+        let is_active = Some(i) == active;
+        let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(*w, strip.height() - 1.0));
         let resp = ui.interact(r, ui.id().with(("tab", i)), Sense::click());
         if is_active {
             ui.painter().rect_filled(r, 0.0, t.panel);
@@ -356,13 +385,29 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         let xr = egui::Rect::from_center_size(egui::pos2(x_center, r.center().y), vec2(12.0, 12.0));
         let xresp = ui.interact(xr.expand(3.0), ui.id().with(("tabx", i)), Sense::click());
         icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
-        ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley, t.text);
+        ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley.clone(), t.text);
         if xresp.clicked() {
             close = Some(i);
         } else if resp.clicked() {
             activate = Some(i);
         }
         x += w;
+    }
+    // The » button: every open document, the active one checked.
+    if overflow {
+        let more = egui::Rect::from_min_max(egui::pos2(strip.right() - MORE, strip.top()), egui::pos2(strip.right(), strip.bottom() - 1.0));
+        let resp = ui.interact(more, ui.id().with("tabs-more"), Sense::click());
+        ui.painter().rect_filled(more, 0.0, if resp.hovered() { t.hover.gamma_multiply(0.4) } else { t.tab_strip });
+        icons::paint(ui, "chevrons-right", egui::Rect::from_center_size(more.center(), vec2(14.0, 14.0)), t.text);
+        let resp = resp.on_hover_text(tl!("Show all open documents"));
+        egui::Popup::menu(&resp).show(|ui| {
+            for (i, (title, _)) in tabs.iter().enumerate() {
+                if widgets::menu_item_name(ui, title, true, Some(i) == active) {
+                    activate = Some(i);
+                    ui.close();
+                }
+            }
+        });
     }
     if let Some(i) = close {
         if let Err(e) = crate::unsaved::close(app, i) {
@@ -764,6 +809,16 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 #[cfg(test)]
 mod tests {
+
+    /// With more tabs than fit, the strip starts late enough to show the active one (#746).
+    #[test]
+    fn the_active_tab_stays_in_view() {
+        let widths = [100.0; 10];
+        assert_eq!(super::first_tab_shown(&widths, Some(2), 350.0), 0, "it fits from the start");
+        assert_eq!(super::first_tab_shown(&widths, Some(9), 350.0), 7, "the last three tabs shown");
+        assert_eq!(super::first_tab_shown(&widths, None, 350.0), 0);
+        assert_eq!(super::first_tab_shown(&widths, Some(4), 50.0), 4, "a tab wider than the room still shows");
+    }
     use serde_json::json;
     use vectorcraft_engine::Session;
 
