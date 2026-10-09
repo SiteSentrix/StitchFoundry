@@ -3062,6 +3062,18 @@
 	no document	沒有文件
 	no data set to edit	沒有可編輯的資料集
 	{name} · {kind} · {count}	{name} · {kind} · {count}
+	Make Text Dynamic	使文字動態化
+	Make Visibility Dynamic	使可見性動態化
+	Capture Data Set	擷取資料集
+	Update Data Set	更新資料集
+	Rename Data Set…	重新命名資料集…
+	Variable Options…	變數選項…
+	Select Bound Object	選取繫結的物件
+	Select All Bound Objects	選取所有繫結的物件
+	Multiple objects	多個物件
+	New Name	新名稱
+	no variable to rename	沒有可重新命名的變數
+	no data set to rename	沒有可重新命名的資料集
 	Variation:	變化：
 	Vector Effects	向量效果
 	Vector Halftone	向量半色調
@@ -3433,3 +3445,5 @@ effect	Soft	柔和
 	Blocks	塊狀
 	Frosted	磨砂
 	Tiny Lens	小鏡頭
+	Rename Data Set	重新命名資料集
+	Rename Variable	重新命名變數

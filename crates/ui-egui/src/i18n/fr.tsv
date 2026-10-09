@@ -3076,6 +3076,18 @@
 	no document	aucun document
 	no data set to edit	aucun jeu de données à modifier
 	{name} · {kind} · {count}	{name} · {kind} · {count}
+	Make Text Dynamic	Rendre le texte dynamique
+	Make Visibility Dynamic	Rendre la visibilité dynamique
+	Capture Data Set	Capturer le jeu de données
+	Update Data Set	Mettre à jour le jeu de données
+	Rename Data Set…	Renommer le jeu de données…
+	Variable Options…	Options de variable…
+	Select Bound Object	Sélectionner l’objet lié
+	Select All Bound Objects	Sélectionner tous les objets liés
+	Multiple objects	Plusieurs objets
+	New Name	Nouveau nom
+	no variable to rename	aucune variable à renommer
+	no data set to rename	aucun jeu de données à renommer
 	Variation:	Variation :
 	Vector Effects	Effets vectoriels
 	Vector Halftone	Trame de demi-teintes vectorielle
@@ -4033,3 +4045,5 @@ effect	Soft	Doux
 	Blocks	Blocs
 	Frosted	Dépoli
 	Tiny Lens	Petites lentilles
+	Rename Data Set	Renommer le jeu de données
+	Rename Variable	Renommer la variable

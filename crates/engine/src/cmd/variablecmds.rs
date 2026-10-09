@@ -78,6 +78,74 @@ fn define(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"name": name, "kind": kind.label()}))
 }
 
+fn rename(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.rename";
+    let from = var_name(p, C)?;
+    let to = named(p.get("newName").and_then(Value::as_str), "newName", C)?;
+    let st = s.doc()?;
+    if st.doc.variables.variable(&to).is_some() {
+        return Err(bad(C, format!("variable `{to}` already exists")));
+    }
+    s.edit("Rename Variable", |d, _| {
+        let v = d.variables.variables.iter_mut().find(|v| v.name == from).ok_or_else(|| bad(C, format!("no variable named `{from}`")))?;
+        v.name = to.clone();
+        for bound in d.variables.bindings.values_mut() {
+            if bound.remove(&from) {
+                bound.insert(to.clone());
+            }
+        }
+        for ds in &mut d.variables.datasets {
+            if let Some(value) = ds.values.remove(&from) {
+                ds.values.insert(to.clone(), value);
+            }
+        }
+        if d.variables.active_dataset.as_deref() == Some(from.as_str()) {
+            d.variables.active_dataset = Some(to.clone());
+        }
+        Ok(())
+    })?;
+    Ok(json!({"from": from, "name": to}))
+}
+
+/// Make Text Dynamic / Make Visibility Dynamic: define a variable of that kind and bind the
+/// selection to it in one step, naming it after what it drives — the panel's buttons.
+fn make_dynamic(s: &mut Session, kind: VariableKind, stem: &str) -> Result<Value> {
+    const C: &str = "variable.makeDynamic";
+    let ids = selected_roots(s)?;
+    if ids.is_empty() {
+        return Err(bad(C, "select the objects to bind"));
+    }
+    let doc = &s.doc()?.doc;
+    for id in &ids {
+        match doc.node(*id) {
+            None => return Err(EngineError::NoNode(*id)),
+            Some(_) if !doc.is_editable(*id) => return Err(bad(C, format!("node {} is locked", id.0))),
+            Some(n) if kind == VariableKind::Text && !matches!(n.kind, NodeKind::Text(_)) => {
+                return Err(bad(C, format!("node {} is not type", id.0)));
+            }
+            Some(_) => {}
+        }
+    }
+    // Named after the first object it drives, as the reference panel does; a second variable
+    // over the same art takes a number rather than colliding.
+    let base = doc.node(ids[0]).map(|n| n.display_name()).unwrap_or_default();
+    let base = base.trim();
+    let mut name = if base.is_empty() { stem.to_string() } else { base.to_string() };
+    let mut n = 2;
+    while doc.variables.variable(&name).is_some() {
+        name = format!("{base} {n}");
+        n += 1;
+    }
+    s.edit("Make Dynamic", |d, _| {
+        d.variables.variables.push(Variable { name: name.clone(), kind });
+        for id in &ids {
+            d.variables.bind(*id, &name);
+        }
+        Ok(())
+    })?;
+    Ok(json!({"name": name, "kind": kind.label(), "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
+}
+
 fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     let names = names_param(p, "variable.delete")?;
     let n = s.edit("Delete Variables", |d, _| Ok(d.variables.prune(&names)))?;
@@ -191,6 +259,69 @@ fn dataset_set(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"name": name, "values": set, "removed": removed}))
 }
 
+fn dataset_rename(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "dataset.rename";
+    let from = var_name(p, C)?;
+    let to = named(p.get("newName").and_then(Value::as_str), "newName", C)?;
+    let st = s.doc()?;
+    if st.doc.variables.dataset(&to).is_some() {
+        return Err(bad(C, format!("dataset `{to}` already exists")));
+    }
+    s.edit("Rename Data Set", |d, _| {
+        let ds = d.variables.datasets.iter_mut().find(|d| d.name == from).ok_or_else(|| bad(C, format!("no dataset named `{from}`")))?;
+        ds.name = to.clone();
+        if d.variables.active_dataset.as_deref() == Some(from.as_str()) {
+            d.variables.active_dataset = Some(to.clone());
+        }
+        Ok(())
+    })?;
+    Ok(json!({"from": from, "name": to}))
+}
+
+/// Capture Data Set: record what the bound objects hold right now as a new row. This, rather
+/// than typing values, is how rows are made — change the art, then capture it.
+fn dataset_capture(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "dataset.capture";
+    let st = s.doc()?;
+    let values = st.doc.captured_values();
+    if values.is_empty() {
+        return Err(bad(C, "bind something to a variable first"));
+    }
+    let name = match str_param(p, "name").filter(|v| !v.is_empty()) {
+        Some(n) => n.to_string(),
+        // "Data Set 1", the first free number, as the reference panel's rows are named.
+        None => (1..).map(|i| format!("Data Set {i}")).find(|n| st.doc.variables.dataset(n).is_none()).unwrap_or_default(),
+    };
+    if s.doc()?.doc.variables.dataset(&name).is_some() {
+        return Err(bad(C, format!("dataset `{name}` already exists")));
+    }
+    s.edit("Capture Data Set", |d, _| {
+        d.variables.datasets.push(DataSet { name: name.clone(), values: values.clone() });
+        d.variables.active_dataset = Some(name.clone());
+        Ok(())
+    })?;
+    Ok(json!({"name": name, "values": values.len()}))
+}
+
+/// Update Data Set: write what the bound objects hold now into the row that is active. Without
+/// an active row there is nothing to update, so say so rather than picking one.
+fn dataset_update(s: &mut Session, _p: &Value) -> Result<Value> {
+    const C: &str = "dataset.update";
+    let values = s.doc()?.doc.captured_values();
+    let Some(name) = s.doc()?.doc.variables.active_dataset.clone() else {
+        return Err(bad(C, "no active data set"));
+    };
+    if values.is_empty() {
+        return Err(bad(C, "bind something to a variable first"));
+    }
+    s.edit("Update Data Set", |d, _| {
+        let ds = d.variables.datasets.iter_mut().find(|d| d.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
+        ds.values = values.clone();
+        Ok(())
+    })?;
+    Ok(json!({"name": name, "values": values.len()}))
+}
+
 fn dataset_delete(s: &mut Session, p: &Value) -> Result<Value> {
     let names = names_param(p, "dataset.delete")?;
     let n = s.edit("Delete Data Sets", |d, _| {
@@ -207,7 +338,15 @@ fn dataset_delete(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn dataset_list(s: &mut Session, _p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let datasets: Vec<Value> = st.doc.variables.datasets.iter().map(|d| json!({"name": d.name, "values": d.values})).collect();
+    let datasets: Vec<Value> = st
+        .doc
+        .variables
+        .datasets
+        .iter()
+        // `matches` says whether the art still holds what the row says, which is what the
+        // panel shows in italics.
+        .map(|d| json!({"name": d.name, "values": d.values, "matches": st.doc.matches_dataset(&d.name)}))
+        .collect();
     Ok(json!({"datasets": datasets, "active": st.doc.variables.active_dataset}))
 }
 
@@ -295,7 +434,34 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             delete
         ),
+        cmd!(
+            "variable.rename",
+            "Rename Variable",
+            ["Window", "Variables"],
+            None,
+            "{name, newName} rename a variable, with its bindings and its values in every dataset",
+            has_doc,
+            rename
+        ),
         cmd!(query "variable.list", "List Variables", [], None, "{} → variables with kinds and binding counts", has_doc, list),
+        cmd!(
+            "variable.makeTextDynamic",
+            "Make Text Dynamic",
+            ["Window", "Variables"],
+            None,
+            "{} define a text variable over the selection, named after it and bound to it",
+            has_selection,
+            |s, _| make_dynamic(s, VariableKind::Text, "Text")
+        ),
+        cmd!(
+            "variable.makeVisibilityDynamic",
+            "Make Visibility Dynamic",
+            ["Window", "Variables"],
+            None,
+            "{} define a visibility variable over the selection, named after it and bound to it",
+            has_selection,
+            |s, _| make_dynamic(s, VariableKind::Visibility, "Visibility")
+        ),
         cmd!(
             "variable.bind",
             "Bind Variable",
@@ -324,8 +490,35 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             dataset_set
         ),
+        cmd!("dataset.rename", "Rename Data Set", ["Window", "Variables"], None, "{name, newName} rename a dataset", has_doc, dataset_rename),
+        cmd!(
+            "dataset.capture",
+            "Capture Data Set",
+            ["Window", "Variables"],
+            None,
+            "{name?} record what the bound objects hold right now as a new dataset (Data Set 1…), and make it the active one",
+            has_doc,
+            dataset_capture
+        ),
+        cmd!(
+            "dataset.update",
+            "Update Data Set",
+            ["Window", "Variables"],
+            None,
+            "{} write what the bound objects hold now into the active dataset",
+            has_doc,
+            dataset_update
+        ),
         cmd!("dataset.delete", "Delete Data Set", ["Window", "Variables"], None, "{names} delete datasets", has_doc, dataset_delete),
-        cmd!(query "dataset.list", "List Data Sets", [], None, "{} → datasets with values and the active one", has_doc, dataset_list),
+        cmd!(
+            query "dataset.list",
+            "List Data Sets",
+            [],
+            None,
+            "{} → datasets with their values, the active one, and which rows the art still matches",
+            has_doc,
+            dataset_list
+        ),
         cmd!(
             "dataset.select",
             "Select Data Set",

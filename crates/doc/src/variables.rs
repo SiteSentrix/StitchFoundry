@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::{Document, NodeId};
+use super::{Document, NodeId, NodeKind};
 
 /// What a variable drives.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,5 +152,47 @@ impl Document {
         let mut bindings = std::mem::take(&mut self.variables.bindings);
         bindings.retain(|id, _| self.node(*id).is_some());
         self.variables.bindings = bindings;
+    }
+
+    /// What the object `id` holds for the variable of `kind`: its characters, or whether it
+    /// shows. `None` when the object is gone, is not of that kind, or is on a locked layer
+    /// (the document's value is whatever it was left at).
+    pub fn variable_value(&self, id: NodeId, kind: VariableKind) -> Option<DataValue> {
+        if !self.is_editable(id) {
+            return None;
+        }
+        let node = self.node(id)?;
+        match (kind, &node.kind) {
+            (VariableKind::Text, NodeKind::Text(t)) => Some(DataValue::Text(t.plain_text())),
+            (VariableKind::Visibility, _) => Some(DataValue::Visible(node.visible)),
+            (VariableKind::Text, _) => None,
+        }
+    }
+
+    /// The values a dataset captured right now: what each bound object holds, in the order the
+    /// variables are defined. `dataset.capture` writes these into a new row and
+    /// `dataset.update` into the active one; the Variables panel compares the active row with
+    /// them to tell whether the art still matches what it says.
+    pub fn captured_values(&self) -> BTreeMap<String, DataValue> {
+        let mut out = BTreeMap::new();
+        for v in &self.variables.variables {
+            // An object driven by several variables of the same kind reads from the first one
+            // bound, so a capture is one value per variable and applies back the same way.
+            let value = self.variables.objects_of(&v.name).into_iter().find_map(|id| self.variable_value(id, v.kind));
+            if let Some(value) = value {
+                out.insert(v.name.clone(), value);
+            }
+        }
+        out
+    }
+
+    /// Whether the bound objects still hold what `name`'s row says they do. False when there
+    /// is no such row, or when an edit has moved the art away from it.
+    pub fn matches_dataset(&self, name: &str) -> bool {
+        let Some(ds) = self.variables.dataset(name) else { return false };
+        let current = self.captured_values();
+        // A value the art can't report (its object is locked or gone) isn't drift: the row
+        // keeps it, and applying it again would skip it too.
+        ds.values.iter().all(|(k, v)| current.get(k).is_none_or(|c| c == v))
     }
 }

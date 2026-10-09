@@ -253,6 +253,132 @@ fn locked_art_is_neither_bound_nor_rewritten() {
     assert!(!s.doc().unwrap().doc.node(r).unwrap().visible, "the unlocked rectangle still applied");
 }
 
+/// Make Text Dynamic / Make Visibility Dynamic: what the panel's buttons run. One step from a
+/// selection to a bound variable, named after what it drives.
+#[test]
+fn making_a_selection_dynamic_names_and_binds_it() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    let v = s.execute("variable.makeTextDynamic", &json!({})).unwrap();
+    assert_eq!(v["name"], "Alice", "named after the text it drives");
+    assert_eq!(v["ids"], json!([t.0]));
+
+    s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+    let v = s.execute("variable.makeVisibilityDynamic", &json!({})).unwrap();
+    assert_eq!(v["kind"], "visibility");
+
+    // The same object twice takes a number rather than colliding with the first variable.
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    let again = s.execute("variable.makeTextDynamic", &json!({})).unwrap();
+    assert_eq!(again["name"], "Alice 2");
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(vars["variables"].as_array().map(Vec::len), Some(3));
+
+    // Nothing selected, art that can't take the kind, and locked art are errors.
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("variable.makeTextDynamic", &json!({})).is_err());
+    s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+    assert!(s.execute("variable.makeTextDynamic", &json!({})).is_err(), "a rectangle is not type");
+}
+
+/// Capture Data Set records what the art holds now, which is how rows are made — the art is
+/// edited and captured, rather than the values typed.
+#[test]
+fn capturing_records_what_the_art_holds_now() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+
+    let v = s.execute("dataset.capture", &json!({})).unwrap();
+    assert_eq!((v["name"].clone(), v["values"].clone()), (json!("Data Set 1"), json!(2)));
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"]["Name"], json!({"text": "Alice"}));
+    assert_eq!(sets["datasets"][0]["values"]["Show"], json!({"visible": true}));
+    assert_eq!(sets["active"], "Data Set 1");
+
+    // Change the art, capture again: a second row, and the first still matches its own text.
+    s.execute("text.editRange", &json!({"id": t.0, "insert": "Bob"})).unwrap();
+    assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["datasets"][0]["matches"], json!(false), "the art moved on");
+    s.execute("dataset.capture", &json!({})).unwrap();
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][1]["name"], "Data Set 2");
+    assert_eq!(sets["datasets"][1]["values"]["Name"], json!({"text": "Bob"}));
+    assert_eq!(sets["datasets"][0]["matches"], json!(false), "row 1 still describes the old text");
+
+    // A named capture, and a name that is taken is an error rather than a second row.
+    s.execute("dataset.capture", &json!({"name": "Winter"})).unwrap();
+    assert!(s.execute("dataset.capture", &json!({"name": "Winter"})).is_err());
+
+    // Nothing bound is nothing to capture.
+    let mut empty = session();
+    empty.execute("variable.define", &json!({"name": "V", "kind": "text"})).unwrap();
+    assert!(empty.execute("dataset.capture", &json!({})).is_err());
+}
+
+/// Update Data Set writes the art's current values into the row that is active.
+#[test]
+fn updating_writes_the_art_into_the_active_row() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+
+    // No active row yet: say so rather than quietly writing into some other one.
+    assert!(s.execute("dataset.update", &json!({})).is_err());
+    s.execute("dataset.capture", &json!({})).unwrap();
+    s.execute("text.editRange", &json!({"id": t.0, "insert": "Bob"})).unwrap();
+    let v = s.execute("dataset.update", &json!({})).unwrap();
+    assert_eq!((v["name"].clone(), v["values"].clone()), (json!("Data Set 1"), json!(1)));
+    assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["datasets"][0]["matches"], json!(true));
+    // One undo step puts the row back as it was.
+    s.execute("text.editRange", &json!({"id": t.0, "insert": "Caz"})).unwrap();
+    s.execute("dataset.update", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(plain(&s, t), "Caz");
+}
+
+/// Renaming carries the variable's bindings and its values in every row with it — a name is
+/// how a variable is referred to, so leaving the old one behind would orphan both.
+#[test]
+fn renaming_carries_the_bindings_and_values_with_it() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "D", "values": {"Name": "Bob"}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "D"})).unwrap();
+
+    s.execute("variable.rename", &json!({"name": "Name", "newName": "Title"})).unwrap();
+    assert_eq!(plain(&s, t), "Bob", "the row still applied");
+    assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["datasets"][0]["values"]["Title"], json!({"text": "Bob"}));
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!((vars["variables"][0]["name"].clone(), vars["variables"][0]["bindings"].clone()), (json!("Title"), json!(1)));
+
+    // Renaming a dataset keeps it active and keeps its values.
+    s.execute("dataset.rename", &json!({"name": "D", "newName": "Row 1"})).unwrap();
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!((sets["active"].clone(), sets["datasets"][0]["name"].clone()), (json!("Row 1"), json!("Row 1")));
+
+    // Taken and missing names are errors.
+    s.execute("variable.define", &json!({"name": "Other", "kind": "text"})).unwrap();
+    assert!(s.execute("variable.rename", &json!({"name": "Title", "newName": "Other"})).is_err());
+    assert!(s.execute("variable.rename", &json!({"name": "Ghost", "newName": "X"})).is_err());
+    assert!(s.execute("dataset.rename", &json!({"name": "Ghost", "newName": "X"})).is_err());
+    // A dataset and a variable are separate namespaces: a dataset may take a variable's name,
+    // and a variable may take a dataset's.
+    s.execute("dataset.rename", &json!({"name": "Row 1", "newName": "Title"})).unwrap();
+    assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["active"], "Title");
+    s.execute("dataset.new", &json!({"name": "Taken"})).unwrap();
+    assert!(s.execute("dataset.rename", &json!({"name": "Title", "newName": "Taken"})).is_err());
+}
+
 /// `dataset.set` is how a value changes after the row exists: replacing it must not need the
 /// dataset to be deleted and rebuilt (which loses its place in the list and the active one).
 #[test]

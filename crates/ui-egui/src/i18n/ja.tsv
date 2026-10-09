@@ -593,6 +593,19 @@
 	no document	ドキュメントがありません
 	no data set to edit	編集するデータセットがありません
 	{name} · {kind} · {count}	{name} · {kind} · {count} 件
+	Make Text Dynamic	テキストを動的にする
+	Make Visibility Dynamic	表示を動的にする
+	Capture Data Set	データセットを取得
+	Update Data Set	データセットを更新
+	Rename Data Set…	データセットの名前を変更…
+	Variable Options…	変数のオプション…
+	Select Bound Object	バインドされたオブジェクトを選択
+	Select All Bound Objects	すべてのバインドされたオブジェクトを選択
+	Multiple objects	複数のオブジェクト
+	New Name	新しい名前
+	Rename Variable	変数の名前を変更
+	no variable to rename	名前を変更する変数がありません
+	no data set to rename	名前を変更するデータセットがありません
 	Brush Libraries	ブラシライブラリ
 	Built-in Libraries	内蔵ライブラリ
 	User Defined	ユーザー定義
@@ -4016,3 +4029,4 @@ effect	Vertical	垂直
 	Blocks	ブロック
 	Frosted	すりガラス
 	Tiny Lens	小さなレンズ
+	Rename Data Set	データセットの名前を変更

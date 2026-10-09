@@ -48,20 +48,27 @@ fn library_placeholders() -> Vec<Item> {
     vec![todo("Built-in Libraries"), todo("User Defined"), Sep, todo("Other Library…")]
 }
 
-/// Window › Variables: the panel, then the commands that define and apply what it shows. The
-/// "…" commands open a Variables dialog (`dialogs::variables`), so the menu and the command
-/// palette both reach them.
+/// Window › Variables: the panel, then the commands that define and apply what it shows, in
+/// the order the panel does them. The "…" commands open a Variables dialog
+/// (`dialogs::variables`), so the menu and the command palette both reach them.
 fn variables_window_menu(panel: impl Fn(&'static str, &'static str) -> Item) -> Vec<Item> {
     vec![
         panel("Variables Panel", crate::panels::variables::ID),
         Sep,
+        c("Make Text Dynamic", "variable.makeTextDynamic"),
+        c("Make Visibility Dynamic", "variable.makeVisibilityDynamic"),
+        Sep,
         c("New Variable…", "variable.define"),
+        c("Variable Options…", "variable.rename"),
         c("Bind Variable…", "variable.bind"),
         c("Unbind Variable", "variable.unbind"),
         c("Delete Variable", "variable.delete"),
         Sep,
+        c("Capture Data Set", "dataset.capture"),
         c("New Data Set…", "dataset.new"),
         c("Edit Data Set…", "dataset.set"),
+        c("Update Data Set", "dataset.update"),
+        c("Rename Data Set…", "dataset.rename"),
         c("Delete Data Set", "dataset.delete"),
         Sep,
         c("Select Data Set…", "dataset.select"),

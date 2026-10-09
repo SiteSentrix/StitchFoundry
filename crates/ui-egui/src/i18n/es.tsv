@@ -3079,6 +3079,18 @@
 	no document	no hay documento
 	no data set to edit	no hay ningún conjunto de datos que editar
 	{name} · {kind} · {count}	{name} · {kind} · {count}
+	Make Text Dynamic	Hacer texto dinámico
+	Make Visibility Dynamic	Hacer visible dinámico
+	Capture Data Set	Capturar conjunto de datos
+	Update Data Set	Actualizar conjunto de datos
+	Rename Data Set…	Renombrar conjunto de datos…
+	Variable Options…	Opciones de variable…
+	Select Bound Object	Seleccionar objeto vinculado
+	Select All Bound Objects	Seleccionar todos los objetos vinculados
+	Multiple objects	Varios objetos
+	New Name	Nuevo nombre
+	no variable to rename	no hay ninguna variable que renombrar
+	no data set to rename	no hay ningún conjunto de datos que renombrar
 	Variation:	Variación:
 	Vector Effects	Efectos vectoriales
 	Vector Halftone	Semitono vectorial
@@ -4021,3 +4033,5 @@ axis	Both	Ambos
 	Blocks	Bloques
 	Frosted	Esmerilado
 	Tiny Lens	Lente pequeña
+	Rename Data Set	Renombrar conjunto de datos
+	Rename Variable	Renombrar variable

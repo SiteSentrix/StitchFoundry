@@ -545,6 +545,12 @@
 	Next Data Set	Další sada dat
 	Previous Data Set	Předchozí sada dat
 	Variables Panel	Panel proměnných
+	Make Text Dynamic	Nastavit text jako dynamický
+	Make Visibility Dynamic	Nastavit viditelnost jako dynamickou
+	Capture Data Set	Pořídit sadu dat
+	Update Data Set	Aktualizovat sadu dat
+	Rename Data Set…	Přejmenovat sadu dat…
+	Variable Options…	Možnosti proměnné…
 	Brush Libraries	Knihovny štětců
 	Built-in Libraries	Vestavěné knihovny
 	User Defined	Uživatelské
@@ -689,3 +695,5 @@
 	Diffuse Glow…	Rozptýlená záře…
 	Glass…	Sklo…
 	Ocean Ripple…	Vlnky na hladině…
+	Rename Data Set	Přejmenovat sadu dat
+	Rename Variable	Přejmenovat proměnnou

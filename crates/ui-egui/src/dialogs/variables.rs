@@ -28,10 +28,22 @@ pub(super) const SPEC: DialogSpec =
 fn opened(id: &str) -> Option<&'static str> {
     Some(match id {
         "variable.define" => "New Variable",
+        "variable.rename" => "Variable Options",
         "variable.bind" => "Bind Variable",
         "dataset.new" => "New Data Set",
         "dataset.set" => "Edit Data Set",
+        "dataset.rename" => "Rename Data Set",
         "dataset.select" => "Select Data Set",
+        _ => return None,
+    })
+}
+
+/// The row `id` renames, which the dialog offers as a dropdown when the document has more than
+/// one. Variable Options renames the one the panel has highlighted, so it starts there.
+fn rename_of(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "variable.rename" => "variable",
+        "dataset.rename" => "name",
         _ => return None,
     })
 }
@@ -70,7 +82,21 @@ pub fn open(app: &mut VectorcraftApp, id: &str) -> bool {
         "dataset.select" => {
             fields.insert("name".into(), json!(""));
         }
-        _ => {}
+        _ => {
+            // A rename: which row, and its new name.
+            let key = rename_of(id).unwrap_or("name");
+            let names: Vec<&str> = if key == "variable" {
+                vars.variables.iter().map(|v| v.name.as_str()).collect()
+            } else {
+                vars.datasets.iter().map(|d| d.name.as_str()).collect()
+            };
+            if names.is_empty() {
+                app.status(if key == "variable" { tl!("no variable to rename").to_string() } else { tl!("no data set to rename").to_string() });
+                return true;
+            }
+            fields.insert(key.into(), json!(names[0]));
+            fields.insert("newName".into(), json!(""));
+        }
     }
     fields.insert("__command".into(), json!(id));
     fields.insert("__label".into(), json!(label));
@@ -133,6 +159,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             "dataset.select" => {
                 label(ui, tl!("Data Set"));
                 dropdown(ui, d, "name", &dataset_names, 220.0);
+                ui.end_row();
+            }
+            // A rename: which row, and its new name.
+            "variable.rename" | "dataset.rename" => {
+                let (key, label_text, names) = if d.str("__command") == "variable.rename" {
+                    ("variable", tl!("Variable").to_string(), &variable_names)
+                } else {
+                    ("name", tl!("Data Set").to_string(), &dataset_names)
+                };
+                label(ui, &label_text);
+                dropdown(ui, d, key, names, 220.0);
+                ui.end_row();
+                label(ui, tl!("New Name"));
+                text(ui, d, "newName", 220.0);
                 ui.end_row();
             }
             _ => {
@@ -219,6 +259,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let p = match cmd.as_str() {
         "variable.define" => json!({"name": name, "kind": d.str("kind")}),
         "variable.bind" => json!({"variable": d.str("variable")}),
+        "variable.rename" => json!({"name": d.str("variable"), "newName": d.str("newName")}),
+        "dataset.rename" => json!({"name": name, "newName": d.str("newName")}),
         "dataset.new" | "dataset.set" => json!({"name": name, "values": values_of(d, &vars)}),
         "dataset.select" => json!({"name": name}),
         _ => json!({}),

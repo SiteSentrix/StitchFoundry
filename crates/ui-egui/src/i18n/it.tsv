@@ -3079,6 +3079,18 @@
 	no document	nessun documento
 	no data set to edit	nessun set di dati da modificare
 	{name} · {kind} · {count}	{name} · {kind} · {count}
+	Make Text Dynamic	Rendi testo dinamico
+	Make Visibility Dynamic	Rendi visibilità dinamica
+	Capture Data Set	Cattura set di dati
+	Update Data Set	Aggiorna set di dati
+	Rename Data Set…	Rinomina set di dati…
+	Variable Options…	Opzioni variabile…
+	Select Bound Object	Seleziona oggetto associato
+	Select All Bound Objects	Seleziona tutti gli oggetti associati
+	Multiple objects	Più oggetti
+	New Name	Novo nome
+	no variable to rename	nessuna variabile da rinominare
+	no data set to rename	nessun set di dati da rinominare
 	Variation:	Variazione:
 	Vector Effects	Effetti vettoriali
 	Vector Halftone	Retino vettoriale
@@ -4023,3 +4035,5 @@ effect	Regular	Normale
 	Blocks	Blocchi
 	Frosted	Smerigliato
 	Tiny Lens	Lente piccola
+	Rename Data Set	Rinomina set di dati
+	Rename Variable	Rinomina variabile

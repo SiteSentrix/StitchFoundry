@@ -2971,6 +2971,18 @@
 	no document	没有文档
 	no data set to edit	没有可编辑的数据集
 	{name} · {kind} · {count}	{name} · {kind} · {count}
+	Make Text Dynamic	使文本动态化
+	Make Visibility Dynamic	使可见性动态化
+	Capture Data Set	捕获数据集
+	Update Data Set	更新数据集
+	Rename Data Set…	重命名数据集…
+	Variable Options…	变量选项…
+	Select Bound Object	选择绑定的对象
+	Select All Bound Objects	选择所有绑定的对象
+	Multiple objects	多个对象
+	New Name	新名称
+	no variable to rename	没有可重命名的变量
+	no data set to rename	没有可重命名的数据集
 	Variation:	变化：
 	Vector Effects	矢量效果
 	Vector Halftone	矢量半色调
@@ -3652,3 +3664,5 @@ effect	Vertical	垂直
 	Blocks	块状
 	Frosted	磨砂
 	Tiny Lens	小镜头
+	Rename Data Set	重命名数据集
+	Rename Variable	重命名变量

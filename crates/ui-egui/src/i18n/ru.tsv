@@ -3075,6 +3075,18 @@
 	no document	нет документа
 	no data set to edit	нет набора данных для изменения
 	{name} · {kind} · {count}	{name} · {kind} · {count}
+	Make Text Dynamic	Сделать текст динамическим
+	Make Visibility Dynamic	Сделать видимость динамической
+	Capture Data Set	Записать набор данных
+	Update Data Set	Обновить набор данных
+	Rename Data Set…	Переименовать набор данных…
+	Variable Options…	Параметры переменной…
+	Select Bound Object	Выбрать связанный объект
+	Select All Bound Objects	Выбрать все связанные объекты
+	Multiple objects	Несколько объектов
+	New Name	Новое имя
+	no variable to rename	нет переменной для переименования
+	no data set to rename	нет набора данных для переименования
 	Variation:	Вариация:
 	Vector Effects	Векторные эффекты
 	Vector Halftone	Векторный полутон
@@ -4019,3 +4031,5 @@ axis	Both	Оба
 	Blocks	Блоки
 	Frosted	Матовое
 	Tiny Lens	Мелкие линзы
+	Rename Data Set	Переименовать набор данных
+	Rename Variable	Переименовать переменную
