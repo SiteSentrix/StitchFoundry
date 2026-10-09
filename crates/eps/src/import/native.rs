@@ -60,6 +60,8 @@ const STREAM_ZLIB: &[u8] = b"%AI9_DataStream";
 const ZSTD_MARK: &[u8] = b"%AI24_ZStandard_Data";
 /// Most bytes the editing copy may have once decompressed.
 const MAX_DECODED: u64 = 256 << 20;
+/// The largest Zstandard window a frame may ask for: the decoder allocates it before reading.
+const MAX_ZSTD_WINDOW: u64 = 64 << 20;
 /// The notes that say the import left out something the file has (see [`is_loss`]).
 const TEXT_LEFT_OUT: &str = "text objects on hidden layers or hidden objects couldn't be read, so they are left out";
 const ART_LEFT_OUT: &str = "hidden layers have art this can't read";
@@ -269,7 +271,7 @@ fn unzlib(packed: &[u8]) -> Option<Vec<u8>> {
 
 /// `packed` as a Zstandard stream decompressed (up to [`MAX_DECODED`] bytes).
 fn unzstd(packed: &[u8]) -> Option<Vec<u8>> {
-    let mut zstd = ruzstd::decoding::StreamingDecoder::new(packed).ok()?;
+    let mut zstd = ruzstd::decoding::StreamingDecoder::new_with_max_window_size(packed, MAX_ZSTD_WINDOW).ok()?;
     let mut data = vec![];
     (&mut zstd).take(MAX_DECODED).read_to_end(&mut data).ok()?;
     (data.len() as u64 != MAX_DECODED).then_some(data)
