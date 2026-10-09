@@ -90,17 +90,18 @@ fn normalize_word(word: &str) -> String {
     word.chars().flat_map(|c| c.to_lowercase()).collect()
 }
 
-/// Look the word up under the preferences lock (or the thread-local test override). Only the matched
-/// [`Exception`] is cloned, never the whole list.
+/// Look the word up under the preferences lock. Only the matched [`Exception`] is cloned, never
+/// the whole list.
+#[cfg(not(test))]
 fn exception_for(word: &str) -> Option<Exception> {
-    let key = normalize_word(word);
-    #[cfg(test)]
-    {
-        if let Some(ex) = TEST_OVERRIDE.with(|c| c.borrow().as_ref().and_then(|e| e.map.get(&key).cloned())) {
-            return Some(ex);
-        }
-    }
-    store().map.get(&key).cloned()
+    store().map.get(&normalize_word(word)).cloned()
+}
+
+/// Unit tests read only their own thread's list: tests running in parallel set the process-wide
+/// one.
+#[cfg(test)]
+fn exception_for(word: &str) -> Option<Exception> {
+    TEST_OVERRIDE.with(|c| c.borrow().as_ref().and_then(|e| e.map.get(&normalize_word(word)).cloned()))
 }
 
 fn is_vowel(c: char) -> bool {
