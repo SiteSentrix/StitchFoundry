@@ -353,15 +353,16 @@ fn mojikumi_halves_line_end_and_consecutive_punctuation() {
         // 」 before 「: the closing mark's space goes; 「 keeps its own.
         let a = adv("一」「二", Mojikumi::LineEndHalf);
         assert!((a[1] - 10.0).abs() < 0.01 && (a[2] - 20.0).abs() < 0.01, "{a:?}");
-        // 「「: the second bracket loses the space before it and is drawn half an em earlier.
-        let a = adv("「「一", Mojikumi::LineEndHalf);
-        assert!((a[0] - 20.0).abs() < 0.01 && (a[1] - 10.0).abs() < 0.01, "{a:?}");
-        let (on, off) = (lay("「「一", Mojikumi::LineEndHalf, vertical_type), lay("「「一", Mojikumi::None, vertical_type));
+        // 「「 inside a line: the second bracket loses the space before it and is drawn half an em
+        // earlier (at a line's start the first one would lose its own too).
+        let a = adv("一「「二", Mojikumi::LineEndHalf);
+        assert!((a[1] - 20.0).abs() < 0.01 && (a[2] - 10.0).abs() < 0.01, "{a:?}");
+        let (on, off) = (lay("一「「二", Mojikumi::LineEndHalf, vertical_type), lay("一「「二", Mojikumi::None, vertical_type));
         let along = |r: Rect| if vertical_type { r.y0 } else { r.x0 };
-        let moved = along(off.glyphs[1].outline.bounding_box()) - along(on.glyphs[1].outline.bounding_box());
+        let moved = along(off.glyphs[2].outline.bounding_box()) - along(on.glyphs[2].outline.bounding_box());
         assert!((moved - 10.0).abs() < 0.01, "vertical {vertical_type}: the second 「 is drawn half an em earlier ({moved})");
         let across = |r: Rect| if vertical_type { r.x0 } else { r.y0 };
-        let drift = across(off.glyphs[1].outline.bounding_box()) - across(on.glyphs[1].outline.bounding_box());
+        let drift = across(off.glyphs[2].outline.bounding_box()) - across(on.glyphs[2].outline.bounding_box());
         assert!(drift.abs() < 0.01, "vertical {vertical_type}: and not moved across the line ({drift})");
         // Text without punctuation is untouched.
         assert_eq!(adv("一二", Mojikumi::LineEndHalf), adv("一二", Mojikumi::None));
@@ -394,8 +395,8 @@ fn mojikumi_spaces_japanese_from_latin_by_a_quarter_em() {
         // Latin first, and nothing after the last character of the line.
         assert_eq!(extra("AB雅").iter().map(|x| x.round()).collect::<Vec<_>>(), [0.0, 5.0, 0.0]);
         assert_eq!(extra("雅A").iter().map(|x| x.round()).collect::<Vec<_>>(), [5.0, 0.0]);
-        // Punctuation takes no Japanese–Latin space (the closing bracket isn't at the line's end).
-        assert!(extra("「A」です").iter().all(|x| x.abs() < 0.01), "{:?}", extra("「A」です"));
+        // Punctuation takes no Japanese–Latin space (neither bracket is at the line's start or end).
+        assert!(extra("で「A」です").iter().all(|x| x.abs() < 0.01), "{:?}", extra("で「A」です"));
     }
     // A tate-chu-yoko block is set as a Japanese character, with no space inside or around it.
     let on = lay("第10回", Mojikumi::LineEndHalf, true);
@@ -405,8 +406,9 @@ fn mojikumi_spaces_japanese_from_latin_by_a_quarter_em() {
 
 /// Mojikumi (JLREQ 3.1.5): with Line-end Punctuation Half Width, an opening bracket starting a
 /// wrapped line is set flush with the line's start (the space before it goes), giving the line half
-/// an em more room; at the start of a paragraph it keeps its full width. Horizontal and vertical.
-/// Needs a font with full-width Japanese punctuation (skipped without one).
+/// an em more room; at the start of a paragraph too, so its face starts at the first-line indent
+/// (JIS X 4051's principle, Figure 71 ①). Horizontal and vertical. Needs a font with full-width
+/// Japanese punctuation (skipped without one).
 #[test]
 fn mojikumi_sets_an_opening_bracket_flush_at_the_start_of_a_wrapped_line() {
     use vectorcraft_doc::Mojikumi;
@@ -436,9 +438,13 @@ fn mojikumi_sets_an_opening_bracket_flush_at_the_start_of_a_wrapped_line() {
         // The half em it gave up lets 六 stay on the line.
         assert_eq!(on.glyphs[6].line, on.glyphs[3].line, "vertical {vertical_type}");
         assert_ne!(off.glyphs[6].line, off.glyphs[3].line, "vertical {vertical_type}");
-        // At the start of a paragraph the bracket keeps its full width.
+        // At the start of a paragraph too: half width, its face half an em earlier than with
+        // Mojikumi None, so it starts at the first-line indent.
         let first = lay("「一」", Mojikumi::LineEndHalf, vertical_type);
-        assert!((first.glyphs[0].advance - 20.0).abs() < 0.01, "vertical {vertical_type}: {}", first.glyphs[0].advance);
+        assert!((first.glyphs[0].advance - 10.0).abs() < 0.01, "vertical {vertical_type}: {}", first.glyphs[0].advance);
+        let solid = lay("「一」", Mojikumi::None, vertical_type);
+        let moved = along(solid.glyphs[0].outline.bounding_box()) - along(first.glyphs[0].outline.bounding_box());
+        assert!((moved - 10.0).abs() < 0.01, "vertical {vertical_type}: the paragraph's 「 is drawn half an em earlier ({moved})");
     }
 }
 
