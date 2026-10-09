@@ -79,6 +79,9 @@ pub struct Targets {
     segments: Vec<(Rect, PathSeg)>,
     /// Ruler guides, which pull a point into line where they run (Snap to Point).
     rulers: Vec<Ruler>,
+    /// The bounds of the objects a moved selection spaces itself evenly with (Spacing Guides):
+    /// gathered only for moves ([`Self::for_move`]).
+    boxes: Vec<Rect>,
     /// How the guides these targets produce look.
     style: GuideStyle,
 }
@@ -145,9 +148,45 @@ fn lines_near(lines: &[(f64, Point, Kind)], v: f64, tol: f64) -> &[(f64, Point, 
     within(lines, |l| l.0, v, tol)
 }
 
+/// `r`'s extent along the x axis (`x`) or the y axis.
+fn span(r: &Rect, x: bool) -> (f64, f64) {
+    if x { (r.x0, r.x1) } else { (r.y0, r.y1) }
+}
+
+/// The objects a moved selection (`moving`) spaces itself evenly with, by their bounds: each
+/// visible object on a layer as a whole (a group too), and inside a group holding some of the
+/// moving objects its other objects. At most [`BUDGET`].
+fn object_boxes(doc: &Document, moving: &[NodeId]) -> Vec<Rect> {
+    fn push(nodes: &[Arc<Node>], moving: &HashSet<NodeId>, holders: &HashSet<NodeId>, out: &mut Vec<Rect>) {
+        for n in nodes.iter().filter(|n| n.visible && !moving.contains(&n.id)) {
+            if out.len() >= BUDGET {
+                return;
+            }
+            match n.children() {
+                Some(ch) if n.is_layer() || holders.contains(&n.id) => push(ch, moving, holders, out),
+                _ => out.extend(n.geometric_bounds()),
+            }
+        }
+    }
+    let holders: HashSet<NodeId> = moving.iter().filter_map(|id| doc.ancestry(*id)).flatten().collect();
+    let mut out = vec![];
+    push(&doc.layers, &moving.iter().copied().collect(), &holders, &mut out);
+    out
+}
+
 impl Targets {
     pub fn collect(doc: &Document, exclude: &[NodeId], visible: Option<Rect>) -> Self {
         Self::collect_inner(doc, exclude, None, visible, Gather::Bounds)
+    }
+
+    /// Targets for moving the selection of `cx`: [`Self::collect`]'s, styled as `cx` asks, and with
+    /// Smart Guides › Spacing Guides the objects it spaces itself evenly with ([`Self::snap_rect`]).
+    pub fn for_move(cx: &ToolContext) -> Self {
+        let mut t = Self::collect(cx.doc, &cx.selection.objects, None).styled(cx);
+        if cx.spacing_guides {
+            t.boxes = object_boxes(cx.doc, &cx.selection.objects);
+        }
+        t
     }
 
     /// Targets for a drawn point: the art in `visible` (all of it for None) but `exclude`, its
@@ -508,7 +547,7 @@ impl Targets {
         let rects: Vec<Rect> = std::iter::once(Vec2::ZERO).chain(offsets.iter().copied()).map(|o| Rect::from_points(p + o, p + o)).collect();
         let (adj, mut ov, aligned) = self.align_rects(&rects, tol);
         let out = p + adj;
-        if aligned {
+        if aligned.contains(&true) {
             ov.extend(self.label(out, "align"));
         }
         (out, ov)
@@ -520,15 +559,107 @@ impl Targets {
     }
 
     /// Snap rectangles that move together (an artboard and its bleed): the edge or centre of any
-    /// of them nearest a target, per axis. Returns the shift and the guides.
+    /// of them nearest a target, per axis. A single moved selection with Spacing Guides
+    /// ([`Self::for_move`]) is spaced evenly along an axis that lines up with nothing
+    /// ([`Self::even_spacing`]). Returns the shift and the guides.
     pub fn snap_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>) {
-        let (d, ov, _) = self.align_rects(rects, tol);
+        let (mut d, mut ov, aligned) = self.align_rects(rects, tol);
+        if let [r] = rects
+            && !self.boxes.is_empty()
+        {
+            let moved = *r + d;
+            let mut spaced = false;
+            for (x, lined_up) in [true, false].into_iter().zip(aligned) {
+                if let Some((shift, _)) = self.even_spacing(moved, x, tol).filter(|_| !lined_up) {
+                    *(if x { &mut d.x } else { &mut d.y }) += shift;
+                    spaced = true;
+                }
+            }
+            // The equal gaps, marked where the rectangle ends up.
+            if spaced {
+                let done = *r + d;
+                for (x, lined_up) in [true, false].into_iter().zip(aligned) {
+                    let gaps = if lined_up { None } else { self.even_spacing(done, x, tol) };
+                    ov.extend(gaps.into_iter().flat_map(|(_, gaps)| gaps).flat_map(|g| self.gap_marks(g, x, tol)));
+                }
+            }
+        }
         (d, ov)
     }
 
-    /// [`Self::snap_rects`], also saying whether an axis lined up (even with Alignment Guides
-    /// off, or already in line, when there is no line or shift to tell).
-    fn align_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, bool) {
+    /// Spacing Guides along the x axis (`x`) or the y axis for the moved rectangle `r`, among the
+    /// objects of its row (column): the shift (within `tol`) that leaves it as far from its
+    /// neighbour before or after it as two other objects of the row are apart, or as far from both
+    /// neighbours; and the equal gaps then, as (start, end, where across) along that axis.
+    fn even_spacing(&self, r: Rect, x: bool, tol: f64) -> Option<(f64, Vec<[f64; 3]>)> {
+        let (r0, r1) = span(&r, x);
+        let len = r1 - r0;
+        let (c0, c1) = span(&r, !x);
+        // The objects beside it, before or after, overlapping it across, by where they start.
+        let mut row: Vec<(Rect, f64, f64)> = self
+            .boxes
+            .iter()
+            .map(|b| (*b, span(b, x).0, span(b, x).1))
+            .filter(|(b, a0, a1)| span(b, !x).0 < c1 && span(b, !x).1 > c0 && (*a1 <= r0 + tol || *a0 >= r1 - tol))
+            .collect();
+        row.sort_by(|a, b| a.1.total_cmp(&b.1));
+        // Where two boxes overlap across: the middle of that (or of the space between them).
+        let mid = |a: &Rect, b: &Rect| (span(a, !x).0.max(span(b, !x).0) + span(a, !x).1.min(span(b, !x).1)) / 2.0;
+        // Each object and the nearest one after it, unless the moved rectangle sits between them.
+        let pairs: Vec<(f64, [f64; 3])> = row
+            .iter()
+            .filter_map(|(p, _, p1)| {
+                let next = row.partition_point(|(_, a0, _)| *a0 < *p1);
+                let (q, q0, _) = row.get(next)?;
+                let straddles = *p1 <= r0 + tol && *q0 >= r1 - tol;
+                (*q0 > *p1 && !straddles).then(|| (q0 - p1, [*p1, *q0, mid(p, q)]))
+            })
+            .collect();
+        let before = row.iter().filter(|(_, _, a1)| *a1 <= r0 + tol).max_by(|a, b| a.2.total_cmp(&b.2));
+        let after = row.iter().filter(|(_, a0, _)| *a0 >= r1 - tol).min_by(|a, b| a.1.total_cmp(&b.1));
+        // Where it could start, and the gap it repeats (None: halfway between its neighbours).
+        let mut starts: Vec<(f64, Option<f64>)> = vec![];
+        if let (Some(a), Some(b)) = (before, after)
+            && b.1 - a.2 > len
+        {
+            starts.push(((a.2 + b.1 - len) / 2.0, None));
+        }
+        for (g, _) in &pairs {
+            starts.extend(before.map(|a| (a.2 + g, Some(*g))));
+            starts.extend(after.map(|b| (b.1 - g - len, Some(*g))));
+        }
+        let (start, repeats) =
+            starts.into_iter().filter(|(t, _)| (t - r0).abs() <= tol).min_by(|a, b| (a.0 - r0).abs().total_cmp(&(b.0 - r0).abs()))?;
+        let at = r + if x { Vec2::new(start - r0, 0.0) } else { Vec2::new(0.0, start - r0) };
+        let (end, mut gaps) = (start + len, vec![]);
+        if let Some((a, _, a1)) = before
+            && repeats.is_none_or(|g| (start - a1 - g).abs() <= 1e-9)
+        {
+            gaps.push([*a1, start, mid(a, &at)]);
+        }
+        if let Some((b, b0, _)) = after
+            && repeats.is_none_or(|g| (b0 - end - g).abs() <= 1e-9)
+        {
+            gaps.push([end, *b0, mid(b, &at)]);
+        }
+        if let Some(g) = repeats {
+            gaps.extend(pairs.iter().filter(|(pg, _)| (pg - g).abs() <= 1e-9).map(|(_, gap)| *gap));
+        }
+        Some((start - r0, gaps))
+    }
+
+    /// A Spacing Guides mark: a line across the gap (start, end, where across) along the x axis
+    /// (`x`) or the y axis, with a tick `tick` long either side of it at each end.
+    fn gap_marks(&self, [u0, u1, c]: [f64; 3], x: bool, tick: f64) -> [Overlay; 3] {
+        let pt = |u: f64, c: f64| if x { Point::new(u, c) } else { Point::new(c, u) };
+        let line = |a: Point, b: Point| Overlay::Line { a, b, color: self.style.color, dashed: false };
+        [line(pt(u0, c), pt(u1, c)), line(pt(u0, c - tick), pt(u0, c + tick)), line(pt(u1, c - tick), pt(u1, c + tick))]
+    }
+
+    /// [`Self::snap_rects`] before Spacing Guides, also saying whether each axis (x, y) lined up
+    /// (even with Alignment Guides off, or already in line, when there is no line or shift to
+    /// tell).
+    fn align_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
         let nearest = |targets: &[(f64, Point, Kind)], along: fn(&Rect) -> [f64; 3]| {
             rects
                 .iter()
@@ -553,7 +684,7 @@ impl Targets {
             let (x0, x1) = (from.x.min(r.x0), from.x.max(r.x1));
             ov.extend(self.line(Point::new(x0, y), Point::new(x1, y)));
         }
-        (d, ov, best_x.is_some() || best_y.is_some())
+        (d, ov, [best_x.is_some(), best_y.is_some()])
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
@@ -1062,6 +1193,53 @@ mod tests {
         let (nr, ov) = snap(Rect::new(240.0, 320.0, 300.0, 380.0), Handle::BottomRight, Point::new(318.0, 398.0), true);
         assert_eq!(nr, Rect::new(240.0, 320.0, 320.0, 400.0));
         assert!(anchor(&ov), "{ov:?}");
+    }
+
+    /// Smart Guides › Spacing Guides (#394): a moved selection lands as far from its neighbour as
+    /// two other objects of its row are apart, or halfway between its two neighbours, and the
+    /// equal gaps are marked; up and down the same in a column. Off, it stays where it is dragged.
+    #[test]
+    fn spacing_guides_space_a_moved_selection_evenly() {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        // A and B 20 apart in a row at y 300–340, C and D 30 apart in a column at x 400–440.
+        for r in [
+            Rect::new(20.0, 300.0, 60.0, 340.0),
+            Rect::new(80.0, 300.0, 120.0, 340.0),
+            Rect::new(400.0, 20.0, 440.0, 50.0),
+            Rect::new(400.0, 80.0, 440.0, 110.0),
+        ] {
+            let id = d.alloc_id();
+            d.insert(Some(l), 0, Node::path(id, vectorcraft_geom::shapes::rectangle(r), Default::default())).unwrap();
+        }
+        let (s, p) = (Selection::default(), paint());
+        let lines = |ov: &[Overlay]| ov.iter().filter(|o| matches!(o, Overlay::Line { color, .. } if *color == MAGENTA)).count();
+        let t = Targets::for_move(&cx(&d, &s, &p));
+        // 21 after B: 20, as A and B, with both gaps marked (a line and two ticks each).
+        let (dv, ov) = t.snap_rect(Rect::new(141.0, 305.0, 181.0, 345.0), 4.0);
+        assert_eq!(dv, Vec2::new(-1.0, 0.0));
+        assert_eq!(lines(&ov), 6, "{ov:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Line { a, b, .. } if (a.x, b.x) == (120.0, 140.0) && a.y == b.y)), "{ov:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Line { a, b, .. } if (a.x, b.x) == (60.0, 80.0) && a.y == b.y)), "{ov:?}");
+        // Halfway between B and a box at 220–260: 50 either side.
+        let mut wide = d.clone();
+        let id = wide.alloc_id();
+        wide.insert(Some(l), 0, Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(220.0, 300.0, 260.0, 340.0)), Default::default()))
+            .unwrap();
+        let (dv, ov) = Targets::for_move(&cx(&wide, &s, &p)).snap_rect(Rect::new(148.0, 305.0, 188.0, 345.0), 4.0);
+        assert_eq!(dv, Vec2::new(2.0, 0.0));
+        assert!(lines(&ov) >= 6, "{ov:?}");
+        // A column: 28 under D, as C and D are 30 apart.
+        let (dv, ov) = t.snap_rect(Rect::new(405.0, 138.0, 445.0, 168.0), 4.0);
+        assert_eq!(dv, Vec2::new(0.0, 2.0));
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Line { a, b, .. } if (a.y, b.y) == (110.0, 140.0) && a.x == b.x)), "{ov:?}");
+        // Above C, 32 over it: 30.
+        let (dv, _) = t.snap_rect(Rect::new(405.0, -42.0, 445.0, -12.0), 4.0);
+        assert_eq!(dv, Vec2::new(0.0, 2.0));
+        // Off: nowhere to go, and no marks.
+        let off = ToolContext { spacing_guides: false, ..cx(&d, &s, &p) };
+        let (dv, ov) = Targets::for_move(&off).snap_rect(Rect::new(141.0, 305.0, 181.0, 345.0), 4.0);
+        assert_eq!((dv, lines(&ov)), (Vec2::ZERO, 0));
     }
 
     /// Preferences › Smart Guides › Display Options (#394): the colour, and Alignment Guides and

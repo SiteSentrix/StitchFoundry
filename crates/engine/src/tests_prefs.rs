@@ -282,6 +282,33 @@ fn snap_to_point_lands_a_dragged_selection_on_anchors() {
     assert_eq!(drag(&mut s, ViewInfo { snap_to_point: false, ..v }), (276.5, 76.0), "View › Snap to Point off");
 }
 
+/// Smart Guides › Spacing Guides (#394): a square dragged 21 pt to the right of a row of two
+/// squares 20 pt apart lands 20 pt from it, with the gaps marked; off, it stays at 21.
+#[test]
+fn spacing_guides_space_a_dragged_square_like_its_row() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    square(&mut s, 20.0, 300.0);
+    square(&mut s, 90.0, 300.0);
+    let m = square(&mut s, 200.0, 305.0);
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    // `m` grabbed by its centre and dragged so its left edge is 21 pt from the second square.
+    let drag = |s: &mut Session| {
+        gesture(s, v, &[(Down, 225.0, 330.0), (Drag, 200.0, 330.0), (Drag, 186.0, 330.0)]);
+        let marks = s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Line { a, b, .. } if a.y == b.y)).count();
+        gesture(s, v, &[(Up, 186.0, 330.0)]);
+        let at = top_left(s, m).0;
+        s.execute("edit.undo", &json!({})).unwrap();
+        (at, marks)
+    };
+    let (at, marks) = drag(&mut s);
+    assert_eq!(at, 160.0, "20 pt from it");
+    assert!(marks >= 2, "both gaps marked");
+    set_pref(&mut s, "spacingGuides", json!(false));
+    assert_eq!(drag(&mut s), (161.0, 0), "off: where it was dragged");
+}
+
 /// Preferences › Smart Guides (#394): Color, Alignment Guides, Anchor/Path Labels, Measurement
 /// Labels, Transform Tools and Snapping Tolerance change what the Selection tool shows while a
 /// square is dragged into line with another, and how far the pull reaches; a hidden guide still
