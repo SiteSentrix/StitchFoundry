@@ -129,7 +129,7 @@ pub fn float(ui: &mut UiState, ids: &[&str], active: &str, pos: Pos2) {
     }
     let panels: Vec<String> = ids.iter().map(|id| id.to_string()).collect();
     let active = panels.iter().position(|p| p == active).unwrap_or(0);
-    ui.floating_panels.push(FloatingPanels { panels, active, pos: [pos.x, pos.y] });
+    ui.floating_panels.push(FloatingPanels { panels, active, pos: [pos.x, pos.y], width: None });
     // The tabbed group shows another of its tabs when the one it showed floats.
     if let Some(tab) = shown_tab(ui) {
         ui.dock_tab = tab;
@@ -312,6 +312,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let ids = ids_of(g);
         let Some(&first) = ids.first() else { continue };
         let active = ids.get(g.active).copied().unwrap_or(first);
+        let given = g.width.map(|w| w.min(screen.width() - 16.0));
         let area = area_id(first);
         let size = ctx.memory(|m| m.area_rect(area)).map_or(vec2(dock::panel_width(active), 200.0), |r| r.size());
         let pos = clamp(g.pos, size, screen);
@@ -333,7 +334,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     })
                     .collect();
                 let tabs_width: f32 = tabs.iter().map(|g| g.size().x + 24.0).sum();
-                let width = ids.iter().map(|id| dock::panel_width(id)).fold(tabs_width + 32.0, f32::max);
+                let width = ids.iter().map(|id| dock::panel_width(id)).fold(tabs_width + 32.0, f32::max).max(given.unwrap_or(0.0));
                 ui.set_width(width);
                 // Title bar: a grip that moves the group, and the × that docks it.
                 let (bar, _) = ui.allocate_exact_size(vec2(width, TITLE), Sense::hover());
@@ -763,7 +764,7 @@ mod tests {
         }))
         .unwrap();
         let edited = edited.sanitized();
-        assert_eq!(edited.floating_panels, [FloatingPanels { panels: vec!["layers".into()], active: 0, pos: [1.0, 2.0] }]);
+        assert_eq!(edited.floating_panels, [FloatingPanels { panels: vec!["layers".into()], active: 0, pos: [1.0, 2.0], width: None }]);
         h.settle();
         let g = h.group("layers");
         let screen = Rect::from_min_size(Pos2::ZERO, SCREEN);

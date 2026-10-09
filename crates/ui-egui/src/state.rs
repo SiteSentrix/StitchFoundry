@@ -425,6 +425,9 @@ pub struct FloatingPanels {
     pub active: usize,
     /// Top-left corner in screen points.
     pub pos: [f32; 2],
+    /// A width the group was given (the Tabs panel sized over its text), else its panels' own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<f32>,
 }
 
 impl FloatingPanels {
