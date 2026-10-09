@@ -167,24 +167,68 @@ fn delete_reports_what_it_actually_removed() {
     assert_eq!(s.execute("dataset.delete", &json!({"names": ["D"]})).unwrap()["deleted"], 0);
 }
 
-/// An object holds one binding, so binding it again replaces what it had, and the reply says
-/// which objects were rebound rather than letting the old variable silently lose them.
+/// An object may be driven by several variables, so binding it again adds to what it has
+/// instead of quietly dropping the earlier one.
 #[test]
-fn binding_again_replaces_and_says_so() {
+fn one_object_can_be_driven_by_several_variables() {
     let mut s = session();
     let t = text(&mut s, "x");
-    s.execute("variable.define", &json!({"name": "First", "kind": "text"})).unwrap();
-    s.execute("variable.define", &json!({"name": "Second", "kind": "text"})).unwrap();
-    s.execute("variable.bind", &json!({"variable": "First", "ids": [t.0]})).unwrap();
-    let v = s.execute("variable.bind", &json!({"variable": "Second", "ids": [t.0]})).unwrap();
-    assert_eq!(v["replaced"], json!([t.0]));
+    let r = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Price", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Badge", "kind": "visibility"})).unwrap();
+
+    // A text object driven by two text variables keeps both.
+    assert_eq!(s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap()["bound"], 1);
+    let v = s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    assert_eq!((v["bound"].clone(), v["already"].clone()), (json!(1), json!([])), "Title is untouched");
+    // A rectangle driven by a visibility variable as well as nothing else yet.
+    s.execute("variable.bind", &json!({"variable": "Badge", "ids": [r.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "D", "values": {"Title": "Hat", "Price": "9.99", "Badge": false}})).unwrap();
+
+    let v = s.execute("dataset.select", &json!({"name": "D"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(3), Some(0)), "every binding applied");
+    // Both text variables are counted; the later one in definition order is what is left.
+    assert_eq!(plain(&s, t), "9.99");
+    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
+
     let vars = s.execute("variable.list", &json!({})).unwrap();
     let of = |n: &str| vars["variables"].as_array().unwrap().iter().find(|v| v["name"] == n).unwrap()["bindings"].as_u64();
-    assert_eq!((of("First"), of("Second")), (Some(0), Some(1)));
-    // Rebinding to the same variable changes nothing and reports no replacement.
-    assert_eq!(s.execute("variable.bind", &json!({"variable": "Second", "ids": [t.0]})).unwrap()["replaced"], json!([]));
+    assert_eq!((of("Title"), of("Price"), of("Badge")), (Some(1), Some(1), Some(1)));
+
+    // Binding again to one it already has is not a change, and says so.
+    let v = s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    assert_eq!((v["bound"].clone(), v["already"].clone()), (json!(0), json!([t.0])));
+    // Unbinding one variable leaves the object's others alone.
+    assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Price"})).unwrap()["unbound"], 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(vars["variables"][1]["bindings"], 1, "the other binding is still there");
+    assert!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Ghost"})).is_err());
+
+    // Deleting a variable drops only its own binding.
+    s.execute("variable.delete", &json!({"names": ["Price"]})).unwrap();
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(vars["variables"][0]["bindings"], 1, "Title still drives the text");
+}
+
+/// `unbound` counts what was actually dropped, like `variable.delete` does.
+#[test]
+fn unbind_reports_what_it_actually_removed() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Price", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Title"})).unwrap()["unbound"], 1);
+    assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Title"})).unwrap()["unbound"], 0, "already gone");
+    // Without `variable` the object's last binding goes and the entry with it.
     assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0]})).unwrap()["unbound"], 1);
     assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0]})).unwrap()["unbound"], 0);
+    // An object with no binding left is not kept as an empty set.
+    let v: Value = serde_json::from_str(&serde_json::to_string(&s.doc().unwrap().doc).unwrap()).unwrap();
+    assert!(v["variables"].get("bindings").is_none_or(|v| v == &json!({})), "{v}");
 }
 
 /// Locked art is the document's to rewrite only while it isn't locked.

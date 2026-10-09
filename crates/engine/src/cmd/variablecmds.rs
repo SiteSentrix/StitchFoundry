@@ -92,7 +92,7 @@ fn list(s: &mut Session, _p: &Value) -> Result<Value> {
         .variables
         .iter()
         .map(|v| {
-            let bindings = st.doc.variables.bindings.values().filter(|b| *b == &v.name).count();
+            let bindings = st.doc.variables.objects_of(&v.name).len();
             json!({"name": v.name, "kind": v.kind.label(), "bindings": bindings})
         })
         .collect();
@@ -123,27 +123,35 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
             Some(_) => {}
         }
     }
-    // An object holds one binding, so binding it again replaces what it had; say which.
-    let replaced: Vec<u64> = ids.iter().filter(|id| doc.variables.bindings.get(id).is_some_and(|b| *b != name)).map(|id| id.0).collect();
-    s.edit("Bind Variable", |d, _| {
-        for id in &ids {
-            d.variables.bindings.insert(*id, name.clone());
-        }
-        Ok(())
-    })?;
-    Ok(json!({"variable": name, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "replaced": replaced}))
+    // Binding again is not a second binding, and says so rather than counting as a change.
+    let already: Vec<u64> = ids.iter().filter(|id| doc.variables.objects_of(&name).contains(id)).map(|id| id.0).collect();
+    let n = s.edit("Bind Variable", |d, _| Ok(ids.iter().filter(|id| d.variables.bind(**id, &name)).count()))?;
+    Ok(json!({"variable": name, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "bound": n, "already": already}))
 }
 
 fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.unbind";
     let ids = match ids_param(p, "ids") {
         Some(v) => v,
         None => selected_roots(s)?,
     };
+    let name = match str_param(p, "variable").filter(|v| !v.is_empty()) {
+        Some(v) => {
+            let v = v.to_string();
+            if s.doc()?.doc.variables.variable(&v).is_none() {
+                return Err(bad(C, format!("no variable named `{v}`")));
+            }
+            Some(v)
+        }
+        None => None,
+    };
     let n = s.edit("Unbind Variable", |d, _| {
         let mut n = 0;
         for id in &ids {
-            if d.variables.bindings.remove(id).is_some() {
-                n += 1;
+            // With `variable` only that one binding goes; without it, every one the object has.
+            match &name {
+                Some(v) => n += usize::from(d.variables.unbind(*id, v)),
+                None => n += usize::from(d.variables.bindings.remove(id).is_some()),
             }
         }
         Ok(n)
@@ -207,10 +215,15 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
     const C: &str = "dataset.select";
     let (applied, skipped) = s.edit("Apply Data Set", |d, _| {
         let ds = d.variables.dataset(name).cloned().ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
-        let bindings: Vec<(NodeId, String)> = d.variables.bindings.iter().map(|(id, v)| (*id, v.clone())).collect();
+        // One object may be driven by several variables; walk them in definition order, so two
+        // text variables on the same object land the later one's value and both are counted.
+        let mut pairs: Vec<(NodeId, String)> = Vec::new();
+        for v in &d.variables.variables {
+            pairs.extend(d.variables.objects_of(&v.name).into_iter().map(|id| (id, v.name.clone())));
+        }
         let mut applied = 0usize;
         let mut skipped = 0usize;
-        for (id, var) in bindings {
+        for (id, var) in pairs {
             // A binding whose variable is gone, whose value this row doesn't carry, or whose
             // value doesn't fit the variable's kind, is left alone and counted, never
             // silently reinterpreted.
@@ -288,11 +301,19 @@ pub fn specs() -> Vec<CommandSpec> {
             "Bind Variable",
             ["Window", "Variables"],
             None,
-            "{variable, ids?} bind objects (default: the selection) to a variable; text needs type, locked art is refused. An object holds one binding, so this replaces what it had → {ids, replaced}",
+            "{variable, ids?} bind objects (default: the selection) to a variable; text needs type, locked art is refused. An object may hold several variables, and binding it to one it already has changes nothing → {bound, already}",
             has_doc,
             bind
         ),
-        cmd!("variable.unbind", "Unbind Variable", ["Window", "Variables"], None, "{ids?} drop bindings (default: the selection)", has_doc, unbind),
+        cmd!(
+            "variable.unbind",
+            "Unbind Variable",
+            ["Window", "Variables"],
+            None,
+            "{ids?, variable?} drop bindings (default: the selection): `variable` drops that one, else every variable the object has",
+            has_doc,
+            unbind
+        ),
         cmd!("dataset.new", "New Data Set…", ["Window", "Variables"], None, "{name, values?: {variable: value}} add a dataset", has_doc, dataset_new),
         cmd!(
             "dataset.set",

@@ -2,7 +2,7 @@
 //! them all at once. One template document produces many variants (badges, price
 //! lists, localized copies) by selecting a dataset instead of editing each object.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -71,7 +71,13 @@ pub struct DataSet {
 }
 
 /// The variable state of a document: definitions, datasets, bindings
-/// (object id → variable name) and which dataset is active.
+/// (object id → the variables bound to it) and which dataset is active.
+///
+/// An object may be driven by several variables — the reference app binds the selected object
+/// to the selected variable, one click at a time, and never says a second binding replaces the
+/// first — so a binding is a set. `dataset.select` applies them in the order the variables are
+/// defined, which is what makes two text variables on one object deterministic: the last one
+/// wins, and `applied` counts both.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Variables {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -79,7 +85,7 @@ pub struct Variables {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub datasets: Vec<DataSet>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub bindings: BTreeMap<NodeId, String>,
+    pub bindings: BTreeMap<NodeId, BTreeSet<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_dataset: Option<String>,
 }
@@ -95,9 +101,25 @@ impl Variables {
         self.datasets.iter().find(|d| d.name == name)
     }
 
+    /// Bind `id` to the variable `name`. True when it was not bound to it already.
+    pub fn bind(&mut self, id: NodeId, name: &str) -> bool {
+        self.bindings.entry(id).or_default().insert(name.to_string())
+    }
+
+    /// Drop `id`'s binding to `name` (and the binding itself when that was its last variable).
+    /// True when there was one.
+    pub fn unbind(&mut self, id: NodeId, name: &str) -> bool {
+        let Some(bound) = self.bindings.get_mut(&id) else { return false };
+        let dropped = bound.remove(name);
+        if bound.is_empty() {
+            self.bindings.remove(&id);
+        }
+        dropped
+    }
+
     /// The objects bound to the variable `name`, in document order.
     pub fn objects_of(&self, name: &str) -> Vec<NodeId> {
-        let mut ids: Vec<NodeId> = self.bindings.iter().filter(|(_, v)| *v == name).map(|(id, _)| *id).collect();
+        let mut ids: Vec<NodeId> = self.bindings.iter().filter(|(_, v)| v.contains(name)).map(|(id, _)| *id).collect();
         ids.sort_unstable();
         ids
     }
@@ -111,7 +133,10 @@ impl Variables {
         for dataset in &mut self.datasets {
             dataset.values.retain(|k, _| !names.contains(k));
         }
-        self.bindings.retain(|_, v| !names.contains(v));
+        for bound in self.bindings.values_mut() {
+            bound.retain(|v| !names.contains(v));
+        }
+        self.bindings.retain(|_, v| !v.is_empty());
         before - self.variables.len()
     }
 }
