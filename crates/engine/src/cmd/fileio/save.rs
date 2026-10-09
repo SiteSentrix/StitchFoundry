@@ -98,13 +98,52 @@ pub fn stamp_save_dates(st: &mut DocState, at: i64) {
     d.metadata.modified = Some(at);
 }
 
-/// The Templates folder: the `templatesFolder` preference, else `Documents/VectorCraft Templates`
-/// in the user's home (none where there is no home folder, as on the web).
+/// The Templates folder: the `templatesFolder` preference, else `VectorCraft Templates` in the
+/// user's documents folder (none where there is no home folder, as on the web).
 pub fn templates_folder(prefs: &Prefs) -> Option<String> {
     if !prefs.templates_folder.is_empty() {
         return Some(prefs.templates_folder.clone());
     }
-    Some(std::path::Path::new(&home_folder()?).join("Documents").join("VectorCraft Templates").to_string_lossy().to_string())
+    Some(documents_folder()?.join("VectorCraft Templates").to_string_lossy().to_string())
+}
+
+/// The Templates folder for a file dialog to start in (#703): made when it's missing; where it
+/// can't be, the nearest folder above it that exists, else the home folder. A dialog asked to
+/// start in a folder that isn't there shows an error on some desktops.
+pub fn templates_dialog_folder(prefs: &Prefs) -> Option<String> {
+    let folder = std::path::PathBuf::from(templates_folder(prefs)?);
+    if !folder.is_dir() {
+        // Best effort: a folder that can't be made leaves the nearest one that exists.
+        let _ = std::fs::create_dir_all(&folder);
+    }
+    folder.ancestors().find(|a| a.is_dir()).map(|a| a.to_string_lossy().into_owned()).or_else(home_folder)
+}
+
+/// The user's documents folder: on Linux and the BSDs the one the desktop names
+/// (`XDG_DOCUMENTS_DIR` in `user-dirs.dirs`: `~/Documenti`, `~/Dokumente`…), elsewhere `Documents`
+/// in the home folder.
+fn documents_folder() -> Option<std::path::PathBuf> {
+    let home = std::path::PathBuf::from(home_folder()?);
+    if cfg!(all(unix, not(target_os = "macos"))) {
+        let config =
+            std::env::var_os("XDG_CONFIG_HOME").map(std::path::PathBuf::from).filter(|p| p.is_absolute()).unwrap_or_else(|| home.join(".config"));
+        if let Some(dir) = std::fs::read_to_string(config.join("user-dirs.dirs")).ok().and_then(|t| xdg_documents(&t, &home)) {
+            return Some(dir);
+        }
+    }
+    Some(home.join("Documents"))
+}
+
+/// `XDG_DOCUMENTS_DIR` in a `user-dirs.dirs` file's `text`, `$HOME` being `home`. None when it isn't
+/// set, is relative, or is the home folder itself (the spec's way of turning it off).
+fn xdg_documents(text: &str, home: &std::path::Path) -> Option<std::path::PathBuf> {
+    let line = text.lines().map(str::trim).find(|l| l.starts_with("XDG_DOCUMENTS_DIR="))?;
+    let value = line.split_once('=')?.1.trim().trim_matches('"');
+    let dir = match value.strip_prefix("$HOME") {
+        Some(rest) => home.join(rest.trim_start_matches('/')),
+        None => std::path::PathBuf::from(value),
+    };
+    (dir.has_root() && dir != home).then_some(dir)
 }
 
 /// The user's home folder (`HOME`, else `USERPROFILE` on Windows; none on the web).
@@ -189,7 +228,7 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         SaveMode::Save | SaveMode::SaveAs => format!("{stem}.{ext}"),
     };
     let folder = match mode {
-        SaveMode::Template => templates_folder(&s.prefs),
+        SaveMode::Template => templates_dialog_folder(&s.prefs),
         _ => st.path.as_deref().and_then(parent_folder),
     };
     let modified = date_param(p, "modified", cmd)?;
@@ -613,4 +652,41 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             format_options
         ),
     ]
+}
+
+#[cfg(test)]
+mod tests_folders {
+    use std::path::{Path, PathBuf};
+
+    /// #703: the documents folder a desktop names in `user-dirs.dirs`, not an English `Documents`.
+    #[test]
+    fn the_desktops_documents_folder_is_read_from_user_dirs() {
+        let home = Path::new("/home/david");
+        let file = "# comment\nXDG_DESKTOP_DIR=\"$HOME/Scrivania\"\nXDG_DOCUMENTS_DIR=\"$HOME/Documenti\"\n";
+        assert_eq!(super::xdg_documents(file, home), Some(PathBuf::from("/home/david/Documenti")));
+        assert_eq!(super::xdg_documents("XDG_DOCUMENTS_DIR=\"/data/docs\"", home), Some(PathBuf::from("/data/docs")));
+        // "$HOME/" turns it off; a relative or missing one isn't used.
+        assert_eq!(super::xdg_documents("XDG_DOCUMENTS_DIR=\"$HOME/\"", home), None);
+        assert_eq!(super::xdg_documents("XDG_DOCUMENTS_DIR=\"docs\"", home), None);
+        assert_eq!(super::xdg_documents("XDG_MUSIC_DIR=\"$HOME/Musica\"", home), None);
+    }
+
+    /// #703: the Templates folder a dialog starts in exists: made when missing, else the nearest
+    /// folder above it.
+    #[test]
+    fn the_templates_dialog_folder_exists() {
+        let base = std::env::temp_dir().join(format!("vc-templates-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let mut prefs = crate::Prefs::default();
+        let wanted = base.join("Modelli").join("VectorCraft Templates");
+        prefs.templates_folder = wanted.to_string_lossy().into_owned();
+        assert_eq!(super::templates_dialog_folder(&prefs).map(PathBuf::from), Some(wanted.clone()));
+        assert!(wanted.is_dir(), "made");
+        // A file in the way: the nearest folder that exists.
+        std::fs::write(base.join("blocked"), b"x").unwrap();
+        prefs.templates_folder = base.join("blocked").join("Templates").to_string_lossy().into_owned();
+        assert_eq!(super::templates_dialog_folder(&prefs).map(PathBuf::from), Some(base.clone()));
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }
