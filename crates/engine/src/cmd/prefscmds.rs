@@ -261,7 +261,19 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "Brightness",
         choice(&[("dark", "Dark"), ("mediumDark", "Medium Dark"), ("mediumLight", "Medium Light"), ("light", "Light")])
     ),
-    p!("canvasColor", "User Interface", "", "Canvas Color", choice(&[("matchUi", "Match User Interface Brightness"), ("white", "White")])),
+    p!(
+        "canvasColor",
+        "User Interface",
+        "",
+        "Canvas Color",
+        choice(&[
+            ("matchUi", "Match User Interface Brightness"),
+            ("white", "White"),
+            ("lightGray", "Light Gray"),
+            ("mediumGray", "Medium Gray"),
+            ("darkGray", "Dark Gray")
+        ])
+    ),
     p!("autoCollapseIconPanels", "User Interface", "", "Auto-Collapse Iconic Panels", bool),
     p!("openDocumentsAsTabs", "User Interface", "", "Open Documents As Tabs", bool),
     p!("largeTabs", "User Interface", "", "Large Tabs", bool),

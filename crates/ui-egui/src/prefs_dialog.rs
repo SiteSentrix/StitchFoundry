@@ -80,11 +80,24 @@ pub fn restore(app: &mut VectorcraftApp) {
 #[derive(Clone, Copy, PartialEq)]
 struct Applied {
     brightness: Brightness,
-    white_canvas: bool,
+    /// User Interface › Canvas Color, unless it matches the interface brightness.
+    canvas: Option<egui::Color32>,
     threads: i32,
     tool_tips: bool,
     scrub: bool,
     bare_points: bool,
+}
+
+/// User Interface › Canvas Color: the canvas around the artboards, or `None` to match the
+/// interface brightness. The greys keep the white page's edge in view (#663).
+fn canvas_color(key: &str) -> Option<egui::Color32> {
+    match key {
+        "white" => Some(egui::Color32::WHITE),
+        "lightGray" => Some(egui::Color32::from_gray(0xc8)),
+        "mediumGray" => Some(egui::Color32::from_gray(0x96)),
+        "darkGray" => Some(egui::Color32::from_gray(0x5a)),
+        _ => None,
+    }
 }
 
 /// Per frame: push UI-side preferences into egui / the renderer when they change.
@@ -97,7 +110,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let want = Applied {
         brightness: app.ui.brightness,
-        white_canvas: p.canvas_color == "white",
+        canvas: canvas_color(&p.canvas_color),
         threads: p.render_threads,
         tool_tips: p.show_tool_tips,
         scrub: p.scrub_numeric_fields,
@@ -113,9 +126,9 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ctx.global_style_mut(|s| s.interaction.tooltip_delay = delay);
         crate::scrub::set_enabled(ctx, want.scrub);
         crate::widgets::set_bare_numbers_are_points(ctx, want.bare_points);
-        if want.white_canvas {
+        if let Some(c) = want.canvas {
             let mut t = Tokens::get(ctx);
-            t.pasteboard = egui::Color32::WHITE;
+            t.pasteboard = c;
             ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
         }
         if prev.is_some_and(|pr| pr.threads != want.threads) {
@@ -364,6 +377,28 @@ mod tests {
     use super::*;
     use crate::Services;
     use vectorcraft_engine::Session;
+
+    /// User Interface › Canvas Color (#663): White and the three greys paint the canvas around the
+    /// artboards; Match User Interface Brightness keeps the theme's.
+    #[test]
+    fn canvas_color_choices_paint_the_pasteboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        let ctx = egui::Context::default();
+        apply_runtime(&mut app, &ctx);
+        let themed = Tokens::get(&ctx).pasteboard;
+        for (key, want) in [
+            ("white", egui::Color32::WHITE),
+            ("lightGray", egui::Color32::from_gray(0xc8)),
+            ("mediumGray", egui::Color32::from_gray(0x96)),
+            ("darkGray", egui::Color32::from_gray(0x5a)),
+            ("matchUi", themed),
+        ] {
+            app.run("prefs.set", serde_json::json!({"key": "canvasColor", "value": key})).unwrap();
+            apply_runtime(&mut app, &ctx);
+            assert_eq!(Tokens::get(&ctx).pasteboard, want, "{key}");
+        }
+        assert!(app.run("prefs.set", serde_json::json!({"key": "canvasColor", "value": "pink"})).is_err());
+    }
 
     fn app() -> VectorcraftApp {
         VectorcraftApp::new(Session::new(), Services::default())
