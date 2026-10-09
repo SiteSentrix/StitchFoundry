@@ -402,12 +402,17 @@ pub struct Guide {
     /// and moves, is copied and is deleted with it. None: a canvas guide, across the whole canvas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artboard: Option<u32>,
+    /// The layer (or sublayer) it is on: it shows, hides and locks with that layer and is listed
+    /// in it in the Layers panel, and goes when the layer is deleted. None: on no layer (guides
+    /// from before guides had layers, and from files that don't say), always there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<NodeId>,
 }
 
 impl Guide {
     /// A canvas guide.
     pub fn new(vertical: bool, pos: f64) -> Self {
-        Self { vertical, pos, artboard: None }
+        Self { vertical, pos, artboard: None, layer: None }
     }
 
     /// Moved by `d` (a vertical guide across, a horizontal one down).
@@ -989,6 +994,19 @@ impl Document {
     pub fn guide_span(&self, g: &Guide) -> Option<(f64, f64)> {
         let r = self.artboards.iter().find(|a| Some(a.id) == g.artboard)?.rect;
         Some(if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) })
+    }
+    /// Is ruler guide `g` shown: on no layer, or on a layer that (with the layers around it) is
+    /// visible? A guide whose layer is gone shows as one on no layer.
+    pub fn guide_shown(&self, g: &Guide) -> bool {
+        g.layer.is_none_or(|l| self.node(l).is_none() || self.is_visible(l))
+    }
+    /// Can ruler guide `g` be picked, moved and deleted: shown, and its layer unlocked?
+    pub fn guide_editable(&self, g: &Guide) -> bool {
+        g.layer.is_none_or(|l| self.node(l).is_none() || self.is_editable(l))
+    }
+    /// The ruler guides on layer `layer` (not its sublayers'), by index.
+    pub fn guides_on(&self, layer: NodeId) -> impl Iterator<Item = (usize, &Guide)> + '_ {
+        self.guides.iter().enumerate().filter(move |(_, g)| g.layer == Some(layer))
     }
     /// Does ruler guide `g` run past `p` (up to `tol` beyond its ends)?
     pub fn guide_passes(&self, g: &Guide, p: Point, tol: f64) -> bool {

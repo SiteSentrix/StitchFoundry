@@ -220,6 +220,8 @@ struct Row {
     colour: Color32,
     /// Drawn dimmed: hidden itself or in a hidden layer or group, or a template layer.
     dim: bool,
+    /// A ruler guide on the layer `node` (its index in the document's guides): the guide's row.
+    guide: Option<usize>,
 }
 
 /// What the rows were listed from: listed again when any of it changes.
@@ -239,7 +241,7 @@ fn list_rows(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str) 
     let mask_layer = doc.mask_edit.map(|m| m.layer);
     let mut out = vec![];
     for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
-        push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query), &mut out);
+        push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query, doc), &mut out);
     }
     out
 }
@@ -251,10 +253,10 @@ fn push_rows(
     depth: usize,
     clip_path: bool,
     (colour, shown): (Color32, bool),
-    cx: (&OpenRows, &PanelOptions, &str),
+    cx: (&OpenRows, &PanelOptions, &str, &Document),
     out: &mut Vec<Row>,
 ) {
-    let (open_rows, opts, query) = cx;
+    let (open_rows, opts, query, doc) = cx;
     if opts.layers_only && !n.is_layer() {
         return;
     }
@@ -266,11 +268,18 @@ fn push_rows(
         _ => colour,
     };
     let shown = shown && n.visible;
-    let opens = opens(n, opts);
     let searching = !query.is_empty();
+    // A layer's ruler guides are rows in it, above its art (not while searching).
+    let guides: Vec<usize> = if n.is_layer() && !opts.layers_only && !searching { doc.guides_on(n.id).map(|(i, _)| i).collect() } else { vec![] };
+    let opens = opens(n, opts) || !guides.is_empty();
     let open = opens && (searching || open_rows.contains(n.id));
     let at = out.len();
-    out.push(Row { node: n.clone(), depth, clip_path, opens, open, colour, dim: !shown || n.is_template() });
+    out.push(Row { node: n.clone(), depth, clip_path, opens, open, colour, dim: !shown || n.is_template(), guide: None });
+    if open {
+        for i in guides.into_iter().rev() {
+            out.push(Row { node: n.clone(), depth: depth + 1, clip_path: false, opens: false, open: false, colour, dim: !shown, guide: Some(i) });
+        }
+    }
     if open && let Some(children) = n.children() {
         for (i, c) in children.iter().enumerate().rev() {
             push_rows(c, depth + 1, i == 0 && n.clips(), (colour, shown), cx, out);
@@ -302,6 +311,8 @@ fn rows_of_doc(ui: &Ui, st: &vectorcraft_engine::DocState, opts: &PanelOptions, 
 struct View<'a> {
     doc: &'a Document,
     sel: HashSet<NodeId>,
+    /// The selected ruler guides.
+    guides: Vec<usize>,
     target: Option<NodeId>,
     current: Option<NodeId>,
     rows: Vec<NodeId>,
@@ -362,6 +373,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let view = View {
         doc: &doc,
         sel: st.selection.objects.iter().copied().collect(),
+        guides: st.selection.guides.clone(),
         target: st.selection.target,
         current: st.current_layer(),
         rows,
@@ -542,8 +554,47 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
     }
 }
 
+/// The row of ruler guide `i` on the layer of `item`: a guide mark and its name, the selection
+/// square when it is selected. A click selects the guide; Shift or Cmd adds it to (or takes it
+/// from) the selected guides.
+fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
+    let (t, h) = (&view.t, view.h);
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+    let Some(g) = view.doc.guides.get(i) else { return };
+    let selected = view.guides.contains(&i);
+    if resp.hovered() {
+        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
+    }
+    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
+    let mut x = r.left() + 2.0 * COLUMN + 2.0;
+    colour_bar(ui, &item.node, r, x, item.colour);
+    x += 6.0 + item.depth as f32 * INDENT + 16.0;
+    // The guide mark: a short line across or down, in the guides' colour.
+    let c = egui::pos2(x + 8.0, r.center().y);
+    let half = if g.vertical { vec2(0.0, 6.0) } else { vec2(6.0, 0.0) };
+    ui.painter().line_segment([c - half, c + half], Stroke::new(1.5, t.accent));
+    x += 22.0;
+    let name = format!("<{}>", if g.vertical { tl!("Vertical Guide") } else { tl!("Horizontal Guide") });
+    let color = if item.dim { t.text_dim } else { t.text };
+    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), color);
+    let col_x = r.right() - 43.5;
+    ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
+    if selected {
+        let q = egui::Rect::from_center_size(egui::pos2(r.right() - SQUARE_X, r.center().y), vec2(7.0, 7.0));
+        ui.painter().rect_filled(q, 0.0, item.colour);
+        ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
+    }
+    if resp.clicked() {
+        let m = ui.input(|i| i.modifiers);
+        out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
+    }
+}
+
 /// The widgets of row `item`.
 fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
+    if let Some(i) = item.guide {
+        return guide_row(ui, view, item, i, out);
+    }
     let n = &*item.node;
     let (depth, clip_path, has_children, open, color) = (item.depth, item.clip_path, item.opens, item.open, item.colour);
     let doc = view.doc;

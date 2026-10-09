@@ -3505,3 +3505,6 @@ lighting	Light	光源
 	Stroke Pressure	筆觸壓力
 	Right Diagonal	右對角線
 	Left Diagonal	左對角線
+	Vertical Guide	垂直參考線
+	Horizontal Guide	水平參考線
+	Move Guide to Layer	將參考線移至圖層

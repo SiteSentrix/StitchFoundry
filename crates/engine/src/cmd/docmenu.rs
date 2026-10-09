@@ -160,7 +160,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Guide",
             [],
             None,
-            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default a canvas guide, across the whole canvas)} → {index}",
+            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer)} → {index}",
             has_doc,
             guide_add
         ),
@@ -169,7 +169,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Guides",
             [],
             None,
-            "{} → [{index, vertical, pos, selected, artboard?: index (an artboard guide's)}…] the ruler guides",
+            "{} → [{index, vertical, pos, selected, artboard?: index (an artboard guide's), layer?: id (the layer it is on), shown, editable (its layer shown and unlocked)}…] the ruler guides",
             has_doc,
             guide_list
         ),
@@ -199,6 +199,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{index, pos: pt} put ruler guide `index` at `pos` | {dx?, dy?: pt, copy?: bool} move the selected guides (vertical ones by dx, horizontal ones by dy); copy leaves them and selects the moved copies",
             guides_unlocked,
             guide_move
+        ),
+        cmd!(
+            "guide.setLayer",
+            "Move Guide to Layer",
+            [],
+            None,
+            "{index?, layer: id} put ruler guide `index`, else the selected guides, on layer `layer` (a layer or sublayer), as for art moved to another layer → {count}",
+            guides_unlocked,
+            guide_set_layer
         ),
         cmd!("file.closeAll", "Close All", ["File"], Some("Cmd+Alt+W"), "{} → {closed}", has_doc, close_all),
         cmd!(
@@ -507,8 +516,13 @@ fn guide_add(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => None,
     };
+    let layer = match id_param(p, "layer") {
+        Some(l) if s.doc()?.doc.node(l).is_some_and(Node::is_layer) => Some(l),
+        Some(_) => return Err(bad("guide.add", "layer must name a layer or sublayer")),
+        None => s.doc()?.current_layer(),
+    };
     let i = s.edit("New Guide", |d, _| {
-        d.guides.push(Guide { artboard, ..Guide::new(vertical, pos) });
+        d.guides.push(Guide { artboard, layer, ..Guide::new(vertical, pos) });
         Ok(d.guides.len() - 1)
     })?;
     Ok(json!({ "index": i }))
@@ -521,6 +535,11 @@ fn guide_list(s: &mut Session, _: &Value) -> Result<Value> {
         if let Some(ab) = st.doc.artboards.iter().position(|a| Some(a.id) == g.artboard) {
             r["artboard"] = json!(ab);
         }
+        if let Some(l) = g.layer {
+            r["layer"] = json!(l.0);
+        }
+        r["shown"] = json!(st.doc.guide_shown(g));
+        r["editable"] = json!(st.doc.guide_editable(g));
         r
     };
     Ok(Value::Array(st.doc.guides.iter().enumerate().map(row).collect()))
@@ -566,6 +585,28 @@ pub(crate) fn guide_remove(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "count": gone.len() }))
+}
+
+/// Put ruler guide `index`, else the selected guides, on layer `layer`, in one undo step.
+fn guide_set_layer(s: &mut Session, p: &Value) -> Result<Value> {
+    let layer = id_param(p, "layer").filter(|l| s.doc().is_ok_and(|st| st.doc.node(*l).is_some_and(Node::is_layer)));
+    let layer = layer.ok_or_else(|| bad("guide.setLayer", "layer must name a layer or sublayer"))?;
+    let moving: Vec<usize> = match p.get("index") {
+        Some(v) => vec![guide_index(s, Some(v), "guide.setLayer")?],
+        None => s.doc()?.selection.guides.clone(),
+    };
+    if moving.is_empty() {
+        return Err(bad("guide.setLayer", "no guide selected (or give an index)"));
+    }
+    s.edit("Move Guide to Layer", |d, _| {
+        for i in &moving {
+            if let Some(g) = d.guides.get_mut(*i) {
+                g.layer = Some(layer);
+            }
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "count": moving.len() }))
 }
 
 /// Put ruler guide `index` at `pos`, else move (or copy) the selected guides, in one undo step.

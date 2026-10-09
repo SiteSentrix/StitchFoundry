@@ -207,6 +207,24 @@ mod tests {
     }
 
     #[test]
+    fn guides_show_and_lock_with_their_layer() {
+        let mut d = Document::new(100.0, 100.0);
+        let layer = d.layers[0].id;
+        let g = crate::Guide { layer: Some(layer), ..crate::Guide::new(true, 10.0) };
+        assert!(d.guide_shown(&g) && d.guide_editable(&g));
+        d.node_mut(layer).unwrap().locked = true;
+        assert!(d.guide_shown(&g) && !d.guide_editable(&g), "locked: shown, not editable");
+        d.node_mut(layer).unwrap().visible = false;
+        assert!(!d.guide_shown(&g) && !d.guide_editable(&g), "hidden");
+        // On no layer, or a layer that's gone: always there.
+        assert!(d.guide_shown(&crate::Guide::new(false, 5.0)));
+        let gone = crate::Guide { layer: Some(NodeId(9999)), ..crate::Guide::new(true, 1.0) };
+        assert!(d.guide_shown(&gone) && d.guide_editable(&gone));
+        d.guides.push(g);
+        assert_eq!(d.guides_on(layer).count(), 1);
+    }
+
+    #[test]
     fn selection_changes_clear_the_target() {
         let mut s = Selection::default();
         s.set([NodeId(2), NodeId(3)]);

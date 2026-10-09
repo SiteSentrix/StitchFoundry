@@ -4095,3 +4095,6 @@ lighting	Light	Свет
 	Stroke Pressure	Нажим мазка
 	Right Diagonal	Диагональ вправо
 	Left Diagonal	Диагональ влево
+	Vertical Guide	Вертикальная направляющая
+	Horizontal Guide	Горизонтальная направляющая
+	Move Guide to Layer	Переместить направляющую на слой

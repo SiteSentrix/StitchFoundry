@@ -372,7 +372,13 @@ impl Targets {
     /// tools): they pull a point into line where they run.
     fn with_rulers(mut self, cx: &ToolContext) -> Self {
         if cx.guides {
-            self.rulers = cx.doc.guides.iter().map(|g| Ruler { vertical: g.vertical, pos: g.pos, span: cx.doc.guide_span(g) }).collect();
+            self.rulers = cx
+                .doc
+                .guides
+                .iter()
+                .filter(|g| cx.doc.guide_shown(g))
+                .map(|g| Ruler { vertical: g.vertical, pos: g.pos, span: cx.doc.guide_span(g) })
+                .collect();
         }
         self
     }

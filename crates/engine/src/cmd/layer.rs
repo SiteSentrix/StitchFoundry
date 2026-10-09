@@ -462,6 +462,9 @@ fn delete_rows(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             d.remove(*id)?;
         }
+        // The guides on the deleted layers go with them.
+        let orphans: Vec<usize> = d.guides.iter().enumerate().filter(|(_, g)| g.layer.is_some_and(|l| d.node(l).is_none())).map(|(i, _)| i).collect();
+        d.retain_guides(sel, |i, _| !orphans.contains(&i));
         sel.prune(d);
         Ok(())
     })?;
