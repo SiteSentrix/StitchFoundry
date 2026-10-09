@@ -160,12 +160,25 @@ impl<'a> Collector<'a> {
                 if placed.contains(&file.path) {
                     let saved = vectorcraft_format::load_file(&bytes)
                         .map_err(|e| bad(C, format!("linked VectorCraft document {} cannot be packaged: {e}", file.path)))?;
+                    let preview = vectorcraft_format::preview(&bytes);
+                    let pdf = vectorcraft_format::pdf_content(&bytes);
+                    let compressed = bytes.starts_with(&[0x1f, 0x8b]);
+                    let include_linked = saved
+                        .doc
+                        .linked_only_images()
+                        .iter()
+                        .any(|key| saved.doc.images.get(key).is_some_and(|blob| !blob.is_proxy()));
                     let mut nested = saved.doc;
                     self.collect(&mut nested, found_path, &destination_file, depth + 1)?;
                     if self.opts.relink {
-                        // Preserve embedded ICC profiles when rewriting a linked native file.
+                        // Preserve each native file's auxiliary content during relinking:
+                        // thumbnails, PDF-compatible pages, ICC profiles, and embedded linked art.
                         let mut options = vectorcraft_format::SaveOptions::for_doc(&nested);
+                        options.preview = preview;
+                        options.pdf = pdf;
                         options.profiles = saved.profiles;
+                        options.compress = compressed;
+                        options.include_linked = include_linked;
                         bytes = vectorcraft_format::save_with(&nested, &options)
                             .map_err(|e| bad(C, format!("could not rewrite packaged document {}: {e}", file.path)))?;
                     }
