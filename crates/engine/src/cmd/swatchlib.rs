@@ -60,7 +60,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Swatch Library…",
             ["Window", "Swatches"],
             None,
-            "{path?, format?: \"vcswatches\" (lossless JSON: colour models, global, spot, gradients, groups) | \"gpl\" (8-bit RGB palette; groups as `# Group:` comments) | \"css\" (custom properties on :root) (default: the path's extension, else vcswatches), names?: [swatch or colour group names] (default: all; None and patterns are never saved), name?: library name (default: the document's), user?: false (save into the user library folder, listed under User Defined)} save the document's swatches as a library → {path, format, count, library?: id when saved to the user folder}; without path or user → {data: the file's text, format, count}",
+            "{path?, format?: \"vcswatches\" (lossless JSON: colour models, global, spot, gradients, groups) | \"gpl\" (8-bit RGB palette; groups as `# Group:` comments) | \"ase\" (swatch exchange, binary: solid colors in their own model (RGB, CMYK, Lab, Gray) as global, spot or process colors, and color groups; gradients are left out, and a tint swatch is saved as the color it shows) | \"css\" (custom properties on :root) (default: the path's extension, else vcswatches), names?: [swatch or colour group names] (default: all; None and patterns are never saved), name?: library name (default: the document's), user?: false (save into the user library folder, listed under User Defined)} save the document's swatches as a library → {path, format, count, library?: id when saved to the user folder}; without path or user → {data: the file's text, format, count}, or {dataBase64, format, count} for ase",
             has_doc,
             save
         ),
@@ -117,6 +117,14 @@ impl LibraryFile for SwatchLibrary {
 /// The extensions of library files [`palette_io::read_bytes`] reads.
 pub const LIBRARY_EXTS: &[&str] = &["vcswatches", "gpl", "ase"];
 
+/// A library file the save commands write ([`Libraries::write`]).
+pub(crate) enum FileData {
+    /// Text (`.vcswatches`, `.gpl`, CSS, `.vcstyles`), returned as `data`.
+    Text(String),
+    /// Bytes (`.ase`), returned as `dataBase64`.
+    Binary(Vec<u8>),
+}
+
 impl<L: LibraryFile> Libraries<L> {
     pub fn user_dir(&self) -> Option<&str> {
         self.user_dir.as_deref()
@@ -155,29 +163,34 @@ impl<L: LibraryFile> Libraries<L> {
         self.extra.iter().find(|e| e.info.id == id).and_then(|e| e.path.as_deref())
     }
 
-    /// Write library file `text` as the save commands do: into the user library folder as
+    /// Write library file `data` as the save commands do: into the user library folder as
     /// `name`.`ext` with `user: true` (→ `path`, and `library`: its id), to `path`, else back as
-    /// `data`; the results go into `out`.
-    pub(crate) fn write(&mut self, p: &Value, name: &str, ext: &str, text: String, out: &mut Value, cmd: &str) -> Result<()> {
+    /// `data` (text) or `dataBase64` (bytes); the results go into `out`.
+    pub(crate) fn write(&mut self, p: &Value, name: &str, ext: &str, data: FileData, out: &mut Value, cmd: &str) -> Result<()> {
+        let bytes = match &data {
+            FileData::Text(text) => text.as_bytes(),
+            FileData::Binary(bytes) => bytes.as_slice(),
+        };
         if bool_or(p, "user", false) {
             let dir = self
                 .user_dir()
                 .ok_or_else(|| bad(cmd, "no user library folder here (save with a path, or without one to get the data)"))?
                 .to_string();
-            // A file name from the library's name, without characters file systems reject.
-            let base: String = name.chars().map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c }).collect();
-            let file = format!("{}.{ext}", base.trim_matches(['.', ' ']));
+            let file = library_file_name(name, ext);
             let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
             create_dir(&dir)?;
-            write_file(&path, text.as_bytes())?;
+            write_file(&path, bytes)?;
             self.rescan();
             out["path"] = json!(path);
             out["library"] = json!(format!("user/{file}"));
         } else if let Some(path) = str_param(p, "path") {
-            write_file(path, text.as_bytes())?;
+            write_file(path, bytes)?;
             out["path"] = json!(path);
         } else {
-            out["data"] = json!(text);
+            match data {
+                FileData::Text(text) => out["data"] = json!(text),
+                FileData::Binary(bytes) => out["dataBase64"] = json!(vectorcraft_format::base64_encode(&bytes)),
+            }
         }
         Ok(())
     }
@@ -205,6 +218,14 @@ impl<L: LibraryFile> Libraries<L> {
         self.extra.push(Extra { info: info.clone(), path: path.map(str::to_string), lib: lib.clone() });
         Ok((info, lib))
     }
+}
+
+/// The file name of library `name` with extension `ext`: characters file systems reject become
+/// `-`, and dots and spaces at either end are dropped. A name with nothing left is `Library`.
+pub fn library_file_name(name: &str, ext: &str) -> String {
+    let base: String = name.chars().map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c }).collect();
+    let base = base.trim_matches(['.', ' ']);
+    format!("{}.{ext}", if base.is_empty() { "Library" } else { base })
 }
 
 /// The library files with extensions `exts` in folder `dir`, sorted by name.
@@ -343,15 +364,16 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.save";
     let path = str_param(p, "path");
     let format = match str_param(p, "format").or_else(|| path.map(|p| p.rsplit_once('.').map_or("", |(_, e)| e))).filter(|f| !f.is_empty()) {
-        Some(f) => PaletteFormat::parse(f).ok_or_else(|| bad(C, format!("unknown format `{f}` (vcswatches, gpl or css)")))?,
+        Some(f) => PaletteFormat::parse(f).ok_or_else(|| bad(C, format!("unknown format `{f}` (vcswatches, gpl, ase or css)")))?,
         None => PaletteFormat::Native,
     };
     let st = s.doc()?;
     let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
     let lib = document_library(&st.doc, &str_list(p, "names"), name, C)?;
-    let (count, text) = (lib.len(), palette_io::write(&lib, format));
-    let mut out = json!({"format": format.id(), "count": count});
-    s.swatch_libraries.write(p, &lib.name, format.id(), text, &mut out, C)?;
+    let bytes = palette_io::write(&lib, format).map_err(|e| bad(C, e))?;
+    let data = if format.binary() { FileData::Binary(bytes) } else { FileData::Text(String::from_utf8_lossy(&bytes).into_owned()) };
+    let mut out = json!({"format": format.id(), "count": lib.len()});
+    s.swatch_libraries.write(p, &lib.name, format.id(), data, &mut out, C)?;
     Ok(out)
 }
 

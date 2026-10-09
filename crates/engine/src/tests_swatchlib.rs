@@ -182,6 +182,10 @@ fn libraries_saved_in_the_user_folder_are_user_defined() {
     let css = dir.join("out.css").to_string_lossy().to_string();
     run(&mut s, "swatch.library.save", json!({ "path": css }));
     assert!(std::fs::read_to_string(&css).unwrap().contains("  --white: #ffffff;"));
+    // A name with nothing a file name can keep is saved as Library.vcswatches, and User Defined lists it.
+    let r = run(&mut s, "swatch.library.save", json!({"user": true, "name": "..."}));
+    assert_eq!(r["library"], "user/Library.vcswatches");
+    assert_eq!(cmd::swatchlib::library(&s, "user/Library.vcswatches").map(|(info, _)| info.name), Some("...".into()));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -232,6 +236,50 @@ fn swatch_exchange_files_load_add_and_list_as_user_libraries() {
         .map(|l| (l["id"].as_str().unwrap(), l["count"].as_u64().unwrap()))
         .collect();
     assert_eq!(user, [("user/Brand.ase", 4)]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn swatch_exchange_files_save_with_models_kinds_and_groups() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 1.0, "m": 0.5, "y": 0.0, "k": 0.2}, "spot": true}));
+    run(&mut s, "swatch.new", json!({"name": "Clay", "color": {"l": 50, "a": 20, "b": -30}}));
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#123456", "#abcdef"]}));
+    let r = run(&mut s, "swatch.library.save", json!({"format": "ase", "names": ["Ink", "Clay", "Brand", "Grays", "Sunset"], "name": "Brand Kit"}));
+    assert_eq!(r["format"], "ase");
+    assert!(r.get("data").is_none(), "a binary file comes back as dataBase64");
+    let b64 = r["dataBase64"].as_str().unwrap().to_string();
+    assert!(vectorcraft_format::base64_decode(&b64).unwrap().starts_with(b"ASEF"));
+    let r = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Brand Kit.ase"}));
+    let (_, lib) = cmd::swatchlib::library(&s, r["library"].as_str().unwrap()).unwrap();
+    assert_eq!(lib.name, "Brand Kit", "named after the file");
+    let ink = lib.swatch("Ink").unwrap();
+    assert!(ink.spot && ink.global);
+    assert_eq!(ink.paint.color(), Some(Color::cmyk(1.0, 0.5, 0.0, 0.2)));
+    assert_eq!(lib.swatch("Clay").unwrap().paint.color(), Some(Color::lab(50.0, 20.0, -30.0)));
+    assert!(lib.swatch("Sunset").is_none(), "a gradient is left out");
+    let groups: Vec<(&str, usize)> = lib.groups.iter().map(|g| (g.name.as_str(), g.swatches.len())).collect();
+    assert_eq!(groups, [("Grays", 9), ("Brand", 2)], "in document order");
+    // Gray colors come back within float rounding.
+    let grays = &doc(&s).swatch_groups.iter().find(|g| g.name == "Grays").unwrap().swatches;
+    for (w, want) in lib.groups[0].swatches.iter().zip(grays) {
+        let (Some(Color::Gray { k }), Some(Color::Gray { k: want_k })) = (w.paint.color(), want.paint.color()) else {
+            panic!("{} isn't gray", w.name)
+        };
+        assert!(w.name == want.name && (k - want_k).abs() < 1e-4, "{}: {k} for {want_k}", w.name);
+    }
+    // Into the user library folder, and to a path ending in .ase.
+    let dir = temp_dir("ase-save");
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let r = run(&mut s, "swatch.library.save", json!({"format": "ase", "user": true, "name": "Brand Kit"}));
+    assert_eq!(r["library"], "user/Brand Kit.ase");
+    assert!(std::fs::read(r["path"].as_str().unwrap()).unwrap().starts_with(b"ASEF"));
+    assert!(cmd::swatchlib::library(&s, "user/Brand Kit.ase").is_some(), "the user folder lists it");
+    let path = dir.join("out.ase").to_string_lossy().to_string();
+    assert_eq!(run(&mut s, "swatch.library.save", json!({ "path": path }))["format"], "ase");
+    assert!(std::fs::read(&path).unwrap().starts_with(b"ASEF"));
+    let e = s.execute("swatch.library.save", &json!({"format": "aco"})).unwrap_err().to_string();
+    assert!(e.contains("vcswatches, gpl, ase or css"), "{e}");
     let _ = std::fs::remove_dir_all(dir);
 }
 
