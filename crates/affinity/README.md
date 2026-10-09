@@ -68,7 +68,8 @@ of CC0 sample files.
 * **Meaning fitted to Affinity's own pictures.** What shapes, paints, text and pixel data mean was
   worked out by comparing our render with the thumbnail every Affinity document embeds (Affinity's
   render of itself), on 176 public documents saved by Affinity 1.x, 2.x and 3.0/3.1 on Windows,
-  macOS and iPad. Most are published under CC0, MIT, BSD, Apache-2.0 or CC BY (-SA); the others
+  macOS and iPad. The collection has since grown to 189 distinct documents, and the reader opens
+  all of them. Most are published under CC0, MIT, BSD, Apache-2.0 or CC BY (-SA); the others
   (no licence stated, or GPL or non-commercial terms) were only opened locally to compare
   pictures, never committed or redistributed. The corpus test keeps the comparison for the pinned
   files, which are CC0, MIT or Apache-2.0 only.
@@ -111,7 +112,7 @@ Every size is checked before it is allocated: 256 MiB per archive entry and 1 Gi
 default (`Limits`), a 64 MiB zstd window, 4096 saved revisions, array lengths no longer than the
 bytes left, 16 777 216 decoded values per document stream (fields and array elements together, counted before
 anything is allocated: a value takes about 40 bytes in memory however few it took in the file; the largest of
-189 distinct public documents uses 3.3 million), 384 levels of object nesting, 128 levels of layers, 500 000 layers, four million curve
+those 189 public documents uses 3.3 million), 384 levels of object nesting, 128 levels of layers, 500 000 layers, four million curve
 nodes per curve, 64 megapixels per pixel layer (cropped to its content first) and 1024 gradient
 stops. Every archive entry's CRC-32 and size must match. Malformed input returns an `Error`; the
 crate has no panics outside tests.
