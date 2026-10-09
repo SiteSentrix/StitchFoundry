@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Crop Image",
             ["Object"],
             None,
-            "{rect?: [x, y, width, height]} crop the selected image (default: to the artboard it sits on) → {id, width, height}",
+            "{rect?: [x, y, width, height] | trim?: true (to the pixels that aren't fully transparent, pixel for pixel; an image with none to cut is left as it is, trimmed: false)} crop the selected image (default: to the artboard it sits on) → {id, width, height, trimmed? (with trim)}",
             has_image,
             crop_image
         ),
@@ -541,6 +541,9 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
+    if p.get("trim").and_then(Value::as_bool) == Some(true) {
+        return trim_image(s, id, im.clone());
+    }
     let ib = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
     let rect = match p.get("rect").and_then(Value::as_array) {
         Some(a) if a.len() == 4 => {
@@ -592,6 +595,49 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "id": id.0, "width": w, "height": h }))
+}
+
+/// Crop Image's trim: the image cut to the box of its pixels that aren't fully transparent, the
+/// pixels copied as they are (no resampling) and placed where they were.
+fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
+    const C: &str = "object.cropImage";
+    let st = s.doc()?;
+    let blob = st.doc.images.get(&im.key).ok_or_else(|| bad(C, "the image's pixels are missing"))?;
+    let px = image::load_from_memory(&blob.bytes).map_err(|_| bad(C, "the image's pixels can't be read"))?.to_rgba8();
+    let (w, h) = px.dimensions();
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for (x, y, p) in px.enumerate_pixels() {
+        if p[3] > 0 {
+            (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1));
+        }
+    }
+    if x1 <= x0 || y1 <= y0 {
+        return Err(bad(C, "the image is fully transparent"));
+    }
+    if (x0, y0, x1, y1) == (0, 0, w, h) {
+        // Already trimmed: not an error, so a script can trim every image it opens.
+        return Ok(json!({ "id": id.0, "width": w, "height": h, "trimmed": false }));
+    }
+    let cut = image::imageops::crop_imm(&px, x0, y0, x1 - x0, y1 - y0).to_image();
+    let mut png = Vec::new();
+    cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad(C, e.to_string()))?;
+    let (cw, ch) = (x1 - x0, y1 - y0);
+    s.edit("Crop Image", |d, _| {
+        let key = unique_key(d, "crop");
+        d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
+        if let Some(n) = d.node_mut(id) {
+            n.kind = NodeKind::Image(ImageObject {
+                key,
+                width: cw,
+                height: ch,
+                xf: im.xf * Affine::translate((f64::from(x0), f64::from(y0))),
+                link: None,
+                placement: Default::default(),
+            });
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
 }
 
 /// The Control bar's Mask for an image: a clip group of the image and a clipping path on its
