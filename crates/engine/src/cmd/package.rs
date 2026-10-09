@@ -138,7 +138,7 @@ impl<'a> Collector<'a> {
                 }
                 let Some(mut bytes) = file.bytes else {
                     self.lines.push(format!("{}: not found ({}), not copied", file.name, file.path));
-                    self.missing.push(format!("{} ({source})", file.name));
+                    self.missing.push(if depth == 0 { file.name.clone() } else { format!("{} ({source})", file.name) });
                     continue;
                 };
                 if self.copies.len() >= 10_000 {
