@@ -150,6 +150,20 @@ fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warning
     (doc, warnings)
 }
 
+/// A `.ai` saved without PDF compatibility (its PDF part is a placeholder page) from the editor's
+/// own copy of its art alone: `None` when the file has none (or pages are picked, or layers are
+/// off), an error when it can't be read.
+fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(Document, Vec<String>)>> {
+    if opts.pages.is_some() || !opts.layers {
+        return None;
+    }
+    let private = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref())?;
+    Some(
+        vectorcraft_eps::ai_alone(&private)
+            .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})"))),
+    )
+}
+
 /// [`load`] with `document.open` options (the PDF pages, box and password; the DXF options).
 pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded> {
     let format = detect(name, bytes).ok_or_else(|| match super::unsupported(&super::extension(name)) {
@@ -188,9 +202,13 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 .then(|| vectorcraft_pdf::editing_with(bytes, opts.password.as_deref()))
                 .flatten()
                 .map(|e| (e.intact, move || Some(e.data)));
-            restore_or_import(editing, || {
-                let (doc, warnings) = super::pdfimport::import(bytes, opts)?;
-                Ok(through_editing_data(bytes, opts, doc, warnings))
+            restore_or_import(editing, || match super::pdfimport::import(bytes, opts) {
+                Ok((doc, warnings)) => Ok(through_editing_data(bytes, opts, doc, warnings)),
+                // Saved without its PDF part: the editing copy is all the file has.
+                Err(e) if e.to_string() == vectorcraft_pdf::PdfError::PlaceholderOnly.to_string() => {
+                    from_editing_data_alone(bytes, opts).unwrap_or(Err(e))
+                }
+                Err(e) => Err(e),
             })?
         }
         "dxf" => {

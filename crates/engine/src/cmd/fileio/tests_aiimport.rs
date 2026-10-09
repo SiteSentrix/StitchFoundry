@@ -91,3 +91,20 @@ fn what_the_reader_doesnt_read_opens_as_before_with_a_warning() {
     let r = open(&mut s, "symbols.ai", &ai::ai(&compressed(symbols.as_bytes()), ai::page_pdf()), json!({})).unwrap();
     assert!(r["warnings"].to_string().contains("symbols") && r["warnings"].to_string().contains("PDF part"), "{r}");
 }
+
+/// A page showing only a placeholder line, as a `.ai` saved without PDF compatibility has.
+const PLACEHOLDER: &str = "BT /F1 12 Tf 10 50 Td (Saved without its PDF part) Tj ET";
+
+#[test]
+fn an_ai_file_saved_without_its_pdf_part_opens_from_its_editing_data() {
+    let mut s = Session::new();
+    let r = open(&mut s, "art.ai", &ai::ai(&compressed(&ai::sample_data()), PLACEHOLDER), json!({})).unwrap();
+    assert_eq!(r["format"], json!("ai"), "{r}");
+    check_sample(&s);
+    // Its editing data damaged: it says so (the placeholder isn't the art).
+    let e = open(&mut s, "damaged.ai", &ai::ai(b"%AI12_CompressedData not zlib", PLACEHOLDER), json!({})).unwrap_err().to_string();
+    assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
+    // Without editing data, the placeholder still isn't opened as the art.
+    let e = open(&mut s, "plain.ai", &ai::ai(b"", PLACEHOLDER), json!({})).unwrap_err().to_string();
+    assert!(e.contains("placeholder"), "{e}");
+}

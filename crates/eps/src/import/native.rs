@@ -31,6 +31,8 @@ use super::ate::{Story, Texts};
 
 /// The notes that say the import left out something the file has (see [`is_loss`]).
 const TEXT_LEFT_OUT: &str = "text objects on hidden layers or hidden objects couldn't be read, so they are left out";
+/// The same for a file without a page to take shown type from.
+const TYPE_LEFT_OUT: &str = "text objects of kinds VectorCraft doesn't read from the file's text document yet are left out";
 const ART_LEFT_OUT: &str = "hidden layers have art this can't read";
 const LAYERS_UNREAD: &str = "the file's layers weren't read";
 
@@ -38,6 +40,7 @@ const LAYERS_UNREAD: &str = "the file's layers weren't read";
 /// layers that could not be read)? Writing the document over the file would lose it for good.
 pub fn is_loss(note: &str) -> bool {
     note.ends_with(TEXT_LEFT_OUT)
+        || note.ends_with(TYPE_LEFT_OUT)
         || [ART_LEFT_OUT, LAYERS_UNREAD, super::graphics::TOO_MUCH, super::graphics::FAR_AWAY].iter().any(|n| note.starts_with(n))
 }
 
@@ -512,7 +515,7 @@ fn plan(
                 };
             }
         }
-        if spare.len() != loose.len() {
+        if !spare.is_empty() && spare.len() != loose.len() {
             warn.push("the text is on the layers in the order the page paints it, so a text object may be in another group than it was".into());
         }
     }
@@ -600,31 +603,36 @@ struct Frame<'a> {
 }
 
 /// The document of the editing copy `data`, with the text (and strokes round it) of `visible`, the
-/// file read as its page, put in its text objects → the document, its notes and where the page is
-/// in it.
-fn build(data: &[u8], visible: &Document, page: Page) -> Result<(Document, Vec<String>, Rect), String> {
+/// file read as its page, put in its text objects → the document and its notes. Without a page
+/// (a `.ai` saved without its PDF part), its type is made from the file's text document alone and
+/// nothing is compared.
+fn build(data: &[u8], visible: Option<&Document>, page: Page) -> Result<(Document, Vec<String>), String> {
     let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data)?;
-    let art_box = match page {
-        Page::Art => bbox.map(|[a, b, c, d]| Rect::new(a, b, c, d)).ok_or("its editing data doesn't say where its art is")?,
-        Page::Artboard => artboard.ok_or("its editing data doesn't say where its artboard is")?,
-    };
-    let page_rect = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
-    if (art_box.width() - page_rect.width()).abs() > 0.5 || (art_box.height() - page_rect.height()).abs() > 0.5 {
-        return Err("its editing data is for a different page".into());
-    }
-    // The page's area in the layers' document, and the page's type moved there.
-    let rect = to_doc.transform_rect_bbox(art_box);
-    let shift = Affine::translate(Vec2::new(rect.x0 - page_rect.x0, rect.y0 - page_rect.y0));
     let (mut shown, mut hidden) = (vec![], vec![]);
-    for l in &visible.layers {
-        if let Some(c) = l.children() {
-            text_objects(c, l.visible, &mut shown, &mut hidden);
+    let mut frame = None;
+    if let Some(visible) = visible {
+        let art_box = match page {
+            Page::Art => bbox.map(|[a, b, c, d]| Rect::new(a, b, c, d)).ok_or("its editing data doesn't say where its art is")?,
+            Page::Artboard => artboard.ok_or("its editing data doesn't say where its artboard is")?,
+        };
+        let page_rect = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
+        if (art_box.width() - page_rect.width()).abs() > 0.5 || (art_box.height() - page_rect.height()).abs() > 0.5 {
+            return Err("its editing data is for a different page".into());
         }
-    }
-    for object in shown.iter_mut().chain(hidden.iter_mut()) {
-        for n in object.iter_mut() {
-            Arc::make_mut(n).transform(shift, false);
+        // The page's area in the layers' document, and the page's type moved there.
+        let rect = to_doc.transform_rect_bbox(art_box);
+        let shift = Affine::translate(Vec2::new(rect.x0 - page_rect.x0, rect.y0 - page_rect.y0));
+        for l in &visible.layers {
+            if let Some(c) = l.children() {
+                text_objects(c, l.visible, &mut shown, &mut hidden);
+            }
         }
+        for object in shown.iter_mut().chain(hidden.iter_mut()) {
+            for n in object.iter_mut() {
+                Arc::make_mut(n).transform(shift, false);
+            }
+        }
+        frame = Some(Frame { page: visible, page_rect, rect });
     }
     let mut infos = vec![];
     collect_slots(&doc.layers, true, &mut infos);
@@ -656,18 +664,22 @@ fn build(data: &[u8], visible: &Document, page: Page) -> Result<(Document, Vec<S
     fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty);
     doc.layers = layers;
     if empty > 0 {
-        notes.push(format!("{empty} {TEXT_LEFT_OUT}"));
+        notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }
     if !hidden_unread.is_empty() {
         notes.push(format!("{ART_LEFT_OUT} ({}), left out of them", few(hidden_unread)));
     }
-    let frame = Frame { page: visible, page_rect, rect };
-    let unseen = prune_unseen(&frame, &mut doc);
-    if unseen > 0 {
-        notes.push(format!("{unseen} {UNSEEN_TEXT}"));
+    match frame {
+        Some(frame) => {
+            let unseen = prune_unseen(&frame, &mut doc);
+            if unseen > 0 {
+                notes.push(format!("{unseen} {UNSEEN_TEXT}"));
+            }
+            notes.extend(compare(&frame, &doc)?);
+        }
+        None => unmark(&mut doc.layers, true, &mut vec![]),
     }
-    notes.extend(compare(&frame, &doc)?);
-    Ok((doc, notes, rect))
+    Ok((doc, notes))
 }
 
 /// Marks (in a node's name, until [`prune_unseen`] has looked) the text objects made from the file's
@@ -765,9 +777,9 @@ fn compare(frame: &Frame<'_>, layered: &Document) -> Result<Option<String>, Stri
 /// has one that can't be used, `visible` with a warning that says why.
 pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
     let Some(data) = ai::eps_data(ps) else { return visible };
-    let result = data.and_then(|data| build(&data, &visible.document, Page::Art));
+    let result = data.and_then(|data| build(&data, Some(&visible.document), Page::Art));
     match result {
-        Ok((document, mut warnings, _)) => {
+        Ok((document, mut warnings)) => {
             for w in &visible.warnings {
                 if !warnings.contains(w) {
                     warnings.push(w.clone());
@@ -792,8 +804,8 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>) -> (
     if !data.windows(15).any(|w| w == b"%AI5_BeginLayer") {
         return (visible, warnings);
     }
-    match build(&data, &visible, Page::Artboard) {
-        Ok((done, notes, _)) => {
+    match build(&data, Some(&visible), Page::Artboard) {
+        Ok((done, notes)) => {
             let mut all = warnings;
             all.extend(notes.into_iter().filter(|n| !all.contains(n)).collect::<Vec<_>>());
             (done, all)
@@ -804,6 +816,13 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>) -> (
             (visible, all)
         }
     }
+}
+
+/// A `.ai` saved without its PDF part (its pages show only a placeholder) from its editing copy
+/// alone (`private`, the joined `AIPrivateData` streams) → the document and the import's notes.
+pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
+    let data = ai::decode_private(private)?;
+    build(&data, None, Page::Artboard)
 }
 
 #[cfg(test)]

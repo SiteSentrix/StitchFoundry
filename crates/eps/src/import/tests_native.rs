@@ -521,3 +521,24 @@ fn a_dictionary_left_open_at_the_end_of_a_layer_is_a_damaged_file() {
     assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| crate::is_loss(w)), "{:?}", r.warnings);
 }
+
+#[test]
+fn an_ai_file_without_its_pdf_part_reads_its_layers_and_makes_its_type() {
+    // Point type from the text document, shown or not; a story it can't read is left out, with a
+    // note that is a loss.
+    let mut doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Area\r", 0, (8200.0, 8160.0), (0.0, 0.0), 0.0)]);
+    // Story 1 in frame 1, a frame that says more than a matrix.
+    let at = doc.rfind("/1 << /0 [ << /0 0 >> ]").unwrap();
+    doc.replace_range(at..at + 23, "/1 << /0 [ << /0 1 >> ]");
+    let at = doc.rfind("/2 << /2 [ 1 0 0 1 0 0 ] >>").unwrap();
+    doc.replace_range(at..at + 27, "/2 << /2 [ 1 0 0 1 0 0 ] /7 1 >>");
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Words", true, &(text_object(0) + &text_object(1)))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(names(&d), ["Back", "Words"], "{notes:?}");
+    let texts: Vec<String> = text_of(&d.layers[1]).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["Hi there"], "{notes:?}");
+    let left = notes.iter().find(|n| n.contains("left out")).unwrap();
+    assert!(left.starts_with("1 ") && crate::is_loss(left), "{notes:?}");
+    assert!(!notes.iter().any(|n| n.contains("order the page paints")), "{notes:?}");
+    assert!(crate::ai_alone(b"%AI24_ZStandard_Data nothing").is_err());
+}
