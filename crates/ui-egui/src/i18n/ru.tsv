@@ -955,6 +955,7 @@
 	Flare Tool	Инструмент «Блик»
 	Flare Tool Options	Параметры инструмента «Блик»
 	Flat Image	Плоское изображение
+	Flat Logo	Плоский логотип
 	Flatness:	Плоскостность:
 	Flatten Artwork	Объединить рисунок
 	Flatten Transparency	Объединить прозрачности
@@ -3619,6 +3620,8 @@ axis	Both	Оба
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входит в группу панели инструментов из нескольких инструментов
 @msg	onto must name a panel floating in another group	onto должен называть панель, плавающую в другой группе
 @msg	x and y must both be numbers	x и y должны быть числами
+@msg	"{0}" is not a colour: write it as #rrggbb	«{0}» не является цветом: запишите его как #rrggbb
+@msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	это не логотип из плоских цветов ({_1}% его сплошных областей совпадает с несколькими плоскими цветами), поэтому режим «Плоский логотип» превратил бы градиенты в пятна: используйте режим «Цвет»
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
