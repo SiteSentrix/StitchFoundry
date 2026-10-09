@@ -31,9 +31,10 @@
 //!   and `.ai` files their users own, used locally and never committed. (Adobe published a
 //!   specification of the legacy format, listed by PRONOM at
 //!   <https://www.nationalarchives.gov.uk/PRONOM/fmt/423>; it was not used here.)
-//! - The wrappers: ASCII85 is PostScript Level 2 (*PostScript Language Reference*, 3rd ed.); the
-//!   compressed stream is Zstandard, RFC 8878 (<https://www.rfc-editor.org/rfc/rfc8878>), read with
-//!   the permissively licensed `ruzstd` crate.
+//! - The wrappers: the text is the standard ASCII85 encoding; the compressed stream is Zstandard,
+//!   RFC 8878 (<https://www.rfc-editor.org/rfc/rfc8878>), read with the permissively licensed
+//!   `ruzstd` crate (MIT); the older one is zlib, read with `flate2`. The PostScript the layers are
+//!   translated into is run by this project's own interpreter (`interp`).
 //!
 //! Where a file doesn't match what this module expects, it is left alone and its page is imported.
 

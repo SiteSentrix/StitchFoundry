@@ -1,5 +1,6 @@
 //! The layers of an Illustrator EPS and `.ai`: read from the editing copy of the art the file
-//! carries (see `native`). The files here are made from the public specification's operators.
+//! carries (see `native`). The files here are small ones written by hand for the tests, with the
+//! operators seen in files their users own.
 
 use vectorcraft_doc::{Document, LayerColor, Node, NodeKind};
 
