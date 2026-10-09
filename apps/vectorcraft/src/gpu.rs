@@ -37,7 +37,7 @@ const HELP: &str =
 /// Frames the UI ran before the failure, below which it was still starting up. The failure in
 /// #502 came on the first or second frame; later, the adapter has proved itself, and a lost
 /// window is something else (such as the compositor restarting).
-const STARTUP_FRAMES: u64 = 10;
+pub const STARTUP_FRAMES: u64 = 10;
 
 /// The preference used when Preferences say Automatic. Windows and macOS show frames from any GPU
 /// (the integrated one avoids the flicker of #306). Elsewhere, the system's own order: Mesa's
