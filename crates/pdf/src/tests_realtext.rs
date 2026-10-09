@@ -274,3 +274,19 @@ fn an_embedded_fonts_own_cmap_names_its_glyphs() {
     }
     assert!(crate::import::font_chars(b"not a font").is_none());
 }
+
+/// Type whose text matrix shears its glyphs (slanted as a whole, as Illustrator writes type
+/// turned and skewed) reopens as type that still leans: drawn, it covers what its outlines do.
+#[test]
+fn slanted_type_reopens_as_type_that_still_leans() {
+    for (turn, lean) in [(0.0, 0.25), (-0.2, 0.25), (0.3, -0.15)] {
+        let mut t = TextObject::point(Point::new(80.0, 150.0), "LEAN", style(60.0));
+        t.xf *= Affine::rotate(turn) * Affine::skew(lean, 0.0);
+        let d = doc(vec![t]);
+        let reopened = import_as(&pdf(&d, false).bytes, TextAs::Text);
+        assert_eq!(texts(&reopened), ["LEAN"], "{turn} {lean}: reopened as type");
+        let (a, b) = (ink(&import_as(&pdf(&reopened, true).bytes, TextAs::Outlines)), ink(&import_as(&pdf(&d, true).bytes, TextAs::Outlines)));
+        let off = [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+        assert!(off < 0.5, "{turn} {lean}: {a:?} vs {b:?}");
+    }
+}
