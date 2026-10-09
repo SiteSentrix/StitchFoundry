@@ -319,6 +319,10 @@ fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool) -> Stri
     format!("{}{} @ {} ({mode})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom).replace('%', " %"))
 }
 
+/// Whether a document tab's × comes before its title (macOS) rather than after it (Windows,
+/// Linux and the web).
+const CLOSE_BEFORE_TITLE: bool = cfg!(target_os = "macos");
+
 /// Document tab strip: "Name* @ 66.67% (RGB/Preview)". User Interface › Large Tabs makes the tabs
 /// taller, with larger titles.
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -346,11 +350,13 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.4));
         }
         ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.5, t.border));
-        // × at the left like Illustrator.
-        let xr = egui::Rect::from_center_size(egui::pos2(r.left() + 16.0, r.center().y), vec2(12.0, 12.0));
+        // The × where each platform puts a tab's: before the title on macOS, after it elsewhere
+        // (#673).
+        let (x_center, title_left) = if CLOSE_BEFORE_TITLE { (r.left() + 16.0, r.left() + 32.0) } else { (r.right() - 16.0, r.left() + 14.0) };
+        let xr = egui::Rect::from_center_size(egui::pos2(x_center, r.center().y), vec2(12.0, 12.0));
         let xresp = ui.interact(xr.expand(3.0), ui.id().with(("tabx", i)), Sense::click());
         icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
-        ui.painter().galley(egui::pos2(r.left() + 32.0, r.center().y - galley.size().y / 2.0), galley, t.text);
+        ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley, t.text);
         if xresp.clicked() {
             close = Some(i);
         } else if resp.clicked() {
@@ -780,6 +786,44 @@ mod tests {
         if !cfg!(target_os = "macos") {
             assert!(text("zoom").contains("Alt+Click") && text("paintbrush").contains("Ctrl+Shift+/"));
         }
+    }
+
+    /// A document tab's × sits where the platform puts it (#673): after the title on Windows,
+    /// Linux and the web, before it on macOS; clicking it closes that document.
+    #[test]
+    fn a_tabs_close_box_sits_where_the_platform_puts_it() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 200.0));
+        let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::doc_tabs(app, ui));
+            out.textures_delta.clear();
+            let mut titles = vec![];
+            for c in &out.shapes {
+                // The titles, not the × icons.
+                if let egui::Shape::Text(t) = &c.shape
+                    && t.visual_bounding_rect().width() > 30.0
+                {
+                    titles.push(t.visual_bounding_rect());
+                }
+            }
+            titles.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            titles
+        };
+        let titles = frame(&mut app, vec![]);
+        assert_eq!(titles.len(), 2, "{titles:?}");
+        // The first tab's ×: 20 pt past its title's end, or 16 pt before its start.
+        let first = titles[0];
+        let x = if super::CLOSE_BEFORE_TITLE { first.left() - 16.0 } else { first.right() + 20.0 };
+        let at = egui::pos2(x, first.center().y);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(&mut app, vec![press(false)]);
+        assert_eq!(app.session.documents().len(), 1, "the × closed the first document");
+        assert!(super::CLOSE_BEFORE_TITLE == cfg!(target_os = "macos"));
     }
 
     /// One headless frame of the status bar; returns the artboard navigator's buttons, left to
