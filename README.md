@@ -218,6 +218,7 @@ The scores are
 self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-05) explains how far to trust them.
 
 **What's missing:**
+
 - 3D and Materials;
 - the Photoshop-style raster effects (Effect Gallery);
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
@@ -229,7 +230,7 @@ self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-0
 advanced type, then hardening and packaging for 1.0. The prioritized list is in
 [Where we're lacking](ROADMAP.md#where-were-lacking-in-priority-order).
 
-**Workspace:** `crates/{geom, color, doc, pathops, text, effects, trace, brush, render, svg, pdf, eps, cad, metafile, format, tools, engine, ui-egui, mcp, testkit}`
+**Workspace:** `crates/{geom, color, doc, pathops, text, effects, three-d, trace, brush, render, svg, pdf, eps, cad, metafile, format, tools, engine, ui-egui, mcp, testkit}`
 and `apps/{vectorcraft, vectorcraft-cli, vectorcraft-web}`. The egui frontend is its own crate, so
 the UI can be swapped without touching the engine.
 
