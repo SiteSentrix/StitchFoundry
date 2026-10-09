@@ -577,4 +577,28 @@ mod tests {
             assert!(PREF_SPECS.iter().any(|s| s.category == *c));
         }
     }
+
+    /// Preferences › Hyphenation › Exceptions (#394): OK on the dialog pushes the list into the
+    /// hyphenator the same way `prefs.set` does (no need to drive the live Preferences window).
+    #[test]
+    fn hyphenation_exceptions_dialog_ok_reaches_the_hyphenator() {
+        struct Clear;
+        impl Drop for Clear {
+            fn drop(&mut self) {
+                vectorcraft_text::set_hyphenation_exceptions("");
+            }
+        }
+        let _clear = Clear;
+        let mut a = app();
+        open(&mut a, Some("Hyphenation"));
+        let d = a.ui.dialog.as_mut().unwrap();
+        assert_eq!(d.str("__category"), "Hyphenation");
+        d.fields.insert("hyphenationExceptions".into(), json!("typography, hap-pen"));
+        confirm(&mut a).unwrap();
+        assert!(a.ui.dialog.is_none());
+        assert_eq!(a.session.prefs.hyphenation_exceptions, "typography, hap-pen");
+        assert_eq!(vectorcraft_text::hyphenation_exceptions(), "typography, hap-pen");
+        assert!(vectorcraft_text::hyphen::hyphen_points("typography").is_empty());
+        assert_eq!(vectorcraft_text::hyphen::hyphen_points("happen"), vec![3]);
+    }
 }

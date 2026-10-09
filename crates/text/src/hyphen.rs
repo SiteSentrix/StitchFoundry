@@ -186,14 +186,20 @@ thread_local! {
     static TEST_OVERRIDE: std::cell::RefCell<Option<Exceptions>> = const { std::cell::RefCell::new(None) };
 }
 
+/// Run `f` with Preferences › Hyphenation › Exceptions applied on this thread only (tests).
+#[cfg(test)]
+pub(crate) fn with_hyphenation_exceptions_for_test(source: &str, f: impl FnOnce()) {
+    TEST_OVERRIDE.with(|c| *c.borrow_mut() = Some(parse_list(source)));
+    f();
+    TEST_OVERRIDE.with(|c| *c.borrow_mut() = None);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn with_exceptions(source: &str, f: impl FnOnce()) {
-        TEST_OVERRIDE.with(|c| *c.borrow_mut() = Some(parse_list(source)));
-        f();
-        TEST_OVERRIDE.with(|c| *c.borrow_mut() = None);
+        with_hyphenation_exceptions_for_test(source, f);
     }
 
     /// #394 Preferences › Hyphenation › Exceptions contract (parse + override).
