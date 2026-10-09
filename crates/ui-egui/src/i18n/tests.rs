@@ -19,6 +19,9 @@ fn tags_map_to_languages() {
     for tag in ["fr", "fr_FR.UTF-8", "fr-BE", "fr_CA", "fr-CH", "fr-LU"] {
         assert_eq!(lang_from_tag(tag), Lang::from_code("fr"), "{tag}");
     }
+    for tag in ["uk", "uk-UA", "uk_UA.UTF-8", "UK-ua", "uk_UA.UTF-8@euro"] {
+        assert_eq!(lang_from_tag(tag), Some(uk()), "{tag}");
+    }
     // Traditional Chinese: by region, by script, and with a region after the script.
     assert_eq!(lang_from_tag("zh_TW.UTF-8"), Some(ZH()));
     assert_eq!(lang_from_tag("zh-TW"), Some(ZH()));
@@ -64,6 +67,7 @@ fn preferences_resolve_with_fallback() {
     assert_eq!(Lang::from_pref("zh-hant"), ZH());
     assert_eq!(Lang::from_pref("ZH-Hant"), ZH());
     assert_eq!(Lang::from_pref("en"), Lang::EN);
+    assert_eq!(Lang::from_pref("UK"), uk());
     // `auto` and unknown codes follow the system (English under test).
     assert_eq!(Lang::from_pref("auto"), Lang::EN);
     assert_eq!(Lang::from_pref("xx-unknown"), Lang::EN);
@@ -419,7 +423,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 7] = ["cs", "es", "fr", "it", "ja", "pt-br", "ru"];
+const KEEPS_MENU_NAMES: [&str; 8] = ["cs", "es", "fr", "it", "ja", "pt-br", "ru", "uk"];
 
 /// Menu labels the menu-complete catalogs (Czech, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -568,6 +572,10 @@ fn ru() -> Lang {
     Lang::from_code("ru").expect("ru registered")
 }
 
+fn uk() -> Lang {
+    Lang::from_code("uk").expect("uk registered")
+}
+
 /// Spanish uses the vector-illustration vocabulary its users know, has two plural forms like
 /// English, and reads the same in the menus and in the panels.
 #[test]
@@ -655,6 +663,76 @@ fn russian_reads_as_russian() {
     assert_eq!(trn(ru(), 22, "{n} Layer", "{n} Layers"), "22 слоя");
 }
 
+#[test]
+fn ukrainian_reads_as_ukrainian() {
+    for (en, want) in [
+        ("Artboard Tool", "Інструмент «Монтажна область»"),
+        ("Swatches", "Зразки"),
+        ("Pathfinder", "Обробка контурів"),
+        ("Stroke", "Обведення"),
+        ("Fill", "Заливка"),
+        ("Direct Selection Tool", "Інструмент «Пряме виділення»"),
+        ("Save As…", "Зберегти як…"),
+        ("Undo", "Скасувати"),
+    ] {
+        assert_eq!(tr(uk(), en), want);
+    }
+    assert_eq!(tr_ctx(uk(), "axis", "Both"), "Обидві");
+    for (n, word) in [
+        (0, "шарів"),
+        (1, "шар"),
+        (2, "шари"),
+        (5, "шарів"),
+        (11, "шарів"),
+        (21, "шар"),
+        (22, "шари"),
+        (111, "шарів"),
+        (112, "шарів"),
+        (121, "шар"),
+        (124, "шари"),
+    ] {
+        assert_eq!(trn(uk(), n, "{n} Layer", "{n} Layers"), format!("{n} {word}"));
+    }
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(uk(), nested), "команда `object.group` зараз недоступна: нічого не виділено");
+}
+
+/// Every Ukrainian plural has all three forms; exercise different endings through real lookups.
+#[test]
+fn ukrainian_plurals_have_three_forms() {
+    let (entries, _) = parse_entries(uk().0.source);
+    let mut count = 0;
+    for (ctx, src, translated) in entries {
+        if ctx != "@plural" {
+            continue;
+        }
+        count += 1;
+        let (one, other) = src.split_once('|').expect("one|other source");
+        let forms: Vec<_> = translated.split('|').collect();
+        assert_eq!(forms.len(), 3, "{src}");
+        for (n, form) in [
+            (1, 0),
+            (2, 1),
+            (4, 1),
+            (0, 2),
+            (5, 2),
+            (11, 2),
+            (12, 2),
+            (14, 2),
+            (21, 0),
+            (24, 1),
+            (111, 2),
+            (114, 2),
+            (121, 0),
+            (122, 1),
+            (u64::MAX, 2),
+        ] {
+            assert_eq!(trn(uk(), n, one, other), forms[form].replace("{n}", &n.to_string()), "{src}: {n}");
+        }
+    }
+    assert!(count >= 13, "Ukrainian plural rows missing");
+}
+
 /// Catalogs written with spaces between words keep a fragment's leading and trailing spaces: the
 /// hint bar and a few labels are joined from pieces (" to finish", "Press ").
 #[test]
@@ -675,7 +753,7 @@ fn czech_plurals_have_three_forms() {
 
 #[test]
 fn russian_plurals_have_three_forms() {
-    let forms: Vec<usize> = [0, 1, 2, 4, 5, 11, 21, 22, 25, 111, 121].into_iter().map(plural_russian).collect();
+    let forms: Vec<usize> = [0, 1, 2, 4, 5, 11, 21, 22, 25, 111, 121].into_iter().map(plural_east_slavic).collect();
     assert_eq!(forms, [2, 0, 1, 1, 2, 2, 0, 1, 2, 2, 0]);
 }
 
@@ -702,10 +780,10 @@ fn latin_script_glyphs_are_available_without_system_fonts() {
     });
 }
 
-/// Russian letters (and the punctuation the catalog uses) come from each family's own first font, not
+/// Russian and Ukrainian letters (and their punctuation) come from each family's own first font, not
 /// from a fallback further down the stack.
 #[test]
-fn russian_glyphs_are_available_without_system_fonts() {
+fn cyrillic_glyphs_are_available_without_system_fonts() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -716,7 +794,7 @@ fn russian_glyphs_are_available_without_system_fonts() {
             let first = first.unwrap();
             let mut font = fonts.fonts.font(&family);
             let chars = font.characters();
-            for ch in "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ«»„“…–’".chars()
+            for ch in "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯґєіїҐЄІЇ«»„“…–’".chars()
             {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
             }
@@ -794,7 +872,7 @@ fn complete_languages_translate_every_message() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["es", "fr", "it", "ru"];
+const COMPLETE_MESSAGES: &[&str] = &["es", "fr", "it", "ru", "uk"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
