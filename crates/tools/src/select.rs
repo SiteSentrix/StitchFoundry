@@ -87,7 +87,7 @@ impl MoveSnap {
     pub(crate) fn new(cx: &ToolContext) -> Self {
         Self {
             bounds: selection_bounds(cx),
-            targets: cx.smart_guides.then(|| Targets::collect(cx.doc, &cx.selection.objects, None).styled(cx)),
+            targets: cx.smart_guides.then(|| Targets::for_move(cx)),
             points: Targets::snap_to_point(cx, &cx.selection.objects),
         }
     }
