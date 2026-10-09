@@ -468,6 +468,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 });
                 corner_radius_row(app, ui, &n, "radius");
             }
+            vectorcraft_doc::LiveShape::Ellipse { pie, .. } => super::transform::pie_rows(app, ui, *pie, "props-pie"),
             _ => {}
         }
     }

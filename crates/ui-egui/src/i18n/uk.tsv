@@ -215,6 +215,10 @@
 	Auto Size New Area Type	Автоматично підганяти розмір нового тексту в області
 	Auto Spell Check	Автоматична перевірка орфографії
 	Auto-Collapse Iconic Panels	Автоматично згортати значки панелей
+	Ellipse Properties:	Властивості еліпса:
+	Invert Pie	Інвертувати сектор
+	Pie End Angle:	Кінцевий кут сектора:
+	Pie Start Angle:	Початковий кут сектора:
 	Show Tool Group Labels	Показувати назви груп інструментів
 	Auto-Rotate (turn the paper to each artboard)	Автоматичний поворот (повертати аркуш відповідно до кожної монтажної області)
 	Automatic flatness	Автоматична площинність

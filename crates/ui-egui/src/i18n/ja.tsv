@@ -345,9 +345,13 @@
 	Appearance Attribute	アピアランス属性
 	Apply	適用
 	Blending Mode	描画モード
+	Ellipse Properties:	楕円形のプロパティ:
 	Fill & Stroke	塗りと線
 	Fill Color	カラー (塗り)
+	Invert Pie	扇形を反転
 	Opacity	不透明度
+	Pie End Angle:	扇形の終了角度:
+	Pie Start Angle:	扇形の開始角度:
 	Stroke Color	カラー (線)
 	Stroke Weight	線幅
 	Graphic Style	グラフィックスタイル

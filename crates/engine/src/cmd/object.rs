@@ -196,7 +196,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Live Shape Properties",
             [],
             None,
-            "{id?, ids?, radius?: pt, kind?: \"round\"|\"invertedRound\"|\"chamfer\", corners?: [i…], sides?: n} (Live Corners on any path: radius and kind set its corners (anchors without handles between two straight sides): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared)",
+            "{id?, ids?, radius?: pt, kind?: \"round\"|\"invertedRound\"|\"chamfer\", corners?: [i…], sides?: n, pieStart?, pieEnd?: degrees (an ellipse's pie, counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse), invertPie?: true (swaps them: the other part of the ellipse)} (Live Corners on any path: radius and kind set its corners (anchors without handles between two straight sides): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared)",
             has_selection,
             set_live_shape
         ),
@@ -1095,11 +1095,37 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         .transpose()?;
     let radius = p.get("radius").and_then(Value::as_f64);
     let sides = p.get("sides").and_then(Value::as_u64);
+    // An ellipse's pie (Ellipse Properties: Pie Start and End Angle, degrees; Invert Pie swaps them).
+    let angle = |k: &str| -> Result<Option<f64>> {
+        match p.get(k) {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => v
+                .as_f64()
+                .filter(|a| a.is_finite())
+                .map(|a| Some(a.rem_euclid(360.0)))
+                .ok_or_else(|| bad("object.setLiveShape", format!("`{k}` must be an angle in degrees, not {v}"))),
+        }
+    };
+    let (pie_start, pie_end) = (angle("pieStart")?, angle("pieEnd")?);
+    let invert = p.get("invertPie").and_then(Value::as_bool) == Some(true);
     s.edit("Live Shape", |d, sel| {
         for id in &ids {
             let Some(NodeKind::Path { path, live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             if let (Some(l @ LiveShape::Polygon { .. }), Some(n)) = (live.as_mut(), sides) {
                 l.set_sides(n);
+                *path = l.to_path();
+            }
+            if let Some(l @ LiveShape::Ellipse { .. }) = live.as_mut()
+                && (pie_start.is_some() || pie_end.is_some() || invert)
+            {
+                if let LiveShape::Ellipse { pie, .. } = l {
+                    // An end of 0 is a full turn (Illustrator shows a whole ellipse as 0° to 360°).
+                    let end_of = |a: f64| if a == 0.0 { 360.0 } else { a };
+                    *pie = (pie_start.unwrap_or(pie.0), pie_end.map_or(pie.1, end_of));
+                    if invert {
+                        *pie = (pie.1.rem_euclid(360.0), end_of(pie.0));
+                    }
+                }
                 *path = l.to_path();
             }
             if radius.is_none() && kind.is_none() {

@@ -146,7 +146,7 @@ impl LiveShape {
             LiveShape::Rectangle { w, h, radii, kinds, xf } => {
                 shapes::rectangle_with_corners(Rect::new(0.0, 0.0, *w, *h), *radii, *kinds).transformed(*xf)
             }
-            LiveShape::Ellipse { w, h, xf, .. } => shapes::ellipse(Rect::new(0.0, 0.0, *w, *h)).transformed(*xf),
+            LiveShape::Ellipse { w, h, pie, xf } => shapes::ellipse_pie(Rect::new(0.0, 0.0, *w, *h), pie.0, pie.1).transformed(*xf),
             LiveShape::Polygon { radii, kinds, .. } => cut_corners(&self.polygon_outline(), radii, kinds).0,
             LiveShape::Line { a, b } => shapes::line(*a, *b),
             LiveShape::Path { base, radii, kinds } => cut_corners(base, radii, kinds).0,
