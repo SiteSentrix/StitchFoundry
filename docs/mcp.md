@@ -612,6 +612,23 @@ the one highlighted layer or group row, else the one selected group, else the cu
 so art added later is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
 underlines clipping-path names.
 
+## Object selection
+
+`select.set {ids}` replaces the selection, `select.add {ids}` adds to it, and
+`select.toggle {id}` or `select.toggle {ids}` toggles each target.
+Every id must be a non-negative integer naming an existing object.
+A malformed or unknown id is an error naming that value; the entire selection is left unchanged.
+All three commands return `{count, ids}` for the resulting selection, in selection order.
+An empty array clears the selection for `select.set` and leaves it alone for Add and Toggle.
+
+`edit.clear {ids?}` deletes the exact selected objects, including individual compound-path members;
+their unselected siblings remain in the compound. Supplying `ids` works without a selection and
+overrides selected anchors or guides. Every explicit id is validated before any deletion; a malformed
+or unknown id leaves the document unchanged. An empty `ids` array does nothing. Layers themselves
+are kept, and selecting an ancestor together with its descendants deletes that subtree once.
+Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
+Cut still removes the objects it copied, including a whole compound when a member is selected.
+
 ## Saved selections
 
 Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default
@@ -778,9 +795,12 @@ swatch in the library panel does). `swatch.resetDefaults {replace?}` brings back
 {"name":"run_command","arguments":{"command":"swatch.library.get","params":{"library":"earth-tones"}}}
 {"name":"run_command","arguments":{"command":"swatch.library.add","params":{"library":"earth-tones","names":["Clay"]}}}
 ```
-`swatch.library.save {path?, format?: "vcswatches"|"gpl"|"css", names?, name?, user?}` writes the document's swatches
-as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour groups; `.gpl` is 8-bit RGB;
-CSS writes custom properties); without `path` it returns `{data}`, and `user: true` saves into the user library
+`swatch.library.save {path?, format?: "vcswatches"|"gpl"|"ase"|"css", names?, name?, user?}` writes the document's
+swatches as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour
+groups; `.gpl` is 8-bit RGB; a swatch exchange `.ase` file keeps solid colors in their own model
+(RGB, CMYK, Lab or Gray) as global, spot or process colors, and color groups, writes a tint swatch
+as the color it shows and leaves gradients out; CSS writes custom properties); without `path`
+it returns `{data}`, or `{dataBase64}` for `.ase`, and `user: true` saves into the user library
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
 dataBase64?, name?}` loads a `.vcswatches`, `.gpl` or swatch exchange (`.ase`) file, or another document's swatches,
 as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global, spot or process
@@ -1150,7 +1170,8 @@ or pulls handles out in line with the neighbouring anchors (a smooth anchor keep
 (Cut Path at Selected Anchor Points) cuts there and answers `{ids}`: a closed path opens at the cut, its two ends
 on top of each other, and an open path becomes one path per piece. Each cut leaves one of its two anchors selected,
 so `path.moveAnchors {dx, dy}` (or a Direct Selection drag) pulls the path apart there; `path.join {}` (Connect
-Selected End Points) joins the ends again. `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
+Selected End Points) joins the ends again; `path.join {ids: [a, b], ends: ["last", "first"]}` joins the ends asked for
+(the Pen's join, #776: drawing on from one open path, a click on another's end makes them one path). `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
 `path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools); the Pen with Alt
 held over a selected path's handle, anchor or segment works as the Anchor Point tool. `path.reshapeSegment {id,
 subpath?, segment, t, dx, dy}` (a segment dragged with Direct Selection or the Anchor Point tool) moves the segment's
@@ -2516,9 +2537,12 @@ Type can use the bundled fonts, fonts added to the session and the fonts install
 the system's and the user's font folders (Windows: `Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, plus fonts
 registered outside them, such as fonts installed as shortcuts, and in the desktop app and `vectorcraft-cli` (MCP
 included) the fonts in DirectWrite's system font collection, such as those Adobe Fonts activates while Creative Cloud runs; macOS: `/System/Library/Fonts`, `/Library/Fonts`,
-`/Network/Library/Fonts`, `~/Library/Fonts` and downloaded system fonts; Linux and BSD: `/usr/share/fonts`,
+`/Network/Library/Fonts`, `~/Library/Fonts` and downloaded system fonts, plus in the desktop app and `vectorcraft-cli`
+the fonts CoreText's font manager lists outside them, such as those apps and font managers register from their own
+folders; Linux and BSD: `/usr/share/fonts`,
 `/usr/local/share/fonts`, `~/.fonts` and the XDG data folders' `fonts`, `~/.local/share/fonts` among them, and in a
-Flatpak sandbox the host's fonts). The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
+Flatpak sandbox the host's fonts). Faces without outlines VectorCraft draws (no `glyf`, `CFF`, `CFF2` or `VARC` table, such
+as bitmap-only fonts) are left out. The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
 by family name), so opening, placing, pasting and importing files find them whatever ran before. `text.fontList`
 lists every family available, the installed ones included, as the font menus do: without the system's hidden
 families, whose names start with "." (macOS's ".SF NS", ".LastResort"), which still resolve when a document names

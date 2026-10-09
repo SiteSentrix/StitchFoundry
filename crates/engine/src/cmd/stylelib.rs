@@ -15,7 +15,7 @@ use vectorcraft_doc::{Document, GraphicStyle, PatternDef, StyleLibrary};
 
 use super::menucmds::squash;
 use super::swatch::str_list;
-use super::swatchlib::{LibraryFile, LibraryInfo, stem};
+use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -211,7 +211,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
     let lib = StyleLibrary::from_document(&st.doc, &str_list(p, "names"), name).map_err(|e| bad(C, e))?;
     let mut out = json!({ "count": lib.len() });
-    s.style_libraries.write(p, &lib.name, STYLES_EXT, style_libs::write(&lib), &mut out, C)?;
+    s.style_libraries.write(p, &lib.name, STYLES_EXT, FileData::Text(style_libs::write(&lib)), &mut out, C)?;
     Ok(out)
 }
 

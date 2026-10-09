@@ -11,8 +11,9 @@
 //! it a corner, dragging an anchor pulls out new symmetric handles and dragging a segment reshapes
 //! it. Cmd held lends the selection tool used last for a drag (the engine's
 //! `Session::pointer`); the path being drawn goes on afterwards while it stays selected.
-//! Enter/Esc (or switching tools) ends the path. Clicking the end of a selected open path continues
-//! it. The rubber-band preview shows the next segment (Enable Rubber Band for Pen Tool). Auto Add/Delete: between paths, a click on a
+//! Enter/Esc (or switching tools) ends the path. Clicking an end of an open path continues it
+//! (selecting it); while drawing, clicking an end of another open path joins the two into one
+//! (#776). The rubber-band preview shows the next segment (Enable Rubber Band for Pen Tool). Auto Add/Delete: between paths, a click on a
 //! segment of a selected path adds an anchor there and a click on one of its anchors deletes it
 //! (Shift held or General → Disable Auto Add/Delete starts a new path instead). On a selected
 //! blend's spine a click adds a point (on a point no key object sits on: deletes it).
@@ -78,6 +79,29 @@ fn active_path(cx: &ToolContext) -> Option<(NodeId, Point, Point, Point)> {
     let first = sp.anchors.first()?.p;
     let last = sp.anchors.last()?;
     Some((id, first, last.p, last.h_out))
+}
+
+/// An end of an open path (one subpath, not `except`) under `p`, within `tol`: the path the Pen
+/// continues or joins to, and whether it's the path's first anchor. Only paths that can be edited,
+/// not guides.
+fn open_end_at(cx: &ToolContext, p: Point, tol: f64, except: Option<NodeId>) -> Option<(NodeId, bool)> {
+    let id = vectorcraft_doc::hit::hit_test(cx.doc, p, cx.hit_options())?.leaf;
+    if Some(id) == except || !cx.doc.is_editable(id) {
+        return None;
+    }
+    let NodeKind::Path { path, guide: false, .. } = &cx.doc.node(id)?.kind else { return None };
+    let [sp] = path.subpaths.as_slice() else { return None };
+    if sp.closed {
+        return None;
+    }
+    let (first, last) = (sp.anchors.first()?.p, sp.anchors.last()?.p);
+    if p.distance(last) <= tol {
+        Some((id, false))
+    } else if p.distance(first) <= tol {
+        Some((id, true))
+    } else {
+        None
+    }
 }
 
 /// The last anchor of `id`'s last subpath: (subpath, anchor).
@@ -160,6 +184,12 @@ impl Tool for PenTool {
                         self.handle = Some((id, si, ai, last));
                         return vec![Action::Begin("Convert Anchor Point".into()), set_out_handle(id, si, ai, last)];
                     }
+                    // An end of another open path: the two become one, and the path is finished.
+                    if let Some((other, at_first)) = open_end_at(cx, p, tol, Some(id)) {
+                        self.stop();
+                        let end = if at_first { "first" } else { "last" };
+                        return vec![Action::Exec("path.join".into(), json!({"ids": [id.0, other.0], "ends": ["last", end]}))];
+                    }
                     if let Some(acts) = self.alt_convert(cx, ev) {
                         return acts;
                     }
@@ -183,6 +213,15 @@ impl Tool for PenTool {
                         return vec![Action::Exec("path.reverse".into(), json!({}))];
                     }
                     return vec![];
+                }
+                // Continue any other open path from the end clicked, selecting it.
+                if let Some((id, at_first)) = open_end_at(cx, p, tol, None) {
+                    (self.drawing, self.path) = (true, Some(id));
+                    let mut out = vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))];
+                    if at_first {
+                        out.push(Action::Exec("path.reverse".into(), json!({"ids": [id.0]})));
+                    }
+                    return out;
                 }
                 if let Some(act) = auto_add_delete(cx, ev.pos, ev.mods, tol) {
                     return vec![act];
@@ -306,6 +345,9 @@ impl Tool for PenTool {
             if p.distance(last) <= tol {
                 return Cursor::PenConvert;
             }
+            if open_end_at(cx, p, tol, Some(id)).is_some() {
+                return Cursor::PenJoin;
+            }
         }
         if alt_converts(cx, p, m) {
             return Cursor::PenConvert;
@@ -316,7 +358,9 @@ impl Tool for PenTool {
                 Some([_]) => return Cursor::PenAdd,
                 _ => {}
             }
-            if active_path(cx).is_some_and(|(_, first, last, _)| p.distance(last) <= tol || p.distance(first) <= tol) {
+            if active_path(cx).is_some_and(|(_, first, last, _)| p.distance(last) <= tol || p.distance(first) <= tol)
+                || open_end_at(cx, p, tol, None).is_some()
+            {
                 return Cursor::PenContinue;
             }
             match auto_add_delete(cx, p, m, tol) {

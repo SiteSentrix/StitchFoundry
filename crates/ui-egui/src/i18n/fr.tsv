@@ -162,6 +162,7 @@
 	Appearance panel	Panneau Aspect
 	Applies when the linked file is relinked or updated.	S’applique lorsque le fichier lié est de nouveau lié ou mis à jour.
 	Applies the next time VectorCraft starts.	S’applique au prochain démarrage de VectorCraft.
+	Apply	Appliquer
 	Apply Brush	Appliquer la forme
 	Apply Character Style	Appliquer le style de caractère
 	Apply Effect	Appliquer l’effet
@@ -2636,6 +2637,7 @@
 	Swash	Lettres ornées
 	Swatch Conflict	Conflit de nuances
 	Swatch Conflicts	Conflits de nuances
+	Swatch exchange files keep solid colors only.	Les fichiers d’échange de nuances ne conservent que les couleurs unies.
 	Swatch Libraries	Bibliothèques de nuances
 	Swatch Libraries Menu	Menu Bibliothèques de nuances
 	Swatch Library	Bibliothèque de nuances
@@ -2986,6 +2988,7 @@
 	Scrub Numeric Fields by Dragging	Modifier les champs numériques en faisant glisser
 	{count} file(s) in {folder}{note}. Show the package folder?	{count} fichier(s) dans {folder}{note}. Afficher le dossier de l’assemblage ?
 	{count} linked file(s) not found	{count} fichier(s) lié(s) introuvable(s)
+	fonts not copied: {fonts}	polices non copiées : {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} image(s) liée(s) modifiée(s) depuis l’enregistrement de ce document. Afficher les nouvelles versions ?
 	{count} more rules: Export writes every one.	{count} règles de plus : Exporter les écrit toutes.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} objets sans nom omis : nommez-les ou activez Objets sans nom dans le menu du panneau.

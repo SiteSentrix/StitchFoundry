@@ -116,7 +116,7 @@ fn every_effect_is_deterministic() {
         assert_eq!(a, b, "{id}");
         assert_ne!(a, src, "{id} changes the image");
         // Premultiplied stays premultiplied.
-        assert!(a.chunks_exact(4).all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]), "{id}");
+        assert!(a.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]), "{id}");
     }
 }
 
@@ -196,9 +196,9 @@ fn lengths_are_document_units() {
 fn gaussian_and_plane_blurs_keep_their_mass() {
     let (w, h) = (30, 30);
     let mut d = image(w, h, |x, y| if (10..20).contains(&x) && (10..20).contains(&y) { grey(255) } else { [0, 0, 0, 0] });
-    let before: u32 = d.chunks_exact(4).map(|p| p[3] as u32).sum();
+    let before: u32 = d.as_chunks::<4>().0.iter().map(|p| p[3] as u32).sum();
     gaussian_rgba(&mut d, w, h, 2.0);
-    let after: u32 = d.chunks_exact(4).map(|p| p[3] as u32).sum();
+    let after: u32 = d.as_chunks::<4>().0.iter().map(|p| p[3] as u32).sum();
     assert!((before as f64 - after as f64).abs() / (before as f64) < 0.02, "{before} → {after}");
     assert!(at(&d, w, 9, 15)[3] > 0 && at(&d, w, 10, 15)[3] < 255);
     let mut plane: Vec<f32> = (0..w * h).map(|i| if i == 15 * w + 15 { 100.0 } else { 0.0 }).collect();

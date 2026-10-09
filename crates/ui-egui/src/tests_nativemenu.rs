@@ -348,11 +348,18 @@ fn key_equivalents_run_through_the_normal_shortcut_path_once() {
     let before = undo(&m);
     m.key_equivalent("Cmd+Z");
     assert_eq!(undo(&m), before - 1, "⌘Z undid one step");
-    let synced = m.fake.synced();
-    assert!(synced >= 1, "the menus were built");
-    m.frame(vec![]);
-    m.frame(vec![]);
-    assert_eq!(m.fake.synced(), synced, "nothing changed: the menus weren't read again");
+    assert!(m.fake.synced() >= 1, "the menus were built");
+    // Idle frames don't read the menus again. The shortcut and plug-in generations are
+    // process-wide, and tests running alongside with other shortcuts bump them (rightly reading
+    // the menus again), so judge two idle frames in which they held still.
+    let globals = || (crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed), crate::menus::plugin_revision());
+    let quiet = (0..50).any(|_| {
+        let (before, synced) = (globals(), m.fake.synced());
+        m.frame(vec![]);
+        m.frame(vec![]);
+        globals() == before && m.fake.synced() == synced
+    });
+    assert!(quiet, "nothing changed: the menus weren't read again");
     assert_eq!(crate::control::inspect(&m.app, &m.ctx)["nativeMenuBar"], json!(true));
 }
 

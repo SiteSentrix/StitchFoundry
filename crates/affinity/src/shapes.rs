@@ -115,13 +115,21 @@ pub(crate) fn shape(r: &mut Reader, shape: ObjId, b: [f64; 4], world: Affine) ->
             }))?
         }
         b"ShPi" => {
-            let start = num(r, shape, b"AngS").unwrap_or(0.0);
-            let mut end = num(r, shape, b"AngE").unwrap_or(TAU);
-            while end < start {
-                end += TAU;
-            }
+            let raw_start = num(r, shape, b"AngS").unwrap_or(0.0);
+            let raw_end = num(r, shape, b"AngE").unwrap_or(TAU);
+            // Normalize in constant time. Repeatedly adding TAU can hang on finite values
+            // large enough that floating-point addition no longer changes the endpoint.
+            let start = raw_start.rem_euclid(TAU);
+            let delta = raw_end - raw_start;
+            let sweep = if raw_end >= raw_start {
+                delta.min(TAU)
+            } else if delta.is_finite() {
+                delta.rem_euclid(TAU)
+            } else {
+                (raw_end.rem_euclid(TAU) - start).rem_euclid(TAU)
+            };
             let inner = num(r, shape, b"IRad").unwrap_or(0.0).clamp(0.0, 1.0);
-            pie(cx, cy, rx, ry, start, end.min(start + TAU), inner)
+            pie(cx, cy, rx, ry, start, start + sweep, inner)
         }
         b"ShpT" => {
             let p = num(r, shape, b"Pos ").unwrap_or(0.5);

@@ -618,6 +618,47 @@ mod tests {
     }
 
     #[test]
+    fn the_save_dialog_writes_swatch_exchange_files() {
+        let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
+        let w = written.clone();
+        let services = crate::Services {
+            pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
+            write: Some(Box::new(move |p: &str, b: &[u8]| {
+                w.borrow_mut().push((p.to_string(), b.to_vec()));
+                Ok(())
+            })),
+            ..Default::default()
+        };
+        let mut app = VectorcraftApp::new(Session::new(), services);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.saveSwatchLibrary", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("format".into(), json!("ase"));
+        d.fields.insert("name".into(), json!("Brand Kit"));
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        assert!(text.contains("Swatch Exchange (.ase)") && text.contains("Swatch exchange files keep solid colors only."), "{text}");
+        crate::dialogs::confirm(&mut app).unwrap();
+        let (path, bytes) = written.borrow()[0].clone();
+        assert_eq!(path, "/tmp/Brand Kit.ase", "the save panel suggests the name");
+        let lib = vectorcraft_color::palette_io::read_bytes(&bytes, "x").unwrap();
+        let solid = app.session.doc().unwrap().doc.swatches_iter().filter(|w| w.paint.color().is_some()).count();
+        assert_eq!(lib.len(), solid, "every solid color of the document");
+        // The web downloads the file under that name.
+        let downloads = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
+        let dl = downloads.clone();
+        let services =
+            crate::Services { download: Some(Box::new(move |name: &str, _: &[u8]| dl.borrow_mut().push(name.to_string()))), ..Default::default() };
+        let mut web = VectorcraftApp::new(Session::new(), services);
+        web.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        web.run("ui.saveSwatchLibrary", json!({})).unwrap();
+        let d = web.ui.dialog.as_mut().unwrap();
+        d.fields.insert("format".into(), json!("ase"));
+        d.fields.insert("name".into(), json!(" Brand: Kit. "));
+        crate::dialogs::confirm(&mut web).unwrap();
+        assert_eq!(*downloads.borrow(), ["Brand- Kit.ase"], "the name made safe as a file name, as for User Defined");
+    }
+
+    #[test]
     fn swatch_exchange_files_without_a_path_open_in_the_library_panel() {
         // A file opened on the web has no path; open_bytes passes its bytes as dataBase64.
         let mut app = app();

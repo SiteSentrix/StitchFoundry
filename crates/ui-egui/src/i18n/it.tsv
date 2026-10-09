@@ -161,6 +161,7 @@
 	Appearance panel	Pannello Aspetto
 	Applies when the linked file is relinked or updated.	Si applica quando il file collegato viene ricollegato o aggiornato.
 	Applies the next time VectorCraft starts.	Si applica al prossimo avvio di VectorCraft.
+	Apply	Applica
 	Apply Brush	Applica pennello
 	Apply Character Style	Applica stile carattere
 	Apply Effect	Applica effetto
@@ -2639,6 +2640,7 @@
 	Swash	Ornamentale
 	Swatch Conflict	Conflitto campioni
 	Swatch Conflicts	Conflitti campioni
+	Swatch exchange files keep solid colors only.	I file di scambio campioni conservano solo i colori pieni.
 	Swatch Libraries	Librerie campioni
 	Swatch Libraries Menu	Menu Librerie campioni
 	Swatch Library	Libreria campioni
@@ -2989,6 +2991,7 @@
 	Scrub Numeric Fields by Dragging	Regola i campi numerici trascinando
 	{count} file(s) in {folder}{note}. Show the package folder?	{count} file in {folder}{note}. Vuoi mostrare la cartella del pacchetto?
 	{count} linked file(s) not found	File collegati non trovati: {count}
+	fonts not copied: {fonts}	font non copiati: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	Immagini collegate modificate dopo il salvataggio di questo documento: {count}. Vuoi mostrare le nuove versioni?
 	{count} more rules: Export writes every one.	Altre {count} regole: Esporta le scrive tutte.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} oggetti senza nome esclusi: assegna loro un nome o attiva Oggetti senza nome nel menu del pannello.

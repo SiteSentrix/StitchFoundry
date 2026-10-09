@@ -11,7 +11,7 @@ Affinity files.
 | Affinity | VectorCraft |
 |---|---|
 | Pages, Publisher spreads (one or two pages) | artboards, spreads side by side |
-| Artboards (`ShpN` with `ABEn`), with name, background fill, any transform | artboards plus a clip group with the background |
+| Artboards (legacy `ABEn` or Affinity 3 `phrp`/`aprp`), with name, paint and any transform | artboards plus a clip group with the actual vector outline, background and stroke |
 | Layers (`Scop`), groups (`Grup`), pass-through or isolated | layers and sublayers, groups |
 | Curves (`PCrv`): cubic subpaths, closed flags, live corners (`CnrD`) | paths (multi-subpath curves fill even-odd) |
 | Rectangles with corner radii (relative or absolute), ellipses, polygons (smooth too), stars, square stars, pies, triangles, trapezoids | paths |
@@ -23,9 +23,9 @@ Affinity files.
 | Linear, elliptical and radial gradients with Affinity's midpoint bias | gradients (the bias as the midpoint where the blend is half way) |
 | Strokes: weight, scale with object, dash pattern and phase, alignment, miter limit, behind the fill | stroke appearance |
 | Fill layers (`FRst`) | filled rectangles |
-| Artistic and frame text: characters, font family/weight/style, size, tracking, fixed leading, colour, paragraph alignment, first baseline | point type and area type |
+| Artistic and frame text: Unicode scalar-indexed runs, stored fallback font, family/weight/style, boolean OpenType features, all caps, size, tracking, fixed leading, colour, paragraph alignment, first baseline | point type and area type |
 | Placed images (`ImgN`): the original JPEG/PNG embedded in the file | embedded images |
-| Pixel layers (`Rstr`): RGBA 8/16-bit and CMYK 8-bit tiles, cropped to their content | embedded PNG images |
+| Pixel layers (`Rstr`): RGBA 8/16-bit and CMYK 8-bit tiles, cropped to their content; source-backed RGBA8 JPEG/PNG tiles with matching dimensions and zero origin | embedded PNG images |
 | Embedded documents and symbols (`EmbN`) | the picture Affinity cached of them |
 | Opacity, visibility, lock, names, the blend modes VectorCraft has | the same |
 
@@ -35,7 +35,7 @@ transparency gradients, fill opacity, bitmap fills, master pages, conical gradie
 special shapes (cloud, heart, cog, callouts, arrows…, imported as their bounding ellipse), corner
 types other than round, stars with rounded points, several fills or strokes on one object (the
 active one is used), outlined or scaled text, text fields such as page numbers, frames with
-columns or a curved outline, grey/Lab/32-bit pixels, CMYK pixels (converted to RGB without the
+columns or a curved outline, paragraph indents/spacing, mixed paragraph alignments, unsupported font selectors, grey/Lab/32-bit pixels, CMYK pixels (converted to RGB without the
 document's profile) and Affinity-only blend modes (Add, Linear Light… as Normal).
 
 When the native document can't be read at all, the engine opens the embedded PNG preview instead,
@@ -78,19 +78,32 @@ of CC0 sample files.
 * **Read-only.** Nothing is written in Affinity's format; export waits until someone can check
   written files in Affinity itself.
 
-The same reader is shared, as an independent copy, with PhotoCraft's `photocraft-affinity`.
+The reader also has an independent copy in PhotoCraft's `photocraft-affinity`.
 
 ## Validation
 
 * Unit tests on synthetic containers built by the `synth` feature (stored, zlib and zstd entries,
   checksums, budgets, cycles, hostile streams, every truncation) and property tests of random
   mutations.
-* `cargo xtask corpus --affinity` fetches 22 public CC0/MIT/Apache-2.0 documents, including the
-  four Affinity 3 `.af` files of [samuel-etver/vector-art](https://github.com/samuel-etver/vector-art)
-  (CC0), at pinned commits, each checked against `xtask/affinity-corpus.sha256`. `tests/real_files.rs`
-  parses them; `engine/tests/affinity_corpus.rs` renders each one and compares it with the
-  thumbnail Affinity saved in it (mean difference 0–4.4 of 255 at the thumbnail's size, with a
-  ceiling per file).
+* `cargo xtask corpus --affinity` fetches 51 public CC0/MIT/Apache-2.0 documents at pinned
+  commits, SHA-256 verified against `xtask/affinity-corpus.sha256`, with upstream license notices.
+  Of these, 33 are current `.af`: four CC0 vector illustrations and 28 original Affinity 3.2.3
+  feature probes plus one separately identified derived regression input from
+  [SethRobinson/Patchy](https://github.com/SethRobinson/Patchy). Only document data and provenance
+  notices were inspected, never that project's importer or authoring scripts.
+* `tests/real_files.rs` parses every file and freezes the modeled features of all 33 current
+  `.af` files. Native raster tests compare decoded pixels with independent embedded images;
+  text tests assert Unicode run boundaries, fallback fonts and feature retention.
+* `engine/tests/affinity_corpus.rs` requires editable native import, exact `.vectorcraft`
+  save/reload, and SVG/PDF/PSD export of every board in all 33 current files. It checks SVG/PDF
+  dimensions and reimport, and independently decodes PSD merged pixels using the published
+  specification. These are VectorCraft consistency checks, not independent Affinity PSD oracles.
+  Saved-thumbnail comparisons cover the existing 22 documents plus nine new representative
+  fixtures, checking every board; unsupported effects and text layout are not claimed visually
+  faithful. The Affinity corpus workflow requires the files, so missing fixtures cannot silently
+  pass CI. Run locally with `AFFINITY_CORPUS_REQUIRED=1` for the same strict gate.
+* Synthetic engine regressions cover nested, rotated and curved artboards, negative origins,
+  multiple spreads and resolution conversion, alongside text recovery and native save/export.
 * `engine/tests/import_fuzz.rs` mutates a synthetic native document's stream and archive and checks
   that whatever opens also renders and exports; `fuzz/` has `cargo-fuzz` targets for the whole
   reader (`container`) and the object stream (`stream`):
@@ -99,6 +112,10 @@ The same reader is shared, as an independent copy, with PhotoCraft's `photocraft
   cd crates/affinity
   cargo +nightly fuzz run stream -- -max_total_time=600
   ```
+
+The source audit, licensing decisions and remaining complex-document/font cases are recorded in
+[affinity-validation.md](../../docs/affinity-validation.md). Reopening VectorCraft's exports in
+Affinity remains an independent validation step that hasn't been done.
 
 What has not been verified: files from Affinity builds or platforms outside the public set, files
 written by other applications, rotated or skewed images against Affinity's render, mask polarity
@@ -113,8 +130,14 @@ default (`Limits`), a 64 MiB zstd window, 4096 saved revisions, array lengths no
 bytes left, 16 777 216 decoded values per document stream (fields and array elements together, counted before
 anything is allocated: a value takes about 40 bytes in memory however few it took in the file; the largest of
 those 189 public documents uses 3.3 million), 384 levels of object nesting, 128 levels of layers, 500 000 layers, four million curve
-nodes per curve, 64 megapixels per pixel layer (cropped to its content first) and 1024 gradient
-stops. Every archive entry's CRC-32 and size must match. Malformed input returns an `Error`; the
+nodes per curve; compound outlines also cap recursion at 128 levels, operand visits at 100 000
+and cumulative geometry work at four million, rejecting cycles and partial results on limits.
+Pie sweeps normalize finite angles in constant time. Pixel layers are limited to 64 megapixels
+(cropped to their content first); gradients to 1024 stops. Text collection is bounded to a
+million characters per node before allocation, with a cumulative 16 MiB budget for owned font
+names, features and gradient stops. Exhaustion warns and uses default attributes for remaining
+text, preserving its characters.
+Every archive entry's CRC-32 and size must match. Malformed input returns an `Error`; the
 crate has no panics outside tests.
 
 ## Privacy

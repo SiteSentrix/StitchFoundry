@@ -330,7 +330,8 @@ mod tests {
     #[test]
     fn save_a_copy_and_template_suggest_their_names() {
         let (mut app, written, picks) = desktop("copy.vectorcraft");
-        app.session.prefs.templates_folder = "/templates".into();
+        let folder = vectorcraft_testkit::temp_dir("save-template-dialog");
+        app.session.prefs.templates_folder = folder.to_string_lossy().into_owned();
         app.run("file.saveCopy", json!({})).unwrap();
         assert_eq!(picks.borrow()[0].name, "Untitled-1 copy.vectorcraft");
         assert!(app.ui.dialog.is_none(), "the native format has no options");
@@ -338,7 +339,8 @@ mod tests {
         assert!(app.session.active().unwrap().path.is_none() && app.session.active().unwrap().is_dirty());
         app.run("file.saveAsTemplate", json!({})).unwrap();
         let pick = &picks.borrow()[1];
-        assert_eq!((pick.name.as_str(), pick.folder.as_deref()), ("Untitled-1 template.vctemplate", Some("/templates")));
+        assert_eq!(pick.name, "Untitled-1 template.vctemplate");
+        assert_eq!(pick.folder.as_deref().map(std::path::Path::new), Some(folder.as_path()));
         assert_eq!(pick.filters, [("VectorCraft Template", &["vctemplate"][..])]);
         assert_eq!(written.borrow()[1].0, "copy.vectorcraft", "the picked name is kept");
     }

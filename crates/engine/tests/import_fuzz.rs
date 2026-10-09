@@ -823,6 +823,20 @@ fn swatch_exchange(what: &str, bytes: &[u8]) -> Result<(), TestCaseError> {
     })
 }
 
+/// The rich document's swatches with a CMYK spot color and a global Lab color added, saved as a
+/// swatch exchange file, made once.
+fn saved_ase() -> Vec<u8> {
+    static ASE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    ASE.get_or_init(|| {
+        let mut s = rich_session();
+        s.execute("swatch.new", &json!({"name": "Ink", "color": {"c": 1, "m": 0.5, "y": 0, "k": 0.2}, "spot": true})).unwrap();
+        s.execute("swatch.new", &json!({"name": "Clay", "color": {"l": 50, "a": 20, "b": -30}, "global": true})).unwrap();
+        let r = s.execute("swatch.library.save", &json!({"format": "ase"})).unwrap();
+        vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+    })
+    .clone()
+}
+
 /// A random swatch exchange block (type, body). The body holds a name, a color model when the block
 /// is a color, and random bytes for the rest.
 fn arb_ase_block() -> impl Strategy<Value = (u16, Vec<u8>)> {
@@ -898,6 +912,19 @@ proptest! {
             bytes.truncate(cut);
         }
         swatch_exchange("mutated swatch exchange file", &bytes)?;
+    }
+
+    #[test]
+    fn mutated_saved_swatch_exchange_files_never_panic(cut in prop::option::of(0usize..4_000), edits in prop::collection::vec((0usize..4_000, any::<u8>()), 0..12)) {
+        let mut bytes = saved_ase();
+        for (at, b) in edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        swatch_exchange("mutated saved swatch exchange file", &bytes)?;
     }
 }
 

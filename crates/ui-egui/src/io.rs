@@ -516,6 +516,29 @@ pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, params
     Ok(path)
 }
 
+/// Run an engine command that returns `{data}` or `{dataBase64}` and write the bytes to a file
+/// picked with file name `name` suggested next to the document (the web downloads them as `name`)
+/// → where they went.
+pub(crate) fn save_command_output_named(app: &mut VectorcraftApp, id: &str, name: &str, params: Value) -> Result<String, String> {
+    let mut v = app.session.execute(id, &params).map_err(|e| e.to_string())?;
+    let bytes = take_output(&mut v)?;
+    let path = write_named(app, None, name, &bytes)?;
+    app.status(format!("Saved {path}"));
+    Ok(path)
+}
+
+/// The bytes a command returned, taken out of its result `v`, which keeps the rest: binary output
+/// comes as base64, text (swatch libraries) as is.
+fn take_output(v: &mut Value) -> Result<Vec<u8>, String> {
+    let o = v.as_object_mut().ok_or("no data")?;
+    let bytes = match (o.remove("dataBase64"), o.remove("data")) {
+        (Some(Value::String(b64)), _) => vectorcraft_format::base64_decode(&b64),
+        (_, Some(Value::String(text))) => Some(text.into_bytes()),
+        _ => None,
+    };
+    bytes.ok_or_else(|| "no data".into())
+}
+
 /// Run an engine command that returns `{dataBase64}` without its `path` and write the bytes to
 /// that path (else a picked or suggested name) → (path, the command's result without the data).
 /// The command runs before a path is asked for, so bad params never open a save dialog, except
@@ -532,14 +555,7 @@ pub(crate) fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut par
         path = Some(picked);
     }
     let mut v = app.session.execute(id, &params).map_err(|e| e.to_string())?;
-    // Binary output comes as base64, text (swatch libraries) as is; the result keeps the rest.
-    let o = v.as_object_mut().ok_or("no data")?;
-    let bytes = match (o.remove("dataBase64"), o.remove("data")) {
-        (Some(Value::String(b64)), _) => vectorcraft_format::base64_decode(&b64),
-        (_, Some(Value::String(text))) => Some(text.into_bytes()),
-        _ => None,
-    };
-    let bytes = bytes.ok_or("no data")?;
+    let bytes = take_output(&mut v)?;
     let path = match path {
         Some(p) => p,
         None => target_path(app, None, ext)?,

@@ -190,7 +190,7 @@ For the experimental, unsupported 64-bit Windows 7 build, see [Windows 7 instruc
 VectorCraft is under active development. [**ROADMAP.md**](ROADMAP.md) covers what ships today, the
 milestones, and honest time-to-parity estimates.
 
-**Where we are (2026-10-07):** roughly 69–75% of Illustrator's features exist and work, and about 40–55% of
+**Where we are (2026-10-09):** roughly 69–75% of Illustrator's features exist and work, and about 40–55% of
 "a power user can't tell the difference". Everyday vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles, threading and Hebrew/Arabic bidirectional layout, and
 files (SVG, PDF and PDF-compatible `.ai` with PDF/X, EPS, DXF, EMF/WMF, raster formats and PSD, Print, Package).
@@ -198,7 +198,9 @@ Affinity documents (`.af` from Affinity 3, `.afdesign`, `.afpub` and, by their c
 and place natively: layers, groups, artboards and pages, curves and shapes, fills, gradients and strokes, clipping
 and masks, text and images, with what didn't come in (effects, adjustments, brushes, master pages…) listed in the
 import warning; a file whose native data can't be read opens as its embedded preview, saying why. VectorCraft
-doesn't write Affinity files. [Scope and limits](crates/affinity/README.md).
+doesn't write Affinity files. Current `.af` validation includes 33 pinned files, native save/reload
+and every-board SVG/PDF/PSD export, with fixes for Affinity 3 artboards, source-backed JPEGs and text runs.
+[Scope and limits](crates/affinity/README.md); [source audit and remaining gaps](docs/affinity-validation.md).
 The interface
 speaks English, Japanese, Traditional and Simplified Chinese, Spanish, French, Italian, Russian and Ukrainian (and Czech and Brazilian Portuguese in the menus).
 The scores are

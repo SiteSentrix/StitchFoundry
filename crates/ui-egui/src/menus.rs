@@ -285,6 +285,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name, or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
     ),
+    (
+        "ui.cropImage",
+        "Crop Image",
+        "",
+        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect}), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box",
+    ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
     (
         "file.export.pdf",
@@ -365,7 +371,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.saveSwatchLibrary",
         "Save Swatch Library…",
         "",
-        "{names?: [the swatches selected in the Swatches panel]} open Save Swatch Library (dialog `saveSwatchLibrary`: name, format: vcswatches|gpl|css, user: save to the user library folder, selectedOnly); OK runs swatch.library.save",
+        "{names?: [the swatches selected in the Swatches panel]} open Save Swatch Library (dialog `saveSwatchLibrary`: name, format: vcswatches|gpl|ase|css, user: save to the user library folder, selectedOnly); OK runs swatch.library.save",
     ),
     ("window.userSwatchLibrary1", "User Swatch Library 1", "", "{} open the 1. User Defined swatch library (swatch.library.list, category user)"),
     ("window.userSwatchLibrary2", "User Swatch Library 2", "", "{} open the 2. User Defined swatch library"),
@@ -1140,6 +1146,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
+        "ui.cropImage" if !selected_image(app, |_| true) => Err("select an image".into()),
+        "ui.cropImage" => {
+            app.select_tool(vectorcraft_tools::cropimage::ID);
+            Ok(json!({"tool": app.session.tool_id()}))
+        }
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
@@ -1839,6 +1850,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             id["view.goto".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && app.session.active().is_some_and(|d| n <= d.doc.views.len()))
         }
         "effect.dialog" | "ui.recolorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "ui.cropImage" => selected_image(app, |_| true),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
@@ -2057,7 +2069,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Expand…", "ui.expandDialog"),
                 c("Expand Appearance", "effect.expandAppearance"),
-                c("Crop Image", "object.cropImage"),
+                c("Crop Image", "ui.cropImage"),
                 c("Rasterize…", "object.rasterize"),
                 cp("Create Gradient Mesh…", "object.mesh.create", json!({"rows": 4, "cols": 4, "appearance": "flat", "highlight": 100})),
                 cp(

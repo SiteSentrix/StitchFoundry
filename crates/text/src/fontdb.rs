@@ -270,9 +270,10 @@ impl FontFace {
         use skrifa::raw::TableProvider;
         self.skrifa().and_then(|f| f.os2().ok()).map_or(0, |t| t.fs_type())
     }
-    /// May the font file be copied along with a document (its licence doesn't restrict embedding)?
+    /// May the font file be copied along with a document? Its license allows embedding its
+    /// outlines, as exports check it ([`Self::embedding`]).
     pub fn embeddable(&self) -> bool {
-        self.fs_type() & 0x000f != 0x0002
+        self.embedding() != crate::embed::Embedding::Forbidden
     }
     /// The face's index in its font file ([`Self::file_data`]; collections hold several).
     pub fn face_index(&self) -> u32 {
@@ -773,16 +774,43 @@ fn enumerate_faces(data: &[u8]) -> Vec<(u32, FaceStyle)> {
         .collect()
 }
 
+/// The font files held by the file at `path`: its contents, or for a suitcase font the fonts in
+/// its resource fork ([`crate::suitcase`]). None when it can't be read.
+#[cfg(not(target_arch = "wasm32"))]
+fn font_files(path: &Path) -> Vec<Vec<u8>> {
+    if crate::suitcase::is_suitcase(path) {
+        return crate::suitcase::read_fonts(path);
+    }
+    std::fs::read(path).into_iter().collect()
+}
+
+/// The tables holding outlines the font engine draws: TrueType, CFF, CFF2 and VARC. A face with
+/// none of them (outlines in Apple's `hvgl` table, bitmaps only) draws nothing.
+#[cfg(not(target_arch = "wasm32"))]
+const OUTLINE_TABLES: [&[u8; 4]; 4] = [b"glyf", b"CFF ", b"CFF2", b"VARC"];
+
 /// The styles of every face in the font file at `path` ([`face_styles`]), reading only its table
 /// directories and `name` and `fvar` tables: a scan opens hundreds of font files, many of them
-/// megabytes long.
+/// megabytes long. Faces without outlines the font engine draws (no [`OUTLINE_TABLES`] table) are
+/// left out.
 #[cfg(not(target_arch = "wasm32"))]
 fn file_face_names(path: &Path) -> Vec<FaceStyle> {
-    use std::io::{Read, Seek, SeekFrom};
+    if crate::suitcase::is_suitcase(path) {
+        return crate::suitcase::read_fonts(path).into_iter().flat_map(|font| reader_face_names(std::io::Cursor::new(font))).collect();
+    }
+    match std::fs::File::open(path) {
+        Ok(file) => reader_face_names(file),
+        Err(_) => vec![],
+    }
+}
+
+/// [`file_face_names`] for the font file `file` reads.
+#[cfg(not(target_arch = "wasm32"))]
+fn reader_face_names(mut file: impl std::io::Read + std::io::Seek) -> Vec<FaceStyle> {
+    use std::io::SeekFrom;
     /// Caps on what a (possibly damaged) file can make the scan read.
     const MAX_FACES: u32 = 256;
     const MAX_NAME_TABLE: u32 = 1 << 20;
-    let Ok(mut file) = std::fs::File::open(path) else { return vec![] };
     let mut read_at = |offset: u64, len: usize| -> Option<Vec<u8>> {
         let mut buf = vec![0; len];
         file.seek(SeekFrom::Start(offset)).ok()?;
@@ -804,6 +832,9 @@ fn file_face_names(path: &Path) -> Vec<FaceStyle> {
             let dir = read_at(start.into(), 12)?;
             let tables = u16::from_be_bytes(dir.get(4..6)?.try_into().ok()?) as usize;
             let records = read_at(u64::from(start) + 12, tables * 16)?;
+            if !records.as_chunks::<16>().0.iter().any(|r| OUTLINE_TABLES.iter().any(|t| r.starts_with(*t))) {
+                return None;
+            }
             let mut table = |tag: &[u8; 4]| -> Option<Vec<u8>> {
                 let rec: &[u8] = records.as_chunks::<16>().0.iter().find(|r| r.starts_with(tag))?;
                 let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?);
@@ -869,7 +900,9 @@ static PLATFORM_FONT_FILES: std::sync::OnceLock<PlatformFontFiles> = std::sync::
 /// folders, asked again by each scan and each check for installed fonts
 /// ([`FontDb::installed_fonts_changed`]). The desktop app lists DirectWrite's system font
 /// collection on Windows: fonts a font service such as Adobe Fonts loads in place, from files
-/// outside the font folders and unknown to the registry (#579). Only the first call counts.
+/// outside the font folders and unknown to the registry (#579). On macOS it lists the fonts
+/// CoreText's font manager has available, which apps and font managers can register from any
+/// folder. Only the first call counts.
 pub fn set_platform_font_files(list: PlatformFontFiles) {
     #[cfg(not(target_arch = "wasm32"))]
     // A second call keeps the first lister, as documented.
@@ -1329,9 +1362,10 @@ impl FontDb {
         }
         for (p, named) in files {
             // A file named by itself is a font whatever its name (font services keep fonts in
-            // files without an extension); one of a folder's only with a font's extension.
+            // files without an extension); one of a folder's only with a font's extension, or
+            // a suitcase font (whose fonts are in its resource fork, whatever its name).
             let ext = p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
-            if !named && !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
+            if !named && !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) && !crate::suitcase::is_suitcase(&p) {
                 continue;
             }
             for FaceStyle { family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
@@ -1452,7 +1486,7 @@ impl FontDb {
         paths.dedup();
         let mut any = false;
         for p in paths {
-            if let Ok(data) = std::fs::read(&p) {
+            for data in font_files(&p) {
                 any |= self.add_font_from(data, Some(&p)) > 0;
             }
         }
@@ -1593,10 +1627,12 @@ impl FontDb {
             if std::fs::metadata(&p).map(|m| m.len() > 40 << 20).unwrap_or(true) {
                 continue;
             }
-            let Ok(data) = std::fs::read(&p) else { continue };
-            let hit = enumerate_faces(&data).iter().any(|(i, _)| skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some()));
-            if hit && self.add_font_from(data, Some(&p)) > 0 && covered(self) {
-                return true;
+            for data in font_files(&p) {
+                let hit =
+                    enumerate_faces(&data).iter().any(|(i, _)| skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some()));
+                if hit && self.add_font_from(data, Some(&p)) > 0 && covered(self) {
+                    return true;
+                }
             }
         }
         self.sys.lock().unwrap_or_else(|e| e.into_inner()).misses.insert(c);
