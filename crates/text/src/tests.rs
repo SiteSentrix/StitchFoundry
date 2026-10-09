@@ -139,6 +139,29 @@ fn tracking_and_scale() {
 }
 
 #[test]
+fn underline_and_strikethrough_bars() {
+    let mut t = point("ab", style(20.0));
+    t.runs = vec![
+        TextRun { text: "ab".into(), style: style(20.0), inline: None },
+        TextRun { text: "cd".into(), style: CharStyle { underline: true, strikethrough: true, ..style(20.0) }, inline: None },
+    ];
+    let l = layout(db(), &t);
+    let bars = decorations(&l, db(), &t);
+    assert_eq!(bars.len(), 2, "one underline and one strikethrough: {bars:?}");
+    assert!(bars.iter().all(|(run, _)| *run == 1), "only the styled run");
+    let (under, strike) = (bars[0].1.bounding_box(), bars[1].1.bounding_box());
+    // The bars span the run's glyphs: from "c" to the end of "d".
+    let (c, d) = (&l.glyphs[2], &l.glyphs[3]);
+    assert!((under.x0 - c.origin.x).abs() < 1e-6 && (under.x1 - d.origin.x - d.advance).abs() < 1e-6, "{under:?}");
+    // y runs down: the underline sits below the baseline, the strikethrough above it, both thin.
+    assert!(under.y0 > 0.0 && under.y1 < 5.0, "{under:?}");
+    assert!(strike.y1 < 0.0 && strike.y0 > -10.0, "{strike:?}");
+    assert!(under.height() < 3.0 && strike.height() < 3.0);
+    // No bars for plain text.
+    assert!(decorations(&layout(db(), &point("ab", style(20.0))), db(), &point("ab", style(20.0))).is_empty());
+}
+
+#[test]
 fn all_caps() {
     let a = width(&point("abc", CharStyle { all_caps: true, ..style(10.0) }));
     let b = width(&point("ABC", style(10.0)));

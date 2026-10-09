@@ -1680,6 +1680,13 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
         cell.apply_affine(Affine::rotate_about(g.angle, g.origin));
         target.extend(cell.iter());
     }
+    // Underline and strikethrough bars, painted as their run's type is (#847).
+    for (run, bar) in vectorcraft_text::decorations(&layout, db, t) {
+        if let Some(r) = runs.get_mut(run) {
+            r.extend(bar.iter());
+        }
+        all.extend(bar.iter());
+    }
     TextGeom { runs, all, bounds: layout.bounds, substituted_fonts, substituted_glyphs, inlines: layout.inlines }
 }
 

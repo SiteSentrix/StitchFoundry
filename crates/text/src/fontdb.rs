@@ -72,6 +72,10 @@ pub struct FontFace {
     /// values).
     pub(crate) cap_height: f64,
     pub(crate) x_height: f64,
+    /// Underline and strikeout: (offset from the baseline up to the line's top, thickness), in
+    /// font units (the `post` and OS/2 tables', else a common placement).
+    pub(crate) underline: (f64, f64),
+    pub(crate) strikeout: (f64, f64),
     pub(crate) shaper: harfrust::ShaperData,
     /// The axis settings of the variable font's named instance this face is (user units: `wght`
     /// 700); empty for a static face or a variable font's default instance.
@@ -1048,6 +1052,13 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
     let shaper = harfrust::ShaperData::new(&hb);
     let instance =
         (!variations.is_empty()).then(|| harfrust::ShaperInstance::from_variations(&hb, variations.iter().map(|(t, v)| (harfrust::Tag::new(t), *v))));
+    let upem = m.units_per_em.max(1) as f64;
+    let x_height = m.x_height.map(|v| v as f64).filter(|v| *v > 0.0).unwrap_or(m.ascent as f64 * 0.5);
+    let decoration = |d: Option<skrifa::metrics::Decoration>, fallback: (f64, f64)| {
+        d.map(|d| (f64::from(d.offset), f64::from(d.thickness))).filter(|(o, t)| o.is_finite() && *t > 0.0 && t.is_finite()).unwrap_or(fallback)
+    };
+    let underline = decoration(m.underline, (-0.075 * upem, 0.05 * upem));
+    let strikeout = decoration(m.strikeout, (x_height * 0.5 + 0.025 * upem, 0.05 * upem));
     Some(FontFace {
         keys,
         traits,
@@ -1060,11 +1071,13 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         variations,
         location,
         instance,
-        upem: m.units_per_em.max(1) as f64,
+        upem,
         ascent: m.ascent as f64,
         descent: -(m.descent as f64),
         cap_height: m.cap_height.map(|v| v as f64).filter(|v| *v > 0.0).unwrap_or(m.ascent as f64 * 0.72),
-        x_height: m.x_height.map(|v| v as f64).filter(|v| *v > 0.0).unwrap_or(m.ascent as f64 * 0.5),
+        x_height,
+        underline,
+        strikeout,
         shaper,
         bytes,
         index,
