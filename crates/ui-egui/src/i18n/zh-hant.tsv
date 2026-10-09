@@ -2651,6 +2651,24 @@
 	Swatch Tiles	色票拼貼
 	Swatches	色票
 	Switch workspace	切換工作區
+	Add Content	新增內容
+	Click to apply to the selected type	按一下以套用到所選文字
+	Create New Library	建立新資料庫
+	Create New Library…	建立新資料庫…
+	Rename Library…	重新命名資料庫…
+	Delete the library “{name}”?	要刪除資料庫「{name}」嗎？
+	Drag art or swatches here, or use + to add the selection's colors and text styles.	將圖稿或色票拖到此處，或使用 + 加入所選物件的顏色和文字樣式。
+	Its graphics, colors and text styles are deleted from this machine.	其圖形、顏色和文字樣式將從此電腦中刪除。
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	在此保存圖形、顏色和文字樣式，即可在任何文件中使用。資料庫儲存在此電腦上，無需帳號。
+	This library is empty	此資料庫是空的
+	Add to Library	加入資料庫
+	Delete Library	刪除資料庫
+	Delete Library Item	刪除資料庫項目
+	Library	資料庫
+	Rename Library	重新命名資料庫
+	Show Library	顯示資料庫
+	Use Library Item	使用資料庫項目
+	Graphic	圖形
 	Show all open documents	顯示所有開啟的文件
 	Symbol Instance	符號範例
 	Symbol Libraries	符號資料庫

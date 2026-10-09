@@ -2644,6 +2644,24 @@
 	Swatch Tiles	Плитки образцов
 	Swatches	Образцы
 	Switch workspace	Переключить рабочую среду
+	Add Content	Добавить содержимое
+	Click to apply to the selected type	Щёлкните, чтобы применить к выделенному тексту
+	Create New Library	Создать библиотеку
+	Create New Library…	Создать библиотеку…
+	Rename Library…	Переименовать библиотеку…
+	Delete the library “{name}”?	Удалить библиотеку «{name}»?
+	Drag art or swatches here, or use + to add the selection's colors and text styles.	Перетащите сюда графику или образцы или нажмите +, чтобы добавить цвета и стили текста выделенного.
+	Its graphics, colors and text styles are deleted from this machine.	Её графика, цвета и стили текста будут удалены с этого компьютера.
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	Храните здесь графику, цвета и стили текста, чтобы использовать их в любом документе. Библиотеки хранятся на этом компьютере — учётная запись не нужна.
+	This library is empty	Эта библиотека пуста
+	Add to Library	Добавить в библиотеку
+	Delete Library	Удалить библиотеку
+	Delete Library Item	Удалить элемент библиотеки
+	Library	Библиотека
+	Rename Library	Переименовать библиотеку
+	Show Library	Показать библиотеку
+	Use Library Item	Использовать элемент библиотеки
+	Graphic	Графика
 	Show all open documents	Показать все открытые документы
 	Symbol Instance	Экземпляр символа
 	Symbol Libraries	Библиотеки символов
@@ -3126,6 +3144,7 @@ axis	Both	Оба
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	no library `{id}`	нет библиотеки `{id}`
 @msg	select some type first	сначала выделите текст
 @msg	{_1} has no {_2} style	у {_1} нет начертания {_2}
 @msg	a layer couldn't be read	не удалось прочитать слой

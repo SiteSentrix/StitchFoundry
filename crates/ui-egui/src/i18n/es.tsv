@@ -2648,6 +2648,24 @@
 	Swatch Tiles	Mosaicos de muestras
 	Swatches	Muestras
 	Switch workspace	Cambiar espacio de trabajo
+	Add Content	Añadir contenido
+	Click to apply to the selected type	Haz clic para aplicarlo al texto seleccionado
+	Create New Library	Crear nueva biblioteca
+	Create New Library…	Crear nueva biblioteca…
+	Rename Library…	Cambiar nombre de la biblioteca…
+	Delete the library “{name}”?	¿Eliminar la biblioteca “{name}”?
+	Drag art or swatches here, or use + to add the selection's colors and text styles.	Arrastra aquí ilustraciones o muestras, o usa + para añadir los colores y estilos de texto de la selección.
+	Its graphics, colors and text styles are deleted from this machine.	Sus gráficos, colores y estilos de texto se eliminan de este equipo.
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	Guarda aquí gráficos, colores y estilos de texto para usarlos en cualquier documento. Las bibliotecas se guardan en este equipo; no hace falta una cuenta.
+	This library is empty	Esta biblioteca está vacía
+	Add to Library	Añadir a la biblioteca
+	Delete Library	Eliminar biblioteca
+	Delete Library Item	Eliminar elemento de la biblioteca
+	Library	Biblioteca
+	Rename Library	Cambiar nombre de la biblioteca
+	Show Library	Mostrar biblioteca
+	Use Library Item	Usar elemento de la biblioteca
+	Graphic	Gráfico
 	Show all open documents	Mostrar todos los documentos abiertos
 	Symbol Instance	Instancia de símbolo
 	Symbol Libraries	Bibliotecas de símbolos
@@ -3130,6 +3148,7 @@ axis	Both	Ambos
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
 # (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
+@msg	no library `{id}`	no hay ninguna biblioteca `{id}`
 @msg	select some type first	selecciona primero algún texto
 @msg	{_1} has no {_2} style	{_1} no tiene el estilo {_2}
 @msg	a layer couldn't be read	no se pudo leer una capa

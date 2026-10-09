@@ -2640,6 +2640,24 @@
 	Swatch Tiles	Плитки зразків
 	Swatches	Зразки
 	Switch workspace	Переключити робоче середовище
+	Add Content	Додати вміст
+	Click to apply to the selected type	Клацніть, щоб застосувати до виділеного тексту
+	Create New Library	Створити бібліотеку
+	Create New Library…	Створити бібліотеку…
+	Rename Library…	Перейменувати бібліотеку…
+	Delete the library “{name}”?	Видалити бібліотеку «{name}»?
+	Drag art or swatches here, or use + to add the selection's colors and text styles.	Перетягніть сюди графіку чи зразки або натисніть +, щоб додати кольори й стилі тексту виділеного.
+	Its graphics, colors and text styles are deleted from this machine.	Її графіку, кольори та стилі тексту буде видалено з цього комп’ютера.
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	Зберігайте тут графіку, кольори й стилі тексту, щоб використовувати їх у будь-якому документі. Бібліотеки зберігаються на цьому комп’ютері — обліковий запис не потрібен.
+	This library is empty	Ця бібліотека порожня
+	Add to Library	Додати до бібліотеки
+	Delete Library	Видалити бібліотеку
+	Delete Library Item	Видалити елемент бібліотеки
+	Library	Бібліотека
+	Rename Library	Перейменувати бібліотеку
+	Show Library	Показати бібліотеку
+	Use Library Item	Використати елемент бібліотеки
+	Graphic	Графіка
 	Show all open documents	Показати всі відкриті документи
 	Symbol Instance	Примірник символ
 	Symbol Libraries	Бібліотеки символів
@@ -3113,6 +3131,7 @@ axis	Both	Обидві
 	Drag to float the toolbar	Перетягніть, щоб зробити панель інструментів плаваючою
 	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
 	Float Tool Group	Зробити групу інструментів плаваючою
+@msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
 @msg	{_1} has no {_2} style	{_1} не має накреслення {_2}
 @msg	a layer couldn't be read	не вдалося прочитати шар
