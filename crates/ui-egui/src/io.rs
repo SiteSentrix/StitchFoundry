@@ -121,7 +121,7 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
         None if app.services.open_async.is_some() => return open_dialog(app).map(|_| Value::Null),
         None => {
             let filters = std::iter::once(("Templates", TEMPLATE_EXTS)).chain(fileio::open_filters()).collect();
-            pick_open(app, &FilePick { folder: fileio::templates_folder(&app.session.prefs), filters, ..Default::default() })?
+            pick_open(app, &FilePick { folder: fileio::templates_dialog_folder(&app.session.prefs), filters, ..Default::default() })?
         }
     };
     let bytes = read(app, &path)?;
