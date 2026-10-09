@@ -172,6 +172,13 @@ impl Server {
             "tools/call" => {
                 let name = params.get("name").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing tool `name`".to_string()))?;
                 let args = params.get("arguments").cloned().unwrap_or(Value::Null);
+                if let Some(arguments) = args.as_object()
+                    && let Some(def) = tool_definitions().into_iter().find(|t| t.get("name").and_then(Value::as_str) == Some(name))
+                    && let Some(properties) = def.get("inputSchema").and_then(|s| s.get("properties")).and_then(Value::as_object)
+                    && let Some(key) = arguments.keys().find(|k| !properties.contains_key(*k))
+                {
+                    return Err((INVALID_PARAMS, format!("unknown argument `{key}` for `{name}`")));
+                }
                 Ok(call_tool(self.backend.as_mut(), name, &args).to_value())
             }
             "resources/list" => Ok(resources::list()),

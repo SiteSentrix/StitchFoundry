@@ -43,7 +43,7 @@ accepted too, and `initialize` answers with whichever of those the client asked 
 
 | Capability | What it covers |
 |---|---|
-| `tools` | The 25 tools below |
+| `tools` | The tools below |
 | `resources` | Two fixed documents and four templates |
 | `prompts` | Five ready-made workflows |
 | `completions` | `completion/complete` for prompt arguments and template variables |
@@ -123,6 +123,12 @@ crate that installed one would override whatever logger an embedder had already 
 `vectorcraft-mcp` directly means calling `vectorcraft_mcp::logging::install()` yourself if you want
 log records to reach your client.
 
+### Synchronous calls
+
+Exports complete synchronously. A `_meta.progressToken` is harmlessly ignored, as are
+`notifications/cancelled` (including unknown request ids). There are no background export jobs
+or progress notifications; cancellation cannot interrupt a running call.
+
 ### Not implemented
 
 Everything below needs the same thing first: the server reads one line at a time and answers it with
@@ -149,6 +155,26 @@ is here and subscriptions are not. The fix for the rest is a reader thread (or a
 the transport — a design change rather than a feature, so it is not in this crate yet.
 
 ## Tools
+
+### Common command tools
+
+These names match the conventions in [FilmCraft #28](https://github.com/storytold/filmcraft/pull/28).
+The older names below remain listed because existing workflows use them.
+
+| Tool | Arguments and result |
+|---|---|
+| `command_list` | Optional `filter`, `enabled_only`; returns the command array |
+| `command_run` | `id`, optional `params`; runs the command through the existing backend |
+| `command_batch` | `steps: [{id, params?}]`, optional `stop_on_error` (default true); returns `completed`, `failed`, `results: [{ok, result\|error}]`. Each edit has its own undo step; failures set `isError` |
+| `doc_inspect` | Optional `depth`, `childLimit`; same summary as `inspect_document` |
+| `render_preview` | Optional `max_side` (1–4096, default 1024); inline PNG of the first artboard without editing it. Artboards too large to render within the allocation bound return a tool error |
+| `ui_inspect`, `ui_screenshot` | Connected desktop state/window capture; tool errors in headless mode |
+
+Every tool declares read-only, destructive, idempotent and open-world hints. File-writing
+`screenshot`, `save_file` and `export` are conservatively marked as mutations. Unknown top-level
+argument keys return JSON-RPC `-32602`; command failures and caught tool panics return `isError`
+content, and the server continues serving. Command `params` are passed through: the registry
+currently describes them in prose, so MCP does not guess schemas or silently remove keys.
 
 Coordinates are points in document space: y points down, the origin is the first artboard's top-left, and a new
 document is 612 × 792 (US Letter). New objects become the selection. Most commands act on the selection or on
