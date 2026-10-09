@@ -886,11 +886,20 @@ impl VectorcraftApp {
         for f in dropped {
             let path = Some(f.path().to_string_lossy().to_string()).filter(|s| !s.is_empty());
             let name = path.as_deref().map_or_else(|| "dropped".into(), vectorcraft_engine::cmd::fileio::file_name);
-            let target = self.drop_target(&name, pos, shift);
-            // A file placed by its path is read by the engine.
-            let bytes = if path.is_some() && target != place::DropTarget::Open { Ok(vec![]) } else { f.bytes() };
+            // Native file drops usually carry a path. Use the same file reader as File → Open
+            // (and File → Place), even if the drop handle can't supply the bytes itself.
+            let bytes = if path.is_some() && self.services.read.is_some() { Ok(vec![]) } else { f.bytes() };
             match bytes {
-                Ok(b) => files.push((target, (name, path, b))),
+                Ok(bytes) => {
+                    // A backend may give bytes without a path or extension. Sniff their format
+                    // before deciding: an SVG opens as a document, a raster image is placed.
+                    let target = if path.is_none() && fileio::detect(&name, &bytes).is_none_or(|f| !f.raster) {
+                        place::DropTarget::Open
+                    } else {
+                        self.drop_target(&name, pos, shift)
+                    };
+                    files.push((target, (name, path, bytes)));
+                }
                 Err(e) => self.status(format!("Couldn't read {name}: {e}")),
             }
         }
