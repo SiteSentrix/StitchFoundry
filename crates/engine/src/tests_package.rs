@@ -194,7 +194,6 @@ fn the_document_info_report_has_every_category() {
     assert!(face.embeddable() && face.path().is_none());
 }
 
-
 /// A professional handoff: the poster links to a reusable illustration, whose
 /// own artwork links to a raster asset. Both dependency levels must travel.
 fn poster_with_placed_document(dir: &Folder) -> Session {
@@ -453,4 +452,35 @@ fn circular_placed_links_copy_each_document_once_and_warn() {
     let report = std::fs::read_to_string(packaged.join("root Report.txt")).unwrap();
     assert!(report.lines().any(|line| line == "LINKED FILES"), "{report}");
     assert!(report.contains("stopped following the cycle"), "{report}");
+}
+
+#[test]
+fn nesting_limit_copies_boundary_file_and_reports_uncollected_links() {
+    let dir = Folder::new("package-placed-depth-limit");
+    let mut deepest = session();
+    let mut next = dir.file("leaf.vectorcraft");
+    save(&mut deepest, &next);
+
+    let mut root = None;
+    for depth in (0..=vectorcraft_doc::placed_document::MAX_DEPTH).rev() {
+        let mut current = session();
+        run(&mut current, "file.place", json!({ "path": next, "link": true }));
+        let name = dir.file(&format!("level{depth}.vectorcraft"));
+        save(&mut current, &name);
+        next = name;
+        if depth == 0 {
+            root = Some(current);
+        }
+    }
+
+    let mut root = root.unwrap();
+    let result = run(&mut root, "file.package", json!({ "folder": dir.file("delivery") }));
+    let expected_links = vectorcraft_doc::placed_document::MAX_DEPTH + 1;
+    assert_eq!(result["links"].as_u64(), Some(expected_links as u64), "{result}");
+    assert!(result["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("nesting limit reached")), "{result}");
+    let folder = dir.0.join("delivery/level0 Folder");
+    let packaged = std::fs::read(folder.join("Links/leaf.vectorcraft")).unwrap();
+    assert_eq!(packaged, std::fs::read(dir.file("leaf.vectorcraft")).unwrap());
+    let report = std::fs::read_to_string(folder.join("level0 Report.txt")).unwrap();
+    assert!(report.contains("nesting limit reached"), "{report}");
 }
