@@ -325,3 +325,46 @@ fn package_finds_nested_assets_after_the_source_tree_moves() {
     std::fs::remove_dir_all(moved.join("art")).unwrap();
     verify_portable_nested_package(&dir.0.join("delivery/poster Folder"));
 }
+
+#[test]
+fn identical_stale_paths_in_different_nested_documents_keep_separate_assets() {
+    let dir = Folder::new("package-stale-paths");
+    let mut poster = session();
+    for (number, color) in [(1, RED), (2, BLUE)] {
+        let image = dir.file(&format!("art{number}/photo.png"));
+        write(&image, &png(300, 300, color));
+        let mut part = session();
+        place(&mut part, &image);
+        let name = dir.file(&format!("art{number}/part.vectorcraft"));
+        save(&mut part, &name);
+
+        // Two otherwise independent linked documents have the *same* obsolete
+        // absolute image path. Their relative paths identify different files.
+        let mut saved = vectorcraft_format::load(&std::fs::read(&name).unwrap()).unwrap();
+        saved.update_links(|link| {
+            link.path = "/old-computer/illustrations/photo.png".into();
+            link.relative = Some("photo.png".into());
+        });
+        write(&name, &vectorcraft_format::save_file(&saved));
+        run(&mut poster, "file.place", json!({ "path": name, "link": true }));
+    }
+    save(&mut poster, &dir.file("poster.vectorcraft"));
+    let result = run(&mut poster, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["links"], 4, "both images and both documents must be copied: {result}");
+    assert_eq!(result["missingLinks"], json!([]), "{result}");
+    let folder = dir.0.join("delivery/poster Folder");
+    std::fs::remove_dir_all(dir.0.join("art1")).unwrap();
+    std::fs::remove_dir_all(dir.0.join("art2")).unwrap();
+
+    let mut actual = Vec::new();
+    for filename in result["files"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|name| name.ends_with(".png")) {
+        actual.push(std::fs::read(folder.join(filename)).unwrap());
+    }
+    assert_eq!(actual.len(), 2, "stale source paths must not cause asset deduplication");
+    assert_ne!(actual[0], actual[1], "different original illustrations must keep different pixels");
+    for filename in result["files"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|name| name.starts_with("Links/") && name.ends_with(".vectorcraft")) {
+        let mut nested = session();
+        let opened = open(&mut nested, &folder.join(filename).to_string_lossy());
+        assert_eq!(opened["missingLinks"], json!([]), "{filename}: {opened}");
+    }
+}
