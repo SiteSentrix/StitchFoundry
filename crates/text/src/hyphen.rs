@@ -21,7 +21,7 @@ enum Exception {
     Only(Vec<usize>),
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 struct Exceptions {
     source: String,
     map: HashMap<String, Exception>,
@@ -61,13 +61,7 @@ pub fn hyphenation_exceptions() -> String {
 }
 
 fn parse_exception(entry: &str) -> (String, Exception) {
-    // A leading tilde with no other markers means "never", as in dictionary hyphenation UIs.
-    if let Some(rest) = entry.strip_prefix('~')
-        && !rest.contains('-')
-        && !rest.contains('~')
-    {
-        return (normalize_word(rest), Exception::Never);
-    }
+    // Illustrator: bare word = never break; hyphens mark the only allowed breaks. No other syntax.
     if !entry.contains('-') {
         return (normalize_word(entry), Exception::Never);
     }
@@ -96,18 +90,17 @@ fn normalize_word(word: &str) -> String {
     word.chars().flat_map(|c| c.to_lowercase()).collect()
 }
 
-fn lookup(ex: &Exceptions, word: &str) -> Option<Exception> {
-    ex.map.get(&normalize_word(word)).cloned()
-}
-
-fn active_exceptions() -> Exceptions {
+/// Look the word up under the preferences lock (or the thread-local test override). Only the matched
+/// [`Exception`] is cloned, never the whole list.
+fn exception_for(word: &str) -> Option<Exception> {
+    let key = normalize_word(word);
     #[cfg(test)]
     {
-        if let Some(local) = TEST_OVERRIDE.with(|c| c.borrow().clone()) {
-            return local;
+        if let Some(ex) = TEST_OVERRIDE.with(|c| c.borrow().as_ref().and_then(|e| e.map.get(&key).cloned())) {
+            return Some(ex);
         }
     }
-    store().clone()
+    store().map.get(&key).cloned()
 }
 
 fn is_vowel(c: char) -> bool {
@@ -130,7 +123,7 @@ fn onset_pair(a: char, b: char) -> bool {
 /// Words containing non-letters (other than a trailing apostrophe) are not hyphenated.
 /// Preferences exceptions override the pattern for a matching word.
 pub fn hyphen_points(word: &str) -> Vec<usize> {
-    if let Some(ex) = lookup(&active_exceptions(), word) {
+    if let Some(ex) = exception_for(word) {
         return match ex {
             Exception::Never => vec![],
             Exception::Only(pts) => pts,
@@ -225,11 +218,6 @@ mod tests {
             assert!(hyphen_points("typography").is_empty());
             assert_eq!(hyphen_points("happen"), vec![3]);
             assert!(!hyphen_points("hyphenation").is_empty(), "unlisted words still use the pattern");
-        });
-
-        // Leading tilde: never hyphenate (dictionary-style).
-        with_exceptions("~extraordinary", || {
-            assert!(hyphen_points("extraordinary").is_empty());
         });
 
         assert_eq!(hyphen_points("typography"), pattern, "override cleared");
