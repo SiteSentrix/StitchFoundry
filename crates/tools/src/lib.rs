@@ -485,6 +485,7 @@ impl Cursor {
             | Cursor::PenDelete
             | Cursor::PenClose
             | Cursor::PenContinue
+            | Cursor::PenJoin
             | Cursor::PenConvert
             | Cursor::Eyedropper
             | Cursor::Slice
