@@ -129,11 +129,11 @@ pub(super) fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32
     r.inner
 }
 
-/// A checkbox bound to `d.fields[key]`.
+/// A checkbox bound to `d.fields[key]` (its box shows while unchecked too).
 pub(super) fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
-    let mut b = d.bool(key);
-    if ui.checkbox(&mut b, tl!(label)).changed() {
-        d.fields.insert(key.into(), Value::Bool(b));
+    let b = d.bool(key);
+    if crate::widgets::check(ui, label, b, true) {
+        d.fields.insert(key.into(), Value::Bool(!b));
     }
 }
 
@@ -410,14 +410,19 @@ pub(super) fn slider_field(
 ) {
     let (min, max) = (*range.start(), *range.end());
     let v = d.f64(key, 0.0).clamp(min, max);
-    let mut new = None;
-    if let (Some(x), _) = crate::widgets::color_slider(ui, ("dlg-slider", key), ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track) {
-        new = Some((min + x as f64 * (max - min)).round());
+    slider_rail(ui, d, key, range, track);
+    if let Some(n) = crate::widgets::plain_field(ui, ("dlg-field", key), v, suffix, 0, 52.0).map(|x| x.round().clamp(min, max)).filter(|n| *n != v) {
+        d.fields.insert(key.into(), json!(n));
     }
-    if let Some(x) = crate::widgets::plain_field(ui, ("dlg-field", key), v, suffix, 0, 52.0) {
-        new = Some(x.round().clamp(min, max));
-    }
-    if let Some(n) = new.filter(|n| *n != v) {
+}
+
+/// The rail of [`slider_field`] alone: dragging it sets the number `d.fields[key]` to a whole
+/// number in `range` (a value past the range shows at its end until the rail moves).
+pub(super) fn slider_rail(ui: &mut egui::Ui, d: &mut Dialog, key: &str, range: std::ops::RangeInclusive<f64>, track: &dyn Fn(f32) -> egui::Color32) {
+    let (min, max) = (*range.start(), *range.end());
+    let v = d.f64(key, 0.0).clamp(min, max);
+    let (dragged, _) = crate::widgets::color_slider(ui, ("dlg-slider", key), ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track);
+    if let Some(n) = dragged.map(|x| (min + x as f64 * (max - min)).round()).filter(|n| *n != v) {
         d.fields.insert(key.into(), json!(n));
     }
 }

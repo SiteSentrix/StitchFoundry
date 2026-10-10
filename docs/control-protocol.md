@@ -130,6 +130,9 @@ effects) prefilled with its values, and `ui.dialog.confirm` runs `effect.setPara
 `effect.apply`. Choosing an effect that the list already has returns `{"pending": "effectExists"}` and opens the
 `effectExists` question: `ui.dialog.confirm` opens the applied effect's dialog, `ui.dialog.set {field: "discard",
 value: true}` then confirm opens a fresh one that adds another, `ui.dialog.cancel` drops it.
+The Transform effect's dialog (`effect.dialog {effect: "distort.transform"}`) has Transform Each's controls: sliders
+for `scaleH`, `scaleV` (%) and `moveH`, `moveV` (pt), an angle dial for `rotate`, then `copies`, `reflectX`,
+`reflectY`, `reference` (0–8, the 9-point grid) and `random` (each object varies its own way, the same on every redraw).
 
 Plug-in dialogs: `engine.execute {command: "plugin.dialog", params: {id}}` (Object › Plug-ins) runs an object filter
 plug-in at once when it takes no parameters, else opens the `plugin` dialog: one field per declared parameter (named
