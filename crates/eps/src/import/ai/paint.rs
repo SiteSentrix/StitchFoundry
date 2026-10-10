@@ -2,10 +2,10 @@
 //!
 //! - Colours: `g`/`G` grey (1 is white), `k`/`K` CMYK, `x`/`X` a named CMYK colour at a tint
 //!   (`c m y k (name) tint`; tint 0 is the full colour), `Xa`/`XA` RGB (`c m y k r g b`, the CMYK
-//!   values its equivalent), `Xx`/`XX` a named colour of either model
-//!   (`c m y k [r g b] (name) tint type`), `Xk`/`XK` a global process colour (its operands as
-//!   `Xx`'s: a global swatch that isn't an ink of its own). Lower case paints fills, upper case
-//!   strokes.
+//!   values its equivalent), `Xx`/`XX` a named colour of any model
+//!   (`c m y k [r g b | L a b] (name) tint type`, type 0 CMYK, 1 RGB, 2 Lab), `Xk`/`XK` a global
+//!   process colour (its operands as `Xx`'s: a global swatch that isn't an ink of its own). Lower
+//!   case paints fills, upper case strokes.
 //! - Gradient definitions: `(name) type stops Bd`, its stops as `colour style [opacity 6]
 //!   midpoint ramp Bs` (style 0 grey, 1 CMYK, 2 RGB with its CMYK, 3 and 4 named colours), `BD`.
 //! - A gradient on an object: `[flag] Bb` (1: the stroke), `flag (name) x y angle length a b c d
@@ -57,8 +57,8 @@ pub(super) fn color_op(op: &str, vals: &[V]) -> Option<(Paint, Option<Named>)> {
     }
 }
 
-/// `c m y k (name) tint x` or `c m y k [r g b] (name) tint type Xx` (type 1: RGB); `rgb` forces
-/// the model.
+/// `c m y k (name) tint x` or `c m y k [r g b | L a b] (name) tint type Xx` (type 1: RGB, 2: Lab);
+/// `rgb` forces RGB or CMYK.
 fn named(vals: &[V], rgb: Option<bool>) -> Option<(Paint, Option<Named>)> {
     let at = vals.iter().rposition(|v| matches!(v, V::Str(_)))?;
     let name = vals.get(at)?.text()?;
@@ -67,9 +67,14 @@ fn named(vals: &[V], rgb: Option<bool>) -> Option<(Paint, Option<Named>)> {
     let unit = |v: f32| v.clamp(0.0, 1.0);
     let tint = 1.0 - unit(*after.first()?);
     let n = before.len();
-    let color = if rgb.unwrap_or(after.get(1).is_some_and(|t| *t == 1.0)) {
+    let kind = after.get(1).copied();
+    let color = if rgb.unwrap_or(kind == Some(1.0)) {
         let [r, g, b] = before.get(n.checked_sub(3)?..)? else { return None };
         Color::rgb(unit(*r), unit(*g), unit(*b))
+    } else if rgb.is_none() && kind == Some(2.0) {
+        // Type 2: a colour defined in Lab, its L a b values after the CMYK equivalent (#1032).
+        let [l, a, b] = before.get(n.checked_sub(3)?..)? else { return None };
+        Color::lab(l.clamp(0.0, 100.0), a.clamp(-128.0, 127.0), b.clamp(-128.0, 127.0))
     } else {
         // The CMYK values come first (an RGB equivalent may follow them).
         let from = if n >= 7 { n - 7 } else { n.checked_sub(4)? };
@@ -266,6 +271,16 @@ mod tests {
         v.extend([V::Str(b"Orange".to_vec()), V::Num(0.0), V::Num(1.0)]);
         let (p, _) = color_op("Xk", &v).unwrap();
         assert_eq!(p.color(), Some(Color::rgb(1.0, 0.5, 0.0)));
+        // A spot colour defined in Lab (type 2): its L a b values, not its CMYK equivalent (#1032).
+        let mut v = nums(&[0.52, 0.98, 0.28, 0.1, 32.9412, 45.0, -18.0]);
+        v.extend([V::Str(b"Plum Ink".to_vec()), V::Num(0.0), V::Num(2.0)]);
+        let (p, named) = color_op("Xx", &v).unwrap();
+        let named = named.unwrap();
+        assert_eq!((named.color, named.spot, named.tint), (Color::lab(32.9412, 45.0, -18.0), true, 1.0));
+        assert_eq!(p.color(), Some(Color::lab(32.9412, 45.0, -18.0)));
+        v[8] = V::Num(0.25);
+        let (_, named) = color_op("XX", &v).unwrap();
+        assert_eq!(named.map(|n| (n.color, n.tint)), Some((Color::lab(32.9412, 45.0, -18.0), 0.75)));
     }
 
     #[test]
