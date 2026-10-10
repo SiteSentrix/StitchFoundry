@@ -27,8 +27,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Corners").int
 /// `corners` (default: the selected corners), filled in with their kind and radius.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
-    let id = match p.get("id").and_then(Value::as_u64) {
-        Some(id) => NodeId(id),
+    let id = match p.get("id") {
+        Some(value) => NodeId(value.as_u64().ok_or("`id` must be a non-negative integer object id")?),
         None => match st.selection.objects[..] {
             [id] => id,
             _ => return Err("select one path, or give its `id`".into()),
@@ -37,8 +37,18 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let Some(live) = st.doc.node(id).and_then(LiveCorners::of) else {
         return Err("Corners edits the corners of a path".into());
     };
-    let corners: BTreeSet<usize> = match p.get("corners").and_then(Value::as_array) {
-        Some(a) => a.iter().filter_map(Value::as_u64).filter_map(|k| usize::try_from(k).ok()).filter(|k| live.corner(*k).is_some()).collect(),
+    let corners: BTreeSet<usize> = match p.get("corners") {
+        Some(Value::Array(values)) => values
+            .iter()
+            .map(|value| {
+                let index = value.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| format!("invalid corner index {value}"))?;
+                if live.corner(index).is_none() {
+                    return Err(format!("anchor {index} is not a corner of this path"));
+                }
+                Ok(index)
+            })
+            .collect::<Result<_, String>>()?,
+        Some(_) => return Err("`corners` must be an array of corner indices".into()),
         None => live.picked(st.selection.partial(id)),
     };
     if corners.is_empty() {
@@ -147,6 +157,25 @@ mod tests {
         let mut v = vec![];
         out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
         v
+    }
+
+    /// Explicit UI-command parameters cannot silently fall back to the selection or drop corners.
+    #[test]
+    fn malformed_explicit_corner_targets_never_open_a_partial_edit() {
+        let (mut app, id) = app();
+        for params in [
+            json!({"id": "invalid"}),
+            json!({"id": -1}),
+            json!({"id": id, "corners": [0, "bad", 2]}),
+            json!({"id": id, "corners": [0, 1.5]}),
+            json!({"id": id, "corners": [0, 9]}),
+            json!({"id": id, "corners": "bad"}),
+        ] {
+            assert!(app.run("ui.corners", params.clone()).is_err(), "accepted {params}");
+            assert!(app.ui.dialog.is_none(), "opened a partial edit for {params}");
+        }
+        app.run("ui.corners", json!({"id": id, "corners": [0, 2]})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["corners"], json!([0, 2]));
     }
 
     #[test]
