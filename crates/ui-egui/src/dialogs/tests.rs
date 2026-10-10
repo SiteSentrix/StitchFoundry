@@ -168,7 +168,15 @@ fn effect_preview_is_kept_as_one_undo_step() {
 
 #[test]
 fn raster_filter_dialogs_preview_and_apply() {
-    for (effect, key, value) in [("blur.radial", "method", "zoom"), ("blur.smart", "quality", "high"), ("sharpen.unsharpMask", "amount", "120")] {
+    for (effect, key, value) in [
+        ("blur.radial", "method", "zoom"),
+        ("blur.smart", "quality", "high"),
+        ("sharpen.unsharpMask", "amount", "120"),
+        ("pixelate.colorHalftone", "channel1", "30"),
+        ("pixelate.crystallize", "cellSize", "20"),
+        ("pixelate.mezzotint", "type", "longLines"),
+        ("pixelate.pointillize", "cellSize", "12"),
+    ] {
         let mut app = app();
         let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
         app.run("select.all", json!({})).unwrap();
@@ -188,6 +196,13 @@ fn raster_filter_dialogs_preview_and_apply() {
     let ranks: Vec<usize> = ["radius", "threshold", "quality"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
     assert!(ranks.windows(2).all(|w| w[0] < w[1]), "{ranks:?}");
     assert_eq!(super::effect::doc_rank(doc, "nope"), usize::MAX);
+    let doc = vectorcraft_effects::effect_info("pixelate.colorHalftone").unwrap().params;
+    let ranks: Vec<usize> = ["maxRadius", "channel1", "channel2", "channel3", "channel4"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[4] < usize::MAX, "{ranks:?}");
+    // Labels as the dialogs show them.
+    assert_eq!(super::form::humanize("maxRadius"), "Max. Radius:");
+    assert_eq!(super::form::humanize("channel3"), "Channel 3:");
+    assert_eq!(super::form::humanize("cellSize"), "Cell Size:");
 }
 
 #[test]

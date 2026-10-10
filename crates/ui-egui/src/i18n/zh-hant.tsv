@@ -3246,6 +3246,31 @@ axis	Both	兩者
 	Smart Blur…	智慧型模糊…
 	Sharpen	銳利化
 	Unsharp Mask…	反銳利化遮罩…
+	Pixelate	像素化
+	Color Halftone…	彩色半色調…
+	Crystallize…	結晶化…
+	Mezzotint…	網線銅版…
+	Pointillize…	點描…
+	Color Halftone	彩色半色調
+	Crystallize	結晶化
+	Mezzotint	網線銅版
+	Pointillize	點描
+	Max. Radius	最大半徑
+	Channel 1	色版 1
+	Channel 2	色版 2
+	Channel 3	色版 3
+	Channel 4	色版 4
+	Cell Size	單元大小
+	Fine Dots	細點
+	Medium Dots	中等點
+	Grainy Dots	顆粒點
+	Coarse Dots	粗點
+	Short Lines	短線
+	Medium Lines	中等線
+	Long Lines	長線
+	Short Strokes	短筆畫
+	Medium Strokes	中等筆畫
+	Long Strokes	長筆畫
 	Radial Blur	放射狀模糊
 	Smart Blur	智慧型模糊
 	Unsharp Mask	反銳利化遮罩

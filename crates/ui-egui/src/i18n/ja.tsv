@@ -3217,6 +3217,31 @@ theme	Appearance	外観
 	Smart Blur…	ぼかし (詳細)…
 	Sharpen	シャープ
 	Unsharp Mask…	アンシャープマスク…
+	Pixelate	ピクセレート
+	Color Halftone…	カラーハーフトーン…
+	Crystallize…	結晶化…
+	Mezzotint…	メゾティント…
+	Pointillize…	点描…
+	Color Halftone	カラーハーフトーン
+	Crystallize	結晶化
+	Mezzotint	メゾティント
+	Pointillize	点描
+	Max. Radius	最大半径
+	Channel 1	チャンネル 1
+	Channel 2	チャンネル 2
+	Channel 3	チャンネル 3
+	Channel 4	チャンネル 4
+	Cell Size	セルの大きさ
+	Fine Dots	細かい点
+	Medium Dots	中程度の点
+	Grainy Dots	粒状の点
+	Coarse Dots	粗い点
+	Short Lines	短い線
+	Medium Lines	中程度の線
+	Long Lines	長い線
+	Short Strokes	短いストローク
+	Medium Strokes	中程度のストローク
+	Long Strokes	長いストローク
 	Radial Blur	ぼかし (放射状)
 	Smart Blur	ぼかし (詳細)
 	Unsharp Mask	アンシャープマスク
