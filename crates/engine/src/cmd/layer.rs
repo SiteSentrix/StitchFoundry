@@ -163,7 +163,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Target",
             [],
             None,
-            "{id} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art (its sublayers' too) selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]}",
+            "{id, add?: bool (Shift-click: the item joins the selection, or leaves it when all selected; nothing is targeted)} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art (its sublayers' too) selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]}",
             has_doc,
             target
         ),
@@ -362,7 +362,11 @@ fn target(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let layer = n.is_layer();
     let rows = st.layer_rows.clone();
-    s.select(|d, sel| sel.set_target(d, id))?;
+    if p.get("add").and_then(Value::as_bool).unwrap_or(false) {
+        s.select(|d, sel| sel.toggle_target(d, id))?;
+    } else {
+        s.select(|d, sel| sel.set_target(d, id))?;
+    }
     let st = s.doc_mut()?;
     // Targeting doesn't change which rows are highlighted.
     st.layer_rows = rows;
