@@ -8,7 +8,7 @@
 
 mod about;
 mod all_tools;
-mod artboard_options;
+pub mod artboard_options;
 pub mod blend_options;
 pub mod brush_options;
 pub mod color_balance;
@@ -79,6 +79,7 @@ pub mod spot_colors;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
+pub mod symbolism_options;
 mod text_export;
 pub mod text_import;
 mod tiff_bmp_tga;
@@ -205,7 +206,7 @@ registry! {
     Transform: ["move", "rotate", "scale", "reflect", "shear"] => transform::SPEC,
     PathOp: ["average", "offsetPath", "simplify", "splitIntoGrid"] => path_ops::SPEC,
     DocumentSetup: ["documentSetup"] => document_setup::SPEC,
-    ArtboardOptions: ["artboardOptions"] => artboard_options::SPEC,
+    ArtboardOptions: [artboard_options::KIND] => artboard_options::SPEC,
     AllTools: ["allTools"] => all_tools::SPEC,
     ExportForScreens: ["exportForScreens"] => export_for_screens::SPEC,
     Recolor: [recolor::KIND] => recolor::SPEC,
@@ -278,6 +279,7 @@ registry! {
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
+    SymbolismOptions: [symbolism_options::KIND] => symbolism_options::SPEC,
     PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,

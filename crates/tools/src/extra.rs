@@ -16,9 +16,14 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         "flare" => Box::new(FlareTool::default()),
         "reshape" => Box::new(ReshapeTool::default()),
         "shaper" => Box::new(ShaperTool::default()),
-        id if vectorcraft_doc::GraphKind::parse(id).is_some() && id.ends_with("Graph") => Box::new(GraphTool::new(id)),
+        id if is_graph_tool(id) => Box::new(GraphTool::new(id)),
         _ => return None,
     })
+}
+
+/// Whether `id` is one of the graph tools (`columnGraph`, `pieGraph`…).
+pub fn is_graph_tool(id: &str) -> bool {
+    id.ends_with("Graph") && vectorcraft_doc::GraphKind::parse(id).is_some()
 }
 
 /// The Flare Tool Options as `shape.flare` takes them: (key, default, least, most). The diameter

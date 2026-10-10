@@ -14,7 +14,8 @@ type Row = (&'static [&'static str], Option<&'static str>, &'static [&'static st
 /// The Liquify tools.
 pub const LIQUIFY: &[&str] = &["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"];
 
-const SYMBOLISM: &[&str] =
+/// The Symbolism tools.
+pub const SYMBOLISM: &[&str] =
     &["symbolSprayer", "symbolShifter", "symbolScruncher", "symbolSizer", "symbolSpinner", "symbolStainer", "symbolScreener", "symbolStyler"];
 
 const ROWS: &[Row] = &[
