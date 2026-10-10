@@ -142,6 +142,17 @@ fn de_key<'de, T: Keyed, D: Deserializer<'de>>(d: D) -> std::result::Result<T, D
     T::parse(&s).ok_or_else(|| D::Error::custom(format!("`{s}`: {}", T::KEYS)))
 }
 
+/// A size in pixels: a number, rounded to whole pixels (`300.0` is 300).
+fn de_pixels<'de, D: Deserializer<'de>>(d: D) -> std::result::Result<Option<u32>, D::Error> {
+    let Some(v) = Option::<f64>::deserialize(d)? else { return Ok(None) };
+    let px = v.round();
+    if !(px.is_finite() && px >= 0.0 && px <= f64::from(u32::MAX)) {
+        return Err(D::Error::custom(format!("{v} is not a size in pixels")));
+    }
+    // In range and whole: the cast is exact.
+    Ok(Some(px as u32))
+}
+
 /// The file format.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -361,8 +372,10 @@ pub struct WebSettings {
     /// JPEG: embed the sRGB profile.
     pub embed_profile: bool,
     /// The image width in pixels (the height follows).
+    #[serde(deserialize_with = "de_pixels")]
     pub width: Option<u32>,
     /// The image height in pixels (the width follows).
+    #[serde(deserialize_with = "de_pixels")]
     pub height: Option<u32>,
     /// The image size in percent of the art's size in points.
     pub percent: Option<f64>,
