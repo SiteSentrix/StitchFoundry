@@ -1,7 +1,14 @@
 //! Graphs (Illustrator's graph tools): a group whose art is generated from a [`GraphSpec`].
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 use vectorcraft_geom::Rect;
+
+/// Most categories (rows) and series (columns) a graph's data grid holds: the grid is built in full for drawing and
+/// for the data window, so a file can't make it allocate without bound.
+pub const MAX_GRAPH_CATEGORIES: usize = 10_000;
+pub const MAX_GRAPH_SERIES: usize = 256;
 
 /// The nine graph types, in the Graph tool group's order.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +100,10 @@ pub struct GraphSpec {
     pub series: Vec<String>,
     pub categories: Vec<String>,
     pub rows: Vec<Vec<f64>>,
+    /// Blank cells as `[category, series]`: their `rows` entry is a 0 placeholder, so a file still reads (as zeros)
+    /// in a version that doesn't know blanks. Cells past the end of a short row are blank too.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub blanks: Vec<[usize; 2]>,
     /// Column/bar width as a % of the available category width (90).
     pub column_width: f64,
     /// Cluster width as a % (80).
@@ -121,6 +132,28 @@ fn edge_to_edge_before_the_option() -> bool {
     true
 }
 
+impl GraphSpec {
+    /// The data with blank cells as `None`, every row as long as the longest (at most [`MAX_GRAPH_CATEGORIES`] rows
+    /// of [`MAX_GRAPH_SERIES`] cells).
+    pub fn cells(&self) -> Vec<Vec<Option<f64>>> {
+        let width = self.rows.iter().map(Vec::len).max().unwrap_or(0).min(MAX_GRAPH_SERIES);
+        let blank: HashSet<[usize; 2]> = self.blanks.iter().copied().collect();
+        self.rows
+            .iter()
+            .take(MAX_GRAPH_CATEGORIES)
+            .enumerate()
+            .map(|(c, r)| (0..width).map(|s| r.get(s).copied().filter(|_| !blank.contains(&[c, s]))).collect())
+            .collect()
+    }
+
+    /// Store `cells`, a blank (`None`) as a 0 placeholder listed in `blanks`.
+    pub fn set_cells(&mut self, cells: Vec<Vec<Option<f64>>>) {
+        self.blanks =
+            cells.iter().enumerate().flat_map(|(c, r)| r.iter().enumerate().filter(|(_, v)| v.is_none()).map(move |(s, _)| [c, s])).collect();
+        self.rows = cells.into_iter().map(|r| r.into_iter().map(|v| v.unwrap_or(0.0)).collect()).collect();
+    }
+}
+
 impl Default for GraphSpec {
     fn default() -> Self {
         Self {
@@ -130,6 +163,7 @@ impl Default for GraphSpec {
             series: vec![],
             categories: vec![],
             rows: vec![vec![1.0]],
+            blanks: vec![],
             column_width: 90.0,
             cluster_width: 80.0,
             legend: true,

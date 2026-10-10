@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Graph",
             [],
             None,
-            "{type: column|stackedColumn|bar|stackedBar|line|area|scatter|pie|radar, x, y, width, height, series?: [..], categories?: [..], rows?: [[..]], csv?} → {id}",
+            "{type: column|stackedColumn|bar|stackedBar|line|area|scatter|pie|radar, x, y, width, height, series?: [..], categories?: [..], rows?: [[number|null]], csv?} → {id}; an empty CSV cell or a null is a blank value, a number in straight quotes is a label",
             has_doc,
             create
         ),
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Data…",
             ["Object", "Graph"],
             None,
-            "{id?, series?, categories?, rows?, csv?: first row = series labels (first cell empty), then one row per category: label, values…} replace the graph's data; no data → the current {csv, series, categories, rows}",
+            "{id?, series?, categories?, rows?, csv?: first row = series labels (first cell empty), then one row per category: label, values…; an empty cell or a null is a blank value, a quoted number a label} replace the graph's data; no data → the current {csv, series, categories, rows}",
             has_selection,
             set_data
         ),
@@ -50,46 +50,83 @@ pub fn specs() -> Vec<CommandSpec> {
 
 // ---------- data ----------
 
-fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<f64>>) {
-    let rows: Vec<Vec<String>> = csv
+/// One CSV cell: its text, and whether it was in straight quotes (a quoted number is a label, not a value).
+struct Cell {
+    text: String,
+    quoted: bool,
+}
+
+impl Cell {
+    fn number(&self) -> Option<f64> {
+        if self.quoted { None } else { self.text.parse::<f64>().ok().filter(|v| v.is_finite()) }
+    }
+}
+
+fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<f64>>>) {
+    let rows: Vec<Vec<Cell>> = csv
         .lines()
         .map(|l| l.trim_end_matches('\r'))
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
             let sep = if l.contains('\t') { '\t' } else { ',' };
-            l.split(sep).map(|c| c.trim().trim_matches('"').to_string()).collect()
+            l.split(sep)
+                .map(|c| {
+                    let c = c.trim();
+                    let quoted = c.len() >= 2 && c.starts_with('"') && c.ends_with('"');
+                    Cell { text: c.trim_matches('"').to_string(), quoted }
+                })
+                .collect()
         })
         .collect();
     let Some(first) = rows.first() else { return (vec![], vec![], vec![]) };
-    // A header row has a non-numeric cell after the first one (or an empty first cell).
-    let header = first.first().is_some_and(|c| c.is_empty()) || first.iter().skip(1).any(|c| c.parse::<f64>().is_err());
-    let series = if header { first.iter().skip(1).cloned().collect() } else { vec![] };
+    // A label is quoted or doesn't read as a number; an empty unquoted cell is a blank value.
+    let label = |c: &Cell| c.quoted || (c.number().is_none() && !c.text.is_empty());
+    // A header row has an empty first cell or a label after it, or is a label followed only by empty cells (`Year,,`).
+    // All-empty series names mean no legend.
+    let empty = |c: &Cell| c.text.is_empty() && !c.quoted;
+    let header = first.first().is_some_and(empty)
+        || first.iter().skip(1).any(label)
+        || (first.len() > 1 && first.first().is_some_and(label) && first.iter().skip(1).all(empty));
+    let mut series: Vec<String> = if header { first.iter().skip(1).map(|c| c.text.clone()).collect() } else { vec![] };
+    if series.iter().all(String::is_empty) {
+        series.clear();
+    }
+    let data = rows.get(usize::from(header)..).unwrap_or_default();
+    // The first column holds the category labels if any row starts with one; then it does for every row, so a
+    // row with an empty label doesn't shift its values one place left.
+    let labelled = data.iter().any(|r| r.first().is_some_and(label));
     let mut categories = vec![];
     let mut values = vec![];
-    for r in rows.iter().skip(header as usize) {
-        let labelled = r.first().is_some_and(|c| c.parse::<f64>().is_err());
-        categories.push(if labelled { r[0].clone() } else { String::new() });
-        values.push(r.iter().skip(labelled as usize).map(|c| c.parse::<f64>().unwrap_or(0.0)).collect());
-    }
-    if categories.iter().all(String::is_empty) {
-        categories.clear();
+    for r in data {
+        if labelled {
+            categories.push(r.first().map(|c| c.text.clone()).unwrap_or_default());
+        }
+        values.push(r.iter().skip(labelled as usize).map(Cell::number).collect());
     }
     (series, categories, values)
 }
 
 fn to_csv(g: &GraphSpec) -> String {
-    let mut out = String::new();
-    if !g.series.is_empty() {
-        out.push(',');
-        out.push_str(&g.series.join(","));
-        out.push('\n');
-    }
-    for (i, r) in g.rows.iter().enumerate() {
-        if let Some(c) = g.categories.get(i) {
-            out.push_str(c);
+    // Always a header row (empty first cell), so a first data row starting with a blank isn't read as one.
+    let cells = g.cells();
+    let width = cells.iter().map(Vec::len).max().unwrap_or(0).max(g.series.len());
+    let mut out = String::from(",");
+    out.push_str(&(0..width).map(|s| g.series.get(s).cloned().unwrap_or_default()).collect::<Vec<_>>().join(","));
+    out.push('\n');
+    let labelled = !g.categories.is_empty();
+    for (i, r) in cells.iter().enumerate() {
+        if labelled {
+            // An empty label, one that reads as a number or one with spaces around it goes in quotes, so it reads back
+            // as the same label.
+            let c = g.categories.get(i).map(String::as_str).unwrap_or_default();
+            if c.trim().is_empty() || c.trim().parse::<f64>().is_ok() || c != c.trim() {
+                out.push_str(&format!("\"{c}\""));
+            } else {
+                out.push_str(c);
+            }
             out.push(',');
         }
-        out.push_str(&r.iter().map(|v| fmt_value(*v)).collect::<Vec<_>>().join(","));
+        out.push_str(&r.iter().map(|v| v.map(fmt_value).unwrap_or_default()).collect::<Vec<_>>().join(","));
         out.push('\n');
     }
     out
@@ -101,7 +138,7 @@ fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
         let (s, c, r) = parse_csv(csv);
         g.series = s;
         g.categories = c;
-        g.rows = r;
+        g.set_cells(r);
         changed = true;
     }
     let strings =
@@ -115,10 +152,24 @@ fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
         changed = true;
     }
     if let Some(rows) = p.get("rows").and_then(Value::as_array) {
-        g.rows = rows.iter().map(|r| r.as_array().map(|a| a.iter().map(|v| v.as_f64().unwrap_or(0.0)).collect()).unwrap_or_default()).collect();
+        // `null` (or anything that isn't a finite number) is a blank cell.
+        g.set_cells(
+            rows.iter().map(|r| r.as_array().map(|a| a.iter().map(|v| v.as_f64().filter(|v| v.is_finite())).collect()).unwrap_or_default()).collect(),
+        );
         changed = true;
     }
-    g.rows.retain(|r| !r.is_empty());
+    // Drop rows with neither a value nor a label; a label-only row stays, its values blank.
+    let mut cells = g.cells();
+    let keep: Vec<bool> = (0..cells.len())
+        .map(|c| cells.get(c).is_some_and(|r| r.iter().any(Option::is_some)) || g.categories.get(c).is_some_and(|l| !l.is_empty()))
+        .collect();
+    if keep.contains(&false) || cells.len() < g.rows.len() {
+        let mut k = keep.iter();
+        cells.retain(|_| k.next().copied().unwrap_or(false));
+        let mut k = keep.iter();
+        g.categories.retain(|_| k.next().copied().unwrap_or(true));
+        g.set_cells(cells);
+    }
     changed
 }
 
@@ -234,6 +285,11 @@ impl Gen<'_> {
     }
 }
 
+/// The stretches of two or more points between blank cells, which a line connects.
+fn runs(pts: &[Option<Point>]) -> Vec<Vec<Point>> {
+    pts.split(Option::is_none).map(|r| r.iter().flatten().copied().collect::<Vec<_>>()).filter(|r| r.len() > 1).collect()
+}
+
 fn polyline(pts: &[Point], closed: bool) -> PathData {
     let mut bp = BezPath::new();
     for (i, p) in pts.iter().enumerate() {
@@ -262,7 +318,11 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     let ncat = g.rows.len().max(1);
     let series_label = |i: usize| g.series.get(i).cloned().unwrap_or_default();
     let mut series: Vec<Vec<Arc<Node>>> = vec![vec![]; nser];
-    let val = |c: usize, s: usize| g.rows.get(c).and_then(|r| r.get(s)).copied().unwrap_or(0.0);
+    // A blank cell (no value) is `None`: columns, bars and stacked segments leave it out, lines and scatter points
+    // break around it and the value axis ignores it. Area, pie and radar draw it as 0, which is what it adds to them.
+    let cells = g.cells();
+    let cell = |c: usize, s: usize| cells.get(c).and_then(|r| r.get(s)).copied().flatten();
+    let val = |c: usize, s: usize| cell(c, s).unwrap_or(0.0);
     let stacked = matches!(g.kind, GraphKind::StackedColumn | GraphKind::StackedBar | GraphKind::Area);
     let horizontal = matches!(g.kind, GraphKind::Bar | GraphKind::StackedBar);
 
@@ -347,15 +407,17 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     lo = lo.min(neg);
                 } else if scatter {
                     for s in (0..nser).step_by(2) {
-                        hi = hi.max(val(c, s));
-                        lo = lo.min(val(c, s));
-                        xlo = xlo.min(val(c, s + 1));
-                        xhi = xhi.max(val(c, s + 1));
+                        if let (Some(y), Some(x)) = (cell(c, s), cell(c, s + 1)) {
+                            hi = hi.max(y);
+                            lo = lo.min(y);
+                            xlo = xlo.min(x);
+                            xhi = xhi.max(x);
+                        }
                     }
                 } else {
-                    for s in 0..nser {
-                        hi = hi.max(val(c, s));
-                        lo = lo.min(val(c, s));
+                    for v in (0..nser).filter_map(|s| cell(c, s)) {
+                        hi = hi.max(v);
+                        lo = lo.min(v);
                     }
                 }
             }
@@ -415,14 +477,20 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     x += xs;
                 }
                 for (si, s) in (0..nser).step_by(2).enumerate() {
-                    let pts: Vec<Point> =
-                        (0..ncat).map(|c| Point::new(r.x0 + (val(c, s + 1) - xl) / (xh - xl) * r.width(), vpos(val(c, s)))).collect();
-                    if g.connect_points && pts.len() > 1 {
-                        let (fill, stroke, w) = mark(si, false, default_series_paint(si), 1.0);
-                        series[si].push(b.path(polyline(&pts, false), fill, stroke, w));
+                    let pts: Vec<Option<Point>> = (0..ncat)
+                        .map(|c| match (cell(c, s), cell(c, s + 1)) {
+                            (Some(y), Some(x)) => Some(Point::new(r.x0 + (x - xl) / (xh - xl) * r.width(), vpos(y))),
+                            _ => None,
+                        })
+                        .collect();
+                    if g.connect_points {
+                        for run in runs(&pts) {
+                            let (fill, stroke, w) = mark(si, false, default_series_paint(si), 1.0);
+                            series[si].push(b.path(polyline(&run, false), fill, stroke, w));
+                        }
                     }
                     if g.mark_points {
-                        for p in &pts {
+                        for p in pts.iter().flatten() {
                             let (fill, stroke, w) = mark(si, true, Paint::None, 0.0);
                             series[si].push(b.path(marker(*p, 5.0), fill, stroke, w));
                         }
@@ -439,8 +507,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     for c in 0..ncat {
                         let c0 = cat_start(c) + (cat_w - cluster) / 2.0;
                         for (s, items) in series.iter_mut().enumerate() {
+                            let Some(v) = cell(c, s) else { continue };
                             let a = c0 + slot * s as f64 + (slot - bar) / 2.0;
-                            let (v0, v1) = (vpos(0.0f64.clamp(lo, hi)), vpos(val(c, s)));
+                            let (v0, v1) = (vpos(0.0f64.clamp(lo, hi)), vpos(v));
                             let rect = if horizontal {
                                 Rect::new(v0.min(v1), a, v0.max(v1), a + bar)
                             } else {
@@ -458,7 +527,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                         let a = cat_start(c) + (cat_w - bar) / 2.0;
                         let (mut pos, mut neg) = (0.0, 0.0);
                         for (s, items) in series.iter_mut().enumerate() {
-                            let v = val(c, s);
+                            let Some(v) = cell(c, s) else { continue };
                             let base = if v >= 0.0 { &mut pos } else { &mut neg };
                             let (v0, v1) = (vpos(*base), vpos(*base + v));
                             *base += v;
@@ -474,13 +543,15 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 }
                 GraphKind::Line => {
                     for (s, items) in series.iter_mut().enumerate() {
-                        let pts: Vec<Point> = (0..ncat).map(|c| Point::new(cat_mid(c), vpos(val(c, s)))).collect();
-                        if g.connect_points && pts.len() > 1 {
-                            let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
-                            items.push(b.path(polyline(&pts, false), fill, stroke, w));
+                        let pts: Vec<Option<Point>> = (0..ncat).map(|c| cell(c, s).map(|v| Point::new(cat_mid(c), vpos(v)))).collect();
+                        if g.connect_points {
+                            for run in runs(&pts) {
+                                let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
+                                items.push(b.path(polyline(&run, false), fill, stroke, w));
+                            }
                         }
                         if g.mark_points {
-                            for p in &pts {
+                            for p in pts.iter().flatten() {
                                 let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
                                 items.push(b.path(marker(*p, 5.0), fill, stroke, w));
                             }
@@ -697,7 +768,8 @@ fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
     let id = target(s, p, "graph.setData")?;
     let mut spec = spec_of(s, id)?;
     if !apply_data(&mut spec, p) {
-        return Ok(json!({ "csv": to_csv(&spec), "series": spec.series, "categories": spec.categories, "rows": spec.rows }));
+        // Blank cells come back as null, so the rows can be edited and sent back as they are.
+        return Ok(json!({ "csv": to_csv(&spec), "series": spec.series, "categories": spec.categories, "rows": spec.cells() }));
     }
     s.edit("Graph Data", |d, _| regenerate(d, id, spec))?;
     Ok(json!({ "id": id.0 }))
@@ -1133,10 +1205,115 @@ mod tests {
         let (s, c, r) = super::parse_csv("\t2024\t2025\nQ1\t1\t2\nQ2\t3\t4\n");
         assert_eq!(s, vec!["2024", "2025"]);
         assert_eq!(c, vec!["Q1", "Q2"]);
-        assert_eq!(r, vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+        assert_eq!(r, vec![vec![Some(1.0), Some(2.0)], vec![Some(3.0), Some(4.0)]]);
         let (s, c, r) = super::parse_csv("1,2\n3,4");
         assert!(s.is_empty() && c.is_empty());
         assert_eq!(r.len(), 2);
         assert_eq!(super::nice_axis(0.0, 7.0, 0), (0.0, 8.0, 2.0));
+    }
+
+    #[test]
+    fn empty_cells_are_blank_and_quoted_numbers_are_labels() {
+        // Quoted years label the rows; empty and non-numeric cells are blank values, not zeros.
+        let (s, c, r) = super::parse_csv(",a,b\n\"2023\",1,\n\"2024\",,x\n\"2025\",3,4");
+        assert_eq!(s, vec!["a", "b"]);
+        assert_eq!(c, vec!["2023", "2024", "2025"]);
+        assert_eq!(r, vec![vec![Some(1.0), None], vec![None, None], vec![Some(3.0), Some(4.0)]]);
+        // Back to CSV: blanks stay empty and numeric labels keep their quotes, so it reads back the same.
+        let mut g = GraphSpec { series: s, categories: c, ..GraphSpec::default() };
+        g.set_cells(r);
+        assert_eq!(g.blanks, vec![[0, 1], [1, 0], [1, 1]]);
+        let csv = super::to_csv(&g);
+        assert!(csv.contains("\"2024\",,"), "{csv}");
+        let (s2, c2, r2) = super::parse_csv(&csv);
+        assert_eq!((s2, c2, r2), (g.series.clone(), g.categories.clone(), g.cells()));
+    }
+
+    #[test]
+    fn a_row_with_an_empty_label_keeps_its_values_in_place() {
+        // The label column is the first column of every row once any row has a label.
+        let (_, c, r) = super::parse_csv(",a,b\nQ1,1,2\n,3,4");
+        assert_eq!(c, vec!["Q1", ""]);
+        assert_eq!(r, vec![vec![Some(1.0), Some(2.0)], vec![Some(3.0), Some(4.0)]]);
+        // And a data window round trip keeps it (the empty label is written as "").
+        let mut g = GraphSpec { series: vec!["a".into(), "b".into()], categories: c, ..GraphSpec::default() };
+        g.set_cells(r);
+        assert_eq!(super::parse_csv(&super::to_csv(&g)).2, g.cells());
+        // Without series or labels, a first row starting with a blank is still data after a round trip.
+        let mut g = GraphSpec::default();
+        g.set_cells(vec![vec![None, Some(2.0)], vec![Some(3.0), Some(4.0)]]);
+        let (s, c, r) = super::parse_csv(&super::to_csv(&g));
+        assert!(s.is_empty() && c.is_empty());
+        assert_eq!(r, g.cells());
+        // A label with spaces around a number stays a label, spaces and all.
+        let mut g = GraphSpec { categories: vec!["2024 ".into()], ..GraphSpec::default() };
+        g.set_cells(vec![vec![Some(1.0)]]);
+        assert_eq!(super::parse_csv(&super::to_csv(&g)).1, vec!["2024 "]);
+    }
+
+    #[test]
+    fn blanks_read_back_as_null_and_year_header_rows_still_read_as_headers() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let r =
+            s.execute("graph.create", &json!({"type": "line", "x": 0, "y": 0, "width": 300, "height": 200, "rows": [[1, null], [2, 3]]})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        assert_eq!(s.execute("graph.setData", &json!({"id": id.0})).unwrap()["rows"], json!([[1.0, null], [2.0, 3.0]]));
+        // A label followed by empty cells is a header with no series names, as before blanks existed.
+        let (s, c, r) = super::parse_csv("Year,,\n2023,1,2");
+        assert!(s.is_empty());
+        assert_eq!(c, Vec::<String>::new());
+        assert_eq!(r, vec![vec![Some(2023.0), Some(1.0), Some(2.0)]]);
+    }
+
+    #[test]
+    fn a_huge_ragged_grid_is_capped() {
+        let g = GraphSpec { rows: vec![vec![0.0; vectorcraft_doc::MAX_GRAPH_SERIES + 10]; 3], ..GraphSpec::default() };
+        assert!(g.cells().iter().all(|r| r.len() == vectorcraft_doc::MAX_GRAPH_SERIES));
+    }
+
+    #[test]
+    fn a_label_only_row_stays_with_blank_values() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let r =
+            s.execute("graph.create", &json!({"type": "column", "x": 0, "y": 0, "width": 300, "height": 200, "csv": ",a\nQ1,1\nQ2\nQ3,3"})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.clone().unwrap();
+        assert_eq!(spec.categories, vec!["Q1", "Q2", "Q3"]);
+        assert_eq!(spec.cells(), vec![vec![Some(1.0)], vec![None], vec![Some(3.0)]]);
+    }
+
+    #[test]
+    fn blank_cells_leave_out_their_columns_and_break_lines() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let rows = json!([[3, 1], [null, 2], [5, null], [4, 4]]);
+        let r = s
+            .execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 400, "height": 200, "series": ["a", "b"], "rows": rows}))
+            .unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        let count = |s: &Session, index: u32| series(&s.doc().unwrap().doc.node(id).unwrap().clone(), index).children().unwrap().len();
+        // Three columns each (one blank), plus the legend swatch.
+        assert_eq!((count(&s, 0), count(&s, 1)), (4, 4));
+        s.execute("graph.setType", &json!({"type": "stackedColumn"})).unwrap();
+        assert_eq!((count(&s, 0), count(&s, 1)), (4, 4));
+        // Line: series a is 3, blank, 5, 4. The lone first point has nothing to connect to, so one line (5 to 4), three
+        // markers and the legend swatch.
+        s.execute("graph.setType", &json!({"type": "line"})).unwrap();
+        assert_eq!(count(&s, 0), 1 + 3 + 1);
+        // Series b is 1, 2, blank, 4: one line (1 to 2), three markers and the swatch.
+        assert_eq!(count(&s, 1), 1 + 3 + 1);
+        // A data window round trip keeps the blanks.
+        let csv = s.execute("graph.setData", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+        assert_eq!(csv.lines().nth(2), Some(",2"), "{csv}");
+        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.clone().unwrap();
+        assert_eq!(spec.cells()[1], vec![None, Some(2.0)]);
+        // In the file a blank is a 0 placeholder plus its place in `blanks`, so a version without blanks reads
+        // numbers (as zeros); a graph without blanks writes no `blanks` at all.
+        let v = serde_json::to_value(&spec).unwrap();
+        assert_eq!(v["rows"][1], json!([0.0, 2.0]));
+        assert_eq!(v["blanks"], json!([[1, 0], [2, 1]]));
+        assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("blanks").is_none());
     }
 }
