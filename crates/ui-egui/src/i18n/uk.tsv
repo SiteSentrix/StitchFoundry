@@ -3405,6 +3405,7 @@ axis	Both	Обидві
 @msg	`color` must be a colour	`color` має бути кольором
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` має бути командою, пункт меню якої відкриває діалогове вікно (див. ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` має бути масивом
+@msg	`freeform.lines` must be an array	`freeform.lines` має бути масивом
 @msg	`gradient` must be an object	`gradient` має бути об’єктом
 @msg	`library` is a library id or name (see {list})	`library` — це ідентифікатор або ім’я бібліотеки (див. {list})
 @msg	`mode` applies to freeform gradients	`mode` застосовується до довільних градієнтів
@@ -3506,6 +3507,7 @@ axis	Both	Обидві
 @msg	empty path	порожній контур
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	версія файлу {0} новіша, ніж підтримує цей VectorCraft ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	довільній точці {i} потрібні `at` [x, y] та допустимий `color`
+@msg	freeform line {i} must be an array of point indices	довільна лінія {i} має бути масивом індексів точок
 @msg	give both `start` and `end` [x, y] (or neither)	вкажіть `start`, `end` [x, y] (або жодного)
 @msg	give corners of the path: anchors between two straight sides	вкажіть кути контуру: опорні точки між двома прямими сторонами
 @msg	give the path `id` and the width point `index`	вкажіть `id` контуру та `index` точки ширини

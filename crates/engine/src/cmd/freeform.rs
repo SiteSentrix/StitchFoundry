@@ -150,22 +150,21 @@ pub(crate) fn parse_freeform(v: &Value) -> std::result::Result<Freeform, String>
     }
     if let Some(lines) = v.get("lines") {
         let lines = lines.as_array().ok_or("`freeform.lines` must be an array")?;
-        for (line, values) in lines.iter().enumerate() {
-            let values = values.as_array().ok_or_else(|| format!("freeform line {line} must be an array of point indices"))?;
-            let indices: Vec<usize> = values
-                .iter()
-                .map(|v| {
-                    let id = v.as_u64().ok_or_else(|| format!("freeform line {line} has a non-integer point index: {v}"))?;
-                    usize::try_from(id).map_err(|_| format!("freeform line {line} has an out-of-range point index: {id}"))
-                })
-                .collect::<std::result::Result<_, _>>()?;
-            f.add_line(indices).map_err(|e| format!("freeform line {line}: {e}"))?;
+        for (i, l) in lines.iter().enumerate() {
+            let ix = point_indices(l).ok_or_else(|| format!("freeform line {i} must be an array of point indices"))?;
+            f.add_line(ix).map_err(|e| format!("freeform line {i}: {e}"))?;
         }
     }
     if let Some(m) = str_param(v, "mode") {
         f.mode = parse_mode(m)?;
     }
     Ok(f)
+}
+
+/// `v` as a list of point indices: `None` unless it is an array of non-negative integers, so no
+/// malformed index is dropped or wrapped round.
+fn point_indices(v: &Value) -> Option<Vec<usize>> {
+    v.as_array()?.iter().map(|i| usize::try_from(i.as_u64()?).ok()).collect()
 }
 
 pub(crate) fn parse_mode(m: &str) -> std::result::Result<FreeformMode, String> {
@@ -289,11 +288,7 @@ fn delete_point(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn add_line(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.freeform.addLine";
-    let points: Vec<usize> = p
-        .get("points")
-        .and_then(Value::as_array)
-        .and_then(|a| a.iter().map(|v| v.as_u64().map(|i| i as usize)).collect())
-        .ok_or_else(|| bad(C, "`points` must be an array of point indices"))?;
+    let points = p.get("points").and_then(point_indices).ok_or_else(|| bad(C, "`points` must be an array of point indices"))?;
     let line = edit(s, p, C, |f, _| f.add_line(points.clone()))?;
     Ok(json!({ "line": line }))
 }
@@ -334,11 +329,11 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(v)
 }
 
-
 #[cfg(test)]
-mod parse_tests {
+mod tests {
     use super::*;
 
+    /// A line with an index that isn't a point's is refused, not shortened to the indices that are.
     #[test]
     fn malformed_freeform_lines_are_not_silently_shortened() {
         let points = json!([
@@ -346,13 +341,7 @@ mod parse_tests {
             {"at": [50, 0], "color": "#00ff00"},
             {"at": [100, 0], "color": "#0000ff"}
         ]);
-        for lines in [
-            json!([[0, "broken", 2]]),
-            json!([[0, -1, 2]]),
-            json!([[0, 1.5, 2]]),
-            json!([{"points": [0, 1]}]),
-            json!("not an array"),
-        ] {
+        for lines in [json!([[0, "broken", 2]]), json!([[0, -1, 2]]), json!([[0, 1.5, 2]]), json!([{"points": [0, 1]}]), json!("not an array")] {
             let value = json!({"points": points, "lines": lines, "mode": "lines"});
             assert!(parse_freeform(&value).is_err(), "invalid lines accepted: {value}");
         }
