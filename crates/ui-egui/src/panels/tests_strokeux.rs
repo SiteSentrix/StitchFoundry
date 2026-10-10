@@ -140,8 +140,8 @@ fn weight_presets_display_cleanly_in_their_native_unit() {
     assert_eq!(stroke::weight_presets(Unit::Meters), stroke::weight_presets(Unit::Points));
 }
 
-/// #991: the spinner to the left of Stroke Weight honors Shift on both arrows, while a
-/// normal click still steps by one point (the focused numeric field already handles Shift+↑/↓).
+/// #991: the spinner left of the Stroke Weight field steps ten with Shift on both arrows and a
+/// tenth with Ctrl/Cmd, as ↑/↓ do in the focused field, while a plain click steps one point.
 #[test]
 fn stroke_weight_stepper_uses_ten_point_shift_steps() {
     use super::tests_appearance::frame_raw;
@@ -151,27 +151,15 @@ fn stroke_weight_stepper_uses_ten_point_shift_steps() {
     let mut app = app_with_rect();
     run(&mut app, "stroke.set", json!({"weight": 14}));
     let t = texts(&ctx, &mut app, stroke::show);
-    let r = text_rect(&t, "Weight:");
-    let x = r.right() + ctx.global_style().spacing.item_spacing.x + 8.0;
+    // The 16 px spinner sits just left of the field's text.
+    let r = text_rect(&t, "14 pt");
+    let x = r.left() - 14.0;
     let click_step = |app: &mut VectorcraftApp, y: f32, modifiers: egui::Modifiers| {
         let pos = egui::pos2(x, y);
-        let button = |pressed| egui::Event::PointerButton {
-            pos,
-            button: egui::PointerButton::Primary,
-            pressed,
-            modifiers,
-        };
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
         for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
-            frame_raw(
-                &ctx,
-                app,
-                egui::RawInput {
-                    modifiers,
-                    events: vec![event],
-                    ..Default::default()
-                },
-                stroke::show,
-            );
+            let events = vec![egui::Event::ModifiersChanged(modifiers), event];
+            frame_raw(&ctx, app, egui::RawInput { events, ..Default::default() }, stroke::show);
         }
     };
 
@@ -181,4 +169,7 @@ fn stroke_weight_stepper_uses_ten_point_shift_steps() {
     assert_eq!(app.session.shown_stroke().unwrap().width, 23.0);
     click_step(&mut app, r.center().y + 5.0, egui::Modifiers::SHIFT);
     assert_eq!(app.session.shown_stroke().unwrap().width, 13.0);
+    // Ctrl/Cmd steps a tenth, as ↑/↓ and the wheel do in the field.
+    click_step(&mut app, r.center().y + 5.0, egui::Modifiers::COMMAND);
+    assert!((app.session.shown_stroke().unwrap().width - 12.9).abs() < 1e-6);
 }
