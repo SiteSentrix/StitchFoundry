@@ -378,7 +378,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Selected guides in the selection colour.
         let picked = LineLook { color: t.selection, ..look };
         let selected: &[usize] = app.session.active().map_or(&[], |st| &st.selection.guides);
-        for (i, g) in doc.guides.iter().enumerate() {
+        // Guides on a hidden layer hide with it.
+        for (i, g) in doc.guides.iter().enumerate().filter(|(_, g)| doc.guide_shown(g)) {
             let at = |along: f64| xf.to_screen(if g.vertical { Point::new(g.pos, along) } else { Point::new(along, g.pos) });
             // An artboard guide runs across its artboard, a canvas guide across the window.
             let (a, b) = match doc.guide_span(g) {

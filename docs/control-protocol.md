@@ -256,6 +256,14 @@ Constrain acts as Shift held (proportional scaling, moves and rotations by 45°)
 where it is greyed. The modifier keys still work while dragging (Cmd on a corner distorts it freely, Cmd+Alt+Shift in
 perspective, Cmd on a side shears).
 
+Ruler guides are layer objects: `guide.add` puts a guide on the current layer (or `layer`), where it shows, hides,
+locks and is deleted with its layer and is listed in the Layers panel (a click on its row selects it, a drag onto
+another layer's rows moves it there); `guide.setLayer {index?, indexes?, layer}` moves guides to another layer, and
+`guide.list` gives each guide's `layer`, `shown` and `editable`. Guides on a hidden or locked layer leave the selection
+and can't be picked, moved or deleted, and no guide goes onto a locked layer; Duplicate copies a layer's guides, Merge
+Selected and Flatten Artwork keep them on the merged layer (Flatten discards a hidden layer's). Guides in files saved
+before guides had layers go on the top visible, unlocked layer when the document opens.
+
 Floating panels: dragging a dock tab, a panel icon or a popped-out panel's title out of the dock floats that panel
 inside the window, and the strip right of the dock's tabs floats the whole Properties | Layers | Libraries group. A
 floating group moves by its title bar (or the strip right of its tabs); a tab dragged out of it floats on its own;

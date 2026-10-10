@@ -3757,6 +3757,7 @@ axis	Both	Les deux
 @msg	the image's pixels don't match its size	les pixels de l’image ne correspondent pas à sa taille
 @msg	the layer has no objects to clip by	le calque n’a aucun objet servant à l’écrêtage
 @msg	the layer or group is locked	le calque ou le groupe est verrouillé
+@msg	the guide is on a hidden or locked layer	le repère se trouve sur un calque masqué ou verrouillé
 @msg	the target layer is locked or hidden	le calque cible est verrouillé ou masqué
 @msg	the layer to flatten into is hidden	le calque de destination de l’aplatissement est masqué
 @msg	the object already has an opacity mask	l’objet a déjà un masque d’opacité
@@ -4107,3 +4108,6 @@ lighting	Light	Lumière
 	Stroke Pressure	Pression des traits
 	Right Diagonal	Diagonale droite
 	Left Diagonal	Diagonale gauche
+	Vertical Guide	Repère vertical
+	Horizontal Guide	Repère horizontal
+	Move Guide to Layer	Déplacer le repère vers le calque

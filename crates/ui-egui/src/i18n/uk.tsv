@@ -3743,6 +3743,7 @@ axis	Both	Обидві
 @msg	the image's pixels don't match its size	пікселі зображення не відповідають його розміру
 @msg	the layer has no objects to clip by	у шарі немає об’єктів для обрізки
 @msg	the layer or group is locked	шар чи група заблоковані
+@msg	the guide is on a hidden or locked layer	напрямна розташована на прихованому або заблокованому шарі
 @msg	the target layer is locked or hidden	цільовий шар заблокований або прихований
 @msg	the layer to flatten into is hidden	шар для об’єднання прихований
 @msg	the object already has an opacity mask	об’єкт вже має маску непрозорості.
@@ -4078,3 +4079,6 @@ lighting	Light	Світло
 	Stroke Pressure	Натиск мазка
 	Right Diagonal	Діагональ праворуч
 	Left Diagonal	Діагональ ліворуч
+	Vertical Guide	Вертикальна напрямна
+	Horizontal Guide	Горизонтальна напрямна
+	Move Guide to Layer	Перемістити напрямну на шар

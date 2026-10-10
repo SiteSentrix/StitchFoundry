@@ -785,7 +785,11 @@ fn ruler_guides_select_move_and_delete() {
     assert_eq!(s.execute("guide.select", &json!({"indexes": [0]})).unwrap()["selected"], json!([0]));
     assert!(selected(&s).is_empty());
     assert_eq!(s.execute("guide.select", &json!({"indexes": [1], "toggle": true})).unwrap()["selected"], json!([0, 1]));
-    assert_eq!(s.execute("guide.list", &json!({})).unwrap()[1], json!({"index": 1, "vertical": false, "pos": 50.0, "selected": true}));
+    let layer = s.doc().unwrap().current_layer().unwrap().0;
+    assert_eq!(
+        s.execute("guide.list", &json!({})).unwrap()[1],
+        json!({"index": 1, "vertical": false, "pos": 50.0, "selected": true, "layer": layer, "shown": true, "editable": true})
+    );
     assert!(s.execute("guide.select", &json!({"indexes": [7]})).is_err());
     // A move takes each selected guide along its own axis, in one undo step.
     let n = undo_len(&s);
@@ -866,11 +870,12 @@ fn artboard_guides_go_with_their_artboard() {
     s.execute("guide.add", &json!({"vertical": true, "pos": 1000, "artboard": 1})).unwrap();
     s.execute("guide.add", &json!({"vertical": false, "pos": 100})).unwrap();
     let list = |s: &mut Session| s.execute("guide.list", &json!({})).unwrap();
+    let layer = s.doc().unwrap().current_layer().unwrap().0;
     assert_eq!(
         list(&mut s),
         json!([
-            {"index": 0, "vertical": true, "pos": 1000.0, "selected": false, "artboard": 1},
-            {"index": 1, "vertical": false, "pos": 100.0, "selected": false},
+            {"index": 0, "vertical": true, "pos": 1000.0, "selected": false, "artboard": 1, "layer": layer, "shown": true, "editable": true},
+            {"index": 1, "vertical": false, "pos": 100.0, "selected": false, "layer": layer, "shown": true, "editable": true},
         ])
     );
     let spans = |s: &Session| {
@@ -909,7 +914,10 @@ fn artboard_guides_go_with_their_artboard() {
     let n = undo_len(&s);
     s.execute("artboard.delete", &json!({"index": 0})).unwrap();
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
-    assert_eq!(list(&mut s)[0], json!({"index": 0, "vertical": false, "pos": 100.0, "selected": true}));
+    assert_eq!(
+        list(&mut s)[0],
+        json!({"index": 0, "vertical": false, "pos": 100.0, "selected": true, "layer": layer, "shown": true, "editable": true})
+    );
     assert_eq!(undo_len(&s), n + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!((guides(&s).len(), selected_guides(&s)), (4, vec![1, 2]));
@@ -951,10 +959,118 @@ fn guides_dragged_out_of_a_ruler_snap_and_take_the_artboard_tool_s_artboard() {
     s.set_tool_option("active", &json!(1));
     s.ruler_guide(false, &ev(PointerKind::Drag, 1000.0, 50.0), true, v).unwrap();
     s.ruler_guide(false, &ev(PointerKind::Up, 1000.0, 50.0), true, v).unwrap();
+    let layer = s.doc().unwrap().current_layer().unwrap().0;
     assert_eq!(
         s.execute("guide.list", &json!({})).unwrap()[1],
-        json!({"index": 1, "vertical": false, "pos": 50.0, "selected": false, "artboard": 1})
+        json!({"index": 1, "vertical": false, "pos": 50.0, "selected": false, "artboard": 1, "layer": layer, "shown": true, "editable": true})
     );
+}
+
+/// Guides saved before guides had layers are put on a layer when the document opens.
+#[test]
+fn guides_from_older_files_are_put_on_a_layer() {
+    let mut s = Session::new();
+    let mut d = vectorcraft_doc::Document::new(400.0, 300.0);
+    d.guides.push(vectorcraft_doc::Guide::new(true, 50.0));
+    d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+    s.add_document(d, None);
+    let st = s.doc().unwrap();
+    let top = st.doc.default_layer();
+    assert!(top.is_some() && st.doc.guides.iter().all(|g| g.layer == top), "{:?}", st.doc.guides);
+}
+
+/// Ruler guides are layer objects: made on the current layer, hidden, locked and deleted with it,
+/// and moved to another layer.
+#[test]
+fn ruler_guides_live_on_layers() {
+    let mut s = session();
+    let first = s.doc().unwrap().current_layer().unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.guides[0].layer, Some(first), "on the current layer");
+    let second = id_of(&s.execute("layer.new", &json!({"name": "Guides"})).unwrap());
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.guides[1].layer, Some(second), "the new layer is current");
+    assert!(s.execute("guide.add", &json!({"vertical": true, "pos": 1, "layer": 99999})).is_err());
+    // Hidden or locked with its layer.
+    s.execute("layer.setProps", &json!({"ids": [second.0], "visible": false})).unwrap();
+    assert_eq!(s.execute("guide.list", &json!({})).unwrap()[1]["shown"], false);
+    s.execute("layer.setProps", &json!({"ids": [second.0], "visible": true, "locked": true})).unwrap();
+    let row = s.execute("guide.list", &json!({})).unwrap()[1].clone();
+    assert_eq!((row["shown"].clone(), row["editable"].clone()), (json!(true), json!(false)));
+    s.execute("layer.setProps", &json!({"ids": [second.0], "locked": false})).unwrap();
+    // Moved to the first layer, then back.
+    s.execute("guide.setLayer", &json!({"index": 1, "layer": first.0})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.guides[1].layer, Some(first));
+    s.execute("guide.setLayer", &json!({"index": 1, "layer": second.0})).unwrap();
+    assert!(s.execute("guide.setLayer", &json!({"index": 1, "layer": 99999})).is_err());
+    // Several at once, as dragging their rows onto a layer's row does.
+    s.execute("guide.setLayer", &json!({"indexes": [0, 1], "layer": first.0})).unwrap();
+    assert!(s.doc().unwrap().doc.guides.iter().all(|g| g.layer == Some(first)));
+    s.execute("guide.setLayer", &json!({"indexes": [1], "layer": second.0})).unwrap();
+    assert!(s.execute("guide.setLayer", &json!({"indexes": [7], "layer": first.0})).is_err());
+    // Deleting a layer deletes its guides; undo brings them back.
+    s.execute("layer.delete", &json!({"ids": [second.0]})).unwrap();
+    assert_eq!(guides(&s), [(true, 200.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
+}
+
+/// Guides on a hidden or locked layer leave the selection and can't be moved, deleted or moved to
+/// another layer; new guides skip a locked current layer as new art does; no guide goes onto a
+/// locked layer.
+#[test]
+fn guides_on_hidden_or_locked_layers_are_left_alone() {
+    let mut s = session();
+    let first = s.doc().unwrap().current_layer().unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    let second = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0, 1]})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [first.0], "locked": true})).unwrap();
+    assert_eq!(selected_guides(&s), [1], "the locked layer's guide is deselected");
+    assert_eq!(s.execute("guide.select", &json!({"indexes": [0]})).unwrap()["selected"], json!([]), "and can't be selected");
+    assert!(s.execute("guide.move", &json!({"index": 0, "pos": 50})).is_err());
+    assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
+    assert!(s.execute("guide.setLayer", &json!({"index": 0, "layer": second.0})).is_err());
+    assert!(s.execute("guide.setLayer", &json!({"index": 1, "layer": first.0})).is_err(), "not onto a locked layer");
+    s.execute("layer.setProps", &json!({"ids": [second.0], "visible": false})).unwrap();
+    assert!(selected_guides(&s).is_empty(), "the hidden layer's guide is deselected");
+    // Both layers hidden or locked: a new guide is refused, as new art is.
+    assert!(s.execute("guide.add", &json!({"vertical": true, "pos": 10})).is_err());
+    s.execute("layer.setProps", &json!({"ids": [second.0], "visible": true, "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [first.0], "locked": false})).unwrap();
+    // The current layer locked: the new guide goes on the top shown, unlocked layer.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 20})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.guides[2].layer, Some(first));
+    assert_eq!(guides(&s).len(), 3);
+}
+
+/// Guides follow their layers through Duplicate, Merge Selected and Flatten Artwork, in one undo
+/// step each.
+#[test]
+fn guides_go_with_their_layers_when_duplicated_merged_and_flattened() {
+    let mut s = session();
+    let first = s.doc().unwrap().current_layer().unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    let second = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+    let on = |s: &Session, l: NodeId| s.doc().unwrap().doc.guides_on(l).map(|(_, g)| (g.vertical, g.pos)).collect::<Vec<_>>();
+    // Duplicate Layer copies its guides onto the copy.
+    let copy = s.execute("layer.duplicate", &json!({"ids": [second.0]})).unwrap()["ids"][0].as_u64().map(NodeId).unwrap();
+    assert_eq!((on(&s, second), on(&s, copy)), (vec![(false, 300.0)], vec![(false, 300.0)]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
+    // Merged into the first layer, the second layer's guide goes with its art.
+    s.execute("layer.merge", &json!({"ids": [second.0, first.0]})).unwrap();
+    assert_eq!(on(&s, first), [(true, 200.0), (false, 300.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((on(&s, first), on(&s, second)), (vec![(true, 200.0)], vec![(false, 300.0)]));
+    // Flattened into the first layer, a hidden layer is discarded with its guides.
+    s.execute("layer.setProps", &json!({"ids": [second.0], "visible": false})).unwrap();
+    s.execute("layer.flatten", &json!({"id": first.0})).unwrap();
+    assert_eq!(guides(&s), [(true, 200.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
 }
 
 /// #451: art moved with the Selection tool lands flush on the artboard's edges and centre (Smart

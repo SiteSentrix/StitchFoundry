@@ -3760,6 +3760,7 @@ axis	Both	Ambos
 @msg	the image's pixels don't match its size	los píxeles de la imagen no coinciden con su tamaño
 @msg	the layer has no objects to clip by	la capa no tiene objetos con los que recortar
 @msg	the layer or group is locked	la capa o el grupo está bloqueado
+@msg	the guide is on a hidden or locked layer	la guía está en una capa oculta o bloqueada
 @msg	the target layer is locked or hidden	la capa de destino está bloqueada u oculta
 @msg	the layer to flatten into is hidden	la capa en la que acoplar está oculta
 @msg	the object already has an opacity mask	el objeto ya tiene una máscara de opacidad
@@ -4097,3 +4098,6 @@ lighting	Light	Luz
 	Stroke Pressure	Presión de pincelada
 	Right Diagonal	Diagonal derecha
 	Left Diagonal	Diagonal izquierda
+	Vertical Guide	Guía vertical
+	Horizontal Guide	Guía horizontal
+	Move Guide to Layer	Mover guía a capa

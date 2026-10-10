@@ -3498,6 +3498,7 @@ theme	Appearance	外観
 @msg	no selection bounds	選択範囲に境界がありません
 @msg	the layer has no objects to clip by	レイヤーにクリッピングマスクとして使えるオブジェクトがありません
 @msg	the layer or group is locked	レイヤーまたはグループがロックされています
+@msg	the guide is on a hidden or locked layer	ガイドが非表示またはロックされたレイヤー上にあります
 @msg	the target layer is locked or hidden	ターゲットレイヤーがロックされているか非表示です
 @msg	the layer to flatten into is hidden	統合先のレイヤーが非表示になっています
 @msg	there are no objects to release	レイヤーに分配するオブジェクトがありません
@@ -4092,3 +4093,6 @@ lighting	Light	ライト
 	Stroke Pressure	ストロークの筆圧
 	Right Diagonal	右斜め
 	Left Diagonal	左斜め
+	Vertical Guide	垂直ガイド
+	Horizontal Guide	水平ガイド
+	Move Guide to Layer	ガイドをレイヤーへ移動

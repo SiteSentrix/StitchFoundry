@@ -3760,6 +3760,7 @@ axis	Both	Entrambi
 @msg	the image's pixels don't match its size	i pixel dell'immagine non corrispondono alle sue dimensioni
 @msg	the layer has no objects to clip by	il livello non ha oggetti con cui ritagliare
 @msg	the layer or group is locked	il livello o il gruppo è bloccato
+@msg	the guide is on a hidden or locked layer	la guida si trova su un livello nascosto o bloccato
 @msg	the target layer is locked or hidden	il livello di destinazione è bloccato o nascosto
 @msg	the layer to flatten into is hidden	il livello in cui appiattire è nascosto
 @msg	the object already has an opacity mask	l'oggetto ha già una maschera di opacità
@@ -4099,3 +4100,6 @@ lighting	Light	Luce
 	Stroke Pressure	Pressione pennellata
 	Right Diagonal	Diagonale destra
 	Left Diagonal	Diagonale sinistra
+	Vertical Guide	Guida verticale
+	Horizontal Guide	Guida orizzontale
+	Move Guide to Layer	Sposta guida nel livello
