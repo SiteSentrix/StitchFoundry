@@ -143,6 +143,7 @@ Layers panel.
 |---|---|---|
 | ~40 panels with ≡ menus; dock, icon column, collapse, tabs | done | 51 panel modules incl. tests |
 | Panels float inside the window, stack, dock back | done | #495 |
+| Floating groups stack into sets; sets dock as extra dock columns (a multi-column dock); groups drop anywhere in a set or column, or onto its tabs; a column taller than the window scrolls | done | `window.panel.float {below, above}`, `window.panel.dock {column}` |
 | Panels outside the app window (another monitor) | missing | single OS window |
 | Properties panel per context (every selection type's Quick Actions) | partial | |
 | Contextual task bar | done | |
