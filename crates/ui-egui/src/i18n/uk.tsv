@@ -3912,3 +3912,5 @@ axis	Both	Обидві
 	Duplication	Дублюванням
 	Interpolation	Інтерполяцією
 @msg	Imported library {name}	Імпортовано бібліотеку {name}
+	RGB:	RGB:
+	CMYK:	CMYK:

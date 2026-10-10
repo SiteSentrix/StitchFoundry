@@ -3921,3 +3921,5 @@ theme	Appearance	外観
 	Duplication	複製
 	Interpolation	補間
 @msg	Imported library {name}	ライブラリ {name} を読み込みました
+	RGB:	RGB:
+	CMYK:	CMYK:
