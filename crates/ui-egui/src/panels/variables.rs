@@ -10,7 +10,8 @@
 
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_doc::VariableKind;
+use vectorcraft_doc::{NodeId, NodeKind, VariableKind};
+use vectorcraft_engine::DocState;
 
 use crate::VectorcraftApp;
 use crate::widgets;
@@ -34,6 +35,47 @@ struct SetRow {
     active: bool,
     /// False once an edit has moved the art away from what this row says.
     matches: bool,
+}
+
+/// The row the panel acts on: Delete, Options… and Select Bound Object all mean it. A name
+/// the document no longer defines highlights nothing (deleted from the palette, undone).
+fn highlighted_row(st: &DocState) -> Option<String> {
+    st.variables_highlight.clone().filter(|h| st.doc.variables.variable(h).is_some())
+}
+
+/// What a variable drives, as object ids: what Select Bound Object selects.
+fn bound_objects(st: &DocState, name: &str) -> Vec<u64> {
+    st.doc.variables.objects_of(name).iter().map(|i| i.0).collect()
+}
+
+/// A row click: highlight the row, and select what it drives (its bindings are left alone).
+pub(crate) fn click_row(app: &mut VectorcraftApp, name: &str, bound: &[u64]) {
+    app.run("variable.highlight", json!({"variable": name})).ok();
+    if !bound.is_empty() {
+        app.run("select.set", json!({"ids": bound})).ok();
+    }
+}
+
+/// Select Bound Object: select what the highlighted variable drives; its bindings stay.
+pub(crate) fn select_bound_object(app: &mut VectorcraftApp) {
+    let ids = app.session.active().map(|st| highlighted_row(st).map(|h| bound_objects(st, &h))).unwrap_or_default().unwrap_or_default();
+    if !ids.is_empty() {
+        app.run("select.set", json!({"ids": ids})).ok();
+    }
+}
+
+/// Delete Variable: the highlighted variable only; the rest of the rows stay.
+pub(crate) fn delete_highlighted(app: &mut VectorcraftApp) {
+    if let Some(name) = app.session.active().and_then(highlighted_row) {
+        app.run("variable.delete", json!({"names": [name]})).ok();
+    }
+}
+
+/// Delete Data Set: the current one only; the rest of the rows stay.
+pub(crate) fn delete_active_dataset(app: &mut VectorcraftApp) {
+    if let Some(name) = app.session.active().and_then(|st| st.doc.variables.active_dataset.clone()) {
+        app.run("dataset.delete", json!({"names": [name]})).ok();
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -72,6 +114,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let active = sets.iter().find(|s| s.active);
     let selected: Vec<u64> = st.selection.objects.iter().map(|i| i.0).collect();
     let has_selection = !selected.is_empty();
+    let highlighted = highlighted_row(st);
+    // Unbind needs a bound object under the selection, not just any selection.
+    let selection_bound = selected.iter().any(|id| st.doc.variables.bindings.contains_key(&NodeId(*id)));
+    // Make Text Dynamic needs exactly one type object: a text variable only drives type.
+    let single_type = selected.len() == 1 && st.doc.node(NodeId(selected[0])).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)));
 
     // The current data set across the top: its name, and the arrows that step through them.
     ui.horizontal(|ui| {
@@ -106,17 +153,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 VariableKind::Text => "type",
                 VariableKind::Visibility => "eye",
             };
-            let icon = ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
-            let _ = icon;
+            ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
             // The object a variable drives is named beside it, as the reference panel does.
             let text = if row.object.is_empty() { row.name.clone() } else { format!("{} · {}", row.name, row.object) };
-            let r = ui.selectable_label(false, text);
-            // A click selects what it drives; a double click opens Variable Options.
-            if (r.clicked() || r.double_clicked()) && !row.bound.is_empty() {
-                app.run("select.set", json!({"ids": row.bound})).ok();
+            let r = ui.selectable_label(highlighted.as_deref() == Some(row.name.as_str()), text);
+            // A click highlights the row and selects what it drives; a double click opens
+            // Variable Options for it.
+            if r.clicked() {
+                click_row(app, &row.name, &row.bound);
             }
             if r.double_clicked() {
-                crate::menus::invoke(app, "variable.rename", json!({"name": row.name}));
+                crate::dialogs::variables::open(app, "variable.rename", Some(&row.name));
             }
         });
     }
@@ -141,7 +188,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The bottom bar: make the selection dynamic, and define and delete what the lists show.
     ui.separator();
     ui.horizontal(|ui| {
-        if widgets::icon_button_enabled(ui, "type", tl!("Make Text Dynamic"), false, has_selection, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "type", tl!("Make Text Dynamic"), false, single_type, 24.0).clicked() {
             app.run("variable.makeTextDynamic", json!({})).ok();
         }
         if widgets::icon_button_enabled(ui, "eye", tl!("Make Visibility Dynamic"), false, has_selection, 24.0).clicked() {
@@ -150,14 +197,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button(ui, "plus", tl!("New Variable…"), false, 24.0).clicked() {
             crate::menus::invoke(app, "variable.define", json!({}));
         }
-        let bound_to_selection = !selected.is_empty();
-        if widgets::icon_button_enabled(ui, "link-2-off", tl!("Unbind Variable"), false, bound_to_selection, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "link-2-off", tl!("Unbind Variable"), false, selection_bound, 24.0).clicked() {
             app.run("variable.unbind", json!({"ids": selected})).ok();
         }
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Variable"), false, !vars.is_empty(), 24.0).clicked() {
-            // Everything the document defines goes, in one undo step, as the panel's bin does.
-            let names: Vec<String> = vars.iter().map(|v| v.name.clone()).collect();
-            app.run("variable.delete", json!({"names": names})).ok();
+        // The bin deletes the highlighted variable only, as the reference panel's does.
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Variable"), false, highlighted.is_some(), 24.0).clicked() {
+            delete_highlighted(app);
         }
     });
     ui.horizontal(|ui| {
@@ -181,15 +226,16 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sets: Vec<String> = st.doc.variables.datasets.iter().map(|d| d.name.clone()).collect();
     let active = st.doc.variables.active_dataset.clone();
     let bound: Vec<u64> = st.doc.variables.bindings.keys().map(|i| i.0).collect();
-    let selected: Vec<u64> = st.selection.objects.iter().map(|i| i.0).collect();
+    let highlighted = highlighted_row(st);
+    let highlighted_bound: Vec<u64> = highlighted.as_ref().map(|h| bound_objects(st, h)).unwrap_or_default();
 
     if widgets::menu_item(ui, tl!("New Variable…"), true, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
     }
-    // Variable Options renames the variable the panel has highlighted, else the first.
+    // Variable Options renames the highlighted variable, else the first.
     if widgets::menu_item(ui, tl!("Variable Options…"), !vars.is_empty(), false) {
-        let name = vars.first().cloned().unwrap_or_default();
-        crate::menus::invoke(app, "variable.rename", json!({"name": name}));
+        let name = highlighted.clone().or_else(|| vars.first().cloned()).unwrap_or_default();
+        crate::dialogs::variables::open(app, "variable.rename", Some(&name));
     }
     ui.separator();
     if widgets::menu_item(ui, tl!("Capture Data Set"), true, false) {
@@ -205,24 +251,22 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::menus::invoke(app, "dataset.set", json!({}));
     }
     if widgets::menu_item(ui, tl!("Rename Data Set…"), !sets.is_empty(), false) {
-        let name = sets.first().cloned().unwrap_or_default();
-        crate::menus::invoke(app, "dataset.rename", json!({"name": name}));
+        let name = active.clone().or_else(|| sets.first().cloned()).unwrap_or_default();
+        crate::dialogs::variables::open(app, "dataset.rename", Some(&name));
     }
-    if widgets::menu_item(ui, tl!("Delete Data Set"), !sets.is_empty(), false) {
-        app.run("dataset.delete", json!({"names": sets})).ok();
+    // Only the current data set goes: the rest of the rows stay.
+    if widgets::menu_item(ui, tl!("Delete Data Set"), active.is_some(), false) {
+        delete_active_dataset(app);
     }
     ui.separator();
-    if widgets::menu_item(ui, tl!("Select Bound Object"), !selected.is_empty(), false) {
-        // The objects the selection is bound to, when it is bound at all.
-        let ids: Vec<u64> = selected.clone();
-        app.run("variable.unbind", json!({"ids": ids})).ok();
+    // What the highlighted variable drives, selected — its bindings are left alone.
+    if widgets::menu_item(ui, tl!("Select Bound Object"), !highlighted_bound.is_empty(), false) {
+        select_bound_object(app);
     }
     if widgets::menu_item(ui, tl!("Select All Bound Objects"), !bound.is_empty(), false) {
         app.run("select.set", json!({"ids": bound})).ok();
     }
 }
-
-use vectorcraft_doc::NodeId;
 
 #[cfg(test)]
 mod tests {
@@ -283,6 +327,60 @@ mod tests {
         ] {
             assert!(text.contains(item), "{item} missing from the panel menu:\n{text}");
         }
+    }
+
+    /// What the panel acts on is the highlight, and only while it names a variable: a stale one
+    /// (deleted elsewhere, undone) highlights nothing, so Delete and Options… stay disabled.
+    #[test]
+    fn a_highlight_of_a_deleted_variable_highlights_nothing() {
+        let mut app = app_with_data();
+        app.session.execute("variable.highlight", &json!({"variable": "Name"})).unwrap();
+        assert_eq!(highlighted_row(app.session.doc().unwrap()).as_deref(), Some("Name"));
+        assert_eq!(bound_objects(app.session.doc().unwrap(), "Name").len(), 1);
+        app.session.execute("variable.delete", &json!({"names": ["Name"]})).unwrap();
+        assert!(highlighted_row(app.session.doc().unwrap()).is_none());
+    }
+
+    /// The reviewer's regression case, through the calls the panel and its menu make: highlight
+    /// a variable, Select Bound Object, then delete one variable and the current dataset. The
+    /// selection lands on what the row drives with the binding intact, and the others remain.
+    #[test]
+    fn selecting_and_deleting_act_on_the_highlighted_row_only() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        let a = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Alice"})).unwrap()["id"].as_u64().unwrap();
+        let b = app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Bob"})).unwrap()["id"].as_u64().unwrap();
+        for (name, id) in [("Name", a), ("Other", b)] {
+            app.session.execute("variable.define", &json!({"name": name, "kind": "text"})).unwrap();
+            app.session.execute("variable.bind", &json!({"variable": name, "ids": [id]})).unwrap();
+        }
+        app.session.execute("dataset.capture", &json!({})).unwrap();
+        app.session.execute("dataset.capture", &json!({})).unwrap();
+        app.session.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
+
+        // A row click highlights; Select Bound Object selects what it drives, binding intact.
+        click_row(&mut app, "Name", &[a]);
+        assert_eq!(app.session.doc().unwrap().selection.objects, vec![NodeId(a)]);
+        assert!(!app.session.doc().unwrap().doc.variables.objects_of("Name").is_empty());
+        select_bound_object(&mut app);
+        assert_eq!(app.session.doc().unwrap().selection.objects, vec![NodeId(a)]);
+        assert!(!app.session.doc().unwrap().doc.variables.objects_of("Name").is_empty());
+
+        // Delete Variable deletes the highlighted one; Delete Data Set the current one.
+        delete_highlighted(&mut app);
+        delete_active_dataset(&mut app);
+        let vars = app.run("variable.list", json!({})).unwrap();
+        assert_eq!(vars["variables"].as_array().unwrap().len(), 1);
+        assert_eq!(vars["variables"][0]["name"], "Other");
+        let sets = app.run("dataset.list", json!({})).unwrap();
+        assert_eq!(sets["datasets"].as_array().unwrap().len(), 1);
+        assert_eq!(sets["datasets"][0]["name"], "Data Set 2");
+
+        // The panel and its menu still draw with the highlight gone stale.
+        let text = crate::tests_labels::painted_text(&mut app, show);
+        assert!(text.contains("Other") && text.contains("Data Set 2"), "{text}");
+        let text = crate::tests_labels::painted_text(&mut app, menu);
+        assert!(text.contains("Select Bound Object"), "{text}");
     }
 
     #[test]

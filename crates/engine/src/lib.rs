@@ -86,6 +86,7 @@ pub struct Interaction {
     /// isolation).
     pub active_layer: Option<NodeId>,
     pub layer_rows: Vec<NodeId>,
+    pub variables_highlight: Option<String>,
     pub isolation: Option<NodeId>,
     /// The perspective transform the previews make (`perspective.transform` params): Transform
     /// Again repeats it once the drag is committed.
@@ -121,6 +122,10 @@ pub struct DocState {
     /// Panel state, not art selection: not saved, not undoable (`layer.setCurrent`,
     /// `layer.highlight`).
     pub layer_rows: Vec<NodeId>,
+    /// The variable highlighted in the Variables panel: what its Delete, Options… and Select
+    /// Bound Object act on. Panel state, not art selection: not saved, not undoable
+    /// (`variable.highlight`). A name, so renaming a variable moves the highlight with it.
+    pub variables_highlight: Option<String>,
     /// Isolation mode container.
     pub isolation: Option<NodeId>,
     pub interaction: Option<Interaction>,
@@ -236,6 +241,7 @@ impl DocState {
             revision: 1,
             active_layer,
             layer_rows: vec![],
+            variables_highlight: None,
             isolation: None,
             interaction: None,
             undo_group: None,
@@ -300,6 +306,7 @@ impl DocState {
             self.selection = it.selection;
             self.active_layer = it.active_layer;
             self.layer_rows = it.layer_rows;
+            self.variables_highlight = it.variables_highlight;
             self.isolation = it.isolation;
             self.revision += 1;
         }
@@ -1294,6 +1301,7 @@ impl Session {
             preview: None,
             active_layer: st.active_layer,
             layer_rows: st.layer_rows.clone(),
+            variables_highlight: st.variables_highlight.clone(),
             isolation: st.isolation,
             perspective_again: None,
         });

@@ -3023,7 +3023,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
     // Variables (data merge): a name and a kind, a name and a row of values.
     if crate::dialogs::variables::opens(id) && p.as_object().is_none_or(|o| o.is_empty()) {
-        crate::dialogs::variables::open(app, id);
+        crate::dialogs::variables::open(app, id, None);
         return;
     }
     // Repeat Options: a dialog with the selected repeat's current values.

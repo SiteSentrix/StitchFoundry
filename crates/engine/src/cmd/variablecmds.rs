@@ -104,6 +104,12 @@ fn rename(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    // The highlight names a variable, so it follows the rename rather than going stale.
+    let st = s.doc_mut()?;
+    if st.variables_highlight.as_deref() == Some(from.as_str()) {
+        st.variables_highlight = Some(to.clone());
+    }
+    st.revision += 1;
     Ok(json!({"from": from, "name": to}))
 }
 
@@ -149,6 +155,12 @@ fn make_dynamic(s: &mut Session, kind: VariableKind, stem: &str) -> Result<Value
 fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     let names = names_param(p, "variable.delete")?;
     let n = s.edit("Delete Variables", |d, _| Ok(d.variables.prune(&names)))?;
+    // A highlight of a variable that is gone highlights nothing.
+    let st = s.doc_mut()?;
+    if st.variables_highlight.as_ref().is_some_and(|h| st.doc.variables.variable(h).is_none()) {
+        st.variables_highlight = None;
+    }
+    st.revision += 1;
     Ok(json!({"deleted": n}))
 }
 
@@ -225,6 +237,27 @@ fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(n)
     })?;
     Ok(json!({"unbound": n}))
+}
+
+/// Highlight one Variables panel row: what the panel's Delete, Options… and Select Bound
+/// Object act on. Panel state, not art selection: not saved, not an undo step (an empty
+/// or missing `variable` clears it), like `layer.highlight`.
+fn highlight(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.highlight";
+    let name = match str_param(p, "variable").filter(|v| !v.is_empty()) {
+        Some(v) => {
+            let v = v.to_string();
+            if s.doc()?.doc.variables.variable(&v).is_none() {
+                return Err(bad(C, format!("no variable named `{v}`")));
+            }
+            Some(v)
+        }
+        None => None,
+    };
+    let st = s.doc_mut()?;
+    st.variables_highlight = name.clone();
+    st.revision += 1;
+    Ok(json!({"variable": name}))
 }
 
 fn dataset_new(s: &mut Session, p: &Value) -> Result<Value> {
@@ -479,6 +512,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?, variable?} drop bindings (default: the selection): `variable` drops that one, else every variable the object has",
             has_doc,
             unbind
+        ),
+        cmd!(
+            "variable.highlight",
+            "Highlight Variable",
+            [],
+            None,
+            "{variable?} highlight one Variables panel row (a click); what the panel's Delete, Options… and Select Bound Object act on. An empty or missing `variable` clears it. Not an undo step → {variable}",
+            has_doc,
+            highlight
         ),
         cmd!("dataset.new", "New Data Set…", ["Window", "Variables"], None, "{name, values?: {variable: value}} add a dataset", has_doc, dataset_new),
         cmd!(

@@ -436,3 +436,56 @@ fn bad_variables_requests_are_errors_not_panics() {
         assert!(s.execute(cmd, &params).is_err(), "{cmd} {params}");
     }
 }
+
+#[test]
+fn highlight_selects_without_unbinding_and_deletes_leave_the_rest() {
+    // The reviewer's regression case: two variables, two rows.
+    let mut s = session();
+    let a = text(&mut s, "Alice");
+    let b = text(&mut s, "Bob");
+    for (name, id) in [("Name", a), ("Other", b)] {
+        s.execute("variable.define", &json!({"name": name, "kind": "text"})).unwrap();
+        s.execute("variable.bind", &json!({"variable": name, "ids": [id.0]})).unwrap();
+    }
+    s.execute("dataset.new", &json!({"name": "One", "values": {"Name": "Alice", "Other": "Bob"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Two", "values": {"Name": "A2", "Other": "B2"}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "One"})).unwrap();
+
+    // What a row click runs (highlight), then what Select Bound Object runs (select).
+    s.execute("variable.highlight", &json!({"variable": "Name"})).unwrap();
+    let bound: Vec<u64> = s.doc().unwrap().doc.variables.objects_of("Name").iter().map(|i| i.0).collect();
+    s.execute("select.set", &json!({"ids": bound})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    // …and the binding is still there: selecting never unbinds.
+    assert_eq!(s.doc().unwrap().doc.variables.objects_of("Name"), vec![a]);
+
+    // Deleting one variable leaves the other; deleting the current dataset leaves the other.
+    s.execute("variable.delete", &json!({"names": ["Name"]})).unwrap();
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(vars["variables"].as_array().unwrap().len(), 1);
+    assert_eq!(vars["variables"][0]["name"], "Other");
+    s.execute("dataset.delete", &json!({"names": ["One"]})).unwrap();
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"].as_array().unwrap().len(), 1);
+    assert_eq!(sets["datasets"][0]["name"], "Two");
+}
+
+#[test]
+fn highlight_follows_rename_and_clears_with_delete() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    assert!(s.execute("variable.highlight", &json!({"variable": "Missing"})).is_err(), "unknown names stay errors");
+    let v = s.execute("variable.highlight", &json!({"variable": "Name"})).unwrap();
+    assert_eq!(v["variable"], "Name");
+    // The highlight names a variable, so the rename carries it along.
+    s.execute("variable.rename", &json!({"name": "Name", "newName": "Title"})).unwrap();
+    assert_eq!(s.doc().unwrap().variables_highlight.as_deref(), Some("Title"));
+    // Empty clears it, and deleting the highlighted variable clears it too.
+    s.execute("variable.highlight", &json!({})).unwrap();
+    assert!(s.doc().unwrap().variables_highlight.is_none());
+    s.execute("variable.highlight", &json!({"variable": "Title"})).unwrap();
+    s.execute("variable.delete", &json!({"names": ["Title"]})).unwrap();
+    assert!(s.doc().unwrap().variables_highlight.is_none(), "a highlight of a deleted variable highlights nothing");
+}

@@ -48,8 +48,10 @@ fn rename_of(id: &str) -> Option<&'static str> {
     })
 }
 
-/// Open `id`'s dialog: OK runs the command with the fields below.
-pub fn open(app: &mut VectorcraftApp, id: &str) -> bool {
+/// Open `id`'s dialog: OK runs the command with the fields below. `preselect` names the row
+/// a rename starts on (the panel's highlighted variable, the active dataset); without it, or
+/// when it no longer exists, the first row — the dialog still offers the dropdown.
+pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool {
     let Some(label) = opened(id) else { return false };
     let Some(st) = app.session.active() else {
         app.status(tl!("no document").to_string());
@@ -94,7 +96,7 @@ pub fn open(app: &mut VectorcraftApp, id: &str) -> bool {
                 app.status(if key == "variable" { tl!("no variable to rename").to_string() } else { tl!("no data set to rename").to_string() });
                 return true;
             }
-            fields.insert(key.into(), json!(names[0]));
+            fields.insert(key.into(), json!(preselect.filter(|p| names.contains(p)).unwrap_or(names[0])));
             fields.insert("newName".into(), json!(""));
         }
     }
@@ -286,7 +288,7 @@ mod tests {
     #[test]
     fn defining_a_variable_from_the_dialog_works() {
         let mut app = app_with_variables();
-        assert!(open(&mut app, "variable.define"));
+        assert!(open(&mut app, "variable.define", None));
         {
             let d = app.ui.dialog.as_ref().unwrap();
             assert_eq!(d.kind, KIND);
@@ -302,7 +304,7 @@ mod tests {
     #[test]
     fn a_new_dataset_carries_the_dialogs_values_and_omits_the_empty_ones() {
         let mut app = app_with_variables();
-        open(&mut app, "dataset.new");
+        open(&mut app, "dataset.new", None);
         {
             let d = app.ui.dialog.as_mut().unwrap();
             d.fields.insert("name".into(), json!("Row 1"));
@@ -321,7 +323,7 @@ mod tests {
         let mut app = app_with_variables();
         app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hello", "Badge": false}})).unwrap();
         app.run("dataset.set", json!({"name": "Row 1", "values": {"Badge": true}})).unwrap();
-        open(&mut app, "dataset.set");
+        open(&mut app, "dataset.set", None);
         {
             let d = app.ui.dialog.as_ref().unwrap();
             assert_eq!(d.str("name"), "Row 1");
@@ -341,7 +343,7 @@ mod tests {
         let id = app.run("text.create", json!({"x": 10, "y": 10, "text": "x"})).unwrap()["id"].as_u64().unwrap();
         app.run("variable.bind", json!({"variable": "Title", "ids": [id]})).unwrap();
         app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hi"}})).unwrap();
-        open(&mut app, "dataset.select");
+        open(&mut app, "dataset.select", None);
         assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "");
         app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Row 1"));
         crate::dialogs::confirm(&mut app).unwrap();
@@ -353,7 +355,20 @@ mod tests {
         let mut app = app_with_variables();
         assert!(opens("dataset.set") && opens("variable.define"));
         assert!(!opens("dataset.list") && !opens("dataset.next"), "no dialog for a query or a step");
-        assert!(!open(&mut app, "dataset.list"), "and it opens nothing");
+        assert!(!open(&mut app, "dataset.list", None), "and it opens nothing");
         assert!(app.ui.dialog.is_none());
+    }
+
+    #[test]
+    fn rename_dialogs_start_on_the_preselected_row() {
+        let mut app = app_with_variables();
+        app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hello"}})).unwrap();
+        open(&mut app, "variable.rename", Some("Badge"));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("variable"), "Badge");
+        // A preselect the document no longer has falls back to the first row.
+        open(&mut app, "variable.rename", Some("Gone"));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("variable"), "Title");
+        open(&mut app, "dataset.rename", Some("Row 1"));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "Row 1");
     }
 }
