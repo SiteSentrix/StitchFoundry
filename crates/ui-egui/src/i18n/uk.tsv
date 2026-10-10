@@ -3338,6 +3338,7 @@ axis	Both	Обидві
 @msg	cannot distort a zero-size bounding box	не можна спотворити обмежувальну рамку нульового розміру
 @msg	cannot read PDF: {0}	не вдалося прочитати PDF: {0}
 @msg	cannot split an open path at its end point	не можна розділити відкритий контур у його кінцевій точці
+@msg	closing needs three anchors	для замикання потрібні три опорні точки
 @msg	check an asset to export	позначте ресурс для експорту
 @msg	choice must be "merge" or "add", not `{choice}`	choice має бути "merge" або "add", а не `{choice}`
 @msg	choose a direction to divide in	виберіть напрямок для поділу
