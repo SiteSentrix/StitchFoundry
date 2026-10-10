@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, CharStyle, Document, GraphKind, GraphSpec, Justify, Node, NodeId, NodeKind, TextObject, ValueAxisSide};
+use vectorcraft_doc::{
+    Appearance, CharStyle, Document, GraphKind, GraphSpec, Justify, Node, NodeId, NodeKind, TextObject, TickLength, ValueAxisSide,
+};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
@@ -41,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
+            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
             has_selection,
             set_type
         ),
@@ -206,6 +208,23 @@ fn series_marks(g: &GraphSpec, i: usize, series_fill: bool, stroke: Paint, width
 }
 
 const LABEL_SIZE: f64 = 9.0;
+/// Most tick marks per division (Graph Type › Tick Marks), and most category tick marks a graph draws.
+const MAX_TICK_MARKS: usize = 20;
+const MAX_CATEGORY_TICKS: usize = 10_000;
+/// Longest axis label prefix or suffix (Graph Type › Add Labels).
+const MAX_AFFIX: usize = 64;
+
+/// An axis label prefix or suffix: one line (no control characters or line separators), at most [`MAX_AFFIX`] long.
+fn one_line(s: &str) -> String {
+    s.chars().filter(|c| !c.is_control() && !matches!(c, '\u{2028}' | '\u{2029}')).take(MAX_AFFIX).collect()
+}
+
+/// A count parameter: a whole number, also as the float a dialog sends back (3.0), at most `max`.
+fn count_param(p: &Value, key: &str, max: u64) -> Option<usize> {
+    let v = p.get(key)?;
+    let n = v.as_u64().or_else(|| v.as_f64().filter(|x| x.is_finite() && *x >= 0.0).map(|x| x.round().min(max as f64) as u64))?;
+    usize::try_from(n.min(max)).ok()
+}
 
 /// A "nice" axis: (min, max, step).
 fn nice_axis(lo: f64, hi: f64, ticks: usize) -> (f64, f64, f64) {
@@ -467,27 +486,68 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             // one shows the right scale).
             let (on_left_side, on_right_side) =
                 if horizontal { (true, false) } else { (g.value_axis != ValueAxisSide::Right, g.value_axis != ValueAxisSide::Left) };
+            // Add Labels text per axis, kept to one short line whatever the file holds.
+            let affix = |s: &str| one_line(s);
+            let affixes = [(affix(&g.prefix), affix(&g.suffix)), (affix(&g.right_prefix), affix(&g.right_suffix))];
+            // Each label's tick mark, then the extra tick marks of its division (Tick Marks per division).
+            let value_ticks = |b: &mut Gen, axes: &mut Vec<Arc<Node>>, a: usize, v: f64, step: f64, hi: f64| {
+                let (len, marks) = if a == 1 { (g.right_tick_length, g.right_tick_marks) } else { (g.tick_length, g.tick_marks) };
+                let n = marks.clamp(1, MAX_TICK_MARKS);
+                for k in 0..n {
+                    let w = v + step * k as f64 / n as f64;
+                    if k > 0 && w >= hi - step * 1e-9 {
+                        break;
+                    }
+                    let q = vpos(a, w);
+                    // A full-length tick on the zero line, or repeating the left side's on one shared scale, adds nothing.
+                    let repeat = a == 1 && on_left_side && g.tick_length == TickLength::Full && right == left;
+                    let len = if len == TickLength::Full && ((q - zero(a)).abs() < 1e-9 || repeat) { TickLength::None } else { len };
+                    let ends = match (len, horizontal, a == 1) {
+                        (TickLength::None, ..) => None,
+                        (TickLength::Short, true, _) => Some((Point::new(q, r.y1), Point::new(q, r.y1 + 4.0))),
+                        (TickLength::Short, false, false) => Some((Point::new(r.x0 - 4.0, q), Point::new(r.x0, q))),
+                        (TickLength::Short, false, true) => Some((Point::new(r.x1, q), Point::new(r.x1 + 4.0, q))),
+                        (TickLength::Full, true, _) => Some((Point::new(q, r.y0), Point::new(q, r.y1))),
+                        (TickLength::Full, false, _) => Some((Point::new(r.x0, q), Point::new(r.x1, q))),
+                    };
+                    if let Some((p0, p1)) = ends {
+                        axes.push(b.line(p0, p1));
+                    }
+                    if k == 0 {
+                        // The label goes right after its own tick mark.
+                        let (prefix, suffix) = affixes.get(a).map_or(("", ""), |(p, s)| (p.as_str(), s.as_str()));
+                        let label = format!("{prefix}{}{suffix}", fmt_value(v));
+                        let t = if horizontal {
+                            b.text(Point::new(q, r.y1 + 4.0 + LABEL_SIZE * 1.1), &label, Justify::Center)
+                        } else if a == 1 {
+                            b.text(Point::new(r.x1 + 6.0, q + LABEL_SIZE * 0.35), &label, Justify::Left)
+                        } else {
+                            b.text(Point::new(r.x0 - 6.0, q + LABEL_SIZE * 0.35), &label, Justify::Right)
+                        };
+                        axes.push(t);
+                    }
+                }
+            };
             if on_left_side {
                 let (lo, hi, step) = left;
                 for v in tick_values(lo, hi, step) {
-                    let q = vpos(0, v);
-                    if horizontal {
-                        axes.push(b.line(Point::new(q, r.y1), Point::new(q, r.y1 + 4.0)));
-                        axes.push(b.text(Point::new(q, r.y1 + 4.0 + LABEL_SIZE * 1.1), &fmt_value(v), Justify::Center));
-                    } else {
-                        axes.push(b.line(Point::new(r.x0 - 4.0, q), Point::new(r.x0, q)));
-                        axes.push(b.text(Point::new(r.x0 - 6.0, q + LABEL_SIZE * 0.35), &fmt_value(v), Justify::Right));
-                    }
+                    value_ticks(&mut b, &mut axes, 0, v, step, hi);
                 }
             }
             if on_right_side {
                 let (lo, hi, step) = right;
                 for v in tick_values(lo, hi, step) {
-                    let q = vpos(1, v);
-                    axes.push(b.line(Point::new(r.x1, q), Point::new(r.x1 + 4.0, q)));
-                    let t = b.text(Point::new(r.x1 + 6.0, q + LABEL_SIZE * 0.35), &fmt_value(v), Justify::Left);
-                    right_edge = t.geometric_bounds().map_or(right_edge, |bb| right_edge.max(bb.x1));
-                    axes.push(t);
+                    value_ticks(&mut b, &mut axes, 1, v, step, hi);
+                }
+            }
+            // The legend starts after the value labels right of the plot: the right axis' (14 points on), or a bar
+            // graph's last bottom label running past the plot (6 points on; a short number stays within the gap).
+            for t in &axes {
+                if matches!(t.kind, NodeKind::Text(_))
+                    && let Some(bb) = t.geometric_bounds()
+                    && bb.x1 > r.x1
+                {
+                    right_edge = right_edge.max(if bb.x0 > r.x1 { bb.x1 } else { bb.x1 - 8.0 });
                 }
             }
             if horizontal {
@@ -527,6 +587,44 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                             b.text(Point::new(cat_mid(c), r.y1 + LABEL_SIZE * 1.4), cat, Justify::Center)
                         };
                         axes.push(t);
+                    }
+                }
+                // Category tick marks (none by default): at the labels, or between them (at the category edges),
+                // with the extra tick marks of each division between those.
+                let len = g.category_tick_length;
+                if len != TickLength::None {
+                    let shown = ncat.min(MAX_CATEGORY_TICKS);
+                    let base: Vec<f64> = match (g.ticks_between_labels, label_edges) {
+                        // Labels at the plot's edges: halfway between neighbouring labels.
+                        (true, true) => (1..shown).map(|c| (cat_mid(c - 1) + cat_mid(c)) / 2.0).collect(),
+                        (true, false) => (0..=shown).map(cat_start).collect(),
+                        (false, _) => (0..shown).map(cat_mid).collect(),
+                    };
+                    // Fewer per division on a long axis, so the cap still ticks all of it.
+                    let n = g.category_tick_marks.clamp(1, MAX_TICK_MARKS).min(MAX_CATEGORY_TICKS / base.len().max(1)).max(1);
+                    let at = base.iter().enumerate().flat_map(|(i, q)| {
+                        let next = base.get(i + 1).copied();
+                        (0..n).filter_map(move |k| if k == 0 { Some(*q) } else { next.map(|x| q + (x - q) * k as f64 / n as f64) })
+                    });
+                    // A full-length tick on a drawn axis line adds nothing.
+                    let on_axis_line = |q: f64| {
+                        if horizontal {
+                            (q - r.y1).abs() < 1e-9
+                        } else {
+                            ((q - r.x0).abs() < 1e-9 && on_left_side) || ((q - r.x1).abs() < 1e-9 && on_right_side)
+                        }
+                    };
+                    for q in at.take(MAX_CATEGORY_TICKS) {
+                        if len == TickLength::Full && on_axis_line(q) {
+                            continue;
+                        }
+                        let (p0, p1) = match (len, horizontal) {
+                            (TickLength::Full, false) => (Point::new(q, r.y0), Point::new(q, r.y1)),
+                            (TickLength::Full, true) => (Point::new(r.x0, q), Point::new(r.x1, q)),
+                            (_, false) => (Point::new(q, r.y1), Point::new(q, r.y1 + 4.0)),
+                            (_, true) => (Point::new(r.x0 - 4.0, q), Point::new(r.x0, q)),
+                        };
+                        axes.push(b.line(p0, p1));
                     }
                 }
             } else {
@@ -915,6 +1013,17 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         "rightTicks",
         "rightAxisMin",
         "rightAxisMax",
+        "tickLength",
+        "tickMarks",
+        "rightTickLength",
+        "rightTickMarks",
+        "categoryTickLength",
+        "categoryTickMarks",
+        "ticksBetweenLabels",
+        "prefix",
+        "suffix",
+        "rightPrefix",
+        "rightSuffix",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         // With series picked, the type and value axis they share, so the dialog's OK keeps them.
@@ -932,6 +1041,11 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             "markPoints": spec.mark_points, "connectPoints": spec.connect_points, "edgeToEdge": spec.edge_to_edge, "ticks": spec.ticks,
             "axisMin": spec.axis_min, "axisMax": spec.axis_max, "valueAxis": value_axis, "separateScales": spec.separate_scales,
             "rightTicks": spec.right_ticks, "rightAxisMin": spec.right_axis_min, "rightAxisMax": spec.right_axis_max,
+            "tickLength": spec.tick_length.id(), "tickMarks": spec.tick_marks.clamp(1, MAX_TICK_MARKS), "rightTickLength": spec.right_tick_length.id(),
+            "rightTickMarks": spec.right_tick_marks.clamp(1, MAX_TICK_MARKS), "categoryTickLength": spec.category_tick_length.id(),
+            "categoryTickMarks": spec.category_tick_marks.clamp(1, MAX_TICK_MARKS), "ticksBetweenLabels": spec.ticks_between_labels,
+            "prefix": one_line(&spec.prefix), "suffix": one_line(&spec.suffix), "rightPrefix": one_line(&spec.right_prefix),
+            "rightSuffix": one_line(&spec.right_suffix),
         }));
     }
     // Series picked with Group Selection stay selected through the regeneration (their groups are new nodes).
@@ -972,7 +1086,30 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     spec.separate_scales = bool_or(p, "separateScales", spec.separate_scales);
-    spec.right_ticks = p.get("rightTicks").and_then(Value::as_u64).map_or(spec.right_ticks, |t| t.min(100) as usize);
+    for (key, slot) in [
+        ("tickLength", &mut spec.tick_length),
+        ("rightTickLength", &mut spec.right_tick_length),
+        ("categoryTickLength", &mut spec.category_tick_length),
+    ] {
+        if let Some(v) = str_param(p, key) {
+            *slot = TickLength::parse(v).ok_or_else(|| bad(C, format!("unknown {key} `{v}` (none, short or full)")))?;
+        }
+    }
+    for (key, slot) in
+        [("tickMarks", &mut spec.tick_marks), ("rightTickMarks", &mut spec.right_tick_marks), ("categoryTickMarks", &mut spec.category_tick_marks)]
+    {
+        *slot = count_param(p, key, MAX_TICK_MARKS as u64).map_or(*slot, |n| n.max(1));
+    }
+    spec.ticks_between_labels = bool_or(p, "ticksBetweenLabels", spec.ticks_between_labels);
+    for (key, slot) in
+        [("prefix", &mut spec.prefix), ("suffix", &mut spec.suffix), ("rightPrefix", &mut spec.right_prefix), ("rightSuffix", &mut spec.right_suffix)]
+    {
+        if let Some(v) = str_param(p, key) {
+            // A label, not a paragraph: one line, at most MAX_AFFIX characters.
+            *slot = one_line(v);
+        }
+    }
+    spec.right_ticks = count_param(p, "rightTicks", 100).unwrap_or(spec.right_ticks);
     if let Some(v) = p.get("rightAxisMin") {
         spec.right_axis_min = v.as_f64();
     }
@@ -985,7 +1122,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.mark_points = bool_or(p, "markPoints", spec.mark_points);
     spec.connect_points = bool_or(p, "connectPoints", spec.connect_points);
     spec.edge_to_edge = bool_or(p, "edgeToEdge", spec.edge_to_edge);
-    spec.ticks = p.get("ticks").and_then(Value::as_u64).map_or(spec.ticks, |t| t.min(100) as usize);
+    spec.ticks = count_param(p, "ticks", 100).unwrap_or(spec.ticks);
     if let Some(v) = p.get("axisMin") {
         spec.axis_min = v.as_f64();
     }
@@ -1899,5 +2036,241 @@ mod tests {
         assert!(spec(&s, id).right_series.is_empty());
         s.execute("graph.setData", &json!({"csv": ",a,b\nQ1,10,1000\nQ2,5,500"})).unwrap();
         assert!(spec(&s, id).right_series.is_empty(), "a new series starts on the left");
+    }
+
+    /// Bounds of the straight lines in the Axes group.
+    fn axis_lines(s: &Session, id: NodeId) -> Vec<vectorcraft_geom::Rect> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Axes")
+            .children()
+            .unwrap()
+            .iter()
+            .filter(|c| matches!(c.kind, NodeKind::Path { .. }))
+            .filter_map(|c| c.geometric_bounds())
+            .collect()
+    }
+
+    fn axis_texts(s: &Session, id: NodeId) -> Vec<String> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Axes")
+            .children()
+            .unwrap()
+            .iter()
+            .filter_map(|c| match &c.kind {
+                NodeKind::Text(t) => Some(t.plain_text()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn value_axis_tick_marks_take_a_length_and_a_count_per_division() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        let short = |s: &Session, x0: f64| axis_lines(s, id).iter().filter(|b| (b.x0 - x0).abs() < 1e-6 && (b.width() - 4.0).abs() < 1e-6).count();
+        let across = |s: &Session| axis_lines(s, id).iter().filter(|b| b.height() < 1e-6 && (b.width() - 300.0).abs() < 1e-6).count();
+        // Short (the default): one at each of the six labels; the zero line runs across.
+        assert_eq!((short(&s, 96.0), across(&s)), (6, 1));
+        s.execute("graph.setType", &json!({"tickLength": "full"})).unwrap();
+        // Across the plot at 200…1000; the one at 0 would be the zero line again.
+        assert_eq!((short(&s, 96.0), across(&s)), (0, 6));
+        s.execute("graph.setType", &json!({"tickLength": "none"})).unwrap();
+        assert_eq!((short(&s, 96.0), across(&s)), (0, 1));
+        // Two per division: one more halfway between labels, none past the last label.
+        s.execute("graph.setType", &json!({"tickLength": "short", "tickMarks": 2})).unwrap();
+        assert_eq!(short(&s, 96.0), 11);
+        assert!(axis_lines(&s, id).iter().any(|b| (b.x0 - 96.0).abs() < 1e-6 && (b.y0 - 280.0).abs() < 1e-6), "100 of 0..1000 sits at y 280");
+        assert_eq!(axis_texts(&s, id).iter().filter(|t| t.parse::<f64>().is_ok()).count(), 6, "labels only at divisions");
+        // The right axis has its own.
+        s.execute("graph.setType", &json!({"valueAxis": "both", "rightTickLength": "none"})).unwrap();
+        assert_eq!((short(&s, 96.0), short(&s, 400.0)), (11, 0));
+        s.execute("graph.setType", &json!({"rightTickLength": "short", "rightTickMarks": 4})).unwrap();
+        assert_eq!(short(&s, 400.0), 21);
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!((v["tickLength"].clone(), v["tickMarks"].clone(), v["rightTickMarks"].clone()), (json!("short"), json!(2), json!(4)));
+        assert!(s.execute("graph.setType", &json!({"tickLength": "long"})).is_err());
+        s.execute("graph.setType", &json!({"tickMarks": 1_000_000})).unwrap();
+        assert_eq!(spec(&s, id).tick_marks, 20);
+    }
+
+    #[test]
+    fn category_tick_marks_go_at_or_between_the_labels() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        let below = |s: &Session| {
+            let mut xs: Vec<f64> = axis_lines(s, id)
+                .iter()
+                .filter(|b| b.width() < 1e-6 && (b.y0 - 300.0).abs() < 1e-6 && (b.height() - 4.0).abs() < 1e-6)
+                .map(|b| b.x0)
+                .collect();
+            xs.sort_by(f64::total_cmp);
+            xs
+        };
+        // None by default, as before.
+        assert!(below(&s).is_empty());
+        s.execute("graph.setType", &json!({"categoryTickLength": "short"})).unwrap();
+        assert_eq!(below(&s), [175.0, 325.0]);
+        s.execute("graph.setType", &json!({"ticksBetweenLabels": true})).unwrap();
+        assert_eq!(below(&s), [100.0, 250.0, 400.0]);
+        s.execute("graph.setType", &json!({"categoryTickMarks": 2})).unwrap();
+        assert_eq!(below(&s), [100.0, 175.0, 250.0, 325.0, 400.0]);
+        s.execute("graph.setType", &json!({"categoryTickLength": "full"})).unwrap();
+        let full = axis_lines(&s, id).iter().filter(|b| b.width() < 1e-6 && (b.height() - 200.0).abs() < 1e-6 && b.x0 > 100.0 + 1e-6).count();
+        assert_eq!(full, 4, "inside the plot: 175, 250, 325 and 400");
+        // Bar graphs: the category axis is the left one.
+        let bar = graph(&mut s, "bar");
+        s.execute("graph.setType", &json!({"id": bar.0, "categoryTickLength": "short", "ticksBetweenLabels": true})).unwrap();
+        let left = axis_lines(&s, bar).iter().filter(|b| b.height() < 1e-6 && (b.x0 - 96.0).abs() < 1e-6 && (b.width() - 4.0).abs() < 1e-6).count();
+        assert_eq!(left, 4, "three categories, four edges");
+    }
+
+    #[test]
+    fn value_axis_numbers_take_a_prefix_and_a_suffix() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        s.execute("graph.setType", &json!({"prefix": "$", "suffix": " M", "valueAxis": "both", "separateScales": true})).unwrap();
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right", "rightSuffix": "%"})).unwrap();
+        let texts = axis_texts(&s, id);
+        assert!(texts.contains(&"$10 M".to_string()) && texts.contains(&"$0 M".to_string()), "{texts:?}");
+        assert!(texts.contains(&"1000%".to_string()) && !texts.contains(&"$1000 M".to_string()), "{texts:?}");
+        // One short line: control characters dropped, the length capped.
+        s.execute("graph.setType", &json!({"prefix": format!("a\nb{}", "x".repeat(500))})).unwrap();
+        let p = spec(&s, id).prefix;
+        assert!(p.starts_with("ab") && p.chars().count() == 64, "{p}");
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!((v["suffix"].clone(), v["rightSuffix"].clone()), (json!(" M"), json!("%")));
+    }
+
+    #[test]
+    fn tick_and_label_options_survive_save_and_open_and_are_left_out_when_unset() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        s.execute(
+            "graph.setType",
+            &json!({"tickLength": "full", "tickMarks": 3, "categoryTickLength": "short", "ticksBetweenLabels": true, "suffix": "%"}),
+        )
+        .unwrap();
+        let path = vectorcraft_testkit::temp_dir("graph-ticks").join("ticks.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!(
+            (g.tick_length, g.tick_marks, g.category_tick_length, g.ticks_between_labels, g.suffix.as_str()),
+            (vectorcraft_doc::TickLength::Full, 3, vectorcraft_doc::TickLength::Short, true, "%")
+        );
+        let v = serde_json::to_value(GraphSpec::default()).unwrap();
+        for k in [
+            "tickLength",
+            "tickMarks",
+            "rightTickLength",
+            "rightTickMarks",
+            "categoryTickLength",
+            "categoryTickMarks",
+            "ticksBetweenLabels",
+            "prefix",
+            "suffix",
+            "rightPrefix",
+            "rightSuffix",
+        ] {
+            assert!(v.get(k).is_none(), "{k}");
+        }
+        // A file's huge values draw within the caps.
+        let g: GraphSpec = serde_json::from_value(json!({"rows": [[1.0]], "tickMarks": 1_000_000_000u64, "prefix": "y".repeat(10_000)})).unwrap();
+        let mut d = vectorcraft_doc::Document::new(800.0, 800.0);
+        let art = super::generate(&mut d, &g);
+        let axes = art.iter().find(|n| n.name.as_deref() == Some("Axes")).unwrap().children().unwrap().to_vec();
+        assert!(axes.len() < 200, "{} axis parts", axes.len());
+        for t in axes.iter().filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(t.plain_text()),
+            _ => None,
+        }) {
+            assert!(t.chars().count() < 80, "{} characters", t.chars().count());
+        }
+    }
+
+    #[test]
+    fn between_labels_ticks_on_an_edge_to_edge_graph_fall_halfway_between_its_labels() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "area");
+        s.execute("graph.setType", &json!({"categoryTickLength": "short", "ticksBetweenLabels": true})).unwrap();
+        // Labels at 100, 250 and 400 (the plot's edges and middle): ticks at 175 and 325.
+        let mut xs: Vec<f64> = axis_lines(&s, id)
+            .iter()
+            .filter(|b| b.width() < 1e-6 && (b.y0 - 300.0).abs() < 1e-6 && (b.height() - 4.0).abs() < 1e-6)
+            .map(|b| b.x0)
+            .collect();
+        xs.sort_by(f64::total_cmp);
+        assert_eq!(xs, [175.0, 325.0]);
+    }
+
+    #[test]
+    fn bar_graph_value_ticks_run_up_the_plot_and_long_labels_push_the_legend() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "bar");
+        let legend_x = |s: &Session| {
+            let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+            series(&n, 0).children().unwrap().last().unwrap().geometric_bounds().unwrap().x0
+        };
+        let before = legend_x(&s);
+        assert!((before - 414.0).abs() < 1e-6, "a short last label leaves the legend where it was: {before}");
+        s.execute("graph.setType", &json!({"tickLength": "full", "tickMarks": 2})).unwrap();
+        let up: Vec<_> = axis_lines(&s, id).into_iter().filter(|b| b.width() < 1e-6 && (b.height() - 200.0).abs() < 1e-6).collect();
+        // -2..6 in 2s: five labels and four halves; the one at 0 is the zero line already, the left end the axis.
+        assert_eq!(up.len(), 9, "{up:?}");
+        s.execute("graph.setType", &json!({"suffix": " million tonnes"})).unwrap();
+        let last = value_label_edge(&s, id);
+        assert!(legend_x(&s) >= last + 6.0 - 1e-6, "{} vs {last}", legend_x(&s));
+    }
+
+    /// The right end of the Axes group's texts.
+    fn value_label_edge(s: &Session, id: NodeId) -> f64 {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Axes")
+            .children()
+            .unwrap()
+            .iter()
+            .filter(|c| matches!(c.kind, NodeKind::Text(_)))
+            .filter_map(|c| c.geometric_bounds())
+            .map(|b| b.x1)
+            .fold(f64::MIN, f64::max)
+    }
+
+    #[test]
+    fn counts_come_back_from_the_dialog_as_floats_and_are_capped() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        s.execute("graph.setType", &json!({"tickMarks": 3.0, "ticks": 4.0, "categoryTickMarks": 2.6})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.tick_marks, g.ticks, g.category_tick_marks), (3, 4, 3));
+        s.execute("graph.setType", &json!({"categoryTickMarks": 0, "rightTickMarks": 1e300, "rightTicks": -2.0})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.category_tick_marks, g.right_tick_marks, g.right_ticks), (1, 20, 0));
+        // A file's values come back as drawn.
+        let mut fields = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!(fields["rightTickMarks"], 20);
+        fields["tickLength"] = json!("full");
+        s.execute("graph.setType", &fields).unwrap();
+        assert_eq!(spec(&s, id).tick_length, vectorcraft_doc::TickLength::Full);
+    }
+
+    #[test]
+    fn a_long_category_axis_is_ticked_all_the_way_within_the_cap() {
+        let rows: Vec<Vec<f64>> = (0..5000).map(|i| vec![i as f64]).collect();
+        let g = GraphSpec { rows, category_tick_length: vectorcraft_doc::TickLength::Short, category_tick_marks: 20, ..GraphSpec::default() };
+        let mut d = vectorcraft_doc::Document::new(800.0, 800.0);
+        let art = super::generate(&mut d, &g);
+        let axes = art.iter().find(|n| n.name.as_deref() == Some("Axes")).unwrap();
+        let ticks: Vec<f64> = axes
+            .children()
+            .unwrap()
+            .iter()
+            .filter_map(|c| c.geometric_bounds())
+            .filter(|b| b.width() < 1e-9 && (b.height() - 4.0).abs() < 1e-9)
+            .map(|b| b.x0)
+            .collect();
+        assert!(ticks.len() <= 10_000 && ticks.len() >= 5000, "{}", ticks.len());
+        assert!(ticks.iter().copied().fold(f64::MIN, f64::max) > 199.0, "the last category is ticked");
     }
 }

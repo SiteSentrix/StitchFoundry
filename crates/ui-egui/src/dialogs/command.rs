@@ -40,7 +40,8 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         ("text.areaOptions", "fit") => Some(AREA_FIT),
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
-        ("graph.setType", "valueAxis") => Some(VALUE_AXIS),
+        ("graph.setType", "valueAxis") => Some(GRAPH_VALUE_AXIS),
+        ("graph.setType", "tickLength" | "rightTickLength" | "categoryTickLength") => Some(GRAPH_TICK_LENGTH),
         _ => None,
     }
 }
@@ -59,7 +60,10 @@ const FIRST_BASELINE: form::Choices =
 const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("Bottom", "bottom"), ("Justify", "justify")];
 
 /// Graph Type › Value Axis (series picked on both axes show none, and OK leaves each where it is).
-const VALUE_AXIS: form::Choices = &[("On Left Side", "left"), ("On Right Side", "right"), ("On Both Sides", "both")];
+const GRAPH_VALUE_AXIS: form::Choices = &[("On Left Side", "left"), ("On Right Side", "right"), ("On Both Sides", "both")];
+
+/// Graph Type › Tick Marks › Length.
+const GRAPH_TICK_LENGTH: form::Choices = &[("None", "none"), ("Short", "short"), ("Full Width", "full")];
 
 /// Closes before running, so a dialog the command opens stays open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
