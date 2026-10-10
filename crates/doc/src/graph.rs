@@ -80,6 +80,32 @@ impl GraphKind {
     }
 }
 
+/// Graph Type › Value Axis: which side of the plot the value axis is drawn on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ValueAxisSide {
+    #[default]
+    Left,
+    Right,
+    Both,
+}
+
+impl ValueAxisSide {
+    pub fn id(self) -> &'static str {
+        match self {
+            ValueAxisSide::Left => "left",
+            ValueAxisSide::Right => "right",
+            ValueAxisSide::Both => "both",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        [ValueAxisSide::Left, ValueAxisSide::Right, ValueAxisSide::Both].into_iter().find(|k| k.id().eq_ignore_ascii_case(s))
+    }
+    fn is_left(&self) -> bool {
+        *self == ValueAxisSide::Left
+    }
+}
+
 /// The fill and stroke captured from one series' generated marks. An absent paint keeps whatever
 /// the generator draws for that part (greyscale for a series fill, the part's own stroke otherwise).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -127,6 +153,24 @@ pub struct GraphSpec {
     pub ticks: usize,
     pub axis_min: Option<f64>,
     pub axis_max: Option<f64>,
+    /// Graph Type › Value Axis side. Column, stacked column, line, area and scatter graphs (the bar graphs' value axis
+    /// runs along the bottom and stays there).
+    #[serde(skip_serializing_if = "ValueAxisSide::is_left")]
+    pub value_axis: ValueAxisSide,
+    /// Graph Type › Separate Scales: with the value axis on both sides, the series on the right axis
+    /// ([`Self::right_series`]) get a scale of their own there.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub separate_scales: bool,
+    /// Indexes of the series assigned to the right value axis.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub right_series: Vec<usize>,
+    /// The right value axis' tick values, used with separate scales: tick count (0 = automatic) and min/max override.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub right_ticks: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub right_axis_min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub right_axis_max: Option<f64>,
     /// Line, scatter and radar graphs: mark data points, connect them.
     pub mark_points: bool,
     pub connect_points: bool,
@@ -138,6 +182,10 @@ pub struct GraphSpec {
     /// Bounds of the art when it was last generated (detects moves/scales of the graph group).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placed: Option<Rect>,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// Edge-to-Edge Lines for a graph saved before the option existed: on, as it was drawn then.
@@ -189,6 +237,12 @@ impl Default for GraphSpec {
             ticks: 0,
             axis_min: None,
             axis_max: None,
+            value_axis: ValueAxisSide::Left,
+            separate_scales: false,
+            right_series: vec![],
+            right_ticks: 0,
+            right_axis_min: None,
+            right_axis_max: None,
             mark_points: true,
             connect_points: true,
             edge_to_edge: false,

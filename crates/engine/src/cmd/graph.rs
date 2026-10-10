@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, CharStyle, Document, GraphKind, GraphSpec, Justify, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::{Appearance, CharStyle, Document, GraphKind, GraphSpec, Justify, Node, NodeId, NodeKind, TextObject, ValueAxisSide};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0); no options → the current ones",
+            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
             has_selection,
             set_type
         ),
@@ -217,20 +217,20 @@ fn nice_axis(lo: f64, hi: f64, ticks: usize) -> (f64, f64, f64) {
     ((lo / step).floor() * step, (hi / step).ceil() * step, step)
 }
 
-/// The value axis: with both `axis_min` and `axis_max` set (Graph Type › Tick Values › Override Calculated Values),
-/// exactly that range split into `ticks` divisions (5 when automatic); otherwise a nice axis around the data, using
-/// whichever bound was given.
-fn value_axis(g: &GraphSpec, lo: f64, hi: f64) -> (f64, f64, f64) {
-    match (g.axis_min, g.axis_max) {
+/// A value axis: with both `min` and `max` set (Graph Type › Tick Values › Override Calculated Values), exactly that
+/// range split into `ticks` divisions (5 when automatic); otherwise a nice axis around the data, using whichever bound
+/// was given.
+fn value_axis(ticks: usize, axis_min: Option<f64>, axis_max: Option<f64>, lo: f64, hi: f64) -> (f64, f64, f64) {
+    match (axis_min, axis_max) {
         (Some(min), Some(max)) if max > min && (max - min).is_finite() => {
-            let n = if g.ticks == 0 { 5 } else { g.ticks.clamp(1, 100) } as f64;
+            let n = if ticks == 0 { 5 } else { ticks.clamp(1, 100) } as f64;
             (min, max, (max - min) / n)
         }
         _ => {
             // An override too wide for f64 (or NaN) gives a non-finite axis, which would reach `clamp` with NaN bounds
             // and panic: fall back to the data, then to 0..1.
             let finite = |(a, b, s): (f64, f64, f64)| a.is_finite() && b.is_finite() && s.is_finite() && b > a && s > 0.0;
-            [nice_axis(g.axis_min.unwrap_or(lo), g.axis_max.unwrap_or(hi), g.ticks), nice_axis(lo, hi, g.ticks)]
+            [nice_axis(axis_min.unwrap_or(lo), axis_max.unwrap_or(hi), ticks), nice_axis(lo, hi, ticks)]
                 .into_iter()
                 .find(|&a| finite(a))
                 .unwrap_or((0.0, 1.0, 0.2))
@@ -327,6 +327,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     let kinds: Vec<GraphKind> = (0..nser).map(|s| g.series_kind(s)).collect();
     let kind = |s: usize| kinds.get(s).copied().unwrap_or(g.kind);
     let horizontal = matches!(g.kind, GraphKind::Bar | GraphKind::StackedBar);
+    // Where the art right of the plot ends (the right value axis' labels), so the legend starts after it.
+    let mut right_edge = r.x1;
 
     match g.kind {
         GraphKind::Pie => {
@@ -363,7 +365,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         GraphKind::Radar => {
             let centre = r.center();
             let rad = (r.width().min(r.height()) / 2.0).max(1.0);
-            let (lo, hi, step) = value_axis(g, 0.0, g.rows.iter().flatten().copied().fold(0.0, f64::max));
+            let (lo, hi, step) = value_axis(g.ticks, g.axis_min, g.axis_max, 0.0, g.rows.iter().flatten().copied().fold(0.0, f64::max));
             let at = |c: usize, v: f64| {
                 let a = -std::f64::consts::FRAC_PI_2 + std::f64::consts::TAU * c as f64 / ncat as f64;
                 centre + vectorcraft_geom::Vec2::new(a.cos(), a.sin()) * (rad * ((v - lo) / (hi - lo)).clamp(0.0, 1.0))
@@ -397,58 +399,112 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             }
         }
         _ => {
-            // Value range (stacked graphs stack positives and negatives separately).
-            let (mut lo, mut hi) = (0.0f64, 0.0f64);
             let scatter = g.kind == GraphKind::Scatter;
+            // Separate Scales: with the value axis on both sides, the series assigned to the right axis get a scale
+            // of their own there (axis 1); every other series, and every series without separate scales, uses axis 0.
+            let separate = g.separate_scales && g.value_axis == ValueAxisSide::Both && !horizontal && !scatter;
+            let mut on_right = vec![false; nser];
+            if separate {
+                for i in &g.right_series {
+                    if let Some(x) = on_right.get_mut(*i) {
+                        *x = true;
+                    }
+                }
+            }
+            let axis = |s: usize| usize::from(on_right.get(s).copied().unwrap_or(false));
+            // Value range per axis (stacked graphs stack positives and negatives separately).
+            let (mut lo, mut hi) = ([0.0f64; 2], [0.0f64; 2]);
             let (mut xlo, mut xhi) = (f64::MAX, f64::MIN);
             for c in 0..ncat {
                 if !scatter {
-                    // Stacked columns (or bars) stack together, and so do areas; other series count one value each.
-                    for stack in [[GraphKind::StackedColumn, GraphKind::StackedBar], [GraphKind::Area, GraphKind::Area]] {
-                        let members = || (0..nser).filter(|s| stack.contains(&kind(*s)));
-                        hi = hi.max(members().map(|s| val(c, s).max(0.0)).sum());
-                        lo = lo.min(members().map(|s| val(c, s).min(0.0)).sum());
-                    }
-                    for v in (0..nser).filter(|s| matches!(kind(*s), GraphKind::Column | GraphKind::Bar | GraphKind::Line)).filter_map(|s| cell(c, s))
-                    {
-                        hi = hi.max(v);
-                        lo = lo.min(v);
+                    for (a, (lo, hi)) in lo.iter_mut().zip(hi.iter_mut()).enumerate() {
+                        // Stacked columns (or bars) stack together, and so do areas; other series count one value each.
+                        for stack in [[GraphKind::StackedColumn, GraphKind::StackedBar], [GraphKind::Area, GraphKind::Area]] {
+                            let members = || (0..nser).filter(|s| axis(*s) == a && stack.contains(&kind(*s)));
+                            *hi = hi.max(members().map(|s| val(c, s).max(0.0)).sum());
+                            *lo = lo.min(members().map(|s| val(c, s).min(0.0)).sum());
+                        }
+                        let single = |s: &usize| axis(*s) == a && matches!(kind(*s), GraphKind::Column | GraphKind::Bar | GraphKind::Line);
+                        for v in (0..nser).filter(single).filter_map(|s| cell(c, s)) {
+                            *hi = hi.max(v);
+                            *lo = lo.min(v);
+                        }
                     }
                 } else {
                     for s in (0..nser).step_by(2) {
                         if let (Some(y), Some(x)) = (cell(c, s), cell(c, s + 1)) {
-                            hi = hi.max(y);
-                            lo = lo.min(y);
+                            hi[0] = hi[0].max(y);
+                            lo[0] = lo[0].min(y);
                             xlo = xlo.min(x);
                             xhi = xhi.max(x);
                         }
                     }
                 }
             }
-            let (lo, hi, step) = value_axis(g, lo, hi);
-            // Value → coordinate along the value axis (y for columns/lines, x for bars).
-            let vpos = |v: f64| {
+            // An axis with no series of its own shows the other one's scale.
+            let left = value_axis(g.ticks, g.axis_min, g.axis_max, lo[0], hi[0]);
+            let used = |a: usize| (0..nser).any(|s| axis(s) == a);
+            let (left, right) = if !separate || !used(1) {
+                (left, left)
+            } else {
+                let right = value_axis(g.right_ticks, g.right_axis_min, g.right_axis_max, lo[1], hi[1]);
+                if used(0) { (left, right) } else { (right, right) }
+            };
+            let scale = |a: usize| if a == 1 { right } else { left };
+            // Value → coordinate along value axis `a` (y for columns/lines, x for bars), and that axis' zero (or the
+            // end nearest it).
+            let vpos = |a: usize, v: f64| {
+                let (lo, hi, _) = scale(a);
                 let t = (v - lo) / (hi - lo);
                 if horizontal { r.x0 + t * r.width() } else { r.y1 - t * r.height() }
             };
+            let zero = |a: usize| {
+                let (lo, hi, _) = scale(a);
+                vpos(a, 0.0f64.clamp(lo, hi))
+            };
             let mut axes = vec![];
-            // Value axis with ticks and labels.
-            for v in tick_values(lo, hi, step) {
-                let q = vpos(v);
-                if horizontal {
-                    axes.push(b.line(Point::new(q, r.y1), Point::new(q, r.y1 + 4.0)));
-                    axes.push(b.text(Point::new(q, r.y1 + 4.0 + LABEL_SIZE * 1.1), &fmt_value(v), Justify::Center));
-                } else {
-                    axes.push(b.line(Point::new(r.x0 - 4.0, q), Point::new(r.x0, q)));
-                    axes.push(b.text(Point::new(r.x0 - 6.0, q + LABEL_SIZE * 0.35), &fmt_value(v), Justify::Right));
+            // Value axes with ticks and labels: along the bottom for bar graphs, else on the chosen sides (the right
+            // one shows the right scale).
+            let (on_left_side, on_right_side) =
+                if horizontal { (true, false) } else { (g.value_axis != ValueAxisSide::Right, g.value_axis != ValueAxisSide::Left) };
+            if on_left_side {
+                let (lo, hi, step) = left;
+                for v in tick_values(lo, hi, step) {
+                    let q = vpos(0, v);
+                    if horizontal {
+                        axes.push(b.line(Point::new(q, r.y1), Point::new(q, r.y1 + 4.0)));
+                        axes.push(b.text(Point::new(q, r.y1 + 4.0 + LABEL_SIZE * 1.1), &fmt_value(v), Justify::Center));
+                    } else {
+                        axes.push(b.line(Point::new(r.x0 - 4.0, q), Point::new(r.x0, q)));
+                        axes.push(b.text(Point::new(r.x0 - 6.0, q + LABEL_SIZE * 0.35), &fmt_value(v), Justify::Right));
+                    }
+                }
+            }
+            if on_right_side {
+                let (lo, hi, step) = right;
+                for v in tick_values(lo, hi, step) {
+                    let q = vpos(1, v);
+                    axes.push(b.line(Point::new(r.x1, q), Point::new(r.x1 + 4.0, q)));
+                    let t = b.text(Point::new(r.x1 + 6.0, q + LABEL_SIZE * 0.35), &fmt_value(v), Justify::Left);
+                    right_edge = t.geometric_bounds().map_or(right_edge, |bb| right_edge.max(bb.x1));
+                    axes.push(t);
                 }
             }
             if horizontal {
                 axes.push(b.line(Point::new(r.x0, r.y1), Point::new(r.x1, r.y1)));
-                axes.push(b.line(Point::new(vpos(0.0f64.clamp(lo, hi)), r.y0), Point::new(vpos(0.0f64.clamp(lo, hi)), r.y1)));
+                axes.push(b.line(Point::new(zero(0), r.y0), Point::new(zero(0), r.y1)));
             } else {
-                axes.push(b.line(Point::new(r.x0, r.y0), Point::new(r.x0, r.y1)));
-                axes.push(b.line(Point::new(r.x0, vpos(0.0f64.clamp(lo, hi))), Point::new(r.x1, vpos(0.0f64.clamp(lo, hi)))));
+                if on_left_side {
+                    axes.push(b.line(Point::new(r.x0, r.y0), Point::new(r.x0, r.y1)));
+                }
+                if on_right_side {
+                    axes.push(b.line(Point::new(r.x1, r.y0), Point::new(r.x1, r.y1)));
+                }
+                axes.push(b.line(Point::new(r.x0, zero(0)), Point::new(r.x1, zero(0))));
+                // The right scale's zero, where its columns start, when it isn't the left one's.
+                if (zero(1) - zero(0)).abs() > 1e-9 {
+                    axes.push(b.line(Point::new(r.x0, zero(1)), Point::new(r.x1, zero(1))));
+                }
             }
             // Category positions.
             let span = if horizontal { r.height() } else { r.width() };
@@ -486,7 +542,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 for (si, s) in (0..nser).step_by(2).enumerate() {
                     let pts: Vec<Option<Point>> = (0..ncat)
                         .map(|c| match (cell(c, s), cell(c, s + 1)) {
-                            (Some(y), Some(x)) => Some(Point::new(r.x0 + (x - xl) / (xh - xl) * r.width(), vpos(y))),
+                            (Some(y), Some(x)) => Some(Point::new(r.x0 + (x - xl) / (xh - xl) * r.width(), vpos(0, y))),
                             _ => None,
                         })
                         .collect();
@@ -510,7 +566,10 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             // no plain columns, a width of their own.
             let columns: Vec<usize> = (0..nser).filter(|s| matches!(kind(*s), GraphKind::Column | GraphKind::Bar)).collect();
             let stacks: Vec<usize> = (0..nser).filter(|s| matches!(kind(*s), GraphKind::StackedColumn | GraphKind::StackedBar)).collect();
-            let slots = columns.len() + usize::from(!stacks.is_empty());
+            // One stack per value axis that has stacked series, each in a slot of its own.
+            let stack_axes: Vec<usize> = (0..2).filter(|a| stacks.iter().any(|s| axis(*s) == *a)).collect();
+            let own_width = columns.is_empty() && stack_axes.len() < 2;
+            let slots = columns.len() + stack_axes.len();
             let cluster = cat_w * (g.cluster_width / 100.0).clamp(0.01, 1.0);
             let slot = cluster / slots.max(1) as f64;
             let bar = slot * (g.column_width / 100.0).clamp(0.01, 1.0);
@@ -523,22 +582,28 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     let Some(v) = cell(c, s) else { continue };
                     let a = c0 + slot * i as f64 + (slot - bar) / 2.0;
                     let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                    let n = b.path(shapes::rectangle(bar_rect(a, bar, vpos(0.0f64.clamp(lo, hi)), vpos(v))), fill, stroke, w);
+                    let n = b.path(shapes::rectangle(bar_rect(a, bar, zero(axis(s)), vpos(axis(s), v))), fill, stroke, w);
                     if let Some(items) = series.get_mut(s) {
                         items.push(n);
                     }
                 }
-                let (a, w) = if columns.is_empty() {
-                    let w = (cat_w * (g.column_width / 100.0).clamp(0.01, 1.0) * (g.cluster_width / 100.0).clamp(0.01, 1.0) * 1.2).min(cat_w);
-                    (cat_start(c) + (cat_w - w) / 2.0, w)
-                } else {
-                    (c0 + slot * columns.len() as f64 + (slot - bar) / 2.0, bar)
+                let place = |ax: usize| {
+                    if own_width {
+                        let w = (cat_w * (g.column_width / 100.0).clamp(0.01, 1.0) * (g.cluster_width / 100.0).clamp(0.01, 1.0) * 1.2).min(cat_w);
+                        (cat_start(c) + (cat_w - w) / 2.0, w)
+                    } else {
+                        let i = columns.len() + stack_axes.iter().position(|a| *a == ax).unwrap_or(0);
+                        (c0 + slot * i as f64 + (slot - bar) / 2.0, bar)
+                    }
                 };
-                let (mut pos, mut neg) = (0.0, 0.0);
+                // Each axis stacks its own series.
+                let (mut pos, mut neg) = ([0.0f64; 2], [0.0f64; 2]);
                 for &s in &stacks {
                     let Some(v) = cell(c, s) else { continue };
-                    let base = if v >= 0.0 { &mut pos } else { &mut neg };
-                    let (v0, v1) = (vpos(*base), vpos(*base + v));
+                    let ax = axis(s);
+                    let (a, w) = place(ax);
+                    let Some(base) = (if v >= 0.0 { pos.get_mut(ax) } else { neg.get_mut(ax) }) else { continue };
+                    let (v0, v1) = (vpos(ax, *base), vpos(ax, *base + v));
                     *base += v;
                     let (fill, stroke, sw) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
                     let n = b.path(shapes::rectangle(bar_rect(a, w, v0, v1)), fill, stroke, sw);
@@ -547,24 +612,26 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     }
                 }
             }
-            // Cumulative area bands, each from the previous area total up to its own.
-            let mut below: Vec<f64> = vec![0.0; ncat];
+            // Cumulative area bands, each from the previous area total on its axis up to its own.
+            let mut belows: [Vec<f64>; 2] = [vec![0.0; ncat], vec![0.0; ncat]];
             for s in (0..nser).filter(|s| kind(*s) == GraphKind::Area) {
+                let a = axis(s);
+                let Some(below) = belows.get_mut(a) else { continue };
                 let above: Vec<f64> = below.iter().enumerate().map(|(c, b)| b + val(c, s)).collect();
                 // Mixed with series at the category centres, areas take their points there too.
-                let at = |c: usize, v: &[f64]| Point::new(mid(c, label_edges), vpos(v.get(c).copied().unwrap_or(0.0)));
+                let at = |c: usize, v: &[f64]| Point::new(mid(c, label_edges), vpos(a, v.get(c).copied().unwrap_or(0.0)));
                 let mut pts: Vec<Point> = (0..ncat).map(|c| at(c, &above)).collect();
-                pts.extend((0..ncat).rev().map(|c| at(c, &below)));
+                pts.extend((0..ncat).rev().map(|c| at(c, below)));
                 let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
                 let n = b.path(polyline(&pts, true), fill, stroke, w);
                 if let Some(items) = series.get_mut(s) {
                     items.push(n);
                 }
-                below = above;
+                *below = above;
             }
             for s in (0..nser).filter(|s| kind(*s) == GraphKind::Line) {
                 let pts: Vec<Option<Point>> =
-                    (0..ncat).map(|c| cell(c, s).map(|v| Point::new(mid(c, g.edge_to_edge && label_edges), vpos(v)))).collect();
+                    (0..ncat).map(|c| cell(c, s).map(|v| Point::new(mid(c, g.edge_to_edge && label_edges), vpos(axis(s), v)))).collect();
                 if g.connect_points {
                     for run in runs(&pts) {
                         let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
@@ -590,7 +657,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     let legend_series = if g.kind == GraphKind::Scatter { nser.div_ceil(2) } else { nser };
     let mut labels = vec![];
     if g.legend && !g.series.is_empty() {
-        let x = r.x1 + 14.0;
+        let x = right_edge + 14.0;
         for (s, items) in series.iter_mut().enumerate().take(legend_series) {
             let label = if g.kind == GraphKind::Scatter { series_label(s * 2) } else { series_label(s) };
             if label.is_empty() {
@@ -715,7 +782,7 @@ fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
     let mut out = HashMap::new();
     doc.walk(|n| {
         let Some(spec) = n.graph.as_deref() else { return };
-        let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
+        let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
         for group in n.children().into_iter().flatten() {
             let Some(index) = group.series_index.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count) else { continue };
             let r = SeriesRef { graph: n.id, group: group.id, index };
@@ -791,6 +858,10 @@ fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
         // Blank cells come back as null, so the rows can be edited and sent back as they are.
         return Ok(json!({ "csv": to_csv(&spec), "series": spec.series, "categories": spec.categories, "rows": spec.cells() }));
     }
+    // Series assigned to the right axis that the new data no longer has are dropped, so a series added later starts
+    // on the left.
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0);
+    spec.right_series.retain(|i| *i < count);
     s.edit("Graph Data", |d, _| regenerate(d, id, spec))?;
     Ok(json!({ "id": id.0 }))
 }
@@ -802,11 +873,15 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     // The series to retype: `seriesIndexes`, else, with no `id`, a selection made only of this graph's series (Group
     // Selection). Anything else selected, the graph itself for one, is the whole graph.
     let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    // A file's list of right-axis series, kept to series the graph has, at most once each.
+    spec.right_series.retain(|i| *i < count);
+    spec.right_series.sort_unstable();
+    spec.right_series.dedup();
     let picked: Vec<usize> = match p.get("seriesIndexes") {
         Some(v) => {
             let a = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(C, "`seriesIndexes` is a non-empty list of series indexes"))?;
-            if p.get("type").is_none() {
-                return Err(bad(C, "`seriesIndexes` needs a `type`"));
+            if str_param(p, "type").is_none() && str_param(p, "valueAxis").is_none() {
+                return Err(bad(C, "`seriesIndexes` needs a `type` or a `valueAxis`"));
             }
             a.iter()
                 .map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count).ok_or_else(|| bad(C, format!("no series {i}"))))
@@ -835,15 +910,28 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         "ticks",
         "axisMin",
         "axisMax",
+        "valueAxis",
+        "separateScales",
+        "rightTicks",
+        "rightAxisMin",
+        "rightAxisMax",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
-        // With series picked, the type they share, so the dialog's OK keeps it.
+        // With series picked, the type and value axis they share, so the dialog's OK keeps them.
         let kinds: Vec<GraphKind> = picked.iter().map(|i| spec.series_kind(*i)).collect();
         let kind = kinds.first().copied().filter(|k| kinds.iter().all(|x| x == k)).unwrap_or(spec.kind);
+        // Series on both axes give no value axis (null), so OK leaves each where it is.
+        let sides: Vec<bool> = picked.iter().map(|i| spec.right_series.binary_search(i).is_ok()).collect();
+        let value_axis = match sides.first() {
+            None => Some(spec.value_axis.id()),
+            Some(r) if sides.iter().all(|x| x == r) => Some(if *r { "right" } else { "left" }),
+            Some(_) => None,
+        };
         return Ok(json!({
             "type": kind.id(), "columnWidth": spec.column_width, "clusterWidth": spec.cluster_width, "legend": spec.legend,
             "markPoints": spec.mark_points, "connectPoints": spec.connect_points, "edgeToEdge": spec.edge_to_edge, "ticks": spec.ticks,
-            "axisMin": spec.axis_min, "axisMax": spec.axis_max,
+            "axisMin": spec.axis_min, "axisMax": spec.axis_max, "valueAxis": value_axis, "separateScales": spec.separate_scales,
+            "rightTicks": spec.right_ticks, "rightAxisMin": spec.right_axis_min, "rightAxisMax": spec.right_axis_max,
         }));
     }
     // Series picked with Group Selection stay selected through the regeneration (their groups are new nodes).
@@ -857,7 +945,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
                 return Err(bad(C, format!("a {} series can't go in a {} graph", kind.label(), spec.kind.label())));
             }
             spec.series_kinds.resize(count, None);
-            for i in picked {
+            for &i in &picked {
                 if let Some(k) = spec.series_kinds.get_mut(i) {
                     *k = (kind != spec.kind).then_some(kind);
                 }
@@ -866,6 +954,30 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
                 spec.series_kinds.pop();
             }
         }
+    }
+    if let Some(v) = str_param(p, "valueAxis") {
+        let side = ValueAxisSide::parse(v).ok_or_else(|| bad(C, format!("unknown value axis `{v}` (left, right or both)")))?;
+        if picked.is_empty() {
+            spec.value_axis = side;
+        } else {
+            // A series goes on one axis.
+            if side == ValueAxisSide::Both {
+                return Err(bad(C, "a series goes on the left or the right value axis"));
+            }
+            spec.right_series.retain(|i| *i < count && !picked.contains(i));
+            if side == ValueAxisSide::Right {
+                spec.right_series.extend(&picked);
+                spec.right_series.sort_unstable();
+            }
+        }
+    }
+    spec.separate_scales = bool_or(p, "separateScales", spec.separate_scales);
+    spec.right_ticks = p.get("rightTicks").and_then(Value::as_u64).map_or(spec.right_ticks, |t| t.min(100) as usize);
+    if let Some(v) = p.get("rightAxisMin") {
+        spec.right_axis_min = v.as_f64();
+    }
+    if let Some(v) = p.get("rightAxisMax") {
+        spec.right_axis_max = v.as_f64();
     }
     spec.column_width = f64_or(p, "columnWidth", spec.column_width).clamp(1.0, 1000.0);
     spec.cluster_width = f64_or(p, "clusterWidth", spec.cluster_width).clamp(1.0, 100.0);
@@ -1575,5 +1687,217 @@ mod tests {
         // A stored type the graph can't take, or past its series, is drawn as the graph's type.
         let g: GraphSpec = serde_json::from_value(json!({"kind": "pie", "seriesKinds": ["line", null, "column"], "rows": [[1.0]]})).unwrap();
         assert_eq!((g.series_kind(0), g.series_kind(5)), (GraphKind::Pie, GraphKind::Pie));
+    }
+
+    /// The value axis labels: text and bounds of the texts in the Axes group that read as numbers.
+    fn value_labels(s: &Session, id: NodeId) -> Vec<(String, vectorcraft_geom::Rect)> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Axes")
+            .children()
+            .unwrap()
+            .iter()
+            .filter_map(|c| match &c.kind {
+                NodeKind::Text(t) => Some((t.plain_text(), c.geometric_bounds().unwrap())),
+                _ => None,
+            })
+            .filter(|(t, _)| t.parse::<f64>().is_ok())
+            .collect()
+    }
+
+    fn two_scale_graph(s: &mut Session) -> NodeId {
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",a,b\nQ1,10,1000\nQ2,5,500";
+        NodeId(
+            s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        )
+    }
+
+    #[test]
+    fn the_value_axis_goes_on_the_left_the_right_or_both_sides() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        let left: Vec<String> = value_labels(&s, id).into_iter().inspect(|(_, b)| assert!(b.x1 < 100.0, "{b:?}")).map(|(t, _)| t).collect();
+        assert_eq!(left, ["0", "200", "400", "600", "800", "1000"]);
+        s.execute("graph.setType", &json!({"valueAxis": "right"})).unwrap();
+        let right = value_labels(&s, id);
+        assert!(right.iter().all(|(_, b)| b.x0 > 400.0), "{right:?}");
+        assert_eq!(right.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), left);
+        // Both sides, one scale: the same labels on each side, and the legend moves past the right ones.
+        s.execute("graph.setType", &json!({"valueAxis": "both"})).unwrap();
+        let both = value_labels(&s, id);
+        assert_eq!(both.len(), 12);
+        let edge = both.iter().map(|(_, b)| b.x1).fold(0.0, f64::max);
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let swatch = series(&n, 0).children().unwrap().last().unwrap().geometric_bounds().unwrap();
+        assert!(swatch.x0 > edge, "{swatch:?} vs {edge}");
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["valueAxis"], "both");
+        assert!(s.execute("graph.setType", &json!({"valueAxis": "top"})).is_err());
+    }
+
+    #[test]
+    fn separate_scales_give_the_right_axis_series_a_scale_of_their_own() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+        // Assigned, but drawn on one scale until separate scales are on with both sides.
+        assert_eq!(spec(&s, id).right_series, [1]);
+        s.execute("graph.setType", &json!({"separateScales": true})).unwrap();
+        assert!((marks(&s, id, 0)[0].height() - 2.0).abs() < 1e-6, "a's 10 of 1000");
+        s.execute("graph.setType", &json!({"valueAxis": "both"})).unwrap();
+        // a's 10 and b's 1000 both reach the top: 0..10 on the left, 0..1000 on the right.
+        let (a, b) = (marks(&s, id, 0), marks(&s, id, 1));
+        assert!((a[0].y0 - 100.0).abs() < 1e-6 && (b[0].y0 - 100.0).abs() < 1e-6, "{:?} {:?}", a[0], b[0]);
+        let labels = value_labels(&s, id);
+        let side = |right: bool| labels.iter().filter(|(_, b)| (b.x0 > 400.0) == right).map(|(t, _)| t.clone()).collect::<Vec<_>>();
+        assert_eq!(side(false), ["0", "2", "4", "6", "8", "10"]);
+        assert_eq!(side(true), ["0", "200", "400", "600", "800", "1000"]);
+        // The right axis' own tick values.
+        s.execute("graph.setType", &json!({"rightAxisMin": 0, "rightAxisMax": 2000, "rightTicks": 4})).unwrap();
+        assert!((marks(&s, id, 1)[0].y0 - 200.0).abs() < 1e-6, "1000 of 2000");
+        assert!((marks(&s, id, 0)[0].y0 - 100.0).abs() < 1e-6, "the left axis is unchanged");
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!((v["separateScales"].clone(), v["rightTicks"].clone(), v["rightAxisMax"].clone()), (json!(true), json!(4), json!(2000.0)));
+        // Stacked series stack on their own axis, each axis' stack in a slot of its own.
+        s.execute("graph.setType", &json!({"type": "stackedColumn"})).unwrap();
+        let (a, b) = (marks(&s, id, 0), marks(&s, id, 1));
+        assert!((a[0].y1 - 300.0).abs() < 1e-6 && (b[0].y1 - 300.0).abs() < 1e-6, "{:?} {:?}", a[0], b[0]);
+        assert!(b[0].x0 >= a[0].x1 - 1e-6 && (a[0].width() - b[0].width()).abs() < 1e-6, "side by side: {:?} {:?}", a[0], b[0]);
+        // A line on the right axis follows the right scale.
+        s.execute("graph.setType", &json!({"type": "column"})).unwrap();
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "line"})).unwrap();
+        let line = marks(&s, id, 1);
+        assert!((line[1].center().y - 200.0).abs() < 1e-6 && (line[2].center().y - 250.0).abs() < 1e-6, "1000 and 500 of 2000: {line:?}");
+    }
+
+    #[test]
+    fn group_selected_series_go_on_the_chosen_axis() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+        s.execute("select.set", &json!({"ids": [grp.0]})).unwrap();
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["valueAxis"], "left");
+        assert!(s.execute("graph.setType", &json!({"valueAxis": "both"})).is_err(), "a series takes one axis");
+        s.execute("graph.setType", &json!({"valueAxis": "right"})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.right_series.clone(), g.value_axis), (vec![1], vectorcraft_doc::ValueAxisSide::Left));
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["valueAxis"], "right");
+        s.execute("graph.setType", &json!({"valueAxis": "left"})).unwrap();
+        assert!(spec(&s, id).right_series.is_empty());
+    }
+
+    #[test]
+    fn bar_graphs_keep_their_value_axis_along_the_bottom() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "bar");
+        let before = (value_labels(&s, id), marks(&s, id, 0));
+        s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true, "seriesIndexes": [1]})).unwrap_err();
+        s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true})).unwrap();
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+        assert_eq!((value_labels(&s, id), marks(&s, id, 0)), before);
+    }
+
+    #[test]
+    fn value_axis_options_survive_save_and_open_and_are_left_out_when_unset() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true, "rightAxisMin": 0, "rightAxisMax": 2000})).unwrap();
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+        let path = vectorcraft_testkit::temp_dir("graph-axes").join("axes.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!(
+            (g.value_axis, g.separate_scales, g.right_series, g.right_axis_max),
+            (vectorcraft_doc::ValueAxisSide::Both, true, vec![1], Some(2000.0))
+        );
+        let v = serde_json::to_value(GraphSpec::default()).unwrap();
+        for k in ["valueAxis", "separateScales", "rightSeries", "rightTicks", "rightAxisMin", "rightAxisMax"] {
+            assert!(v.get(k).is_none(), "{k}");
+        }
+    }
+
+    #[test]
+    fn the_dialog_round_trip_keeps_series_on_both_axes_where_they_are() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",a,b,c\nQ1,10,1000,3\nQ2,5,500,4";
+        let id = NodeId(
+            s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+        for side in ["both", "left"] {
+            s.execute("graph.setType", &json!({"valueAxis": side, "separateScales": true})).unwrap();
+            let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+            s.execute("select.set", &json!({"ids": [series(&n, 0).id.0, series(&n, 1).id.0]})).unwrap();
+            let fields = s.execute("graph.setType", &json!({})).unwrap();
+            assert!(fields["valueAxis"].is_null(), "{side}: {fields}");
+            s.execute("graph.setType", &fields).unwrap();
+            let g = spec(&s, id);
+            assert_eq!((g.right_series, g.value_axis.id()), (vec![1], side), "{side}");
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        }
+    }
+
+    #[test]
+    fn an_axis_with_no_series_shows_the_other_scale() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true})).unwrap();
+        let labels = |s: &Session| {
+            let l = value_labels(s, id);
+            let side = |right: bool| l.iter().filter(|(_, b)| (b.x0 > 400.0) == right).map(|(t, _)| t.clone()).collect::<Vec<_>>();
+            (side(false), side(true))
+        };
+        let (left, right) = labels(&s);
+        assert_eq!(left, right);
+        assert_eq!(right.last().unwrap(), "1000");
+        // Every series on the right: the left axis shows the right scale.
+        s.execute("graph.setType", &json!({"seriesIndexes": [0, 1], "valueAxis": "right", "rightAxisMin": 0, "rightAxisMax": 2000})).unwrap();
+        let (left, right) = labels(&s);
+        assert_eq!(left, right);
+        assert_eq!(right.last().unwrap(), "2000");
+    }
+
+    #[test]
+    fn right_axis_columns_start_at_the_right_scales_zero() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",a,b\nQ1,10,-500\nQ2,5,500";
+        let id = NodeId(
+            s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true, "seriesIndexes": [1]})).unwrap_err();
+        s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true})).unwrap();
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+        // Right scale -600..600 (zero at y 200), left 0..10 (zero at y 300): b's columns meet at the right zero.
+        let b = marks(&s, id, 1);
+        assert!((b[0].y0 - 200.0).abs() < 1e-6 && (b[1].y1 - 200.0).abs() < 1e-6, "{b:?}");
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let at_200 = group(&n, "Axes")
+            .children()
+            .unwrap()
+            .iter()
+            .filter(|c| matches!(c.kind, NodeKind::Path { .. }))
+            .filter_map(|c| c.geometric_bounds())
+            .any(|bb| bb.height() < 1e-6 && (bb.y0 - 200.0).abs() < 1e-6 && (bb.width() - 300.0).abs() < 1e-6);
+        assert!(at_200, "a zero line for the right scale");
+    }
+
+    #[test]
+    fn data_without_a_right_axis_series_drops_its_assignment() {
+        let mut s = Session::new();
+        let id = two_scale_graph(&mut s);
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+        s.execute("graph.setData", &json!({"csv": ",a\nQ1,10\nQ2,5"})).unwrap();
+        assert!(spec(&s, id).right_series.is_empty());
+        s.execute("graph.setData", &json!({"csv": ",a,b\nQ1,10,1000\nQ2,5,500"})).unwrap();
+        assert!(spec(&s, id).right_series.is_empty(), "a new series starts on the left");
     }
 }
