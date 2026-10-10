@@ -819,9 +819,11 @@ groups; `.gpl` is 8-bit RGB; a swatch exchange `.ase` file keeps solid colors in
 as the color it shows and leaves gradients out; CSS writes custom properties); without `path`
 it returns `{data}`, or `{dataBase64}` for `.ase`, and `user: true` saves into the user library
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
-dataBase64?, name?}` loads a `.vcswatches`, `.gpl` or swatch exchange (`.ase`) file, or another document's swatches,
-as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global, spot or process
-swatches and keeps their color groups. A file in the user library folder, or a file with the
+dataBase64?, name?}` loads a `.vcswatches`, `.gpl`, swatch exchange (`.ase`) or color book (`.acb`) file, or another
+document's swatches, as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global,
+spot or process swatches and keeps their color groups. A color book (such as a Pantone book you own) gives its RGB,
+CMYK or Lab colors named with the book's prefix and suffix ("PANTONE 185 C"), as spot colors unless the book marks
+them as process colors; `.acb` files are read, never written. A file in the user library folder, or a file with the
 same extension and bytes as one there, loads as that User Defined library (category `user`).
 `swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
 app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
