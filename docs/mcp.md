@@ -1397,7 +1397,7 @@ size. The journal entry of a scaling command records the `strokes` and `corners`
 
 ## Live Corners
 
-`object.setLiveShape {id?, ids?, radius?, kind?, corners?}` sets the corners of any path (one undo step): a live
+`object.setLiveShape {id?, ids?, radius?, kind?, corners?, items?}` sets the corners of any path (one undo step): a live
 rectangle's or polygon's, a star's, a pen path's. A corner is an anchor without handles between two straight sides
 (not an open path's ends, not a smooth anchor, not one the sides run straight on through). `radius` (pt) and `kind`
 (`round`, `invertedRound` or `chamfer`) go to the `corners` given, else to the corners holding a Direct-Selected
@@ -1413,9 +1413,10 @@ draws no larger than takes the cut halfway along the corner's shorter side (half
 same limit for its four corners), the corners stay circular through uneven scales (the radius scales by the mean scale,
 or keeps its size with Scale Corners off), and a rectangle from a file that kept an uneven scale in its transform
 (elliptical corners) gets circular ones in document units when its corners are next set. Dragging a corner widget
-rounds the corners whose widgets show (every corner, or the Direct-Selected ones), outlining in red those that reach
-their limit; the Selection tool shows the widgets of live rectangles and polygons, the Direct Selection tool those of
-any path. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
+rounds the corners whose widgets show (every corner, or the Direct-Selected ones) on every selected path at once,
+outlining in red those that reach their limit; the Selection tool shows the widgets of live rectangles and polygons,
+the Direct Selection tool those of any path. Several objects each with their own corners are one call:
+`items: [{id, corners?}]` in place of `ids` and `corners`. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
 dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 
 ```json

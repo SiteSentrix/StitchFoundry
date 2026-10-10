@@ -1701,8 +1701,8 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
             app.session.prefs.hide_corner_widget_above,
         )
     {
-        let color = c32(st.doc.layer_color(w.id));
-        for sp in w.visible().map(|q| xf.to_screen(q)) {
+        for (id, q) in w.visible_on() {
+            let (sp, color) = (xf.to_screen(q), c32(st.doc.layer_color(id)));
             p.circle_filled(sp, 3.0, Color32::WHITE);
             p.circle_stroke(sp, 3.0, Stroke::new(1.0, color));
             p.circle_filled(sp, 1.0, color);
