@@ -4064,3 +4064,33 @@ effect	Regular	Normale
 lighting	Light	Luce
 	Keep visible surfaces only when expanding	Mantieni solo le superfici visibili durante l’espansione
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Ritaglia la geometria coperta durante Espandi aspetto. L’anteprima mantiene la superficie completa. Le tinte trasparenti e le superfici che superano i limiti di visibilità mantengono tutte le facce.
+	Accented Edges…	Bordi accentuati…
+	Angled Strokes…	Pennellate angolate…
+	Crosshatch…	Tratteggio incrociato…
+	Dark Strokes…	Pennellate scure…
+	Ink Outlines…	Contorni a china…
+	Spatter…	Spruzzo…
+	Sprayed Strokes…	Pennellate spruzzate…
+	Sumi-e…	Sumi-e…
+	Accented Edges	Bordi accentuati
+	Angled Strokes	Pennellate angolate
+	Crosshatch	Tratteggio incrociato
+	Dark Strokes	Pennellate scure
+	Ink Outlines	Contorni a china
+	Spatter	Spruzzo
+	Sprayed Strokes	Pennellate spruzzate
+	Sumi-e	Sumi-e
+	Direction Balance	Bilanciamento direzione
+	Stroke Length	Lunghezza pennellata
+	Sharpness	Nitidezza
+	Strength	Forza
+	Balance	Bilanciamento
+	Black Intensity	Intensità nero
+	White Intensity	Intensità bianco
+	Dark Intensity	Intensità scuri
+	Spray Radius	Raggio spruzzo
+	Stroke Direction	Direzione pennellata
+	Stroke Width	Larghezza pennellata
+	Stroke Pressure	Pressione pennellata
+	Right Diagonal	Diagonale destra
+	Left Diagonal	Diagonale sinistra

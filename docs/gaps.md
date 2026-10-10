@@ -22,7 +22,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 5 | [G11 Correctness bugs in core tools](#g11-correctness-bugs-in-core-tools) | 8–15 | yes | [target-app-parity.md](target-app-parity.md) |
 | 6 | [G4 Advanced type](#g4-advanced-type) | 34–47 | core part | [type-parity.md](type-parity.md) |
 | 7 | [G12 Preferences and panels that don't act yet](#g12-preferences-and-panels-that-dont-act-yet) | 13–20 | yes | [ui-parity.md](ui-parity.md) |
-| 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 30–50 | no | [effects-parity.md](effects-parity.md) |
+| 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 24–40 | no | [effects-parity.md](effects-parity.md) |
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 15–25 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 8–16 | macOS pressure | [hardware-parity.md](hardware-parity.md) |
 | 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 17–28 | no | [target-app-parity.md](target-app-parity.md) |
@@ -111,12 +111,12 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G2 Photoshop-style raster effects and the Effect Gallery
 
-- **Missing:** 37 of 57 filters (all of Artistic, Brush Strokes and Sketch), the Effect Gallery dialog, Load
+- **Missing:** 29 of 57 filters (all of Artistic and Sketch), the Effect Gallery dialog, Load
   Texture for Glass and Texturizer, Smart Blur's Edge Only and Overlay Edge. Measured in
   [effects-parity.md](effects-parity.md).
-- **Done:** the pixel-filter pipeline and 20 filters (Blur, Distort, Pixelate, Sharpen, Stylize, Texture,
-  Video), the last 13 on 2026-10-10.
-- **Estimate:** 30–50 h (measured 0.7–1.2 h per filter); parallelizes well.
+- **Done:** the pixel-filter pipeline and 28 filters (Blur, Brush Strokes, Distort, Pixelate, Sharpen, Stylize,
+  Texture, Video), Brush Strokes on 2026-10-11.
+- **Estimate:** 24–40 h (measured 0.7–1.2 h per filter); parallelizes well.
 
 ## G13 Illustrator 2026 (30.x) additions
 

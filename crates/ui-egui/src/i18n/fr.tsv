@@ -4072,3 +4072,33 @@ effect	Soft	Doux
 	Keep visible surfaces only when expanding	Conserver uniquement les surfaces visibles lors de la décomposition
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Découpe la géométrie masquée lors de la décomposition de l’aspect. L’aperçu conserve toute la surface. Les peintures transparentes et les surfaces dépassant les limites de visibilité conservent toutes les faces.
 lighting	Light	Lumière
+	Accented Edges…	Contours accentués…
+	Angled Strokes…	Traits obliques…
+	Crosshatch…	Hachures croisées…
+	Dark Strokes…	Traits sombres…
+	Ink Outlines…	Contours à l'encre…
+	Spatter…	Éclaboussures…
+	Sprayed Strokes…	Traits pulvérisés…
+	Sumi-e…	Sumi-e…
+	Accented Edges	Contours accentués
+	Angled Strokes	Traits obliques
+	Crosshatch	Hachures croisées
+	Dark Strokes	Traits sombres
+	Ink Outlines	Contours à l'encre
+	Spatter	Éclaboussures
+	Sprayed Strokes	Traits pulvérisés
+	Sumi-e	Sumi-e
+	Direction Balance	Équilibre de direction
+	Stroke Length	Longueur des traits
+	Sharpness	Netteté
+	Strength	Force
+	Balance	Équilibre
+	Black Intensity	Intensité du noir
+	White Intensity	Intensité du blanc
+	Dark Intensity	Intensité sombre
+	Spray Radius	Rayon de pulvérisation
+	Stroke Direction	Direction des traits
+	Stroke Width	Largeur des traits
+	Stroke Pressure	Pression des traits
+	Right Diagonal	Diagonale droite
+	Left Diagonal	Diagonale gauche

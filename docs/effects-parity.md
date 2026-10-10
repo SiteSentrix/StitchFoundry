@@ -12,7 +12,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | Group | Illustrator | VectorCraft | % | Remaining (h) |
 |---|---:|---:|---:|---:|
 | Illustrator effects (vector and stylize) | 50 | 44 | 88% | 6–10 |
-| Photoshop effects (raster, Effect Gallery) | 57 | 20 | 35% | 30–50 |
+| Photoshop effects (raster, Effect Gallery) | 57 | 28 | 49% | 24–40 |
 | 3D and Materials | 4 (+3 Classic) | 1 (initial Revolve) | ~8% | 45–75 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
 
@@ -38,7 +38,7 @@ Document Raster Effects Settings exists.
 |---|---|---:|---|
 | Artistic | Colored Pencil, Cutout, Dry Brush, Film Grain, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor | 0/15 | all |
 | Blur | Gaussian Blur, Radial Blur, Smart Blur | 3/3 | Smart Blur's Edge Only and Overlay Edge modes |
-| Brush Strokes | Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes, Sumi-e | 0/8 | all |
+| Brush Strokes | Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes, Sumi-e | 8/8 | — |
 | Distort | Diffuse Glow, Glass, Ocean Ripple | 3/3 | Glass's Load Texture |
 | Pixelate | Color Halftone, Crystallize, Mezzotint, Pointillize | 4/4 | — |
 | Sharpen | Unsharp Mask | 1/1 | — |
@@ -50,7 +50,7 @@ Document Raster Effects Settings exists.
 
 The pixel-filter pipeline (`vectorcraft_effects::pixel`) is in place: each new filter is one function, a
 catalogue row, a menu entry and translations. Measured throughput: 0.7–1.2 agent hours per filter
-(see [calibration](target-app-parity.md#calibration)), so the 37 missing filters are ~26–44 h and the Effect
+(see [calibration](target-app-parity.md#calibration)), so the 29 missing filters are ~20–35 h and the Effect
 Gallery dialog another 4–6 h. These parallelize well across agents.
 
 ## 3D and Materials
@@ -72,5 +72,6 @@ rendering, Turntable, 3D export) is 45–75 h, still the largest single gap.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | Brush Strokes landed (8 filters): 28/57 Photoshop effects |
 | 2026-10-10 | minor | Initial Revolve landed (#846) |
 | 2026-10-10 | major | First checklist, counted from the effects catalogue (20/57 Photoshop effects, 44/50 Illustrator effects) |

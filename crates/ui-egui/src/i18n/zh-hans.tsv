@@ -3693,3 +3693,33 @@ effect	Vertical	垂直
 lighting	Light	光源
 	Keep visible surfaces only when expanding	扩展时仅保留可见表面
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	扩展外观时裁剪被遮挡的几何区域。实时预览保留完整表面。透明绘制或超出可见性处理限制的表面保留所有面。
+	Accented Edges…	强化的边缘…
+	Angled Strokes…	成角的线条…
+	Crosshatch…	阴影线…
+	Dark Strokes…	深色线条…
+	Ink Outlines…	墨水轮廓…
+	Spatter…	喷溅…
+	Sprayed Strokes…	喷色描边…
+	Sumi-e…	水墨画…
+	Accented Edges	强化的边缘
+	Angled Strokes	成角的线条
+	Crosshatch	阴影线
+	Dark Strokes	深色线条
+	Ink Outlines	墨水轮廓
+	Spatter	喷溅
+	Sprayed Strokes	喷色描边
+	Sumi-e	水墨画
+	Direction Balance	方向平衡
+	Stroke Length	描边长度
+	Sharpness	锐化程度
+	Strength	力度
+	Balance	平衡
+	Black Intensity	黑色强度
+	White Intensity	白色强度
+	Dark Intensity	深色强度
+	Spray Radius	喷色半径
+	Stroke Direction	描边方向
+	Stroke Width	描边宽度
+	Stroke Pressure	描边压力
+	Right Diagonal	右对角线
+	Left Diagonal	左对角线

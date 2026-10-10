@@ -3474,3 +3474,33 @@ effect	Soft	柔和
 lighting	Light	光源
 	Keep visible surfaces only when expanding	展開時僅保留可見表面
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	展開外觀時裁剪被遮擋的幾何區域。即時預覽保留完整表面。透明繪製或超出可見性處理限制的表面保留所有面。
+	Accented Edges…	強調邊緣…
+	Angled Strokes…	傾斜筆觸…
+	Crosshatch…	交叉影線…
+	Dark Strokes…	深色筆觸…
+	Ink Outlines…	墨水輪廓…
+	Spatter…	噴濺…
+	Sprayed Strokes…	噴灑筆觸…
+	Sumi-e…	水墨畫…
+	Accented Edges	強調邊緣
+	Angled Strokes	傾斜筆觸
+	Crosshatch	交叉影線
+	Dark Strokes	深色筆觸
+	Ink Outlines	墨水輪廓
+	Spatter	噴濺
+	Sprayed Strokes	噴灑筆觸
+	Sumi-e	水墨畫
+	Direction Balance	方向平衡
+	Stroke Length	筆觸長度
+	Sharpness	銳利度
+	Strength	力度
+	Balance	平衡
+	Black Intensity	黑色強度
+	White Intensity	白色強度
+	Dark Intensity	暗部強度
+	Spray Radius	噴灑半徑
+	Stroke Direction	筆觸方向
+	Stroke Width	筆觸寬度
+	Stroke Pressure	筆觸壓力
+	Right Diagonal	右對角線
+	Left Diagonal	左對角線

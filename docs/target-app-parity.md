@@ -11,7 +11,7 @@ the work list made from it. Deep areas have their own checklists: [UI and intera
 
 | Number | Value | Kind |
 |---|---|---|
-| **Feature breadth** (does each Illustrator menu item, tool, effect and format exist?) | **~88%** | measured in part: menu tree 348 of 375 items wired (92.8%), tools 89 of 92 (97%), vector effects 44 of 50 (88%), Photoshop-style effects 20 of 57 (35%), 3D 1 of 4 (initial Revolve); blended by the area weights below |
+| **Feature breadth** (does each Illustrator menu item, tool, effect and format exist?) | **~88%** | measured in part: menu tree 348 of 375 items wired (92.8%), tools 89 of 92 (97%), vector effects 44 of 50 (88%), Photoshop-style effects 28 of 57 (49%), 3D 1 of 4 (initial Revolve); blended by the area weights below |
 | **Feature depth** (each area scored by behaviour, weighted) | **~75%** | estimated, area table below |
 | **Ready for real work, mainstream illustrator** | **~65%** (60–70%) | estimated, see [Ready for real work](#ready-for-real-work) |
 | **Ready for real work, full Illustrator** (decides the stage) | **~62%** (57–67%) | estimated: additive weighted sum over the dimensions, see [Ready for real work](#ready-for-real-work) |
@@ -74,7 +74,7 @@ dominate; 3D, graphs and automation are specialist). They sum to 105. Feature de
 | Strokes, brushes, width profiles | 5 | 88% | Art brush Overlap, Pattern brush auto corners, brush libraries, pen pressure on macOS, tilt/bearing/rotation | 8–15 | estimated |
 | Appearance, transparency, graphic styles, masks | 5 | 97% | raster effect reach in preview bounds | 1–2 | estimated |
 | Live vector effects | 5 | 85% | Outline Object, Effect › Rasterize, Pathfinder Hard Mix/Soft Mix/Trap, SVG Filters, the Transform effect's missing options (#885) | 6–10 | measured count 44/50, depth estimated |
-| Raster effects (Effect Gallery) | 4 | 40% | 37 Photoshop-style filters (Artistic, Brush Strokes, Sketch), the Effect Gallery dialog, Load Texture | 30–50 | measured count 20/57 |
+| Raster effects (Effect Gallery) | 4 | 48% | 29 Photoshop-style filters (Artistic, Sketch), the Effect Gallery dialog, Load Texture | 24–40 | measured count 28/57 |
 | 3D and Materials (and Turntable) | 4 | ~8% | initial live Revolve done (flat shading, one light, no caps, approximate visibility for intersecting surfaces); Extrude & Bevel, Inflate, Rotate, materials, Turntable views, 3D export | 50–85 | estimated (Revolve landed after the first measure, #846) |
 | Type core | 9 | 80% | hyphenation and justification options, Optical Margin Alignment, Middle Eastern features beyond bidi layout, see [type-parity.md](type-parity.md) | 14–19 | estimated |
 | Type advanced (CJK, spelling, Touch Type, Retype) | 4 | 50% | CJK vertical composition (ruby, mojikumi, proportional vertical metrics), variable font axes, tab leaders, spell check, Touch Type, Retype | 20–28 | estimated |
@@ -114,7 +114,7 @@ review parallelize less and need humans.
 
 | Audience | Ready % | Opus 5.5 agent hours to ~95% (one agent) | With 4–6 agents | Work that dominates |
 |---|---:|---:|---:|---|
-| **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (50–85 h), raster effects (30–50 h), advanced type (20–28 h), generative AI (30–60 h), localization (70–110 h) and ecosystem |
+| **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (50–85 h), raster effects (24–40 h), advanced type (20–28 h), generative AI (30–60 h), localization (70–110 h) and ecosystem |
 | **Mainstream illustrator** | **~65%** (60–70%) | **~230–380 h** | ~65–110 h | the interaction-fidelity pass (60–90 h), hardening and QA (30–50 h), stability (20–35 h), performance budgets (15–25 h), `.ai` exchange (10–20 h), the remaining depth of the everyday areas |
 | **Essentials user** | **~75%** (70–80%) | **~60–105 h** | ~25–45 h | launch and stability on Windows (20–35 h), in-app help and onboarding (8–15 h), basic QA (10–15 h), Shape Builder regions (4–8 h), UI polish |
 

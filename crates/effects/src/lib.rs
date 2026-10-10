@@ -131,6 +131,11 @@ fn lengths_of(id: &str) -> Lengths {
         "stylize.dropShadow" => always(&["x", "y", "blur"]),
         "stylize.innerGlow" | "stylize.outerGlow" => always(&["blur"]),
         "stylize.glowingEdges" => always(&["edgeWidth", "smoothness"]),
+        "brushStrokes.accentedEdges" => always(&["edgeWidth"]),
+        "brushStrokes.angledStrokes" | "brushStrokes.crosshatch" | "brushStrokes.inkOutlines" => always(&["strokeLength"]),
+        "brushStrokes.spatter" => always(&["sprayRadius"]),
+        "brushStrokes.sprayedStrokes" => always(&["strokeLength", "sprayRadius"]),
+        "brushStrokes.sumiE" => always(&["strokeWidth"]),
         "pixelate.colorHalftone" => always(&["maxRadius"]),
         "pixelate.crystallize" | "pixelate.pointillize" => always(&["cellSize"]),
         "texture.craquelure" => always(&["crackSpacing"]),
@@ -149,6 +154,7 @@ const SHAPE: &[&str] = &["Effect", "Convert to Shape"];
 const STYLIZE: &[&str] = &["Effect", "Stylize"];
 const WARP: &[&str] = &["Effect", "Warp"];
 const BLUR: &[&str] = &["Effect", "Blur"];
+const BRUSH_STROKES: &[&str] = &["Effect", "Brush Strokes"];
 const DISTORT: &[&str] = &["Effect", "Distort"];
 const SHARPEN: &[&str] = &["Effect", "Sharpen"];
 const PIXELATE: &[&str] = &["Effect", "Pixelate"];
@@ -305,6 +311,62 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             BLUR,
             "{radius: pt 0.1..100 (3), threshold: levels 0.1..100 (25; only colours closer than this blur together, so edges stay sharp), quality: \"low\"|\"medium\"|\"high\" (\"medium\"; 5, 7 or 9 samples across)} (Normal mode)",
             json!({"radius": 3.0, "threshold": 25.0, "quality": "medium"}),
+        ),
+        r(
+            "brushStrokes.accentedEdges",
+            "Accented Edges…",
+            BRUSH_STROKES,
+            "{edgeWidth: pt 1..14 (2), edgeBrightness: 0..50 (38; high: white chalk, low: black ink), smoothness: 1..15 (5; softens the object first and leaves its faint edges out)} accentuates the object's edges",
+            json!({"edgeWidth": 2.0, "edgeBrightness": 38.0, "smoothness": 5.0}),
+        ),
+        r(
+            "brushStrokes.angledStrokes",
+            "Angled Strokes…",
+            BRUSH_STROKES,
+            "{directionBalance: 0..100 (50; 0: every stroke a left diagonal, 100: every stroke a right diagonal, between: light areas right, dark areas left), strokeLength: pt 3..50 (15), sharpness: 0..10 (3)} repaints the object with diagonal strokes, the light areas' going the opposite way to the dark areas'",
+            json!({"directionBalance": 50.0, "strokeLength": 15.0, "sharpness": 3.0}),
+        ),
+        r(
+            "brushStrokes.crosshatch",
+            "Crosshatch…",
+            BRUSH_STROKES,
+            "{strokeLength: pt 3..50 (9), sharpness: 0..20 (6), strength: 1..3 (1; passes of hatching)} keeps the object's detail under pencil hatching along both diagonals and roughens its edges",
+            json!({"strokeLength": 9.0, "sharpness": 6.0, "strength": 1.0}),
+        ),
+        r(
+            "brushStrokes.darkStrokes",
+            "Dark Strokes…",
+            BRUSH_STROKES,
+            "{balance: 0..10 (5; the higher, the more of the object counts as dark), blackIntensity: 0..10 (6), whiteIntensity: 0..10 (2)} paints the dark areas closer to black with short strokes and the light areas with long white strokes",
+            json!({"balance": 5.0, "blackIntensity": 6.0, "whiteIntensity": 2.0}),
+        ),
+        r(
+            "brushStrokes.inkOutlines",
+            "Ink Outlines…",
+            BRUSH_STROKES,
+            "{strokeLength: pt 1..50 (4), darkIntensity: 0..50 (20), lightIntensity: 0..50 (10)} redraws the object in pen and ink: fine outlines over its edges and ink strokes in its shadows",
+            json!({"strokeLength": 4.0, "darkIntensity": 20.0, "lightIntensity": 10.0}),
+        ),
+        r(
+            "brushStrokes.spatter",
+            "Spatter…",
+            BRUSH_STROKES,
+            "{sprayRadius: pt 0..25 (10; colours scattered up to 0.4 × this), smoothness: 1..15 (5; larger, smoother grains)} renders the object as if sprayed with a spatter airbrush",
+            json!({"sprayRadius": 10.0, "smoothness": 5.0}),
+        ),
+        r(
+            "brushStrokes.sprayedStrokes",
+            "Sprayed Strokes…",
+            BRUSH_STROKES,
+            "{strokeLength: pt 0..20 (12), sprayRadius: pt 0..25 (7; strokes scattered up to 0.3 × this), strokeDirection: \"rightDiagonal\"|\"horizontal\"|\"leftDiagonal\"|\"vertical\" (\"rightDiagonal\")} repaints the object with sprayed, angled strokes of its main colours",
+            json!({"strokeLength": 12.0, "sprayRadius": 7.0, "strokeDirection": "rightDiagonal"}),
+        ),
+        r(
+            "brushStrokes.sumiE",
+            "Sumi-e…",
+            BRUSH_STROKES,
+            "{strokeWidth: pt 3..15 (10), strokePressure: 0..15 (2; more ink), contrast: 0..40 (16)} paints the object in the Japanese style, as if with a wet brush full of black ink on rice paper: soft, blurred edges and rich blacks, the colours keeping their hue and the object its shape",
+            json!({"strokeWidth": 10.0, "strokePressure": 2.0, "contrast": 16.0}),
         ),
         r(
             "distort.diffuseGlow",

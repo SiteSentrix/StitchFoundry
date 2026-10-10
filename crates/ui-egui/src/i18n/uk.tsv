@@ -4043,3 +4043,33 @@ axis	Both	Обидві
 	Keep visible surfaces only when expanding	Під час розгортання зберігати лише видимі поверхні
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Обрізає приховану геометрію під час розгортання оформлення. Попередній перегляд зберігає всю поверхню. Прозорі заливки та поверхні, що перевищують обмеження видимості, зберігають усі грані.
 lighting	Light	Світло
+	Accented Edges…	Акцент на краях…
+	Angled Strokes…	Похилі мазки…
+	Crosshatch…	Перехресне штрихування…
+	Dark Strokes…	Темні мазки…
+	Ink Outlines…	Контури тушшю…
+	Spatter…	Розбризкування…
+	Sprayed Strokes…	Розпилені мазки…
+	Sumi-e…	Сумі-е…
+	Accented Edges	Акцент на краях
+	Angled Strokes	Похилі мазки
+	Crosshatch	Перехресне штрихування
+	Dark Strokes	Темні мазки
+	Ink Outlines	Контури тушшю
+	Spatter	Розбризкування
+	Sprayed Strokes	Розпилені мазки
+	Sumi-e	Сумі-е
+	Direction Balance	Баланс напрямку
+	Stroke Length	Довжина мазка
+	Sharpness	Різкість
+	Strength	Сила
+	Balance	Баланс
+	Black Intensity	Інтенсивність чорного
+	White Intensity	Інтенсивність білого
+	Dark Intensity	Інтенсивність темного
+	Spray Radius	Радіус розпилення
+	Stroke Direction	Напрямок мазків
+	Stroke Width	Ширина мазка
+	Stroke Pressure	Натиск мазка
+	Right Diagonal	Діагональ праворуч
+	Left Diagonal	Діагональ ліворуч

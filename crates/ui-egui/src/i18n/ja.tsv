@@ -4057,3 +4057,33 @@ effect	Vertical	垂直
 lighting	Light	ライト
 	Keep visible surfaces only when expanding	アピアランス分割時に見える面だけを保持
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	アピアランスの分割時に隠れた部分を除去します。プレビューでは面全体を保持します。透明なペイントや可視性処理の制限を超える面は、すべての面を保持します。
+	Accented Edges…	エッジの強調…
+	Angled Strokes…	斜めのストローク…
+	Crosshatch…	クロスハッチ…
+	Dark Strokes…	暗いストローク…
+	Ink Outlines…	インクの輪郭…
+	Spatter…	はね…
+	Sprayed Strokes…	スプレーストローク…
+	Sumi-e…	墨絵…
+	Accented Edges	エッジの強調
+	Angled Strokes	斜めのストローク
+	Crosshatch	クロスハッチ
+	Dark Strokes	暗いストローク
+	Ink Outlines	インクの輪郭
+	Spatter	はね
+	Sprayed Strokes	スプレーストローク
+	Sumi-e	墨絵
+	Direction Balance	方向のバランス
+	Stroke Length	ストロークの長さ
+	Sharpness	シャープさ
+	Strength	強度
+	Balance	バランス
+	Black Intensity	黒の強さ
+	White Intensity	白の強さ
+	Dark Intensity	暗部の強さ
+	Spray Radius	スプレー半径
+	Stroke Direction	ストロークの方向
+	Stroke Width	ストロークの幅
+	Stroke Pressure	ストロークの筆圧
+	Right Diagonal	右斜め
+	Left Diagonal	左斜め

@@ -4060,3 +4060,33 @@ axis	Both	Оба
 lighting	Light	Свет
 	Keep visible surfaces only when expanding	При разборе сохранять только видимые поверхности
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Удаляет скрытую геометрию при разборе оформления. Предпросмотр сохраняет всю поверхность. Прозрачные краски и поверхности, превышающие ограничения видимости, сохраняют все грани.
+	Accented Edges…	Акцент на краях…
+	Angled Strokes…	Наклонные мазки…
+	Crosshatch…	Перекрёстная штриховка…
+	Dark Strokes…	Тёмные мазки…
+	Ink Outlines…	Контуры тушью…
+	Spatter…	Разбрызгивание…
+	Sprayed Strokes…	Распылённые мазки…
+	Sumi-e…	Суми-э…
+	Accented Edges	Акцент на краях
+	Angled Strokes	Наклонные мазки
+	Crosshatch	Перекрёстная штриховка
+	Dark Strokes	Тёмные мазки
+	Ink Outlines	Контуры тушью
+	Spatter	Разбрызгивание
+	Sprayed Strokes	Распылённые мазки
+	Sumi-e	Суми-э
+	Direction Balance	Баланс направления
+	Stroke Length	Длина мазка
+	Sharpness	Резкость
+	Strength	Сила
+	Balance	Баланс
+	Black Intensity	Интенсивность чёрного
+	White Intensity	Интенсивность белого
+	Dark Intensity	Интенсивность тёмного
+	Spray Radius	Радиус распыления
+	Stroke Direction	Направление мазков
+	Stroke Width	Ширина мазка
+	Stroke Pressure	Нажим мазка
+	Right Diagonal	Диагональ вправо
+	Left Diagonal	Диагональ влево
