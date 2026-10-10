@@ -255,51 +255,7 @@ pub fn install_fonts(ctx: &egui::Context) {
     mono.extend(fallback);
     fonts.families.insert(FontFamily::Name(FONT_MONO.into()), mono);
     add_craft_fonts(&mut fonts);
-    // System CJK fallback (PingFang / Heiti / Noto…) when craft-fonts are absent.
-    if let Some((name, data)) = system_cjk_font() {
-        fonts.font_data.insert(name.clone(), Arc::new(data));
-        for stack in fonts.families.values_mut() {
-            stack.push(name.clone());
-        }
-    }
     ctx.set_fonts(fonts);
-}
-
-/// A CJK font already installed on the system, as a last-resort fallback.
-fn system_cjk_font() -> Option<(String, FontData)> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let paths: &[&str] = if cfg!(target_os = "macos") {
-            &[
-                "/System/Library/Fonts/PingFang.ttc",
-                "/System/Library/Fonts/STHeiti Medium.ttc",
-                "/System/Library/Fonts/STHeiti Light.ttc",
-                "/System/Library/Fonts/Hiragino Sans GB.ttc",
-                "/System/Library/Fonts/Supplemental/Songti.ttc",
-                "/Library/Fonts/Arial Unicode.ttf",
-            ]
-        } else if cfg!(target_os = "windows") {
-            &[r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf", r"C:\Windows\Fonts\simsun.ttc"]
-        } else {
-            &[
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-            ]
-        };
-        for path in paths {
-            if let Ok(bytes) = std::fs::read(path) {
-                let mut data = FontData::from_owned(bytes);
-                data.index = 0;
-                return Some(("system-cjk".to_string(), data));
-            }
-        }
-        None
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        None
-    }
 }
 
 /// The egui name of a craft-fonts face.
