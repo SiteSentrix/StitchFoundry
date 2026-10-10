@@ -371,6 +371,12 @@ pub struct VectorcraftApp {
     /// The look for fonts installed or removed while the app was in the background, running
     /// ([`Self::refresh_installed_fonts`]): whether they were.
     font_check: Option<std::sync::mpsc::Receiver<bool>>,
+    /// The window came back to the front: check the active document's linked files next frame
+    /// ([`dialogs::missing_links::after_focus`]).
+    pub(crate) links_check: bool,
+    /// The changed linked files already offered for update (path, size and modification time), so
+    /// coming back to the window doesn't ask about the same change twice.
+    pub(crate) links_asked: std::collections::HashSet<dialogs::missing_links::FileStamp>,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
@@ -468,6 +474,8 @@ impl VectorcraftApp {
             clipboard_probe: None,
             picks: picks::Picks::default(),
             font_check: None,
+            links_check: false,
+            links_asked: Default::default(),
             paste_chord: Default::default(),
             background: Default::default(),
             recovery: Default::default(),
@@ -881,6 +889,9 @@ impl VectorcraftApp {
             self.system_paste = wanted && self.system_clipboard_pasteable();
         }
         self.poll_font_check(ctx);
+        if std::mem::take(&mut self.links_check) {
+            dialogs::missing_links::after_focus(self);
+        }
         picks::poll(self, ctx);
         background::poll(self);
         if !self.background.jobs.is_empty() {
@@ -1014,7 +1025,10 @@ impl VectorcraftApp {
             match e {
                 egui::Event::ModifiersChanged(m) => self.host_modifiers = *m,
                 egui::Event::WindowFocused(false) => self.host_modifiers = egui::Modifiers::NONE,
-                egui::Event::WindowFocused(true) => self.refresh_installed_fonts(),
+                egui::Event::WindowFocused(true) => {
+                    self.refresh_installed_fonts();
+                    self.links_check = true;
+                }
                 _ => {}
             }
         }
