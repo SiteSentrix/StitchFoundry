@@ -695,7 +695,8 @@ mod tests {
         // Issue #1028: linesweeper 0.5 handed back a contour running out along an input curve and
         // back by a piece that doesn't follow it, which refit into a visible lens.
         let c = arc();
-        let tidy = Tidy::keeping(DEFAULT_PRECISION, [&BezPath::from_vec(vec![kurbo::PathEl::MoveTo(c.p0), kurbo::PathEl::CurveTo(c.p1, c.p2, c.p3)])]);
+        let tidy =
+            Tidy::keeping(DEFAULT_PRECISION, [&BezPath::from_vec(vec![kurbo::PathEl::MoveTo(c.p0), kurbo::PathEl::CurveTo(c.p1, c.p2, c.p3)])]);
         let out = c.subsegment(0.2..0.6);
         let mut contour = BezPath::new();
         contour.move_to(out.p0);
