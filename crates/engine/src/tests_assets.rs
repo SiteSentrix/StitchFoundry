@@ -273,12 +273,7 @@ fn collecting_explicit_assets_rejects_invalid_ids_without_adding_anything() {
     let b = rect(&mut s, 50.0, 10.0, 20.0, 20.0);
     let original_selection = s.doc().unwrap().selection.objects.clone();
     let before = undo_len(&s);
-    for ids in [
-        json!([a, "not an object"]),
-        json!([a, 3.5]),
-        json!([a, u64::MAX]),
-        json!({"id": a}),
-    ] {
+    for ids in [json!([a, "not an object"]), json!([a, 3.5]), json!([a, u64::MAX]), json!({"id": a})] {
         assert!(s.execute("assets.add", &json!({"ids": ids})).is_err(), "invalid ids: {ids}");
         assert!(assets(&mut s).is_empty(), "invalid ids must not collect only the valid subset");
         assert_eq!(undo_len(&s), before);
