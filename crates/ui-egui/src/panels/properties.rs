@@ -442,10 +442,12 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
         }
         ui.add_space(10.0);
-        if widgets::icon_button(ui, "flip-horizontal-2", tl!("Flip Along Horizontal Axis"), false, 24.0).clicked() {
+        // Lucide's flip icons are named for their mirror line: flip-vertical-2 draws a vertical
+        // line (the left-right flip), flip-horizontal-2 a horizontal one (top-bottom).
+        if widgets::icon_button(ui, "flip-vertical-2", tl!("Flip Along Horizontal Axis"), false, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "vertical"})).ok();
         }
-        if widgets::icon_button(ui, "flip-vertical-2", tl!("Flip Along Vertical Axis"), false, 24.0).clicked() {
+        if widgets::icon_button(ui, "flip-horizontal-2", tl!("Flip Along Vertical Axis"), false, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "horizontal"})).ok();
         }
     });
