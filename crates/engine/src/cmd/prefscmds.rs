@@ -282,6 +282,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scaleCursorWithUi", "User Interface", "UI Scaling", "Scale Cursor Proportional to UI", bool),
     // `auto` or a language code the shell registers (`zh-hant`); the shell shows it as a dropdown.
     p!("interfaceLanguage", "User Interface", "Language", "Language", text),
+    p!("systemTitleBar", "User Interface", "", "System Title Bar", bool),
     // Performance
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),

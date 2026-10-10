@@ -18,9 +18,12 @@ pub const APP_BAR_HEIGHT: f32 = 44.0;
 /// The application bar: brand mark, Home, menus, then Discord, search and the workspace switcher
 /// at the right. With [`VectorcraftApp::custom_titlebar`] it is also the window's title bar
 /// ([`titlebar`]): the caption buttons take the right end and the rest of the bar drags the window.
+/// With the system title bar (Windows and Linux, `system_title_bar`) the OS draws its own icon and
+/// title, so the in-app bar shows Home, menus and workspace controls only: no brand mark.
 pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let custom = app.custom_titlebar;
+    let system = system_title_bar(app);
     let left = app.titlebar_inset.clamp(8.0, f32::from(i8::MAX)) as i8;
     let frame = egui::Frame::NONE.fill(t.app_bar).inner_margin(egui::Margin { left, right: if custom { 0 } else { 14 }, top: 0, bottom: 0 });
     let bar = egui::Panel::top("app_bar").exact_size(APP_BAR_HEIGHT).frame(frame.stroke(Stroke::new(1.0, t.border))).show(ui, |ui| {
@@ -28,10 +31,12 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             titlebar::drag_area(ui, ui.max_rect());
         }
         ui.horizontal_centered(|ui| {
-            // Brand mark: the app icon.
-            let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
-            crate::brand::paint_mark(ui, r);
-            ui.add_space(4.0);
+            // With the system title bar the OS draws its own icon: no in-app brand mark.
+            if !system {
+                let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
+                crate::brand::paint_mark(ui, r);
+                ui.add_space(4.0);
+            }
             let on_home = menus::home_showing(app);
             if widgets::icon_button(ui, "house", tl!("Home"), on_home, 24.0).clicked() {
                 app.run("app.home", json!({})).ok();
@@ -106,6 +111,35 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if custom {
         titlebar::caption_buttons(app, ui, bar.response.rect);
+    }
+}
+
+/// Whether the window shows the system's title bar instead of the app drawing its own: Windows
+/// and Linux with Preferences › User Interface › System Title Bar. macOS always has system
+/// decorations, but keeps the in-app brand mark, so it never counts as system mode here; nor
+/// does the web build (the browser tab has no document title), nor an embedder that never
+/// turned the preference on.
+pub fn system_title_bar(app: &VectorcraftApp) -> bool {
+    !app.custom_titlebar && app.session.prefs.system_title_bar && !cfg!(any(target_os = "macos", target_arch = "wasm32"))
+}
+
+/// The OS window title: the active document's name suffixed with the app name (a `*` prefix
+/// marks unsaved changes, like the `*` in the document tabs), or just the app name with no
+/// document open.
+pub fn window_title(app: &VectorcraftApp) -> String {
+    app.session
+        .active()
+        .map(|d| format!("{}{} \u{2014} VectorCraft", if d.is_dirty() { "*" } else { "" }, d.title()))
+        .unwrap_or_else(|| "VectorCraft".into())
+}
+
+/// Keep the OS window title (and the taskbar / Alt-Tab entry) on the active file. Sends
+/// `ViewportCommand::Title` only when the title changed since the last frame.
+pub fn sync_window_title(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let want = window_title(app);
+    if app.last_window_title != want {
+        app.last_window_title = want.clone();
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(want));
     }
 }
 
@@ -964,5 +998,82 @@ mod tests {
         app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
         let off = hint(&mut app);
         assert!(off.contains(" to zoom into an area") && !off.contains("Hold"), "{off}");
+    }
+
+    fn title_test_app(custom_titlebar: bool) -> crate::VectorcraftApp {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.custom_titlebar = custom_titlebar;
+        // The preference that makes the shell launch without its own title bar.
+        app.run("prefs.set", json!({"key": "systemTitleBar", "value": !custom_titlebar})).unwrap();
+        app
+    }
+
+    #[test]
+    fn without_the_preference_the_mark_stays() {
+        // The default (e.g. the web build): no custom bar, no preference.
+        let app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        assert!(!super::system_title_bar(&app));
+    }
+
+    #[test]
+    fn window_title_with_no_document_is_the_app_name() {
+        assert_eq!(super::window_title(&title_test_app(true)), "VectorCraft");
+    }
+
+    #[test]
+    fn window_title_follows_the_active_file() {
+        let mut app = title_test_app(true);
+        app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
+        assert_eq!(super::window_title(&app), "foo.svg \u{2014} VectorCraft");
+        // Unsaved changes gain a `*` prefix, like the `*` in the document tabs.
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        assert_eq!(super::window_title(&app), "*foo.svg \u{2014} VectorCraft");
+    }
+
+    #[test]
+    fn system_mode_hides_the_mark() {
+        for custom in [true, false] {
+            let mut app = title_test_app(custom);
+            app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::app_bar(&mut app, ui));
+            let uploads = out.textures_delta.set.values().flat_map(|d| d.iter()).filter(|d| d.image.size() == [128, 128]).count();
+            out.textures_delta.clear();
+            let marks: Vec<egui::Rect> = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Mesh(m) if m.texture_id == crate::brand::texture_id(&ctx) => Some(m.calc_bounds()),
+                    _ => None,
+                })
+                .collect();
+            let system = super::system_title_bar(&app);
+            assert_eq!(system, !custom && !cfg!(target_os = "macos"));
+            assert_eq!(marks.is_empty(), system, "mark in system mode (custom={custom})");
+            assert_eq!(uploads, if system { 0 } else { 1 }, "mark texture in system mode (custom={custom})");
+        }
+    }
+
+    #[test]
+    fn sync_window_title_sends_only_on_change() {
+        let mut app = title_test_app(true);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        super::sync_window_title(&mut app, &ctx);
+        assert_eq!(app.last_window_title, "VectorCraft");
+        let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
+        out.textures_delta.clear();
+        let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
+        assert!(cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(t) if t == "VectorCraft")), "{cmds:?}");
+        // Same document state again: the cached title stops a repeat command.
+        super::sync_window_title(&mut app, &ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
+        out.textures_delta.clear();
+        let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
+        assert!(!cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(_))), "repeat Title: {cmds:?}");
+        app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
+        super::sync_window_title(&mut app, &ctx);
+        assert_eq!(app.last_window_title, "foo.svg \u{2014} VectorCraft");
     }
 }

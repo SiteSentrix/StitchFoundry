@@ -353,6 +353,9 @@ pub struct VectorcraftApp {
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
+    /// sent again only when it changes, so idle frames don't spam the backend.
+    pub(crate) last_window_title: String,
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,
@@ -462,6 +465,7 @@ impl VectorcraftApp {
             canvas_rect: None,
             hover_doc: None,
             custom_titlebar: false,
+            last_window_title: String::new(),
             graphics_adapter: None,
             place: Default::default(),
             system_paste: false,
@@ -958,6 +962,9 @@ impl VectorcraftApp {
         }
         shortcut_editor::sync(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);
+        // The OS title bar (and the taskbar / Alt-Tab entry) follows the active file; with the
+        // system title bar this is where the document name lives, as the in-app mark is hidden.
+        crate::chrome::sync_window_title(self, ctx);
         self.drain_control(ctx);
         if !self.synthetic.is_empty() {
             ctx.request_repaint();

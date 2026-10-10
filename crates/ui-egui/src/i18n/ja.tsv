@@ -3970,3 +3970,5 @@ effect	Soft	ソフト
 effect	Horizontal	水平
 effect	Vertical	垂直
 	Edge	エッジ
+	System Title Bar	システムのタイトルバー
+	Applies at next launch.	次回の起動時に適用されます。

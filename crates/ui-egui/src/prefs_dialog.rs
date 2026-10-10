@@ -261,6 +261,11 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
             PrefKind::Bool if sp.key == "animatedZoom" => {
                 ui.add_enabled_ui(d.bool("gpuPerformance"), |ui| bool_row(ui, d, sp.key, sp.label));
             }
+            PrefKind::Bool if sp.key == "systemTitleBar" && cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) => {
+                bool_row(ui, d, sp.key, sp.label);
+                // The window's decorations are chosen once, when the app starts.
+                ui.label(egui::RichText::new(tl!("Applies at next launch.")).color(t.text_dim).size(11.0));
+            }
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
             PrefKind::Num { min, max, unit } => {
                 labeled(ui, sp.label, |ui| {
@@ -528,6 +533,37 @@ mod tests {
         assert_eq!(a.session.prefs.gpu_preference, "highPerformance");
         let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
         assert_eq!(saved["engine_prefs"]["gpuPreference"], json!("highPerformance"));
+    }
+
+    /// User Interface › System Title Bar: shown with its next-launch note, applied by OK and
+    /// saved with the UI state under the key the desktop app reads before the window opens.
+    #[test]
+    fn system_title_bar_preference_shows_and_persists() {
+        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut a = app();
+        open(&mut a, Some("User Interface"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // The window sizes itself on the first frame and draws on the second.
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut shown = vec![];
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        assert!(shown.iter().any(|t| t == "System Title Bar"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "Applies at next launch."), "{shown:?}");
+        a.ui.dialog.as_mut().unwrap().fields.insert("systemTitleBar".into(), json!(true));
+        confirm(&mut a).unwrap();
+        assert!(a.session.prefs.system_title_bar);
+        let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
+        assert_eq!(saved["engine_prefs"]["systemTitleBar"], json!(true));
     }
 
     /// Units › Numbers Without Units Are Points (#394): the preference reaches the fields when it
