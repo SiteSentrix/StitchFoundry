@@ -2119,7 +2119,6 @@
 	Set Zoom	Definir Zoom
 	Set base color to the current color	Definir cor base para a cor atual
 	Set the selected color to the current color	Definir a cor selecionada para a cor atual
-	Settings…	Configurações…
 	Setup…	Configuração…
 	Shadows and Glows	Sombras e Brilhos
 	Shape	Forma
@@ -2735,3 +2734,4 @@
 	Texturizer…	Texturizador…
 	System Title Bar	Barra de título do sistema
 	Applies at next launch.	Aplica-se na próxima inicialização.
+	Exit	Sair

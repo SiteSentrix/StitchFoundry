@@ -14,7 +14,6 @@
 	Align to Path	Zarovnat k cestě
 	Cut Path at Selected Anchor Points	Rozdělit cestu ve vybraných kotevních bodech
 	Join Our Discord	Připojit se k našemu Discordu
-	Settings…	Nastavení…
 	Language	Jazyk
 	UI Brightness	Jas rozhraní
 	Dark	Tmavý
@@ -675,3 +674,4 @@
 	Texturizer…	Texturovač…
 	System Title Bar	Systémové záhlaví okna
 	Applies at next launch.	Projeví se při příštím spuštění.
+	Exit	Ukončit

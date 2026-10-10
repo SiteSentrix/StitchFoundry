@@ -7,8 +7,10 @@
 //! - an **app menu** named VectorCraft: About; Settings, a submenu with one item per Preferences
 //!   page (General… ⌘K first); Language; Appearance (the UI brightness); Services; Hide VectorCraft
 //!   ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All; and Quit ⌘Q, still the app's own
-//!   `app.quit`, so documents with unsaved changes are asked about. These leave the other menus
-//!   (Edit › Preferences…, Help › About), and Join Our Discord stays under Help only;
+//!   `app.quit`, so documents with unsaved changes are asked about. Language and Appearance have
+//!   no in-window menu (as in PhotoCraft) and are synthesized here; Quit is File › Exit in the
+//!   window and reads as Quit in the App menu. These leave the other menus (Edit › Preferences…,
+//!   Help › About), and Join Our Discord stays under Help only;
 //! - **Window** gets Minimize ⌃⌘M, Zoom and Bring All to Front, and **Help** the system's search
 //!   field;
 //! - a system key already bound to a command keeps the command's: the system item goes without.
@@ -34,6 +36,7 @@ use serde_json::{Value, json};
 use crate::VectorcraftApp;
 use crate::i18n::{Lang, tr, tr_ctx};
 use crate::menus::{self, Entry};
+use crate::theme::Brightness;
 
 pub const APP_NAME: &str = "VectorCraft";
 /// Hide VectorCraft: an item of ours (AppKit's always takes ⌘H, which is View › Hide Edges).
@@ -292,7 +295,9 @@ pub struct Layout {
 }
 
 /// The Mac menu bar of `bar` (the in-window menus, [`from_tree`]): see the module docs.
-pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
+/// Language and Appearance have no in-window menu (as in PhotoCraft); when the tree doesn't
+/// carry them they are synthesized below, so the App menu keeps them.
+pub fn mac_layout(app: &VectorcraftApp, bar: &MenuBar, lang: Lang) -> Layout {
     let mut bar = bar.clone();
     let mut clashes = Vec::new();
     let bound = crate::shortcuts::all_shortcuts();
@@ -316,8 +321,10 @@ pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
     let about = take_items(&mut bar, "help.about").into_iter().next();
     let settings = take_items(&mut bar, "edit.preferences").into_iter().next();
     let quit = take_items(&mut bar, "app.quit").into_iter().next();
-    let language = take_submenu(&mut bar, "app.language");
-    let appearance = take_submenu(&mut bar, "window.brightness");
+    // Language and UI Brightness live only in the App menu: taken from the tree when it carries
+    // them, else synthesized here (the in-window bar has neither).
+    let language = take_submenu(&mut bar, "app.language").or_else(|| Some(language_node(app, lang)));
+    let appearance = take_submenu(&mut bar, "window.brightness").or_else(|| Some(appearance_node(app, lang)));
     // Its other items (Join Our Discord) stay where the in-window bar also has them: Help.
     bar.menus.retain(|m| m.role != MenuRole::App);
 
@@ -333,7 +340,11 @@ pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
     }));
     app.extend([Node::Separator, Node::Standard(Standard::Services), Node::Separator]);
     app.extend([Node::Item(hide), Node::Item(hide_others), Node::Standard(Standard::ShowAll), Node::Separator]);
-    app.extend(quit.map(Node::Item));
+    // Quit is File › Exit in the window; in the App menu it reads as a Mac Quit item.
+    app.extend(quit.map(|mut q| {
+        q.label = tr(lang, "Quit VectorCraft").into();
+        Node::Item(q)
+    }));
     bar.menus.insert(0, Menu { title: APP_NAME.into(), role: MenuRole::App, children: app });
 
     if let Some(window) = bar.menus.iter_mut().find(|m| m.role == MenuRole::Window) {
@@ -348,6 +359,40 @@ pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
     // A menu the moves emptied goes away (Help stays: it has the search field).
     bar.menus.retain(|m| !m.children.is_empty() || m.role == MenuRole::Help);
     Layout { bar, clashes }
+}
+
+/// Language in the app menu, after Settings: Automatic, then every UI language in its own name,
+/// with the `interfaceLanguage` preference checked.
+fn language_node(app: &VectorcraftApp, lang: Lang) -> Node {
+    let mut children = vec![Node::Item(native_item(app, "Automatic", "app.language", json!({"lang": "auto"}))), Node::Separator];
+    children.extend(Lang::all().map(|l| Node::Item(native_item(app, l.name(), "app.language", json!({"lang": l.code()})))));
+    Node::Submenu { label: tr(lang, "Language").into(), children }
+}
+
+/// Appearance in the app menu (the UI-brightness theme, as Mac apps call it).
+fn appearance_node(app: &VectorcraftApp, lang: Lang) -> Node {
+    let children =
+        Brightness::ALL.iter().map(|b| Node::Item(native_item(app, b.label(), "window.brightness", json!({"brightness": b.id()})))).collect();
+    Node::Submenu { label: tr_ctx(lang, "theme", "Appearance").into(), children }
+}
+
+/// A native item running `command`, built like [`from_tree`] builds it (translated label,
+/// shortcut, enabled and checked as they read now).
+fn native_item(app: &VectorcraftApp, label: &'static str, command: &'static str, params: Value) -> Item {
+    let item = menus::Item::Cmd(label, command, params);
+    match menus::entry(app, &item) {
+        Some(Entry::Item(row)) => Item {
+            command: row.command.map(|(id, _)| id),
+            params: row.command.map_or(Value::Null, |(_, p)| p.clone()),
+            source: row.source,
+            label: row.label.into_owned(),
+            shortcut: row.shortcut,
+            enabled: row.enabled,
+            checked: row.checked,
+        },
+        // The commands always show; the fallback keeps the structure.
+        _ => Item { command: Some(command), params: Value::Null, source: label, label: label.into(), shortcut: None, enabled: true, checked: None },
+    }
 }
 
 /// Settings ▸: one item per page of the Preferences dialog (its own list), each opening it there;
@@ -413,7 +458,7 @@ fn take_submenu(bar: &mut MenuBar, command: &str) -> Option<Node> {
 
 /// VectorCraft's menus as a Mac menu bar, as they show now.
 pub fn layout(app: &VectorcraftApp) -> Layout {
-    mac_layout(&from_tree(app, &menus::menu_tree_named(app.session.prefs.font_names_in_english)), crate::i18n::current())
+    mac_layout(app, &from_tree(app, &menus::menu_tree_named(app.session.prefs.font_names_in_english)), crate::i18n::current())
 }
 
 // ----------------------------------------------------------------------------- the app's side

@@ -266,7 +266,7 @@ mod tests {
             assert!(close.height() >= 42.0 && [min, max, close].iter().all(|r| r.width() == BUTTON_WIDTH));
             assert_eq!((min.right(), max.right()), (max.left(), close.left()));
             let widgets = w.bar_widgets();
-            assert!(widgets.len() >= 12, "home, nine menus, workspace switcher, search: {widgets:?}");
+            assert!(widgets.len() >= 11, "home, eight menus, workspace switcher, search: {widgets:?}");
             for (i, a) in widgets.iter().enumerate() {
                 assert!(a.right() <= min.left() - 8.0, "{a:?} runs into the caption buttons at {width}");
                 for b in &widgets[i + 1..] {
