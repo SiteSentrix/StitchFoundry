@@ -1501,6 +1501,27 @@
 	New Artboard	新建画板
 	Exit	退出
 	New Bristle Brush	新建鬃毛画笔
+	Calligraphic Brush Options	书法画笔选项
+	Bristle Brush Options	鬃毛画笔选项
+	Roundness:	圆度：
+	Fixed	固定
+	Pressure	压力
+	Shape:	形状：
+	Bristle Length:	鬃毛长度：
+	Bristle Density:	鬃毛密度：
+	Bristle Thickness:	鬃毛粗细：
+	Paint Opacity:	上色不透明度：
+	Stiffness:	硬度：
+	Round Point	圆尖头
+	Flat Point	扁尖头
+	Round Blunt	圆钝头
+	Flat Blunt	扁钝头
+	Round Curve	圆弯头
+	Flat Curve	扁弯头
+	Round Angle	圆斜头
+	Flat Angle	扁斜头
+	Round Fan	圆扇头
+	Flat Fan	扁扇头
 	New Brush…	新建画笔…
 	New Calligraphic Brush	新建书法画笔
 	New Character Style	新建字符样式

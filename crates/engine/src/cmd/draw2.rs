@@ -6,7 +6,7 @@ use std::sync::Arc;
 use kurbo::{ParamCurve, ParamCurveNearest};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, PressureProfile, Selection};
 use vectorcraft_geom::hit::fill_contains;
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 use vectorcraft_pathops as po;
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pencil",
             [],
             None,
-            "{points: [[x,y]…], fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, extend?: {id, end: \"start\"|\"end\"}} fit a freehand stroke → {id}",
+            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic brushes with Pressure variation; a point without one presses fully), fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, extend?: {id, end: \"start\"|\"end\"}} fit a freehand stroke → {id}",
             has_doc,
             freehand
         ),
@@ -151,20 +151,51 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// `[[x,y]…]` or `[{x,y}…]`; non-finite points are dropped.
 fn points_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Point>> {
+    Ok(samples_param(p, key, cmd)?.into_iter().map(|(pt, _)| pt).collect())
+}
+
+/// [`points_param`] with each point's pen pressure, if it has one: `[[x,y,pressure]…]` or
+/// `[{x,y,pressure}…]` (0..1).
+fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<(Point, Option<f64>)>> {
     let a = p.get(key).and_then(Value::as_array).ok_or_else(|| bad(cmd, format!("missing array `{key}`")))?;
-    let pts: Vec<Point> = a
+    let pts: Vec<(Point, Option<f64>)> = a
         .iter()
         .filter_map(|v| match v {
-            Value::Array(xy) => Some(Point::new(xy.first()?.as_f64()?, xy.get(1)?.as_f64()?)),
-            Value::Object(_) => Some(Point::new(v.get("x")?.as_f64()?, v.get("y")?.as_f64()?)),
+            Value::Array(xy) => Some((Point::new(xy.first()?.as_f64()?, xy.get(1)?.as_f64()?), xy.get(2).and_then(Value::as_f64))),
+            Value::Object(_) => Some((Point::new(v.get("x")?.as_f64()?, v.get("y")?.as_f64()?), v.get("pressure").and_then(Value::as_f64))),
             _ => None,
         })
-        .filter(|p| p.x.is_finite() && p.y.is_finite())
+        .filter(|(p, _)| p.x.is_finite() && p.y.is_finite())
         .collect();
     if pts.is_empty() {
         return Err(bad(cmd, "need at least one point"));
     }
     Ok(pts)
+}
+
+/// The pen pressure along a freehand stroke (positions measured along its polyline), when any of
+/// its samples has one; samples without one count as full pressure, as a pen event without one.
+fn stroke_pressure(samples: &[(Point, Option<f64>)]) -> Option<PressureProfile> {
+    if samples.iter().all(|(_, p)| p.is_none()) {
+        return None;
+    }
+    let mut at = 0.0;
+    let mut prev: Option<Point> = None;
+    let along: Vec<(f64, f64)> = samples
+        .iter()
+        .map(|(pt, p)| {
+            at += prev.map_or(0.0, |q| q.distance(*pt));
+            prev = Some(*pt);
+            (at, p.unwrap_or(1.0))
+        })
+        .collect();
+    PressureProfile::from_samples(along.into_iter().map(|(s, p)| (if at > 1e-9 { s / at } else { 0.0 }, p)))
+}
+
+/// The length of a subpath.
+fn subpath_len(sp: &SubPath) -> f64 {
+    use kurbo::ParamCurveArclen;
+    PathData::single(sp.clone()).to_bezpath().segments().map(|s| s.arclen(0.01)).sum()
 }
 
 fn usize_req(p: &Value, key: &str, cmd: &str) -> Result<usize> {
@@ -501,7 +532,9 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
 
 fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.freehand";
-    let mut pts = points_param(p, "points", C)?;
+    let samples = samples_param(p, "points", C)?;
+    let pressure = stroke_pressure(&samples);
+    let mut pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
     let tol = f64_or(p, "fidelity", 1.5).clamp(0.05, 100.0);
     let closed = bool_or(p, "closed", false);
     let brush = str_param(p, "style") == Some("brush");
@@ -511,6 +544,7 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         let (pd, _) = path_of(&s.doc()?.doc, id)?;
         let si = pd.subpaths.iter().rposition(|s| !s.closed && !s.anchors.is_empty()).ok_or_else(|| bad(C, "path has no open end"))?;
         let mut sp = pd.subpaths[si].clone();
+        let old_len = subpath_len(&sp);
         if at_start {
             sp.reverse();
         }
@@ -547,12 +581,24 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         for a in &mut sp.anchors {
             *a = Anchor::with_handles(a.p, a.h_in, a.h_out);
         }
+        // The path's pressure (in the direction it is continued in) followed by the stroke's.
+        let old_pressure = s.doc()?.doc.node(id).and_then(|n| n.appearance.stroke()).and_then(|st| st.pressure.clone());
+        let joined = (old_pressure.is_some() || pressure.is_some()).then(|| {
+            let old = old_pressure.map(|p| if at_start { p.reversed() } else { p });
+            let total = subpath_len(&sp);
+            PressureProfile::extended(old.as_ref(), old_len, pressure.as_ref(), total - old_len)
+        });
         s.edit(if brush { "Paintbrush" } else { "Pencil" }, |d, sel| {
-            let path = path_mut(d, id)?;
-            if at_start && !sp.closed {
+            let reverse = at_start && !sp.closed;
+            if reverse {
                 sp.reverse();
             }
-            path.subpaths[si] = sp;
+            path_mut(d, id)?.subpaths[si] = sp;
+            if let Some(joined) = joined
+                && let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut())
+            {
+                st.pressure = if reverse { joined.map(|p| p.reversed()) } else { joined };
+            }
             sel.set([id]);
             Ok(())
         })?;
@@ -563,7 +609,10 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let sp = fit_freehand(&pts, tol, closed);
     let fill = if bool_or(p, "fill", false) { s.paint.fill.clone() } else { Paint::None };
-    let look = s.new_art_look(fill, stroke_paint(s), s.paint.stroke_width.max(0.1));
+    let mut look = s.new_art_look(fill, stroke_paint(s), s.paint.stroke_width.max(0.1));
+    if let Some(st) = look.appearance.stroke_mut() {
+        st.pressure = pressure;
+    }
     add_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None)
 }
 

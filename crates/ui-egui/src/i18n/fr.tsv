@@ -1542,6 +1542,27 @@
 	New Art Has Basic Appearance	Aspect de base pour les nouvelles illustrations
 	New Artboard	Nouveau plan de travail
 	New Bristle Brush	Nouvelle forme Soies
+	Calligraphic Brush Options	Options de forme calligraphique
+	Bristle Brush Options	Options de forme Soies
+	Roundness:	Arrondi :
+	Fixed	Fixe
+	Pressure	Pression
+	Shape:	Forme :
+	Bristle Length:	Longueur des soies :
+	Bristle Density:	Densité des soies :
+	Bristle Thickness:	Épaisseur des soies :
+	Paint Opacity:	Opacité de la peinture :
+	Stiffness:	Rigidité :
+	Round Point	Pointe ronde
+	Flat Point	Pointe plate
+	Round Blunt	Rond émoussé
+	Flat Blunt	Plat émoussé
+	Round Curve	Rond incurvé
+	Flat Curve	Plat incurvé
+	Round Angle	Rond biseauté
+	Flat Angle	Plat biseauté
+	Round Fan	Éventail rond
+	Flat Fan	Éventail plat
 	New Brush…	Nouvelle forme…
 	New Calligraphic Brush	Nouvelle forme calligraphique
 	New Character Style	Nouveau style de caractère
@@ -3419,6 +3440,8 @@ axis	Both	Les deux
 @msg	no blend options	aucune option de dégradé de formes
 @msg	no bounds	aucune limite
 @msg	no brush named `{name}`	aucune forme nommée `{name}`
+@msg	no brush selected	aucune forme sélectionnée
+@msg	this kind of brush has no options dialog yet	ce type de forme n’a pas encore de boîte de dialogue d’options
 @msg	no catalog	aucun catalogue
 @msg	no changes since the last save	aucune modification depuis le dernier enregistrement
 @msg	no clock to keep a heartbeat by	aucune horloge pour entretenir le signal d’activité

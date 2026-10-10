@@ -1545,6 +1545,27 @@
 	Artboard	Mesa de trabajo
 	Exit	Salir
 	New Bristle Brush	Nuevo pincel de cerdas
+	Calligraphic Brush Options	Opciones de pincel caligráfico
+	Bristle Brush Options	Opciones de pincel de cerdas
+	Roundness:	Redondez:
+	Fixed	Fijo
+	Pressure	Presión
+	Shape:	Forma:
+	Bristle Length:	Longitud de cerdas:
+	Bristle Density:	Densidad de cerdas:
+	Bristle Thickness:	Grosor de cerdas:
+	Paint Opacity:	Opacidad de pintura:
+	Stiffness:	Rigidez:
+	Round Point	Punta redonda
+	Flat Point	Punta plana
+	Round Blunt	Romo redondo
+	Flat Blunt	Romo plano
+	Round Curve	Curvo redondo
+	Flat Curve	Curvo plano
+	Round Angle	Sesgado redondo
+	Flat Angle	Sesgado plano
+	Round Fan	Abanico redondo
+	Flat Fan	Abanico plano
 	New Brush…	Nuevo pincel…
 	New Calligraphic Brush	Nuevo pincel caligráfico
 	New Character Style	Nuevo estilo de carácter
@@ -3422,6 +3443,8 @@ axis	Both	Ambos
 @msg	no blend options	no hay opciones de fusión
 @msg	no bounds	sin límites
 @msg	no brush named `{name}`	no hay ningún pincel llamado `{name}`
+@msg	no brush selected	no hay ningún pincel seleccionado
+@msg	this kind of brush has no options dialog yet	este tipo de pincel aún no tiene un cuadro de opciones
 @msg	no catalog	no hay catálogo
 @msg	no changes since the last save	no hay cambios desde la última vez que se guardó
 @msg	no clock to keep a heartbeat by	no hay reloj para mantener la señal de actividad

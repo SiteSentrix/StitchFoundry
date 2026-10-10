@@ -393,18 +393,30 @@ pub(super) fn slider_w(
     track: &dyn Fn(f32) -> egui::Color32,
 ) {
     let t = Tokens::get(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.add_sized([label_w, 22.0], egui::Label::new(egui::RichText::new(tl!(label)).color(t.text)));
+        slider_field(ui, d, key, range, suffix, track);
+    });
+}
+
+/// The rail and value field of [`slider`] without its label (for a row that draws its own).
+pub(super) fn slider_field(
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    key: &str,
+    range: std::ops::RangeInclusive<f64>,
+    suffix: &str,
+    track: &dyn Fn(f32) -> egui::Color32,
+) {
     let (min, max) = (*range.start(), *range.end());
     let v = d.f64(key, 0.0).clamp(min, max);
     let mut new = None;
-    ui.horizontal(|ui| {
-        ui.add_sized([label_w, 22.0], egui::Label::new(egui::RichText::new(tl!(label)).color(t.text)));
-        if let (Some(x), _) = crate::widgets::color_slider(ui, ("dlg-slider", key), ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track) {
-            new = Some((min + x as f64 * (max - min)).round());
-        }
-        if let Some(x) = crate::widgets::plain_field(ui, ("dlg-field", key), v, suffix, 0, 52.0) {
-            new = Some(x.round().clamp(min, max));
-        }
-    });
+    if let (Some(x), _) = crate::widgets::color_slider(ui, ("dlg-slider", key), ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track) {
+        new = Some((min + x as f64 * (max - min)).round());
+    }
+    if let Some(x) = crate::widgets::plain_field(ui, ("dlg-field", key), v, suffix, 0, 52.0) {
+        new = Some(x.round().clamp(min, max));
+    }
     if let Some(n) = new.filter(|n| *n != v) {
         d.fields.insert(key.into(), json!(n));
     }

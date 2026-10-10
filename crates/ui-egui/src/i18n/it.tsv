@@ -1545,6 +1545,27 @@
 	Artboard	Tavola da disegno
 	Exit	Esci
 	New Bristle Brush	Nuovo pennello a setole
+	Calligraphic Brush Options	Opzioni pennello calligrafico
+	Bristle Brush Options	Opzioni pennello a setole
+	Roundness:	Rotondità:
+	Fixed	Fisso
+	Pressure	Pressione
+	Shape:	Forma:
+	Bristle Length:	Lunghezza setole:
+	Bristle Density:	Densità setole:
+	Bristle Thickness:	Spessore setole:
+	Paint Opacity:	Opacità colore:
+	Stiffness:	Rigidità:
+	Round Point	Punta tonda
+	Flat Point	Punta piatta
+	Round Blunt	Tonda smussata
+	Flat Blunt	Piatta smussata
+	Round Curve	Tonda curva
+	Flat Curve	Piatta curva
+	Round Angle	Tonda angolata
+	Flat Angle	Piatta angolata
+	Round Fan	Ventaglio tondo
+	Flat Fan	Ventaglio piatto
 	New Brush…	Nuovo pennello…
 	New Calligraphic Brush	Nuovo pennello calligrafico
 	New Character Style	Nuovo stile carattere
@@ -3422,6 +3443,8 @@ axis	Both	Entrambi
 @msg	no blend options	nessuna opzione di fusione
 @msg	no bounds	nessun limite
 @msg	no brush named `{name}`	nessun pennello denominato `{name}`
+@msg	no brush selected	nessun pennello selezionato
+@msg	this kind of brush has no options dialog yet	questo tipo di pennello non ha ancora una finestra di opzioni
 @msg	no catalog	nessun catalogo
 @msg	no changes since the last save	nessuna modifica dall'ultimo salvataggio
 @msg	no clock to keep a heartbeat by	nessun orologio con cui mantenere il segnale di attività
