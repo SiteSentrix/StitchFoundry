@@ -10,20 +10,16 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, icons, widgets};
 
-/// Keep the drawer to two tool cells instead of stretching across a wide window.
-/// The shared dialog frame will shrink further on narrow screens.
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("All Tools").into(),
-    body,
-    ok: None,
-    min_width: 376.0,
-    max_width: Some(376.0),
-    ..DialogSpec::FORM
-};
+/// A compact drawer two tools wide, however wide the window (#1018); the dialog frame narrows it
+/// further in a narrow window.
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading: |_| tl!("All Tools").into(), body, ok: None, min_width: WIDTH, max_width: Some(WIDTH), ..DialogSpec::FORM };
 
 /// A tool's cell: its icon and name.
 const CELL: egui::Vec2 = vec2(176.0, 28.0);
 const ICON: f32 = 20.0;
+/// The drawer's width: two cells, the gap between them and room for the scroll bar.
+const WIDTH: f32 = 2.0 * CELL.x + 24.0;
 
 /// The heading a tool is listed under: its Basic toolbar group, else one for the tools only the
 /// Advanced toolbar shows.
@@ -104,9 +100,20 @@ mod tests {
     use super::*;
 
     /// Every tool is listed once, under a heading; the Basic toolbar's groups come first, in its order.
+    #[test]
+    fn every_tool_is_listed_once_under_a_heading() {
+        let s = sections();
+        let listed: Vec<&str> = s.iter().flat_map(|(_, tools)| tools.iter().map(|t| t.id)).collect();
+        let all: Vec<&str> = TOOL_GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
+        assert_eq!(listed.len(), all.len());
+        assert!(all.iter().all(|id| listed.contains(id)));
+        let heads: Vec<&str> = s.iter().map(|(c, _)| *c).collect();
+        assert_eq!(&heads[..3], ["Select", "Shapes", "Draw"]);
+        assert!(heads.contains(&"Symbols") && heads.contains(&"Graph"), "{heads:?}");
+        assert!(!heads.contains(&"More"), "every tool has a named heading: {heads:?}");
+    }
 
-
-    /// #1018: the All Tools drawer must not fill a desktop-sized window.
+    /// The drawer stays two tools wide in a wide window and fits a narrow one (#1018).
     #[test]
     fn all_tools_dialog_has_a_bounded_width() {
         use egui::{Pos2, RawInput, Rect};
@@ -124,20 +131,7 @@ mod tests {
             }
             let rect = ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", "allTools")))).expect("drawer is shown");
             assert!(rect.width() <= width, "drawer exceeds viewport: {rect:?}");
-            assert!(rect.width() <= 465.0, "drawer expanded beyond two tool columns: {rect:?}");
+            assert!(rect.width() < 3.0 * CELL.x, "drawer wider than two tools: {rect:?}");
         }
-    }
-
-    #[test]
-    fn every_tool_is_listed_once_under_a_heading() {
-        let s = sections();
-        let listed: Vec<&str> = s.iter().flat_map(|(_, tools)| tools.iter().map(|t| t.id)).collect();
-        let all: Vec<&str> = TOOL_GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
-        assert_eq!(listed.len(), all.len());
-        assert!(all.iter().all(|id| listed.contains(id)));
-        let heads: Vec<&str> = s.iter().map(|(c, _)| *c).collect();
-        assert_eq!(&heads[..3], ["Select", "Shapes", "Draw"]);
-        assert!(heads.contains(&"Symbols") && heads.contains(&"Graph"), "{heads:?}");
-        assert!(!heads.contains(&"More"), "every tool has a named heading: {heads:?}");
     }
 }
