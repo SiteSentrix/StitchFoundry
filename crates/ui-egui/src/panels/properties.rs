@@ -523,13 +523,17 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     super::character::font_pickers(app, ui, &s, ("font", "font-style"), (w - 4.0, w - 4.0));
     super::character::metrics_grid(app, ui, "props-char", &s, w, false);
     section_header(ui, tl!("Paragraph"));
-    ui.horizontal(|ui| {
-        for (icon, j) in [("align-start-vertical", "left"), ("align-center-vertical", "center"), ("align-end-vertical", "right")] {
-            if widgets::icon_button(ui, icon, j, false, 24.0).clicked() {
-                app.run("text.setStyle", json!({"justify": j})).ok();
+    // As in the Paragraph panel: the seven alignments and Hyphenate (#775); the rest is there.
+    if let Some((_, para)) = super::character::text_style(app) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            super::paragraph::alignment_buttons(app, ui, &para, 24.0);
+            if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
+                app.ui.open_panel = Some("paragraph".into());
             }
-        }
-    });
+        });
+        super::paragraph::hyphenate_check(app, ui, &para);
+    }
 }
 
 #[cfg(test)]
@@ -592,6 +596,20 @@ mod tests {
     }
 
     /// #530: Edit Artboards shows the active artboard, with New Artboard, Delete Artboard and Exit.
+    /// #775: type's Paragraph section has Hyphenate, and its checkbox turns it on.
+    #[test]
+    fn type_paragraph_section_hyphenates() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("text.create", json!({"x": 10, "y": 50, "text": "Paragraph"})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, &texts, "Hyphenate");
+        let hyphenate = |app: &VectorcraftApp| crate::panels::character::text_style(app).unwrap().1.hyphenate;
+        assert!(hyphenate(&app));
+    }
+
     #[test]
     fn edit_artboards_adds_artboards_and_exits() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
