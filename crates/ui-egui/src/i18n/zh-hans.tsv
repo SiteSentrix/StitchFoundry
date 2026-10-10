@@ -9,6 +9,11 @@
 # proprietary localisation resource, string table or product UI may be copied. Product and
 # technology names stay in Latin letters. Full-width punctuation (，。：“”) in sentences, half-width
 # parentheses.
+	Glowing Edges…	发光边缘…
+	Glowing Edges	发光边缘
+	Edge Width	边缘宽度
+	Edge Brightness	边缘亮度
+	Smoothness	平滑度
 
 	  — missing	  — 缺失
 	 to search every command	以搜索所有命令

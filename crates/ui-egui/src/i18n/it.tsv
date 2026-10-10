@@ -12,6 +12,11 @@
 # tested). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Photoshop-style raster effects (Effect menu, their dialogs).
+	Glowing Edges…	Bordi luminosi…
+	Glowing Edges	Bordi luminosi
+	Edge Width	Larghezza bordo
+	Edge Brightness	Luminosità bordo
+	Smoothness	Uniformità
 	Radial Blur…	Sfocatura radiale…
 	Smart Blur…	Sfocatura intelligente…
 	Sharpen	Nitidezza

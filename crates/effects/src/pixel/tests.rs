@@ -55,6 +55,7 @@ fn params_take_defaults_and_stay_in_range() {
         fx("sharpen.unsharpMask", json!({"amount": 1e9, "radius": 0, "threshold": 1e9})),
         PixelFx::UnsharpMask { amount: 5.0, radius: 0.1, threshold: 255.0 }
     );
+    assert_eq!(fx("stylize.glowingEdges", json!({})), PixelFx::GlowingEdges { width: 2.0, brightness: 6.0, smoothness: 5.0 });
     for id in PIXEL_EFFECTS {
         assert!(crate::is_raster(id) && crate::effect_info(id).is_some_and(|e| e.raster), "{id}");
     }
@@ -118,6 +119,45 @@ fn every_effect_is_deterministic() {
         // Premultiplied stays premultiplied.
         assert!(a.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]), "{id}");
     }
+}
+
+#[test]
+fn glowing_edges_draw_a_bright_outline_and_preserve_premultiplication() {
+    let (w, h) = (9, 9);
+    let src = image(w, h, |x, _| if x < 4 { [0, 0, 0, 200] } else { [200, 200, 200, 200] });
+    let mut out = src.clone();
+    fx("stylize.glowingEdges", json!({"edgeWidth": 1, "smoothness": 1, "edgeBrightness": 20})).apply(&mut out, w, h, &space(w, h));
+    assert!(at(&out, w, 3, 4)[0] > 0 || at(&out, w, 4, 4)[0] > 0);
+    assert!(out.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
+}
+
+/// Glowing Edges sees transparency beyond every side of the raster: a solid square glows alike at
+/// its left and right edges (the right one doesn't read the next row's first pixel).
+#[test]
+fn glowing_edges_glow_alike_on_every_side() {
+    let (w, h) = (9, 9);
+    let mut out = image(w, h, |_, _| [180, 180, 180, 255]);
+    fx("stylize.glowingEdges", json!({"edgeWidth": 1, "smoothness": 1, "edgeBrightness": 20})).apply(&mut out, w, h, &space(w, h));
+    let (left, right, top, bottom) = (at(&out, w, 0, 4), at(&out, w, 8, 4), at(&out, w, 4, 0), at(&out, w, 4, 8));
+    assert!(left[0] > 0 && left == right && top == bottom, "{left:?} {right:?} {top:?} {bottom:?}");
+    assert!(at(&out, w, 4, 4)[0] < left[0], "the inside stays darker than the edges");
+}
+
+#[test]
+fn glowing_edges_defaults_keep_the_outline_bright_and_use_source_colour() {
+    let (w, h) = (17, 17);
+    let src = image(w, h, |x, y| if (4..13).contains(&x) && (4..13).contains(&y) { [180, 0, 0, 255] } else { [0; 4] });
+    let mut out = src.clone();
+    fx("stylize.glowingEdges", json!({})).apply(&mut out, w, h, &space(w, h));
+
+    let outline = at(&out, w, 4, 8);
+    assert!(outline[0] >= 170, "default outline should retain a near-full-color peak: {outline:?}");
+    let outside = at(&out, w, 3, 8);
+    assert_eq!(outside[1], 0, "transparent halo must not be grey: {outside:?}");
+    assert_eq!(outside[2], 0, "transparent halo must retain source hue: {outside:?}");
+    // The glow outside keeps the edge's colour as it fades, rather than darkening towards grey.
+    assert!(outside[3] > 0 && u32::from(outside[0]) * 255 >= 240 * u32::from(outside[3]), "{outside:?}");
+    assert!(out.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
 }
 
 #[test]

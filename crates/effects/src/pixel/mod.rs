@@ -1,5 +1,5 @@
 //! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Sharpen › Unsharp
-//! Mask): filters over the pixels of an object rendered alone, premultiplied RGBA8.
+//! Mask, and Stylize › Glowing Edges): filters over premultiplied RGBA8 pixels.
 //!
 //! - Every distance is in document units (points) and becomes pixels through the raster's
 //!   [`PixelSpace::px`], so an effect looks the same at any zoom and at any Document Raster Effects
@@ -9,6 +9,7 @@
 //! - Beyond the raster's edges is transparency.
 
 mod blur;
+mod edges;
 mod sharpen;
 
 use serde_json::Value;
@@ -17,7 +18,7 @@ use vectorcraft_geom::{Affine, Point, Rect};
 use crate::util::{num, text};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 3] = ["blur.radial", "blur.smart", "sharpen.unsharpMask"];
+pub const PIXEL_EFFECTS: [&str; 4] = ["blur.radial", "blur.smart", "sharpen.unsharpMask", "stylize.glowingEdges"];
 
 /// A Photoshop-style raster effect with its parameters read and clamped to their ranges. Lengths
 /// are in document units.
@@ -33,6 +34,8 @@ pub enum PixelFx {
     /// Sharpen › Unsharp Mask: colours pushed away from a Gaussian blur of σ = `radius` by `amount`
     /// (1 = 100 %), where they differ from it by at least `threshold` levels.
     UnsharpMask { amount: f64, radius: f64, threshold: f64 },
+    /// Stylize › Glowing Edges: bright coloured Sobel outlines on black.
+    GlowingEdges { width: f64, brightness: f64, smoothness: f64 },
 }
 
 /// Where a raster's pixels lie in the document.
@@ -69,6 +72,11 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             radius: num(p, "radius", 1.0).clamp(0.1, 250.0),
             threshold: num(p, "threshold", 0.0).clamp(0.0, 255.0),
         },
+        "stylize.glowingEdges" => PixelFx::GlowingEdges {
+            width: num(p, "edgeWidth", 2.0).clamp(1.0, 14.0),
+            brightness: num(p, "edgeBrightness", 6.0).clamp(0.0, 20.0),
+            smoothness: num(p, "smoothness", 5.0).clamp(1.0, 15.0),
+        },
         _ => return None,
     })
 }
@@ -85,6 +93,7 @@ impl PixelFx {
             PixelFx::RadialBlur { amount, zoom: true, .. } => far * (blur::zoom_extent(amount).exp() - 1.0),
             PixelFx::SmartBlur { radius, .. } => radius,
             PixelFx::UnsharpMask { .. } => 0.0,
+            PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
         }
     }
 
@@ -95,6 +104,7 @@ impl PixelFx {
             PixelFx::RadialBlur { .. } => None,
             PixelFx::SmartBlur { radius, .. } => Some(radius),
             PixelFx::UnsharpMask { radius, .. } => Some(3.0 * radius),
+            PixelFx::GlowingEdges { width, smoothness, .. } => Some(width.max(smoothness * 3.0)),
         }
     }
 
@@ -107,6 +117,7 @@ impl PixelFx {
             PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
             PixelFx::SmartBlur { radius, threshold, samples } => blur::smart(px, w, h, to_px(radius), threshold, samples),
             PixelFx::UnsharpMask { amount, radius, threshold } => sharpen::unsharp(px, w, h, amount, to_px(radius), threshold),
+            PixelFx::GlowingEdges { width, brightness, smoothness } => edges::glow(px, w, h, to_px(width), brightness, to_px(smoothness)),
         }
     }
 }

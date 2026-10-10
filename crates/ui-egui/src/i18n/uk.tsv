@@ -10,6 +10,11 @@
 # Coverage: every menu string, tl! literal, plural, status and error message (enforced in tests).
 # Product, language, built-in workspace and perspective preset names follow MENU_KEEP_AS_IS.
 # Keep placeholders, ellipses and leading/trailing spaces of fragments when editing.
+	Glowing Edges…	Сяйливі краї…
+	Glowing Edges	Сяйливі краї
+	Edge Width	Ширина краю
+	Edge Brightness	Яскравість краю
+	Smoothness	Згладжування
 
 	Radial Blur…	Радіальне розмиття…
 	Smart Blur…	Розумне розмиття…
