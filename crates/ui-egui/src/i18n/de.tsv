@@ -3854,3 +3854,81 @@ theme	Appearance	Erscheinungsbild
 @msg	automation path rejected: cannot resolve {path}: {e}	Automatisierungspfad abgelehnt: {path} kann nicht aufgelöst werden: {e}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	Automatisierungspfad abgelehnt: Aufwärtsnavigation unterhalb eines Ordners, der nicht vorhanden ist: {path}
 @msg	automation path rejected: reserved device names are not allowed: {path}	Automatisierungspfad abgelehnt: Reservierte Gerätenamen sind nicht zulässig: {path}
+# Added on landing: strings from features that landed after the catalog was written.
+# Raster effects: Pixelate, Texture, Video (Effect menu, their dialogs).
+	Pixelate	Vergröbern
+	Color Halftone…	Farbraster…
+	Crystallize…	Kristallisieren…
+	Mezzotint…	Mezzotint…
+	Pointillize…	Punktieren…
+	Texture	Struktur
+	Craquelure…	Craquelé…
+	Grain…	Körnung…
+	Mosaic Tiles…	Mosaikfliesen…
+	Patchwork…	Patchwork…
+	Stained Glass…	Buntglas…
+	Texturizer…	Struktur hinzufügen…
+	Video	Video
+	De-Interlace…	Zeilensprung entfernen…
+	NTSC Colors	NTSC-Farben
+# Libraries: groups, search, import and export.
+	New Library Group	Neue Bibliotheksgruppe
+	Rename Library Group	Bibliotheksgruppe umbenennen
+	Delete Library Group	Bibliotheksgruppe löschen
+	Move Library Item to Group	Bibliothekselement in Gruppe verschieben
+	Import Library	Bibliothek importieren
+	Export Library	Bibliothek exportieren
+	New Group	Neue Gruppe
+	Move to Group	In Gruppe verschieben
+	No results	Keine Ergebnisse
+	No items in this library match “{query}”.	Keine Elemente in dieser Bibliothek entsprechen „{query}“.
+	Right-click an item to move it into this group.	Klicken Sie mit der rechten Maustaste auf ein Element, um es in diese Gruppe zu verschieben.
+@msg	Imported library {name}	Bibliothek {name} importiert
+# Linked files changed on disk.
+	Update Changed Links	Geänderte Verknüpfungen aktualisieren
+	{count} linked image(s) changed on disk. Show the new versions?	{count} verknüpfte(s) Bild(er) wurde(n) auf dem Datenträger geändert. Neue Versionen anzeigen?
+@msg	Updated {_1} linked file(s) changed on disk	{_1} auf dem Datenträger geänderte verknüpfte Datei(en) aktualisiert
+# Window: the system's title bar (Windows, Linux).
+	System Title Bar	Systemtitelleiste
+# Brush Options: Scatter, Art and Pattern brushes.
+	Scatter Brush Options	Optionen für Spezialpinsel
+	Art Brush Options	Optionen für Bildpinsel
+	Pattern Brush Options	Optionen für Musterpinsel
+	Brush Scale Options	Pinselskalierungsoptionen
+	Scale Proportionately	Proportional skalieren
+	Stretch to Fit Stroke Length	Auf Konturlänge strecken
+	Stretch Between Guides	Zwischen Hilfslinien strecken
+	Start:	Anfang:
+	End:	Ende:
+	Left to Right	Von links nach rechts
+	Right to Left	Von rechts nach links
+	Top to Bottom	Von oben nach unten
+	Bottom to Top	Von unten nach oben
+	Flip:	Spiegeln:
+	Scatter:	Streuung:
+	Rotation:	Drehung:
+	Rotation relative to:	Drehung relativ zu:
+	Side Tile	Seitenkachel
+	Outer Corner Tile	Äußere Eckkachel
+	Inner Corner Tile	Innere Eckkachel
+	Start Tile	Anfangskachel
+	End Tile	Endkachel
+	Fit	Einpassen
+	Stretch to fit	Zum Einpassen strecken
+	Add space to fit	Zum Einpassen Abstand hinzufügen
+	Approximate path	Pfad annähern
+	Colorization	Färbung
+	Key Color:	Hauptfarbe:
+	Tints	Farbtöne
+	Tints and Shades	Farbtöne und Schattierungen
+	Hue Shift	Farbtonverschiebung
+	RGB:	RGB:
+	CMYK:	CMYK:
+# PSD files (opened and placed as their merged image).
+@msg	not a PSD file	keine PSD-Datei
+@msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus
+@msg	the PSD file has an unknown colour mode ({m})	die PSD-Datei hat einen unbekannten Farbmodus ({m})
+@msg	the PSD file's image data uses an unknown compression ({m})	die Bilddaten der PSD-Datei verwenden eine unbekannte Komprimierung ({m})
+@msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
+@msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
+@msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
