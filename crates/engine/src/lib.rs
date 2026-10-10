@@ -1629,6 +1629,8 @@ mod tests_recolor;
 #[cfg(test)]
 mod tests_recovery;
 #[cfg(test)]
+mod tests_reflecthit;
+#[cfg(test)]
 mod tests_registration;
 #[cfg(test)]
 mod tests_save;
