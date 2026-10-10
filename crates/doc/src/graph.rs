@@ -106,6 +106,35 @@ impl ValueAxisSide {
     }
 }
 
+/// Graph Type › Tick Marks › Length: no tick marks, short ones outside the axis, or lines across the whole plot.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TickLength {
+    None,
+    #[default]
+    Short,
+    Full,
+}
+
+impl TickLength {
+    pub fn id(self) -> &'static str {
+        match self {
+            TickLength::None => "none",
+            TickLength::Short => "short",
+            TickLength::Full => "full",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        [TickLength::None, TickLength::Short, TickLength::Full].into_iter().find(|k| k.id().eq_ignore_ascii_case(s))
+    }
+    fn is_short(&self) -> bool {
+        *self == TickLength::Short
+    }
+    fn is_none(&self) -> bool {
+        *self == TickLength::None
+    }
+}
+
 /// The fill and stroke captured from one series' generated marks. An absent paint keeps whatever
 /// the generator draws for that part (greyscale for a series fill, the part's own stroke otherwise).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -171,6 +200,32 @@ pub struct GraphSpec {
     pub right_axis_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub right_axis_max: Option<f64>,
+    /// Graph Type › Tick Marks for the value axis (the left one, or the bottom one of bar graphs) and the right one:
+    /// length, and tick marks per division (0 and 1 = one, at the labels).
+    #[serde(skip_serializing_if = "TickLength::is_short")]
+    pub tick_length: TickLength,
+    #[serde(skip_serializing_if = "at_most_one")]
+    pub tick_marks: usize,
+    #[serde(skip_serializing_if = "TickLength::is_short")]
+    pub right_tick_length: TickLength,
+    #[serde(skip_serializing_if = "at_most_one")]
+    pub right_tick_marks: usize,
+    /// Tick Marks for the category axis (none by default), and Draw Tick Marks Between Labels.
+    #[serde(skip_serializing_if = "TickLength::is_none")]
+    pub category_tick_length: TickLength,
+    #[serde(skip_serializing_if = "at_most_one")]
+    pub category_tick_marks: usize,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ticks_between_labels: bool,
+    /// Graph Type › Add Labels: text before and after the value axes' numbers.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub prefix: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub suffix: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub right_prefix: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub right_suffix: String,
     /// Line, scatter and radar graphs: mark data points, connect them.
     pub mark_points: bool,
     pub connect_points: bool,
@@ -182,6 +237,10 @@ pub struct GraphSpec {
     /// Bounds of the art when it was last generated (detects moves/scales of the graph group).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placed: Option<Rect>,
+}
+
+fn at_most_one(n: &usize) -> bool {
+    *n <= 1
 }
 
 fn is_zero(n: &usize) -> bool {
@@ -243,6 +302,17 @@ impl Default for GraphSpec {
             right_ticks: 0,
             right_axis_min: None,
             right_axis_max: None,
+            tick_length: TickLength::Short,
+            tick_marks: 1,
+            right_tick_length: TickLength::Short,
+            right_tick_marks: 1,
+            category_tick_length: TickLength::None,
+            category_tick_marks: 1,
+            ticks_between_labels: false,
+            prefix: String::new(),
+            suffix: String::new(),
+            right_prefix: String::new(),
+            right_suffix: String::new(),
             mark_points: true,
             connect_points: true,
             edge_to_edge: false,
