@@ -2756,6 +2756,23 @@
 	Add to Library	Добавить в библиотеку
 	Delete Library	Удалить библиотеку
 	Delete Library Item	Удалить элемент библиотеки
+	No results	Ничего не найдено
+	No items in this library match “{query}”.	В этой библиотеке нет элементов, соответствующих «{query}».
+	Right-click an item to move it into this group.	Щёлкните элемент правой кнопкой мыши, чтобы переместить его в эту группу.
+	New Group	Новая группа
+	New Group…	Новая группа…
+	Move to Group	Переместить в группу
+	No Group	Без группы
+	Rename Group…	Переименовать группу…
+	Delete Group	Удалить группу
+	Import Library…	Импортировать библиотеку…
+	Export Library…	Экспортировать библиотеку…
+	Import Library	Импортировать библиотеку
+	Export Library	Экспортировать библиотеку
+	New Library Group	Новая группа библиотеки
+	Rename Library Group	Переименовать группу библиотеки
+	Delete Library Group	Удалить группу библиотеки
+	Move Library Item to Group	Переместить элемент библиотеки в группу
 	Library	Библиотека
 	Rename Library	Переименовать библиотеку
 	Show Library	Показать библиотеку
@@ -3879,3 +3896,4 @@ axis	Both	Оба
 	Even Fields	Чётные поля
 	Duplication	Дублированием
 	Interpolation	Интерполяцией
+@msg	Imported library {name}	Импортирована библиотека {name}

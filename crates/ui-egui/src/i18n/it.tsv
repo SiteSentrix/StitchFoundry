@@ -2760,6 +2760,23 @@
 	Add to Library	Aggiungi alla libreria
 	Delete Library	Elimina libreria
 	Delete Library Item	Elimina elemento della libreria
+	No results	Nessun risultato
+	No items in this library match “{query}”.	Nessun elemento di questa libreria corrisponde a “{query}”.
+	Right-click an item to move it into this group.	Fai clic con il pulsante destro su un elemento per spostarlo in questo gruppo.
+	New Group	Nuovo gruppo
+	New Group…	Nuovo gruppo…
+	Move to Group	Sposta nel gruppo
+	No Group	Nessun gruppo
+	Rename Group…	Rinomina gruppo…
+	Delete Group	Elimina gruppo
+	Import Library…	Importa libreria…
+	Export Library…	Esporta libreria…
+	Import Library	Importa libreria
+	Export Library	Esporta libreria
+	New Library Group	Nuovo gruppo di libreria
+	Rename Library Group	Rinomina gruppo di libreria
+	Delete Library Group	Elimina gruppo di libreria
+	Move Library Item to Group	Sposta elemento della libreria nel gruppo
 	Library	Libreria
 	Rename Library	Rinomina libreria
 	Show Library	Mostra libreria
@@ -3881,3 +3898,4 @@ axis	Both	Entrambi
 	Even Fields	Campi pari
 	Duplication	Duplicazione
 	Interpolation	Interpolazione
+@msg	Imported library {name}	Libreria {name} importata

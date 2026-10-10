@@ -953,9 +953,26 @@ gives another colour merges into the document's), a colour paints the selection'
 to the document (numbered when its name is taken by other attributes) and applied to the selected text, each as one
 undo step. `library.removeItem {library?, kind, item}` removes one.
 
+Items can be put in user-named groups, which the panel shows as collapsible sections after the ungrouped items (its
+search field filters every item by name; `library.get` lists them all to filter). `library.createGroup {library?,
+name?, items?: [{kind, item}]}` makes one (a name another group has, ignoring case, gets a number) with those items
+moved into it; `library.renameGroup {library?, group, name}` renames one; `library.deleteGroup {library?, group}`
+deletes one, its items staying in the library ungrouped; and `library.moveItem {library?, kind, item, group?}` moves
+an item into a group (without `group`, out of its group). An item is in one group at most; `library.get` lists the
+groups as `groups: [{name, items: [{kind: "color"|"charStyle"|"paraStyle"|"graphic", item}]}]` (a graphic by its id).
+
+`library.export {library?, path?}` writes a library (its colours, styles, graphics with their art and thumbnails, and
+its groups) as a `.vclibrary` file, the JSON the library folder keeps (without `path`: `{data}`, the file's text).
+`library.import {path? | data? | dataBase64?, name?}` adds the library of such a file as a new library and makes it
+the current one; a name another library has gets a number (`Brand (2)`). Imported files are checked: at most 10,000
+items of each kind and 1,000 groups, names clipped and made unique, thumbnails kept only when they are small PNGs, and
+groups naming items that aren't there dropped. Files written before groups load as they are.
+
 ```json
 {"name":"run_command","arguments":{"command":"library.add","params":{"kind":"graphic","name":"Logo"}}}
 {"name":"run_command","arguments":{"command":"library.use","params":{"kind":"graphic","item":"Logo","center":[300,200]}}}
+{"name":"run_command","arguments":{"command":"library.createGroup","params":{"name":"Logos","items":[{"kind":"graphic","item":"Logo"}]}}}
+{"name":"run_command","arguments":{"command":"library.export","params":{"path":"/tmp/Brand.vclibrary"}}}
 ```
 
 ## Strokes on type

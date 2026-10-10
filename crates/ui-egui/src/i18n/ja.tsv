@@ -2496,6 +2496,23 @@
 	Add to Library	ライブラリに追加
 	Delete Library	ライブラリを削除
 	Delete Library Item	ライブラリ項目を削除
+	No results	結果はありません
+	No items in this library match “{query}”.	このライブラリには「{query}」に一致する項目がありません。
+	Right-click an item to move it into this group.	項目を右クリックすると、このグループに移動できます。
+	New Group	新規グループ
+	New Group…	新規グループ…
+	Move to Group	グループに移動
+	No Group	グループなし
+	Rename Group…	グループ名を変更…
+	Delete Group	グループを削除
+	Import Library…	ライブラリを読み込み…
+	Export Library…	ライブラリを書き出し…
+	Import Library	ライブラリを読み込み
+	Export Library	ライブラリを書き出し
+	New Library Group	新規ライブラリグループ
+	Rename Library Group	ライブラリグループ名を変更
+	Delete Library Group	ライブラリグループを削除
+	Move Library Item to Group	ライブラリ項目をグループに移動
 	Library	ライブラリ
 	Rename Library	ライブラリ名を変更
 	Show Library	ライブラリを表示
@@ -3873,3 +3890,4 @@ theme	Appearance	外観
 	Even Fields	偶数フィールド
 	Duplication	複製
 	Interpolation	補間
+@msg	Imported library {name}	ライブラリ {name} を読み込みました

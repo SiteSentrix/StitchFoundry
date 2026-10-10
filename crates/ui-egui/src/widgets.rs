@@ -124,6 +124,12 @@ pub fn section_header(ui: &mut Ui, text: &str) {
 /// A collapsible section's header across the panel: a chevron (down while `open`) and `text`;
 /// a click anywhere on it toggles the section. Whether it was clicked.
 pub fn section_toggle(ui: &mut Ui, text: &str, open: bool) -> bool {
+    section_toggle_name(ui, tl!(text), open).clicked()
+}
+
+/// [`section_toggle`] for a name that is user data (a library group), shown as it is → its
+/// response (clicked: toggle; it takes a context menu).
+pub fn section_toggle_name(ui: &mut Ui, text: &str, open: bool) -> Response {
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
     if resp.hovered() {
@@ -131,9 +137,9 @@ pub fn section_toggle(ui: &mut Ui, text: &str, open: bool) -> bool {
     }
     let chevron = Rect::from_center_size(pos2(rect.left() + 8.0, rect.center().y), vec2(12.0, 12.0));
     icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, chevron, if resp.hovered() { t.text_strong } else { t.icon });
-    ui.painter().text(pos2(rect.left() + 18.0, rect.center().y), egui::Align2::LEFT_CENTER, tl!(text), theme::semibold(12.5), t.text);
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::CollapsingHeader, true, open, tl!(text)));
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+    ui.painter().text(pos2(rect.left() + 18.0, rect.center().y), egui::Align2::LEFT_CENTER, text, theme::semibold(12.5), t.text);
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::CollapsingHeader, true, open, text));
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// Full-width 1 px divider with vertical margins.
