@@ -268,6 +268,8 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return super::docmenu::guide_remove(s, &json!({}));
     }
     let st = s.doc()?;
+    // Guides selected with the art go with it (not when ids are given).
+    let with_guides = explicit.is_none();
     let targets = explicit.unwrap_or_else(|| st.selection.in_paint_order(&st.doc));
     // Keep the selected ids themselves, without promoting compound members. Delete a selected
     // ancestor just once; its selected descendants leave with it. Layers themselves are kept.
@@ -283,6 +285,10 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Clear", |d, sel| {
         for id in &ids {
             d.remove(*id)?;
+        }
+        if with_guides {
+            let gone = sel.guides.clone();
+            d.retain_guides(sel, |i, _| !gone.contains(&i));
         }
         sel.clear();
         Ok(())
