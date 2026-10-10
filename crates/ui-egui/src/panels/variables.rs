@@ -64,6 +64,23 @@ pub(crate) fn select_bound_object(app: &mut VectorcraftApp) {
     }
 }
 
+/// What the selection allows the bottom bar's and the panel menu's commands to do.
+struct Picked {
+    selected: Vec<u64>,
+    has_selection: bool,
+    /// Unbind needs a bound object under the selection, not just any selection.
+    selection_bound: bool,
+    /// Make Text Dynamic needs exactly one type object: a text variable only drives type.
+    single_type: bool,
+}
+
+fn picked(st: &vectorcraft_engine::DocState) -> Picked {
+    let selected: Vec<u64> = st.selection.objects.iter().map(|i| i.0).collect();
+    let selection_bound = selected.iter().any(|id| st.doc.variables.bindings.contains_key(&NodeId(*id)));
+    let single_type = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))));
+    Picked { has_selection: !selected.is_empty(), selected, selection_bound, single_type }
+}
+
 /// Delete Variable: the highlighted variable only (the command's default); the rest stay.
 pub(crate) fn delete_highlighted(app: &mut VectorcraftApp) {
     app.run("variable.delete", json!({})).ok();
@@ -110,13 +127,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         })
         .collect();
     let active = sets.iter().find(|s| s.active);
-    let selected: Vec<u64> = st.selection.objects.iter().map(|i| i.0).collect();
-    let has_selection = !selected.is_empty();
+    let Picked { selected, has_selection, selection_bound, single_type } = picked(st);
     let highlighted = highlighted_row(st);
-    // Unbind needs a bound object under the selection, not just any selection.
-    let selection_bound = selected.iter().any(|id| st.doc.variables.bindings.contains_key(&NodeId(*id)));
-    // Make Text Dynamic needs exactly one type object: a text variable only drives type.
-    let single_type = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))));
 
     // The current data set across the top: its name, and the arrows that step through them.
     ui.horizontal(|ui| {
@@ -226,6 +238,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let bound: Vec<u64> = st.doc.variables.bindings.keys().map(|i| i.0).collect();
     let highlighted = highlighted_row(st);
     let highlighted_bound: Vec<u64> = highlighted.as_ref().map(|h| bound_objects(st, h)).unwrap_or_default();
+    let Picked { selected, has_selection, selection_bound, single_type } = picked(st);
 
     if widgets::menu_item(ui, tl!("New Variable…"), true, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
@@ -234,6 +247,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::menu_item(ui, tl!("Variable Options…"), !vars.is_empty(), false) {
         let name = highlighted.clone().or_else(|| vars.first().cloned()).unwrap_or_default();
         crate::dialogs::variables::open(app, "variable.rename", Some(&name));
+    }
+    if widgets::menu_item(ui, tl!("Make Text Dynamic"), single_type, false) {
+        app.run("variable.makeTextDynamic", json!({})).ok();
+    }
+    if widgets::menu_item(ui, tl!("Make Visibility Dynamic"), has_selection, false) {
+        app.run("variable.makeVisibilityDynamic", json!({})).ok();
+    }
+    if widgets::menu_item(ui, tl!("Unbind Variable"), selection_bound, false) {
+        app.run("variable.unbind", json!({"ids": selected})).ok();
+    }
+    if widgets::menu_item(ui, tl!("Delete Variable"), highlighted.is_some(), false) {
+        delete_highlighted(app);
     }
     ui.separator();
     if widgets::menu_item(ui, tl!("Capture Data Set"), true, false) {
@@ -405,38 +430,18 @@ mod tests {
         }
     }
 
-    /// Every Variables command is in the Window menu, so the feature is reachable without an
-    /// agent: the palette runs these with empty params, which the dialogs turn into a form.
+    /// Window › Variables opens the panel, as Window's other panel items do; its commands are in
+    /// the panel, its menu and the command palette.
     #[test]
-    fn every_variables_command_is_in_the_window_menu() {
+    fn window_variables_opens_the_panel() {
         let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         let entries = crate::menus::menu_entries(&app);
-        let in_menu = |id: &str| entries.iter().any(|e| e.command.as_deref() == Some(id));
-        for id in [
-            "variable.define",
-            "variable.rename",
-            "variable.delete",
-            "variable.bind",
-            "variable.unbind",
-            "variable.makeTextDynamic",
-            "variable.makeVisibilityDynamic",
-            "dataset.new",
-            "dataset.set",
-            "dataset.capture",
-            "dataset.update",
-            "dataset.rename",
-            "dataset.delete",
-            "dataset.select",
-            "dataset.next",
-            "dataset.prev",
-        ] {
-            assert!(in_menu(id), "{id} is not in the Window menu");
-        }
         let panel = entries
             .iter()
             .find(|e| e.command.as_deref() == Some("window.panel") && e.params.get("panel").and_then(serde_json::Value::as_str) == Some(ID))
             .expect("the Variables panel is listed");
-        assert_eq!(panel.path, vec!["Window".to_string(), "Variables".to_string()]);
+        assert_eq!((panel.path.clone(), panel.label.as_str()), (vec!["Window".to_string()], "Variables"));
+        assert!(!entries.iter().any(|e| e.path == ["Window", "Variables"]), "no Variables submenu");
     }
 
     /// A menu item that needs a name opens the dialog rather than running the command with
