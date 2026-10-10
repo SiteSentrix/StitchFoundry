@@ -630,10 +630,8 @@ fn main() -> std::process::ExitCode {
 mod tests {
     use super::*;
 
-    fn ui_state_with_prefs(prefs: serde_json::Value) -> vectorcraft_ui_egui::UiState {
-        let mut ui = vectorcraft_ui_egui::UiState::default();
-        ui.engine_prefs = prefs;
-        ui
+    fn ui_state_with_prefs(engine_prefs: serde_json::Value) -> vectorcraft_ui_egui::UiState {
+        vectorcraft_ui_egui::UiState { engine_prefs, ..Default::default() }
     }
 
     #[test]

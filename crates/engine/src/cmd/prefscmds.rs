@@ -278,11 +278,11 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("toolGroupLabels", "User Interface", "", "Show Tool Group Labels", bool),
     p!("openDocumentsAsTabs", "User Interface", "", "Open Documents As Tabs", bool),
     p!("largeTabs", "User Interface", "", "Large Tabs", bool),
+    p!("systemTitleBar", "User Interface", "", "System Title Bar", bool),
     p!("uiScaling", "User Interface", "UI Scaling", "Scale", num(0.75, 2.0, "×")),
     p!("scaleCursorWithUi", "User Interface", "UI Scaling", "Scale Cursor Proportional to UI", bool),
     // `auto` or a language code the shell registers (`zh-hant`); the shell shows it as a dropdown.
     p!("interfaceLanguage", "User Interface", "Language", "Language", text),
-    p!("systemTitleBar", "User Interface", "", "System Title Bar", bool),
     // Performance
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),

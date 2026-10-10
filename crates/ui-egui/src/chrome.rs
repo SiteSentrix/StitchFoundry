@@ -130,6 +130,9 @@ pub fn sync_window_title(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if app.last_window_title != want {
         app.last_window_title = want.clone();
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(want));
+        // One more frame: a new title makes AppKit lay its title bar out again, putting the window
+        // buttons back where it keeps them until the next frame centres them on the bar (#968).
+        ctx.request_repaint();
     }
 }
 

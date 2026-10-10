@@ -13,7 +13,7 @@ use crate::VectorcraftApp;
 use crate::io;
 use crate::panels::character::Face;
 use crate::state::{DockTab, next_zoom};
-use crate::theme::{self, Brightness, Tokens};
+use crate::theme::{Brightness, Tokens};
 use crate::widgets;
 
 #[derive(Clone, Debug)]
@@ -2754,11 +2754,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         .ui(ui, |ui| {
             let mut titles = Vec::with_capacity(tree.len());
             for (title, items) in tree.iter() {
-                let text = if *title == "VectorCraft" {
-                    egui::RichText::new(tl!(title)).font(theme::semibold(13.0)).color(t.text)
-                } else {
-                    egui::RichText::new(tl!(title)).size(13.0).color(t.text)
-                };
+                let text = egui::RichText::new(tl!(title)).size(13.0).color(t.text);
                 titles.push(ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked)).response);
             }
             (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
@@ -3520,6 +3516,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme;
 
     /// One headless frame of the in-window menu bar; returns its titles (left to right) as
     /// (rect, id of the title's popup).

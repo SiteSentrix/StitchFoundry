@@ -208,8 +208,10 @@ Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) 
 Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
 caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 46 pt each; they are window chrome,
 not commands, so drive them with `ui.click` if needed. Close runs `app.quit` (the same `saveChanges` questions for
-modified documents), and empty bar space and the 5 pt window edges move and resize the window. macOS and the web
-build are unchanged.
+modified documents), and empty bar space and the 5 pt window edges move and resize the window. Preferences › User
+Interface › System Title Bar (`systemTitleBar`, read when the app starts) gives the window its OS decorations back
+instead: the OS title then shows the active document (`*name — VectorCraft` with unsaved changes) and the app bar
+drops its brand mark. On macOS the window buttons are centred on the app bar; the web build is unchanged.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);
