@@ -182,6 +182,10 @@ fn libraries_saved_in_the_user_folder_are_user_defined() {
     let css = dir.join("out.css").to_string_lossy().to_string();
     run(&mut s, "swatch.library.save", json!({ "path": css }));
     assert!(std::fs::read_to_string(&css).unwrap().contains("  --white: #ffffff;"));
+    // A name with nothing a file name can keep is saved as Library.vcswatches, and User Defined lists it.
+    let r = run(&mut s, "swatch.library.save", json!({"user": true, "name": "..."}));
+    assert_eq!(r["library"], "user/Library.vcswatches");
+    assert_eq!(cmd::swatchlib::library(&s, "user/Library.vcswatches").map(|(info, _)| info.name), Some("...".into()));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -232,6 +236,139 @@ fn swatch_exchange_files_load_add_and_list_as_user_libraries() {
         .map(|l| (l["id"].as_str().unwrap(), l["count"].as_u64().unwrap()))
         .collect();
     assert_eq!(user, [("user/Brand.ase", 4)]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn swatch_exchange_files_save_with_models_kinds_and_groups() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 1.0, "m": 0.5, "y": 0.0, "k": 0.2}, "spot": true}));
+    run(&mut s, "swatch.new", json!({"name": "Clay", "color": {"l": 50, "a": 20, "b": -30}}));
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#123456", "#abcdef"]}));
+    let r = run(&mut s, "swatch.library.save", json!({"format": "ase", "names": ["Ink", "Clay", "Brand", "Grays", "Sunset"], "name": "Brand Kit"}));
+    assert_eq!(r["format"], "ase");
+    assert!(r.get("data").is_none(), "a binary file comes back as dataBase64");
+    let b64 = r["dataBase64"].as_str().unwrap().to_string();
+    assert!(vectorcraft_format::base64_decode(&b64).unwrap().starts_with(b"ASEF"));
+    let r = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Brand Kit.ase"}));
+    let (_, lib) = cmd::swatchlib::library(&s, r["library"].as_str().unwrap()).unwrap();
+    assert_eq!(lib.name, "Brand Kit", "named after the file");
+    let ink = lib.swatch("Ink").unwrap();
+    assert!(ink.spot && ink.global);
+    assert_eq!(ink.paint.color(), Some(Color::cmyk(1.0, 0.5, 0.0, 0.2)));
+    assert_eq!(lib.swatch("Clay").unwrap().paint.color(), Some(Color::lab(50.0, 20.0, -30.0)));
+    assert!(lib.swatch("Sunset").is_none(), "a gradient is left out");
+    let groups: Vec<(&str, usize)> = lib.groups.iter().map(|g| (g.name.as_str(), g.swatches.len())).collect();
+    assert_eq!(groups, [("Grays", 9), ("Brand", 2)], "in document order");
+    // Gray colors come back within float rounding.
+    let grays = &doc(&s).swatch_groups.iter().find(|g| g.name == "Grays").unwrap().swatches;
+    for (w, want) in lib.groups[0].swatches.iter().zip(grays) {
+        let (Some(Color::Gray { k }), Some(Color::Gray { k: want_k })) = (w.paint.color(), want.paint.color()) else {
+            panic!("{} isn't gray", w.name)
+        };
+        assert!(w.name == want.name && (k - want_k).abs() < 1e-4, "{}: {k} for {want_k}", w.name);
+    }
+    // Into the user library folder, and to a path ending in .ase.
+    let dir = temp_dir("ase-save");
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let r = run(&mut s, "swatch.library.save", json!({"format": "ase", "user": true, "name": "Brand Kit"}));
+    assert_eq!(r["library"], "user/Brand Kit.ase");
+    assert!(std::fs::read(r["path"].as_str().unwrap()).unwrap().starts_with(b"ASEF"));
+    assert!(cmd::swatchlib::library(&s, "user/Brand Kit.ase").is_some(), "the user folder lists it");
+    let path = dir.join("out.ase").to_string_lossy().to_string();
+    assert_eq!(run(&mut s, "swatch.library.save", json!({ "path": path }))["format"], "ase");
+    assert!(std::fs::read(&path).unwrap().starts_with(b"ASEF"));
+    let e = s.execute("swatch.library.save", &json!({"format": "aco"})).unwrap_err().to_string();
+    assert!(e.contains("vcswatches, gpl, ase or css"), "{e}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn loaded_libraries_copy_into_the_user_folder_without_replacing_files() {
+    use vectorcraft_testkit::ase::{Block, ase, sample};
+    let dir = temp_dir("copy");
+    let (user, elsewhere) = (dir.join("user"), dir.join("elsewhere"));
+    std::fs::create_dir_all(&user).unwrap();
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let source = elsewhere.join("Brand.ase");
+    std::fs::write(&source, sample()).unwrap();
+    let source = source.to_string_lossy().to_string();
+    // Another library whose file name differs only in case.
+    let other = ase(&[Block::Color("Only", b"RGB ", &[1.0, 0.0, 0.0], 2)]);
+    std::fs::write(user.join("brand.ase"), &other).unwrap();
+    let mut s = session();
+    s.swatch_libraries.set_user_dir(Some(user.to_string_lossy().to_string()));
+    let loaded = run(&mut s, "swatch.library.load", json!({ "path": source }))["library"].clone();
+    assert_eq!(loaded, format!("loaded/{source}"));
+    let r = run(&mut s, "swatch.library.copyToUser", json!({ "library": loaded }));
+    // A swatch exchange library is named after its file.
+    assert_eq!(
+        (r["library"].as_str(), r["name"].as_str(), r["count"].as_u64(), r["copied"].as_bool()),
+        (Some("user/Brand 2.ase"), Some("Brand 2"), Some(4), Some(true))
+    );
+    assert_eq!(r["path"], user.join("Brand 2.ase").to_string_lossy().to_string());
+    assert_eq!(std::fs::read(user.join("Brand 2.ase")).unwrap(), sample(), "the file as it is");
+    assert_eq!(std::fs::read(user.join("brand.ase")).unwrap(), other, "never replaced");
+    let listed = |s: &mut Session| -> Vec<String> {
+        let list = run(s, "swatch.library.list", json!({}));
+        let libs = list["libraries"].as_array().unwrap().iter().filter(|l| matches!(l["category"].as_str(), Some("user" | "loaded")));
+        libs.map(|l| l["id"].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(listed(&mut s), ["user/Brand 2.ase", "user/brand.ase"], "listed as User Defined only");
+    // The loaded id finds the copy, so choices made with it (Limit to Library) keep their colors.
+    let found = cmd::swatchlib::library(&s, loaded.as_str().unwrap()).map(|(info, _)| info.id);
+    assert_eq!(found.as_deref(), Some("user/Brand 2.ase"));
+    assert!(cmd::swatchlib::limit_palette(&s, loaded.as_str().unwrap()).is_some());
+    // The same file again opens the copy, which is listed once; copying it writes nothing.
+    let again = run(&mut s, "swatch.library.load", json!({ "path": source }))["library"].clone();
+    assert_eq!(again, "user/Brand 2.ase");
+    assert_eq!(listed(&mut s), ["user/Brand 2.ase", "user/brand.ase"]);
+    let r = run(&mut s, "swatch.library.copyToUser", json!({ "library": again }));
+    assert_eq!((r["library"].as_str(), r["copied"].as_bool()), (Some("user/Brand 2.ase"), Some(false)));
+    assert_eq!(std::fs::read_dir(&user).unwrap().count(), 2);
+    // A document's swatches and a library loaded from data are written as .vcswatches.
+    run(&mut s, "swatch.new", json!({"name": "Signal", "color": "#ff3300"}));
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let poster = elsewhere.join("Poster.vectorcraft");
+    std::fs::write(&poster, vectorcraft_format::base64_decode(&b64).unwrap()).unwrap();
+    let loaded = run(&mut s, "swatch.library.load", json!({ "path": poster.to_string_lossy() }))["library"].clone();
+    let r = run(&mut s, "swatch.library.copyToUser", json!({ "library": loaded }));
+    assert_eq!((r["library"].as_str(), r["copied"].as_bool()), (Some("user/Poster.vcswatches"), Some(true)));
+    assert!(cmd::swatchlib::library(&s, "user/Poster.vcswatches").unwrap().1.swatch("Signal").is_some());
+    // Copied again, the document's swatches are written as the same bytes: the copy there is used.
+    let loaded = run(&mut s, "swatch.library.load", json!({ "path": poster.to_string_lossy() }))["library"].clone();
+    let r = run(&mut s, "swatch.library.copyToUser", json!({ "library": loaded }));
+    assert_eq!((r["library"].as_str(), r["copied"].as_bool()), (Some("user/Poster.vcswatches"), Some(false)));
+    let kit = vectorcraft_format::base64_encode(&sample());
+    let loaded = run(&mut s, "swatch.library.load", json!({"dataBase64": kit, "name": "Kit.ase"}))["library"].clone();
+    assert_eq!(run(&mut s, "swatch.library.copyToUser", json!({ "library": loaded }))["library"], "user/Kit.vcswatches");
+    // A library without a name is copied as Library.
+    let loaded = run(&mut s, "swatch.library.load", json!({"data": "GIMP Palette\nName:\n0 0 0 Black\n"}))["library"].clone();
+    let r = run(&mut s, "swatch.library.copyToUser", json!({ "library": loaded }));
+    assert_eq!((r["library"].as_str(), r["name"].as_str(), r["copied"].as_bool()), (Some("user/Library.vcswatches"), Some("Library"), Some(true)));
+    // When the source no longer reads as a library, the copy fails and no new file is left in the folder.
+    let junk = elsewhere.join("Junk.ase");
+    std::fs::write(&junk, ase(&[Block::Color("Junk", b"RGB ", &[0.0, 1.0, 0.0], 2)])).unwrap();
+    let loaded = run(&mut s, "swatch.library.load", json!({ "path": junk.to_string_lossy() }))["library"].clone();
+    std::fs::write(&junk, b"not a library").unwrap();
+    let files = std::fs::read_dir(&user).unwrap().count();
+    let e = s.execute("swatch.library.copyToUser", &json!({ "library": loaded })).unwrap_err().to_string();
+    assert!(e.contains("the copy `user/Junk.ase` can't be read as a library"), "{e}");
+    assert_eq!(std::fs::read_dir(&user).unwrap().count(), files);
+    // A User Defined library comes back as it is; a built-in one is an error.
+    let r = run(&mut s, "swatch.library.copyToUser", json!({"library": "user/brand.ase"}));
+    assert_eq!((r["library"].as_str(), r["copied"].as_bool()), (Some("user/brand.ase"), Some(false)));
+    assert!(s.execute("swatch.library.copyToUser", &json!({"library": "pastels"})).unwrap_err().to_string().contains("built in"));
+    assert!(s.execute("swatch.library.copyToUser", &json!({})).is_err());
+    // Without a user library folder (the web, headless sessions) there is nowhere to copy to, and
+    // the command is off.
+    let mut headless = session();
+    let info = find_command("swatch.library.copyToUser").unwrap().info(&headless);
+    assert!(!info.enabled && info.disabled_reason.as_deref() == Some("no user library folder here"), "{info:?}");
+    assert!(find_command("swatch.library.copyToUser").unwrap().info(&s).enabled);
+    let loaded = run(&mut headless, "swatch.library.load", json!({"dataBase64": kit, "name": "Kit.ase"}))["library"].clone();
+    let e = headless.execute("swatch.library.copyToUser", &json!({ "library": loaded })).unwrap_err().to_string();
+    assert!(e.contains("no user library folder"), "{e}");
     let _ = std::fs::remove_dir_all(dir);
 }
 

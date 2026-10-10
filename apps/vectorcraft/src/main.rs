@@ -23,9 +23,12 @@ mod control_server;
 mod gpu;
 mod logging;
 #[cfg(target_os = "macos")]
+mod mac_fonts;
+#[cfg(target_os = "macos")]
 mod mac_menu;
 #[cfg(target_os = "macos")]
 mod open_documents;
+mod prefs_dir;
 mod printing;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 mod system_fonts;
@@ -139,27 +142,13 @@ fn discard_marked_text() {
 /// Where UI preferences live: ~/Library/Application Support/VectorCraft (macOS),
 /// %APPDATA%\VectorCraft (Windows), $XDG_CONFIG_HOME or ~/.config/vectorcraft (Linux).
 fn prefs_path() -> Option<std::path::PathBuf> {
-    prefs_path_for("VectorCraft", "vectorcraft")
+    prefs_dir::prefs_path_for("VectorCraft", "vectorcraft")
 }
 
 /// The same place under the project's former name (DrawCraft): read once if there are no
 /// VectorCraft preferences yet, so settings survive the rename.
 fn legacy_prefs_path() -> Option<std::path::PathBuf> {
-    prefs_path_for("DrawCraft", "drawcraft")
-}
-
-fn prefs_path_for(name: &str, lower: &str) -> Option<std::path::PathBuf> {
-    let base = if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support").join(name))
-    } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join(name))
-    } else {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(std::path::PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
-            .map(|c| c.join(lower))
-    };
-    base.map(|b| b.join("ui.json"))
+    prefs_dir::prefs_path_for("DrawCraft", "drawcraft")
 }
 
 /// Where the log files live: `logs` in the preferences folder (see `logging`).
@@ -393,6 +382,10 @@ fn main() -> std::process::ExitCode {
     // Before the first font scan (the app's start): the fonts font services load (#579).
     #[cfg(all(windows, not(target_vendor = "win7")))]
     system_fonts::install();
+    #[cfg(target_os = "macos")]
+    mac_fonts::install();
+    // VectorCraft's own Fonts folder, which text.addFontFiles copies fonts into.
+    prefs_dir::install_fonts();
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
@@ -427,7 +420,21 @@ fn main() -> std::process::ExitCode {
     #[cfg(feature = "wgpu")]
     let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
     #[cfg(feature = "wgpu")]
-    let power = gpu::power_preference(gpu_pref, eframe::wgpu::PowerPreference::from_env());
+    let power_env = eframe::wgpu::PowerPreference::from_env();
+    #[cfg(feature = "wgpu")]
+    let power = gpu::power_preference(gpu_pref, power_env);
+    // Automatic draws on the GPU that drives the (primary) display: a GPU without a monitor reset
+    // its driver and took every monitor down (pdfcraft#378). Logged first: the first question in
+    // every black-window report.
+    #[cfg(feature = "wgpu")]
+    let displays = gpu::preferred_displays(gpu_pref, power_env);
+    #[cfg(feature = "wgpu")]
+    if gpu::automatic(gpu_pref, power_env) {
+        let listed: Vec<String> = displays.iter().map(ToString::to_string).collect();
+        log::info!("display GPUs (PCI vendor:device): {}", if listed.is_empty() { "unknown".to_string() } else { listed.join(", ") });
+    } else {
+        log::info!("graphics processor chosen by the user ({power:?}): which GPU drives the display isn't considered");
+    }
     #[cfg(feature = "wgpu")]
     let startup = std::sync::Arc::new(gpu::Startup::default());
     let options = eframe::NativeOptions {
@@ -454,7 +461,7 @@ fn main() -> std::process::ExitCode {
         options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-            create.native_adapter_selector = Some(gpu::selector(power, startup.clone()));
+            create.native_adapter_selector = Some(gpu::selector(power, displays, startup.clone()));
             // Nothing draws or dispatches indirectly, so wgpu's check of indirect arguments only
             // costs a compute shader at start-up, one some drivers can't compile (OCLP-patched
             // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.

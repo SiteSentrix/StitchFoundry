@@ -146,6 +146,46 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
     layout_with(db, t, &opts)
 }
 
+/// The underline and strikethrough bars of `t` laid out as `layout` (#847): per run and line, a
+/// bar from the stretch's first glyph to its last one's advance, placed and sized by the font's
+/// own underline and strikeout metrics through the glyph's transform (so the size, baseline shift
+/// and scaling follow) → (run, bar in text space). Type on a path and vertical type have none yet.
+pub fn decorations(layout: &TextLayout, db: &FontDb, t: &TextObject) -> Vec<(usize, BezPath)> {
+    let mut out = vec![];
+    if layout.on_path || layout.vertical {
+        return out;
+    }
+    let glyphs = &layout.glyphs;
+    let mut i = 0;
+    while let Some(g) = glyphs.get(i) {
+        // The stretch: the glyphs of this run on this line, in a row.
+        let end = glyphs.iter().skip(i).position(|h| h.run != g.run || h.line != g.line).map_or(glyphs.len(), |n| i + n);
+        let stretch = glyphs.get(i..end).unwrap_or_default();
+        i = end.max(i + 1);
+        let Some(style) = t.runs.get(g.run).map(|r| &r.style) else { continue };
+        if !(style.underline || style.strikethrough) {
+            continue;
+        }
+        let Some(face) = db.face_by_id(g.font_id) else { continue };
+        let (x0, x1) = stretch.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), h| {
+            let (s, e) = (h.origin.x, h.origin.x + h.advance);
+            (a.min(s).min(e), b.max(s).max(e))
+        });
+        for (on, (offset, thickness)) in [(style.underline, face.underline), (style.strikethrough, face.strikeout)] {
+            if !on {
+                continue;
+            }
+            // Font units run y down in the glyph's transform: the bar's top is at -offset.
+            let (top, bottom) = ((g.xf * Point::new(0.0, -offset)).y, (g.xf * Point::new(0.0, -offset + thickness)).y);
+            let bar = Rect::new(x0, top.min(bottom), x1, top.max(bottom));
+            if bar.width() > 0.0 && bar.height() > 0.0 && bar.width().is_finite() && bar.height().is_finite() {
+                out.push((g.run, bar.to_path(0.1)));
+            }
+        }
+    }
+    out
+}
+
 /// Most layout passes Shrink Text to Fit runs past the first (bisection plus the final pass).
 const SHRINK_PASSES: usize = 11;
 
@@ -263,7 +303,8 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         TextKind::OnPath { .. } => Affine::IDENTITY,
         TextKind::Point => {
             let first = cx.style_at(0);
-            let centre = db.face(&first.font_family, &first.font_style).map_or(EM_CENTER, |f| f.ideographic_centre());
+            let centre =
+                db.face_version(&first.font_family, &first.font_style, first.font_version.as_deref()).map_or(EM_CENTER, |f| f.ideographic_centre());
             Affine::translate((-centre * first.size, 0.0)) * QUARTER_TURN
         }
         _ => QUARTER_TURN,
@@ -1392,7 +1433,8 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, regions: Optio
             let (asc, desc, lead) = style_metrics(cx.db, cx.style_at(pr.start));
             let st = cx.style_at(pr.start);
             let (cap, xh) = cap_x_heights(cx.db, st);
-            let centre = cx.db.face(&st.font_family, &st.font_style).map_or(EM_CENTER, |f| f.ideographic_centre());
+            let centre =
+                cx.db.face_version(&st.font_family, &st.font_style, st.font_version.as_deref()).map_or(EM_CENTER, |f| f.ideographic_centre());
             Metrics { asc, desc, lead, cap, xh, top: (centre + 0.5) * st.size * st.v_scale / 100.0 }
         };
         if pi > 0 {

@@ -155,6 +155,7 @@
 	Appearance panel	Панель «Оформлення»
 	Applies when the linked file is relinked or updated.	Використовується при повторній прив’язці або оновленні пов’язаного файлу.
 	Applies the next time VectorCraft starts.	Застосовується при наступному запуску VectorCraft.
+	Apply	Застосувати
 	Apply Brush	Застосувати пензель
 	Apply Character Style	Застосувати стиль символу
 	Apply Effect	Застосувати ефект
@@ -214,8 +215,12 @@
 	Auto Size New Area Type	Автоматично підганяти розмір нового тексту в області
 	Auto Spell Check	Автоматична перевірка орфографії
 	Auto-Collapse Iconic Panels	Автоматично згортати значки панелей
+	Ellipse Properties:	Властивості еліпса:
+	Invert Pie	Інвертувати сектор
+	Pie End Angle:	Кінцевий кут сектора:
+	Pie Start Angle:	Початковий кут сектора:
 	Show Tool Group Labels	Показувати назви груп інструментів
-	Auto-Rotate (turn the paper to each artboard)	Автоповорот (повертати лист по кожній монтажній області)
+	Auto-Rotate (turn the paper to each artboard)	Автоматичний поворот (повертати аркуш відповідно до кожної монтажної області)
 	Automatic flatness	Автоматична площинність
 	Automatically	Автоматично
 	Automatically Save Recovery Data	Автоматично зберігати дані відновлення
@@ -239,7 +244,7 @@
 	Black	Чорний
 	Black and White	Чорно-білий
 	Black and White Logo	Чорно-білий логотип
-	BLANK DOCUMENT PRESETS	НАБОРИ ПОРОЖНИХ ДОКУМЕНТІВ
+	BLANK DOCUMENT PRESETS	НАБОРИ ПОРОЖНІХ ДОКУМЕНТІВ
 	Bleed	Виліт
 	Bleed:	Виліт:
 	Bleeds	Вильоти
@@ -434,7 +439,7 @@
 	Compatible Gradient and Gradient Mesh Printing	Сумісний друк градієнтів та градієнтних сіток
 	Complement	Додатковий
 	Complexity:	Складність:
-	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Складові кольори перетворюються на нього; кольороподіли розділяються з ним, якщо це профіль CMYK.
+	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Складові кольори перетворюються за цим профілем; кольороподіл також виконується за ним, якщо це профіль CMYK.
 	Compound Path	Складений контур
 	Compress (RLE)	Стиснути (RLE)
 	Compress text and line art	Стискати текст та штриховий малюнок
@@ -476,7 +481,7 @@
 	Convert to Shape	Перетворити на фігуру
 	Convert to sRGB	Перетворити на sRGB
 	Convert:	Перетворити:
-	Copied the CSS of {rules} object(s)	Скопійовано CSS для {rules} об’єкта(ів)
+	Copied the CSS of {rules} object(s)	Скопійовано CSS об’єктів: {rules}
 	Copies:	Копії:
 	Copy	Копіювати
 	Copy (make a transformed copy)	Копіювати (створити перетворену копію)
@@ -486,6 +491,7 @@
 	Copy Fonts Used in the Document	Копіювати шрифти, використані у документі
 	Copy Links	Копіювати зв’язки
 	Copy Selected Style	Копіювати вибраний стиль
+	Copy to User Defined	Копіювати в «Користувацькі»
 	Copy Width Point	Копіювати точку ширини
 	Copyright	Авторські права
 	Copyright Info URL:	URL інформації про авторські права:
@@ -541,11 +547,11 @@
 	CSS Properties	Властивості CSS
 	Ctrl	Ctrl
 	Currency & Symbols	Валюти та символи
-	Current Brush	Поточна пензель
+	Current Brush	Поточний пензель
 	Current Colors ({total})	Поточні кольори ({total})
 	Current Symbol	Поточний символ
 	Curvature	Кривизна
-	Curvature Tool	Інструмент «Кривізна»
+	Curvature Tool	Інструмент «Кривизна»
 	Curves…	Криві…
 	Custom	Користувацький
 	Customize…	Налаштувати…
@@ -614,7 +620,7 @@
 	Delete these {n} graphic styles?	Видалити ці графічні стилі ({n})?
 	Delete this saved preset	Видалити цей збережений набір
 	Delete this {n} graphic style?	Видалити цей графічний стиль ({n})?
-	Delete Transparency Flattener Preset	Видалити набір об’єднання прозоростей
+	Delete Transparency Flattener Preset	Видалити набір зведення прозорості
 	Delete Width Point	Видалити точку ширини
 	Delete Workspace	Видалити робоче середовище
 	Delete {kind} Style	Видалити стиль {kind}
@@ -784,21 +790,21 @@
 	Ellipse	Еліпс
 	Ellipse Tool	Інструмент «Еліпс»
 	Ellipse…	Еліпс…
-	Ellipsis	Багатокрапка
-	Em Box Bottom/Left	Низ/ліво кегельного майданчика
+	Ellipsis	Трикрапка
+	Em Box Bottom/Left	Нижній/лівий край кегельного майданчика
 	Em Box Center	Центр кегельного майданчика
 	Em Box Top/Right	Верх/право кегельного майданчика
 	ICF Top/Right	Верх/право ICF
-	ICF Bottom/Left	Низ/ліво ICF
+	ICF Bottom/Left	Нижній/лівий край ICF
 	Em Dash	Довге тире
 	Em Space	Кругла шпація
 	Embed	Вбудувати
 	Embed Fonts (for other applications)	Вбудувати шрифти (для інших програм)
 	Embed Fonts (Glyphs Used)	Вбудувати шрифти (використані гліфи)
-	Embed ICC Profile	Використати профіль ICC
-	Embed ICC Profiles	Використати профілі ICC
-	Embed Image	Використати зображення
-	Embed Image(s)	Використати зображення(и)
+	Embed ICC Profile	Вбудувати профіль ICC
+	Embed ICC Profiles	Вбудувати профілі ICC
+	Embed Image	Вбудувати зображення
+	Embed Image(s)	Вбудувати зображення
 	Embed page thumbnails	Вбудувати мініатюри сторінок
 	Embedded	Вбудовано
 	Embedded Image	Впроваджене зображення
@@ -865,7 +871,7 @@
 	Expand…	Розібрати…
 	Export	Експорт
 	Export All…	Експортувати все…
-	Export and Clipboard Transparency Flattener Settings	Параметри об’єднання прозоростей для експорту та буфера обміну
+	Export and Clipboard Transparency Flattener Settings	Параметри зведення прозорості для експорту та буфера обміну
 	Export Artboard	Експортувати монтажну область
 	Export As	Експортувати як
 	Export As PNG…	Експортувати як PNG…
@@ -893,7 +899,7 @@
 	Export Settings	Параметри експорту
 	Export the selected assets (else all of them)	Експортувати виділені ресурси (інакше все)
 	Export to:	Експортувати до:
-	Export Transparency Flattener Presets	Експортувати набори поєднання прозоростей
+	Export Transparency Flattener Presets	Експортувати набори зведення прозорості
 	Export {count} Selected	Експортувати вибрані ({count})
 	Export:	Експорт:
 	Exported {count} file(s) to {folder}	Експортовано файли: {count} до {folder}
@@ -966,18 +972,18 @@
 	Fit to Artwork Bounds	Вписати у межі малюнка
 	Fit to Selected Art	Вписати у виділений малюнок
 	Flag…	Прапор…
-	Flare	Блік
-	Flare Tool	Інструмент «Блик»
-	Flare Tool Options	Параметри інструменту «Блик»
+	Flare	Відблиск
+	Flare Tool	Інструмент «Відблиск»
+	Flare Tool Options	Параметри інструменту «Відблиск»
 	Flat Image	Плоске зображення
 	Flat Logo	Плоский логотип
 	Flatness:	Площинність:
 	Flatten Artwork	Об’єднати малюнок
-	Flatten Transparency	Об’єднати прозорості
-	Flatten Transparency…	Поєднати прозорості…
-	Flattener preset:	Набір об’єднання:
-	Flattener presets	Набори об’єднання
-	Flattener Preview	Попередній перегляд об’єднання
+	Flatten Transparency	Звести прозорість
+	Flatten Transparency…	Звести прозорість…
+	Flattener preset:	Набір зведення:
+	Flattener presets	Набори зведення
+	Flattener Preview	Попередній перегляд зведення
 	Flip Across	Відобразити поперек
 	Flip Along	Відобразити вздовж
 	Flip Along Horizontal Axis	Відобразити по горизонтальній осі
@@ -1113,9 +1119,9 @@
 	More Options	Додаткові параметри
 	Show Properties Panel	Показати панель «Властивості»
 	Hide Corner Widget	Приховати кутовий віджет
-	Hide Corner Widget for angles greater than	Приховувати кутовий віджет для кутів.
+	Hide Corner Widget for angles greater than	Приховувати кутовий віджет для кутів, більших за
 	Hide Edges	Приховати краї
-	Hide Gradient Annotator	Сховати анотатор градієнта
+	Hide Gradient Annotator	Приховати маркер градієнта
 	Hide Grid	Приховати сітку
 	Hide Guides	Приховати напрямні
 	Hide Hidden Characters	Приховати приховані символи
@@ -1169,7 +1175,7 @@
 	Ignore White	Ігнорувати білий
 	Palette:	Палітра:
 	Limited	Обмежена
-	Full Tone	Повнотонова
+	Full Tone	Повний діапазон тонів
 	Document Library	Бібліотека документа
 	Library:	Бібліотека:
 	Image	Зображення
@@ -1187,7 +1193,7 @@
 	Import PDF Presets	Імпортувати набори PDF
 	Import Perspective Grid Presets	Імпортувати набори сітки перспективи
 	Import Print Presets	Імпортувати набори друку
-	Import Transparency Flattener Presets	Імпортувати набори поєднання прозоростей
+	Import Transparency Flattener Presets	Імпортувати набори зведення прозорості
 	Imported {what}: {}	Імпортовано: {what}: {}
 	Import…	Імпорт…
 	In Tangent Handles	Маркери вхідної дотичної
@@ -1241,11 +1247,11 @@
 	Join the ArtCraft community on Discord (discord.gg/artcraft)	Приєднуйтесь до спільноти ArtCraft Discord (discord.gg/artcraft)
 	Join the lines of each paragraph	Поєднувати рядки кожного абзацу
 	Join Tool	Інструмент «З’єднання»
-	Justification…	Виняток…
-	Justify all lines	Вимкнути всі рядки
-	Justify with last line aligned center	Вимкнути з останнім рядком по центру
-	Justify with last line aligned left	Вимкнути з останнім рядком по лівому краю
-	Justify with last line aligned right	Вимкнути з останнім рядком з правого краю
+	Justification…	Вирівнювання за шириною…
+	Justify all lines	Вирівняти всі рядки за шириною
+	Justify with last line aligned center	Вирівняти за шириною, останній рядок — по центру
+	Justify with last line aligned left	Вирівняти за шириною, останній рядок — ліворуч
+	Justify with last line aligned right	Вирівняти за шириною, останній рядок — праворуч
 	Keep a link to an image file instead of only embedding it	Зберігати зв’язок із файлом зображення замість простого впровадження
 	Keep both sides the same width	Зберігати однакову ширину обох сторін
 	Keep Formatting	Зберігати форматування
@@ -1301,7 +1307,7 @@
 	Left-to-Right Paragraph Direction	Напрямок абзацу зліва направо
 	Left:	Зліва:
 	Legacy Macintosh RGB (Gamma 1.8)	Застарілий Macintosh RGB (гама 1.8)
-	Legacy vector clipboard	Застарілий вектор буфер обміну
+	Legacy vector clipboard	Застарілий векторний буфер обміну
 	Legacy vector clipboard (no transparency)	Застарілий векторний буфер обміну (без прозорості)
 	Less	Менше
 	Letter	Letter
@@ -1423,7 +1429,7 @@
 	Matte:	Підкладка:
 	Maximize	Розгорнути
 	Maximum	Максимум
-	Maximum Editability	Максимальна редагованість
+	Maximum Editability	Максимальні можливості редагування
 	Measure Tool	Інструмент «Вимірювання»
 	Measurement Labels	Мітки вимірів
 	Media	Носій
@@ -1448,7 +1454,7 @@
 	Meters	Метри
 	Method:	Метод:
 	Millimeters	Міліметри
-	Minify	Мініфікувати
+	Minify	Мінімізувати
 	Minimal	Мінімальний
 	Minimize	Згорнути
 	Minus Back	Мінус нижній
@@ -1537,8 +1543,8 @@
 	New Graphic Style…	Новий графічний стиль…
 	New Layer Options…	Параметри нового шару…
 	New Layer…	Новий шар…
-	New Opacity Masks Are Clipping	Нові непрозорі маски обрізають
-	New Opacity Masks Are Inverted	Нові непрозорі маски інвертуються
+	New Opacity Masks Are Clipping	Нові маски непрозорості відсікають
+	New Opacity Masks Are Inverted	Нові маски непрозорості інвертуються
 	New Paragraph Style	Новий стиль абзацу
 	New Pattern Brush from Selection	Новий візерунковий пензель з виділеного
 	New PDF Preset	Новий набір PDF
@@ -1574,7 +1580,7 @@
 	No Document	Немає документа
 	No document open	Немає відкритого документа
 	No document open.	Документ не відкрито.
-	No filter plug-ins installed	Фільтруючі модулі не встановлені
+	No filter plug-ins installed	Модулі фільтрів не встановлено
 	No fonts are available.	Шрифти недоступні.
 	No gradient swatches	Немає градієнтних зразків
 	No graphic styles	Немає графічних стилів
@@ -1648,7 +1654,7 @@
 	Opacity Mask Info	Відомості про маску непрозорості
 	Opacity Mask Options	Параметри маски непрозорості
 	Opacity:	Непрозорість:
-	Opacity: 50% Multiply	Непрозорість: 50 % Збільшення
+	Opacity: 50% Multiply	Непрозорість: 50 % Множення
 	Opacity: Default	Непрозорість: за замовчуванням
 	Opacity: {value}	Непрозорість: {value}
 	Opaque	Непрозорий
@@ -1730,22 +1736,22 @@
 	Outline Stroke	Обвести обведення
 	Outline Text	Обвести текст
 	Outlines and Rules	Контури та лінійки
-	Output	Висновок
+	Output	Виведення
 	Output All Blacks Accurately	Виводити всі чорні точно
 	Output All Blacks as Rich Black	Виводити всі чорні як складовий чорний
 	Output Black	Вихідний чорний
-	Output condition:	Умова висновку:
-	Output Intent	Призначення висновку
-	Output intent profile:	Профіль призначення висновку:
+	Output condition:	Умова виведення:
+	Output Intent	Призначення виведення
+	Output intent profile:	Профіль призначення виведення:
 	Output White	Вихідний білий
-	Output › Mode	Висновок › Режим
-	Output:	Висновок:
+	Output › Mode	Виведення › Режим
+	Output:	Виведення:
 	Overlap:	Перекриття:
 	Overlapping	Перекривається
 	Overlay	Накладання
 	Overprint	Накладення
-	Overprint and Transparency Flattener	Накладання та поєднання прозоростей
-	Overprint and Transparency Flattener Options	Параметри накладання та об’єднання прозоростей
+	Overprint and Transparency Flattener	Накладання та зведення прозорості
+	Overprint and Transparency Flattener Options	Параметри накладання та зведення прозорості
 	Overprint Black…	Накладення чорного…
 	Overprint Fill	Накладання заливки
 	Overprint Preview	Перегляд накладання
@@ -1800,7 +1806,7 @@
 	Pattern Options	Параметри візерунка
 	Pattern options are available in pattern editing mode.	Параметри візерунка доступні у режимі редагування візерунка.
 	PDF	PDF
-	PDF 1.3 files have no transparency: the preset flattens it.	Файли PDF 1.3 не підтримують прозорість: набір поєднує її.
+	PDF 1.3 files have no transparency: the preset flattens it.	Файли PDF 1.3 не підтримують прозорість: набір зводить її.
 	PDF Info	Відомості про PDF
 	PDF Preset	Набір PDF
 	PDF Preset:	Набір PDF:
@@ -1932,10 +1938,10 @@
 	Profile:	Профіль:
 	Progressive	Прогресивний
 	Projecting Cap	Закінчення, що виступає
-	Proof Colors	Коліропроба
+	Proof Colors	Пробні кольори
 	Proof Setup	Налаштування кольоропроби
 	Properties	Властивості
-	Proportional Oldstyle	Пропорційні старий стиль
+	Proportional Oldstyle	Пропорційні цифри старого стилю
 	Pucker & Bloat…	Зморщування та роздування …
 	Pucker Tool	Інструмент «Зморщування»
 	Punctuation	Пунктуація
@@ -1949,7 +1955,7 @@
 	Quick Actions	Швидкі дії
 	Quickly start a new file	Швидко створити новий файл
 	Quit VectorCraft	Вийти з VectorCraft
-	Radar Graph Tool	Інструмент «Пелюсточна діаграма»
+	Radar Graph Tool	Інструмент «Пелюсткова діаграма»
 	Radial	Радіальний
 	Radial Glows	Радіальні світіння
 	Radial Gradient	Радіальний градієнт
@@ -2048,6 +2054,25 @@
 	Reflect…	Відобразити…
 	Refresh	Оновити
 	Refresh Font List	Оновити список шрифтів
+	Missing Fonts	Відсутні шрифти
+	Missing Fonts Dialog	Діалогове вікно «Відсутні шрифти»
+	These fonts aren't available. Their text shows in another font.	Ці шрифти недоступні. Їхній текст показано іншим шрифтом.
+	Search Fonts Folder	Шукати в папці Fonts
+	Find in Folder…	Знайти в папці…
+	Find Fonts in Folder…	Знайти шрифти в папці…
+	Find Font Files	Знайти файли шрифтів
+	Add Font Files	Додати файли шрифтів
+	Add Fonts	Додати шрифти
+	Find Fonts	Знайти шрифти
+	Stop	Зупинити
+	Searching…	Пошук…
+	Not found	Не знайдено
+	{folders} folder(s) and {files} file(s) searched	Переглянуто папок: {folders}, файлів: {files}
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Пропущено папок: {count}, зокрема папки інших програм і системи та приховані папки
+	{count} folder(s) or file(s) couldn't be read	Не вдалося прочитати папок або файлів: {count}
+	The search stopped at its limit: search a smaller folder.	Пошук зупинився на межі: виберіть меншу папку.
+	Copy only fonts you own or are licensed to install.	Копіюйте лише шрифти, які належать вам або які ви маєте право встановлювати за ліцензією.
+	VectorCraft copies the fonts to {folder}.	VectorCraft копіює шрифти в {folder}.
 	Registered Trademark Symbol	Символ зареєстрованого товарного знаку
 	Registration marks	Мітки поєднання
 	Registry name:	Ім’я у реєстрі:
@@ -2138,12 +2163,12 @@
 	Restored {} recovered document(s): save them to keep them	Відновлено документів: {}: збережіть їх, щоб залишити
 	Restrict printing, editing and other tasks	Обмежити друк, редагування та інші завдання
 	Reverse Front to Back	Зворотний порядок спереду назад
-	Reverse Gradient	Звернути градієнт
+	Reverse Gradient	Змінити напрям градієнта
 	Reverse Order	Зворотний порядок
-	Reverse Path Direction	Звернути напрям контуру
-	Reverse Path Direction Off	Звернути напрям контуру вимкнено
-	Reverse Path Direction On	Звернути напрямок контуру увімкнено
-	Reverse Spine	Звернути кістяк
+	Reverse Path Direction	Змінити напрям контуру
+	Reverse Path Direction Off	Зміна напряму контуру вимкнена
+	Reverse Path Direction On	Зміна напряму контуру увімкнена
+	Reverse Spine	Змінити напрям осі
 	Revert	Повернути
 	Revert to the saved version of “{name}”?	Повернутися до збереженої версії «{name}»?
 	Replace “{name}”, the file this document was opened from?	Замінити «{name}» — файл, з якого відкрито цей документ?
@@ -2167,7 +2192,7 @@
 	Rotate View Tool	Інструмент «Поворот виду»
 	Rotate…	Повернути…
 	Rotation	Поворот
-	Roughen…	Огрубління…
+	Roughen…	Надати нерівності…
 	Round Cap	Кругле закінчення
 	Round Corners…	Заокруглити кути…
 	Round Join	Заокруглене з’єднання
@@ -2237,8 +2262,8 @@
 	Save these settings as a print preset	Зберегти ці параметри як набір друку
 	Save to Swatches	Зберегти у зразки
 	Save To:	Зберегти у:
-	Save Transparency Flattener Preset	Зберегти набір об’єднання прозоростей
-	Save Transparency Flattener Preset…	Зберегти набір об’єднання прозоростей…
+	Save Transparency Flattener Preset	Зберегти набір зведення прозорості
+	Save Transparency Flattener Preset…	Зберегти набір зведення прозорості…
 	SAVED	ЗБЕРЕЖЕНІ
 	Saved	Збережено
 	Saved recovery data for {title}	Збережено дані відновлення для {title}
@@ -2337,14 +2362,14 @@
 	Select Anchors	Виділити опорні точки
 	Select Appearance Item	Виділити елемент оформлення
 	Select Art	Виділити малюнок
-	Select art and choose Object › Pattern › Make.	Перейдіть до малюнка та оберіть «Об’єкт › Візерунок › Створити».
-	Select art and click New Symbol to make one.	Перейдіть до малюнка і натисніть «Новий символ», щоб створити його.
+	Select art and choose Object › Pattern › Make.	Виділіть малюнок та виберіть «Об’єкт › Візерунок › Створити».
+	Select art and click New Symbol to make one.	Виділіть малюнок і натисніть «Новий символ», щоб створити його.
 	Select art and use New Brush to make one.	Виділіть малюнок та використовуйте «Новий пензель», щоб створити його.
 	Select Freeform Point	Виділити довільну точку
 	Select Gradient Stop	Виділити точку переходу градієнта
 	Select Guides	Виділити напрямні
 	Select Objects	Виділити об’єкти
-	Select objects to see their CSS, or Generate CSS for the whole document.	Перейдіть до об’єктів, щоб побачити CSS, або створіть CSS для всього документа.
+	Select objects to see their CSS, or Generate CSS for the whole document.	Виділіть об’єкти, щоб побачити їхній CSS, або створіть CSS для всього документа.
 	Select Same Tint %	Виділити з тим же % відтінку
 	Select Slices	Виділити фрагменти
 	Select styled art and click New Graphic Style.	Виділіть оформлений малюнок та натисніть «Новий графічний стиль».
@@ -2363,14 +2388,14 @@
 	Selection & Anchor Display	Відображення виділення та опорних точок
 	Selection Only	Тільки виділення
 	Selection Tool	Інструмент «Виділення»
-	Send Backward	На один рівень тому
+	Send Backward	На один рівень назад
 	Send to Back	На задній план
 	Send to Current Layer	Надіслати на поточний шар
 	Sentence case	Як у реченні
 	Separate colors into rows	Розділити кольори по рядках
 	Separate several keywords with commas.	Розділяйте ключові слова комами.
-	Separations list the document's inks here: one page per ink that prints.	Кольорові поділу перераховують тут фарби документа: одна сторінка на кожну фарбу, що друкується.
-	Separations Preview	Перегляд кольороподілів
+	Separations list the document's inks here: one page per ink that prints.	Тут перелічено фарби документа для кольороподілу: одна сторінка на кожну фарбу, що друкується.
+	Separations Preview	Перегляд кольороподілу
 	Serialize Document	Серіалізувати документ
 	Serif / Mincho	Serif / Mincho
 	Server-side (.map)	Серверна частина (.map)
@@ -2432,7 +2457,7 @@
 	Show Embedded	Показати впроваджені
 	Show Find Field	Показати поле пошуку
 	Show Font Names in English	Показувати назви шрифтів англійською
-	Show Gradient Annotator	Показати анотатор градієнта
+	Show Gradient Annotator	Показати маркер градієнта
 	Show Gradient Swatches	Показати градієнтні зразки
 	Show Grid	Показати сітку
 	Show Grid (⌘')	Показати сітку (⌘')
@@ -2631,6 +2656,7 @@
 	Swash	Розчерк
 	Swatch Conflict	Конфлікт зразків
 	Swatch Conflicts	Конфлікти зразків
+	Swatch exchange files keep solid colors only.	Файли обміну зразками зберігають лише суцільні кольори.
 	Swatch Libraries	Бібліотеки зразків
 	Swatch Libraries Menu	Меню "Бібліотеки зразків"
 	Swatch Library	Бібліотека зразків
@@ -2659,7 +2685,7 @@
 	Use Library Item	Використати елемент бібліотеки
 	Graphic	Графіка
 	Show all open documents	Показати всі відкриті документи
-	Symbol Instance	Примірник символ
+	Symbol Instance	Екземпляр символу
 	Symbol Libraries	Бібліотеки символів
 	Symbol Libraries (on the roadmap)	Бібліотеки символів (у плані розвитку)
 	Symbol Screener Tool	Інструмент «Прозорість символів»
@@ -2678,7 +2704,7 @@
 	Tab Stops	Табуляції
 	Tabs	Табуляції
 	Tabular Lining	Табличні цифри
-	Tabular Oldstyle	Таблиці старого стилю
+	Tabular Oldstyle	Табличні цифри старого стилю
 	Target	Об’єкт
 	Target Contents	Вміст об’єкта
 	Target:	Об’єкт:
@@ -2687,7 +2713,7 @@
 	Temperature/Tint…	Температура/відтінок…
 	Template	Шаблон
 	Templates	Шаблони
-	Templates Folder	Шаблони папки
+	Templates Folder	Папка шаблонів
 	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, що відображається в комірці:
 	Text Export Options	Параметри експорту тексту
@@ -2772,12 +2798,12 @@
 	Transforms	Трансформування
 	Transform…	Трансформувати…
 	Transparency	Прозорість
-	Transparency Flattener Presets	Набори поєднання прозоростей
-	Transparency Flattener Presets…	Набори поєднання прозоростей…
+	Transparency Flattener Presets	Набори зведення прозорості
+	Transparency Flattener Presets…	Набори зведення прозорості…
 	Transparency Grid	Сітка прозорості
 	Transparency Info	Відомості про прозорість
-	Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour.	Прозорість поєднується з набором. Текст записується як контури; градієнти – як колірні смуги.
-	Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth.	Прозорість поєднується з набором. Текст записується як контури; градієнти залишаються гладкими.
+	Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour.	Прозорість зводиться за параметрами набору. Текст записується як контури; градієнти — як колірні смуги.
+	Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth.	Прозорість зводиться за параметрами набору. Текст записується як контури; градієнти залишаються гладкими.
 	Transparency Options	Параметри прозорості
 	Transparent	Прозорий
 	Transparent (Default)	Прозорий (за замовчуванням)
@@ -2859,7 +2885,7 @@
 	Use document bleed settings	Використовувати параметри вильоту документа
 	Use Even-Odd Fill Rule	Використовувати правило заливки «парне–непарне»
 	Use Japanese Crop Marks	Використовувати японські мітки обрізання
-	Use Low Resolution Proxy for Linked EPS	Використовувати низькодозволений проксі для пов’язаних EPS
+	Use Low Resolution Proxy for Linked EPS	Використовувати попередній перегляд низької роздільної здатності для пов’язаних EPS
 	Use Non-Zero Winding Fill Rule	Використовувати правило заливки «ненульове заповнення»
 	Use Precise Cursors	Використовувати точні курсори
 	Use Pressure Pen	Використовувати перо з натиском
@@ -2981,6 +3007,7 @@
 	Scrub Numeric Fields by Dragging	Змінювати числові поля перетягуванням
 	{count} file(s) in {folder}{note}. Show the package folder?	файлів: {count} {folder}{note}. Показати папку пакета?
 	{count} linked file(s) not found	не знайдено пов’язаних файлів: {count}
+	fonts not copied: {fonts}	шрифти не скопійовано: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	пов’язані зображення ({count}) змінилися з моменту збереження цього документа. Показати нові версії?
 	{count} more rules: Export writes every one.	ще правил: {count}: експорт записує все.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	пропущено об’єкти без імені: {count}: назвіть їх або увімкніть «Об’єкти без імені» у меню панелі.
@@ -3098,15 +3125,15 @@
 	Merged PRs	Об’єднані PR
 	Commits	Коміти
 	Lines added	Додані рядки
-	Lines deleted	Віддалені рядки
+	Lines deleted	Видалені рядки
 	Line delta	Різниця рядків
 	Binary assets added	Додані бінарні ресурси
-	Binary assets removed	Віддалені бінарні ресурси
+	Binary assets removed	Видалені бінарні ресурси
 	First commit	Перший коміт
 	Last commit	Останній коміт
 	First	Перший
 	Last	Останній
-	{people} contributors · {commits} commits	{people} учасників · {commits} коммітів
+	{people} contributors · {commits} commits	{people} учасників · {commits} комітів
 	No contributor data was built into this copy.	Ця копія не містить даних про учасників.
 	No model credits were built into this copy.	Ця копія не містить відомостей про моделі.
 	Company	Компанія
@@ -3122,15 +3149,15 @@ axis	Horizontal	Горизонтальна
 axis	Vertical	Вертикальна
 axis	Both	Обидві
 	Drag to move	Перетягніть для переміщення
-	Drag to float as a toolbar	Перетягніть, щоб зробити плаваючою панеллю інструментів
+	Drag to float as a toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Put back in the toolbar	Повернути на панель інструментів
-	Float Panel	Зробити панель плаваючою
+	Float Panel	Від’єднати панель
 	Dock Panel	Прикріпити панель
-	Drag to float the panel group	Перетягніть, щоб зробити групу панелей плаваючою
+	Drag to float the panel group	Перетягніть, щоб від’єднати групу панелей
 	Put back in the dock	Повернути у док
-	Drag to float the toolbar	Перетягніть, щоб зробити панель інструментів плаваючою
+	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
-	Float Tool Group	Зробити групу інструментів плаваючою
+	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
 @msg	{_1} has no {_2} style	{_1} не має накреслення {_2}
@@ -3145,6 +3172,7 @@ axis	Both	Обидві
 @msg	its editing data is for a different page	його дані для редагування відносяться до іншої сторінки
 @msg	its layers use {_1}, which aren't read yet	його шари використовують {_1}, що поки не читається
 @msg	its page has text, and its layers have no text objects to put it in	на його сторінці є текст, а на шарах немає текстових об’єктів, куди його помістити
+@msg	its type is to come in as outlines, which only its page has	його текст має прийти у вигляді контурів, а вони є лише на його сторінці
 @msg	the art on them differs from the page's in {_1}% of it	зображення на шарах відрізняється від зображення на сторінці на {_1} % площі
 @msg	`to` must be "corner" or "smooth"	`to` має бути "corner" або "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Файли BMP бувають RGB або у відтінках сірого: colorModel rgb або gray
@@ -3152,7 +3180,7 @@ axis	Both	Обидві
 @msg	Combine Slices: the slices have no bounds	Об’єднання фрагментів: фрагменти не мають кордонів
 @msg	Convert to Artboards: selection has no area	Перетворення на монтажні області: виділення не має області
 @msg	Convert to Shape: no rectangles or ellipses selected	Перетворення на фігуру: не виділено прямокутники або еліпси
-@msg	Copied the CSS of {rules} object(s)	Скопійовано CSS для {rules} об’єкта(ів)
+@msg	Copied the CSS of {rules} object(s)	Скопійовано CSS об’єктів: {rules}
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}
@@ -3175,8 +3203,8 @@ axis	Both	Обидві
 @msg	Expand: nothing to expand	Розбір: нема чого розбирати
 @msg	Exported {count} file(s) to {folder}	Експортовано файли: {count} до {folder}
 @msg	Exported {path}	Експортовано: {path}
-@msg	Flatten Transparency: select objects to flatten	Об’єднання прозоростей: виділіть об’єкти для об’єднання
-@msg	Flatten Transparency: {e}	Об’єднання прозоростей: {e}
+@msg	Flatten Transparency: select objects to flatten	Зведення прозорості: виділіть об’єкти для зведення
+@msg	Flatten Transparency: {e}	Зведення прозорості: {e}
 @msg	Image Trace: the traced image is missing	Трасування зображення: зображення, що трасується, відсутнє
 @msg	Imported {what}: {_1}	Імпортовано: {what}: {_1}
 @msg	Installed plug-in {_1}	Встановлено модуль {_1}
@@ -3328,7 +3356,7 @@ axis	Both	Обидві
 @msg	image would be too large; lower the resolution	зображення буде завеликим; зменште роздільну здатність
 @msg	index must be a number or first, previous, next or last	index має бути числом або first, previous, next, last
 @msg	index must be a number or first, previous, next or last, not `{other}`	index повинен бути числом або first, previous, next, last, а не `{other}`
-@msg	installing from a path is not available on the web; pass the module as `dataBase64`	встановлення з файла недоступне у вебверсії; передайте модуль як `dataBase64`
+@msg	installing from a path is not available on the web; pass the module as `dataBase64`	встановлення з файлу недоступне у вебверсії; передайте модуль як `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	внутрішня помилка `{cmd}`: {msg} (документ залишений у попередньому стані; будь ласка, повідомте про цю помилку)
 @msg	internal error: {msg} (please report this bug)	внутрішня помилка: {msg} (будь ласка, повідомте про цю помилку)
 @msg	invalid PDF setting: {0}	неприпустимий параметр PDF: {0}
@@ -3434,6 +3462,7 @@ axis	Both	Обидві
 @msg	no symbol instances selected	екземпляри символів не виділені
 @msg	no target object has an opacity mask: select one or give `id`	у жодного цільового об’єкта немає маски непрозорості: виділіть один або вкажіть `id`
 @msg	no threaded text selected	пов’язаний текст не виділено
+@msg	no user library folder here	тут немає папки користувацьких бібліотек
 @msg	no user workspace `{from}`	немає користувача робочого середовища `{from}`
 @msg	node {_1} is not text	вузол {_1} не є текстом
 @msg	not a DXF drawing	не є кресленням DXF
@@ -3474,7 +3503,7 @@ axis	Both	Обидві
 @msg	plug-in exceeded its {0}	модуль перевищив свій {0}
 @msg	plug-in failed: {0}	модуль завершився помилково: {0}
 @msg	plug-in manifest: {0}	маніфест модуля: {0}
-@msg	plug-in output: {0}	висновок модуля: {0}
+@msg	plug-in output: {0}	виведення модуля: {0}
 @msg	plug-in parameters: {0}	параметри модуля: {0}
 @msg	plug-in trapped: {0}	модуль зупинено з помилкою: {0}
 @msg	print settings are not an object	параметри друку не є об’єктом
@@ -3499,9 +3528,9 @@ axis	Both	Обидві
 @msg	select a symbol instance	виділіть екземпляр символу
 @msg	select an Image Trace object	виділіть об’єкт трасування зображення
 @msg	could not decode image: {0}	не вдалося декодувати зображення: {0}
-@msg	image is empty	зображення порожньо
+@msg	image is empty	зображення порожнє
 @msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	зображення має розмір {width} × {height} пікселів, що більше, ніж приймає трасування зображення ({max} мегапікселів)
-@msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	це трасування створило б більше {max} опорних точок, що більше, ніж документ може плавно відобразити: збільшіть «Шум», зменшіть «Контури» або «Кольори» або виберіть набір з меншою точністю
+@msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	це трасування створило б більше {max} опорних точок, що більше, ніж документ може плавно відобразити: збільште «Шум», зменште «Контури» або «Кольори» або виберіть набір з меншою точністю
 @msg	select an envelope	виділіть оболонку
 @msg	select an image	виділіть зображення
 @msg	select an object in perspective	виділіть об’єкт у перспективі
@@ -3663,7 +3692,7 @@ axis	Both	Обидві
 @msg	A browser with WebGPU or WebGL2 is required.	Потрібен браузер із WebGPU або WebGL2.
 @msg	The graphics were lost and couldn't be restarted.	Графіку було втрачено, і її не вдалося перезапустити.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Ваші незбережені зміни зберігаються у цьому браузері: перезавантажте сторінку, щоб повернути їх.
-@msg	Reload the page to go on (changes not saved yet may be lost).	Перезавантажте сторінку, щоб продовжити.
+@msg	Reload the page to go on (changes not saved yet may be lost).	Перезавантажте сторінку, щоб продовжити (незбережені зміни можуть бути втрачені).
 @msg	tool (a tool id) is required	потрібно tool (ідентифікатор інструменту)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входить до групи панелі інструментів з кількох інструментів
 @msg	onto must name a panel floating in another group	onto має називати панель, що плаває в іншій групі
@@ -3687,6 +3716,24 @@ axis	Both	Обидві
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	цей файл збережений без сумісності з PDF, і його дані редагування не вдається прочитати ({why})
+@msg	No fonts are missing in this document	У цьому документі немає відсутніх шрифтів
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не шукає в папках інших програм і системи: {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не шукає в папках Shared і Public у Users: {path}
+@msg	{path} is not a folder	{path} не є папкою
+@msg	the search couldn't start: try again in a moment	не вдалося почати пошук: спробуйте ще раз за мить
+@msg	searching a folder isn't available on the web	пошук у папці недоступний у веб-версії
+@msg	every search thread stopped on an internal error (please report this bug)	усі потоки пошуку зупинилися через внутрішню помилку (повідомте про цю помилку)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папку Fonts VectorCraft тут не задано: її задають настільна програма та vectorcraft-cli
+@msg	choose the font files to add	виберіть файли шрифтів для додавання
+@msg	{n} font file(s) are now in {folder}	Файлів шрифтів тепер у {folder}: {n}
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлів шрифтів тепер у {folder}: {n}; не вдалося додати {failed}: {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	тут недоступно шрифтів: {n}; їхній текст показано іншим шрифтом
+@msg	not a file	не файл
+@msg	not a font file	не файл шрифту
+@msg	that document is no longer open	цей документ більше не відкрито
+@msg	larger than 256 MB	більше 256 МБ
+@msg	the files come to more than 1 GB: add fewer at a time	файли займають понад 1 ГБ: додавайте менше за раз
+@msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб
@@ -3694,7 +3741,7 @@ axis	Both	Обидві
 	Settings	Налаштування
 	Break Link	Розірвати зв’язок
 	On: one locked object showing the document, updated when it changes.	Увімк.: один заблокований об’єкт, який показує документ і оновлюється під час його зміни.
-	Off: an editable copy of its art, embedded in this document.	Вимк.: редагована копія зображення, введена в цей документ.
+	Off: an editable copy of its art, embedded in this document.	Вимк.: редагована копія графіки, вбудована в цей документ.
 	Images: link to the file instead of only embedding it.	Зображення: пов’язувати із файлом замість простого впровадження.
 	VectorCraft documents: one locked object, updated when the file changes.	Документи VectorCraft: один заблокований об’єкт, який оновлюється під час зміни файлу.
 	A file dialog is open: choose there first	Відкрито вікно вибору файлу: спочатку зробіть вибір у ньому

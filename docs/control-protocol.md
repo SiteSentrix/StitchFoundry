@@ -154,9 +154,11 @@ Clicking a swatch there runs `swatch.library.add {library, names: [name], apply}
 one with Alt), so one undo step adds and applies it; Shift/Cmd-clicks select swatches and colour groups for
 Add to Swatches.
 `window.swatchLibrary.other {path?}` loads a library file (or another document's swatches) and opens it there;
-opening a `.vcswatches`, `.gpl` or `.ase` file with `app.open` does the same. `ui.saveSwatchLibrary {names?}` opens the
-`saveSwatchLibrary` dialog (fields `name`, `format`: `vcswatches`/`gpl`/`css`, `user`: save to the user library
-folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `swatch.library.save` (to a file it asks for a path).
+opening a `.vcswatches`, `.gpl` or `.ase` file with `app.open` does the same. A file with the same extension and
+bytes as a User Defined library opens as that library. `ui.saveSwatchLibrary {names?}` opens the
+`saveSwatchLibrary` dialog (fields `name`, `format`: `vcswatches`/`gpl`/`ase`/`css`, `user`: save to the user library
+folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `swatch.library.save` (to a file it asks for a path
+and suggests `name` with the format's extension as the file name; the web downloads the file under that name).
 
 Graphic style libraries open in the same panel: `window.graphicStyleLibrary {library}` (`library_panel: {kind:
 "graphicStyles", id}`; `library: null` closes it). Clicking a style there runs `graphicStyle.addFromLibrary {library,
@@ -166,7 +168,7 @@ document's graphic styles) and opens it there; opening a `.vcstyles` file with `
 Defined libraries are `window.userGraphicStyleLibrary1`…`10` in Window → Graphic Style Libraries.
 `ui.saveGraphicStyleLibrary {names?}` opens the `saveGraphicStyleLibrary` dialog (fields `name`, `user`: save to the
 user library folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `graphicStyle.saveLibrary` (to a file it
-asks for a path).
+asks for a path and suggests `name` with `.vcstyles` as the file name; the web downloads the file under that name).
 
 Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) opens the `tileEdgeColor` dialog (field
 `color`: `#rrggbb` or a preset name such as "Light Blue"); `ui.dialog.confirm` sets the preference
@@ -372,6 +374,27 @@ folder; `ui.dialog.set {field: "discard", value: true}` then confirm ignores it 
 `applyToAll` the rest too. The next missing file is asked about after each answer; `ui.dialog.cancel` stops asking.
 Then, with the preference `updateLinks: "askWhenModified"`, modified linked files are offered for update in a
 `confirm` dialog whose `ui.dialog.confirm` runs `links.update`.
+
+Missing fonts: once the missing linked file questions are answered, or at once when there are none, `app.open` of a
+document whose type uses fonts that aren't available (`text.missingFonts`) opens the `missingFonts` dialog, one document
+at a time, and so does `links.editOriginal` of a placed document. When another dialog takes its place (Import PDF for a
+file opened next, for example), the dialog opens again once that one closes. Fields: `document` (the document's uid),
+`fonts` (`[{family, style, status, resolved}]`), `fontsNextToDocument` (the `Fonts` folder next to the document, or
+empty), `state` (empty, `searching`, `done`, `stopped` or `failed`), `search` (the search's `id`), `folder`, `found`
+(`text.findFontFiles`'s `fonts`, with the files found), `searched`, `skipped`, `unreadable`, `stopped`, `error` and
+`chosen` (the files to add; a font's first file is chosen when the search finds it). Its buttons are Find Fonts and
+Close, with Search Fonts Folder, Find in Folder… and, once files are found, Add Fonts in the dialog.
+`ui.dialog.set {field: "discard", value: true}` then `ui.dialog.confirm` is Find Fonts: the dialog closes and Type ›
+Find Font opens (dialog `findFont`) with the first missing font selected. `ui.dialog.set {field: "searchFolder",
+value}` then `ui.dialog.confirm` searches that folder (`text.findFontFiles`), keeps the dialog open and clears
+`searchFolder`, also when the search doesn't start. The fields change as frames draw the dialog; `text.findFontFiles
+{}` reports the search directly. `ui.dialog.confirm` without `discard` or `searchFolder` is Add Fonts: it copies the
+files in `chosen` (`text.addFontFiles`) and closes the dialog. `ui.dialog.cancel` (Close) closes it and stops its
+search. After Find Fonts or Close, the dialog doesn't open again for that open.
+`ui.missingFontsDialog {folder?}` opens the dialog for the active document, searching `folder` when given.
+`ui.findFontsInFolder {folder?}` (Find in Folder… in Type › Find Font…, shown when the document misses fonts) asks for a
+folder, then opens the dialog searching it. The web shows a status line instead of the dialog, and both commands are
+disabled there.
 
 Text Import Options: placing a `.txt` file through the app (`file.place` with a file and no `text` options, the Place
 dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: `unicode`/`ansi`,

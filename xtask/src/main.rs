@@ -12,6 +12,7 @@ mod layers;
 mod sha256;
 mod stats;
 mod version;
+mod web_fonts;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -32,6 +33,8 @@ commands:
   ico <out.ico> <png>...
                   pack PNGs into a Windows .ico (used by packaging/icons.sh)
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
+  web-fonts       copy the craft-fonts faces in crates/text/web-fonts.txt into the web site (the Trunk
+                  post_build hook; a no-op without CRAFT_FONTS_DIR)
 ";
 
 fn main() -> ExitCode {
@@ -49,6 +52,7 @@ fn main() -> ExitCode {
         Some("ico") => ico::run(&rest),
         Some("version") => version::run(&root(), &rest),
         Some("stats") => stats::run(&root(), rest.contains(&"--exact")),
+        Some("web-fonts") => web_fonts::run(&root()),
         Some("-h" | "--help" | "help") | None => {
             print!("{USAGE}");
             Ok(())

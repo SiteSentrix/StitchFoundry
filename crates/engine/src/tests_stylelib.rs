@@ -192,8 +192,15 @@ fn user_libraries_and_other_documents_styles() {
     assert_eq!(user.len(), 1);
     assert_eq!((user[0]["name"].as_str(), user[0]["count"].as_u64()), (Some("My: Looks"), Some(doc(&s).graphic_styles.len() as u64)));
     assert_eq!(list["userFolder"].as_str(), Some(dir.to_string_lossy().as_ref()));
-    // Opening a file of the user folder gives its User Defined library.
+    // Opening a file of the user folder gives its User Defined library, and so does a file with the
+    // same bytes in another folder.
     assert_eq!(run(&mut s, "graphicStyle.loadLibrary", json!({ "path": path }))["library"], "user/My- Looks.vcstyles");
+    let elsewhere = dir.with_file_name(format!("vc-stylelib-elsewhere-{}", std::process::id()));
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let copy = elsewhere.join("Looks.vcstyles");
+    std::fs::copy(&path, &copy).unwrap();
+    assert_eq!(run(&mut s, "graphicStyle.loadLibrary", json!({ "path": copy.to_string_lossy() }))["library"], "user/My- Looks.vcstyles");
+    let _ = std::fs::remove_dir_all(elsewhere);
     let _ = std::fs::remove_dir_all(dir);
 
     // Another document's graphic styles load as a library.

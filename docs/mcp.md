@@ -416,7 +416,19 @@ strokes, effects or a brush comes in as its drawn look (a group named after it).
 text object's place; hidden point type is made from the file's text document. A file whose editing data has symbols,
 pattern fills, placed files or anything else the reader doesn't read on a layer that shows, or whose layers look
 different from its page, opens as before: an EPS as its printed page, a `.ai` file from its PDF content (where plain
-groups open ungrouped), with a warning saying why.
+groups open ungrouped), with a warning saying why. Layers look different when they draw an object the page doesn't (or
+miss one it draws), and, for an EPS whose page is the box of its art, when they print art outside it. With
+`textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines.
+
+The document then has what the file's page doesn't print: hidden objects and layers, layers that don't print, guides and
+the art outside the artboards, as the app that wrote the file shows them. Exports and `artboard.fitToArt` leave out the
+hidden art, the guides and template layers; an EPS's artboard is the file's artboard, not the page's bounding box. A
+print pipeline that wants only what the page prints opens the file with `editingData: false` (default `true`):
+an EPS as its page, a `.ai` file from its PDF content (a `.ai` saved without PDF compatibility then can't be opened).
+
+```json
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/label.eps","editingData":false}}}
+```
 
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)
@@ -438,7 +450,8 @@ CMYK too.
 PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) open through the EPS
 reader (see EPS and PostScript import). An `.ai` saved without PDF compatibility (its PDF part is only a placeholder
 page) opens from its editing data alone: its type is made from the file's text document where it can be (point type), and
-what can't be is left out with a warning; without editing data it says it can't be opened.
+what can't be is left out with a warning; so is non-native art (the content of a placed PDF, which Illustrator shows but
+doesn't edit and keeps as a PDF inside the editing data); without editing data it says it can't be opened.
 
 What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
@@ -612,6 +625,23 @@ the one highlighted layer or group row, else the one selected group, else the cu
 so art added later is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
 underlines clipping-path names.
 
+## Object selection
+
+`select.set {ids}` replaces the selection, `select.add {ids}` adds to it, and
+`select.toggle {id}` or `select.toggle {ids}` toggles each target.
+Every id must be a non-negative integer naming an existing object.
+A malformed or unknown id is an error naming that value; the entire selection is left unchanged.
+All three commands return `{count, ids}` for the resulting selection, in selection order.
+An empty array clears the selection for `select.set` and leaves it alone for Add and Toggle.
+
+`edit.clear {ids?}` deletes the exact selected objects, including individual compound-path members;
+their unselected siblings remain in the compound. Supplying `ids` works without a selection and
+overrides selected anchors or guides. Every explicit id is validated before any deletion; a malformed
+or unknown id leaves the document unchanged. An empty `ids` array does nothing. Layers themselves
+are kept, and selecting an ancestor together with its descendants deletes that subtree once.
+Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
+Cut still removes the objects it copied, including a whole compound when a member is selected.
+
 ## Saved selections
 
 Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default
@@ -778,13 +808,22 @@ swatch in the library panel does). `swatch.resetDefaults {replace?}` brings back
 {"name":"run_command","arguments":{"command":"swatch.library.get","params":{"library":"earth-tones"}}}
 {"name":"run_command","arguments":{"command":"swatch.library.add","params":{"library":"earth-tones","names":["Clay"]}}}
 ```
-`swatch.library.save {path?, format?: "vcswatches"|"gpl"|"css", names?, name?, user?}` writes the document's swatches
-as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour groups; `.gpl` is 8-bit RGB;
-CSS writes custom properties); without `path` it returns `{data}`, and `user: true` saves into the user library
+`swatch.library.save {path?, format?: "vcswatches"|"gpl"|"ase"|"css", names?, name?, user?}` writes the document's
+swatches as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour
+groups; `.gpl` is 8-bit RGB; a swatch exchange `.ase` file keeps solid colors in their own model
+(RGB, CMYK, Lab or Gray) as global, spot or process colors, and color groups, writes a tint swatch
+as the color it shows and leaves gradients out; CSS writes custom properties); without `path`
+it returns `{data}`, or `{dataBase64}` for `.ase`, and `user: true` saves into the user library
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
 dataBase64?, name?}` loads a `.vcswatches`, `.gpl` or swatch exchange (`.ase`) file, or another document's swatches,
 as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global, spot or process
-swatches and keeps their color groups.
+swatches and keeps their color groups. A file in the user library folder, or a file with the
+same extension and bytes as one there, loads as that User Defined library (category `user`).
+`swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
+app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
+as `.vcswatches`) under a name no file there has, and lists it as User Defined from then on; until the app
+quits, commands given its loaded id use the copy → `{library, name, count, path, copied}` (`copied: false`
+when the folder already held the same file). Without a user library folder the command is disabled.
 
 ## Graphic style libraries
 
@@ -807,7 +846,8 @@ its bounds.
 the styles unlinked from swatches, with their opacity, blend mode, isolate and knockout, and the patterns they paint
 with); without `path` it returns `{data}`, and `user: true` saves into the user library folder of the desktop app
 (category `user`, User Defined). `graphicStyle.loadLibrary {path? | data? | dataBase64?, name?}` loads a `.vcstyles`
-file, or another document's graphic styles, as a library to add from.
+file, or another document's graphic styles, as a library to add from; a file in the user library folder, or a file
+with the same extension and bytes as one there, loads as that User Defined library.
 
 ## Libraries
 
@@ -1150,7 +1190,8 @@ or pulls handles out in line with the neighbouring anchors (a smooth anchor keep
 (Cut Path at Selected Anchor Points) cuts there and answers `{ids}`: a closed path opens at the cut, its two ends
 on top of each other, and an open path becomes one path per piece. Each cut leaves one of its two anchors selected,
 so `path.moveAnchors {dx, dy}` (or a Direct Selection drag) pulls the path apart there; `path.join {}` (Connect
-Selected End Points) joins the ends again. `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
+Selected End Points) joins the ends again; `path.join {ids: [a, b], ends: ["last", "first"]}` joins the ends asked for
+(the Pen's join, #776: drawing on from one open path, a click on another's end makes them one path). `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
 `path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools); the Pen with Alt
 held over a selected path's handle, anchor or segment works as the Anchor Point tool. `path.reshapeSegment {id,
 subpath?, segment, t, dx, dy}` (a segment dragged with Direct Selection or the Anchor Point tool) moves the segment's
@@ -2516,9 +2557,16 @@ Type can use the bundled fonts, fonts added to the session and the fonts install
 the system's and the user's font folders (Windows: `Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, plus fonts
 registered outside them, such as fonts installed as shortcuts, and in the desktop app and `vectorcraft-cli` (MCP
 included) the fonts in DirectWrite's system font collection, such as those Adobe Fonts activates while Creative Cloud runs; macOS: `/System/Library/Fonts`, `/Library/Fonts`,
-`/Network/Library/Fonts`, `~/Library/Fonts` and downloaded system fonts; Linux and BSD: `/usr/share/fonts`,
+`/Network/Library/Fonts`, `~/Library/Fonts` and downloaded system fonts, plus in the desktop app and `vectorcraft-cli`
+the fonts CoreText's font manager lists outside them, such as those apps and font managers register from their own
+folders; Linux and BSD: `/usr/share/fonts`,
 `/usr/local/share/fonts`, `~/.fonts` and the XDG data folders' `fonts`, `~/.local/share/fonts` among them, and in a
-Flatpak sandbox the host's fonts). The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
+Flatpak sandbox the host's fonts). Faces without outlines VectorCraft draws (no `glyf`, `CFF`, `CFF2` or `VARC` table, such
+as bitmap-only fonts) are left out. The scan also reads the folder the `fontsFolder` preference names (Preferences › Type ›
+Additional Fonts Folder) with its subfolders and, in the desktop app and `vectorcraft-cli`, VectorCraft's own `Fonts` folder
+next to the preferences: `~/Library/Application Support/VectorCraft/Fonts` on macOS, `%APPDATA%\VectorCraft\Fonts` on
+Windows, and `$XDG_CONFIG_HOME/vectorcraft/Fonts` or `~/.config/vectorcraft/Fonts` on Linux and BSD. `text.addFontFiles`
+copies fonts into that folder. The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
 by family name), so opening, placing, pasting and importing files find them whatever ran before. `text.fontList`
 lists every family available, the installed ones included, as the font menus do: without the system's hidden
 families, whose names start with "." (macOS's ".SF NS", ".LastResort"), which still resolve when a document names
@@ -2532,6 +2580,51 @@ comes to the front and a font folder changed meanwhile.
 {"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
 {"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
+```
+
+`text.missingFonts` lists the fonts that the active document's type uses, in its layers and its symbols, and that aren't
+available as named: `{fonts: [{family, style, status, resolved}], count, fontsNextToDocument?}`. `status` is `missing` or
+`substitute`, as in `text.fonts`. CSS generic families such as `sans-serif`, which no font file provides, and names
+longer than 256 bytes are left out. `fontsNextToDocument` is the `Fonts` folder next to the saved document
+(File › Package writes it), when there is one and a search may start there. `text.findFontFiles {folder}` looks for
+the fonts' files in an absolute folder and its subfolders on separate threads and returns at once with
+`state: "searching"` and an `id`; `fonts: [{family, style?}]` names other fonts to look for. `text.findFontFiles {}`
+returns the last search's state with the files found so far for each font: `searching`, `done`, `stopped` (with
+`stopped`: `stop`, `time` or `limit`) or `failed` (with `error`); before the first search it returns
+`{state: "idle", fonts: []}`, without an `id`. `{stop: true}` stops the search. A search reads the table directories
+and the `name`, `fvar` and `OS/2` tables of `.ttf`, `.otf`, `.ttc` and `.otc` files and, on macOS, of suitcase fonts
+(extensionless or `.suit` files whose fonts are in their resource fork), and it lists a file for a font only when adding
+the file makes the font resolve exactly as `text.fonts` resolves it. It ends after `maxSeconds` (60 by default, 1 to
+600), at its limits on the entries listed (10,000,000), the folders waiting to be listed (1,000,000), the font files
+read (10,000) and the files kept (1,000), or once every font has a file. Folders more than 64 levels below the picked
+one are skipped and counted in `skipped`. A search does not read a font file larger than 256 MB, which
+`text.addFontFiles` does not copy, or a suitcase font whose resource fork is larger than 8 MB.
+
+A search does not enter app and media library packages (`.app`, `.bundle`, `.framework`, `.photoslibrary` and the like),
+folders named `Program Files` (also `Program Files (x86)` and `Program Files (Arm)`), `ProgramData`, `$Recycle.Bin` or
+`System Volume Information`, the system's folders at the root of a volume (a macOS, Linux, BSD or Windows root, told by
+the folders it holds), the `Shared` and `Public` folders in `Users`, a home folder's `Library`, `AppData`,
+`Applications` and `snap` folders and the folders in it whose names start with a dot, the app data folders in a
+`Library` folder (`Application Support`, `Containers`, `Group Containers`, `Caches`, `Preferences`), or the folders the
+environment names for apps and the system (such as `APPDATA`, `LOCALAPPDATA`, `ProgramFiles`, `SystemRoot` and
+`XDG_CONFIG_HOME`), and a search of a folder inside one of them fails. The walk also skips other hidden folders and
+folders whose contents are in the cloud, and it follows no links; a picked folder may be one of those, and a picked path
+that goes through a link is searched at its target. Programs installed in other folders, such as a folder on another
+drive, are searched as any other folder is.
+
+`text.addFontFiles {files}` copies files that the session's last search found into VectorCraft's `Fonts` folder, then
+scans the fonts again, and type set in them redraws. It copies only regular `.ttf`, `.otf`, `.ttc`, `.otc`, `.woff`
+and `.woff2` files and suitcase fonts (with their resource fork), at most 256 MB a file and 1 GB in all, and lists any
+other file in `skipped`. It never replaces a file: a file with the same contents is kept (`kept`), and when another
+file has the name, the copy gets a number (`Name 2.otf`). Copy only fonts you own or are licensed to install. `command.batch` returns before a search ends; later requests over MCP or the control channel poll
+`text.findFontFiles {}`. `vectorcraft-cli run` stops the search when its last step ends. The web build has no Fonts
+folder and no folder search.
+
+```json
+{"name":"run_command","arguments":{"command":"text.missingFonts","params":{}}}
+{"name":"run_command","arguments":{"command":"text.findFontFiles","params":{"folder":"/Users/me/Downloads"}}}
+{"name":"run_command","arguments":{"command":"text.findFontFiles","params":{}}}
+{"name":"run_command","arguments":{"command":"text.addFontFiles","params":{"files":["/Users/me/Downloads/Example/Example-Regular.otf"]}}}
 ```
 
 ## Tool options

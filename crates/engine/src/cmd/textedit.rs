@@ -316,6 +316,10 @@ impl CharChange {
         if let Some(v) = &self.style {
             st.font_style = v.clone();
         }
+        // Another font: none of the old one's versions.
+        if self.font.is_some() || self.style.is_some() {
+            st.font_version = None;
+        }
         if let Some(v) = self.size {
             st.size = v.clamp(0.1, 1296.0);
         }
@@ -388,7 +392,9 @@ pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>
     let db = vectorcraft_text::FontDb::global();
     let mut faces = std::collections::HashMap::new();
     let mut covers = |st: &CharStyle, c: char| {
-        let face = faces.entry((st.font_family.clone(), st.font_style.clone())).or_insert_with(|| db.face(&st.font_family, &st.font_style));
+        let face = faces
+            .entry((st.font_family.clone(), st.font_style.clone(), st.font_version.clone()))
+            .or_insert_with(|| db.face_version(&st.font_family, &st.font_style, st.font_version.as_deref()));
         face.as_ref().map(|f| f.covers(c))
     };
     // Byte ranges that keep a font (family, style).

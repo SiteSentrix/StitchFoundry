@@ -582,7 +582,7 @@ impl Renderer {
     }
 
     /// Render one artboard (or any document rect) at `scale` pixels per point, transparent or on white,
-    /// as exported: template layers are left out.
+    /// as exported: template layers and guides are left out.
     pub fn render_region(&mut self, doc: &Document, region: Rect, scale: f64, white: bool) -> Rendered {
         let opts = RenderOptions { background: white.then_some([255, 255, 255, 255]), skip_templates: true, ..Default::default() };
         self.render_region_with(doc, region, scale, &opts)
@@ -1653,7 +1653,11 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
         .runs
         .iter()
         .map(|r| match db.resolve(&r.style.font_family, &r.style.font_style) {
-            Some((f, m)) => (m == vectorcraft_text::FontMatch::Missing, Some(f.id())),
+            // The version the type names, when it's installed (see `FontDb::face_version`).
+            Some((f, m)) => {
+                let face = db.face_version(&r.style.font_family, &r.style.font_style, r.style.font_version.as_deref()).unwrap_or(f);
+                (m == vectorcraft_text::FontMatch::Missing, Some(face.id()))
+            }
             None => (true, None),
         })
         .collect();
@@ -1675,6 +1679,13 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
         let mut cell = Rect::new(g.origin.x, g.origin.y - line.ascent, g.origin.x + g.advance, g.origin.y + line.descent).to_path(0.1);
         cell.apply_affine(Affine::rotate_about(g.angle, g.origin));
         target.extend(cell.iter());
+    }
+    // Underline and strikethrough bars, painted as their run's type is (#847).
+    for (run, bar) in vectorcraft_text::decorations(&layout, db, t) {
+        if let Some(r) = runs.get_mut(run) {
+            r.extend(bar.iter());
+        }
+        all.extend(bar.iter());
     }
     TextGeom { runs, all, bounds: layout.bounds, substituted_fonts, substituted_glyphs, inlines: layout.inlines }
 }

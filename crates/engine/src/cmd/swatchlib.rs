@@ -3,7 +3,9 @@
 //! [`vectorcraft_color::libraries`]; User Defined ones are the library files in the user library
 //! folder ([`Libraries`]), and Other Library… loads more from files. `swatch.library.add` copies
 //! swatches into the document; `swatch.library.save` writes the document's ([`palette_io`]).
+//! `swatch.library.copyToUser` copies a loaded library into the user library folder.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -12,8 +14,9 @@ use vectorcraft_color::palette_io::{self, PaletteFormat};
 use vectorcraft_color::recolor::Palette;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
 
-use super::fileio::{create_dir, read_file, write_file};
+use super::fileio::{create_dir, extension, read_file, write_file, write_new_file};
 use super::menucmds::squash;
+use super::package::free_name;
 use super::swatch::{map_default_paints, str_list, swatch_json};
 use super::*;
 
@@ -60,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Swatch Library…",
             ["Window", "Swatches"],
             None,
-            "{path?, format?: \"vcswatches\" (lossless JSON: colour models, global, spot, gradients, groups) | \"gpl\" (8-bit RGB palette; groups as `# Group:` comments) | \"css\" (custom properties on :root) (default: the path's extension, else vcswatches), names?: [swatch or colour group names] (default: all; None and patterns are never saved), name?: library name (default: the document's), user?: false (save into the user library folder, listed under User Defined)} save the document's swatches as a library → {path, format, count, library?: id when saved to the user folder}; without path or user → {data: the file's text, format, count}",
+            "{path?, format?: \"vcswatches\" (lossless JSON: colour models, global, spot, gradients, groups) | \"gpl\" (8-bit RGB palette; groups as `# Group:` comments) | \"ase\" (swatch exchange, binary: solid colors in their own model (RGB, CMYK, Lab, Gray) as global, spot or process colors, and color groups; gradients are left out, and a tint swatch is saved as the color it shows) | \"css\" (custom properties on :root) (default: the path's extension, else vcswatches), names?: [swatch or colour group names] (default: all; None and patterns are never saved), name?: library name (default: the document's), user?: false (save into the user library folder, listed under User Defined)} save the document's swatches as a library → {path, format, count, library?: id when saved to the user folder}; without path or user → {data: the file's text, format, count}, or {dataBase64, format, count} for ase",
             has_doc,
             save
         ),
@@ -69,9 +72,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Swatch Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl or .ase (swatch exchange) library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl or .ase (swatch exchange) library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library) → {library: id, name, count}",
             always,
             load
+        ),
+        cmd!(
+            "swatch.library.copyToUser",
+            "Copy to User Defined",
+            ["Window", "Swatch Libraries"],
+            None,
+            "{library: id or name of a loaded library (category \"loaded\", swatch.library.load)} copy it into the user library folder of the desktop app, whose libraries VectorCraft lists as User Defined every time it starts (a loaded library is listed until the app quits): a library file as it is, the swatches of a document or a library loaded from data as a .vcswatches file. A name the folder already has gets a number (\"Brand 2.ase\") and no file is replaced; when the folder already holds the same file, that file is used. The library is then listed as User Defined only, and until the app quits commands given its loaded id use the copy; a User Defined library comes back as it is → {library: its User Defined id, name, count, path, copied: false when nothing was written}",
+            has_user_folder,
+            copy_to_user
         ),
     ]
 }
@@ -85,6 +97,9 @@ pub struct Libraries<L = SwatchLibrary> {
     /// there are no User Defined libraries.
     user_dir: Option<String>,
     extra: Vec<Extra<L>>,
+    /// Loaded libraries copied into the user library folder ([`Libraries::copy_to_user`]): the
+    /// loaded id and the User Defined id [`Libraries::get`] finds for it.
+    copied: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +132,14 @@ impl LibraryFile for SwatchLibrary {
 /// The extensions of library files [`palette_io::read_bytes`] reads.
 pub const LIBRARY_EXTS: &[&str] = &["vcswatches", "gpl", "ase"];
 
+/// A library file the save commands write ([`Libraries::write`]).
+pub(crate) enum FileData {
+    /// Text (`.vcswatches`, `.gpl`, CSS, `.vcstyles`), returned as `data`.
+    Text(String),
+    /// Bytes (`.ase`), returned as `dataBase64`.
+    Binary(Vec<u8>),
+}
+
 impl<L: LibraryFile> Libraries<L> {
     pub fn user_dir(&self) -> Option<&str> {
         self.user_dir.as_deref()
@@ -145,9 +168,11 @@ impl<L: LibraryFile> Libraries<L> {
         self.extra.iter().map(|e| &e.info)
     }
 
-    /// The User Defined or loaded library `id`.
+    /// The User Defined or loaded library `id`. The id of a loaded library copied into the user
+    /// library folder finds the User Defined copy.
     pub fn get(&self, id: &str) -> Option<(LibraryInfo, Arc<L>)> {
-        self.extra.iter().find(|e| e.info.id == id).map(|e| (e.info.clone(), e.lib.clone()))
+        let find = |id: &str| self.extra.iter().find(|e| e.info.id == id).map(|e| (e.info.clone(), e.lib.clone()));
+        find(id).or_else(|| self.copied.iter().find(|(loaded, _)| loaded == id).and_then(|(_, user)| find(user)))
     }
 
     /// The file library `id` was read from.
@@ -155,36 +180,50 @@ impl<L: LibraryFile> Libraries<L> {
         self.extra.iter().find(|e| e.info.id == id).and_then(|e| e.path.as_deref())
     }
 
-    /// Write library file `text` as the save commands do: into the user library folder as
+    /// The User Defined library whose file has the extension of file name `file` and holds `bytes`.
+    fn user_file(&self, file: &str, bytes: &[u8]) -> Option<&Extra<L>> {
+        let ext = extension(file);
+        self.extra
+            .iter()
+            .find(|e| e.info.category == "user" && e.path.as_deref().is_some_and(|p| extension(p) == ext && read_file(p).is_ok_and(|b| b == bytes)))
+    }
+
+    /// Write library file `data` as the save commands do: into the user library folder as
     /// `name`.`ext` with `user: true` (→ `path`, and `library`: its id), to `path`, else back as
-    /// `data`; the results go into `out`.
-    pub(crate) fn write(&mut self, p: &Value, name: &str, ext: &str, text: String, out: &mut Value, cmd: &str) -> Result<()> {
+    /// `data` (text) or `dataBase64` (bytes); the results go into `out`.
+    pub(crate) fn write(&mut self, p: &Value, name: &str, ext: &str, data: FileData, out: &mut Value, cmd: &str) -> Result<()> {
+        let bytes = match &data {
+            FileData::Text(text) => text.as_bytes(),
+            FileData::Binary(bytes) => bytes.as_slice(),
+        };
         if bool_or(p, "user", false) {
             let dir = self
                 .user_dir()
                 .ok_or_else(|| bad(cmd, "no user library folder here (save with a path, or without one to get the data)"))?
                 .to_string();
-            // A file name from the library's name, without characters file systems reject.
-            let base: String = name.chars().map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c }).collect();
-            let file = format!("{}.{ext}", base.trim_matches(['.', ' ']));
+            let file = library_file_name(name, ext);
             let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
             create_dir(&dir)?;
-            write_file(&path, text.as_bytes())?;
+            write_file(&path, bytes)?;
             self.rescan();
             out["path"] = json!(path);
             out["library"] = json!(format!("user/{file}"));
         } else if let Some(path) = str_param(p, "path") {
-            write_file(path, text.as_bytes())?;
+            write_file(path, bytes)?;
             out["path"] = json!(path);
         } else {
-            out["data"] = json!(text);
+            match data {
+                FileData::Text(text) => out["data"] = json!(text),
+                FileData::Binary(bytes) => out["dataBase64"] = json!(vectorcraft_format::base64_encode(&bytes)),
+            }
         }
         Ok(())
     }
 
     /// Load a library from `p` (`path`, `data` or `dataBase64`; `name`: the file's name) as the
-    /// load commands do, `parse(bytes, file name)` reading it. A file of the user library folder is
-    /// its User Defined library; others are listed as loaded until the app quits.
+    /// load commands do, `parse(bytes, file name)` reading it. A file of the user library folder,
+    /// or a file with the same extension and bytes as one there, is that User Defined library;
+    /// others are listed as loaded until the app quits.
     pub(crate) fn load(&mut self, p: &Value, cmd: &str, parse: impl FnOnce(&[u8], &str) -> Result<L>) -> Result<(LibraryInfo, Arc<L>)> {
         let path = str_param(p, "path");
         let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
@@ -196,7 +235,9 @@ impl<L: LibraryFile> Libraries<L> {
         let file = str_param(p, "name").map(str::to_string).or_else(|| path.map(file_name)).unwrap_or_else(|| "Library".into());
         let lib = parse(&bytes, &file)?;
         self.rescan();
-        if let Some(e) = path.and_then(|p| self.extra.iter().find(|e| e.info.category == "user" && e.path.as_deref() == Some(p))) {
+        let user =
+            |p: &str| self.extra.iter().find(|e| e.info.category == "user" && e.path.as_deref() == Some(p)).or_else(|| self.user_file(p, &bytes));
+        if let Some(e) = path.and_then(user) {
             return Ok((e.info.clone(), e.lib.clone()));
         }
         let info = LibraryInfo { id: format!("loaded/{}", path.unwrap_or(&file)), name: lib.name().to_string(), category: "loaded" };
@@ -205,6 +246,66 @@ impl<L: LibraryFile> Libraries<L> {
         self.extra.push(Extra { info: info.clone(), path: path.map(str::to_string), lib: lib.clone() });
         Ok((info, lib))
     }
+
+    /// Copy loaded library `id` into the user library folder, where it is listed as User Defined in
+    /// place of the loaded entry; `id` then finds the copy ([`Libraries::get`]). A library read
+    /// from a library file (an extension of `L::EXTS`) is copied as that file's bytes under the
+    /// file's name; any other (the swatches of a document, a library loaded from data) is written
+    /// by `encode` as a `.{ext}` file named after the library. A name the folder already has,
+    /// compared without case, gets a number ("Brand 2.ase"), and no file is replaced. When a file
+    /// of the folder with the same extension holds the same bytes, its library is used and nothing
+    /// is written. → the User Defined library, and whether a file was written.
+    pub(crate) fn copy_to_user(
+        &mut self,
+        id: &str,
+        ext: &str,
+        encode: impl FnOnce(&L) -> Result<Vec<u8>>,
+        cmd: &str,
+    ) -> Result<(LibraryInfo, Arc<L>, bool)> {
+        let dir = self.user_dir().ok_or_else(|| bad(cmd, "no user library folder here"))?.to_string();
+        let (source, lib) = self
+            .extra
+            .iter()
+            .find(|e| e.info.id == id && e.info.category == "loaded")
+            .map(|e| (e.path.clone(), e.lib.clone()))
+            .ok_or_else(|| bad(cmd, format!("`{id}` isn't a loaded library")))?;
+        let (file, bytes) = match source.filter(|p| L::EXTS.contains(&extension(p).as_str())) {
+            Some(p) => (file_name(&p), read_file(&p)?),
+            None => (library_file_name(lib.name(), ext), encode(&lib)?),
+        };
+        self.rescan();
+        let (user_id, written) = match self.user_file(&file, &bytes).map(|e| e.info.id.clone()) {
+            Some(same) => (same, None),
+            None => {
+                create_dir(&dir)?;
+                let mut taken: HashSet<String> = library_files(&dir, L::EXTS).iter().map(|p| file_name(p).to_lowercase()).collect();
+                let file = free_name(&file, &mut taken);
+                let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
+                write_new_file(&path, &bytes)?;
+                self.rescan();
+                (format!("user/{file}"), Some(path))
+            }
+        };
+        let Some((info, lib)) = self.get(&user_id) else {
+            if let Some(path) = &written {
+                // Best effort: the copy that can't be read is all there is to clean up.
+                let _ = std::fs::remove_file(path);
+            }
+            return Err(bad(cmd, format!("the copy `{user_id}` can't be read as a library")));
+        };
+        self.extra.retain(|x| x.info.id != id);
+        self.copied.retain(|(loaded, _)| loaded != id);
+        self.copied.push((id.to_string(), info.id.clone()));
+        Ok((info, lib, written.is_some()))
+    }
+}
+
+/// The file name of library `name` with extension `ext`: characters file systems reject become
+/// `-`, and dots and spaces at either end are dropped. A name with nothing left is `Library`.
+pub fn library_file_name(name: &str, ext: &str) -> String {
+    let base: String = name.chars().map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c }).collect();
+    let base = base.trim_matches(['.', ' ']);
+    format!("{}.{ext}", if base.is_empty() { "Library" } else { base })
 }
 
 /// The library files with extensions `exts` in folder `dir`, sorted by name.
@@ -343,15 +444,16 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.save";
     let path = str_param(p, "path");
     let format = match str_param(p, "format").or_else(|| path.map(|p| p.rsplit_once('.').map_or("", |(_, e)| e))).filter(|f| !f.is_empty()) {
-        Some(f) => PaletteFormat::parse(f).ok_or_else(|| bad(C, format!("unknown format `{f}` (vcswatches, gpl or css)")))?,
+        Some(f) => PaletteFormat::parse(f).ok_or_else(|| bad(C, format!("unknown format `{f}` (vcswatches, gpl, ase or css)")))?,
         None => PaletteFormat::Native,
     };
     let st = s.doc()?;
     let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
     let lib = document_library(&st.doc, &str_list(p, "names"), name, C)?;
-    let (count, text) = (lib.len(), palette_io::write(&lib, format));
-    let mut out = json!({"format": format.id(), "count": count});
-    s.swatch_libraries.write(p, &lib.name, format.id(), text, &mut out, C)?;
+    let bytes = palette_io::write(&lib, format).map_err(|e| bad(C, e))?;
+    let data = if format.binary() { FileData::Binary(bytes) } else { FileData::Text(String::from_utf8_lossy(&bytes).into_owned()) };
+    let mut out = json!({"format": format.id(), "count": lib.len()});
+    s.swatch_libraries.write(p, &lib.name, format.id(), data, &mut out, C)?;
     Ok(out)
 }
 
@@ -381,6 +483,29 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(
         json!({"id": info.id, "name": info.name, "category": info.category, "swatches": ungrouped.chain(grouped).collect::<Vec<_>>(), "groups": groups}),
     )
+}
+
+/// There is a user library folder to copy libraries into (the desktop app sets one).
+fn has_user_folder(s: &Session) -> std::result::Result<(), String> {
+    match s.swatch_libraries.user_dir() {
+        Some(_) => Ok(()),
+        None => Err("no user library folder here".into()),
+    }
+}
+
+fn copy_to_user(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.library.copyToUser";
+    let (info, lib) = library_param(s, p, C)?;
+    let (info, lib, copied) = match info.category {
+        "loaded" => {
+            let native = |lib: &SwatchLibrary| palette_io::write(lib, PaletteFormat::Native).map_err(|e| bad(C, e));
+            s.swatch_libraries.copy_to_user(&info.id, PaletteFormat::Native.id(), native, C)?
+        }
+        "user" => (info, lib, false),
+        _ => return Err(bad(C, format!("`{}` is built in and always listed", info.name))),
+    };
+    let path = s.swatch_libraries.path(&info.id);
+    Ok(json!({"library": info.id, "name": info.name, "count": lib.len(), "path": path, "copied": copied}))
 }
 
 /// The library swatches `names` stand for, each once, with the colour group it goes into (`None`:

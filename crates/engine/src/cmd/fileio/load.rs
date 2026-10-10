@@ -137,11 +137,12 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// layers and hidden objects as they were, and the art outside its artboard (its PDF part has
 /// only what is on the artboards), as an EPS of the editor is read. Anything else as it was.
 fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>) -> (Document, Vec<String>) {
-    if opts.pages.is_some() || !opts.layers {
+    if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return (doc, warnings);
     }
     let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings) };
-    let (doc, mut warnings) = vectorcraft_eps::layered_ai(&private, doc, warnings);
+    let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
+    let (doc, mut warnings) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined);
     // The note that the art outside the artboard is lost is the reason the layers weren't read.
     if warnings.iter().any(|w| w.starts_with("the file's layers weren't read from its editing data")) {
         return (doc, warnings);
@@ -151,10 +152,10 @@ fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warning
 }
 
 /// A `.ai` saved without PDF compatibility (its PDF part is a placeholder page) from the editor's
-/// own copy of its art alone: `None` when the file has none (or pages are picked, or layers are
-/// off), an error when it can't be read.
+/// own copy of its art alone: `None` when the file has none (or pages are picked, or layers or the
+/// editing data are off), an error when it can't be read.
 fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(Document, Vec<String>)>> {
-    if opts.pages.is_some() || !opts.layers {
+    if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return None;
     }
     let private = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref())?;
@@ -178,7 +179,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if format.id == "eps" || vectorcraft_pdf::is_postscript(bytes) => {
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import(bytes).map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
+                let r = vectorcraft_eps::import_with(bytes, opts.editing_data).map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
         }

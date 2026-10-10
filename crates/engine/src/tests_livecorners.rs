@@ -279,3 +279,31 @@ fn a_pen_path_rounds_its_corners_but_not_its_ends() {
     run(&mut s, json!({"id": e.0, "radius": 8}));
     assert_eq!(node_path(&s, e), before);
 }
+
+/// #812: an ellipse's Pie Start and End Angle cut it as a pie; Invert Pie shows the other part;
+/// one undo step each; a bad angle is an error.
+#[test]
+fn an_ellipse_takes_pie_angles_and_inverts() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let id = NodeId(s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    let pie = |s: &Session| match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Path { live: Some(LiveShape::Ellipse { pie, .. }), path, .. } => (*pie, path.bounds().unwrap()),
+        k => panic!("{k:?}"),
+    };
+    s.execute("object.setLiveShape", &json!({"pieStart": 0, "pieEnd": 90})).unwrap();
+    let (p, b) = pie(&s);
+    assert_eq!(p, (0.0, 90.0));
+    assert!((b.x0 - 100.0).abs() < 1e-6 && (b.y1 - 50.0).abs() < 1e-6, "the quarter up and right of the centre: {b:?}");
+    s.execute("object.setLiveShape", &json!({"invertPie": true})).unwrap();
+    let (p, b) = pie(&s);
+    assert_eq!(p, (90.0, 360.0));
+    assert!(b.x0.abs() < 1e-6 && (b.y1 - 100.0).abs() < 1e-6, "the other three quarters: {b:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(pie(&s).0, (0.0, 90.0));
+    // 0 to 360 (or an end of 0) is the whole ellipse again.
+    s.execute("object.setLiveShape", &json!({"pieStart": 0, "pieEnd": 0})).unwrap();
+    assert_eq!(pie(&s).0, (0.0, 360.0));
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchor_count(), 4);
+    assert!(s.execute("object.setLiveShape", &json!({"pieStart": "half"})).is_err());
+}

@@ -12,6 +12,13 @@ trunk build --release              # writes ../../dist/web (index.html, .js glue
 trunk serve --release              # dev server on http://127.0.0.1:8766
 ```
 
+What the web build needs: `trunk`, the `wasm32-unknown-unknown` target and `cargo`, nothing else (no
+POSIX shell, so it works the same on Windows). Optionally, `CRAFT_FONTS_DIR` set to an absolute
+craft-fonts checkout adds the fonts the site serves beside the wasm: Trunk's `post_build` hook runs
+`cargo xtask web-fonts`, which copies them into `dist/web/fonts/` (it does nothing without
+`CRAFT_FONTS_DIR`, and skips with a warning any listed face an older checkout lacks). See
+[Arabic fonts and the web build](#arabic-fonts-and-the-web-build).
+
 Any static file server works for `dist/web`, for example `python3 -m http.server 8766` inside that directory. The release `.wasm` is about 17.5 MB, or 7.1 MB gzipped, so serve it with compression.
 
 URL flag: `?webgl` forces the WebGL2 backend.
@@ -38,10 +45,15 @@ How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 
 The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (wgpu, through eframe) only composites the canvas texture and draws the UI, so any GPU that can show the window will do. The desktop app picks the window's adapter itself (`apps/vectorcraft/src/gpu.rs`, eframe's `native_adapter_selector`) and logs every adapter it found and the one it uses.
 
-- **Order:** adapters that report they can't present to the window are never tried; then the one `WGPU_ADAPTER_NAME` names; hardware before software (llvmpipe, WARP); the native backends (Vulkan, Metal, DX12) before OpenGL; then the power preference; then, on Windows, where each GPU is listed under both, a GPU's DX12 adapter before its Vulkan one (Intel's Vulkan driver made the whole window flicker black, #545), keeping the system's order among equals. `WGPU_BACKEND=vulkan` still picks Vulkan.
-- **Preferences › Performance › Graphics Processor** (`gpuPreference`): `automatic` (the default), `lowPower` (Power Saving, the integrated GPU) or `highPerformance` (the discrete GPU). The adapter is chosen when the window opens, so a change applies after a restart.
-  - **Automatic on Windows and macOS** is power saving: the system shows frames from any GPU, and presenting frames rendered on a discrete GPU through the integrated one made the window flicker on some hybrid laptops (#306).
-  - **Automatic on Linux and the BSDs** keeps the system's order: Mesa's Vulkan device-select layer puts the GPU the desktop runs on first (the integrated one on hybrid laptops; `DRI_PRIME` and `MESA_VK_DEVICE_SELECT` steer it). A Wayland compositor may not accept frames from another GPU: on a desktop whose compositor ran on an NVIDIA GPU, rendering on the Ryzen's integrated GPU made KWin end the window's connection ("importing the supplied dmabufs failed") and 0.5.0 crashed at startup (#502).
+- **Order:** adapters that report they can't present to the window are never tried; then the one `WGPU_ADAPTER_NAME` names; hardware before software (llvmpipe, WARP); the native backends (Vulkan, Metal, DX12) before OpenGL; with Automatic, the GPU that drives a display, and among those the one that drives the primary display; then the power preference; then, on Windows, where each GPU is listed under both, a GPU's DX12 adapter before its Vulkan one (Intel's Vulkan driver made the whole window flicker black, #545), keeping the system's order among equals. `WGPU_BACKEND=vulkan` still picks Vulkan.
+- **The GPU that drives the display.** A GPU without a monitor is the wrong one even when it says it can show the window: on a desktop with a Ryzen's integrated GPU (no monitor) and an NVIDIA card driving both monitors, power saving picked the integrated GPU, Windows had to present every frame across adapters, and the integrated GPU's driver reset under that: the graphics device was lost, or the desktop's compositor went down and every monitor stayed black for minutes (pdfcraft#378). So Automatic asks the system which GPU drives which display and puts that GPU first; the power preference only orders the rest, and decides alone where the system can't say.
+  - **Windows:** `EnumDisplayDevices` (the display devices attached to the desktop, and the primary one), through the `winsafe` crate; the PCI ids in each device id are matched against wgpu's adapters. The registry doesn't tell a user which adapter drives a display, and WMI reports a resolution for a GPU without a monitor, so neither is used.
+  - **Linux:** the connected connectors in `/sys/class/drm` and their cards' PCI ids; a built-in panel (`eDP`, `LVDS`, `DSI`) counts as the primary display.
+  - **macOS**, OpenGL adapters (no device id) and Metal (no ids at all): no match, so the power preference decides as before.
+  - The log's first lines list the display GPUs (`display GPUs (PCI vendor:device): 10de:2204 (primary)`), every adapter with whether it drives a display, and the one drawn on and why (`drawing on NVIDIA GeForce RTX 3090 (Dx12, DiscreteGpu): it drives the primary display`). That is the first thing to look for in a black-window report.
+- **Preferences › Performance › Graphics Processor** (`gpuPreference`): `automatic` (the default), `lowPower` (Power Saving, the integrated GPU) or `highPerformance` (the discrete GPU). The adapter is chosen when the window opens, so a change applies after a restart. Power Saving and High Performance are the user's own choice and order by kind alone, without looking at the displays; so does `WGPU_POWER_PREF`.
+  - **Automatic on Windows and macOS** is the GPU that drives the primary display, then power saving: the system shows frames from any GPU, and presenting frames rendered on a discrete GPU through the integrated one made the window flicker on some hybrid laptops (#306). On a hybrid laptop the integrated GPU drives the panel, so both rules agree.
+  - **Automatic on Linux and the BSDs** is the GPU that drives the panel or a monitor, then the system's order: Mesa's Vulkan device-select layer puts the GPU the desktop runs on first (the integrated one on hybrid laptops; `DRI_PRIME` and `MESA_VK_DEVICE_SELECT` steer it). A Wayland compositor may not accept frames from another GPU: on a desktop whose compositor ran on an NVIDIA GPU, rendering on the Ryzen's integrated GPU made KWin end the window's connection ("importing the supplied dmabufs failed") and 0.5.0 crashed at startup (#502).
   - 0.5.0 saved `powerSaving`, its default, for everyone; it reads as `automatic`.
 - **If the window fails on its adapter while starting up** (an error from wgpu, or a panic inside wgpu or egui-wgpu during the first frames), the app starts again without that adapter and tries the next one, telling which in the status bar; the run that failed keeps its log as `vectorcraft.1.log`. On Unix the new app replaces the process (an AppImage stays mounted); on Windows it starts beside it. Adapters are told apart by backend and PCI ids, or by name where the backend reports no ids (Metal lists every GPU of a dual-GPU Mac as `0000:0000`, #651). The adapters left out travel in `VECTORCRAFT_GPU_SKIP` (`backend:vendor:device`, such as `Vulkan:1002:164e`), one more on each restart, so the restarts end. When no adapter is left, the app logs why and exits with an error instead of panicking.
 - **Environment variables** for when the choice still goes wrong, all read at startup and stronger than the preference:
@@ -124,6 +136,25 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
 
+### Arabic fonts and the web build
+
+Desktop builds load craft-fonts' Arabic families into the document font database (Noto Sans
+Arabic first, the fallback for Arabic text; the others are picked by name).
+
+The web build doesn't embed them (wasm size). Instead `crates/text/web-fonts.txt` lists the faces
+it fetches from beside the wasm, `startup` (before the app starts) or `background` (after):
+
+- `crates/text/build.rs` turns the list into `vectorcraft_text::WEB_FONTS` (URL
+  `fonts/<sha16>/<file>` and the SRI hash, from the craft-fonts manifest).
+- `cargo xtask web-fonts` (`xtask/src/web_fonts.rs`), the Trunk `post_build` hook, copies the files
+  there, checking each one's SHA-256. A listed face the checkout lacks is skipped with a warning, as
+  in `build.rs`, so an older craft-fonts just means fewer fonts.
+- `apps/vectorcraft-web/src/fonts.rs` fetches and registers them, logging `web font …` for any
+  that fail.
+
+Try it: `cd apps/vectorcraft-web && CRAFT_FONTS_DIR=$PWD/../../../craft-fonts trunk serve`. To serve
+another craft-fonts face on the web, add a line to `web-fonts.txt`.
+
 ## Localisation
 
 Strings in code stay English and are the default lookup keys. `crates/ui-egui/src/i18n` maps them to display
@@ -167,10 +198,10 @@ locale such as `ru-RU`, `ru-BY` or `ru-KZ` resolves to it), Ukrainian (`uk`, com
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish, French, Italian, Russian and Ukrainian cover every
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish, French, Italian, Japanese, Russian and Ukrainian cover every
   message literal the test scan finds (`complete_languages_translate_every_message`, languages listed in
   `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs an `es.tsv`,
-  a `fr.tsv`, an `it.tsv`, a `ru.tsv` and a `uk.tsv` row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
+  a `fr.tsv`, an `it.tsv`, a `ja.tsv`, a `ru.tsv` and a `uk.tsv` row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
   complete_languages_translate_every_message` lists them all). Other languages show messages in English
   until they add `@msg` rows.
 - Not translated on purpose: names that are user data (layers, swatches, fonts, documents), the tab
@@ -194,7 +225,9 @@ parameters. Shipped code therefore never panics. Anything that can fail returns 
 ### Enforced by lints
 
 `Cargo.toml` denies these clippy lints for the whole workspace, and `cargo xtask ci` runs clippy with
-`-D warnings`:
+`-D warnings`. The gate targets the current stable Rust (`rust-version` in `Cargo.toml` is only the
+minimum that builds the app, and no toolchain is pinned): when a new stable adds lints, they are fixed
+in the code:
 
 | Banned in shipped code | Use instead |
 |---|---|

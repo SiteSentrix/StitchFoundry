@@ -311,6 +311,9 @@ const SKIPPED: &[(&str, &str)] = &[
     ("Alternate_Content", "End_Versioned_Content"),
 ];
 
+/// The note for a `/ForeignObject`, art the editor shows but doesn't edit.
+pub const NON_NATIVE_ART: &str = "non-native art (a placed PDF's content) is left out: VectorCraft doesn't draw it from the editing data yet";
+
 /// A section comment's marker without its `AI<version>_` prefix and value (`AI14_BeginSymbol` →
 /// `BeginSymbol`); DSC comments (`%%BeginProlog`) keep their `%`.
 fn marker(c: &str) -> &str {
@@ -645,8 +648,13 @@ impl<'a> Reader<'a> {
             "," => {
                 if let Some(Frame { kind: Kind::Obj(o), base, .. }) = self.frames.last_mut() {
                     obj::add_entry(o, &mut self.stack, *base);
-                    // Binary data in ASCII85 follows, up to its `~>`.
-                    if o.ty == "Binary" && o.entries.last().is_some_and(|(k, _)| k.as_deref() == Some("ASCII85Decode")) {
+                    // Binary data in ASCII85 follows, up to its `~>`: a `/Binary` dictionary's
+                    // (`/ASCII85Decode ,`) or a non-native art object's (`/ForeignObject`'s
+                    // `/Data ,`, the PDF it keeps), in comment lines. ASCII85 has `_`, so a line
+                    // of it may start with `%_` and read as hidden tokens: a `(` there would open
+                    // a string that swallows the rest of the layer.
+                    let key = o.entries.last().and_then(|(k, _)| k.as_deref());
+                    if (o.ty == "Binary" && key == Some("ASCII85Decode")) || (o.ty == "ForeignObject" && key == Some("Data")) {
                         self.lex.skip_past(b"~>");
                     }
                 }
@@ -826,6 +834,9 @@ impl<'a> Reader<'a> {
             "Document" => self.document(&o),
             "AI11Text" => self.text_slot(&o)?,
             "SymbolInstance" => self.unreadable("symbols"),
+            // Art Illustrator shows but doesn't edit (a placed PDF's content): its PDF is kept in
+            // the dictionary, which nothing draws from yet, so the file opens without it.
+            "ForeignObject" => self.warn(NON_NATIVE_ART),
             _ => {}
         }
         Ok(())

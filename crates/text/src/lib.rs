@@ -24,14 +24,15 @@ mod suitcase;
 pub mod test_fonts;
 pub mod thread;
 
-pub use craft_fonts::{CRAFT_FONTS, CraftFont};
+pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
-    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, set_platform_font_files, set_user_font_dirs,
-    style_weight, system_font_dirs, user_font_dirs,
+    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, WantedFont, WantedFonts, app_font_dir,
+    is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, style_weight, system_font_dirs, user_font_dirs,
 };
+pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
-pub use layout::{layout, layout_with};
+pub use layout::{decorations, layout, layout_with};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
@@ -522,4 +523,9 @@ mod tests_typo;
 #[cfg(test)]
 mod tests_variable;
 #[cfg(test)]
+mod tests_versions;
+#[cfg(test)]
 mod tests_vertical;
+#[cfg(test)]
+#[path = "../build/web_fonts.rs"]
+mod web_fonts_build;

@@ -135,6 +135,9 @@ fn group_layer(
 pub const OFF_ARTBOARD_NOTE: &str =
     "only the PDF-compatible part of this file was read: art outside its artboards is kept in the editor's private data alone, so it doesn't open";
 
+/// Warning: art reaching past the page box was clipped to it.
+pub(crate) const PAST_PAGE_NOTE: &str = "art reaching past the page was clipped to it, as PDF viewers show it";
+
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open(bytes, opts.password.as_deref())?;
@@ -226,6 +229,29 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
                 art.retain(|n| n.visual_bounds().is_none_or(|r| r.x0 <= ab.x1 && r.x1 >= ab.x0 && r.y0 <= ab.y1 && r.y1 >= ab.y0));
             }
             parts.retain(|(_, art)| !art.is_empty());
+        }
+        // Viewers show a page through its crop box, so art reaching past it (a mock-up backdrop
+        // around the page, say) never showed. A clip to the page box that the file states is
+        // dropped as redundant (by hayro and by `push_clip_path`), so restore the box here:
+        // each object reaching past it keeps its own clip, which Fit to Artwork Bounds and
+        // `CropTo::Bounding` then respect.
+        // The crop box is what viewers show, whichever box the artboard takes. Not in a
+        // PDF-compatible `.ai`: its PDF part stands in for the editable document, whose art
+        // crossing the artboard edge isn't clipped, so it opens whole (#646).
+        let shown = xf.transform_rect_bbox(crate::pages::page_box(page, CropTo::Crop));
+        let page_box = shown.inflate(0.01, 0.01);
+        let mut clipped = false;
+        for (_, art) in parts.iter_mut().filter(|_| !ai) {
+            for n in art.iter_mut() {
+                if n.visual_bounds().is_some_and(|r| !contains(page_box, r)) {
+                    let clip = Arc::new(b.clip_node(&shown.to_path(0.1), FillRule::NonZero));
+                    *n = Arc::new(Node::new(b.id(), NodeKind::Group { children: vec![clip, n.clone()], clip: true }));
+                    clipped = true;
+                }
+            }
+        }
+        if clipped {
+            b.warn(PAST_PAGE_NOTE);
         }
         let children: Vec<Arc<Node>> = parts.iter().flat_map(|(_, v)| v.iter().cloned()).collect();
         placeholder &= ai && only_text(&children);
@@ -460,8 +486,12 @@ fn matching_face(
         return Some(face.clone());
     }
     let db = vectorcraft_text::FontDb::global();
-    let others =
+    // Other installed versions of its family and style (a font library keeps old ones), then the
+    // family's other styles.
+    let versions = db.versions(face).into_iter().skip(1).take(16);
+    let styles =
         db.styles(&face.family).into_iter().filter(|s| !s.eq_ignore_ascii_case(&face.style)).take(64).filter_map(|s| db.face(&face.family, &s));
+    let others = versions.chain(styles);
     let mut best = own.map(|d| (d, face.clone()));
     for f in others {
         if let Some(d) = glyph_deviation(&f, text, o, vertical)
@@ -636,6 +666,9 @@ struct Builder<'p> {
     /// Font (cache key) → the installed face that draws its glyphs, decided from its first glyph
     /// that can be compared ([`matching_face`]); `None`: its glyphs differ, so it stays outlines.
     matched: HashMap<u128, Option<Arc<vectorcraft_text::FontFace>>>,
+    /// Per font: the installed version its type names, when it isn't the one its family and style
+    /// resolve to (see `CharStyle::font_version`).
+    versions: HashMap<u128, Option<String>>,
     /// The soft mask of the graphics state, the art drawn through it so far, and the masks read.
     mask: Option<Arc<MaskSpec>>,
     masked: Vec<Arc<Node>>,
@@ -784,6 +817,7 @@ impl<'p> Builder<'p> {
             cid_text: HashMap::new(),
             font_chars: HashMap::new(),
             matched: HashMap::new(),
+            versions: HashMap::new(),
             mask: None,
             masked: vec![],
             masks: HashMap::new(),
@@ -1356,12 +1390,25 @@ impl<'p> Builder<'p> {
             };
             info = FontInfo { family: f.family.clone(), style: f.style.clone(), face: Some(f) };
         }
+        // A version of the family and style that the two alone don't resolve to: the type names it.
+        // Kept per font once its face is decided (until then each glyph asks).
+        let named = |f: &Option<Arc<vectorcraft_text::FontFace>>| {
+            let f = f.as_ref()?;
+            let default = vectorcraft_text::FontDb::global().face(&f.family, &f.style)?;
+            (default.version != f.version).then(|| f.version.clone())
+        };
+        let version = match self.versions.get(&key) {
+            Some(v) => v.clone(),
+            None if self.matched.contains_key(&key) => self.versions.entry(key).or_insert_with(|| named(&info.face)).clone(),
+            None => named(&info.face),
+        };
         let (paint, opacity) = self.paint(paint, stroke.is_some());
         let stroke = stroke.map(|p| (paint.clone(), p.line_width as f64 * scale));
         let look = Look {
             font: key,
             family: info.family,
             style: info.style,
+            version,
             size: at.size,
             h_scale: at.h_scale,
             fill: stroke.is_none().then_some(paint),

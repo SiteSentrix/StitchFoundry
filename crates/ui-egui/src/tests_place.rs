@@ -55,13 +55,33 @@ impl egui::DroppedFile for Dropped {
     }
 }
 
+#[derive(Debug)]
+struct MockDrop {
+    path: std::path::PathBuf,
+    bytes: Result<Vec<u8>, String>,
+}
+
+impl egui::DroppedFile for MockDrop {
+    fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        self.bytes.clone()
+    }
+}
+
 /// One headless frame of the whole window (800×600) with `events` and `dropped` files.
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, mut events: Vec<egui::Event>, dropped: &[&str], shift: bool) {
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, dropped: &[&str], shift: bool) {
+    let files = dropped.iter().map(|p| Arc::new(Dropped(p.into())) as egui::DroppedFileHandle).collect();
+    frame_files(app, ctx, events, files, shift);
+}
+
+fn frame_files(app: &mut VectorcraftApp, ctx: &egui::Context, mut events: Vec<egui::Event>, dropped: Vec<egui::DroppedFileHandle>, shift: bool) {
     events.push(egui::Event::ModifiersChanged(egui::Modifiers { shift, ..Default::default() }));
     let raw = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
         events,
-        dropped_files: dropped.iter().map(|p| Arc::new(Dropped(p.into())) as egui::DroppedFileHandle).collect(),
+        dropped_files: dropped,
         ..Default::default()
     };
     let mut out = ctx.run_ui(raw, |ui| {
@@ -79,7 +99,7 @@ fn selected_image(app: &VectorcraftApp) -> vectorcraft_doc::Node {
 }
 
 /// A tiny SVG document.
-const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="50" height="40"><rect width="20" height="10"/></svg>"#;
+const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="50" height="40"><path d="M5 5 L45 5 L30 30 Z"/></svg>"#;
 
 /// Two frames: fonts, then the canvas lays out → the canvas.
 fn laid_out(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
@@ -155,6 +175,84 @@ fn a_dropped_document_opens_as_a_tab_of_its_own() {
     assert_eq!(app.session.active().unwrap().path.as_deref(), Some(svg.as_str()));
     assert_eq!((images(&app, 0), images(&app, 1)), (1, 0), "the picture is placed in the document that was open");
     assert_eq!(app.ui.recent_files.first(), Some(&svg));
+}
+
+#[test]
+fn a_native_svg_drop_uses_file_open_even_with_a_path_only_handle() {
+    let path = temp_file("path-only.svg", SVG.as_bytes());
+    let mut dropped = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut dropped, &ctx);
+    let handle = Arc::new(MockDrop { path: path.clone().into(), bytes: Err("only a path".into()) }) as egui::DroppedFileHandle;
+    frame_files(&mut dropped, &ctx, vec![], vec![handle], false);
+
+    let mut opened = app();
+    opened.run("file.open", json!({ "path": path })).unwrap();
+    let anchors = |app: &VectorcraftApp| {
+        let mut count = 0;
+        app.session.active().unwrap().doc.walk(|n| {
+            if let NodeKind::Path { path, .. } = &n.kind {
+                count += path.anchors().count();
+            }
+        });
+        count
+    };
+    assert_eq!(anchors(&dropped), anchors(&opened), "same editable SVG anchors as File > Open");
+    assert!(anchors(&dropped) >= 3, "the imported path has editable anchors");
+    assert_eq!(dropped.session.active().unwrap().path, opened.session.active().unwrap().path);
+    assert_eq!(dropped.session.active().unwrap().selection.objects.len(), opened.session.active().unwrap().selection.objects.len());
+    assert_eq!(dropped.ui.recent_files, opened.ui.recent_files);
+}
+
+#[test]
+fn an_svg_drop_without_a_path_is_detected_from_its_bytes() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let svg = Arc::new(MockDrop { path: Default::default(), bytes: Ok(SVG.as_bytes().to_vec()) }) as egui::DroppedFileHandle;
+    frame_files(&mut app, &ctx, vec![], vec![svg], false);
+    assert_eq!(app.session.documents().len(), 2, "SVG bytes open as a document, not placed art");
+    assert!(app.session.active().unwrap().path.is_none(), "no filesystem path was supplied");
+
+    frame(&mut app, &ctx, vec![], &[], false);
+    let image = Arc::new(MockDrop { path: Default::default(), bytes: Ok(png(6, 6, 72.0)) }) as egui::DroppedFileHandle;
+    frame_files(&mut app, &ctx, vec![], vec![image], false);
+    assert_eq!(app.session.documents().len(), 2, "an image is placed, not opened");
+    assert_eq!(images(&app, 1), 1);
+}
+
+#[test]
+fn multiple_svg_drops_open_individually() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let a = temp_file("first.svg", SVG.as_bytes());
+    let b = temp_file("second.svg", SVG.as_bytes());
+    frame(&mut app, &ctx, vec![], &[&a, &b], false);
+    assert_eq!(app.session.documents().len(), 3);
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some(b.as_str()));
+    assert_eq!(&app.ui.recent_files[..2], &[b, a]);
+}
+
+#[test]
+fn unsupported_and_unreadable_drops_leave_the_document_open() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let invalid = temp_file("not-art.xyz", b"not an image or document");
+    frame(&mut app, &ctx, vec![], &[&invalid], false);
+    assert!(app.ui.status.contains("Couldn't place not-art.xyz"), "{}", app.ui.status);
+
+    let invalid_svg = temp_file("broken.svg", b"<svg");
+    frame(&mut app, &ctx, vec![], &[&invalid_svg], false);
+    assert!(app.ui.status.contains("Couldn't open broken.svg"), "{}", app.ui.status);
+
+    let missing = temp_file("unreadable.svg", SVG.as_bytes());
+    std::fs::remove_file(&missing).unwrap();
+    frame(&mut app, &ctx, vec![], &[&missing], false);
+    assert!(app.ui.status.contains("Couldn't open unreadable.svg"), "{}", app.ui.status);
+    assert_eq!(app.session.documents().len(), 1);
+    assert!(app.ui.recent_files.is_empty(), "failed drops don't enter Open Recent");
 }
 
 #[test]
@@ -406,4 +504,45 @@ fn a_vectorcraft_document_places_linked_and_edit_original_opens_it() {
     app.run("file.place", json!({})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
     assert!(crate::dialogs::place::link_tip(d).contains("VectorCraft documents"));
+}
+
+/// Tool key `key` as the Control bar's Apply (Enter) and Cancel (Escape) send it.
+fn tool_key(app: &mut VectorcraftApp, key: vectorcraft_tools::ToolKey) {
+    let view = app.view_info();
+    let r = app.session.tool_key(key, vectorcraft_tools::Mods::default(), view);
+    crate::canvas::apply_requests(app, r);
+}
+
+/// #734: Crop Image shows a crop box on the image instead of cropping to the artboard at once (an
+/// image inside the artboard had nothing to cut); Apply crops to the box in one undo step, Cancel
+/// leaves the image whole, and both go back to the Selection tool.
+#[test]
+fn crop_image_shows_a_box_that_apply_crops_to() {
+    use vectorcraft_tools::ToolKey;
+    let mut app = app();
+    place_picked(&mut app, &temp_file("crop.png", &png(100, 50, 72.0)));
+    app.ui.dialog.as_mut().unwrap().fields.insert("link".into(), json!(false));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let whole = selected_image(&app).geometric_bounds().unwrap();
+    assert!(crate::menus::enabled(&app, "ui.cropImage"));
+    app.run("ui.cropImage", json!({})).unwrap();
+    assert_eq!(app.session.tool_id(), "cropImage");
+    tool_key(&mut app, ToolKey::Escape);
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(selected_image(&app).geometric_bounds(), Some(whole), "Cancel leaves it whole");
+    // The box set to the image's left half, as the Control bar's fields set it, then Apply.
+    app.run("ui.cropImage", json!({})).unwrap();
+    app.run("tool.setOption", json!({"key": "rect", "value": [whole.x0, whole.y0, whole.width() / 2.0, whole.height()]})).unwrap();
+    tool_key(&mut app, ToolKey::Enter);
+    assert_eq!(app.session.tool_id(), "selection");
+    let b = selected_image(&app).geometric_bounds().unwrap();
+    assert!(
+        (b.x0 - whole.x0).abs() < 1e-6 && (b.width() - whole.width() / 2.0).abs() < 1e-6 && (b.height() - whole.height()).abs() < 1e-6,
+        "{b:?} of {whole:?}"
+    );
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(selected_image(&app).geometric_bounds(), Some(whole), "one undo step");
+    // Without an image selected there's nothing to crop.
+    app.run("select.none", json!({})).unwrap();
+    assert!(!crate::menus::enabled(&app, "ui.cropImage") && app.run("ui.cropImage", json!({})).is_err());
 }

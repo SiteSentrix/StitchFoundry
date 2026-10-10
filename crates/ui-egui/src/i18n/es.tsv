@@ -161,6 +161,7 @@
 	Appearance panel	Panel Apariencia
 	Applies when the linked file is relinked or updated.	Se aplica al volver a vincular o actualizar el archivo vinculado.
 	Applies the next time VectorCraft starts.	Se aplica la próxima vez que se inicie VectorCraft.
+	Apply	Aplicar
 	Apply Brush	Aplicar pincel
 	Apply Character Style	Aplicar estilo de carácter
 	Apply Effect	Aplicar efecto
@@ -220,6 +221,10 @@
 	Auto Size New Area Type	Ajustar automáticamente el tamaño del nuevo texto de área
 	Auto Spell Check	Revisión ortográfica automática
 	Auto-Collapse Iconic Panels	Contraer automáticamente los paneles de iconos
+	Ellipse Properties:	Propiedades de la elipse:
+	Invert Pie	Invertir sector
+	Pie End Angle:	Ángulo final del sector:
+	Pie Start Angle:	Ángulo inicial del sector:
 	Show Tool Group Labels	Mostrar etiquetas de grupos de herramientas
 	Auto-Rotate (turn the paper to each artboard)	Rotar automáticamente (girar el papel según cada mesa de trabajo)
 	Automatic flatness	Lisura automática
@@ -492,6 +497,7 @@
 	Copy Fonts Used in the Document	Copiar fuentes usadas en el documento
 	Copy Links	Copiar vínculos
 	Copy Selected Style	Copiar estilo seleccionado
+	Copy to User Defined	Copiar en Definido por el usuario
 	Copy Width Point	Copiar punto de anchura
 	Copyright	Copyright
 	Copyright Info URL:	URL de información de copyright:
@@ -2056,6 +2062,25 @@
 	Reflect…	Reflejar…
 	Refresh	Actualizar
 	Refresh Font List	Actualizar lista de fuentes
+	Missing Fonts	Fuentes que faltan
+	Missing Fonts Dialog	Cuadro de diálogo Fuentes que faltan
+	These fonts aren't available. Their text shows in another font.	Estas fuentes no están disponibles. Su texto se muestra con otra fuente.
+	Search Fonts Folder	Buscar en la carpeta Fonts
+	Find in Folder…	Buscar en una carpeta…
+	Find Fonts in Folder…	Buscar fuentes en una carpeta…
+	Find Font Files	Buscar archivos de fuentes
+	Add Font Files	Agregar archivos de fuentes
+	Add Fonts	Agregar fuentes
+	Find Fonts	Buscar fuentes
+	Stop	Detener
+	Searching…	Buscando…
+	Not found	No se encontró
+	{folders} folder(s) and {files} file(s) searched	Se buscó en {folders} carpeta(s) y {files} archivo(s)
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Se omitieron {count} carpeta(s), como las de otras aplicaciones y del sistema y las ocultas
+	{count} folder(s) or file(s) couldn't be read	No se pudieron leer {count} carpeta(s) o archivo(s)
+	The search stopped at its limit: search a smaller folder.	La búsqueda se detuvo en su límite: busca en una carpeta más pequeña.
+	Copy only fonts you own or are licensed to install.	Copia solo fuentes que te pertenezcan o cuya licencia te permita instalarlas.
+	VectorCraft copies the fonts to {folder}.	VectorCraft copia las fuentes en {folder}.
 	Registered Trademark Symbol	Símbolo de marca registrada
 	Registration marks	Marcas de registro
 	Registry name:	Nombre del registro:
@@ -2639,6 +2664,7 @@
 	Swash	Decorativa
 	Swatch Conflict	Conflicto de muestras
 	Swatch Conflicts	Conflictos de muestras
+	Swatch exchange files keep solid colors only.	Los archivos de intercambio de muestras solo conservan colores sólidos.
 	Swatch Libraries	Bibliotecas de muestras
 	Swatch Libraries Menu	Menú Bibliotecas de muestras
 	Swatch Library	Biblioteca de muestras
@@ -2989,6 +3015,7 @@
 	Scrub Numeric Fields by Dragging	Ajustar campos numéricos arrastrando
 	{count} file(s) in {folder}{note}. Show the package folder?	{count} archivo(s) en {folder}{note}. ¿Mostrar la carpeta del paquete?
 	{count} linked file(s) not found	No se encontraron {count} archivo(s) vinculado(s)
+	fonts not copied: {fonts}	fuentes no copiadas: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} imagen(es) vinculada(s) cambiaron desde que se guardó este documento. ¿Mostrar las versiones nuevas?
 	{count} more rules: Export writes every one.	{count} reglas más: Exportar las escribe todas.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Se omitieron {count} objetos sin nombre: ponles nombre o activa Objetos sin nombre en el menú del panel.
@@ -3162,6 +3189,7 @@ axis	Both	Ambos
 @msg	its editing data is for a different page	sus datos de edición son de otra página
 @msg	its layers use {_1}, which aren't read yet	sus capas usan {_1}, que aún no se leen
 @msg	its page has text, and its layers have no text objects to put it in	su página tiene texto y sus capas no tienen objetos de texto donde ponerlo
+@msg	its type is to come in as outlines, which only its page has	su texto debe llegar como contornos, y solo su página los tiene
 @msg	the art on them differs from the page's in {_1}% of it	el arte de las capas difiere del de la página en el {_1} % de su superficie
 @msg	`to` must be "corner" or "smooth"	`to` debe ser "corner" o "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	los archivos BMP son RGB o en escala de grises: colorModel rgb o gray
@@ -3451,6 +3479,7 @@ axis	Both	Ambos
 @msg	no symbol instances selected	no hay instancias de símbolo seleccionadas
 @msg	no target object has an opacity mask: select one or give `id`	ningún objeto de destino tiene máscara de opacidad: selecciona uno o indica `id`
 @msg	no threaded text selected	no hay texto enlazado seleccionado
+@msg	no user library folder here	aquí no hay ninguna carpeta de bibliotecas de usuario
 @msg	no user workspace `{from}`	no existe el espacio de trabajo de usuario `{from}`
 @msg	node {_1} is not text	el nodo {_1} no es texto
 @msg	not a DXF drawing	no es un dibujo DXF
@@ -3704,6 +3733,24 @@ axis	Both	Ambos
 @msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos
 @msg	its editing data doesn't say where its art is	sus datos de edición no dicen dónde está su ilustración
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	este archivo se guardó sin compatibilidad con PDF y sus datos de edición no se pueden leer ({why})
+@msg	No fonts are missing in this document	No faltan fuentes en este documento
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft no busca en carpetas de otras aplicaciones ni del sistema: {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft no busca en las carpetas Shared ni Public de Users: {path}
+@msg	{path} is not a folder	{path} no es una carpeta
+@msg	the search couldn't start: try again in a moment	no se pudo iniciar la búsqueda: inténtalo de nuevo en un momento
+@msg	searching a folder isn't available on the web	en la web no se puede buscar en una carpeta
+@msg	every search thread stopped on an internal error (please report this bug)	todos los hilos de búsqueda se detuvieron por un error interno (informa de este error)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	La carpeta Fonts de VectorCraft no está configurada aquí: la configuran la aplicación de escritorio y vectorcraft-cli
+@msg	choose the font files to add	elige los archivos de fuentes que quieres agregar
+@msg	{n} font file(s) are now in {folder}	{n} archivo(s) de fuentes ahora están en {folder}
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} archivo(s) de fuentes ahora están en {folder}; no se pudieron agregar {failed}: {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	aquí no están disponibles {n} fuente(s): su texto se muestra con otra fuente
+@msg	not a file	no es un archivo
+@msg	not a font file	no es un archivo de fuente
+@msg	that document is no longer open	ese documento ya no está abierto
+@msg	larger than 256 MB	mayor de 256 MB
+@msg	the files come to more than 1 GB: add fewer at a time	los archivos suman más de 1 GB: agrega menos a la vez
+@msg	every numbered name for it is taken in the Fonts folder	todos los nombres numerados para él ya existen en la carpeta Fonts
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios

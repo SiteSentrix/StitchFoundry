@@ -159,6 +159,7 @@
 	Appearance panel	Панель «Оформление»
 	Applies when the linked file is relinked or updated.	Применяется при повторной привязке или обновлении связанного файла.
 	Applies the next time VectorCraft starts.	Применяется при следующем запуске VectorCraft.
+	Apply	Применить
 	Apply Brush	Применить кисть
 	Apply Character Style	Применить стиль символа
 	Apply Effect	Применить эффект
@@ -218,6 +219,10 @@
 	Auto Size New Area Type	Автоматически подгонять размер нового текста в области
 	Auto Spell Check	Автоматическая проверка орфографии
 	Auto-Collapse Iconic Panels	Автоматически сворачивать значки панелей
+	Ellipse Properties:	Свойства эллипса:
+	Invert Pie	Инвертировать сектор
+	Pie End Angle:	Конечный угол сектора:
+	Pie Start Angle:	Начальный угол сектора:
 	Show Tool Group Labels	Показывать названия групп инструментов
 	Auto-Rotate (turn the paper to each artboard)	Автоповорот (поворачивать лист по каждой монтажной области)
 	Automatic flatness	Автоматическая плоскостность
@@ -490,6 +495,7 @@
 	Copy Fonts Used in the Document	Копировать шрифты, использованные в документе
 	Copy Links	Копировать связи
 	Copy Selected Style	Копировать выбранный стиль
+	Copy to User Defined	Копировать в «Пользовательский»
 	Copy Width Point	Копировать точку ширины
 	Copyright	Copyright
 	Copyright Info URL:	URL информации об авторских правах:
@@ -2052,6 +2058,25 @@
 	Reflect…	Отразить…
 	Refresh	Обновить
 	Refresh Font List	Обновить список шрифтов
+	Missing Fonts	Отсутствующие шрифты
+	Missing Fonts Dialog	Диалоговое окно «Отсутствующие шрифты»
+	These fonts aren't available. Their text shows in another font.	Эти шрифты недоступны. Их текст отображается другим шрифтом.
+	Search Fonts Folder	Искать в папке Fonts
+	Find in Folder…	Найти в папке…
+	Find Fonts in Folder…	Найти шрифты в папке…
+	Find Font Files	Найти файлы шрифтов
+	Add Font Files	Добавить файлы шрифтов
+	Add Fonts	Добавить шрифты
+	Find Fonts	Найти шрифты
+	Stop	Остановить
+	Searching…	Поиск…
+	Not found	Не найдено
+	{folders} folder(s) and {files} file(s) searched	Просмотрено папок: {folders}, файлов: {files}
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Пропущено папок: {count}, например папки других приложений и системы и скрытые папки
+	{count} folder(s) or file(s) couldn't be read	Не удалось прочитать папок или файлов: {count}
+	The search stopped at its limit: search a smaller folder.	Поиск остановился на пределе: выберите папку поменьше.
+	Copy only fonts you own or are licensed to install.	Копируйте только шрифты, которые принадлежат вам или которые вы вправе устанавливать по лицензии.
+	VectorCraft copies the fonts to {folder}.	VectorCraft копирует шрифты в {folder}.
 	Registered Trademark Symbol	Символ зарегистрированного товарного знака
 	Registration marks	Метки совмещения
 	Registry name:	Имя в реестре:
@@ -2635,6 +2660,7 @@
 	Swash	Росчерк
 	Swatch Conflict	Конфликт образцов
 	Swatch Conflicts	Конфликты образцов
+	Swatch exchange files keep solid colors only.	Файлы обмена образцами сохраняют только сплошные цвета.
 	Swatch Libraries	Библиотеки образцов
 	Swatch Libraries Menu	Меню «Библиотеки образцов»
 	Swatch Library	Библиотека образцов
@@ -2985,6 +3011,7 @@
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
 	{count} file(s) in {folder}{note}. Show the package folder?	Файлов: {count} в {folder}{note}. Показать папку пакета?
 	{count} linked file(s) not found	Не найдено связанных файлов: {count}
+	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	Связанных изображений ({count}) изменились с момента сохранения этого документа. Показать новые версии?
 	{count} more rules: Export writes every one.	Ещё правил: {count}: экспорт записывает все.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Пропущено объектов без имени: {count}: назовите их или включите «Объекты без имени» в меню панели.
@@ -3158,6 +3185,7 @@ axis	Both	Оба
 @msg	its editing data is for a different page	его данные для редактирования относятся к другой странице
 @msg	its layers use {_1}, which aren't read yet	его слои используют {_1}, что пока не читается
 @msg	its page has text, and its layers have no text objects to put it in	на его странице есть текст, а на слоях нет текстовых объектов, куда его поместить
+@msg	its type is to come in as outlines, which only its page has	его текст должен прийти в виде контуров, а они есть только на его странице
 @msg	the art on them differs from the page's in {_1}% of it	изображение на слоях отличается от изображения на странице на {_1} % площади
 @msg	`to` must be "corner" or "smooth"	`to` должно быть "corner" или "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	файлы BMP бывают RGB или в оттенках серого: colorModel rgb или gray
@@ -3447,6 +3475,7 @@ axis	Both	Оба
 @msg	no symbol instances selected	экземпляры символов не выделены
 @msg	no target object has an opacity mask: select one or give `id`	ни у одного целевого объекта нет непрозрачной маски: выделите один или укажите `id`
 @msg	no threaded text selected	связанный текст не выделен
+@msg	no user library folder here	здесь нет папки пользовательских библиотек
 @msg	no user workspace `{from}`	нет пользовательской рабочей среды `{from}`
 @msg	node {_1} is not text	узел {_1} не является текстом
 @msg	not a DXF drawing	не является чертежом DXF
@@ -3700,6 +3729,24 @@ axis	Both	Оба
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	its editing data doesn't say where its art is	в его данных редактирования не указано, где находится графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	этот файл сохранён без совместимости с PDF, и его данные редактирования не удаётся прочитать ({why})
+@msg	No fonts are missing in this document	В этом документе нет отсутствующих шрифтов
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не ищет в папках других приложений и системы: {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не ищет в папках Shared и Public внутри Users: {path}
+@msg	{path} is not a folder	{path} не является папкой
+@msg	the search couldn't start: try again in a moment	не удалось начать поиск: повторите попытку чуть позже
+@msg	searching a folder isn't available on the web	поиск в папке недоступен в веб-версии
+@msg	every search thread stopped on an internal error (please report this bug)	все потоки поиска остановились из-за внутренней ошибки (сообщите об этой ошибке)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папка Fonts VectorCraft здесь не задана: её задают настольное приложение и vectorcraft-cli
+@msg	choose the font files to add	выберите файлы шрифтов для добавления
+@msg	{n} font file(s) are now in {folder}	Файлов шрифтов теперь в {folder}: {n}
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлов шрифтов теперь в {folder}: {n}; не удалось добавить {failed}: {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	здесь недоступно шрифтов: {n}; их текст отображается другим шрифтом
+@msg	not a file	не файл
+@msg	not a font file	не файл шрифта
+@msg	that document is no longer open	этот документ больше не открыт
+@msg	larger than 256 MB	больше 256 МБ
+@msg	the files come to more than 1 GB: add fewer at a time	файлы занимают больше 1 ГБ: добавляйте меньше за раз
+@msg	every numbered name for it is taken in the Fonts folder	все нумерованные имена для него уже заняты в папке Fonts
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы

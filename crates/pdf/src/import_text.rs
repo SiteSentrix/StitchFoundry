@@ -75,6 +75,8 @@ pub(crate) struct Look {
     pub font: u128,
     pub family: String,
     pub style: String,
+    /// The installed version of the font when it isn't the one family and style resolve to.
+    pub version: Option<String>,
     pub size: f64,
     pub h_scale: f64,
     pub fill: Option<Paint>,
@@ -97,6 +99,7 @@ impl Look {
         CharStyle {
             font_family: self.family.clone(),
             font_style: self.style.clone(),
+            font_version: self.version.clone(),
             size: round(self.size),
             h_scale: round(self.h_scale),
             fill: self.fill.clone().unwrap_or(Paint::None),

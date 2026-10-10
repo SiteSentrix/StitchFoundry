@@ -5,9 +5,9 @@
 //! Bottom: fill/stroke proxy, colour/gradient/none, drawing modes, screen mode, Edit Toolbar.
 
 use egui::{Color32, CornerRadius, Sense, Stroke, Ui, pos2, vec2};
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_tools::{TOOL_GROUPS, ToolInfo, tool_info};
+use vectorcraft_tools::{Mods, TOOL_GROUPS, ToolInfo, ToolKey, tool_info};
 
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, icons, widgets};
@@ -62,7 +62,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
     ("Color", &[&["gradient", "mesh"], &["eyedropper", "measure"]]),
 ];
 
-fn tip(t: &ToolInfo) -> String {
+pub(crate) fn tip(t: &ToolInfo) -> String {
     match crate::shortcut_editor::tool_shortcut(t.id) {
         Some(s) => format!("{} ({})", tl!(t.label), s),
         None => tl!(t.label).to_string(),
@@ -350,6 +350,9 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() == "puppetWarp" {
         return puppet_warp_options(app, ui);
     }
+    if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
+        return crop_options(app, ui);
+    }
     if app.session.tool_id() == "artboard" {
         crate::panels::artboards::art_options(app, ui);
         ui.separator();
@@ -367,6 +370,42 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
         if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, 96.0).and_then(|i| choices.get(i)) {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
+        }
+    }
+    ui.separator();
+}
+
+/// Crop Image's box: its centre (X, Y) and size (W, H) in the general unit, set through the tool's
+/// `rect` option, then Apply (Enter) and Cancel (Escape).
+fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let set = app.session.tool_options()["rect"].as_array().and_then(|v| match v.iter().filter_map(Value::as_f64).collect::<Vec<_>>()[..] {
+        [x, y, w, h] => Some(vectorcraft_geom::Rect::new(x, y, x + w, y + h)),
+        _ => None,
+    });
+    let Some((_, _, r)) = app.session.active().and_then(|st| vectorcraft_tools::cropimage::crop_box(&st.doc, &st.selection, set)) else { return };
+    let t = Tokens::get(ui.ctx());
+    let units = app.session.general_unit();
+    let c = r.center();
+    for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
+        widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
+        if let Some(nv) = widgets::num_field(ui, ("cb-crop", k), Some(v), units, 80.0) {
+            let (mut c, mut w, mut h) = (c, r.width(), r.height());
+            match k {
+                "x" => c.x = nv,
+                "y" => c.y = nv,
+                "width" => w = nv.max(0.0),
+                _ => h = nv.max(0.0),
+            }
+            let rect = [c.x - w / 2.0, c.y - h / 2.0, w, h];
+            app.run("tool.setOption", json!({ "key": "rect", "value": rect })).ok();
+        }
+    }
+    ui.separator();
+    for (label, key) in [(tl!("Apply"), ToolKey::Enter), (tl!("Cancel"), ToolKey::Escape)] {
+        if widgets::flat_button(ui, label, 64.0).clicked() {
+            let view = app.view_info();
+            let r = app.session.tool_key(key, Mods::default(), view);
+            crate::canvas::apply_requests(app, r);
         }
     }
     ui.separator();

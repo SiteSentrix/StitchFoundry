@@ -872,7 +872,7 @@ fn complete_languages_translate_every_message() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["es", "fr", "it", "ru", "uk"];
+const COMPLETE_MESSAGES: &[&str] = &["es", "fr", "it", "ja", "ru", "uk"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];

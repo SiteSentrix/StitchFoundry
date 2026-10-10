@@ -251,6 +251,13 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 node.appearance = st.appearance();
                 children.push(Arc::new(node));
             }
+            // Underline and strikethrough bars become paths of their run's paint too (#847).
+            for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
+                let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
+                let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
+                node.appearance = st.appearance();
+                children.push(Arc::new(node));
+            }
             let (par, idx, _) = d.position(tid).ok_or(EngineError::NoNode(tid))?;
             d.remove(tid)?;
             if children.is_empty() {
@@ -415,6 +422,10 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 if let Some(f) = &style {
                     st.font_style = f.clone();
+                }
+                // Another font: none of the old one's versions.
+                if font.is_some() || style.is_some() {
+                    st.font_version = None;
                 }
                 if let Some(v) = size {
                     st.size = v.clamp(0.1, 1296.0);

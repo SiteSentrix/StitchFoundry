@@ -785,8 +785,20 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
 /// A column of tool or panel buttons (the toolbar, the dock's icon column) that scrolls when the
 /// window is too short for it: with the mouse wheel, or the scroll bar shown while the pointer is
 /// over it.
+/// Its scroll bar stays a slim line at the edge, even while scrolled or dragged, so it never covers
+/// the buttons (#808).
 pub fn strip_scroll<R>(ui: &mut Ui, id: &str, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-    egui::ScrollArea::vertical().id_salt(id).auto_shrink([false, true]).show(ui, add_contents).inner
+    ui.scope(|ui| {
+        ui.spacing_mut().scroll = egui::style::ScrollStyle {
+            bar_width: 4.0,
+            floating_width: 2.0,
+            bar_inner_margin: 0.0,
+            bar_outer_margin: 1.0,
+            ..egui::style::ScrollStyle::floating()
+        };
+        egui::ScrollArea::vertical().id_salt(id).auto_shrink([false, true]).show(ui, add_contents).inner
+    })
+    .inner
 }
 
 /// Whether the blend-mode list draws a separator above `BlendMode::ALL[i]`: where a
