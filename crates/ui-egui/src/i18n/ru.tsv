@@ -1192,6 +1192,7 @@
 	Highlight Alternate Glyphs	Выделять альтернативные глифы
 	Highlight anchors on mouse over	Выделять опорные точки при наведении
 	Highlight Rows	Выделять строки
+	Highlight Variable	Подсветить переменную
 	Highlight Substituted Fonts	Выделять заменённые шрифты
 	Highlight Substituted Glyphs	Выделять заменённые глифы
 	History	История
@@ -3051,6 +3052,38 @@
 	V:	В:
 	Variable Width Profile	Профиль переменной ширины
 	Variables	Переменные
+	New Variable	Новая переменная
+	Delete Variable	Удалить переменную
+	List Variables	Перечислить переменные
+	Bind Variable	Привязать переменную
+	Unbind Variable	Отвязать переменную
+	New Data Set	Новый набор данных
+	Delete Data Set	Удалить набор данных
+	List Data Sets	Перечислить наборы данных
+	Select Data Set	Выделить набор данных
+	Next Data Set	Следующий набор данных
+	Previous Data Set	Предыдущий набор данных
+	Data Sets	Наборы данных
+	New Variable…	Новая переменная…
+	New Data Set…	Новый набор данных…
+	Edit Data Set…	Изменить набор данных…
+	Data Set	Набор данных
+	Kind	Тип
+	Variable	Переменная
+	no document	нет документа
+	no data set to edit	нет набора данных для изменения
+	Make Text Dynamic	Сделать текст динамическим
+	Make Visibility Dynamic	Сделать видимость динамической
+	Capture Data Set	Записать набор данных
+	Update Data Set	Обновить набор данных
+	Rename Data Set…	Переименовать набор данных…
+	Variable Options…	Параметры переменной…
+	Select Bound Object	Выбрать связанный объект
+	Select All Bound Objects	Выбрать все связанные объекты
+	Multiple objects	Несколько объектов
+	New Name	Новое имя
+	no variable to rename	нет переменной для переименования
+	no data set to rename	нет набора данных для переименования
 	Variation:	Вариация:
 	Vector Effects	Векторные эффекты
 	Vector Halftone	Векторный полутон
@@ -3995,3 +4028,10 @@ axis	Both	Оба
 	Blocks	Блоки
 	Frosted	Матовое
 	Tiny Lens	Мелкие линзы
+	Rename Data Set	Переименовать набор данных
+	Rename Variable	Переименовать переменную
+	Variable Options	Параметры переменной
+	Edit Data Set	Изменить набор данных
+	Define a variable first	Сначала определите переменную
+	Text	Текст
+	Visibility	Видимость

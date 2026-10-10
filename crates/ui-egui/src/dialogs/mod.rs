@@ -88,6 +88,7 @@ pub mod tile_edge_color;
 mod tools;
 mod transform;
 pub mod transform_each;
+pub mod variables;
 pub mod width_point;
 
 use serde_json::{Value, json};
@@ -212,6 +213,7 @@ registry! {
     ExportForScreens: ["exportForScreens"] => export_for_screens::SPEC,
     Recolor: [recolor::KIND] => recolor::SPEC,
     Command: ["command"] => command::SPEC,
+    Variables: [variables::KIND] => variables::SPEC,
     Effect: ["effect"] => effect::SPEC,
     SaveChanges: [crate::unsaved::KIND] => save_changes::SPEC,
     Preferences: ["preferences"] => DialogSpec::window(crate::prefs_dialog::show, |app, _| crate::prefs_dialog::confirm(app)),

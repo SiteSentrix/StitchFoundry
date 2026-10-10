@@ -112,6 +112,23 @@ fn text_ref(s: &Session, id: NodeId) -> Result<TextObject> {
     }
 }
 
+/// Replace a type object's whole content: the new text takes the replaced text's
+/// style and paragraph styles follow, exactly as `text.editRange` over the full
+/// range does. Dataset apply and friends share this so Variables edits behave
+/// like Type tool edits.
+pub(crate) fn set_plain_text(d: &mut vectorcraft_doc::Document, id: NodeId, text: &str) -> Result<()> {
+    let len = match d.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => edit::runs_len(&t.runs),
+        Some(_) => return Err(EngineError::Other(format!("node {} is not text", id.0))),
+        None => return Err(EngineError::NoNode(id)),
+    };
+    let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+    t.splice_paras(0, len, text);
+    edit::replace_range(&mut t.runs, 0, len, text);
+    refresh_bounds(t);
+    Ok(())
+}
+
 fn byte_param(p: &Value, k: &str) -> Option<usize> {
     p.get(k).and_then(Value::as_u64).map(|v| v as usize)
 }

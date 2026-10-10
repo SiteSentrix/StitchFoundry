@@ -1170,6 +1170,7 @@
 	Highlight Alternate Glyphs	醒目提示替代字符
 	Highlight anchors on mouse over	滑鼠移過時醒目提示錨點
 	Highlight Rows	反白顯示列
+	Highlight Variable	突出顯示變數
 	Highlight Substituted Fonts	醒目提示被取代的字體
 	Highlight Substituted Glyphs	醒目提示被取代的字符
 	History	步驟記錄
@@ -3038,6 +3039,38 @@
 	V:	V：
 	Variable Width Profile	可變寬度描述檔
 	Variables	變數
+	New Variable	新增變數
+	Delete Variable	刪除變數
+	List Variables	列出變數
+	Bind Variable	綁定變數
+	Unbind Variable	解除變數綁定
+	New Data Set	新增資料集
+	Delete Data Set	刪除資料集
+	List Data Sets	列出資料集
+	Select Data Set	選取資料集
+	Next Data Set	下一個資料集
+	Previous Data Set	上一個資料集
+	Data Sets	資料集
+	New Variable…	新增變數…
+	New Data Set…	新增資料集…
+	Edit Data Set…	編輯資料集…
+	Data Set	資料集
+	Kind	類型
+	Variable	變數
+	no document	沒有文件
+	no data set to edit	沒有可編輯的資料集
+	Make Text Dynamic	使文字動態化
+	Make Visibility Dynamic	使可見性動態化
+	Capture Data Set	擷取資料集
+	Update Data Set	更新資料集
+	Rename Data Set…	重新命名資料集…
+	Variable Options…	變數選項…
+	Select Bound Object	選取繫結的物件
+	Select All Bound Objects	選取所有繫結的物件
+	Multiple objects	多個物件
+	New Name	新名稱
+	no variable to rename	沒有可重新命名的變數
+	no data set to rename	沒有可重新命名的資料集
 	Variation:	變化：
 	Vector Effects	向量效果
 	Vector Halftone	向量半色調
@@ -3409,3 +3442,10 @@ effect	Soft	柔和
 	Blocks	塊狀
 	Frosted	磨砂
 	Tiny Lens	小鏡頭
+	Rename Data Set	重新命名資料集
+	Rename Variable	重新命名變數
+	Variable Options	變數選項
+	Edit Data Set	編輯資料集
+	Define a variable first	請先定義一個變數
+	Text	文字
+	Visibility	可見性

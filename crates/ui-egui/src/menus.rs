@@ -47,6 +47,7 @@ fn sub(label: &'static str, items: Vec<Item>) -> Item {
 fn library_placeholders() -> Vec<Item> {
     vec![todo("Built-in Libraries"), todo("User Defined"), Sep, todo("Other Library…")]
 }
+
 use Item::Sep;
 
 /// UI-level commands: (id, label, shortcut, params doc).
@@ -2548,7 +2549,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         panel("Tabs", "tabs"),
                     ],
                 ),
-                todo("Variables"),
+                panel("Variables", crate::panels::variables::ID),
                 Sep,
                 sub("Brush Libraries", library_placeholders()),
                 sub("Graphic Style Libraries", crate::panels::graphic_styles::window_menu()),
@@ -2990,6 +2991,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         if let Err(e) = crate::dialogs::envelope::open(app, id) {
             app.status(e);
         }
+        return;
+    }
+    // Variables (data merge): a name and a kind, a name and a row of values.
+    if crate::dialogs::variables::opens(id) && p.as_object().is_none_or(|o| o.is_empty()) {
+        crate::dialogs::variables::open(app, id, None);
         return;
     }
     // Repeat Options: a dialog with the selected repeat's current values.

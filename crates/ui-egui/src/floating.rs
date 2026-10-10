@@ -496,12 +496,13 @@ mod tests {
 
     const SCREEN: Vec2 = vec2(1400.0, 900.0);
 
-    /// Frames of the whole window, 1400 × 900, with pointer input one event a frame (as the
-    /// control channel's `ui.drag` sends it).
+    /// Frames of the whole window, with pointer input one event a frame (as the control
+    /// channel's `ui.drag` sends it).
     struct Harness {
         app: VectorcraftApp,
         ctx: egui::Context,
         time: f64,
+        screen: Vec2,
     }
 
     fn button(pos: Pos2, pressed: bool) -> Event {
@@ -510,16 +511,23 @@ mod tests {
 
     impl Harness {
         fn new() -> Self {
+            Self::on(SCREEN)
+        }
+
+        /// The same window at another size. The icon column scrolls when it is too short for
+        /// every icon, which hides the ones past the bottom — a test that counts them needs
+        /// a window tall enough to show them all.
+        fn on(screen: Vec2) -> Self {
             let mut app = VectorcraftApp::new(Session::new(), Default::default());
             app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-            let mut h = Self { app, ctx: egui::Context::default(), time: 0.0 };
+            let mut h = Self { app, ctx: egui::Context::default(), time: 0.0, screen };
             h.settle();
             h
         }
 
         fn frame(&mut self, events: Vec<Event>) {
             self.time += 0.05;
-            let screen = Rect::from_min_size(Pos2::ZERO, SCREEN);
+            let screen = Rect::from_min_size(Pos2::ZERO, self.screen);
             let raw = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), events, ..Default::default() };
             let app = &mut self.app;
             self.ctx
@@ -651,10 +659,13 @@ mod tests {
 
     #[test]
     fn icons_dragged_out_float_stack_onto_another_group_and_tear_out_of_it() {
-        let mut h = Harness::new();
+        // Tall enough that the icon column shows every icon, so counting them says what it
+        // means: one leaves the column, rather than one more scrolling into view.
+        let mut h = Harness::on(vec2(1400.0, 1600.0));
         // Color, Color Guide, Swatches… top to bottom.
         let icons = h.icons();
         let count = icons.len();
+        assert_eq!(count, crate::state::ICON_PANEL_GROUPS.iter().map(|g| g.len()).sum::<usize>(), "every group's icons are drawn");
         h.drag(icons[2].center(), pos2(500.0, 250.0));
         assert_eq!(h.groups(), [["swatches"]]);
         assert_eq!(h.icons().len(), count - 1, "its icon left the column");

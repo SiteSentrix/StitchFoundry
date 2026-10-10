@@ -1188,6 +1188,7 @@
 	Highlight Alternate Glyphs	Виділяти альтернативні гліфи
 	Highlight anchors on mouse over	Виділяти опорні точки при наведенні
 	Highlight Rows	Виділяти рядки
+	Highlight Variable	Підсвітити змінну
 	Highlight Substituted Fonts	Виділяти замінені шрифти
 	Highlight Substituted Glyphs	Виділяти замінені гліфи
 	History	Історія
@@ -3047,6 +3048,38 @@
 	V:	В:
 	Variable Width Profile	Профіль змінної ширини
 	Variables	Змінні
+	New Variable	Нова змінна
+	Delete Variable	Видалити змінну
+	List Variables	Перерахувати змінні
+	Bind Variable	Прив'язати змінну
+	Unbind Variable	Відв'язати змінну
+	New Data Set	Новий набір даних
+	Delete Data Set	Видалити набір даних
+	List Data Sets	Перерахувати набори даних
+	Select Data Set	Виділити набір даних
+	Next Data Set	Наступний набір даних
+	Previous Data Set	Попередній набір даних
+	Data Sets	Набори даних
+	New Variable…	Нова змінна…
+	New Data Set…	Новий набір даних…
+	Edit Data Set…	Змінити набір даних…
+	Data Set	Набір даних
+	Kind	Тип
+	Variable	Змінна
+	no document	немає документа
+	no data set to edit	немає набору даних для зміни
+	Make Text Dynamic	Зробити текст динамічним
+	Make Visibility Dynamic	Зробити видимість динамічною
+	Capture Data Set	Записати набір даних
+	Update Data Set	Оновити набір даних
+	Rename Data Set…	Перейменувати набір даних…
+	Variable Options…	Параметри змінної…
+	Select Bound Object	Вибрати пов’язаний об’єкт
+	Select All Bound Objects	Вибрати всі пов’язані об’єкти
+	Multiple objects	Кілька об’єктів
+	New Name	Нова назва
+	no variable to rename	немає змінної для перейменування
+	no data set to rename	немає набору даних для перейменування
 	Variation:	Варіація:
 	Vector Effects	Векторні ефекти
 	Vector Halftone	Векторний напівтон
@@ -3980,3 +4013,10 @@ axis	Both	Обидві
 	Blocks	Блоки
 	Frosted	Матове
 	Tiny Lens	Дрібні лінзи
+	Rename Data Set	Перейменувати набір даних
+	Rename Variable	Перейменувати змінну
+	Variable Options	Параметри змінної
+	Edit Data Set	Змінити набір даних
+	Define a variable first	Спочатку визначте змінну
+	Text	Текст
+	Visibility	Видимість

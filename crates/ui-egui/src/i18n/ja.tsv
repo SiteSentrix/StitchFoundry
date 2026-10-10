@@ -569,6 +569,39 @@
 	Paragraph Styles	段落スタイル
 	Tabs	タブ
 	Variables	変数
+	New Variable	新規変数
+	Delete Variable	変数を削除
+	List Variables	変数一覧
+	Bind Variable	変数をバインド
+	Unbind Variable	変数のバインドを解除
+	New Data Set	新規データセット
+	Delete Data Set	データセットを削除
+	List Data Sets	データセット一覧
+	Select Data Set	データセットを選択
+	Next Data Set	次のデータセット
+	Previous Data Set	前のデータセット
+	Data Sets	データセット
+	New Variable…	新規変数…
+	New Data Set…	新規データセット…
+	Edit Data Set…	データセットを編集…
+	Data Set	データセット
+	Kind	種類
+	Variable	変数
+	no document	ドキュメントがありません
+	no data set to edit	編集するデータセットがありません
+	Make Text Dynamic	テキストを動的にする
+	Make Visibility Dynamic	表示を動的にする
+	Capture Data Set	データセットを取得
+	Update Data Set	データセットを更新
+	Rename Data Set…	データセットの名前を変更…
+	Variable Options…	変数のオプション…
+	Select Bound Object	バインドされたオブジェクトを選択
+	Select All Bound Objects	すべてのバインドされたオブジェクトを選択
+	Multiple objects	複数のオブジェクト
+	New Name	新しい名前
+	Rename Variable	変数の名前を変更
+	no variable to rename	名前を変更する変数がありません
+	no data set to rename	名前を変更するデータセットがありません
 	Brush Libraries	ブラシライブラリ
 	Built-in Libraries	内蔵ライブラリ
 	User Defined	ユーザー定義
@@ -1415,6 +1448,7 @@
 	High Performance (discrete)	高パフォーマンス (専用 GPU)
 	Highlight Alternate Glyphs	代替字形をハイライト
 	Highlight Rows	行をハイライト
+	Highlight Variable	変数をハイライト表示
 	Highlight Substituted Fonts	置換フォントをハイライト
 	Highlight Substituted Glyphs	置換字形をハイライト
 	Highlight anchors on mouse over	マウスオーバー時にアンカーをハイライト
@@ -3992,3 +4026,9 @@ effect	Vertical	垂直
 	Blocks	ブロック
 	Frosted	すりガラス
 	Tiny Lens	小さなレンズ
+	Rename Data Set	データセットの名前を変更
+	Variable Options	変数のオプション
+	Edit Data Set	データセットを編集
+	Define a variable first	先に変数を定義してください
+	Text	テキスト
+	Visibility	表示状態

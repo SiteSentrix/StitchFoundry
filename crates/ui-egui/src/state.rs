@@ -138,9 +138,14 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::links::ID, "Links", "link"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
+    (crate::panels::variables::ID, "Variables", "chart-column"),
 ];
 
 /// Groups of icon panels separated by dividers in the collapsed column.
+///
+/// This, not [`ICON_PANELS`], is what the collapsed column draws: a panel listed there but in
+/// no group can be opened from the Window menu and `window.panel`, but never appears as an
+/// icon. A panel that belongs in the column needs a row here as well as its entry above.
 pub const ICON_PANEL_GROUPS: &[&[&str]] = &[
     &["color", "colorGuide"],
     &["swatches", "brushes", "symbols", "patternOptions"],
@@ -150,6 +155,7 @@ pub const ICON_PANEL_GROUPS: &[&[&str]] = &[
     &["transform", "align", "pathfinder"],
     &["character", "paragraph", "glyphs"],
     &["history", "actions", "info", "navigator"],
+    &["variables"],
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

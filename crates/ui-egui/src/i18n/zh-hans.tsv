@@ -2947,6 +2947,38 @@
 	V:	V：
 	Variable Width Profile	变量宽度配置文件
 	Variables	变量
+	New Variable	新建变量
+	Delete Variable	删除变量
+	List Variables	列出变量
+	Bind Variable	绑定变量
+	Unbind Variable	解除变量绑定
+	New Data Set	新建数据集
+	Delete Data Set	删除数据集
+	List Data Sets	列出数据集
+	Select Data Set	选择数据集
+	Next Data Set	下一个数据集
+	Previous Data Set	上一个数据集
+	Data Sets	数据集
+	New Variable…	新建变量…
+	New Data Set…	新建数据集…
+	Edit Data Set…	编辑数据集…
+	Data Set	数据集
+	Kind	类型
+	Variable	变量
+	no document	没有文档
+	no data set to edit	没有可编辑的数据集
+	Make Text Dynamic	使文本动态化
+	Make Visibility Dynamic	使可见性动态化
+	Capture Data Set	捕获数据集
+	Update Data Set	更新数据集
+	Rename Data Set…	重命名数据集…
+	Variable Options…	变量选项…
+	Select Bound Object	选择绑定的对象
+	Select All Bound Objects	选择所有绑定的对象
+	Multiple objects	多个对象
+	New Name	新名称
+	no variable to rename	没有可重命名的变量
+	no data set to rename	没有可重命名的数据集
 	Variation:	变化：
 	Vector Effects	矢量效果
 	Vector Halftone	矢量半色调
@@ -3394,6 +3426,7 @@
 	Hide Others	隐藏其他
 	High Performance (discrete)	高性能 (独立显卡)
 	Highlight Rows	突出显示行
+	Highlight Variable	突出显示变量
 	Lock Others	锁定其他
 	Merge Selected	合并所选图层
 	Move Rows	移动行
@@ -3628,3 +3661,10 @@ effect	Vertical	垂直
 	Blocks	块状
 	Frosted	磨砂
 	Tiny Lens	小镜头
+	Rename Data Set	重命名数据集
+	Rename Variable	重命名变量
+	Variable Options	变量选项
+	Edit Data Set	编辑数据集
+	Define a variable first	请先定义一个变量
+	Text	文本
+	Visibility	可见性

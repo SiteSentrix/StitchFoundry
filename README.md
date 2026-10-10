@@ -221,7 +221,7 @@ self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-0
 - 3D and Materials;
 - the Photoshop-style raster effects (Effect Gallery);
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
-- Variables and scripting;
+- scripting, and the rest of Variables (image and graph kinds, dataset import);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - packaging for Windows and Linux.
 

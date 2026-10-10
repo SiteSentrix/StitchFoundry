@@ -1195,6 +1195,7 @@
 	Highlight Alternate Glyphs	Resaltar glifos alternativos
 	Highlight anchors on mouse over	Resaltar anclas al pasar el puntero
 	Highlight Rows	Resaltar filas
+	Highlight Variable	Resaltar variable
 	Highlight Substituted Fonts	Resaltar fuentes sustituidas
 	Highlight Substituted Glyphs	Resaltar glifos sustituidos
 	History	Historial
@@ -3055,6 +3056,38 @@
 	V:	V:
 	Variable Width Profile	Perfil de anchura variable
 	Variables	Variables
+	New Variable	Nueva variable
+	Delete Variable	Eliminar variable
+	List Variables	Enumerar variables
+	Bind Variable	Vincular variable
+	Unbind Variable	Desvincular variable
+	New Data Set	Nuevo conjunto de datos
+	Delete Data Set	Eliminar conjunto de datos
+	List Data Sets	Enumerar conjuntos de datos
+	Select Data Set	Seleccionar conjunto de datos
+	Next Data Set	Conjunto de datos siguiente
+	Previous Data Set	Conjunto de datos anterior
+	Data Sets	Conjuntos de datos
+	New Variable…	Nueva variable…
+	New Data Set…	Nuevo conjunto de datos…
+	Edit Data Set…	Editar conjunto de datos…
+	Data Set	Conjunto de datos
+	Kind	Tipo
+	Variable	Variable
+	no document	no hay documento
+	no data set to edit	no hay ningún conjunto de datos que editar
+	Make Text Dynamic	Hacer texto dinámico
+	Make Visibility Dynamic	Hacer visible dinámico
+	Capture Data Set	Capturar conjunto de datos
+	Update Data Set	Actualizar conjunto de datos
+	Rename Data Set…	Renombrar conjunto de datos…
+	Variable Options…	Opciones de variable…
+	Select Bound Object	Seleccionar objeto vinculado
+	Select All Bound Objects	Seleccionar todos los objetos vinculados
+	Multiple objects	Varios objetos
+	New Name	Nuevo nombre
+	no variable to rename	no hay ninguna variable que renombrar
+	no data set to rename	no hay ningún conjunto de datos que renombrar
 	Variation:	Variación:
 	Vector Effects	Efectos vectoriales
 	Vector Halftone	Semitono vectorial
@@ -3997,3 +4030,10 @@ axis	Both	Ambos
 	Blocks	Bloques
 	Frosted	Esmerilado
 	Tiny Lens	Lente pequeña
+	Rename Data Set	Renombrar conjunto de datos
+	Rename Variable	Renombrar variable
+	Variable Options	Opciones de variable
+	Edit Data Set	Editar conjunto de datos
+	Define a variable first	Defina primero una variable
+	Text	Texto
+	Visibility	Visibilidad

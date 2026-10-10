@@ -42,6 +42,7 @@ pub mod tabs;
 pub mod text_styles;
 pub mod transform;
 pub mod transparency;
+pub mod variables;
 
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
@@ -136,6 +137,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "tabs" => tabs::show(app, ui),
         flattener_preview::ID => flattener_preview::show(app, ui),
         "attributes" => attributes::show(app, ui),
+        variables::ID => variables::show(app, ui),
         "colorThemes" => color_themes::show(app, ui),
         links::ID => links::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
@@ -187,6 +189,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         links::ID => links::menu(app, ui),
         asset_export::ID => asset_export::menu(app, ui),
         css_properties::ID => css_properties::menu(app, ui),
+        variables::ID => variables::menu(app, ui),
         _ => return false,
     }
     true

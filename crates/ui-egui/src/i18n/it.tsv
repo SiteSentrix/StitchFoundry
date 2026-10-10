@@ -1194,6 +1194,7 @@
 	Highlight Alternate Glyphs	Evidenzia glifi alternativi
 	Highlight anchors on mouse over	Evidenzia ancoraggi al passaggio del mouse
 	Highlight Rows	Evidenzia righe
+	Highlight Variable	Evidenzia variabile
 	Highlight Substituted Fonts	Evidenzia font sostituiti
 	Highlight Substituted Glyphs	Evidenzia glifi sostituiti
 	History	Cronologia
@@ -3055,6 +3056,38 @@
 	V:	V:
 	Variable Width Profile	Profilo larghezza variabile
 	Variables	Variabili
+	New Variable	Nuova variabile
+	Delete Variable	Elimina variabile
+	List Variables	Elenca variabili
+	Bind Variable	Collega variabile
+	Unbind Variable	Scollega variabile
+	New Data Set	Nuovo set di dati
+	Delete Data Set	Elimina set di dati
+	List Data Sets	Elenca set di dati
+	Select Data Set	Seleziona set di dati
+	Next Data Set	Set di dati successivo
+	Previous Data Set	Set di dati precedente
+	Data Sets	Set di dati
+	New Variable…	Nuova variabile…
+	New Data Set…	Nuovo set di dati…
+	Edit Data Set…	Modifica set di dati…
+	Data Set	Set di dati
+	Kind	Tipo
+	Variable	Variabile
+	no document	nessun documento
+	no data set to edit	nessun set di dati da modificare
+	Make Text Dynamic	Rendi testo dinamico
+	Make Visibility Dynamic	Rendi visibilità dinamica
+	Capture Data Set	Cattura set di dati
+	Update Data Set	Aggiorna set di dati
+	Rename Data Set…	Rinomina set di dati…
+	Variable Options…	Opzioni variabile…
+	Select Bound Object	Seleziona oggetto associato
+	Select All Bound Objects	Seleziona tutti gli oggetti associati
+	Multiple objects	Più oggetti
+	New Name	Novo nome
+	no variable to rename	nessuna variabile da rinominare
+	no data set to rename	nessun set di dati da rinominare
 	Variation:	Variazione:
 	Vector Effects	Effetti vettoriali
 	Vector Halftone	Retino vettoriale
@@ -3999,3 +4032,10 @@ effect	Regular	Normale
 	Blocks	Blocchi
 	Frosted	Smerigliato
 	Tiny Lens	Lente piccola
+	Rename Data Set	Rinomina set di dati
+	Rename Variable	Rinomina variabile
+	Variable Options	Opzioni variabile
+	Edit Data Set	Modifica set di dati
+	Define a variable first	Definisci prima una variabile
+	Text	Testo
+	Visibility	Visibilità

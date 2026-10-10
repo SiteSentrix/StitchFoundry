@@ -1194,6 +1194,7 @@
 	Highlight Alternate Glyphs	Surligner les glyphes de substitution
 	Highlight anchors on mouse over	Mettre en évidence les points d’ancrage au survol
 	Highlight Rows	Surligner les lignes
+	Highlight Variable	Surligner la variable
 	Highlight Substituted Fonts	Surligner les polices remplacées
 	Highlight Substituted Glyphs	Surligner les glyphes remplacés
 	History	Historique
@@ -3052,6 +3053,38 @@
 	V:	V :
 	Variable Width Profile	Profil de largeur variable
 	Variables	Variables
+	New Variable	Nouvelle variable
+	Delete Variable	Supprimer la variable
+	List Variables	Lister les variables
+	Bind Variable	Lier la variable
+	Unbind Variable	Délier la variable
+	New Data Set	Nouveau jeu de données
+	Delete Data Set	Supprimer le jeu de données
+	List Data Sets	Lister les jeux de données
+	Select Data Set	Sélectionner le jeu de données
+	Next Data Set	Jeu de données suivant
+	Previous Data Set	Jeu de données précédent
+	Data Sets	Jeux de données
+	New Variable…	Nouvelle variable…
+	New Data Set…	Nouveau jeu de données…
+	Edit Data Set…	Modifier le jeu de données…
+	Data Set	Jeu de données
+	Kind	Type
+	Variable	Variable
+	no document	aucun document
+	no data set to edit	aucun jeu de données à modifier
+	Make Text Dynamic	Rendre le texte dynamique
+	Make Visibility Dynamic	Rendre la visibilité dynamique
+	Capture Data Set	Capturer le jeu de données
+	Update Data Set	Mettre à jour le jeu de données
+	Rename Data Set…	Renommer le jeu de données…
+	Variable Options…	Options de variable…
+	Select Bound Object	Sélectionner l’objet lié
+	Select All Bound Objects	Sélectionner tous les objets liés
+	Multiple objects	Plusieurs objets
+	New Name	Nouveau nom
+	no variable to rename	aucune variable à renommer
+	no data set to rename	aucun jeu de données à renommer
 	Variation:	Variation :
 	Vector Effects	Effets vectoriels
 	Vector Halftone	Trame de demi-teintes vectorielle
@@ -4009,3 +4042,10 @@ effect	Soft	Doux
 	Blocks	Blocs
 	Frosted	Dépoli
 	Tiny Lens	Petites lentilles
+	Rename Data Set	Renommer le jeu de données
+	Rename Variable	Renommer la variable
+	Variable Options	Options de variable
+	Edit Data Set	Modifier le jeu de données
+	Define a variable first	Définissez d’abord une variable
+	Text	Texte
+	Visibility	Visibilité

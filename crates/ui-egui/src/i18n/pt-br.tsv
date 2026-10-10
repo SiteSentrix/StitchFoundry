@@ -2530,6 +2530,20 @@
 	V:	V:
 	Variable Width Profile	Perfil de Largura Variável
 	Variables	Variáveis
+	New Variable…	Nova variável…
+	Unbind Variable	Desassociar variável
+	Delete Variable	Excluir variável
+	New Data Set…	Novo conjunto de dados…
+	Edit Data Set…	Editar conjunto de dados…
+	Delete Data Set	Excluir conjunto de dados
+	Next Data Set	Próximo conjunto de dados
+	Previous Data Set	Conjunto de dados anterior
+	Make Text Dynamic	Tornar texto dinâmico
+	Make Visibility Dynamic	Tornar visibilidade dinâmica
+	Capture Data Set	Capturar conjunto de dados
+	Update Data Set	Atualizar conjunto de dados
+	Rename Data Set…	Renomear conjunto de dados…
+	Variable Options…	Opções de variável…
 	Variation:	Variação:
 	Vector Effects	Efeitos Vetoriais
 	Vector Halftone	Meio-tom Vetorial
@@ -2738,3 +2752,5 @@
 	Diffuse Glow…	Brilho difuso…
 	Glass…	Vidro…
 	Ocean Ripple…	Ondulação oceânica…
+	Rename Data Set	Renomear conjunto de dados
+	Rename Variable	Renomear variável
