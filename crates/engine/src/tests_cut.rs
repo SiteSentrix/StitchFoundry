@@ -118,7 +118,6 @@ fn line_cut_that_misses_changes_nothing() {
     assert!(s.execute("path.lineCut", &json!({"from": [5, 5]})).is_err());
 }
 
-
 #[test]
 fn rect_cut_rejects_non_numeric_rectangle_elements_without_modifying_art() {
     let mut s = session();
@@ -127,11 +126,7 @@ fn rect_cut_rejects_non_numeric_rectangle_elements_without_modifying_art() {
     let original = bounds(&s, id);
     let history = undo_depth(&s);
     // The old parser dropped the string and used the four remaining values.
-    for params in [
-        json!([0, "ignored", 10, 50, 50]),
-        json!([0, 10, 50, null, 50]),
-        json!([0, 10, 50, 50, 5]),
-    ] {
+    for params in [json!([0, "ignored", 10, 50, 50]), json!([0, 10, 50, null, 50]), json!([0, 10, 50, 50, 5])] {
         assert!(s.execute("path.rectCut", &json!({"rect": params})).is_err());
         assert!(near(bounds(&s, id), original), "failed cut must not change geometry");
         assert_eq!(undo_depth(&s), history, "failed cut must not add undo history");
