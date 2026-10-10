@@ -70,6 +70,15 @@ pub struct DataSet {
     pub values: BTreeMap<String, DataValue>,
 }
 
+impl DataSet {
+    /// Whether the art, as [`Document::captured_values`] read it, still holds what this row
+    /// says. A value the art can't report (its object is locked or gone) isn't drift: the row
+    /// keeps it, and applying it again would skip it too.
+    pub fn matches(&self, current: &BTreeMap<String, DataValue>) -> bool {
+        self.values.iter().all(|(k, v)| current.get(k).is_none_or(|c| c == v))
+    }
+}
+
 /// The variable state of a document: definitions, datasets, bindings
 /// (object id → the variables bound to it) and which dataset is active.
 ///
@@ -128,13 +137,15 @@ impl Variables {
     /// them. Datasets named here are left alone: their names are their own namespace (the
     /// active one is dropped by whoever deletes the dataset).
     pub fn prune(&mut self, names: &[String]) -> usize {
+        // A set, so a long list of names costs a lookup per value rather than a scan.
+        let names: BTreeSet<&str> = names.iter().map(String::as_str).collect();
         let before = self.variables.len();
-        self.variables.retain(|v| !names.contains(&v.name));
+        self.variables.retain(|v| !names.contains(v.name.as_str()));
         for dataset in &mut self.datasets {
-            dataset.values.retain(|k, _| !names.contains(k));
+            dataset.values.retain(|k, _| !names.contains(k.as_str()));
         }
         for bound in self.bindings.values_mut() {
-            bound.retain(|v| !names.contains(v));
+            bound.retain(|v| !names.contains(v.as_str()));
         }
         self.bindings.retain(|_, v| !v.is_empty());
         before - self.variables.len()
@@ -154,11 +165,19 @@ impl Document {
         self.variables.bindings = bindings;
     }
 
+    /// Whether a variable may read and rewrite the object `id`: it is in the document, neither
+    /// it nor anything above it is locked, and nothing above it is hidden. Its own visibility
+    /// doesn't count, as that is what a visibility variable drives: a row that hid it must be
+    /// able to show it again, and a capture must record it hidden.
+    pub fn variable_target(&self, id: NodeId) -> bool {
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked && (n.visible || *i == id))))
+    }
+
     /// What the object `id` holds for the variable of `kind`: its characters, or whether it
-    /// shows. `None` when the object is gone, is not of that kind, or is on a locked layer
-    /// (the document's value is whatever it was left at).
+    /// shows. `None` when the object is gone, is not of that kind, or is locked or on a hidden
+    /// or locked layer (the document's value is whatever it was left at).
     pub fn variable_value(&self, id: NodeId, kind: VariableKind) -> Option<DataValue> {
-        if !self.is_editable(id) {
+        if !self.variable_target(id) {
             return None;
         }
         let node = self.node(id)?;
@@ -184,15 +203,5 @@ impl Document {
             }
         }
         out
-    }
-
-    /// Whether the bound objects still hold what `name`'s row says they do. False when there
-    /// is no such row, or when an edit has moved the art away from it.
-    pub fn matches_dataset(&self, name: &str) -> bool {
-        let Some(ds) = self.variables.dataset(name) else { return false };
-        let current = self.captured_values();
-        // A value the art can't report (its object is locked or gone) isn't drift: the row
-        // keeps it, and applying it again would skip it too.
-        ds.values.iter().all(|(k, v)| current.get(k).is_none_or(|c| c == v))
     }
 }

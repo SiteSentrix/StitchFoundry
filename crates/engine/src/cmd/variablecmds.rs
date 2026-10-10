@@ -14,32 +14,60 @@ use super::edit::selected_roots;
 use super::textedit::set_plain_text;
 use super::*;
 
+/// The longest variable or dataset name, in characters (names arrive from MCP and files).
+const MAX_NAME: usize = 255;
+
 fn var_name(p: &Value, cmd: &str) -> Result<String> {
     named(str_param(p, "name"), "name", cmd)
 }
 
-/// `key`'s value, as a non-empty name.
+/// `key`'s value, as a name: trimmed, not empty and at most [`MAX_NAME`] characters.
 fn named(v: Option<&str>, key: &str, cmd: &str) -> Result<String> {
-    match v.filter(|v| !v.is_empty()) {
+    match v.map(str::trim).filter(|v| !v.is_empty()) {
+        Some(v) if v.chars().count() > MAX_NAME => Err(bad(cmd, format!("`{key}` is longer than {MAX_NAME} characters"))),
         Some(v) => Ok(v.to_string()),
         None => Err(bad(cmd, format!("missing `{key}`"))),
     }
 }
 
-fn names_param(p: &Value, cmd: &str) -> Result<Vec<String>> {
-    match p.get("names").and_then(Value::as_array) {
-        Some(names) if !names.is_empty() => {
-            let mut out = Vec::with_capacity(names.len());
-            for n in names {
-                match n.as_str().filter(|v| !v.is_empty()) {
-                    Some(v) => out.push(v.to_string()),
-                    None => return Err(bad(cmd, "`names` must be non-empty strings")),
-                }
-            }
-            Ok(out)
-        }
-        _ => Err(bad(cmd, "missing `names`")),
+/// `key`'s value as a name, or `None` when it is missing or empty.
+fn optional_name(p: &Value, key: &str, cmd: &str) -> Result<Option<String>> {
+    match str_param(p, key).map(str::trim).filter(|v| !v.is_empty()) {
+        Some(v) => named(Some(v), key, cmd).map(Some),
+        None => Ok(None),
     }
+}
+
+/// The `names` of a delete, or without them `fallback` (what the panel acts on) as the one name.
+fn names_param(p: &Value, cmd: &str, fallback: Option<String>, nothing: &str) -> Result<Vec<String>> {
+    let Some(given) = p.get("names") else {
+        return fallback.map(|n| vec![n]).ok_or_else(|| bad(cmd, nothing.to_string()));
+    };
+    match given.as_array() {
+        Some(names) if !names.is_empty() => names.iter().map(|n| named(n.as_str(), "names", cmd)).collect(),
+        _ => Err(bad(cmd, "`names` must be a list of names")),
+    }
+}
+
+/// The objects a bind acts on: `ids` when given (every one checked), else the selection.
+fn target_ids(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
+    if p.get("ids").is_some() { checked_ids_param(s, p, "ids", cmd) } else { selected_roots(s) }
+}
+
+/// Refuse what a variable of `kind` can't drive: art that is locked or on a hidden or locked
+/// layer is not the document's to rewrite, and a text variable only drives type.
+fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: VariableKind, cmd: &str) -> Result<()> {
+    for id in ids {
+        match doc.node(*id) {
+            None => return Err(EngineError::NoNode(*id)),
+            Some(_) if !doc.variable_target(*id) => return Err(bad(cmd, format!("node {} is locked", id.0))),
+            Some(n) if kind == VariableKind::Text && !matches!(n.kind, NodeKind::Text(_)) => {
+                return Err(bad(cmd, format!("node {} is not type", id.0)));
+            }
+            Some(_) => {}
+        }
+    }
+    Ok(())
 }
 
 fn dataset_value(cmd: &str, var: &str, kind: VariableKind, v: &Value) -> Result<DataValue> {
@@ -99,9 +127,6 @@ fn rename(s: &mut Session, p: &Value) -> Result<Value> {
                 ds.values.insert(to.clone(), value);
             }
         }
-        if d.variables.active_dataset.as_deref() == Some(from.as_str()) {
-            d.variables.active_dataset = Some(to.clone());
-        }
         Ok(())
     })?;
     // The highlight names a variable, so it follows the rename rather than going stale.
@@ -122,21 +147,15 @@ fn make_dynamic(s: &mut Session, kind: VariableKind, stem: &str) -> Result<Value
         return Err(bad(C, "select the objects to bind"));
     }
     let doc = &s.doc()?.doc;
-    for id in &ids {
-        match doc.node(*id) {
-            None => return Err(EngineError::NoNode(*id)),
-            Some(_) if !doc.is_editable(*id) => return Err(bad(C, format!("node {} is locked", id.0))),
-            Some(n) if kind == VariableKind::Text && !matches!(n.kind, NodeKind::Text(_)) => {
-                return Err(bad(C, format!("node {} is not type", id.0)));
-            }
-            Some(_) => {}
-        }
-    }
+    check_bindable(doc, &ids, kind, C)?;
     // Named after the first object it drives, as the reference panel does; a second variable
     // over the same art takes a number rather than colliding.
-    let base = doc.node(ids[0]).map(|n| n.display_name()).unwrap_or_default();
-    let base = base.trim();
-    let mut name = if base.is_empty() { stem.to_string() } else { base.to_string() };
+    let shown = ids.first().and_then(|id| doc.node(*id)).map(|n| n.display_name()).unwrap_or_default();
+    let base: String = match shown.trim() {
+        "" => stem.to_string(),
+        b => b.chars().take(MAX_NAME - 8).collect(),
+    };
+    let mut name = base.clone();
     let mut n = 2;
     while doc.variables.variable(&name).is_some() {
         name = format!("{base} {n}");
@@ -153,7 +172,9 @@ fn make_dynamic(s: &mut Session, kind: VariableKind, stem: &str) -> Result<Value
 }
 
 fn delete(s: &mut Session, p: &Value) -> Result<Value> {
-    let names = names_param(p, "variable.delete")?;
+    // Without `names`, the highlighted variable: what the panel's bin and the menu item delete.
+    let highlighted = s.doc()?.variables_highlight.clone();
+    let names = names_param(p, "variable.delete", highlighted, "no variable highlighted")?;
     let n = s.edit("Delete Variables", |d, _| Ok(d.variables.prune(&names)))?;
     // A highlight of a variable that is gone highlights nothing.
     let st = s.doc_mut()?;
@@ -182,27 +203,13 @@ fn list(s: &mut Session, _p: &Value) -> Result<Value> {
 fn bind(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.bind";
     let name = named(str_param(p, "variable"), "variable", C)?;
-    let ids = match ids_param(p, "ids") {
-        Some(v) => v,
-        None => selected_roots(s)?,
-    };
+    let ids = target_ids(s, p, C)?;
     if ids.is_empty() {
         return Err(bad(C, "nothing to bind"));
     }
     let doc = &s.doc()?.doc;
     let kind = doc.variables.variable(&name).map(|v| v.kind).ok_or_else(|| bad(C, format!("no variable named `{name}`")))?;
-    for id in &ids {
-        match doc.node(*id) {
-            None => return Err(EngineError::NoNode(*id)),
-            // Art on a locked or hidden layer is not the document's to rewrite, and a text
-            // variable only drives type.
-            Some(_) if !doc.is_editable(*id) => return Err(bad(C, format!("node {} is locked", id.0))),
-            Some(n) if kind == VariableKind::Text && !matches!(n.kind, NodeKind::Text(_)) => {
-                return Err(bad(C, format!("node {} is not type", id.0)));
-            }
-            Some(_) => {}
-        }
-    }
+    check_bindable(doc, &ids, kind, C)?;
     // Binding again is not a second binding, and says so rather than counting as a change.
     let already: Vec<u64> = ids.iter().filter(|id| doc.variables.objects_of(&name).contains(id)).map(|id| id.0).collect();
     let n = s.edit("Bind Variable", |d, _| Ok(ids.iter().filter(|id| d.variables.bind(**id, &name)).count()))?;
@@ -211,20 +218,8 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.unbind";
-    let ids = match ids_param(p, "ids") {
-        Some(v) => v,
-        None => selected_roots(s)?,
-    };
-    let name = match str_param(p, "variable").filter(|v| !v.is_empty()) {
-        Some(v) => {
-            let v = v.to_string();
-            if s.doc()?.doc.variables.variable(&v).is_none() {
-                return Err(bad(C, format!("no variable named `{v}`")));
-            }
-            Some(v)
-        }
-        None => None,
-    };
+    let ids = target_ids(s, p, C)?;
+    let name = defined_variable(s, p, C)?;
     let n = s.edit("Unbind Variable", |d, _| {
         let mut n = 0;
         for id in &ids {
@@ -239,21 +234,22 @@ fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"unbound": n}))
 }
 
+/// The `variable` a command names, which must be defined; `None` when it names none.
+fn defined_variable(s: &Session, p: &Value, cmd: &str) -> Result<Option<String>> {
+    let name = optional_name(p, "variable", cmd)?;
+    if let Some(v) = &name
+        && s.doc()?.doc.variables.variable(v).is_none()
+    {
+        return Err(bad(cmd, format!("no variable named `{v}`")));
+    }
+    Ok(name)
+}
+
 /// Highlight one Variables panel row: what the panel's Delete, Options… and Select Bound
 /// Object act on. Panel state, not art selection: not saved, not an undo step (an empty
 /// or missing `variable` clears it), like `layer.highlight`.
 fn highlight(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "variable.highlight";
-    let name = match str_param(p, "variable").filter(|v| !v.is_empty()) {
-        Some(v) => {
-            let v = v.to_string();
-            if s.doc()?.doc.variables.variable(&v).is_none() {
-                return Err(bad(C, format!("no variable named `{v}`")));
-            }
-            Some(v)
-        }
-        None => None,
-    };
+    let name = defined_variable(s, p, "variable.highlight")?;
     let st = s.doc_mut()?;
     st.variables_highlight = name.clone();
     st.revision += 1;
@@ -320,8 +316,8 @@ fn dataset_capture(s: &mut Session, p: &Value) -> Result<Value> {
     if values.is_empty() {
         return Err(bad(C, "bind something to a variable first"));
     }
-    let name = match str_param(p, "name").filter(|v| !v.is_empty()) {
-        Some(n) => n.to_string(),
+    let name = match optional_name(p, "name", C)? {
+        Some(n) => n,
         // "Data Set 1", the first free number, as the reference panel's rows are named.
         None => (1..).map(|i| format!("Data Set {i}")).find(|n| st.doc.variables.dataset(n).is_none()).unwrap_or_default(),
     };
@@ -356,7 +352,9 @@ fn dataset_update(s: &mut Session, _p: &Value) -> Result<Value> {
 }
 
 fn dataset_delete(s: &mut Session, p: &Value) -> Result<Value> {
-    let names = names_param(p, "dataset.delete")?;
+    // Without `names`, the active dataset: what the panel's Delete Data Set deletes.
+    let active = s.doc()?.doc.variables.active_dataset.clone();
+    let names = names_param(p, "dataset.delete", active, "no active data set")?;
     let n = s.edit("Delete Data Sets", |d, _| {
         let before = d.variables.datasets.len();
         d.variables.datasets.retain(|d| !names.contains(&d.name));
@@ -371,6 +369,7 @@ fn dataset_delete(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn dataset_list(s: &mut Session, _p: &Value) -> Result<Value> {
     let st = s.doc()?;
+    let current = st.doc.captured_values();
     let datasets: Vec<Value> = st
         .doc
         .variables
@@ -378,7 +377,7 @@ fn dataset_list(s: &mut Session, _p: &Value) -> Result<Value> {
         .iter()
         // `matches` says whether the art still holds what the row says, which is what the
         // panel shows in italics.
-        .map(|d| json!({"name": d.name, "values": d.values, "matches": st.doc.matches_dataset(&d.name)}))
+        .map(|d| json!({"name": d.name, "values": d.values, "matches": d.matches(&current)}))
         .collect();
     Ok(json!({"datasets": datasets, "active": st.doc.variables.active_dataset}))
 }
@@ -406,9 +405,10 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
                     continue;
                 }
             };
-            // Art on a locked or hidden layer, and text whose object is gone, can't be
-            // rewritten: skipped and counted, like the rest.
-            if !d.is_editable(id) {
+            // Locked art, art on a locked or hidden layer, and text whose object is gone, can't
+            // be rewritten: skipped and counted, like the rest. A hidden object is rewritten: a
+            // row that hid it shows it again.
+            if !d.variable_target(id) {
                 skipped += 1;
                 continue;
             }
@@ -463,7 +463,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Variable",
             ["Window", "Variables"],
             None,
-            "{names} delete variables with their bindings and values",
+            "{names?} delete variables with their bindings and values (default: the highlighted one)",
             has_doc,
             delete
         ),
@@ -551,7 +551,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             dataset_update
         ),
-        cmd!("dataset.delete", "Delete Data Set", ["Window", "Variables"], None, "{names} delete datasets", has_doc, dataset_delete),
+        cmd!(
+            "dataset.delete",
+            "Delete Data Set",
+            ["Window", "Variables"],
+            None,
+            "{names?} delete datasets (default: the active one)",
+            has_doc,
+            dataset_delete
+        ),
         cmd!(
             query "dataset.list",
             "List Data Sets",

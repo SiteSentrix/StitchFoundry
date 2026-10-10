@@ -489,3 +489,103 @@ fn highlight_follows_rename_and_clears_with_delete() {
     s.execute("variable.delete", &json!({"names": ["Title"]})).unwrap();
     assert!(s.doc().unwrap().variables_highlight.is_none(), "a highlight of a deleted variable highlights nothing");
 }
+
+/// A row that hides an object must be able to show it again, and hiding it on the artboard
+/// (as the Layers panel does) is what a capture records: a visibility variable reads and
+/// writes its object's own visibility, which therefore never makes the object off limits.
+#[test]
+fn a_hidden_object_comes_back_and_is_captured_hidden() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0, t.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Shown", "values": {"Name": "Alice", "Show": true}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Hidden", "values": {"Name": "Bob", "Show": false}})).unwrap();
+
+    s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
+    let v = s.execute("dataset.select", &json!({"name": "Shown"})).unwrap();
+    assert_eq!(v["skipped"], json!(0), "{v}");
+    assert!(s.doc().unwrap().doc.node(r).unwrap().visible, "the row shows it again");
+    assert_eq!(plain(&s, t), "Alice", "and rewrites the text of the object it had hidden");
+
+    // Hidden on the artboard, then captured: the row says hidden, and it matches the art.
+    s.execute("select.set", &json!({"ids": [t.0, r.0]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("dataset.capture", &json!({"name": "Captured"})).unwrap();
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    let captured = sets["datasets"].as_array().unwrap().iter().find(|d| d["name"] == "Captured").unwrap().clone();
+    assert_eq!(captured["values"]["Show"], json!({"visible": false}), "{captured}");
+    assert_eq!(captured["matches"], json!(true));
+
+    // A hidden object can still be bound by id.
+    s.execute("variable.define", &json!({"name": "More", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "More", "ids": [r.0]})).unwrap();
+}
+
+/// Variables and datasets are separate namespaces: renaming a variable leaves a dataset of
+/// the same name, and which dataset is active, alone.
+#[test]
+fn renaming_a_variable_leaves_a_dataset_of_the_same_name_active() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
+    s.execute("dataset.capture", &json!({"name": "Title"})).unwrap();
+    s.execute("variable.rename", &json!({"name": "Title", "newName": "Heading"})).unwrap();
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!((sets["active"].clone(), sets["datasets"][0]["name"].clone()), (json!("Title"), json!("Title")));
+    s.execute("dataset.update", &json!({})).unwrap();
+}
+
+/// Without `names`, the deletes act on what the panel shows as current: the highlighted
+/// variable and the active dataset (Window › Variables runs them with no params).
+#[test]
+fn deletes_without_names_take_the_highlight_and_the_active_dataset() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    for name in ["A", "B"] {
+        s.execute("variable.define", &json!({"name": name, "kind": "text"})).unwrap();
+    }
+    s.execute("variable.bind", &json!({"variable": "A", "ids": [t.0]})).unwrap();
+    s.execute("dataset.capture", &json!({})).unwrap();
+    s.execute("dataset.capture", &json!({})).unwrap();
+    assert!(s.execute("variable.delete", &json!({})).is_err(), "nothing highlighted");
+
+    s.execute("variable.highlight", &json!({"variable": "B"})).unwrap();
+    assert_eq!(s.execute("variable.delete", &json!({})).unwrap()["deleted"], json!(1));
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(vars["variables"].as_array().map(Vec::len), Some(1));
+    assert_eq!(vars["variables"][0]["name"], "A");
+
+    assert_eq!(s.execute("dataset.delete", &json!({})).unwrap()["deleted"], json!(1));
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"].as_array().map(Vec::len), Some(1));
+    assert_eq!(sets["datasets"][0]["name"], "Data Set 1");
+    assert!(s.execute("dataset.delete", &json!({})).is_err(), "no active dataset left");
+}
+
+/// Ids and names from an agent are checked, never reinterpreted: an `ids` that isn't a list
+/// of objects is an error rather than the selection, and names are trimmed and capped.
+#[test]
+fn ids_and_names_from_an_agent_are_checked() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "  Name  ", "kind": "text"})).unwrap();
+    assert_eq!(s.execute("variable.list", &json!({})).unwrap()["variables"][0]["name"], "Name");
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    for params in
+        [json!({"variable": "Name", "ids": 5}), json!({"variable": "Name", "ids": [t.0, "x"]}), json!({"variable": "Name", "ids": [999_999]})]
+    {
+        assert!(s.execute("variable.bind", &params).is_err(), "{params}");
+    }
+    assert!(s.doc().unwrap().doc.variables.objects_of("Name").is_empty(), "nothing was bound");
+    assert!(s.execute("variable.unbind", &json!({"ids": "all"})).is_err());
+    assert!(s.execute("variable.define", &json!({"name": "x".repeat(256), "kind": "text"})).is_err());
+    s.execute("variable.define", &json!({"name": "x".repeat(255), "kind": "text"})).unwrap();
+    assert!(s.execute("variable.delete", &json!({"names": []})).is_err());
+    assert!(s.execute("variable.delete", &json!({"names": [5]})).is_err());
+}
