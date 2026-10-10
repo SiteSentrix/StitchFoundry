@@ -90,7 +90,8 @@ tools, never checked side by side) isn't captured row by row.
 | Snapping panel/popover consolidating the snap options (30.0) | missing | |
 | Customisable rotation snap angle (#973) | missing | Illustrator: Constrain Angle and construction angles only |
 | Ruler guides: drag out, select, move, delete, lock, Make/Release Guides | done | #414, #451 |
-| Ruler guides as Layers rows; Alt swaps a ruler guide's orientation while dragging | missing | |
+| Ruler guides as Layers rows: shown, hidden, locked and deleted with their layer; rows dragged to another layer | done | `guide.setLayer`; guides from older files go on a layer |
+| Alt swaps a ruler guide's orientation while dragging | missing | |
 | Global and video rulers | missing | menu stubs |
 
 ## Transform handles, bounding box, Free Transform
