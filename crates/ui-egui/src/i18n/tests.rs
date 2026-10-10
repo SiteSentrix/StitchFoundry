@@ -994,6 +994,27 @@ fn align_reflect_and_shear_param_errors_are_translated() {
     }
 }
 
+/// The parameter error of `select.key` for an id that isn't a selected top-level object, whose
+/// text [`message_literals`] doesn't read, is translated whole in each language of
+/// [`COMPLETE_MESSAGES`].
+#[test]
+fn select_key_param_error_is_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let rectangle = |s: &mut vectorcraft_engine::Session, x: u64| {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone()
+    };
+    let [a, b, unselected] = [0, 50, 100].map(|x| rectangle(&mut s, x));
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let e = s.execute("select.key", &json!({"id": unselected})).unwrap_err();
+    let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{e}") };
+    for code in COMPLETE_MESSAGES {
+        let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
+        assert!(!shown.contains(msg.as_str()), "{code}: {shown}");
+    }
+}
+
 /// Languages whose catalogs cover every status and error message.
 const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "it", "ja", "ru", "uk"];
 

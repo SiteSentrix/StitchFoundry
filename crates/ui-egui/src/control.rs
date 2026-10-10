@@ -183,7 +183,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 }
             }
             ctx.request_repaint();
-            wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "tool": app.session.tool_id()})))
+            wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "key": d["key"], "tool": app.session.tool_id()})))
         }
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };
@@ -401,7 +401,7 @@ mod tests {
     use serde_json::{Value, json};
     use vectorcraft_engine::Session;
 
-    use super::ControlRequest;
+    use super::{ControlRequest, Outcome, handle};
     use crate::{Services, VectorcraftApp};
 
     /// #1004: `ui.render` (the MCP `screenshot` of a connected app) renders the artboard asked
@@ -432,5 +432,27 @@ mod tests {
             assert_eq!(got, size.map(Some), "{params}: {r}");
         }
         assert!(request("ui.render", json!({"artboard": 2}))["error"].is_string());
+    }
+
+    /// `ui.pointer` replies with the key object: a click on one of two selected objects makes it
+    /// the key, and a click on the key again lets it go.
+    #[test]
+    fn pointer_replies_name_the_key_object() {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        let b = app.run("shape.rectangle", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("tool.select", json!({"tool": "selection"})).unwrap();
+        let ctx = egui::Context::default();
+        let click = |app: &mut VectorcraftApp| {
+            let events = json!([{"kind": "down", "x": 110, "y": 20}, {"kind": "up", "x": 110, "y": 20}]);
+            let (req, _) = ControlRequest::new("ui.pointer", json!({"events": events}));
+            let Outcome::Done(r) = handle(app, &ctx, &req) else { panic!("not done") };
+            assert_eq!(r["ok"], true, "{r}");
+            r["result"].get("key").cloned()
+        };
+        assert_eq!(click(&mut app), Some(b), "a click on a selected object makes it the key");
+        assert_eq!(click(&mut app), Some(Value::Null), "a click on the key again lets it go");
     }
 }

@@ -3679,6 +3679,7 @@ axis	Both	Les deux
 @msg	nothing to wrap	rien à envelopper
 @msg	object {0} cannot have children	l’objet {0} ne peut pas avoir d’enfants
 @msg	object {id} is not a path	l’objet {id} n’est pas un tracé
+@msg	object {id} is not a selected top-level object	l’objet {id} n’est pas un objet sélectionné de premier niveau
 @msg	page size {w} × {h}	format de page {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	la page {0} n’existe pas (le PDF en a {1})
 @msg	paste unavailable	collage indisponible

@@ -724,6 +724,17 @@ A malformed or unknown id is an error naming that value; the entire selection is
 All three commands return `{count, ids}` for the resulting selection, in selection order.
 An empty array clears the selection for `select.set` and leaves it alone for Add and Toggle.
 
+`select.key {id}` makes `id` the key object that Align aligns to and Distribute Spacing spaces from (`object.align` without `to`, `object.distributeSpacing` with `spacing`), and `select.key {}` clears it.
+The id must name a selected top-level object.
+Layers, compound-path members and objects inside another selected object are not top-level objects.
+Any other id is an error naming that value, and the key is left unchanged.
+A null `id` is an error too.
+A click with the Selection tool on a selected top-level object, while two or more objects are selected, runs `select.key {id}`, and a click on the key object again runs `select.key {}`.
+On a single selected object, or on a group selected with only its own members, `select.key` sets no key.
+It returns `{key}`, the key object's id or null.
+`document.inspect` (the `inspect_document` tool) reports the key object as `key`, null without one.
+The `ui.pointer` and `pointer_gesture` replies list it as `key` beside `selection`.
+
 `edit.clear {ids?}` deletes the exact selected objects, including individual compound-path members;
 their unselected siblings remain in the compound. Supplying `ids` works without a selection and
 overrides selected anchors or guides. Every explicit id is validated before any deletion; a malformed

@@ -65,7 +65,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Key Object",
             [],
             None,
-            "{id?: a selected object, one of two or more (the Selection tool: a click on one object of a selection of several; on the key again: none)} the key object Align aligns to and Distribute Spacing spaces from; none clears it, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members)",
+            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object), one of two or more (the Selection tool: a click on one object of a selection of several; on the key again: no id)} the key object Align aligns to and Distribute Spacing spaces from; without `id` it clears the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members); any other id is an error that leaves the key as it was → {key} (the resulting key object, or null)",
             has_doc,
             key
         ),
@@ -297,9 +297,18 @@ fn selection_result(s: &Session) -> Result<Value> {
 }
 
 fn key(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id");
-    s.select(|_, sel| sel.key = id.filter(|i| sel.contains(*i)))?;
-    ok()
+    let id = p.get("id").map(|value| checked_id(s, value, "select.key")).transpose()?;
+    if let Some(id) = id {
+        let st = s.doc()?;
+        // A selected top-level object is the only top-level object among the selected ones of
+        // itself and its ancestors.
+        let selected = st.doc.ancestry(id).unwrap_or_default().into_iter().filter(|a| st.selection.contains(*a)).collect();
+        if super::edit::roots_of(&st.doc, selected) != [id] {
+            return Err(bad("select.key", format!("object {id} is not a selected top-level object")));
+        }
+    }
+    s.select(|_, sel| sel.key = id)?;
+    Ok(json!({ "key": s.doc()?.selection.key }))
 }
 
 /// `[[subpath, anchor]…]` anchor references of `cmd`: a malformed entry fails rather than being
