@@ -1809,7 +1809,8 @@ the preview instead of the pixels, plus the path relative to the saved file. `do
 the linked files again, looking for each at its path, then at its relative path and by name in the document's folder
 (so a folder moved with its links still opens): the result lists `missingLinks` (their images show the preview),
 `modifiedLinks` (left as they were; read again only with the preference `updateLinks: "automatically"`, then they are
-in `updatedLinks`), each as `{name, path, ids}`. `links.check` reports every link's `status` (`ok`, `modified`,
+in `updatedLinks`), each as `{name, path, ids}`. The desktop app also checks the active document's links when its window
+comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. Without a
 file system (the web), linked images show their previews.

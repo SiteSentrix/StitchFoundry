@@ -404,7 +404,9 @@ Missing linked files: `app.open` of a document whose linked images' files can't 
 folder; `ui.dialog.set {field: "discard", value: true}` then confirm ignores it (the images keep their preview), with
 `applyToAll` the rest too. The next missing file is asked about after each answer; `ui.dialog.cancel` stops asking.
 Then, with the preference `updateLinks: "askWhenModified"`, modified linked files are offered for update in a
-`confirm` dialog whose `ui.dialog.confirm` runs `links.update`.
+`confirm` dialog whose `ui.dialog.confirm` runs `links.update`. The same happens when the app's window comes back to
+the front and a linked file of the active document changed meanwhile (asked once per change of a file); with
+`"automatically"` the files are read again at once, with `"manually"` the Links panel shows them as modified.
 
 Missing fonts: once the missing linked file questions are answered, or at once when there are none, `app.open` of a
 document whose type uses fonts that aren't available (`text.missingFonts`) opens the `missingFonts` dialog, one document
