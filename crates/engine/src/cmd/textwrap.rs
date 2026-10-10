@@ -8,7 +8,6 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, TextKind, TextWrap, WrapShape};
 use vectorcraft_geom::{PathData, shapes};
 
-use super::edit::selected_roots;
 use super::typecmd::refresh_bounds;
 use super::*;
 
@@ -36,21 +35,12 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-/// An explicit target list must be all valid ids: a partially applied text wrap is
-/// particularly surprising when some of the chosen objects are silently skipped.
-fn targets(s: &Session, p: &Value, command: &str) -> Result<Vec<NodeId>> {
-    match p.get("ids") {
-        Some(_) => checked_ids_param(s, p, "ids", command),
-        None => selected_roots(s),
-    }
-}
-
 fn wrap_param(p: &Value, base: TextWrap) -> TextWrap {
     TextWrap { offset: f64_or(p, "offset", base.offset).clamp(-1000.0, 1000.0), invert: bool_or(p, "invert", base.invert) }
 }
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = targets(s, p, "object.textWrap.make")?;
+    let ids = checked_ids_or_selection(s, p, "object.textWrap.make")?;
     let w = wrap_param(p, TextWrap::default());
     s.edit("Make Text Wrap", |d, _| {
         for id in &ids {
@@ -68,7 +58,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
     let ids: Vec<NodeId> = {
         let d = &s.doc()?.doc;
-        targets(s, p, "object.textWrap.release")?.into_iter().filter(|i| d.node(*i).is_some_and(|n| n.wrap.is_some())).collect()
+        checked_ids_or_selection(s, p, "object.textWrap.release")?.into_iter().filter(|i| d.node(*i).is_some_and(|n| n.wrap.is_some())).collect()
     };
     if ids.is_empty() {
         return Err(EngineError::Other("Text Wrap: select a wrap object".into()));
@@ -85,7 +75,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn options(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = targets(s, p, "object.textWrap.options")?;
+    let ids = checked_ids_or_selection(s, p, "object.textWrap.options")?;
     let current = {
         let d = &s.doc()?.doc;
         ids.iter().find_map(|i| d.node(*i).and_then(|n| n.wrap)).unwrap_or_default()
