@@ -400,6 +400,32 @@ fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
 /// macOS keeps its traffic lights over the integrated title strip.
 const CUSTOM_TITLEBAR: bool = !cfg!(target_os = "macos");
 
+/// Whether this start draws its own title bar: Windows and Linux do, unless Preferences ›
+/// User Interface › System Title Bar asks for the system's. Read from the saved preferences
+/// before the window opens; a missing or unreadable value keeps the default.
+fn custom_titlebar(saved: Option<&vectorcraft_ui_egui::UiState>) -> bool {
+    CUSTOM_TITLEBAR && !saved.map(|ui| ui.engine_prefs.get("systemTitleBar").and_then(serde_json::Value::as_bool).unwrap_or(false)).unwrap_or(false)
+}
+
+fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
+    eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("VectorCraft")
+            .with_inner_size(window::DEFAULT_SIZE)
+            .with_min_inner_size(window::MIN_SIZE)
+            .with_drag_and_drop(true)
+            .with_decorations(!custom_titlebar)
+            .with_fullsize_content_view(true)
+            .with_titlebar_shown(false)
+            .with_title_shown(false)
+            .with_icon(app_icon())
+            .with_app_id("ai.storyteller.vectorcraft"),
+        #[cfg(feature = "windows7")]
+        renderer: eframe::Renderer::Glow,
+        ..Default::default()
+    }
+}
+
 fn main() -> std::process::ExitCode {
     // First, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
@@ -486,22 +512,8 @@ fn main() -> std::process::ExitCode {
     }
     #[cfg(feature = "wgpu")]
     let startup = std::sync::Arc::new(gpu::Startup::default());
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("VectorCraft")
-            .with_inner_size(window::DEFAULT_SIZE)
-            .with_min_inner_size(window::MIN_SIZE)
-            .with_drag_and_drop(true)
-            .with_decorations(!CUSTOM_TITLEBAR)
-            .with_fullsize_content_view(true)
-            .with_titlebar_shown(false)
-            .with_title_shown(false)
-            .with_icon(app_icon())
-            .with_app_id("ai.storyteller.vectorcraft"),
-        #[cfg(feature = "windows7")]
-        renderer: eframe::Renderer::Glow,
-        ..Default::default()
-    };
+    let custom_titlebar = custom_titlebar(saved.as_ref());
+    let options = native_options(custom_titlebar);
     #[cfg(feature = "wgpu")]
     let options = {
         let mut options = options;
@@ -575,7 +587,7 @@ fn main() -> std::process::ExitCode {
                 {
                     app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
                 }
-                app.custom_titlebar = CUSTOM_TITLEBAR;
+                app.custom_titlebar = custom_titlebar;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());
@@ -617,6 +629,25 @@ fn main() -> std::process::ExitCode {
 #[cfg(all(test, feature = "wgpu"))]
 mod tests {
     use super::*;
+
+    fn ui_state_with_prefs(engine_prefs: serde_json::Value) -> vectorcraft_ui_egui::UiState {
+        vectorcraft_ui_egui::UiState { engine_prefs, ..Default::default() }
+    }
+
+    #[test]
+    fn the_system_title_bar_preference_keeps_the_window_decorations() {
+        // Preferences › User Interface › System Title Bar gives the window back its system
+        // decorations on Windows and Linux; macOS always has them.
+        assert_eq!(super::custom_titlebar(None), super::CUSTOM_TITLEBAR, "no preferences: the default");
+        let off = ui_state_with_prefs(serde_json::json!({"systemTitleBar": false}));
+        assert_eq!(super::custom_titlebar(Some(&off)), super::CUSTOM_TITLEBAR);
+        let on = ui_state_with_prefs(serde_json::json!({"systemTitleBar": true}));
+        assert!(!super::custom_titlebar(Some(&on)));
+        assert_eq!(super::native_options(false).viewport.decorations, Some(true));
+        if super::CUSTOM_TITLEBAR {
+            assert_eq!(super::native_options(true).viewport.decorations, Some(false));
+        }
+    }
 
     /// The file extensions the macOS bundle declares: its document types and its own exported type.
     fn plist_extensions(plist: &str) -> Vec<&str> {

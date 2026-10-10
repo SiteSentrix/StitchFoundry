@@ -13,7 +13,7 @@ use crate::VectorcraftApp;
 use crate::io;
 use crate::panels::character::Face;
 use crate::state::{DockTab, next_zoom};
-use crate::theme::{self, Brightness, Tokens};
+use crate::theme::{Brightness, Tokens};
 use crate::widgets;
 
 #[derive(Clone, Debug)]
@@ -1926,8 +1926,10 @@ fn selected_image(app: &VectorcraftApp, keep: impl Fn(&vectorcraft_doc::ImageObj
     })
 }
 
-/// The in-window and native menu tree. `english_names` is Preferences › Type › Show Font Names in
-/// English (the Type → Font labels follow it; tests use the default `true`).
+/// The in-window and native menu tree. The in-window bar skips the VectorCraft menu (see
+/// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
+/// `english_names` is Preferences › Type › Show Font Names in English (the Type → Font labels
+/// follow it; tests use the default `true`).
 pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
     menu_tree_named(true)
 }
@@ -1936,24 +1938,13 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id }));
     vec![
         (
+            // The application menu: About and Discord only. The in-window bar never shows it (File
+            // is first there, as in Illustrator); on macOS `native_menu::mac_layout` composes the
+            // App menu from this entry and the other menus (About from Help, Settings from Edit,
+            // Quit from File, Language and Appearance synthesized). It stays first: `from_tree`
+            // gives the first menu the App role.
             "VectorCraft",
-            vec![
-                c("About VectorCraft", "help.about"),
-                c("Join Our Discord", "help.discord"),
-                Sep,
-                c("Settings…", "edit.preferences"),
-                sub(
-                    "Language",
-                    std::iter::once(cp("Automatic", "app.language", json!({"lang": "auto"})))
-                        .chain(std::iter::once(Sep))
-                        .chain(crate::i18n::Lang::all().map(|l| cp(l.name(), "app.language", json!({"lang": l.code()}))))
-                        .collect(),
-                ),
-                Sep,
-                sub("UI Brightness", Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({"brightness": b.id()}))).collect()),
-                Sep,
-                c("Quit VectorCraft", "app.quit"),
-            ],
+            vec![c("About VectorCraft", "help.about"), c("Join Our Discord", "help.discord")],
         ),
         (
             "File",
@@ -2007,6 +1998,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("File Info…", "file.info"),
                 Sep,
                 c("Print…", "file.print"),
+                Sep,
+                c("Exit", "app.quit"),
             ],
         ),
         (
@@ -2754,15 +2747,14 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     }
     let mut clicked: Option<(String, Value)> = None;
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
+    // No application menu in the window (as in Illustrator): the bar starts at File on every
+    // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
+    let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != "VectorCraft").collect();
     let (end, open) = egui::MenuBar::new()
         .ui(ui, |ui| {
             let mut titles = Vec::with_capacity(tree.len());
-            for (i, (title, items)) in tree.iter().enumerate() {
-                let text = if i == 0 {
-                    egui::RichText::new(tl!(title)).font(theme::semibold(13.0)).color(t.text)
-                } else {
-                    egui::RichText::new(tl!(title)).size(13.0).color(t.text)
-                };
+            for (title, items) in tree.iter() {
+                let text = egui::RichText::new(tl!(title)).size(13.0).color(t.text);
                 titles.push(ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked)).response);
             }
             (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
@@ -3524,6 +3516,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme;
 
     /// One headless frame of the in-window menu bar; returns its titles (left to right) as
     /// (rect, id of the title's popup).
@@ -3553,6 +3546,43 @@ mod tests {
         (0..titles.len()).filter(|&i| egui::Popup::is_id_open(ctx, titles[i].1)).collect()
     }
 
+    /// File ends with Exit, running the app's own quit flow (unsaved documents are asked about).
+    #[test]
+    fn file_ends_with_exit() {
+        let tree = menu_tree();
+        let (_, file) = tree.iter().find(|(t, _)| *t == "File").unwrap();
+        let last = file.iter().rev().find(|i| !matches!(i, Item::Sep)).unwrap();
+        assert!(matches!(last, Item::Cmd("Exit", "app.quit", _)), "{last:?}");
+    }
+
+    /// No application menu in the window (as in Illustrator): the bar starts at File.
+    #[test]
+    fn the_bar_starts_at_file() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            menu_bar(&mut app, ui);
+        });
+        out.textures_delta.clear();
+        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut shown = vec![];
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        let titles = ["File", "Edit", "Object", "Type", "Select", "Effect", "View", "Window", "Help"];
+        for t in titles {
+            assert!(shown.iter().any(|s| s == t), "{t} missing from {shown:?}");
+        }
+        assert!(!shown.iter().any(|s| s == "VectorCraft"), "{shown:?}");
+    }
+
     #[test]
     fn hovering_another_title_switches_the_open_menu() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -3561,9 +3591,9 @@ mod tests {
         theme::apply(&ctx, Default::default());
         bar_frame(&mut app, &ctx, vec![]);
         let titles = bar_frame(&mut app, &ctx, vec![]);
-        assert_eq!(titles.len(), menu_tree().len());
-        // 0 is the app menu, then File, Edit, Object.
-        let (file, edit, object) = (titles[1].0.center(), titles[2].0.center(), titles[3].0.center());
+        // No application menu in the window: the bar starts at File on every platform.
+        assert_eq!(titles.len(), menu_tree().len() - 1);
+        let (file, edit, object) = (titles[0].0.center(), titles[1].0.center(), titles[2].0.center());
         let frames = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             let mut t = bar_frame(app, &ctx, events);
             for _ in 0..2 {
@@ -3581,17 +3611,17 @@ mod tests {
         frames(&mut app, vec![egui::Event::PointerMoved(file)]);
         frames(&mut app, vec![button(file, true)]);
         let t = frames(&mut app, vec![button(file, false)]);
-        assert_eq!(open_titles(&ctx, &t), vec![1], "a click opens File");
+        assert_eq!(open_titles(&ctx, &t), vec![0], "a click opens File");
         let t = frames(&mut app, vec![egui::Event::PointerMoved(edit)]);
-        assert_eq!(open_titles(&ctx, &t), vec![2], "hovering Edit opens it and closes File");
+        assert_eq!(open_titles(&ctx, &t), vec![1], "hovering Edit opens it and closes File");
         let t = frames(&mut app, vec![egui::Event::PointerMoved(object)]);
-        assert_eq!(open_titles(&ctx, &t), vec![3], "hovering Object opens it and closes Edit");
+        assert_eq!(open_titles(&ctx, &t), vec![2], "hovering Object opens it and closes Edit");
 
         // A pointer resting on a title doesn't switch: File opened another way (the keyboard)
         // stays open while the pointer stays still over Object.
-        egui::Popup::open_id(&ctx, t[1].1);
+        egui::Popup::open_id(&ctx, t[0].1);
         let t = frames(&mut app, vec![]);
-        assert_eq!(open_titles(&ctx, &t), vec![1], "a still pointer leaves the open menu alone");
+        assert_eq!(open_titles(&ctx, &t), vec![0], "a still pointer leaves the open menu alone");
     }
 
     #[test]

@@ -199,8 +199,8 @@ fn the_engine_follows_the_interface_language() {
     assert_eq!(app.ui_language().code(), "ja");
 }
 
-/// VectorCraft › Language (`app.language`) sets the `interfaceLanguage` preference, which is what
-/// persists; the checked item follows the preference, and a bad code is an error, not a change.
+/// `app.language` sets the `interfaceLanguage` preference, which is what persists; the checked
+/// item follows the preference, and a bad code is an error, not a change.
 #[test]
 fn language_command_sets_the_preference() {
     use crate::menus::{checked, run_ui_command};
@@ -218,9 +218,21 @@ fn language_command_sets_the_preference() {
     run_ui_command(&mut app, "app.language", &serde_json::json!({"lang": "auto"})).unwrap().unwrap();
     assert_eq!(app.session.prefs.interface_language, "auto");
     assert_eq!(checked(&app, "app.language", &serde_json::json!({"lang": "auto"})), Some(true));
-    // Every registered language is in the menu, by its own name.
-    let labels: Vec<String> =
-        crate::menus::menu_entries(&app).into_iter().filter(|e| e.command.as_deref() == Some("app.language")).map(|e| e.label).collect();
+    // Every registered language is in the Mac App menu's Language, by its own name (the in-window
+    // bar has no Language menu).
+    let layout = crate::native_menu::mac_layout(&app, &crate::native_menu::from_tree(&app, &crate::menus::menu_tree()), Lang::EN);
+    let app_menu = layout.bar.menus.into_iter().find(|m| m.title == "VectorCraft").expect("App menu");
+    fn items(nodes: &[crate::native_menu::Node], out: &mut Vec<String>) {
+        for n in nodes {
+            match n {
+                crate::native_menu::Node::Item(it) if it.command == Some("app.language") => out.push(it.label.clone()),
+                crate::native_menu::Node::Submenu { children, .. } => items(children, out),
+                _ => {}
+            }
+        }
+    }
+    let mut labels = vec![];
+    items(&app_menu.children, &mut labels);
     for l in Lang::all() {
         assert!(labels.iter().any(|x| x == l.name()), "{} missing from {labels:?}", l.code());
     }

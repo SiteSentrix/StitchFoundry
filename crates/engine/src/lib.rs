@@ -512,6 +512,10 @@ pub struct Prefs {
     /// UI language: `auto` (follow the system locale) or a language code such as `en`, `zh-hant`.
     /// The list of languages belongs to the shell (`ui-egui` i18n); an unknown code reads as `auto`.
     pub interface_language: String,
+    /// Windows and Linux: use the system's title bar and window buttons instead of the app bar
+    /// acting as the title bar (tiling window managers, desktops that draw their own decorations).
+    /// Read when the app starts. macOS always uses the system's.
+    pub system_title_bar: bool,
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
@@ -726,6 +730,7 @@ impl Default for Prefs {
             ui_scaling: 1.0,
             scale_cursor_with_ui: false,
             interface_language: s("auto"),
+            system_title_bar: false,
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),

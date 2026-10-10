@@ -2601,7 +2601,7 @@ without ideographs uses its em box. One undo step.
 
 ## New type in a Japanese interface
 
-While the interface is in Japanese (VectorCraft › Language, or `auto` on a Japanese system), new type starts with em
+While the interface is in Japanese (Preferences › User Interface › Language, or `auto` on a Japanese system), new type starts with em
 box top-to-top leading (`leadingModel: "emBoxTop"`) and em box centre character alignment (`charAlign: "emBoxCenter"`);
 in other languages it starts on the Roman baseline (#432). This covers the Type tools,
 `text.create` and `text.createInPath`, which also take `leadingModel` and `charAlign` to choose, and `paraStyle.new` /
