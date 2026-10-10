@@ -3462,7 +3462,6 @@ effect	Soft	柔和
 	Shading	明暗處理
 	Direction	方向
 	Elevation	仰角
-	Intensity	強度
 	Ambient	環境光
 	Segments	分段數
 	Show axis	顯示軸

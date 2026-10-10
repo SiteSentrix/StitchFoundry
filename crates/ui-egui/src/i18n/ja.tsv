@@ -4045,7 +4045,6 @@ effect	Vertical	垂直
 	Shading	陰影
 	Direction	方向
 	Elevation	仰角
-	Intensity	強度
 	Ambient	環境光
 	Segments	分割数
 	Show axis	軸を表示

@@ -219,7 +219,7 @@ self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-0
 
 **What's missing:**
 
-- 3D and Materials;
+- 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
 - the Photoshop-style raster effects (Effect Gallery);
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);

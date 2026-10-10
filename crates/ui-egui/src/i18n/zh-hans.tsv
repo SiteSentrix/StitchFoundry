@@ -3681,7 +3681,6 @@ effect	Vertical	垂直
 	Shading	明暗处理
 	Direction	方向
 	Elevation	仰角
-	Intensity	强度
 	Ambient	环境光
 	Segments	分段数
 	Show axis	显示轴
