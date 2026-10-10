@@ -546,3 +546,68 @@ fn crop_image_shows_a_box_that_apply_crops_to() {
     app.run("select.none", json!({})).unwrap();
     assert!(!crate::menus::enabled(&app, "ui.cropImage") && app.run("ui.cropImage", json!({})).is_err());
 }
+
+/// One headless frame of the whole window at `time` → how long the app asked to wait before the
+/// next one.
+fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::time::Duration {
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(time), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        app.logic(ui.ctx());
+        app.ui(ui);
+    });
+    out.textures_delta.clear();
+    out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay)
+}
+
+/// The window sits idle for `secs` from `*time` (a frame now, then only the frames the app asks
+/// for) or until `done` → whether it was.
+fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64, done: &dyn Fn(&VectorcraftApp) -> bool) -> bool {
+    let end = *time + secs;
+    loop {
+        let wait = frame_at(app, ctx, *time);
+        if done(app) {
+            return true;
+        }
+        let next = *time + wait.as_secs_f64().max(1.0 / 60.0);
+        if next > end {
+            *time = end;
+            return false;
+        }
+        if app.session.link_scan.is_some() {
+            // The look runs on a worker thread, in real time.
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        *time = next;
+    }
+}
+
+/// A file placed into a document whose last look found no links, then changed by another app
+/// while the window sits idle in the background, follows Update Links: Automatically: the app
+/// wakes itself to see the new link before the change, so the change isn't taken for the file as
+/// first seen.
+#[test]
+fn a_file_placed_while_idle_follows_its_changes() {
+    let mut app = app();
+    app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
+    let ctx = egui::Context::default();
+    let mut time = 0.0;
+    idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
+    // A look finds the new document without links: no wakes of its own for it.
+    assert_eq!(frame_at(&mut app, &ctx, time), std::time::Duration::MAX, "{:?}", ctx.repaint_causes());
+    // Half a second later, before the next look is due, a file is placed. The place itself is a
+    // frame (as any command); then nothing happens for 3 s.
+    time += 0.5;
+    let path = temp_file("idle-watch.png", &png(40, 30, 72.0));
+    app.run("file.place", json!({"path": path})).unwrap();
+    let id = app.session.active().unwrap().selection.objects[0];
+    idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    let changed = png(60, 30, 72.0);
+    std::fs::write(&path, &changed).unwrap();
+    let hash = vectorcraft_doc::links::hash_bytes(&changed);
+    let updated = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        matches!(&st.doc.node(id).unwrap().kind, NodeKind::Image(im) if im.link.as_ref().and_then(|l| l.hash.as_deref()) == Some(hash.as_str()))
+    };
+    assert!(idle(&mut app, &ctx, &mut time, 10.0, &updated), "the changed file was never read again");
+}
