@@ -61,7 +61,7 @@ usvg = "0.48"
 krilla = "0.8"
 skrifa = "0.47"
 harfrust = "0.13"
-linesweeper = "0.4"
+linesweeper = "0.5"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 # Zstandard decoder (pure Rust, builds for wasm32 too): the editing copy an EPS carries of its art.
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }
