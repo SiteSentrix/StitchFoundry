@@ -3859,3 +3859,13 @@ axis	Both	Оба
 @msg	automation path rejected: cannot resolve {path}: {e}	путь автоматизации отклонён: не удаётся определить {path}: {e}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	путь автоматизации отклонён: переход вверх (..) из несуществующей папки: {path}
 @msg	automation path rejected: reserved device names are not allowed: {path}	путь автоматизации отклонён: зарезервированные имена устройств недопустимы: {path}
+@msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Файлы PSD в режиме «Многоканальный» не читаются: сохраните его в режиме RGB, CMYK или «Градации серого»
+@msg	not a PSD file	это не документ PSD
+@msg	the PSD file has an unknown colour mode ({m})	у файла PSD неизвестный цветовой режим ({m})
+@msg	the PSD file's image data uses an unknown compression ({m})	данные изображения файла PSD используют неизвестное сжатие ({m})
+@msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
+@msg	zipped 32-bit PSD image data with prediction can't be read	32-битные данные изображения PSD со сжатием ZIP с предсказанием не читаются
+@msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битные файлы PSD в этом цветовом режиме не читаются
+@msg	the PSD file is cut short	файл PSD обрезан
+@msg	the PSD file's header is damaged	заголовок файла PSD повреждён
+@msg	the PSD file's image data can't be read: {e}	не удаётся прочитать данные изображения файла PSD: {e}

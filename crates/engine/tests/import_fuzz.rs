@@ -1,5 +1,5 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
-//! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset
+//! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset
 //! (`.vcflattener`) libraries, and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
@@ -945,6 +945,19 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
         out.push((name, b));
     }
     out[0].1 = vectorcraft_engine::cmd::fileio::ppi::with_png_resolution(&out[0].1, (300.0, 150.0));
+    // A layered PSD with transparency (as VectorCraft exports it), and a PackBits PSB by hand.
+    let mut s = rich_session();
+    let r = s.execute("document.export", &json!({"format": "psd", "ppi": 2})).unwrap();
+    out.push(("a.psd", vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()));
+    let mut psb = b"8BPS\0\x02\0\0\0\0\0\0\0\x04\0\0\0\x02\0\0\0\x03\0\x08\0\x03".to_vec();
+    psb.extend([0; 8]);
+    psb.extend(10u64.to_be_bytes());
+    psb.extend(2u64.to_be_bytes());
+    psb.extend((-1i16).to_be_bytes());
+    psb.extend([0, 1]);
+    psb.extend((0..8).flat_map(|_| 2u32.to_be_bytes()));
+    psb.extend((0..8u8).flat_map(|v| [0xfe, v * 30]));
+    out.push(("a.psb", psb));
     out
 }
 
@@ -954,7 +967,7 @@ proptest! {
     /// Mutated image headers (resolution metadata, chunk and segment lengths) never crash reading
     /// their resolution or placing them.
     #[test]
-    fn mutated_images_place_without_panics(which in 0usize..4, cut in 0usize..400, edits in prop::collection::vec((0usize..120, any::<u8>()), 0..12)) {
+    fn mutated_images_place_without_panics(which in 0usize..6, cut in 0usize..4000, edits in prop::collection::vec((0usize..120, any::<u8>()), 0..12)) {
         let (name, mut bytes) = raster_samples().swap_remove(which);
         for (at, b) in edits {
             if let Some(x) = bytes.get_mut(at) {

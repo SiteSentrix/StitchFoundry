@@ -621,13 +621,14 @@ mod tests {
             .collect()
     }
 
-    /// Finder offers the app for every file File › Open reads (#295, #354), takes over no other
-    /// app's files, and hands them to the app rather than to AppKit's document machinery.
+    /// Finder offers the app for every file File › Open reads (#295, #354) but Photoshop documents
+    /// (`UNASSOCIATED_EXTS`), takes over no other app's files, and hands them to the app rather than
+    /// to AppKit's document machinery.
     #[test]
     fn the_macos_bundle_opens_every_readable_format() {
         let plist = include_str!("../../../packaging/macos/Info.plist.in");
         let declared = plist_extensions(plist);
-        for e in fileio::OPEN_EXTS {
+        for e in fileio::OPEN_EXTS.iter().filter(|e| !fileio::UNASSOCIATED_EXTS.contains(e)) {
             assert!(declared.contains(e), "Info.plist.in doesn't declare .{e}");
         }
         for e in &declared {

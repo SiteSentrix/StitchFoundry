@@ -3861,3 +3861,13 @@ axis	Both	Entrambi
 @msg	automation path rejected: cannot resolve {path}: {e}	percorso di automazione rifiutato: impossibile risolvere {path}: {e}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	percorso di automazione rifiutato: risale (..) da una cartella che non esiste: {path}
 @msg	automation path rejected: reserved device names are not allowed: {path}	percorso di automazione rifiutato: i nomi di dispositivo riservati non sono consentiti: {path}
+@msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	I file PSD in modalità Multicanale non possono essere letti: salvalo in modalità RGB, CMYK o Scala di grigio
+@msg	not a PSD file	non è un documento PSD
+@msg	the PSD file has an unknown colour mode ({m})	il file PSD ha un metodo colore sconosciuto ({m})
+@msg	the PSD file's image data uses an unknown compression ({m})	i dati immagine del file PSD usano una compressione sconosciuta ({m})
+@msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'immagine PSD è troppo grande per essere letta ({_1} × {_2} pixel)
+@msg	zipped 32-bit PSD image data with prediction can't be read	i dati immagine PSD a 32 bit compressi ZIP con previsione non possono essere letti
+@msg	{depth}-bit PSD files in this colour mode can't be read	i file PSD a {depth} bit in questo metodo colore non possono essere letti
+@msg	the PSD file is cut short	il file PSD è troncato
+@msg	the PSD file's header is damaged	l'intestazione del file PSD è danneggiata
+@msg	the PSD file's image data can't be read: {e}	i dati immagine del file PSD non possono essere letti: {e}
