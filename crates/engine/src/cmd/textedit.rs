@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\"} style a character range (runs are split at the range ends) → {id, runs}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\"} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Get Text Range",
             [],
             None,
-            "{id, start?, end?} → {text, runs: [{text, style}], length}",
+            "{id, start?, end?, effective?: bool = false} → {text, runs: [{text, style}], length}; effective uses document-point size/leading/baseline shift and transformed horizontal scale; default returns stored local styles for rich-text copying",
             has_doc,
             get_range
         ),
@@ -174,7 +174,12 @@ fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
     let (a, b) = range_of(p, len);
-    let runs = edit::slice_runs(&t.runs, a, b);
+    let mut runs = edit::slice_runs(&t.runs, a, b);
+    if p.get("effective").and_then(Value::as_bool).unwrap_or(false) {
+        for run in &mut runs {
+            run.style = t.effective_char_style(&run.style).ok_or_else(|| bad("text.getRange", "text transform is collapsed or unrepresentable"))?;
+        }
+    }
     let text: String = runs.iter().map(|r| r.text.as_str()).collect();
     Ok(json!({"text": text, "runs": runs, "length": len}))
 }
@@ -316,6 +321,15 @@ impl CharChange {
             && self.char_align.is_none()
     }
 
+    fn localize(&mut self, t: &TextObject, cmd: &str) -> Result<()> {
+        use super::typecmd::local_type_value;
+        self.size = self.size.map(|v| local_type_value(t, v, (0.1, 1296.0), false, cmd)).transpose()?;
+        self.leading = self.leading.map(|v| v.map(|v| local_type_value(t, v, (0.1, 5000.0), false, cmd)).transpose()).transpose()?;
+        self.baseline_shift = self.baseline_shift.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
+        self.h_scale = self.h_scale.map(|v| local_type_value(t, v, (1.0, 10000.0), true, cmd)).transpose()?;
+        Ok(())
+    }
+
     pub(crate) fn apply(&self, st: &mut CharStyle) {
         if let Some(f) = &self.font {
             st.font_family = f.clone();
@@ -338,10 +352,10 @@ impl CharChange {
             st.font_version = None;
         }
         if let Some(v) = self.size {
-            st.size = v.clamp(0.1, 1296.0);
+            st.size = v;
         }
         if let Some(v) = self.leading {
-            st.leading = v.map(|l| l.clamp(0.1, 5000.0));
+            st.leading = v;
         }
         if let Some(v) = self.tracking {
             st.tracking = v.clamp(-1000.0, 10000.0);
@@ -350,10 +364,10 @@ impl CharChange {
             st.kerning = v.map(|k| k.clamp(-1000.0, 10000.0));
         }
         if let Some(v) = self.baseline_shift {
-            st.baseline_shift = v.clamp(-1296.0, 1296.0);
+            st.baseline_shift = v;
         }
         if let Some(v) = self.h_scale {
-            st.h_scale = v.clamp(1.0, 10000.0);
+            st.h_scale = v;
         }
         if let Some(v) = self.v_scale {
             st.v_scale = v.clamp(1.0, 10000.0);
@@ -445,12 +459,13 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(bad(C, "missing `id`: give one, or select one type object")),
         },
     };
-    let change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
+    let mut change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
     if change.is_empty() {
         return Err(bad(C, "nothing to change"));
     }
     let protect = s.prefs.missing_glyph_protection && (change.font.is_some() || change.style.is_some());
     let t = text_ref(s, id)?;
+    change.localize(&t, C)?;
     let (a, b) = range_of(p, edit::runs_len(&t.runs));
     let n = s.edit("Character", |d, _| {
         let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
@@ -605,13 +620,27 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
         s.edit("Character", |d, _| {
             for &(id, a, b) in &ranges {
                 let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
-                edit::style_range(&mut t.runs, a, b, |st| match step {
-                    Step::Size => st.size = (st.size + inc).clamp(0.1, 1296.0),
-                    Step::Leading => st.leading = Some((st.effective_leading() + inc).clamp(0.1, 5000.0)),
-                    Step::Tracking => st.tracking = (st.tracking + inc).clamp(-1000.0, 10000.0),
-                    Step::Kerning => st.kerning = Some((st.kerning.unwrap_or(0.0) + inc).clamp(-1000.0, 10000.0)),
-                    Step::BaselineShift => st.baseline_shift = (st.baseline_shift + inc).clamp(-1296.0, 1296.0),
-                });
+                let points = if matches!(step, Step::Size | Step::Leading | Step::BaselineShift) {
+                    t.style_scale().ok_or_else(|| bad(C, "text transform is collapsed or unrepresentable"))?.points
+                } else {
+                    1.0
+                };
+                let mut runs = edit::slice_runs(&t.runs, a, b);
+                for run in &mut runs {
+                    let st = &mut run.style;
+                    match step {
+                        Step::Size => st.size = super::typecmd::local_type_value(t, st.size * points + inc, (0.1, 1296.0), false, C)?,
+                        Step::Leading => {
+                            st.leading = Some(super::typecmd::local_type_value(t, st.effective_leading() * points + inc, (0.1, 5000.0), false, C)?);
+                        }
+                        Step::Tracking => st.tracking = (st.tracking + inc).clamp(-1000.0, 10000.0),
+                        Step::Kerning => st.kerning = Some((st.kerning.unwrap_or(0.0) + inc).clamp(-1000.0, 10000.0)),
+                        Step::BaselineShift => {
+                            st.baseline_shift = super::typecmd::local_type_value(t, st.baseline_shift * points + inc, (-1296.0, 1296.0), false, C)?;
+                        }
+                    }
+                }
+                edit::replace_range_styled(&mut t.runs, a, b, &runs);
                 refresh_bounds(t);
             }
             Ok(())

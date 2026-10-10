@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (moved from the ROADMAP's "Where we're lacking", re-ranked, added file-format, stability, hardware, localization, ecosystem and AI gaps) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -86,6 +86,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G11 Correctness bugs in core tools
 
+- **Done:** scaled text's size and horizontal-scale controls account for object/group transforms (#1034),
+  including exact sizes across grouped labels and resetting horizontal stretch while keeping editable text.
 - **Missing:** Shape Builder misses planar regions and targets whole shapes (#937, #893); Transform effect dialog's invisible checkboxes and missing options (#885);
   PDF text boxes moving on open (#722); SVG units reverting to points (#864); bezier drag preview freezing (#834).
 - **Impact:** wrong output in everyday work.
@@ -96,7 +98,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Missing:** hyphenation and justification options, Optical Margin Alignment (type core); CJK vertical
   composition (ruby, mojikumi sets and dialog, proportional vertical metrics #966, kinsoku settings #633, manual
   tate-chu-yoko), Middle Eastern features beyond bidi, variable font axes, spell check with an open dictionary,
-  Touch Type, Retype, Snap to Glyph. Itemized in [type-parity.md](type-parity.md).
+  Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
+  Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
 - **Estimate:** 34–47 h (type core 14–19 h blocks beta).
 
@@ -200,6 +203,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | #1034: corrected scaled type controls; optional group font-size preservation remains separate. Estimates unchanged at this rounding. |
 | 2026-10-11 | minor | G9: legacy `.ai` without the prolog opens with its layers (#1027) |
 | 2026-10-11 | minor | G9: `.ai` pattern fills and global colours read from the editing data (#1025) |
 | 2026-10-10 | minor | G3: initial Revolve landed (#846), 45–75 h left |
