@@ -221,9 +221,11 @@ fn rect_cut(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.rectCut";
     let rect = match p.get("rect") {
         Some(v) => {
-            let a: Vec<f64> = v.as_array().map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
-            let [x, y, w, h] = a[..] else { return Err(bad(C, "rect must be [x, y, width, height]")) };
-            Rect::new(x, y, x + w, y + h).abs()
+            // Every component must be present and numeric. Dropping invalid elements would
+            // silently cut the wrong region when a malformed five-element array is supplied.
+            let values = v.as_array().filter(|a| a.len() == 4).and_then(|a| a.iter().map(Value::as_f64).collect::<Option<Vec<_>>>());
+            let Some([x, y, w, h]) = values.as_deref() else { return Err(bad(C, "rect must be [x, y, width, height]")) };
+            Rect::new(*x, *y, x + w, y + h).abs()
         }
         None => Rect::from_points(point_req(p, "from", C)?, point_req(p, "to", C)?),
     };
