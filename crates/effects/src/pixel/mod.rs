@@ -1,5 +1,6 @@
-//! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Pixelate › Color
-//! Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Stylize › Glowing
+//! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Distort › Diffuse
+//! Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize,
+//! Sharpen › Unsharp Mask, Stylize › Glowing
 //! Edges, Texture › Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, and
 //! Video › De-Interlace and NTSC Colors): filters over premultiplied RGBA8 pixels.
 //!
@@ -11,6 +12,7 @@
 //! - Beyond the raster's edges is transparency.
 
 mod blur;
+mod distort;
 mod edges;
 mod pixelate;
 mod sharpen;
@@ -22,13 +24,17 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::util::{flag, num, text};
 
+pub use distort::{GLASS_TEXTURES, GlassTexture};
 pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
 pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, Texture};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 16] = [
+pub const PIXEL_EFFECTS: [&str; 19] = [
     "blur.radial",
     "blur.smart",
+    "distort.diffuseGlow",
+    "distort.glass",
+    "distort.oceanRipple",
     "pixelate.colorHalftone",
     "pixelate.crystallize",
     "pixelate.mezzotint",
@@ -56,6 +62,16 @@ pub enum PixelFx {
     /// whose colour differs from its own by no more than `threshold` levels, over a grid of
     /// `samples` × `samples` neighbours at most.
     SmartBlur { radius: f64, threshold: f64, samples: u32 },
+    /// Distort › Diffuse Glow: the highlights glow white as strongly as `glow` (0..20), from the
+    /// brightness `clear` (0..20) leaves clear, under white grain as dense as `graininess` (0..10).
+    DiffuseGlow { graininess: f64, glow: f64, clear: f64 },
+    /// Distort › Glass: the object seen through a `texture` surface scaled by `scaling` (0.5..2),
+    /// bent by `distortion` (0..20), smoothed by `smoothness` (1..15), its heights turned over when
+    /// `invert`.
+    Glass { distortion: f64, smoothness: f64, texture: GlassTexture, scaling: f64, invert: bool },
+    /// Distort › Ocean Ripple: the object under ripples of `size` (1..15) shifting it as much as
+    /// `magnitude` (0..20) says.
+    OceanRipple { size: f64, magnitude: f64 },
     /// Sharpen › Unsharp Mask: colours pushed away from a Gaussian blur of σ = `radius` by `amount`
     /// (1 = 100 %), where they differ from it by at least `threshold` levels.
     UnsharpMask { amount: f64, radius: f64, threshold: f64 },
@@ -149,6 +165,21 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             threshold: num(p, "threshold", 25.0).clamp(0.1, 100.0),
             samples: quality([("low", 5), ("medium", 7), ("high", 9)], 7),
         },
+        "distort.diffuseGlow" => PixelFx::DiffuseGlow {
+            graininess: num(p, "graininess", 6.0).clamp(0.0, 10.0),
+            glow: num(p, "glowAmount", 10.0).clamp(0.0, 20.0),
+            clear: num(p, "clearAmount", 15.0).clamp(0.0, 20.0),
+        },
+        "distort.glass" => PixelFx::Glass {
+            distortion: num(p, "distortion", 5.0).clamp(0.0, 20.0),
+            smoothness: num(p, "smoothness", 3.0).clamp(1.0, 15.0),
+            texture: GlassTexture::parse(text(p, "texture", "frosted")),
+            scaling: num(p, "scaling", 100.0).clamp(50.0, 200.0) / 100.0,
+            invert: flag(p, "invert", false),
+        },
+        "distort.oceanRipple" => {
+            PixelFx::OceanRipple { size: num(p, "rippleSize", 9.0).clamp(1.0, 15.0), magnitude: num(p, "rippleMagnitude", 9.0).clamp(0.0, 20.0) }
+        }
         "sharpen.unsharpMask" => PixelFx::UnsharpMask {
             amount: num(p, "amount", 50.0).clamp(1.0, 500.0) / 100.0,
             radius: num(p, "radius", 1.0).clamp(0.1, 250.0),
@@ -217,6 +248,10 @@ impl PixelFx {
             PixelFx::RadialBlur { zoom: false, .. } => (far - near).max(0.0),
             PixelFx::RadialBlur { amount, zoom: true, .. } => far * (blur::zoom_extent(amount).exp() - 1.0),
             PixelFx::SmartBlur { radius, .. } => radius,
+            PixelFx::DiffuseGlow { .. } => 0.0,
+            // Content shifted outwards reaches past the bounds by as much as the shift.
+            PixelFx::Glass { distortion, .. } => distort::glass_shift(distortion),
+            PixelFx::OceanRipple { size, magnitude } => distort::ripple_shift(size, magnitude),
             PixelFx::UnsharpMask { .. } => 0.0,
             PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
             PixelFx::ColorHalftone { .. }
@@ -240,6 +275,9 @@ impl PixelFx {
         match *self {
             PixelFx::RadialBlur { .. } => None,
             PixelFx::SmartBlur { radius, .. } => Some(radius),
+            PixelFx::DiffuseGlow { .. } => Some(3.0 * distort::GLOW_SPREAD),
+            PixelFx::Glass { distortion, .. } => Some(distort::glass_shift(distortion)),
+            PixelFx::OceanRipple { size, magnitude } => Some(distort::ripple_shift(size, magnitude)),
             PixelFx::UnsharpMask { radius, .. } => Some(3.0 * radius),
             PixelFx::GlowingEdges { width, smoothness, .. } => Some(width.max(smoothness * 3.0)),
             // The cells around the pixel's, and the cells around theirs.
@@ -268,6 +306,11 @@ impl PixelFx {
         match *self {
             PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
             PixelFx::SmartBlur { radius, threshold, samples } => blur::smart(px, w, h, to_px(radius), threshold, samples),
+            PixelFx::DiffuseGlow { graininess, glow, clear } => distort::diffuse_glow(px, w, h, space, graininess, glow, clear),
+            PixelFx::Glass { distortion, smoothness, texture, scaling, invert } => {
+                distort::glass(px, w, h, space, distortion, smoothness, texture, scaling, invert)
+            }
+            PixelFx::OceanRipple { size, magnitude } => distort::ocean_ripple(px, w, h, space, size, magnitude),
             PixelFx::UnsharpMask { amount, radius, threshold } => sharpen::unsharp(px, w, h, amount, to_px(radius), threshold),
             PixelFx::GlowingEdges { width, brightness, smoothness } => edges::glow(px, w, h, to_px(width), brightness, to_px(smoothness)),
             PixelFx::ColorHalftone { max_radius, angles } => pixelate::color_halftone(px, w, h, space, max_radius, angles),

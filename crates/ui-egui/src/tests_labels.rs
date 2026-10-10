@@ -78,6 +78,23 @@ fn effect_menu_lists_the_video_filters_last() {
     assert!(at("Sharpen") < at("Video"));
 }
 
+/// Effect › Distort, between Blur and Pixelate: each filter opens its dialog.
+#[test]
+fn effect_menu_lists_the_distort_filters_between_blur_and_pixelate() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let distort: Vec<_> = entries.iter().filter(|e| e.path == ["Effect", "Distort"]).collect();
+    let labels: Vec<&str> = distort.iter().map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["Diffuse Glow…", "Glass…", "Ocean Ripple…"]);
+    assert!(distort.iter().all(|e| e.command.as_deref() == Some("effect.dialog")));
+    let raster: Vec<&str> =
+        entries.iter().filter_map(|e| e.path.get(1).filter(|_| e.path.len() == 2 && e.path[0] == "Effect")).map(String::as_str).collect();
+    let at = |name: &str| raster.iter().position(|s| *s == name).unwrap();
+    assert!(at("Blur") < at("Distort") && at("Distort") < at("Pixelate"));
+    // The vector Distort & Transform stays its own submenu.
+    assert!(raster.contains(&"Distort & Transform"));
+}
+
 /// Effect › Texture, between Sharpen and Video: each filter opens its dialog.
 #[test]
 fn effect_menu_lists_the_texture_filters_between_sharpen_and_video() {
