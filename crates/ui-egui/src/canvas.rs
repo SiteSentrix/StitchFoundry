@@ -512,13 +512,16 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
 fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
     let line = ui.ctx().options(|o| o.input_options.line_scroll_speed);
     let wheel_zooms = app.session.prefs.zoom_with_mouse_wheel;
-    let alt_id = egui::Id::new("canvas-alt-wheel");
-    let alt_before = ui.data(|d| d.get_temp(alt_id)).unwrap_or(false);
-    let mut alt_turn = alt_before;
+    let turn_id = egui::Id::new("canvas-wheel-turn");
+    let turn_before: WheelTurn = ui.data(|d| d.get_temp(turn_id)).unwrap_or_default();
+    let mut turn = turn_before;
     let (pointer, m, space, (factor, scroll)) =
-        ui.input(|i| (i.pointer.clone(), i.modifiers, i.key_down(egui::Key::Space), wheel(i, wheel_zooms, line, rect.height(), &mut alt_turn)));
-    if alt_turn != alt_before {
-        ui.data_mut(|d| d.insert_temp(alt_id, alt_turn));
+        ui.input(|i| (i.pointer.clone(), i.modifiers, i.key_down(egui::Key::Space), wheel(i, wheel_zooms, line, rect.height(), &mut turn)));
+    if turn != turn_before {
+        ui.data_mut(|d| d.insert_temp(turn_id, turn));
+    }
+    if turn.glide != 0.0 {
+        ui.ctx().request_repaint();
     }
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
@@ -717,6 +720,18 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
 
 /// How much one point of wheel motion zooms (as `exp(points × WHEEL_ZOOM)`).
 const WHEEL_ZOOM: f64 = 0.01;
+/// How fast a wheel notch's zoom glides in with Zoom with Mouse Wheel: the time constant (s) of
+/// the part still to come.
+const WHEEL_GLIDE: f64 = 0.05;
+
+/// What the wheel did across frames ([`wheel`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct WheelTurn {
+    /// The last wheel turn was an Alt-wheel one.
+    alt: bool,
+    /// The zoom (natural log) wheel notches still have to glide in.
+    glide: f64,
+}
 /// Animated Zoom: how much one point of sideways drag zooms (100 points to the right double it).
 const SCRUB_ZOOM: f64 = std::f64::consts::LN_2 / 100.0;
 /// Animated Zoom: how far the pointer moves before a press is a drag, in points.
@@ -754,19 +769,19 @@ fn marquee(p: &egui::Painter, r: egui::Rect) {
 /// a zoom factor (about the pointer) and a scroll (screen points the content moves). The wheel scrolls, Cmd- and Alt-wheel (Option
 /// on the Mac) zoom. With General › Zoom with Mouse Wheel (`wheel_zooms`) the wheel and Alt-wheel
 /// zoom, Shift-wheel scrolls up and down and Cmd/Ctrl-wheel sideways. `line` and `page`: points
-/// per wheel line and page. `alt_turn`: the last wheel turn was an Alt-wheel one (kept by the
-/// caller across frames).
-fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, alt_turn: &mut bool) -> (f64, egui::Vec2) {
+/// per wheel line and page. `turn`: kept by the caller across frames. A mouse wheel's notches zoom
+/// in a glide over a few frames, as scrolling does (#888); a trackpad's fine steps at once.
+fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, turn: &mut WheelTurn) -> (f64, egui::Vec2) {
     // Fingers on a touch screen pan the content with them (a trackpad sends scrolls instead).
     let pan = i.multi_touch().map_or(egui::Vec2::ZERO, |t| t.translation_delta);
     if !wheel_zooms {
         // egui makes Cmd-wheel (and a pinch) its zoom and the rest a scroll it spreads over a few
         // frames: the rest of an Alt-wheel turn zooms too, however soon Alt is let go.
         if let Some(m) = i.events.iter().rev().find_map(|e| if let egui::Event::MouseWheel { modifiers, .. } = e { Some(modifiers) } else { None }) {
-            *alt_turn = m.alt && !m.command;
+            turn.alt = m.alt && !m.command;
         }
         let (zoom, scroll) = (f64::from(i.zoom_delta()), i.smooth_scroll_delta);
-        return if *alt_turn && scroll != egui::Vec2::ZERO {
+        return if turn.alt && scroll != egui::Vec2::ZERO {
             (zoom * (f64::from(scroll.x + scroll.y) * WHEEL_ZOOM).exp(), pan)
         } else {
             (zoom, scroll + pan)
@@ -787,8 +802,11 @@ fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, alt_turn
                     scroll.x += d.x + d.y;
                 } else if modifiers.shift {
                     scroll.y += d.x + d.y;
-                } else {
+                } else if *unit == egui::MouseWheelUnit::Point {
                     zoom *= (f64::from(d.y) * WHEEL_ZOOM).exp();
+                    scroll.x += d.x;
+                } else {
+                    turn.glide += f64::from(d.y) * WHEEL_ZOOM;
                     scroll.x += d.x;
                 }
             }
@@ -796,7 +814,11 @@ fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, alt_turn
             _ => {}
         }
     }
-    (zoom, scroll)
+    // This frame's part of the glide: what is left shrinks by e every WHEEL_GLIDE seconds.
+    let part = if turn.glide.abs() < 1e-3 { 1.0 } else { 1.0 - (-f64::from(i.stable_dt.min(0.1)) / WHEEL_GLIDE).exp() };
+    let step = turn.glide * part;
+    turn.glide -= step;
+    (zoom * step.exp(), scroll)
 }
 
 /// Enable Touch Gestures: this frame's finger contacts on the canvas ([`crate::touch`]). A second
@@ -2866,6 +2888,43 @@ mod tests {
         assert!((zoom - 1.0).abs() < 1e-9 && scroll.x == 0.0 && scroll.y < -1.0, "on: Shift-wheel scrolls up ({zoom}, {scroll:?})");
         let (zoom, scroll, _) = turn(&mut app, "cmd");
         assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "on: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})");
+    }
+
+    /// #888: with Zoom with Mouse Wheel, a wheel notch's zoom glides in over a few frames, as a
+    /// scroll does, instead of jumping on the frame it arrives; it ends at the same zoom.
+    #[test]
+    fn wheel_notches_zoom_in_a_glide() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": true})).unwrap();
+        let ctx = egui::Context::default();
+        let run = |app: &mut VectorcraftApp| {
+            let mut raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+            app.raw_input_hook(&mut raw);
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        run(&mut app);
+        let at = app.canvas_rect.unwrap().center();
+        let before = app.view().unwrap().zoom;
+        crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1}));
+        // The first frame the zoom moves in (the event may land a frame later).
+        let mut first = 1.0;
+        for _ in 0..3 {
+            run(&mut app);
+            first = app.view().unwrap().zoom / before;
+            if first != 1.0 {
+                break;
+            }
+        }
+        for _ in 0..60 {
+            run(&mut app);
+        }
+        let done = app.view().unwrap().zoom / before;
+        assert!(done > 1.01, "the notch zooms in ({done})");
+        assert!(first > 1.0 && first < done, "the first frame takes only part of it ({first} of {done})");
+        run(&mut app);
+        assert_eq!(app.view().unwrap().zoom / before, done, "and it stops");
     }
 
     /// Two fingers dragged together on a touch screen pan the canvas with them, under either
