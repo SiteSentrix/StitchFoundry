@@ -3170,6 +3170,7 @@ axis	Both	Entrambi
 @msg	its editing data is for a different page	i suoi dati di modifica sono di un'altra pagina
 @msg	its layers use {_1}, which aren't read yet	i suoi livelli usano {_1}, che non vengono ancora letti
 @msg	its page has text, and its layers have no text objects to put it in	la sua pagina ha del testo e i suoi livelli non hanno oggetti di testo in cui metterlo
+@msg	its type is to come in as outlines, which only its page has	il suo testo deve arrivare come contorni, che ha solo la sua pagina
 @msg	the art on them differs from the page's in {_1}% of it	l'illustrazione dei livelli differisce da quella della pagina per il {_1}% della sua superficie
 @msg	`to` must be "corner" or "smooth"	`to` deve essere "corner" o "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	I file BMP sono RGB o in scala di grigi: colorModel rgb o gray

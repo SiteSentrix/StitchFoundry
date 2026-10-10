@@ -139,7 +139,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             artboard_set
         ),
-        cmd!("artboard.fitToArt", "Fit to Artwork Bounds", ["Object", "Artboards"], None, "{index?}", has_doc, artboard_fit_art),
+        cmd!(
+            "artboard.fitToArt",
+            "Fit to Artwork Bounds",
+            ["Object", "Artboards"],
+            None,
+            "{index?} the artboard fits the art that shows (with its strokes and effects; hidden objects and layers, guides and template layers don't count)",
+            has_doc,
+            artboard_fit_art
+        ),
         cmd!("artboard.fitToSelection", "Fit to Selected Art", ["Object", "Artboards"], None, "{index?}", has_selection, artboard_fit_sel),
         cmd!(
             "layer.clippingMask.toggle",
@@ -810,9 +818,11 @@ fn rect_map(from: Rect, to: Rect) -> Option<Affine> {
     xf.is_finite().then_some(xf)
 }
 
+/// The artboard fits the art that exports draw: hidden objects and layers, guides and template
+/// layers don't count.
 fn artboard_fit_art(s: &mut Session, p: &Value) -> Result<Value> {
     let i = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let b = s.doc()?.doc.art_bounds().ok_or_else(|| EngineError::Other("no artwork".into()))?;
+    let b = vectorcraft_render::encode::art_bounds(&s.doc()?.doc).ok_or_else(|| EngineError::Other("no artwork".into()))?;
     s.execute("artboard.setProps", &json!({"index": i, "x": b.x0, "y": b.y0, "width": b.width(), "height": b.height()}))
 }
 
