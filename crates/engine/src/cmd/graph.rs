@@ -842,12 +842,12 @@ mod tests {
     fn edge_to_edge_lines_off_puts_line_points_at_category_centres() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
-        // 300 pt wide, three categories: edges at 100 and 400; centres at 150, 250, 350.
+        // 300 pt wide, three categories: centres at 150, 250, 350 (off by default); edges at 100 and 400.
         let id = graph(&mut s, "line");
-        assert_eq!(marker_xs(&s, id, 0), vec![100.0, 250.0, 400.0]);
-        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["edgeToEdge"], json!(true));
-        s.execute("graph.setType", &json!({"edgeToEdge": false})).unwrap();
         assert_eq!(marker_xs(&s, id, 0), vec![150.0, 250.0, 350.0]);
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["edgeToEdge"], json!(false));
+        s.execute("graph.setType", &json!({"edgeToEdge": true})).unwrap();
+        assert_eq!(marker_xs(&s, id, 0), vec![100.0, 250.0, 400.0]);
         // A graph saved before the option existed keeps its edge-to-edge lines.
         let old: GraphSpec = serde_json::from_value(json!({"kind": "line"})).unwrap();
         assert!(old.edge_to_edge);
