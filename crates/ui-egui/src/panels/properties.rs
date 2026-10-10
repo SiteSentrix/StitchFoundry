@@ -447,16 +447,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         match live {
             vectorcraft_doc::LiveShape::Rectangle { .. } => corner_radius_row(app, ui, &n, "radius"),
-            vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
-                let fw = super::field_width(ui);
-                ui.horizontal(|ui| {
-                    dim_label(ui, tl!("Sides:"));
-                    if let Some(s) = widgets::plain_field(ui, "sides", *sides as f64, "", 0, fw) {
-                        app.run("object.setLiveShape", json!({"sides": s as u32})).ok();
-                    }
-                });
-                corner_radius_row(app, ui, &n, "radius");
-            }
+            vectorcraft_doc::LiveShape::Polygon { .. } => super::transform::polygon_rows(app, ui, &n, live, "props-polygon"),
             vectorcraft_doc::LiveShape::Ellipse { pie, .. } => super::transform::pie_rows(app, ui, *pie, "props-pie"),
             _ => {}
         }

@@ -1340,6 +1340,19 @@ dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"radius":5}}}
 ```
 
+The same command sets the rest of a live shape's properties, as the Properties and Transform panels show them. A
+polygon (Polygon Properties): `sides` (3–1000), `polygonAngle` (degrees counterclockwise, its first vertex straight up
+at 0), `polygonRadius` (pt, centre to vertex), `sideLength` (pt, which sets the radius) and `makeSidesEqual: true`,
+which drops an uneven scale or shear (its sides then differ) and keeps its centre, angle and mean radius; a radius or
+length that isn't a number above 0 is an error. An ellipse (Ellipse Properties): `pieStart` and `pieEnd` (degrees
+counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them. Each call is
+one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"sides":8,"polygonAngle":22.5,"sideLength":40}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"makeSidesEqual":true}}}
+```
+
 ## Use Preview Bounds
 
 With the preference `usePreviewBounds` on (`prefs.set {key: "usePreviewBounds", value: true}`; also the Align panel
