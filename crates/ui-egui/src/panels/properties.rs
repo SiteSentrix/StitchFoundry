@@ -57,21 +57,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     divider(ui);
     section_header(ui, tl!("Align"));
     ui.horizontal(|ui| {
-        for (icon, tip, p) in [
-            ("align-start-vertical", tl!("Horizontal Align Left"), json!({"horizontal": "left"})),
-            ("align-center-vertical", tl!("Horizontal Align Center"), json!({"horizontal": "center"})),
-            ("align-end-vertical", tl!("Horizontal Align Right"), json!({"horizontal": "right"})),
-            ("align-start-horizontal", tl!("Vertical Align Top"), json!({"vertical": "top"})),
-            ("align-center-horizontal", tl!("Vertical Align Center"), json!({"vertical": "center"})),
-            ("align-end-horizontal", tl!("Vertical Align Bottom"), json!({"vertical": "bottom"})),
-        ] {
-            if widgets::icon_button(ui, icon, tip, false, 26.0).clicked() {
-                let mut p = p;
-                if n_sel == 1 {
-                    p["to"] = json!("artboard");
-                }
-                app.run("object.align", p).ok();
-            }
+        super::align::align_buttons(app, ui, 26.0);
+        // The rest (Distribute Objects, Distribute Spacing, Align To) is the Align panel's.
+        if widgets::icon_button(ui, "ellipsis", tl!("More Align options"), false, 26.0).clicked() {
+            app.ui.open_panel = Some("align".into());
         }
     });
     if n_sel > 1 {
