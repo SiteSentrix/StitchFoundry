@@ -1537,6 +1537,27 @@
 	New Art Has Basic Appearance	Новий малюнок має основне оформлення
 	New Artboard	Нова монтажна область
 	New Bristle Brush	Новий щетинний пензель
+	Calligraphic Brush Options	Параметри каліграфічного пензля
+	Bristle Brush Options	Параметри щетинного пензля
+	Roundness:	Округлість:
+	Fixed	Фіксований
+	Pressure	Натиск
+	Shape:	Форма:
+	Bristle Length:	Довжина щетинок:
+	Bristle Density:	Щільність щетинок:
+	Bristle Thickness:	Товщина щетинок:
+	Paint Opacity:	Непрозорість фарби:
+	Stiffness:	Жорсткість:
+	Round Point	Кругла загострена
+	Flat Point	Пласка загострена
+	Round Blunt	Кругла тупа
+	Flat Blunt	Пласка тупа
+	Round Curve	Кругла вигнута
+	Flat Curve	Пласка вигнута
+	Round Angle	Кругла скошена
+	Flat Angle	Пласка скошена
+	Round Fan	Кругла віялова
+	Flat Fan	Пласка віялова
 	New Brush…	Новий пензель…
 	New Calligraphic Brush	Новий каліграфічний пензель
 	New Character Style	Новий стиль символу
@@ -3405,6 +3426,8 @@ axis	Both	Обидві
 @msg	no blend options	немає параметрів переходу
 @msg	no bounds	немає кордонів
 @msg	no brush named `{name}`	немає пензля з ім’ям `{name}`
+@msg	no brush selected	пензель не вибрано
+@msg	this kind of brush has no options dialog yet	пензель цього типу ще не має вікна параметрів
 @msg	no catalog	немає каталогу
 @msg	no changes since the last save	немає змін з моменту останнього збереження
 @msg	no clock to keep a heartbeat by	немає годинника для підтримки сигналу

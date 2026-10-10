@@ -338,6 +338,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{stroke?: bool (default: the active proxy), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's colour)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke",
     ),
     (
+        "ui.brushOptions",
+        "Brush Options…",
+        "",
+        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens: Calligraphic (dialog `brushOptions`, fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation) or Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness); OK runs brush.options. Other brush types: error",
+    ),
+    (
         "ui.graphicStyleOptions",
         "Graphic Style Options…",
         "",
@@ -1206,6 +1212,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
         "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
+        "ui.brushOptions" => crate::dialogs::brush_options::open(app, s("name").as_deref()),
         "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
         "ui.colorGuideOptions" => {
             crate::dialogs::color_guide_options::open(app);
@@ -1871,6 +1878,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
+        "ui.brushOptions" => crate::dialogs::brush_options::available(app),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),

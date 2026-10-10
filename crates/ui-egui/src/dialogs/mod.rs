@@ -10,6 +10,7 @@ mod about;
 mod all_tools;
 mod artboard_options;
 pub mod blend_options;
+pub mod brush_options;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -278,6 +279,7 @@ registry! {
     PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
+    BrushOptions: [brush_options::KIND] => brush_options::SPEC,
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,

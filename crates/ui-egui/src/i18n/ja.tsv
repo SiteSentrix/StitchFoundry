@@ -1677,6 +1677,27 @@
 	Artboard	アートボード
 	Exit	終了
 	New Bristle Brush	新規剛毛ブラシ
+	Calligraphic Brush Options	絵筆ブラシオプション
+	Bristle Brush Options	剛毛ブラシオプション
+	Roundness:	真円率:
+	Fixed	固定
+	Pressure	筆圧
+	Shape:	形状:
+	Bristle Length:	毛の長さ:
+	Bristle Density:	毛の密度:
+	Bristle Thickness:	毛の太さ:
+	Paint Opacity:	塗料の不透明度:
+	Stiffness:	硬さ:
+	Round Point	丸・先細
+	Flat Point	平・先細
+	Round Blunt	丸・先丸
+	Flat Blunt	平・先丸
+	Round Curve	丸・カーブ
+	Flat Curve	平・カーブ
+	Round Angle	丸・斜め
+	Flat Angle	平・斜め
+	Round Fan	丸・扇形
+	Flat Fan	平・扇形
 	New Brush…	新規ブラシ…
 	New Calligraphic Brush	新規絵筆ブラシ
 	New Character Style	新規文字スタイル
@@ -3237,6 +3258,8 @@ theme	Appearance	外観
 @msg	Show All Hidden Attributes: nothing is hidden	非表示の属性をすべて表示: 非表示の属性はありません
 @msg	Expand: no brush strokes selected	拡張: ブラシストロークが選択されていません
 @msg	no brush named `{name}`	`{name}` という名前のブラシが見つかりません
+@msg	no brush selected	ブラシが選択されていません
+@msg	this kind of brush has no options dialog yet	この種類のブラシにはまだオプションダイアログがありません
 @msg	no symbol instances selected	シンボルインスタンスが選択されていません
 @msg	select a symbol instance	シンボルインスタンスを選択してください
 @msg	the art has no bounds	アートに境界がありません

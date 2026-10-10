@@ -1541,6 +1541,27 @@
 	New Art Has Basic Appearance	Новый рисунок имеет основное оформление
 	New Artboard	Новая монтажная область
 	New Bristle Brush	Новая щетинная кисть
+	Calligraphic Brush Options	Параметры каллиграфической кисти
+	Bristle Brush Options	Параметры щетинной кисти
+	Roundness:	Округлость:
+	Fixed	Фиксированный
+	Pressure	Нажим
+	Shape:	Форма:
+	Bristle Length:	Длина щетинок:
+	Bristle Density:	Плотность щетинок:
+	Bristle Thickness:	Толщина щетинок:
+	Paint Opacity:	Непрозрачность краски:
+	Stiffness:	Жёсткость:
+	Round Point	Круглая заострённая
+	Flat Point	Плоская заострённая
+	Round Blunt	Круглая тупая
+	Flat Blunt	Плоская тупая
+	Round Curve	Круглая изогнутая
+	Flat Curve	Плоская изогнутая
+	Round Angle	Круглая скошенная
+	Flat Angle	Плоская скошенная
+	Round Fan	Круглая веерная
+	Flat Fan	Плоская веерная
 	New Brush…	Новая кисть…
 	New Calligraphic Brush	Новая каллиграфическая кисть
 	New Character Style	Новый стиль символа
@@ -3418,6 +3439,8 @@ axis	Both	Оба
 @msg	no blend options	нет параметров перехода
 @msg	no bounds	нет границ
 @msg	no brush named `{name}`	нет кисти с именем `{name}`
+@msg	no brush selected	кисть не выбрана
+@msg	this kind of brush has no options dialog yet	у кисти этого типа пока нет окна параметров
 @msg	no catalog	нет каталога
 @msg	no changes since the last save	нет изменений с момента последнего сохранения
 @msg	no clock to keep a heartbeat by	нет часов для поддержания сигнала
