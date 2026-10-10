@@ -357,8 +357,10 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
                 }),
             },
         };
-        if let Err(e) = r {
-            app.status(if target == DropTarget::Open { format!("Couldn't open {name}: {e}") } else { format!("Couldn't place {name}: {e}") });
+        match r {
+            Err(e) if target == DropTarget::Open => io::report_open_error(app, &name, &e),
+            Err(e) => app.status(format!("Couldn't place {name}: {e}")),
+            Ok(()) => {}
         }
     }
 }

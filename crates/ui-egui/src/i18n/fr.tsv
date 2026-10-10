@@ -688,6 +688,7 @@
 	Divide Vertically Into	Diviser verticalement en
 	Do Not Move	Ne pas déplacer
 	Do you want to save the changes you made to “{name}”?	Voulez-vous enregistrer les modifications apportées à « {name} » ?
+	Can't open “{name}”.	Impossible d’ouvrir « {name} ».
 	Document	Document
 	Document Color Mode	Mode colorimétrique du document
 	Document Info	Informations sur le document

@@ -118,12 +118,11 @@ fn end_before_teardown(frames: u64) {
 }
 
 /// Open files handed to the app (command line, macOS Finder and Dock) as documents. A file that
-/// can't be opened is reported in the status bar and on stderr; the others still open.
+/// can't be opened is reported to the user and on stderr; the others still open.
 fn open_files(app: &mut VectorcraftApp, files: Vec<String>) {
     for f in files {
-        if let Err(e) = vectorcraft_ui_egui::io::open_path(app, &f) {
+        if let Err(e) = vectorcraft_ui_egui::io::open_reporting(app, &f) {
             eprintln!("vectorcraft: {f}: {e}");
-            app.status(format!("Couldn't open {}: {e}", fileio::file_name(&f)));
         }
     }
 }
