@@ -137,19 +137,21 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         _ => st.doc.artboards.get(current).or(st.doc.artboards.first()).map(|a| a.rect),
     };
     let Some(target) = target else { return };
-    let Some(v) = app.view_mut() else { return };
-    v.center = target.center();
-    v.fitted = true;
-    if how == "view.actualSize" {
-        v.zoom = 1.0;
+    let zoom = if how == "view.actualSize" {
+        actual_size_zoom(app.session.prefs.display_print_size, app.screen_ppi, app.pixels_per_point)
     } else {
         let zx = (rect.width() as f64 - 60.0) / target.width().max(1.0);
         let zy = (rect.height() as f64 - 60.0) / target.height().max(1.0);
-        v.zoom = zx.min(zy).clamp(0.0313, 640.0);
-    }
+        zx.min(zy).clamp(0.0313, 640.0)
+    };
+    let Some(v) = app.view_mut() else { return };
+    v.center = target.center();
+    v.fitted = true;
+    v.zoom = zoom;
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    app.pixels_per_point = f64::from(ui.ctx().pixels_per_point());
     let t = Tokens::get(ui.ctx());
     let full = ui.available_rect_before_wrap();
     // A document that opened, closed or became active since Home was chosen replaces it.
@@ -745,6 +747,27 @@ const HOLD_ZOOM: f64 = std::f64::consts::LN_2;
 /// as it is dragged sideways or held, instead of zooming to the area dragged across.
 pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
     p.animated_zoom && p.gpu_performance
+}
+
+/// Zoom for View → Actual Size (`view.actualSize`).
+///
+/// With Preferences › General › Display Print Size at 100% Zoom off, one document point is one
+/// screen point (zoom 1). With it on, one document inch (72 pt) fills one physical inch on the
+/// screen: `screen_ppi / (72 × pixels_per_point)`, clamped to the zoom range.
+///
+/// `screen_ppi` is the assumed monitor density (CSS reference 96 by default; tests may inject a
+/// measured value). `pixels_per_point` is egui's scale factor.
+///
+/// Public behaviour matches Adobe's preference of the same name
+/// (<https://helpx.adobe.com/illustrator/using/setting-preferences.html> and the CC 2019 notes on
+/// Actual Size / Display Print Size).
+pub(crate) fn actual_size_zoom(display_print_size: bool, screen_ppi: f64, pixels_per_point: f64) -> f64 {
+    if !display_print_size {
+        return 1.0;
+    }
+    let ppp = if pixels_per_point.is_finite() && pixels_per_point > 0.0 { pixels_per_point } else { 1.0 };
+    let ppi = if screen_ppi.is_finite() && screen_ppi > 0.0 { screen_ppi } else { 96.0 };
+    (ppi / (72.0 * ppp)).clamp(0.0313, 640.0)
 }
 
 /// Zoom view `vm` of the canvas `rect` to `zoom` (clamped to the zoom range), keeping the document
@@ -2955,6 +2978,38 @@ mod tests {
             assert!((moved.x + 30.0).abs() < 0.5 && (moved.y + 24.0).abs() < 0.5, "the content follows the fingers ({wheel_zooms}): {moved:?}");
             assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 0, "nothing drawn");
         }
+    }
+
+    /// General › Display Print Size at 100% Zoom (#394): off, Actual Size is 1 document point per
+    /// screen point; on, one document inch fills one physical inch (`screen_ppi / (72 × ppp)`).
+    #[test]
+    fn actual_size_zoom_follows_display_print_size() {
+        assert_eq!(actual_size_zoom(false, 96.0, 1.0), 1.0);
+        assert_eq!(actual_size_zoom(false, 220.0, 2.0), 1.0);
+        assert!((actual_size_zoom(true, 96.0, 1.0) - 96.0 / 72.0).abs() < 1e-12);
+        assert!((actual_size_zoom(true, 220.0, 2.0) - 220.0 / (72.0 * 2.0)).abs() < 1e-12);
+        assert_eq!(actual_size_zoom(true, f64::NAN, 0.0), actual_size_zoom(true, 96.0, 1.0));
+    }
+
+    /// `view.actualSize` reads Preferences › Display Print Size at 100% Zoom and the host's screen
+    /// density (#394).
+    #[test]
+    fn view_actual_size_follows_display_print_size() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(460.0, 260.0)));
+        app.screen_ppi = 96.0;
+        app.pixels_per_point = 1.0;
+        app.run("view.setZoom", json!({"zoom": 250})).unwrap();
+        app.run("view.actualSize", json!({})).unwrap();
+        assert!((app.view().unwrap().zoom - 1.0).abs() < 1e-12, "default pref keeps 100% = 1:1");
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+        app.run("view.actualSize", json!({})).unwrap();
+        assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12, "print size uses screen PPI");
+        app.pixels_per_point = 2.0;
+        app.screen_ppi = 220.0;
+        app.run("view.actualSize", json!({})).unwrap();
+        assert!((app.view().unwrap().zoom - 220.0 / 144.0).abs() < 1e-12);
     }
 
     /// Performance › Animated Zoom (#394): the Zoom tool dragged sideways zooms about where it was
