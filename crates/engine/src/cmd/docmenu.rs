@@ -516,10 +516,12 @@ fn guide_add(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => None,
     };
+    let st = s.doc()?;
     let layer = match id_param(p, "layer") {
-        Some(l) if s.doc()?.doc.node(l).is_some_and(Node::is_layer) => Some(l),
+        Some(l) if st.doc.node(l).is_some_and(Node::is_layer) => Some(l),
         Some(_) => return Err(bad("guide.add", "layer must name a layer or sublayer")),
-        None => s.doc()?.current_layer(),
+        // Where new art goes (refused when no layer is shown and unlocked), or that group's layer.
+        None => st.target_parent()?.and_then(|p| if st.doc.node(p).is_some_and(Node::is_layer) { Some(p) } else { st.doc.layer_containing(p) }),
     };
     let i = s.edit("New Guide", |d, _| {
         d.guides.push(Guide { artboard, layer, ..Guide::new(vertical, pos) });
@@ -554,6 +556,16 @@ fn guide_index(s: &Session, v: Option<&Value>, cmd: &str) -> Result<usize> {
     Ok(i)
 }
 
+/// [`guide_index`] of a guide that can be moved or deleted: not on a hidden or locked layer.
+fn editable_guide_index(s: &Session, v: Option<&Value>, cmd: &str) -> Result<usize> {
+    let i = guide_index(s, v, cmd)?;
+    let d = &s.doc()?.doc;
+    if !d.guides.get(i).is_some_and(|g| d.guide_editable(g)) {
+        return Err(EngineError::Other("the guide is on a hidden or locked layer".into()));
+    }
+    Ok(i)
+}
+
 fn guide_select(s: &mut Session, p: &Value) -> Result<Value> {
     let list = p.get("indexes").and_then(Value::as_array).ok_or_else(|| bad("guide.select", "missing indexes"))?;
     let picked = list.iter().map(|v| guide_index(s, Some(v), "guide.select")).collect::<Result<Vec<_>>>()?;
@@ -573,7 +585,7 @@ fn guide_select(s: &mut Session, p: &Value) -> Result<Value> {
 /// Delete ruler guide `index`, else the selected guides, in one undo step → {count}.
 pub(crate) fn guide_remove(s: &mut Session, p: &Value) -> Result<Value> {
     let gone: Vec<usize> = match p.get("index") {
-        Some(v) => vec![guide_index(s, Some(v), "guide.remove")?],
+        Some(v) => vec![editable_guide_index(s, Some(v), "guide.remove")?],
         None => s.doc()?.selection.guides.clone(),
     };
     if gone.is_empty() {
@@ -589,15 +601,21 @@ pub(crate) fn guide_remove(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Put ruler guide `index`, else the selected guides, on layer `layer`, in one undo step.
 fn guide_set_layer(s: &mut Session, p: &Value) -> Result<Value> {
-    let layer = id_param(p, "layer").filter(|l| s.doc().is_ok_and(|st| st.doc.node(*l).is_some_and(Node::is_layer)));
-    let layer = layer.ok_or_else(|| bad("guide.setLayer", "layer must name a layer or sublayer"))?;
+    const C: &str = "guide.setLayer";
+    let d = &s.doc()?.doc;
+    let layer =
+        id_param(p, "layer").filter(|l| d.node(*l).is_some_and(Node::is_layer)).ok_or_else(|| bad(C, "layer must name a layer or sublayer"))?;
+    // As objects dragged in the Layers panel: never onto a locked layer.
+    if super::layer::locked_within(d, layer) {
+        return Err(EngineError::Other("the layer or group is locked".into()));
+    }
     let moving: Vec<usize> = match (p.get("index"), p.get("indexes").and_then(Value::as_array)) {
-        (Some(v), _) => vec![guide_index(s, Some(v), "guide.setLayer")?],
-        (None, Some(list)) => list.iter().take(10_000).map(|v| guide_index(s, Some(v), "guide.setLayer")).collect::<Result<Vec<_>>>()?,
+        (Some(v), _) => vec![editable_guide_index(s, Some(v), C)?],
+        (None, Some(list)) => list.iter().take(10_000).map(|v| editable_guide_index(s, Some(v), C)).collect::<Result<Vec<_>>>()?,
         (None, None) => s.doc()?.selection.guides.clone(),
     };
     if moving.is_empty() {
-        return Err(bad("guide.setLayer", "no guide selected (or give an index)"));
+        return Err(bad(C, "no guide selected (or give an index)"));
     }
     s.edit("Move Guide to Layer", |d, _| {
         for i in &moving {
@@ -613,7 +631,7 @@ fn guide_set_layer(s: &mut Session, p: &Value) -> Result<Value> {
 /// Put ruler guide `index` at `pos`, else move (or copy) the selected guides, in one undo step.
 pub(crate) fn guide_move(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(v) = p.get("index") {
-        let i = guide_index(s, Some(v), "guide.move")?;
+        let i = editable_guide_index(s, Some(v), "guide.move")?;
         let pos = f64_req(p, "pos", "guide.move")?;
         s.edit("Move Guide", |d, _| {
             if let Some(g) = d.guides.get_mut(i) {

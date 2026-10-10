@@ -263,6 +263,8 @@ fn merge_into(d: &mut Document, into: NodeId, others: &[NodeId]) -> Result<()> {
     all.extend(taken);
     all.sort_by(|a, b| keys.get(&a.id).cmp(&keys.get(&b.id)));
     *ch = all;
+    // The merged layers' guides go to it too.
+    d.rehome_guides(into);
     Ok(())
 }
 
@@ -311,6 +313,8 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
         for h in &hidden {
             d.remove(*h)?;
         }
+        // Hidden layers are discarded with their guides.
+        d.drop_guides_of_deleted_layers(sel);
         merge_into(d, into, &others)?;
         sel.prune(d);
         Ok(())

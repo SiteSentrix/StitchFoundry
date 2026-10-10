@@ -3660,6 +3660,7 @@ theme	Appearance	Erscheinungsbild
 @msg	the image's pixels don't match its size	die Pixel des Bilds passen nicht zu seiner Größe
 @msg	the layer has no objects to clip by	die Ebene hat keine Objekte, an denen beschnitten werden könnte
 @msg	the layer or group is locked	die Ebene oder Gruppe ist gesperrt
+@msg	the guide is on a hidden or locked layer	die Hilfslinie liegt auf einer ausgeblendeten oder gesperrten Ebene
 @msg	the target layer is locked or hidden	die Zielebene ist gesperrt oder ausgeblendet
 @msg	the layer to flatten into is hidden	die Ebene, auf die reduziert werden soll, ist ausgeblendet
 @msg	the object already has an opacity mask	das Objekt hat bereits eine Deckkraftmaske

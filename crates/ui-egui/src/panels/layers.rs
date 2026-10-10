@@ -560,13 +560,14 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
 
 /// The row of ruler guide `i` on the layer of `item`: a guide mark and its name, the selection
 /// square when it is selected. A click selects the guide; Shift or Cmd adds it to (or takes it
-/// from) the selected guides.
+/// from) the selected guides. A guide on a hidden or locked layer can't be selected or dragged.
 fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     let (t, h) = (&view.t, view.h);
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
     let Some(g) = view.doc.guides.get(i) else { return };
     let selected = view.guides.contains(&i);
-    if resp.hovered() {
+    let editable = view.doc.guide_editable(g);
+    if editable && resp.hovered() {
         ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
     }
     ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
@@ -588,12 +589,12 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         ui.painter().rect_filled(q, 0.0, item.colour);
         ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
     }
-    if resp.clicked() {
+    if editable && resp.clicked() {
         let m = ui.input(|i| i.modifiers);
         out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
     }
     // Dragged: the selected guides when this is one of them, else this one, to another layer's row.
-    if resp.drag_started() {
+    if editable && resp.drag_started() {
         let guides = if selected { view.guides.clone() } else { vec![i] };
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Guides(guides));
     }
@@ -1510,6 +1511,42 @@ mod tests {
         let d = &app.session.active().unwrap().doc;
         assert!(d.node(sub).is_none() && d.node(c).is_none());
         assert_eq!(d.layers.len(), 1);
+    }
+
+    /// A layer's ruler guides are rows in it, above its art: a click selects the guide, a drag onto
+    /// another layer's row moves it there, and a guide on a locked layer is left alone.
+    #[test]
+    fn guide_rows_select_and_move_their_guides() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+        run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
+        run(&mut app, "select.none", json!({}));
+        let second = NodeId(run(&mut app, "layer.new", json!({}))["id"].as_u64().unwrap());
+        expand(&mut app, &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        // Rows top down: Layer 2, Layer 1, its guide (no target circle), the rectangle.
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(circles.len(), 3);
+        let guide_row = egui::pos2(150.0, (circles[1].y + circles[2].y) / 2.0);
+        let guides = |app: &VectorcraftApp| app.session.active().unwrap().selection.guides.clone();
+        click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
+        assert_eq!(guides(&app), [0], "its row selects it");
+        // Dragged onto Layer 2's row, it goes on Layer 2, in one undo step.
+        let undo = app.session.active().unwrap().history.undo.len();
+        drag(&mut app, &ctx, guide_row, egui::pos2(150.0, circles[0].y), false);
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.guides[0].layer, st.history.undo.len()), (Some(second), undo + 1));
+        // Now under Layer 2: locked, its row neither selects nor drags it.
+        run(&mut app, "layer.setProps", json!({"ids": [second.0], "locked": true}));
+        assert!(guides(&app).is_empty(), "deselected with its layer locked");
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        let guide_row = egui::pos2(150.0, (circles[0].y + circles[1].y) / 2.0);
+        click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
+        assert!(guides(&app).is_empty());
+        drag(&mut app, &ctx, guide_row, egui::pos2(150.0, circles[2].y), false);
+        assert_eq!(app.session.active().unwrap().doc.guides[0].layer, Some(second));
     }
 
     /// The selection squares drawn: (big ones on rows whose object is selected, small ones on rows

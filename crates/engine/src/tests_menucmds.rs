@@ -1015,6 +1015,64 @@ fn ruler_guides_live_on_layers() {
     assert_eq!(guides(&s).len(), 2);
 }
 
+/// Guides on a hidden or locked layer leave the selection and can't be moved, deleted or moved to
+/// another layer; new guides skip a locked current layer as new art does; no guide goes onto a
+/// locked layer.
+#[test]
+fn guides_on_hidden_or_locked_layers_are_left_alone() {
+    let mut s = session();
+    let first = s.doc().unwrap().current_layer().unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    let second = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0, 1]})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [first.0], "locked": true})).unwrap();
+    assert_eq!(selected_guides(&s), [1], "the locked layer's guide is deselected");
+    assert_eq!(s.execute("guide.select", &json!({"indexes": [0]})).unwrap()["selected"], json!([]), "and can't be selected");
+    assert!(s.execute("guide.move", &json!({"index": 0, "pos": 50})).is_err());
+    assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
+    assert!(s.execute("guide.setLayer", &json!({"index": 0, "layer": second.0})).is_err());
+    assert!(s.execute("guide.setLayer", &json!({"index": 1, "layer": first.0})).is_err(), "not onto a locked layer");
+    s.execute("layer.setProps", &json!({"ids": [second.0], "visible": false})).unwrap();
+    assert!(selected_guides(&s).is_empty(), "the hidden layer's guide is deselected");
+    // Both layers hidden or locked: a new guide is refused, as new art is.
+    assert!(s.execute("guide.add", &json!({"vertical": true, "pos": 10})).is_err());
+    s.execute("layer.setProps", &json!({"ids": [second.0], "visible": true, "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [first.0], "locked": false})).unwrap();
+    // The current layer locked: the new guide goes on the top shown, unlocked layer.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 20})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.guides[2].layer, Some(first));
+    assert_eq!(guides(&s).len(), 3);
+}
+
+/// Guides follow their layers through Duplicate, Merge Selected and Flatten Artwork, in one undo
+/// step each.
+#[test]
+fn guides_go_with_their_layers_when_duplicated_merged_and_flattened() {
+    let mut s = session();
+    let first = s.doc().unwrap().current_layer().unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    let second = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+    let on = |s: &Session, l: NodeId| s.doc().unwrap().doc.guides_on(l).map(|(_, g)| (g.vertical, g.pos)).collect::<Vec<_>>();
+    // Duplicate Layer copies its guides onto the copy.
+    let copy = s.execute("layer.duplicate", &json!({"ids": [second.0]})).unwrap()["ids"][0].as_u64().map(NodeId).unwrap();
+    assert_eq!((on(&s, second), on(&s, copy)), (vec![(false, 300.0)], vec![(false, 300.0)]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
+    // Merged into the first layer, the second layer's guide goes with its art.
+    s.execute("layer.merge", &json!({"ids": [second.0, first.0]})).unwrap();
+    assert_eq!(on(&s, first), [(true, 200.0), (false, 300.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((on(&s, first), on(&s, second)), (vec![(true, 200.0)], vec![(false, 300.0)]));
+    // Flattened into the first layer, a hidden layer is discarded with its guides.
+    s.execute("layer.setProps", &json!({"ids": [second.0], "visible": false})).unwrap();
+    s.execute("layer.flatten", &json!({"id": first.0})).unwrap();
+    assert_eq!(guides(&s), [(true, 200.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
+}
+
 /// #451: art moved with the Selection tool lands flush on the artboard's edges and centre (Smart
 /// Guides).
 #[test]

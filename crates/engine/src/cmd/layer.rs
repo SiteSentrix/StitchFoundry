@@ -221,7 +221,7 @@ pub(crate) fn accepts(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
 }
 
 /// Whether `id` or a container around it is locked.
-fn locked_within(d: &Document, id: NodeId) -> bool {
+pub(crate) fn locked_within(d: &Document, id: NodeId) -> bool {
     d.ancestry(id).unwrap_or_default().iter().any(|a| d.node(*a).is_some_and(|n| n.locked))
 }
 
@@ -463,8 +463,7 @@ fn delete_rows(s: &mut Session, p: &Value) -> Result<Value> {
             d.remove(*id)?;
         }
         // The guides on the deleted layers go with them.
-        let orphans: Vec<usize> = d.guides.iter().enumerate().filter(|(_, g)| g.layer.is_some_and(|l| d.node(l).is_none())).map(|(i, _)| i).collect();
-        d.retain_guides(sel, |i, _| !orphans.contains(&i));
+        d.drop_guides_of_deleted_layers(sel);
         sel.prune(d);
         Ok(())
     })?;
@@ -490,6 +489,7 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
             let mut c = d.reid(&n);
             if n.is_layer() {
                 c.name = Some(format!("{} copy", n.display_name()));
+                d.copy_layer_guides(&n, &c);
             }
             out.push(d.insert(par, idx + 1, c)?);
         }
@@ -682,7 +682,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             nodes.push(if copy {
                 let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
-                d.reid(&n)
+                let c = d.reid(&n);
+                if n.is_layer() {
+                    d.copy_layer_guides(&n, &c);
+                }
+                c
             } else {
                 Arc::unwrap_or_clone(d.remove(*id)?)
             });

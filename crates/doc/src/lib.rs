@@ -995,32 +995,68 @@ impl Document {
         let r = self.artboards.iter().find(|a| Some(a.id) == g.artboard)?.rect;
         Some(if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) })
     }
+    /// The layer (or sublayer) ruler guide `g` is on, if it is on one this document has.
+    fn guide_layer(&self, g: &Guide) -> Option<NodeId> {
+        g.layer.filter(|l| self.node(*l).is_some_and(Node::is_layer))
+    }
     /// Is ruler guide `g` shown: on no layer, or on a layer that (with the layers around it) is
     /// visible? A guide whose layer is gone shows as one on no layer.
     pub fn guide_shown(&self, g: &Guide) -> bool {
-        g.layer.is_none_or(|l| self.node(l).is_none() || self.is_visible(l))
+        self.guide_layer(g).is_none_or(|l| self.is_visible(l))
     }
     /// Can ruler guide `g` be picked, moved and deleted: shown, and its layer unlocked?
     pub fn guide_editable(&self, g: &Guide) -> bool {
-        g.layer.is_none_or(|l| self.node(l).is_none() || self.is_editable(l))
+        self.guide_layer(g).is_none_or(|l| self.is_editable(l))
+    }
+    /// Put the ruler guides on no layer this document has (from files saved before guides had
+    /// layers, or of layers merged into `layer`) on layer `layer`. Returns how many.
+    pub fn rehome_guides(&mut self, layer: NodeId) -> usize {
+        let lost: Vec<bool> = self.guides.iter().map(|g| self.guide_layer(g).is_none()).collect();
+        let mut n = 0;
+        for (g, lost) in self.guides.iter_mut().zip(lost) {
+            if lost {
+                g.layer = Some(layer);
+                n += 1;
+            }
+        }
+        n
     }
     /// Put the ruler guides on no layer (from files saved before guides had layers), or on one that
     /// is gone, on the top visible, unlocked layer ([`Self::default_layer`]). Returns how many.
     pub fn adopt_guides(&mut self) -> usize {
-        let Some(home) = self.default_layer() else { return 0 };
-        let lost: Vec<usize> = self
+        self.default_layer().map_or(0, |home| self.rehome_guides(home))
+    }
+    /// Delete the ruler guides whose layer was deleted (they go with it), keeping `sel`'s guides in
+    /// step. Guides on no layer stay. Returns how many went.
+    pub fn drop_guides_of_deleted_layers(&mut self, sel: &mut Selection) -> usize {
+        let gone: Vec<bool> = self.guides.iter().map(|g| g.layer.is_some() && self.guide_layer(g).is_none()).collect();
+        self.retain_guides(sel, |i, _| !gone.get(i).copied().unwrap_or(false))
+    }
+    /// Copy the ruler guides of layer `from` and of its sublayers onto their copies in `copy` (made
+    /// from `from` by [`Self::reid`]: the same tree with fresh ids), as duplicating a layer copies
+    /// the objects on it. Returns how many.
+    pub fn copy_layer_guides(&mut self, from: &Node, copy: &Node) -> usize {
+        let layers = |n: &Node| {
+            let mut out = vec![];
+            n.walk(&mut |c| {
+                if c.is_layer() {
+                    out.push(c.id);
+                }
+            });
+            out
+        };
+        let pairs: Vec<(NodeId, NodeId)> = layers(from).into_iter().zip(layers(copy)).collect();
+        let copies: Vec<Guide> = self
             .guides
             .iter()
-            .enumerate()
-            .filter(|(_, g)| g.layer.is_none_or(|l| !self.node(l).is_some_and(Node::is_layer)))
-            .map(|(i, _)| i)
+            .filter_map(|g| {
+                let to = pairs.iter().find(|(a, _)| Some(*a) == g.layer)?.1;
+                Some(Guide { layer: Some(to), ..g.clone() })
+            })
             .collect();
-        for i in &lost {
-            if let Some(g) = self.guides.get_mut(*i) {
-                g.layer = Some(home);
-            }
-        }
-        lost.len()
+        let n = copies.len();
+        self.guides.extend(copies);
+        n
     }
     /// The ruler guides on layer `layer` (not its sublayers'), by index.
     pub fn guides_on(&self, layer: NodeId) -> impl Iterator<Item = (usize, &Guide)> + '_ {

@@ -125,7 +125,8 @@ impl Selection {
             self.target = None;
         }
         self.slices.retain(|id| doc.is_slice(*id));
-        self.guides.retain(|i| *i < doc.guides.len());
+        // Guides on a hidden or locked layer can't stay selected.
+        self.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
     }
     /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected
     /// (the art of its sublayers too), anything else is selected itself.
@@ -230,6 +231,10 @@ mod tests {
         assert_eq!(d.adopt_guides(), 2);
         assert!(d.guides.iter().all(|g| g.layer == Some(layer)));
         assert_eq!(d.adopt_guides(), 0, "once");
+        // A guide saved before guides had layers reads as one on no layer.
+        let old: crate::Guide = serde_json::from_str(r#"{"vertical": true, "pos": 5.0}"#).unwrap();
+        assert_eq!(old.layer, None);
+        assert!(!serde_json::to_string(&crate::Guide::new(true, 5.0)).unwrap().contains("layer"), "nothing new written");
     }
 
     #[test]
