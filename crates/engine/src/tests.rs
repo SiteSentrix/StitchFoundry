@@ -134,6 +134,40 @@ fn fill_and_stroke_commands() {
     s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}})).unwrap();
 }
 
+
+#[test]
+fn rejected_paint_edits_leave_new_art_defaults_and_focus_unchanged() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    let defaults = s.paint.clone();
+    let focused = s.fill_active;
+    let original_fill = s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint();
+    let original_stroke = s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint();
+
+    // Both shortcut commands used to change defaults before checking invalid ids.
+    for (command, params) in [
+        ("paint.swap", json!({"ids": "not an array"})),
+        ("paint.default", json!({"ids": ["not an object id"]})),
+        ("paint.setFill", json!({"color": "#123456", "ids": [false]})),
+        ("paint.setStroke", json!({"color": "#123456", "ids": "not an array"})),
+        ("paint.setFill", json!({"color": "#123456", "item": "invalid"})),
+    ] {
+        assert!(s.execute(command, &params).is_err(), "{command} should reject {params}");
+        assert_eq!(s.paint, defaults, "{command} changed new-art defaults on failure");
+        assert_eq!(s.fill_active, focused, "{command} changed the active proxy on failure");
+        let appearance = &s.doc().unwrap().doc.node(id).unwrap().appearance;
+        assert_eq!(appearance.fill_paint(), original_fill);
+        assert_eq!(appearance.stroke_paint(), original_stroke);
+    }
+
+    // Successful operations still update both the selected object and new-art defaults.
+    s.execute("paint.swap", &json!({})).unwrap();
+    assert_eq!(s.paint.fill, defaults.stroke);
+    assert_eq!(s.paint.stroke, defaults.fill);
+}
+
 #[test]
 fn select_same_fill() {
     let mut s = session();
