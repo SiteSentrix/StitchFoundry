@@ -504,7 +504,9 @@ fn main() -> std::process::ExitCode {
     #[cfg(feature = "wgpu")]
     let displays = gpu::preferred_displays(gpu_pref, power_env);
     #[cfg(feature = "wgpu")]
-    if gpu::automatic(gpu_pref, power_env) {
+    let chosen_gpu = !gpu::automatic(gpu_pref, power_env);
+    #[cfg(feature = "wgpu")]
+    if !chosen_gpu {
         let listed: Vec<String> = displays.iter().map(ToString::to_string).collect();
         log::info!("display GPUs (PCI vendor:device): {}", if listed.is_empty() { "unknown".to_string() } else { listed.join(", ") });
     } else {
@@ -534,6 +536,8 @@ fn main() -> std::process::ExitCode {
     };
     #[cfg(feature = "wgpu")]
     gpu::watch_panics();
+    #[cfg(feature = "wgpu")]
+    gpu::watch_first_frame(startup.clone());
     // Files opened from Finder and the Dock arrive as events, not arguments.
     #[cfg(target_os = "macos")]
     open_documents::install();
@@ -577,7 +581,15 @@ fn main() -> std::process::ExitCode {
                     log::info!("rendering with {summary} (power preference {power:?})");
                     created.created(&cc.egui_ctx);
                     if !gpu::skipped().is_empty() {
-                        app.status(format!("The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}"));
+                        // A processor chosen in Settings can be the one that can't show the window.
+                        let hint = if chosen_gpu {
+                            " (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)"
+                        } else {
+                            ""
+                        };
+                        app.status(format!(
+                            "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}{hint}"
+                        ));
                     }
                     app.graphics_adapter = Some(summary);
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
@@ -609,6 +621,9 @@ fn main() -> std::process::ExitCode {
                 #[cfg(not(target_os = "macos"))]
                 let _ = in_window_menus;
                 file_access::unconfined(|| open_files(&mut app, files));
+                // The first frame is due from now (`gpu::watch_first_frame`).
+                #[cfg(feature = "wgpu")]
+                created.ready();
                 Ok(Box::new(App { app, graphics_loss, graphics_lost: false, frames: 0 }))
             }),
         )
