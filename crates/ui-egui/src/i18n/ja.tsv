@@ -354,6 +354,8 @@
 	Fill & Stroke	塗りと線
 	Fill Color	カラー (塗り)
 	Invert Pie	扇形を反転
+	Side Length:	辺の長さ:
+	Make Sides Equal	辺の長さをそろえる
 	Opacity	不透明度
 	Pie End Angle:	扇形の終了角度:
 	Pie Start Angle:	扇形の開始角度:
@@ -2857,6 +2859,20 @@
 	Fill: click for swatches, Shift-click for the color mixer	塗り: クリックでスウォッチ、Shift キーを押しながらクリックでカラーミキサー
 	Fit in View	表示に合わせる
 	Flare Tool Options	フレアツールオプション
+	Halo	ハロー
+	Rays	光線
+	Rings	リング
+	Diameter:	直径:
+	Brightness:	明るさ:
+	Growth:	拡大:
+	Fuzziness:	ぼかし:
+	Number:	数:
+	Longest:	最長:
+	Path:	パス:
+	Largest:	最大:
+	Direction:	方向:
+	Symbolism Tools Options	シンボルツールオプション
+	Symbol Set Density:	シンボルセットの密度:
 	Flattener presets	分割・統合プリセット
 	Focal Fill	焦点の塗り
 	Focal Stroke	焦点の線

@@ -226,6 +226,8 @@
 	Auto-Collapse Iconic Panels	Автоматически сворачивать значки панелей
 	Ellipse Properties:	Свойства эллипса:
 	Invert Pie	Инвертировать сектор
+	Side Length:	Длина стороны:
+	Make Sides Equal	Выровнять стороны
 	Pie End Angle:	Конечный угол сектора:
 	Pie Start Angle:	Начальный угол сектора:
 	Show Tool Group Labels	Показывать названия групп инструментов
@@ -985,6 +987,20 @@
 	Flare	Блик
 	Flare Tool	Инструмент «Блик»
 	Flare Tool Options	Параметры инструмента «Блик»
+	Halo	Ореол
+	Rays	Лучи
+	Rings	Кольца
+	Diameter:	Диаметр:
+	Brightness:	Яркость:
+	Growth:	Рост:
+	Fuzziness:	Размытие:
+	Number:	Количество:
+	Longest:	Самый длинный:
+	Path:	Контур:
+	Largest:	Самое большое:
+	Direction:	Направление:
+	Symbolism Tools Options	Параметры инструментов символов
+	Symbol Set Density:	Плотность набора символов:
 	Flat Image	Плоское изображение
 	Flat Logo	Плоский логотип
 	Flatness:	Плоскостность:

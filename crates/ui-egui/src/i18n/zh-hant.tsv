@@ -222,6 +222,8 @@
 	Auto-Collapse Iconic Panels	自動收合圖示面板
 	Ellipse Properties:	橢圓屬性：
 	Invert Pie	反轉扇形
+	Side Length:	邊長：
+	Make Sides Equal	使各邊等長
 	Pie End Angle:	扇形終止角度：
 	Pie Start Angle:	扇形起始角度：
 	Show Tool Group Labels	顯示工具組標籤
@@ -988,6 +990,20 @@
 	Flare	光暈
 	Flare Tool	光暈工具
 	Flare Tool Options	光暈工具選項
+	Halo	光暈
+	Rays	射線
+	Rings	光環
+	Diameter:	直徑：
+	Brightness:	亮度：
+	Growth:	增大：
+	Fuzziness:	模糊度：
+	Number:	數量：
+	Longest:	最長：
+	Path:	路徑：
+	Largest:	最大：
+	Direction:	方向：
+	Symbolism Tools Options	符號工具選項
+	Symbol Set Density:	符號組密度：
 	Flat Image	平面影像
 	Flatness:	平滑度：
 	Flatten Artwork	將圖稿平面化

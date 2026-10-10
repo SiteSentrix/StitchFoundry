@@ -229,6 +229,8 @@
 	Auto-Collapse Iconic Panels	Réduire automatiquement les panneaux en icônes
 	Ellipse Properties:	Propriétés de l’ellipse :
 	Invert Pie	Inverser le secteur
+	Side Length:	Longueur du côté :
+	Make Sides Equal	Égaliser les côtés
 	Pie End Angle:	Angle de fin du secteur :
 	Pie Start Angle:	Angle de début du secteur :
 	Show Tool Group Labels	Afficher les libellés des groupes d'outils
@@ -987,6 +989,20 @@
 	Flare	Halo
 	Flare Tool	Outil Halo
 	Flare Tool Options	Options de l’outil Halo
+	Halo	Halo
+	Rays	Rayons
+	Rings	Anneaux
+	Diameter:	Diamètre :
+	Brightness:	Luminosité :
+	Growth:	Croissance :
+	Fuzziness:	Flou :
+	Number:	Nombre :
+	Longest:	Le plus long :
+	Path:	Tracé :
+	Largest:	Le plus grand :
+	Direction:	Direction :
+	Symbolism Tools Options	Options des outils de symbole
+	Symbol Set Density:	Densité du jeu de symboles :
 	Flat Image	Image aplatie
 	Flat Logo	Logo en aplats
 	Flatness:	Planéité :

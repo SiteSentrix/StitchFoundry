@@ -397,6 +397,37 @@ fn area_options_fit_junk() {
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }
 
+/// A live polygon's Polygon Properties with junk values (the fixtures have no polygon), drawn
+/// plain, scaled unevenly and flattened to nothing: never a panic, and the document stays sound.
+#[test]
+fn polygon_properties_junk() {
+    let mut cases: Vec<Value> = vec![json!({"makeSidesEqual": true}), json!({"sides": u64::MAX, "sideLength": 1e-300, "makeSidesEqual": true})];
+    for key in ["polygonRadius", "sideLength", "polygonAngle"] {
+        for v in junk_values() {
+            cases.push(json!({ key: v }));
+        }
+    }
+    let mut failures = vec![];
+    for scale in [None, Some((300.0, 20.0)), Some((1e-300, 100.0))] {
+        for p in &cases {
+            let mut s = Fixture::Multi.session();
+            let Ok(_) = s.execute("shape.polygon", &json!({"cx": 100, "cy": 100, "radius": 40, "sides": 7, "rotation": 10})) else { continue };
+            if let Some((sx, sy)) = scale {
+                let _ = s.execute("object.scale", &json!({"sx": sx, "sy": sy}));
+            }
+            match catch_quiet(|| s.execute("object.setLiveShape", p)) {
+                Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{scale:?}]: {m}")),
+                Ok(_) => {
+                    if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                        failures.push(format!("object.setLiveShape {p} [{scale:?}]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
 /// After a successful fuzzed call, the document still round-trips and exports.
 #[test]
 fn fuzzed_calls_keep_documents_serializable() {

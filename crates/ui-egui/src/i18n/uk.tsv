@@ -222,6 +222,8 @@
 	Auto-Collapse Iconic Panels	Автоматично згортати значки панелей
 	Ellipse Properties:	Властивості еліпса:
 	Invert Pie	Інвертувати сектор
+	Side Length:	Довжина сторони:
+	Make Sides Equal	Вирівняти сторони
 	Pie End Angle:	Кінцевий кут сектора:
 	Pie Start Angle:	Початковий кут сектора:
 	Show Tool Group Labels	Показувати назви груп інструментів
@@ -981,6 +983,20 @@
 	Flare	Відблиск
 	Flare Tool	Інструмент «Відблиск»
 	Flare Tool Options	Параметри інструменту «Відблиск»
+	Halo	Ореол
+	Rays	Промені
+	Rings	Кільця
+	Diameter:	Діаметр:
+	Brightness:	Яскравість:
+	Growth:	Зростання:
+	Fuzziness:	Розмиття:
+	Number:	Кількість:
+	Longest:	Найдовший:
+	Path:	Контур:
+	Largest:	Найбільше:
+	Direction:	Напрямок:
+	Symbolism Tools Options	Параметри інструментів символів
+	Symbol Set Density:	Щільність набору символів:
 	Flat Image	Плоске зображення
 	Flat Logo	Плоский логотип
 	Flatness:	Площинність:

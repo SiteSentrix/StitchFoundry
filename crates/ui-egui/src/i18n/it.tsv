@@ -228,6 +228,8 @@
 	Auto-Collapse Iconic Panels	Comprimi automaticamente i pannelli a icona
 	Ellipse Properties:	Proprietà dell’ellisse:
 	Invert Pie	Inverti settore
+	Side Length:	Lunghezza del lato:
+	Make Sides Equal	Rendi uguali i lati
 	Pie End Angle:	Angolo finale del settore:
 	Pie Start Angle:	Angolo iniziale del settore:
 	Show Tool Group Labels	Mostra etichette dei gruppi di strumenti
@@ -987,6 +989,20 @@
 	Flare	Riflesso
 	Flare Tool	Strumento Riflesso
 	Flare Tool Options	Opzioni strumento Riflesso
+	Halo	Alone
+	Rays	Raggi
+	Rings	Anelli
+	Diameter:	Diametro:
+	Brightness:	Luminosità:
+	Growth:	Crescita:
+	Fuzziness:	Sfocatura:
+	Number:	Numero:
+	Longest:	Più lungo:
+	Path:	Tracciato:
+	Largest:	Più grande:
+	Direction:	Direzione:
+	Symbolism Tools Options	Opzioni strumenti simboli
+	Symbol Set Density:	Densità del set di simboli:
 	Flat Image	Immagine appiattita
 	Flat Logo	Logo piatto
 	Flatness:	Planarità:

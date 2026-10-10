@@ -1340,6 +1340,19 @@ dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"radius":5}}}
 ```
 
+The same command sets the rest of a live shape's properties, as the Properties and Transform panels show them. A
+polygon (Polygon Properties): `sides` (3–1000), `polygonAngle` (degrees counterclockwise, its first vertex straight up
+at 0), `polygonRadius` (pt, centre to vertex), `sideLength` (pt, which sets the radius) and `makeSidesEqual: true`,
+which drops an uneven scale or shear (its sides then differ) and keeps its centre, angle and mean radius; a radius or
+length that isn't a number above 0 is an error. An ellipse (Ellipse Properties): `pieStart` and `pieEnd` (degrees
+counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them. Each call is
+one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"sides":8,"polygonAngle":22.5,"sideLength":40}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"makeSidesEqual":true}}}
+```
+
 ## Use Preview Bounds
 
 With the preference `usePreviewBounds` on (`prefs.set {key: "usePreviewBounds", value: true}`; also the Align panel
@@ -2672,11 +2685,26 @@ active tool, `tool` names another one, and `{}` just reads them; the result is t
 tool keeps last across tool switches (and documents) and are saved with the preferences (`toolSettings` in
 `prefs.get`'s full object), as the reference app keeps them: the Liquify tools' brush and tool options, Mirror & Cut's
 axis and side, Puppet Warp's mesh, the Symbolism brush, the line, grid, pencil, brush and eraser tools' options,
-polygon sides and star points. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
+polygon sides and star points, and the Flare Tool Options. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
 intensity), and the Symbolism tools one brush. Interaction state (pins, a reference point) starts afresh.
 
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
+```
+
+`tool.options {tool}` opens what double-clicking the tool's button opens (its params doc lists every tool), in the
+desktop app. The Flare tool's are its Flare Tool Options (dialog `flareOptions`): `diameter` and `pathLength` (pt),
+`opacity`, `brightness`, `growth`, `fuzziness`, `longest`, `rayFuzziness` and `largest` (%), `rays`, `rings`,
+`direction` (°), and `raysOn` and `ringsOn` (the Rays and Rings checkboxes; off, the flare has none). OK keeps them
+(`tool.setOption {tool: "flare", values}`) and the next flare dragged out uses them; a click with the tool opens the
+same dialog, and its OK also draws a flare there. The Artboard tool's are the active artboard's Artboard Options
+(dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's), a graph tool's
+the selected graph's Graph Type (an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
+`symbolismOptions`: `diameter` in points, `intensity` and `density` 1–10, one brush for the eight tools) and the
+Magic Wand tool's its panel.
+
+```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"flare","values":{"rays":24,"ringsOn":false}}}}
 ```
 
 ## Perspective grid
