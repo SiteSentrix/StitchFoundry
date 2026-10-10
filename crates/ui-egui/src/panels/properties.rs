@@ -195,6 +195,7 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     let i = super::artboards::selected(app, n);
     let scale_art = super::artboards::scale_art(app);
+    let move_art = super::artboards::move_art(app);
     if let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() {
         // Its name as it is (names are never translated).
         ui.label(egui::RichText::new(&ab.name).size(13.0).color(Tokens::get(ui.ctx()).text));
@@ -207,7 +208,7 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                 for (label, key, v) in [(l1, k1, v1), (l2, k2, v2)] {
                     dim_label(ui, label);
                     if let Some(v) = widgets::num_field(ui, ("ab", key, row), Some(v), units, fw) {
-                        app.run("artboard.setProps", json!({"index": i, key: v, "scaleArt": scale_art})).ok();
+                        app.run("artboard.setProps", json!({"index": i, key: v, "scaleArt": scale_art, "moveArt": move_art})).ok();
                     }
                 }
                 ui.end_row();
@@ -536,8 +537,12 @@ mod tests {
 
     /// One frame of the panel with `events` → the texts painted, with their rects.
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
+        panel_frame(app, ctx, events, show)
+    }
+
+    fn panel_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Vec<(String, Rect)> {
         let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), events, ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
         out.textures_delta.clear();
         out.shapes
             .iter()
@@ -584,6 +589,41 @@ mod tests {
         };
         let widths = [field("35 pt"), field("0°"), field("0 pt"), field("100%")];
         assert!(widths.iter().all(|w| (w - widths[0]).abs() < 1.0), "X, rotation, corner radius, opacity: {widths:?}");
+    }
+
+    /// Both panels forward the Move Artwork toggle when their actual X field is edited.
+    #[test]
+    fn artboard_coordinate_fields_move_art_in_properties_and_transform() {
+        for draw in [show as fn(&mut VectorcraftApp, &mut Ui), super::super::transform::show] {
+            for move_art in [false, true] {
+                let mut app = VectorcraftApp::new(Session::new(), Default::default());
+                app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+                let id = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+                app.select_tool("artboard");
+                app.session.set_tool_option("moveArt", &json!(move_art));
+                let ctx = egui::Context::default();
+                panel_frame(&mut app, &ctx, vec![], draw);
+                let texts = panel_frame(&mut app, &ctx, vec![], draw);
+                let label = texts.iter().find(|(t, _)| t == "X:").unwrap().1;
+                let at = egui::pos2(label.right() + 40.0, label.center().y);
+                let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+                panel_frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)], draw);
+                panel_frame(&mut app, &ctx, vec![press(false)], draw);
+                panel_frame(
+                    &mut app,
+                    &ctx,
+                    vec![Event::Key { key: egui::Key::ArrowUp, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+                    draw,
+                );
+                let d = &app.session.doc().unwrap().doc;
+                assert_eq!(d.artboards[0].rect.x0, 1.0, "the focused X field steps its position");
+                assert_eq!(d.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0, if move_art { 11.0 } else { 10.0 });
+                app.run("edit.undo", json!({})).unwrap();
+                let d = &app.session.doc().unwrap().doc;
+                assert_eq!(d.artboards[0].rect.x0, 0.0);
+                assert_eq!(d.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0, 10.0);
+            }
+        }
     }
 
     /// #530: Edit Artboards shows the active artboard, with New Artboard, Delete Artboard and Exit.

@@ -58,7 +58,8 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
     let set = |app: &mut VectorcraftApp, x, y, w, h| {
         let n = artboard_rect(r, refi, x, y, w, h, link);
         let scale_art = crate::panels::artboards::scale_art(app);
-        let p = json!({"index": index, "x": n.x0, "y": n.y0, "width": n.width(), "height": n.height(), "scaleArt": scale_art});
+        let move_art = crate::panels::artboards::move_art(app);
+        let p = json!({"index": index, "x": n.x0, "y": n.y0, "width": n.width(), "height": n.height(), "scaleArt": scale_art, "moveArt": move_art});
         if let Err(e) = app.run("artboard.setProps", p) {
             app.status(e);
         }

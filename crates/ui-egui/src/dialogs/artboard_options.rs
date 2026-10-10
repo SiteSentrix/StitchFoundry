@@ -35,5 +35,6 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             p[k] = json!(d.f64(k, 0.0));
         }
     }
+    p["moveArt"] = json!(crate::panels::artboards::move_art(app));
     run_and_close(app, "artboard.setProps", p)
 }

@@ -135,7 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Artboard Options…",
             ["Window", "Artboards"],
             None,
-            "{index, name?, x?, y?, width?, height?, scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale)} → null, or with scaleArt {scaled: the art scaled}",
+            "{index, name?, x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale)} → null, or with scaleArt {scaled: the art scaled}",
             has_doc,
             artboard_set
         ),
@@ -771,8 +771,13 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
     // Artboard gathers it) and its guides from the old rectangle onto the new one.
     let scale_art = bool_or(p, "scaleArt", false);
     let fit = if scale_art && resized { rect_map(was, now) } else { None };
-    let art = if fit.is_some() {
-        // Locked and hidden art too? Noted in the journal, so a replay scales the same objects
+    // Position fields honor Move Artwork independently of Scale Artwork. A resize still
+    // leaves the art alone unless scaling was requested. Fit-to-art callers keep the default.
+    let delta = now.origin() - was.origin();
+    let moving = !resized && bool_or(p, "moveArt", false) && delta != vectorcraft_geom::Vec2::ZERO;
+    let transform = fit.or_else(|| moving.then(|| Affine::translate(delta)));
+    let art = if transform.is_some() {
+        // Locked and hidden art too? Noted in the journal, so a replay transforms the same objects
         // whatever the preference is then.
         let all = bool_or(p, "lockedAndHidden", s.prefs.move_locked_with_artboard);
         s.note_journal("lockedAndHidden", json!(all));
@@ -792,7 +797,7 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
             a.name = n.to_string();
         }
         let id = a.id;
-        if let Some(xf) = fit {
+        if let Some(xf) = transform {
             d.map_artboard_guides(id, xf);
             for id in &art {
                 if let Some(n) = d.node_mut(*id) {
@@ -801,14 +806,14 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
             }
         } else if !resized {
             // Moved (not resized), it takes its guides along.
-            d.move_artboard_guides(id, now.origin() - was.origin());
+            d.move_artboard_guides(id, delta);
         }
         Ok(())
     })?;
     if !scale_art {
         return ok();
     }
-    Ok(json!({ "scaled": art.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(json!({ "scaled": if fit.is_some() { art.iter().map(|i| i.0).collect::<Vec<_>>() } else { vec![] } }))
 }
 
 /// The map taking artboard rectangle `from` onto `to`, each side scaled by its own ratio. None
