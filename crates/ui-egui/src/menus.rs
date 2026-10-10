@@ -1921,7 +1921,13 @@ fn selected_image(app: &VectorcraftApp, keep: impl Fn(&vectorcraft_doc::ImageObj
     })
 }
 
+/// The in-window and native menu tree. `english_names` is Preferences › Type › Show Font Names in
+/// English (the Type → Font labels follow it; tests use the default `true`).
 pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
+    menu_tree_named(true)
+}
+
+pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id }));
     vec![
         (
@@ -2269,7 +2275,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
         (
             "Type",
             vec![
-                sub("Font", font_items()),
+                sub("Font", font_items(english_names)),
                 sub("Recent Fonts", RECENT_FONT_IDS.iter().map(|id| c("Recent Font", id)).collect()),
                 sub("Size", TYPE_SIZES.iter().map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n }))).collect()),
                 c("Bold", "type.bold"),
@@ -2742,7 +2748,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         ctx.data_mut(|d| d.insert_temp::<Field>(field_key, field));
     }
     let mut clicked: Option<(String, Value)> = None;
-    let tree = menu_tree();
+    let tree = menu_tree_named(app.session.prefs.font_names_in_english);
     let (end, open) = egui::MenuBar::new()
         .ui(ui, |ui| {
             let mut titles = Vec::with_capacity(tree.len());
@@ -3147,7 +3153,7 @@ pub struct MenuEntry {
 /// Flattened menu for `ui.menu.list`.
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
-    for (title, items) in menu_tree() {
+    for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english) {
         flatten(app, vec![title.to_string()], &items, &mut out);
     }
     out
@@ -3251,34 +3257,45 @@ fn insert_items(list: &[(&'static str, &'static str)]) -> Vec<Item> {
 }
 
 /// Type → Font: one item per available family, the installed fonts included. Built again only when
-/// the fonts change (the menu tree is built every frame); labels are interned once each, so
-/// rebuilding doesn't allocate forever.
-fn font_items() -> Vec<Item> {
+/// the fonts or Show Font Names in English change (the menu tree is built every frame); labels are
+/// interned once each, so rebuilding doesn't allocate forever. The command still sets the English
+/// family name ([`vectorcraft_text::FontDb::canonical`]).
+fn font_items(english_names: bool) -> Vec<Item> {
     static NAMES: std::sync::Mutex<std::collections::BTreeSet<&'static str>> = std::sync::Mutex::new(std::collections::BTreeSet::new());
-    static ITEMS: std::sync::Mutex<(u64, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, Vec::new()));
+    static ITEMS: std::sync::Mutex<(u64, bool, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, true, Vec::new()));
     let db = vectorcraft_text::FontDb::global();
     // Read first: fonts that load meanwhile make the next frame build the list again.
     let generation = db.generation();
     let fams = db.menu_family_list();
     let (Ok(mut names), Ok(mut items)) = (NAMES.lock(), ITEMS.lock()) else { return vec![] };
-    if items.0 != generation {
+    if items.0 != generation || items.1 != english_names {
         let list = fams
             .iter()
             .map(|f| {
-                let label: &'static str = match names.get(f.as_str()) {
+                let english = f.as_str();
+                let shown = db.family_display_name(english, english_names);
+                let label: &'static str = match names.get(shown.as_str()) {
                     Some(n) => n,
                     None => {
-                        let n: &'static str = Box::leak(f.clone().into_boxed_str());
+                        let n: &'static str = Box::leak(shown.into_boxed_str());
                         names.insert(n);
                         n
                     }
                 };
-                cp(label, "text.setStyle", json!({ "font": label }))
+                let font: &'static str = match names.get(english) {
+                    Some(n) => n,
+                    None => {
+                        let n: &'static str = Box::leak(english.to_string().into_boxed_str());
+                        names.insert(n);
+                        n
+                    }
+                };
+                cp(label, "text.setStyle", json!({ "font": font }))
             })
             .collect();
-        *items = (generation, list);
+        *items = (generation, english_names, list);
     }
-    items.1.clone()
+    items.2.clone()
 }
 
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the

@@ -50,6 +50,9 @@ pub struct FontFace {
     id: u32,
     /// Typographic family name (e.g. "Source Sans 3").
     pub family: String,
+    /// Non-English family name from the name table (`ヒラギノ角ゴシック`), when the font has one.
+    /// Used when Preferences › Type › Show Font Names in English is off.
+    pub native_family: Option<String>,
     /// Typographic style name (e.g. "Semibold", "Italic").
     pub style: String,
     /// The font's version string (name ID 5, e.g. "Version 7.200"; empty when it has none). Two
@@ -292,6 +295,8 @@ impl FontFace {
 #[derive(Debug, Default)]
 struct CatalogFamily {
     name: String,
+    /// Non-English family name from the name table, when the scan found one.
+    native: Option<String>,
     faces: Vec<CatalogFace>,
     /// The family's kind (from its first face found).
     traits: Option<FontTraits>,
@@ -426,6 +431,34 @@ fn name(font: &skrifa::FontRef<'_>, ids: &[StringId]) -> Option<String> {
 /// Every localized string of `id`, with its language.
 fn localized(font: &skrifa::FontRef<'_>, id: StringId) -> Vec<(Option<String>, String)> {
     font.localized_strings(id).map(|s| (s.language().map(str::to_owned), s.to_string())).filter(|(_, s)| !s.is_empty()).collect()
+}
+
+/// Whether a name-table language tag is English (Illustrator's "Show Font Names in English").
+fn is_english_lang(lang: Option<&str>) -> bool {
+    lang.is_some_and(|l| {
+        let l = l.to_ascii_lowercase();
+        l == "en" || l == "eng" || l.starts_with("en-") || l.starts_with("en_")
+    })
+}
+
+/// A non-English family label from the name table, for Preferences › Type › Show Font Names in
+/// English (off). Prefers a record whose language isn't English; else any label that differs from
+/// `english` and isn't plain ASCII. `None` when the font has no other name.
+fn pick_native_label(english: &str, pairs: &[(Option<String>, String)]) -> Option<String> {
+    pairs
+        .iter()
+        .find(|(lang, s)| !s.eq_ignore_ascii_case(english) && !is_english_lang(lang.as_deref()))
+        .or_else(|| pairs.iter().find(|(_, s)| !s.eq_ignore_ascii_case(english) && !s.is_ascii()))
+        .map(|(_, s)| s.clone())
+}
+
+/// The family's native-language name from the font (typographic, else legacy), when it has one.
+fn native_family_name(font: &skrifa::FontRef<'_>, english: &str) -> Option<String> {
+    let pairs = {
+        let t = localized(font, StringId::TYPOGRAPHIC_FAMILY_NAME);
+        if t.is_empty() { localized(font, StringId::FAMILY_NAME) } else { t }
+    };
+    pick_native_label(english, &pairs)
 }
 
 /// Every localized string of `id`.
@@ -692,6 +725,8 @@ fn face_names(f: &skrifa::FontRef<'_>) -> Option<(String, String)> {
 #[derive(Clone, Debug)]
 pub(crate) struct FaceStyle {
     family: String,
+    /// See [`FontFace::native_family`].
+    native_family: Option<String>,
     style: String,
     keys: FaceKeys,
     /// A named instance's axis settings (user units); empty for the face itself.
@@ -708,13 +743,14 @@ pub(crate) struct FaceStyle {
 /// The styles of a face: the face itself, then its named instances when it is a variable font.
 pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
     let Some((family, style)) = face_names(f) else { return vec![] };
+    let native_family = native_family_name(f, &family);
     let mut keys = FaceKeys::of(f, &family, &style);
     let traits = FontTraits::of(f, &keys);
-    let mut instances = named_instances(f, &family, &style, &mut keys);
+    let mut instances = named_instances(f, &family, &style, &mut keys, native_family.clone());
     for i in &mut instances {
         i.traits = traits;
     }
-    let face = FaceStyle { family, style, keys, variations: vec![], weight: None, italic: false, traits };
+    let face = FaceStyle { family, native_family, style, keys, variations: vec![], weight: None, italic: false, traits };
     std::iter::once(face).chain(instances).collect()
 }
 
@@ -723,7 +759,7 @@ pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
 /// names already taken. The default instance's name, when it isn't the face's style name (a face
 /// `Regular` whose default instance is `Book`), names the face too (`keys`). Damaged tables give
 /// fewer instances or none; the counts read are capped.
-fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mut FaceKeys) -> Vec<FaceStyle> {
+fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mut FaceKeys, native_family: Option<String>) -> Vec<FaceStyle> {
     let axes = f.axes();
     if axes.is_empty() || axes.len() > MAX_AXES {
         return vec![];
@@ -766,7 +802,16 @@ fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mu
         }
         let keys = FaceKeys { families: keys.families.clone(), styles, legacy: vec![], postscript };
         let variations = tags.iter().zip(&coords).map(|(t, v)| (t.to_be_bytes(), *v)).collect();
-        out.push(FaceStyle { family: family.to_string(), style, keys, variations, weight, italic, traits: FontTraits::default() });
+        out.push(FaceStyle {
+            family: family.to_string(),
+            native_family: native_family.clone(),
+            style,
+            keys,
+            variations,
+            weight,
+            italic,
+            traits: FontTraits::default(),
+        });
     }
     out
 }
@@ -1236,7 +1281,7 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         FontBytes::Owned(v) => v.as_slice(),
     };
     let f = skrifa::FontRef::from_index(data, index).ok()?;
-    let FaceStyle { family, style, keys, variations, weight, italic, traits } = spec;
+    let FaceStyle { family, native_family, style, keys, variations, weight, italic, traits } = spec;
     let version = name(&f, &[StringId::VERSION_STRING]).unwrap_or_default();
     // A named instance: outlines, metrics and advances at its axis settings.
     let location = if variations.is_empty() { Location::default() } else { f.axes().location(variations.iter().map(|(t, v)| (Tag::new(t), *v))) };
@@ -1258,6 +1303,7 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         traits,
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
         family,
+        native_family,
         style,
         version,
         weight: weight.unwrap_or(a.weight.value()),
@@ -1456,6 +1502,23 @@ impl FontDb {
         list
     }
 
+    /// How a font menu labels `family`: the English name when `english` is on (Preferences › Type ›
+    /// Show Font Names in English, the default), else the font's native-language name when it has
+    /// one. The document and commands still use the English family ([`Self::canonical`]).
+    pub fn family_display_name(&self, family: &str, english: bool) -> String {
+        let (family, _) = self.canonical(family, "");
+        if english {
+            return family;
+        }
+        if let Some(native) = self.read_faces().iter().find(|f| f.family.eq_ignore_ascii_case(&family)).and_then(|f| f.native_family.clone()) {
+            return native;
+        }
+        if let Some(native) = self.read_catalog().get(&family.to_ascii_lowercase()).and_then(|c| c.native.clone()) {
+            return native;
+        }
+        family
+    }
+
     /// Style names available for `family`: upright styles by weight, then italics.
     pub fn styles(&self, family: &str) -> Vec<String> {
         let (family, _) = self.canonical(family, "");
@@ -1599,7 +1662,7 @@ impl FontDb {
             if !named && !is_font_file(&p) && !crate::suitcase::is_suitcase(&p) {
                 continue;
             }
-            for FaceStyle { family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
+            for FaceStyle { family, native_family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
                 for (k, a) in Alias::of(&family, &style, &keys) {
                     aliases.entry(k).or_default().push(a);
                 }
@@ -1611,6 +1674,9 @@ impl FontDb {
                 entry.traits.get_or_insert(traits);
                 if entry.name.is_empty() {
                     entry.name = family;
+                }
+                if entry.native.is_none() {
+                    entry.native = native_family;
                 }
                 let (weight, italic) = (weight.unwrap_or_else(|| style_weight(&style)), italic || style_italic(&style));
                 entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic });
@@ -2022,6 +2088,22 @@ mod alias_tests {
         assert!(legacy.iter().any(|a| a.style.as_deref() == Some("W3") && a.paired.as_deref() == Some("regular")), "{legacy:?}");
         assert!(!legacy.iter().any(|a| a.paired.as_deref() == Some("w3")), "Mac family + Windows style is no pair");
         assert!(find("HiraginoSans-W3").iter().any(|a| a.style.as_deref() == Some("W3") && a.paired.is_none()), "the PostScript name");
+    }
+
+    /// #394 Preferences › Type › Show Font Names in English: pick the non-English name-table label.
+    #[test]
+    fn pick_native_label_prefers_a_non_english_name_record() {
+        assert_eq!(
+            pick_native_label("Hiragino Sans", &[(Some("en".into()), "Hiragino Sans".into()), (Some("ja".into()), "ヒラギノ角ゴシック".into())])
+                .as_deref(),
+            Some("ヒラギノ角ゴシック")
+        );
+        assert!(pick_native_label("Source Sans 3", &[(Some("en".into()), "Source Sans 3".into())]).is_none());
+        let font = name_font(HIRAGINO_W3);
+        let f = skrifa::FontRef::new(&font).unwrap();
+        let (family, _) = face_names(&f).unwrap();
+        assert_eq!(family, "Hiragino Sans");
+        assert_eq!(native_family_name(&f, &family).as_deref(), Some("ヒラギノ角ゴシック"));
     }
 
     #[test]
