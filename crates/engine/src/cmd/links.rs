@@ -167,13 +167,13 @@ fn linked(n: &Node) -> Option<(&LinkInfo, &str, Option<bool>)> {
     }
 }
 
-/// The linked images and placed documents of `d` by file and content: those in the layers (only `ids` when
-/// given), then, without `ids`, the ones only symbols and patterns show.
 /// Every linked file of `d` with the ids of the objects showing it (for [`crate::link_watch`]).
 pub(crate) fn linked_groups(d: &Document) -> Vec<(String, Vec<u64>)> {
     groups(d, None).into_iter().filter(|g| !g.ids.is_empty()).map(|g| (g.link.path, ids_json(&g.ids))).collect()
 }
 
+/// The linked images and placed documents of `d` by file and content: those in the layers (only `ids` when
+/// given), then, without `ids`, the ones only symbols and patterns show.
 fn groups(d: &Document, ids: Option<&[NodeId]>) -> Vec<Group> {
     let mut out: Vec<Group> = vec![];
     let mut index: BTreeMap<(String, String, bool), usize> = BTreeMap::new();
