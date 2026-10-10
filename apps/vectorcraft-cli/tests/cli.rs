@@ -297,3 +297,21 @@ fn closed_stdout_ends_quietly() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success() && !err.contains("panicked"), "{:?}: {err}", out.status);
 }
+
+/// #1005: `run` whose reader has gone (`vectorcraft-cli run … | true`) ends quietly with status 0,
+/// and its later steps still run; a failing step still fails.
+#[test]
+fn run_with_a_closed_stdout_ends_quietly_and_finishes_the_batch() {
+    let svg = tmp("closed-run.svg");
+    let _ = std::fs::remove_file(&svg);
+    let rect = r#"{"x":1,"y":1,"width":5,"height":5}"#;
+    let args = ["run", "--cmd", "document.json", "--cmd", "shape.rectangle", "--params", rect, "--export", svg.to_str().unwrap()];
+    let mut child = Command::new(BIN).args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    drop(child.stdout.take());
+    let out = child.wait_with_output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success() && err.is_empty(), "{:?}: {err}", out.status);
+    assert!(svg.is_file(), "the export after the closed reader still ran");
+    let out = Command::new(BIN).args(["run", "--cmd", "not-a-command"]).stdout(Stdio::null()).output().unwrap();
+    assert!(!out.status.success());
+}
