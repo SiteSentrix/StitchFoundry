@@ -128,6 +128,20 @@ fn units_choose_the_default_scale() {
     let um = info(&drawing(&[(9, "$INSUNITS"), (70, "13")], &[], &[], LINE)).unwrap();
     assert_eq!((um.unit, um.units.as_str()), (Unit::Millimeters, "Microns"));
     assert!((um.scale - 1000.0).abs() < 1e-6);
+    // #1011: US survey inches, yards and miles (from the survey foot, 1200/3937 m), not unitless.
+    let survey_ft = 72.0 / 0.0254 * 1200.0 / 3937.0;
+    for (code, name, pt) in [
+        ("21", "US survey feet", survey_ft),
+        ("22", "US survey inches", survey_ft / 12.0),
+        ("23", "US survey yards", survey_ft * 3.0),
+        ("24", "US survey miles", survey_ft * 5280.0),
+    ] {
+        let i = info(&drawing(&[(9, "$INSUNITS"), (70, code)], &[], &[], LINE)).unwrap();
+        assert_eq!((i.unit, i.units.as_str()), (Unit::Millimeters, name));
+        assert!((i.scale * pt - 72.0 / 25.4).abs() < 1e-9, "{name}: 1 mm is {} units", i.scale);
+    }
+    let survey_in = open(&drawing(&[(9, "$INSUNITS"), (70, "22")], &[], &[], LINE), &ImportOptions::default()).document;
+    assert!((survey_in.artboards[0].rect.width() - 7200.0144000288).abs() < 1e-6, "{:?}", survey_in.artboards[0].rect);
     let imperial = info(&drawing(&[(9, "$MEASUREMENT"), (70, "0")], &[], &[], LINE)).unwrap();
     assert_eq!((imperial.unit, imperial.scale), (Unit::Inches, 1.0));
     // A ratio: 1 cm = 10 units is 1:1 in millimetres again.
