@@ -7,7 +7,7 @@ use crate::{RasterFx, raster_effects};
 
 /// A `w` × `h` raster whose pixels are document points (origin top-left).
 fn space(w: usize, h: usize) -> PixelSpace {
-    PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(w as f64 / 2.0, h as f64 / 2.0), channels: Channels::Rgb }
+    PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(w as f64 / 2.0, h as f64 / 2.0), channels: Channels::Rgb, line: 1.0 }
 }
 
 fn image(w: usize, h: usize, f: impl Fn(usize, usize) -> [u8; 4]) -> Vec<u8> {
@@ -224,7 +224,8 @@ fn lengths_are_document_units() {
     let edge = |scale: usize| image(40 * scale, 4, move |x, _| grey(if x < 20 * scale { 100 } else { 150 }));
     let run = |scale: usize| {
         let mut d = edge(scale);
-        let s = PixelSpace { to_doc: Affine::scale(1.0 / scale as f64), px: 1.0 / scale as f64, center: Point::ZERO, channels: Channels::Rgb };
+        let s =
+            PixelSpace { to_doc: Affine::scale(1.0 / scale as f64), px: 1.0 / scale as f64, center: Point::ZERO, channels: Channels::Rgb, line: 1.0 };
         fx("sharpen.unsharpMask", json!({"amount": 100, "radius": 2})).apply(&mut d, 40 * scale, 4, &s);
         (0..40 * scale).filter(|x| at(&d, 40 * scale, *x, 2)[0] < 99).count()
     };
@@ -253,7 +254,7 @@ fn gaussian_and_plane_blurs_keep_their_mass() {
 fn pixel_timings() {
     let (w, h) = (2000, 2000);
     let src = image(w, h, |x, y| [(x % 256) as u8, (y % 256) as u8, ((x ^ y) % 256) as u8, 255]);
-    let s = PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(1000.0, 1000.0), channels: Channels::Rgb };
+    let s = PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(1000.0, 1000.0), channels: Channels::Rgb, line: 1.0 };
     let cases = [
         ("blur.radial", json!({"quality": "draft"})),
         ("blur.radial", json!({"quality": "good"})),
@@ -475,5 +476,52 @@ fn pixelate_patterns_follow_the_object_at_any_resolution() {
         let mut shifted = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
         f.apply(&mut shifted, w, h, &moved);
         assert_eq!(shifted, one, "{id}");
+    }
+}
+
+/// Video › De-Interlace: lines 1, 3, 5… (or 2, 4, 6…) are made again from the others, by copying
+/// the line above or by averaging the lines above and below; the lines are the document's raster
+/// rows, whatever the raster's own resolution.
+#[test]
+fn deinterlace_remakes_one_field_from_the_other() {
+    let (w, h) = (2, 6);
+    // Line n (from 1) is grey 40 n.
+    let src = image(w, h, |_, y| grey(40 * (y as u8 + 1)));
+    let run = |p: serde_json::Value, s: &PixelSpace| {
+        let mut d = src.clone();
+        fx("video.deinterlace", p).apply(&mut d, w, h, s);
+        (0..h).map(|y| at(&d, w, 1, y)[0]).collect::<Vec<_>>()
+    };
+    let s = space(w, h);
+    // Odd lines (1, 3, 5) copy the line above; line 1 has none, so it takes line 2.
+    assert_eq!(run(json!({}), &s), [80, 80, 80, 160, 160, 240]);
+    assert_eq!(run(json!({"eliminate": "even"}), &s), [40, 40, 120, 120, 200, 200]);
+    // Interpolated: the average of the lines around (one side at the edges).
+    assert_eq!(run(json!({"eliminate": "even", "create": "interpolation"}), &s), [40, 80, 120, 160, 200, 200]);
+    // Lines two pixels tall: lines 1 and 3 (pixels 0–1 and 4–5) copy their neighbour, row by row.
+    let coarse = PixelSpace { line: 2.0, ..space(w, h) };
+    assert_eq!(run(json!({}), &coarse), [120, 160, 120, 160, 120, 160]);
+    // A damaged space changes nothing.
+    assert_eq!(run(json!({}), &PixelSpace { line: f64::NAN, ..space(w, h) }), [40, 80, 120, 160, 200, 240]);
+}
+
+/// Video › NTSC Colors: saturated yellow and cyan lose saturation (their composite signal is too
+/// strong) but keep their brightness; greys, dark colours and transparency stay as they are.
+#[test]
+fn ntsc_colors_tame_only_colours_too_strong_for_the_signal() {
+    let (w, h) = (5, 1);
+    let px = [[255, 255, 0, 255], [0, 255, 255, 255], [128, 128, 128, 255], [100, 20, 20, 255], [0, 0, 0, 0]];
+    let mut d: Vec<u8> = px.concat();
+    fx("video.ntscColors", json!({})).apply(&mut d, w, h, &space(w, h));
+    let luma = |p: [u8; 4]| 0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2]);
+    for (x, &a) in px.iter().enumerate() {
+        let b = at(&d, w, x, 0);
+        if x >= 2 {
+            assert_eq!(b, a, "{x}: unchanged");
+            continue;
+        }
+        let spread = |p: [u8; 4]| p[..3].iter().max().unwrap() - p[..3].iter().min().unwrap();
+        assert!(spread(b) < spread(a), "{x}: less saturated {b:?}");
+        assert!((luma(a) - luma(b)).abs() < 3.0, "{x}: as bright {a:?} {b:?}");
     }
 }

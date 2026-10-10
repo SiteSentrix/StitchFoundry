@@ -144,6 +144,7 @@ const WARP: &[&str] = &["Effect", "Warp"];
 const BLUR: &[&str] = &["Effect", "Blur"];
 const SHARPEN: &[&str] = &["Effect", "Sharpen"];
 const PIXELATE: &[&str] = &["Effect", "Pixelate"];
+const VIDEO: &[&str] = &["Effect", "Video"];
 const PATHFINDER: &[&str] = &["Effect", "Pathfinder"];
 const PLUGINS: &[&str] = &["Effect", "Plug-ins"];
 const ADJUST: &[&str] = &["Effect", "Color Adjustments"];
@@ -330,6 +331,20 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             PIXELATE,
             "{cellSize: pt 3..300 (5)} redraws the object as randomly placed dots of its colours on a white canvas",
             json!({"cellSize": 5.0}),
+        ),
+        r(
+            "video.deinterlace",
+            "De-Interlace…",
+            VIDEO,
+            "{eliminate: \"odd\"|\"even\" (\"odd\"; which field lines are taken out), create: \"duplication\"|\"interpolation\" (\"duplication\"; a line taken out becomes a copy of the line above, or the average of the lines above and below)} the field lines are the rows of the document's raster grid (Document Raster Effects Settings › Resolution), numbered from 1 at the top of the page",
+            json!({"eliminate": "odd", "create": "duplication"}),
+        ),
+        r(
+            "video.ntscColors",
+            "NTSC Colors",
+            VIDEO,
+            "{} makes colours a television signal can't carry (luma plus chroma past 110 % of white, or luma minus chroma below −20 %) less saturated, keeping their brightness",
+            json!({}),
         ),
     ];
     v.extend([

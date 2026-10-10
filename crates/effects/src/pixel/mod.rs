@@ -1,6 +1,6 @@
 //! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Pixelate › Color
-//! Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, and Stylize › Glowing
-//! Edges): filters over premultiplied RGBA8 pixels.
+//! Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Stylize › Glowing
+//! Edges, and Video › De-Interlace and NTSC Colors): filters over premultiplied RGBA8 pixels.
 //!
 //! - Every distance is in document units (points) and becomes pixels through the raster's
 //!   [`PixelSpace::px`], so an effect looks the same at any zoom and at any Document Raster Effects
@@ -13,6 +13,7 @@ mod blur;
 mod edges;
 mod pixelate;
 mod sharpen;
+mod video;
 
 use serde_json::Value;
 use vectorcraft_geom::{Affine, Point, Rect};
@@ -22,7 +23,7 @@ use crate::util::{num, text};
 pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 8] = [
+pub const PIXEL_EFFECTS: [&str; 10] = [
     "blur.radial",
     "blur.smart",
     "pixelate.colorHalftone",
@@ -31,6 +32,8 @@ pub const PIXEL_EFFECTS: [&str; 8] = [
     "pixelate.pointillize",
     "sharpen.unsharpMask",
     "stylize.glowingEdges",
+    "video.deinterlace",
+    "video.ntscColors",
 ];
 
 /// A Photoshop-style raster effect with its parameters read and clamped to their ranges. Lengths
@@ -59,6 +62,11 @@ pub enum PixelFx {
     /// Pixelate › Pointillize: random dots about `cell` across of the object's colours on a white
     /// canvas.
     Pointillize { cell: f64 },
+    /// Video › De-Interlace: the odd (or `even`) field lines made again from the others, by
+    /// duplication or, with `interpolate`, by averaging.
+    DeInterlace { even: bool, interpolate: bool },
+    /// Video › NTSC Colors: colours a television signal can't carry made less saturated.
+    NtscColors,
 }
 
 /// What a raster's colour channels hold, for the filters that treat them apart (Color Halftone
@@ -89,6 +97,9 @@ pub struct PixelSpace {
     pub center: Point,
     /// What the colour channels hold.
     pub channels: Channels,
+    /// The height of a line of the document's raster grid (document units: 72 / Document Raster
+    /// Effects Settings › Resolution), the fields De-Interlace works on.
+    pub line: f64,
 }
 
 /// Effect `id`'s parameters `p` (defaults merged in) as a [`PixelFx`]; `None` for other effects.
@@ -126,6 +137,11 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         "pixelate.crystallize" => PixelFx::Crystallize { cell: num(p, "cellSize", 10.0).clamp(3.0, 300.0) },
         "pixelate.mezzotint" => PixelFx::Mezzotint { kind: Mezzotint::parse(text(p, "type", "fineDots")) },
         "pixelate.pointillize" => PixelFx::Pointillize { cell: num(p, "cellSize", 5.0).clamp(3.0, 300.0) },
+        "video.deinterlace" => PixelFx::DeInterlace {
+            even: text(p, "eliminate", "odd").eq_ignore_ascii_case("even"),
+            interpolate: text(p, "create", "duplication").eq_ignore_ascii_case("interpolation"),
+        },
+        "video.ntscColors" => PixelFx::NtscColors,
         _ => return None,
     })
 }
@@ -143,7 +159,7 @@ impl PixelFx {
             PixelFx::SmartBlur { radius, .. } => radius,
             PixelFx::UnsharpMask { .. } => 0.0,
             PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
-            PixelFx::ColorHalftone { .. } | PixelFx::Mezzotint { .. } => 0.0,
+            PixelFx::ColorHalftone { .. } | PixelFx::Mezzotint { .. } | PixelFx::DeInterlace { .. } | PixelFx::NtscColors => 0.0,
             // A crystal's or dot's point inside the object reaches out by up to its cell.
             PixelFx::Crystallize { cell } | PixelFx::Pointillize { cell } => 1.5 * cell,
         }
@@ -163,6 +179,9 @@ impl PixelFx {
             PixelFx::Mezzotint { .. } => Some(0.0),
             // The dots' points, and the softened colour around them.
             PixelFx::Pointillize { cell } => Some(2.5 * cell),
+            // The lines above and below.
+            PixelFx::DeInterlace { .. } => Some(video::MAX_LINE),
+            PixelFx::NtscColors => Some(0.0),
         }
     }
 
@@ -180,6 +199,8 @@ impl PixelFx {
             PixelFx::Crystallize { cell } => pixelate::crystallize(px, w, h, space, cell),
             PixelFx::Mezzotint { kind } => pixelate::mezzotint(px, w, h, space, kind),
             PixelFx::Pointillize { cell } => pixelate::pointillize(px, w, h, space, cell),
+            PixelFx::DeInterlace { even, interpolate } => video::deinterlace(px, w, h, space, even, interpolate),
+            PixelFx::NtscColors => video::ntsc(px),
         }
     }
 }
