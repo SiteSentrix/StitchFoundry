@@ -215,7 +215,9 @@ pub(super) fn param_fields(
             d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect();
         keys.sort_by_key(|(k, _)| rank(k));
         for (k, v) in keys {
-            ui.label(egui::RichText::new(humanized(&k)).color(t.text));
+            // A size's Relative / Absolute pair (Roughen, Zig Zag, Tweak) is its own label.
+            let relative = k == "relative" && v.is_boolean();
+            ui.label(egui::RichText::new(if relative { String::new() } else { humanized(&k) }).color(t.text));
             if let Some(cur) = crate::widgets::blend_param(&k, &v) {
                 if let Some(m) = crate::widgets::blend_param_dropdown(ui, ("fx-blend", &k), cur) {
                     d.fields.insert(k, m);
@@ -247,9 +249,19 @@ pub(super) fn param_fields(
                         changed = true;
                     }
                 }
-                Value::Bool(mut b) => {
-                    if ui.checkbox(&mut b, "").changed() {
-                        d.fields.insert(k, json!(b));
+                Value::Bool(b) if relative => {
+                    ui.horizontal(|ui| {
+                        for (label, on) in [(tl!("Relative"), true), (tl!("Absolute"), false)] {
+                            if crate::widgets::radio(ui, label, b == on, true) && b != on {
+                                d.fields.insert(k.clone(), json!(on));
+                                changed = true;
+                            }
+                        }
+                    });
+                }
+                Value::Bool(b) => {
+                    if crate::widgets::check(ui, "", b, true) {
+                        d.fields.insert(k, json!(!b));
                         changed = true;
                     }
                 }
