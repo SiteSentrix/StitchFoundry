@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Guides",
             [],
             None,
-            "{indexes: [index…], toggle?: bool} select ruler guides on their own (deselecting the art); toggle adds or removes them instead → {selected: [index…]}",
+            "{indexes: [index…], toggle?: bool} select ruler guides on their own (deselecting the art); toggle adds or removes them instead, keeping the selected art (a Shift-click on a guide) → {selected: [index…]}",
             guides_unlocked,
             guide_select
         ),
@@ -539,15 +539,12 @@ fn guide_select(s: &mut Session, p: &Value) -> Result<Value> {
     let list = p.get("indexes").and_then(Value::as_array).ok_or_else(|| bad("guide.select", "missing indexes"))?;
     let picked = list.iter().map(|v| guide_index(s, Some(v), "guide.select")).collect::<Result<Vec<_>>>()?;
     if bool_or(p, "toggle", false) {
-        let mut now = s.doc()?.selection.guides.clone();
-        for i in picked {
-            if let Some(k) = now.iter().position(|g| *g == i) {
-                now.remove(k);
-            } else {
-                now.push(i);
+        // Added to (or taken from) what is selected, the art included.
+        s.select(|_, sel| {
+            for i in picked {
+                sel.toggle_guide(i);
             }
-        }
-        s.select(|_, sel| sel.set_guides(now))?;
+        })?;
     } else {
         s.select(|_, sel| sel.set_guides(picked))?;
     }

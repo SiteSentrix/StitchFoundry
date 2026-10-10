@@ -823,6 +823,40 @@ fn ruler_guides_select_move_and_delete() {
     assert!(matches!(s.execute("edit.clear", &json!({})), Err(EngineError::Disabled(..))));
 }
 
+/// Shift selects ruler guides and art together, in either order; Delete takes both in one step.
+#[test]
+fn guides_and_art_are_shift_selected_together() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    let b = rect(&mut s, 70.0, 50.0, 60.0, 30.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+    // Art first, then a Shift-click on a guide: the art stays selected.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![a], vec![0]));
+    // A guide first, then Shift-added art: the guide stays selected.
+    s.execute("guide.select", &json!({"indexes": [1]})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![b], vec![1]));
+    // A new selection drops them.
+    sel(&mut s, &[a]);
+    assert!(selected_guides(&s).is_empty());
+    // Delete takes the art and the guides, in one step; undo brings both back.
+    s.execute("guide.select", &json!({"indexes": [1], "toggle": true})).unwrap();
+    let n = undo_len(&s);
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert_eq!((guides(&s), undo_len(&s)), (vec![(true, 200.0)], n + 1));
+    assert!(s.doc().unwrap().doc.node(a).is_none() && s.doc().unwrap().doc.node(b).is_some());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
+    // Ids given: only those go, the guides stay.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!(guides(&s).len(), 2);
+}
+
 /// #451: an artboard guide (`guide.add {artboard}`) runs across its artboard only, and is moved,
 /// copied and deleted with it; canvas guides stay put.
 #[test]
