@@ -528,6 +528,10 @@ pub struct Node {
     /// Graph object: the group's children are generated from this spec (Object → Graph).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<Box<crate::graph::GraphSpec>>,
+    /// Index of the graph series this generated group belongs to. Axes, the legend and other
+    /// children leave it unset, so a series named "Legend" or "Axes" is not mistaken for them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub series_index: Option<u32>,
     /// Editable Shaper composition; the original art is retained in its source child.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
@@ -595,6 +599,7 @@ impl Node {
             trace: None,
             wrap: None,
             graph: None,
+            series_index: None,
             shaper: None,
             kind,
             graphic_style: None,
