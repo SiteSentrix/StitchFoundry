@@ -579,6 +579,16 @@ impl VectorcraftApp {
             return r;
         }
         let mut params = params;
+        // Paste in place, in front, in back (#693) and Select › All on Active Artboard (#1006): onto
+        // or on the active artboard, the view's.
+        if matches!(id, "edit.pasteInPlace" | "edit.pasteInFront" | "edit.pasteInBack" | "select.allOnArtboard")
+            && params.get("artboard").is_none()
+            && self.view().is_some()
+            && let Some(n) = self.session.active().map(|d| d.doc.artboards.len())
+            && let Some(p) = params.as_object_mut()
+        {
+            p.insert("artboard".into(), serde_json::json!(panels::artboards::selected(self, n)));
+        }
         if id.starts_with("edit.paste") {
             if let Err(e) = self.adopt_system_clipboard() {
                 self.ui.status = e.clone();
@@ -591,14 +601,6 @@ impl VectorcraftApp {
                 && let Some(p) = params.as_object_mut()
             {
                 p.insert("center".into(), serde_json::json!([c.x, c.y]));
-            }
-            // In place, in front, in back: onto the active artboard (#693).
-            if matches!(id, "edit.pasteInPlace" | "edit.pasteInFront" | "edit.pasteInBack")
-                && params.get("artboard").is_none()
-                && let Some(i) = self.view().map(|v| v.artboard)
-                && let Some(p) = params.as_object_mut()
-            {
-                p.insert("artboard".into(), serde_json::json!(i));
             }
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;

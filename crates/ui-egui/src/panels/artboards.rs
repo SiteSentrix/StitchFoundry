@@ -235,6 +235,26 @@ mod tests {
         crate::menus::invoke(&mut app, "view.goToArtboard", json!({"index": "previous"}));
         assert_eq!(selected(&app, 2), 0, "and the panel follows the navigator");
     }
+
+    /// #1006: Select › All on Active Artboard selects the art of the artboard made active here,
+    /// and an explicit artboard still wins.
+    #[test]
+    fn all_on_active_artboard_takes_the_active_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 2})).unwrap();
+        let mut rect = |x| app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        let (a, b) = (rect(10), rect(130));
+        let picked = |app: &mut VectorcraftApp, params| {
+            crate::menus::invoke(app, "select.allOnArtboard", params);
+            let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|n| n.0).collect();
+            json!(ids)
+        };
+        select(&mut app, 1);
+        assert_eq!(picked(&mut app, json!({})), json!([b]));
+        select(&mut app, 0);
+        assert_eq!(picked(&mut app, json!({})), json!([a]));
+        assert_eq!(picked(&mut app, json!({"artboard": 1})), json!([b]));
+    }
     /// Double-clicking a row's number goes to its artboard and its name renames it; a row's
     /// Options button edits that artboard with the Artboard tool, and the tool's artboard is the
     /// active one.
