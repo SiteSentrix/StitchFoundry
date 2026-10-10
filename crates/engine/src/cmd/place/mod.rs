@@ -309,11 +309,20 @@ fn transformed(mut node: Node, m: Affine) -> Node {
 /// `[x, y, width, height]` with a positive size.
 fn rect_param(p: &Value) -> Result<Option<Rect>> {
     let Some(v) = p.get("rect") else { return Ok(None) };
-    let n: Vec<f64> = v.as_array().map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
-    match n[..] {
-        [x, y, w, h] if w > 0.0 && h > 0.0 => Ok(Some(Rect::new(x, y, x + w, y + h))),
+    // All four or nothing: a malformed entry dropped would shift the others ([0, "bad", 10, 40, 50]).
+    match finite_numbers(v) {
+        Some([x, y, w, h]) if w > 0.0 && h > 0.0 => Ok(Some(Rect::new(x, y, x + w, y + h))),
         _ => Err(bad(PLACE, "rect must be [x, y, width, height] with a positive width and height")),
     }
+}
+
+/// `at`, the `[x, y]` the art is centred on (absent or null: none); anything else fails rather than
+/// placing the art as if no point were given.
+fn at_param(p: &Value) -> Result<Option<Point>> {
+    p.get("at")
+        .filter(|v| !v.is_null())
+        .map(|v| finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(PLACE, "at must be [x, y]")))
+        .transpose()
 }
 
 /// The transform that puts new art with the natural box `natural` where `old` is: an image's scale
@@ -342,7 +351,7 @@ fn fit(natural: Rect, r: Rect) -> Affine {
 fn place(s: &mut Session, p: &Value) -> Result<Value> {
     let replace = bool_or(p, "replace", false);
     let template = bool_or(p, "template", false);
-    let at = point_param(p, "at");
+    let at = at_param(p)?;
     let rect = rect_param(p)?;
     if replace && (template || at.is_some() || rect.is_some()) {
         return Err(bad(PLACE, "replace keeps the replaced object's place and transform: drop template, at and rect"));

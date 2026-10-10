@@ -58,6 +58,37 @@ fn serialize(s: &mut Session, format: &str) -> Vec<u8> {
 }
 
 #[test]
+fn malformed_place_coordinates_are_rejected_instead_of_silently_changed() {
+    let mut s = session();
+    let png = png(4, 2, [20, 40, 60, 255], None);
+    let original = s.doc().unwrap().doc.layers.clone();
+    // Previously filter_map dropped the string from a five-element rectangle and
+    // treated the remaining four values as a different, valid placement.
+    for rect in [json!([0, "ignored", 10, 40, 50]), json!([10, 20, 40, null, 50]), json!([10, 20, 40, 50, 60])] {
+        let mut params = file("tiny.png", &png);
+        params["rect"] = rect;
+        assert!(s.execute("file.place", &params).is_err(), "{params}");
+        assert_eq!(s.doc().unwrap().doc.layers, original, "failed Place must not add art");
+    }
+    // An explicitly supplied invalid position formerly behaved as though no
+    // position were supplied and centred the image on the artboard.
+    for at in [json!(["not-a-number", 20]), json!([10, null]), json!([10, 20, 30]), json!("invalid")] {
+        let mut params = file("tiny.png", &png);
+        params["at"] = at;
+        assert!(s.execute("file.place", &params).is_err(), "{params}");
+        assert_eq!(s.doc().unwrap().doc.layers, original);
+    }
+    let mut params = file("tiny.png", &png);
+    params["rect"] = json!([10, 20, 80, 60]);
+    let placed = s.execute("file.place", &params).unwrap();
+    assert_eq!(placed["ids"].as_array().unwrap().len(), 1);
+    // A null position is no position, as for the other optional params.
+    let mut params = file("tiny.png", &png);
+    params["at"] = Value::Null;
+    assert_eq!(s.execute("file.place", &params).unwrap()["ids"].as_array().unwrap().len(), 1);
+}
+
+#[test]
 fn a_300_px_png_at_300_ppi_places_as_72_pt_centred_selected_and_undoable() {
     let mut s = session();
     let r = place(&mut s, "photo.png", &png(300, 150, [255, 0, 0, 255], Some(300.0)), json!({}));
