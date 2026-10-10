@@ -865,8 +865,6 @@ impl<'a> Reader<'a> {
         self.add(n, hidden)
     }
 
-    /// Note something the data has that isn't read: an error on a layer that shows, left out of a
-    /// layer that doesn't.
     /// Non-native art (`/ForeignObject`): the content of a placed PDF, which Illustrator shows but
     /// doesn't edit. Its `/Data` is that PDF (ASCII85 in comment lines, kept by the `,` handler),
     /// `/Bounds` the art's box in a space measured from `/Origin` with y down, and `/RTransform`
@@ -955,6 +953,8 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Note something the data has that isn't read: an error on a layer that shows, left out of a
+    /// layer that doesn't.
     fn unreadable(&mut self, what: &str) {
         if self.shown() {
             self.unsupported.insert(what.into());
