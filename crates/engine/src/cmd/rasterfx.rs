@@ -152,7 +152,8 @@ fn render(doc: &Document, nodes: Vec<Node>, region: Rect, scale: f64, anti_alias
     tmp.layers = vec![Arc::new(layer)];
     let mut r = vectorcraft_render::Renderer::new();
     r.threads = 0;
-    r.render_region_with(&tmp, region, scale, &RenderOptions { skip_templates: true, anti_alias, ..Default::default() })
+    // Art Optimized is supersampled, as in exports: shapes meeting edge to edge leave no seam.
+    r.render_region_with(&tmp, region, scale, &RenderOptions { skip_templates: true, anti_alias, supersample: true, ..Default::default() })
 }
 
 /// Pixels per point of raster effects rendered as images (the document's raster effects
