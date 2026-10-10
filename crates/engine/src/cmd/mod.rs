@@ -324,6 +324,17 @@ pub(crate) fn checked_id(s: &Session, value: &Value, command: &str) -> Result<No
     Ok(id)
 }
 
+/// `v` as exactly `N` finite numbers (`[x, y]`, `[x, y, width, height]`…): `None` when it isn't an
+/// array of that length or an entry isn't a number, so nothing malformed is left out or padded.
+pub(crate) fn finite_numbers<const N: usize>(v: &Value) -> Option<[f64; N]> {
+    let a = v.as_array().filter(|a| a.len() == N)?;
+    let mut out = [0.0; N];
+    for (o, n) in out.iter_mut().zip(a) {
+        *o = n.as_f64().filter(|n| n.is_finite())?;
+    }
+    Some(out)
+}
+
 pub(crate) fn point_param(p: &Value, key: &str) -> Option<Point> {
     let a = p.get(key)?.as_array()?;
     Some(Point::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?))
