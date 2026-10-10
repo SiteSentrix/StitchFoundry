@@ -3213,6 +3213,7 @@ axis	Vertical	Vertikal
 axis	Both	Beide
 theme	Appearance	Erscheinungsbild
 	Drag to move	Zum Verschieben ziehen
+	Drag to move out of the set	Ziehen, um aus dem Satz zu lösen
 	Drag to float as a toolbar	Ziehen, um als eigene Werkzeugleiste abzulösen
 	Put back in the toolbar	Zurück in die Werkzeugleiste setzen
 	Float Panel	Bedienfeld ablösen
@@ -3769,6 +3770,9 @@ theme	Appearance	Erscheinungsbild
 @msg	tool (a tool id) is required	tool (eine Werkzeug-ID) ist erforderlich
 @msg	{tool} isn't in a toolbar group of several tools	{tool} gehört zu keiner Werkzeuggruppe mit mehreren Werkzeugen
 @msg	onto must name a panel floating in another group	onto muss ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
+@msg	below and above must name a panel floating in another group	below und above müssen ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
+@msg	give only one of onto, below and above	nur eines von onto, below und above angeben
+@msg	column must be true or a number from 1	column muss true oder eine Zahl ab 1 sein
 @msg	x and y must both be numbers	x und y müssen beide Zahlen sein
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ist keine Farbe: Schreiben Sie sie als #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dies ist kein Logo aus flächigen Farben ({_1} % seiner einfarbigen Bereiche entsprechen wenigen flächigen Farben), daher würde der Modus „Flaches Logo“ seine Verläufe in Flecken zerlegen: Verwenden Sie stattdessen den Modus „Farbe“
