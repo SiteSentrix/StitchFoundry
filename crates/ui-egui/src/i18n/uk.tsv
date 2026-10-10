@@ -3071,7 +3071,6 @@
 	Variable	Змінна
 	no document	немає документа
 	no data set to edit	немає набору даних для зміни
-	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Make Text Dynamic	Зробити текст динамічним
 	Make Visibility Dynamic	Зробити видимість динамічною
 	Capture Data Set	Записати набір даних
@@ -4019,3 +4018,8 @@ axis	Both	Обидві
 	Tiny Lens	Дрібні лінзи
 	Rename Data Set	Перейменувати набір даних
 	Rename Variable	Перейменувати змінну
+	Variable Options	Параметри змінної
+	Edit Data Set	Змінити набір даних
+	Define a variable first	Спочатку визначте змінну
+	Text	Текст
+	Visibility	Видимість

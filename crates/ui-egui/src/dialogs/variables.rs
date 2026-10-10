@@ -21,6 +21,11 @@ pub const KIND: &str = "variables";
 /// The kinds a variable can have, as `variable.define` names them.
 const KINDS: [&str; 2] = ["text", "visibility"];
 
+/// What the dialog shows for each of [`KINDS`].
+fn kind_labels() -> [&'static str; 2] {
+    [tl!("Text"), tl!("Visibility")]
+}
+
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |d| tl!(&d.str("__label")).to_string(), body, confirm, min_width: 380.0, ..DialogSpec::FORM };
 
@@ -96,7 +101,7 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
                 app.status(if key == "variable" { tl!("no variable to rename").to_string() } else { tl!("no data set to rename").to_string() });
                 return true;
             }
-            fields.insert(key.into(), json!(preselect.filter(|p| names.contains(p)).unwrap_or(names[0])));
+            fields.insert(key.into(), json!(preselect.filter(|p| names.contains(p)).or(names.first().copied()).unwrap_or_default()));
             fields.insert("newName".into(), json!(""));
         }
     }
@@ -136,10 +141,10 @@ fn value_key(name: &str) -> String {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else {
-        widgets::dim_label(ui, "No document");
+        widgets::dim_label(ui, tl!("No document"));
         return false;
     };
-    let vars = st.doc.variables.clone();
+    let vars = &st.doc.variables;
     let variable_names: Vec<&str> = vars.variables.iter().map(|v| v.name.as_str()).collect();
     let dataset_names: Vec<&str> = vars.datasets.iter().map(|x| x.name.as_str()).collect();
     egui::Grid::new("variables-grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
@@ -150,7 +155,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 text(ui, d, "name", 220.0);
                 ui.end_row();
                 label(ui, tl!("Kind"));
-                dropdown(ui, d, "kind", &KINDS, 220.0);
+                // The kinds by their translated names; the field keeps the command's own word.
+                let labels = kind_labels();
+                let shown = KINDS.iter().position(|k| *k == d.str("kind")).and_then(|i| labels.get(i)).copied().unwrap_or_default();
+                if let Some(kind) = widgets::dropdown_names(ui, ("variables-dd", "kind"), shown, &labels, 220.0).and_then(|i| KINDS.get(i)) {
+                    d.fields.insert("kind".into(), json!(kind));
+                }
                 ui.end_row();
             }
             "variable.bind" => {
@@ -182,7 +192,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 text(ui, d, "name", 220.0);
                 ui.end_row();
                 if vars.variables.is_empty() {
-                    widgets::dim_label(ui, "Define a variable first");
+                    widgets::dim_label(ui, tl!("Define a variable first"));
                     ui.end_row();
                     return;
                 }
@@ -223,16 +233,18 @@ fn checkbox(ui: &mut egui::Ui, d: &mut Dialog, key: &str) -> egui::Response {
     r
 }
 
-/// A dropdown over `options` for `key`, written back as it changes. The empty option is first
-/// so a fresh dialog can still be filled in; a name that is no longer offered reads as empty
-/// rather than being silently swapped for another one.
+/// A dropdown over the document's names `options` (shown as they are, never translated) for
+/// `key`, written back as it changes. The empty option is first so a fresh dialog can still be
+/// filled in; a name that is no longer offered reads as empty rather than being silently
+/// swapped for another one.
 fn dropdown(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[&str], width: f32) {
     let cur = d.str(key);
     let mut labels: Vec<&str> = vec![""];
     labels.extend_from_slice(options);
     let shown = if cur.is_empty() || options.contains(&cur.as_str()) { cur.as_str() } else { "" };
-    if let Some(i) = widgets::dropdown(ui, ("variables-dd", key), shown, &labels, width) {
-        d.fields.insert(key.into(), json!(options.get(i.saturating_sub(1)).copied().unwrap_or_default()));
+    if let Some(i) = widgets::dropdown_names(ui, ("variables-dd", key), shown, &labels, width) {
+        // The empty option (0) empties the field; the rest are `options`, one along.
+        d.fields.insert(key.into(), json!(i.checked_sub(1).and_then(|i| options.get(i)).copied().unwrap_or_default()));
     }
 }
 
@@ -257,13 +269,15 @@ fn values_of(d: &Dialog, vars: &Variables) -> Value {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let cmd = d.str("__command");
     let name = d.str("name");
-    let vars = app.session.active().map(|st| st.doc.variables.clone()).unwrap_or_default();
     let p = match cmd.as_str() {
         "variable.define" => json!({"name": name, "kind": d.str("kind")}),
         "variable.bind" => json!({"variable": d.str("variable")}),
         "variable.rename" => json!({"name": d.str("variable"), "newName": d.str("newName")}),
         "dataset.rename" => json!({"name": name, "newName": d.str("newName")}),
-        "dataset.new" | "dataset.set" => json!({"name": name, "values": values_of(d, &vars)}),
+        "dataset.new" | "dataset.set" => {
+            let values = app.session.active().map(|st| values_of(d, &st.doc.variables)).unwrap_or_else(|| json!({}));
+            json!({"name": name, "values": values})
+        }
         "dataset.select" => json!({"name": name}),
         _ => json!({}),
     };

@@ -3954,3 +3954,46 @@ theme	Appearance	Erscheinungsbild
 	Frosted	Mattiert
 	Tiny Lens	Kleine Linsen
 	Canvas	Leinwand
+	Highlight Variable	Variable hervorheben
+	New Variable	Neue Variable
+	Delete Variable	Variable löschen
+	List Variables	Variablen auflisten
+	Bind Variable	Variable binden
+	Unbind Variable	Variable lösen
+	New Data Set	Neuer Datensatz
+	Delete Data Set	Datensatz löschen
+	List Data Sets	Datensätze auflisten
+	Select Data Set	Datensatz auswählen
+	Next Data Set	Nächster Datensatz
+	Previous Data Set	Vorheriger Datensatz
+	Data Sets	Datensätze
+	New Variable…	Neue Variable…
+	Bind Variable…	Variable binden…
+	New Data Set…	Neuer Datensatz…
+	Edit Data Set…	Datensatz bearbeiten…
+	Select Data Set…	Datensatz auswählen…
+	Variables Panel	Bedienfeld „Variablen“
+	Data Set	Datensatz
+	Kind	Art
+	Variable	Variable
+	no document	kein Dokument
+	no data set to edit	kein Datensatz zum Bearbeiten
+	Make Text Dynamic	Text dynamisch machen
+	Make Visibility Dynamic	Sichtbarkeit dynamisch machen
+	Capture Data Set	Datensatz erfassen
+	Update Data Set	Datensatz aktualisieren
+	Rename Data Set…	Datensatz umbenennen…
+	Variable Options…	Variablenoptionen…
+	Select Bound Object	Gebundenes Objekt auswählen
+	Select All Bound Objects	Alle gebundenen Objekte auswählen
+	Multiple objects	Mehrere Objekte
+	New Name	Neuer Name
+	no variable to rename	keine Variable zum Umbenennen
+	no data set to rename	kein Datensatz zum Umbenennen
+	Rename Data Set	Datensatz umbenennen
+	Rename Variable	Variable umbenennen
+	Variable Options	Variablenoptionen
+	Edit Data Set	Datensatz bearbeiten
+	Define a variable first	Definieren Sie zuerst eine Variable
+	Text	Text
+	Visibility	Sichtbarkeit

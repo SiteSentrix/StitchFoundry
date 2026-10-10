@@ -2970,7 +2970,6 @@
 	Variable	变量
 	no document	没有文档
 	no data set to edit	没有可编辑的数据集
-	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Make Text Dynamic	使文本动态化
 	Make Visibility Dynamic	使可见性动态化
 	Capture Data Set	捕获数据集
@@ -3667,3 +3666,8 @@ effect	Vertical	垂直
 	Tiny Lens	小镜头
 	Rename Data Set	重命名数据集
 	Rename Variable	重命名变量
+	Variable Options	变量选项
+	Edit Data Set	编辑数据集
+	Define a variable first	请先定义一个变量
+	Text	文本
+	Visibility	可见性

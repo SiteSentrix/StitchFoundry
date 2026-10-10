@@ -3062,7 +3062,6 @@
 	Variable	變數
 	no document	沒有文件
 	no data set to edit	沒有可編輯的資料集
-	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Make Text Dynamic	使文字動態化
 	Make Visibility Dynamic	使可見性動態化
 	Capture Data Set	擷取資料集
@@ -3448,3 +3447,8 @@ effect	Soft	柔和
 	Tiny Lens	小鏡頭
 	Rename Data Set	重新命名資料集
 	Rename Variable	重新命名變數
+	Variable Options	變數選項
+	Edit Data Set	編輯資料集
+	Define a variable first	請先定義一個變數
+	Text	文字
+	Visibility	可見性

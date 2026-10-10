@@ -3079,7 +3079,6 @@
 	Variable	Variable
 	no document	no hay documento
 	no data set to edit	no hay ningún conjunto de datos que editar
-	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Make Text Dynamic	Hacer texto dinámico
 	Make Visibility Dynamic	Hacer visible dinámico
 	Capture Data Set	Capturar conjunto de datos
@@ -4036,3 +4035,8 @@ axis	Both	Ambos
 	Tiny Lens	Lente pequeña
 	Rename Data Set	Renombrar conjunto de datos
 	Rename Variable	Renombrar variable
+	Variable Options	Opciones de variable
+	Edit Data Set	Editar conjunto de datos
+	Define a variable first	Defina primero una variable
+	Text	Texto
+	Visibility	Visibilidad

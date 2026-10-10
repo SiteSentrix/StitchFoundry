@@ -3076,7 +3076,6 @@
 	Variable	Variable
 	no document	aucun document
 	no data set to edit	aucun jeu de données à modifier
-	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Make Text Dynamic	Rendre le texte dynamique
 	Make Visibility Dynamic	Rendre la visibilité dynamique
 	Capture Data Set	Capturer le jeu de données
@@ -4048,3 +4047,8 @@ effect	Soft	Doux
 	Tiny Lens	Petites lentilles
 	Rename Data Set	Renommer le jeu de données
 	Rename Variable	Renommer la variable
+	Variable Options	Options de variable
+	Edit Data Set	Modifier le jeu de données
+	Define a variable first	Définissez d’abord une variable
+	Text	Texte
+	Visibility	Visibilité

@@ -592,7 +592,6 @@
 	Variable	変数
 	no document	ドキュメントがありません
 	no data set to edit	編集するデータセットがありません
-	{name} · {kind} · {count}	{name} · {kind} · {count} 件
 	Make Text Dynamic	テキストを動的にする
 	Make Visibility Dynamic	表示を動的にする
 	Capture Data Set	データセットを取得
@@ -4031,3 +4030,8 @@ effect	Vertical	垂直
 	Frosted	すりガラス
 	Tiny Lens	小さなレンズ
 	Rename Data Set	データセットの名前を変更
+	Variable Options	変数のオプション
+	Edit Data Set	データセットを編集
+	Define a variable first	先に変数を定義してください
+	Text	テキスト
+	Visibility	表示状態

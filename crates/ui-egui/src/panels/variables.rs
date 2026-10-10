@@ -64,18 +64,14 @@ pub(crate) fn select_bound_object(app: &mut VectorcraftApp) {
     }
 }
 
-/// Delete Variable: the highlighted variable only; the rest of the rows stay.
+/// Delete Variable: the highlighted variable only (the command's default); the rest stay.
 pub(crate) fn delete_highlighted(app: &mut VectorcraftApp) {
-    if let Some(name) = app.session.active().and_then(highlighted_row) {
-        app.run("variable.delete", json!({"names": [name]})).ok();
-    }
+    app.run("variable.delete", json!({})).ok();
 }
 
-/// Delete Data Set: the current one only; the rest of the rows stay.
+/// Delete Data Set: the current one only (the command's default); the rest of the rows stay.
 pub(crate) fn delete_active_dataset(app: &mut VectorcraftApp) {
-    if let Some(name) = app.session.active().and_then(|st| st.doc.variables.active_dataset.clone()) {
-        app.run("dataset.delete", json!({"names": [name]})).ok();
-    }
+    app.run("dataset.delete", json!({})).ok();
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -91,14 +87,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .iter()
         .map(|v| {
             let bound: Vec<u64> = st.doc.variables.objects_of(&v.name).iter().map(|i| i.0).collect();
-            let object = match bound.len() {
-                0 => String::new(),
-                1 => st.doc.node(NodeId(bound[0])).map(|n| n.display_name()).unwrap_or_default(),
+            let object = match bound.as_slice() {
+                [] => String::new(),
+                [one] => st.doc.node(NodeId(*one)).map(|n| n.display_name()).unwrap_or_default(),
                 _ => tl!("Multiple objects").to_string(),
             };
             VarRow { name: v.name.clone(), kind: v.kind, bound, object }
         })
         .collect();
+    // What the art holds now, read once for every row's drift check.
+    let current = st.doc.captured_values();
     let sets: Vec<SetRow> = st
         .doc
         .variables
@@ -108,7 +106,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             name: d.name.clone(),
             values: d.values.len(),
             active: st.doc.variables.active_dataset.as_deref() == Some(d.name.as_str()),
-            matches: st.doc.matches_dataset(&d.name),
+            matches: d.matches(&current),
         })
         .collect();
     let active = sets.iter().find(|s| s.active);
@@ -118,18 +116,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Unbind needs a bound object under the selection, not just any selection.
     let selection_bound = selected.iter().any(|id| st.doc.variables.bindings.contains_key(&NodeId(*id)));
     // Make Text Dynamic needs exactly one type object: a text variable only drives type.
-    let single_type = selected.len() == 1 && st.doc.node(NodeId(selected[0])).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)));
+    let single_type = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))));
 
     // The current data set across the top: its name, and the arrows that step through them.
     ui.horizontal(|ui| {
         widgets::field_label(ui, tl!("Data Set"));
         let names: Vec<&str> = sets.iter().map(|s| s.name.as_str()).collect();
         let current = active.map(|s| s.name.as_str()).unwrap_or("");
-        let picked = widgets::dropdown(ui, "variables-active", current, &names, 160.0);
-        if let Some(i) = picked
-            && names.get(i).is_some_and(|n| *n != current)
+        let picked = widgets::dropdown_names(ui, "variables-active", current, &names, 160.0);
+        if let Some(name) = picked.and_then(|i| names.get(i))
+            && *name != current
         {
-            app.run("dataset.select", json!({"name": names[i]})).ok();
+            app.run("dataset.select", json!({"name": name})).ok();
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let has = !sets.is_empty();

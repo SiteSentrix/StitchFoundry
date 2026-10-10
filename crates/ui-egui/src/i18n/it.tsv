@@ -3079,7 +3079,6 @@
 	Variable	Variabile
 	no document	nessun documento
 	no data set to edit	nessun set di dati da modificare
-	{name} · {kind} · {count}	{name} · {kind} · {count}
 	Make Text Dynamic	Rendi testo dinamico
 	Make Visibility Dynamic	Rendi visibilità dinamica
 	Capture Data Set	Cattura set di dati
@@ -4038,3 +4037,8 @@ effect	Regular	Normale
 	Tiny Lens	Lente piccola
 	Rename Data Set	Rinomina set di dati
 	Rename Variable	Rinomina variabile
+	Variable Options	Opzioni variabile
+	Edit Data Set	Modifica set di dati
+	Define a variable first	Definisci prima una variabile
+	Text	Testo
+	Visibility	Visibilità
