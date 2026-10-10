@@ -126,8 +126,9 @@ pub struct DocState {
     pub undo_group: Option<UndoGroup>,
     /// For Object → Transform → Transform Again (⌘D).
     pub last_transform: Option<(Affine, bool)>,
-    /// Selection saved by Select → Reselect.
-    pub last_selection_cmd: Option<(String, Value)>,
+    /// What Select → Reselect repeats: the last selection command, its params and the objects
+    /// selected when it ran (a Same command's reference objects).
+    pub last_selection_cmd: Option<(String, Value, Vec<NodeId>)>,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas

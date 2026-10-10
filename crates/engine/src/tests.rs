@@ -149,6 +149,18 @@ fn select_same_fill() {
     let r = s.execute("select.same.fillColor", &json!({})).unwrap();
     assert_eq!(r["count"], 2);
     assert!(!s.doc().unwrap().selection.contains(a));
+    // Reselect after Deselect repeats it from the same reference object (#903).
+    let blue = s.doc().unwrap().selection.objects.clone();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, blue);
+    // With its reference object gone, it fails as Select Same does, and selects nothing.
+    s.execute("select.none", &json!({})).unwrap();
+    for id in &blue {
+        s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert!(s.execute("select.reselect", &json!({})).is_err());
+    assert!(s.doc().unwrap().selection.objects.is_empty());
 }
 
 #[test]
