@@ -69,6 +69,15 @@ impl GraphKind {
             GraphKind::Radar => "Radar",
         }
     }
+    /// Whether a series of this type can be drawn in a graph of type `graph` (Combine different graph types): the
+    /// column, stacked column, line and area types share a vertical value axis, the bar types a horizontal one.
+    /// Scatter, pie and radar lay their data out on their own and take no other types.
+    pub fn combines_with(self, graph: GraphKind) -> bool {
+        use GraphKind::*;
+        let vertical = |k| matches!(k, Column | StackedColumn | Line | Area);
+        let horizontal = |k| matches!(k, Bar | StackedBar);
+        self == graph || (vertical(self) && vertical(graph)) || (horizontal(self) && horizontal(graph))
+    }
 }
 
 /// The fill and stroke captured from one series' generated marks. An absent paint keeps whatever
@@ -95,6 +104,10 @@ pub struct GraphSpec {
     /// entries keep the generator's own fill and stroke.
     pub series_paints: Vec<SeriesPaint>,
     pub kind: GraphKind,
+    /// Graph types chosen for single series (Combine different graph types), by series index; `None` and missing
+    /// entries draw as [`Self::kind`].
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub series_kinds: Vec<Option<GraphKind>>,
     /// The plot rectangle (the area the graph tool dragged), document points.
     pub rect: Rect,
     pub series: Vec<String>,
@@ -133,6 +146,11 @@ fn edge_to_edge_before_the_option() -> bool {
 }
 
 impl GraphSpec {
+    /// The type series `s` is drawn as: its own type when it combines with the graph's, else the graph's.
+    pub fn series_kind(&self, s: usize) -> GraphKind {
+        self.series_kinds.get(s).copied().flatten().filter(|k| k.combines_with(self.kind)).unwrap_or(self.kind)
+    }
+
     /// The data with blank cells as `None`, every row as long as the longest (at most [`MAX_GRAPH_CATEGORIES`] rows
     /// of [`MAX_GRAPH_SERIES`] cells).
     pub fn cells(&self) -> Vec<Vec<Option<f64>>> {
@@ -159,6 +177,7 @@ impl Default for GraphSpec {
         Self {
             series_paints: vec![],
             kind: GraphKind::Column,
+            series_kinds: vec![],
             rect: Rect::new(0.0, 0.0, 200.0, 150.0),
             series: vec![],
             categories: vec![],

@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?} change the graph type and options (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0); no options → the current ones",
+            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0); no options → the current ones",
             has_selection,
             set_type
         ),
@@ -323,7 +323,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     let cells = g.cells();
     let cell = |c: usize, s: usize| cells.get(c).and_then(|r| r.get(s)).copied().flatten();
     let val = |c: usize, s: usize| cell(c, s).unwrap_or(0.0);
-    let stacked = matches!(g.kind, GraphKind::StackedColumn | GraphKind::StackedBar | GraphKind::Area);
+    // Each series' own type (Combine different graph types); one type for the whole graph unless a series has its own.
+    let kinds: Vec<GraphKind> = (0..nser).map(|s| g.series_kind(s)).collect();
+    let kind = |s: usize| kinds.get(s).copied().unwrap_or(g.kind);
     let horizontal = matches!(g.kind, GraphKind::Bar | GraphKind::StackedBar);
 
     match g.kind {
@@ -400,12 +402,19 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             let scatter = g.kind == GraphKind::Scatter;
             let (mut xlo, mut xhi) = (f64::MAX, f64::MIN);
             for c in 0..ncat {
-                if stacked {
-                    let pos: f64 = (0..nser).map(|s| val(c, s).max(0.0)).sum();
-                    let neg: f64 = (0..nser).map(|s| val(c, s).min(0.0)).sum();
-                    hi = hi.max(pos);
-                    lo = lo.min(neg);
-                } else if scatter {
+                if !scatter {
+                    // Stacked columns (or bars) stack together, and so do areas; other series count one value each.
+                    for stack in [[GraphKind::StackedColumn, GraphKind::StackedBar], [GraphKind::Area, GraphKind::Area]] {
+                        let members = || (0..nser).filter(|s| stack.contains(&kind(*s)));
+                        hi = hi.max(members().map(|s| val(c, s).max(0.0)).sum());
+                        lo = lo.min(members().map(|s| val(c, s).min(0.0)).sum());
+                    }
+                    for v in (0..nser).filter(|s| matches!(kind(*s), GraphKind::Column | GraphKind::Bar | GraphKind::Line)).filter_map(|s| cell(c, s))
+                    {
+                        hi = hi.max(v);
+                        lo = lo.min(v);
+                    }
+                } else {
                     for s in (0..nser).step_by(2) {
                         if let (Some(y), Some(x)) = (cell(c, s), cell(c, s + 1)) {
                             hi = hi.max(y);
@@ -413,11 +422,6 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                             xlo = xlo.min(x);
                             xhi = xhi.max(x);
                         }
-                    }
-                } else {
-                    for v in (0..nser).filter_map(|s| cell(c, s)) {
-                        hi = hi.max(v);
-                        lo = lo.min(v);
                     }
                 }
             }
@@ -450,11 +454,14 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             let span = if horizontal { r.height() } else { r.width() };
             let cat_w = span / ncat as f64;
             let cat_start = |c: usize| if horizontal { r.y0 + c as f64 * cat_w } else { r.x0 + c as f64 * cat_w };
-            // Area bands always span the plot; line graphs only with Edge-to-Edge Lines.
-            let points_mode = g.kind == GraphKind::Area || (g.kind == GraphKind::Line && g.edge_to_edge);
-            let cat_mid = |c: usize| {
-                if points_mode && ncat > 1 { r.x0 + r.width() * c as f64 / (ncat - 1) as f64 } else { cat_start(c) + cat_w / 2.0 }
+            // Area bands always span the plot; lines only with Edge-to-Edge Lines. Category labels sit where every
+            // series puts its points: at the edges when all of them span the plot, else at the category centres.
+            let spans = |k: GraphKind| k == GraphKind::Area || (k == GraphKind::Line && g.edge_to_edge);
+            let mid = |c: usize, edges: bool| {
+                if edges && ncat > 1 { r.x0 + r.width() * c as f64 / (ncat - 1) as f64 } else { cat_start(c) + cat_w / 2.0 }
             };
+            let label_edges = kinds.iter().all(|k| spans(*k));
+            let cat_mid = |c: usize| mid(c, label_edges);
             if !scatter {
                 for c in 0..ncat {
                     if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
@@ -499,78 +506,83 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             }
             let ax = b.group("Axes", axes);
             b.out.push(ax);
-            match g.kind {
-                GraphKind::Column | GraphKind::Bar => {
-                    let cluster = cat_w * (g.cluster_width / 100.0).clamp(0.01, 1.0);
-                    let slot = cluster / nser as f64;
-                    let bar = slot * (g.column_width / 100.0).clamp(0.01, 1.0);
-                    for c in 0..ncat {
-                        let c0 = cat_start(c) + (cat_w - cluster) / 2.0;
-                        for (s, items) in series.iter_mut().enumerate() {
-                            let Some(v) = cell(c, s) else { continue };
-                            let a = c0 + slot * s as f64 + (slot - bar) / 2.0;
-                            let (v0, v1) = (vpos(0.0f64.clamp(lo, hi)), vpos(v));
-                            let rect = if horizontal {
-                                Rect::new(v0.min(v1), a, v0.max(v1), a + bar)
-                            } else {
-                                Rect::new(a, v0.min(v1), a + bar, v0.max(v1))
-                            };
-                            let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                            items.push(b.path(shapes::rectangle(rect), fill, stroke, w));
+            // Columns (or bars) of one category side by side; stacked columns take one slot of that cluster, or, with
+            // no plain columns, a width of their own.
+            let columns: Vec<usize> = (0..nser).filter(|s| matches!(kind(*s), GraphKind::Column | GraphKind::Bar)).collect();
+            let stacks: Vec<usize> = (0..nser).filter(|s| matches!(kind(*s), GraphKind::StackedColumn | GraphKind::StackedBar)).collect();
+            let slots = columns.len() + usize::from(!stacks.is_empty());
+            let cluster = cat_w * (g.cluster_width / 100.0).clamp(0.01, 1.0);
+            let slot = cluster / slots.max(1) as f64;
+            let bar = slot * (g.column_width / 100.0).clamp(0.01, 1.0);
+            let bar_rect = |a: f64, w: f64, v0: f64, v1: f64| {
+                if horizontal { Rect::new(v0.min(v1), a, v0.max(v1), a + w) } else { Rect::new(a, v0.min(v1), a + w, v0.max(v1)) }
+            };
+            for c in 0..ncat {
+                let c0 = cat_start(c) + (cat_w - cluster) / 2.0;
+                for (i, &s) in columns.iter().enumerate() {
+                    let Some(v) = cell(c, s) else { continue };
+                    let a = c0 + slot * i as f64 + (slot - bar) / 2.0;
+                    let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
+                    let n = b.path(shapes::rectangle(bar_rect(a, bar, vpos(0.0f64.clamp(lo, hi)), vpos(v))), fill, stroke, w);
+                    if let Some(items) = series.get_mut(s) {
+                        items.push(n);
+                    }
+                }
+                let (a, w) = if columns.is_empty() {
+                    let w = (cat_w * (g.column_width / 100.0).clamp(0.01, 1.0) * (g.cluster_width / 100.0).clamp(0.01, 1.0) * 1.2).min(cat_w);
+                    (cat_start(c) + (cat_w - w) / 2.0, w)
+                } else {
+                    (c0 + slot * columns.len() as f64 + (slot - bar) / 2.0, bar)
+                };
+                let (mut pos, mut neg) = (0.0, 0.0);
+                for &s in &stacks {
+                    let Some(v) = cell(c, s) else { continue };
+                    let base = if v >= 0.0 { &mut pos } else { &mut neg };
+                    let (v0, v1) = (vpos(*base), vpos(*base + v));
+                    *base += v;
+                    let (fill, stroke, sw) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
+                    let n = b.path(shapes::rectangle(bar_rect(a, w, v0, v1)), fill, stroke, sw);
+                    if let Some(items) = series.get_mut(s) {
+                        items.push(n);
+                    }
+                }
+            }
+            // Cumulative area bands, each from the previous area total up to its own.
+            let mut below: Vec<f64> = vec![0.0; ncat];
+            for s in (0..nser).filter(|s| kind(*s) == GraphKind::Area) {
+                let above: Vec<f64> = below.iter().enumerate().map(|(c, b)| b + val(c, s)).collect();
+                // Mixed with series at the category centres, areas take their points there too.
+                let at = |c: usize, v: &[f64]| Point::new(mid(c, label_edges), vpos(v.get(c).copied().unwrap_or(0.0)));
+                let mut pts: Vec<Point> = (0..ncat).map(|c| at(c, &above)).collect();
+                pts.extend((0..ncat).rev().map(|c| at(c, &below)));
+                let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
+                let n = b.path(polyline(&pts, true), fill, stroke, w);
+                if let Some(items) = series.get_mut(s) {
+                    items.push(n);
+                }
+                below = above;
+            }
+            for s in (0..nser).filter(|s| kind(*s) == GraphKind::Line) {
+                let pts: Vec<Option<Point>> =
+                    (0..ncat).map(|c| cell(c, s).map(|v| Point::new(mid(c, g.edge_to_edge && label_edges), vpos(v)))).collect();
+                if g.connect_points {
+                    for run in runs(&pts) {
+                        let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
+                        let n = b.path(polyline(&run, false), fill, stroke, w);
+                        if let Some(items) = series.get_mut(s) {
+                            items.push(n);
                         }
                     }
                 }
-                GraphKind::StackedColumn | GraphKind::StackedBar => {
-                    let bar = cat_w * (g.column_width / 100.0).clamp(0.01, 1.0) * (g.cluster_width / 100.0).clamp(0.01, 1.0) * 1.2;
-                    let bar = bar.min(cat_w);
-                    for c in 0..ncat {
-                        let a = cat_start(c) + (cat_w - bar) / 2.0;
-                        let (mut pos, mut neg) = (0.0, 0.0);
-                        for (s, items) in series.iter_mut().enumerate() {
-                            let Some(v) = cell(c, s) else { continue };
-                            let base = if v >= 0.0 { &mut pos } else { &mut neg };
-                            let (v0, v1) = (vpos(*base), vpos(*base + v));
-                            *base += v;
-                            let rect = if horizontal {
-                                Rect::new(v0.min(v1), a, v0.max(v1), a + bar)
-                            } else {
-                                Rect::new(a, v0.min(v1), a + bar, v0.max(v1))
-                            };
-                            let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
-                            items.push(b.path(shapes::rectangle(rect), fill, stroke, w));
+                if g.mark_points {
+                    for p in pts.iter().flatten() {
+                        let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
+                        let n = b.path(marker(*p, 5.0), fill, stroke, w);
+                        if let Some(items) = series.get_mut(s) {
+                            items.push(n);
                         }
                     }
                 }
-                GraphKind::Line => {
-                    for (s, items) in series.iter_mut().enumerate() {
-                        let pts: Vec<Option<Point>> = (0..ncat).map(|c| cell(c, s).map(|v| Point::new(cat_mid(c), vpos(v)))).collect();
-                        if g.connect_points {
-                            for run in runs(&pts) {
-                                let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
-                                items.push(b.path(polyline(&run, false), fill, stroke, w));
-                            }
-                        }
-                        if g.mark_points {
-                            for p in pts.iter().flatten() {
-                                let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                                items.push(b.path(marker(*p, 5.0), fill, stroke, w));
-                            }
-                        }
-                    }
-                }
-                GraphKind::Area => {
-                    // Cumulative bands, each from the previous total up to its own.
-                    let mut below: Vec<f64> = vec![0.0; ncat];
-                    for (s, items) in series.iter_mut().enumerate() {
-                        let above: Vec<f64> = (0..ncat).map(|c| below[c] + val(c, s)).collect();
-                        let mut pts: Vec<Point> = (0..ncat).map(|c| Point::new(cat_mid(c), vpos(above[c]))).collect();
-                        pts.extend((0..ncat).rev().map(|c| Point::new(cat_mid(c), vpos(below[c]))));
-                        let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
-                        items.push(b.path(polyline(&pts, true), fill, stroke, w));
-                        below = above;
-                    }
-                }
-                _ => {}
             }
         }
     }
@@ -590,7 +602,15 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             labels.push(b.text(Point::new(x + 12.0, y + 7.5), &label, Justify::Left));
         }
     }
-    for (s, items) in series.into_iter().enumerate() {
+    // Areas at the back, lines and points in front of columns; one graph type keeps the series order.
+    let depth = |s: usize| match kind(s) {
+        GraphKind::Area => 0,
+        GraphKind::Line => 2,
+        _ => 1,
+    };
+    let mut series: Vec<(usize, Vec<Arc<Node>>)> = series.into_iter().enumerate().collect();
+    series.sort_by_key(|(s, _)| depth(*s));
+    for (s, items) in series {
         if items.is_empty() {
             continue;
         }
@@ -779,16 +799,73 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graph.setType";
     let id = target(s, p, C)?;
     let mut spec = spec_of(s, id)?;
-    let keys = ["type", "columnWidth", "clusterWidth", "legend", "markPoints", "connectPoints", "edgeToEdge", "ticks", "axisMin", "axisMax"];
+    // The series to retype: `seriesIndexes`, else, with no `id`, a selection made only of this graph's series (Group
+    // Selection). Anything else selected, the graph itself for one, is the whole graph.
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    let picked: Vec<usize> = match p.get("seriesIndexes") {
+        Some(v) => {
+            let a = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(C, "`seriesIndexes` is a non-empty list of series indexes"))?;
+            if p.get("type").is_none() {
+                return Err(bad(C, "`seriesIndexes` needs a `type`"));
+            }
+            a.iter()
+                .map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count).ok_or_else(|| bad(C, format!("no series {i}"))))
+                .collect::<Result<_>>()?
+        }
+        None if p.get("id").is_none() => {
+            let st = s.doc()?;
+            let members = series_members(&st.doc);
+            let picked: Option<Vec<usize>> = st.selection.objects.iter().map(|n| members.get(n).filter(|r| r.graph == id).map(|r| r.index)).collect();
+            let mut out = picked.unwrap_or_default();
+            out.sort_unstable();
+            out.dedup();
+            out
+        }
+        None => vec![],
+    };
+    let keys = [
+        "type",
+        "seriesIndexes",
+        "columnWidth",
+        "clusterWidth",
+        "legend",
+        "markPoints",
+        "connectPoints",
+        "edgeToEdge",
+        "ticks",
+        "axisMin",
+        "axisMax",
+    ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
+        // With series picked, the type they share, so the dialog's OK keeps it.
+        let kinds: Vec<GraphKind> = picked.iter().map(|i| spec.series_kind(*i)).collect();
+        let kind = kinds.first().copied().filter(|k| kinds.iter().all(|x| x == k)).unwrap_or(spec.kind);
         return Ok(json!({
-            "type": spec.kind.id(), "columnWidth": spec.column_width, "clusterWidth": spec.cluster_width, "legend": spec.legend,
+            "type": kind.id(), "columnWidth": spec.column_width, "clusterWidth": spec.cluster_width, "legend": spec.legend,
             "markPoints": spec.mark_points, "connectPoints": spec.connect_points, "edgeToEdge": spec.edge_to_edge, "ticks": spec.ticks,
             "axisMin": spec.axis_min, "axisMax": spec.axis_max,
         }));
     }
+    // Series picked with Group Selection stay selected through the regeneration (their groups are new nodes).
+    let reselect: Vec<u32> = if p.get("seriesIndexes").is_none() { picked.iter().filter_map(|i| u32::try_from(*i).ok()).collect() } else { vec![] };
     if let Some(t) = str_param(p, "type") {
-        spec.kind = GraphKind::parse(t).ok_or_else(|| bad(C, format!("unknown graph type `{t}`")))?;
+        let kind = GraphKind::parse(t).ok_or_else(|| bad(C, format!("unknown graph type `{t}`")))?;
+        if picked.is_empty() {
+            spec.kind = kind;
+        } else {
+            if !kind.combines_with(spec.kind) {
+                return Err(bad(C, format!("a {} series can't go in a {} graph", kind.label(), spec.kind.label())));
+            }
+            spec.series_kinds.resize(count, None);
+            for i in picked {
+                if let Some(k) = spec.series_kinds.get_mut(i) {
+                    *k = (kind != spec.kind).then_some(kind);
+                }
+            }
+            while spec.series_kinds.last().is_some_and(Option::is_none) {
+                spec.series_kinds.pop();
+            }
+        }
     }
     spec.column_width = f64_or(p, "columnWidth", spec.column_width).clamp(1.0, 1000.0);
     spec.cluster_width = f64_or(p, "clusterWidth", spec.cluster_width).clamp(1.0, 100.0);
@@ -804,8 +881,19 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         spec.axis_max = v.as_f64();
     }
     let label = format!("{} Graph", spec.kind.label());
-    s.edit("Graph Type", |d, _| {
+    s.edit("Graph Type", |d, sel| {
         regenerate(d, id, spec)?;
+        if !reselect.is_empty() {
+            let groups: Vec<NodeId> = d
+                .node(id)
+                .and_then(Node::children)
+                .into_iter()
+                .flatten()
+                .filter(|c| c.series_index.is_some_and(|i| reselect.contains(&i)))
+                .map(|c| c.id)
+                .collect();
+            sel.set(groups);
+        }
         if let Some(n) = d.node_mut(id)
             && n.name.as_deref().is_some_and(|nm| nm.ends_with(" Graph"))
         {
@@ -1315,5 +1403,177 @@ mod tests {
         assert_eq!(v["rows"][1], json!([0.0, 2.0]));
         assert_eq!(v["blanks"], json!([[1, 0], [2, 1]]));
         assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("blanks").is_none());
+    }
+
+    fn spec(s: &Session, id: NodeId) -> GraphSpec {
+        s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone()
+    }
+
+    /// Bounds of a series' marks, without its legend swatch (the last child).
+    fn marks(s: &Session, id: NodeId, index: u32) -> Vec<vectorcraft_geom::Rect> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let ch = series(&n, index).children().unwrap().to_vec();
+        ch[..ch.len() - 1].iter().map(|c| c.geometric_bounds().unwrap()).collect()
+    }
+
+    #[test]
+    fn a_series_given_its_own_type_is_drawn_as_that_type_in_front_of_the_columns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let one_column = marks(&s, id, 0)[0].width();
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "line"})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.kind, g.series_kind(0), g.series_kind(1)), (GraphKind::Column, GraphKind::Column, GraphKind::Line));
+        // The columns left take the whole cluster; the line runs through the category centres, one marker a value.
+        let cols = marks(&s, id, 0);
+        assert_eq!(cols.len(), 3);
+        assert!((cols[0].width() - 2.0 * one_column).abs() < 1e-6, "{} vs {one_column}", cols[0].width());
+        let line = marks(&s, id, 1);
+        assert_eq!(line.len(), 4, "a line and three markers");
+        assert!((line[1].center().x - cols[0].center().x).abs() < 1e-6);
+        // The line series is drawn after (in front of) the column series.
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.series_index).collect();
+        assert_eq!(order, [0, 1]);
+        s.execute("graph.setType", &json!({"seriesIndexes": [0], "type": "line"})).unwrap();
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "column"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.series_index).collect();
+        assert_eq!(order, [1, 0]);
+        // Back to the graph's own type: nothing is stored for that series.
+        assert_eq!(spec(&s, id).series_kinds, [Some(GraphKind::Line)]);
+        // One undo per change.
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(spec(&s, id).series_kinds, [Some(GraphKind::Line), Some(GraphKind::Line)]);
+    }
+
+    #[test]
+    fn group_selecting_a_series_retypes_only_that_series() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let grp = series(&n, 1).id;
+        s.execute("select.set", &json!({"ids": [grp.0]})).unwrap();
+        // The dialog opens on the series' type, and its OK (every option sent back) keeps it.
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["type"], "column");
+        s.execute("graph.setType", &json!({"type": "area"})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.kind, g.series_kind(1)), (GraphKind::Column, GraphKind::Area));
+        let mut all = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!(all["type"], "area");
+        all["ticks"] = json!(4);
+        s.execute("graph.setType", &all).unwrap();
+        assert_eq!(spec(&s, id).series_kind(1), GraphKind::Area);
+        // The series stays selected through each change.
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+        assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [grp]);
+        // A series and something outside it selected, or an explicit `id`: the whole graph.
+        s.execute("select.set", &json!({"ids": [grp.0, id.0]})).unwrap();
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["type"], "column");
+        s.execute("select.set", &json!({"ids": [grp.0]})).unwrap();
+        assert_eq!(s.execute("graph.setType", &json!({"id": id.0})).unwrap()["type"], "column");
+        // The whole graph selected: the graph's type changes, the series keeps its own.
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.setType", &json!({"type": "line"})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.kind, g.series_kind(0), g.series_kind(1)), (GraphKind::Line, GraphKind::Line, GraphKind::Area));
+    }
+
+    #[test]
+    fn types_that_do_not_share_a_value_axis_are_refused_or_ignored() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        for ty in ["pie", "radar", "scatter", "bar"] {
+            assert!(s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": ty})).is_err(), "{ty}");
+        }
+        for bad in [json!([2]), json!([]), json!([-1]), json!(["x"]), json!([1e30]), json!({}), json!(1)] {
+            assert!(s.execute("graph.setType", &json!({"seriesIndexes": bad, "type": "line"})).is_err(), "{bad}");
+        }
+        assert!(s.execute("graph.setType", &json!({"seriesIndexes": [1]})).is_err(), "no type");
+        assert!(spec(&s, id).series_kinds.is_empty());
+        // A series type the graph's new type can't take is drawn as the graph's type, and kept for when it can.
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "line"})).unwrap();
+        s.execute("graph.setType", &json!({"type": "pie"})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!(g.series_kind(1), GraphKind::Pie);
+        s.execute("graph.setType", &json!({"type": "column"})).unwrap();
+        assert_eq!(spec(&s, id).series_kind(1), GraphKind::Line);
+    }
+
+    #[test]
+    fn stacked_columns_take_one_slot_and_the_value_axis_covers_their_total() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",a,b,c\nQ1,10,20,30\nQ2,10,20,30";
+        let id = NodeId(
+            s.execute("graph.create", &json!({"type": "stackedColumn", "x": 0, "y": 0, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        s.execute("graph.setType", &json!({"seriesIndexes": [2], "type": "line"})).unwrap();
+        let (a, b) = (marks(&s, id, 0), marks(&s, id, 1));
+        assert!((a[0].x0 - b[0].x0).abs() < 1e-6 && (a[0].y0 - b[0].y1).abs() < 1e-6, "b sits on a");
+        // a + b stack to 30, the line's highest value is 30: the axis ends at 30 and the stack reaches the top.
+        assert!((b[0].y0 - 0.0).abs() < 1e-6, "{:?}", b[0]);
+        // With a plain column too, the stack is the cluster's last slot, beside it.
+        s.execute("graph.setType", &json!({"seriesIndexes": [0], "type": "column"})).unwrap();
+        let (a, b) = (marks(&s, id, 0), marks(&s, id, 1));
+        assert!((a[0].width() - b[0].width()).abs() < 1e-6 && b[0].x0 > a[0].x1, "{:?} {:?}", a[0], b[0]);
+    }
+
+    #[test]
+    fn areas_mixed_with_columns_put_their_points_at_the_category_centres() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"seriesIndexes": [0], "type": "area"})).unwrap();
+        let (area, cols) = (marks(&s, id, 0)[0], marks(&s, id, 1));
+        assert!((area.x0 - cols[0].center().x).abs() < 1e-6 && (area.x1 - cols[2].center().x).abs() < 1e-6, "{area:?}");
+        // The area is drawn behind the columns.
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.series_index).collect();
+        assert_eq!(order, [0, 1]);
+        // An area graph alone still spans the plot.
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "area"})).unwrap();
+        assert!((marks(&s, id, 0)[0].x0 - 100.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bar_graphs_take_stacked_bar_series() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",a,b,c\nQ1,10,20,-5\nQ2,10,20,-5";
+        let id = NodeId(
+            s.execute("graph.create", &json!({"type": "bar", "x": 0, "y": 0, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        assert!(s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "column"})).is_err());
+        s.execute("graph.setType", &json!({"seriesIndexes": [1, 2], "type": "stackedBar"})).unwrap();
+        let (a, b, c) = (marks(&s, id, 0), marks(&s, id, 1), marks(&s, id, 2));
+        // b and c stack along x in the cluster's second slot, below a's bar; c, negative, runs left of the zero line.
+        assert!((a[0].height() - b[0].height()).abs() < 1e-6 && b[0].y0 > a[0].y1, "{:?} {:?}", a[0], b[0]);
+        assert!((b[0].y0 - c[0].y0).abs() < 1e-6 && (c[0].x1 - b[0].x0).abs() < 1e-6, "{:?} {:?}", b[0], c[0]);
+    }
+
+    #[test]
+    fn series_types_survive_save_and_open_and_older_files_have_none() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "line"})).unwrap();
+        let path = vectorcraft_testkit::temp_dir("graph-kinds").join("kinds.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        assert_eq!(spec(&s, id).series_kinds, [None, Some(GraphKind::Line)]);
+        let g: GraphSpec = serde_json::from_value(json!({"kind": "line", "rows": [[1.0, 2.0]]})).unwrap();
+        assert!(g.series_kinds.is_empty());
+        assert!(serde_json::to_value(&g).unwrap().get("seriesKinds").is_none());
+        // A stored type the graph can't take, or past its series, is drawn as the graph's type.
+        let g: GraphSpec = serde_json::from_value(json!({"kind": "pie", "seriesKinds": ["line", null, "column"], "rows": [[1.0]]})).unwrap();
+        assert_eq!((g.series_kind(0), g.series_kind(5)), (GraphKind::Pie, GraphKind::Pie));
     }
 }
