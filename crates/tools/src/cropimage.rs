@@ -342,16 +342,10 @@ mod tests {
         assert!(t.overlays(&cx).is_empty() && !t.claims_key(&cx, ToolKey::Enter));
     }
 
-
     #[test]
     fn crop_box_option_requires_exactly_four_finite_numeric_values() {
         let mut tool = CropImageTool::default();
-        for invalid in [
-            json!([10, "ignored", 20, 30, 40]),
-            json!([10, 20, 30, null, 40]),
-            json!([10, 20, 30, 40, 50]),
-            json!("not a rectangle"),
-        ] {
+        for invalid in [json!([10, "ignored", 20, 30, 40]), json!([10, 20, 30, null, 40]), json!([10, 20, 30, 40, 50]), json!("not a rectangle")] {
             tool.set_option("rect", &invalid);
             assert!(tool.options().get("rect").is_none(), "invalid box should reset crop: {invalid}");
         }
