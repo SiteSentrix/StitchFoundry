@@ -187,37 +187,10 @@ pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
 /// without a unit is in `unit` ([`typed_unit`]: in points in a picas field with Numbers Without
 /// Units Are Points on).
 pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
-    let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_default();
-    let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone());
-    let editing = ui.memory(|m| m.has_focus(id));
-    if !editing {
-        buf = shown.clone();
-    }
-    take_dialog_focus(ui, id, &buf);
-    let (rect, resp) = ui
-        .allocate_ui_with_layout(vec2(width, 26.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.set_min_width(width);
-            let framed = egui::Frame::NONE
-                .fill(t.input)
-                .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-                .corner_radius(CornerRadius::same(2))
-                .inner_margin(egui::Margin::symmetric(6, 4))
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut buf)
-                            .id(id)
-                            .frame(egui::Frame::NONE)
-                            .desired_width(width - 14.0)
-                            .min_size(vec2(width - 14.0, 0.0))
-                            .font(egui::FontId::proportional(12.5))
-                            .text_color(t.text_strong),
-                    )
-                });
-            (framed.response.rect, framed.inner)
-        })
-        .inner;
+    take_dialog_focus(ui, id, &shown);
+    let (mut buf, resp, rect) = recessed_text(ui, id, &shown, width, 1);
     select_all_on_focus(ui, &resp, &buf);
     // ↑/↓ and the wheel step in the field's unit; a drag on its label scrubs it.
     let read = typed_unit(ui.ctx(), unit);
@@ -349,27 +322,32 @@ fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize
     let t = Tokens::get(ui.ctx());
     let editing = ui.memory(|m| m.has_focus(id));
     let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.to_string()) } else { shown.to_string() };
+    // The box is exactly as tall as the other controls of a row (26 points a line), its text
+    // centred in it: a frame around the text came out a point taller and stood out next to
+    // spinners and dropdowns (#900).
     let height = 26.0 + 16.0 * (rows.max(1) - 1) as f32;
+    let layout = if rows > 1 { egui::Layout::top_down(egui::Align::Min) } else { egui::Layout::left_to_right(egui::Align::Center) };
     let (rect, resp) = ui
-        .allocate_ui_with_layout(vec2(width, height), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.set_min_width(width);
-            let framed = egui::Frame::NONE
-                .fill(t.input)
-                .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-                .corner_radius(CornerRadius::same(2))
-                .inner_margin(egui::Margin::symmetric(6, 4))
+        .allocate_ui_with_layout(vec2(width, height), layout, |ui| {
+            ui.set_min_size(vec2(width, height));
+            let rect = ui.max_rect();
+            ui.painter().rect(rect, 2.0, t.input, Stroke::new(1.0, if editing { t.accent } else { t.input_border }), StrokeKind::Inside);
+            let margin = egui::Margin { left: 7, right: 7, top: if rows > 1 { 4 } else { 0 }, bottom: 0 };
+            let resp = egui::Frame::NONE
+                .inner_margin(margin)
                 .show(ui, |ui| {
                     let edit = if rows > 1 { egui::TextEdit::multiline(&mut buf).desired_rows(rows) } else { egui::TextEdit::singleline(&mut buf) };
                     ui.add(
                         edit.id(id)
                             .frame(egui::Frame::NONE)
+                            .margin(egui::Margin::ZERO)
                             .desired_width(width - 14.0)
-                            .min_size(vec2(width - 14.0, 0.0))
                             .font(egui::FontId::proportional(12.5))
                             .text_color(t.text_strong),
                     )
-                });
-            (framed.response.rect, framed.inner)
+                })
+                .inner;
+            (rect, resp)
         })
         .inner;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
@@ -1126,7 +1104,8 @@ fn spin_generic(
     let h = 26.0;
     let enabled = ui.is_enabled();
     ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
+        // The spinner, the field and the chevron share their borders: one box in three parts.
+        ui.spacing_mut().item_spacing.x = -1.0;
         let (sr, sresp) = ui.allocate_exact_size(vec2(16.0, h), Sense::click());
         ui.painter().rect_filled(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, t.input);
         ui.painter().rect_stroke(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
@@ -1154,7 +1133,7 @@ fn spin_generic(
             let nv = if up.contains(p) { v + step } else { v - step };
             out = Some(SpinPick::Value(nv.max(min)));
         }
-        let fw = if presets.is_empty() { width - 16.0 } else { width - 36.0 };
+        let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
         if let Some(v) = field(ui, fw) {
             out = Some(SpinPick::Value(v.max(min)));
         }
@@ -1792,8 +1771,9 @@ fn chevron_cell(ui: &mut Ui, h: f32) -> Response {
 pub fn text_presets(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: &str, presets: &[&str], width: f32) -> Option<String> {
     let mut out = None;
     ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        out = text_field(ui, &id, Some(value), width - 20.0, 1);
+        // The field and the chevron share a border.
+        ui.spacing_mut().item_spacing.x = -1.0;
+        out = text_field(ui, &id, Some(value), width - 19.0, 1);
         let resp = chevron_cell(ui, 26.0);
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(width - 10.0);
