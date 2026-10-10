@@ -412,8 +412,8 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
 }
 
 /// "Recent Colors" header + a row of chips (the Session's recent colours, which every paint
-/// command feeds); clicking one applies it to the active proxy (Alt: the inactive one).
-pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// command feeds); returns the one clicked, for the caller to apply.
+pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     crate::widgets::subheader(ui, "Recent Colors");
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
@@ -430,9 +430,7 @@ pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             chosen = Some(*c);
         }
     }
-    if let Some(c) = chosen {
-        apply_click(app, ui, json!({"color": color_json(&c)}));
-    }
+    chosen
 }
 
 /// A colour as command JSON, keeping its model.
