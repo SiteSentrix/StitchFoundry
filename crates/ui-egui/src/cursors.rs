@@ -113,17 +113,21 @@ fn double_arrow(p: &mut Ink, o: Pos2, dir: egui::Vec2) {
 }
 
 /// A curved double arrow over the hotspot: an arc with an arrowhead at each end, pointing on along
-/// the arc (#701).
-fn rotate(p: &mut Ink, o: Pos2) {
+/// the arc (#701). The arc bows up, or toward `octant` (0 up, then clockwise in 45° steps): beside a
+/// bounding box it wraps the corner the pointer is at.
+fn rotate(p: &mut Ink, o: Pos2, octant: u8) {
     const R: f32 = 8.0;
     let (a0, a1) = (std::f32::consts::PI * 0.12, std::f32::consts::PI * 0.88);
-    let at = |a: f32| o + vec2(a.cos() * R, -a.sin() * R);
+    // Clockwise on screen (y down) by whole octants.
+    let (s, c) = (f32::from(octant % 8) * std::f32::consts::FRAC_PI_4).sin_cos();
+    let turn = |v: Vec2| vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+    let at = |a: f32| o + turn(vec2(a.cos() * R, -a.sin() * R));
     let pts: Vec<Pos2> = (0..=12).map(|i| at(a0 + (a1 - a0) * i as f32 / 12.0)).collect();
     p.add(Shape::line(pts.clone(), Stroke::new(3.2, HALO)));
     p.add(Shape::line(pts, Stroke::new(1.3, INK)));
     // Each head points away from the arc, along its tangent there.
     for (a, away) in [(a0, -1.0f32), (a1, 1.0)] {
-        let t = vec2(-a.sin(), -a.cos()) * away;
+        let t = turn(vec2(-a.sin(), -a.cos()) * away);
         let n = vec2(-t.y, t.x);
         let (end, tip) = (at(a) - t * 1.5, at(a) + t * 4.5);
         poly(p, vec![tip, end + n * 1.8, end - n * 1.8], INK, INK);
@@ -269,7 +273,8 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::ResizeV => double_arrow(ink, p, vec2(0.0, 1.0)),
         Cursor::ResizeNwSe => double_arrow(ink, p, vec2(1.0, 1.0)),
         Cursor::ResizeNeSw => double_arrow(ink, p, vec2(1.0, -1.0)),
-        Cursor::Rotate => rotate(ink, p),
+        Cursor::Rotate => rotate(ink, p, 0),
+        Cursor::RotateToward(octant) => rotate(ink, p, octant),
         Cursor::CornerRadius => corner_radius(ink, p),
         Cursor::Pen => pen(ink, p, "*"),
         Cursor::PenAdd => pen(ink, p, "+"),
@@ -432,7 +437,7 @@ mod tests {
     use crate::VectorcraftApp;
 
     /// Every cursor with a glyph.
-    const GLYPHS: [Cursor; 33] = [
+    const GLYPHS: [Cursor; 34] = [
         Cursor::Arrow,
         Cursor::ArrowHollow,
         Cursor::Move,
@@ -442,6 +447,7 @@ mod tests {
         Cursor::ResizeNwSe,
         Cursor::ResizeNeSw,
         Cursor::Rotate,
+        Cursor::RotateToward(1),
         Cursor::CornerRadius,
         Cursor::Pen,
         Cursor::PenAdd,
