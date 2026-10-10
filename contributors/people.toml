@@ -58,3 +58,7 @@ sync_github_name = false
 real_name = "Fabio William Conceição"
 display_name = "Messhias"
 sync_github_name = false
+
+[people.KattKnight]
+display_name = "KattKnight (ayla.dsc)"
+sync_github_name = false
