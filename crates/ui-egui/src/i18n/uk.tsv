@@ -3769,7 +3769,7 @@ axis	Both	Обидві
 @msg	the {tool} tool has no options	інструмент {tool} не має параметрів
 @msg	there are no objects to release	немає об’єктів для звільнення
 @msg	there are no printer settings to open here	тут немає налаштувань принтера для відкриття
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	цей файл PostScript неможливо прочитати ({_1}): збережіть його як PDF або SVG у додатку, який його створив
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	цей файл PostScript неможливо прочитати ({why}): збережіть його як PDF або SVG у додатку, який його створив
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript цього файлу неможливо прочитати ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	цей формат містить одну монтажну область: експортуйте кілька як PDF або за допомогою document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	це креслення DWG, яке неможливо прочитати: збережіть його з CAD як ASCII DXF і відкрийте його

@@ -2,14 +2,17 @@
 //!
 //! - Art space has y up; the first artboard's top left corner is the document's origin.
 //! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed … colorIndex r g b …
-//!   dimPercent … Lb`, `(name) Ln`, its art, `LB`.
+//!   dimPercent … Lb` (ten operands in the legacy format, without the one before the colour
+//!   index), `(name) Ln`, its art, `LB`.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end.
 //! - Paths: `m`, `l`/`L`, `c`/`C`, `v`/`V`, `y`/`Y`, painted by `N n F f S s B b` (lower case
 //!   closes), `(op) *` for a guide. Stroke `w J j M d`, fill rule `XR`, overprint `O`/`R`.
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.
 //! - Names: an `/ArtDictionary` after an object, its `AI10_ArtUID` the name's XML id.
-//! - Artboards: the `ArtboardArray` of the `/Document` dictionary, else `%AI3_Cropmarks`.
+//! - Artboards: the `ArtboardArray` of the `/Document` dictionary, else `%AI3_Cropmarks`, else
+//!   the art size around the template box's centre, else (a file in the legacy format another
+//!   app wrote) the bounding box.
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
 //!   and the samples after `XI`.
 //! - Art with an appearance the format can't write as plain art (several fills or strokes,
@@ -304,6 +307,8 @@ const IGNORED: &[&str] = &[
     "Xm",
     "XP",
     "Np",
+    // Flatness (`i`): how finely curves print.
+    "i",
     "TE",
     "TZ",
     "Xs",
@@ -1098,7 +1103,8 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// `… Lb`: a layer's options.
+    /// `… Lb`: a layer's options. The legacy format's has ten operands, its colour index one place
+    /// earlier (`visible preview unlocked printing dimmed masks colorIndex r g b`).
     fn layer_attrs(&mut self, vals: &[V]) {
         let n = Self::nums(vals);
         let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() else { return };
@@ -1109,12 +1115,13 @@ impl<'a> Reader<'a> {
         a.printable = flag(3, true);
         let dim_pct = n.get(12).copied().filter(|v| v.is_finite()).unwrap_or(50.0).clamp(0.0, 100.0);
         a.dim = flag(4, false).then_some(dim_pct.round() as u8);
-        let index = n.get(7).copied().unwrap_or(0.0);
-        let rgb = |i: usize| n.get(i).map_or(0, |v| v.clamp(0.0, 255.0) as u8);
+        let at = if n.len() <= 10 { 6 } else { 7 };
+        let index = n.get(at).copied().unwrap_or(0.0);
+        let rgb = |i: usize| n.get(at + i).map_or(0, |v| v.clamp(0.0, 255.0) as u8);
         a.color = Some(if (0.0..vectorcraft_doc::LAYER_COLORS.len() as f64).contains(&index) && index.fract() == 0.0 {
             LayerColor::Preset(index as u8)
         } else {
-            LayerColor::Custom([rgb(8), rgb(9), rgb(10)])
+            LayerColor::Custom([rgb(1), rgb(2), rgb(3)])
         });
     }
 
@@ -1438,12 +1445,24 @@ impl<'a> Reader<'a> {
         (sane(r) && w > 0.0 && h > 0.0).then_some(r)
     }
 
+    /// The first artboard: the `/Document`'s first, else the crop marks, else [`Self::sized_board`].
+    fn first_board(&self) -> Option<Rect> {
+        self.artboards.first().map(|(_, r)| *r).or(self.cropmarks).or_else(|| self.sized_board())
+    }
+
+    /// The page of a file that says nothing of its artboard (the legacy format as other apps write
+    /// it): its art's bounding box.
+    fn bbox_board(&self) -> Option<Rect> {
+        let [x0, y0, x1, y1] = self.hires.or(self.bbox)?;
+        Some(Rect::new(x0, y0, x1, y1)).filter(|r| r.width() > 0.0 && r.height() > 0.0)
+    }
+
     /// Art space → the document (fixed when the art starts, from the artboards read by then).
     fn ensure_space(&mut self) -> Affine {
         if let Some(m) = self.to_doc {
             return m;
         }
-        let first = self.artboards.first().map(|(_, r)| *r).or(self.cropmarks).or_else(|| self.sized_board());
+        let first = self.first_board().or_else(|| self.bbox_board());
         let top_left = first.map_or(Point::new(0.0, 792.0), |r| Point::new(r.x0, r.y1));
         let m = Affine::new([1.0, 0.0, 0.0, -1.0, -top_left.x, top_left.y]);
         self.to_doc = Some(m);
@@ -1475,11 +1494,11 @@ impl<'a> Reader<'a> {
             return Err("it has no layers".into());
         }
         let to_doc = self.ensure_space();
-        let artboard = self.artboards.first().map(|(_, r)| *r).or(self.cropmarks).or_else(|| self.sized_board());
+        let artboard = self.first_board();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
         let boards: Vec<(String, Rect)> = if self.artboards.is_empty() {
-            self.cropmarks.or_else(|| self.sized_board()).map(|r| vec![("Artboard 1".to_string(), r)]).unwrap_or_default()
+            artboard.or_else(|| self.bbox_board()).map(|r| vec![("Artboard 1".to_string(), r)]).unwrap_or_default()
         } else {
             self.artboards.clone()
         };

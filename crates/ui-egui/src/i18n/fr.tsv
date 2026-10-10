@@ -3783,7 +3783,7 @@ axis	Both	Les deux
 @msg	the {tool} tool has no options	l’outil {tool} n’a pas d’options
 @msg	there are no objects to release	il n’y a aucun objet à libérer
 @msg	there are no printer settings to open here	il n’y a pas de réglages d’imprimante à ouvrir ici
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	impossible de lire ce fichier PostScript ({_1}) : enregistrez-le au format PDF ou SVG dans l’application qui l’a créé
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	impossible de lire ce fichier PostScript ({why}) : enregistrez-le au format PDF ou SVG dans l’application qui l’a créé
 @msg	this file's PostScript couldn't be read ({why}): {what}	impossible de lire le PostScript de ce fichier ({why}) : {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	ce format ne contient qu’un plan de travail : exportez-en plusieurs au format PDF ou avec document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	c’est un dessin DWG, qui ne peut pas être lu : enregistrez-le depuis l’application de CAO au format DXF ASCII et ouvrez ce fichier
