@@ -309,9 +309,11 @@ fn transformed(mut node: Node, m: Affine) -> Node {
 /// `[x, y, width, height]` with a positive size.
 fn rect_param(p: &Value) -> Result<Option<Rect>> {
     let Some(v) = p.get("rect") else { return Ok(None) };
-    let n: Vec<f64> = v.as_array().map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
-    match n[..] {
-        [x, y, w, h] if w > 0.0 && h > 0.0 => Ok(Some(Rect::new(x, y, x + w, y + h))),
+    // Reject invalid components instead of dropping them: filtering would turn a malformed
+    // five-element box such as [0, "bad", 10, 40, 50] into a different valid rectangle.
+    let numbers = v.as_array().filter(|a| a.len() == 4).and_then(|a| a.iter().map(Value::as_f64).collect::<Option<Vec<_>>>());
+    match numbers.as_deref() {
+        Some([x, y, w, h]) if *w > 0.0 && *h > 0.0 => Ok(Some(Rect::new(*x, *y, x + w, y + h))),
         _ => Err(bad(PLACE, "rect must be [x, y, width, height] with a positive width and height")),
     }
 }
@@ -343,6 +345,9 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
     let replace = bool_or(p, "replace", false);
     let template = bool_or(p, "template", false);
     let at = point_param(p, "at");
+    if p.get("at").is_some() && (at.is_none() || p["at"].as_array().is_none_or(|a| a.len() != 2)) {
+        return Err(bad(PLACE, "at must be [x, y] with two numeric coordinates"));
+    }
     let rect = rect_param(p)?;
     if replace && (template || at.is_some() || rect.is_some()) {
         return Err(bad(PLACE, "replace keeps the replaced object's place and transform: drop template, at and rect"));
