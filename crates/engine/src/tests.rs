@@ -993,3 +993,30 @@ fn malformed_anchor_selection_never_replaces_or_partially_changes_selection() {
     assert!(s.doc().unwrap().selection.contains(a));
     assert!(!s.doc().unwrap().selection.contains(b));
 }
+
+#[test]
+fn path_commands_reject_bad_anchors_before_modifying_geometry() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 50.0, 30.0);
+    let original_points: Vec<_> = s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect();
+    let history = s.doc().unwrap().history.undo.len();
+    let valid = json!({"x": 10, "y": 20});
+    for invalid in [
+        json!({"x": "bad", "y": 40}),
+        json!({"x": 50}),
+        json!({"x": 50, "y": 40, "in": [0]}),
+        json!({"x": 50, "y": 40, "out": [1, "bad"]}),
+        json!({"x": 50, "y": 40, "smooth": "yes"}),
+    ] {
+        let anchors = json!([valid.clone(), invalid]);
+        assert!(s.execute("path.create", &json!({"anchors": anchors})).is_err(), "{anchors}");
+        assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": anchors}]})).is_err(), "{anchors}");
+        let points: Vec<_> = s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect();
+        assert_eq!(points, original_points);
+        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    }
+    assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": []}, {"closed": true}]})).is_err());
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": [{"x": 0, "y": 0}, {"x": 30, "y": 40}], "closed": false}]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchor_count(), 2);
+}

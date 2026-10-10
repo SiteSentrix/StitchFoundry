@@ -396,6 +396,41 @@ pub(crate) fn anchor_from_json(v: &Value) -> Option<Anchor> {
     Some(a)
 }
 
+/// Strictly parse command-provided anchors: dropping invalid entries would change geometry.
+pub(crate) fn checked_anchor_from_json(v: &Value, cmd: &str) -> Result<Anchor> {
+    let coord = |key: &str| {
+        v.get(key)
+            .and_then(Value::as_f64)
+            .filter(|n| n.is_finite())
+            .ok_or_else(|| bad(cmd, format!("anchor `{key}` must be a finite number")))
+    };
+    let p = Point::new(coord("x")?, coord("y")?);
+    let handle = |key: &str| -> Result<Point> {
+        match v.get(key) {
+            None | Some(Value::Null) => Ok(p),
+            Some(value) => {
+                let Some([x, y]) = value.as_array().map(Vec::as_slice) else {
+                    return Err(bad(cmd, format!("anchor `{key}` must be [x, y]")));
+                };
+                let (Some(x), Some(y)) = (x.as_f64(), y.as_f64()) else {
+                    return Err(bad(cmd, format!("anchor `{key}` must contain two numbers")));
+                };
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(bad(cmd, format!("anchor `{key}` must contain finite numbers")));
+                }
+                Ok(Point::new(x, y))
+            }
+        }
+    };
+    let mut anchor = Anchor::with_handles(p, handle("in")?, handle("out")?);
+    match v.get("smooth") {
+        None | Some(Value::Null) | Some(Value::Bool(false)) => {}
+        Some(Value::Bool(true)) => anchor.kind = AnchorKind::Smooth,
+        Some(_) => return Err(bad(cmd, "anchor `smooth` must be a boolean")),
+    }
+    Ok(anchor)
+}
+
 fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
     let path = if let Some(d) = str_param(p, "d") {
         let bp = vectorcraft_geom::BezPath::from_svg(d).map_err(|e| bad("path.create", format!("bad path data: {e}")))?;
@@ -406,8 +441,8 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
             .and_then(Value::as_array)
             .ok_or_else(|| bad("path.create", "missing anchors"))?
             .iter()
-            .filter_map(anchor_from_json)
-            .collect();
+            .map(|a| checked_anchor_from_json(a, "path.create"))
+            .collect::<Result<_>>()?;
         if anchors.is_empty() {
             return Err(bad("path.create", "need at least one anchor"));
         }

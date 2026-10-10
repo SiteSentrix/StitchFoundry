@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath, Vec2};
 
-use super::create::anchor_from_json;
+use super::create::{anchor_from_json, checked_anchor_from_json};
 use super::*;
 use crate::EngineError;
 
@@ -217,12 +217,21 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let data = PathData::new(
         subs.iter()
             .map(|sp| {
-                SubPath::new(
-                    sp.get("anchors").and_then(Value::as_array).map(|a| a.iter().filter_map(anchor_from_json).collect()).unwrap_or_default(),
-                    bool_or(sp, "closed", false),
-                )
+                let anchors = sp
+                    .get("anchors")
+                    .and_then(Value::as_array)
+                    .ok_or_else(|| bad("path.setAnchors", "each subpath needs an anchors array"))?
+                    .iter()
+                    .map(|a| checked_anchor_from_json(a, "path.setAnchors"))
+                    .collect::<Result<Vec<_>>>()?;
+                let closed = match sp.get("closed") {
+                    None | Some(Value::Null) => false,
+                    Some(Value::Bool(v)) => *v,
+                    Some(_) => return Err(bad("path.setAnchors", "closed must be a boolean")),
+                };
+                Ok(SubPath::new(anchors, closed))
             })
-            .collect(),
+            .collect::<Result<Vec<_>>>()?,
     );
     s.edit("Reshape", |d, _| {
         *path_mut(d, id)? = data;
