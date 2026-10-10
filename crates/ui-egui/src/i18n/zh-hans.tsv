@@ -3517,6 +3517,7 @@ axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	两者
 	Drag to move	拖动以移动
+	Drag to move out of the set	拖动以移出该组合
 	Drag to float as a toolbar	拖动使其浮动为工具栏
 	Put back in the toolbar	放回工具栏
 	Float Panel	浮动面板

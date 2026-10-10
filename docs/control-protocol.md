@@ -260,13 +260,26 @@ Floating panels: dragging a dock tab, a panel icon or a popped-out panel's title
 inside the window, and the strip right of the dock's tabs floats the whole Properties | Layers | Libraries group. A
 floating group moves by its title bar (or the strip right of its tabs); a tab dragged out of it floats on its own;
 dropped on another group's title bar or tabs it stacks with that group, and dropped on the dock (lit up while the
-pointer is over it) or closed with its × its panels go back to the tabbed group or the icon column.
-`window.panel.float {panel, x?, y?, onto?, group?}` floats a panel (with `group`, its whole group) with its top-left
-corner at `x`, `y` (window points; default cascaded), or stacks it with the floating group holding `onto`;
-`window.panel.dock {panel, group?}` puts it back. `panel` takes the `window.panel` ids and labels, and `"tools"` for
+pointer is over it) or closed with its × its panels go back to the tabbed group or the icon column. Dropped on the upper or
+lower half of another group, floating or docked (a line shows where), a group joins it in a set right above or below
+it: the groups stack top to bottom, each
+showing one of its panels, and move together by the top group's title bar, whose × docks them all; a group dragged by
+its tab strip (a lone panel's tab or the strip right of the tabs) leaves the set. A double-click on a tab collapses a
+group to its tabs, and another expands it. Dropped on the left edge of the icon column or of a dock column, a set
+docks as a new dock column there: its groups stack in it as in a floating set, take groups dropped on their edges and
+tabs, and leave it dragged by their tab strip; the strip along the column's top floats the whole column again, and
+its × puts its panels back where they live.
+`window.panel.float {panel, x?, y?, onto?, below?, above?, group?, collapsed?}` floats a panel (with `group`, its whole
+group) with its top-left corner at `x`, `y` (window points; default cascaded), or stacks it as a tab with the floating
+group holding `onto`, or puts its group in a set right `below` or `above` the group holding that panel; `collapsed`
+collapses or expands its group;
+`window.panel.dock {panel, group?, column?}` puts it back, or with `column` (`true`, or the place: 1 next to the icon
+column, counting left) docks its group and set as a dock column; `window.panel.float` on a docked panel floats its
+column. `panel` takes the `window.panel` ids and labels, and `"tools"` for
 the Tools panel, which floats by its title bar and docks on the window's left edge. `window.panel` on a floating
-panel shows its tab. `ui.floating_panels` in `ui.inspect` lists the groups (panel ids, the index of the tab shown,
-the top-left corner) and `ui.toolbar_pos` the Tools panel's corner (null: docked); both are saved with the
+panel shows its tab (expanding its group). `ui.floating_panels` in `ui.inspect` lists the groups (panel ids, the
+index of the tab shown, the top-left corner, `column`: the set it is stacked in, top to bottom in list order,
+`collapsed`, and `docked`: the dock column it stands in) and `ui.toolbar_pos` the Tools panel's corner (null: docked); both are saved with the
 preferences and in user workspaces (the built-in workspaces dock everything), and a corner saved on a bigger window
 is clamped into this one when drawn. Floating panels stay inside the app window (no separate OS windows).
 
