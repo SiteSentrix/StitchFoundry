@@ -936,6 +936,14 @@ fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Document) -> u
         return 0;
     }
     let mut with = view.difference(doc, rect).any;
+    // Taking a text object out changes only what is drawn in its box. When the art would still
+    // differ from the page by more than `compare` allows with every candidate gone, the layers
+    // aren't used whatever is pruned: don't draw them again for each one (#758).
+    let margin = OUTLINE_REACH + 1.0;
+    let boxes: f64 = found.iter().filter_map(|(_, b)| *b).map(|b| b.inflate(margin, margin).intersect(rect).area().max(0.0)).sum();
+    if with - boxes / rect.area().max(1e-9) > MAX_DIFFERENCE {
+        return 0;
+    }
     let mut removed = 0;
     for (id, bounds) in found {
         if bounds.is_none_or(|b| b.intersect(rect).is_zero_area()) {
