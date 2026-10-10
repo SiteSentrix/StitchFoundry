@@ -3,6 +3,11 @@
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). One JSON request per line:
 `{"id": 1, "method": "ui.inspect", "params": {}}` → `{"id": 1, "ok": true, "result": {...}}` or `{"id":1,"ok":false,"error":"..."}`.
 
+Set `VECTORCRAFT_CONFIG_DIR` to a dedicated directory for an isolated native test profile. Preferences,
+logs, recovery and user libraries then use that root, without importing the legacy DrawCraft profile.
+An unset override preserves the usual platform paths and legacy migration; an explicitly empty override
+disables those paths. `VECTORCRAFT_NO_PREFS` continues to disable preference reads and writes.
+
 **Only requests are read.** Every line must be a JSON object with a string `method` (`id` and `params`
 are optional; blank lines are skipped). Anything else gets one error reply
 (`{"ok": false, "error": "… closing the connection"}`) and the server **closes the connection**, so
@@ -676,3 +681,34 @@ drags its points (a press on a point focuses it, and a press on one of the focus
 handle); a Mesh tool click inside a mesh envelope adds a row and a column. While an envelope or its content is
 selected the Control bar shows its controls (Edit Envelope / Edit Contents, warp style, orientation, bend and
 distortions or mesh rows and columns, Reset, Envelope Options); each runs an `object.envelope.*` command.
+
+## Shared panel docking
+
+Panel arrangements support tab grouping and reordering, horizontal and vertical splits,
+and movable, resizable floating groups inside the application window. Drag a panel tab,
+or use its context menu. Floating groups remain within the application viewport.
+
+The shared layout begins with the existing workspace on the first docking operation.
+Workspace saves retain its groups, active tabs, split sizes, floating geometry, and the
+positions of hidden panels. Resetting a built-in workspace restores its default dock.
+
+- `window.panel.move {panel, anchor, zone?, before?}` moves a panel into the target group.
+  `zone` is `tab` (default), `center`, `left`, `right`, `top`, or `bottom`; `before` reorders
+  tabs by panel ID. The destination must already be visible.
+- `window.panel.float {panel, x?, y?, width?, height?}` detaches a panel.
+- `window.panel.dock {panel, anchor?, zone?, before?}` returns a panel to its previous
+  dock placement when possible, or to the supplied destination.
+- `window.panel.activate {panel}` reveals and selects a panel, restoring its saved
+  position when possible. `window.panel.close {panel}` hides it.
+
+Panel IDs are stable across themes. Invalid IDs, non-finite or invalid geometry, and
+invalid destinations return an error without changing the arrangement.
+
+`window.panel.layout {action}` also accepts the shared, externally tagged action schema.
+For example, `{"action":{"MoveFloating":{"panel":"properties","rect":[44,66,360,450]}}}`
+updates a floating group's position and size; `{"action":{"ResizeSplit":{"path":[],"size":{"Ratio":0.35}}}}`
+resizes the root divider (`false`/`true` path entries select first/second children).
+`Move` with `placement: {"Tab":{"before":"swatches"}}` reorders tabs, and
+`SetStackOpen {panel,open}` / `ResizeStack {panel,height}` control accordion entries.
+The UI dispatches these same commands. Unknown panel IDs, invalid geometry, and stale
+split paths return an error without changing the workspace.

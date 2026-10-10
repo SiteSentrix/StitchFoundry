@@ -35,7 +35,7 @@ const TRAVEL: f32 = 4.0;
 
 /// What a move carries.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Moving {
+pub(crate) enum Moving {
     /// The floating group holding this panel.
     Panel(&'static str),
     /// The floating Tools panel.
@@ -44,16 +44,17 @@ enum Moving {
 
 /// A move in progress: what moves, where the pointer holds it from its top-left corner, and where
 /// the press began.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct Move {
     what: Moving,
     grab: Vec2,
     from: Pos2,
+    original: UiState,
 }
 
 /// Where a moved group or Tools panel lands.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Drop {
+pub(crate) enum Drop {
     /// Back in the dock (the Tools panel: at the window's left edge).
     Dock,
     /// Stacked with the floating group holding this panel.
@@ -172,9 +173,9 @@ pub fn clamp(pos: [f32; 2], size: Vec2, screen: Rect) -> Pos2 {
 }
 
 /// Start moving `what` with the pointer, held `grab` from its top-left corner.
-fn start(ctx: &egui::Context, what: Moving, grab: Vec2) {
+fn start(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, grab: Vec2) {
     let Some(from) = ctx.input(|i| i.pointer.press_origin().or(i.pointer.interact_pos())) else { return };
-    ctx.data_mut(|d| d.insert_temp(move_id(), Move { what, grab, from }));
+    ctx.data_mut(|d| d.insert_temp(move_id(), Move { what, grab, from, original: app.ui.clone() }));
 }
 
 /// Where the pointer holds a group torn off by a press `left` points right of where the group's
@@ -187,9 +188,25 @@ pub(crate) fn strip_grab(ctx: &egui::Context, left: f32) -> Vec2 {
 /// Float `ids` under the pointer, held `grab` from the new group's top-left corner, and carry on
 /// moving them with the pointer (a tab or group dragged out of the dock or out of its group).
 pub(crate) fn tear(app: &mut VectorcraftApp, ctx: &egui::Context, ids: &[&'static str], active: &'static str, grab: Vec2) {
+    // A restored popout may retain its drag response in the cancellation frame. Do not
+    // immediately tear it out again after track restored the gesture's original layout.
+    if ctx.input(|input| !input.focused || input.key_pressed(egui::Key::Escape)) {
+        return;
+    }
     let Some(at) = ctx.input(|i| i.pointer.interact_pos()) else { return };
-    float(&mut app.ui, ids, active, at - grab);
-    start(ctx, Moving::Panel(active), grab);
+    let original = app.ui.clone();
+    let pos = at - grab;
+    if let Err(error) = app.run("window.panel.float", json!({"panel":active,"group":ids.len() > 1,"x":pos.x,"y":pos.y})) {
+        app.ui.status = error;
+        return;
+    }
+    start(app, ctx, Moving::Panel(active), grab);
+    ctx.data_mut(|data| {
+        if let Some(mut drag) = data.get_temp::<Move>(move_id()) {
+            drag.original = original;
+            data.insert_temp(move_id(), drag);
+        }
+    });
 }
 
 /// The Tools panel's title bar was pressed (`title`, the panel's bounds `bounds`): docked, dragging
@@ -197,27 +214,29 @@ pub(crate) fn tear(app: &mut VectorcraftApp, ctx: &egui::Context, ids: &[&'stati
 pub(crate) fn drag_tools(app: &mut VectorcraftApp, ctx: &egui::Context, title: &egui::Response, bounds: Rect, floating: Option<Pos2>) {
     let Some(at) = ctx.input(|i| i.pointer.interact_pos()) else { return };
     match floating {
-        Some(pos) if title.drag_started() => start(ctx, Moving::Tools, at - pos),
+        Some(pos) if title.drag_started() => start(app, ctx, Moving::Tools, at - pos),
         None if title.dragged() && !bounds.contains(at) => {
             // Held where the press grabbed the title bar.
             let grab = ctx.input(|i| i.pointer.press_origin()).map_or(vec2(10.0, 7.0), |p| p - bounds.min);
             let p = at - grab;
             app.ui.toolbar_pos = Some([p.x, p.y]);
-            start(ctx, Moving::Tools, grab);
+            start(app, ctx, Moving::Tools, grab);
         }
         _ => {}
     }
 }
 
 /// Where the pointer at `at` would drop `what`, and the zone that lights up for it.
-fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2) -> Option<(Drop, Rect)> {
+pub(crate) fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2) -> Option<(Drop, Rect)> {
     let zone = |id: Id| ctx.data(|d| d.get_temp::<Rect>(id)).filter(|r| r.contains(at));
     let Moving::Panel(id) = what else { return zone(tools_zone_id()).map(|r| (Drop::Dock, r)) };
     let own = group_of(&app.ui, id);
     // Another group's title bar and tabs stack with it.
     for (i, g) in app.ui.floating_panels.iter().enumerate() {
         let Some((first, _)) = g.panels.first().and_then(|p| panel(p)).filter(|_| Some(i) != own) else { continue };
-        let head = ctx.memory(|m| m.area_rect(area_id(first))).map(|r| Rect::from_min_size(r.min, vec2(r.width(), 1.0 + TITLE + STRIP)));
+        let area =
+            if app.ui.docking.is_some() { Id::new("vectorcraft-panel-docking").with(("floating", &first.to_string())) } else { area_id(first) };
+        let head = ctx.memory(|m| m.area_rect(area)).map(|r| Rect::from_min_size(r.min, vec2(r.width(), 1.0 + TITLE + STRIP)));
         if let Some(head) = head.filter(|h| h.contains(at)) {
             return Some((Drop::Stack(first), head));
         }
@@ -232,7 +251,7 @@ fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Moving, at: Pos2
 }
 
 /// Light up a drop zone: over the docked panels, under the floating ones (the moved one too).
-fn highlight(ctx: &egui::Context, zone: Rect) {
+pub(crate) fn highlight(ctx: &egui::Context, zone: Rect) {
     let t = Tokens::get(ctx);
     let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Background, Id::new("floating-drop-zone")));
     painter.rect(zone.shrink(1.0), CornerRadius::same(2), t.accent.gamma_multiply(0.2), Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
@@ -242,6 +261,21 @@ fn highlight(ctx: &egui::Context, zone: Rect) {
 /// follows the pointer and the zone it would drop on lights up; the release drops it there.
 pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(m) = ctx.data(|d| d.get_temp::<Move>(move_id())) else { return };
+    if m.original.docking_generation != app.ui.docking_generation {
+        ctx.data_mut(|data| data.remove::<Move>(move_id()));
+        return;
+    }
+    if ctx.input(|input| !input.focused || input.key_pressed(egui::Key::Escape)) {
+        app.ui.docking = m.original.docking;
+        app.ui.docking_hidden = m.original.docking_hidden;
+        app.ui.docking_icons = m.original.docking_icons;
+        app.ui.floating_panels = m.original.floating_panels;
+        app.ui.open_panel = m.original.open_panel;
+        app.ui.dock_tab = m.original.dock_tab;
+        app.ui.toolbar_pos = m.original.toolbar_pos;
+        ctx.data_mut(|data| data.remove::<Move>(move_id()));
+        return;
+    }
     let at = ctx.input(|i| i.pointer.interact_pos());
     let target = at.filter(|at| at.distance(m.from) > TRAVEL).and_then(|at| drop_target(app, ctx, m.what, at));
     if ctx.input(|i| i.pointer.primary_down()) {
@@ -250,6 +284,11 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
             && p.y.is_finite()
         {
             match m.what {
+                Moving::Panel(id) if app.ui.docking.is_some() => {
+                    if let Err(error) = app.run("window.panel.float", json!({"panel":id,"group":true,"x":p.x,"y":p.y})) {
+                        app.ui.status = error;
+                    }
+                }
                 Moving::Panel(id) => {
                     if let Some(g) = group_of(&app.ui, id).and_then(|i| app.ui.floating_panels.get_mut(i)) {
                         g.pos = [p.x, p.y];
@@ -270,6 +309,16 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.toolbar_pos = None;
         return;
     };
+    if app.ui.docking.is_some() {
+        let (command, params) = match drop {
+            Drop::Dock => ("window.panel.dock", json!({"panel":id,"group":true})),
+            Drop::Stack(onto) => ("window.panel.float", json!({"panel":id,"group":true,"onto":onto})),
+        };
+        if let Err(error) = app.run(command, params) {
+            app.ui.status = error;
+        }
+        return;
+    }
     let Some(g) = group_of(&app.ui, id).and_then(|i| app.ui.floating_panels.get(i)) else { return };
     let ids = ids_of(g);
     let active = ids.get(g.active).copied().unwrap_or(id);
@@ -300,6 +349,9 @@ enum Action {
 /// The floating groups, each a stack of tabs under a title bar. Hidden with the dock (Tab,
 /// Presentation Mode).
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if app.ui.docking.is_some() {
+        return;
+    }
     if app.ui.floating_panels.is_empty() || !app.ui.dock || app.ui.screen_mode >= 3 {
         return;
     }
@@ -357,25 +409,25 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 // Tab strip: a click shows a tab, a drag out of the strip floats it on its own.
                 let (strip, _) = ui.allocate_exact_size(vec2(width, STRIP), Sense::hover());
                 ui.painter().rect_filled(strip, 0.0, t.panel_darker);
-                let mut left = strip.left();
-                for (k, (&id, galley)) in ids.iter().zip(tabs).enumerate() {
-                    let r = Rect::from_min_size(pos2(left, strip.top()), vec2(galley.size().x + 24.0, STRIP));
-                    left = r.right();
-                    let resp = ui.interact(r, ui.id().with(("tab", id)), Sense::click_and_drag());
-                    if id == active {
-                        ui.painter().rect_filled(r, 0.0, t.panel);
-                    }
-                    ui.painter().galley(pos2(r.left() + 12.0, r.center().y - galley.size().y / 2.0), galley, t.text);
+                let menu = Rect::from_center_size(strip.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0));
+                let tab_area = Rect::from_min_max(strip.min, pos2((menu.left() - 4.0).max(strip.left()), strip.bottom()));
+                let names: Vec<_> = ids.iter().map(|&id| (id, panel(id).map_or(id, |(_, label)| label))).collect();
+                let selected = ids.iter().position(|&id| id == active).unwrap_or(0);
+                let out = dock::panel_tabs(ui, "tab", tab_area, &names, selected, theme::semibold(12.0), false);
+                for (k, resp) in out.responses {
+                    let Some(&id) = ids.get(k) else { continue };
                     if resp.clicked() {
                         action = Some(Action::Activate(gi, k));
                     } else if lone && resp.drag_started() {
                         action = Some(Action::Move(id, pos));
                     } else if !lone && resp.dragged() && pointer.is_some_and(|p| !strip.expand(4.0).contains(p)) {
-                        action = Some(Action::Tear(id, r.left()));
+                        action = Some(Action::Tear(id, resp.rect.left()));
                     }
                 }
-                let menu = Rect::from_center_size(strip.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0));
-                let rest = Rect::from_min_max(pos2(left, strip.top()), pos2(menu.left() - 4.0, strip.bottom()));
+                if let Some(k) = out.picked {
+                    action = Some(Action::Activate(gi, k));
+                }
+                let rest = Rect::from_min_max(pos2(out.right, strip.top()), pos2(menu.left() - 4.0, strip.bottom()));
                 if rest.width() > 0.0 {
                     let resp = ui.interact(rest, ui.id().with("strip"), Sense::drag());
                     if resp.drag_started() {
@@ -407,7 +459,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 g.pos = [pos.x, pos.y];
             }
             if let Some(at) = pointer {
-                start(ctx, Moving::Panel(id), at - pos);
+                start(app, ctx, Moving::Panel(id), at - pos);
             }
         }
         Some(Action::Tear(id, left)) => tear(app, ctx, &[id], id, strip_grab(ctx, left)),
@@ -528,7 +580,9 @@ mod tests {
         fn frame(&mut self, events: Vec<Event>) {
             self.time += 0.05;
             let screen = Rect::from_min_size(Pos2::ZERO, self.screen);
-            let raw = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), events, ..Default::default() };
+            let focused =
+                events.iter().rev().find_map(|event| if let Event::WindowFocused(focused) = event { Some(*focused) } else { None }).unwrap_or(true);
+            let raw = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), focused, events, ..Default::default() };
             let app = &mut self.app;
             self.ctx
                 .run_ui(raw, |ui| {
@@ -575,11 +629,20 @@ mod tests {
 
         /// The floating group whose first panel is `first`, as drawn.
         fn group(&self, first: &str) -> Rect {
-            self.ctx.memory(|m| m.area_rect(area_id(first))).unwrap()
+            let id = if self.app.ui.docking.is_some() {
+                Id::new("vectorcraft-panel-docking").with(("floating", &first.to_string()))
+            } else {
+                area_id(first)
+            };
+            self.ctx.memory(|m| m.area_rect(id)).unwrap()
         }
 
         /// A point on a floating group's title bar (left of its ×).
         fn title(&self, first: &str) -> Pos2 {
+            if self.app.ui.docking.is_some() {
+                let rect = self.group(first);
+                return rect.left_top() + vec2(6.0, 16.0);
+            }
             let r = self.group(first);
             pos2(r.left() + 30.0, r.top() + 1.0 + TITLE / 2.0)
         }
@@ -593,15 +656,29 @@ mod tests {
             r
         }
 
+        fn shared_tab(&self, panel: &str) -> Rect {
+            self.ctx.read_response(Id::new("vectorcraft-panel-docking").with(("tab", &panel.to_string()))).unwrap().rect
+        }
+
         /// The dock's tabs, left to right.
         fn dock_tabs(&self) -> Vec<Rect> {
+            if let Some(layout) = &self.app.ui.docking {
+                let root = craft_ui::docking::Layout { root: layout.root.clone(), floating: Vec::new() };
+                return root
+                    .panels()
+                    .into_iter()
+                    .filter_map(|panel| {
+                        self.ctx.read_response(Id::new("vectorcraft-panel-docking").with(("tab", panel))).map(|response| response.rect)
+                    })
+                    .collect();
+            }
             let dock = self.temp_rect(dock_rect_id());
             self.widgets(|r| r.height() == 32.0 && dock.contains_rect(r))
         }
 
         /// The icon column's panel icons, top to bottom.
         fn icons(&self) -> Vec<Rect> {
-            let dock = self.temp_rect(dock_rect_id());
+            let dock = self.temp_rect(if self.app.ui.docking.is_some() { icons_rect_id() } else { dock_rect_id() });
             self.widgets(|r| r.size() == vec2(30.0, 30.0) && dock.contains_rect(r))
         }
 
@@ -614,30 +691,19 @@ mod tests {
     fn a_dock_tab_dragged_out_floats_and_dropped_on_the_dock_docks_again() {
         let mut h = Harness::new();
         let tabs = h.dock_tabs();
-        assert_eq!(tabs.len(), 3, "Properties, Layers, Libraries: {tabs:?}");
+        assert_eq!(tabs.len(), 3);
         let to = pos2(600.0, 400.0);
         h.drag(tabs[1].center(), to);
-        assert_eq!(h.groups(), [["layers"]], "Layers floats");
-        assert!(h.group("layers").contains(to), "under the pointer: {:?}", h.group("layers"));
-        assert_eq!(h.dock_tabs().len(), 2, "its tab left the dock");
+        assert_eq!(h.groups(), [["layers"]]);
+        assert!(h.group("layers").contains(to));
+        assert_eq!(h.dock_tabs().len(), 2);
         assert_eq!(h.app.ui.dock_tab, DockTab::Properties);
-        // A click on its title bar moves nothing, even over the dock.
-        let dock = h.temp_rect(dock_rect_id());
-        h.app.run("window.panel.float", json!({"panel": "layers", "x": dock.left() + 10.0, "y": 300})).unwrap();
-        h.settle();
         h.click(h.title("layers"));
-        assert_eq!(h.groups(), [["layers"]], "a click doesn't dock it");
-        // Dragged by its title bar onto the dock, the dock lights up, and the release docks it.
-        h.app.run("window.panel.float", json!({"panel": "layers", "x": 500, "y": 300})).unwrap();
-        h.settle();
-        let over = dock.center();
-        h.hold(h.title("layers"), over);
-        assert!(h.group("layers").contains(over), "the group follows the pointer");
-        let target = drop_target(&h.app, &h.ctx, Moving::Panel("layers"), over);
-        assert_eq!(target, Some((Drop::Dock, dock)), "the dock is the drop zone, lit whole: its tab comes back");
-        h.release(over);
-        assert!(h.groups().is_empty(), "docked: {:?}", h.groups());
-        assert_eq!((h.dock_tabs().len(), h.app.ui.dock_tab), (3, DockTab::Layers), "back in the dock, shown");
+        assert_eq!(h.groups(), [["layers"]], "a click only activates the floating tab");
+        let over = h.shared_tab("properties").center();
+        h.drag(h.title("layers"), over);
+        assert!(h.groups().is_empty());
+        assert_eq!((h.dock_tabs().len(), h.app.ui.dock_tab), (3, DockTab::Layers));
     }
 
     #[test]
@@ -652,7 +718,9 @@ mod tests {
         assert!(column.width() < 40.0, "only the icon column is left: {column:?}");
         // Its × puts them back.
         let g = h.group("properties");
-        h.click(pos2(g.right() - 11.0, g.top() + 1.0 + TITLE / 2.0));
+        let close =
+            if h.app.ui.docking.is_some() { pos2(g.right() - 36.0, g.top() + 16.0) } else { pos2(g.right() - 11.0, g.top() + 1.0 + TITLE / 2.0) };
+        h.click(close);
         assert!(h.groups().is_empty());
         assert_eq!(h.dock_tabs().len(), 3);
     }
@@ -668,32 +736,40 @@ mod tests {
         assert_eq!(count, crate::state::ICON_PANEL_GROUPS.iter().map(|g| g.len()).sum::<usize>(), "every group's icons are drawn");
         h.drag(icons[2].center(), pos2(500.0, 250.0));
         assert_eq!(h.groups(), [["swatches"]]);
-        assert_eq!(h.icons().len(), count - 1, "its icon left the column");
-        h.drag(h.icons()[0].center(), pos2(500.0, 650.0));
+        assert_eq!(h.icons().len(), count - 1);
+        let separate = pos2(900.0, 650.0);
+        assert!(!h.group("swatches").contains(separate));
+        h.drag(h.icons()[0].center(), separate);
         assert_eq!(h.groups(), [["swatches"], ["color"]]);
-        // Color's title bar dropped on the Swatches group's tabs stacks them.
-        let onto = h.group("swatches").left_top() + vec2(150.0, 1.0 + TITLE + STRIP / 2.0);
-        h.hold(h.title("color"), onto);
-        assert_eq!(drop_target(&h.app, &h.ctx, Moving::Panel("color"), onto).map(|t| t.0), Some(Drop::Stack("swatches")));
-        h.release(onto);
+        let onto = h.shared_tab("swatches").right_center() - vec2(3.0, 0.0);
+        h.drag(h.title("color"), onto);
         assert_eq!(h.groups(), [["swatches", "color"]]);
-        assert_eq!(h.app.ui.floating_panels[0].active, 1, "showing the panel dropped on it");
-        // A click shows a tab; a tab dragged out of the strip floats on its own again.
-        let g = h.group("swatches");
-        let tabs = h.widgets(|r| r.height() == STRIP && g.contains_rect(r));
-        assert_eq!(tabs.len(), 3, "two tabs and the strip right of them: {tabs:?}");
-        h.click(tabs[0].center());
+        assert_eq!(h.app.ui.floating_panels[0].active, 1);
+        h.click(h.shared_tab("swatches").center());
         assert_eq!(h.app.ui.floating_panels[0].active, 0);
         let to = pos2(900.0, 500.0);
-        h.drag(tabs[1].center(), to);
+        h.drag(h.shared_tab("color").center(), to);
         assert_eq!(h.groups(), [["swatches"], ["color"]]);
         assert!(h.group("color").contains(to));
-        // Window › Color shows it where it floats; Dock Panel puts it back.
         assert_eq!(h.app.run("window.panel", json!({"panel": "Color"})).unwrap(), json!({"floating": ["color"]}));
         assert_eq!(crate::menus::checked(&h.app, "window.panel", &json!({"panel": "color"})), Some(true));
         h.app.run("window.panel.dock", json!({"panel": "color"})).unwrap();
         h.settle();
+        assert!(h.groups().iter().all(|group| !group.contains(&"color")));
         assert_eq!(h.icons().len(), count - 1, "Color is back in the column");
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("color"));
+    }
+
+    #[test]
+    fn an_icon_panel_can_be_dropped_into_another_docked_tab_group() {
+        let mut h = Harness::new();
+        h.drag(h.icons()[0].center(), pos2(500.0, 400.0));
+        assert_eq!(h.groups(), [["color"]]);
+        h.drag(h.shared_tab("color").center(), h.shared_tab("layers").center());
+        assert!(h.groups().is_empty());
+        assert!(h.app.ui.docking.as_ref().unwrap().contains(&"color".into()));
+        assert!(h.app.ui.open_panel.is_none(), "the actual shared group owns Color");
+        assert_eq!(h.dock_tabs().len(), 4);
     }
 
     #[test]
@@ -727,6 +803,40 @@ mod tests {
         // Its panel menu docks it again.
         h.app.run("window.panel.dock", json!({"panel": "swatches"})).unwrap();
         assert!(h.groups().is_empty());
+    }
+
+    #[test]
+    fn popped_out_title_drag_cancels_on_escape_focus_loss_and_workspace_change() {
+        for reason in ["escape", "focus", "workspace"] {
+            let mut h = Harness::new();
+            h.app.run("window.panel", json!({"panel":"swatches"})).unwrap();
+            h.settle();
+            let original = h.app.ui.clone();
+            let flyout = h.ctx.memory(|m| m.area_rect(Id::new("icon-panel"))).unwrap();
+            let to = pos2(500.0, 400.0);
+            h.hold(flyout.left_top() + vec2(20.0, 13.0), to);
+            assert!(h.app.ui.floating_panels.iter().any(|g| g.panels.contains(&"swatches".into())));
+            match reason {
+                "escape" => h.frame(vec![Event::Key {
+                    key: egui::Key::Escape,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Default::default(),
+                }]),
+                "focus" => h.frame(vec![Event::WindowFocused(false)]),
+                _ => {
+                    crate::workspaces::apply(&mut h.app.ui, &crate::workspaces::Workspace::default());
+                    h.frame(vec![Event::PointerMoved(pos2(650.0, 450.0))]);
+                }
+            }
+            assert!(h.ctx.data(|d| d.get_temp::<Move>(move_id())).is_none(), "{reason}: stale gesture removed");
+            assert!(h.app.ui.docking.is_none(), "{reason}: original/selected workspace retained");
+            assert!(h.app.ui.floating_panels.is_empty(), "{reason}: no stale floating group");
+            if reason != "workspace" {
+                assert_eq!(h.app.ui.open_panel, original.open_panel);
+            }
+        }
     }
 
     #[test]

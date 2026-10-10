@@ -4039,3 +4039,28 @@ effect	Regular	Normale
 	Define a variable first	Definisci prima una variabile
 	Text	Testo
 	Visibility	Visibilità
+# Shared panel docking
+	Activate Panel	Attiva pannello
+	Change Panel Layout	Modifica disposizione dei pannelli
+	Close Panel	Chiudi pannello
+	Move Panel	Sposta pannello
+	Group with	Raggruppa con
+	Resize panels	Ridimensiona pannelli
+	Resize panel window	Ridimensiona finestra del pannello
+@msg	Invalid panel layout; restored the default dock	La disposizione dei pannelli non è valida; è stato ripristinato l’ancoraggio predefinito
+@msg	action is required	action è obbligatorio
+@msg	anchor must name a registered panel	anchor deve indicare un pannello registrato
+@msg	before must name a panel	before deve indicare un pannello
+@msg	docking action contains an unknown panel or an excessive split path	L’azione di ancoraggio contiene un pannello sconosciuto o un percorso di divisioni troppo lungo
+@msg	group must be true or false	group deve essere true o false
+@msg	move requires a destination panel	Lo spostamento richiede un pannello di destinazione
+@msg	move requires an existing destination panel	Lo spostamento richiede un pannello di destinazione esistente
+@msg	onto must name a floating panel	onto deve indicare un pannello mobile
+@msg	panel group is empty	Il gruppo di pannelli è vuoto
+@msg	panel must name a registered panel	panel deve indicare un pannello registrato
+@msg	saved panel layout is invalid; reset the workspace first	La disposizione salvata dei pannelli non è valida; reimposta prima l’area di lavoro
+@msg	zone must be a string	zone deve essere una stringa
+@msg	zone must be tab, center, left, right, top or bottom	zone deve essere tab, center, left, right, top o bottom
+@msg	{key} must be a finite coordinate	{key} deve essere una coordinata finita
+@msg	x and y must be provided together	x e y devono essere forniti insieme
+@msg	invalid restored panel group	Il gruppo di pannelli ripristinato non è valido

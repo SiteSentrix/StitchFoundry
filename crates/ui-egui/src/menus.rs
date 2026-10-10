@@ -257,6 +257,20 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
     ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too)"),
     (
+        "window.panel.layout",
+        "Change Panel Layout",
+        "",
+        "{action} serialized docking action, including floating geometry, divider sizes and accordion state",
+    ),
+    (
+        "window.panel.move",
+        "Move Panel",
+        "",
+        "{panel, anchor, zone?: tab|center|left|right|top|bottom, before?: panel} group, split or reorder a panel",
+    ),
+    ("window.panel.activate", "Activate Panel", "", "{panel} show and select a panel in its current group"),
+    ("window.panel.close", "Close Panel", "", "{panel} hide a panel"),
+    (
         "window.panel.float",
         "Float Panel",
         "",
@@ -843,6 +857,9 @@ pub(crate) fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    if let Some(result) = crate::panel_docking::command(app, id, p) {
+        return Some(result);
+    }
     if id == "app.language" {
         let lang = p.get("lang").and_then(Value::as_str).unwrap_or("");
         let value = if lang.eq_ignore_ascii_case("auto") {
@@ -1448,6 +1465,9 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
             let canonical = normalize_panel(panel);
             match canonical.and_then(DockTab::from_id) {
+                _ if app.ui.docking.is_some() => canonical.is_some_and(|id| {
+                    app.ui.open_panel.as_deref() == Some(id) || app.ui.docking.as_ref().is_some_and(|layout| layout.contains(&id.to_string()))
+                }),
                 _ if canonical.is_some_and(|id| crate::floating::group_of(&app.ui, id).is_some()) => true,
                 Some(tab) if !app.ui.dock_collapsed => crate::floating::shown_tab(&app.ui) == Some(tab),
                 _ => canonical.is_some_and(|id| app.ui.open_panel.as_deref() == Some(id)),

@@ -3449,3 +3449,11 @@ effect	Soft	柔和
 	Define a variable first	請先定義一個變數
 	Text	文字
 	Visibility	可見性
+# Shared panel docking
+	Activate Panel	啟用面板
+	Change Panel Layout	變更面板配置
+	Close Panel	關閉面板
+	Move Panel	移動面板
+	Group with	群組至
+	Resize panels	調整面板大小
+	Resize panel window	調整面板視窗大小

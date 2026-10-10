@@ -277,6 +277,17 @@ pub struct UiState {
     /// Panels dragged out of the dock: each group floats as its own stack of tabs.
     #[serde(default)]
     pub floating_panels: Vec<FloatingPanels>,
+    /// Shared panel membership and placement; older preferences use the legacy dock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docking: Option<craft_ui::docking::Layout<String>>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub docking_hidden: std::collections::BTreeMap<String, craft_ui::docking::Location<String>>,
+    /// Panels whose saved return destination is the iconic rail.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub docking_icons: std::collections::BTreeSet<String>,
+    /// Invalidates in-flight gestures when a workspace is replaced.
+    #[serde(skip)]
+    pub docking_generation: u64,
     /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
     /// docked at the window's left edge.
     #[serde(default)]
@@ -483,6 +494,8 @@ impl UiState {
             f.tools.first().is_some_and(|k| seen.insert(k.clone()))
         });
         FloatingPanels::sanitize(&mut self.floating_panels, &mut self.toolbar_pos);
+        self.docking = self.docking.filter(crate::panel_docking::valid);
+        self.docking_icons.retain(|id| ICON_PANELS.iter().any(|entry| entry.0 == id));
         // Overrides that can't fire (modifier-only chords recorded by older versions, #487) give
         // the default back.
         self.shortcut_overrides.retain(|_, c| c.is_empty() || crate::shortcut_editor::normalize(c).is_some());
@@ -507,6 +520,10 @@ impl Default for UiState {
             slot_tool: Default::default(),
             floating_flyouts: vec![],
             floating_panels: vec![],
+            docking: None,
+            docking_hidden: Default::default(),
+            docking_icons: Default::default(),
+            docking_generation: 0,
             toolbar_pos: None,
             status_bar: true,
             dock: true,

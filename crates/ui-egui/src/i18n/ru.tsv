@@ -4035,3 +4035,28 @@ axis	Both	Оба
 	Define a variable first	Сначала определите переменную
 	Text	Текст
 	Visibility	Видимость
+# Shared panel docking
+	Activate Panel	Активировать панель
+	Change Panel Layout	Изменить расположение панелей
+	Close Panel	Закрыть панель
+	Move Panel	Переместить панель
+	Group with	Сгруппировать с
+	Resize panels	Изменить размер панелей
+	Resize panel window	Изменить размер окна панели
+@msg	Invalid panel layout; restored the default dock	Недопустимое расположение панелей; восстановлено расположение по умолчанию
+@msg	action is required	Необходимо указать action
+@msg	anchor must name a registered panel	anchor должен указывать зарегистрированную панель
+@msg	before must name a panel	before должен указывать панель
+@msg	docking action contains an unknown panel or an excessive split path	Действие прикрепления содержит неизвестную панель или слишком длинный путь разделений
+@msg	group must be true or false	group должен иметь значение true или false
+@msg	move requires a destination panel	Для перемещения требуется целевая панель
+@msg	move requires an existing destination panel	Для перемещения требуется существующая целевая панель
+@msg	onto must name a floating panel	onto должен указывать плавающую панель
+@msg	panel group is empty	Группа панелей пуста
+@msg	panel must name a registered panel	panel должен указывать зарегистрированную панель
+@msg	saved panel layout is invalid; reset the workspace first	Сохранённое расположение панелей недопустимо; сначала сбросьте рабочую среду
+@msg	zone must be a string	zone должен быть строкой
+@msg	zone must be tab, center, left, right, top or bottom	zone должен иметь значение tab, center, left, right, top или bottom
+@msg	{key} must be a finite coordinate	{key} должен быть конечной координатой
+@msg	x and y must be provided together	x и y необходимо указывать вместе
+@msg	invalid restored panel group	Восстановленная группа панелей недопустима
