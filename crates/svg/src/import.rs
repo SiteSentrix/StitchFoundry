@@ -47,8 +47,8 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         usvg::Tree::from_str(&src, &opt).map_err(|e| SvgError::Parse(e.to_string()))?
     };
     let size = tree.size();
-    let (kx, ky) = units.k;
-    let mut doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
+    let k = units.k;
+    let mut doc = Document::new(size.width() as f64 * k, size.height() as f64 * k);
     doc.units = units.unit;
     let mut im = Importer {
         doc,
@@ -68,7 +68,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         data: found.data,
         sublayers: found.sublayers,
         sublayer_groups: HashSet::new(),
-        screen: (kx * ky).sqrt(),
+        screen: k,
     };
     if im.files.nested_text() {
         im.warn("text inside an SVG image isn't imported".into());
@@ -76,7 +76,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
-    let mut base = Affine::scale_non_uniform(kx, ky) * aff(top.transform());
+    let mut base = Affine::scale(k) * aff(top.transform());
     if let Some(g) = im.wrapper(top) {
         base *= aff(g.transform());
         top = g;
@@ -212,12 +212,14 @@ pub(super) const DEFAULT_FONT_SIZE: f64 = 12.0;
 /// A pixel (and a unitless user unit) is a point, as we export, and absolute lengths keep their
 /// physical size at 72 pt per inch: `font-size="12pt"` is 12 pt, `1in` is 72 pt. A root size in
 /// absolute units (`width="210mm"`) is that physical size, and its user units are CSS pixels of it
-/// (96 per inch, 0.75 pt each), so a drawing without a `viewBox` keeps its proportions.
+/// (96 per inch, 0.75 pt each), so a drawing without a `viewBox` keeps its proportions. With one
+/// side absolute and the other not (`width="96pt" height="96"`), both are: the unitless side is
+/// CSS pixels too, so the drawing isn't stretched (#1010).
 struct RootUnits {
     /// Pixels per inch usvg (and the text pass) convert absolute lengths at.
     dpi: f64,
-    /// Points per user unit of the root along x and y.
-    k: (f64, f64),
+    /// Points per user unit of the root, along both axes.
+    k: f64,
     /// Document units: those of the root `width` (pixels when it has none).
     unit: Unit,
 }
@@ -228,8 +230,7 @@ impl RootUnits {
         use svgtypes::LengthUnit as U;
         let physical = |u: Option<U>| matches!(u, Some(U::In | U::Cm | U::Mm | U::Pt | U::Pc));
         let (w, h) = (unit("width"), unit("height"));
-        let k = |u| if physical(u) { PT_PER_IN / CSS_PX_PER_IN } else { 1.0 };
-        let dpi = if physical(w) || physical(h) { CSS_PX_PER_IN } else { PT_PER_IN };
+        let (dpi, k) = if physical(w) || physical(h) { (CSS_PX_PER_IN, PT_PER_IN / CSS_PX_PER_IN) } else { (PT_PER_IN, 1.0) };
         let unit = match w {
             Some(U::Mm) => Unit::Millimeters,
             Some(U::Cm) => Unit::Centimeters,
@@ -238,7 +239,7 @@ impl RootUnits {
             Some(U::Pc) => Unit::Picas,
             _ => Unit::Pixels,
         };
-        Self { dpi, k: (k(w), k(h)), unit }
+        Self { dpi, k, unit }
     }
 }
 
