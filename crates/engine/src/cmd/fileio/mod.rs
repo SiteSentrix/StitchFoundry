@@ -34,6 +34,7 @@ pub mod pdf;
 mod pdfimport;
 pub mod pngtext;
 pub mod ppi;
+pub mod psdread;
 mod save;
 mod screens;
 mod svg;
@@ -558,10 +559,12 @@ pub const FORMATS: &[Format] = &[
     Format { id: "emf", label: "EMF", extensions: &["emf"], mime: "image/emf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "tga", label: "Targa", extensions: &["tga"], mime: "image/x-tga", read: false, write: true, raster: true, options: TGA_OPTIONS },
-    Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: false, write: true, raster: true, options: PSD_OPTIONS },
+    Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: true, write: true, raster: true, options: PSD_OPTIONS },
     // Affinity Photo's `.afphoto` opens by its content but isn't listed: Finder shouldn't offer a
     // vector app for a raster editor's documents.
     reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/vnd.affinity", false),
+    // Photoshop's large document format: read like a PSD (its merged image), never written.
+    reader("psb", "PSB", &["psb"], "image/x-psb", true),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -581,6 +584,8 @@ pub const OPEN_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "psd",
+    "psb",
     "vctemplate",
     "dxf",
     "emf",
@@ -590,6 +595,11 @@ pub const OPEN_EXTS: &[&str] = &[
     "afdesign",
     "afpub",
 ];
+
+/// Extensions in [`OPEN_EXTS`] the desktop packaging doesn't associate with VectorCraft: Photoshop
+/// documents belong to raster editors, so Finder and file managers don't offer a vector app for
+/// them (File › Open and Place still read them).
+pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -623,6 +633,8 @@ pub const PLACE_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "psd",
+    "psb",
     "vctemplate",
     "dxf",
     "emf",
@@ -979,6 +991,8 @@ mod tests_tiffbmp;
 mod tests_pdfx;
 #[cfg(test)]
 mod tests_psd;
+#[cfg(test)]
+mod tests_psdread;
 
 #[cfg(test)]
 mod tests_epsimport;
