@@ -487,7 +487,7 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::ResizeV => C::ResizeVertical,
         Cursor::ResizeNwSe => C::ResizeNwSe,
         Cursor::ResizeNeSw => C::ResizeNeSw,
-        Cursor::Rotate => C::Alias,
+        Cursor::Rotate | Cursor::RotateToward(_) => C::Alias,
         Cursor::Pen | Cursor::PenAdd | Cursor::PenDelete | Cursor::PenClose | Cursor::PenContinue | Cursor::PenJoin | Cursor::PenConvert => {
             C::Crosshair
         }
