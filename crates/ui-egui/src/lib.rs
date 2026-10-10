@@ -336,13 +336,6 @@ pub struct VectorcraftApp {
     last_time: f64,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
     pub canvas_rect: Option<egui::Rect>,
-    /// Physical pixels per inch assumed for View → Actual Size when Preferences › Display Print
-    /// Size at 100% Zoom is on. Defaults to the CSS reference density (96). Tests (and a future
-    /// safe host probe) may set a measured value.
-    pub screen_ppi: f64,
-    /// Last canvas `pixels_per_point` (egui's scale factor). Paired with [`Self::screen_ppi`] for
-    /// Actual Size under Display Print Size.
-    pub pixels_per_point: f64,
     /// Hover position in document coordinates.
     pub hover_doc: Option<vectorcraft_geom::Point>,
     /// System clipboard: SVG to publish next frame, the last SVG we published (so pasting it back
@@ -444,8 +437,6 @@ impl VectorcraftApp {
             frame: 0,
             last_time: 0.0,
             canvas_rect: None,
-            screen_ppi: 96.0,
-            pixels_per_point: 1.0,
             hover_doc: None,
             custom_titlebar: false,
             graphics_adapter: None,
