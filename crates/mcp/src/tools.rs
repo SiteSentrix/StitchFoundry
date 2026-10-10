@@ -574,7 +574,7 @@ fn select_ids(b: &mut dyn Backend, a: &Args) -> Result<(), String> {
 fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let text = a.get("text").and_then(Value::as_str).ok_or("missing string argument `text`")?;
     let mut style = json!({});
-    for k in ["size", "font"] {
+    for k in ["size", "font", "color"] {
         if let Some(v) = a.get(k) {
             style[k] = v.clone();
         }
@@ -591,9 +591,6 @@ fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         let mut p = json!({"x": x, "y": y, "text": text});
         for (k, v) in style.as_object().into_iter().flatten() {
             p[k.as_str()] = v.clone();
-        }
-        if let Some(c) = a.get("color") {
-            p["color"] = c.clone();
         }
         if let (Some(w), Some(h)) = (a.get("width"), a.get("height")) {
             p["area"] = json!({"width": w, "height": h});
