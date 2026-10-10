@@ -95,6 +95,11 @@ pub struct CharStyle {
     /// their line line up with it.
     #[serde(default, rename = "charAlign", skip_serializing_if = "crate::skip::is_default")]
     pub char_align: CharAlign,
+    /// Proportional Metrics (Character panel menu, East Asian options): full-width glyphs take the
+    /// font's own proportional widths, OpenType `palt` (#966). Vertical type sets them as before
+    /// for now.
+    #[serde(default, rename = "proportionalMetrics", skip_serializing_if = "crate::skip::is_default")]
+    pub proportional_metrics: bool,
 }
 
 /// Where a character smaller than the largest on its line lines up with it: on the Roman
@@ -205,6 +210,7 @@ impl Default for CharStyle {
             stroke_dash: None,
             position: CharPosition::Normal,
             char_align: CharAlign::RomanBaseline,
+            proportional_metrics: false,
             small_caps: None,
         }
     }

@@ -387,7 +387,8 @@ fn tate_chu_yoko(g: &mut [SGlyph], size: impl Fn(&SGlyph) -> f64) {
 /// Half an em of `g`'s size when it is full-width Japanese punctuation of kind `kind` (its
 /// advance an em, give or take a tenth), the space that mojikumi can take off.
 fn punct_half(g: &SGlyph, kind: Punct) -> Option<f64> {
-    if punct(g.ch)? != kind || g.tcy.is_some() {
+    // A glyph Proportional Metrics re-spaced has no empty half left to take off (#966).
+    if punct(g.ch)? != kind || g.tcy.is_some() || g.proportional {
         return None;
     }
     let em = g.face.units_per_em();
@@ -1176,6 +1177,7 @@ mod wrapping_tests {
                 tcy: None,
                 inline: None,
                 lead: 0.0,
+                proportional: false,
                 level: unicode_bidi::Level::ltr(),
             })
             .collect()
