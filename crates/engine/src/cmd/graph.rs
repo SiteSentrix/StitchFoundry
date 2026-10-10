@@ -5,6 +5,7 @@
 //! the spec. Editing the data or the type regenerates them in place, keeping any move/scale the
 //! user applied to the graph since it was generated.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -576,46 +577,50 @@ fn spec_of(s: &Session, id: NodeId) -> Result<GraphSpec> {
     s.doc()?.doc.node(id).and_then(|n| n.graph.as_deref().cloned()).ok_or(EngineError::NoNode(id))
 }
 
-/// The generated series group containing `id`: the graph, the group, and the series index stored
-/// on that group. Axes, the legend and a series that was not generated are not series groups.
-fn series_group(doc: &Document, id: NodeId) -> Option<(NodeId, NodeId, usize)> {
-    let mut child = id;
-    let mut parent = doc.parent_of(child);
-    while let Some(parent_id) = parent {
-        let node = doc.node(parent_id)?;
-        if node.graph.is_some() {
-            let group = node.children()?.iter().find(|n| n.id == child)?;
-            let index = usize::try_from(group.series_index?).ok()?;
-            return Some((parent_id, child, index));
+/// Where a node inside a graph's generated series art belongs: the graph, the series group and
+/// the series index stored on that group.
+#[derive(Clone, Copy)]
+struct SeriesRef {
+    graph: NodeId,
+    group: NodeId,
+    index: usize,
+}
+
+/// Every node in a graph's series groups (the groups too), found in one pass over the document.
+/// Axes, the legend and groups whose index is past the graph's series (the index comes from the
+/// file) are left out.
+fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
+    let mut out = HashMap::new();
+    doc.walk(|n| {
+        let Some(spec) = n.graph.as_deref() else { return };
+        let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
+        for group in n.children().into_iter().flatten() {
+            let Some(index) = group.series_index.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count) else { continue };
+            let r = SeriesRef { graph: n.id, group: group.id, index };
+            group.walk(&mut |m| {
+                out.insert(m.id, r);
+            });
         }
-        child = parent_id;
-        parent = doc.parent_of(child);
-    }
-    None
+    });
+    out
 }
 
 /// Group Selection on a graph series targets its constituent marks and legend swatch, not a
-/// group-level appearance which the generated art does not inherit.
+/// group-level appearance which the generated art does not inherit. Other ids pass through.
 pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
-    fn paths(node: &vectorcraft_doc::Node, out: &mut Vec<NodeId>) {
-        if matches!(node.kind, NodeKind::Path { .. }) {
-            out.push(node.id);
-        } else if let Some(children) = node.children() {
-            for child in children {
-                paths(child, out);
-            }
-        }
+    let members = series_members(doc);
+    if members.is_empty() {
+        return ids.to_vec();
     }
-
     let mut out = Vec::new();
     for id in ids {
-        if let Some((_, group, _)) = series_group(doc, *id)
-            && group == *id
-            && let Some(node) = doc.node(group)
-        {
-            paths(node, &mut out);
-        } else {
-            out.push(*id);
+        match members.get(id).filter(|r| r.group == *id).and_then(|_| doc.node(*id)) {
+            Some(group) => group.walk(&mut |m| {
+                if matches!(m.kind, NodeKind::Path { .. }) {
+                    out.push(m.id);
+                }
+            }),
+            None => out.push(*id),
         }
     }
     out.sort_unstable();
@@ -627,18 +632,23 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
 /// inside the same document edit, so the visible paint and future regeneration undo together.
 /// Gradients, patterns and swatch links are kept as [`Paint`], not reduced to a solid colour.
 pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bool) {
+    let members = series_members(doc);
+    if members.is_empty() {
+        return;
+    }
     let captures: Vec<_> = ids
         .iter()
         .filter_map(|id| {
-            let (graph, _, index) = series_group(doc, *id)?;
+            let r = members.get(id)?;
             let node = doc.node(*id)?;
             let paint = node.appearance.paint_at(None, fill)?.clone();
             let width = (!fill).then(|| node.appearance.stroke_width());
-            Some((graph, index, paint, width))
+            Some((r.graph, r.index, paint, width))
         })
         .collect();
     for (graph, index, paint, width) in captures {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.graph.as_deref_mut()) else { continue };
+        // `index` is below the graph's series count (`series_members`).
         if spec.series_paints.len() <= index {
             spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
         }
@@ -840,6 +850,26 @@ mod tests {
         let green = vectorcraft_color::Color::rgb(18.0 / 255.0, 171.0 / 255.0, 52.0 / 255.0);
         assert_eq!(node.graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color), Some(green));
         assert!(group(node, "2024").children().unwrap().iter().all(|n| n.appearance.fill_paint().color() == Some(green)));
+    }
+
+    /// A series index read from a file past the graph's series is not a series: painting its art
+    /// paints the art alone and stores nothing (no allocation sized by the file).
+    #[test]
+    fn a_series_index_past_the_graphs_series_is_ignored() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+        s.edit("Junk", |d, _| {
+            d.node_mut(series_id).unwrap().series_index = Some(u32::MAX);
+            Ok(())
+        })
+        .unwrap();
+        let bar = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0].id;
+        s.execute("paint.setFill", &json!({"ids": [bar.0, series_id.0], "color": "#12ab34"})).unwrap();
+        let node = s.doc().unwrap().doc.node(id).unwrap();
+        assert!(node.graph.as_ref().unwrap().series_paints.is_empty());
+        assert_eq!(group(node, "2024").children().unwrap()[0].appearance.fill_paint().color().map(|c| c.to_hex()), Some("#12ab34".into()));
     }
 
     #[test]
