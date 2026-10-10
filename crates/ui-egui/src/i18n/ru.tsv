@@ -1584,6 +1584,37 @@
 	New Bristle Brush	Новая щетинная кисть
 	Calligraphic Brush Options	Параметры каллиграфической кисти
 	Bristle Brush Options	Параметры щетинной кисти
+	Scatter Brush Options	Параметры кисти-распыления
+	Art Brush Options	Параметры художественной кисти
+	Pattern Brush Options	Параметры узорной кисти
+	Scatter:	Рассеивание:
+	Rotation:	Поворот:
+	Rotation relative to:	Поворот относительно:
+	Brush Scale Options	Параметры масштабирования кисти
+	Scale Proportionately	Масштабировать пропорционально
+	Stretch to Fit Stroke Length	Растянуть по длине обводки
+	Stretch Between Guides	Растянуть между направляющими
+	Start:	Начало:
+	End:	Конец:
+	Left to Right	Слева направо
+	Right to Left	Справа налево
+	Top to Bottom	Сверху вниз
+	Bottom to Top	Снизу вверх
+	Flip:	Отразить:
+	Outer Corner Tile	Фрагмент внешнего угла
+	Side Tile	Боковой фрагмент
+	Inner Corner Tile	Фрагмент внутреннего угла
+	Start Tile	Начальный фрагмент
+	End Tile	Конечный фрагмент
+	Fit	Подгонка
+	Stretch to fit	Растянуть для подгонки
+	Add space to fit	Добавить интервалы для подгонки
+	Approximate path	Приблизить к контуру
+	Colorization	Перекрашивание
+	Tints	Оттенки
+	Tints and Shades	Оттенки и тени
+	Hue Shift	Сдвиг тона
+	Key Color:	Ключевой цвет:
 	Roundness:	Округлость:
 	Fixed	Фиксированный
 	Pressure	Нажим
@@ -3498,7 +3529,6 @@ axis	Both	Оба
 @msg	no bounds	нет границ
 @msg	no brush named `{name}`	нет кисти с именем `{name}`
 @msg	no brush selected	кисть не выбрана
-@msg	this kind of brush has no options dialog yet	у кисти этого типа пока нет окна параметров
 @msg	no catalog	нет каталога
 @msg	no changes since the last save	нет изменений с момента последнего сохранения
 @msg	no clock to keep a heartbeat by	нет часов для поддержания сигнала

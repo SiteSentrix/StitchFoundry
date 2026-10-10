@@ -1580,6 +1580,37 @@
 	New Bristle Brush	Новий щетинний пензель
 	Calligraphic Brush Options	Параметри каліграфічного пензля
 	Bristle Brush Options	Параметри щетинного пензля
+	Scatter Brush Options	Параметри пензля-розпорошення
+	Art Brush Options	Параметри художнього пензля
+	Pattern Brush Options	Параметри візерункового пензля
+	Scatter:	Розсіювання:
+	Rotation:	Поворот:
+	Rotation relative to:	Поворот відносно:
+	Brush Scale Options	Параметри масштабування пензля
+	Scale Proportionately	Масштабувати пропорційно
+	Stretch to Fit Stroke Length	Розтягнути за довжиною обведення
+	Stretch Between Guides	Розтягнути між напрямними
+	Start:	Початок:
+	End:	Кінець:
+	Left to Right	Зліва направо
+	Right to Left	Справа наліво
+	Top to Bottom	Згори вниз
+	Bottom to Top	Знизу вгору
+	Flip:	Відобразити:
+	Outer Corner Tile	Фрагмент зовнішнього кута
+	Side Tile	Бічний фрагмент
+	Inner Corner Tile	Фрагмент внутрішнього кута
+	Start Tile	Початковий фрагмент
+	End Tile	Кінцевий фрагмент
+	Fit	Припасування
+	Stretch to fit	Розтягнути для припасування
+	Add space to fit	Додати інтервали для припасування
+	Approximate path	Наблизити до контуру
+	Colorization	Перефарбування
+	Tints	Відтінки
+	Tints and Shades	Відтінки й тіні
+	Hue Shift	Зсув тону
+	Key Color:	Ключовий колір:
 	Roundness:	Округлість:
 	Fixed	Фіксований
 	Pressure	Натиск
@@ -3485,7 +3516,6 @@ axis	Both	Обидві
 @msg	no bounds	немає кордонів
 @msg	no brush named `{name}`	немає пензля з ім’ям `{name}`
 @msg	no brush selected	пензель не вибрано
-@msg	this kind of brush has no options dialog yet	пензель цього типу ще не має вікна параметрів
 @msg	no catalog	немає каталогу
 @msg	no changes since the last save	немає змін з моменту останнього збереження
 @msg	no clock to keep a heartbeat by	немає годинника для підтримки сигналу

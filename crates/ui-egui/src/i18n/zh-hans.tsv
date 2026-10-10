@@ -1519,6 +1519,34 @@
 	New Bristle Brush	新建鬃毛画笔
 	Calligraphic Brush Options	书法画笔选项
 	Bristle Brush Options	鬃毛画笔选项
+	Scatter Brush Options	散布画笔选项
+	Art Brush Options	艺术画笔选项
+	Pattern Brush Options	图案画笔选项
+	Scatter:	散布：
+	Rotation:	旋转：
+	Rotation relative to:	旋转相对于：
+	Brush Scale Options	画笔缩放选项
+	Scale Proportionately	等比缩放
+	Stretch to Fit Stroke Length	伸展以适合描边长度
+	Stretch Between Guides	在参考线之间伸展
+	Start:	起点：
+	End:	终点：
+	Left to Right	从左到右
+	Right to Left	从右到左
+	Top to Bottom	从上到下
+	Bottom to Top	从下到上
+	Flip:	翻转：
+	Outer Corner Tile	外角拼贴
+	Side Tile	边线拼贴
+	Inner Corner Tile	内角拼贴
+	Start Tile	起点拼贴
+	End Tile	终点拼贴
+	Fit	适合
+	Stretch to fit	伸展以适合
+	Add space to fit	添加间距以适合
+	Approximate path	近似路径
+	Colorization	着色
+	Key Color:	主色：
 	Roundness:	圆度：
 	Fixed	固定
 	Pressure	压力

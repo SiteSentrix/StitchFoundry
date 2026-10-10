@@ -1588,6 +1588,37 @@
 	New Bristle Brush	Nuovo pennello a setole
 	Calligraphic Brush Options	Opzioni pennello calligrafico
 	Bristle Brush Options	Opzioni pennello a setole
+	Scatter Brush Options	Opzioni pennello a dispersione
+	Art Brush Options	Opzioni pennello artistico
+	Pattern Brush Options	Opzioni pennello motivo
+	Scatter:	Dispersione:
+	Rotation:	Rotazione:
+	Rotation relative to:	Rotazione relativa a:
+	Brush Scale Options	Opzioni di scala del pennello
+	Scale Proportionately	Ridimensiona proporzionalmente
+	Stretch to Fit Stroke Length	Allunga per adattare alla lunghezza del tratto
+	Stretch Between Guides	Allunga tra le guide
+	Start:	Inizio:
+	End:	Fine:
+	Left to Right	Da sinistra a destra
+	Right to Left	Da destra a sinistra
+	Top to Bottom	Dall'alto in basso
+	Bottom to Top	Dal basso in alto
+	Flip:	Capovolgi:
+	Outer Corner Tile	Tassello angolo esterno
+	Side Tile	Tassello laterale
+	Inner Corner Tile	Tassello angolo interno
+	Start Tile	Tassello iniziale
+	End Tile	Tassello finale
+	Fit	Adattamento
+	Stretch to fit	Allunga per adattare
+	Add space to fit	Aggiungi spazio per adattare
+	Approximate path	Approssima tracciato
+	Colorization	Colorazione
+	Tints	Tinte
+	Tints and Shades	Tinte e ombre
+	Hue Shift	Variazione tonalità
+	Key Color:	Colore chiave:
 	Roundness:	Rotondità:
 	Fixed	Fisso
 	Pressure	Pressione
@@ -3502,7 +3533,6 @@ axis	Both	Entrambi
 @msg	no bounds	nessun limite
 @msg	no brush named `{name}`	nessun pennello denominato `{name}`
 @msg	no brush selected	nessun pennello selezionato
-@msg	this kind of brush has no options dialog yet	questo tipo di pennello non ha ancora una finestra di opzioni
 @msg	no catalog	nessun catalogo
 @msg	no changes since the last save	nessuna modifica dall'ultimo salvataggio
 @msg	no clock to keep a heartbeat by	nessun orologio con cui mantenere il segnale di attività

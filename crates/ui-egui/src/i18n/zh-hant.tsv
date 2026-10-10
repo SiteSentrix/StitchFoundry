@@ -1563,6 +1563,37 @@
 	New Bristle Brush	新增鬃毛筆刷
 	Calligraphic Brush Options	書法筆刷選項
 	Bristle Brush Options	鬃毛筆刷選項
+	Scatter Brush Options	散佈筆刷選項
+	Art Brush Options	藝術筆刷選項
+	Pattern Brush Options	圖樣筆刷選項
+	Scatter:	散佈：
+	Rotation:	旋轉：
+	Rotation relative to:	旋轉相對於：
+	Brush Scale Options	筆刷縮放選項
+	Scale Proportionately	等比例縮放
+	Stretch to Fit Stroke Length	延伸以符合筆畫長度
+	Stretch Between Guides	在參考線之間延伸
+	Start:	起點：
+	End:	終點：
+	Left to Right	由左至右
+	Right to Left	由右至左
+	Top to Bottom	由上而下
+	Bottom to Top	由下而上
+	Flip:	翻轉：
+	Outer Corner Tile	外角拼貼
+	Side Tile	邊線拼貼
+	Inner Corner Tile	內角拼貼
+	Start Tile	起點拼貼
+	End Tile	終點拼貼
+	Fit	符合
+	Stretch to fit	延伸以符合
+	Add space to fit	增加間距以符合
+	Approximate path	近似路徑
+	Colorization	上色
+	Tints	淺色
+	Tints and Shades	淺色與暗色
+	Hue Shift	色相偏移
+	Key Color:	主要顏色：
 	Roundness:	圓度：
 	Fixed	固定
 	Pressure	壓力
