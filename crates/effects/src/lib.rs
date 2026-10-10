@@ -207,8 +207,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "distort.transform",
             "Transform…",
             DT,
-            "{scaleH: % (100), scaleV: % (100), moveH: pt (0), moveV: pt (0), rotate: deg (0), copies: int (0), reflectX: bool, reflectY: bool}",
-            json!({"scaleH": 100.0, "scaleV": 100.0, "moveH": 0.0, "moveV": 0.0, "rotate": 0.0, "copies": 0, "reflectX": false, "reflectY": false}),
+            "{scaleH: % (100), scaleV: % (100), moveH: pt (0; right = +), moveV: pt (0; down = +), rotate: deg (0; counter-clockwise), copies: 0..1000 (0; each copy transforms the last again), reflectX: bool (false; flips left to right), reflectY: bool (false; flips top to bottom), reference: 0..8 (4; the point of the bounds' 9-point grid it scales, rotates and reflects about: 0 top left, 4 centre, 8 bottom right), random: bool (false; each scale goes a random share of the way from 100 % to its value, each move and the angle a random share of theirs, differently for each object and the same on every redraw)}",
+            json!({"scaleH": 100.0, "scaleV": 100.0, "moveH": 0.0, "moveV": 0.0, "rotate": 0.0, "copies": 0, "reflectX": false, "reflectY": false, "reference": 4, "random": false}),
         ),
         g(
             "distort.tweak",
@@ -489,6 +489,9 @@ pub struct GeomContext<'a> {
     pub stroke: Option<&'a StrokeLayer>,
     /// The object's fill rule (inside and outside alignment).
     pub rule: FillRule,
+    /// The seed of the Transform effect's Random: the object's id, so each object varies its own
+    /// way and keeps its result on every redraw.
+    pub seed: u64,
 }
 
 impl<'a> GeomContext<'a> {
@@ -498,7 +501,7 @@ impl<'a> GeomContext<'a> {
             NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } => *rule,
             _ => FillRule::NonZero,
         };
-        Self { stroke: n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0), rule }
+        Self { stroke: n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0), rule, seed: n.id.0 }
     }
 
     /// The context of the effects on `item`, one of the same object's appearance items: a
@@ -551,7 +554,7 @@ pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &Geo
         "distort.freeDistort" => distort::free_distort(path, b, p),
         "distort.puckerBloat" => distort::pucker_bloat(path, b, num(p, "amount", 0.0)),
         "distort.roughen" => distort::roughen(path, b, p),
-        "distort.transform" => distort::transform(path, b, p),
+        "distort.transform" => distort::transform(path, b, p, ctx.seed),
         "distort.tweak" => distort::tweak(path, b, p),
         "distort.twist" => distort::twist(path, b, num(p, "angle", 10.0)),
         "distort.zigZag" => distort::zig_zag(path, b, p),

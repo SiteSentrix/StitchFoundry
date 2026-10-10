@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 
 use vectorcraft_color::Color;
 
-use super::{DialogSpec, form};
+use super::{DialogSpec, form, transform_each};
 use crate::panels::c32;
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -131,6 +131,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let changed = match vectorcraft_plugins::effect::installed(&id) {
         Some(plugin) => form::schema_fields(ui, d, &plugin.manifest().params),
         None if vectorcraft_effects::is_adjustment(&id) => adjust_fields(ui, d),
+        None if id == TRANSFORM => transform_fields(ui, d, app.session.general_unit()),
         None => {
             let doc = vectorcraft_effects::effect_info(&id).map(|e| e.params).unwrap_or_default();
             let unit = app.session.general_unit();
@@ -138,8 +139,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     };
     ui.add_space(6.0);
-    let mut pv = d.bool("preview");
-    let pv_changed = ui.checkbox(&mut pv, tl!("Preview")).changed();
+    let pv_changed = widgets::check(ui, tl!("Preview"), d.bool("preview"), true);
+    let pv = d.bool("preview") != pv_changed;
     d.fields.insert("preview".into(), json!(pv));
     if pv && (changed || pv_changed || !app.session.in_interaction()) {
         let label = d.str("__label");
@@ -261,10 +262,40 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             form::check(ui, d, key, label);
         }
     }
+    values_changed(d)
+}
+
+/// Do the dialog's values differ from those last previewed? (Remembers them for the next frame.)
+fn values_changed(d: &mut Dialog) -> bool {
     let params = form::params(d);
     let changed = d.fields.get(form::PREVIEWED) != Some(&params);
     d.fields.insert(form::PREVIEWED.into(), params);
     changed
+}
+
+/// The Transform effect (Effect › Distort & Transform › Transform…).
+const TRANSFORM: &str = "distort.transform";
+
+/// The Transform effect's dialog: Transform Each's Scale and Move sliders and Rotate dial, then
+/// Copies, the reflections, the reference point and Random. Returns whether the values differ from
+/// those last previewed.
+fn transform_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) -> bool {
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| transform_each::sections(ui, d, unit));
+        ui.add_space(16.0);
+        ui.vertical(|ui| {
+            widgets::subheader(ui, tl!("Options"));
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                widgets::dim_label(ui, tl!("Copies:"));
+                if let Some(n) = widgets::range_field(ui, "fx-copies", d.f64("copies", 0.0), 0.0..=1000.0, "", 0, 50.0) {
+                    d.fields.insert("copies".into(), json!(n));
+                }
+            });
+            transform_each::reflect_options(ui, d);
+        });
+    });
+    values_changed(d)
 }
 
 /// Curves' graph of its `points` (input across, output up, 0..255): drag a point to move it

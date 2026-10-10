@@ -418,6 +418,7 @@ pub fn mixed_field(
         vectorcraft_doc::parse_number(&bare.replace(['%', '°'], ""))
     };
     let shown = value.map(show).unwrap_or_default();
+    take_dialog_focus(ui, id, &shown);
     let (mut buf, resp, rect) = recessed_text(ui, id, &shown, width, 1);
     select_all_on_focus(ui, &resp, &buf);
     // ↑/↓ and the wheel step at the field's precision (a count ignores Ctrl/Cmd's tenth); a drag on
@@ -893,6 +894,31 @@ pub fn reference_point(ui: &mut Ui, current: usize) -> Option<usize> {
         }
     }
     out
+}
+
+/// An angle dial `size` points across: a circle with a hand from its centre at `angle` (degrees,
+/// counter-clockwise from 3 o'clock). Pressing or dragging points the hand at the pointer, in whole
+/// degrees (-179..180), Shift in 45° steps. Returns the new angle.
+pub fn angle_dial(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, angle: f64, size: f32) -> Option<f64> {
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
+    let (c, r) = (rect.center(), size / 2.0 - 1.0);
+    let ring = if resp.hovered() || resp.dragged() { t.text } else { t.input_border };
+    ui.painter().circle(c, r, t.input, Stroke::new(1.0, ring));
+    let a = (angle as f32).to_radians();
+    ui.painter().line_segment([c, c + vec2(a.cos(), -a.sin()) * (r - 3.0)], Stroke::new(1.5, t.text));
+    ui.painter().circle_filled(c, 2.0, t.text);
+    let (p, _) = pointer_phase(&resp)?;
+    let v = p - c;
+    if v.length() < 2.0 {
+        return None;
+    }
+    let step = if ui.input(|i| i.modifiers.shift) { 45.0 } else { 1.0 };
+    let deg = ((-v.y).atan2(v.x).to_degrees() as f64 / step).round() * step;
+    // atan2 gives -180..180: -180 shows as 180.
+    let deg = if deg <= -180.0 { deg + 360.0 } else { deg };
+    (deg != angle).then_some(deg)
 }
 
 /// A toggle icon (e.g. eye / lock columns) — returns clicked.
