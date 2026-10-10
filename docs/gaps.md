@@ -86,8 +86,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G11 Correctness bugs in core tools
 
-- **Missing:** Shape Builder misses planar regions and targets whole shapes (#937, #893); Asset Export
-  anti-aliasing ghost borders (#983); Transform effect dialog's invisible checkboxes and missing options (#885);
+- **Missing:** Shape Builder misses planar regions and targets whole shapes (#937, #893); Transform effect dialog's invisible checkboxes and missing options (#885);
   PDF text boxes moving on open (#722); SVG units reverting to points (#864); bezier drag preview freezing (#834).
 - **Impact:** wrong output in everyday work.
 - **Estimate:** 8–15 h.

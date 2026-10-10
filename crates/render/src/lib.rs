@@ -114,6 +114,11 @@ pub struct RenderOptions {
     /// opaque, where 8-bit compositing leaves alpha 254 on some anti-aliased edges (#787). Off,
     /// the faster 8-bit pipeline (the canvas).
     pub precise: bool,
+    /// Exports: Art Optimized edges are supersampled ([`supersample_factor`]): the art is drawn
+    /// with hard edges at several times the size and averaged down, so shapes that meet edge to
+    /// edge leave no seam of the background between them (#983). Off, edges are smoothed shape by
+    /// shape (the canvas).
+    pub supersample: bool,
 }
 
 /// The opacity of the art around an isolated group or layer.
@@ -186,8 +191,46 @@ impl Default for RenderOptions {
             smooth_images: true,
             isolated: None,
             precise: false,
+            supersample: false,
         }
     }
+}
+
+/// The most pixels a supersampled render draws (the frame and its compositing buffers hold a few
+/// times this many bytes).
+const MAX_SUPERSAMPLED_PIXELS: u64 = 40_000_000;
+
+/// How many times wider and taller a `w`×`h` render is drawn when supersampled: 4, or less where
+/// that would pass [`MAX_SUPERSAMPLED_PIXELS`] or the renderer's 65,535-pixel side; `None` when not
+/// even twice fits (the edges are then smoothed shape by shape).
+pub fn supersample_factor(w: u32, h: u32) -> Option<u32> {
+    (2..=4u32).rev().find(|k| {
+        let (sw, sh) = (u64::from(w) * u64::from(*k), u64::from(h) * u64::from(*k));
+        sw <= u64::from(u16::MAX) && sh <= u64::from(u16::MAX) && sw * sh <= MAX_SUPERSAMPLED_PIXELS
+    })
+}
+
+/// Average each `k`×`k` block of `src` (`w`×`h` pixels of 4 premultiplied bytes) into one pixel.
+fn downsample(src: &[u8], w: usize, h: usize, k: usize) -> Vec<u8> {
+    let (ow, oh) = (w / k.max(1), h / k.max(1));
+    let n = (k * k).max(1) as u32;
+    let mut out = vec![0u8; ow * oh * 4];
+    for (o, px) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        let (ox, oy) = (o % ow.max(1), o / ow.max(1));
+        let mut acc = [0u32; 4];
+        for y in oy * k..(oy + 1) * k {
+            let row = y * w + ox * k;
+            for p in src.get(row * 4..(row + k) * 4).unwrap_or_default().as_chunks::<4>().0 {
+                for (a, v) in acc.iter_mut().zip(p) {
+                    *a += u32::from(*v);
+                }
+            }
+        }
+        for (d, a) in px.iter_mut().zip(acc) {
+            *d = ((a + n / 2) / n).min(255) as u8;
+        }
+    }
+    out
 }
 
 /// A rendered image (premultiplied RGBA8, row-major).
@@ -476,6 +519,16 @@ impl Renderer {
     /// screen colours (4 bytes a pixel, see [`Self::render_region_inks`]).
     fn render_as(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions, inks: bool) -> Rendered {
         let start = now();
+        if opts.supersample && opts.anti_alias == AntiAlias::Art && opts.mask_view.is_none() {
+            let (w, h) = (width.clamp(1, u16::MAX as u32), height.clamp(1, u16::MAX as u32));
+            if let Some(k) = supersample_factor(w, h) {
+                let hard = RenderOptions { anti_alias: AntiAlias::None, supersample: false, ..opts.clone() };
+                let big = self.render_as(doc, w * k, h * k, Affine::scale(f64::from(k)) * view, &hard, inks);
+                let pixels = downsample(&big.pixels, big.width as usize, big.height as usize, k as usize);
+                self.stats.micros = now().saturating_sub(start);
+                return Rendered { width: w, height: h, pixels };
+            }
+        }
         let prepared = proof::prepare(doc, opts);
         let doc: &Document = &prepared;
         let w = width.clamp(1, u16::MAX as u32) as u16;
