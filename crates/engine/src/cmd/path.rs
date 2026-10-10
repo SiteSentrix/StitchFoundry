@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath, Vec2};
 
-use super::create::{anchor_from_json, checked_anchor_from_json};
+use super::create::checked_anchor_from_json;
 use super::*;
 use crate::EngineError;
 
