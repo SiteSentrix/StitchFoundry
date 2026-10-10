@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use egui::{CornerRadius, Sense, Stroke, StrokeKind, Ui, vec2};
+use egui::{CornerRadius, Sense, Stroke, Ui, vec2};
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
 
@@ -12,8 +12,12 @@ use crate::theme::{self, Tokens};
 use crate::widgets;
 use crate::{VectorcraftApp, icons, menus, titlebar};
 
-/// The application bar's height, in points.
-pub const APP_BAR_HEIGHT: f32 = 44.0;
+/// The application bar's height, in points (compact, as in PhotoCraft).
+pub const APP_BAR_HEIGHT: f32 = 32.0;
+/// The brand mark's side.
+const MARK: f32 = 18.0;
+/// Height of the workspace switcher.
+const WIDGET_H: f32 = 22.0;
 
 /// The application bar: brand mark, Home, menus, then Discord, search and the workspace switcher
 /// at the right. With [`VectorcraftApp::custom_titlebar`] it is also the window's title bar
@@ -33,12 +37,12 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.horizontal_centered(|ui| {
             // With the system title bar the OS draws its own icon: no in-app brand mark.
             if !system {
-                let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
+                let (r, _) = ui.allocate_exact_size(vec2(MARK, MARK), Sense::hover());
                 crate::brand::paint_mark(ui, r);
-                ui.add_space(4.0);
+                ui.add_space(6.0);
             }
             let on_home = menus::home_showing(app);
-            if widgets::icon_button(ui, "house", tl!("Home"), on_home, 24.0).clicked() {
+            if widgets::icon_button(ui, "house", tl!("Home"), on_home, 20.0).clicked() {
                 app.run("app.home", json!({})).ok();
             }
             ui.add_space(2.0);
@@ -51,8 +55,8 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 menus::menu_bar(app, ui)
             };
             // The right-side group fills the space after the menus from the right; when it runs
-            // short, Discord goes first (it is also under Help), then the search box becomes an
-            // icon, then the workspace switcher narrows.
+            // short, Discord goes first (it is also under Help), then the search icon (the palette
+            // stays under its shortcut), then the workspace switcher narrows.
             let full = ui.max_rect();
             let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
@@ -63,45 +67,31 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let ws = ui.painter().layout_no_wrap(ws_name, egui::FontId::proportional(12.0), t.text);
             let ws_w = (ws.size().x + 36.0).clamp(112.0, 190.0);
             let gap = ui.spacing().item_spacing.x;
-            let with_search = ws_w + 8.0 + gap + 200.0;
-            let search_full = room >= with_search;
-            let discord = room >= with_search + 10.0 + gap + crate::community::discord_width(ui, false);
-            let ws_w = if search_full { ws_w } else { ws_w.min(room - 8.0 - gap - 24.0).max(64.0) };
+            // The search icon, as in PhotoCraft: shown while a minimal switcher fits beside it.
+            let icon = 28.0;
+            let search = room >= 64.0 + 8.0 + gap + icon;
+            let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);
+            let discord = search && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
-            let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, 24.0), Sense::click());
+            let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
             ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
             ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
             icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
             let wresp = wresp.on_hover_text(tl!("Switch workspace"));
             egui::Popup::menu(&wresp).show(|ui| crate::workspaces::popup(app, ui));
             ui.add_space(8.0);
-            // Search box → command palette.
-            let open_palette = if search_full {
-                let (r, resp) = ui.allocate_exact_size(vec2(200.0, 24.0), Sense::click());
-                ui.painter().rect_filled(r, CornerRadius::same(12), t.input);
-                ui.painter().rect_stroke(
-                    r,
-                    CornerRadius::same(12),
-                    Stroke::new(1.0, if resp.hovered() { t.input_border } else { t.divider }),
-                    StrokeKind::Inside,
-                );
-                icons::paint(ui, "search", egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(13.0, 13.0)), t.text_dim);
-                ui.painter().text(
-                    r.left_center() + vec2(26.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    tl!("Search commands and tools"),
-                    egui::FontId::proportional(11.5),
-                    t.text_dim,
-                );
-                resp.clicked()
-            } else {
-                widgets::icon_button(ui, "search", tl!("Search commands and tools"), false, 24.0).clicked()
-            };
-            if open_palette {
-                app.ui.palette_open = true;
-                app.ui.palette_query.clear();
+            // Search → command palette (its shortcut opens it too).
+            if search {
+                let tip = match menus::shortcut_of("help.commandPalette") {
+                    Some(sc) => format!("{}  ({})", tl!("Search commands and tools"), menus::pretty_shortcut(sc)),
+                    None => tl!("Search commands and tools").to_string(),
+                };
+                if widgets::icon_button(ui, "search", &tip, app.ui.palette_open, icon).clicked() {
+                    app.ui.palette_open = !app.ui.palette_open;
+                    app.ui.palette_query.clear();
+                }
             }
             if discord {
                 ui.add_space(10.0);

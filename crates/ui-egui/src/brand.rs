@@ -1,6 +1,6 @@
 //! The VectorCraft brand mark: the app icon (the engraved dragon, `assets/app-icon/`, see its
 //! README). The PNG carries the icon's rounded corners; it is decoded once per context into a
-//! mipmapped texture, so it stays crisp from the 22 pt app-bar mark to the About box.
+//! mipmapped texture, so it stays crisp from the 18 pt app-bar mark to the About box.
 
 use egui::{Color32, Context, Id, Rect, TextureHandle, TextureOptions, Ui, pos2};
 
@@ -81,7 +81,7 @@ mod tests {
         let (uploads, marks) = frame();
         assert_eq!(uploads, 1);
         assert_eq!(marks.len(), 1);
-        assert_eq!(marks[0].size(), egui::vec2(22.0, 22.0));
+        assert_eq!(marks[0].size(), egui::vec2(18.0, 18.0));
         // Later frames reuse the texture.
         let (uploads, marks) = frame();
         assert_eq!((uploads, marks.len()), (0, 1));
