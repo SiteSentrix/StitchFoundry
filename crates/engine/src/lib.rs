@@ -9,6 +9,7 @@
 pub mod cmd;
 pub mod guard;
 pub mod inspect;
+pub mod steps;
 mod tooling;
 pub mod units;
 

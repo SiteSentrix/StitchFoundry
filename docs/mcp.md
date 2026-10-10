@@ -167,7 +167,7 @@ The older names below remain listed because existing workflows use them.
 |---|---|
 | `command_list` | Optional `filter`, `enabled_only`; returns the command array |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend |
-| `command_batch` | `steps: [{id, params?}]`, optional `stop_on_error` (default true); returns `completed`, `failed`, `results: [{ok, result\|error}]`. Each edit has its own undo step; failures set `isError` |
+| `command_batch` | `steps: [{id, params?}]`, optional `stop_on_error` (default true); returns `completed`, `failed`, `results: [{ok, result\|error}]`. Each edit has its own undo step; failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below) |
 | `doc_inspect` | Optional `depth`, `childLimit`; same summary as `inspect_document` |
 | `render_preview` | Optional `max_side` (1–4096, default 1024); inline PNG of the first artboard without editing it. Artboards too large to render within the allocation bound return a tool error |
 | `ui_inspect`, `ui_screenshot` | Connected desktop state/window capture; tool errors in headless mode |
@@ -572,6 +572,16 @@ vectorcraft-cli run --cmd file.new --params '{"width":800,"height":600}' \
 applies to the `--cmd` just before it. `run` also accepts the host commands `file.open`, `file.save`, `file.export`,
 `file.exportForScreens` and `tool.select`. `run --in`, `convert` and `info` read every format `document.open` reads
 (`vectorcraft-cli --help` lists them).
+
+A step can use an earlier step's result, in `run` as in the `command_batch` tool. A parameter string that is exactly
+`$N` or `$N.path` takes that value from the result of step `N` (counting from 0, in the order they ran; `run --in`'s
+open isn't a step), and `$last…` from the step before. A path goes into objects by key and arrays by index:
+`"$1.id"`, `"$2.ids.0"`, `"$last.ids[0]"`. A string starting with `$$` stands for one `$` (`"$$1.99"` is `$1.99`). A
+reference that names no value fails the step, so a command never runs with one left in it:
+
+```sh
+vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd text.create --params '{"x":10,"y":60,"text":"plain and bold words","size":30}'   --cmd text.setRangeStyle --params '{"id":"$1.id","start":10,"end":14,"style":"Bold"}'
+```
 
 ## Transparency and opacity masks
 
