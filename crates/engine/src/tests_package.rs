@@ -317,13 +317,8 @@ fn package_keeps_distinct_linked_documents_with_colliding_file_names() {
     assert_eq!(result["links"], 4, "{result}");
     assert_eq!(result["missingLinks"], json!([]));
     let folder = dir.0.join("delivery/poster Folder");
-    let packaged: Vec<_> = result["files"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(Value::as_str)
-        .filter(|name| name.ends_with(".vectorcraft"))
-        .collect();
+    let packaged: Vec<_> =
+        result["files"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|name| name.ends_with(".vectorcraft")).collect();
     assert_eq!(packaged.len(), 3, "both nested documents must be retained: {packaged:?}");
     std::fs::remove_dir_all(dir.0.join("art1")).unwrap();
     std::fs::remove_dir_all(dir.0.join("art2")).unwrap();
@@ -391,7 +386,13 @@ fn identical_stale_paths_in_different_nested_documents_keep_separate_assets() {
     }
     assert_eq!(actual.len(), 2, "stale source paths must not cause asset deduplication");
     assert_ne!(actual[0], actual[1], "different original illustrations must keep different pixels");
-    for filename in result["files"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|name| name.starts_with("Links/") && name.ends_with(".vectorcraft")) {
+    for filename in result["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|name| name.starts_with("Links/") && name.ends_with(".vectorcraft"))
+    {
         let mut nested = session();
         let opened = open(&mut nested, &folder.join(filename).to_string_lossy());
         assert_eq!(opened["missingLinks"], json!([]), "{filename}: {opened}");
@@ -424,6 +425,22 @@ fn packaging_nested_files_preserves_embedded_preview_pdf_and_compression() {
     nested.visit_images(|_, image| images.push(image.link.clone()));
     assert_eq!(images.len(), 1);
     assert_eq!(images[0].as_ref().unwrap().relative.as_deref(), Some("photo.png"));
+}
+
+/// The report keeps the packaged document's sections as they were, then gives each placed
+/// document's own, headed by its file, instead of nesting them inside the parent's list.
+#[test]
+fn the_report_lists_a_placed_documents_links_in_a_section_of_its_own() {
+    let dir = Folder::new("package-report-sections");
+    let mut parent = poster_with_placed_document(&dir);
+    run(&mut parent, "file.package", json!({ "folder": dir.file("delivery"), "copyFonts": false }));
+    let report = std::fs::read_to_string(dir.0.join("delivery/poster Folder/poster Report.txt")).unwrap();
+    let lines: Vec<&str> = report.lines().collect();
+    let sections: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| **l == "LINKED FILES").map(|(i, _)| i).collect();
+    let [poster, part] = sections[..] else { panic!("two link sections: {report}") };
+    assert!(lines[poster + 1].ends_with("→ Links/part.vectorcraft"), "the packaged document's section as before: {report}");
+    assert!(lines[part + 1].starts_with("Document: ") && lines[part + 1].ends_with("part.vectorcraft"), "{report}");
+    assert!(lines[part + 2].ends_with("→ Links/photo.png"), "{report}");
 }
 
 /// A damaged or newer-format linked native file is still an asset worth delivering.
