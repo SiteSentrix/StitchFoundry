@@ -293,6 +293,8 @@ pub struct CacheKey {
     pub pixel: Option<[i64; 4]>,
     /// Images sampled smoothly ([`vectorcraft_render::RenderOptions::smooth_images`]).
     pub smooth_images: bool,
+    /// Isolation mode's group or layer ([`vectorcraft_render::RenderOptions::isolated`]).
+    pub isolated: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]

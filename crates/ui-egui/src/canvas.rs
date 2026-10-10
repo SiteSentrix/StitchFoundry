@@ -249,6 +249,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         placed: vectorcraft_render::placed_document::generation(),
         pixel,
         smooth_images,
+        isolated: st.isolation.map(|id| id.0),
     };
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
@@ -298,6 +299,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             progressive_placed: true,
             trace_views: true,
             smooth_images,
+            // Isolation mode: the art around the isolated group or layer is dimmed (#833).
+            isolated: key.isolated.map(vectorcraft_doc::NodeId),
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.

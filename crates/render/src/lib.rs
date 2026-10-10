@@ -107,7 +107,13 @@ pub struct RenderOptions {
     /// Images are sampled smoothly when scaled or rotated; off, each pixel takes its nearest image
     /// pixel (Pixel Preview with File Handling › Display Bitmaps as Anti-aliased Images off).
     pub smooth_images: bool,
+    /// Screen view in isolation mode: the isolated group or layer. Everything around it draws
+    /// dimmed ([`ISOLATION_DIM`]).
+    pub isolated: Option<NodeId>,
 }
+
+/// The opacity of the art around an isolated group or layer.
+pub const ISOLATION_DIM: f32 = 0.5;
 
 /// How edges are rasterized (raster export option).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -174,6 +180,7 @@ impl Default for RenderOptions {
             progressive_placed: false,
             trace_views: false,
             smooth_images: true,
+            isolated: None,
         }
     }
 }
@@ -355,6 +362,11 @@ pub struct Renderer {
     /// Inline graphics being drawn inside inline graphics (a symbol whose art holds text showing
     /// it): drawing stops at [`MAX_INLINE_DEPTH`].
     inline_depth: u32,
+    /// [`RenderOptions::isolated`]'s layers and groups, from the top layer down to it, for the
+    /// frame (`stamp`) and document they were found in.
+    isolation: Option<(u64, usize, NodeId, Vec<NodeId>)>,
+    /// Drawing inside the isolated container or a dimmed object: nothing further dims.
+    isolation_settled: bool,
 }
 
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
@@ -441,6 +453,8 @@ impl Renderer {
             adjusted: Default::default(),
             dim_images: None,
             inline_depth: 0,
+            isolation: None,
+            isolation_settled: false,
         }
     }
 
@@ -876,6 +890,46 @@ impl Renderer {
 
     /// [`Self::draw_node`] after culling and Layer Options.
     fn draw_layer_node(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node) {
+        // Isolation mode: the art around the isolated container draws dimmed (#833).
+        if let Some((isolated, path)) = self.isolation_path(f) {
+            // A container on the way down to it draws as usual: its members decide.
+            if path.contains(&n.id) && n.id != isolated {
+                return self.draw_layer_node_now(ctx, f, n);
+            }
+            self.isolation_settled = true;
+            if n.id == isolated {
+                self.draw_layer_node_now(ctx, f, n);
+            } else {
+                self.dimmed(ctx, f, &mut |r, c, fr| r.draw_layer_node_now(c, fr, n));
+            }
+            self.isolation_settled = false;
+            return;
+        }
+        self.draw_layer_node_now(ctx, f, n);
+    }
+
+    /// In isolation mode, while drawing outside the isolated container and the art dimmed around
+    /// it: the isolated container and its layers and groups, from the top layer down to it.
+    fn isolation_path(&mut self, f: &Frame) -> Option<(NodeId, Vec<NodeId>)> {
+        let isolated = f.opts.isolated.filter(|_| !self.isolation_settled)?;
+        let doc = std::ptr::from_ref(f.doc) as usize;
+        if !self.isolation.as_ref().is_some_and(|(stamp, d, id, _)| (*stamp, *d, *id) == (self.stamp, doc, isolated)) {
+            self.isolation = Some((self.stamp, doc, isolated, f.doc.ancestry(isolated).unwrap_or_default()));
+        }
+        let path = self.isolation.as_ref().map(|(.., path)| path.clone()).filter(|p| !p.is_empty())?;
+        Some((isolated, path))
+    }
+
+    /// `draw` at [`ISOLATION_DIM`], with nothing inside dimmed again.
+    fn dimmed(&mut self, ctx: &mut RenderContext, f: &Frame, draw: &mut group::Content) {
+        let settled = std::mem::replace(&mut self.isolation_settled, true);
+        let comp = Composite { opacity: ISOLATION_DIM, ..Default::default() };
+        self.group(ctx, f, comp, draw);
+        self.isolation_settled = settled;
+    }
+
+    /// [`Self::draw_layer_node`] past isolation mode's dimming.
+    fn draw_layer_node_now(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node) {
         if fx::has_object_fx(n) {
             return self.draw_object_fx(ctx, f, &Arc::new(n.clone()), false);
         }
@@ -998,6 +1052,22 @@ impl Renderer {
     fn draw_children(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>], knockout: bool) {
         if knockout {
             self.draw_knockout(ctx, f, children);
+        } else if let Some((_, path)) = self.isolation_path(f) {
+            // Isolation mode, in a container on the way down to the isolated one: each run of
+            // members around it draws dimmed as one (#833).
+            let mut rest = children;
+            while let Some(i) = rest.iter().position(|c| path.contains(&c.id)) {
+                let (around, from) = rest.split_at(i);
+                if !around.is_empty() {
+                    self.dimmed(ctx, f, &mut |r, c, fr| around.iter().for_each(|n| r.draw_arc(c, fr, n)));
+                }
+                let Some((on_path, after)) = from.split_first() else { break };
+                self.draw_arc(ctx, f, on_path);
+                rest = after;
+            }
+            if !rest.is_empty() {
+                self.dimmed(ctx, f, &mut |r, c, fr| rest.iter().for_each(|n| r.draw_arc(c, fr, n)));
+            }
         } else {
             for c in children {
                 self.draw_arc(ctx, f, c);
