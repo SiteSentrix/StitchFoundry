@@ -364,6 +364,14 @@ pub fn text_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value
     (resp.lost_focus() && buf.trim() != shown).then(|| buf.trim().to_string())
 }
 
+/// A one-line [`text_field`] that keeps the text exactly as typed, spaces included (a tab
+/// leader such as ". "). Returns it when a change is committed (Enter or focus loss).
+pub fn exact_text_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: &str, width: f32) -> Option<String> {
+    let id = ui.id().with(id);
+    let (buf, resp, _) = recessed_text(ui, id, value, width, 1);
+    (resp.lost_focus() && buf != value).then_some(buf)
+}
+
 /// A form row: `label` in a column `label_width` wide, then what `add` draws.
 pub fn label_row(ui: &mut Ui, label: &str, label_width: f32, add: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
