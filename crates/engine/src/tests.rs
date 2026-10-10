@@ -134,6 +134,32 @@ fn fill_and_stroke_commands() {
     s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}})).unwrap();
 }
 
+
+#[test]
+fn stroke_rejects_invalid_dash_components_and_preserves_defaults_on_error() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 40.0, 30.0);
+    s.execute("stroke.set", &json!({"weight": 3, "dash": [6, 3]})).unwrap();
+    let previous_weight = s.paint.stroke_width;
+    let previous_stroke = s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().cloned();
+
+    for params in [
+        json!({"weight": 10, "dash": [6, "not a number", 3]}),
+        json!({"weight": 10, "ids": "not an array"}),
+        json!({"weight": 10, "item": "invalid"}),
+        json!({"weight": 10, "arrowAlign": "unknown"}),
+    ] {
+        assert!(s.execute("stroke.set", &params).is_err(), "{params} must fail");
+        assert_eq!(s.paint.stroke_width, previous_weight, "failed stroke edit changed new-art defaults");
+        assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().cloned(), previous_stroke);
+    }
+
+    // A valid dash list still updates the selected stroke and new-art default width.
+    s.execute("stroke.set", &json!({"weight": 7, "dash": [4, 2]})).unwrap();
+    assert_eq!(s.paint.stroke_width, 7.0);
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().width, 7.0);
+}
+
 #[test]
 fn rejected_paint_edits_leave_new_art_defaults_and_focus_unchanged() {
     let mut s = session();
