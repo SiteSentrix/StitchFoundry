@@ -706,7 +706,7 @@ impl VectorcraftApp {
             self.services.inbox.as_ref().map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default();
         for (name, bytes) in arrived {
             if let Err(e) = io::open_bytes(self, &name, &bytes, None) {
-                self.status(format!("Couldn't open {name}: {e}"));
+                io::report_open_error(self, &name, &e);
             }
         }
         place::drain(self);

@@ -1122,6 +1122,7 @@
 	Divide Slices	スライスを分割
 	Divide Vertically Into	垂直方向に分割
 	Do you want to save the changes you made to “{name}”?	「{name}」への変更を保存しますか？
+	Can't open “{name}”.	「{name}」を開けません。
 	Document	ドキュメント
 	Document Ink Options	ドキュメントのインキオプション
 	Document JSON	ドキュメント JSON

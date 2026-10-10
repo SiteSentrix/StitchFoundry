@@ -1850,10 +1850,9 @@ fn recent(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::icons::icon(ui, "history", 16.0, t.icon);
             let r = ui.add(egui::Button::new(egui::RichText::new(&name).color(t.accent).size(13.0)).frame(false)).on_hover_text(&path);
             ui.add(egui::Label::new(egui::RichText::new(&folder).size(12.0).color(t.text_dim)).truncate());
-            if r.clicked()
-                && let Err(e) = crate::io::open_path(app, &path)
-            {
-                app.status(e);
+            if r.clicked() {
+                // A failure is reported to the user there.
+                let _ = crate::io::open_reporting(app, &path);
             }
         });
     }

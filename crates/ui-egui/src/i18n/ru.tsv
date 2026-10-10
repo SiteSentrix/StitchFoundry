@@ -684,6 +684,7 @@
 	Divide Vertically Into	Разделить по вертикали на
 	Do Not Move	Не перемещать
 	Do you want to save the changes you made to “{name}”?	Сохранить изменения, внесённые в «{name}»?
+	Can't open “{name}”.	Не удаётся открыть «{name}».
 	Document	Документ
 	Document Color Mode	Цветовой режим документа
 	Document Info	Сведения о документе

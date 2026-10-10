@@ -884,7 +884,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
         "file.reveal" => io::reveal(app),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
-            Some(path) => io::open_path(app, &path),
+            Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
         },
         "type.findFont" => {
