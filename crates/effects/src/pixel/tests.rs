@@ -144,6 +144,21 @@ fn glowing_edges_glow_alike_on_every_side() {
 }
 
 #[test]
+fn glowing_edges_defaults_keep_the_outline_bright_and_use_source_colour() {
+    let (w, h) = (17, 17);
+    let src = image(w, h, |x, y| if (4..13).contains(&x) && (4..13).contains(&y) { [180, 0, 0, 255] } else { [0; 4] });
+    let mut out = src.clone();
+    fx("stylize.glowingEdges", json!({})).apply(&mut out, w, h, &space(w, h));
+
+    let outline = at(&out, w, 4, 8);
+    assert!(outline[0] >= 170, "default outline should retain a near-full-color peak: {outline:?}");
+    let outside = at(&out, w, 3, 8);
+    assert_eq!(outside[1], 0, "transparent halo must not be grey: {outside:?}");
+    assert_eq!(outside[2], 0, "transparent halo must retain source hue: {outside:?}");
+    assert!(out.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
+}
+
+#[test]
 fn spin_blur_smears_along_arcs_and_keeps_the_centre() {
     let (w, h) = (41, 41);
     // A white dot 12 px right of the centre (20.5, 20.5), and one on the centre.
