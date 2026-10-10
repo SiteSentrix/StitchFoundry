@@ -16,8 +16,8 @@
 //! - `ui.dialog.set {field, value}` / `ui.dialog.confirm` / `ui.dialog.cancel`
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
-//! - `ui.render {path?, scale?, data?}`: render the active artboard headlessly (PNG; without a path,
-//!   or with `data: true`, as `pngBase64`)
+//! - `ui.render {path?, scale?, artboard?, data?}`: render an artboard headlessly (`artboard`: its
+//!   0-based index, default the first; PNG; without a path, or with `data: true`, as `pngBase64`)
 //! - `app.open {path}` (any readable format) / `app.save {path?, svg?: {…SVG options}}` / `app.quit`
 //!   (`file.close`, `file.closeAll` and `app.quit` first open a `saveChanges` dialog for each
 //!   modified document: `ui.dialog.confirm` saves, set `discard: true` then confirm to discard)
@@ -321,7 +321,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.render" => {
             let Some(st) = app.session.active() else { return err("no document") };
             let doc = st.doc.clone();
-            let Some(r) = doc.artboards.first().map(|a| a.rect) else { return err("no artboard") };
+            // The artboard asked for (0-based, as headless), else the first.
+            let index = p.get("artboard").and_then(Value::as_u64).map_or(Some(0), |i| usize::try_from(i).ok());
+            let Some(r) = index.and_then(|i| doc.artboards.get(i)).map(|a| a.rect) else { return err("no such artboard") };
             let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0);
             if let Err(e) = vectorcraft_render::raster_size(r, scale) {
                 return err(e);
@@ -388,5 +390,44 @@ pub fn save_screenshot(app: &mut VectorcraftApp, image: &egui::ColorImage, path:
             Err(e) => json!({"ok": false, "error": e}),
         },
         None => json!({"ok": false, "error": "no writer configured"}),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::{Value, json};
+    use vectorcraft_engine::Session;
+
+    use super::ControlRequest;
+    use crate::{Services, VectorcraftApp};
+
+    /// #1004: `ui.render` (the MCP `screenshot` of a connected app) renders the artboard asked
+    /// for, at the scale asked for; the first without one.
+    #[test]
+    fn render_takes_the_artboard_asked_for() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut app = VectorcraftApp::new(Session::new(), Services::default()).with_control(rx);
+        let mut request = |method: &str, params: Value| {
+            let (req, reply) = ControlRequest::new(method, params);
+            tx.send(req).unwrap();
+            app.drain_control(&egui::Context::default());
+            reply.try_recv().unwrap()
+        };
+        let new = json!({"width": 64, "height": 64, "units": "Points", "artboards": 2});
+        request("engine.execute", json!({"command": "file.new", "params": new}));
+        let board = json!({"index": 1, "x": 100, "y": 0, "width": 96, "height": 48});
+        let r = request("engine.execute", json!({"command": "artboard.setProps", "params": board}));
+        assert_eq!(r["ok"], true, "{r}");
+        for (params, size) in [
+            (json!({}), [64, 64]),
+            (json!({"artboard": 0}), [64, 64]),
+            (json!({"artboard": 1}), [96, 48]),
+            (json!({"artboard": 1, "scale": 0.5}), [48, 24]),
+        ] {
+            let r = request("ui.render", params.clone());
+            let got = [&r["result"]["width"], &r["result"]["height"]].map(Value::as_u64);
+            assert_eq!(got, size.map(Some), "{params}: {r}");
+        }
+        assert!(request("ui.render", json!({"artboard": 2}))["error"].is_string());
     }
 }
