@@ -129,7 +129,7 @@ fn default_ratio(h: &reader::Header) -> (Unit, f64) {
 
 /// The name of `$INSUNITS` code `code`.
 fn units_name(code: i64) -> &'static str {
-    const NAMES: [&str; 22] = [
+    const NAMES: [&str; 25] = [
         "Unitless",
         "Inches",
         "Feet",
@@ -152,6 +152,9 @@ fn units_name(code: i64) -> &'static str {
         "Light years",
         "Parsecs",
         "US survey feet",
+        "US survey inches",
+        "US survey yards",
+        "US survey miles",
     ];
     usize::try_from(code).ok().and_then(|i| NAMES.get(i)).copied().unwrap_or("Unitless")
 }
