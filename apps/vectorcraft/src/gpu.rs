@@ -31,7 +31,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use eframe::egui_wgpu::NativeAdapterSelectorMethod;
-use eframe::wgpu::{self, Backend, DeviceType, PowerPreference};
+use eframe::wgpu::{self, Backend, Backends, DeviceType, PowerPreference};
 
 /// The adapters a restart leaves out, those the window failed on, as comma-separated [`key`]s
 /// (`Vulkan:1002:164e`, `Metal:Intel Iris Pro Graphics`). Set by the app itself when it starts
@@ -79,6 +79,15 @@ pub fn automatic(pref: Option<&str>, env: Option<PowerPreference>) -> bool {
 /// The GPUs to rank first: those that drive a display, when the choice is [`automatic`].
 pub fn preferred_displays(pref: Option<&str>, env: Option<PowerPreference>) -> Vec<DisplayGpu> {
     if automatic(pref, env) { display_gpus() } else { Vec::new() }
+}
+
+/// The graphics backends the window starts with: on Windows Direct3D 12, falling back to OpenGL,
+/// unless `WGPU_BACKEND` names others (`env_set`; `default` then holds them). Creating a Vulkan
+/// instance loads every installed Vulkan driver into the process, and a faulty one (Intel's
+/// `igvk64.dll`, #806) crashed the app before its window appeared. DX12 is Windows' own backend,
+/// as in PdfCraft. Elsewhere, `default`.
+pub fn backends(default: Backends, env_set: bool) -> Backends {
+    if cfg!(windows) && !env_set { Backends::DX12 | Backends::GL } else { default }
 }
 
 /// One adapter, as [`adapter_order`] sees it.
@@ -807,6 +816,18 @@ mod tests {
             assert_eq!(adapter_order(&c, power, &[], None, &[]), [1, 0, 3, 2], "{power:?}");
         }
         assert_eq!(adapter_order(&c, PowerPreference::LowPower, &[], None, &[c[1].key.clone()]), [0, 3, 2], "DX12 failed: Vulkan next");
+    }
+
+    #[test]
+    fn windows_never_loads_vulkan_drivers_unless_asked() {
+        let all = Backends::all();
+        let start = backends(all, false);
+        if cfg!(windows) {
+            assert_eq!(start, Backends::DX12 | Backends::GL, "#806");
+        } else {
+            assert_eq!(start, all);
+        }
+        assert_eq!(backends(Backends::VULKAN, true), Backends::VULKAN, "WGPU_BACKEND=vulkan still picks it");
     }
 
     #[test]
