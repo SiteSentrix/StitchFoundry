@@ -1,13 +1,17 @@
 //! VectorCraft desktop app.
 //!
-//! Usage: `vectorcraft [--control <port>] [--in-window-menus] [files…]`
+//! Usage: `vectorcraft [--control <port> [--automation-read-root <dir>] [--automation-write-root <dir>]]
+//! [--in-window-menus] [files…]`
 //!
 //! `--in-window-menus` (or `VECTORCRAFT_IN_WINDOW_MENUS=1`) keeps the menus inside the window on
 //! macOS instead of the macOS menu bar (`mac_menu`).
 //!
 //! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
-//! See `vectorcraft_ui_egui::control` for the methods.
+//! See `vectorcraft_ui_egui::control` for the methods. `--automation-read-root` and
+//! `--automation-write-root` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` / `_WRITE_ROOT`) confine the
+//! files its requests read and write (`vectorcraft_engine::file_access`); the person at the
+//! keyboard isn't confined.
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
 #[cfg(all(feature = "windows7", any(feature = "wgpu", feature = "accessibility")))]
@@ -36,6 +40,7 @@ mod window;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
+use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
 use vectorcraft_ui_egui::picks::PickRequest;
 use vectorcraft_ui_egui::{ClipboardProbeFactory, FilePick, Services, VectorcraftApp};
@@ -51,7 +56,39 @@ struct App {
 }
 
 impl eframe::App for App {
-    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    // Each frame runs unconfined: it is the person at the keyboard's. The app confines what the
+    // control channel asks for, and the frames carrying input it injected, to the automation roots
+    // (`VectorcraftApp::with_automation_roots`), which are in force elsewhere in the process.
+    fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        file_access::unconfined(|| self.logic_frame(ctx, frame));
+    }
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        #[cfg(target_os = "macos")]
+        if self.app.services.native_menu.is_some() {
+            mac_menu::raw_input_hook(raw);
+        }
+        file_access::unconfined(|| self.app.raw_input_hook(raw));
+    }
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        file_access::unconfined(|| self.app.ui(ui));
+        #[cfg(target_os = "macos")]
+        if self.app.take_ime_discard() {
+            discard_marked_text();
+        }
+    }
+    #[cfg(not(feature = "windows7"))]
+    fn on_exit(&mut self) {
+        file_access::unconfined(|| save_prefs(&self.app));
+        end_before_teardown(self.frames);
+    }
+    #[cfg(feature = "windows7")]
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        file_access::unconfined(|| save_prefs(&self.app));
+    }
+}
+
+impl App {
+    fn logic_frame(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.frames = ctx.cumulative_frame_nr();
         if let Some(why) = self.graphics_loss.take() {
             // eframe can't give a window a new device: the user saves and starts again.
@@ -75,29 +112,6 @@ impl eframe::App for App {
         if self.app.ui.status == "quit" {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
-    }
-    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
-        #[cfg(target_os = "macos")]
-        if self.app.services.native_menu.is_some() {
-            mac_menu::raw_input_hook(raw);
-        }
-        self.app.raw_input_hook(raw);
-    }
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.app.ui(ui);
-        #[cfg(target_os = "macos")]
-        if self.app.take_ime_discard() {
-            discard_marked_text();
-        }
-    }
-    #[cfg(not(feature = "windows7"))]
-    fn on_exit(&mut self) {
-        save_prefs(&self.app);
-        end_before_teardown(self.frames);
-    }
-    #[cfg(feature = "windows7")]
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        save_prefs(&self.app);
     }
 }
 
@@ -389,12 +403,19 @@ fn main() -> std::process::ExitCode {
     // VectorCraft's own Fonts folder, which text.addFontFiles copies fonts into.
     prefs_dir::install_fonts();
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
+    let root_env = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+    let mut read_root = root_env("VECTORCRAFT_AUTOMATION_READ_ROOT");
+    let mut write_root = root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT");
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--control" => control_port = args.next().and_then(|p| p.parse().ok()),
+            "--automation-read-root" => read_root = args.next().map(std::path::PathBuf::from),
+            "--automation-write-root" => write_root = args.next().map(std::path::PathBuf::from),
+            _ if a.starts_with("--automation-read-root=") => read_root = a.split_once('=').map(|(_, d)| d.into()),
+            _ if a.starts_with("--automation-write-root=") => write_root = a.split_once('=').map(|(_, d)| d.into()),
             "--in-window-menus" => in_window_menus = true,
             "--version" => {
                 println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
@@ -417,6 +438,23 @@ fn main() -> std::process::ExitCode {
             None => logger.no_file(),
         }
     }
+    // The roots confine the control channel: a bad one keeps the app from starting rather than
+    // leaving agents unconfined. Without a control port there is nothing to confine.
+    let roots = if control_port.is_none() {
+        if read_root.is_some() || write_root.is_some() {
+            log::warn!("--automation-read-root and --automation-write-root confine the control channel: ignored without --control");
+        }
+        None
+    } else {
+        match AutomationRoots::new(read_root.as_deref(), write_root.as_deref()) {
+            Ok(roots) => roots,
+            Err(e) => {
+                log::error!("{e}");
+                eprintln!("vectorcraft: {e}");
+                return std::process::ExitCode::FAILURE;
+            }
+        }
+    };
     let saved = read_prefs();
     let saved_window = saved.as_ref().and_then(|ui| ui.window);
     #[cfg(feature = "wgpu")]
@@ -532,7 +570,13 @@ fn main() -> std::process::ExitCode {
                 app.custom_titlebar = CUSTOM_TITLEBAR;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
-                    app = app.with_control(rx);
+                    app = app.with_control(rx).with_automation_roots(roots.clone());
+                    if let Some(roots) = &roots {
+                        // Everywhere the app doesn't say whose work it is (worker threads), the
+                        // roots hold: unconfined is only what the person at the keyboard does.
+                        file_access::confine_process(roots.clone());
+                        log::info!("control channel confined to the automation roots: read {:?}, write {:?}", roots.read_root(), roots.write_root());
+                    }
                 }
                 #[cfg(target_os = "macos")]
                 {
@@ -544,7 +588,7 @@ fn main() -> std::process::ExitCode {
                 }
                 #[cfg(not(target_os = "macos"))]
                 let _ = in_window_menus;
-                open_files(&mut app, files);
+                file_access::unconfined(|| open_files(&mut app, files));
                 Ok(Box::new(App { app, graphics_loss, graphics_lost: false, frames: 0 }))
             }),
         )

@@ -3827,3 +3827,12 @@ axis	Both	Ambos
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: el resultado del paso {i} no tiene ese valor (escriba $$ para un $ literal)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: no hay ningún paso {i} antes de este (los pasos se cuentan desde 0; escriba $$ para un $ literal)
 @msg	object ids are non-negative integers, not {v}	los identificadores de objeto son enteros no negativos, no {v}
+@msg	automation filesystem access is not granted: read authority is absent: {path}	la automatización no tiene acceso al sistema de archivos: falta el permiso de lectura: {path}
+@msg	automation filesystem access is not granted: write authority is absent: {path}	la automatización no tiene acceso al sistema de archivos: falta el permiso de escritura: {path}
+@msg	automation path rejected: outside the read root {root}: {path}	ruta de automatización rechazada: fuera de la carpeta raíz de lectura {root}: {path}
+@msg	automation path rejected: outside the write root {root}: {path}	ruta de automatización rechazada: fuera de la carpeta raíz de escritura {root}: {path}
+@msg	automation path rejected: path is empty	ruta de automatización rechazada: la ruta está vacía
+@msg	automation path rejected: a link that leads nowhere: {path}	ruta de automatización rechazada: un vínculo que no lleva a ninguna parte: {path}
+@msg	automation path rejected: cannot resolve {path}: {e}	ruta de automatización rechazada: no se puede resolver {path}: {e}
+@msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	ruta de automatización rechazada: sube (..) desde una carpeta que no existe: {path}
+@msg	automation path rejected: reserved device names are not allowed: {path}	ruta de automatización rechazada: no se permiten nombres de dispositivo reservados: {path}

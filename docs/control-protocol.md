@@ -13,6 +13,34 @@ its request line is rejected first. At most 16 connections are served at once; f
 line and are closed. Clients that get an error reply should reconnect. The port has no authentication,
 so only enable it while you use it. Transport: `apps/vectorcraft/src/control_server.rs`.
 
+## Confining file access
+
+```sh
+vectorcraft --control 7979 --automation-read-root /work/project --automation-write-root /work/project/out
+```
+
+`--automation-read-root <dir>` and `--automation-write-root <dir>` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` /
+`VECTORCRAFT_AUTOMATION_WRITE_ROOT`; `--flag=<dir>` works too) confine what the control channel reads and
+writes, with the same flags as `vectorcraft-cli mcp` and the other Craft apps. Every path a request reads
+(open, place, relink, library and profile loads, plug-ins…) must lie inside the read root, every path it
+writes (save, export, package, captures, library saves…) inside the write root; anything else is an
+ordinary error reply. Paths are made absolute against the app's working directory, links are followed
+(for a file that doesn't exist yet, its folder's), and the comparison is by whole folder names (`/work2` is
+not inside `/work`), ignoring case on Windows; `..` below a folder that doesn't exist, a link that leads
+nowhere and Windows device names are refused. A root left out grants none of its access. The roots must be
+existing folders, or the app doesn't start; without `--control` they are ignored. See `docs/mcp.md`
+› Confining file access for the details.
+
+What is confined: the requests themselves, the frames that carry input they inject (`ui.click`, `ui.key`,
+`ui.text`…, so a menu item an agent clicks is confined too), the background saves and exports they start,
+and window captures. The person at the keyboard is not: files opened from the command line, Finder or a
+file dialog, and everything done with the mouse and keyboard, work as usual. The preferences that move
+folders the app reads or writes on its own (Additional Fonts Folder, Additional Plug-ins Folder, Data
+Recovery's folder, the Templates folder) can only be pointed inside the roots by automation. The app's own folders
+(preferences, Data Recovery, the library folders, VectorCraft's Fonts folder) are not confined, since no
+agent names a path there. A path is checked, then opened: another program that swaps in a link between
+the two can still win that race.
+
 | Method | Params | |
 |---|---|---|
 | `engine.execute` | `{command, params}` | run any engine or UI command (see `engine.commands`) |
@@ -27,8 +55,8 @@ so only enable it while you use it. Transport: `apps/vectorcraft/src/control_ser
 | `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel (Option on the Mac) zooms about the pointer; with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?}` | |
 | `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` | fill and submit the open dialog |
-| `ui.screenshot` | `{path?}` | capture the window (PNG). Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
-| `ui.render` | `{path?, scale?}` | render the artboard headlessly (PNG) |
+| `ui.screenshot` | `{path?, data?}` | capture the window (PNG), written to `path`; `data: true` sends it back as `pngBase64` too. Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
+| `ui.render` | `{path?, scale?, data?}` | render the artboard headlessly (PNG): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
 | `ui.resize` / `ui.focus` | | |
 | `app.open` / `app.save` / `app.export` / `app.quit` | `{path}` / `{path?}` / `{path?, format?, artboard?, range?, scale?, …}` | `app.open` reads every format `document.open` reads (see `document.formats`) and returns its result (`{index, title, format, warnings, …}`; `warnings` say what didn't come in as it was, such as an EPS shown as its preview image and why its PostScript couldn't be read), or null when a dialog asks first or a library loads. `app.export` encodes through the engine's `document.export` (same options; the document keeps its path) and writes `path` through the host; without `path` it returns `{dataBase64, format, bytes}`, as headless mode does. `app.quit`, `file.close` and `file.closeAll` first open a `saveChanges` dialog for each modified document (they return `{"pending": "saveChanges"}`): `ui.dialog.confirm` saves, `ui.dialog.set {field: "discard", value: true}` then confirm discards, `ui.dialog.cancel` cancels the whole close or quit |
 | `app.export` with `useArtboards` | `{path, useArtboards: true, range? \| artboards?, …}` | Export As: PNG, JPEG and WebP write one file per chosen artboard (default all; SVG does so for a `range`), `<path stem>-<artboard>.<ext>`, and return `{path, files: [path…]}`; a PDF keeps them as pages of `path`. `useArtboards: false` covers the bounds of the visible art. The menu's Export As… is `file.exportAs`: the `exportAs` dialog (`format`, `useArtboards`, `all`, `range`), then a save dialog and the format's options: `pngOptions` / `jpgOptions` / `webpOptions`, `svgOptions`, or `savePdf` for a PDF with Use Artboards |

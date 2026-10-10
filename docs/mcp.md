@@ -49,6 +49,57 @@ claude mcp add vectorcraft -- "C:\Program Files\VectorCraft\vectorcraft-cli.exe"
 claude mcp add vectorcraft -- vectorcraft-cli mcp
 ```
 
+## Confining file access
+
+```sh
+vectorcraft-cli mcp --automation-read-root /work/project --automation-write-root /work/project/out
+```
+
+```json
+{"mcpServers": {"vectorcraft": {"command": "/abs/path/target/release/vectorcraft-cli",
+  "args": ["mcp", "--automation-read-root", "/work/project", "--automation-write-root", "/work/project/out"]}}}
+```
+
+The two flags (PhotoCraft and the other Craft apps take the same ones, so one client config works across
+the suite) keep the agent to the folders you give it:
+
+- Every file a command reads must lie inside the **read root**: `open_file`, `file.place`, relinking and
+  updating links, the images an SVG links to, swatch library, graphic style library and colour-profile loads, plug-ins,
+  `file.newFromTemplate`, preset imports, the folders `text.findFontFiles` searches.
+- Every file a command writes must lie inside the **write root**: `save_file`, `export`, the save and
+  export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
+  library and preset saves to a path.
+- Read and write access are separate. Give the same folder twice for both; a root left out grants none
+  of its access (with only `--automation-read-root`, nothing can be written to disk, though `export` and
+  the save commands without a path still return the bytes). Without either flag nothing changes.
+- A path is made absolute against the server's working directory, then its links are followed: a file
+  (or folder) link that leads out of a root is outside it. For a file that doesn't exist yet, its nearest
+  existing folder's links are followed and the rest must be plain names, so `..` below a folder that
+  doesn't exist is refused, as is a link that leads nowhere (writing through it would create its target).
+  The result is compared with the root by whole folder names: `/work2/x` is not inside `/work`. On
+  Windows case is ignored, UNC paths (`\\server\share\…`) are resolved like drive-letter ones, and
+  device names (`CON`, `NUL`, `COM1`…) are refused.
+- A refused path is an ordinary tool error the agent can read and correct, for example
+  `automation path rejected: outside the write root /work/project/out: /etc/x.png` or
+  `automation filesystem access is not granted: write authority is absent: /work/project/out/x.png`.
+  Links in an opened document that point outside the read root show as missing.
+- The preferences that move folders the app reads or writes on its own (`fontsFolder`,
+  `pluginsFolder`, `recoveryFolder`, `templatesFolder`) can only be set inside the roots. The app's own folders
+  (preferences, Data Recovery, the User Defined library folders, VectorCraft's Fonts folder) are not
+  confined: no agent names a path there.
+- The roots must be existing folders; a missing one stops the server with an error. Each flag is
+  given once (`--flag <dir>` or `--flag=<dir>`).
+
+The flags confine the headless server and imply `--headless`; `--connect` with them is an error, since
+the server would otherwise talk to an app that isn't confined. A running app confines itself: start it
+with the same flags, `vectorcraft --control 7979 --automation-read-root <dir> --automation-write-root
+<dir>`, and connect as usual (see [Control protocol](control-protocol.md#confining-file-access)). The
+server then writes nothing itself: `screenshot {path}` asks the app to write the file.
+
+The checks hold for every thread of the server process. A path is checked, then opened: another program
+that swaps a link in between can still win that race, so the roots keep an agent to the files it was
+given rather than guarding against other software on the computer.
+
 ## Protocol
 
 Newline-delimited JSON-RPC 2.0 on stdio. The revision is **`2025-06-18`**; `2025-03-26` and `2024-11-05` are
@@ -223,7 +274,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `type_text` | `{text}` | Remote only. |
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. Includes UI commands such as `view.*` and `window.*` in remote mode. |
 | `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
-| `screenshot` | `{path?, scale?, artboard?, window?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard; `window:true` captures the app window (remote only). |
+| `screenshot` | `{path?, scale?, artboard?, window?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard; `window:true` captures the app window (remote only). With `path` the backend (the headless session or the app) writes the PNG there too. |
 | `open_file` | `{path}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`, `.dxf`, `.emf`, `.wmf`, PNG, JPEG, GIF, WebP, TIFF, BMP (an image opens as a document of its pixel size). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). `run_command document.formats` lists the formats. |
 | `save_file` | `{path?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable). |
 | `export` | `{path?, format?, scale?, artboard?, range?, selection?, outlineText?, options?}` | `svg`, `svgz`, `pdf`, `eps`, `dxf`, `emf`, `wmf`, `png`, `jpg`, `webp`, `gif`, `png8` (an indexed `.png`), `tiff`, `bmp`, `tga`, `psd` (layered), `txt` (the document's text), `vectorcraft` or `template` (a native template). The tool's `format` enum and `document.formats` list them, generated from the engine's format table. When `format` is omitted, it comes from the path's extension. PDF writes one page per artboard: all of them, or `artboard` (0-based) / `range` (`"1-3, 5"`, 1-based); the other formats write one artboard. `options` carries more format options (e.g. `{"quality": 80}` for JPEG). `selection: true` exports the selected objects cropped to their bounds (the reply adds their `bounds`, and reports `format` and the encoder's `warnings` as a whole-document export does); `outlineText: true` writes SVG text as paths. Template layers are left out, live effects are kept, and exporting `vectorcraft` never changes the document's path. Without `path` the bytes come back as `dataBase64`. Both backends run the same `document.export` call. |

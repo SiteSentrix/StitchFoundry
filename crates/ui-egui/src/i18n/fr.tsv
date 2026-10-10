@@ -3838,3 +3838,12 @@ axis	Both	Les deux
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}` : le résultat de l’étape {i} n’a pas cette valeur (écrivez $$ pour un $ littéral)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}` : il n’y a pas d’étape {i} avant celle-ci (les étapes sont comptées à partir de 0 ; écrivez $$ pour un $ littéral)
 @msg	object ids are non-negative integers, not {v}	les identifiants d’objet sont des entiers positifs ou nuls, pas {v}
+@msg	automation filesystem access is not granted: read authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation de lecture : {path}
+@msg	automation filesystem access is not granted: write authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation d’écriture : {path}
+@msg	automation path rejected: outside the read root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine de lecture {root} : {path}
+@msg	automation path rejected: outside the write root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine d’écriture {root} : {path}
+@msg	automation path rejected: path is empty	chemin d’automatisation refusé : le chemin est vide
+@msg	automation path rejected: a link that leads nowhere: {path}	chemin d’automatisation refusé : un lien qui ne mène nulle part : {path}
+@msg	automation path rejected: cannot resolve {path}: {e}	chemin d’automatisation refusé : impossible de résoudre {path} : {e}
+@msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	chemin d’automatisation refusé : remonte (..) depuis un dossier qui n’existe pas : {path}
+@msg	automation path rejected: reserved device names are not allowed: {path}	chemin d’automatisation refusé : les noms de périphériques réservés ne sont pas autorisés : {path}

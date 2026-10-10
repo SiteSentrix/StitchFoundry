@@ -649,43 +649,50 @@ fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
 
 fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     let path = a.get("path").and_then(Value::as_str);
-    if a.get("window").and_then(Value::as_bool) == Some(true) {
-        need_ui(b, "screenshot {window:true}")?;
-        // The app writes the capture to disk (loopback: same machine), then we read it back.
-        let tmp;
-        let target = match path {
-            Some(p) => p,
-            None => {
-                tmp = std::env::temp_dir().join(format!("vectorcraft-window-{}.png", std::process::id())).to_string_lossy().to_string();
-                &tmp
-            }
-        };
-        let r = b.call("ui.screenshot", json!({"path": target}))?;
-        let png = std::fs::read(target).map_err(|e| format!("read {target}: {e}"))?;
-        if path.is_none() {
-            std::fs::remove_file(target).ok();
-        }
-        return Ok(image_result(&png, json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": path})));
-    }
-    let mut p = json!({});
-    for k in ["scale", "artboard"] {
-        if let Some(v) = a.get(k) {
-            p[k] = v.clone();
-        }
-    }
-    let r = b.call("ui.render", p)?;
-    let b64 = r.get("pngBase64").and_then(Value::as_str).ok_or("renderer returned no image")?;
+    let window = a.get("window").and_then(Value::as_bool) == Some(true);
+    // The backend writes the file, where its automation roots allow, and sends the image back too
+    // (`data`): this process writes nothing.
+    let mut p = json!({"data": true});
     if let Some(path) = path {
-        let png = vectorcraft_format::base64_decode(b64).ok_or("renderer returned bad base64")?;
-        std::fs::write(path, png).map_err(|e| format!("write {path}: {e}"))?;
+        p["path"] = json!(path);
     }
-    Ok(ToolResult {
-        content: vec![
-            json!({"type": "image", "data": b64, "mimeType": "image/png"}),
-            json!({"type": "text", "text": json!({"width": r.get("width"), "height": r.get("height"), "path": path}).to_string()}),
-        ],
-        is_error: false,
-    })
+    let r = if window {
+        need_ui(b, "screenshot {window:true}")?;
+        b.call("ui.screenshot", p)?
+    } else {
+        for k in ["scale", "artboard"] {
+            if let Some(v) = a.get(k) {
+                p[k] = v.clone();
+            }
+        }
+        b.call("ui.render", p)?
+    };
+    let png = match r.get("pngBase64").and_then(Value::as_str) {
+        Some(b64) => vectorcraft_format::base64_decode(b64).ok_or("the backend returned bad base64")?,
+        // An app from before `data` wrote the file without sending the image: read it back
+        // (loopback: the same machine).
+        None => match path {
+            Some(path) => std::fs::read(path).map_err(|e| format!("read {path}: {e}"))?,
+            None if window => return old_window_capture(b),
+            None => return Err("the renderer returned no image".into()),
+        },
+    };
+    let info = if window {
+        json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": path})
+    } else {
+        json!({"width": r.get("width"), "height": r.get("height"), "path": path})
+    };
+    Ok(image_result(&png, info))
+}
+
+/// The window of an app from before `ui.screenshot {data}`, captured through a temporary file.
+fn old_window_capture(b: &mut dyn Backend) -> Result<ToolResult, String> {
+    let tmp = std::env::temp_dir().join(format!("vectorcraft-window-{}.png", std::process::id())).to_string_lossy().to_string();
+    let r = b.call("ui.screenshot", json!({"path": tmp}))?;
+    let png = std::fs::read(&tmp).map_err(|e| format!("read {tmp}: {e}"))?;
+    // Best effort: a temporary file left behind is harmless.
+    std::fs::remove_file(&tmp).ok();
+    Ok(image_result(&png, json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": Value::Null})))
 }
 
 fn image_result(png: &[u8], info: Value) -> ToolResult {
