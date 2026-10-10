@@ -8,7 +8,11 @@ fn tags_map_to_languages() {
     assert_eq!(lang_from_tag("en_US.UTF-8"), Some(Lang::EN));
     assert_eq!(lang_from_tag("C"), Some(Lang::EN));
     assert_eq!(lang_from_tag("POSIX"), Some(Lang::EN));
-    assert_eq!(lang_from_tag("de_DE"), None);
+    assert_eq!(lang_from_tag("nl_NL"), None);
+    // German: Germany, Austria, Switzerland and the rest share the one catalog.
+    for tag in ["de", "de_DE.UTF-8", "de-AT", "de_CH", "de-LU", "de_DE.UTF-8@euro"] {
+        assert_eq!(lang_from_tag(tag), Some(de()), "{tag}");
+    }
     assert_eq!(lang_from_tag("ja_JP.UTF-8"), Lang::from_code("ja"));
     assert_eq!(lang_from_tag("ja"), Lang::from_code("ja"));
     // Spanish: every region (and Latin America as a whole) resolves to the one catalog.
@@ -51,7 +55,8 @@ fn candidates_walk_from_specific_to_general() {
 #[test]
 fn os_language_lists_are_parsed() {
     assert_eq!(first_supported("(\n    \"zh-Hant-TW\",\n    \"en-US\"\n)\n"), Some(ZH()));
-    assert_eq!(first_supported("(\n    \"de-DE\",\n    \"en-US\"\n)\n"), Some(Lang::EN));
+    assert_eq!(first_supported("(\n    \"nl-NL\",\n    \"en-US\"\n)\n"), Some(Lang::EN));
+    assert_eq!(first_supported("(\n    \"de-DE\",\n    \"en-US\"\n)\n"), Some(de()));
     assert_eq!(first_supported("(\n    \"fr-FR\",\n    \"en-US\"\n)\n"), Lang::from_code("fr"));
     assert_eq!(first_supported("("), None);
     // Windows: `reg query HKCU\Control Panel\International /v LocaleName`.
@@ -435,9 +440,9 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 8] = ["cs", "es", "fr", "it", "ja", "pt-br", "ru", "uk"];
+const KEEPS_MENU_NAMES: [&str; 9] = ["cs", "de", "es", "fr", "it", "ja", "pt-br", "ru", "uk"];
 
-/// Menu labels the menu-complete catalogs (Czech, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
+/// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
 /// Each language's own name in the Language menu is left alone too.
 const MENU_KEEP_AS_IS: &[&str] = &[
@@ -527,7 +532,7 @@ fn toggled_labels() -> Vec<String> {
     labels
 }
 
-/// Czech, Spanish, Italian, Japanese and Brazilian Portuguese cover every menu label, the Show/Hide pairs
+/// Czech, German, Spanish, Italian, Japanese and Brazilian Portuguese cover every menu label, the Show/Hide pairs
 /// and the canvas context menu included (panels and dialogs not yet).
 #[test]
 fn menu_catalogs_translate_every_menu_label() {
@@ -565,7 +570,12 @@ fn menu_catalogs_translate_every_menu_label() {
     }
     assert_eq!(tr(Lang::from_code("pt-br").expect("pt-br"), "File"), "Arquivo");
     assert_eq!(tr(es(), "File"), "Archivo");
+    assert_eq!(tr(de(), "File"), "Datei");
     assert_eq!(tr(it(), "Edit"), "Modifica");
+}
+
+fn de() -> Lang {
+    Lang::from_code("de").expect("de registered")
 }
 
 fn es() -> Lang {
@@ -607,6 +617,36 @@ fn spanish_reads_as_spanish() {
     assert_eq!(trn(es(), 1, "{n} Layer", "{n} Layers"), "1 capa");
     assert_eq!(trn(es(), 0, "{n} Layer", "{n} Layers"), "0 capas");
     assert_eq!(trn(es(), 3, "{n} Layer", "{n} Layers"), "3 capas");
+}
+
+/// German uses the vector-illustration vocabulary its users know, has two plural forms like
+/// English (zero takes the plural), translates the reason inside a message too, and tells the
+/// interface theme ("Erscheinungsbild") from the Appearance panel ("Aussehen").
+#[test]
+fn german_reads_as_german() {
+    for (en, want) in [
+        ("Artboard Tool", "Zeichenflächen-Werkzeug"),
+        ("Swatches", "Farbfelder"),
+        ("Pathfinder", "Pathfinder"),
+        ("Stroke", "Kontur"),
+        ("Fill", "Fläche"),
+        ("Direct Selection Tool", "Direktauswahl-Werkzeug"),
+        ("Save As…", "Speichern unter…"),
+        ("Undo", "Rückgängig"),
+    ] {
+        assert_eq!(tr(de(), en), want);
+    }
+    assert_eq!(trn(de(), 1, "{n} Layer", "{n} Layers"), "1 Ebene");
+    assert_eq!(trn(de(), 0, "{n} Layer", "{n} Layers"), "0 Ebenen");
+    assert_eq!(trn(de(), 3, "{n} Layer", "{n} Layers"), "3 Ebenen");
+    assert_eq!(tr_ctx(de(), "axis", "Both"), "Beide");
+    assert_eq!(tr(de(), "Appearance"), "Aussehen");
+    assert_eq!(tr_ctx(de(), "theme", "Appearance"), "Erscheinungsbild");
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(de(), nested), "der Befehl `object.group` ist derzeit nicht verfügbar: nichts ausgewählt");
+    // Text styles are "…format" in German: the kind is joined to it ("Neues Zeichenformat erstellen").
+    assert_eq!(fmt(tr(de(), "Create New {kind} Style"), &[("kind", tr(de(), "Character"))]), "Neues Zeichenformat erstellen");
+    assert_eq!(fmt(tr(de(), "Show {kind} Brushes"), &[("kind", tr(de(), "Calligraphic"))]), "Kalligrafiepinsel einblenden");
 }
 
 /// French uses the vector-illustration vocabulary its users know, puts zero in the singular (« 0
@@ -769,7 +809,7 @@ fn russian_plurals_have_three_forms() {
     assert_eq!(forms, [2, 0, 1, 1, 2, 2, 0, 1, 2, 2, 0]);
 }
 
-/// Czech, Spanish, French and Italian letters (and the punctuation their text uses) come from each family's own first font, not
+/// Czech, German, Spanish, French and Italian letters (and the punctuation their text uses) come from each family's own first font, not
 /// from a fallback further down the stack. (`has_glyph` can't tell: it counts characters of the
 /// face that draws missing glyphs, the first one, as missing.)
 #[test]
@@ -784,7 +824,7 @@ fn latin_script_glyphs_are_available_without_system_fonts() {
             let first = first.unwrap();
             let mut font = fonts.fonts.font(&family);
             let chars = font.characters();
-            for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”àèìòùÀÈÌÒÙ«»’âêîôûçëïÿœæÂÊÎÔÛÇËÏŒÆ\u{a0}".chars()
+            for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”àèìòùÀÈÌÒÙ«»’âêîôûçëïÿœæÂÊÎÔÛÇËÏŒÆäöÄÖß\u{a0}".chars()
             {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
             }
@@ -884,7 +924,7 @@ fn complete_languages_translate_every_message() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["es", "fr", "it", "ja", "ru", "uk"];
+const COMPLETE_MESSAGES: &[&str] = &["de", "es", "fr", "it", "ja", "ru", "uk"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];

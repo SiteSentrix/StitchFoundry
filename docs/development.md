@@ -166,7 +166,8 @@ always use the English ids and labels, so agents and scripts never see translate
 Languages shipped: English (`en`, the source), Traditional Chinese (`zh-hant`, complete, in the vocabulary used
 in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Simplified Chinese (`zh-hans`,
 complete, in the vocabulary used in mainland China; `zh-CN`, `zh-SG`, `zh-Hans-*` and a bare `zh` resolve to it,
-so the two scripts never mix), Japanese (`ja`, complete), Spanish (`es`, complete, in neutral
+so the two scripts never mix), Japanese (`ja`, complete), German (`de`, complete; `de-DE`, `de-AT`, `de-CH` and every
+other `de-*` locale resolve to it), Spanish (`es`, complete, in neutral
 international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or `es-419` resolves to it), French (`fr`,
 complete; `fr-FR`, `fr-BE`, `fr-CA`, `fr-CH` and every other `fr-*` locale resolve to it), Italian (`it`,
 complete; `it-IT`, `it-CH` and every other `it-*` locale resolve to it), Russian (`ru`, complete; every `ru-*`
