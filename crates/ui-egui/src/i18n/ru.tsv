@@ -3755,6 +3755,7 @@ axis	Both	Оба
 @msg	the image's pixels don't match its size	пиксели изображения не соответствуют его размеру
 @msg	the layer has no objects to clip by	в слое нет объектов для обрезки
 @msg	the layer or group is locked	слой или группа заблокированы
+@msg	the target layer is locked or hidden	целевой слой заблокирован или скрыт
 @msg	the layer to flatten into is hidden	слой для объединения скрыт
 @msg	the object already has an opacity mask	у объекта уже есть непрозрачная маска
 @msg	the object has no geometry	у объекта нет геометрии

@@ -78,6 +78,36 @@ fn art_in_a_sublayer_is_selected_as_objects_not_the_sublayer() {
     assert!(s.doc().unwrap().doc.node(a).is_none());
 }
 
+/// #1002: with no layer shown and unlocked, new art is refused (the document unchanged) rather
+/// than put on a hidden or locked layer; another layer that takes art still gets it.
+#[test]
+fn new_art_is_refused_when_no_layer_is_shown_and_unlocked() {
+    for prop in ["visible", "locked"] {
+        let mut s = session();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let copied = rect(&mut s, 0.0);
+        run(&mut s, "select.set", json!({"ids": [copied.0]}));
+        run(&mut s, "edit.copy", json!({}));
+        run(&mut s, "select.none", json!({}));
+        run(&mut s, "layer.setProps", json!({"ids": [layer.0], prop: prop == "locked"}));
+        let before = s.doc().unwrap().doc.clone();
+        for (cmd, p) in [
+            ("shape.ellipse", json!({"x": 10, "y": 10, "width": 20, "height": 20})),
+            ("shape.polarGrid", json!({"x": 10, "y": 10, "width": 20, "height": 20})),
+            ("text.create", json!({"x": 10, "y": 40, "text": "A"})),
+            ("edit.paste", json!({})),
+        ] {
+            let e = s.execute(cmd, &p).unwrap_err();
+            assert_eq!(e.to_string(), "the target layer is locked or hidden", "{prop} {cmd}");
+        }
+        assert_eq!(s.doc().unwrap().doc.layers, before.layers, "{prop}: nothing was added");
+        let other = id(&run(&mut s, "layer.new", json!({})));
+        run(&mut s, "layer.setCurrent", json!({"id": layer.0}));
+        let n = rect(&mut s, 50.0);
+        assert_eq!(parent(&s, n), Some(other), "{prop}");
+    }
+}
+
 #[test]
 fn clicking_rows_at_any_depth_highlights_them_and_sets_the_current_layer() {
     let mut s = session();

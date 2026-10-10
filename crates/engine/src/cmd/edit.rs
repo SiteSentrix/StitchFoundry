@@ -346,7 +346,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     let off = s.prefs.paste_offset;
     let st = s.doc()?;
     let same_doc = clip.source_doc == Some(st.uid);
-    let parent = st.insertion_parent();
+    let parent = st.target_parent()?;
     // A copied artboard comes back with its art: right of the last artboard, or where it was
     // (Paste in Place, in Front, in Back). Paste on All Artboards pastes only the art.
     let board = clip
