@@ -274,9 +274,12 @@ fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
     fileio::write_atomic(std::path::Path::new(path), bytes).map_err(|e| e.to_string())
 }
 
-/// Linux: show the dialog for `request` over `parent` on a thread of its own, answering on the
-/// receiver. Shown on the UI thread, nothing would answer the compositor meanwhile, which then
-/// offers to kill the window as not responding (#592).
+/// Linux and macOS: show the dialog for `request` over `parent` on a thread of its own, answering
+/// on the receiver. Shown on the UI thread, nothing would answer the compositor meanwhile on Linux,
+/// which then offers to kill the window as not responding (#592); on macOS the panel ran modally
+/// inside the window's event handler, and resizing it delivered window events to that handler
+/// again, which crashed the app (#867). From another thread, rfd runs the panel on the main thread
+/// from the run loop, outside the handler.
 fn start_pick(request: PickRequest, parent: &Parent) -> Option<std::sync::mpsc::Receiver<Vec<String>>> {
     let dialog = file_dialog(&request, parent);
     let (tx, rx) = std::sync::mpsc::channel();
@@ -296,9 +299,9 @@ fn services(parent: Parent) -> Services {
         pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
         pick_open_multi: Some(Box::new(move || pick_now(PickRequest::OpenMany, &p2))),
         pick_save: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Save(pick.clone()), &p3).into_iter().next())),
-        // Windows and macOS dialogs run the window's events while they are open; Linux's don't.
-        start_pick: cfg!(all(unix, not(target_os = "macos")))
-            .then(|| Box::new(move |request: PickRequest| start_pick(request, &p5)) as vectorcraft_ui_egui::picks::StartPick),
+        // Windows dialogs run the window's events while they are open; Linux's don't, and macOS
+        // ones re-enter the window's event handler (#867).
+        start_pick: cfg!(unix).then(|| Box::new(move |request: PickRequest| start_pick(request, &p5)) as vectorcraft_ui_egui::picks::StartPick),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(write_file)),
         // Background Save and Export write from a worker thread.
