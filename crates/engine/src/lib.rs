@@ -346,6 +346,14 @@ impl DocState {
         // A sublayer takes new art only while it and the layers around it are shown and unlocked.
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()) && self.doc.is_editable(*l)).or_else(|| self.doc.default_layer())
     }
+    /// [`Self::insertion_parent`] for new art, which a locked or hidden layer never takes: an error
+    /// when no layer is shown and unlocked, so the art is refused rather than hidden or locked away.
+    pub fn target_parent(&self) -> Result<Option<NodeId>> {
+        match self.insertion_parent() {
+            Some(p) if !self.doc.is_editable(p) => Err(EngineError::Other("the target layer is locked or hidden".into())),
+            parent => Ok(parent),
+        }
+    }
     /// The highlighted Layers panel rows that still exist (ids are reused after undo, so a
     /// remembered row must still be in the document).
     pub fn highlighted_rows(&self) -> Vec<NodeId> {

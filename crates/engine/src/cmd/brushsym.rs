@@ -603,7 +603,7 @@ fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
     let centre = d.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
     let c = Point::new(f64_or(p, "x", centre.x), f64_or(p, "y", centre.y));
     let size = natural_size(d, &name);
-    let parent = s.doc()?.insertion_parent();
+    let parent = s.doc()?.target_parent()?;
     let id = s.edit("Place Symbol Instance", |d, sel| {
         let id = d.alloc_id();
         d.insert(parent, usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: place_xf(c, size) }))?;
@@ -843,7 +843,8 @@ fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
     let alt = bool_or(p, "alt", false);
     let size = natural_size(&st.doc, &name);
     let set = st.selection.objects.first().copied().filter(|id| st.selection.len() == 1 && st.doc.node(*id).is_some_and(is_symbol_set));
-    let parent = st.insertion_parent();
+    // Only a new Symbol Set needs a layer that takes new art.
+    let parent = if alt || set.is_some() { st.insertion_parent() } else { st.target_parent()? };
     if alt {
         // Remove instances of this symbol under the brush (within the set, or anywhere).
         let d = &st.doc;

@@ -79,7 +79,7 @@ pub(crate) fn add_node(s: &mut Session, label: &str, kind: NodeKind, appearance:
 
 /// Insert a new object looking like `look` (drawing modes apply); select it.
 pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>) -> Result<Value> {
-    let parent = s.doc()?.insertion_parent();
+    let parent = s.doc()?.target_parent()?;
     let mode = s.draw_mode;
     let inside = s.draw_inside;
     let behind_of = s.doc()?.selection.in_paint_order(&s.doc()?.doc).first().copied();
@@ -298,7 +298,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         };
         parts.push(("Ring", circle(at, rr), radial(at, rr, stops), 1.0));
     }
-    let parent = s.doc()?.insertion_parent();
+    let parent = s.doc()?.target_parent()?;
     let id = s.edit("Flare", |d, sel| {
         let children = parts
             .into_iter()
@@ -352,7 +352,7 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn grid_group(s: &mut Session, label: &str, paths: Vec<PathData>) -> Result<Value> {
-    let parent = s.doc()?.insertion_parent();
+    let parent = s.doc()?.target_parent()?;
     let look = s.new_art_look(vectorcraft_color::Paint::None, s.paint.stroke.clone(), s.paint.stroke_width);
     let id = s.edit(label, |d, sel| {
         let children = paths

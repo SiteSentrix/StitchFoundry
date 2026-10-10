@@ -702,7 +702,7 @@ fn trim_marks(s: &mut Session, p: &Value) -> Result<Value> {
     if rects.is_empty() {
         return Err(bad(C, "nothing to mark"));
     }
-    let parent = s.doc()?.insertion_parent();
+    let parent = s.doc()?.target_parent()?;
     let ids = s.edit("Create Trim Marks", |d, sel| {
         let mut ids = vec![];
         for r in &rects {

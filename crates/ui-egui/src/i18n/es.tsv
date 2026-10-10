@@ -3759,6 +3759,7 @@ axis	Both	Ambos
 @msg	the image's pixels don't match its size	los píxeles de la imagen no coinciden con su tamaño
 @msg	the layer has no objects to clip by	la capa no tiene objetos con los que recortar
 @msg	the layer or group is locked	la capa o el grupo está bloqueado
+@msg	the target layer is locked or hidden	la capa de destino está bloqueada u oculta
 @msg	the layer to flatten into is hidden	la capa en la que acoplar está oculta
 @msg	the object already has an opacity mask	el objeto ya tiene una máscara de opacidad
 @msg	the object has no geometry	el objeto no tiene geometría
