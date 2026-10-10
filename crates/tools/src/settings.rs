@@ -35,6 +35,27 @@ const ROWS: &[Row] = &[
     (&["star"], None, &["points"]),
     (&["freeTransform"], None, &["constrain"]),
     (&["artboard"], None, &["moveArt", "scaleArt"]),
+    // Flare Tool Options (`extra::FLARE_OPTIONS` and the Rays and Rings checkboxes).
+    (
+        &["flare"],
+        None,
+        &[
+            "diameter",
+            "opacity",
+            "brightness",
+            "growth",
+            "fuzziness",
+            "raysOn",
+            "rays",
+            "longest",
+            "rayFuzziness",
+            "ringsOn",
+            "pathLength",
+            "rings",
+            "largest",
+            "direction",
+        ],
+    ),
 ];
 
 /// The stores `tool`'s persistent options live in, each with the option keys it holds.

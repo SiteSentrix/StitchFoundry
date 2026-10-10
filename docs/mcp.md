@@ -2685,11 +2685,22 @@ active tool, `tool` names another one, and `{}` just reads them; the result is t
 tool keeps last across tool switches (and documents) and are saved with the preferences (`toolSettings` in
 `prefs.get`'s full object), as the reference app keeps them: the Liquify tools' brush and tool options, Mirror & Cut's
 axis and side, Puppet Warp's mesh, the Symbolism brush, the line, grid, pencil, brush and eraser tools' options,
-polygon sides and star points. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
+polygon sides and star points, and the Flare Tool Options. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
 intensity), and the Symbolism tools one brush. Interaction state (pins, a reference point) starts afresh.
 
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
+```
+
+`tool.options {tool}` opens what double-clicking the tool's button opens (its params doc lists every tool), in the
+desktop app. The Flare tool's are its Flare Tool Options (dialog `flareOptions`): `diameter` and `pathLength` (pt),
+`opacity`, `brightness`, `growth`, `fuzziness`, `longest`, `rayFuzziness` and `largest` (%), `rays`, `rings`,
+`direction` (°), and `raysOn` and `ringsOn` (the Rays and Rings checkboxes; off, the flare has none). OK keeps them
+(`tool.setOption {tool: "flare", values}`) and the next flare dragged out uses them; a click with the tool opens the
+same dialog, and its OK also draws a flare there.
+
+```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"flare","values":{"rays":24,"ringsOn":false}}}}
 ```
 
 ## Perspective grid

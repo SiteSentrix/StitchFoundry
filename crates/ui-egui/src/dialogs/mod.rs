@@ -29,6 +29,7 @@ mod export_as;
 mod export_for_screens;
 pub mod eyedropper;
 pub mod file_info;
+pub mod flare_options;
 pub mod flatten;
 pub mod flattener_presets;
 mod form;
@@ -276,6 +277,7 @@ registry! {
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
+    FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
