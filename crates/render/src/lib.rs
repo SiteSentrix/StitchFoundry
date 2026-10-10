@@ -110,6 +110,10 @@ pub struct RenderOptions {
     /// Screen view in isolation mode: the isolated group or layer. Everything around it draws
     /// dimmed ([`ISOLATION_DIM`]).
     pub isolated: Option<NodeId>,
+    /// Composite in floating point (exports): translucent art over opaque art comes out exactly
+    /// opaque, where 8-bit compositing leaves alpha 254 on some anti-aliased edges (#787). Off,
+    /// the faster 8-bit pipeline (the canvas).
+    pub precise: bool,
 }
 
 /// The opacity of the art around an isolated group or layer.
@@ -181,6 +185,7 @@ impl Default for RenderOptions {
             trace_views: false,
             smooth_images: true,
             isolated: None,
+            precise: false,
         }
     }
 }
@@ -362,6 +367,9 @@ pub struct Renderer {
     /// Inline graphics being drawn inside inline graphics (a symbol whose art holds text showing
     /// it): drawing stops at [`MAX_INLINE_DEPTH`].
     inline_depth: u32,
+    /// How the frame being drawn is rasterized ([`RenderOptions::precise`]): its offscreen groups,
+    /// masks and patterns too.
+    raster: vello_cpu::RasterizerSettings,
     /// [`RenderOptions::isolated`]'s layers and groups, from the top layer down to it, for the
     /// frame (`stamp`) and document they were found in.
     isolation: Option<(u64, usize, NodeId, Vec<NodeId>)>,
@@ -453,6 +461,7 @@ impl Renderer {
             adjusted: Default::default(),
             dim_images: None,
             inline_depth: 0,
+            raster: vello_cpu::RasterizerSettings::default(),
             isolation: None,
             isolation_settled: false,
         }
@@ -532,6 +541,8 @@ impl Renderer {
         };
         // `reset` keeps the threshold of the previous render: set it every time.
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
+        let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
+        self.raster = vello_cpu::RasterizerSettings { render_mode, ..Default::default() };
         if let Some(bg) = opts.background {
             ctx.set_transform(Affine::IDENTITY);
             ctx.set_paint(f.ink.fixed(bg));
@@ -560,7 +571,7 @@ impl Renderer {
         }
         ctx.flush();
         let mut pm = Pixmap::new(w, h);
-        ctx.render(&mut pm, &mut self.resources);
+        ctx.render_with(&mut pm, &mut self.resources, self.raster);
         if threads == 0 {
             self.ctx_st = Some(ctx);
         } else {
@@ -795,7 +806,7 @@ impl Renderer {
         (self.knockout, self.nested, self.backdrop, self.clip_paths) = outer;
         mctx.flush();
         let mut pm = Pixmap::new(w, h);
-        mctx.render(&mut pm, &mut self.resources);
+        mctx.render_with(&mut pm, &mut self.resources, self.raster);
         pm.data().iter().map(|p| mask_value(p.r, p.g, p.b, p.a, m.clip, m.invert)).collect()
     }
 

@@ -582,7 +582,8 @@ pub fn render(doc: &Document, s: &WebSettings) -> std::result::Result<WebRender,
     let doc = doc.without_edit_modes();
     let (region, scale) = region(&doc, s)?;
     let page = (doc.setup.background == vectorcraft_doc::Background::White).then_some([255; 4]);
-    let opts = vectorcraft_render::RenderOptions { background: page, skip_templates: true, anti_alias: s.anti_alias, ..Default::default() };
+    let opts =
+        vectorcraft_render::RenderOptions { background: page, skip_templates: true, anti_alias: s.anti_alias, precise: true, ..Default::default() };
     let img = vectorcraft_render::Renderer::new().render_region_with(&doc, region, scale, &opts);
     Ok(WebRender { rgba: img.to_straight(), width: img.width, height: img.height, region, scale })
 }
