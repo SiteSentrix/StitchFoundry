@@ -110,6 +110,44 @@ fn backgrounds_are_opaque_or_transparent() {
     assert_eq!(webp.get_pixel(0, 0).0, [0, 0, 0, 255]);
 }
 
+/// #787: translucent art over opaque art (or a background) stays exactly opaque, its anti-aliased
+/// edges too, so the file is written as RGB.
+#[test]
+fn translucent_edges_over_opaque_art_stay_opaque() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let under = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    let mut over =
+        Node::path(d.alloc_id(), shapes::ellipse(Rect::new(10.0, 10.0, 90.0, 90.0)), Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
+    over.opacity = 0.5;
+    let only_over = {
+        let mut d = d.clone();
+        d.insert(Some(l), 0, over.clone()).unwrap();
+        d
+    };
+    d.insert(Some(l), 0, under).unwrap();
+    d.insert(Some(l), 1, over).unwrap();
+    // Over a black background at 72 ppi, and over an opaque rectangle at a scale that puts the
+    // edges on fractions of a pixel.
+    for (doc, o) in [
+        (&only_over, RasterExportOptions { background: Some([0, 0, 0]), ..Default::default() }),
+        (&d, RasterExportOptions { ppi: 72.0 * 0.3515625, ..Default::default() }),
+    ] {
+        let png = Renderer::new().export_region(doc, doc.artboards[0].rect, RasterFormat::Png, &o).unwrap();
+        let img = image::load_from_memory(&png).unwrap().to_rgba8();
+        let below: Vec<_> = img.pixels().filter(|p| p[3] < 255).collect();
+        assert!(below.is_empty(), "ppi {}: {} pixels below alpha 255, e.g. {:?}", o.ppi, below.len(), below.first());
+        assert_eq!(png[25], 2, "IHDR colour type: RGB");
+    }
+    // The inside is half white over black.
+    let img = export(&only_over, RasterFormat::Png, &RasterExportOptions { background: Some([0, 0, 0]), ..Default::default() });
+    assert!(img.get_pixel(50, 50).0[..3].iter().all(|c| (127..=128).contains(c)), "{:?}", img.get_pixel(50, 50));
+}
+
 #[test]
 fn interlaced_export_decodes_to_the_same_pixels() {
     let d = circle_doc();
