@@ -269,7 +269,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "stylize.innerGlow",
             "Inner Glow…",
             STYLIZE,
-            "{mode: blend mode (\"screen\"), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffffff\"), source: \"edge\"|\"center\"}",
+            "{mode: blend mode (\"screen\"), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffffff\"), source: \"center\"|\"edge\" (\"edge\")}",
             json!({"mode": "screen", "opacity": 75.0, "blur": 5.0, "color": "#ffffff", "source": "edge"}),
         ),
         r(
