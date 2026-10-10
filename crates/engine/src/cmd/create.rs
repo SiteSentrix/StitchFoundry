@@ -385,48 +385,22 @@ fn polar_grid(s: &mut Session, p: &Value) -> Result<Value> {
     grid_group(s, "Polar Grid", shapes::polar_grid(r, c, rad))
 }
 
-pub(crate) fn anchor_from_json(v: &Value) -> Option<Anchor> {
-    let p = Point::new(v.get("x")?.as_f64()?, v.get("y")?.as_f64()?);
-    let h_in = point_param(v, "in").unwrap_or(p);
-    let h_out = point_param(v, "out").unwrap_or(p);
-    let mut a = Anchor::with_handles(p, h_in, h_out);
-    if v.get("smooth").and_then(Value::as_bool) == Some(true) {
-        a.kind = AnchorKind::Smooth;
-    }
-    Some(a)
-}
-
-/// Strictly parse command-provided anchors: dropping invalid entries would change geometry.
-pub(crate) fn checked_anchor_from_json(v: &Value, cmd: &str) -> Result<Anchor> {
-    let coord = |key: &str| {
-        v.get(key)
-            .and_then(Value::as_f64)
-            .filter(|n| n.is_finite())
-            .ok_or_else(|| bad(cmd, format!("anchor `{key}` must be a finite number")))
-    };
+/// An anchor `{x, y, in?, out?, smooth?}` given to `cmd` (handles `[x, y]`, at the anchor when
+/// absent or null): anything malformed fails rather than being left out or replaced by a default,
+/// which would change the path's shape.
+pub(crate) fn anchor_from_json(v: &Value, cmd: &str) -> Result<Anchor> {
+    let coord =
+        |key: &str| v.get(key).and_then(Value::as_f64).filter(|n| n.is_finite()).ok_or_else(|| bad(cmd, format!("anchor `{key}` must be a number")));
     let p = Point::new(coord("x")?, coord("y")?);
-    let handle = |key: &str| -> Result<Point> {
-        match v.get(key) {
-            None | Some(Value::Null) => Ok(p),
-            Some(value) => {
-                let Some([x, y]) = value.as_array().map(Vec::as_slice) else {
-                    return Err(bad(cmd, format!("anchor `{key}` must be [x, y]")));
-                };
-                let (Some(x), Some(y)) = (x.as_f64(), y.as_f64()) else {
-                    return Err(bad(cmd, format!("anchor `{key}` must contain two numbers")));
-                };
-                if !x.is_finite() || !y.is_finite() {
-                    return Err(bad(cmd, format!("anchor `{key}` must contain finite numbers")));
-                }
-                Ok(Point::new(x, y))
-            }
-        }
+    let handle = |key: &str| match v.get(key).filter(|h| !h.is_null()) {
+        None => Ok(p),
+        Some(h) => finite_numbers(h).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(cmd, format!("anchor `{key}` must be [x, y]"))),
     };
     let mut anchor = Anchor::with_handles(p, handle("in")?, handle("out")?);
-    match v.get("smooth") {
-        None | Some(Value::Null) | Some(Value::Bool(false)) => {}
+    match v.get("smooth").filter(|b| !b.is_null()) {
+        None | Some(Value::Bool(false)) => {}
         Some(Value::Bool(true)) => anchor.kind = AnchorKind::Smooth,
-        Some(_) => return Err(bad(cmd, "anchor `smooth` must be a boolean")),
+        Some(_) => return Err(bad(cmd, "anchor `smooth` must be true or false")),
     }
     Ok(anchor)
 }
@@ -441,7 +415,7 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
             .and_then(Value::as_array)
             .ok_or_else(|| bad("path.create", "missing anchors"))?
             .iter()
-            .map(|a| checked_anchor_from_json(a, "path.create"))
+            .map(|a| anchor_from_json(a, "path.create"))
             .collect::<Result<_>>()?;
         if anchors.is_empty() {
             return Err(bad("path.create", "need at least one anchor"));

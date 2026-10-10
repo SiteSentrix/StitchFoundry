@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath, Vec2};
 
-use super::create::checked_anchor_from_json;
+use super::create::anchor_from_json;
 use super::*;
 use crate::EngineError;
 
@@ -129,7 +129,7 @@ fn path_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Result<&mut PathDa
 
 fn append_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("path.appendAnchor", "missing id"))?;
-    let a = anchor_from_json(p).ok_or_else(|| bad("path.appendAnchor", "missing x/y"))?;
+    let a = anchor_from_json(p, "path.appendAnchor")?;
     s.edit("Pen", |d, sel| {
         let path = path_mut(d, id)?;
         match path.subpaths.last_mut() {
@@ -222,7 +222,7 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                     .and_then(Value::as_array)
                     .ok_or_else(|| bad("path.setAnchors", "each subpath needs an anchors array"))?
                     .iter()
-                    .map(|a| checked_anchor_from_json(a, "path.setAnchors"))
+                    .map(|a| anchor_from_json(a, "path.setAnchors"))
                     .collect::<Result<Vec<_>>>()?;
                 let closed = match sp.get("closed") {
                     None | Some(Value::Null) => false,

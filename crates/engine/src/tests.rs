@@ -1016,6 +1016,9 @@ fn path_commands_reject_bad_anchors_before_modifying_geometry() {
         assert_eq!(s.doc().unwrap().history.undo.len(), history);
     }
     assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": []}, {"closed": true}]})).is_err());
+    assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": [valid.clone()], "closed": "yes"}]})).is_err());
+    // The Pen's append reads its anchor the same way.
+    assert!(s.execute("path.appendAnchor", &json!({"id": a.0, "x": 5, "y": 5, "out": [1]})).is_err());
     assert_eq!(s.doc().unwrap().history.undo.len(), history);
     s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": [{"x": 0, "y": 0}, {"x": 30, "y": 40}], "closed": false}]})).unwrap();
     assert_eq!(s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchor_count(), 2);
