@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, ticks?: n, axisMin?, axisMax?} change the graph type and options (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0); no options → the current ones",
+            "{id?, type?, columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?} change the graph type and options (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0); no options → the current ones",
             has_selection,
             set_type
         ),
@@ -322,11 +322,15 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             b.out.push(ax);
             for (s, items) in series.iter_mut().enumerate() {
                 let pts: Vec<Point> = (0..ncat).map(|c| at(c, val(c, s))).collect();
-                let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
-                items.push(b.path(polyline(&pts, true), fill, stroke, w));
-                for p in pts {
-                    let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                    items.push(b.path(marker(p, 4.0), fill, stroke, w));
+                if g.connect_points && pts.len() > 1 {
+                    let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
+                    items.push(b.path(polyline(&pts, true), fill, stroke, w));
+                }
+                if g.mark_points {
+                    for p in pts {
+                        let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
+                        items.push(b.path(marker(p, 4.0), fill, stroke, w));
+                    }
                 }
             }
         }
@@ -384,7 +388,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             let span = if horizontal { r.height() } else { r.width() };
             let cat_w = span / ncat as f64;
             let cat_start = |c: usize| if horizontal { r.y0 + c as f64 * cat_w } else { r.x0 + c as f64 * cat_w };
-            let points_mode = matches!(g.kind, GraphKind::Line | GraphKind::Area);
+            // Area bands always span the plot; line graphs only with Edge-to-Edge Lines.
+            let points_mode = g.kind == GraphKind::Area || (g.kind == GraphKind::Line && g.edge_to_edge);
             let cat_mid = |c: usize| {
                 if points_mode && ncat > 1 { r.x0 + r.width() * c as f64 / (ncat - 1) as f64 } else { cat_start(c) + cat_w / 2.0 }
             };
@@ -702,11 +707,11 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graph.setType";
     let id = target(s, p, C)?;
     let mut spec = spec_of(s, id)?;
-    let keys = ["type", "columnWidth", "clusterWidth", "legend", "markPoints", "connectPoints", "ticks", "axisMin", "axisMax"];
+    let keys = ["type", "columnWidth", "clusterWidth", "legend", "markPoints", "connectPoints", "edgeToEdge", "ticks", "axisMin", "axisMax"];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         return Ok(json!({
             "type": spec.kind.id(), "columnWidth": spec.column_width, "clusterWidth": spec.cluster_width, "legend": spec.legend,
-            "markPoints": spec.mark_points, "connectPoints": spec.connect_points, "ticks": spec.ticks,
+            "markPoints": spec.mark_points, "connectPoints": spec.connect_points, "edgeToEdge": spec.edge_to_edge, "ticks": spec.ticks,
             "axisMin": spec.axis_min, "axisMax": spec.axis_max,
         }));
     }
@@ -718,6 +723,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.legend = bool_or(p, "legend", spec.legend);
     spec.mark_points = bool_or(p, "markPoints", spec.mark_points);
     spec.connect_points = bool_or(p, "connectPoints", spec.connect_points);
+    spec.edge_to_edge = bool_or(p, "edgeToEdge", spec.edge_to_edge);
     spec.ticks = p.get("ticks").and_then(Value::as_u64).map_or(spec.ticks, |t| t.min(100) as usize);
     if let Some(v) = p.get("axisMin") {
         spec.axis_min = v.as_f64();
@@ -815,6 +821,50 @@ mod tests {
         s.execute("select.set", &json!({"ids": [bar.0]})).unwrap();
         assert!(s.execute("graph.setData", &json!({})).is_ok());
         assert!(matches!(n.kind, NodeKind::Group { .. }));
+    }
+
+    /// The x of every marker of series `index`, left to right.
+    fn marker_xs(s: &Session, id: NodeId, index: u32) -> Vec<f64> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let mut xs: Vec<f64> = series(&n, index)
+            .children()
+            .unwrap()
+            .iter()
+            .map(|c| c.geometric_bounds().unwrap())
+            .filter(|b| (b.width() - 5.0).abs() < 1e-6)
+            .map(|b| b.center().x)
+            .collect();
+        xs.sort_by(f64::total_cmp);
+        xs
+    }
+
+    #[test]
+    fn edge_to_edge_lines_off_puts_line_points_at_category_centres() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        // 300 pt wide, three categories: edges at 100 and 400; centres at 150, 250, 350.
+        let id = graph(&mut s, "line");
+        assert_eq!(marker_xs(&s, id, 0), vec![100.0, 250.0, 400.0]);
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["edgeToEdge"], json!(true));
+        s.execute("graph.setType", &json!({"edgeToEdge": false})).unwrap();
+        assert_eq!(marker_xs(&s, id, 0), vec![150.0, 250.0, 350.0]);
+        // A graph saved before the option existed keeps its edge-to-edge lines.
+        let old: GraphSpec = serde_json::from_value(json!({"kind": "line"})).unwrap();
+        assert!(old.edge_to_edge);
+    }
+
+    #[test]
+    fn radar_graphs_follow_mark_and_connect_data_points() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "radar");
+        let parts = |s: &Session| series(&s.doc().unwrap().doc.node(id).unwrap().clone(), 0).children().unwrap().len();
+        // The ring, three markers and the legend swatch.
+        assert_eq!(parts(&s), 5);
+        s.execute("graph.setType", &json!({"markPoints": false})).unwrap();
+        assert_eq!(parts(&s), 2);
+        s.execute("graph.setType", &json!({"markPoints": true, "connectPoints": false})).unwrap();
+        assert_eq!(parts(&s), 4);
     }
 
     #[test]

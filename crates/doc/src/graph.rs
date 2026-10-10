@@ -103,9 +103,12 @@ pub struct GraphSpec {
     pub ticks: usize,
     pub axis_min: Option<f64>,
     pub axis_max: Option<f64>,
-    /// Line graphs: mark data points, connect them, fill (area-like) the lines.
+    /// Line, scatter and radar graphs: mark data points, connect them.
     pub mark_points: bool,
     pub connect_points: bool,
+    /// Line graphs: run the lines from edge to edge of the plot (on, as before the option existed); off, the points
+    /// sit at the centres of their categories, like the columns of a column graph.
+    pub edge_to_edge: bool,
     /// Bounds of the art when it was last generated (detects moves/scales of the graph group).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placed: Option<Rect>,
@@ -128,6 +131,7 @@ impl Default for GraphSpec {
             axis_max: None,
             mark_points: true,
             connect_points: true,
+            edge_to_edge: true,
             placed: None,
         }
     }
