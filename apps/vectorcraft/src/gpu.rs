@@ -161,6 +161,7 @@ pub fn display_gpus() -> Vec<DisplayGpu> {
 }
 
 /// Record that the GPU `pci` drives a display, merging it with its other displays.
+#[cfg(any(windows, target_os = "linux", test))]
 fn add_display_gpu(gpus: &mut Vec<DisplayGpu>, pci: (u32, u32), primary: bool) {
     match gpus.iter_mut().find(|g| g.pci == pci) {
         Some(gpu) => gpu.primary |= primary,
@@ -197,6 +198,7 @@ fn windows_display_gpus() -> Vec<DisplayGpu> {
 
 /// The PCI `(vendor, device)` of a Windows device id such as
 /// `PCI\VEN_10DE&DEV_2204&SUBSYS_40421458&REV_A1`, any case; `None` for anything else.
+#[cfg(any(windows, test))]
 fn pci_ids(device_id: &str) -> Option<(u32, u32)> {
     let field = |key: &str| {
         device_id.split(['\\', '&']).find_map(|part| {

@@ -547,3 +547,25 @@ fn the_app_font_folder_is_read_by_the_scan() {
     assert_eq!(dirs.iter().filter(|d| **d == dir).count(), 1, "{dirs:?}");
     assert!(!dirs.contains(&dir.join("Other")));
 }
+
+/// #394 Preferences › Type › Show Font Names in English: off, menus label the family in its
+/// native language; on (default), the English name. Documents still resolve by either name.
+#[test]
+fn family_display_name_follows_show_font_names_in_english() {
+    let bytes = named(&[
+        (3, EN, 1, "Hiragino Sans"),
+        (3, EN, 2, "Regular"),
+        (3, EN, 6, "HiraginoSans-Regular"),
+        (3, EN, 16, "Hiragino Sans"),
+        (3, JA, 16, "ヒラギノ角ゴシック"),
+        (3, EN, 17, "Regular"),
+    ]);
+    let db = FontDb::with_font_dirs(vec![]);
+    assert!(db.add_font(bytes) > 0);
+    assert_eq!(db.family_display_name("Hiragino Sans", true), "Hiragino Sans");
+    assert_eq!(db.family_display_name("Hiragino Sans", false), "ヒラギノ角ゴシック");
+    assert_eq!(db.family_display_name("ヒラギノ角ゴシック", false), "ヒラギノ角ゴシック");
+    assert_eq!(db.family_display_name("Source Sans 3", false), "Source Sans 3");
+    let face = db.face("ヒラギノ角ゴシック", "Regular").unwrap();
+    assert_eq!(face.family, "Hiragino Sans");
+}

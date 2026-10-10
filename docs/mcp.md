@@ -1503,9 +1503,14 @@ Not read yet: Spacing Guides (the tools draw none).
   type's frame, type on a path's path — within `selectionTolerance`; a click among the glyphs, between the lines or
   inside the frame selects nothing. Off, anywhere in the type's bounds selects it. Marquee selection is unchanged, and
   the Type tools (a click among the characters edits them) and the Eyedropper (`eyedropper`) are not affected.
+- `fontNamesInEnglish` (on by default): Preferences › Type › Show Font Names in English. Off, the Character panel and
+  Type → Font menus label a family by its native-language name when the font has one. `text.fontList` and
+  `text.setStyle {font}` always use the English (canonical) family name; a document may still name a font by any of
+  its aliases (`ヒラギノ角ゴシック` resolves to Hiragino Sans).
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeSizeIncrement":4,"trackingIncrement":50}}}}
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"fontNamesInEnglish","value":false}}}
 {"name":"run_command","arguments":{"command":"type.step","params":{"attribute":"tracking","by":-2}}}
 ```
 
@@ -2636,13 +2641,14 @@ next to the preferences: `~/Library/Application Support/VectorCraft/Fonts` on ma
 Windows, and `$XDG_CONFIG_HOME/vectorcraft/Fonts` or `~/.config/vectorcraft/Fonts` on Linux and BSD. `text.addFontFiles`
 copies fonts into that folder. The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
 by family name), so opening, placing, pasting and importing files find them whatever ran before. `text.fontList`
-lists every family available, the installed ones included, as the font menus do: without the system's hidden
-families, whose names start with "." (macOS's ".SF NS", ".LastResort"), which still resolve when a document names
-them. With `family` it gives that family's styles (upright by weight, then italics) and fails when the family isn't
-available. `text.rescanFonts` (Character panel menu ›
-Refresh Font List) scans the font folders again, for fonts installed or removed since the app started: type set in a
-font that became available redraws in it, without editing the document. The app does so by itself when its window
-comes to the front and a font folder changed meanwhile.
+lists every family available, the installed ones included, each by its English (canonical) name — the same string
+`text.setStyle {font}` and documents use — without the system's hidden families, whose names start with "."
+(macOS's ".SF NS", ".LastResort"), which still resolve when a document names them. Preferences › Type › Show Font
+Names in English (`fontNamesInEnglish`) only changes the UI menu labels, not this list. With `family` it gives that
+family's styles (upright by weight, then italics) and fails when the family isn't available. `text.rescanFonts`
+(Character panel menu › Refresh Font List) scans the font folders again, for fonts installed or removed since the app
+started: type set in a font that became available redraws in it, without editing the document. The app does so by
+itself when its window comes to the front and a font folder changed meanwhile.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
