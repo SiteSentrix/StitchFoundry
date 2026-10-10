@@ -543,6 +543,33 @@ fn an_ai_file_without_its_pdf_part_reads_its_layers_and_makes_its_type() {
     assert!(crate::ai_alone(b"%AI24_ZStandard_Data nothing").is_err());
 }
 
+/// A global process colour (`Xk`) or a pattern fill on a sublayer no longer sends a `.ai` to its
+/// PDF part, which has only the top-level layers (#1025).
+#[test]
+fn a_global_colour_or_a_pattern_fill_keeps_the_sublayers_of_an_ai_file() {
+    // The PDF part's yellow square, in a global yellow at full tint, on a sublayer; a hidden
+    // sublayer with a pattern fill (the page doesn't have it).
+    let yellow = "0 0 1 0 (Yellow global) 0 0 Xk\n10 10 m\n14 10 L\n14 14 L\n10 14 L\nf";
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let patterned = "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n50 50 m\n70 50 L\n70 70 L\n50 70 L\nf";
+    let ground = layer("Ground", true, &(layer("Lawn", true, yellow) + &layer("Paving", false, patterned)));
+    let art = native(&format!("{dots}{ground}"));
+    let (d, warnings) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false);
+    assert_eq!(names(&d), ["Ground"], "{warnings:?}");
+    let subs: Vec<_> = d.layers[0].children().unwrap().iter().map(|l| (l.name.clone().unwrap_or_default(), kinds(l))).collect();
+    assert_eq!(subs, [("Lawn".to_string(), vec!["path"]), ("Paving".to_string(), vec!["path"])]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(d.swatch("Yellow global").is_some_and(|s| s.global && !s.spot));
+    assert!(d.pattern("Dots").is_some() && d.swatch("Dots").is_some());
+    // Without a PDF part, the pattern fill shows.
+    let shown = native(&format!("{dots}{}", layer("Ground", true, &layer("Lawn", true, patterned))));
+    let (d, notes) = crate::ai_alone(&private(&shown)).unwrap();
+    let lawn = &d.layers[0].children().unwrap()[0];
+    assert_eq!((lawn.name.as_deref(), kinds(lawn)), (Some("Lawn"), vec!["path"]), "{notes:?}");
+    let fill = lawn.children().unwrap()[0].appearance.fill().map(|f| f.paint.clone());
+    assert!(matches!(&fill, Some(vectorcraft_color::Paint::Pattern { pattern, .. }) if pattern == "Dots"), "{fill:?}");
+}
+
 #[test]
 fn an_object_the_page_doesnt_draw_makes_the_file_come_in_as_its_page() {
     // A 20-point square that the page doesn't draw: 4% of the page, and an object all the same.
