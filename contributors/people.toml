@@ -50,3 +50,8 @@ sync_github_name = true
 real_name = "Vikram Bhaskaran"
 display_name = "Vikram Bhaskaran"
 sync_github_name = false
+
+[people.Messhias]
+real_name = "Fabio William Conceição"
+display_name = "Messhias"
+sync_github_name = false

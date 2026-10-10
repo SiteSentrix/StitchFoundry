@@ -205,7 +205,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.zoomOut", "Zoom Out", "Cmd+-", "{}"),
     ("view.fitArtboard", "Fit Artboard in Window", "Cmd+0", "{}"),
     ("view.fitAll", "Fit All in Window", "Cmd+Alt+0", "{}"),
-    ("view.actualSize", "Actual Size", "Cmd+1", "{}"),
+    (
+        "view.actualSize",
+        "Actual Size",
+        "Cmd+1",
+        "{} 100%: with Display Print Size at 100% Zoom off, one document point per screen point; on, one document inch fills 96 screen points (an inch at the system's reference density, whatever the display scaling)",
+    ),
     ("view.setZoom", "Set Zoom", "", "{zoom: percent, center?: [x,y]}"),
     (
         "view.goToArtboard",

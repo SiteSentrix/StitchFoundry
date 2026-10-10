@@ -137,16 +137,17 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         _ => st.doc.artboards.get(current).or(st.doc.artboards.first()).map(|a| a.rect),
     };
     let Some(target) = target else { return };
-    let Some(v) = app.view_mut() else { return };
-    v.center = target.center();
-    v.fitted = true;
-    if how == "view.actualSize" {
-        v.zoom = 1.0;
+    let zoom = if how == "view.actualSize" {
+        actual_size_zoom(app.session.prefs.display_print_size)
     } else {
         let zx = (rect.width() as f64 - 60.0) / target.width().max(1.0);
         let zy = (rect.height() as f64 - 60.0) / target.height().max(1.0);
-        v.zoom = zx.min(zy).clamp(0.0313, 640.0);
-    }
+        zx.min(zy).clamp(0.0313, 640.0)
+    };
+    let Some(v) = app.view_mut() else { return };
+    v.center = target.center();
+    v.fitted = true;
+    v.zoom = zoom;
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -745,6 +746,14 @@ const HOLD_ZOOM: f64 = std::f64::consts::LN_2;
 /// as it is dragged sideways or held, instead of zooming to the area dragged across.
 pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
     p.animated_zoom && p.gpu_performance
+}
+
+/// Zoom for View → Actual Size (`view.actualSize`). With Preferences › General › Display Print
+/// Size at 100% Zoom off, one document point is one screen point. On, one document inch (72 pt)
+/// fills an inch of the screen as the system counts it: 96 screen points, the reference density
+/// that display scaling is set against (a CSS inch), whatever the scale factor.
+pub(crate) fn actual_size_zoom(display_print_size: bool) -> f64 {
+    if display_print_size { 96.0 / 72.0 } else { 1.0 }
 }
 
 /// Zoom view `vm` of the canvas `rect` to `zoom` (clamped to the zoom range), keeping the document
@@ -2955,6 +2964,21 @@ mod tests {
             assert!((moved.x + 30.0).abs() < 0.5 && (moved.y + 24.0).abs() < 0.5, "the content follows the fingers ({wheel_zooms}): {moved:?}");
             assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 0, "nothing drawn");
         }
+    }
+
+    /// General › Display Print Size at 100% Zoom (#394): `view.actualSize` is one document point per
+    /// screen point with it off, and 96 screen points per document inch with it on.
+    #[test]
+    fn view_actual_size_follows_display_print_size() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(460.0, 260.0)));
+        app.run("view.setZoom", json!({"zoom": 250})).unwrap();
+        app.run("view.actualSize", json!({})).unwrap();
+        assert!((app.view().unwrap().zoom - 1.0).abs() < 1e-12, "off by default: 100% is 1:1");
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+        app.run("view.actualSize", json!({})).unwrap();
+        assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12, "an inch is 96 screen points");
     }
 
     /// Performance › Animated Zoom (#394): the Zoom tool dragged sideways zooms about where it was
