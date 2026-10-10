@@ -40,6 +40,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     transform_section(app, ui);
     divider(ui);
+    // The Gradient tool: the gradient's type and, for a freeform one, how clicks add points (#921).
+    if app.session.tool_id() == "gradient" {
+        section_header(ui, tl!("Gradient"));
+        super::gradient::type_row(app, ui);
+        super::gradient::draw_radios(app, ui);
+        divider(ui);
+    }
     let is_image = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Image(_)));
     if is_image {
         image_section(app, ui);
@@ -561,6 +568,31 @@ mod tests {
         let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, ctx, vec![Event::PointerMoved(at), b(true)]);
         frame(app, ctx, vec![b(false)]);
+    }
+
+    /// #921: with the Gradient tool, a Gradient section: the type, and for a freeform gradient
+    /// Draw as Points or Lines radio buttons.
+    #[test]
+    fn the_gradient_tool_shows_the_gradient_type_and_draw() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"gradient": {}})).unwrap();
+        let ctx = egui::Context::default();
+        let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(!has(&texts, "Gradient"), "only with the Gradient tool");
+        app.select_tool("gradient");
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(has(&texts, "Gradient") && has(&texts, "Type:") && !has(&texts, "Draw:"), "{texts:?}");
+        app.run("paint.editGradient", json!({"kind": "freeform"})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(has(&texts, "Draw:") && has(&texts, "Points") && has(&texts, "Lines"), "{texts:?}");
+        click(&mut app, &ctx, &texts, "Lines");
+        let fill = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+        let vectorcraft_color::Paint::Gradient(g) = fill else { panic!("{fill:?}") };
+        assert_eq!(super::super::gradient::shown_points(&g).mode, vectorcraft_color::FreeformMode::Lines);
     }
 
     /// #696: the number fields are all as wide: the Transform fields, the rotation, the corner
