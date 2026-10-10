@@ -100,7 +100,12 @@ impl StrokeChange {
         let dash = match p.get("dash") {
             None => None,
             Some(Value::Null) => Some(None),
-            Some(Value::Array(a)) => Some(Some(a.iter().filter_map(Value::as_f64).collect::<Vec<_>>()).filter(|d| !d.is_empty())),
+            Some(Value::Array(a)) => {
+                // Do not silently omit malformed segments and change the user's dash pattern.
+                let values: Vec<f64> =
+                    a.iter().map(|v| v.as_f64().ok_or_else(|| bad(cmd, format!("dash lengths must be numbers, got {v}")))).collect::<Result<_>>()?;
+                Some(Some(values).filter(|d| !d.is_empty()))
+            }
             Some(v) => return Err(bad(cmd, format!("dash must be a list of lengths or null, got {v}"))),
         };
         Ok(Self {
@@ -167,9 +172,6 @@ fn no_targets(ids: &[vectorcraft_doc::NodeId], p: &Value) -> bool {
 fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.set";
     let change = StrokeChange::parse(p, C)?;
-    if let Some(w) = change.weight {
-        s.paint.stroke_width = w;
-    }
     let item = item_target(s, p, C)?.of_kind(s, false);
     let mut ids = item.targets(s, p)?;
     let new_art = no_targets(&ids, p);
@@ -216,10 +218,6 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
             st.profile = pr.clone();
         }
     };
-    // With nothing selected the Stroke panel sets up the next object drawn.
-    if new_art && let Some(st) = s.new_art_stroke_mut() {
-        set(st);
-    }
     edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
@@ -235,6 +233,14 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    // Commit the new-art template only after the complete request is validated
+    // and the selected artwork edit has succeeded.
+    if let Some(w) = change.weight {
+        s.paint.stroke_width = w;
+    }
+    if new_art && let Some(st) = s.new_art_stroke_mut() {
+        set(st);
+    }
     ok()
 }
 
