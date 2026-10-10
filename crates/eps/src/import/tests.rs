@@ -640,6 +640,42 @@ fn hostile_executable_files_and_type_loops_are_refused() {
     blue("currentfile cvx exec currentfile flushfile 0 0 1 setrgbcolor");
 }
 
+/// Reads `body` as [`read`] does, on a thread of its own, and fails the test when reading takes
+/// more than 20 s.
+fn read_soon(body: &str) -> crate::Imported {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let ps = eps(body);
+    std::thread::spawn(move || tx.send(import(&ps)).ok());
+    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|_| panic!("reading {body} did not finish")).unwrap()
+}
+
+/// `arc` raises its second angle by multiples of 360 until it is at least the first, and `arcn`
+/// lowers it until it is at most the first (PLRM 3rd ed., `arc` and `arcn` in chapter 8), however
+/// large the angles: the arc runs between the angles' remainders after whole turns and ends at
+/// the second angle, the new current point.
+#[test]
+fn arcs_with_huge_angles_end_at_their_second_angle() {
+    // `at(deg)` is the point at `deg` degrees on the circle of radius 10 around (50, 50), in
+    // document space.
+    let at = |deg: f64| Point::new(50.0 + 10.0 * deg.to_radians().cos(), 50.0 - 10.0 * deg.to_radians().sin());
+    // Each program is listed with the remainders of its first and second angles after whole turns.
+    for (body, first, second) in [
+        ("50 50 10 1e18 0 arc", 280.0, 0.0),
+        ("50 50 10 1e308 0 arc", 296.0, 0.0),
+        ("50 50 10 0 1e18 arcn", 0.0, 280.0),
+        ("50 50 10 0 1e308 arcn", 0.0, 296.0),
+    ] {
+        let r = read_soon(&format!("newpath {body} currentpoint stroke 1 1 rectfill"));
+        let o = objects(&r.document);
+        assert_eq!(o.len(), 2, "{body}: {:?}", r.warnings);
+        // The arc lies within one quarter of the circle, so its endpoints span its bounds.
+        let (a, b) = (at(first), at(second));
+        assert!(near(bounds(&o[0]), Rect::from_points(a, b)), "{body}: {:?}", bounds(&o[0]));
+        // The second object is the square drawn at the current point.
+        assert!(near(bounds(&o[1]), Rect::new(b.x, b.y - 1.0, b.x + 1.0, b.y)), "{body}: {:?}", bounds(&o[1]));
+    }
+}
+
 #[test]
 fn cshow_runs_its_procedure_for_each_character() {
     check("/n 0 def { pop pop pop /n n 1 add def } (abc) cshow n 3 eq");
