@@ -788,6 +788,8 @@ impl VectorcraftApp {
             return;
         }
         let last: f64 = ctx.data(|d| d.get_temp(last_key)).unwrap_or(f64::NEG_INFINITY);
+        // The active document as the last look saw it: its uid and revision.
+        let (seen_key, doc) = (egui::Id::new("linkWatch.seen"), self.session.active().map(|d| (d.uid, d.revision)));
         if now - last >= 2.0 || (focused && !was_focused) {
             // Walking the document's links costs a pass over it: only when a look is due.
             // `start_link_scan` starts none for a document without links, which then doesn't
@@ -795,12 +797,21 @@ impl VectorcraftApp {
             ctx.data_mut(|d| d.insert_temp(last_key, now));
             self.session.start_link_scan();
             let links = self.session.link_scan.is_some();
-            ctx.data_mut(|d| d.insert_temp(egui::Id::new("linkWatch.links"), links));
+            ctx.data_mut(|d| {
+                d.insert_temp(egui::Id::new("linkWatch.links"), links);
+                d.insert_temp(seen_key, doc);
+            });
         }
         if self.session.link_scan.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         } else if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("linkWatch.links"))).unwrap_or(false) {
             ctx.request_repaint_after(std::time::Duration::from_millis(2000));
+        } else if ctx.data(|d| d.get_temp::<Option<(u64, u64)>>(seen_key)).is_some_and(|seen| seen != doc) {
+            // The document changed (a file placed into one without links) or another came to the
+            // front since that look: wake for the next one even if the app sits idle until then,
+            // or a file placed and changed meanwhile is first seen after the change, which is then
+            // never acted on.
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64((last + 2.0 - now).clamp(0.0, 2.0)));
         }
     }
 
