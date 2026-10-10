@@ -134,7 +134,6 @@ fn fill_and_stroke_commands() {
     s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}})).unwrap();
 }
 
-
 #[test]
 fn stroke_rejects_invalid_dash_components_and_preserves_defaults_on_error() {
     let mut s = session();
@@ -158,6 +157,16 @@ fn stroke_rejects_invalid_dash_components_and_preserves_defaults_on_error() {
     s.execute("stroke.set", &json!({"weight": 7, "dash": [4, 2]})).unwrap();
     assert_eq!(s.paint.stroke_width, 7.0);
     assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().width, 7.0);
+
+    // With nothing selected the panel sets up the next object drawn: a rejected edit doesn't.
+    s.execute("select.none", &json!({})).unwrap();
+    let next = s.new_art();
+    assert!(s.execute("stroke.set", &json!({"weight": 12, "dash": [2, 2], "arrowAlign": "unknown"})).is_err());
+    assert_eq!(s.new_art(), next);
+    s.execute("stroke.set", &json!({"weight": 12, "dash": [2, 2]})).unwrap();
+    let next = s.new_art();
+    let stroke = next.stroke().unwrap();
+    assert_eq!((stroke.width, stroke.dash.as_ref().map(|d| d.pattern.clone())), (12.0, Some(vec![2.0, 2.0])));
 }
 
 #[test]

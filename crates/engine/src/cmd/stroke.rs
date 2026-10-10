@@ -102,10 +102,8 @@ impl StrokeChange {
             Some(Value::Null) => Some(None),
             Some(Value::Array(a)) => {
                 // Do not silently omit malformed segments and change the user's dash pattern.
-                let values: Vec<f64> = a
-                    .iter()
-                    .map(|v| v.as_f64().ok_or_else(|| bad(cmd, format!("dash lengths must be numbers, got {v}"))))
-                    .collect::<Result<_>>()?;
+                let values: Vec<f64> =
+                    a.iter().map(|v| v.as_f64().ok_or_else(|| bad(cmd, format!("dash lengths must be numbers, got {v}")))).collect::<Result<_>>()?;
                 Some(Some(values).filter(|d| !d.is_empty()))
             }
             Some(v) => return Err(bad(cmd, format!("dash must be a list of lengths or null, got {v}"))),
