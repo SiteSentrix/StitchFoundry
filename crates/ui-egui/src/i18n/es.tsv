@@ -1588,6 +1588,37 @@
 	New Bristle Brush	Nuevo pincel de cerdas
 	Calligraphic Brush Options	Opciones de pincel caligráfico
 	Bristle Brush Options	Opciones de pincel de cerdas
+	Scatter Brush Options	Opciones de pincel de dispersión
+	Art Brush Options	Opciones de pincel de arte
+	Pattern Brush Options	Opciones de pincel de motivo
+	Scatter:	Dispersión:
+	Rotation:	Rotación:
+	Rotation relative to:	Rotación relativa a:
+	Brush Scale Options	Opciones de escala del pincel
+	Scale Proportionately	Escalar proporcionalmente
+	Stretch to Fit Stroke Length	Estirar para ajustar a la longitud del trazo
+	Stretch Between Guides	Estirar entre guías
+	Start:	Inicio:
+	End:	Final:
+	Left to Right	De izquierda a derecha
+	Right to Left	De derecha a izquierda
+	Top to Bottom	De arriba abajo
+	Bottom to Top	De abajo arriba
+	Flip:	Voltear:
+	Outer Corner Tile	Mosaico de esquina exterior
+	Side Tile	Mosaico lateral
+	Inner Corner Tile	Mosaico de esquina interior
+	Start Tile	Mosaico inicial
+	End Tile	Mosaico final
+	Fit	Ajuste
+	Stretch to fit	Estirar para ajustar
+	Add space to fit	Agregar espacio para ajustar
+	Approximate path	Aproximar trazado
+	Colorization	Coloración
+	Tints	Matices
+	Tints and Shades	Matices y sombras
+	Hue Shift	Cambio de tono
+	Key Color:	Color clave:
 	Roundness:	Redondez:
 	Fixed	Fijo
 	Pressure	Presión
@@ -3502,7 +3533,6 @@ axis	Both	Ambos
 @msg	no bounds	sin límites
 @msg	no brush named `{name}`	no hay ningún pincel llamado `{name}`
 @msg	no brush selected	no hay ningún pincel seleccionado
-@msg	this kind of brush has no options dialog yet	este tipo de pincel aún no tiene un cuadro de opciones
 @msg	no catalog	no hay catálogo
 @msg	no changes since the last save	no hay cambios desde la última vez que se guardó
 @msg	no clock to keep a heartbeat by	no hay reloj para mantener la señal de actividad

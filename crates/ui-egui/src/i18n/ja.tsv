@@ -1681,6 +1681,37 @@
 	New Bristle Brush	新規剛毛ブラシ
 	Calligraphic Brush Options	絵筆ブラシオプション
 	Bristle Brush Options	剛毛ブラシオプション
+	Scatter Brush Options	散布ブラシオプション
+	Art Brush Options	アートブラシオプション
+	Pattern Brush Options	パターンブラシオプション
+	Scatter:	散布:
+	Rotation:	回転:
+	Rotation relative to:	回転の基準:
+	Brush Scale Options	ブラシ伸縮オプション
+	Scale Proportionately	縦横比を保持して拡大・縮小
+	Stretch to Fit Stroke Length	ストロークの長さに合わせて伸縮
+	Stretch Between Guides	ガイド間で伸縮
+	Start:	始点:
+	End:	終点:
+	Left to Right	左から右
+	Right to Left	右から左
+	Top to Bottom	上から下
+	Bottom to Top	下から上
+	Flip:	反転:
+	Outer Corner Tile	外角タイル
+	Side Tile	サイドタイル
+	Inner Corner Tile	内角タイル
+	Start Tile	始点タイル
+	End Tile	終点タイル
+	Fit	調整
+	Stretch to fit	伸縮して合わせる
+	Add space to fit	間隔を空けて合わせる
+	Approximate path	パスに近似
+	Colorization	着色
+	Tints	淡彩
+	Tints and Shades	淡彩と陰影
+	Hue Shift	色相シフト
+	Key Color:	キーカラー:
 	Roundness:	真円率:
 	Fixed	固定
 	Pressure	筆圧
@@ -3317,7 +3348,6 @@ theme	Appearance	外観
 @msg	Expand: no brush strokes selected	拡張: ブラシストロークが選択されていません
 @msg	no brush named `{name}`	`{name}` という名前のブラシが見つかりません
 @msg	no brush selected	ブラシが選択されていません
-@msg	this kind of brush has no options dialog yet	この種類のブラシにはまだオプションダイアログがありません
 @msg	no symbol instances selected	シンボルインスタンスが選択されていません
 @msg	select a symbol instance	シンボルインスタンスを選択してください
 @msg	the art has no bounds	アートに境界がありません
