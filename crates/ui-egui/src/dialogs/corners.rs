@@ -28,7 +28,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Corners").int
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
     let id = match p.get("id") {
-        Some(value) => NodeId(value.as_u64().ok_or("`id` must be a non-negative integer object id")?),
+        Some(v) => NodeId(v.as_u64().ok_or_else(|| format!("object ids are non-negative integers, not {v}"))?),
         None => match st.selection.objects[..] {
             [id] => id,
             _ => return Err("select one path, or give its `id`".into()),
@@ -38,20 +38,14 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         return Err("Corners edits the corners of a path".into());
     };
     let corners: BTreeSet<usize> = match p.get("corners") {
-        Some(Value::Array(values)) => values
-            .iter()
-            .map(|value| {
-                let index = value.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| format!("invalid corner index {value}"))?;
-                if live.corner(index).is_none() {
-                    return Err(format!("anchor {index} is not a corner of this path"));
-                }
-                Ok(index)
-            })
-            .collect::<Result<_, String>>()?,
-        Some(_) => return Err("`corners` must be an array of corner indices".into()),
+        Some(v) => v
+            .as_array()
+            .and_then(|a| a.iter().map(|k| usize::try_from(k.as_u64()?).ok()).collect())
+            .ok_or_else(|| format!("`corners` must be an array of anchor indices, not {v}"))?,
         None => live.picked(st.selection.partial(id)),
     };
-    if corners.is_empty() {
+    // Every corner given is one of the path's: none is left out of the edit.
+    if corners.is_empty() || !corners.iter().all(|k| live.corner(*k).is_some()) {
         return Err("give corners of the path: anchors between two straight sides".into());
     }
     let (radius, kind) = live.style(&corners);
