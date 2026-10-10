@@ -134,7 +134,6 @@ fn fill_and_stroke_commands() {
     s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}})).unwrap();
 }
 
-
 #[test]
 fn rejected_paint_edits_leave_new_art_defaults_and_focus_unchanged() {
     let mut s = session();
