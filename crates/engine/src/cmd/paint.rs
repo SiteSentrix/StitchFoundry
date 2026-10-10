@@ -375,15 +375,7 @@ fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint) -> Result<Value> {
 /// remember the paint.
 fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
-    // New art gets the paint fitted to itself, not placed where this one is.
-    if fill {
-        s.paint.fill = unplaced(&paint);
-    } else {
-        s.paint.stroke = unplaced(&paint);
-    }
-    if bool_or(p, "focus", true) {
-        s.fill_active = fill;
-    }
+    // Resolve the requested targets before mutating defaults or the active proxy.
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
     let selected = item.targets(s, p)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
@@ -423,6 +415,16 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
             Ok(())
         },
     )?;
+    // Rejected edits leave the next shape's appearance and active proxy untouched.
+    // New art takes an unplaced gradient so that it fits the new object's own bounds.
+    if fill {
+        s.paint.fill = unplaced(&paint);
+    } else {
+        s.paint.stroke = unplaced(&paint);
+    }
+    if bool_or(p, "focus", true) {
+        s.fill_active = fill;
+    }
     s.remember_paint(&paint);
     ok()
 }
@@ -436,7 +438,6 @@ fn set_run_stroke(style: &mut CharStyle, paint: Paint) {
 }
 
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
-    std::mem::swap(&mut s.paint.fill, &mut s.paint.stroke);
     let ids = paint_targets(s, p)?;
     if !ids.is_empty() {
         s.edit("Swap Fill and Stroke", |d, _| {
@@ -458,11 +459,11 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(())
         })?;
     }
+    std::mem::swap(&mut s.paint.fill, &mut s.paint.stroke);
     ok()
 }
 
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
-    super::newart::reset(s);
     let ids = paint_targets(s, p)?;
     if !ids.is_empty() {
         s.edit("Default Fill and Stroke", |d, _| {
@@ -481,6 +482,7 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(())
         })?;
     }
+    super::newart::reset(s);
     ok()
 }
 
