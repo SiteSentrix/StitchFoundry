@@ -3,12 +3,12 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
+use vectorcraft_geom::Rect;
 
 /// Most categories (rows) and series (columns) a graph's data grid holds: the grid is built in full for drawing and
 /// for the data window, so a file can't make it allocate without bound.
 pub const MAX_GRAPH_CATEGORIES: usize = 10_000;
 pub const MAX_GRAPH_SERIES: usize = 256;
-use vectorcraft_geom::Rect;
 
 /// The nine graph types, in the Graph tool group's order.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
