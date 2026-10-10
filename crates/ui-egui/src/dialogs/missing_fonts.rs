@@ -489,7 +489,7 @@ mod tests {
     #[test]
     fn the_documents_fonts_folder_is_offered_and_searched_off_the_ui_thread() {
         let root = folder("package");
-        let font = root.join("pkg/Fonts/sub/Findme.otf");
+        let font = root.join("pkg").join("Fonts").join("sub").join("Findme.otf");
         std::fs::create_dir_all(font.parent().unwrap()).unwrap();
         std::fs::write(&font, vectorcraft_testkit::fonts::renamed("Findme Sans 3")).unwrap();
         let mut app = app_for(&root);
@@ -497,7 +497,7 @@ mod tests {
         save_doc(&mut app, &doc, "Findme Sans 3", false);
         open(&mut app, &doc);
         let next = app.ui.dialog.as_ref().filter(|d| d.kind == KIND).expect("Missing Fonts at once: no links missing").str("fontsNextToDocument");
-        assert_eq!(next, root.join("pkg/Fonts").to_string_lossy());
+        assert_eq!(next, root.join("pkg").join("Fonts").to_string_lossy());
         assert!(frame(&mut app).contains("Search Fonts Folder"));
         app.ui.dialog.as_mut().unwrap().fields.insert("searchFolder".into(), json!(next));
         let r = super::super::confirm(&mut app).unwrap();

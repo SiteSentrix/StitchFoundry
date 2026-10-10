@@ -170,7 +170,7 @@ fn a_search_finds_a_missing_fonts_file_by_its_names() {
     let id = r["id"].clone();
     let r = finished(&mut s);
     assert_eq!((&r["state"], &r["id"], r.get("stopped")), (&json!("done"), &id, None), "{r}");
-    let found = root.join("x/y/Findme.otf").to_string_lossy().into_owned();
+    let found = root.join("x").join("y").join("Findme.otf").to_string_lossy().into_owned();
     let findme = r["fonts"].as_array().unwrap().iter().find(|f| f["family"] == "Findme Sans 3").cloned().unwrap();
     assert_eq!((findme["status"].as_str(), findme["files"].clone()), (Some("missing"), json!([found])));
     assert_eq!(r["searched"]["fontFiles"], 2, "the font files are read, not the text file: {r}");
@@ -360,7 +360,7 @@ fn only_font_files_are_copied() {
 #[test]
 fn a_search_skips_font_files_too_large_to_add() {
     let root = folder("too-large");
-    let (big, small) = (root.join("big/Sizeme.otf"), root.join("small/Sizeme.otf"));
+    let (big, small) = (root.join("big").join("Sizeme.otf"), root.join("small").join("Sizeme.otf"));
     let font = vectorcraft_testkit::fonts::renamed("Sizeme Sans 3");
     for path in [&big, &small] {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
