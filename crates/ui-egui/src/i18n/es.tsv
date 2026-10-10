@@ -3931,3 +3931,43 @@ axis	Both	Ambos
 @msg	Imported library {name}	Biblioteca {name} importada
 	RGB:	RGB:
 	CMYK:	CMYK:
+	Texture	Textura
+	Craquelure…	Craquelado…
+	Grain…	Granulado…
+	Mosaic Tiles…	Azulejos de mosaico…
+	Patchwork…	Retazos…
+	Stained Glass…	Vidriera…
+	Texturizer…	Texturizador…
+	Craquelure	Craquelado
+	Grain	Granulado
+	Mosaic Tiles	Azulejos de mosaico
+	Patchwork	Retazos
+	Stained Glass	Vidriera
+	Texturizer	Texturizador
+	Crack Spacing	Espaciado de grietas
+	Crack Depth	Profundidad de grietas
+	Crack Brightness	Brillo de grietas
+	Intensity	Intensidad
+	Grain Type	Tipo de granulado
+	Tile Size	Tamaño de azulejo
+	Grout Width	Anchura de la junta
+	Lighten Grout	Aclarar junta
+	Square Size	Tamaño de cuadrado
+	Relief	Relieve
+	Border Thickness	Grosor del borde
+	Light Intensity	Intensidad de luz
+	Light Direction	Dirección de la luz
+	Sprinkles	Espolvoreado
+	Clumped	Agrupado
+	Contrasty	Contrastado
+	Enlarged	Ampliado
+	Stippled	Punteado
+	Speckle	Moteado
+	Brick	Ladrillo
+	Burlap	Arpillera
+	Canvas	Lienzo
+	Sandstone	Arenisca
+	Bottom Left	Abajo a la izquierda
+	Top Left	Arriba a la izquierda
+	Top Right	Arriba a la derecha
+	Bottom Right	Abajo a la derecha

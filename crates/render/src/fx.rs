@@ -603,7 +603,8 @@ impl Renderer {
         };
         // De-Interlace's field lines: the rows of the document's raster grid (1 to 2400 ppi).
         let ppi = Some(f.doc.raster_effects_ppi).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0);
-        let space = effects::PixelSpace { to_doc, px, center: content.reach.center(), channels, line: 72.0 / ppi };
+        let (center, extent) = (content.reach.center(), 0.5 * content.reach.width().hypot(content.reach.height()));
+        let space = effects::PixelSpace { to_doc, px, center, channels, line: 72.0 / ppi, extent };
         let (wz, hz) = (wu as usize, hu as usize);
         for fx in chain {
             match fx {

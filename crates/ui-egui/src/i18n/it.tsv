@@ -3931,3 +3931,45 @@ axis	Both	Entrambi
 @msg	Imported library {name}	Libreria {name} importata
 	RGB:	RGB:
 	CMYK:	CMYK:
+	Texture	Texture
+	Craquelure…	Craquelé…
+	Grain…	Granulosità…
+	Mosaic Tiles…	Tessere di mosaico…
+	Patchwork…	Patchwork…
+	Stained Glass…	Vetro colorato…
+	Texturizer…	Applica texture…
+	Craquelure	Craquelé
+	Grain	Granulosità
+	Mosaic Tiles	Tessere di mosaico
+	Patchwork	Patchwork
+	Stained Glass	Vetro colorato
+	Texturizer	Applica texture
+	Crack Spacing	Spaziatura crepe
+	Crack Depth	Profondità crepe
+	Crack Brightness	Luminosità crepe
+	Intensity	Intensità
+	Grain Type	Tipo di granulosità
+	Tile Size	Dimensione tessere
+	Grout Width	Larghezza stuccatura
+	Lighten Grout	Schiarisci stuccatura
+	Square Size	Dimensione quadrati
+	Relief	Rilievo
+	Border Thickness	Spessore bordo
+	Light Intensity	Intensità luce
+	Light Direction	Direzione luce
+	Sprinkles	Spruzzato
+	Clumped	Raggruppato
+	Contrasty	Contrastato
+	Enlarged	Ingrandito
+	Stippled	Punteggiato
+	Speckle	Maculato
+	Brick	Mattone
+	Burlap	Tela di iuta
+	Canvas	Tela
+	Sandstone	Arenaria
+	Bottom Left	In basso a sinistra
+	Top Left	In alto a sinistra
+	Top Right	In alto a destra
+	Bottom Right	In basso a destra
+effect	Soft	Morbido
+effect	Regular	Normale

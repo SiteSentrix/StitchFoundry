@@ -3923,3 +3923,46 @@ theme	Appearance	外観
 @msg	Imported library {name}	ライブラリ {name} を読み込みました
 	RGB:	RGB:
 	CMYK:	CMYK:
+	Texture	テクスチャ
+	Craquelure…	クラッキング…
+	Grain…	粒状…
+	Mosaic Tiles…	モザイクタイル…
+	Patchwork…	パッチワーク…
+	Stained Glass…	ステンドグラス…
+	Texturizer…	テクスチャライザー…
+	Craquelure	クラッキング
+	Grain	粒状
+	Mosaic Tiles	モザイクタイル
+	Patchwork	パッチワーク
+	Stained Glass	ステンドグラス
+	Texturizer	テクスチャライザー
+	Crack Spacing	溝の間隔
+	Crack Depth	溝の深さ
+	Crack Brightness	溝の明るさ
+	Intensity	強さ
+	Grain Type	粒子の種類
+	Tile Size	タイルのサイズ
+	Grout Width	目地の幅
+	Lighten Grout	目地を明るく
+	Square Size	正方形のサイズ
+	Relief	レリーフ
+	Border Thickness	境界線の太さ
+	Light Intensity	光の強さ
+	Light Direction	光源の方向
+	Sprinkles	散布
+	Clumped	集合
+	Contrasty	高コントラスト
+	Enlarged	拡大
+	Stippled	スティップル
+	Speckle	斑点
+	Brick	レンガ
+	Burlap	麻布
+	Canvas	カンバス
+	Sandstone	砂岩
+	Bottom Left	左下
+	Top Left	左上
+	Top Right	右上
+	Bottom Right	右下
+effect	Soft	ソフト
+effect	Horizontal	水平
+effect	Vertical	垂直
