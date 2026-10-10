@@ -294,15 +294,9 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-/// `[[subpath, anchor]…]` anchor references (malformed entries are left out).
-pub(crate) fn parse_refs(v: Option<&Value>) -> Vec<(usize, usize)> {
-    v.and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|x| Some((x.get(0)?.as_u64()? as usize, x.get(1)?.as_u64()? as usize))).collect())
-        .unwrap_or_default()
-}
-
-/// Parse an explicitly supplied anchor list without dropping invalid entries.
-fn checked_refs(v: Option<&Value>, cmd: &str) -> Result<Vec<(usize, usize)>> {
+/// `[[subpath, anchor]…]` anchor references of `cmd`: a malformed entry fails rather than being
+/// left out, which would act on other anchors than the ones given.
+pub(crate) fn checked_refs(v: Option<&Value>, cmd: &str) -> Result<Vec<(usize, usize)>> {
     let refs = v.and_then(Value::as_array).ok_or_else(|| bad(cmd, "`anchors` must be an array of [subpath, anchor] pairs"))?;
     refs.iter()
         .map(|v| {
