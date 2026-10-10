@@ -826,3 +826,159 @@ fn texture_patterns_follow_the_object_at_any_resolution() {
         assert_eq!(shifted, one, "{id}");
     }
 }
+
+#[test]
+fn distort_params_take_defaults_and_stay_in_range() {
+    assert_eq!(fx("distort.diffuseGlow", json!({})), PixelFx::DiffuseGlow { graininess: 6.0, glow: 10.0, clear: 15.0 });
+    assert_eq!(
+        fx("distort.diffuseGlow", json!({"graininess": 1e9, "glowAmount": -3, "clearAmount": "x"})),
+        PixelFx::DiffuseGlow { graininess: 10.0, glow: 0.0, clear: 15.0 }
+    );
+    assert_eq!(
+        fx("distort.glass", json!({})),
+        PixelFx::Glass { distortion: 5.0, smoothness: 3.0, texture: GlassTexture::Frosted, scaling: 1.0, invert: false }
+    );
+    assert_eq!(
+        fx("distort.glass", json!({"distortion": 1e308, "smoothness": 0, "texture": "TINYLENS", "scaling": 1, "invert": true})),
+        PixelFx::Glass { distortion: 20.0, smoothness: 1.0, texture: GlassTexture::TinyLens, scaling: 0.5, invert: true }
+    );
+    assert_eq!(fx("distort.glass", json!({"texture": "bubbles"})), fx("distort.glass", json!({})));
+    assert_eq!(fx("distort.oceanRipple", json!({})), PixelFx::OceanRipple { size: 9.0, magnitude: 9.0 });
+    assert_eq!(fx("distort.oceanRipple", json!({"rippleSize": 99, "rippleMagnitude": -1})), PixelFx::OceanRipple { size: 15.0, magnitude: 0.0 });
+    // Shifted content reaches past the bounds by the longest shift, and comes from as far.
+    let b = Rect::new(0.0, 0.0, 100.0, 50.0);
+    let glass = fx("distort.glass", json!({"distortion": 20}));
+    assert_eq!((glass.outset(b), glass.reach()), (10.0, Some(10.0)));
+    let ripple = fx("distort.oceanRipple", json!({}));
+    assert!((ripple.outset(b) - 0.03 * 9.0 * 11.0).abs() < 1e-9 && ripple.reach() == Some(ripple.outset(b)));
+    assert_eq!(fx("distort.diffuseGlow", json!({})).outset(b), 0.0);
+}
+
+/// Vertical stripes 5 points wide (out of step with every glass surface), alternately light and
+/// dark, over the whole raster.
+fn stripes(w: usize, h: usize) -> Vec<u8> {
+    image(w, h, |x, _| if (x / 5) % 2 == 0 { [230, 200, 60, 255] } else { [20, 40, 120, 255] })
+}
+
+#[test]
+fn glass_bends_the_image_by_its_texture() {
+    let (w, h) = (48, 40);
+    let src = stripes(w, h);
+    let run = |p: serde_json::Value| {
+        let mut d = src.clone();
+        fx("distort.glass", p).apply(&mut d, w, h, &space(w, h));
+        d
+    };
+    // No distortion, no change.
+    assert_eq!(run(json!({"distortion": 0})), src);
+    let mut seen = vec![];
+    for (_, texture) in GLASS_TEXTURES {
+        let bent = run(json!({"texture": texture, "distortion": 12}));
+        assert_ne!(bent, src, "{texture}");
+        assert!(!seen.contains(&bent), "{texture} differs from the other textures");
+        assert_ne!(run(json!({"texture": texture, "distortion": 12, "invert": true})), bent, "{texture} inverted");
+        // A colour moves; none is invented: every pixel blends two neighbouring stripes at most
+        // (those within a shift of the raster's edges also take in the transparency beyond it).
+        for (x, y) in (6..w - 6).flat_map(|x| (6..h - 6).map(move |y| (x, y))) {
+            let p = at(&bent, w, x, y);
+            assert!(p[3] == 255 && p[0] >= 20 && p[0] <= 230, "{texture} at ({x}, {y}): {p:?}");
+        }
+        seen.push(bent);
+    }
+    // Smoother glass bends the stripes differently (more gently).
+    assert_ne!(run(json!({"distortion": 12, "smoothness": 15})), run(json!({"distortion": 12, "smoothness": 1})));
+}
+
+#[test]
+fn ocean_ripple_moves_content_no_farther_than_its_magnitude() {
+    let (w, h) = (64, 32);
+    // The left half white, the right half transparent.
+    let src = image(w, h, |x, _| if x < 32 { grey(255) } else { [0; 4] });
+    let mut d = src.clone();
+    fx("distort.oceanRipple", json!({"rippleMagnitude": 0})).apply(&mut d, w, h, &space(w, h));
+    assert_eq!(d, src, "no magnitude, no ripples");
+    let f = fx("distort.oceanRipple", json!({"rippleSize": 6, "rippleMagnitude": 20}));
+    let most = f.reach().unwrap();
+    let mut d = src.clone();
+    f.apply(&mut d, w, h, &space(w, h));
+    assert_ne!(d, src);
+    // Away from the white's edge, and from the raster's (beyond which is transparency), nothing
+    // changes.
+    let inside = |v: usize, n: usize| (v as f64 + 0.5).min(n as f64 - v as f64 - 0.5) > most + 1.0;
+    for y in (0..h).filter(|y| inside(*y, h)) {
+        for x in (0..w).filter(|x| inside(*x, w)) {
+            let to_edge = (x as f64 + 0.5 - 32.0).abs();
+            if to_edge > most + 1.0 {
+                assert_eq!(at(&d, w, x, y), at(&src, w, x, y), "({x}, {y}) is {to_edge} from the edge, past {most}");
+            }
+        }
+    }
+    // The edge wanders: some rows reach farther right than others.
+    let ends: Vec<usize> = (0..h).map(|y| (0..w).filter(|x| at(&d, w, *x, y)[3] > 127).count()).collect();
+    assert!(ends.iter().min() != ends.iter().max(), "{ends:?}");
+}
+
+#[test]
+fn diffuse_glow_whitens_the_highlights_and_sprinkles_grain() {
+    let (w, h) = (48, 48);
+    // Dark on the left, light on the right, a transparent margin round them.
+    let src = image(w, h, |x, y| {
+        if !(4..44).contains(&x) || !(4..44).contains(&y) {
+            [0; 4]
+        } else if x < 24 {
+            [30, 30, 60, 255]
+        } else {
+            [200, 190, 170, 255]
+        }
+    });
+    let run = |p: serde_json::Value| {
+        let mut d = src.clone();
+        fx("distort.diffuseGlow", p).apply(&mut d, w, h, &space(w, h));
+        d
+    };
+    let clean = run(json!({"graininess": 0}));
+    // Transparency stays; the shadows stay clear; the highlights glow.
+    for (a, b) in clean.as_chunks::<4>().0.iter().zip(src.as_chunks::<4>().0) {
+        assert_eq!(a[3], b[3]);
+    }
+    assert_eq!(at(&clean, w, 10, 24), at(&src, w, 10, 24));
+    let (lit, before) = (at(&clean, w, 36, 24), at(&src, w, 36, 24));
+    assert!((0..3).all(|c| lit[c] > before[c]), "{lit:?} brighter than {before:?}");
+    // More Clear Amount leaves more of the image clear of glow.
+    assert!(at(&run(json!({"graininess": 0, "clearAmount": 20})), w, 36, 24)[0] < lit[0]);
+    assert_eq!(run(json!({"graininess": 0, "glowAmount": 0})), src);
+    // Grain: white specks, in the shadows too.
+    let grainy = run(json!({"graininess": 10}));
+    let specks = (4..24).flat_map(|x| (4..44).map(move |y| (x, y))).filter(|(x, y)| at(&grainy, w, *x, *y)[0] > 100).count();
+    assert!(specks > 10, "{specks} white specks in the shadows");
+}
+
+#[test]
+fn distort_patterns_follow_the_object_at_any_resolution() {
+    let (w, h) = (48, 48);
+    let art = |x: f64, y: f64| -> [u8; 4] {
+        if (8.0..40.0).contains(&x) && (8.0..40.0).contains(&y) { [(x * 5.0) as u8, (y * 5.0) as u8, 120, 255] } else { [0; 4] }
+    };
+    for (id, p) in [
+        ("distort.diffuseGlow", json!({"clearAmount": 5})),
+        ("distort.glass", json!({"texture": "blocks", "distortion": 8})),
+        ("distort.oceanRipple", json!({"rippleMagnitude": 12})),
+    ] {
+        let f = fx(id, p);
+        let mut one = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
+        f.apply(&mut one, w, h, &space(w, h));
+        let mut two = image(2 * w, 2 * h, |x, y| art((x as f64 + 0.5) / 2.0, (y as f64 + 0.5) / 2.0));
+        let fine = PixelSpace { to_doc: Affine::scale(0.5), px: 0.5, ..space(w, h) };
+        f.apply(&mut two, 2 * w, 2 * h, &fine);
+        let down = image(w, h, |x, y| {
+            let q = [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| at(&two, 2 * w, 2 * x + dx, 2 * y + dy));
+            std::array::from_fn(|c| (q.iter().map(|p| u32::from(p[c])).sum::<u32>() / 4) as u8)
+        });
+        let diff = one.iter().zip(&down).map(|(a, b)| f64::from(a.abs_diff(*b))).sum::<f64>() / one.len() as f64;
+        assert!(diff < 12.0, "{id}: {diff}");
+        let moved = PixelSpace { to_doc: Affine::translate((7.0, 3.0)), center: Point::new(31.0, 27.0), ..space(w, h) };
+        let mut shifted = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
+        f.apply(&mut shifted, w, h, &moved);
+        assert_eq!(shifted, one, "{id}");
+    }
+}

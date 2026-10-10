@@ -146,6 +146,7 @@ const SHAPE: &[&str] = &["Effect", "Convert to Shape"];
 const STYLIZE: &[&str] = &["Effect", "Stylize"];
 const WARP: &[&str] = &["Effect", "Warp"];
 const BLUR: &[&str] = &["Effect", "Blur"];
+const DISTORT: &[&str] = &["Effect", "Distort"];
 const SHARPEN: &[&str] = &["Effect", "Sharpen"];
 const PIXELATE: &[&str] = &["Effect", "Pixelate"];
 const TEXTURE: &[&str] = &["Effect", "Texture"];
@@ -294,6 +295,27 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             BLUR,
             "{radius: pt 0.1..100 (3), threshold: levels 0.1..100 (25; only colours closer than this blur together, so edges stay sharp), quality: \"low\"|\"medium\"|\"high\" (\"medium\"; 5, 7 or 9 samples across)} (Normal mode)",
             json!({"radius": 3.0, "threshold": 25.0, "quality": "medium"}),
+        ),
+        r(
+            "distort.diffuseGlow",
+            "Diffuse Glow…",
+            DISTORT,
+            "{graininess: 0..10 (6; white grain, thicker in the glow), glowAmount: 0..20 (10), clearAmount: 0..20 (15; the higher, the more of the image stays clear of glow)} renders the object as if seen through a soft diffusion filter: its highlights glow white under see-through white grain",
+            json!({"graininess": 6.0, "glowAmount": 10.0, "clearAmount": 15.0}),
+        ),
+        r(
+            "distort.glass",
+            "Glass…",
+            DISTORT,
+            "{distortion: 0..20 (5), smoothness: 1..15 (3), texture: \"blocks\"|\"canvas\"|\"frosted\"|\"tinyLens\" (\"frosted\"; surfaces made in code), scaling: % 50..200 (100), invert: bool (false; turns the surface's heights over)} makes the object look as if seen through glass",
+            json!({"distortion": 5.0, "smoothness": 3.0, "texture": "frosted", "scaling": 100.0, "invert": false}),
+        ),
+        r(
+            "distort.oceanRipple",
+            "Ocean Ripple…",
+            DISTORT,
+            "{rippleSize: 1..15 (9), rippleMagnitude: 0..20 (9)} adds randomly spaced ripples, as if the object were under water",
+            json!({"rippleSize": 9.0, "rippleMagnitude": 9.0}),
         ),
         r(
             "sharpen.unsharpMask",

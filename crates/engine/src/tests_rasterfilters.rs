@@ -1,5 +1,5 @@
-//! The Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Pixelate ›
-//! Color Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Texture ›
+//! The Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Distort ›
+//! Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Texture ›
 //! Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, Video): applied and
 //! edited as commands, listed in the catalogue, drawn on the canvas, and written to PDF and SVG
 //! as images of the effected object.
@@ -17,6 +17,11 @@ const EFFECTS: [(&str, &str); 3] = [
     ("blur.smart", r#"{"radius": 8, "threshold": 100}"#),
     ("sharpen.unsharpMask", r#"{"amount": 300, "radius": 3}"#),
 ];
+
+/// Effect › Distort (Diffuse Glow with its highlights glowing from a low brightness up, as the
+/// striped art's reds are dark).
+const DISTORT: [(&str, &str); 3] =
+    [("distort.diffuseGlow", r#"{"clearAmount": 0, "glowAmount": 20}"#), ("distort.glass", "{}"), ("distort.oceanRipple", "{}")];
 
 /// Effect › Pixelate, at their defaults.
 const PIXELATE: [(&str, &str); 4] =
@@ -73,6 +78,7 @@ fn listed_applied_edited_and_undone() {
         EFFECTS.iter().map(|(id, _)| list["catalog"].as_array().unwrap().iter().find(|e| e["id"] == *id).unwrap()["menu"].clone()).collect();
     assert_eq!(menus, [json!(["Effect", "Blur"]), json!(["Effect", "Blur"]), json!(["Effect", "Sharpen"])]);
     for (group, menu) in [
+        (DISTORT.as_slice(), "Distort"),
         (PIXELATE.as_slice(), "Pixelate"),
         (TEXTURE.as_slice(), "Texture"),
         (VIDEO.as_slice(), "Video"),
@@ -102,7 +108,7 @@ fn listed_applied_edited_and_undone() {
 
 #[test]
 fn each_effect_changes_the_canvas_and_draws_the_same_twice() {
-    for (id, params) in EFFECTS.into_iter().chain(PIXELATE).chain(TEXTURE).chain(VIDEO) {
+    for (id, params) in EFFECTS.into_iter().chain(DISTORT).chain(PIXELATE).chain(TEXTURE).chain(VIDEO) {
         let (mut s, g) = striped();
         let plain = render(&s);
         let params: Value = serde_json::from_str(params).unwrap();
@@ -131,7 +137,7 @@ fn spin_blur_reaches_past_the_corners() {
 
 #[test]
 fn pdf_and_svg_write_the_effected_object_as_an_image() {
-    for (id, params) in EFFECTS.into_iter().chain(PIXELATE).chain(TEXTURE).chain(VIDEO) {
+    for (id, params) in EFFECTS.into_iter().chain(DISTORT).chain(PIXELATE).chain(TEXTURE).chain(VIDEO) {
         let (mut s, g) = striped();
         let params: Value = serde_json::from_str(params).unwrap();
         s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": params})).unwrap();

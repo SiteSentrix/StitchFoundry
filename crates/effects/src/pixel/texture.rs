@@ -83,7 +83,7 @@ impl Texture {
     }
 
     /// The surface's height at `p` (points at 100 %), in points: slopes of about 1 at most.
-    fn height(self, p: Point) -> f64 {
+    pub(super) fn height(self, p: Point) -> f64 {
         match self {
             Texture::Brick => brick(p),
             Texture::Burlap => weave(p, 7.0, true),
@@ -155,13 +155,13 @@ const SALT_SURFACE: u64 = 112;
 pub(super) const CONTOUR_SOFTNESS: f64 = 1.0 / 6.0;
 
 /// A pixel's straight colour (0..1).
-fn straight(p: [u8; 4]) -> [f32; 3] {
+pub(super) fn straight(p: [u8; 4]) -> [f32; 3] {
     let a = f32::from(p[3]);
     [p[0], p[1], p[2]].map(|v| if a > 0.0 { (f32::from(v) / a).min(1.0) } else { 0.0 })
 }
 
 /// The pixel of straight colour `c` at coverage `alpha` (0..1), premultiplied.
-fn premultiply(c: [f32; 3], alpha: f32) -> [u8; 4] {
+pub(super) fn premultiply(c: [f32; 3], alpha: f32) -> [u8; 4] {
     let a = (alpha.clamp(0.0, 1.0) * 255.0).round();
     let [r, g, b] = c.map(|v| (v.clamp(0.0, 1.0) * a).round().min(a) as u8);
     [r, g, b, a as u8]
@@ -185,7 +185,7 @@ fn cover(d: f64, px: f64) -> f64 {
 }
 
 /// The luma of colour `c` (Rec. 601 weights).
-fn luma(c: [f32; 3]) -> f32 {
+pub(super) fn luma(c: [f32; 3]) -> f32 {
     0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
 }
 
@@ -308,7 +308,7 @@ pub(super) fn craquelure(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSp
 }
 
 /// A random value in [-1, 1) for the `size`-point cell holding `q`; `k` picks one of several.
-fn cell_noise(salt: u64, q: Point, size: f64, k: u64) -> f64 {
+pub(super) fn cell_noise(salt: u64, q: Point, size: f64, k: u64) -> f64 {
     match (cell(q.x / size), cell(q.y / size)) {
         (Some(i), Some(j)) => 2.0 * rand(salt, i, j, k) - 1.0,
         _ => 0.0,
@@ -316,7 +316,7 @@ fn cell_noise(salt: u64, q: Point, size: f64, k: u64) -> f64 {
 }
 
 /// [`value_noise`] in [-1, 1) over cells `size` points wide.
-fn smooth_noise(salt: u64, q: Point, size: f64) -> f64 {
+pub(super) fn smooth_noise(salt: u64, q: Point, size: f64) -> f64 {
     2.0 * value_noise(salt, q.x / size, q.y / size) - 1.0
 }
 
