@@ -1081,47 +1081,46 @@ fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, unit: Unit, 
     let step = unit.ruler_step(xf.zoom);
     let minor = step / 10.0;
     let font = egui::FontId::proportional(9.5);
-    let a = xf.to_doc(top.left_top());
-    let b = xf.to_doc(top.right_top());
-    let clip_top = p.with_clip_rect(top);
-    let mut x = (a.x / per / minor).floor() * minor;
-    while x * per <= b.x {
-        let sx = xf.to_screen(Point::new(x * per, 0.0)).x;
-        let is_major = ((x / step).round() * step - x).abs() < minor * 0.01;
-        let is_mid = ((x / (step / 2.0)).round() * (step / 2.0) - x).abs() < minor * 0.01;
-        let len = if is_major {
+    let near = |v: f64, every: f64| ((v / every).round() * every - v).abs() < minor * 0.01;
+    // A tick's length: the labelled ones longest, the halves between them shorter.
+    let tick = |v: f64| {
+        if near(v, step) {
             RULER
-        } else if is_mid {
+        } else if near(v, step / 2.0) {
             7.0
         } else {
             4.0
-        };
-        clip_top.line_segment([pos2(sx, top.bottom() - len), pos2(sx, top.bottom())], Stroke::new(1.0, t.ruler_tick));
-        if is_major {
+        }
+    };
+    // Each ruler measures along its own edge, in the canvas's coordinates turned with the view
+    // (#826): at 0° the top one reads x and the left one y. `draw` gets each tick's distance
+    // (screen points) from `from` along the ruler, and its value in `unit`.
+    let ticks = |from: Pos2, to: Pos2, axis: vectorcraft_geom::Vec2, draw: &mut dyn FnMut(f32, f64)| {
+        let along = |s: Pos2| xf.to_doc(s).to_vec2().dot(axis);
+        let (a, b) = (along(from), along(to));
+        let mut v = (a / per / minor).floor() * minor;
+        while v * per <= b {
+            draw(((v * per - a) * xf.zoom) as f32, v);
+            v += minor;
+        }
+    };
+    // The canvas's directions along the screen's x and y.
+    let (sn, cs) = xf.rot.sin_cos();
+    let clip_top = p.with_clip_rect(top);
+    ticks(top.left_top(), top.right_top(), vectorcraft_geom::Vec2::new(cs, -sn), &mut |d, x| {
+        let sx = top.left() + d;
+        clip_top.line_segment([pos2(sx, top.bottom() - tick(x)), pos2(sx, top.bottom())], Stroke::new(1.0, t.ruler_tick));
+        if near(x, step) {
             clip_top.text(pos2(sx + 2.0, top.top() + 1.0), egui::Align2::LEFT_TOP, ruler_label(x, step), font.clone(), t.ruler_tick);
         }
-        x += minor;
-    }
-    let a = xf.to_doc(left.left_top());
-    let b = xf.to_doc(left.left_bottom());
+    });
     let clip_left = p.with_clip_rect(left);
-    let mut y = (a.y / per / minor).floor() * minor;
-    while y * per <= b.y {
-        let sy = xf.to_screen(Point::new(0.0, y * per)).y;
-        let is_major = ((y / step).round() * step - y).abs() < minor * 0.01;
-        let is_mid = ((y / (step / 2.0)).round() * (step / 2.0) - y).abs() < minor * 0.01;
-        let len = if is_major {
-            RULER
-        } else if is_mid {
-            7.0
-        } else {
-            4.0
-        };
-        clip_left.line_segment([pos2(left.right() - len, sy), pos2(left.right(), sy)], Stroke::new(1.0, t.ruler_tick));
-        if is_major {
+    ticks(left.left_top(), left.left_bottom(), vectorcraft_geom::Vec2::new(sn, cs), &mut |d, y| {
+        let sy = left.top() + d;
+        clip_left.line_segment([pos2(left.right() - tick(y), sy), pos2(left.right(), sy)], Stroke::new(1.0, t.ruler_tick));
+        if near(y, step) {
             // Vertical labels read top-to-bottom, one digit per line like Illustrator.
-            let s = ruler_label(y, step);
-            for (k, ch) in s.chars().enumerate() {
+            for (k, ch) in ruler_label(y, step).chars().enumerate() {
                 clip_left.text(
                     pos2(left.left() + 4.0, sy + 2.0 + k as f32 * 8.5),
                     egui::Align2::LEFT_TOP,
@@ -1131,8 +1130,7 @@ fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, unit: Unit, 
                 );
             }
         }
-        y += minor;
-    }
+    });
     if let Some(h) = hover {
         let s = xf.to_screen(h);
         clip_top.line_segment([pos2(s.x, top.top()), pos2(s.x, top.bottom())], Stroke::new(1.0, t.text));
@@ -2052,6 +2050,47 @@ mod tests {
     use super::*;
     use vectorcraft_engine::Session;
     use vectorcraft_geom::Shape as _;
+
+    /// #826: in a turned view each ruler still has ticks along its whole length; at 0° the top one
+    /// reads x where the canvas has it.
+    #[test]
+    fn rulers_cover_their_length_at_any_rotation() {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let full = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0));
+        let [top, left, _] = ruler_rects(full);
+        for deg in [0.0_f64, 30.0, 90.0, 135.0, 200.0] {
+            let xf = Xf { rect: full, zoom: 1.0, center: Point::new(300.0, 200.0), rot: deg.to_radians() };
+            let mut out = ctx.run_ui(Default::default(), |ui| rulers(ui, full, &xf, None, Unit::Points, &Tokens::get(ui.ctx())));
+            out.textures_delta.clear();
+            // The ticks' positions along each ruler.
+            let along = |ruler: egui::Rect, x: bool| -> Vec<f32> {
+                let mut at: Vec<f32> = out
+                    .shapes
+                    .iter()
+                    .filter(|c| c.clip_rect == ruler)
+                    .filter_map(|c| match &c.shape {
+                        Shape::LineSegment { points: [a, b], .. } if x && a.x == b.x => Some(a.x),
+                        Shape::LineSegment { points: [a, b], .. } if !x && a.y == b.y => Some(a.y),
+                        _ => None,
+                    })
+                    .collect();
+                at.sort_by(f32::total_cmp);
+                at
+            };
+            for (ruler, x) in [(top, true), (left, false)] {
+                let at = along(ruler, x);
+                let (start, end) = if x { (ruler.left(), ruler.right()) } else { (ruler.top(), ruler.bottom()) };
+                let (Some(first), Some(last)) = (at.first(), at.last()) else { panic!("{deg}°: no ticks") };
+                assert!(first - start < 20.0 && end - last < 20.0, "{deg}°: ticks from {first} to {last} on {start}..{end}");
+                assert!(at.windows(2).all(|w| w[1] - w[0] < 20.0), "{deg}°: a gap in the ticks");
+            }
+            if deg == 0.0 {
+                let origin = xf.to_screen(Point::ZERO).x;
+                assert!(along(top, true).iter().any(|x| (x - origin).abs() < 0.01), "a tick at x = 0");
+            }
+        }
+    }
 
     #[test]
     fn shaper_selection_highlights_only_the_visible_result() {
