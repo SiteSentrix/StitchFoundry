@@ -248,7 +248,7 @@ pub(super) fn param_fields(
             match v {
                 Value::Number(n) => {
                     if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), "", 3, 140.0) {
-                        d.fields.insert(k, json!(x));
+                        d.fields.insert(k, numeric_edit_value(&n, x));
                         changed = true;
                     }
                 }
@@ -289,6 +289,22 @@ pub(super) fn param_fields(
         }
     });
     changed
+}
+
+/// Keep integer command parameters integral when a numeric field is edited. The editor reads
+/// numbers through f64, but a JSON float such as 12.0 is not accepted by Value::as_u64().
+/// Counts (Object Mosaic rows/columns, grid repeats, etc.) would otherwise fall back to their
+/// defaults after the user changed them. Fractional input stays fractional for command validation.
+fn numeric_edit_value(original: &serde_json::Number, value: f64) -> Value {
+    if value.is_finite() && value.fract() == 0.0 {
+        if original.is_u64() && value >= 0.0 && value < u64::MAX as f64 {
+            return json!(value as u64);
+        }
+        if original.is_i64() && value >= i64::MIN as f64 && value < i64::MAX as f64 {
+            return json!(value as i64);
+        }
+    }
+    json!(value)
 }
 
 /// Editor for a plug-in's parameters from its schema (plug-in filter and effect dialogs): numbers
@@ -551,4 +567,31 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
 pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(tl!(text)).size(11.0).color(t.text_dim));
+}
+
+#[cfg(test)]
+mod numeric_edit_tests {
+    use super::*;
+
+    #[test]
+    fn integer_command_parameters_remain_json_integers() {
+        // Object Mosaic's command parses counts with Value::as_u64().
+        let count = json!(10);
+        let original = count.as_number().unwrap();
+        let changed = numeric_edit_value(original, 24.0);
+        assert_eq!(changed.as_u64(), Some(24));
+        assert_eq!(numeric_edit_value(original, 1.0), json!(1));
+        // A decimal must not be silently converted to a different integer.
+        assert_eq!(numeric_edit_value(original, 2.5), json!(2.5));
+    }
+
+    #[test]
+    fn signed_counts_and_float_parameters_retain_their_number_kind() {
+        let signed = json!(-10);
+        assert_eq!(numeric_edit_value(signed.as_number().unwrap(), -4.0), json!(-4));
+        let float = json!(10.5);
+        let updated = numeric_edit_value(float.as_number().unwrap(), 12.0);
+        assert!(updated.is_f64());
+        assert_eq!(updated, json!(12.0));
+    }
 }
