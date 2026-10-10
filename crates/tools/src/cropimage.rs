@@ -232,9 +232,15 @@ impl Tool for CropImageTool {
         if key != "rect" {
             return;
         }
-        let n: Vec<f64> = value.as_array().map(|v| v.iter().filter_map(Value::as_f64).filter(|n| n.is_finite()).collect()).unwrap_or_default();
-        self.rect = match n.as_slice() {
-            [x, y, w, h] => Some((None, Rect::new(*x, *y, x + w, y + h))),
+        // Invalid components must discard the whole box, not silently shift the
+        // coordinates by dropping a non-numeric entry.
+        let numbers = value
+            .as_array()
+            .filter(|a| a.len() == 4)
+            .and_then(|a| a.iter().map(Value::as_f64).collect::<Option<Vec<_>>>())
+            .filter(|a| a.iter().all(|n| n.is_finite()));
+        self.rect = match numbers.as_deref() {
+            Some([x, y, w, h]) => Some((None, Rect::new(*x, *y, x + w, y + h))),
             _ => None,
         };
     }
@@ -334,6 +340,17 @@ mod tests {
         let none = Selection::default();
         let cx = crate::testutil::cx(&d, &none, &p);
         assert!(t.overlays(&cx).is_empty() && !t.claims_key(&cx, ToolKey::Enter));
+    }
+
+    #[test]
+    fn crop_box_option_requires_exactly_four_finite_numeric_values() {
+        let mut tool = CropImageTool::default();
+        for invalid in [json!([10, "ignored", 20, 30, 40]), json!([10, 20, 30, null, 40]), json!([10, 20, 30, 40, 50]), json!("not a rectangle")] {
+            tool.set_option("rect", &invalid);
+            assert!(tool.options().get("rect").is_none(), "invalid box should reset crop: {invalid}");
+        }
+        tool.set_option("rect", &json!([10, 20, 30, 40]));
+        assert_eq!(tool.options()["rect"], json!([10.0, 20.0, 30.0, 40.0]));
     }
 
     #[test]
