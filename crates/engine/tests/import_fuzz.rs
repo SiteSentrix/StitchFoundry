@@ -1702,6 +1702,9 @@ fn ascii85(data: &[u8]) -> String {
     out
 }
 
+/// A pattern's definition in editing data: its name and tile, its art on `%_` lines, its end.
+const PATTERN: &str = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 6 6\n%_0 A\n%_0 Ae\n%_u\n%_0 0 m\n%_0 6 L\n%_6 6 L\n%_6 0 L\n%_n\n%_0 0 0 1 K\n%_1 J 1 w\n%_3 3 m\n%_3 3 L\n%_S\n%_U\n%_9 () XW\nE\n%AI3_EndPattern\n";
+
 /// The editing data of a file with every sort of object the layers reader knows, and some it doesn't.
 fn editing_text() -> String {
     let square = |x: u32| format!("0 0 1 0 k\n{x} 10 m\n{} 10 L\n{} 14 L\n{x} 14 L\nf", x + 4, x + 4);
@@ -1724,13 +1727,16 @@ fn editing_text() -> String {
         "0 Xw".into(),
         "1 0 0 0 1 0 Bg".into(),
         "0 1 w 2 J 0 j 4 M [3 2]0 d 1 D".into(),
+        "0 0 0 1 (Black global) 0.4 0 Xk".into(),
+        "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p".into(),
+        square(60),
     ]
     .join("\n");
     let layer = |name: &str, visible: u8, body: &str| {
         format!("%AI5_BeginLayer\n{visible} 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n")
     };
     format!(
-        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n{}{}%%Trailer\n",
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n{PATTERN}{}{}%%Trailer\n",
         layer("One", 1, &format!("{body}\n{}", layer("Sub", 1, &square(70)))),
         layer("Two", 0, &square(80))
     )
@@ -1980,6 +1986,16 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "/Binary : /ASCII85Decode ,",
             "~>",
             "p",
+            "P",
+            "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p",
+            "(Dots) 0 0 1 1 0 0 0 0 0 [0 0 0 0 1e308 0] P",
+            "Xk",
+            "XK",
+            "0 0 0 1 (Global) 0.4 0 Xk",
+            "1 0.5 0 (Global) 0 1 XK",
+            "E",
+            "\n%AI3_BeginPattern: (Dots)\n(Dots) 0 0 6 6\n",
+            "\n%AI3_EndPattern\n",
             "To",
             "frobnicate",
             "\n%AI5_BeginLayer\n",

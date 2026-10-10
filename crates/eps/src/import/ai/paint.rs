@@ -3,7 +3,9 @@
 //! - Colours: `g`/`G` grey (1 is white), `k`/`K` CMYK, `x`/`X` a named CMYK colour at a tint
 //!   (`c m y k (name) tint`; tint 0 is the full colour), `Xa`/`XA` RGB (`c m y k r g b`, the CMYK
 //!   values its equivalent), `Xx`/`XX` a named colour of either model
-//!   (`c m y k [r g b] (name) tint type`). Lower case paints fills, upper case strokes.
+//!   (`c m y k [r g b] (name) tint type`), `Xk`/`XK` a global process colour (its operands as
+//!   `Xx`'s: a global swatch that isn't an ink of its own). Lower case paints fills, upper case
+//!   strokes.
 //! - Gradient definitions: `(name) type stops Bd`, its stops as `colour style [opacity 6]
 //!   midpoint ramp Bs` (style 0 grey, 1 CMYK, 2 RGB with its CMYK, 3 and 4 named colours), `BD`.
 //! - A gradient on an object: `[flag] Bb` (1: the stroke), `flag (name) x y angle length a b c d
@@ -28,6 +30,8 @@ pub(super) struct Named {
     /// The full colour.
     pub color: Color,
     pub tint: f32,
+    /// An ink of its own (a spot colour), not a global process colour.
+    pub spot: bool,
 }
 
 /// The paint of a colour operator's operands (`op`: its name, lower case or not), with the named
@@ -48,6 +52,7 @@ pub(super) fn color_op(op: &str, vals: &[V]) -> Option<(Paint, Option<Named>)> {
         }
         "x" => named(vals, Some(false)),
         "xx" => named(vals, None),
+        "xk" => named(vals, None).map(|(p, n)| (p, n.map(|n| Named { spot: false, ..n }))),
         _ => None,
     }
 }
@@ -72,7 +77,7 @@ fn named(vals: &[V], rgb: Option<bool>) -> Option<(Paint, Option<Named>)> {
         Color::cmyk(unit(*c), unit(*m), unit(*y), unit(*k))
     };
     let paint = Paint::Solid { color: color.tinted(tint), swatch: Some(name.clone()), tint };
-    Some((paint, Some(Named { name, color, tint })))
+    Some((paint, Some(Named { name, color, tint, spot: true })))
 }
 
 /// The colour of a gradient stop's colour values and style.
@@ -162,7 +167,7 @@ pub(super) struct Instance {
     hilight: Vec2,
 }
 
-fn affine(n: &[f64]) -> Option<Affine> {
+pub(super) fn affine(n: &[f64]) -> Option<Affine> {
     let [a, b, c, d, e, f] = n else { return None };
     let m = Affine::new([*a, *b, *c, *d, *e, *f]);
     (m.as_coeffs().iter().all(|v| v.is_finite())).then_some(m)
@@ -247,6 +252,20 @@ mod tests {
         assert!((named.tint - 0.6).abs() < 1e-6);
         assert!(matches!(p, Paint::Solid { swatch: Some(_), .. }));
         assert!(color_op("k", &nums(&[1.0])).is_none());
+        // A global process colour: CMYK (type 0) or RGB (type 1), not an ink.
+        let mut v = nums(&[0.0, 0.0, 0.0, 1.0]);
+        v.extend([V::Str(b"K100".to_vec()), V::Num(0.4), V::Num(0.0)]);
+        let (p, named) = color_op("XK", &v).unwrap();
+        let named = named.unwrap();
+        assert_eq!((named.name.as_str(), named.color, named.spot), ("K100", Color::cmyk(0.0, 0.0, 0.0, 1.0), false));
+        assert!((named.tint - 0.6).abs() < 1e-6);
+        assert!(
+            matches!(p, Paint::Solid { swatch: Some(s), tint, color: Color::Cmyk { k, .. } } if s == "K100" && (tint - 0.6).abs() < 1e-6 && (k - 0.6).abs() < 1e-6)
+        );
+        let mut v = nums(&[0.0, 0.0, 0.0, 0.0, 1.0, 0.5, 0.0]);
+        v.extend([V::Str(b"Orange".to_vec()), V::Num(0.0), V::Num(1.0)]);
+        let (p, _) = color_op("Xk", &v).unwrap();
+        assert_eq!(p.color(), Some(Color::rgb(1.0, 0.5, 0.0)));
     }
 
     #[test]

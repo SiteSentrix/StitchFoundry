@@ -55,8 +55,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Missing:** faithful layer and group structure from the editing data in real files (#951: 109 layers instead
   of 14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
-  lines (#779), open speed on large files (#758), legacy `.ai` without the prolog, live effects, brushes, symbols
-  and pattern fills as live objects (#637). Writing Illustrator's own editing data is out of scope
+  lines (#779), open speed on large files (#758), legacy `.ai` without the prolog, live effects, brushes and
+  symbols as live objects (#637; pattern fills and global colours are read since #1025). Writing Illustrator's own editing data is out of scope
   (undocumented); Save As `.ai` stays PDF-compatible.
 - **Evidence:** the issues above; 28 of the 350 issues are about `.ai`/EPS (about 22 people, the most common single
   format theme), 20 fixed, and the 8 open ones are about structure (layers, guides, speed, live objects), not missing
@@ -200,6 +200,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | G9: `.ai` pattern fills and global colours read from the editing data (#1025) |
 | 2026-10-10 | minor | G3: initial Revolve landed (#846), 45–75 h left |
 | 2026-10-10 | minor | G9 evidence counted from the tracker (28 `.ai`/EPS issues, 20 fixed); impact narrowed to handing files back |
 | 2026-10-10 | minor | Alpha blockers checked against the core-workflow gate: none |
