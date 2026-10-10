@@ -15,7 +15,8 @@
 //! Both pick the key objects of a blend, and click or drag ruler guides ([`crate::rulerguide`]).
 //! Direct Selection also edits a blend's spine: drag its points (a key object on a point moves
 //! with it) and, once a point is clicked, its handles; and the points of selected gradient meshes
-//! and mesh envelopes and their handles ([`MeshEdit`]). Dragging a corner or an edge of area
+//! and mesh envelopes and their handles ([`MeshEdit`]; a solid fill colour recolours a gradient
+//! mesh's point last clicked). Dragging a corner or an edge of area
 //! type's frame reshapes the type area (`text.reshapeArea`): the text reflows at its size.
 //! Dragging the brackets of selected type on a path moves or flips it ([`crate::pathtype`]).
 //!
@@ -290,6 +291,9 @@ impl Tool for DirectSelectionTool {
     }
     fn busy(&self) -> bool {
         !matches!(self.state, State::Idle) || self.guide.busy()
+    }
+    fn options(&self) -> Value {
+        self.mesh.options()
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         if let Some(out) = self.guide.pointer(cx, ev) {
