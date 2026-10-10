@@ -3819,3 +3819,12 @@ theme	Appearance	外観
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ステップ {i} の結果にその値はありません ($ そのものを書くには $$ と入力してください)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: この前にステップ {i} はありません (ステップは 0 から数えます。$ そのものを書くには $$ と入力してください)
 @msg	object ids are non-negative integers, not {v}	オブジェクト ID は 0 以上の整数です ({v} は使えません)
+@msg	automation filesystem access is not granted: read authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 読み込み権限がありません: {path}
+@msg	automation filesystem access is not granted: write authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 書き込み権限がありません: {path}
+@msg	automation path rejected: outside the read root {root}: {path}	自動化のパスを拒否しました: 読み込みルート {root} の外です: {path}
+@msg	automation path rejected: outside the write root {root}: {path}	自動化のパスを拒否しました: 書き込みルート {root} の外です: {path}
+@msg	automation path rejected: path is empty	自動化のパスを拒否しました: パスが空です
+@msg	automation path rejected: a link that leads nowhere: {path}	自動化のパスを拒否しました: リンク先が存在しません: {path}
+@msg	automation path rejected: cannot resolve {path}: {e}	自動化のパスを拒否しました: {path} を解決できません: {e}
+@msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	自動化のパスを拒否しました: 存在しないフォルダーから上の階層 (..) へ移動しています: {path}
+@msg	automation path rejected: reserved device names are not allowed: {path}	自動化のパスを拒否しました: 予約済みのデバイス名は使用できません: {path}

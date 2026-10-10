@@ -708,20 +708,39 @@ fn formats(_: &mut Session, _: &Value) -> Result<Value> {
 }
 
 // ---------- the file system (none on the web, where commands take and return bytes) ----------
+//
+// Every path a command reads or writes goes through these, which check it against the automation
+// roots in force ([`crate::file_access`]): a path outside them is an error (`file_stamp` and
+// `file_created`: no file), as is any path once roots are in force without its kind of access.
+
+/// `path` checked for reading against the automation roots in force.
+#[cfg(not(target_arch = "wasm32"))]
+fn may_read(path: &str) -> Result<()> {
+    crate::file_access::check_read(path).map_err(EngineError::Other)
+}
+
+/// `path` checked for writing against the automation roots in force.
+#[cfg(not(target_arch = "wasm32"))]
+fn may_write(path: &str) -> Result<()> {
+    crate::file_access::check_write(path).map_err(EngineError::Other)
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn read_file(path: &str) -> Result<Vec<u8>> {
+    may_read(path)?;
     std::fs::read(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
+    may_write(path)?;
     // Never a half-written file: see [`write_atomic`].
     write_atomic(std::path::Path::new(path), bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_dir(path: &str) -> Result<()> {
+    may_write(path)?;
     std::fs::create_dir_all(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
@@ -730,6 +749,7 @@ pub(crate) fn create_dir(path: &str) -> Result<()> {
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn write_new_file(path: &str, bytes: &[u8]) -> Result<()> {
     use std::io::Write as _;
+    may_write(path)?;
     let err = |e: std::io::Error| EngineError::Other(format!("{path}: {e}"));
     let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(path).map_err(err)?;
     let written = f.write_all(bytes).and_then(|()| f.sync_all());
@@ -742,17 +762,20 @@ pub(crate) fn write_new_file(path: &str, bytes: &[u8]) -> Result<()> {
 }
 
 /// A file's size (bytes) and modification time (ms since the Unix epoch, when the file system
-/// keeps one); `None` when there is no file at `path`.
+/// keeps one); `None` when there is no file at `path` (or automation may not read it).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn file_stamp(path: &str) -> Option<(u64, Option<u64>)> {
+    may_read(path).ok()?;
     let m = std::fs::metadata(path).ok().filter(std::fs::Metadata::is_file)?;
     let modified = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
     Some((m.len(), modified))
 }
 
-/// When the file at `path` was created (ms since the Unix epoch), when the file system keeps it.
+/// When the file at `path` was created (ms since the Unix epoch), when the file system keeps it
+/// (and automation may read it).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn file_created(path: &str) -> Option<u64> {
+    may_read(path).ok()?;
     let t = std::fs::metadata(path).ok()?.created().ok()?;
     t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)
 }

@@ -186,6 +186,12 @@ Register the MCP server with Claude Code:
 claude mcp add vectorcraft -- /path/to/vectorcraft-cli mcp
 ```
 
+To keep an agent to one project's files, give it folders to read and write (the same flags as PhotoCraft):
+
+```sh
+claude mcp add vectorcraft -- /path/to/vectorcraft-cli mcp --automation-read-root /work/project --automation-write-root /work/project
+```
+
 The details are in [`docs/mcp.md`](docs/mcp.md) and [`docs/control-protocol.md`](docs/control-protocol.md).
 
 For the experimental, unsupported 64-bit Windows 7 build, see [Windows 7 instructions](docs/windows7.md).

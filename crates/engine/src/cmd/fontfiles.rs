@@ -345,7 +345,11 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(f) = files.iter().find(|f| !found.contains(f)) {
         return Err(bad(C, format!("`{}` is not a font file the last text.findFontFiles search found", f.display())));
     }
-    super::fileio::create_dir(&dir.to_string_lossy())?;
+    for f in &files {
+        crate::file_access::check_read(&f.to_string_lossy()).map_err(EngineError::Other)?;
+    }
+    // VectorCraft's own Fonts folder: no automation root applies to it.
+    crate::file_access::unconfined(|| super::fileio::create_dir(&dir.to_string_lossy()))?;
     let report = copy_into(&files, dir);
     let pairs = |v: &[(PathBuf, PathBuf)]| {
         v.iter().map(|(from, to)| json!({ "from": from.to_string_lossy(), "to": to.to_string_lossy() })).collect::<Vec<_>>()

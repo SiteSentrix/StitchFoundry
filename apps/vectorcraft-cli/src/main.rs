@@ -1,7 +1,7 @@
 //! `vectorcraft-cli`: VectorCraft from the command line.
 //!
 //! ```text
-//! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless]
+//! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg]... [--scale 2]
 //! vectorcraft-cli commands
 //! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--replace-lossy]
@@ -14,6 +14,7 @@
 #![deny(unsafe_code)]
 
 use std::io::Write;
+use std::path::Path;
 use std::process::ExitCode;
 
 /// `println!` / `print!` that end the program quietly when stdout is closed
@@ -50,6 +51,7 @@ mod prefs_dir;
 mod system_fonts;
 
 use serde_json::{Value, json};
+use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_mcp::{Backend, DEFAULT_ADDR, Headless, Remote, Server};
 
 /// stdout went away. A reader that stopped early (a closed pipe) ends the program quietly, as
@@ -66,9 +68,13 @@ const USAGE: &str = "\
 vectorcraft-cli — VectorCraft automation
 
 USAGE:
-  vectorcraft-cli mcp [--connect ADDR | --headless]
+  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
       (vectorcraft --control 7979), falling back to a headless in-process session.
+      --automation-read-root / --automation-write-root confine the files the agent's commands read
+      (open, place, relink, library loads…) and write (save, export, package, library saves…) to
+      DIR, links followed; a root left out grants none of its access. They imply --headless: a
+      running app enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
 
   vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON]]... [--export FILE]... [--scale N]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
@@ -145,18 +151,42 @@ fn main() -> ExitCode {
 fn mcp(args: &[String]) -> Result<(), String> {
     let mut connect: Option<String> = None;
     let mut headless = false;
+    let (mut read_root, mut write_root): (Option<String>, Option<String>) = (None, None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
-        match a.as_str() {
+        // The roots also come as `--flag=DIR`, as the other Craft apps take them.
+        let (flag, inline) = match a.split_once('=') {
+            Some((f, v)) if f.starts_with("--automation-") => (f, Some(v.to_string())),
+            _ => (a.as_str(), None),
+        };
+        match flag {
             "--connect" => connect = Some(it.next().cloned().ok_or("--connect needs an address")?),
             "--headless" => headless = true,
+            "--automation-read-root" | "--automation-write-root" => {
+                let dir = inline.or_else(|| it.next().cloned()).ok_or_else(|| format!("{flag} needs a folder"))?;
+                let slot = if flag == "--automation-read-root" { &mut read_root } else { &mut write_root };
+                if slot.replace(dir).is_some() {
+                    return Err(format!("{flag} is given twice: it takes one folder"));
+                }
+            }
             other => return Err(format!("unknown mcp option `{other}`")),
         }
     }
     if headless && connect.is_some() {
         return Err("use either --connect or --headless".into());
     }
-    let backend: Box<dyn Backend> = if headless {
+    let roots = AutomationRoots::new(read_root.as_deref().map(Path::new), write_root.as_deref().map(Path::new))?;
+    if roots.is_some() && connect.is_some() {
+        return Err("--automation-read-root and --automation-write-root confine the headless server; a running app enforces its own roots:                     start it with `vectorcraft --control <port> --automation-read-root <dir> --automation-write-root <dir>`"
+            .into());
+    }
+    let backend: Box<dyn Backend> = if let Some(roots) = roots {
+        // Every thread of this process, not only the server's: nothing reaches past the roots.
+        file_access::confine_process(roots.clone());
+        let show = |root: Option<&Path>| root.map_or_else(|| "none".to_string(), |r| r.display().to_string());
+        eprintln!("vectorcraft-cli: files confined: read root {}, write root {}", show(roots.read_root()), show(roots.write_root()));
+        Box::new(Headless::with_document().with_automation_roots(Some(roots)))
+    } else if headless {
         Box::new(Headless::with_document())
     } else if let Some(addr) = connect {
         // Explicit address: fail loudly if the app isn't there.

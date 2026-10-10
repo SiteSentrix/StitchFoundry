@@ -257,6 +257,8 @@ pub(crate) fn start_in(
     if cfg!(target_arch = "wasm32") {
         return Err("searching a folder isn't available on the web".into());
     }
+    // The walkers follow no links, so a folder automation may read holds all they read.
+    crate::file_access::check_read(&folder.to_string_lossy())?;
     let seconds = if limits.seconds.is_finite() { limits.seconds.clamp(0.0, 3600.0) } else { 60.0 };
     let n = pool.reserve(threads.clamp(1, MAX_THREADS));
     if n == 0 {
