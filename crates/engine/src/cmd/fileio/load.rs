@@ -228,6 +228,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
+    // Threaded type read from a file flows through its frames.
+    if !doc.text_threads.is_empty() && !restored {
+        crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
+    }
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
