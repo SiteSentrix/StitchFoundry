@@ -3686,7 +3686,7 @@ theme	Appearance	Erscheinungsbild
 @msg	the {tool} tool has no options	das Werkzeug „{tool}“ hat keine Optionen
 @msg	there are no objects to release	es gibt keine Objekte zum Zurückwandeln
 @msg	there are no printer settings to open here	hier lassen sich keine Druckereinstellungen öffnen
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	diese PostScript-Datei kann nicht gelesen werden ({_1}): Speichern Sie sie in der App, mit der sie erstellt wurde, als PDF oder SVG
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	diese PostScript-Datei kann nicht gelesen werden ({why}): Speichern Sie sie in der App, mit der sie erstellt wurde, als PDF oder SVG
 @msg	this file's PostScript couldn't be read ({why}): {what}	das PostScript dieser Datei konnte nicht gelesen werden ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	dieses Format fasst eine Zeichenfläche: Exportieren Sie mehrere als PDF oder mit document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	dies ist eine DWG-Zeichnung, die nicht gelesen werden kann: Speichern Sie sie in der CAD-App als ASCII-DXF und öffnen Sie diese Datei

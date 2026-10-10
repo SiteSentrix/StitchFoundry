@@ -1,11 +1,15 @@
 //! The layers of an Illustrator EPS or `.ai`.
 //!
 //! Besides the page it prints, such a file carries the app's own copy of the art: an EPS after its
-//! `%%EOF`, a `.ai` in its `AIPrivateData` streams (see `ai` for the containers). It has what the
-//! page doesn't: the layers with their names and options, the groups, compound paths and clipping
-//! groups, the objects' names, the hidden objects and layers, the art outside the artboards and
-//! every artboard. `ai` reads that structure into a document, with the colours, gradients,
-//! transparency and images of the art.
+//! `%%EOF`, a `.ai` in its `AIPrivateData` streams (see `ai` for the containers). A file in the
+//! legacy format (a `.ai` in PostScript form: versions 3 to 8, and the apps that still write it)
+//! is that copy itself: its program has the layers, and the prolog it names defines the operators
+//! for printing (other apps name it without including it, so their files can't be run).
+//!
+//! The copy has what the page doesn't: the layers with their names and options, the groups,
+//! compound paths and clipping groups, the objects' names, the hidden objects and layers, the art
+//! outside the artboards and every artboard. `ai` reads that structure into a document, with the
+//! colours, gradients, transparency and images of the art.
 //!
 //! Text objects are slots in that document: their characters, fonts and places are in the file's
 //! text document (see `ate`). Type that shows comes from the page, which draws it, into the slot
@@ -21,6 +25,7 @@
 //!
 //! Where a file doesn't match what this module expects, it is left alone and its page is imported.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -991,12 +996,13 @@ fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document) -> Result
     }))
 }
 
-/// The EPS `visible` (read as its page) read through its editing copy instead: its layers (the
+/// The EPS `visible` (read as its page) read through its editing copy instead (its private data, or
+/// its program in the legacy format, see [`editing_copy`]): its layers (the
 /// hidden ones too), groups, compound paths, clipping groups and artboards, with the text and the
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
 /// has one that can't be used, `visible` with a warning that says why.
 pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
-    let Some(data) = ai::eps_data(ps) else { return visible };
+    let Some(data) = editing_copy(ps) else { return visible };
     let result = data.and_then(|data| build(&data, Some(&visible.document), Page::Art, false));
     match result {
         Ok((document, mut warnings)) => {
@@ -1023,7 +1029,7 @@ pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
 /// its PDF part).
 pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool) -> (Document, Vec<String>) {
     let Ok(data) = ai::decode_private(private) else { return (visible, warnings) };
-    if !data.windows(15).any(|w| w == b"%AI5_BeginLayer") {
+    if !has_layers(&data) {
         return (visible, warnings);
     }
     match build(&data, Some(&visible), Page::Artboard, outlined) {
@@ -1045,6 +1051,27 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
 pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
     let data = ai::decode_private(private)?;
     build(&data, None, Page::Artboard, false)
+}
+
+/// Does the editing data (or a program in the legacy format) have layers?
+fn has_layers(data: &[u8]) -> bool {
+    data.windows(15).any(|w| w == b"%AI5_BeginLayer")
+}
+
+/// The editing copy of the art in the PostScript `ps`: an EPS's private data, else the program
+/// itself when it has layers (the legacy format). `None` without one.
+fn editing_copy(ps: &[u8]) -> Option<Result<Cow<'_, [u8]>, String>> {
+    match ai::eps_data(ps) {
+        Some(data) => Some(data.map(Cow::Owned)),
+        None => has_layers(ps).then_some(Ok(Cow::Borrowed(ps))),
+    }
+}
+
+/// A file in the legacy format whose page can't be read (a `.ai` in PostScript form that names its
+/// prolog without including it) from its layers alone (`ps`: its program, which has them) → the
+/// document and the import's notes. `None` when the layers aren't in the program.
+pub(super) fn program_alone(ps: &[u8]) -> Option<Result<(Document, Vec<String>), String>> {
+    (!ai::has_eps_data(ps) && has_layers(ps)).then(|| build(ps, None, Page::Art, false))
 }
 
 #[cfg(test)]

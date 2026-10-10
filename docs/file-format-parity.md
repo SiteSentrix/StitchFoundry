@@ -29,14 +29,16 @@ private editing data. VectorCraft:
 
 - **Reads** the PDF page (vectors, text, images, colour, transparency, layers via optional content) and the
   *structure* of the editing data (below). Opens Illustrator EPS the same way through its own PostScript
-  Level 3 interpreter.
+  Level 3 interpreter. A `.ai` in PostScript form (versions 3 to 8, and what Rhino and other CAD apps
+  write) is its own editing data: it opens through the layers its program has, compared with its page
+  when the program runs, from the layers alone when it names its prolog without including it (#1027).
 - **Writes** a PDF-compatible `.ai` (Save As › `ai`): Illustrator opens it as plain art. It never writes
   Illustrator's private editing data, which is undocumented.
 - **Known failures in users' files:** layer structure flattened or multiplied (#951: 109 layers instead of
   14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
   lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects,
-  brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025), legacy `.ai`
-  without the prolog not read.
+  brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
+  without the prolog opens since #1027, its legacy type (`To` … `TO`) not read yet.
 - Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible only).
   Closing the open-side issues: 10–20 h with users' files.
 
@@ -78,5 +80,6 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | `.ai` in PostScript form opens through its layers, also without its prolog (#1027) |
 | 2026-10-11 | minor | `.ai` editing data: global process colours and pattern fills read, so they no longer drop sublayers (#1025) |
 | 2026-10-10 | major | First checklist; moved the `.ai` editing-data scope from the ROADMAP's "Out of scope" here; added the user-reported `.ai` failures |

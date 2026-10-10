@@ -3786,7 +3786,7 @@ axis	Both	Entrambi
 @msg	the {tool} tool has no options	lo strumento {tool} non ha opzioni
 @msg	there are no objects to release	non ci sono oggetti da rilasciare
 @msg	there are no printer settings to open here	non ci sono impostazioni della stampante da aprire qui
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	impossibile leggere questo file PostScript ({_1}): salvalo come PDF o SVG nell'app che lo ha creato
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	impossibile leggere questo file PostScript ({why}): salvalo come PDF o SVG nell'app che lo ha creato
 @msg	this file's PostScript couldn't be read ({why}): {what}	impossibile leggere il PostScript di questo file ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	questo formato contiene una sola tavola da disegno: esportane più di una come PDF o con document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	questo è un disegno DWG, che non può essere letto: salvalo dall'app CAD come DXF ASCII e apri quel file

@@ -52,6 +52,11 @@ pub fn eps_data(ps: &[u8]) -> Option<Result<Vec<u8>, String>> {
     Some(eps_section(section))
 }
 
+/// Does the EPS `ps` carry editing data ([`eps_data`] isn't `None`)?
+pub fn has_eps_data(ps: &[u8]) -> bool {
+    find(ps, EPS_BEGIN).is_some()
+}
+
 /// The editing data between the EPS markers: header comments, then the data (encoded or not).
 fn eps_section(section: &[u8]) -> Result<Vec<u8>, String> {
     let mut header = Vec::new();
