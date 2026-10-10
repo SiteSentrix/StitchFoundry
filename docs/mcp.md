@@ -521,9 +521,10 @@ CMYK too.
 PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) open through the EPS
 reader (see EPS and PostScript import). An `.ai` saved without PDF compatibility (its PDF part is only a placeholder
 page) opens from its editing data alone: its type is made from the file's text document where it can be (point type,
-area type and type on a path), and what can't be is left out with a warning; so is non-native art (the content of a
-placed PDF, which Illustrator shows but doesn't edit and keeps as a PDF inside the editing data); without editing data
-it says it can't be opened.
+area type and type on a path), and what can't be is left out with a warning. Non-native art (the content of a placed
+PDF, which Illustrator shows but doesn't edit and keeps as a PDF inside the editing data) is drawn by the PDF importer,
+as a group named "Non-native art" fitted to the object's box; one whose PDF can't be read is left out with a warning.
+Without editing data it says it can't be opened.
 
 What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
