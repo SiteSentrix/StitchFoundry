@@ -1230,6 +1230,26 @@ the path it had begun while that stays selected. Its reply's `tool` is the tool 
 {"name":"run_command","arguments":{"command":"path.moveAnchors","params":{"dx":0,"dy":40}}}
 ```
 
+## Editing a path with the Curvature tool
+
+The Curvature tool edits any selected path, whatever drew it, keeping its shape except where edited (#798). Each edit
+is one undo step and leaves the anchor it edited direct-selected (the tool's current point):
+`path.curvatureEdit {id, subpath?, op, …}` answers `{anchor}`. `op: "move"` with `anchor`, `x`, `y` moves a point and
+re-curves only its two segments: a smooth point turns along the line through its neighbours, and the neighbours'
+handles keep their directions (their lengths scale with the chord), so the segments beyond don't change.
+`op: "insert"` with `segment`, `t` adds a smooth point there without changing the shape (with `x`, `y` it is then
+moved there: the tool's click-and-drag on a segment). `op: "extend"` with `x`, `y` goes on from the `end` (default)
+or the `start` of an open subpath, and `op: "close"` closes it from that end; `from` says how the old end bends into
+the new segment: `"keep"` (default) keeps its curve, `"smooth"` curves it through its neighbours (a point the tool
+placed), `"corner"` leaves it without handles. Alt-click or double-click toggles a point with `path.convertAnchor`, and
+Backspace/Delete removes the current point with `path.removeAnchor`.
+
+```json
+{"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"move","anchor":2,"x":260,"y":140}}}
+{"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"extend","end":"end","x":550,"y":120}}}
+{"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"extend","x":650,"y":60,"from":"smooth"}}}
+```
+
 ## Registration and trim marks
 
 Every document has the built-in `[Registration]` swatch (listed after None by `swatch.list`): a colour that prints on

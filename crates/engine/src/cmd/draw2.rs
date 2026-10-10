@@ -37,6 +37,15 @@ pub fn specs() -> Vec<CommandSpec> {
             curvature
         ),
         cmd!(
+            "path.curvatureEdit",
+            "Curvature",
+            [],
+            None,
+            "{id, subpath?, op: \"move\"|\"insert\"|\"extend\"|\"close\", anchor?, segment?, t?, end?: \"start\"|\"end\", from?: \"keep\"|\"smooth\"|\"corner\", x?, y?} edit a path as the Curvature tool does, its shape kept elsewhere; the anchor edited becomes the direct-selected one → {anchor}. move: anchor to x, y, re-curving only its two segments; insert: a smooth anchor at t on segment, the shape unchanged (with x, y: then moved there); extend: an open subpath goes on from its end (default) or start to a new end at x, y; close: an open subpath closes from that end. The old end bends into the new segment as from says: keep its curve (default), smooth through its neighbours, or a corner",
+            has_doc,
+            curvature_edit
+        ),
+        cmd!(
             "path.removeAnchor",
             "Delete Anchor Point",
             [],
@@ -591,6 +600,76 @@ fn curvature(s: &mut Session, p: &Value) -> Result<Value> {
         ap.set_stroke(Paint::solid(Color::BLACK));
     }
     add_look(s, "Curvature", path_kind(PathData::single(sp)), look, None)
+}
+
+/// An edit `path.curvatureEdit` makes.
+enum CurvatureOp {
+    Move(usize, Point),
+    Insert(usize, f64, Option<Point>),
+    Extend(Point),
+    Close,
+}
+
+fn curvature_edit(s: &mut Session, p: &Value) -> Result<Value> {
+    use vectorcraft_tools::draw2::{EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move};
+    const C: &str = "path.curvatureEdit";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let si = p.get("subpath").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let at = match (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
+        (Some(x), Some(y)) if x.is_finite() && y.is_finite() => Some(Point::new(x, y)),
+        (None, None) => None,
+        _ => return Err(bad(C, "x and y must be finite numbers")),
+    };
+    let to = || at.ok_or_else(|| bad(C, "missing x, y"));
+    let start = match str_param(p, "end") {
+        None | Some("end") => false,
+        Some("start") => true,
+        Some(e) => return Err(bad(C, format!("unknown end {e:?}"))),
+    };
+    let how = match str_param(p, "from") {
+        None => EndCurve::Keep,
+        Some(f) => EndCurve::parse(f).ok_or_else(|| bad(C, format!("unknown from {f:?}")))?,
+    };
+    let op = match str_param(p, "op") {
+        Some("move") => CurvatureOp::Move(usize_req(p, "anchor", C)?, to()?),
+        Some("insert") => CurvatureOp::Insert(usize_req(p, "segment", C)?, f64_or(p, "t", 0.5), at),
+        Some("extend") => CurvatureOp::Extend(to()?),
+        Some("close") => CurvatureOp::Close,
+        Some(o) => return Err(bad(C, format!("unknown op {o:?}"))),
+        None => return Err(bad(C, "missing op")),
+    };
+    let anchor = s.edit("Curvature", |d, sel| {
+        let path = path_mut(d, id)?;
+        let sp = path.subpaths.get_mut(si).ok_or_else(|| EngineError::Other("no such subpath".into()))?;
+        if matches!(op, CurvatureOp::Extend(_) | CurvatureOp::Close) && sp.closed {
+            return Err(EngineError::Other("path is already closed".into()));
+        }
+        let ai = match op {
+            CurvatureOp::Move(ai, q) => curvature_move(sp, ai, q).then_some(ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?,
+            CurvatureOp::Insert(seg, t, q) => {
+                let ai = curvature_insert(sp, seg, t).ok_or_else(|| EngineError::Other("no such segment".into()))?;
+                if let Some(q) = q {
+                    curvature_move(sp, ai, q);
+                }
+                ai
+            }
+            CurvatureOp::Extend(q) => {
+                curvature_extend(sp, start, q, how);
+                if start { 0 } else { sp.anchors.len() - 1 }
+            }
+            CurvatureOp::Close => {
+                if sp.anchors.len() < 3 {
+                    return Err(EngineError::Other("closing needs three anchors".into()));
+                }
+                curvature_close(sp, start, how);
+                if start { sp.anchors.len() - 1 } else { 0 }
+            }
+        };
+        sel.set([id]);
+        sel.anchors.insert(id, [(si, ai)].into());
+        Ok(ai)
+    })?;
+    Ok(json!({ "anchor": anchor }))
 }
 
 // ---------- anchor tools ----------

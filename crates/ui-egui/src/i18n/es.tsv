@@ -3355,6 +3355,7 @@ axis	Both	Ambos
 @msg	cannot distort a zero-size bounding box	no se puede distorsionar un cuadro delimitador de tamaño cero
 @msg	cannot read PDF: {0}	no se puede leer el PDF: {0}
 @msg	cannot split an open path at its end point	no se puede dividir un trazado abierto en su punto final
+@msg	closing needs three anchors	cerrar necesita tres puntos de ancla
 @msg	check an asset to export	marca un recurso para exportar
 @msg	choice must be "merge" or "add", not `{choice}`	choice debe ser "merge" o "add", no `{choice}`
 @msg	choose a direction to divide in	elige una dirección en la que dividir
