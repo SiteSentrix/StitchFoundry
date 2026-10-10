@@ -55,21 +55,16 @@ fn list_views(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn new_view(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "view.saved.new";
-    let center = match p.get("center").and_then(Value::as_array).map(Vec::as_slice) {
-        Some([x, y]) => match (x.as_f64(), y.as_f64()) {
-            (Some(x), Some(y)) if x.is_finite() && y.is_finite() => Point::new(x, y),
-            _ => return Err(bad(C, "center must contain two finite numbers")),
-        },
-        _ => return Err(bad(C, "center must be [x, y]")),
-    };
+    let [x, y] = p.get("center").and_then(finite_numbers::<2>).ok_or_else(|| bad(C, "center must be [x, y]"))?;
     let zoom = f64_req(p, "zoom", C)?;
-    let rotation = match p.get("rotation") {
-        Some(value) => value.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad(C, "rotation must be a finite number"))?,
-        None => 0.0,
-    };
     if !(zoom.is_finite() && zoom > 0.0) {
         return Err(bad(C, "zoom must be positive"));
     }
+    // Given, the rotation is a number: nothing malformed falls back to 0°.
+    let rotation = match p.get("rotation") {
+        Some(r) => r.as_f64().filter(|r| r.is_finite()).ok_or_else(|| bad(C, "rotation must be a number of degrees"))?,
+        None => 0.0,
+    };
     let st = s.doc()?;
     if st.doc.views.len() >= MAX_VIEWS {
         return Err(bad(C, format!("a document keeps at most {MAX_VIEWS} views")));
@@ -81,7 +76,7 @@ fn new_view(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.views.iter().any(|v| v.name == name) {
         return Err(bad(C, format!("a view named `{name}` exists")));
     }
-    let view = SavedView { name: name.clone(), center, zoom, rotation };
+    let view = SavedView { name: name.clone(), center: Point::new(x, y), zoom, rotation };
     let index = s.edit("New View", |d, _| {
         d.views.push(view);
         Ok(d.views.len() - 1)
