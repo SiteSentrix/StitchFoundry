@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, ticks?: n, axisMin?, axisMax?} change the graph type and options; no options → the current ones",
+            "{id?, type?, columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, ticks?: n, axisMin?, axisMax?} change the graph type and options (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0); no options → the current ones",
             has_selection,
             set_type
         ),
@@ -166,6 +166,37 @@ fn nice_axis(lo: f64, hi: f64, ticks: usize) -> (f64, f64, f64) {
     ((lo / step).floor() * step, (hi / step).ceil() * step, step)
 }
 
+/// The value axis: with both `axis_min` and `axis_max` set (Graph Type › Tick Values › Override Calculated Values),
+/// exactly that range split into `ticks` divisions (5 when automatic); otherwise a nice axis around the data, using
+/// whichever bound was given.
+fn value_axis(g: &GraphSpec, lo: f64, hi: f64) -> (f64, f64, f64) {
+    match (g.axis_min, g.axis_max) {
+        (Some(min), Some(max)) if max > min && (max - min).is_finite() => {
+            let n = if g.ticks == 0 { 5 } else { g.ticks.clamp(1, 100) } as f64;
+            (min, max, (max - min) / n)
+        }
+        _ => {
+            // An override too wide for f64 (or NaN) gives a non-finite axis, which would reach `clamp` with NaN bounds
+            // and panic: fall back to the data, then to 0..1.
+            let finite = |(a, b, s): (f64, f64, f64)| a.is_finite() && b.is_finite() && s.is_finite() && b > a && s > 0.0;
+            [nice_axis(g.axis_min.unwrap_or(lo), g.axis_max.unwrap_or(hi), g.ticks), nice_axis(lo, hi, g.ticks)]
+                .into_iter()
+                .find(|&a| finite(a))
+                .unwrap_or((0.0, 1.0, 0.2))
+        }
+    }
+}
+
+/// The tick values from `lo` to `hi` every `step`, both ends included: counted, not accumulated, so the last tick
+/// lands on `hi` and a step too small for the range (or not finite) can't loop forever. At most 1000 ticks.
+fn tick_values(lo: f64, hi: f64, step: f64) -> Vec<f64> {
+    let n = ((hi - lo) / step).round();
+    if !(lo.is_finite() && step.is_finite() && step > 0.0 && n.is_finite() && n >= 0.0) {
+        return vec![];
+    }
+    (0..=(n as usize).min(1000)).map(|i| lo + i as f64 * step).collect()
+}
+
 struct Gen<'a> {
     d: &'a mut Document,
     out: Vec<Arc<Node>>,
@@ -270,8 +301,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         GraphKind::Radar => {
             let centre = r.center();
             let rad = (r.width().min(r.height()) / 2.0).max(1.0);
-            let hi = g.axis_max.unwrap_or_else(|| g.rows.iter().flatten().copied().fold(0.0, f64::max));
-            let (lo, hi, step) = nice_axis(g.axis_min.unwrap_or(0.0), hi, g.ticks);
+            let (lo, hi, step) = value_axis(g, 0.0, g.rows.iter().flatten().copied().fold(0.0, f64::max));
             let at = |c: usize, v: f64| {
                 let a = -std::f64::consts::FRAC_PI_2 + std::f64::consts::TAU * c as f64 / ncat as f64;
                 centre + vectorcraft_geom::Vec2::new(a.cos(), a.sin()) * (rad * ((v - lo) / (hi - lo)).clamp(0.0, 1.0))
@@ -284,11 +314,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     axes.push(b.text(Point::new(p.x, p.y + LABEL_SIZE * 0.35), cat, Justify::Center));
                 }
             }
-            let mut v = lo + step;
-            while v <= hi + step * 1e-6 {
+            for v in tick_values(lo, hi, step).into_iter().skip(1) {
                 let ring: Vec<Point> = (0..ncat).map(|c| at(c, v)).collect();
                 axes.push(b.path(polyline(&ring, true), Paint::None, Paint::solid(Color::rgb(0.6, 0.6, 0.6)), 0.25));
-                v += step;
             }
             let ax = b.group("Axes", axes);
             b.out.push(ax);
@@ -327,7 +355,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     }
                 }
             }
-            let (lo, hi, step) = nice_axis(g.axis_min.unwrap_or(lo), g.axis_max.unwrap_or(hi), g.ticks);
+            let (lo, hi, step) = value_axis(g, lo, hi);
             // Value → coordinate along the value axis (y for columns/lines, x for bars).
             let vpos = |v: f64| {
                 let t = (v - lo) / (hi - lo);
@@ -335,8 +363,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             };
             let mut axes = vec![];
             // Value axis with ticks and labels.
-            let mut v = lo;
-            while v <= hi + step * 1e-6 {
+            for v in tick_values(lo, hi, step) {
                 let q = vpos(v);
                 if horizontal {
                     axes.push(b.line(Point::new(q, r.y1), Point::new(q, r.y1 + 4.0)));
@@ -345,7 +372,6 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     axes.push(b.line(Point::new(r.x0 - 4.0, q), Point::new(r.x0, q)));
                     axes.push(b.text(Point::new(r.x0 - 6.0, q + LABEL_SIZE * 0.35), &fmt_value(v), Justify::Right));
                 }
-                v += step;
             }
             if horizontal {
                 axes.push(b.line(Point::new(r.x0, r.y1), Point::new(r.x1, r.y1)));
@@ -681,6 +707,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({
             "type": spec.kind.id(), "columnWidth": spec.column_width, "clusterWidth": spec.cluster_width, "legend": spec.legend,
             "markPoints": spec.mark_points, "connectPoints": spec.connect_points, "ticks": spec.ticks,
+            "axisMin": spec.axis_min, "axisMax": spec.axis_max,
         }));
     }
     if let Some(t) = str_param(p, "type") {
@@ -788,6 +815,45 @@ mod tests {
         s.execute("select.set", &json!({"ids": [bar.0]})).unwrap();
         assert!(s.execute("graph.setData", &json!({})).is_ok());
         assert!(matches!(n.kind, NodeKind::Group { .. }));
+    }
+
+    #[test]
+    fn an_overridden_value_axis_is_used_exactly() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let r = s.execute("graph.create", &json!({"type": "column", "x": 20, "y": 20, "width": 170, "height": 74, "series": ["a"], "categories": ["x", "y"], "rows": [[4839], [10488]]})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        let tallest = |s: &Session| -> f64 {
+            let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+            let bars = series(&n, 0).children().unwrap();
+            bars.iter().map(|c| c.geometric_bounds().unwrap().height()).fold(0.0, f64::max)
+        };
+        // Calculated: a nice axis (0 to 12500 here), so the 10488 column falls short of 10488 / 12000 of the plot.
+        assert!((tallest(&s) - 74.0 * 10488.0 / 12000.0).abs() > 1.0);
+        s.execute("graph.setType", &json!({"axisMin": 0, "axisMax": 12000})).unwrap();
+        assert!((tallest(&s) - 74.0 * 10488.0 / 12000.0).abs() < 1e-6, "{}", tallest(&s));
+        let o = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!((o["axisMin"].as_f64(), o["axisMax"].as_f64()), (Some(0.0), Some(12000.0)));
+        // One bound only keeps the calculated (nice) axis around it.
+        s.execute("graph.setType", &json!({"axisMax": null})).unwrap();
+        assert!((tallest(&s) - 74.0 * 10488.0 / 12000.0).abs() > 1.0);
+    }
+
+    #[test]
+    fn tick_values_end_on_the_maximum_and_never_run_away() {
+        // Counted, not accumulated: an offset range keeps its last tick.
+        let t = super::tick_values(1e10, 1e10 + 1.0, 0.01);
+        assert_eq!(t.len(), 101);
+        assert!((t[100] - (1e10 + 1.0)).abs() < 1e-3);
+        // A range too wide for f64, or a step too small to move, gives no ticks or a capped list.
+        assert!(super::tick_values(-1.7e308, 1.7e308, f64::INFINITY).is_empty());
+        assert!(super::tick_values(1e20, 1e20 + 16384.0, 163.84).len() <= 1001);
+        assert!(super::tick_values(0.0, 1.0, 0.0).is_empty());
+        // An override whose span overflows falls back to the calculated axis instead of hanging.
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"axisMin": -1.7e308, "axisMax": 1.7e308})).unwrap();
     }
 
     #[test]
