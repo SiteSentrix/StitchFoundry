@@ -446,3 +446,26 @@ fn the_transform_effect_dialog_has_its_controls_previews_them_and_shows_them_aga
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
     assert!(text.lines().any(|l| l == "Reference Point"), "{text}");
 }
+
+#[test]
+fn artboard_options_position_moves_art_only_with_the_tool_option_on() {
+    for move_art in [false, true] {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool("artboard");
+        app.session.set_tool_option("moveArt", &json!(move_art));
+        crate::dialogs::artboard_options::open(&mut app).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("x".into(), json!(50));
+        // Draw the dialog once and confirm through its registry, as the OK button does.
+        frame(&mut app, Default::default());
+        let before = app.session.doc().unwrap().doc.clone();
+        super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.artboards[0].rect.x0, 50.0);
+        assert_eq!(
+            app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0,
+            if move_art { 60.0 } else { 10.0 }
+        );
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(*app.session.doc().unwrap().doc, *before);
+    }
+}
