@@ -2738,6 +2738,23 @@
 	Add to Library	加入資料庫
 	Delete Library	刪除資料庫
 	Delete Library Item	刪除資料庫項目
+	No results	沒有結果
+	No items in this library match “{query}”.	此資料庫中沒有符合「{query}」的項目。
+	Right-click an item to move it into this group.	在項目上按一下右鍵，即可將其移至此群組。
+	New Group	新增群組
+	New Group…	新增群組…
+	Move to Group	移至群組
+	No Group	無群組
+	Rename Group…	重新命名群組…
+	Delete Group	刪除群組
+	Import Library…	匯入資料庫…
+	Export Library…	匯出資料庫…
+	Import Library	匯入資料庫
+	Export Library	匯出資料庫
+	New Library Group	新增資料庫群組
+	Rename Library Group	重新命名資料庫群組
+	Delete Library Group	刪除資料庫群組
+	Move Library Item to Group	將資料庫項目移至群組
 	Library	資料庫
 	Rename Library	重新命名資料庫
 	Show Library	顯示資料庫

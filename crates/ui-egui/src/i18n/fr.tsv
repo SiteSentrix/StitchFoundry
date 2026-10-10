@@ -2757,6 +2757,23 @@
 	Add to Library	Ajouter à la bibliothèque
 	Delete Library	Supprimer la bibliothèque
 	Delete Library Item	Supprimer l’élément de la bibliothèque
+	No results	Aucun résultat
+	No items in this library match “{query}”.	Aucun élément de cette bibliothèque ne correspond à « {query} ».
+	Right-click an item to move it into this group.	Cliquez avec le bouton droit sur un élément pour le placer dans ce groupe.
+	New Group	Nouveau groupe
+	New Group…	Nouveau groupe…
+	Move to Group	Déplacer vers le groupe
+	No Group	Aucun groupe
+	Rename Group…	Renommer le groupe…
+	Delete Group	Supprimer le groupe
+	Import Library…	Importer une bibliothèque…
+	Export Library…	Exporter la bibliothèque…
+	Import Library	Importer une bibliothèque
+	Export Library	Exporter la bibliothèque
+	New Library Group	Nouveau groupe de bibliothèque
+	Rename Library Group	Renommer le groupe de bibliothèque
+	Delete Library Group	Supprimer le groupe de bibliothèque
+	Move Library Item to Group	Déplacer l’élément de la bibliothèque vers un groupe
 	Library	Bibliothèque
 	Rename Library	Renommer la bibliothèque
 	Show Library	Afficher la bibliothèque
@@ -3892,3 +3909,4 @@ axis	Both	Les deux
 	Even Fields	Trames paires
 	Duplication	Duplication
 	Interpolation	Interpolation
+@msg	Imported library {name}	Bibliothèque {name} importée

@@ -2652,6 +2652,23 @@
 	Add to Library	添加到库
 	Delete Library	删除库
 	Delete Library Item	删除库项目
+	No results	无结果
+	No items in this library match “{query}”.	此库中没有与“{query}”匹配的项目。
+	Right-click an item to move it into this group.	右键单击项目可将其移到此组。
+	New Group	新建组
+	New Group…	新建组…
+	Move to Group	移到组
+	No Group	无组
+	Rename Group…	重命名组…
+	Delete Group	删除组
+	Import Library…	导入库…
+	Export Library…	导出库…
+	Import Library	导入库
+	Export Library	导出库
+	New Library Group	新建库组
+	Rename Library Group	重命名库组
+	Delete Library Group	删除库组
+	Move Library Item to Group	将库项目移到组
 	Library	库
 	Rename Library	重命名库
 	Show Library	显示库
