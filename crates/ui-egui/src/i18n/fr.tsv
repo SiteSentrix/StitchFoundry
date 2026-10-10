@@ -22,6 +22,31 @@
 	Smart Blur…	Flou intelligent…
 	Sharpen	Netteté
 	Unsharp Mask…	Masque de netteté…
+	Pixelate	Pixellisation
+	Color Halftone…	Demi-teintes couleur…
+	Crystallize…	Cristalliser…
+	Mezzotint…	Manière noire…
+	Pointillize…	Pointillisme…
+	Color Halftone	Demi-teintes couleur
+	Crystallize	Cristalliser
+	Mezzotint	Manière noire
+	Pointillize	Pointillisme
+	Max. Radius	Rayon max.
+	Channel 1	Couche 1
+	Channel 2	Couche 2
+	Channel 3	Couche 3
+	Channel 4	Couche 4
+	Cell Size	Taille de cellule
+	Fine Dots	Points fins
+	Medium Dots	Points moyens
+	Grainy Dots	Points granuleux
+	Coarse Dots	Gros points
+	Short Lines	Lignes courtes
+	Medium Lines	Lignes moyennes
+	Long Lines	Lignes longues
+	Short Strokes	Traits courts
+	Medium Strokes	Traits moyens
+	Long Strokes	Traits longs
 	Radial Blur	Flou radial
 	Smart Blur	Flou intelligent
 	Unsharp Mask	Masque de netteté

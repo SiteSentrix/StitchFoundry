@@ -19,6 +19,31 @@
 	Smart Blur…	Умное размытие…
 	Sharpen	Резкость
 	Unsharp Mask…	Нерезкая маска…
+	Pixelate	Пикселизация
+	Color Halftone…	Цветные полутона…
+	Crystallize…	Кристаллизация…
+	Mezzotint…	Меццо-тинто…
+	Pointillize…	Пуантилизм…
+	Color Halftone	Цветные полутона
+	Crystallize	Кристаллизация
+	Mezzotint	Меццо-тинто
+	Pointillize	Пуантилизм
+	Max. Radius	Макс. радиус
+	Channel 1	Канал 1
+	Channel 2	Канал 2
+	Channel 3	Канал 3
+	Channel 4	Канал 4
+	Cell Size	Размер ячейки
+	Fine Dots	Мелкие точки
+	Medium Dots	Средние точки
+	Grainy Dots	Зернистые точки
+	Coarse Dots	Крупные точки
+	Short Lines	Короткие линии
+	Medium Lines	Средние линии
+	Long Lines	Длинные линии
+	Short Strokes	Короткие штрихи
+	Medium Strokes	Средние штрихи
+	Long Strokes	Длинные штрихи
 	Radial Blur	Радиальное размытие
 	Smart Blur	Умное размытие
 	Unsharp Mask	Нерезкая маска

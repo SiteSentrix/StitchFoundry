@@ -21,6 +21,31 @@
 	Smart Blur…	Desenfoque inteligente…
 	Sharpen	Enfocar
 	Unsharp Mask…	Máscara de enfoque…
+	Pixelate	Pixelizar
+	Color Halftone…	Semitono de color…
+	Crystallize…	Cristalizar…
+	Mezzotint…	Grabado a media tinta…
+	Pointillize…	Puntillismo…
+	Color Halftone	Semitono de color
+	Crystallize	Cristalizar
+	Mezzotint	Grabado a media tinta
+	Pointillize	Puntillismo
+	Max. Radius	Radio máx.
+	Channel 1	Canal 1
+	Channel 2	Canal 2
+	Channel 3	Canal 3
+	Channel 4	Canal 4
+	Cell Size	Tamaño de celda
+	Fine Dots	Puntos finos
+	Medium Dots	Puntos medios
+	Grainy Dots	Puntos granulados
+	Coarse Dots	Puntos gruesos
+	Short Lines	Líneas cortas
+	Medium Lines	Líneas medias
+	Long Lines	Líneas largas
+	Short Strokes	Trazos cortos
+	Medium Strokes	Trazos medios
+	Long Strokes	Trazos largos
 	Radial Blur	Desenfoque radial
 	Smart Blur	Desenfoque inteligente
 	Unsharp Mask	Máscara de enfoque
