@@ -3342,3 +3342,44 @@ axis	Both	兩者
 	Interpolation	內插
 	RGB:	RGB：
 	CMYK:	CMYK：
+	Texture	紋理
+	Craquelure…	龜裂紋…
+	Grain…	顆粒…
+	Mosaic Tiles…	馬賽克拼貼…
+	Patchwork…	拼綴圖…
+	Stained Glass…	彩色玻璃…
+	Texturizer…	紋理化…
+	Craquelure	龜裂紋
+	Grain	顆粒
+	Mosaic Tiles	馬賽克拼貼
+	Patchwork	拼綴圖
+	Stained Glass	彩色玻璃
+	Texturizer	紋理化
+	Crack Spacing	裂紋間距
+	Crack Depth	裂紋深度
+	Crack Brightness	裂紋亮度
+	Intensity	強度
+	Grain Type	顆粒類型
+	Tile Size	拼貼大小
+	Grout Width	縫隙寬度
+	Lighten Grout	加亮縫隙
+	Square Size	方塊大小
+	Relief	浮雕
+	Border Thickness	邊框粗細
+	Light Intensity	光源強度
+	Light Direction	光源方向
+	Sprinkles	噴灑
+	Clumped	結塊
+	Contrasty	高反差
+	Enlarged	放大
+	Stippled	點刻
+	Speckle	斑點
+	Brick	磚塊
+	Burlap	粗麻布
+	Canvas	畫布
+	Sandstone	砂岩
+	Bottom Left	左下
+	Top Left	左上
+	Top Right	右上
+	Bottom Right	右下
+effect	Soft	柔和

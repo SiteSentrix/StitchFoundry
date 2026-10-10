@@ -3559,3 +3559,46 @@ axis	Both	两者
 	Even Fields	偶数场
 	Duplication	复制
 	Interpolation	插值
+	Texture	纹理
+	Craquelure…	龟裂缝…
+	Grain…	颗粒…
+	Mosaic Tiles…	马赛克拼贴…
+	Patchwork…	拼缀图…
+	Stained Glass…	染色玻璃…
+	Texturizer…	纹理化…
+	Craquelure	龟裂缝
+	Grain	颗粒
+	Mosaic Tiles	马赛克拼贴
+	Patchwork	拼缀图
+	Stained Glass	染色玻璃
+	Texturizer	纹理化
+	Crack Spacing	裂缝间距
+	Crack Depth	裂缝深度
+	Crack Brightness	裂缝亮度
+	Intensity	强度
+	Grain Type	颗粒类型
+	Tile Size	拼贴大小
+	Grout Width	缝隙宽度
+	Lighten Grout	加亮缝隙
+	Square Size	方形大小
+	Relief	凸现
+	Border Thickness	边框粗细
+	Light Intensity	光照强度
+	Light Direction	光照方向
+	Sprinkles	喷洒
+	Clumped	结块
+	Contrasty	强反差
+	Enlarged	扩大
+	Stippled	点刻
+	Speckle	斑点
+	Brick	砖形
+	Burlap	粗麻布
+	Canvas	画布
+	Sandstone	砂岩
+	Bottom Left	左下
+	Top Left	左上
+	Top Right	右上
+	Bottom Right	右下
+effect	Soft	柔和
+effect	Horizontal	水平
+effect	Vertical	垂直

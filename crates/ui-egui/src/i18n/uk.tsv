@@ -3914,3 +3914,43 @@ axis	Both	Обидві
 @msg	Imported library {name}	Імпортовано бібліотеку {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	Texture	Текстура
+	Craquelure…	Кракелюри…
+	Grain…	Зерно…
+	Mosaic Tiles…	Мозаїчні фрагменти…
+	Patchwork…	Клаптикова плитка…
+	Stained Glass…	Вітраж…
+	Texturizer…	Текстуризатор…
+	Craquelure	Кракелюри
+	Grain	Зерно
+	Mosaic Tiles	Мозаїчні фрагменти
+	Patchwork	Клаптикова плитка
+	Stained Glass	Вітраж
+	Texturizer	Текстуризатор
+	Crack Spacing	Інтервал тріщин
+	Crack Depth	Глибина тріщин
+	Crack Brightness	Яскравість тріщин
+	Intensity	Інтенсивність
+	Grain Type	Тип зерна
+	Tile Size	Розмір фрагментів
+	Grout Width	Ширина швів
+	Lighten Grout	Освітлення швів
+	Square Size	Розмір квадратів
+	Relief	Рельєф
+	Border Thickness	Товщина меж
+	Light Intensity	Інтенсивність світла
+	Light Direction	Напрямок світла
+	Sprinkles	Бризки
+	Clumped	Грудки
+	Contrasty	Контрастне
+	Enlarged	Збільшене
+	Stippled	Пунктир
+	Speckle	Цятки
+	Brick	Цегла
+	Burlap	Мішковина
+	Canvas	Полотно
+	Sandstone	Пісковик
+	Bottom Left	Знизу ліворуч
+	Top Left	Вгорі ліворуч
+	Top Right	Вгорі праворуч
+	Bottom Right	Знизу праворуч
