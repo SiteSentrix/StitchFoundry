@@ -3854,3 +3854,13 @@ axis	Both	Обидві
 @msg	the PSD file is cut short	файл PSD обрізаний
 @msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено
 @msg	the PSD file's image data can't be read: {e}	не вдається прочитати дані зображення файлу PSD: {e}
+	Video	Відео
+	De-Interlace…	Усунення черезрядковості…
+	De-Interlace	Усунення черезрядковості
+	NTSC Colors	Кольори NTSC
+	Eliminate	Вилучити
+	Create New Fields by	Створити нові поля
+	Odd Fields	Непарні поля
+	Even Fields	Парні поля
+	Duplication	Дублюванням
+	Interpolation	Інтерполяцією
