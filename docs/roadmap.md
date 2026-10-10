@@ -31,7 +31,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 2. **`.ai` files from real users** (G9): layer structure (#951, #868), guides (#779). 10–20 h.
 3. **Launch and stability** (G10): the Windows and Linux start-up reports. 20–35 h.
 4. **Core-tool bugs** (G11): Shape Builder regions (#937, #893), Asset Export borders (#983). 8–15 h.
-5. **Raster effects** (G2) continue alongside: Artistic, Brush Strokes, Sketch, then the Effect Gallery. 30–50 h.
+5. **Raster effects** (G2) continue alongside: Artistic, Sketch, then the Effect Gallery. 24–40 h.
 
 ## Next
 

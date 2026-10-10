@@ -4062,3 +4062,33 @@ axis	Both	Ambos
 lighting	Light	Luz
 	Keep visible surfaces only when expanding	Conservar solo superficies visibles al expandir
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Recorta la geometría oculta al expandir la apariencia. La vista previa conserva toda la superficie. Las pinturas transparentes y las superficies que superan los límites de visibilidad conservan todas las caras.
+	Accented Edges…	Bordes acentuados…
+	Angled Strokes…	Pinceladas en ángulo…
+	Crosshatch…	Sombreado cruzado…
+	Dark Strokes…	Pinceladas oscuras…
+	Ink Outlines…	Contornos de tinta…
+	Spatter…	Salpicadura…
+	Sprayed Strokes…	Pinceladas pulverizadas…
+	Sumi-e…	Sumi-e…
+	Accented Edges	Bordes acentuados
+	Angled Strokes	Pinceladas en ángulo
+	Crosshatch	Sombreado cruzado
+	Dark Strokes	Pinceladas oscuras
+	Ink Outlines	Contornos de tinta
+	Spatter	Salpicadura
+	Sprayed Strokes	Pinceladas pulverizadas
+	Sumi-e	Sumi-e
+	Direction Balance	Equilibrio de dirección
+	Stroke Length	Longitud de pincelada
+	Sharpness	Nitidez
+	Strength	Fuerza
+	Balance	Equilibrio
+	Black Intensity	Intensidad del negro
+	White Intensity	Intensidad del blanco
+	Dark Intensity	Intensidad oscura
+	Spray Radius	Radio de pulverización
+	Stroke Direction	Dirección de pincelada
+	Stroke Width	Anchura de pincelada
+	Stroke Pressure	Presión de pincelada
+	Right Diagonal	Diagonal derecha
+	Left Diagonal	Diagonal izquierda
