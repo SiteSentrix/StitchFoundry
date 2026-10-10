@@ -74,11 +74,13 @@ pub(super) fn glow(px: &mut [[u8; 4]], w: usize, h: usize, width: f64, brightnes
         let glow = if peak > 0.0 { (edge / peak * brightness as f32 / 6.0).clamp(0.0, 1.0) } else { 0.0 };
         let colour_weight = colours[0][index].max(colours[1][index]).max(colours[2][index]);
         let straight = if colour_weight > 1e-6 { std::array::from_fn(|channel| colours[channel][index] / colour_weight) } else { [0.0; 3] };
+        // Premultiplied: the glow is light of the edge's colour, so outside the shape it keeps that
+        // colour at the glow's opacity instead of darkening as it fades.
         let a = alpha.max(glow);
         *out = [
-            (straight[0] * glow * a * 255.0).round().clamp(0.0, 255.0) as u8,
-            (straight[1] * glow * a * 255.0).round().clamp(0.0, 255.0) as u8,
-            (straight[2] * glow * a * 255.0).round().clamp(0.0, 255.0) as u8,
+            (straight[0] * glow * 255.0).round().clamp(0.0, 255.0) as u8,
+            (straight[1] * glow * 255.0).round().clamp(0.0, 255.0) as u8,
+            (straight[2] * glow * 255.0).round().clamp(0.0, 255.0) as u8,
             (a * 255.0).round() as u8,
         ];
     }

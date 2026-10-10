@@ -155,6 +155,8 @@ fn glowing_edges_defaults_keep_the_outline_bright_and_use_source_colour() {
     let outside = at(&out, w, 3, 8);
     assert_eq!(outside[1], 0, "transparent halo must not be grey: {outside:?}");
     assert_eq!(outside[2], 0, "transparent halo must retain source hue: {outside:?}");
+    // The glow outside keeps the edge's colour as it fades, rather than darkening towards grey.
+    assert!(outside[3] > 0 && u32::from(outside[0]) * 255 >= 240 * u32::from(outside[3]), "{outside:?}");
     assert!(out.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
 }
 
