@@ -3932,3 +3932,7 @@ theme	Appearance	Erscheinungsbild
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
+	Value Axis	Werteachse
+	On Left Side	Links
+	On Right Side	Rechts
+	On Both Sides	Auf beiden Seiten
