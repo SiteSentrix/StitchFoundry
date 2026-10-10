@@ -236,6 +236,9 @@ fn reshape_area_takes_untrusted_params() {
         json!({"id": id.0, "dx": 1, "dy": 1}),
         json!({"id": id.0, "anchors": [], "dx": 1, "dy": 1}),
         json!({"id": id.0, "anchors": [["a", 1], [0], "x"], "dx": 1, "dy": 1}),
+        // A malformed reference among good ones fails rather than moving only the good ones.
+        json!({"id": id.0, "anchors": [[0, 2], [0, "3"]], "dx": 1, "dy": 1}),
+        json!({"id": id.0, "anchors": [[0, 2], [0, 3, 1]], "dx": 1, "dy": 1}),
         json!({"id": id.0, "anchors": [[0, 9]], "dx": 1, "dy": 1}),
         json!({"id": id.0, "anchors": [[0, 1], [7, 0]], "dx": 1, "dy": 1}),
         json!({"id": id.0, "anchors": [[0, 2]], "dy": 1}),

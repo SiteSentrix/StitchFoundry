@@ -960,3 +960,36 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
     assert!(s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "size": 40})).is_err(), "two type objects: which one?");
     assert!(s.execute("text.setRangeStyle", &json!({"id": "two", "size": 40})).is_err());
 }
+
+#[test]
+fn malformed_anchor_selection_never_replaces_or_partially_changes_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 30.0, 20.0);
+    let b = rect(&mut s, 50.0, 10.0, 30.0, 20.0);
+    let expected = s.doc().unwrap().selection.objects.clone();
+    let expected_anchors = s.doc().unwrap().selection.anchors.clone();
+    for p in [
+        json!({"id": a.0, "anchors": [[0, 0], ["bad", 2]]}),
+        json!({"id": a.0, "anchors": [[0, 0, 1]]}),
+        json!({"id": a.0, "anchors": "not an array"}),
+        json!({"id": u64::MAX, "anchors": []}),
+        json!({"id": a.0, "anchors": [], "mode": "missing"}),
+    ] {
+        assert!(s.execute("select.anchors", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, expected);
+        assert_eq!(s.doc().unwrap().selection.anchors, expected_anchors);
+    }
+    for p in [
+        json!({"items": [{"id": a.0, "anchors": [[0, 0]]}, {"id": b.0, "anchors": [[0, "bad"]]}]}),
+        json!({"items": [{"id": a.0, "anchors": [[0, 0]]}, {"id": "bad", "anchors": [[0, 0]]}]}),
+        json!({"items": [{"id": u64::MAX, "anchors": []}]}),
+        json!({"items": [{"id": a.0}]}),
+    ] {
+        assert!(s.execute("select.anchorsMany", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, expected);
+        assert_eq!(s.doc().unwrap().selection.anchors, expected_anchors);
+    }
+    s.execute("select.anchorsMany", &json!({"items": [{"id": a.0, "anchors": [[0, 0]]}]})).unwrap();
+    assert!(s.doc().unwrap().selection.contains(a));
+    assert!(!s.doc().unwrap().selection.contains(b));
+}
