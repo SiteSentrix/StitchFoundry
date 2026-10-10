@@ -133,49 +133,28 @@ fn warp_node(n: &mut Node, pr: &Projective) {
 
 fn distort(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.distort";
-    let invalid_corners = || bad(C, "corners must be exactly 4 finite [x,y] points (TL, TR, BR, BL)");
-    let points = p.get("corners").and_then(Value::as_array).filter(|a| a.len() == 4).ok_or_else(invalid_corners)?;
-    let corners: Vec<Point> = points
-        .iter()
-        .map(|v| {
-            let Some([x, y]) = v.as_array().map(Vec::as_slice) else {
-                return Err(invalid_corners());
-            };
-            let (Some(x), Some(y)) = (x.as_f64(), y.as_f64()) else {
-                return Err(invalid_corners());
-            };
-            if !x.is_finite() || !y.is_finite() {
-                return Err(invalid_corners());
-            }
-            Ok(Point::new(x, y))
-        })
-        .collect::<Result<_>>()?;
-    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) {
-        checked_ids_param(s, p, "ids", C)?
-    } else {
-        selected_roots(s)?
-    };
+    // All four corners or nothing, each exactly [x, y]: nothing malformed is left out.
+    let corners: Option<Vec<Point>> = p
+        .get("corners")
+        .and_then(Value::as_array)
+        .filter(|a| a.len() == 4)
+        .and_then(|a| a.iter().map(|c| finite_numbers(c).map(|[x, y]| Point::new(x, y))).collect());
+    let Some(&[tl, tr, br, bl]) = corners.as_deref() else { return Err(bad(C, "corners must be 4 [x, y] points (TL, TR, BR, BL)")) };
+    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { selected_roots(s)? };
     if ids.is_empty() {
         return Err(bad(C, "nothing to distort"));
     }
-    let src = match p.get("from") {
-        None | Some(Value::Null) => s.doc()?.doc.bounds_of(&ids, false).ok_or_else(|| bad(C, "nothing to distort"))?,
+    let src = match p.get("from").filter(|v| !v.is_null()) {
+        None => s.doc()?.doc.bounds_of(&ids, false).ok_or_else(|| bad(C, "nothing to distort"))?,
         Some(v) => {
-            let Some([x0, y0, x1, y1]) = v.as_array().map(Vec::as_slice) else {
-                return Err(bad(C, "from must be exactly 4 finite numbers [x0,y0,x1,y1]"));
-            };
-            let coordinate = |v: &Value| {
-                v.as_f64()
-                    .filter(|n| n.is_finite())
-                    .ok_or_else(|| bad(C, "from must be exactly 4 finite numbers [x0,y0,x1,y1]"))
-            };
-            Rect::new(coordinate(x0)?, coordinate(y0)?, coordinate(x1)?, coordinate(y1)?)
+            let [x0, y0, x1, y1] = finite_numbers(v).ok_or_else(|| bad(C, "from must be [x0, y0, x1, y1]"))?;
+            Rect::new(x0, y0, x1, y1)
         }
     };
     if !src.width().is_finite() || !src.height().is_finite() || src.width().abs() < 1e-9 || src.height().abs() < 1e-9 {
         return Err(bad(C, "cannot distort a zero-size or non-finite bounding box"));
     }
-    let pr = Projective::from_rect(src, [corners[0], corners[1], corners[2], corners[3]]);
+    let pr = Projective::from_rect(src, [tl, tr, br, bl]);
     s.edit("Free Distort", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
