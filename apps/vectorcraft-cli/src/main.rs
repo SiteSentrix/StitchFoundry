@@ -269,17 +269,23 @@ fn run(args: &[String]) -> Result<(), String> {
     } else if !matches!(steps.first(), Some(Step::Cmd(id, _)) if id == "file.new") {
         h.ensure_document();
     }
+    // Each step's result, for later steps to refer to (`"$1.id"`, see `vectorcraft_engine::steps`).
+    let mut results = vec![];
     for step in steps {
-        match step {
+        let r = match step {
             Step::Cmd(id, params) => {
+                let params = vectorcraft_engine::steps::resolve(&params, &results).map_err(|e| format!("{id}: {e}"))?;
                 let r = h.call("engine.execute", json!({"command": id, "params": params})).map_err(|e| format!("{id}: {e}"))?;
                 emit(json!({"step": "cmd", "command": id, "result": r}))?;
+                r
             }
             Step::Export(path) => {
                 let r = h.call("app.export", json!({"path": path, "scale": scale})).map_err(|e| format!("export {path}: {e}"))?;
                 emit(json!({"step": "export", "result": r}))?;
+                r
             }
-        }
+        };
+        results.push(r);
     }
     Ok(())
 }
