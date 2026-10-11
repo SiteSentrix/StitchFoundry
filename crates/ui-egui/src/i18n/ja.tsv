@@ -1697,6 +1697,7 @@
 	Move Rows	行を移動
 	Move Slices	スライスを移動
 	Move Spine Point	スパインポイントを移動
+	Reshape Spine Segment	スパインセグメントをシェイプ変形
 	Move Swatch	スウォッチを移動
 	Move Up	上へ移動
 	Move in Perspective	遠近で移動

@@ -692,7 +692,9 @@ new blends start with. The Blend tool (`ui.tool.select {tool: "blend"}`): `ui.po
 another, blends them; down on an anchor point blends from that point; each further object clicked joins the blend.
 A selected blend shows its spine. With Direct Selection (`directSelection`) a `ui.pointer` drag from a spine point
 moves it (`object.blend.spine.moveAnchor`, one undo step) and, once a point is clicked, from one of its handles
-reshapes the curve; Direct and Group Selection pick a blend's key objects. With the Pen tool a click on a selected
+reshapes the curve, and a drag on a curved spine segment bends it (`object.blend.spine.reshapeSegment`); the Anchor
+Point tool (`anchorPoint`) bends any segment of a selected blend's spine, straight ones too. Direct and Group Selection
+pick a blend's key objects. With the Pen tool a click on a selected
 blend's spine adds a point (on a point no key sits on, deletes it).
 
 Perspective grid view options: View → Perspective Grid lists Show/Hide Grid, Show/Hide Rulers, Snap to Grid

@@ -1563,6 +1563,7 @@
 	Move Rows	Mover filas
 	Move Slices	Mover sectores
 	Move Spine Point	Mover punto del eje
+	Reshape Spine Segment	Remodelar segmento del eje
 	Move Swatch	Mover muestra
 	Move Up	Subir
 	Move…	Mover…
