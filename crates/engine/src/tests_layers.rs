@@ -543,6 +543,23 @@ fn hide_lock_and_outline_others_and_their_all_counterparts() {
     assert_eq!(run(&mut s, "layer.previewAll", json!({}))["count"], 0, "nothing to do: no undo step");
 }
 
+/// #1158: Alt-click on a hidden (locked) layer's eye (lock) isolates it: it shows (unlocks) as the
+/// others hide (lock), in one undo step.
+#[test]
+fn hide_and_lock_others_show_and_unlock_the_layer_kept() {
+    let mut s = session();
+    let l1 = s.doc().unwrap().doc.layers[0].id;
+    let l2 = id(&run(&mut s, "layer.new", json!({})));
+    let flags = |s: &Session, f: fn(&Node) -> bool| [l1, l2].map(|l| f(&node(s, l)));
+    run(&mut s, "layer.setProps", json!({"ids": [l2.0], "visible": false, "locked": true}));
+    assert_eq!(run(&mut s, "layer.hideOthers", json!({"ids": [l2.0]}))["count"], 2);
+    assert_eq!(flags(&s, |n| n.visible), [false, true]);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(flags(&s, |n| n.visible), [true, false], "one undo step");
+    run(&mut s, "layer.lockOthers", json!({"ids": [l2.0]}));
+    assert_eq!(flags(&s, |n| n.locked), [true, false]);
+}
+
 #[test]
 fn locate_object_highlights_its_row() {
     let mut s = session();
