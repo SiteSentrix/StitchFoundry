@@ -1,6 +1,8 @@
 //! Artboard tool (Shift+O).
 //!
-//! Click an artboard to make it active (dashed bounds, 8 handles and its name); Shift-click adds
+//! Click an object to create an artboard fitted to its visible bounds; drag still moves the
+//! containing artboard or draws one on the pasteboard. Click an empty part of an artboard to
+//! make it active (dashed bounds, 8 handles and its name); Shift-click adds
 //! artboards to the selection or takes them out (dashed bounds), and a drag or Delete then acts on
 //! all of them (#1139). Drag inside moves
 //! it (with its artwork when the `moveArt` option is on, Shift constrains; Alt moves a copy and
@@ -60,6 +62,8 @@ pub struct ArtboardTool {
     /// artboard's proportions.
     pub scale_art: bool,
     drag: Option<Drag>,
+    /// The pressed object can be fitted on release; a drag, modifier or cancellation takes over.
+    click_art: Option<(Point, Rect)>,
     preview: Option<Rect>,
     /// Smart Guide targets, gathered when a move or resize starts.
     targets: Option<Targets>,
@@ -79,6 +83,7 @@ impl Default for ArtboardTool {
             move_art: true,
             scale_art: false,
             drag: None,
+            click_art: None,
             preview: None,
             targets: None,
             copy_targets: None,
@@ -178,6 +183,7 @@ impl ArtboardTool {
 
     fn end_drag(&mut self) {
         self.drag = None;
+        self.click_art = None;
         self.preview = None;
         self.targets = None;
         self.copy_targets = None;
@@ -188,6 +194,13 @@ impl ArtboardTool {
 
 /// An artboard's shortest side (as `artboard.setProps` keeps it).
 const MIN_SIDE: f64 = 1.0;
+
+fn create_artboard(r: Rect) -> Vec<Action> {
+    vec![
+        Action::Exec("artboard.new".into(), json!({ "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height() })),
+        Action::Notify("created".into()),
+    ]
+}
 
 /// `r` grown about `anchor` until both sides are at least [`MIN_SIDE`], by one factor, so a
 /// proportional resize keeps its proportions where the command would lengthen only the short side.
@@ -220,13 +233,25 @@ impl Tool for ArtboardTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
         let m = ev.mods;
+        if ev.kind == PointerKind::Drag && self.click_art.is_some_and(|(start, _)| m != Mods::default() || p.distance(start) >= cx.tol(3.0)) {
+            self.click_art = None;
+        }
         match (ev.kind, self.drag) {
             (PointerKind::Down, _) => {
+                self.click_art = None;
                 if let Some(r) = self.active_rect(cx)
                     && let Some(handle) = hit_handle(r, p, cx.tol(5.0))
                 {
                     self.drag = Some(Drag::Resize { index: self.active, handle, rect: r, grab: handle.pos(r) - p, began: false });
                     return vec![];
+                }
+                if m == Mods::default() {
+                    self.click_art = vectorcraft_doc::hit::hit_test(cx.doc, p, cx.hit_options())
+                        .and_then(|h| cx.doc.bounds_of(&[h.top_object(cx.isolation)], true))
+                        // Match Fit to Selected Art, and do not stretch zero-sized art to the
+                        // artboard command's minimum side or pass non-finite bounds to it.
+                        .filter(|r| r.width() >= MIN_SIDE && r.height() >= MIN_SIDE && [r.x0, r.y0, r.x1, r.y1].iter().all(|n| n.is_finite()))
+                        .map(|r| (p, r));
                 }
                 if let Some(i) = cx.doc.artboard_at(p)
                     && let Some(a) = cx.doc.artboards.get(i)
@@ -299,7 +324,14 @@ impl Tool for ArtboardTool {
                 vec![]
             }
             (PointerKind::Up, Some(d)) => {
+                let click_art = self.click_art;
                 self.end_drag();
+                if m == Mods::default()
+                    && let Some((start, r)) = click_art
+                    && p.distance(start) < cx.tol(3.0)
+                {
+                    return create_artboard(r);
+                }
                 match d {
                     Drag::Move { began: true, copy, many, .. } => {
                         // The copies, last in the previewed document, become the selection (the
@@ -318,10 +350,7 @@ impl Tool for ArtboardTool {
                         if r.width() < cx.tol(3.0) || r.height() < cx.tol(3.0) {
                             return vec![];
                         }
-                        vec![
-                            Action::Exec("artboard.new".into(), json!({ "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height() })),
-                            Action::Notify("created".into()),
-                        ]
+                        create_artboard(r)
                     }
                     _ => vec![],
                 }
