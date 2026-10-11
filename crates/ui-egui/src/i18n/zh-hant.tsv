@@ -2130,6 +2130,7 @@
 	Redefine Symbol	重新定義符號
 	Redefine {kind} Style	重新定義{kind}樣式
 	Redo	重做
+	List Folder	列出資料夾
 	Begin Undo Group	開始還原群組
 	End Undo Group	結束還原群組
 	Redo {name}	重做 {name}

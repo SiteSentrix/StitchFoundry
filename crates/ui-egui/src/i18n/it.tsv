@@ -2152,6 +2152,7 @@
 	Redefine Symbol	Ridefinisci simbolo
 	Redefine {kind} Style	Ridefinisci stile {kind}
 	Redo	Ripeti
+	List Folder	Elenca cartella
 	Begin Undo Group	Inizia gruppo di annullamento
 	End Undo Group	Termina gruppo di annullamento
 	Redo {name}	Ripeti {name}

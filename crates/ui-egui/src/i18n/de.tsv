@@ -2101,6 +2101,7 @@
 	Redefine Symbol	Symbol neu definieren
 	Redefine {kind} Style	{kind}format neu definieren
 	Redo	Wiederholen
+	List Folder	Ordner auflisten
 	Begin Undo Group	Rückgängig-Gruppe beginnen
 	End Undo Group	Rückgängig-Gruppe beenden
 	Redo {name}	Wiederholen: {name}

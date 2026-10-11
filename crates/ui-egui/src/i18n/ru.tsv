@@ -2148,6 +2148,7 @@
 	Redefine Symbol	Переопределить символ
 	Redefine {kind} Style	Переопределить стиль {kind}
 	Redo	Повторить
+	List Folder	Показать содержимое папки
 	Begin Undo Group	Начать группу отмены
 	End Undo Group	Завершить группу отмены
 	Redo {name}	Повторить {name}

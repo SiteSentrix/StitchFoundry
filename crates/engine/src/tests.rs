@@ -1670,3 +1670,32 @@ fn path_commands_reject_bad_anchors_before_modifying_geometry() {
     s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": [{"x": 0, "y": 0}, {"x": 30, "y": 40}], "closed": false}]})).unwrap();
     assert_eq!(s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchor_count(), 2);
 }
+
+/// #1163: `file.list` lists a folder's files and folders by name, held to the automation read root
+/// when one is in force.
+#[test]
+fn file_list_lists_a_folder_within_the_read_root() {
+    let base = std::env::temp_dir().join(format!("vc-file-list-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    for d in ["in/sub", "outside"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+    }
+    std::fs::write(base.join("in/b.svg"), "<svg/>").unwrap();
+    std::fs::write(base.join("in/a.pdf"), "1234").unwrap();
+    let path = |d: &str| base.join(d).to_string_lossy().into_owned();
+    let mut s = Session::new();
+    let r = s.execute("file.list", &json!({"path": path("in")})).unwrap();
+    assert_eq!(
+        r["entries"],
+        json!([{"name": "a.pdf", "kind": "file", "size": 4}, {"name": "b.svg", "kind": "file", "size": 6}, {"name": "sub", "kind": "folder"}])
+    );
+    assert_eq!(r["truncated"], false);
+    let roots = crate::file_access::AutomationRoots::new(Some(&base.join("in")), None).unwrap().unwrap();
+    crate::file_access::confine(Some(&roots), || {
+        assert!(s.execute("file.list", &json!({"path": path("in/sub")})).is_ok());
+        assert!(s.execute("file.list", &json!({"path": path("outside")})).is_err(), "outside the read root");
+    });
+    assert!(s.execute("file.list", &json!({"path": path("in/b.svg")})).is_err(), "not a folder");
+    assert!(s.execute("file.list", &json!({})).is_err());
+    let _ = std::fs::remove_dir_all(base);
+}

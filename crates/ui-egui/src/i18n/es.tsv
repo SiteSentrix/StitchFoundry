@@ -2152,6 +2152,7 @@
 	Redefine Symbol	Redefinir símbolo
 	Redefine {kind} Style	Redefinir estilo de {kind}
 	Redo	Rehacer
+	List Folder	Listar carpeta
 	Begin Undo Group	Iniciar grupo de deshacer
 	End Undo Group	Finalizar grupo de deshacer
 	Redo {name}	Rehacer {name}
