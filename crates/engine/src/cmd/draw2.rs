@@ -781,6 +781,7 @@ fn remove_anchors_of(d: &mut Document, sel: &mut Selection, id: NodeId, anchors:
         sel.remove(id);
     } else {
         sel.anchors.remove(&id);
+        sel.segments.remove(&id);
     }
     Ok(gone)
 }

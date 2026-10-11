@@ -1653,6 +1653,21 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                 return;
             }
             let NodeKind::Path { path, .. } = &c.kind else { return };
+            let selected_segments = st.selection.segments.get(&c.id);
+            if let Some(segments) = selected_segments {
+                for &(si, seg) in segments {
+                    let Some(sp) = path.subpaths.get(si).filter(|sp| seg < sp.segment_count()) else { continue };
+                    let curve = sp.segment(seg);
+                    let mut outline = vectorcraft_geom::BezPath::new();
+                    outline.move_to(curve.p0);
+                    if sp.segment_is_line(seg) {
+                        outline.line_to(curve.p3);
+                    } else {
+                        outline.curve_to(curve.p1, curve.p2, curve.p3);
+                    }
+                    stroke_path(p, &outline, xf, Stroke::new(2.0, color));
+                }
+            }
             for (si, ai, a) in path.anchors() {
                 let sel = match partial {
                     Some(set) => set.contains(&(si, ai)),
@@ -1661,9 +1676,22 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                 let sp = xf.to_screen(a.p);
                 if sel && (direct || partial.is_some()) {
                     with_handles += 1;
-                    handles.extend([a.h_in, a.h_out].into_iter().filter(|h| h.distance(a.p) > 1e-6).map(|h| (sp, xf.to_screen(h), color)));
+                    let sides = path.subpaths.get(si).map(|subpath| st.selection.handle_sides(c.id, si, ai, subpath)).unwrap_or((true, true));
+                    handles.extend(
+                        [(a.h_in, sides.0), (a.h_out, sides.1)]
+                            .into_iter()
+                            .filter(|(h, show)| *show && h.distance(a.p) > 1e-6)
+                            .map(|(h, _)| (sp, xf.to_screen(h), color)),
+                    );
                 }
-                anchor_square(p, sp, if sel && partial.is_some() { selected_anchor(color) } else { color }, sel, anchor(partial.is_some() || direct));
+                let anchor_selected = sel && selected_segments.is_none();
+                anchor_square(
+                    p,
+                    sp,
+                    if anchor_selected && partial.is_some() { selected_anchor(color) } else { color },
+                    anchor_selected,
+                    anchor(partial.is_some() || direct),
+                );
             }
         });
         // Centre point (Attributes panel → Show Center).
@@ -2626,6 +2654,58 @@ mod tests {
         let mut v = vec![];
         out.shapes.into_iter().for_each(|c| flat(c.shape, &mut v));
         (v, out.textures_delta)
+    }
+
+    /// #1278: a segment click marks the edge, not its endpoint anchors or neighboring handles.
+    #[test]
+    fn a_segment_pick_has_hollow_anchors_and_only_its_own_handles() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width":400,"height":300})).unwrap();
+        app.ui.task_bar = false;
+        app.ui.view.rulers = false;
+        let id = app.run("shape.rectangle", json!({"x":50,"y":50,"width":200,"height":150})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.none", json!({})).unwrap();
+        app.select_tool("directSelection");
+        let view = app.view_info();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(kind, 150.0, 50.0), view).unwrap();
+        }
+        let before = app.session.doc().unwrap().doc.clone();
+        let color = c32(before.layer_color(vectorcraft_doc::NodeId(id)));
+        let selected = selected_anchor(color);
+        let ctx = egui::Context::default();
+        let painted = shapes(&mut app, &ctx);
+        assert_eq!(painted.iter().filter(|s| matches!(s, Shape::Rect(r) if r.fill == selected)).count(), 0);
+        assert_eq!(
+            painted.iter().filter(|s| matches!(s, Shape::Path(p) if p.stroke.width == 2.0 && p.points.len() == 2)).count(),
+            1,
+            "only the chosen straight edge has emphasis"
+        );
+        assert!(!painted.iter().any(|s| matches!(s, Shape::Circle(_))), "segment picks have no corner widgets");
+        assert_eq!(app.session.doc().unwrap().doc, before);
+        app.run("select.anchors", json!({"id":id,"anchors":[[0,0],[0,1]]})).unwrap();
+        let painted = shapes(&mut app, &ctx);
+        assert_eq!(painted.iter().filter(|s| matches!(s, Shape::Rect(r) if r.fill == selected)).count(), 2);
+        app.run(
+            "path.create",
+            json!({"anchors":[{"x":50,"y":260,"out":[100,220]},{"x":200,"y":260,"in":[150,220],"out":[250,300]},{"x":330,"y":260,"in":[280,300]}]}),
+        )
+        .unwrap();
+        app.run("select.none", json!({})).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(kind, 125.0, 230.0), view).unwrap();
+        }
+        let before = app.session.doc().unwrap().doc.clone();
+        let painted = shapes(&mut app, &ctx);
+        assert_eq!(
+            painted.iter().filter(|s| matches!(s, Shape::LineSegment {stroke,..} if stroke.color == color)).count(),
+            2,
+            "only the chosen curve's two controls show"
+        );
+        app.ui.view.edges = false;
+        let painted = shapes(&mut app, &ctx);
+        assert!(!painted.iter().any(|s| matches!(s, Shape::LineSegment {stroke,..} if stroke.color == color)));
+        assert_eq!(app.session.doc().unwrap().doc, before);
     }
 
     /// View › Pixel Preview: magnified, the art shows as the document pixels it rasterizes to (one

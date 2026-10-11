@@ -456,21 +456,35 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
+    let segments = st.selection.segments.clone();
     s.edit("Clear", |d, selection| {
+        let mut survivors = vec![];
         for (id, set) in &sel {
             let remove_node = {
                 let path = path_mut(d, *id)?;
-                // Deleting an anchor from a closed path opens it there (Illustrator behaviour on Delete).
-                for &(si, ai) in set.iter().rev() {
-                    if let Some(sp) = path.subpaths.get_mut(si)
-                        && ai < sp.anchors.len()
-                    {
-                        if sp.closed {
-                            sp.anchors.rotate_left(ai + 1);
-                            sp.anchors.pop();
-                            sp.closed = false;
-                        } else {
-                            sp.anchors.remove(ai);
+                if let Some(refs) = segments.get(id) {
+                    // A segment pick cuts its connection, keeping every neighboring cubic.
+                    path.subpaths = std::mem::take(&mut path.subpaths)
+                        .into_iter()
+                        .enumerate()
+                        .flat_map(|(si, sp)| {
+                            let cuts = refs.iter().filter_map(|&(s, seg)| (s == si).then_some(seg)).collect();
+                            without_segments(sp, &cuts)
+                        })
+                        .collect();
+                } else {
+                    // Deleting an anchor from a closed path opens it there (Illustrator behaviour on Delete).
+                    for &(si, ai) in set.iter().rev() {
+                        if let Some(sp) = path.subpaths.get_mut(si)
+                            && ai < sp.anchors.len()
+                        {
+                            if sp.closed {
+                                sp.anchors.rotate_left(ai + 1);
+                                sp.anchors.pop();
+                                sp.closed = false;
+                            } else {
+                                sp.anchors.remove(ai);
+                            }
                         }
                     }
                 }
@@ -479,12 +493,50 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
             };
             if remove_node {
                 d.remove(*id)?;
+            } else if segments.contains_key(id) {
+                survivors.push(*id);
             }
         }
-        selection.clear();
+        // Another Delete removes the remaining path after a segment cut. Anchor Delete keeps
+        // its existing deselection behavior.
+        selection.set(survivors);
         Ok(())
     })?;
     ok()
+}
+
+/// Remove connections, splitting open/closed contours into their surviving open runs.
+fn without_segments(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
+    let cuts: BTreeSet<usize> = removed.iter().copied().filter(|&i| i < sp.segment_count()).collect();
+    let Some(&first) = cuts.first() else { return vec![sp] };
+    let n = sp.anchors.len();
+    let start = if sp.closed { (first + 1) % n } else { 0 };
+    let mut result = vec![];
+    let mut run = vec![];
+    let mut previous = None;
+    for (index, anchor) in sp.anchors.iter().enumerate().cycle().skip(start).take(n) {
+        if previous.is_some_and(|i| cuts.contains(&i)) {
+            result.extend(open_run(std::mem::take(&mut run)));
+        }
+        run.push(*anchor);
+        previous = Some(index);
+    }
+    result.extend(open_run(run));
+    result
+}
+
+fn open_run(mut anchors: Vec<vectorcraft_geom::Anchor>) -> Option<SubPath> {
+    if anchors.len() < 2 {
+        return None;
+    }
+    // The cut edge's incoming/outgoing controls are no longer part of an open endpoint.
+    if let Some(first) = anchors.first_mut() {
+        first.h_in = first.p;
+    }
+    if let Some(last) = anchors.last_mut() {
+        last.h_out = last.p;
+    }
+    Some(SubPath::new(anchors, false))
 }
 
 fn reshape(s: &mut Session, p: &Value) -> Result<Value> {

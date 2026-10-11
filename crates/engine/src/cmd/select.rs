@@ -71,6 +71,15 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("select.anchors", "Select Anchors", [], None, "{id, anchors: [[subpath, anchor]…], mode: \"set\"|\"add\"|\"toggle\"}", has_doc, anchors),
         cmd!(
+            "select.segments",
+            "Select Segments",
+            [],
+            None,
+            "{id, segments: [[subpath, segment]…]} select path segments; their endpoints move with them, Delete removes only their connections",
+            has_doc,
+            segments
+        ),
+        cmd!(
             "select.anchorsMany",
             "Select Anchors",
             [],
@@ -330,6 +339,27 @@ pub(crate) fn checked_refs(v: Option<&Value>, cmd: &str) -> Result<Vec<(usize, u
         .collect()
 }
 
+fn segments(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.segments";
+    let id = checked_id(s, p.get("id").ok_or_else(|| bad(C, "missing id"))?, C)?;
+    let refs: BTreeSet<_> = checked_refs(p.get("segments"), C)?.into_iter().collect();
+    let path = s.doc()?.doc.node(id).and_then(|n| n.path_data()).ok_or_else(|| bad(C, "object is not a path"))?;
+    let mut endpoints = BTreeSet::new();
+    for &(si, seg) in &refs {
+        let sp = path.subpaths.get(si).filter(|sp| seg < sp.segment_count()).ok_or_else(|| bad(C, "segment does not exist"))?;
+        endpoints.extend([(si, seg), (si, (seg + 1) % sp.anchors.len())]);
+    }
+    s.select(|_, sel| {
+        sel.clear();
+        if !refs.is_empty() {
+            sel.add(id);
+            sel.anchors.insert(id, endpoints);
+            sel.segments.insert(id, refs);
+        }
+    })?;
+    ok()
+}
+
 fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "select.anchors";
     let id = checked_id(s, p.get("id").ok_or_else(|| bad(C, "missing id"))?, C)?;
@@ -347,6 +377,7 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
         // A path selected as a whole has every anchor selected: toggle and add start from them all.
         let whole = sel.contains(id) && sel.partial(id).is_none();
         sel.add(id);
+        sel.segments.remove(&id);
         let e = sel.anchors.entry(id).or_default();
         if whole && let Some(path) = d.node(id).and_then(|n| n.path_data()) {
             e.extend(path.anchors().map(|(s, i, _)| (s, i)));
@@ -385,6 +416,7 @@ fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
             sel.clear();
         }
         for (id, refs) in items {
+            sel.segments.remove(&id);
             let all: BTreeSet<(usize, usize)> =
                 d.node(id).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, i, _)| (s, i)).collect()).unwrap_or_default();
             // Anything but a path is selected, toggled or deselected as a whole.

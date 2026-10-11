@@ -300,7 +300,7 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
-    // Direct-selected anchors: delete those anchors instead of whole objects.
+    // Direct-selected anchors or segments: remove those components instead of whole objects.
     if explicit.is_none() && !s.doc()?.selection.anchors.is_empty() {
         return super::path::delete_anchors(s, p);
     }

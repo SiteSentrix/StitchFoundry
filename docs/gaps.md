@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -87,7 +87,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G11 Correctness bugs in core tools
 
-- **Done:** scaled text's size and horizontal-scale controls account for object/group transforms (#1034),
+- **Done:** Direct Selection picks a segment independently of its anchors and Delete preserves neighboring edges (#1278);
+  scaled text's size and horizontal-scale controls account for object/group transforms (#1034),
   including exact sizes across grouped labels and resetting horizontal stretch while keeping editable text.
 - **Missing:** Shape Builder misses planar regions and targets whole shapes (#937); Transform effect dialog's invisible checkboxes and missing options (#885);
   PDF text boxes moving on open (#722); SVG units reverting to points (#864); bezier drag preview freezing (#834).
@@ -205,6 +206,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | G11: Direct Selection segment Delete retains neighboring geometry and appearance (#1278); estimates unchanged |
 | 2026-10-12 | minor | G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged |
 | 2026-10-11 | minor | G15: large-selection edits, cached live effects and faster Pathfinder (#1173); a 25k-path perf run meets every budget; estimate unchanged |
 | 2026-10-11 | minor | G4: Middle Eastern digit types done (Character panel menu › Digits); estimate unchanged |
