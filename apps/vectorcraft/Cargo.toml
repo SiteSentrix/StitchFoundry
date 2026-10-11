@@ -67,6 +67,12 @@ objc2-core-text = { version = "0.3", default-features = false, features = ["std"
 # already in the build through eframe.
 pollster = "1"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Asks the Wayland compositor which GPU it draws with (linux-dmabuf feedback, src/compositor_gpu.rs),
+# so Automatic draws on that one. Both are already in the build through winit.
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client"] }
+
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.
 winresource = "0.1"

@@ -23,6 +23,8 @@ compile_error!("the win7 target requires --no-default-features --features window
 
 mod automation_args;
 mod clipboard;
+#[cfg(feature = "wgpu")]
+mod compositor_gpu;
 mod control_server;
 #[cfg(feature = "wgpu")]
 mod gpu;
@@ -670,6 +672,9 @@ fn main() -> std::process::ExitCode {
     // every black-window report.
     #[cfg(feature = "wgpu")]
     let displays = gpu::preferred_displays(gpu_pref, power_env);
+    // Under Wayland, the GPU the compositor draws with comes even before those (src/compositor_gpu.rs).
+    #[cfg(feature = "wgpu")]
+    let compositor = gpu::preferred_compositor(gpu_pref, power_env);
     #[cfg(feature = "wgpu")]
     let chosen_gpu = !gpu::automatic(gpu_pref, power_env);
     #[cfg(feature = "wgpu")]
@@ -710,7 +715,7 @@ fn main() -> std::process::ExitCode {
         options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-            create.native_adapter_selector = Some(gpu::selector(power, displays, startup.clone()));
+            create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, startup.clone()));
             // Nothing draws or dispatches indirectly, so wgpu's check of indirect arguments only
             // costs a compute shader at start-up, one some drivers can't compile (OCLP-patched
             // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
