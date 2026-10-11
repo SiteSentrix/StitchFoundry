@@ -4137,3 +4137,5 @@ lighting	Light	ライト
 @msg	invalid native panel set	ネイティブパネルセットが無効です
 @msg	missing panel layout	パネル配置がありません
 @msg	unsupported native docking operation	ネイティブドッキング操作は未対応です
+	Linux Display Server	Linux ディスプレイサーバー
+	X11 (XWayland)	X11 (XWayland)

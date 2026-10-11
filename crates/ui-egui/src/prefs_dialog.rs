@@ -306,6 +306,8 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     }
                 });
             }
+            // Linux only: the other platforms have a single display server.
+            PrefKind::Choice(_) if sp.key == "linuxDisplayServer" && !cfg!(target_os = "linux") => {}
             PrefKind::Choice(opts) => {
                 labeled(ui, sp.label, |ui| {
                     let cur = v.as_str().unwrap_or("");
@@ -315,8 +317,8 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                         d.fields.insert(sp.key.into(), json!(opts[i].0));
                     }
                 });
-                if sp.key == "gpuPreference" {
-                    // The window's graphics device is chosen once, when the app starts.
+                if sp.key == "gpuPreference" || sp.key == "linuxDisplayServer" {
+                    // The window's graphics device and display server are chosen once, when the app starts.
                     ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
                 }
             }

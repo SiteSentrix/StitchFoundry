@@ -156,6 +156,23 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.gpu_preference, "automatic");
 }
 
+/// Performance › Linux Display Server (#1151): automatic by default, X11 by value or label, and
+/// anything else is an error that changes nothing.
+#[test]
+fn linux_display_server_defaults_to_automatic_and_validates() {
+    let mut s = Session::new();
+    assert_eq!(s.prefs.linux_display_server, "automatic");
+    s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": "X11 (XWayland)"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "x11");
+    for bad in [json!("wayland"), json!(""), json!(11), json!(null)] {
+        assert!(s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.prefs.linux_display_server, "x11");
+    }
+    assert_eq!(s.prefs.to_json()["linuxDisplayServer"], "x11");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "automatic");
+}
+
 /// Selection & Anchor Display › Tolerance, Object Selection by Path Only and Command Click to
 /// Select Objects Behind, and General › Double Click To Isolate, as the Selection tool sees them
 /// (#394).

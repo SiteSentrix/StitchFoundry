@@ -39,6 +39,7 @@ mod printing;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 mod system_fonts;
 mod window;
+mod xwayland;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
@@ -674,6 +675,25 @@ fn main() -> std::process::ExitCode {
     let startup = std::sync::Arc::new(gpu::Startup::default());
     let custom_titlebar = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
+    // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
+    // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151).
+    #[cfg(target_os = "linux")]
+    let options = {
+        let mut options = options;
+        let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
+        if xwayland::wanted(pref, |name| std::env::var_os(name)) {
+            if xwayland::x11_libraries_found() {
+                log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                use winit::platform::x11::EventLoopBuilderExtX11 as _;
+                options.event_loop_builder = Some(Box::new(|builder| {
+                    builder.with_x11();
+                }));
+            } else {
+                log::warn!("Linux Display Server is X11, but the X11 libraries aren't all installed: opening the window on Wayland");
+            }
+        }
+        options
+    };
     #[cfg(feature = "wgpu")]
     let options = {
         let mut options = options;

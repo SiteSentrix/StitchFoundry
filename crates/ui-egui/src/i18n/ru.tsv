@@ -4139,3 +4139,5 @@ lighting	Light	Свет
 @msg	invalid native panel set	Недопустимый собственный набор панелей
 @msg	missing panel layout	Отсутствует расположение панелей
 @msg	unsupported native docking operation	Неподдерживаемая собственная операция прикрепления
+	Linux Display Server	Дисплейный сервер Linux
+	X11 (XWayland)	X11 (XWayland)
