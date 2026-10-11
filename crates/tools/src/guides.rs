@@ -477,6 +477,11 @@ impl Targets {
     }
 
     /// The anchor or centre nearest `p`, within `tol`.
+    /// Is a target point (an anchor, a centre) within `tol` of `p`?
+    pub(crate) fn has_point_near(&self, p: Point, tol: f64) -> bool {
+        self.nearest_point(p, tol).is_some()
+    }
+
     fn nearest_point(&self, p: Point, tol: f64) -> Option<(Point, Kind)> {
         within(&self.points, |q| q.0.x, p.x, tol)
             .iter()
