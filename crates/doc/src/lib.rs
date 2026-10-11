@@ -795,6 +795,72 @@ impl Document {
         find(&self.layers, id, &mut p).then_some(p)
     }
 
+    /// [`Document::index_path`] of every id in `ids` that is in the tree, in one walk of it: an
+    /// edit of many objects looks them all up for the cost of one search instead of one each. Like
+    /// `index_path`, an id that appears twice maps to its first place in tree order.
+    pub fn index_paths(&self, ids: impl IntoIterator<Item = NodeId>) -> std::collections::HashMap<NodeId, Vec<usize>> {
+        use std::collections::{HashMap, HashSet};
+        fn walk(nodes: &[Arc<Node>], want: &HashSet<NodeId>, path: &mut Vec<usize>, out: &mut HashMap<NodeId, Vec<usize>>) -> bool {
+            for (i, n) in nodes.iter().enumerate() {
+                path.push(i);
+                if want.contains(&n.id) && !out.contains_key(&n.id) {
+                    out.insert(n.id, path.clone());
+                    if out.len() == want.len() {
+                        return true;
+                    }
+                }
+                if let Some(ch) = n.children()
+                    && walk(ch, want, path, out)
+                {
+                    return true;
+                }
+                path.pop();
+            }
+            false
+        }
+        let want: HashSet<NodeId> = ids.into_iter().collect();
+        let mut out = HashMap::with_capacity(want.len());
+        if !want.is_empty() {
+            walk(&self.layers, &want, &mut Vec::new(), &mut out);
+        }
+        out
+    }
+
+    /// The node at index path `path` (as [`Document::index_path`] gives it).
+    pub fn node_at(&self, path: &[usize]) -> Option<&Node> {
+        let (first, rest) = path.split_first()?;
+        let mut cur: &Node = self.layers.get(*first)?;
+        for &i in rest {
+            cur = cur.children()?.get(i)?;
+        }
+        Some(cur)
+    }
+
+    /// Mutable access to the node at index path `path`; clones the Arc path (copy-on-write), as
+    /// [`Document::node_mut`] does.
+    pub fn node_mut_at(&mut self, path: &[usize]) -> Option<&mut Node> {
+        let (first, rest) = path.split_first()?;
+        let mut cur: &mut Arc<Node> = self.layers.get_mut(*first)?;
+        for &i in rest {
+            cur = Arc::make_mut(cur).children_mut()?.get_mut(i)?;
+        }
+        Some(Arc::make_mut(cur))
+    }
+
+    /// [`Document::ancestry`] of the node at index path `path`.
+    pub fn ancestry_at(&self, path: &[usize]) -> Option<Vec<NodeId>> {
+        let mut out = Vec::with_capacity(path.len());
+        let mut nodes = &self.layers;
+        for &i in path {
+            let n = nodes.get(i)?;
+            out.push(n.id);
+            if let Some(ch) = n.children() {
+                nodes = ch;
+            }
+        }
+        Some(out)
+    }
+
     /// Ids from the top-level layer down to `id` inclusive.
     pub fn ancestry(&self, id: NodeId) -> Option<Vec<NodeId>> {
         let path = self.index_path(id)?;
@@ -1391,6 +1457,8 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod tests_lookups;
 #[cfg(test)]
 mod tests_slices;
 #[cfg(test)]
