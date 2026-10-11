@@ -13,6 +13,7 @@ pub mod cmyk;
 pub mod corners;
 pub mod graph;
 pub mod hit;
+mod id_index;
 pub mod inks;
 mod inline;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
@@ -658,6 +659,9 @@ pub struct Document {
     /// state, never saved.
     #[serde(skip)]
     pub puppet: Option<Arc<PuppetPins>>,
+    /// Where each node is in the tree, for lookups by id ([`id_index`]): a cache, never saved.
+    #[serde(skip)]
+    index: id_index::IdIndex,
 }
 
 fn ppi72() -> f64 {
@@ -729,6 +733,7 @@ impl Document {
             print_setup: None,
             assets: vec![],
             puppet: None,
+            index: Default::default(),
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
@@ -758,24 +763,37 @@ impl Document {
 
     /// Find a node anywhere in the tree.
     pub fn node(&self, id: NodeId) -> Option<&Node> {
-        fn find(nodes: &[Arc<Node>], id: NodeId) -> Option<&Node> {
-            for n in nodes {
-                if n.id == id {
-                    return Some(n);
-                }
-                if let Some(ch) = n.children()
-                    && let Some(f) = find(ch, id)
-                {
-                    return Some(f);
-                }
-            }
-            None
-        }
-        find(&self.layers, id)
+        self.index_path(id).and_then(|p| self.node_at(&p))
     }
 
-    /// Index path from the top-level layer list to `id` (e.g. `[0, 3, 1]`).
+    /// Index path from the top-level layer list to `id` (e.g. `[0, 3, 1]`): the first place in
+    /// tree order where `id` appears.
     pub fn index_path(&self, id: NodeId) -> Option<Vec<usize>> {
+        // The cached path, while the node there still has the id ([`id_index`]).
+        let cached = self.index.get();
+        match cached.as_ref().and_then(|m| m.get(&id)) {
+            Some(Some(p)) if self.node_at(p).is_some_and(|n| n.id == id) => return Some(p.clone()),
+            Some(None) => return self.walk_index_path(id),
+            Some(Some(_)) => {
+                // Stale: the tree changed. Rebuild, then answer from it (what a walk gives now).
+                return match self.index.rebuild(&self.layers).get(&id) {
+                    Some(Some(p)) => Some(p.clone()),
+                    Some(None) => self.walk_index_path(id),
+                    None => None,
+                };
+            }
+            None => {}
+        }
+        // Not cached: deleted, added since, or no cache yet.
+        let found = self.walk_index_path(id);
+        if cached.is_none() || (found.is_some() && self.index.missed()) {
+            self.index.rebuild(&self.layers);
+        }
+        found
+    }
+
+    /// [`Document::index_path`] by walking the tree.
+    fn walk_index_path(&self, id: NodeId) -> Option<Vec<usize>> {
         fn find(nodes: &[Arc<Node>], id: NodeId, path: &mut Vec<usize>) -> bool {
             for (i, n) in nodes.iter().enumerate() {
                 path.push(i);
@@ -818,10 +836,23 @@ impl Document {
             }
             false
         }
-        let want: HashSet<NodeId> = ids.into_iter().collect();
+        let mut want: HashSet<NodeId> = ids.into_iter().collect();
         let mut out = HashMap::with_capacity(want.len());
+        // Cached paths that still check out ([`id_index`]); the rest take one walk. For a good
+        // share of the document, one walk is quicker than checking each cached path.
+        if let Some(cache) = self.index.get().filter(|c| want.len().saturating_mul(8) < c.len()) {
+            want.retain(|id| match cache.get(id) {
+                Some(Some(p)) if self.node_at(p).is_some_and(|n| n.id == *id) => {
+                    out.insert(*id, p.clone());
+                    false
+                }
+                _ => true,
+            });
+        }
         if !want.is_empty() {
-            walk(&self.layers, &want, &mut Vec::new(), &mut out);
+            let mut rest = HashMap::with_capacity(want.len());
+            walk(&self.layers, &want, &mut Vec::new(), &mut rest);
+            out.extend(rest);
         }
         out
     }

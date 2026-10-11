@@ -78,3 +78,79 @@ fn batched_lookups_match_one_at_a_time() {
         assert_eq!(serde_json::to_string(&a).ok(), serde_json::to_string(&b).ok(), "seed {seed}");
     }
 }
+
+/// What a walk of the tree gives for every id, checked against the cached lookups.
+fn agree(d: &Document, ids: &[NodeId], what: &str) {
+    agree_except(d, ids, None, what);
+}
+
+/// [`agree`], except for `dup`, an id given a second node after the cache was built: lookups of it
+/// may return either of its nodes (see `id_index`), but always one with that id.
+fn agree_except(d: &Document, ids: &[NodeId], dup: Option<NodeId>, what: &str) {
+    if let Some(dup) = dup {
+        assert_eq!(d.node(dup).map(|n| n.id), Some(dup), "{what}: node {dup:?} has its id");
+    }
+    let ids: Vec<NodeId> = ids.iter().copied().filter(|id| Some(*id) != dup).collect();
+    let ids = &ids[..];
+    for id in ids {
+        let walked = d.walk_index_path(*id);
+        assert_eq!(d.index_path(*id), walked, "{what}: index_path {id:?}");
+        let by_walk = walked.as_deref().and_then(|p| d.node_at(p)).map(|n| n as *const Node);
+        assert_eq!(d.node(*id).map(|n| n as *const Node), by_walk, "{what}: node {id:?}");
+    }
+    let batched = d.index_paths(ids.iter().copied());
+    for id in ids {
+        assert_eq!(batched.get(id).cloned(), d.walk_index_path(*id), "{what}: index_paths {id:?}");
+    }
+}
+
+/// The id cache never answers differently from a walk, however the tree is changed behind its
+/// back (through the public fields), including in a clone that shares the cache.
+#[test]
+fn cached_lookups_follow_any_edit_of_the_tree() {
+    for seed in 1..30 {
+        let (mut d, ids) = tree(seed);
+        agree(&d, &ids, "fresh");
+        let snapshot = d.clone(); // shares the cache
+        // Insert at the front of the first layer: every path in it shifts.
+        let extra = d.alloc_id();
+        let leaf = Arc::new(Node::path(extra, shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art()));
+        if let Some(ch) = Arc::make_mut(&mut d.layers[0]).children_mut() {
+            ch.insert(0, leaf.clone());
+        }
+        let mut all = ids.clone();
+        all.push(extra);
+        agree(&d, &all, "inserted at the front");
+        // Remove a child, swap two, and move one into another layer.
+        if let Some(ch) = Arc::make_mut(&mut d.layers[1]).children_mut()
+            && ch.len() > 3
+        {
+            ch.remove(1);
+            ch.swap(0, 2);
+        }
+        let moved = Arc::make_mut(&mut d.layers[2]).children_mut().and_then(|ch| (!ch.is_empty()).then(|| ch.remove(0)));
+        if let Some(m) = moved
+            && let Some(ch) = Arc::make_mut(&mut d.layers[0]).children_mut()
+        {
+            ch.push(m);
+        }
+        agree(&d, &all, "removed, swapped and moved");
+        // A new duplicate of an existing id, earlier in tree order than the original.
+        let dup = ids[ids.len() / 3];
+        let copy = Arc::new(Node::path(dup, shapes::rectangle(Rect::new(0.0, 0.0, 2.0, 2.0)), Appearance::default_art()));
+        if let Some(ch) = Arc::make_mut(&mut d.layers[0]).children_mut() {
+            ch.insert(0, copy);
+        }
+        agree_except(&d, &all, Some(dup), "a duplicate inserted earlier");
+        // Delete a whole layer, then look everything up again, missing ids included.
+        d.layers.remove(1);
+        agree_except(&d, &all, Some(dup), "a layer deleted");
+        // A rebuilt cache (as after loading a file) knows the duplicate and walks for it.
+        let mut fresh = d.clone();
+        fresh.layers = d.layers.clone();
+        fresh.index = Default::default();
+        agree(&fresh, &all, "a damaged tree, cached afresh");
+        // The clone made before all this still answers for its own tree.
+        agree(&snapshot, &ids, "the earlier clone");
+    }
+}
