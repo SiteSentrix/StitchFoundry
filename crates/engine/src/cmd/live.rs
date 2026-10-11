@@ -14,7 +14,7 @@ use vectorcraft_doc::live::{
     PreserveShape, Spine,
 };
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
-use vectorcraft_geom::{Affine, PathData, Point};
+use vectorcraft_geom::{Affine, PathData, Point, Vec2};
 
 use super::edit::selected_roots;
 use super::expand::gradient_sampler;
@@ -94,6 +94,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id? (default: the selected blend), anchor: index, x, y, handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on the point moves with it. The first edit turns the straight spine into a path",
             has_doc,
             spine_move_anchor
+        ),
+        cmd!(
+            "object.blend.spine.reshapeSegment",
+            "Reshape Spine Segment",
+            [],
+            None,
+            "{id? (default: the selected blend), segment: index, t: 0..1, dx, dy} bend a segment of the blend's spine so its point at t moves by (dx, dy), as path.reshapeSegment bends a path's: a straight spine turns into a curve (#1111)",
+            has_doc,
+            spine_reshape_segment
         ),
         cmd!(
             "object.blend.spine.addAnchor",
@@ -637,6 +646,18 @@ fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    ok()
+}
+
+fn spine_reshape_segment(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.blend.spine.reshapeSegment";
+    let seg = index_param(p, "segment", C)?;
+    let t = f64_or(p, "t", 0.5).clamp(0.05, 0.95);
+    let dv = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
+    if !(t.is_finite() && dv.x.is_finite() && dv.y.is_finite() && dv.hypot() < 1e9) {
+        return Err(bad(C, "t, dx and dy must be finite"));
+    }
+    edit_spine(s, p, C, "Reshape Spine", |sp, _, _| if sp.bend_segment(seg, t, dv) { Ok(()) } else { Err(bad(C, "no such spine segment")) })?;
     ok()
 }
 

@@ -90,6 +90,15 @@ enum State {
         start: Point,
         began: bool,
     },
+    /// Dragging a curved segment of a selected blend's spine: it follows the pointer
+    /// (`object.blend.spine.reshapeSegment`, #1111).
+    SpineSegment {
+        id: NodeId,
+        seg: usize,
+        t: f64,
+        start: Point,
+        began: bool,
+    },
     /// Dragging a handle of the clicked spine point.
     SpineHandle {
         id: NodeId,
@@ -167,6 +176,15 @@ fn hit_spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usiz
     spines(cx).into_iter().find_map(|(id, path)| {
         let (_, ai, a) = path.anchors().find(|(_, _, a)| a.p.distance(p) <= tol)?;
         Some((id, ai, a.p))
+    })
+}
+
+/// The segment of a selected blend's spine passing within `tol` of `p`: (blend, segment, t, whether
+/// it is straight).
+pub(crate) fn hit_spine_segment(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, f64, bool)> {
+    spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)).find_map(|(id, path)| {
+        let (si, seg, t, _, dist) = path.nearest(p)?;
+        (dist <= tol).then(|| (id, seg, t, path.subpaths.get(si).is_some_and(|sp| sp.segment_is_line(seg))))
     })
 }
 
@@ -402,6 +420,11 @@ impl Tool for DirectSelectionTool {
                 if let Some((id, anchors)) = hit_frame_edge(cx, p, tol) {
                     return self.press_type_area(cx, id, anchors, p, ev.mods.shift);
                 }
+                // A curved segment of a selected blend's spine reshapes, as a path's does.
+                if let Some((id, seg, t, false)) = hit_spine_segment(cx, p, tol) {
+                    self.state = State::SpineSegment { id, seg, t, start: p, began: false };
+                    return vec![];
+                }
                 if let Some(out) = self.guide.press(cx, ev) {
                     self.state = State::Idle;
                     return out;
@@ -546,6 +569,22 @@ impl Tool for DirectSelectionTool {
                 out.push(Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": id.0, "anchor": anchor, "x": q.x, "y": q.y})));
                 out
             }
+            (PointerKind::Drag, State::SpineSegment { id, seg, t, start, began }) => {
+                let mut out = vec![];
+                if !began {
+                    if p.distance(start) < cx.tol(3.0) {
+                        return out;
+                    }
+                    out.push(Action::Begin("Reshape Spine".into()));
+                    self.state = State::SpineSegment { id, seg, t, start, began: true };
+                }
+                let d = p - start;
+                out.push(Action::Preview(
+                    "object.blend.spine.reshapeSegment".into(),
+                    json!({"id": id.0, "segment": seg, "t": t, "dx": d.x, "dy": d.y}),
+                ));
+                out
+            }
             (PointerKind::Drag, State::SpineHandle { id, anchor, out }) => vec![Action::Preview(
                 "object.blend.spine.moveAnchor".into(),
                 json!({"id": id.0, "anchor": anchor, "handle": if out {"out"} else {"in"}, "x": p.x, "y": p.y, "independent": ev.mods.alt}),
@@ -583,6 +622,7 @@ impl Tool for DirectSelectionTool {
                 | State::MoveObject { began, .. }
                 | State::Segment { began, .. }
                 | State::SpinePoint { began, .. }
+                | State::SpineSegment { began, .. }
                 | State::TypeArea { began, .. },
             ) => {
                 self.state = State::Idle;
@@ -812,6 +852,45 @@ mod tests {
         assert_eq!(a[1], Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": g.0, "anchor": 1, "x": 220.0, "y": 350.0})));
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 221.0, 350.0)), vec![Action::Commit]);
         assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Anchor { filled: true, .. })), "the clicked point shows");
+    }
+
+    /// #1111: the Anchor Point tool bends a selected blend's straight spine; Direct Selection
+    /// reshapes a curved spine segment and leaves a straight one alone, as it does a path's.
+    #[test]
+    fn spine_segments_bend_with_the_anchor_point_tool_and_direct_selection() {
+        let (mut d, g, _) = blend_doc();
+        let mut s = Selection::default();
+        s.set([g]);
+        let p = paint();
+        let drag = |t: &mut dyn crate::Tool, cx: &ToolContext| {
+            t.pointer(cx, &PointerEvent::new(PointerKind::Down, 160.0, 311.0));
+            let a = t.pointer(cx, &PointerEvent::new(PointerKind::Drag, 160.0, 351.0));
+            t.pointer(cx, &PointerEvent::new(PointerKind::Up, 160.0, 351.0));
+            a
+        };
+        let straight = cx(&d, &s, &p);
+        let a = drag(crate::create("anchorPoint").as_mut(), &straight);
+        assert!(
+            matches!(a.last(), Some(Action::Preview(c, v)) if c == "object.blend.spine.reshapeSegment" && v["id"] == g.0 && v["segment"] == 0 && v["dy"] == 40.0),
+            "{a:?}"
+        );
+        let a = drag(&mut DirectSelectionTool::new(false), &straight);
+        assert!(!a.iter().any(|x| matches!(x, Action::Preview(c, _) if c == "object.blend.spine.reshapeSegment")), "straight: {a:?}");
+        // The spine bent upward: Direct Selection takes it from where it passes.
+        let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(210.0, 310.0)], false);
+        sp.bend_segment(0, 0.5, vectorcraft_geom::Vec2::new(0.0, 20.0));
+        let Some(NodeKind::Blend { spec, .. }) = d.node_mut(g).map(|n| &mut n.kind) else { panic!("blend") };
+        (spec.spine, spec.key_anchors) = (Some(PathData::single(sp)), vec![0, 1]);
+        let mut t = DirectSelectionTool::new(false);
+        let curved = cx(&d, &s, &p);
+        t.pointer(&curved, &PointerEvent::new(PointerKind::Down, 160.0, 330.0));
+        let a = t.pointer(&curved, &PointerEvent::new(PointerKind::Drag, 160.0, 345.0));
+        assert_eq!(a[0], Action::Begin("Reshape Spine".into()));
+        assert!(
+            matches!(&a[1], Action::Preview(c, v) if c == "object.blend.spine.reshapeSegment" && v["segment"] == 0 && v["dx"] == 0.0 && v["dy"] == 15.0),
+            "{a:?}"
+        );
+        assert_eq!(t.pointer(&curved, &PointerEvent::new(PointerKind::Up, 160.0, 345.0)), vec![Action::Commit]);
     }
 
     #[test]

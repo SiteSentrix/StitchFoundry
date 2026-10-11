@@ -1538,6 +1538,7 @@
 	Move Rows	移動列
 	Move Slices	移動切片
 	Move Spine Point	移動脊線點
+	Reshape Spine Segment	改變脊線線段外框
 	Move Swatch	移動色票
 	Move Up	上移
 	Move…	移動…

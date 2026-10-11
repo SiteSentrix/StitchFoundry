@@ -1545,6 +1545,7 @@
 	Move Rows	Zeilen verschieben
 	Move Slices	Slices verschieben
 	Move Spine Point	Achsenpunkt verschieben
+	Reshape Spine Segment	Achsensegment umformen
 	Move Swatch	Farbfeld verschieben
 	Move Up	Nach oben verschieben
 	Move…	Verschieben…
