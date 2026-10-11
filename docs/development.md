@@ -133,6 +133,8 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   embed everywhere, was 8.7 MB, so the web build is still smaller than before.
 - Document text: the Japanese faces join the font database after the bundled fonts (Mincho first),
   so they are the fallback for Japanese after the requested font; installed system fonts come after.
+  Noto Sans Thai (when the checkout has it) is the fallback for Thai where no Thai font is
+  installed, and the web build fetches it before the app starts (`crates/text/web-fonts.txt`).
 - UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first), after
   the UI fonts and before the installed fonts `ui_fonts.rs` discovers for other scripts.
 - Tests that need Japanese glyphs skip with a message when built without craft-fonts. The FreeBSD
