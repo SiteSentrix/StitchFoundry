@@ -214,11 +214,17 @@ mod design_from_prompt {
         panic!("no answer");
     }
 
-    /// Every piece of text one headless frame of the open dialog paints.
+    /// Every piece of text the open dialog paints, once it has measured and placed itself.
     fn dialog_text(app: &mut VectorcraftApp) -> Vec<String> {
         let ctx = egui::Context::default();
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
-        let out = ctx.run_ui(raw, |ui| crate::dialogs::show(app, &ui.ctx().clone()));
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let raw =
+            || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
+        for _ in 0..4 {
+            let _ = ctx.run_ui(raw(), |ui| crate::dialogs::show(app, &ui.ctx().clone()));
+        }
+        let out = ctx.run_ui(raw(), |ui| crate::dialogs::show(app, &ui.ctx().clone()));
         fn walk(s: &egui::Shape, into: &mut Vec<String>) {
             match s {
                 egui::Shape::Text(t) => into.push(t.galley.text().to_string()),

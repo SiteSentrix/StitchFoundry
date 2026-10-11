@@ -15,6 +15,7 @@ the control channel, the CLI and the MCP server.
 - [The digitizing widget and brush](#the-digitizing-widget-and-brush)
 - [Lettering](#lettering)
 - [Auto-Digitize](#auto-digitize)
+- [Design from Prompt](#design-from-prompt)
 - [Design settings: hoop, fabric, threads](#design-settings-hoop-fabric-threads)
 - [Stitch Sequence and the stitch player](#stitch-sequence-and-the-stitch-player)
 - [Machine files](#machine-files)
@@ -173,6 +174,41 @@ type: satin for narrow parts, tatami at its best angle for the rest. The design 
 colour, nearest shape first. It is scaled to fit the hoop if one is set (or to 100 mm if it is
 larger than 200 mm). The image stays underneath as a reference. One undo step undoes it all.
 
+## Design from Prompt
+
+Describe a design in words and Claude, Anthropic's AI model, draws artwork for it, which
+StitchFoundry then digitizes. Choose **Embroidery › Design from Prompt…** (or the button in the
+Embroidery panel), describe the design ("a cartoon fox head, orange and white"), and set its size
+(the longest side, in mm: 90% of the hoop's shorter side by default, else 100 mm) and the most
+thread colours it may use. **Generate** sends the request, and the dialog shows how long Claude
+has been drawing; **Cancel** stops waiting. If something goes wrong (a refused key, a busy
+service, a drawing that grew too detailed), the dialog says so and stays open to try again.
+
+Claude is asked for what digitizes well: filled shapes in flat colours, no part narrower than
+1.5 mm stitched, no shading or tiny details, drawn back to front. The drawing arrives as one group
+named after the description. Its shapes get stitch types as with Convert Artwork to Embroidery
+(satin for narrow parts, tatami for the rest), sewn in the order they were drawn, and each one cuts
+what it covers out of the fills sewn before it (Remove Underlying Stitching), so stacked shapes
+don't pile up thread. Its colours become the design chart's closest threads. Images, invisible
+shapes and specks under 1 mm² are left out. One undo step undoes it all. As with any automatic
+digitizing, check the stitches (Check Design, the stitch player) before you sew. Claude won't copy
+someone else's logo, trademark or character: the dialog says so, and an original design described
+in your own words draws fine.
+
+**Your own API key.** Design from Prompt uses your Anthropic API key, and each design is billed to
+your Anthropic account; get a key in the [Anthropic Console](https://console.anthropic.com/settings/keys).
+Paste it into the dialog. With **Remember the key on this computer** (turn it off to forget a kept
+key), it is kept in a file of its own, `anthropic-api-key`, next to StitchFoundry's settings and
+readable by you alone: not in the settings themselves, which the control channel and MCP agents
+can read. Without a kept key, the `ANTHROPIC_API_KEY` environment variable is used.
+
+Only your description, the size and the colour count are sent, to `api.anthropic.com` over HTTPS,
+and only when you click Generate; nothing from your design leaves the computer. Certificates are
+checked against the system's trusted ones, and a proxy set in the usual environment variables
+(`HTTPS_PROXY`…) is used. Design from Prompt needs the desktop app: the web app can't send the
+request yet. Agents don't need it: an agent that draws can hand its own SVG to
+`embroidery.placeArt`, which does the rest.
+
 ## Design settings: hoop, fabric, threads
 
 The Embroidery panel's **Design** section shows the stitch count, size, colours, trims, sewing
@@ -328,6 +364,7 @@ tool list for all parameters):
 | `embroidery.draw {brush, points \| stamp, …}` | a brush stroke, as the widget draws it |
 | `embroidery.column {points: [[x, y, curve?]…], id?}` | a Column A/B satin column from points on its two sides in turn; with `id`, continue that column |
 | `embroidery.autoDigitize {colors, …}` | trace a selected image into stitches |
+| `embroidery.placeArt {svg, size?, at?, name?, minArea?}` | place flat-colour SVG art and digitize it, as Design from Prompt does with Claude's drawing (its linked files are never read) |
 | `embroidery.settings {hoop, fabric, chart, machine, …}`, `embroidery.applyFabric {name}` | design settings |
 | `embroidery.machine.list`, `embroidery.machine.save {name, newName?, format?, fromDesign?, …}`, `embroidery.machine.delete {name}` | machine profiles: change the standard ones, make, rename and delete your own |
 | `embroidery.sortByColor` | sew each colour in one go |
@@ -359,12 +396,13 @@ From the control channel (`stitchfoundry --control 7979`, one JSON object per li
 
 | Crate | Layer | Role |
 |---|---|---|
-| `sf-core` | standalone | geometry, the embroidery model, the stitch engine (runs, satin, fills, underlay, appliqué, connectors, ties, trims), inclination lines and turning, brushes, threads, hoops, fabrics |
+| `sf-core` | standalone | geometry, the embroidery model, the stitch engine (runs, satin, fills, underlay, appliqué, connectors, ties, trims), inclination lines and turning, brushes, threads, hoops, fabrics; Design from Prompt's request and the reading of its reply (`ai`) |
 | `sf-formats` | 1 | machine file readers and writers |
 | `vectorcraft-embroidery` | 2 | the document side: converts paths and type to embroidery objects (millimetres), plans the whole document in paint order, caches unchanged objects |
 | `vectorcraft-engine` | 5 | the `embroidery.*` commands and machine-file open/place |
 | `vectorcraft-tools` | 4 | the Embroidery Brush and Inclination tools |
-| `vectorcraft-ui-egui` | 6 | canvas overlay (TrueView mesh, hoop, beads, player), panels, widget, menus |
+| `vectorcraft-ui-egui` | 6 | canvas overlay (TrueView mesh, hoop, beads, player), panels, widget, menus, the Design from Prompt dialog |
+| `vectorcraft` (the desktop app) | 7 | sends Design from Prompt's request (ureq, rustls) and keeps the API key |
 
 Documents store embroidery as an optional attribute on each node (`Node.embroidery`) and on
 the document (`Document.embroidery`: hoop, fabric, chart). Older documents and documents without
@@ -387,6 +425,10 @@ round trips and robustness tests in the repository.
   plural form for every number.
 - Auto-Digitize works best on flat-colour logos; photos and gradients need tracing by hand
   first.
+- Design from Prompt works with your own Anthropic API key only (StitchFoundry accounts and AI
+  credits aren't built yet), and only in the desktop app. The drawing follows the description
+  loosely and can use more colours than asked (colours close enough to share a thread are merged),
+  and a drawing is billed even when it comes out unusable.
 - Branching orders objects closest-first rather than searching for the best tour, and only
   carries the thread across under objects of the branch sewn later.
 - Appliqué is one object (placement, tack-down, cover). Splitting an appliqué where pieces overlap

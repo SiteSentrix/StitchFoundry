@@ -88,6 +88,9 @@ pub enum ArtError {
     /// The model declined to draw it.
     #[error("The AI declined to draw this: try another description.")]
     Refused,
+    /// The description asks for someone else's logo or character, with the model's reason.
+    #[error("The AI won't copy someone else's logo or character: {0}")]
+    NotOriginal(String),
     /// The reply ran out of room before the artwork was done.
     #[error("The drawing grew too detailed to finish: ask for something simpler.")]
     Truncated,
@@ -149,7 +152,11 @@ hatching, texture or tiny details. Every part is at least {min} units wide (abou
 - Shapes go back to front: the first one is sewn first and later ones lie on top of it. Keep to \
 about 60 shapes or fewer.\n\
 - viewBox=\"0 0 1000 1000\" (another aspect is fine with 1000 on its longest side), absolute \
-coordinates, no transforms on the root element."
+coordinates, no transforms on the root element.\n\
+\n\
+Never reproduce a logo, trademark, mascot or character that belongs to someone else (a team, \
+company, brand, film, show or game). If the description asks for one, reply with a single line \
+that starts with \"DECLINED:\" followed by a short reason, instead of the SVG."
         )
     }
 
@@ -226,6 +233,10 @@ pub fn parse_reply(status: u16, body: &str) -> Result<Art, ArtError> {
                 .collect()
         })
         .unwrap_or_default();
+    if let Some(reason) = text.trim().strip_prefix("DECLINED:") {
+        let reason: String = reason.trim().chars().take(300).collect();
+        return Err(ArtError::NotOriginal(if reason.is_empty() { "describe an original design".into() } else { reason }));
+    }
     let svg = extract_svg(&text).ok_or(ArtError::NoArt)?;
     let model = v.get("model").and_then(Value::as_str).unwrap_or(MODEL).to_string();
     Ok(Art { svg: svg.to_string(), model })
@@ -272,6 +283,7 @@ mod tests {
         // 80 mm: 12.5 units a millimetre, so 1.5 mm is 19 units and a 1 mm gap 13
         assert!(system.contains("At most 5 different fill colours"), "{system}");
         assert!(system.contains("about 80 mm") && system.contains("at least 19 units") && system.contains("at least 13 units"), "{system}");
+        assert!(system.contains("starts with \"DECLINED:\""), "{system}");
     }
 
     #[test]
@@ -313,6 +325,9 @@ mod tests {
         assert_eq!(parse_reply(200, &cut), Err(ArtError::Truncated));
         assert_eq!(parse_reply(200, &reply("end_turn", json!([{"type": "text", "text": "I can't draw that."}]))), Err(ArtError::NoArt));
         assert_eq!(parse_reply(200, "not json"), Err(ArtError::NoArt));
+        // someone else's logo or character: the model's reason is shown
+        let declined = reply("end_turn", json!([{"type": "text", "text": "DECLINED: that is a sports team's logo"}]));
+        assert_eq!(parse_reply(200, &declined), Err(ArtError::NotOriginal("that is a sports team's logo".into())));
         let huge = format!("<svg>{}</svg>", "x".repeat(MAX_SVG));
         assert_eq!(parse_reply(200, &reply("end_turn", json!([{"type": "text", "text": huge}]))), Err(ArtError::NoArt));
     }
