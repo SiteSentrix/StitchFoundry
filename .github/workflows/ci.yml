@@ -41,8 +41,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev
-      - uses: dtolnay/rust-toolchain@stable
+      # The toolchain the code is checked with locally. Each Rust release adds clippy lints, so
+      # bump it on purpose and fix what the new lints flag in the same commit.
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.97.0
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2

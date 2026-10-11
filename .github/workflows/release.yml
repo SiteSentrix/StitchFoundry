@@ -449,7 +449,7 @@ jobs:
       - name: Check the package
         run: |
           tar -tzf dist/release/vectorcraft-*-linux-riscv64.tar.gz \
-            | grep -E '/bin/vectorcraft$|/bin/vectorcraft-cli$|/share/applications/ai\.storyteller\.vectorcraft\.desktop$'
+            | grep -E '/bin/vectorcraft$|/bin/vectorcraft-cli$|/share/applications/com\.sitesentrix\.stitchfoundry\.desktop$'
           file target/riscv64gc-unknown-linux-gnu/release/vectorcraft | grep -F 'RISC-V'
       - uses: actions/upload-artifact@v7
         with:
