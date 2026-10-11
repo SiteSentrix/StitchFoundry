@@ -539,22 +539,66 @@ pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
             .filter_map(|k| grid.get(&k))
             .flatten()
             .copied()
-            .find_map(|v| points.get(v).filter(|q| q.distance(p) <= eps).map(|&q| (v, q)));
+            .find(|&v| points.get(v).is_some_and(|q| q.distance(p) <= eps));
         near.unwrap_or_else(|| {
             points.push(p);
             grid.entry((cx, cy)).or_default().push(points.len() - 1);
-            (points.len() - 1, p)
+            points.len() - 1
         })
     };
+    let mut pieces: Vec<(Vec<Seg>, [usize; 2])> = Vec::new();
+    for idx in top.segment_indices() {
+        let segs: Vec<Seg> = positions[idx].path.segments().map(to_seg).collect();
+        let ends = [vertex_id(top.point(idx.first_half()).to_kurbo()), vertex_id(top.point(idx.second_half()).to_kurbo())];
+        if !segs.is_empty() && ends[0] != ends[1] {
+            pieces.push((segs, ends));
+        }
+    }
+    // The sweep can cut the paths through one crossing at points more than `eps` apart, so copies of
+    // one edge (such as an open path's two passes) can end on different vertices. Pieces whose
+    // middles and ends lie within `tol` of each other are such copies, and their ends are one vertex.
+    let tol = 16.0 * eps;
+    let cell_of = |p: Point| ((p.x / tol).floor() as i64, (p.y / tol).floor() as i64);
+    let mids: Vec<Option<Point>> = pieces.iter().map(|(segs, _)| mid(segs)).collect();
+    let mut by_mid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for (k, m) in mids.iter().enumerate() {
+        if let Some(m) = m {
+            by_mid.entry(cell_of(*m)).or_default().push(k);
+        }
+    }
+    let close = |a: usize, b: usize| matches!((points.get(a), points.get(b)), (Some(p), Some(q)) if p.distance(*q) <= tol);
+    let mut joined: Vec<usize> = (0..points.len()).collect();
+    for (k, (_, [a, b])) in pieces.iter().enumerate() {
+        let Some(&Some(m)) = mids.get(k) else { continue };
+        let (cx, cy) = cell_of(m);
+        let others = (cx - 1..=cx + 1).flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y))).filter_map(|c| by_mid.get(&c)).flatten();
+        for &j in others.filter(|&&j| j > k) {
+            let (Some((_, [c, d])), Some(&Some(n))) = (pieces.get(j), mids.get(j)) else { continue };
+            if m.distance(n) > tol {
+                continue;
+            }
+            let pairs = if close(*a, *c) && close(*b, *d) {
+                [(*a, *c), (*b, *d)]
+            } else if close(*a, *d) && close(*b, *c) {
+                [(*a, *d), (*b, *c)]
+            } else {
+                continue;
+            };
+            for (x, y) in pairs {
+                let (x, y) = (find(&mut joined, x), find(&mut joined, y));
+                if let Some(r) = joined.get_mut(x.max(y)) {
+                    *r = x.min(y);
+                }
+            }
+        }
+    }
     let mut edges: Vec<Edge> = Vec::new();
     let mut between: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
     let outlines = Outlines::new(&inputs, eps);
-    for idx in top.segment_indices() {
-        let half = idx.first_half();
-        let mut segs: Vec<Seg> = positions[idx].path.segments().map(to_seg).collect();
-        let ((v0, p0), (v1, p1)) = (vertex_id(top.point(half).to_kurbo()), vertex_id(top.point(idx.second_half()).to_kurbo()));
-        let ends = [v0, v1];
-        if segs.is_empty() || v0 == v1 {
+    for (mut segs, ends) in pieces {
+        let ends = ends.map(|v| find(&mut joined, v));
+        let (Some(&p0), Some(&p1)) = (points.get(ends[0]), points.get(ends[1])) else { continue };
+        if ends[0] == ends[1] {
             continue;
         }
         // Every edge at a vertex starts or ends exactly on it, so faces meeting there share its
@@ -1224,6 +1268,36 @@ mod tests {
         assert_eq!(cut.subpaths.len(), 2);
         assert!(cut.subpaths.iter().all(|sp| !sp.closed));
         assert!((cut.length() - 160.0).abs() < 1e-6, "{}", cut.length());
+    }
+
+    /// Proptest shrank a failure of `pieces_cut_out_of_their_inputs` to this input with linesweeper
+    /// 0.5. The sweep cuts lines 0 and 1 at points of their crossing up to 1.4 `eps` apart, and
+    /// `vertex_id` merges a point only into a vertex within `eps` of it. Line 0's loose end in the
+    /// square is still one piece, and erasing it shortens line 0 by its length only. No face or
+    /// merged outline runs out along it and back.
+    #[test]
+    fn a_loose_end_is_one_piece_when_the_sweep_cuts_its_passes_apart() {
+        let s = [line((30.0, 20.0), (70.0, 0.0), 0), line((40.0, 0.0), (0.0, 90.0), 1), rect(10.0, 0.0, 40.0, 30.0, 2)];
+        let arr = shape_builder(&s, true);
+        for key in 0..3 {
+            assert_eq!(arr.edges.iter().chain(&arr.lines).filter(|e| e.key == key).count(), 3, "pieces of {key}");
+        }
+        for e in arr.edges.iter().chain(&arr.lines) {
+            let input = &s[e.key as usize].path;
+            let cut = cut_out(input, &e.path.subpaths[0], false, 0.05).expect("on its input");
+            assert!((input.length() - cut.length() - e.path.length()).abs() < 1e-6, "{:?}", e.path);
+        }
+        // From (30,20) to the crossing at (220/7, 135/7).
+        let loose = arr.lines.iter().find(|l| l.path.subpaths[0].anchors.iter().any(|a| a.p == Point::new(30.0, 20.0))).expect("the loose end");
+        assert_eq!(loose.path.subpaths[0].anchors.len(), 2, "{:?}", loose.path);
+        assert!((loose.path.length() - 2000f64.sqrt() / 28.0).abs() < 1e-6, "{}", loose.path.length());
+        let (faces, _) = live_paint(&s);
+        let left = at(&faces, 15.0, 15.0);
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].path.subpaths[0].anchors.len(), 4, "(10,0) (40,0) (26.67,30) (10,30): {:?}", left[0].path);
+        let merged = crate::FaceMerger::new(&s).merge(&faces.iter().collect::<Vec<_>>());
+        assert_eq!(merged.subpaths.len(), 1, "the square: {merged:?}");
+        assert_eq!(merged.subpaths[0].anchors.len(), 4, "{merged:?}");
     }
 
     fn arb_segment() -> impl Strategy<Value = Shape> {
