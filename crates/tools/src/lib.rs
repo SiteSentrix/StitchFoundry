@@ -16,6 +16,7 @@ pub mod cut;
 pub mod direct;
 pub mod distort;
 pub mod draw2;
+pub mod embroidery;
 pub mod extra;
 pub mod guides;
 pub mod meshblend;
@@ -217,6 +218,12 @@ impl ScreenFrame {
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
+    /// Embroidery: start and stop bead (document points) of each selected stitched
+    /// object, from the stitch plan (the Inclination tool drags them).
+    pub embroidery_beads: &'a [(NodeId, Point, Point)],
+    /// Embroidery: the own stitches (document points, sewing order) of each selected
+    /// stitched object, while the Stitch Edit tool is active.
+    pub embroidery_stitches: &'a [(NodeId, Vec<(Point, sf_core::Cmd)>)],
     /// Which open document `doc` is (its process-unique id) and its revision, which moves with
     /// every change of the document or the selection: what a tool keeps between pointer events
     /// for the document as it is (the snap targets of hovering) is keyed on it.
@@ -596,6 +603,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| printtiling::create(other))
             .or_else(|| cropimage::create(other))
             .or_else(|| cut::create(other))
+            .or_else(|| embroidery::create(other))
             .unwrap_or_else(|| Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection")))),
     }
 }
@@ -663,6 +671,8 @@ pub(crate) mod testutil {
     pub fn cx<'a>(d: &'a Document, s: &'a Selection, p: &'a PaintDefaults) -> ToolContext<'a> {
         ToolContext {
             doc: d,
+            embroidery_beads: &[],
+            embroidery_stitches: &[],
             revision: (0, 0),
             selection: s,
             zoom: 1.0,

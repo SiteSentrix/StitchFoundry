@@ -7,13 +7,13 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>VectorCraft</string>
+  <string>StitchFoundry</string>
   <key>CFBundleName</key>
-  <string>VectorCraft</string>
+  <string>StitchFoundry</string>
   <key>CFBundleExecutable</key>
-  <string>VectorCraft</string>
+  <string>StitchFoundry</string>
   <key>CFBundleIdentifier</key>
-  <string>ai.storyteller.vectorcraft</string>
+  <string>com.sitesentrix.stitchfoundry</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundlePackageType</key>
@@ -29,7 +29,7 @@
   <key>VectorCraftBuildCommit</key>
   <string>@BUILD_SHA@</string>
   <key>CFBundleIconFile</key>
-  <string>VectorCraft</string>
+  <string>StitchFoundry</string>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.graphics-design</string>
   <!-- Must match MACOSX_DEPLOYMENT_TARGET in package.sh. Big Sur is the first release on
@@ -43,18 +43,18 @@
   <key>NSRequiresAquaSystemAppearance</key>
   <false/>
   <key>NSHumanReadableCopyright</key>
-  <string>Copyright © the VectorCraft authors. MIT OR Apache-2.0.</string>
+  <string>Copyright © SiteSentrix and the VectorCraft authors. MIT OR Apache-2.0.</string>
 
   <!-- Every format File › Open reads (OPEN_EXTS in crates/engine/src/cmd/fileio/mod.rs; a test in
        apps/vectorcraft checks this list), so Finder offers VectorCraft for them (Open With,
-       double-click, Dock drop). VectorCraft owns its own formats; for the others it is an
+       double-click, Dock drop). StitchFoundry owns its own formats; for the others it is an
        alternate, so it doesn't take over another app's files. The app isn't NSDocument-based (no
        NSDocumentClass): it opens these files itself (apps/vectorcraft/src/open_documents.rs). -->
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>
       <key>CFBundleTypeName</key><string>VectorCraft Document</string>
-      <key>LSItemContentTypes</key><array><string>ai.storyteller.vectorcraft.document</string></array>
+      <key>LSItemContentTypes</key><array><string>com.sitesentrix.stitchfoundry.document</string></array>
       <key>CFBundleTypeRole</key><string>Editor</string>
       <key>LSHandlerRank</key><string>Owner</string>
     </dict>
@@ -101,6 +101,16 @@
       <key>LSHandlerRank</key><string>Alternate</string>
     </dict>
     <dict>
+      <key>CFBundleTypeName</key><string>Embroidery Machine File</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>dst</string><string>exp</string><string>jef</string><string>pes</string>
+        <string>pec</string><string>vp3</string><string>xxx</string><string>u01</string>
+      </array>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+    </dict>
+    <dict>
       <key>CFBundleTypeName</key><string>EMF and WMF</string>
       <key>CFBundleTypeExtensions</key><array><string>emf</string><string>wmf</string></array>
       <key>CFBundleTypeRole</key><string>Editor</string>
@@ -118,12 +128,12 @@
     </dict>
   </array>
 
-  <!-- VectorCraft's own format (.drawcraft is its name from before the rename). -->
+  <!-- The native format, VectorCraft's (.drawcraft is its name from before the rename). -->
   <key>UTExportedTypeDeclarations</key>
   <array>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>ai.storyteller.vectorcraft.document</string>
+      <string>com.sitesentrix.stitchfoundry.document</string>
       <key>UTTypeDescription</key>
       <string>VectorCraft Document</string>
       <key>UTTypeConformsTo</key>
@@ -132,7 +142,7 @@
         <string>public.image</string>
       </array>
       <key>UTTypeIconFile</key>
-      <string>VectorCraft</string>
+      <string>StitchFoundry</string>
       <key>UTTypeTagSpecification</key>
       <dict>
         <key>public.filename-extension</key>

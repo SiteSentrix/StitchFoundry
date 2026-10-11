@@ -69,7 +69,7 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Ein niedrigerer Wert folgt dem Strich genauer; ein höherer ergibt weniger Punkte und glattere Kurven.
 	A new preset starting from the selected one	Eine neue Vorgabe auf Grundlage der ausgewählten
 	A saved copy of the selected preset	Eine gespeicherte Kopie der ausgewählten Vorgabe
-	About VectorCraft	Über VectorCraft
+	About StitchFoundry	Über StitchFoundry
 	above	bei mehr als
 	Absolute Position	Absolute Position
 	Accurate	Genau
@@ -172,7 +172,7 @@
 	Appearance Panel	Bedienfeld „Aussehen“
 	Appearance panel	Bedienfeld „Aussehen“
 	Applies when the linked file is relinked or updated.	Gilt, wenn die verknüpfte Datei neu verknüpft oder aktualisiert wird.
-	Applies the next time VectorCraft starts.	Gilt ab dem nächsten Start von VectorCraft.
+	Applies the next time StitchFoundry starts.	Gilt ab dem nächsten Start von StitchFoundry.
 	Apply	Anwenden
 	Apply Brush	Pinsel anwenden
 	Apply Character Style	Zeichenformat anwenden
@@ -210,8 +210,6 @@
 	Artboard {number}	Zeichenfläche {number}
 	Artboard:	Zeichenfläche:
 	Artboards	Zeichenflächen
-	ArtCraft Website	ArtCraft-Website
-	ArtCraft website	ArtCraft-Website
 	Artwork Colors	Farben der Grafik
 	As Multiple Assets	Als mehrere Assets
 	As Single Asset	Als einzelnes Asset
@@ -670,7 +668,6 @@
 	Discard Recovered Documents	Wiederhergestellte Dokumente verwerfen
 	Discard White Overprint in Output	Weißes Überdrucken in der Ausgabe verwerfen
 	Discarded {} recovered document(s)	{} wiederhergestellte(s) Dokument(e) verworfen
-	Discord	Discord
 	Discretionary Hyphen	Bedingter Trennstrich
 	Discretionary Ligatures	Bedingte Ligaturen
 	Display All Blacks Accurately	Alle Schwarztöne genau anzeigen
@@ -1275,9 +1272,6 @@
 	Italian	Italienisch
 	Japanese	Japanisch
 	Join	Zusammenfügen
-	Join Our Discord	Unserem Discord beitreten
-	Join our Discord	Unserem Discord beitreten
-	Join the ArtCraft community on Discord (discord.gg/artcraft)	Treten Sie der ArtCraft-Community auf Discord bei (discord.gg/artcraft)
 	Join the lines of each paragraph	Die Zeilen jedes Absatzes verbinden
 	Join Tool	Zusammenfügen-Werkzeug
 	Justification…	Abstände…
@@ -1837,7 +1831,6 @@
 	Paragraph Style Options	Absatzformatoptionen
 	Paragraph Styles	Absatzformate
 	Paragraph Symbol	Absatzmarke
-	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Teil von ArtCraft. MIT OR Apache-2.0. Schriften: Source Sans 3, Inter, JetBrains Mono (OFL). Symbole: Lucide (ISC) + VectorCraft.
 	Password	Kennwort
 	Paste	Einfügen
 	Paste in Back	Dahinter einfügen
@@ -2010,7 +2003,7 @@
 	Quarter Space	Viertelgeviert-Leerzeichen
 	Quick Actions	Schnellaktionen
 	Quickly start a new file	Schnell eine neue Datei beginnen
-	Quit VectorCraft	VectorCraft beenden
+	Quit StitchFoundry	StitchFoundry beenden
 	Radar Graph Tool	Netzdiagramm-Werkzeug
 	Radial	Radial
 	Radial Glows	Radiale Leuchteffekte
@@ -2128,7 +2121,7 @@
 	{count} folder(s) or file(s) couldn't be read	{count} Ordner oder Datei(en) konnten nicht gelesen werden
 	The search stopped at its limit: search a smaller folder.	Die Suche hat ihr Limit erreicht: Durchsuchen Sie einen kleineren Ordner.
 	Copy only fonts you own or are licensed to install.	Kopieren Sie nur Schriften, die Ihnen gehören oder für deren Installation Sie eine Lizenz haben.
-	VectorCraft copies the fonts to {folder}.	VectorCraft kopiert die Schriften nach {folder}.
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry kopiert die Schriften nach {folder}.
 	Registered Trademark Symbol	Symbol für eingetragene Marke
 	Registration marks	Passermarken
 	Registry name:	Registrierungsname:
@@ -2228,7 +2221,7 @@
 	Revert	Zurück zur letzten Version
 	Revert to the saved version of “{name}”?	Zur gespeicherten Version von „{name}“ zurückkehren?
 	Replace “{name}”, the file this document was opened from?	„{name}“ ersetzen, die Datei, aus der dieses Dokument geöffnet wurde?
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Beim Öffnen wurde ausgelassen, was VectorCraft noch nicht lesen kann ({what}); beim Ersetzen geht das endgültig verloren. Speichern Sie unter einem anderen Namen, um es zu behalten.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Beim Öffnen wurde ausgelassen, was StitchFoundry noch nicht lesen kann ({what}); beim Ersetzen geht das endgültig verloren. Speichern Sie unter einem anderen Namen, um es zu behalten.
 	Revolve…	Kreiseln…
 	RGB Color	RGB-Farbe
 	Right	Rechts
@@ -2988,13 +2981,10 @@
 	Vector Effects	Vektoreffekte
 	Vector Halftone	Vektor-Halbton
 	Vector Halftone…	Vektor-Halbton…
-	Vector illustration — fast, open, scriptable.	Vektorillustration – schnell, offen, skriptfähig.
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft wurde beim letzten Mal nicht normal beendet. Diese Dokumente hatten ungespeicherte Änderungen:
-	VectorCraft Help…	VectorCraft-Hilfe…
-	VectorCraft on getartcraft.com	VectorCraft auf getartcraft.com
-	VectorCraft on GitHub	VectorCraft auf GitHub
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry wurde beim letzten Mal nicht normal beendet. Diese Dokumente hatten ungespeicherte Änderungen:
+	StitchFoundry Help…	StitchFoundry-Hilfe…
+	StitchFoundry on GitHub	StitchFoundry auf GitHub
 	Vectors	Vektoren
-	Version {version} — open-source vector illustration in pure Rust.	Version {version} – Open-Source-Vektorillustration in reinem Rust.
 	Version:	Version:
 	Vertical	Vertikal
 	Vertical %	Vertikal %
@@ -3031,7 +3021,7 @@
 	Web Snap:	Web-Ausrichtung:
 	Weight	Stärke
 	Weight:	Stärke:
-	Welcome to VectorCraft	Willkommen bei VectorCraft
+	Welcome to StitchFoundry	Willkommen bei StitchFoundry
 	When pasting text	Beim Einfügen von Text
 	White	Weiß
 	Widget Position:	Widget-Position:
@@ -3391,7 +3381,7 @@ theme	Appearance	Erscheinungsbild
 @msg	can't encode the document: {0}	das Dokument kann nicht kodiert werden: {0}
 @msg	can't parse shortcut `{c}`	Tastaturbefehl `{c}` kann nicht ausgewertet werden
 @msg	can't parse shortcut `{s}` for `{k}`	Tastaturbefehl `{s}` für `{k}` kann nicht ausgewertet werden
-@msg	can't save version {0}: VectorCraft writes versions {MIN_VERSION} to {VERSION}	Version {0} kann nicht gespeichert werden: VectorCraft schreibt die Versionen {MIN_VERSION} bis {VERSION}
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	Version {0} kann nicht gespeichert werden: StitchFoundry schreibt die Versionen {MIN_VERSION} bis {VERSION}
 @msg	can't write .{ext} images	.{ext}-Bilder können nicht geschrieben werden
 @msg	cannot distort a zero-size bounding box	ein Begrenzungsrahmen ohne Ausdehnung kann nicht verzerrt werden
 @msg	cannot read PDF: {0}	PDF kann nicht gelesen werden: {0}
@@ -3415,7 +3405,7 @@ theme	Appearance	Erscheinungsbild
 @msg	empty brush stroke	leerer Pinselstrich
 @msg	empty cutter	leeres Schneidobjekt
 @msg	empty path	leerer Pfad
-@msg	file version {0} is newer than this VectorCraft supports ({VERSION})	die Dateiversion {0} ist neuer, als dieses VectorCraft unterstützt ({VERSION})
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	die Dateiversion {0} ist neuer, als dieses StitchFoundry unterstützt ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	Freiformpunkt {i} braucht `at` [x, y] und eine gültige `color`
 @msg	give both `start` and `end` [x, y] (or neither)	geben Sie sowohl `start` als auch `end` [x, y] an (oder keines von beiden)
 @msg	give corners of the path: anchors between two straight sides	geben Sie Ecken des Pfads an: Ankerpunkte zwischen zwei geraden Seiten
@@ -3432,9 +3422,9 @@ theme	Appearance	Erscheinungsbild
 @msg	invalid PDF setting: {0}	ungültige PDF-Einstellung: {0}
 @msg	invalid image data for `{0}`	ungültige Bilddaten für `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	ungültige Parameter für `{cmd}`: {msg}
-@msg	is not an image VectorCraft reads	ist kein Bild, das VectorCraft lesen kann
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	es verwendet `{at}`, das der PostScript-Leser von VectorCraft nicht kennt
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	es verwendet `{at}`, das der PostScript-Leser von VectorCraft nicht kennt, in {procs}
+@msg	is not an image StitchFoundry reads	ist kein Bild, das StitchFoundry lesen kann
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	es verwendet `{at}`, das der PostScript-Leser von StitchFoundry nicht kennt
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	es verwendet `{at}`, das der PostScript-Leser von StitchFoundry nicht kennt, in {procs}
 @msg	its Windows metafile preview was opened instead, which may simplify the art	stattdessen wurde seine Windows-Metadatei-Vorschau geöffnet, die die Grafik möglicherweise vereinfacht
 @msg	its preview was placed instead, at screen resolution	stattdessen wurde seine Vorschau in Bildschirmauflösung platziert
 @msg	join needs open paths	zum Zusammenfügen sind offene Pfade nötig
@@ -3539,7 +3529,7 @@ theme	Appearance	Erscheinungsbild
 @msg	node {_1} is not text	Knoten {_1} ist kein Text
 @msg	not a DXF drawing	keine DXF-Zeichnung
 @msg	not a VectorCraft file: {0}	keine VectorCraft-Datei: {0}
-@msg	not a VectorCraft shortcut set (missing `overrides`)	kein VectorCraft-Tastaturbefehlssatz (`overrides` fehlt)
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	kein StitchFoundry-Tastaturbefehlssatz (`overrides` fehlt)
 @msg	not a graphic style library (format `{_1}`)	keine Grafikstil-Bibliothek (Format `{_1}`)
 @msg	not a stored central record	kein gespeicherter zentraler Eintrag
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
@@ -3758,9 +3748,9 @@ theme	Appearance	Erscheinungsbild
 @msg	Sent to {_1}	An {_1} gesendet
 @msg	{_1} files	{_1}-Dateien
 @msg	The graphics were lost and have been restarted	Die Grafikausgabe ging verloren und wurde neu gestartet
-@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde VectorCraft auf {summary} neu gestartet
-@msg	Loading VectorCraft…	VectorCraft wird geladen…
-@msg	VectorCraft failed to start: {e}	VectorCraft konnte nicht gestartet werden: {e}
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde StitchFoundry auf {summary} neu gestartet
+@msg	Loading StitchFoundry…	StitchFoundry wird geladen…
+@msg	StitchFoundry failed to start: {e}	StitchFoundry konnte nicht gestartet werden: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Ein Browser mit WebGPU oder WebGL2 ist erforderlich.
 @msg	The graphics were lost and couldn't be restarted.	Die Grafikausgabe ging verloren und konnte nicht neu gestartet werden.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Ihre ungespeicherten Änderungen bleiben in diesem Browser erhalten: Laden Sie die Seite neu, um sie zurückzuholen.
@@ -3779,23 +3769,23 @@ theme	Appearance	Erscheinungsbild
 @msg	it has more than {MAX_NODES} objects	es enthält mehr als {MAX_NODES} Objekte
 @msg	it has no layers	es enthält keine Ebenen
 @msg	it has too many values in a row	es enthält zu viele Werte hintereinander
-@msg	it has {_1}, which VectorCraft doesn't read from it yet	es enthält {_1}, was VectorCraft daraus noch nicht liest
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	es enthält {_1}, was StitchFoundry daraus noch nicht liest
 @msg	its objects are nested too deeply	seine Objekte sind zu tief verschachtelt
 @msg	its section ending with `%{end}` doesn't end	sein Abschnitt, der mit `%{end}` enden soll, endet nicht
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	Objekte mit mehreren Flächen oder Konturen, Effekten oder Pinseln wurden so übernommen, wie sie gezeichnet aussehen ({_1}): Ihr Aussehen ist noch nicht bearbeitbar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	der Verlauf „{name}“ ist in der Datei nicht definiert: Eine einfache Farbe steht an seiner Stelle
-@msg	an image VectorCraft can't read was left out	ein Bild, das VectorCraft nicht lesen kann, wurde ausgelassen
+@msg	an image StitchFoundry can't read was left out	ein Bild, das StitchFoundry nicht lesen kann, wurde ausgelassen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	diese Datei wurde ohne PDF-Kompatibilität gespeichert, und ihre Bearbeitungsdaten können nicht gelesen werden ({why})
 @msg	No fonts are missing in this document	In diesem Dokument fehlen keine Schriften
-@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft durchsucht keine Ordner anderer Apps oder des Systems: {path}
-@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft durchsucht nicht den Ordner „Shared“ oder „Public“ unter „Users“: {path}
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry durchsucht keine Ordner anderer Apps oder des Systems: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry durchsucht nicht den Ordner „Shared“ oder „Public“ unter „Users“: {path}
 @msg	{path} is not a folder	{path} ist kein Ordner
 @msg	the search couldn't start: try again in a moment	die Suche konnte nicht gestartet werden: Versuchen Sie es gleich noch einmal
 @msg	searching a folder isn't available on the web	das Durchsuchen eines Ordners ist im Web nicht verfügbar
 @msg	every search thread stopped on an internal error (please report this bug)	alle Such-Threads wurden mit einem internen Fehler beendet (bitte melden Sie diesen Fehler)
-@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	der Schriftenordner von VectorCraft ist hier nicht festgelegt: Die Desktop-App und vectorcraft-cli legen ihn fest
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	der Schriftenordner von StitchFoundry ist hier nicht festgelegt: Die Desktop-App und vectorcraft-cli legen ihn fest
 @msg	choose the font files to add	wählen Sie die Schriftdateien aus, die hinzugefügt werden sollen
 @msg	{n} font file(s) are now in {folder}	{n} Schriftdatei(en) liegen jetzt in {folder}
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} Schriftdatei(en) liegen jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}
@@ -3809,7 +3799,7 @@ theme	Appearance	Erscheinungsbild
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
-	Hide VectorCraft	VectorCraft ausblenden
+	Hide StitchFoundry	StitchFoundry ausblenden
 	Zoom	Zoomen
 	Bring All to Front	Alle nach vorne bringen
 	Settings	Einstellungen
@@ -4047,3 +4037,314 @@ theme	Appearance	Erscheinungsbild
 	Stroke Pressure	Strichdruck
 	Right Diagonal	Diagonal nach rechts
 	Left Diagonal	Diagonal nach links
+# Embroidery (StitchFoundry)
+	Add Inclination Line	Neigungslinie hinzufügen
+	After the selection	Nach der Auswahl
+	Appliqué	Applikation
+	Apply Fabric	Stoff anwenden
+	Artwork	Grafik
+	Auto Direction	Automatische Richtung
+	Auto Stitch Direction	Automatische Stichrichtung
+	Auto spacing	Automatischer Abstand
+	Auto split	Automatische Teilung
+	Auto-Digitize Image	Bild automatisch digitalisieren
+	Automatic underlay	Automatische Unterlage
+	Back to the start	Zurück zum Anfang
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Bean Run	Bohnenstich
+	Before the selection	Vor der Auswahl
+	Blanket	Festonstich
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Pinselstrich
+	Calligraphy	Kalligrafie
+	Cell size	Zellengröße
+	Centre run	Mittellauf
+	Clear Inclination Lines	Neigungslinien löschen
+	Clear Lines	Linien löschen
+	Connectors	Verbindungen
+	Constant	Konstant
+	Contour Fill	Konturfüllung
+	Convert Artwork to Embroidery	Grafik in Stickerei umwandeln
+	Cover stitch	Abdeckstich
+	Cover width	Abdeckbreite
+	Cross	Kreuz
+	Cross Fill	Kreuzstichfüllung
+	Delete Inclination Line	Neigungslinie löschen
+	Densities (mm)	Dichten (mm)
+	Density	Dichte
+	Design	Stickmuster
+	Design Information	Stickmusterinformationen
+	Digitizing Widget	Digitalisierungs-Widget
+	Dimmed	Abgeschwächt
+	Direction: automatic	Richtung: automatisch
+	Direction: fixed angle	Richtung: fester Winkel
+	Direction: one inclination line	Richtung: eine Neigungslinie
+	Direction: turning along	Richtung: folgt
+	Drag across the shape to add a line; drag a bead to move it	Über die Form ziehen, um eine Linie hinzuzufügen; einen Start- oder Endpunkt ziehen, um ihn zu verschieben
+	Each anchor point is a needle penetration.	Jeder Ankerpunkt ist ein Nadeleinstich.
+	Edge run	Kantenlauf
+	Edge run underlay	Kantenlauf-Unterlage
+	Edit Lines	Linien bearbeiten
+	Embroidery	Stickerei
+	Embroidery Brush Tool	Stickpinsel-Werkzeug
+	Embroidery Settings	Stickerei-Einstellungen
+	Export Machine File	Maschinendatei exportieren
+	Export Machine File…	Maschinendatei exportieren…
+	Fabric	Stoff
+	Fabric color	Stofffarbe
+	Feather	Feder
+	Fill style	Füllart
+	Fits the hoop	Passt in den Stickrahmen
+	Give objects a stitch type in the Embroidery panel.	Weisen Sie Objekten im Bedienfeld „Stickerei“ eine Stichart zu.
+	Gradient to	Verlauf bis
+	Hidden	Ausgeblendet
+	Hide Digitizing Widget	Digitalisierungs-Widget ausblenden
+	Hoop	Stickrahmen
+	Inclination Tool	Neigungslinien-Werkzeug
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	Größer als der Stickrahmen
+	Lengths (mm)	Längen (mm)
+	Let sewing start and stop at the closest points again	Das Sticken wieder an den nächstgelegenen Punkten beginnen und enden lassen
+	Machine Embroidery File	Maschinenstickdatei
+	Manual Stitches	Manuelle Stiche
+	Meander Fill	Mäanderfüllung
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Motiv
+	Move Inclination Line	Neigungslinie verschieben
+	Needle points	Einstichpunkte
+	New strokes	Neue Striche
+	No Stitches	Keine Stiche
+	No hoop	Kein Stickrahmen
+	No stitches yet.	Noch keine Stiche.
+	Not set	Nicht festgelegt
+	Nothing stitched yet	Noch nichts gestickt
+	Object color	Objektfarbe
+	Open a document to see its stitch sequence.	Öffnen Sie ein Dokument, um seine Stichreihenfolge anzuzeigen.
+	Open or create a document to digitize embroidery.	Öffnen oder erstellen Sie ein Dokument, um Stickereien zu digitalisieren.
+	Path spacing	Pfadabstand
+	Pause	Pause
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Pinsel, Breite, Dichte und Form auf einem Drehregler wählen und dann auf der Arbeitsfläche zeichnen
+	Place editable inclination lines (or pick the angle) automatically	Bearbeitbare Neigungslinien automatisch setzen (oder den Winkel wählen)
+	Placement line and stop	Platzierungslinie und Stopp
+	Play the stitches	Stiche abspielen
+	Pull compensation	Zugkompensation
+	Radial Fill	Radialfüllung
+	Randomness	Zufälligkeit
+	Remove background	Hintergrund entfernen
+	Reset Start and Stop	Start- und Endpunkt zurücksetzen
+	Row offset	Reihenversatz
+	Run	Steppstich
+	Run style	Steppstichart
+	Satin	Plattstich
+	Satin Fill	Plattstichfüllung
+	Scallop	Bogen
+	Select a path, shape or compound path to give it a stitch type.	Wählen Sie einen Pfad, eine Form oder einen zusammengesetzten Pfad aus, um ihm eine Stichart zuzuweisen.
+	Set Inclination Lines	Neigungslinien festlegen
+	Set Start and Stop	Start- und Endpunkt festlegen
+	Set Thread	Garn festlegen
+	Sew earlier	Früher sticken
+	Sew first	Zuerst sticken
+	Sew last	Zuletzt sticken
+	Sew later	Später sticken
+	Sewing time	Stickzeit
+	Sewn last	Zuletzt gestickt
+	Short stitches on curves	Kurze Stiche in Kurven
+	Show every stitch	Alle Stiche anzeigen
+	Show stitches	Stiche anzeigen
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Einfach
+	Sort by Thread Color	Nach Garnfarbe sortieren
+	Spiral Fill	Spiralfüllung
+	Stitch Parameters	Stichparameter
+	Stitch Plan	Stichplan
+	Stitch Sequence	Stichreihenfolge
+	Stitch Type	Stichart
+	Stitch length	Stichlänge
+	Stitch type	Stichart
+	Stitches	Stiche
+	Stop to trim fabric	Stopp zum Zurückschneiden des Stoffs
+	Tack-down	Heftstich
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Verjüngt
+	Tatami Fill	Tatami-Füllung
+	Tatami underlay	Tatami-Unterlage
+	Thread	Garn
+	Thread colors	Garnfarben
+	Trim after	Fadenschnitt danach
+	Trims	Fadenschnitte
+	Triple	Dreifach
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	Wandelt das Bild in Stiche um: Schmale Teile werden zu Plattstich, der Rest zu Tatami-Füllung.
+	Wave	Welle
+	Widget values	Widget-Werte
+	Width profile	Breitenprofil
+	Widths (mm)	Breiten (mm)
+	Zigzag	Zickzack
+	colors	Farben
+	inclination lines	Neigungslinien
+	stitches	Stiche
+	trims	Fadenschnitte
+	Brush	Pinsel
+	Length	Länge
+	Bean	Bohnenstich
+	Steil	Plattstichlinie
+	Triangle	Dreieck
+	Hexagon	Sechseck
+	Heart	Herz
+	Arrow	Pfeil
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Automatisches Digitalisieren hat keine Formen zum Sticken gefunden: Verringern Sie „Rauschen“ oder erhöhen Sie „Farben“
+@msg	Auto-Digitize: the image traced to nothing	Automatisches Digitalisieren: Das Nachzeichnen des Bilds hat nichts ergeben
+@msg	can't open `{title}`: the file has no stitches	`{title}` kann nicht geöffnet werden: Die Datei enthält keine Stiche
+@msg	can't open `{title}`: {e}	`{title}` kann nicht geöffnet werden: {e}
+@msg	{_1} export failed: {e}	Export als {_1} fehlgeschlagen: {e}
+	Stitch Lines	Stichlinien
+	Tatami	Tatami
+# Embroidery (StitchFoundry), phase 1
+	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Von SiteSentrix, auf Basis von VectorCraft vom ArtCraft-Team. MIT OR Apache-2.0. Schriften: Source Sans 3, Inter, JetBrains Mono (OFL). Symbole: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Version {version} – Open-Source-Maschinenstickerei-Digitalisierung in reinem Rust.
+	Machine embroidery digitizing — fast, open, scriptable.	Maschinenstickerei digitalisieren – schnell, offen, skriptfähig.
+	Split Here	Hier teilen
+	Split the object in two at the picked stitch	Das Objekt am ausgewählten Stich in zwei teilen
+	Split Object	Objekt teilen
+	Check settings	Prüfeinstellungen
+	Dense from (layers)	Zu dicht ab (Lagen)
+	Give every stitched object the chart's closest thread	Jedem gestickten Objekt das nächstliegende Garn der Farbkarte geben
+	Hidden (not sewn)	Ausgeblendet (wird nicht gestickt)
+	Inclination lines	Neigungslinien
+	Long stitches from	Lange Stiche ab
+	Match Threads to Chart	Garne an Farbkarte anpassen
+	Omit last stitch	Letzten Stich weglassen
+	Small lettering under	Kleine Schrift unter
+	Start and stop	Anfang und Ende
+	Thread chart	Garnfarbkarte
+	Tie style	Vernähart
+	Tiny objects under	Winzige Objekte unter
+	Travel by	Springen nach
+	Double	Doppelt
+machine	Trim	Fadenschnitt
+	Column A/B Tool	Säule-A/B-Werkzeug
+	Column A/B	Säule A/B
+	Tatami stitches	Tatamistiche
+	Make Current	Als aktuell festlegen
+	New objects of this stitch type take these properties	Neue Objekte dieser Stichart erhalten diese Eigenschaften
+	Properties for New Objects	Eigenschaften für neue Objekte
+	Objects you give a stitch type take these properties.	Objekte, denen Sie eine Stichart zuweisen, erhalten diese Eigenschaften.
+	Reset to Defaults	Auf Standard zurücksetzen
+	Fabric settings	Stoffeinstellungen
+	Satin density	Plattstichdichte
+	Fill density	Füllungsdichte
+	Fill stitch length	Stichlänge der Füllung
+	Underlay spacing	Unterlagenabstand
+	Fill underlay	Füllungsunterlage
+	Topping	Auflagevlies
+	Save as New Fabric	Als neuen Stoff speichern
+	Seconds per trim	Sekunden pro Fadenschnitt
+	Seconds per color change	Sekunden pro Farbwechsel
+	Save to Machine	In Maschine speichern
+	Keep these settings in the machine's profile, for new designs	Diese Einstellungen im Profil der Maschine behalten, für neue Designs
+	Reset Machine	Maschine zurücksetzen
+	Put the machine's profile back to how it ships, and use it	Das Profil der Maschine auf den Auslieferungszustand zurücksetzen und verwenden
+	Delete Machine	Maschine löschen
+	Save as New Machine	Als neue Maschine speichern
+	A machine profile of your own with these settings	Ein eigenes Maschinenprofil mit diesen Einstellungen
+	My Machine	Meine Maschine
+	A copy of this fabric to change	Eine Kopie dieses Stoffs zum Ändern
+	Delete Fabric	Stoff löschen
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Noch keine Stile. Wählen Sie ein gesticktes Objekt aus und erstellen Sie einen Stil, um seine Sticheigenschaften wiederzuverwenden.
+	New Embroidery Style	Neuer Stickstil
+	Delete Embroidery Style	Stickstil löschen
+	Duplicate Embroidery Style	Stickstil duplizieren
+	Redefine Embroidery Style	Stickstil neu definieren
+	Break Link to Embroidery Style	Verknüpfung mit Stickstil aufheben
+	Rename Embroidery Style…	Stickstil umbenennen…
+	Embroidery Styles	Stickstile
+	Make Properties Current	Eigenschaften als aktuell festlegen
+	Current Properties	Aktuelle Eigenschaften
+	New Object Properties	Eigenschaften neuer Objekte
+	Reset Current Properties	Aktuelle Eigenschaften zurücksetzen
+	Apply Embroidery Style	Stickstil anwenden
+	Rename Embroidery Style	Stickstil umbenennen
+	Save Fabric	Stoff speichern
+	Machine Profiles	Maschinenprofile
+	Save Machine Profile	Maschinenprofil speichern
+	Delete Machine Profile	Maschinenprofil löschen
+	Auto Sequence	Automatische Reihenfolge
+	Branch	Verzweigen
+	Break Apart	Zerlegen
+	Sew the objects separately again	Die Objekte wieder einzeln sticken
+	These objects are sewn as one path (a branch).	Diese Objekte werden in einem Zug gestickt (eine Verzweigung).
+	Clear Machine Function	Maschinenfunktion entfernen
+	Insert Machine Function	Maschinenfunktion einfügen
+	Object Stitches	Stiche des Objekts
+@msg	`after` is −1 to {_1}	`after` liegt zwischen −1 und {_1}
+@msg	`{what}` is [x, y]	`{what}` ist [x, y]
+@msg	`{what}` is [x, y] (numbers)	`{what}` ist [x, y] (Zahlen)
+@msg	each op needs `op`: move, delete or insert	jede Operation braucht `op`: move, delete oder insert
+@msg	indices are record numbers (0, 1, 2…)	Indizes sind Datensatznummern (0, 1, 2 …)
+@msg	missing `after` (−1 inserts first)	`after` fehlt (−1 fügt am Anfang ein)
+@msg	missing `indices`	`indices` fehlt
+@msg	no record {i}: the object has {len}	kein Datensatz {i}: das Objekt hat {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	unbekannter cmd `{c}`: stitch, jump, trim oder stop
+@msg	unknown op `{other}`: move, delete or insert	unbekannte op `{other}`: move, delete oder insert
+	Stitch Edit Tool	Stichbearbeitungs-Werkzeug
+	Stitch List	Stichliste
+	Stop after	Danach anhalten
+	Stitches edited by hand: the shape no longer changes them.	Stiche von Hand bearbeitet: Die Form ändert sie nicht mehr.
+	Edit Stitches	Stiche bearbeiten
+	Pick, move, add and delete single stitches	Einzelne Stiche auswählen, verschieben, einfügen und löschen
+	Regenerate Stitches	Stiche neu erzeugen
+	Drop the hand edits and stitch the shape again	Die Handbearbeitung verwerfen und die Form neu besticken
+	Freeze Stitches	Stiche fixieren
+	Function	Funktion
+	X (mm)	X (mm)
+	Y (mm)	Y (mm)
+	Stitch	Stich
+	Jump	Sprung
+	Color change	Farbwechsel
+	End	Ende
+	#	Nr.
+	Open a document to see its stitches.	Öffnen Sie ein Dokument, um seine Stiche zu sehen.
+	Machine	Maschine
+	Machine settings	Maschineneinstellungen
+	Longest stitch	Längster Stich
+	Longest jump	Längster Sprung
+	Shortest stitch	Kürzester Stich
+	Trim jumps longer than	Sprünge abschneiden ab
+	Tie length	Vernählänge
+	Stitches per minute	Stiche pro Minute
+	commercial machines	kommerzielle Maschinen
+	home machines	Heimmaschinen
+	Remove underlying stitching	Darunterliegende Stiche entfernen
+	Overlap	Überlappung
+	Turn	Drehen
+	Capped	Gekappt
+	Backstitch	Rückstich
+	Check Again	Erneut prüfen
+	Check Design	Stickmuster prüfen
+	Click to select and show it	Klicken zum Auswählen und Anzeigen
+	Design setting	Einstellung des Stickmusters
+	Different on each side	Je Seite unterschiedlich
+	Double zigzag	Doppelter Zickzack
+	Fill Holes	Löcher füllen
+	Flip to the other side	Auf die andere Seite
+	Lettering only {n} mm tall is hard to sew clearly	Schrift von nur {n} mm Höhe ist schwer sauber zu sticken
+	Look for dense spots, long stitches, tiny objects and small lettering	Sucht sehr dichte Stellen, lange Stiche, winzige Objekte und kleine Schrift
+	Makes no stitches	Erzeugt keine Stiche
+	No problems found.	Keine Probleme gefunden.
+	Passes	Durchgänge
+	Preserve long stitches	Lange Stiche erhalten
+	Pull comp., side 1	Zugkomp., Seite 1
+	Pull comp., side 2	Zugkomp., Seite 2
+	Remove Holes	Löcher entfernen
+	Reverse Stitch Direction	Stichrichtung umkehren
+	Stem Stitch	Stielstich
+	Stem stitch	Stielstich
+	Stitches up to {n} mm long can snag	Stiche bis {n} mm Länge können hängen bleiben
+	The design is larger than the hoop	Das Stickmuster ist größer als der Stickrahmen
+	Thread Color	Garnfarbe
+	Tie in	Vernähen am Anfang
+	Tie off	Vernähen am Ende
+	Tiny object: may not sew cleanly	Winziges Objekt: wird evtl. nicht sauber gestickt
+	Very dense: about {n} layers of thread here	Sehr dicht: hier etwa {n} Lagen Garn

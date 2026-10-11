@@ -10,7 +10,9 @@ use crate::{
 };
 
 /// The built-in preset every PDF export starts from.
-pub const DEFAULT_PRESET: &str = "VectorCraft Default";
+pub const DEFAULT_PRESET: &str = "StitchFoundry Default";
+/// The default preset's name before the rebrand: still accepted.
+pub const LEGACY_DEFAULT_PRESET: &str = "VectorCraft Default";
 
 /// A named set of PDF settings: a built-in preset or one the user saved.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -58,7 +60,7 @@ pub fn builtin_presets() -> Vec<PdfPreset> {
     vec![
         preset(
             DEFAULT_PRESET,
-            "Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.",
+            "Keeps the document editable: StitchFoundry reopens the PDF with nothing lost. For files you'll edit again.",
             PdfSettings { preserve_editing: true, ..Default::default() },
         ),
         preset("High Quality Print", "For desktop printers and proofs: images stay at print resolution.", print(ImageCodec::Auto, false)),
@@ -95,9 +97,10 @@ pub fn builtin_presets() -> Vec<PdfPreset> {
     ]
 }
 
-/// The built-in preset `name` names (any case; `default` is the app default).
+/// The built-in preset `name` names (any case; `default` is the app default, and so is its
+/// name before the rebrand).
 pub fn builtin_preset(name: &str) -> Option<PdfPreset> {
     let name = name.trim();
-    let name = if name.eq_ignore_ascii_case("default") { DEFAULT_PRESET } else { name };
+    let name = if name.eq_ignore_ascii_case("default") || name.eq_ignore_ascii_case(LEGACY_DEFAULT_PRESET) { DEFAULT_PRESET } else { name };
     builtin_presets().into_iter().find(|p| p.name.eq_ignore_ascii_case(name))
 }

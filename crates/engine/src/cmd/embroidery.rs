@@ -1,0 +1,1459 @@
+//! Embroidery menu: stitch types and parameters, threads, inclination lines,
+//! start/stop beads, brush strokes, artwork conversion and the stitch plan.
+//!
+//! Positions in params are document points; stitch parameters are millimetres
+//! (the units embroidery machines and digitizers use).
+
+use std::sync::{Arc, Mutex};
+
+use serde_json::{Map, Value, json};
+use sf_core::attr::{DocEmbroidery, Embroidery, StitchType};
+use sf_core::brush::{Stamp, WidthProfile, fit_stroke, stamp};
+use sf_core::direction::{Guide, auto_fill_angle, auto_guides};
+use sf_core::model::{AppliqueParams, FillKind, FillParams, RunKind, RunParams, SatinParams};
+use sf_core::threads::{Rgb, Thread};
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::{Appearance, Document, NodeId, NodeKind};
+use vectorcraft_embroidery::{MM_PER_PT, PT_PER_MM, Planner, StitchPlan, contour_to_path, is_line_art, is_open, regions_mm, stitchable};
+
+use super::*;
+use crate::EngineError;
+
+/// Per-document stitch planner, shared by commands and the canvas.
+#[derive(Clone, Default)]
+pub struct EmbroideryState(Arc<Mutex<Planner>>);
+
+impl std::fmt::Debug for EmbroideryState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("EmbroideryState")
+    }
+}
+
+impl EmbroideryState {
+    /// The stitch plan of `doc` (regenerated only for objects that changed).
+    pub fn plan(&self, doc: &Document) -> Arc<StitchPlan> {
+        // A poisoned lock only means an earlier plan panicked half way: the cache is still usable.
+        let mut p = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        p.plan(doc)
+    }
+}
+
+/// Start and stop bead (document points) of each selected stitched object: where
+/// its stitches begin and end in the plan.
+pub(crate) fn selection_beads(st: &crate::DocState) -> Vec<(NodeId, Point, Point)> {
+    let stitched: Vec<NodeId> = st.selection.objects.iter().copied().filter(|id| st.doc.node(*id).is_some_and(|n| n.embroidery.is_some())).collect();
+    if stitched.is_empty() {
+        return Vec::new();
+    }
+    let plan = st.embroidery.plan(&st.doc);
+    let pat = plan.pattern();
+    let first_last = |id: NodeId| {
+        let ranges = plan.records_of(id);
+        let mut it = ranges.iter().flat_map(|r| pat.stitches.get(r.clone()).unwrap_or_default().iter()).filter(|s| s.cmd == sf_core::Cmd::Stitch);
+        let first = it.next()?.pos();
+        let last = it.next_back().map_or(first, |s| s.pos());
+        let p = |q: sf_core::Point| vectorcraft_embroidery::pt(q);
+        Some((id, p(first), p(last)))
+    };
+    stitched.into_iter().filter_map(first_last).collect()
+}
+
+/// The own stitches (document points) of each selected stitched object, for the
+/// Stitch Edit tool: its frozen ones, else those its shape generates.
+pub(crate) fn selection_stitches(st: &crate::DocState) -> Vec<(NodeId, Vec<(Point, sf_core::Cmd)>)> {
+    let mut out = Vec::new();
+    let mut plan = None;
+    for id in &st.selection.objects {
+        let Some(e) = st.doc.node(*id).and_then(|n| n.embroidery.as_deref()) else { continue };
+        let list: Vec<(Point, sf_core::Cmd)> = match &e.frozen {
+            Some(f) => f.iter().map(|s| (Point::new(s.x, s.y), s.cmd)).collect(),
+            None => {
+                let plan = plan.get_or_insert_with(|| st.embroidery.plan(&st.doc));
+                plan.own_stitches(*id).iter().map(|s| (vectorcraft_embroidery::pt(s.pos()), s.cmd)).collect()
+            }
+        };
+        out.push((*id, list));
+    }
+    out
+}
+
+impl Session {
+    /// The active document's stitch plan.
+    pub fn embroidery_plan(&self) -> Option<Arc<StitchPlan>> {
+        let st = self.active()?;
+        Some(st.embroidery.plan(&st.doc))
+    }
+}
+
+pub fn specs() -> Vec<CommandSpec> {
+    vec![
+        cmd!(
+            "embroidery.set",
+            "Stitch Type",
+            [],
+            None,
+            "{type: run|bean|backstitch|stemstitch|blanket|zigzag|motif|satin|fill|satinfill|contour|spiral|radial|cross|meander|applique|manual|none, ids?} give the selection (or ids; groups: their paths) a stitch type, keeping thread and inclination lines → {ids}",
+            has_selection,
+            set_type
+        ),
+        cmd!(
+            "embroidery.setParams",
+            "Stitch Parameters",
+            [],
+            None,
+            "{params: {spacing?, stitch_length?, angle?, pull_comp?, pull_comp_2?: mm|null (satin side 2), preserve_long?, passes?: 1–9 (runs; 2 = backtrack), kind?, underlay?: {…, double_zigzag?}, corners?: Auto|Turn|Miter|Cap (satin lines), width?, profile?, auto_direction?, trim_after?, tie_in?: bool|null, tie_off?: bool|null (null: the design setting), remove_underlying?: bool (fills below leave out what this covers), underlying_overlap?: mm|null (kept under its edge; null: 1 mm), …} (mm and degrees; camelCase also accepted), ids?} merge stitch parameters into the selected stitched objects → {ids}",
+            has_selection,
+            set_params
+        ),
+        cmd!(
+            "embroidery.setThread",
+            "Set Thread",
+            [],
+            None,
+            "{color: \"#rrggbb\" | null (use the paint colour), name?, code?, chart?, paint?: bool (default true: recolour the art to match), ids?} → {ids}",
+            has_selection,
+            set_thread
+        ),
+        cmd!(
+            "embroidery.matchThreads",
+            "Match Threads to Chart",
+            [],
+            None,
+            "{chart? (default: the design's), all?: bool, paint?: bool (default true), ids?} give stitched objects (the selection; all of them with `all` or nothing selected) the chart's closest thread, recolouring their art → {matched, chart}",
+            has_doc,
+            match_threads
+        ),
+        cmd!(
+            "embroidery.autoDirection",
+            "Auto Stitch Direction",
+            ["Embroidery"],
+            None,
+            "{ids?} place inclination lines along column-like shapes (stitches turn with the shape) or pick the straight angle with the fewest breaks; the result is ordinary, editable inclination lines → {ids, guides, angles}",
+            has_selection,
+            auto_direction
+        ),
+        cmd!(
+            "embroidery.setGuides",
+            "Set Inclination Lines",
+            [],
+            None,
+            "{id, guides: [[x1, y1, x2, y2], …]} (points) replace an object's inclination lines",
+            has_doc,
+            set_guides
+        ),
+        cmd!(
+            "embroidery.addGuide",
+            "Add Inclination Line",
+            [],
+            None,
+            "{id, a: [x, y], b: [x, y], index?} add an inclination line (stitches run parallel to it) → {index}",
+            has_doc,
+            add_guide
+        ),
+        cmd!(
+            "embroidery.moveGuide",
+            "Move Inclination Line",
+            [],
+            None,
+            "{id, index, a?: [x, y], b?: [x, y]} move one end (or both) of an inclination line",
+            has_doc,
+            move_guide
+        ),
+        cmd!("embroidery.removeGuide", "Delete Inclination Line", [], None, "{id, index}", has_doc, remove_guide),
+        cmd!(
+            "embroidery.clearGuides",
+            "Clear Inclination Lines",
+            ["Embroidery"],
+            None,
+            "{ids?} remove inclination lines and go back to automatic stitch direction",
+            has_selection,
+            clear_guides
+        ),
+        cmd!(
+            "embroidery.setBeads",
+            "Set Start and Stop",
+            [],
+            None,
+            "{id, entry?: [x, y] | null, exit?: [x, y] | null} where sewing starts (green bead) and stops (red bead); null = automatic closest join",
+            has_doc,
+            set_beads
+        ),
+        cmd!(
+            "embroidery.convert",
+            "Convert Artwork to Embroidery",
+            ["Embroidery"],
+            None,
+            "{ids?, force?: bool} give each path without embroidery a stitch type from its look: filled shapes become tatami (turning satin when long and thin), strokes satin lines or runs → {ids}",
+            has_selection,
+            convert_art
+        ),
+        cmd!(
+            query "embroidery.export",
+            "Export Machine File",
+            ["Embroidery"],
+            None,
+            "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01 (the design's machine, else dst), name?: design label, center?: bool (true)} the stitch plan as a machine embroidery file → {dataBase64, format, bytes, stitches, colors}",
+            has_doc,
+            export_machine_file
+        ),
+        cmd!(
+            "embroidery.autoDigitize",
+            "Auto-Digitize Image",
+            ["Embroidery"],
+            None,
+            "{colors?: 2-16 (6), detail?: 0-100 (60), noise?: px (16), removeBackground?: bool (true), minArea?: mm² (1), size?: mm (longest side), keepImage?: bool (true)} trace the selected image into flat colour shapes and give each a stitch type: satin for narrow parts, tatami at its best angle for the rest, specks and the background dropped, sewn colour by colour → {id, objects, satin, fill, removed, colors, scale}",
+            has_selection,
+            auto_digitize
+        ),
+        cmd!(
+            "embroidery.draw",
+            "Brush Stroke",
+            [],
+            None,
+            "{brush: run|bean|steil|tapered|calligraphy|pressure|applique|fill|satin, points?: [[x, y], …], closed?, stamp?: ellipse|rectangle|roundedRectangle|triangle|diamond|pentagon|hexagon|star|heart|arrow|line, from?: [x, y], to?: [x, y], square?, width?: mm, density?: mm, length?: mm, nibAngle?: deg, pressures?: [0..1], color?, smooth?: pt, order?: top|before|after, relativeTo?: id} draw a stitched object with a widget brush (order: sewn last, or just before / after object relativeTo) → {id}",
+            has_doc,
+            draw
+        ),
+        cmd!(
+            "embroidery.settings",
+            "Embroidery Settings",
+            [],
+            None,
+            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null, fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags)} → the settings",
+            has_doc,
+            settings
+        ),
+        cmd!(
+            "embroidery.applyFabric",
+            "Apply Fabric",
+            [],
+            None,
+            "{name} set density, pull compensation and underlay of every stitched object for a fabric (see embroidery.info: fabrics)",
+            has_doc,
+            apply_fabric
+        ),
+        cmd!(
+            "embroidery.sortByColor",
+            "Sort by Thread Color",
+            ["Embroidery"],
+            None,
+            "{} reorder stitched objects within each layer so each thread colour is sewn in one go (fewer colour changes) → {moved}",
+            has_doc,
+            sort_by_color
+        ),
+        cmd!(query
+            "embroidery.info",
+            "Design Information",
+            [],
+            None,
+            "{} → {objects, stitches, jumps, trims, colorChanges, stops, widthMm, heightMm, threadM, bobbinM, seconds, time, colors: [{color, name, stitches, threadM}], hoop, fits, fabric, fabrics, hoops, charts, machine, machineFormat (what it exports in), machines (as embroidery.machine.list), settings}",
+            has_doc,
+            info
+        ),
+        cmd!(query
+            "embroidery.plan",
+            "Stitch Plan",
+            [],
+            None,
+            "{limit?} → {threads: [\"#rrggbb\"], stitches: [[x, y, cmd], …] (points; cmd: stitch|jump|trim|color|stop|end), nodes: [id per object]}",
+            has_doc,
+            plan
+        ),
+    ]
+}
+
+// ---------- helpers ----------
+
+/// Converts `camelCase` keys to `snake_case` (params accept both).
+/// `pullComp2` → `pull_comp_2` (snake_case keys pass through unchanged).
+fn snake(k: &str) -> String {
+    let mut out = String::with_capacity(k.len() + 4);
+    let mut prev_letter = false;
+    for ch in k.chars() {
+        if ch.is_ascii_uppercase() {
+            out.push('_');
+            out.push(ch.to_ascii_lowercase());
+        } else if ch.is_ascii_digit() && prev_letter {
+            out.push('_');
+            out.push(ch);
+        } else {
+            out.push(ch);
+        }
+        prev_letter = ch.is_ascii_alphabetic();
+    }
+    out
+}
+
+/// Recursive JSON merge: objects merge key by key, anything else replaces.
+fn merge(target: &mut Value, patch: &Value) {
+    match (target, patch) {
+        (Value::Object(t), Value::Object(p)) => {
+            for (k, v) in p {
+                let k = snake(k);
+                match t.get_mut(&k) {
+                    Some(slot) if slot.is_object() && v.is_object() => merge(slot, v),
+                    _ => {
+                        let mut v = v.clone();
+                        snake_keys(&mut v);
+                        t.insert(k, v);
+                    }
+                }
+            }
+        }
+        (t, p) => *t = p.clone(),
+    }
+}
+
+fn snake_keys(v: &mut Value) {
+    if let Value::Object(m) = v {
+        let old = std::mem::take(m);
+        for (k, mut val) in old {
+            snake_keys(&mut val);
+            m.insert(snake(&k), val);
+        }
+    }
+}
+
+/// The stitch type an `embroidery.set` type names: `Some(None)` for `none`.
+pub(crate) fn stitch_type(name: &str) -> Option<Option<StitchType>> {
+    if name == "none" {
+        return Some(None);
+    }
+    StitchType::from_name(name).map(Some)
+}
+
+/// The stitch type menu entry a type name or alias stands for.
+fn canonical(name: &str) -> &str {
+    match name {
+        "single" => "run",
+        "triple" => "bean",
+        "back" => "backstitch",
+        "stem" => "stemstitch",
+        "steil" => "satin",
+        "tatami" => "fill",
+        n => n,
+    }
+}
+
+fn guide_pt(g: &Guide) -> Value {
+    json!([g.a.x, g.a.y, g.b.x, g.b.y])
+}
+
+fn sf_point(p: Point) -> sf_core::Point {
+    sf_core::Point::new(p.x, p.y)
+}
+
+/// The stitched paths among the targets (groups and layers expand to their contents).
+pub(crate) fn stitched_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    let ids = targets(s, p)?;
+    let d = &s.doc()?.doc;
+    let mut out = Vec::new();
+    for id in leaf_targets(s, &ids)? {
+        if d.node(id).is_some_and(stitchable) {
+            out.push(id);
+        }
+    }
+    Ok(out)
+}
+
+pub(crate) fn ids_json(ids: &[NodeId]) -> Value {
+    json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
+}
+
+fn rgb_of(c: &Color) -> Rgb {
+    let v = c.to_rgba8(1.0);
+    Rgb::new(v[0], v[1], v[2])
+}
+
+// ---------- commands ----------
+
+fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.set";
+    let name = str_param(p, "type").ok_or_else(|| bad(CMD, "missing `type`"))?;
+    let st = stitch_type(name).ok_or_else(|| bad(CMD, format!("unknown stitch type `{name}`")))?;
+    let ids = stitched_targets(s, p)?;
+    if ids.is_empty() {
+        return Err(bad(CMD, "select a path or compound path to stitch"));
+    }
+    // the properties made current for the type (not when a run style of it is asked for)
+    let current = match &st {
+        Some(st) if st.type_name() == canonical(name) => s.doc()?.doc.embroidery.as_deref().and_then(|c| c.current_for(st.type_name()).cloned()),
+        _ => None,
+    };
+    s.edit("Stitch Type", |d, _| {
+        for id in &ids {
+            let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+            match (&st, n.embroidery.as_deref_mut()) {
+                (None, _) => n.embroidery = None,
+                // a stitched object takes the type's stitch parameters and keeps the rest
+                (Some(st), Some(e)) => e.stitch = current.as_ref().map_or_else(|| st.clone(), |c| c.stitch.clone()),
+                (Some(st), None) => n.embroidery = Some(Box::new(current.clone().unwrap_or_else(|| Embroidery::new(st.clone())))),
+            }
+        }
+        Ok(())
+    })?;
+    Ok(ids_json(&ids))
+}
+
+/// `e` with a parameter patch merged in (camelCase or snake_case names): the
+/// object-level options go to the record, the rest to its stitch parameters. An error
+/// says what is wrong with the patch.
+pub(crate) fn patched(e: &Embroidery, patch: &Value) -> std::result::Result<Embroidery, String> {
+    let mut v = serde_json::to_value(e).map_err(|err| err.to_string())?;
+    let mut top = Map::new();
+    let mut stitch = Map::new();
+    if let Value::Object(m) = patch {
+        for (k, val) in m {
+            let key = snake(k);
+            if matches!(
+                key.as_str(),
+                "width"
+                    | "profile"
+                    | "auto_direction"
+                    | "trim_after"
+                    | "stop_after"
+                    | "tie_in"
+                    | "tie_off"
+                    | "remove_underlying"
+                    | "underlying_overlap"
+                    | "omit_last"
+            ) {
+                top.insert(key, val.clone());
+            } else {
+                stitch.insert(key, val.clone());
+            }
+        }
+    }
+    merge(&mut v, &Value::Object(top));
+    if let Some(slot) = v.get_mut("stitch") {
+        merge(slot, &Value::Object(stitch));
+    }
+    serde_json::from_value(v).map_err(|err| format!("invalid stitch parameters: {err}"))
+}
+
+fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.setParams";
+    let patch = p.get("params").filter(|v| v.is_object()).ok_or_else(|| bad(CMD, "missing object `params`"))?;
+    let ids = stitched_targets(s, p)?;
+    // Validate on copies first so a bad value changes nothing.
+    let mut updated = Vec::new();
+    {
+        let d = &s.doc()?.doc;
+        for id in &ids {
+            let Some(e) = d.node(*id).and_then(|n| n.embroidery.as_deref()) else { continue };
+            let e = patched(e, patch).map_err(|m| bad(CMD, m))?;
+            updated.push((*id, e));
+        }
+    }
+    if updated.is_empty() {
+        return Err(bad(CMD, "select stitched objects (Embroidery › Stitch Type first)"));
+    }
+    s.edit("Stitch Parameters", |d, _| {
+        for (id, e) in &updated {
+            d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery = Some(Box::new(e.clone()));
+        }
+        Ok(())
+    })?;
+    Ok(ids_json(&updated.iter().map(|u| u.0).collect::<Vec<_>>()))
+}
+
+fn set_thread(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.setThread";
+    let color = match p.get("color") {
+        None => return Err(bad(CMD, "missing `color` (\"#rrggbb\" or null)")),
+        Some(Value::Null) => None,
+        Some(v) => Some(color_value(v).ok_or_else(|| bad(CMD, format!("not a colour: {v}")))?),
+    };
+    let repaint = bool_or(p, "paint", true);
+    let ids = stitched_targets(s, p)?;
+    let thread = color.as_ref().map(|c| {
+        let rgb = rgb_of(c);
+        Thread {
+            color: rgb,
+            name: str_param(p, "name").map(str::to_string).unwrap_or_else(|| rgb.to_hex()),
+            code: str_param(p, "code").unwrap_or_default().to_string(),
+            chart: str_param(p, "chart").unwrap_or_default().to_string(),
+        }
+    });
+    let fill = s.doc()?.doc.embroidery.as_deref().and_then(|c| c.current_for("fill").cloned()).unwrap_or_else(Embroidery::fill);
+    s.edit("Set Thread", |d, _| {
+        for id in &ids {
+            put_thread(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, &fill, thread.clone(), color.filter(|_| repaint));
+        }
+        Ok(())
+    })?;
+    Ok(ids_json(&ids))
+}
+
+/// Gives a node its thread (unstitched art becomes `fill`), and paints its art `repaint`:
+/// the stroke of lines, runs and satin borders, else the fill.
+fn put_thread(n: &mut vectorcraft_doc::Node, fill: &Embroidery, thread: Option<Thread>, repaint: Option<Color>) {
+    let (lines, border) = (is_open(n), is_line_art(n));
+    let e = n.embroidery.get_or_insert_with(|| Box::new(fill.clone()));
+    e.thread = thread;
+    let stroke_paint = lines || matches!(e.stitch, StitchType::Run(_) | StitchType::Manual) || (border && matches!(e.stitch, StitchType::Satin(_)));
+    if let Some(c) = repaint {
+        if stroke_paint {
+            n.appearance.set_stroke(Paint::solid(c));
+        } else {
+            n.appearance.set_fill(Paint::solid(c));
+        }
+    }
+}
+
+fn match_threads(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.matchThreads";
+    let cfg = s.doc()?.doc.embroidery.as_deref().cloned().unwrap_or_default();
+    let name = str_param(p, "chart").map_or_else(|| cfg.chart.clone(), str::to_string);
+    let chart = sf_core::threads::charts().into_iter().find(|c| c.name == name).ok_or_else(|| bad(CMD, format!("unknown thread chart `{name}`")))?;
+    let repaint = bool_or(p, "paint", true);
+    // the selection's stitched objects; every one with `all` or nothing selected
+    let everything = bool_or(p, "all", false) || (p.get("ids").is_none() && s.doc()?.selection.objects.is_empty());
+    let ids: Vec<NodeId> =
+        if everything { vectorcraft_embroidery::stitched_nodes(&s.doc()?.doc).iter().map(|n| n.id).collect() } else { stitched_targets(s, p)? };
+    let plans: Vec<(NodeId, Thread)> = {
+        let d = &s.doc()?.doc;
+        ids.iter()
+            .filter_map(|id| {
+                let n = d.node(*id)?;
+                let e = n.embroidery.as_deref()?;
+                if matches!(e.stitch, StitchType::Branch) || matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) {
+                    return None;
+                }
+                let now = vectorcraft_embroidery::node_thread(n, e).color;
+                chart.threads.get(chart.nearest(now)).map(|t| (*id, t.clone()))
+            })
+            .collect()
+    };
+    if plans.is_empty() {
+        return Err(bad(CMD, "nothing stitched to match"));
+    }
+    let fill = cfg.current_for("fill").cloned().unwrap_or_else(Embroidery::fill);
+    s.edit("Match Threads to Chart", |d, _| {
+        for (id, t) in &plans {
+            let c = Color::rgb8(t.color.r, t.color.g, t.color.b);
+            put_thread(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, &fill, Some(t.clone()), repaint.then_some(c));
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "matched": plans.len(), "chart": chart.name }))
+}
+
+fn auto_direction(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = stitched_targets(s, p)?;
+    let mut changes: Vec<(NodeId, Vec<Guide>, Option<f64>)> = Vec::new();
+    {
+        let d = &s.doc()?.doc;
+        for id in &ids {
+            let Some(n) = d.node(*id) else { continue };
+            let Some(e) = n.embroidery.as_deref() else { continue };
+            let satin = match &e.stitch {
+                StitchType::Satin(_) => true,
+                StitchType::Fill(f) => f.kind == FillKind::Satin,
+                _ => false,
+            };
+            let is_area = matches!(e.stitch, StitchType::Fill(_)) || (matches!(e.stitch, StitchType::Satin(_)) && !is_line_art(n));
+            if !is_area {
+                continue;
+            }
+            let regions = regions_mm(n);
+            let Some(region) = regions.iter().max_by(|a, b| a.area().total_cmp(&b.area())) else { continue };
+            let spacing = match &e.stitch {
+                StitchType::Fill(f) => f.spacing,
+                _ => 0.4,
+            };
+            // One part without holes can take editable inclination lines.
+            let guides = if region.holes.is_empty() && regions.len() == 1 { auto_guides(&region.outer) } else { None };
+            match guides {
+                Some(g) if satin || long_and_thin(region, &g) => {
+                    let pts = g.iter().map(|g| Guide::new(g.a * PT_PER_MM, g.b * PT_PER_MM)).collect();
+                    changes.push((*id, pts, None));
+                }
+                // Satin that can't turn as one column (a star, type) stays automatic: it is cut into
+                // simple columns, each with its own direction.
+                _ if satin => changes.push((*id, Vec::new(), None)),
+                _ => changes.push((*id, Vec::new(), Some(auto_fill_angle(region, spacing.max(0.8))))),
+            }
+        }
+    }
+    let summary: Vec<Value> = changes.iter().map(|(id, g, a)| json!({"id": id.0, "guides": g.len(), "angle": a})).collect();
+    s.edit("Auto Stitch Direction", |d, _| {
+        for (id, guides, angle) in &changes {
+            let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+            if let Some(e) = n.embroidery.as_deref_mut() {
+                e.guides = guides.clone();
+                // Lines or an angle are now the object's own; otherwise it stays automatic.
+                e.auto_direction = guides.is_empty() && angle.is_none();
+                if let (Some(a), StitchType::Fill(f)) = (angle, &mut e.stitch) {
+                    f.angle = *a;
+                }
+            }
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "objects": summary }))
+}
+
+/// Long thin shapes read better with stitches that turn along them. Elongation
+/// (half perimeter)² / area is 4 for a square and about 7 for a 5:1 bar.
+fn long_and_thin(region: &sf_core::geom::Polygon, guides: &[Guide]) -> bool {
+    let area = region.area();
+    let half_perimeter = region.perimeter() * 0.5;
+    !guides.is_empty() && area > 1e-9 && half_perimeter * half_perimeter / area > 6.5
+}
+
+fn guide_target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
+    let id = id_param(p, "id").ok_or_else(|| bad(cmd, "missing object `id`"))?;
+    let has = s.doc()?.doc.node(id).ok_or_else(|| bad(cmd, format!("no such object id {}", id.0)))?.embroidery.is_some();
+    if !has {
+        return Err(bad(cmd, "the object has no stitch type"));
+    }
+    Ok(id)
+}
+
+fn edit_embroidery(s: &mut Session, label: &str, id: NodeId, f: impl FnOnce(&mut Embroidery) -> Result<Value>) -> Result<Value> {
+    s.edit(label, |d, _| {
+        let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
+        let e = n.embroidery.as_deref_mut().ok_or(EngineError::NoNode(id))?;
+        f(e)
+    })
+}
+
+fn guide_from(p: &Value, cmd: &str) -> Result<Guide> {
+    let a = point_param(p, "a").ok_or_else(|| bad(cmd, "missing point `a` [x, y]"))?;
+    let b = point_param(p, "b").ok_or_else(|| bad(cmd, "missing point `b` [x, y]"))?;
+    if !(a.x.is_finite() && a.y.is_finite() && b.x.is_finite() && b.y.is_finite()) || (a - b).hypot() < 1e-6 {
+        return Err(bad(cmd, "an inclination line needs two different points"));
+    }
+    Ok(Guide::new(sf_point(a), sf_point(b)))
+}
+
+fn set_guides(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.setGuides";
+    let id = guide_target(s, p, CMD)?;
+    let list = p.get("guides").and_then(Value::as_array).ok_or_else(|| bad(CMD, "missing `guides` array"))?;
+    let mut guides = Vec::with_capacity(list.len());
+    for g in list {
+        let c: Vec<f64> = g.as_array().map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+        let [x1, y1, x2, y2] = c.as_slice() else {
+            return Err(bad(CMD, format!("each guide is [x1, y1, x2, y2], not {g}")));
+        };
+        if !(x1.is_finite() && y1.is_finite() && x2.is_finite() && y2.is_finite()) {
+            return Err(bad(CMD, "guide coordinates must be finite"));
+        }
+        guides.push(Guide::new(sf_core::Point::new(*x1, *y1), sf_core::Point::new(*x2, *y2)));
+    }
+    edit_embroidery(s, "Set Inclination Lines", id, |e| {
+        e.guides = guides;
+        e.auto_direction = false;
+        Ok(json!({ "guides": e.guides.len() }))
+    })
+}
+
+fn add_guide(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.addGuide";
+    let id = guide_target(s, p, CMD)?;
+    let g = guide_from(p, CMD)?;
+    let index = p.get("index").and_then(Value::as_u64).map(|i| i as usize);
+    edit_embroidery(s, "Add Inclination Line", id, |e| {
+        // Insert where it fits along the shape: between the guides it lies between.
+        let at = index.unwrap_or_else(|| best_insert(&e.guides, &g)).min(e.guides.len());
+        e.guides.insert(at, g);
+        e.auto_direction = false;
+        Ok(json!({ "index": at }))
+    })
+}
+
+/// Index that keeps guides in order along the shape (nearest neighbours).
+fn best_insert(guides: &[Guide], g: &Guide) -> usize {
+    if guides.len() < 2 {
+        return guides.len();
+    }
+    let m = g.midpoint();
+    let mut best = (f64::INFINITY, guides.len());
+    for i in 0..=guides.len() {
+        // cost of putting it between i-1 and i
+        let prev = i.checked_sub(1).and_then(|k| guides.get(k)).map(Guide::midpoint);
+        let next = guides.get(i).map(Guide::midpoint);
+        let cost = match (prev, next) {
+            (Some(a), Some(b)) => a.distance(m) + m.distance(b) - a.distance(b),
+            (Some(a), None) => a.distance(m),
+            (None, Some(b)) => m.distance(b),
+            (None, None) => 0.0,
+        };
+        if cost < best.0 {
+            best = (cost, i);
+        }
+    }
+    best.1
+}
+
+fn move_guide(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.moveGuide";
+    let id = guide_target(s, p, CMD)?;
+    let index = p.get("index").and_then(Value::as_u64).ok_or_else(|| bad(CMD, "missing `index`"))? as usize;
+    let a = point_param(p, "a").filter(|q| q.x.is_finite() && q.y.is_finite());
+    let b = point_param(p, "b").filter(|q| q.x.is_finite() && q.y.is_finite());
+    edit_embroidery(s, "Move Inclination Line", id, |e| {
+        let g = e.guides.get_mut(index).ok_or_else(|| bad(CMD, format!("no inclination line {index}")))?;
+        if let Some(a) = a {
+            g.a = sf_point(a);
+        }
+        if let Some(b) = b {
+            g.b = sf_point(b);
+        }
+        Ok(guide_pt(g))
+    })
+}
+
+fn remove_guide(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.removeGuide";
+    let id = guide_target(s, p, CMD)?;
+    let index = p.get("index").and_then(Value::as_u64).ok_or_else(|| bad(CMD, "missing `index`"))? as usize;
+    edit_embroidery(s, "Delete Inclination Line", id, |e| {
+        if index >= e.guides.len() {
+            return Err(bad(CMD, format!("no inclination line {index}")));
+        }
+        e.guides.remove(index);
+        Ok(json!({ "guides": e.guides.len() }))
+    })
+}
+
+fn clear_guides(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = stitched_targets(s, p)?;
+    s.edit("Clear Inclination Lines", |d, _| {
+        for id in &ids {
+            if let Some(e) = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery.as_deref_mut() {
+                e.guides.clear();
+                e.auto_direction = true;
+            }
+        }
+        Ok(())
+    })?;
+    Ok(ids_json(&ids))
+}
+
+fn set_beads(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.setBeads";
+    let id = guide_target(s, p, CMD)?;
+    let read = |key: &str| -> Result<Option<Option<sf_core::Point>>> {
+        match p.get(key) {
+            None => Ok(None),
+            Some(Value::Null) => Ok(Some(None)),
+            Some(_) => {
+                let q = point_param(p, key)
+                    .filter(|q| q.x.is_finite() && q.y.is_finite())
+                    .ok_or_else(|| bad(CMD, format!("`{key}` is [x, y] or null")))?;
+                Ok(Some(Some(sf_point(q))))
+            }
+        }
+    };
+    let entry = read("entry")?;
+    let exit = read("exit")?;
+    edit_embroidery(s, "Set Start and Stop", id, |e| {
+        if let Some(v) = entry {
+            e.entry = v;
+        }
+        if let Some(v) = exit {
+            e.exit = v;
+        }
+        Ok(json!({ "entry": e.entry.map(|q| [q.x, q.y]), "exit": e.exit.map(|q| [q.x, q.y]) }))
+    })
+}
+
+fn convert_art(s: &mut Session, p: &Value) -> Result<Value> {
+    let force = bool_or(p, "force", false);
+    let ids = stitched_targets(s, p)?;
+    let mut plans: Vec<(NodeId, Embroidery)> = Vec::new();
+    {
+        let d = &s.doc()?.doc;
+        let cfg = d.embroidery.as_deref();
+        for id in &ids {
+            let Some(n) = d.node(*id) else { continue };
+            if n.embroidery.is_some() && !force {
+                continue;
+            }
+            let mut e = vectorcraft_embroidery::suggest(n);
+            if let Some(c) = cfg.and_then(|c| c.current_for(e.stitch.type_name())) {
+                // the type's current properties; a width read from the stroke stays
+                let width = e.width;
+                e.take_properties(c);
+                e.width = width.or(e.width);
+            }
+            plans.push((*id, e));
+        }
+    }
+    let done: Vec<NodeId> = plans.iter().map(|p| p.0).collect();
+    if plans.is_empty() {
+        return Ok(ids_json(&done));
+    }
+    s.edit("Convert Artwork to Embroidery", |d, _| {
+        for (id, e) in &plans {
+            d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery = Some(Box::new(e.clone()));
+        }
+        Ok(())
+    })?;
+    Ok(ids_json(&done))
+}
+
+/// The machine formats, by extension (what `embroidery.export` and File › Open take).
+pub const MACHINE_EXTS: &[&str] = &["dst", "exp", "jef", "pes", "pec", "vp3", "xxx", "u01"];
+
+fn export_machine_file(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.export";
+    // the design's machine reads this format, unless another is asked for
+    let machine = s.doc()?.doc.embroidery.as_deref().and_then(|e| e.machine_file_format(&s.prefs.embroidery_machines));
+    let key = str_param(p, "format").map(str::to_string).or(machine).unwrap_or_else(|| "dst".to_string());
+    let key = key.as_str();
+    let format =
+        sf_formats::Format::from_extension(key).ok_or_else(|| bad(CMD, format!("unknown format `{key}`: one of {}", MACHINE_EXTS.join(", "))))?;
+    let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
+    if plan.is_empty() {
+        return Err(bad(CMD, "nothing is stitched yet: give objects a stitch type first"));
+    }
+    let title = &s.doc()?.doc.title;
+    let name = str_param(p, "name").map_or_else(|| super::fileio::file_stem(title), str::to_string);
+    let opts = sf_formats::WriteOptions { name, center: bool_or(p, "center", true), ..sf_formats::WriteOptions::default() };
+    let pattern = plan.pattern();
+    let bytes = sf_formats::write(format, pattern, &opts).map_err(|e| EngineError::Other(format!("{} export failed: {e}", format.name())))?;
+    Ok(json!({
+        "dataBase64": vectorcraft_format::base64_encode(&bytes),
+        "format": format.extension(),
+        "bytes": bytes.len(),
+        "stitches": pattern.stitch_count(),
+        "colors": pattern.color_blocks().len(),
+    }))
+}
+
+/// A machine embroidery file (DST, PES, JEF…) as a new document: each thread's stitches become a
+/// path of manual stitches, one subpath per run between jumps and trims, on an artboard 10 mm
+/// round the design. → (document, warnings)
+pub(crate) fn machine_file_doc(title: &str, bytes: &[u8], ext: &str) -> Result<(Document, Vec<String>)> {
+    let (_, pattern) = sf_formats::read_any(bytes, Some(ext)).map_err(|e| EngineError::Other(format!("can't open `{title}`: {e}")))?;
+    // Runs of stitches per thread.
+    let mut threads: Vec<Vec<Vec<sf_core::Point>>> = vec![Vec::new()];
+    let (mut run, mut at, mut stops) = (Vec::<sf_core::Point>::new(), sf_core::Point::ZERO, 0usize);
+    let flush = |run: &mut Vec<sf_core::Point>, threads: &mut Vec<Vec<Vec<sf_core::Point>>>| {
+        let r = std::mem::take(run);
+        if r.len() >= 2
+            && let Some(t) = threads.last_mut()
+        {
+            t.push(r);
+        }
+    };
+    for st in &pattern.stitches {
+        let p = st.pos();
+        match st.cmd {
+            sf_core::Cmd::Stitch => {
+                if run.is_empty() {
+                    run.push(at);
+                }
+                if run.last().is_none_or(|q| q.distance(p) > 1e-9) {
+                    run.push(p);
+                }
+                at = p;
+            }
+            sf_core::Cmd::Jump => {
+                flush(&mut run, &mut threads);
+                at = p;
+            }
+            sf_core::Cmd::Trim | sf_core::Cmd::End => flush(&mut run, &mut threads),
+            sf_core::Cmd::Stop => {
+                flush(&mut run, &mut threads);
+                stops += 1;
+            }
+            sf_core::Cmd::ColorChange => {
+                flush(&mut run, &mut threads);
+                threads.push(Vec::new());
+            }
+        }
+    }
+    flush(&mut run, &mut threads);
+    let b = pattern.bounds();
+    if threads.iter().all(Vec::is_empty) || b.is_empty() {
+        return Err(EngineError::Other(format!("can't open `{title}`: the file has no stitches")));
+    }
+    const MARGIN: f64 = 10.0;
+    let to_pt = |q: sf_core::Point| kurbo::Point::new((q.x - b.min.x + MARGIN) * PT_PER_MM, (q.y - b.min.y + MARGIN) * PT_PER_MM);
+    let mut doc = Document::new((b.width() + 2.0 * MARGIN) * PT_PER_MM, (b.height() + 2.0 * MARGIN) * PT_PER_MM);
+    doc.title = title.to_string();
+    let layer = doc.layers.first().map(|l| l.id);
+    for (i, runs) in threads.iter().enumerate().filter(|(_, r)| !r.is_empty()) {
+        use vectorcraft_geom::path::{Anchor, AnchorKind, PathData, SubPath};
+        let subpaths = runs
+            .iter()
+            .map(|r| {
+                let anchors = r.iter().map(|q| to_pt(*q)).map(|p| Anchor { p, h_in: p, h_out: p, kind: AnchorKind::Corner }).collect();
+                SubPath::new(anchors, false)
+            })
+            .collect();
+        let thread = pattern.thread(i);
+        let c = thread.color;
+        let id = doc.alloc_id();
+        let kind =
+            NodeKind::Path { path: PathData { subpaths }, rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: false, guide: false };
+        let mut n = vectorcraft_doc::Node::new(id, kind);
+        n.name = Some(thread.label()).filter(|l| !l.is_empty());
+        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(c.r, c.g, c.b)), 0.3 * PT_PER_MM);
+        let mut e = Embroidery::manual();
+        e.thread = Some(thread);
+        n.embroidery = Some(Box::new(e));
+        doc.insert(layer, usize::MAX, n).map_err(|e| EngineError::Other(e.to_string()))?;
+    }
+    let mut warnings = Vec::new();
+    if stops > 0 {
+        warnings.push(format!("the design's {stops} machine stop(s) weren't kept"));
+    }
+    Ok((doc, warnings))
+}
+
+/// Whether a traced shape is the image's background: its outline is (nearly) the whole image.
+fn is_backdrop(n: &vectorcraft_doc::Node, image: kurbo::Rect) -> bool {
+    let regions = regions_mm(n);
+    let outer: f64 = regions.iter().map(|r| sf_core::geom::Polygon::from_ring(r.outer.clone()).area()).sum();
+    let whole = image.width() * image.height() * MM_PER_PT * MM_PER_PT;
+    whole > 0.0 && outer >= 0.97 * whole
+}
+
+fn auto_digitize(s: &mut Session, p: &Value) -> Result<Value> {
+    // The trace and the stitch types are one undo step.
+    let group = s.active().is_some_and(|d| d.undo_group.is_none());
+    if group {
+        s.begin_undo_group();
+    }
+    let res = digitize_image(s, p);
+    if group {
+        s.end_undo_group(res.is_err());
+    }
+    res
+}
+
+fn digitize_image(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.autoDigitize";
+    let colors = p.get("colors").and_then(Value::as_u64).unwrap_or(6).clamp(2, 16);
+    let detail = f64_or(p, "detail", 60.0).clamp(0.0, 100.0);
+    let noise = p.get("noise").and_then(Value::as_u64).unwrap_or(16).clamp(1, 10_000);
+    let remove_bg = bool_or(p, "removeBackground", true);
+    let min_area = f64_or(p, "minArea", 1.0).max(0.0);
+    let keep_image = bool_or(p, "keepImage", true);
+    let size = match p.get("size").filter(|v| !v.is_null()) {
+        Some(v) => Some(v.as_f64().filter(|v| v.is_finite() && *v >= 5.0).ok_or_else(|| bad(CMD, "size must be at least 5 mm"))?),
+        None => None,
+    };
+    // The image to trace (kept under the stitches as the digitizing backdrop).
+    let source = {
+        let st = s.doc()?;
+        st.selection.objects.iter().find_map(|id| st.doc.node(*id).filter(|n| matches!(n.kind, NodeKind::Image(_))).cloned())
+    };
+    let Some(source) = source else { return Err(bad(CMD, "select an image to auto-digitize")) };
+    let trace = json!({
+        "preset": "6 Colors",
+        "params": {
+            "mode": "color", "palette": "limited", "colors": colors, "paths": detail, "corners": 60.0, "noise": noise,
+            "method": "abutting", "ignoreWhite": remove_bg, "fills": true, "strokes": false
+        }
+    });
+    let traced = s.execute("imageTrace.makeAndExpand", &trace)?;
+    let gid = traced
+        .get("id")
+        .and_then(Value::as_u64)
+        .map(NodeId)
+        .ok_or_else(|| EngineError::Other("Auto-Digitize: the image traced to nothing".into()))?;
+    let (kids, bounds, hoop) = {
+        let st = s.doc()?;
+        let g = st.doc.node(gid).ok_or(EngineError::NoNode(gid))?;
+        let kids: Vec<Arc<vectorcraft_doc::Node>> = g.children().cloned().unwrap_or_default();
+        let hoop = st.doc.embroidery.as_deref().and_then(|e| e.hoop.clone());
+        (kids, g.geometric_bounds(), hoop)
+    };
+    let Some(bounds) = bounds else { return Err(EngineError::Other("Auto-Digitize: the image traced to nothing".into())) };
+    // Size: as asked, else shrunk into the hoop (or to 100 mm when larger than 200 mm without one).
+    let longest = bounds.width().max(bounds.height()) * MM_PER_PT;
+    let scale = match (size, &hoop) {
+        (Some(mm), _) if longest > 0.0 => mm / longest,
+        (None, Some(h)) => {
+            let k = (h.width * 0.9 / (bounds.width() * MM_PER_PT).max(1e-9)).min(h.height * 0.9 / (bounds.height() * MM_PER_PT).max(1e-9));
+            k.min(1.0)
+        }
+        (None, None) if longest > 200.0 => 100.0 / longest,
+        _ => 1.0,
+    };
+    let xf = kurbo::Affine::scale_about(scale, bounds.origin());
+    let image_rect = xf.transform_rect_bbox(bounds);
+    let (mut keep, mut removed, mut satin, mut fill) = (Vec::new(), 0usize, 0usize, 0usize);
+    for (k, c) in kids.iter().enumerate() {
+        let mut n = (**c).clone();
+        if (scale - 1.0).abs() > 1e-9 {
+            n.transform(xf, true);
+        }
+        let regions = regions_mm(&n);
+        let area: f64 = regions.iter().map(sf_core::geom::Polygon::area).sum();
+        if area < min_area || (remove_bg && k == 0 && is_backdrop(&n, image_rect)) {
+            removed += 1;
+            continue;
+        }
+        let e = vectorcraft_embroidery::suggest(&n);
+        if matches!(e.stitch, StitchType::Satin(_)) {
+            satin += 1;
+        } else {
+            fill += 1;
+        }
+        n.embroidery = Some(Box::new(e));
+        keep.push(n);
+    }
+    if keep.is_empty() {
+        return Err(EngineError::Other("Auto-Digitize found no shapes to stitch: lower Noise or raise Colors".into()));
+    }
+    // Abutting shapes don't overlap, so they can be sewn colour by colour (in the order the colours
+    // first appear), each colour nearest-first.
+    let colour = |n: &vectorcraft_doc::Node| match n.appearance.fill_paint() {
+        Paint::Solid { color, .. } => rgb_of(&color).to_u32(),
+        _ => 0,
+    };
+    let centre = |n: &vectorcraft_doc::Node| n.geometric_bounds().map_or(kurbo::Point::ZERO, |b| b.center());
+    let mut order: Vec<u32> = Vec::new();
+    for n in &keep {
+        let c = colour(n);
+        if !order.contains(&c) {
+            order.push(c);
+        }
+    }
+    let mut sorted = Vec::with_capacity(keep.len());
+    let mut here = image_rect.origin();
+    for c in &order {
+        let mut todo: Vec<vectorcraft_doc::Node> = Vec::new();
+        let mut rest = Vec::new();
+        for n in keep.drain(..) {
+            if colour(&n) == *c { todo.push(n) } else { rest.push(n) }
+        }
+        keep = rest;
+        while !todo.is_empty() {
+            let i = todo.iter().enumerate().min_by(|a, b| centre(a.1).distance(here).total_cmp(&centre(b.1).distance(here))).map_or(0, |(i, _)| i);
+            let n = todo.swap_remove(i);
+            here = centre(&n);
+            sorted.push(n);
+        }
+    }
+    let objects = sorted.len();
+    s.edit("Auto-Digitize", |d, sel| {
+        let g = d.node_mut(gid).ok_or(EngineError::NoNode(gid))?;
+        g.name = Some("Auto-Digitized".into());
+        if let Some(ch) = g.children_mut() {
+            *ch = sorted.into_iter().map(Arc::new).collect();
+        }
+        if keep_image {
+            let mut img = source.clone();
+            img.id = d.alloc_id();
+            img.name = Some("Auto-Digitize Artwork".into());
+            if (scale - 1.0).abs() > 1e-9 {
+                img.transform(xf, true);
+            }
+            let (parent, idx, _) = d.position(gid).ok_or(EngineError::NoNode(gid))?;
+            d.insert(parent, idx, img)?;
+        }
+        sel.set([gid]);
+        Ok(())
+    })?;
+    Ok(json!({ "id": gid.0, "objects": objects, "satin": satin, "fill": fill, "removed": removed, "colors": order.len(), "scale": scale }))
+}
+
+fn stamp_named(name: &str) -> Option<Stamp> {
+    Some(match name {
+        "free" => Stamp::Free,
+        "line" => Stamp::Line,
+        "ellipse" | "circle" => Stamp::Ellipse,
+        "rectangle" | "square" => Stamp::Rectangle,
+        "roundedRectangle" | "rounded_rectangle" => Stamp::RoundedRectangle,
+        "triangle" => Stamp::Triangle,
+        "diamond" => Stamp::Diamond,
+        "pentagon" => Stamp::Pentagon,
+        "hexagon" => Stamp::Hexagon,
+        "star" => Stamp::Star,
+        "heart" => Stamp::Heart,
+        "arrow" => Stamp::Arrow,
+        _ => return None,
+    })
+}
+
+fn draw(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.draw";
+    let brush = str_param(p, "brush").unwrap_or("run");
+    let width = f64_or(p, "width", 3.0).clamp(0.3, 50.0);
+    let density = f64_or(p, "density", 0.4).clamp(0.1, 10.0);
+    let length = f64_or(p, "length", 2.5).clamp(0.3, 12.0);
+    let stamp_kind = match str_param(p, "stamp") {
+        Some(n) => stamp_named(n).ok_or_else(|| bad(CMD, format!("unknown stamp `{n}`")))?,
+        None => Stamp::Free,
+    };
+    let closed_brush = matches!(brush, "fill" | "applique" | "satin");
+    let contour = if stamp_kind != Stamp::Free {
+        let from = point_param(p, "from").ok_or_else(|| bad(CMD, "a stamp needs `from` and `to`"))?;
+        let to = point_param(p, "to").ok_or_else(|| bad(CMD, "a stamp needs `from` and `to`"))?;
+        stamp(stamp_kind, sf_point(from), sf_point(to), bool_or(p, "square", false)).ok_or_else(|| bad(CMD, "drag to give the shape a size"))?
+    } else {
+        let pts: Vec<sf_core::Point> = p
+            .get("points")
+            .and_then(Value::as_array)
+            .ok_or_else(|| bad(CMD, "missing `points` (or `stamp`)"))?
+            .iter()
+            .filter_map(|q| {
+                let a = q.as_array()?;
+                let (x, y) = (a.first()?.as_f64()?, a.get(1)?.as_f64()?);
+                (x.is_finite() && y.is_finite()).then(|| sf_core::Point::new(x, y))
+            })
+            .take(20_000)
+            .collect();
+        if pts.len() < 2 {
+            return Err(bad(CMD, "a brush stroke needs at least two points"));
+        }
+        let closed = bool_or(p, "closed", closed_brush);
+        let tol = f64_or(p, "smooth", 0.8).clamp(0.05, 20.0);
+        fit_stroke(&pts, tol, closed)
+    };
+    let closed = contour.closed;
+    let profile = match brush {
+        "tapered" => WidthProfile::Tapered,
+        "calligraphy" => WidthProfile::Calligraphy { nib_angle: f64_or(p, "nibAngle", 145.0) },
+        "pressure" => WidthProfile::Pressure(
+            p.get("pressures")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_f64).map(|v| v.clamp(0.0, 1.0) as f32).take(20_000).collect())
+                .unwrap_or_default(),
+        ),
+        _ => WidthProfile::Constant,
+    };
+    let stitch = match brush {
+        "run" => StitchType::Run(RunParams { stitch_length: length, ..RunParams::default() }),
+        "bean" => StitchType::Run(RunParams { kind: RunKind::Triple, stitch_length: length, ..RunParams::default() }),
+        "steil" | "tapered" | "calligraphy" | "pressure" | "satin" => StitchType::Satin(SatinParams { spacing: density, ..SatinParams::default() }),
+        "applique" => StitchType::Applique(AppliqueParams { cover_width: width.min(8.0), cover_spacing: density, ..AppliqueParams::default() }),
+        "fill" => StitchType::Fill(FillParams { spacing: density, stitch_length: length.max(2.0), ..FillParams::default() }),
+        other => return Err(bad(CMD, format!("unknown brush `{other}`"))),
+    };
+    let color = match p.get("color") {
+        Some(v) => color_value(v).ok_or_else(|| bad(CMD, format!("not a colour: {v}")))?,
+        None => Color::rgb8(0x1a, 0x3e, 0x8c),
+    };
+    let mut e = Embroidery::new(stitch);
+    if matches!(brush, "steil" | "tapered" | "calligraphy" | "pressure") {
+        e.width = Some(width);
+        e.profile = profile;
+    }
+    let path = contour_to_path(&contour);
+    let area = closed && !matches!(brush, "run" | "bean" | "steil" | "tapered" | "calligraphy" | "pressure");
+    let appearance = if area {
+        Appearance::basic(Paint::solid(color), Paint::None, 0.0)
+    } else {
+        let w = if matches!(e.stitch, StitchType::Satin(_)) { width * PT_PER_MM } else { 0.75 };
+        Appearance::basic(Paint::None, Paint::solid(color), w)
+    };
+    let kind = NodeKind::Path { path, rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: false, guide: false };
+    // Digitize Before / After: next to an object in the sewing (paint) order, else on top.
+    let (parent, index) = match (str_param(p, "order"), id_param(p, "relativeTo")) {
+        (Some(order @ ("before" | "after")), Some(rel)) => {
+            let (parent, idx, _) = s.doc()?.doc.position(rel).ok_or_else(|| bad(CMD, format!("no such object id {}", rel.0)))?;
+            (parent, if order == "after" { idx + 1 } else { idx })
+        }
+        (Some("before" | "after"), None) => return Err(bad(CMD, "`order` before or after needs `relativeTo`")),
+        (Some(o), _) if o != "top" => return Err(bad(CMD, "order must be top, before or after")),
+        _ => (s.doc()?.insertion_parent(), usize::MAX),
+    };
+    let label = "Brush Stroke";
+    let id = s.edit(label, |d, sel| {
+        let id = d.alloc_id();
+        let mut n = vectorcraft_doc::Node::new(id, kind);
+        n.appearance = appearance;
+        n.embroidery = Some(Box::new(e));
+        d.insert(parent, index, n)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0 }))
+}
+
+fn settings(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.settings";
+    let mut cfg: DocEmbroidery = s.doc()?.doc.embroidery.as_deref().cloned().unwrap_or_default();
+    let mut changed = false;
+    if let Some(h) = p.get("hoop") {
+        changed = true;
+        cfg.hoop = match h {
+            Value::Null => None,
+            Value::String(name) => Some(
+                sf_core::hoops::standard_hoops().into_iter().find(|x| x.name == *name).ok_or_else(|| bad(CMD, format!("unknown hoop `{name}`")))?,
+            ),
+            Value::Object(_) => {
+                let w =
+                    h.get("width").and_then(Value::as_f64).filter(|v| v.is_finite() && *v > 1.0).ok_or_else(|| bad(CMD, "hoop width (mm) > 1"))?;
+                let ht =
+                    h.get("height").and_then(Value::as_f64).filter(|v| v.is_finite() && *v > 1.0).ok_or_else(|| bad(CMD, "hoop height (mm) > 1"))?;
+                let shape = if str_param(h, "shape") == Some("oval") { sf_core::hoops::HoopShape::Oval } else { sf_core::hoops::HoopShape::Rect };
+                Some(sf_core::hoops::Hoop::new(str_param(h, "name").unwrap_or("Custom"), w, ht, shape))
+            }
+            _ => return Err(bad(CMD, "hoop is a name, {width, height, shape?} or null")),
+        };
+    }
+    if let Some(f) = str_param(p, "fabric") {
+        cfg.fabric = f.to_string();
+        changed = true;
+    }
+    if let Some(c) = str_param(p, "chart") {
+        cfg.chart = c.to_string();
+        changed = true;
+    }
+    // A machine first, so values given with it override the machine's.
+    if let Some(m) = p.get("machine") {
+        changed = true;
+        match m {
+            Value::Null => (cfg.machine, cfg.machine_format) = (String::new(), String::new()),
+            Value::String(f) if f.trim().is_empty() => (cfg.machine, cfg.machine_format) = (String::new(), String::new()),
+            Value::String(f) => {
+                let saved = &s.prefs.embroidery_machines;
+                let profile = sf_core::machines::find(saved, f).ok_or_else(|| {
+                    let names: Vec<String> = sf_core::machines::profiles(saved).into_iter().map(|m| m.name).collect();
+                    bad(CMD, format!("unknown machine `{f}`: one of {}", names.join(", ")))
+                })?;
+                cfg.settings = profile.apply(&cfg.settings);
+                // the user's profiles: the design keeps the format too, for where it isn't saved
+                cfg.machine_format = if profile.is_standard() { String::new() } else { profile.format.clone() };
+                cfg.machine = profile.name;
+            }
+            _ => return Err(bad(CMD, "machine is a machine profile's name (\"dst\", \"pes\", … or one of yours) or null")),
+        }
+    }
+    if let Some(c) = p.get("checks") {
+        let o = c.as_object().ok_or_else(|| bad(CMD, "checks is {denseLayers?, longStitch?, smallLettering?, tinyObject?}"))?;
+        let lim = &mut cfg.checks;
+        for (k, slot, lo, hi) in [
+            ("denseLayers", &mut lim.dense_layers, 1.5, 20.0),
+            ("longStitch", &mut lim.long_stitch, 2.0, 20.0),
+            ("smallLettering", &mut lim.small_lettering, 1.0, 30.0),
+            ("tinyObject", &mut lim.tiny_object, 0.1, 10.0),
+        ] {
+            if let Some(v) = o.get(k) {
+                *slot = v.as_f64().filter(|x| (lo..=hi).contains(x)).ok_or_else(|| bad(CMD, format!("checks.{k} is a number from {lo} to {hi}")))?;
+                changed = true;
+            }
+        }
+    }
+    let num = |k: &str| p.get(k).and_then(Value::as_f64).filter(|v| v.is_finite() && *v >= 0.0);
+    let st = &mut cfg.settings;
+    for (k, slot) in [
+        ("trimThreshold", &mut st.trim_threshold),
+        ("tieLength", &mut st.tie_length),
+        ("minStitch", &mut st.min_stitch),
+        ("maxStitch", &mut st.max_stitch),
+        ("maxJump", &mut st.max_jump),
+        ("machineSpeed", &mut st.machine_speed),
+        ("trimSeconds", &mut st.trim_seconds),
+        ("colorChangeSeconds", &mut st.color_change_seconds),
+    ] {
+        if let Some(v) = num(k) {
+            *slot = v;
+            changed = true;
+        }
+    }
+    if let Some(v) = p.get("tieIn").and_then(Value::as_bool) {
+        st.tie_in = v;
+        changed = true;
+    }
+    if let Some(v) = p.get("tieOff").and_then(Value::as_bool) {
+        st.tie_off = v;
+        changed = true;
+    }
+    if let Some(v) = p.get("tieStyle") {
+        let name = v.as_str().unwrap_or_default();
+        st.tie_style =
+            sf_core::model::TieStyle::ALL.into_iter().find(|t| t.id() == name).ok_or_else(|| bad(CMD, "tieStyle is single, double or triangle"))?;
+        changed = true;
+    }
+    if changed {
+        let new = cfg.clone();
+        s.edit("Embroidery Settings", |d, _| {
+            d.embroidery = Some(Box::new(new));
+            Ok(())
+        })?;
+    }
+    serde_json::to_value(&cfg).map_err(|e| bad(CMD, e.to_string()))
+}
+
+fn apply_fabric(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.applyFabric";
+    let name = str_param(p, "name").ok_or_else(|| bad(CMD, "missing fabric `name`"))?;
+    let fabric =
+        s.doc()?.doc.embroidery.as_deref().cloned().unwrap_or_default().fabric(name).ok_or_else(|| bad(CMD, format!("unknown fabric `{name}`")))?;
+    let ids: Vec<NodeId> = vectorcraft_embroidery::stitched_nodes(&s.doc()?.doc).iter().map(|n| n.id).collect();
+    s.edit("Apply Fabric", |d, _| {
+        for id in &ids {
+            let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+            if let Some(e) = n.embroidery.as_deref_mut() {
+                match &mut e.stitch {
+                    StitchType::Satin(sp) => {
+                        sp.spacing = fabric.satin_spacing;
+                        sp.pull_comp = fabric.pull_comp;
+                    }
+                    StitchType::Fill(f) => {
+                        f.spacing = if f.kind == FillKind::Satin { fabric.satin_spacing } else { fabric.fill_spacing };
+                        f.stitch_length = fabric.fill_stitch_length;
+                        f.pull_comp = fabric.pull_comp;
+                        f.underlay.tatami = fabric.fill_underlay;
+                        f.underlay.spacing = fabric.underlay_spacing;
+                    }
+                    StitchType::Applique(a) => {
+                        a.cover_spacing = fabric.satin_spacing;
+                        a.pull_comp = fabric.pull_comp;
+                    }
+                    StitchType::Run(_) | StitchType::Manual | StitchType::Branch => {}
+                }
+            }
+        }
+        let cfg = d.embroidery.get_or_insert_with(Box::default);
+        cfg.fabric = fabric.name.to_string();
+        Ok(())
+    })?;
+    Ok(json!({ "objects": ids.len(), "fabric": fabric.name }))
+}
+
+fn sort_by_color(s: &mut Session, _p: &Value) -> Result<Value> {
+    let plan = s.embroidery_plan().ok_or_else(|| bad("embroidery.sortByColor", "no document"))?;
+    // Thread of each stitched node, in current order.
+    let mut color_of: std::collections::HashMap<NodeId, Rgb> = std::collections::HashMap::new();
+    for (k, obj) in plan.design.objects.iter().enumerate() {
+        if let Some(node) = plan.nodes.get(k) {
+            color_of.entry(*node).or_insert_with(|| plan.design.thread(obj.color).color);
+        }
+    }
+    let mut moved = 0usize;
+    s.edit("Sort by Thread Color", |d, _| {
+        let parents: Vec<Option<NodeId>> = {
+            let mut v: Vec<Option<NodeId>> = color_of.keys().map(|id| d.parent_of(*id)).collect();
+            v.sort_by_key(|p| p.map(|x| x.0));
+            v.dedup();
+            v
+        };
+        for parent in parents {
+            let Some(parent) = parent else { continue };
+            let Some(children) = d.node(parent).and_then(|n| n.children()).cloned() else { continue };
+            // positions held by stitched children, and their colours in order of first use
+            let slots: Vec<usize> = children.iter().enumerate().filter(|(_, c)| color_of.contains_key(&c.id)).map(|(i, _)| i).collect();
+            let mut order: Vec<Rgb> = Vec::new();
+            for &i in &slots {
+                if let Some(c) = children.get(i).and_then(|n| color_of.get(&n.id))
+                    && !order.contains(c)
+                {
+                    order.push(*c);
+                }
+            }
+            let mut sorted: Vec<NodeId> = slots.iter().filter_map(|&i| children.get(i).map(|n| n.id)).collect();
+            let rank = |id: &NodeId| color_of.get(id).and_then(|c| order.iter().position(|o| o == c)).unwrap_or(usize::MAX);
+            sorted.sort_by_key(rank); // stable: keeps the order within one colour
+            for (slot, id) in slots.iter().zip(&sorted) {
+                if children.get(*slot).map(|n| n.id) != Some(*id) {
+                    moved += 1;
+                }
+            }
+            // the stitched objects trade places; anything else stays where it is
+            let nodes: Vec<Arc<vectorcraft_doc::Node>> = sorted.iter().filter_map(|id| children.iter().find(|c| c.id == *id).cloned()).collect();
+            let ch = d.children_mut(Some(parent))?;
+            for (&slot, node) in slots.iter().zip(nodes) {
+                ch[slot] = node;
+            }
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "moved": moved }))
+}
+
+fn info(s: &mut Session, _p: &Value) -> Result<Value> {
+    let plan = s.embroidery_plan().ok_or_else(|| bad("embroidery.info", "no document"))?;
+    let cfg = s.doc()?.doc.embroidery.as_deref().cloned().unwrap_or_default();
+    // the built-in fabrics, then the design's own
+    let builtin = sf_core::fabrics::fabrics();
+    let fabrics: Vec<&str> = builtin.iter().chain(&cfg.fabrics).map(|f| f.name.as_str()).collect();
+    let details: Vec<Value> = builtin
+        .iter()
+        .map(|f| super::embroidery_props::fabric_json(f, false))
+        .chain(cfg.fabrics.iter().map(|f| super::embroidery_props::fabric_json(f, true)))
+        .collect();
+    let hoops: Vec<Value> = sf_core::hoops::standard_hoops().iter().map(|h| json!({"name": h.name, "width": h.width, "height": h.height})).collect();
+    let charts: Vec<&str> = sf_core::threads::charts().iter().map(|c| c.name).collect();
+    let saved = &s.prefs.embroidery_machines;
+    let machines: Vec<Value> = sf_core::machines::profiles(saved).iter().map(|m| super::embroidery_machines::machine_json(m, saved)).collect();
+    let machine_format = cfg.machine_file_format(saved);
+    let st = &cfg.settings;
+    let settings = json!({
+        "maxStitch": st.max_stitch, "maxJump": st.max_jump, "minStitch": st.min_stitch, "trimThreshold": st.trim_threshold,
+        "tieIn": st.tie_in, "tieOff": st.tie_off, "tieLength": st.tie_length, "tieStyle": st.tie_style.id(), "machineSpeed": st.machine_speed,
+        "trimSeconds": st.trim_seconds, "colorChangeSeconds": st.color_change_seconds,
+        "checks": {
+            "denseLayers": cfg.checks.dense_layers, "longStitch": cfg.checks.long_stitch,
+            "smallLettering": cfg.checks.small_lettering, "tinyObject": cfg.checks.tiny_object,
+        },
+    });
+    let fits = cfg.hoop.as_ref().map(|h| {
+        let b = plan.pattern().bounds();
+        let centered =
+            sf_core::BBox::new(sf_core::Point::new(-b.width() / 2.0, -b.height() / 2.0), sf_core::Point::new(b.width() / 2.0, b.height() / 2.0));
+        h.fits(&centered)
+    });
+    let Some(st) = &plan.stats else {
+        return Ok(
+            json!({"objects": 0, "stitches": 0, "fabrics": fabrics, "fabricDetails": details, "hoops": hoops, "charts": charts, "machines": machines, "hoop": cfg.hoop.map(|h| h.name), "fabric": cfg.fabric, "machine": cfg.machine, "machineFormat": machine_format, "settings": settings}),
+        );
+    };
+    Ok(json!({
+        "objects": plan.design.objects.len(),
+        "stitches": st.stitches,
+        "jumps": st.jumps,
+        "trims": st.trims,
+        "colorChanges": st.color_changes,
+        "stops": st.stops,
+        "widthMm": st.width_mm,
+        "heightMm": st.height_mm,
+        "threadM": st.thread_m,
+        "bobbinM": st.bobbin_m,
+        "seconds": st.seconds,
+        "time": st.time_string(),
+        "maxStitchMm": st.max_stitch_mm,
+        "colors": st.colors.iter().map(|c| json!({"color": c.thread.color.to_hex(), "name": c.thread.label(), "stitches": c.stitches, "threadM": c.thread_m})).collect::<Vec<_>>(),
+        "hoop": cfg.hoop.as_ref().map(|h| h.name.clone()),
+        "fits": fits,
+        "fabric": cfg.fabric,
+        "fabrics": fabrics,
+        "fabricDetails": details,
+        "hoops": hoops,
+        "charts": charts,
+        "machine": cfg.machine,
+        "machineFormat": machine_format,
+        "machines": machines,
+        "settings": settings,
+    }))
+}
+
+fn plan(s: &mut Session, p: &Value) -> Result<Value> {
+    let plan = s.embroidery_plan().ok_or_else(|| bad("embroidery.plan", "no document"))?;
+    let limit = p.get("limit").and_then(Value::as_u64).map_or(usize::MAX, |l| l as usize);
+    let pat = plan.pattern();
+    let stitches: Vec<Value> = pat
+        .stitches
+        .iter()
+        .take(limit)
+        .map(|st| {
+            let q = vectorcraft_embroidery::pt(st.pos());
+            let cmd = match st.cmd {
+                sf_core::Cmd::Stitch => "stitch",
+                sf_core::Cmd::Jump => "jump",
+                sf_core::Cmd::Trim => "trim",
+                sf_core::Cmd::ColorChange => "color",
+                sf_core::Cmd::Stop => "stop",
+                sf_core::Cmd::End => "end",
+            };
+            json!([q.x, q.y, cmd])
+        })
+        .collect();
+    Ok(json!({
+        "threads": pat.threads.iter().map(|t| t.color.to_hex()).collect::<Vec<_>>(),
+        "stitches": stitches,
+        "nodes": plan.nodes.iter().map(|n| n.0).collect::<Vec<_>>(),
+    }))
+}

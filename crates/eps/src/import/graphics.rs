@@ -39,7 +39,7 @@ const SHADING_SAMPLES: usize = 32;
 const MAX_STITCH_STOPS: usize = 1024;
 
 pub(super) const FAR_AWAY: &str = "objects far outside the page were left out";
-pub(super) const TOO_MUCH: &str = "the file draws more than VectorCraft reads: the rest was left out";
+pub(super) const TOO_MUCH: &str = "the file draws more than StitchFoundry reads: the rest was left out";
 const NESTED_PATTERNS: &str = "patterns nested too deeply are filled with mid-grey";
 /// Deepest patterns and glyph procedures drawn inside each other's art.
 pub(crate) const MAX_APART: u32 = 8;

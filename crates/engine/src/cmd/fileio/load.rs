@@ -85,6 +85,12 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if clipboard::looks_like_svg(&String::from_utf8_lossy(&bytes[..bytes.len().min(4096)])) {
         return format("svg");
     }
+    // Machine embroidery files with a signature (the others go by their extension).
+    if let Some(f) = sf_formats::detect(bytes)
+        .filter(|f| matches!(f, sf_formats::Format::Pes | sf_formats::Format::Pec | sf_formats::Format::Vp3 | sf_formats::Format::Dst))
+    {
+        return format(f.extension());
+    }
     by_name
 }
 
@@ -172,7 +178,7 @@ fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(D
 pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded> {
     let format = detect(name, bytes).ok_or_else(|| match super::unsupported(&super::extension(name)) {
         Some(u) => err(format!("can't open `{}`: {}", file_name(name), u.hint)),
-        None => err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")),
+        None => err(format!("can't open `{name}`: not a format StitchFoundry reads (see document.formats)")),
     })?;
     let title = file_name(name);
     let mut converted = false;
@@ -227,6 +233,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let i = super::affinity::import(&title, bytes)?;
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
+        }
+        id if crate::cmd::embroidery::MACHINE_EXTS.contains(&id) => {
+            let (doc, warnings) = crate::cmd::embroidery::machine_file_doc(&title, bytes, id)?;
+            (doc, warnings, false)
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
@@ -370,7 +380,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_RASTER_ALLOC);
     reader.limits(limits);
-    let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
+    let kind = reader.format().ok_or_else(|| err("not an image StitchFoundry reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     let cmyk = || ImageBlob::new(f.mime, bytes.to_vec()).cmyk().is_some();
     if matches!(f.id, "png" | "jpg" | "gif" | "webp") || (f.id == "tiff" && cmyk()) {

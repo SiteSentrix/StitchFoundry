@@ -1,0 +1,15 @@
+[package]
+name = "sf-formats"
+description = "StitchFoundry machine embroidery file formats: DST, EXP, JEF, PES, PEC, VP3, XXX and U01 readers and writers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+sf-core = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

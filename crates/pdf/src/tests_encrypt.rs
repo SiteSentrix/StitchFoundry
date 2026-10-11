@@ -80,7 +80,7 @@ fn strings_and_streams_are_encrypted() {
     sec.plaintext_metadata = false;
     let bytes = protected(Compatibility::Pdf17, sec, true);
     let text = String::from_utf8_lossy(&bytes);
-    for plain in ["VectorCraft", "native", "xmpmeta", "FEFF0054"] {
+    for plain in ["StitchFoundry", "native", "xmpmeta", "FEFF0054"] {
         assert!(!text.contains(plain), "`{plain}` is readable");
     }
     // The trailer names the dictionary; the ID stays as it was.

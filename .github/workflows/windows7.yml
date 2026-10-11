@@ -19,6 +19,8 @@ env:
 
 jobs:
   build:
+    # Upstream's CI: skipped in forks such as StitchFoundry.
+    if: github.repository == 'storytold/vectorcraft'
     runs-on: windows-2022
     timeout-minutes: 90
     steps:

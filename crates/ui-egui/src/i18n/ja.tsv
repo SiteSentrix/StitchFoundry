@@ -14,7 +14,7 @@
 # tested) — and the status and error messages (`@msg` rows at the end, `COMPLETE_MESSAGES`, tested).
 # Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
-	About VectorCraft	VectorCraft について
+	About StitchFoundry	StitchFoundry について
 	All Scripts	すべての文字
 	Anchors:	アンカー:
 	Any Kind	すべての種類
@@ -40,7 +40,6 @@
 	Favorites	お気に入り
 	Flip	反転
 	Japanese	日本語
-	Join Our Discord	Discord に参加
 	Line-end Punctuation Half Width	行末約物半角
 	Mojikumi Set	文字組み
 	Kinsoku Set	禁則処理
@@ -63,7 +62,7 @@
 	Medium Dark	やや暗い
 	Medium Light	やや明るい
 	Light	明るい
-	Quit VectorCraft	VectorCraft を終了
+	Quit StitchFoundry	StitchFoundry を終了
 	File	ファイル
 	New…	新規…
 	New from Template…	テンプレートから新規…
@@ -634,11 +633,9 @@
 	Save Swatch Library…	スウォッチライブラリを保存…
 	Symbol Libraries	シンボルライブラリ
 	Help	ヘルプ
-	ArtCraft Website	ArtCraft の Web サイト
-	VectorCraft on getartcraft.com	getartcraft.com の VectorCraft
-	VectorCraft on GitHub	GitHub の VectorCraft
+	StitchFoundry on GitHub	GitHub の StitchFoundry
 	Search Commands…	コマンドを検索…
-	VectorCraft Help…	VectorCraft ヘルプ…
+	StitchFoundry Help…	StitchFoundry ヘルプ…
 	Preview	プレビュー
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
@@ -822,7 +819,7 @@
 	Appearance Panel	アピアランスパネル
 	Appearance of Black	ブラックのアピアランス
 	Appearance panel	アピアランスパネル
-	Applies the next time VectorCraft starts.	VectorCraft の次回起動時に適用されます。
+	Applies the next time StitchFoundry starts.	StitchFoundry の次回起動時に適用されます。
 	Applies when the linked file is relinked or updated.	リンクファイルを再リンクまたは更新したときに適用されます。
 	Apply Brush	ブラシを適用
 	Apply Character Style	文字スタイルを適用
@@ -842,7 +839,6 @@
 	Arrange: Bring to Front	重ね順: 最前面へ
 	Arrowheads:	矢印:
 	Art using a deleted global swatch keeps its colour.	削除したグローバルスウォッチを使っているアートは、そのカラーを保持します。
-	ArtCraft website	ArtCraft の Web サイト
 	Artboard Options	アートボードオプション
 	Artboard Options: edit with the Artboard tool	アートボードオプション: アートボードツールで編集
 	Artboard Options…	アートボードオプション…
@@ -1518,8 +1514,6 @@
 	Isolate Group	グループを分離
 	Italian	イタリア語
 	Join Tool	結合ツール
-	Join our Discord	Discord に参加
-	Join the ArtCraft community on Discord (discord.gg/artcraft)	Discord で ArtCraft コミュニティに参加 (discord.gg/artcraft)
 	Join the lines of each paragraph	段落内の行を連結
 	Justification…	文字組み…
 	Keep Formatting	書式を保持
@@ -2178,7 +2172,7 @@
 	{count} folder(s) or file(s) couldn't be read	{count} 個のフォルダーまたはファイルを読み込めませんでした
 	The search stopped at its limit: search a smaller folder.	検索は上限で停止しました。より小さなフォルダーを検索してください。
 	Copy only fonts you own or are licensed to install.	所有しているフォント、またはインストールするライセンスがあるフォントだけをコピーしてください。
-	VectorCraft copies the fonts to {folder}.	VectorCraft はフォントを {folder} にコピーします。
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry はフォントを {folder} にコピーします。
 	Registry name:	レジストリ名:
 	Release Compound Shape	複合シェイプを解除
 	Release Opacity Mask	不透明マスクを解除
@@ -2247,7 +2241,7 @@
 	Reverse Path Direction On	パスの方向を反転: オン
 	Revert to the saved version of “{name}”?	「{name}」を保存済みの状態に戻しますか？
 	Replace “{name}”, the file this document was opened from?	このドキュメントの開き元のファイル「{name}」を置き換えますか？
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	開いたときに VectorCraft がまだ読み込めない内容（{what}）が除外されたため、置き換えるとそれは完全に失われます。保持するには別の名前で保存してください。
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	開いたときに StitchFoundry がまだ読み込めない内容（{what}）が除外されたため、置き換えるとそれは完全に失われます。保持するには別の名前で保存してください。
 	Right Grid:	右グリッド:
 	Right Indent	右インデント
 	Right Plane	右面
@@ -2747,10 +2741,8 @@
 	Variable Width Profile	可変幅プロファイル
 	Variation:	バリエーション:
 	Vector Halftone	ベクトルハーフトーン
-	Vector illustration — fast, open, scriptable.	ベクターイラスト — 高速・オープン・スクリプト対応
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft は前回正常に終了しませんでした。次のドキュメントに未保存の変更があります:
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry は前回正常に終了しませんでした。次のドキュメントに未保存の変更があります:
 	Vectors	ベクター
-	Version {version} — open-source vector illustration in pure Rust.	バージョン {version} — Rust だけで書かれたオープンソースのベクターイラストアプリ。
 	Version:	バージョン:
 	Vertical Area Type Tool	縦書きエリア内文字ツール
 	Vertical Distribute Space	垂直方向等間隔に分布
@@ -2769,7 +2761,7 @@
 	Web Shift	Web シフト
 	Web Snap:	Web スナップ:
 	Weight:	線幅:
-	Welcome to VectorCraft	VectorCraft へようこそ
+	Welcome to StitchFoundry	StitchFoundry へようこそ
 	When pasting text	テキストをペーストするとき
 	White	白
 	Widget Position:	ウィジェットの位置:
@@ -2914,7 +2906,6 @@
 	Delete these {n} graphic styles?	これら {n} 個のグラフィックスタイルを削除しますか？
 	Delete this {n} graphic style?	この {n} 個のグラフィックスタイルを削除しますか？
 	Discarded {} recovered document(s)	復元したドキュメント {} 個を破棄しました
-	Discord	Discord
 	Do Not Move	移動しない
 	Document Swatches	ドキュメントのスウォッチ
 	Document profile	ドキュメントプロファイル
@@ -3050,7 +3041,6 @@
 	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
 	Page information	ページ情報
 	Paragraph Style	段落スタイル
-	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft の一員。MIT OR Apache-2.0。フォント：Source Sans 3、Inter、JetBrains Mono (OFL)。アイコン：Lucide (ISC) + VectorCraft。
 	Perspective grid presets	遠近グリッドプリセット
 	Phone 390×844	スマートフォン 390×844
 	Place onto a new locked, dimmed template layer below the current layer	現在のレイヤーの下に、ロックされ淡色表示の新規テンプレートレイヤーとして配置
@@ -3277,7 +3267,7 @@ axis	Both	両方
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	サービス
-	Hide VectorCraft	VectorCraft を隠す
+	Hide StitchFoundry	StitchFoundry を隠す
 	Zoom	拡大/縮小
 	Bring All to Front	すべてを手前に移動
 	Settings	環境設定
@@ -3356,13 +3346,13 @@ theme	Appearance	外観
 @msg	its type is to come in as outlines, which only its page has	文字をアウトラインとして読み込む設定ですが、アウトラインはページにしかありません
 @msg	{_1} files	{_1} 個のファイル
 @msg	A browser with WebGPU or WebGL2 is required.	WebGPU または WebGL2 に対応したブラウザーが必要です。
-@msg	Loading VectorCraft…	VectorCraft を読み込んでいます…
+@msg	Loading StitchFoundry…	StitchFoundry を読み込んでいます…
 @msg	Reload the page to go on (changes not saved yet may be lost).	続けるにはページを再読み込みしてください (未保存の変更は失われる場合があります)。
 @msg	The graphics were lost and couldn't be restarted.	グラフィックス機能が利用できなくなり、再起動できませんでした。
 @msg	The graphics were lost and have been restarted	グラフィックス機能が利用できなくなったため、再起動しました
-@msg	VectorCraft failed to start: {e}	VectorCraft を起動できませんでした: {e}
+@msg	StitchFoundry failed to start: {e}	StitchFoundry を起動できませんでした: {e}
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	未保存の変更はこのブラウザーに残っています: 復元するにはページを再読み込みしてください。
-@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で VectorCraft を再起動しました
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で StitchFoundry を再起動しました
 @msg	not a DXF drawing	DXF 図面ではありません
 @msg	scale must be a number from {_1} to {_2}, not {s}	縮尺は {_1} から {_2} までの数値にしてください ({s} は指定できません)
 @msg	the artboard to fit must be a positive size up to {_1} pt	合わせる先のアートボードのサイズは 0 より大きく {_1} pt 以下にしてください
@@ -3622,10 +3612,10 @@ theme	Appearance	外観
 @msg	it has more than {MAX_NODES} objects	オブジェクトが {MAX_NODES} 個を超えています
 @msg	it has no layers	レイヤーがありません
 @msg	it has too many values in a row	連続する値が多すぎます
-@msg	it has {_1}, which VectorCraft doesn't read from it yet	{_1} が含まれていますが、VectorCraft はまだこのファイルからは読み込めません
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	{_1} が含まれていますが、StitchFoundry はまだこのファイルからは読み込めません
 @msg	its objects are nested too deeply	オブジェクトの入れ子が深すぎます
 @msg	its section ending with `%{end}` doesn't end	`%{end}` で終わるはずのセクションが終わっていません
-@msg	an image VectorCraft can't read was left out	VectorCraft で読み込めない画像は除外されました
+@msg	an image StitchFoundry can't read was left out	StitchFoundry で読み込めない画像は除外されました
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
@@ -3640,7 +3630,7 @@ theme	Appearance	外観
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript エラー (`{op}` での {name}: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	{procs} 内の PostScript エラー (`{op}` での {name}: {at})
 @msg	a PostScript error ({name})	PostScript エラー ({name})
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	VectorCraft の PostScript 読み込み機能が対応していない `{at}` を使用しています
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	StitchFoundry の PostScript 読み込み機能が対応していない `{at}` を使用しています
 @msg	the file was read up to an error ({why}): what follows it was left out	ファイルはエラーが発生した箇所まで読み込まれました ({why}): それ以降の内容は除外されました
 @msg	this file's PostScript couldn't be read ({why}): {what}	このファイルの PostScript を読み込めませんでした ({why}): {what}
 @msg	it has no page	ページがありません
@@ -3654,7 +3644,7 @@ theme	Appearance	外観
 @msg	its Windows metafile preview was opened instead, which may simplify the art	代わりに Windows メタファイルのプレビューを開いたため、アートが簡略化されている場合があります
 @msg	its preview was placed instead, at screen resolution	代わりにプレビューを画面解像度で配置しました
 @msg	shadings of more than 4096 patches or triangles were left out	パッチまたは三角形が 4096 個を超えるシェーディングは除外されました
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	{procs} 内で、VectorCraft の PostScript 読み込み機能が対応していない `{at}` を使用しています
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	{procs} 内で、StitchFoundry の PostScript 読み込み機能が対応していない `{at}` を使用しています
 @msg	the export region is not finite	書き出し範囲に無効な数値が含まれています
 @msg	a page out of range	範囲外のページがあります
 @msg	a page's placement is not finite	ページの配置に無効な数値が含まれています
@@ -3663,8 +3653,8 @@ theme	Appearance	外観
 @msg	the preview image is empty	プレビュー画像が空です
 @msg	the thumbnail image is malformed	サムネール画像の形式が正しくありません
 @msg	can't encode the document: {0}	ドキュメントをエンコードできません: {0}
-@msg	can't save version {0}: VectorCraft writes versions {MIN_VERSION} to {VERSION}	バージョン {0} では保存できません: VectorCraft で保存できるのはバージョン {MIN_VERSION} から {VERSION} までです
-@msg	file version {0} is newer than this VectorCraft supports ({VERSION})	ファイルのバージョン {0} は、この VectorCraft が対応するバージョン ({VERSION}) より新しいものです
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	バージョン {0} では保存できません: StitchFoundry で保存できるのはバージョン {MIN_VERSION} から {VERSION} までです
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	ファイルのバージョン {0} は、この StitchFoundry が対応するバージョン ({VERSION}) より新しいものです
 @msg	invalid image data for `{0}`	`{0}` の画像データが正しくありません
 @msg	not a VectorCraft file: {0}	VectorCraft ファイルではありません: {0}
 @msg	the compressed file unpacks to more than {_1} MB	圧縮ファイルを展開すると {_1} MB を超えます
@@ -3713,7 +3703,7 @@ theme	Appearance	外観
 @msg	plug-in output: {0}	プラグインの出力に問題があります: {0}
 @msg	plug-in parameters: {0}	プラグインのパラメーターに問題があります: {0}
 @msg	plug-in trapped: {0}	プラグインが異常終了しました: {0}
-@msg	is not an image VectorCraft reads	VectorCraft で読み込める画像ではありません
+@msg	is not an image StitchFoundry reads	StitchFoundry で読み込める画像ではありません
 @msg	not found	見つかりません
 @msg	SVG parse error: {0}	SVG を解析できませんでした: {0}
 @msg	decimals must be {_1}–{_2} (got {_3})	小数点以下の桁数は {_1} から {_2} までにしてください (指定値: {_3})
@@ -3886,7 +3876,7 @@ theme	Appearance	外観
 @msg	no dialog open	ダイアログが開かれていません
 @msg	no file reader	ファイルの読み込み機能がありません
 @msg	no file writer	ファイルの書き込み機能がありません
-@msg	not a VectorCraft shortcut set (missing `overrides`)	VectorCraft のショートカットセットではありません (`overrides` がありません)
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	StitchFoundry のショートカットセットではありません (`overrides` がありません)
 @msg	shortcut for `{k}` must be a string	`{k}` のショートカットは文字列で指定してください
 @msg	tool shortcuts must be a single key (optionally with Shift)	ツールのショートカットには 1 つのキーを指定してください (Shift との組み合わせも可)
 @msg	unknown preset (one of {_1})	不明なプリセットです ({_1} のいずれかを指定してください)
@@ -3906,13 +3896,13 @@ theme	Appearance	外観
 @msg	unknown workspace (one of {_1})	不明なワークスペースです ({_1} のいずれかを指定してください)
 @msg	workspace name can't be empty	ワークスペース名を入力してください
 @msg	No fonts are missing in this document	このドキュメントには見つからないフォントはありません
-@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft は他のアプリやシステムのフォルダーを検索しません: {path}
-@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft は Users 内の Shared フォルダーと Public フォルダーを検索しません: {path}
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry は他のアプリやシステムのフォルダーを検索しません: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry は Users 内の Shared フォルダーと Public フォルダーを検索しません: {path}
 @msg	{path} is not a folder	{path} はフォルダーではありません
 @msg	the search couldn't start: try again in a moment	検索を開始できませんでした: しばらくしてからもう一度お試しください
 @msg	searching a folder isn't available on the web	Web 版ではフォルダーを検索できません
 @msg	every search thread stopped on an internal error (please report this bug)	すべての検索スレッドが内部エラーで停止しました (このバグを報告してください)
-@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	この環境では VectorCraft の Fonts フォルダーが設定されていません: デスクトップアプリと vectorcraft-cli が設定します
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	この環境では StitchFoundry の Fonts フォルダーが設定されていません: デスクトップアプリと vectorcraft-cli が設定します
 @msg	choose the font files to add	追加するフォントファイルを選択してください
 @msg	{n} font file(s) are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
@@ -4087,3 +4077,314 @@ lighting	Light	ライト
 	Stroke Pressure	ストロークの筆圧
 	Right Diagonal	右斜め
 	Left Diagonal	左斜め
+# Embroidery (StitchFoundry)
+	Add Inclination Line	縫い方向線を追加
+	After the selection	選択範囲の後
+	Appliqué	アップリケ
+	Apply Fabric	生地を適用
+	Artwork	アートワーク
+	Auto Direction	方向を自動設定
+	Auto Stitch Direction	ステッチ方向を自動設定
+	Auto spacing	自動間隔
+	Auto split	自動分割
+	Auto-Digitize Image	画像を自動デジタイズ
+	Automatic underlay	自動下縫い
+	Back to the start	最初に戻る
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Bean Run	三重縫い
+	Before the selection	選択範囲の前
+	Blanket	ブランケットステッチ
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	ブラシストローク
+	Calligraphy	カリグラフィ
+	Cell size	セルサイズ
+	Centre run	中央走り縫い
+	Clear Inclination Lines	縫い方向線を消去
+	Clear Lines	線を消去
+	Connectors	渡り糸
+	Constant	一定
+	Contour Fill	輪郭フィル
+	Convert Artwork to Embroidery	アートワークを刺繍に変換
+	Cover stitch	カバーステッチ
+	Cover width	カバー幅
+	Cross	クロス
+	Cross Fill	クロスステッチフィル
+	Delete Inclination Line	縫い方向線を削除
+	Densities (mm)	密度 (mm)
+	Density	密度
+	Design	デザイン
+	Design Information	デザイン情報
+	Digitizing Widget	デジタイズウィジェット
+	Dimmed	淡色表示
+	Direction: automatic	方向: 自動
+	Direction: fixed angle	方向: 固定角度
+	Direction: one inclination line	方向: 縫い方向線 1 本
+	Direction: turning along	方向:
+	Drag across the shape to add a line; drag a bead to move it	シェイプを横切るようにドラッグして線を追加、開始・終了マーカーをドラッグして移動
+	Each anchor point is a needle penetration.	各アンカーポイントが針落ち点になります。
+	Edge run	輪郭走り縫い
+	Edge run underlay	輪郭下縫い
+	Edit Lines	線を編集
+	Embroidery	刺繍
+	Embroidery Brush Tool	刺繍ブラシツール
+	Embroidery Settings	刺繍設定
+	Export Machine File	ミシン用ファイルを書き出し
+	Export Machine File…	ミシン用ファイルを書き出し…
+	Fabric	生地
+	Fabric color	生地の色
+	Feather	フェザー
+	Fill style	フィルの種類
+	Fits the hoop	刺繍枠に収まります
+	Give objects a stitch type in the Embroidery panel.	刺繍パネルでオブジェクトにステッチの種類を設定してください。
+	Gradient to	グラデーション終点
+	Hidden	非表示
+	Hide Digitizing Widget	デジタイズウィジェットを隠す
+	Hoop	刺繍枠
+	Inclination Tool	縫い方向ツール
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	刺繍枠より大きい
+	Lengths (mm)	長さ (mm)
+	Let sewing start and stop at the closest points again	縫い始めと縫い終わりを最も近い点に戻す
+	Machine Embroidery File	ミシン刺繍ファイル
+	Manual Stitches	手動ステッチ
+	Meander Fill	メアンダーフィル
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	モチーフ
+	Move Inclination Line	縫い方向線を移動
+	Needle points	針落ち点
+	New strokes	新しいストローク
+	No Stitches	ステッチなし
+	No hoop	刺繍枠なし
+	No stitches yet.	ステッチはまだありません。
+	Not set	未設定
+	Nothing stitched yet	まだ何も刺繍されていません
+	Object color	オブジェクトのカラー
+	Open a document to see its stitch sequence.	ドキュメントを開くと縫い順が表示されます。
+	Open or create a document to digitize embroidery.	ドキュメントを開くか作成すると、刺繍をデジタイズできます。
+	Path spacing	パスの間隔
+	Pause	一時停止
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	ダイヤルでブラシ、幅、密度、シェイプを選び、カンバスに描画
+	Place editable inclination lines (or pick the angle) automatically	編集可能な縫い方向線を自動で配置 (または角度を自動で選択)
+	Placement line and stop	配置線と停止
+	Play the stitches	ステッチを再生
+	Pull compensation	縮み補正
+	Radial Fill	放射状フィル
+	Randomness	ランダム度
+	Remove background	背景を削除
+	Reset Start and Stop	縫い始めと縫い終わりをリセット
+	Row offset	列のオフセット
+	Run	走り縫い
+	Run style	走り縫いの種類
+	Satin	サテン
+	Satin Fill	サテンフィル
+	Scallop	スカラップ
+	Select a path, shape or compound path to give it a stitch type.	パス、シェイプ、複合パスのいずれかを選択して、ステッチの種類を設定します。
+	Set Inclination Lines	縫い方向線を設定
+	Set Start and Stop	縫い始めと縫い終わりを設定
+	Set Thread	糸を設定
+	Sew earlier	先に縫う
+	Sew first	最初に縫う
+	Sew last	最後に縫う
+	Sew later	後で縫う
+	Sewing time	縫製時間
+	Sewn last	最後に縫う
+	Short stitches on curves	カーブでショートステッチ
+	Show every stitch	すべてのステッチを表示
+	Show stitches	ステッチの表示
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	一重
+	Sort by Thread Color	糸色順に並べ替え
+	Spiral Fill	スパイラルフィル
+	Stitch Parameters	ステッチのパラメーター
+	Stitch Plan	ステッチプラン
+	Stitch Sequence	縫い順
+	Stitch Type	ステッチの種類
+	Stitch length	ステッチの長さ
+	Stitch type	ステッチの種類
+	Stitches	ステッチ
+	Stop to trim fabric	停止して余分な生地をカット
+	Tack-down	仮止め
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	テーパー
+	Tatami Fill	タタミフィル
+	Tatami underlay	タタミ下縫い
+	Thread	糸
+	Thread colors	糸色数
+	Trim after	終了後に糸切り
+	Trims	糸切り
+	Triple	三重
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	画像をステッチに変換: 細い部分はサテン、残りはタタミフィルになります。
+	Wave	ウェーブ
+	Widget values	ウィジェットの値
+	Width profile	幅プロファイル
+	Widths (mm)	幅 (mm)
+	Zigzag	ジグザグ
+	colors	色
+	inclination lines	本の縫い方向線に沿って回転
+	stitches	針
+	trims	回の糸切り
+	Brush	ブラシ
+	Length	長さ
+	Bean	三重縫い
+	Steil	サテンライン
+	Triangle	三角形
+	Hexagon	六角形
+	Heart	ハート
+	Arrow	矢印
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	自動デジタイズでステッチにできるシェイプが見つかりません: 「ノイズ」を下げるか「カラー」を上げてください
+@msg	Auto-Digitize: the image traced to nothing	自動デジタイズ: 画像をトレースしても何も得られませんでした
+@msg	can't open `{title}`: the file has no stitches	`{title}` を開けません: ファイルにステッチがありません
+@msg	can't open `{title}`: {e}	`{title}` を開けません: {e}
+@msg	{_1} export failed: {e}	{_1} の書き出しに失敗しました: {e}
+	Stitch Lines	縫い目の線
+	Tatami	タタミ
+# Embroidery (StitchFoundry), phase 1
+	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	SiteSentrix 制作。ArtCraft チームの VectorCraft がベースです。MIT OR Apache-2.0。フォント：Source Sans 3、Inter、JetBrains Mono (OFL)。アイコン：Lucide (ISC) + VectorCraft。
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	バージョン {version} — Rust だけで書かれたオープンソースのミシン刺繍デジタイズアプリ。
+	Machine embroidery digitizing — fast, open, scriptable.	ミシン刺繍のデジタイズ — 高速・オープン・スクリプト対応
+	Split Here	ここで分割
+	Split the object in two at the picked stitch	選んだステッチでオブジェクトを2つに分割します
+	Split Object	オブジェクトを分割
+	Check settings	チェックの設定
+	Dense from (layers)	高密度の基準（層）
+	Give every stitched object the chart's closest thread	すべての刺繍オブジェクトに色見本で最も近い糸を割り当てます
+	Hidden (not sewn)	非表示（縫われません）
+	Inclination lines	縫い方向線
+	Long stitches from	長いステッチの基準
+	Match Threads to Chart	糸を色見本に合わせる
+	Omit last stitch	最後のステッチを省く
+	Small lettering under	小さい文字の基準
+	Start and stop	開始点と終了点
+	Thread chart	糸の色見本
+	Tie style	止め縫いの種類
+	Tiny objects under	極小オブジェクトの基準
+	Travel by	移動単位
+	Double	ダブル
+machine	Trim	糸切り
+	Column A/B Tool	コラム A/B ツール
+	Column A/B	コラム A/B
+	Tatami stitches	タタミステッチ
+	Make Current	現在の設定にする
+	New objects of this stitch type take these properties	このステッチの種類の新しいオブジェクトにこれらのプロパティを使います
+	Properties for New Objects	新規オブジェクトのプロパティ
+	Objects you give a stitch type take these properties.	ステッチの種類を設定したオブジェクトにはこれらのプロパティが使われます。
+	Reset to Defaults	初期設定に戻す
+	Fabric settings	生地の設定
+	Satin density	サテンの密度
+	Fill density	フィルの密度
+	Fill stitch length	フィルのステッチの長さ
+	Underlay spacing	下縫いの間隔
+	Fill underlay	フィルの下縫い
+	Topping	トッピング
+	Save as New Fabric	新しい生地として保存
+	Seconds per trim	糸切り1回の秒数
+	Seconds per color change	色替え1回の秒数
+	Save to Machine	ミシンに保存
+	Keep these settings in the machine's profile, for new designs	この設定をミシンのプロファイルに保存し、新しいデザインで使います
+	Reset Machine	ミシンをリセット
+	Put the machine's profile back to how it ships, and use it	ミシンのプロファイルを出荷時の状態に戻して使います
+	Delete Machine	ミシンを削除
+	Save as New Machine	新しいミシンとして保存
+	A machine profile of your own with these settings	この設定で独自のミシンプロファイルを作成します
+	My Machine	マイミシン
+	A copy of this fabric to change	この生地のコピーを作成して変更します
+	Delete Fabric	生地を削除
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	スタイルはまだありません。ステッチを設定したオブジェクトを選択してスタイルを作成すると、そのステッチのプロパティを再利用できます。
+	New Embroidery Style	新規刺繍スタイル
+	Delete Embroidery Style	刺繍スタイルを削除
+	Duplicate Embroidery Style	刺繍スタイルを複製
+	Redefine Embroidery Style	刺繍スタイルを再定義
+	Break Link to Embroidery Style	刺繍スタイルへのリンクを解除
+	Rename Embroidery Style…	刺繍スタイルの名前を変更…
+	Embroidery Styles	刺繍スタイル
+	Make Properties Current	プロパティを現在の設定にする
+	Current Properties	現在のプロパティ
+	New Object Properties	新規オブジェクトのプロパティ
+	Reset Current Properties	現在のプロパティをリセット
+	Apply Embroidery Style	刺繍スタイルを適用
+	Rename Embroidery Style	刺繍スタイルの名前を変更
+	Save Fabric	生地を保存
+	Machine Profiles	ミシンプロファイル
+	Save Machine Profile	ミシンプロファイルを保存
+	Delete Machine Profile	ミシンプロファイルを削除
+	Auto Sequence	縫い順を自動設定
+	Branch	ブランチ
+	Break Apart	分解
+	Sew the objects separately again	オブジェクトを再び個別に縫う
+	These objects are sewn as one path (a branch).	これらのオブジェクトは1本の経路（ブランチ）として縫われます。
+	Clear Machine Function	ミシン機能を削除
+	Insert Machine Function	ミシン機能を挿入
+	Object Stitches	オブジェクトのステッチ
+@msg	`after` is −1 to {_1}	`after` は −1 から {_1} までです
+@msg	`{what}` is [x, y]	`{what}` は [x, y] です
+@msg	`{what}` is [x, y] (numbers)	`{what}` は [x, y]（数値）です
+@msg	each op needs `op`: move, delete or insert	各操作には `op` が必要です：move、delete、insert のいずれか
+@msg	indices are record numbers (0, 1, 2…)	インデックスはレコード番号です（0、1、2…）
+@msg	missing `after` (−1 inserts first)	`after` がありません（−1 で先頭に挿入）
+@msg	missing `indices`	`indices` がありません
+@msg	no record {i}: the object has {len}	レコード {i} はありません：オブジェクトのレコード数は {len} です
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	不明な cmd `{c}`：stitch、jump、trim、stop のいずれか
+@msg	unknown op `{other}`: move, delete or insert	不明な op `{other}`：move、delete、insert のいずれか
+	Stitch Edit Tool	ステッチ編集ツール
+	Stitch List	ステッチリスト
+	Stop after	後で停止
+	Stitches edited by hand: the shape no longer changes them.	手で編集したステッチ：形を変えてもステッチは変わりません。
+	Edit Stitches	ステッチを編集
+	Pick, move, add and delete single stitches	一針ずつ選択・移動・追加・削除します
+	Regenerate Stitches	ステッチを再生成
+	Drop the hand edits and stitch the shape again	手での編集を破棄して形から縫い直します
+	Freeze Stitches	ステッチを固定
+	Function	機能
+	X (mm)	X（mm）
+	Y (mm)	Y（mm）
+	Stitch	ステッチ
+	Jump	ジャンプ
+	Color change	色替え
+	End	終了
+	#	番号
+	Open a document to see its stitches.	ドキュメントを開くとステッチが表示されます。
+	Machine	ミシン
+	Machine settings	ミシンの設定
+	Longest stitch	最長の針目
+	Longest jump	最長のジャンプ
+	Shortest stitch	最短の針目
+	Trim jumps longer than	この長さを超えるジャンプは糸切り
+	Tie length	止め縫いの長さ
+	Stitches per minute	毎分の針数
+	commercial machines	業務用ミシン
+	home machines	家庭用ミシン
+	Remove underlying stitching	下の縫い目を取り除く
+	Overlap	重なり
+	Turn	回り込み
+	Capped	切り落とし
+	Backstitch	返し縫い
+	Check Again	再チェック
+	Check Design	デザインをチェック
+	Click to select and show it	クリックして選択・表示
+	Design setting	デザインの設定
+	Different on each side	左右で別の値
+	Double zigzag	二重ジグザグ
+	Fill Holes	穴を埋める
+	Flip to the other side	反対側にする
+	Lettering only {n} mm tall is hard to sew clearly	高さ {n} mm の文字はきれいに縫いにくい
+	Look for dense spots, long stitches, tiny objects and small lettering	密度の高い箇所、長いステッチ、極小のオブジェクト、小さい文字を探します
+	Makes no stitches	ステッチが生成されません
+	No problems found.	問題は見つかりませんでした。
+	Passes	縫い回数
+	Preserve long stitches	長いステッチを保持
+	Pull comp., side 1	縮み補正 (側 1)
+	Pull comp., side 2	縮み補正 (側 2)
+	Remove Holes	穴を削除
+	Reverse Stitch Direction	縫い方向を反転
+	Stem Stitch	ステムステッチ
+	Stem stitch	ステムステッチ
+	Stitches up to {n} mm long can snag	最長 {n} mm のステッチは引っかかることがあります
+	The design is larger than the hoop	デザインが刺繍枠より大きくなっています
+	Thread Color	糸色
+	Tie in	縫い始めの止め縫い
+	Tie off	縫い終わりの止め縫い
+	Tiny object: may not sew cleanly	極小のオブジェクト: きれいに縫えない場合があります
+	Very dense: about {n} layers of thread here	高密度: ここは約 {n} 層の糸があります

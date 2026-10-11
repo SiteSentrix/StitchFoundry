@@ -172,6 +172,8 @@ pub struct DocState {
     /// Transform Again after a perspective move or scale (Perspective Selection tool): the
     /// `perspective.transform` params it repeats. `None` once an ordinary transform follows.
     pub last_perspective: Option<Value>,
+    /// The embroidery stitch plan cache (shared by commands and the canvas).
+    pub embroidery: cmd::embroidery::EmbroideryState,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -261,6 +263,7 @@ impl DocState {
             imported_from: None,
             import_losses: vec![],
             last_perspective: None,
+            embroidery: Default::default(),
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -602,8 +605,13 @@ pub struct Prefs {
     /// not a Preferences dialog field: resetting the preferences keeps it; `pdf.preset.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub pdf_presets: Vec<vectorcraft_pdf::PdfPreset>,
+    /// Embroidery machine profiles: the standard ones the user changed and the user's own
+    /// (`embroidery.machine.*`; the standard ones as they ship aren't stored). A local library,
+    /// not a Preferences dialog field: resetting the preferences keeps it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub embroidery_machines: Vec<sf_core::machines::MachineProfile>,
     // File Handling (continued)
-    /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
+    /// Where Save as Template and New from Template start ("" = `Documents/StitchFoundry Templates`).
     pub templates_folder: String,
     /// Open older native files as "<name> [Converted]" so Save asks for a new name.
     pub append_converted: bool,
@@ -777,6 +785,7 @@ impl Default for Prefs {
             new_doc_presets: vec![],
             recent_new_docs: vec![],
             pdf_presets: vec![],
+            embroidery_machines: vec![],
             templates_folder: String::new(),
             append_converted: true,
             use_compression: false,
@@ -1474,6 +1483,8 @@ mod tests_draw2;
 mod tests_editcolors;
 #[cfg(test)]
 mod tests_effectedit;
+#[cfg(test)]
+mod tests_embroidery;
 #[cfg(test)]
 mod tests_emptytype;
 #[cfg(test)]

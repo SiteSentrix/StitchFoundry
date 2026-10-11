@@ -48,7 +48,7 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	数值较小时紧贴所绘线条，较大时锚点较少、曲线更平滑。
 	A new preset starting from the selected one	以所选预设为基础的新预设
 	A saved copy of the selected preset	所选预设的副本
-	About VectorCraft	关于 VectorCraft
+	About StitchFoundry	关于 StitchFoundry
 	above	以上
 	Absolute Position	绝对位置
 	Accurate	精确
@@ -186,8 +186,6 @@
 	Artboard {number}	画板 {number}
 	Artboard:	画板：
 	Artboards	画板
-	ArtCraft Website	ArtCraft 网站
-	ArtCraft website	ArtCraft 网站
 	Artwork Colors	图稿颜色
 	As Multiple Assets	作为多个资源
 	As Single Asset	作为单一资源
@@ -642,7 +640,6 @@
 	Discard Recovered Documents	丢弃已恢复的文档
 	Discard White Overprint in Output	输出时放弃白色叠印
 	Discarded {} recovered document(s)	已放弃 {} 份恢复的文档
-	Discord	Discord
 	Discretionary Hyphen	选择性连字号
 	Discretionary Ligatures	任意连字
 	Display All Blacks Accurately	准确显示所有黑色
@@ -1240,9 +1237,6 @@
 	Isolate Group	隔离编组
 	Italian	意大利语
 	Join	连接
-	Join Our Discord	加入 Discord
-	Join our Discord	加入我们的 Discord
-	Join the ArtCraft community on Discord (discord.gg/artcraft)	在 Discord 加入 ArtCraft 社区 (discord.gg/artcraft)
 	Join the lines of each paragraph	合并每个段落的行
 	Join Tool	连接工具
 	Justification…	对齐设置…
@@ -1817,7 +1811,6 @@
 	Paragraph Style Options	段落样式选项
 	Paragraph Styles	段落样式
 	Paragraph Symbol	段落符号
-	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft 的一部分。MIT OR Apache-2.0。字体：Source Sans 3、Inter、JetBrains Mono (OFL)。图标：Lucide (ISC) + VectorCraft。
 	Password	口令
 	Paste	粘贴
 	Paste in Back	贴在后面
@@ -1989,7 +1982,7 @@
 	Quarter Space	四分之一空格
 	Quick Actions	快速操作
 	Quickly start a new file	快速新建文件
-	Quit VectorCraft	退出 VectorCraft
+	Quit StitchFoundry	退出 StitchFoundry
 	Radar Graph Tool	雷达图工具
 	Radial	径向
 	Radial Glows	径向光晕
@@ -2107,7 +2100,7 @@
 	{count} folder(s) or file(s) couldn't be read	有 {count} 个文件夹或文件无法读取
 	The search stopped at its limit: search a smaller folder.	搜索已达上限而停止：请搜索较小的文件夹。
 	Copy only fonts you own or are licensed to install.	只复制您拥有或已获得安装许可的字体。
-	VectorCraft copies the fonts to {folder}.	VectorCraft 会将字体复制到 {folder}。
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry 会将字体复制到 {folder}。
 	Registered Trademark Symbol	注册商标符号
 	Registration marks	对位标记
 	Registry name:	登录名称：
@@ -2205,7 +2198,7 @@
 	Revert	恢复
 	Revert to the saved version of “{name}”?	要恢复为“{name}”已存储的版本吗？
 	Replace “{name}”, the file this document was opened from?	要替换“{name}”（打开此文档的源文件）吗？
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	打开时略去了 VectorCraft 尚无法读取的内容（{what}），替换该文件会永久丢失这些内容。要保留它们，请以其他名称存储。
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	打开时略去了 StitchFoundry 尚无法读取的内容（{what}），替换该文件会永久丢失这些内容。要保留它们，请以其他名称存储。
 	Revolve…	回转…
 	RGB Color	RGB 颜色
 	Right	右
@@ -2983,14 +2976,11 @@
 	Vector Effects	矢量效果
 	Vector Halftone	矢量半色调
 	Vector Halftone…	矢量半调…
-	Vector illustration — fast, open, scriptable.	矢量插画　—　快速、开放、可脚本化。
-	VectorCraft	VectorCraft
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft 上次未正常退出。以下文档有未存储的更改：
-	VectorCraft Help…	VectorCraft 说明…
-	VectorCraft on getartcraft.com	getartcraft.com 上的 VectorCraft
-	VectorCraft on GitHub	GitHub 上的 VectorCraft
+	StitchFoundry	StitchFoundry
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry 上次未正常退出。以下文档有未存储的更改：
+	StitchFoundry Help…	StitchFoundry 说明…
+	StitchFoundry on GitHub	GitHub 上的 StitchFoundry
 	Vectors	矢量
-	Version {version} — open-source vector illustration in pure Rust.	版本 {version} — 以纯 Rust 打造的开放原始码矢量插画软件。
 	Version:	版本：
 	Vertical	竖排
 	Vertical %	垂直 %
@@ -3028,7 +3018,7 @@
 	Web Snap:	Web 色偏：
 	Weight	粗细
 	Weight:	粗细：
-	Welcome to VectorCraft	欢迎使用 VectorCraft
+	Welcome to StitchFoundry	欢迎使用 StitchFoundry
 	When pasting text	粘贴文字时
 	White	白色
 	Widget Position:	Widget 位置：
@@ -3163,7 +3153,7 @@
 	  — {n} characters from another font	  — {n} 个字符来自其他字体
 	[Normal Character Style]	[正常字符样式]
 	[Normal Paragraph Style]	[正常段落样式]
-	VectorCraft Defaults	VectorCraft 默认
+	StitchFoundry Defaults	StitchFoundry 默认
 	Menu Commands	菜单命令
 	Tool	工具
 	Command	命令
@@ -3232,7 +3222,6 @@
 	X:	X：
 	Y:	Y：
 	Text Displayed in Cell	单元格中显示的文本
-	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft 的一部分。MIT 或 Apache-2.0 许可。字体：Source Sans 3、Inter、JetBrains Mono、Noto Sans SC (OFL)。图标：Lucide (ISC)+ VectorCraft。
 	RGB	RGB
 	Pattern Swatches	图案色板
 	Default Graphic Style	默认图形样式
@@ -3276,10 +3265,10 @@
 	Visible & Printable Layers	可见且可打印的图层
 	SVG 1.1	SVG 1.1
 	Unsorted	不排序
-	Differences from VectorCraft Default:	与 VectorCraft 默认设置的差异：
+	Differences from StitchFoundry Default:	与 StitchFoundry 默认设置的差异：
 	Differences from [Default]:	与 [默认] 的差异：
-	Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.	保持文档可编辑：VectorCraft 可无损重新打开该 PDF。适合还会再次编辑的文件。
-	VectorCraft Default	VectorCraft 默认设置
+	Keeps the document editable: StitchFoundry reopens the PDF with nothing lost. For files you'll edit again.	保持文档可编辑：StitchFoundry 可无损重新打开该 PDF。适合还会再次编辑的文件。
+	StitchFoundry Default	StitchFoundry 默认设置
 	PDF 1.7	PDF 1.7
 	[Default]	[默认]
 	[Custom]	[自定义]
@@ -3292,7 +3281,7 @@
 	[PDF/X-4:2010]	[PDF/X-4:2010]
 	[Press Quality]	[印刷质量]
 	[Smallest File Size]	[最小文件大小]
-	[VectorCraft Default]	[VectorCraft 默认设置]
+	[StitchFoundry Default]	[StitchFoundry 默认设置]
 	High Resolution	高分辨率
 	Maximize Editability	最大化可编辑性
 	Preserve Appearance	保留外观
@@ -3370,7 +3359,7 @@
 	Technical Drawing	技术绘图
 	Photo Low Fidelity	低保真照片
 	Restricted Colors	受限颜色
-	VectorCraft Generic CMYK (SWOP-like)	VectorCraft 通用 CMYK (类 SWOP)
+	StitchFoundry Generic CMYK (SWOP-like)	StitchFoundry 通用 CMYK (类 SWOP)
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	Working RGB	工作 RGB
 	Dot Gain 15%	网点扩大 15%
@@ -3399,7 +3388,7 @@
 # The Layers panel, the graphics processor preference and the font menu's filters.
 	All Scripts	所有文字系统
 	Any Kind	所有类型
-	Applies the next time VectorCraft starts.	下次启动 VectorCraft 时生效。
+	Applies the next time StitchFoundry starts.	下次启动 StitchFoundry 时生效。
 	Collapse to Icons	折叠为图标
 	Decorative	装饰
 	Dim Images to:	图像变暗至：
@@ -3529,7 +3518,7 @@ axis	Both	两者
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	服务
-	Hide VectorCraft	隐藏 VectorCraft
+	Hide StitchFoundry	隐藏 StitchFoundry
 	Bring All to Front	前置全部窗口
 	Settings	设置
 	Break Link	断开链接
@@ -3723,3 +3712,298 @@ lighting	Light	光源
 	Stroke Pressure	描边压力
 	Right Diagonal	右对角线
 	Left Diagonal	左对角线
+# Embroidery (StitchFoundry)
+	Add Inclination Line	添加针迹方向线
+	After the selection	所选对象之后
+	Appliqué	贴布绣
+	Apply Fabric	应用布料
+	Artwork	图稿
+	Auto Direction	自动方向
+	Auto Stitch Direction	自动针迹方向
+	Auto spacing	自动间距
+	Auto split	自动分割
+	Auto-Digitize Image	自动打版图像
+	Automatic underlay	自动打底
+	Back to the start	回到开头
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Bean Run	三重平针
+	Before the selection	所选对象之前
+	Blanket	毛边绣
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	画笔描边
+	Calligraphy	书法
+	Cell size	格子大小
+	Centre run	中心平针
+	Clear Inclination Lines	清除针迹方向线
+	Clear Lines	清除线条
+	Connectors	连接线
+	Constant	固定
+	Contour Fill	轮廓填充
+	Convert Artwork to Embroidery	将图稿转换为刺绣
+	Cover stitch	包边针
+	Cover width	包边宽度
+	Cross	十字
+	Cross Fill	十字绣填充
+	Delete Inclination Line	删除针迹方向线
+	Densities (mm)	密度 (mm)
+	Density	密度
+	Design	图案
+	Design Information	图案信息
+	Digitizing Widget	打版控件
+	Dimmed	淡化
+	Direction: automatic	方向：自动
+	Direction: fixed angle	方向：固定角度
+	Direction: one inclination line	方向：1 条针迹方向线
+	Direction: turning along	方向：沿
+	Drag across the shape to add a line; drag a bead to move it	横跨形状拖动以添加线条；拖动起点或终点标记可将其移动
+	Each anchor point is a needle penetration.	每个锚点都是一个落针点。
+	Edge run	边缘平针
+	Edge run underlay	边缘打底
+	Edit Lines	编辑线条
+	Embroidery	刺绣
+	Embroidery Brush Tool	刺绣画笔工具
+	Embroidery Settings	刺绣设置
+	Export Machine File	导出机绣文件
+	Export Machine File…	导出机绣文件…
+	Fabric	布料
+	Fabric color	布料颜色
+	Feather	羽毛
+	Fill style	填充样式
+	Fits the hoop	可放入绣框
+	Give objects a stitch type in the Embroidery panel.	在“刺绣”面板中为对象指定针迹类型。
+	Gradient to	渐变至
+	Hidden	隐藏
+	Hide Digitizing Widget	隐藏打版控件
+	Hoop	绣框
+	Inclination Tool	针迹方向工具
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	超出绣框
+	Lengths (mm)	长度 (mm)
+	Let sewing start and stop at the closest points again	重新从最近的点开始和结束绣制
+	Machine Embroidery File	机绣文件
+	Manual Stitches	手动针迹
+	Meander Fill	蜿蜒填充
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	图样
+	Move Inclination Line	移动针迹方向线
+	Needle points	落针点
+	New strokes	新笔触
+	No Stitches	无针迹
+	No hoop	无绣框
+	No stitches yet.	尚无针迹。
+	Not set	未设置
+	Nothing stitched yet	尚未绣制任何内容
+	Object color	对象颜色
+	Open a document to see its stitch sequence.	打开文档以查看其刺绣顺序。
+	Open or create a document to digitize embroidery.	打开或新建文档以进行刺绣打版。
+	Path spacing	路径间距
+	Pause	暂停
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	从转盘选择画笔、宽度、密度和形状，然后在画布上绘制
+	Place editable inclination lines (or pick the angle) automatically	自动放置可编辑的针迹方向线 (或选择角度)
+	Placement line and stop	定位线和停止
+	Play the stitches	播放针迹
+	Pull compensation	拉力补偿
+	Radial Fill	放射状填充
+	Randomness	随机度
+	Remove background	移除背景
+	Reset Start and Stop	重置起点和终点
+	Row offset	行偏移
+	Run	平针
+	Run style	平针样式
+	Satin	缎纹
+	Satin Fill	缎纹填充
+	Scallop	扇贝
+	Select a path, shape or compound path to give it a stitch type.	选择路径、形状或复合路径以指定针迹类型。
+	Set Inclination Lines	设置针迹方向线
+	Set Start and Stop	设置起点和终点
+	Set Thread	设置绣线
+	Sew earlier	提前绣制
+	Sew first	最先绣制
+	Sew last	最后绣制
+	Sew later	延后绣制
+	Sewing time	刺绣时间
+	Sewn last	最后绣制
+	Short stitches on curves	曲线处使用短针
+	Show every stitch	显示所有针迹
+	Show stitches	显示针迹
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	单一
+	Sort by Thread Color	按绣线颜色排序
+	Spiral Fill	螺旋填充
+	Stitch Parameters	针迹参数
+	Stitch Plan	针迹计划
+	Stitch Sequence	刺绣顺序
+	Stitch Type	针迹类型
+	Stitch length	针距
+	Stitch type	针迹类型
+	Stitches	针迹
+	Stop to trim fabric	停止以修剪布料
+	Tack-down	固定针
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	渐细
+	Tatami Fill	榻榻米填充
+	Tatami underlay	榻榻米打底
+	Thread	绣线
+	Thread colors	绣线颜色数
+	Trim after	完成后剪线
+	Trims	剪线
+	Triple	三重
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	将图像转换为针迹：窄的部分变为缎纹，其余变为榻榻米填充。
+	Wave	波浪
+	Widget values	控件值
+	Width profile	宽度配置文件
+	Widths (mm)	宽度 (mm)
+	Zigzag	之字形
+	colors	色
+	inclination lines	条针迹方向线转向
+	stitches	针
+	trims	次剪线
+	Brush	画笔
+	Length	长度
+	Bean	三重平针
+	Steil	缎纹线
+	Triangle	三角形
+	Hexagon	六边形
+	Heart	心形
+	Arrow	箭头
+	Stitch Lines	针迹线
+	Tatami	榻榻米
+# Embroidery (StitchFoundry), phase 1
+	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	由 SiteSentrix 制作，基于 ArtCraft 团队的 VectorCraft。MIT OR Apache-2.0。字体：Source Sans 3、Inter、JetBrains Mono (OFL)。图标：Lucide (ISC) + VectorCraft。
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	版本 {version} — 以纯 Rust 打造的开放原始码电脑刺绣制版软件。
+	Machine embroidery digitizing — fast, open, scriptable.	电脑刺绣制版　—　快速、开放、可脚本化。
+	Split Here	在此分割
+	Split the object in two at the picked stitch	在所选针迹处将对象一分为二
+	Split Object	分割对象
+	Check settings	检查设置
+	Dense from (layers)	过密起点（层）
+	Give every stitched object the chart's closest thread	为每个刺绣对象指定色卡中最接近的绣线
+	Hidden (not sewn)	已隐藏（不绣制）
+	Inclination lines	针迹方向线
+	Long stitches from	长针迹起点
+	Match Threads to Chart	将绣线对应至色卡
+	Omit last stitch	省略最后一针
+	Small lettering under	小字低于
+	Start and stop	起点与终点
+	Thread chart	绣线色卡
+	Tie style	打结方式
+	Tiny objects under	微小对象低于
+	Travel by	移动单位
+	Double	双重
+machine	Trim	剪线
+	Column A/B Tool	A/B 柱状工具
+	Column A/B	A/B 柱状
+	Tatami stitches	榻榻米针迹
+	Make Current	设为当前
+	New objects of this stitch type take these properties	此针迹类型的新对象将采用这些属性
+	Properties for New Objects	新对象的属性
+	Objects you give a stitch type take these properties.	您指定针迹类型的对象将采用这些属性。
+	Fabric settings	布料设置
+	Satin density	缎纹密度
+	Fill density	填充密度
+	Fill stitch length	填充针距
+	Underlay spacing	打底间距
+	Fill underlay	填充打底
+	Topping	表面衬
+	Save as New Fabric	另存为新布料
+	Seconds per trim	每次剪线秒数
+	Seconds per color change	每次换色秒数
+	Save to Machine	保存到机器
+	Keep these settings in the machine's profile, for new designs	将这些设置保存到机器配置文件，供新设计使用
+	Reset Machine	重置机器
+	Put the machine's profile back to how it ships, and use it	将机器配置文件恢复为出厂状态并使用
+	Delete Machine	删除机器
+	Save as New Machine	另存为新机器
+	A machine profile of your own with these settings	使用这些设置创建自己的机器配置文件
+	My Machine	我的机器
+	A copy of this fabric to change	创建此布料的副本以进行修改
+	Delete Fabric	删除布料
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	尚无样式。选择已设置针迹的对象并创建样式，即可重复使用其针迹属性。
+	New Embroidery Style	新建刺绣样式
+	Delete Embroidery Style	删除刺绣样式
+	Duplicate Embroidery Style	复制刺绣样式
+	Redefine Embroidery Style	重新定义刺绣样式
+	Break Link to Embroidery Style	断开与刺绣样式的链接
+	Rename Embroidery Style…	重命名刺绣样式…
+	Embroidery Styles	刺绣样式
+	Make Properties Current	将属性设为当前
+	Current Properties	当前属性
+	New Object Properties	新对象属性
+	Reset Current Properties	重置当前属性
+	Apply Embroidery Style	应用刺绣样式
+	Rename Embroidery Style	重命名刺绣样式
+	Save Fabric	保存布料
+	Machine Profiles	机器配置文件
+	Save Machine Profile	保存机器配置文件
+	Delete Machine Profile	删除机器配置文件
+	Auto Sequence	自动排序
+	Branch	分支
+	Break Apart	拆分
+	Sew the objects separately again	重新分别绣制这些对象
+	These objects are sewn as one path (a branch).	这些对象以单一路径（分支）绣制。
+	Clear Machine Function	清除机器功能
+	Insert Machine Function	插入机器功能
+	Object Stitches	对象针迹
+	Stitch Edit Tool	针迹编辑工具
+	Stitch List	针迹列表
+	Stop after	之后停止
+	Stitches edited by hand: the shape no longer changes them.	针迹已手动编辑：形状不再改变它们。
+	Edit Stitches	编辑针迹
+	Pick, move, add and delete single stitches	逐针选择、移动、添加和删除
+	Regenerate Stitches	重新生成针迹
+	Drop the hand edits and stitch the shape again	放弃手动编辑并按形状重新绣制
+	Freeze Stitches	固定针迹
+	Function	功能
+	X (mm)	X（mm）
+	Y (mm)	Y（mm）
+	Stitch	针迹
+	Jump	跳针
+	Color change	换色
+	End	结束
+	#	编号
+	Open a document to see its stitches.	打开文档即可查看其针迹。
+	Machine	机器
+	Machine settings	机器设置
+	Longest stitch	最长针距
+	Longest jump	最长跳针
+	Shortest stitch	最短针距
+	Trim jumps longer than	跳针长于此即剪线
+	Tie length	打结长度
+	Stitches per minute	每分钟针数
+	commercial machines	商用机器
+	home machines	家用机器
+	Remove underlying stitching	移除下层针迹
+	Overlap	重叠
+	Turn	转向
+	Capped	截角
+	Backstitch	回针绣
+	Check Again	重新检查
+	Check Design	检查图案
+	Click to select and show it	单击以选择并显示
+	Design setting	图案设置
+	Different on each side	两侧不同
+	Double zigzag	双重之字形
+	Fill Holes	填补孔洞
+	Flip to the other side	翻到另一侧
+	Lettering only {n} mm tall is hard to sew clearly	只有 {n} mm 高的文字难以绣得清楚
+	Look for dense spots, long stitches, tiny objects and small lettering	查找过密处、长针迹、极小对象和小字
+	Makes no stitches	不产生针迹
+	No problems found.	未发现问题。
+	Passes	缝制次数
+	Preserve long stitches	保留长针迹
+	Pull comp., side 1	拉力补偿（侧 1）
+	Pull comp., side 2	拉力补偿（侧 2）
+	Remove Holes	移除孔洞
+	Reverse Stitch Direction	反转针迹方向
+	Stem Stitch	轮廓绣
+	Stem stitch	轮廓绣
+	Stitches up to {n} mm long can snag	长达 {n} mm 的针迹可能会勾线
+	The design is larger than the hoop	图案大于绣框
+	Thread Color	绣线颜色
+	Tie in	起针打结
+	Tie off	收针打结
+	Tiny object: may not sew cleanly	极小对象：可能无法绣得整齐
+	Very dense: about {n} layers of thread here	过密：此处约有 {n} 层绣线

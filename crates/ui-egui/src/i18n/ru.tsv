@@ -85,7 +85,7 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Меньшее значение точнее повторяет обводку; большее даёт меньше точек и более гладкие кривые.
 	A new preset starting from the selected one	Новый набор на основе выбранного
 	A saved copy of the selected preset	Сохранённая копия выбранного набора
-	About VectorCraft	О программе VectorCraft
+	About StitchFoundry	О программе StitchFoundry
 	above	сверху
 	Absolute Position	Абсолютная позиция
 	Accurate	Точный
@@ -188,7 +188,7 @@
 	Appearance Panel	Панель «Оформление»
 	Appearance panel	Панель «Оформление»
 	Applies when the linked file is relinked or updated.	Применяется при повторной привязке или обновлении связанного файла.
-	Applies the next time VectorCraft starts.	Применяется при следующем запуске VectorCraft.
+	Applies the next time StitchFoundry starts.	Применяется при следующем запуске StitchFoundry.
 	Apply	Применить
 	Apply Brush	Применить кисть
 	Apply Character Style	Применить стиль символа
@@ -226,8 +226,6 @@
 	Artboard {number}	Монтажная область {number}
 	Artboard:	Монтажная область:
 	Artboards	Монтажные области
-	ArtCraft Website	Веб-сайт ArtCraft
-	ArtCraft website	Веб-сайт ArtCraft
 	Artwork Colors	Цвета рисунка
 	As Multiple Assets	Как несколько ресурсов
 	As Single Asset	Как один ресурс
@@ -685,7 +683,6 @@
 	Discard Recovered Documents	Отменить восстановленные документы
 	Discard White Overprint in Output	Отменить наложение белого при выводе
 	Discarded {} recovered document(s)	Отменено восстановленных документов: {}
-	Discord	Discord
 	Discretionary Hyphen	Мягкий перенос
 	Discretionary Ligatures	Дискреционные лигатуры
 	Display All Blacks Accurately	Отображать все чёрные точно
@@ -1294,9 +1291,6 @@
 	Italian	Итальянский
 	Japanese	Японский
 	Join	Соединить
-	Join Our Discord	Присоединяйтесь к нашему Discord
-	Join our Discord	Присоединяйтесь к нашему Discord
-	Join the ArtCraft community on Discord (discord.gg/artcraft)	Присоединяйтесь к сообществу ArtCraft в Discord (discord.gg/artcraft)
 	Join the lines of each paragraph	Соединять строки каждого абзаца
 	Join Tool	Инструмент «Соединение»
 	Justification…	Выключка…
@@ -1887,7 +1881,6 @@
 	Paragraph Style Options	Параметры стиля абзаца
 	Paragraph Styles	Стили абзацев
 	Paragraph Symbol	Символ абзаца
-	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Часть ArtCraft. MIT OR Apache-2.0. Шрифты: Source Sans 3, Inter, JetBrains Mono (OFL). Значки: Lucide (ISC) + VectorCraft.
 	Password	Пароль
 	Paste	Вставить
 	Paste in Back	Вставить позади
@@ -2060,7 +2053,7 @@
 	Quarter Space	Четвертная шпация
 	Quick Actions	Быстрые действия
 	Quickly start a new file	Быстро создать новый файл
-	Quit VectorCraft	Выйти из VectorCraft
+	Quit StitchFoundry	Выйти из StitchFoundry
 	Radar Graph Tool	Инструмент «Лепестковая диаграмма»
 	Radial	Радиальный
 	Radial Glows	Радиальные свечения
@@ -2178,7 +2171,7 @@
 	{count} folder(s) or file(s) couldn't be read	Не удалось прочитать папок или файлов: {count}
 	The search stopped at its limit: search a smaller folder.	Поиск остановился на пределе: выберите папку поменьше.
 	Copy only fonts you own or are licensed to install.	Копируйте только шрифты, которые принадлежат вам или которые вы вправе устанавливать по лицензии.
-	VectorCraft copies the fonts to {folder}.	VectorCraft копирует шрифты в {folder}.
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry копирует шрифты в {folder}.
 	Registered Trademark Symbol	Символ зарегистрированного товарного знака
 	Registration marks	Метки совмещения
 	Registry name:	Имя в реестре:
@@ -2278,7 +2271,7 @@
 	Revert	Вернуть
 	Revert to the saved version of “{name}”?	Вернуться к сохранённой версии «{name}»?
 	Replace “{name}”, the file this document was opened from?	Заменить «{name}» — файл, из которого открыт этот документ?
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	При открытии было пропущено то, что VectorCraft пока не умеет читать ({what}), поэтому замена файла потеряет это навсегда. Чтобы сохранить это, сохраните документ под другим именем.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	При открытии было пропущено то, что StitchFoundry пока не умеет читать ({what}), поэтому замена файла потеряет это навсегда. Чтобы сохранить это, сохраните документ под другим именем.
 	Revolve…	Вращение…
 	RGB Color	Цвет RGB
 	Right	Справа
@@ -3088,13 +3081,10 @@
 	Vector Effects	Векторные эффекты
 	Vector Halftone	Векторный полутон
 	Vector Halftone…	Векторный полутон…
-	Vector illustration — fast, open, scriptable.	Векторная иллюстрация — быстрая, открытая, программируемая.
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft не завершился нормально в прошлый раз. В этих документах были несохранённые изменения:
-	VectorCraft Help…	Справка VectorCraft…
-	VectorCraft on getartcraft.com	VectorCraft на getartcraft.com
-	VectorCraft on GitHub	VectorCraft на GitHub
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry не завершился нормально в прошлый раз. В этих документах были несохранённые изменения:
+	StitchFoundry Help…	Справка StitchFoundry…
+	StitchFoundry on GitHub	StitchFoundry на GitHub
 	Vectors	Векторы
-	Version {version} — open-source vector illustration in pure Rust.	Версия {version} — векторная иллюстрация с открытым исходным кодом на чистом Rust.
 	Version:	Версия:
 	Vertical	Вертикально
 	Vertical %	По вертикали, %
@@ -3131,7 +3121,7 @@
 	Web Snap:	Привязка к web:
 	Weight	Толщина
 	Weight:	Толщина:
-	Welcome to VectorCraft	Добро пожаловать в VectorCraft
+	Welcome to StitchFoundry	Добро пожаловать в StitchFoundry
 	When pasting text	При вставке текста
 	White	Белый
 	Widget Position:	Положение виджета:
@@ -3491,7 +3481,7 @@ axis	Both	Оба
 @msg	can't encode the document: {0}	не удалось закодировать документ: {0}
 @msg	can't parse shortcut `{c}`	не удалось разобрать сочетание `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	не удалось разобрать сочетание `{s}` для `{k}`
-@msg	can't save version {0}: VectorCraft writes versions {MIN_VERSION} to {VERSION}	не удалось сохранить версию {0}: VectorCraft записывает версии от {MIN_VERSION} до {VERSION}
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	не удалось сохранить версию {0}: StitchFoundry записывает версии от {MIN_VERSION} до {VERSION}
 @msg	can't write .{ext} images	не удалось записать изображения .{ext}
 @msg	cannot distort a zero-size bounding box	нельзя исказить ограничительную рамку нулевого размера
 @msg	cannot read PDF: {0}	не удалось прочитать PDF: {0}
@@ -3515,7 +3505,7 @@ axis	Both	Оба
 @msg	empty brush stroke	пустой мазок кисти
 @msg	empty cutter	пустой резак
 @msg	empty path	пустой контур
-@msg	file version {0} is newer than this VectorCraft supports ({VERSION})	версия файла {0} новее, чем поддерживает этот VectorCraft ({VERSION})
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	версия файла {0} новее, чем поддерживает этот StitchFoundry ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	произвольной точке {i} нужны `at` [x, y] и допустимый `color`
 @msg	give both `start` and `end` [x, y] (or neither)	укажите и `start`, и `end` [x, y] (или ни одного)
 @msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
@@ -3532,9 +3522,9 @@ axis	Both	Оба
 @msg	invalid PDF setting: {0}	недопустимый параметр PDF: {0}
 @msg	invalid image data for `{0}`	недопустимые данные изображения для `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	недопустимые параметры для `{cmd}`: {msg}
-@msg	is not an image VectorCraft reads	не является изображением, которое читает VectorCraft
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	использует `{at}`, которое не знает читатель PostScript в VectorCraft
-@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	использует `{at}`, которое не знает читатель PostScript в VectorCraft, в {procs}
+@msg	is not an image StitchFoundry reads	не является изображением, которое читает StitchFoundry
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	использует `{at}`, которое не знает читатель PostScript в StitchFoundry
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	использует `{at}`, которое не знает читатель PostScript в StitchFoundry, в {procs}
 @msg	its Windows metafile preview was opened instead, which may simplify the art	вместо этого было открыто его предварительное представление метафайла Windows, что может упростить рисунок
 @msg	its preview was placed instead, at screen resolution	вместо этого было помещено его предварительное представление в разрешении экрана
 @msg	join needs open paths	соединение требует открытых контуров
@@ -3638,7 +3628,7 @@ axis	Both	Оба
 @msg	node {_1} is not text	узел {_1} не является текстом
 @msg	not a DXF drawing	не является чертежом DXF
 @msg	not a VectorCraft file: {0}	не является файлом VectorCraft: {0}
-@msg	not a VectorCraft shortcut set (missing `overrides`)	не является набором сочетаний клавиш VectorCraft (отсутствует `overrides`)
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	не является набором сочетаний клавиш StitchFoundry (отсутствует `overrides`)
 @msg	not a graphic style library (format `{_1}`)	не является библиотекой графических стилей (формат `{_1}`)
 @msg	not a stored central record	не является сохранённой центральной записью
 @msg	not a valid plug-in module: {0}	не является допустимым модулем: {0}
@@ -3858,9 +3848,9 @@ axis	Both	Оба
 @msg	Sent to {_1}	Отправлено в {_1}
 @msg	{_1} files	{_1} файлов
 @msg	The graphics were lost and have been restarted	Графика была потеряна и перезапущена
-@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Графический процессор, выбранный первым, не смог показать окно, поэтому VectorCraft запустился снова на {summary}
-@msg	Loading VectorCraft…	Загрузка VectorCraft…
-@msg	VectorCraft failed to start: {e}	VectorCraft не удалось запустить: {e}
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Графический процессор, выбранный первым, не смог показать окно, поэтому StitchFoundry запустился снова на {summary}
+@msg	Loading StitchFoundry…	Загрузка StitchFoundry…
+@msg	StitchFoundry failed to start: {e}	StitchFoundry не удалось запустить: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Требуется браузер с WebGPU или WebGL2.
 @msg	The graphics were lost and couldn't be restarted.	Графика была потеряна, и её не удалось перезапустить.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Ваши несохранённые изменения сохраняются в этом браузере: перезагрузите страницу, чтобы вернуть их.
@@ -3879,23 +3869,23 @@ axis	Both	Оба
 @msg	it has more than {MAX_NODES} objects	в них больше {MAX_NODES} объектов
 @msg	it has no layers	в них нет слоёв
 @msg	it has too many values in a row	в них слишком много значений подряд
-@msg	it has {_1}, which VectorCraft doesn't read from it yet	в них есть {_1}, которые VectorCraft пока не читает
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	в них есть {_1}, которые StitchFoundry пока не читает
 @msg	its objects are nested too deeply	объекты в них вложены слишком глубоко
 @msg	its section ending with `%{end}` doesn't end	раздел, заканчивающийся на `%{end}`, не заканчивается
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	объекты с несколькими заливками или обводками, эффектами или кистями импортированы в нарисованном виде ({_1}): их оформление пока нельзя редактировать
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиент «{name}» не определён в файле: вместо него используется сплошной цвет
-@msg	an image VectorCraft can't read was left out	изображение, которое VectorCraft не может прочитать, пропущено
+@msg	an image StitchFoundry can't read was left out	изображение, которое StitchFoundry не может прочитать, пропущено
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	its editing data doesn't say where its art is	в его данных редактирования не указано, где находится графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	этот файл сохранён без совместимости с PDF, и его данные редактирования не удаётся прочитать ({why})
 @msg	No fonts are missing in this document	В этом документе нет отсутствующих шрифтов
-@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не ищет в папках других приложений и системы: {path}
-@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не ищет в папках Shared и Public внутри Users: {path}
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry не ищет в папках других приложений и системы: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry не ищет в папках Shared и Public внутри Users: {path}
 @msg	{path} is not a folder	{path} не является папкой
 @msg	the search couldn't start: try again in a moment	не удалось начать поиск: повторите попытку чуть позже
 @msg	searching a folder isn't available on the web	поиск в папке недоступен в веб-версии
 @msg	every search thread stopped on an internal error (please report this bug)	все потоки поиска остановились из-за внутренней ошибки (сообщите об этой ошибке)
-@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папка Fonts VectorCraft здесь не задана: её задают настольное приложение и vectorcraft-cli
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папка Fonts StitchFoundry здесь не задана: её задают настольное приложение и vectorcraft-cli
 @msg	choose the font files to add	выберите файлы шрифтов для добавления
 @msg	{n} font file(s) are now in {folder}	Файлов шрифтов теперь в {folder}: {n}
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлов шрифтов теперь в {folder}: {n}; не удалось добавить {failed}: {reason}
@@ -3909,7 +3899,7 @@ axis	Both	Оба
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
-	Hide VectorCraft	Скрыть VectorCraft
+	Hide StitchFoundry	Скрыть StitchFoundry
 	Zoom	Масштаб
 	Bring All to Front	Все окна на передний план
 	Settings	Настройки
@@ -4090,3 +4080,314 @@ lighting	Light	Свет
 	Stroke Pressure	Нажим мазка
 	Right Diagonal	Диагональ вправо
 	Left Diagonal	Диагональ влево
+# Embroidery (StitchFoundry)
+	Add Inclination Line	Добавить линию наклона
+	After the selection	После выделенного
+	Appliqué	Аппликация
+	Apply Fabric	Применить ткань
+	Artwork	Рисунок
+	Auto Direction	Автоматическое направление
+	Auto Stitch Direction	Автоматическое направление стежков
+	Auto spacing	Автоматический интервал
+	Auto split	Автоматическое разбиение
+	Auto-Digitize Image	Автоматически оцифровать изображение
+	Automatic underlay	Автоматическая подложка
+	Back to the start	В начало
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Bean Run	Тройная строчка
+	Before the selection	Перед выделенным
+	Blanket	Петельный шов
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	Мазок кисти
+	Calligraphy	Каллиграфия
+	Cell size	Размер ячейки
+	Centre run	Строчка по центру
+	Clear Inclination Lines	Удалить линии наклона
+	Clear Lines	Удалить линии
+	Connectors	Переходы
+	Constant	Постоянный
+	Contour Fill	Контурная заливка
+	Convert Artwork to Embroidery	Преобразовать рисунок в вышивку
+	Cover stitch	Покрывающий шов
+	Cover width	Ширина покрытия
+	Cross	Крест
+	Cross Fill	Заливка крестиком
+	Delete Inclination Line	Удалить линию наклона
+	Densities (mm)	Плотности (мм)
+	Density	Плотность
+	Design	Дизайн
+	Design Information	Сведения о дизайне
+	Digitizing Widget	Виджет оцифровки
+	Dimmed	Приглушённый
+	Direction: automatic	Направление: автоматическое
+	Direction: fixed angle	Направление: фиксированный угол
+	Direction: one inclination line	Направление: одна линия наклона
+	Direction: turning along	Направление: меняется вдоль
+	Drag across the shape to add a line; drag a bead to move it	Перетащите поперёк фигуры, чтобы добавить линию; перетащите метку начала или конца, чтобы переместить её
+	Each anchor point is a needle penetration.	Каждая опорная точка — это прокол иглы.
+	Edge run	Строчка по краям
+	Edge run underlay	Подложка по краю
+	Edit Lines	Редактировать линии
+	Embroidery	Вышивка
+	Embroidery Brush Tool	Инструмент «Кисть для вышивки»
+	Embroidery Settings	Настройки вышивки
+	Export Machine File	Экспортировать файл для машины
+	Export Machine File…	Экспортировать файл для машины…
+	Fabric	Ткань
+	Fabric color	Цвет ткани
+	Feather	Перо
+	Fill style	Стиль заливки
+	Fits the hoop	Помещается в пяльцы
+	Give objects a stitch type in the Embroidery panel.	Назначьте объектам тип стежка на панели «Вышивка».
+	Gradient to	Градиент до
+	Hidden	Не показывать
+	Hide Digitizing Widget	Скрыть виджет оцифровки
+	Hoop	Пяльцы
+	Inclination Tool	Инструмент «Линии наклона»
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	Больше пялец
+	Lengths (mm)	Длины (мм)
+	Let sewing start and stop at the closest points again	Вернуть начало и конец вышивки в ближайшие точки
+	Machine Embroidery File	Файл для вышивальной машины
+	Manual Stitches	Ручные стежки
+	Meander Fill	Заливка меандром
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	Мотив
+	Move Inclination Line	Переместить линию наклона
+	Needle points	Точки прокола
+	New strokes	Новые штрихи
+	No Stitches	Без стежков
+	No hoop	Без пялец
+	No stitches yet.	Стежков пока нет.
+	Not set	Не задана
+	Nothing stitched yet	Пока ничего не вышито
+	Object color	Цвет объекта
+	Open a document to see its stitch sequence.	Откройте документ, чтобы увидеть порядок вышивки.
+	Open or create a document to digitize embroidery.	Откройте или создайте документ, чтобы оцифровать вышивку.
+	Path spacing	Интервал линий
+	Pause	Пауза
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	Выберите на круговой панели кисть, ширину, плотность и фигуру, затем рисуйте на холсте
+	Place editable inclination lines (or pick the angle) automatically	Автоматически расставить редактируемые линии наклона (или подобрать угол)
+	Placement line and stop	Линия размещения и остановка
+	Play the stitches	Воспроизвести стежки
+	Pull compensation	Компенсация стягивания
+	Radial Fill	Радиальная заливка
+	Randomness	Случайность
+	Remove background	Удалить фон
+	Reset Start and Stop	Сбросить начало и конец
+	Row offset	Смещение рядов
+	Run	Строчка
+	Run style	Вид строчки
+	Satin	Гладь
+	Satin Fill	Заливка гладью
+	Scallop	Фестоны
+	Select a path, shape or compound path to give it a stitch type.	Выделите контур, фигуру или составной контур, чтобы назначить ему тип стежка.
+	Set Inclination Lines	Задать линии наклона
+	Set Start and Stop	Задать начало и конец
+	Set Thread	Задать нить
+	Sew earlier	Вышить раньше
+	Sew first	Вышить первым
+	Sew last	Вышить последним
+	Sew later	Вышить позже
+	Sewing time	Время вышивки
+	Sewn last	Вышивается последним
+	Short stitches on curves	Короткие стежки на изгибах
+	Show every stitch	Показать все стежки
+	Show stitches	Отображение стежков
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	Одинарная
+	Sort by Thread Color	Сортировать по цвету нити
+	Spiral Fill	Спиральная заливка
+	Stitch Parameters	Параметры стежков
+	Stitch Plan	План стежков
+	Stitch Sequence	Порядок вышивки
+	Stitch Type	Тип стежка
+	Stitch length	Длина стежка
+	Stitch type	Тип стежка
+	Stitches	Стежки
+	Stop to trim fabric	Остановка для обрезки ткани
+	Tack-down	Прихватка
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	Сужение
+	Tatami Fill	Заливка татами
+	Tatami underlay	Подложка татами
+	Thread	Нить
+	Thread colors	Цвета нитей
+	Trim after	Обрезать нить после
+	Trims	Обрезки нити
+	Triple	Тройная
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	Превращает изображение в стежки: узкие части становятся гладью, остальное — заливкой татами.
+	Wave	Волна
+	Widget values	Значения виджета
+	Width profile	Профиль ширины
+	Widths (mm)	Ширины (мм)
+	Zigzag	Зигзаг
+	colors	цветов
+	inclination lines	линий наклона
+	stitches	стежков
+	trims	обрезок
+	Brush	Кисть
+	Length	Длина
+	Bean	Тройная
+	Steil	Линия гладью
+	Triangle	Треугольник
+	Hexagon	Шестиугольник
+	Heart	Сердце
+	Arrow	Стрелка
+@msg	Auto-Digitize found no shapes to stitch: lower Noise or raise Colors	Автоматическая оцифровка не нашла фигур для вышивки: уменьшите «Шум» или увеличьте «Цвета»
+@msg	Auto-Digitize: the image traced to nothing	Автоматическая оцифровка: трассировка изображения ничего не дала
+@msg	can't open `{title}`: the file has no stitches	не удалось открыть `{title}`: в файле нет стежков
+@msg	can't open `{title}`: {e}	не удалось открыть `{title}`: {e}
+@msg	{_1} export failed: {e}	не удалось экспортировать в формат {_1}: {e}
+	Stitch Lines	Линии стежков
+	Tatami	Татами
+# Embroidery (StitchFoundry), phase 1
+	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	От SiteSentrix, на основе VectorCraft от команды ArtCraft. MIT OR Apache-2.0. Шрифты: Source Sans 3, Inter, JetBrains Mono (OFL). Значки: Lucide (ISC) + VectorCraft.
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Версия {version} — оцифровка машинной вышивки с открытым исходным кодом на чистом Rust.
+	Machine embroidery digitizing — fast, open, scriptable.	Оцифровка машинной вышивки — быстрая, открытая, программируемая.
+	Split Here	Разделить здесь
+	Split the object in two at the picked stitch	Разделить объект на два в выбранном стежке
+	Split Object	Разделить объект
+	Check settings	Параметры проверки
+	Dense from (layers)	Слишком плотно от (слоёв)
+	Give every stitched object the chart's closest thread	Назначить каждому вышиваемому объекту ближайшую нить из карты цветов
+	Hidden (not sewn)	Скрытые (не вышиваются)
+	Inclination lines	Линии наклона
+	Long stitches from	Длинные стежки от
+	Match Threads to Chart	Подобрать нити по карте цветов
+	Omit last stitch	Пропустить последний стежок
+	Small lettering under	Мелкий текст меньше
+	Start and stop	Начало и конец
+	Thread chart	Карта цветов нитей
+	Tie style	Тип закрепки
+	Tiny objects under	Крошечные объекты меньше
+	Travel by	Переход по
+	Double	Двойная
+machine	Trim	Обрезка нити
+	Column A/B Tool	Инструмент «Колонна A/B»
+	Column A/B	Колонна A/B
+	Tatami stitches	Стежки татами
+	Make Current	Сделать текущими
+	New objects of this stitch type take these properties	Новые объекты этого типа стежка получают эти свойства
+	Properties for New Objects	Свойства для новых объектов
+	Objects you give a stitch type take these properties.	Объекты, которым вы задаёте тип стежка, получают эти свойства.
+	Reset to Defaults	Восстановить значения по умолчанию
+	Fabric settings	Настройки ткани
+	Satin density	Плотность глади
+	Fill density	Плотность заливки
+	Fill stitch length	Длина стежка заливки
+	Underlay spacing	Шаг подложки
+	Fill underlay	Подложка заливки
+	Topping	Верхний стабилизатор
+	Save as New Fabric	Сохранить как новую ткань
+	Seconds per trim	Секунд на обрезку нити
+	Seconds per color change	Секунд на смену цвета
+	Save to Machine	Сохранить в машину
+	Keep these settings in the machine's profile, for new designs	Сохранить эти настройки в профиле машины для новых дизайнов
+	Reset Machine	Сбросить машину
+	Put the machine's profile back to how it ships, and use it	Вернуть профиль машины к исходному виду и использовать его
+	Delete Machine	Удалить машину
+	Save as New Machine	Сохранить как новую машину
+	A machine profile of your own with these settings	Собственный профиль машины с этими настройками
+	My Machine	Моя машина
+	A copy of this fabric to change	Копия этой ткани для изменения
+	Delete Fabric	Удалить ткань
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	Стилей пока нет. Выберите вышиваемый объект и создайте стиль, чтобы повторно использовать его свойства стежков.
+	New Embroidery Style	Новый стиль вышивки
+	Delete Embroidery Style	Удалить стиль вышивки
+	Duplicate Embroidery Style	Дублировать стиль вышивки
+	Redefine Embroidery Style	Переопределить стиль вышивки
+	Break Link to Embroidery Style	Разорвать связь со стилем вышивки
+	Rename Embroidery Style…	Переименовать стиль вышивки…
+	Embroidery Styles	Стили вышивки
+	Make Properties Current	Сделать свойства текущими
+	Current Properties	Текущие свойства
+	New Object Properties	Свойства новых объектов
+	Reset Current Properties	Сбросить текущие свойства
+	Apply Embroidery Style	Применить стиль вышивки
+	Rename Embroidery Style	Переименовать стиль вышивки
+	Save Fabric	Сохранить ткань
+	Machine Profiles	Профили машин
+	Save Machine Profile	Сохранить профиль машины
+	Delete Machine Profile	Удалить профиль машины
+	Auto Sequence	Автопорядок
+	Branch	Объединить в ветвь
+	Break Apart	Разбить
+	Sew the objects separately again	Снова вышивать объекты по отдельности
+	These objects are sewn as one path (a branch).	Эти объекты вышиваются одним путём (ветвью).
+	Clear Machine Function	Удалить функцию машины
+	Insert Machine Function	Вставить функцию машины
+	Object Stitches	Стежки объекта
+@msg	`after` is −1 to {_1}	`after` — от −1 до {_1}
+@msg	`{what}` is [x, y]	`{what}` — это [x, y]
+@msg	`{what}` is [x, y] (numbers)	`{what}` — это [x, y] (числа)
+@msg	each op needs `op`: move, delete or insert	каждой операции нужен `op`: move, delete или insert
+@msg	indices are record numbers (0, 1, 2…)	индексы — это номера записей (0, 1, 2…)
+@msg	missing `after` (−1 inserts first)	нет `after` (−1 вставляет в начало)
+@msg	missing `indices`	нет `indices`
+@msg	no record {i}: the object has {len}	нет записи {i}: у объекта их {len}
+@msg	unknown cmd `{c}`: stitch, jump, trim or stop	неизвестный cmd `{c}`: stitch, jump, trim или stop
+@msg	unknown op `{other}`: move, delete or insert	неизвестная op `{other}`: move, delete или insert
+	Stitch Edit Tool	Инструмент «Правка стежков»
+	Stitch List	Список стежков
+	Stop after	Остановка после
+	Stitches edited by hand: the shape no longer changes them.	Стежки изменены вручную: форма их больше не меняет.
+	Edit Stitches	Править стежки
+	Pick, move, add and delete single stitches	Выбирать, перемещать, добавлять и удалять отдельные стежки
+	Regenerate Stitches	Пересоздать стежки
+	Drop the hand edits and stitch the shape again	Отменить ручную правку и заново прошить форму
+	Freeze Stitches	Зафиксировать стежки
+	Function	Функция
+	X (mm)	X (мм)
+	Y (mm)	Y (мм)
+	Stitch	Стежок
+	Jump	Переход
+	Color change	Смена цвета
+	End	Конец
+	#	№
+	Open a document to see its stitches.	Откройте документ, чтобы увидеть его стежки.
+	Machine	Машина
+	Machine settings	Настройки машины
+	Longest stitch	Самый длинный стежок
+	Longest jump	Самый длинный переход
+	Shortest stitch	Самый короткий стежок
+	Trim jumps longer than	Обрезать переходы длиннее
+	Tie length	Длина закрепки
+	Stitches per minute	Стежков в минуту
+	commercial machines	промышленные машины
+	home machines	бытовые машины
+	Remove underlying stitching	Убрать стежки снизу
+	Overlap	Перекрытие
+	Turn	Поворот
+	Capped	Срезанный
+	Backstitch	Назад иголку
+	Check Again	Проверить снова
+	Check Design	Проверить дизайн
+	Click to select and show it	Щёлкните, чтобы выделить и показать
+	Design setting	Настройка дизайна
+	Different on each side	Разная с каждой стороны
+	Double zigzag	Двойной зигзаг
+	Fill Holes	Заполнить отверстия
+	Flip to the other side	На другую сторону
+	Lettering only {n} mm tall is hard to sew clearly	Надписи высотой всего {n} мм трудно вышить чётко
+	Look for dense spots, long stitches, tiny objects and small lettering	Ищет слишком плотные места, длинные стежки, крошечные объекты и мелкие надписи
+	Makes no stitches	Не даёт стежков
+	No problems found.	Проблем не найдено.
+	Passes	Проходы
+	Preserve long stitches	Сохранять длинные стежки
+	Pull comp., side 1	Компенсация, сторона 1
+	Pull comp., side 2	Компенсация, сторона 2
+	Remove Holes	Удалить отверстия
+	Reverse Stitch Direction	Обратить направление стежков
+	Stem Stitch	Стебельчатый шов
+	Stem stitch	Стебельчатый шов
+	Stitches up to {n} mm long can snag	Стежки длиной до {n} мм могут цепляться
+	The design is larger than the hoop	Дизайн больше пялец
+	Thread Color	Цвет нити
+	Tie in	Закрепка в начале
+	Tie off	Закрепка в конце
+	Tiny object: may not sew cleanly	Крошечный объект: может вышиться неаккуратно
+	Very dense: about {n} layers of thread here	Очень плотно: здесь около {n} слоёв нити

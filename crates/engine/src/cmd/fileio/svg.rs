@@ -52,7 +52,7 @@ pub const OPTIONS: &[FormatOption] = &[
         name: "preserveEditing",
         ty: "boolean",
         default: "false",
-        description: "embed the native document in <metadata> so VectorCraft reopens the SVG with nothing lost",
+        description: "embed the native document in <metadata> so StitchFoundry reopens the SVG with nothing lost",
     },
     FormatOption {
         name: "metadata",

@@ -555,6 +555,11 @@ pub struct Node {
     /// Object › Perspective: the perspective grid plane the object is attached to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub perspective: Option<Box<crate::PerspectiveAttachment>>,
+    /// Embroidery: how this object is stitched (stitch type, parameters, thread,
+    /// inclination lines, start/stop beads). Kept on the node so copies, duplicates
+    /// and pastes keep it, and moved by [`Node::transform`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embroidery: Option<Box<sf_core::attr::Embroidery>>,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -607,6 +612,7 @@ impl Node {
             slice: None,
             bbox_angle: 0.0,
             perspective: None,
+            embroidery: None,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {
@@ -841,6 +847,10 @@ impl Node {
         }
         // Type and symbols in perspective keep looking the same, moved by `a`.
         self.transform_projection(a);
+        // Inclination lines, start/stop beads and fill angles follow the stitched object.
+        if let Some(e) = &mut self.embroidery {
+            e.transform(&sf_core::Affine(a.as_coeffs()));
+        }
         // Refitting an unplaced gradient only reproduces moves and uniform scales.
         if !keeps_gradient_fit(a) {
             self.pin_gradients();

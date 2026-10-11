@@ -107,7 +107,7 @@ fn the_header_follows_dsc_and_the_file_ends_with_eof() {
     let out = export(&d, &EpsOptions { title: "Poster (draft)".into(), created: Some(0), ..opts(&d) }, None, None).unwrap();
     let ps = text(&out);
     assert!(ps.starts_with("%!PS-Adobe-3.0 EPSF-3.0\n"), "{ps}");
-    assert!(dsc(&ps, "Creator").unwrap().starts_with("VectorCraft"));
+    assert!(dsc(&ps, "Creator").unwrap().starts_with("StitchFoundry"));
     assert_eq!(dsc(&ps, "Title").as_deref(), Some("(Poster \\(draft\\))"));
     assert_eq!(dsc(&ps, "CreationDate").as_deref(), Some("(1970-01-01 00:00:00 UTC)"));
     assert_eq!(dsc(&ps, "LanguageLevel").as_deref(), Some("3"));

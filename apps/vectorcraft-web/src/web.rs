@@ -131,7 +131,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 el.remove();
             }
         }
-        (Err(e), None) => notice(&[&format!("VectorCraft failed to start: {}", js_err(e)), "A browser with WebGPU or WebGL2 is required."]),
+        (Err(e), None) => notice(&[&format!("StitchFoundry failed to start: {}", js_err(e)), "A browser with WebGPU or WebGL2 is required."]),
         (Err(e), Some(kept)) => {
             log::error!("vectorcraft-web: couldn't restart the graphics: {}", js_err(e));
             give_up(slot.borrow_mut().take(), kept);
@@ -161,7 +161,7 @@ fn detect_language() {
     }
     i18n::set_system_locales(tags.as_slice());
     if let Some(el) = element(LOADING_ID) {
-        el.set_text_content(Some(i18n::message(i18n::system_lang(), "Loading VectorCraft…").as_str()));
+        el.set_text_content(Some(i18n::message(i18n::system_lang(), "Loading StitchFoundry…").as_str()));
     }
 }
 

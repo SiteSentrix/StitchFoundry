@@ -65,7 +65,7 @@ fn stdout_failed(e: std::io::Error) -> ! {
 }
 
 const USAGE: &str = "\
-vectorcraft-cli — VectorCraft automation
+vectorcraft-cli — StitchFoundry automation
 
 USAGE:
   vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR] [--automation-write-root DIR]

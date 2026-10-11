@@ -103,9 +103,9 @@ impl App {
             // eframe can't give a window a new device: the user saves and starts again.
             self.graphics_lost = self.app.graphics_lost(&why);
             self.app.status(if self.graphics_lost {
-                "The graphics device was lost: unsaved changes are kept for Data Recovery. Save your documents and restart VectorCraft"
+                "The graphics device was lost: unsaved changes are kept for Data Recovery. Save your documents and restart StitchFoundry"
             } else {
-                "The graphics device was lost: save your documents and restart VectorCraft"
+                "The graphics device was lost: save your documents and restart StitchFoundry"
             });
         }
         if self.graphics_lost && ctx.input(|i| i.viewport().close_requested()) {
@@ -161,16 +161,17 @@ fn discard_marked_text() {
     }
 }
 
-/// Where UI preferences live: ~/Library/Application Support/VectorCraft (macOS),
-/// %APPDATA%\VectorCraft (Windows), $XDG_CONFIG_HOME or ~/.config/vectorcraft (Linux).
+/// Where UI preferences live: ~/Library/Application Support/StitchFoundry (macOS),
+/// %APPDATA%\StitchFoundry (Windows), $XDG_CONFIG_HOME or ~/.config/stitchfoundry (Linux). Its own
+/// folder, so StitchFoundry and VectorCraft keep their settings, libraries and recovery copies apart.
 fn prefs_path() -> Option<std::path::PathBuf> {
-    prefs_dir::prefs_path_for("VectorCraft", "vectorcraft")
+    prefs_dir::prefs_path_for("StitchFoundry", "stitchfoundry")
 }
 
-/// The same place under the project's former name (DrawCraft): read once if there are no
-/// VectorCraft preferences yet, so settings survive the rename.
+/// VectorCraft's preferences (StitchFoundry is based on it): read once if there are no StitchFoundry
+/// preferences yet, so a VectorCraft user's settings come along.
 fn legacy_prefs_path() -> Option<std::path::PathBuf> {
-    prefs_dir::prefs_path_for("DrawCraft", "drawcraft")
+    prefs_dir::prefs_path_for("VectorCraft", "vectorcraft")
 }
 
 /// Where the log files live: `logs` in the preferences folder (see `logging`).
@@ -335,7 +336,7 @@ fn services(parent: Parent) -> Services {
         // owner that never answers holds a read for up to 4 s. Windows only asks which formats the
         // clipboard holds and macOS asks the pasteboard server, so they check in line.
         clipboard_probe: cfg!(target_os = "linux").then(|| Box::new(clipboard::system_clipboard) as ClipboardProbeFactory),
-        // Help → Discord / website / GitHub, the Discord button, About and Home links.
+        // Help → GitHub, and the About and Home links.
         open_url: Some(Box::new(|url: &str| {
             let _ = webbrowser::open(url);
         })),
@@ -369,12 +370,12 @@ fn open_file(path: &str) -> Result<(), String> {
 
 /// The window, Dock, taskbar and app-switcher icon (`assets/app-icon/`, see its README). macOS gets
 /// the version with Apple's transparent margin; elsewhere the full-bleed tile. The app ID matches
-/// `packaging/linux/ai.storyteller.vectorcraft.desktop` so Wayland docks find the launcher icon.
+/// `packaging/linux/com.sitesentrix.stitchfoundry.desktop` so Wayland docks find the launcher icon.
 fn app_icon() -> egui::IconData {
     #[cfg(target_os = "macos")]
-    let png: &[u8] = include_bytes!("../../../assets/app-icon/vectorcraft-macos-512.png");
+    let png: &[u8] = include_bytes!("../../../assets/app-icon/stitchfoundry-macos-512.png");
     #[cfg(not(target_os = "macos"))]
-    let png: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.vectorcraft.png");
+    let png: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/com.sitesentrix.stitchfoundry.png");
     eframe::icon_data::from_png_bytes(png).unwrap_or_default()
 }
 
@@ -410,7 +411,7 @@ fn custom_titlebar(saved: Option<&vectorcraft_ui_egui::UiState>) -> bool {
 fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("VectorCraft")
+            .with_title("StitchFoundry")
             .with_inner_size(window::DEFAULT_SIZE)
             .with_min_inner_size(window::MIN_SIZE)
             .with_drag_and_drop(true)
@@ -419,7 +420,7 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
             .with_titlebar_shown(false)
             .with_title_shown(false)
             .with_icon(app_icon())
-            .with_app_id("ai.storyteller.vectorcraft"),
+            .with_app_id("com.sitesentrix.stitchfoundry"),
         #[cfg(feature = "windows7")]
         renderer: eframe::Renderer::Glow,
         ..Default::default()
@@ -466,7 +467,7 @@ fn main() -> std::process::ExitCode {
     if let Some(logger) = logger {
         match log_dir().filter(|_| prefs_enabled()) {
             Some(dir) => match logger.attach_dir(&dir) {
-                Ok(path) => log::info!("VectorCraft {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
+                Ok(path) => log::info!("StitchFoundry {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
                 // Standard error only by now (`attach_dir` gave up on the file); unlike `eprintln!`, never panics.
                 Err(e) => log::warn!("no log file: {e}"),
             },
@@ -546,7 +547,7 @@ fn main() -> std::process::ExitCode {
     // A panic that ends the window (egui-wgpu's own, #502) is caught here: never a crash.
     let outcome = vectorcraft_engine::guard::catch_panic(|| {
         eframe::run_native(
-            "VectorCraft",
+            "StitchFoundry",
             options,
             Box::new(move |cc| {
                 let mut app = VectorcraftApp::new(Session::new(), services(cc.winit_window().cloned()));
@@ -588,7 +589,7 @@ fn main() -> std::process::ExitCode {
                             ""
                         };
                         app.status(format!(
-                            "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}{hint}"
+                            "The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}{hint}"
                         ));
                     }
                     app.graphics_adapter = Some(summary);
@@ -635,7 +636,7 @@ fn main() -> std::process::ExitCode {
     match outcome {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
-            log::error!("VectorCraft stopped: {e}");
+            log::error!("StitchFoundry stopped: {e}");
             std::process::ExitCode::FAILURE
         }
     }

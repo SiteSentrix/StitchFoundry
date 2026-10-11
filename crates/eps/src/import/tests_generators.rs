@@ -735,7 +735,7 @@ fn errors_name_the_operator_and_the_procedures() {
     let r = read("{ 1 (a) add } stopped pop 0 0 10 10 rectfill /inner { 1 (a) add } def /outer { inner } def outer");
     assert!(r.warnings[0].contains("(typecheck in `add`), in `inner` in `outer`"), "{:?}", r.warnings);
     let r = read("0 0 10 10 rectfill /p { frobnicate } def p");
-    assert!(r.warnings[0].contains("it uses `frobnicate`, which VectorCraft's PostScript reader doesn't know, in `p`"), "{:?}", r.warnings);
+    assert!(r.warnings[0].contains("it uses `frobnicate`, which StitchFoundry's PostScript reader doesn't know, in `p`"), "{:?}", r.warnings);
     let r = read("0 0 10 10 rectfill 0 0 moveto (x) cvn moveto");
     assert!(r.warnings[0].contains("typecheck in `moveto`: a number"), "{:?}", r.warnings);
 }

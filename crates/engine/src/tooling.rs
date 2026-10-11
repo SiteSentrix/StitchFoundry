@@ -176,8 +176,13 @@ impl Session {
     {
         let Some(st) = self.active.and_then(|i| self.docs.get(i)) else { return R::default() };
         let (unit, stroke_unit) = (self.general_unit(), self.stroke_unit());
+        let beads = crate::cmd::embroidery::selection_beads(st);
+        // needle points only for the tool that edits them
+        let needles = if self.tool.id() == "embroideryStitches" { crate::cmd::embroidery::selection_stitches(st) } else { Vec::new() };
         let cx = ToolContext {
             doc: &st.doc,
+            embroidery_beads: &beads,
+            embroidery_stitches: &needles,
             revision: (st.uid, st.revision),
             selection: &st.selection,
             zoom: view.zoom,

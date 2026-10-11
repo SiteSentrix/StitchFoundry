@@ -251,7 +251,7 @@ const MAX_NATIVE: u64 = 1 << 30;
 /// language level, data, and the spot colours `custom` with their CMYK equivalents.
 pub(crate) fn comments(s: &mut String, title: &str, created: Option<i64>, level: Level, custom: &[(String, [f32; 4])]) {
     use std::fmt::Write;
-    let _ = writeln!(s, "%%Creator: VectorCraft {}", env!("CARGO_PKG_VERSION"));
+    let _ = writeln!(s, "%%Creator: StitchFoundry {}", env!("CARGO_PKG_VERSION"));
     let _ = writeln!(s, "%%Title: {}", ps::string(title));
     if let Some(t) = created {
         let [y, mo, d, h, mi, se] = vectorcraft_doc::metadata::civil(t);

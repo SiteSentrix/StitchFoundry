@@ -192,7 +192,7 @@ fn templates_suggest_a_name_in_the_templates_folder_and_open_untitled() {
     // With no preference the folder is under the user's home (where there is one).
     s.prefs.templates_folder.clear();
     if let Some(f) = crate::cmd::fileio::templates_folder(&s.prefs) {
-        assert!(f.ends_with("VectorCraft Templates"), "{f}");
+        assert!(f.ends_with("StitchFoundry Templates"), "{f}");
     }
     let _ = std::fs::remove_dir_all(d);
 }

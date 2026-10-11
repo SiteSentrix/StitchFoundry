@@ -106,7 +106,7 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Um valor menor segue o traço de perto; um valor maior gera menos pontos e curvas mais suaves.
 	A new preset starting from the selected one	Um novo predefinido a partir do selecionado
 	A saved copy of the selected preset	Uma cópia salva do predefinido selecionado
-	About VectorCraft	Sobre o VectorCraft
+	About StitchFoundry	Sobre o StitchFoundry
 	Absolute Position	Posição Absoluta
 	Accurate	Preciso
 	Abutting	Contíguo
@@ -196,7 +196,7 @@
 	Appearance Panel	Painel Aparência
 	Appearance of Black	Aparência do Preto
 	Appearance panel	Painel de Aparência
-	Applies the next time VectorCraft starts.	Aplica na próxima inicialização do VectorCraft.
+	Applies the next time StitchFoundry starts.	Aplica na próxima inicialização do StitchFoundry.
 	Applies when the linked file is relinked or updated.	Aplica quando o arquivo vinculado é revinculado ou atualizado.
 	Apply Brush	Aplicar Pincel
 	Apply Character Style	Aplicar Estilo de Caractere
@@ -225,8 +225,6 @@
 	Arrange: Bring to Front	Organizar: Trazer para Frente
 	Arrowheads:	Pontas de Seta:
 	Art using a deleted global swatch keeps its colour.	A arte que usa uma amostra global excluída mantém sua cor.
-	ArtCraft Website	Site do ArtCraft
-	ArtCraft website	Site do ArtCraft
 	Artboard Options	Opções de Mesa de Trabalho
 	Artboard Options: edit with the Artboard tool	Opções de Mesa de Trabalho: edite com a ferramenta Mesa de Trabalho
 	Artboard Options…	Opções de Mesa de Trabalho…
@@ -1124,10 +1122,7 @@
 	Isolate Selected Group	Isolar Grupo Selecionado
 	Italian	Italiano
 	Join	Unir
-	Join Our Discord	Junte-se ao nosso Discord
 	Join Tool	Ferramenta Unir
-	Join our Discord	Junte-se ao nosso Discord
-	Join the ArtCraft community on Discord (discord.gg/artcraft)	Junte-se à comunidade do ArtCraft no Discord (discord.gg/artcraft)
 	Join the lines of each paragraph	Junte as linhas de cada parágrafo
 	Justification…	Justificação…
 	Keep Formatting	Manter Formatação
@@ -1732,7 +1727,7 @@
 	Quarter Space	Espaço de Quarto
 	Quick Actions	Ações Rápidas
 	Quickly start a new file	Começar rapidamente um novo arquivo
-	Quit VectorCraft	Sair do VectorCraft
+	Quit StitchFoundry	Sair do StitchFoundry
 	RECENT	RECENTES
 	RGB Color	Cor RGB
 	Radar Graph Tool	Ferramenta Gráfico de Radar
@@ -1841,7 +1836,7 @@
 	{count} folder(s) or file(s) couldn't be read	{count} pasta(s) ou arquivo(s) não puderam ser lidos
 	The search stopped at its limit: search a smaller folder.	A pesquisa parou no limite: pesquise uma pasta menor.
 	Copy only fonts you own or are licensed to install.	Copie apenas fontes que sejam suas ou que você tenha licença para instalar.
-	VectorCraft copies the fonts to {folder}.	O VectorCraft copia as fontes para {folder}.
+	StitchFoundry copies the fonts to {folder}.	O StitchFoundry copia as fontes para {folder}.
 	Registered Trademark Symbol	Símbolo de Marca Registrada
 	Registry name:	Nome do registro:
 	Release	Liberar
@@ -1930,7 +1925,7 @@
 	Revert	Reverter
 	Revert to the saved version of “{name}”?	Reverter para a versão salva de “{name}”?
 	Replace “{name}”, the file this document was opened from?	Substituir “{name}”, o arquivo do qual este documento foi aberto?
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Ao abri-lo, ficou de fora o que o VectorCraft ainda não consegue ler ({what}), então substituí-lo perde isso para sempre. Salve com outro nome para mantê-lo.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Ao abri-lo, ficou de fora o que o StitchFoundry ainda não consegue ler ({what}), então substituí-lo perde isso para sempre. Salve com outro nome para mantê-lo.
 	Revolve…	Revolver…
 	Right Grid:	Grade Direita:
 	Right Indent	Recuo Direito
@@ -2548,13 +2543,10 @@
 	Vector Effects	Efeitos Vetoriais
 	Vector Halftone	Meio-tom Vetorial
 	Vector Halftone…	Meio-tom Vetorial…
-	Vector illustration — fast, open, scriptable.	Ilustração vetorial — rápida, aberta, scriptável.
-	VectorCraft Help…	Ajuda do VectorCraft…
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	O VectorCraft não fechou normalmente da última vez. Estes documentos tinham alterações não salvas:
-	VectorCraft on GitHub	VectorCraft no GitHub
-	VectorCraft on getartcraft.com	VectorCraft em getartcraft.com
+	StitchFoundry Help…	Ajuda do StitchFoundry…
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	O StitchFoundry não fechou normalmente da última vez. Estes documentos tinham alterações não salvas:
+	StitchFoundry on GitHub	StitchFoundry no GitHub
 	Vectors	Vetores
-	Version {version} — open-source vector illustration in pure Rust.	Versão {version} — ilustração vetorial de código aberto em Rust puro.
 	Version:	Versão:
 	Vertical	Vertical
 	Vertical Align Bottom	Alinhar Inferior Verticalmente
@@ -2582,7 +2574,7 @@
 	Web Shift	Web Shift
 	Web Snap:	Web Snap:
 	Weight:	Peso:
-	Welcome to VectorCraft	Bem-vindo ao VectorCraft
+	Welcome to StitchFoundry	Bem-vindo ao StitchFoundry
 	When pasting text	Ao colar texto
 	White	Branco
 	Widget Position:	Posição do Widget:
@@ -2705,7 +2697,7 @@
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Serviços
-	Hide VectorCraft	Ocultar o VectorCraft
+	Hide StitchFoundry	Ocultar o StitchFoundry
 	Hide Others	Ocultar Outros
 	Zoom	Zoom
 	Bring All to Front	Trazer Todas para a Frente
@@ -2789,3 +2781,62 @@ lighting	Light	Luz
 	Spatter…	Respingo…
 	Sprayed Strokes…	Traços Borrifados…
 	Sumi-e…	Sumi-e…
+# Embroidery (StitchFoundry)
+	Embroidery	Bordado
+	Digitizing Widget	Widget de Digitalização
+	Convert Artwork to Embroidery	Converter Arte em Bordado
+	Auto-Digitize Image	Digitalizar Imagem Automaticamente
+	Stitch Type	Tipo de Ponto
+	Run	Ponto Corrido
+	Bean Run	Ponto Triplo
+	Blanket	Ponto Caseado
+	Satin	Ponto Cheio
+	Tatami Fill	Preenchimento Tatami
+	Satin Fill	Preenchimento em Ponto Cheio
+	Contour Fill	Preenchimento de Contorno
+	Spiral Fill	Preenchimento em Espiral
+	Radial Fill	Preenchimento Radial
+	Cross Fill	Preenchimento em Ponto Cruz
+	Meander Fill	Preenchimento em Meandro
+	Appliqué	Aplicação
+	Manual Stitches	Pontos Manuais
+	No Stitches	Sem Pontos
+	Auto Direction	Direção Automática
+	Clear Inclination Lines	Limpar Linhas de Inclinação
+	Sort by Thread Color	Ordenar por Cor da Linha
+	Export Machine File	Exportar Arquivo para Máquina
+	Stitch Sequence	Sequência de Bordado
+	Machine Embroidery File	Arquivo de Bordado para Máquina
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+# Embroidery (StitchFoundry), phase 1
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	Versão {version} — digitalização de bordado à máquina de código aberto em Rust puro.
+	Machine embroidery digitizing — fast, open, scriptable.	Digitalização de bordado à máquina — rápida, aberta, scriptável.
+	Clear Machine Function	Remover função da máquina
+	Insert Machine Function	Inserir função da máquina
+	Object Stitches	Pontos do objeto
+	Backstitch	Ponto Atrás
+	Stem Stitch	Ponto Haste
+	Reverse Stitch Direction	Inverter Direção dos Pontos
+	Remove Holes	Remover Furos
+	Fill Holes	Preencher Furos
+	Check Design	Verificar Desenho
+	Thread Color	Cor da Linha
+	Stitch Edit Tool	Ferramenta Editar pontos
+	Stitch List	Lista de pontos
+	Freeze Stitches	Fixar pontos
+	Regenerate Stitches	Regenerar pontos
+	Auto Sequence	Sequência Automática
+	Branch	Ramificar
+	Break Apart	Separar
+	Make Properties Current	Tornar Propriedades Atuais
+	Embroidery Styles	Estilos de Bordado
+	Column A/B Tool	Ferramenta Coluna A/B
+	Match Threads to Chart	Combinar Linhas com a Cartela
+machine	Trim	Corte de linha

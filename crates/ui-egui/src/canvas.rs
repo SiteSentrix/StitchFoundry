@@ -173,6 +173,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         fit(app, "view.fitArtboard");
     }
     let resp = ui.interact(rect, egui::Id::new("canvas"), Sense::click_and_drag());
+    let over_widget = !resp.dragged() && crate::embroidery::widget::contains(app, rect, ui.input(|i| i.pointer.hover_pos()));
     // A press on the canvas while the context menu is open only closes it (a drag too, which egui
     // alone would leave open); the tool doesn't get it.
     if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
@@ -180,6 +181,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Do not let a ring drag also move or deselect the editable source path.
     } else if resp.context_menu_opened() && resp.hovered() && ui.input(|i| i.pointer.any_pressed()) {
         egui::Popup::close_all(ui.ctx());
+    } else if over_widget {
+        // The embroidery digitizing widget takes clicks over it.
     } else {
         handle_input(app, ui, &resp, rect);
     }
@@ -348,6 +351,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => {}
         }
     }
+    // Embroidery: the stitch plan over the art (TrueView or lines).
+    crate::embroidery::overlay::paint(app, &painter, &xf);
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
     }
@@ -432,9 +437,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if app.ui.screen_mode < 3 {
         crate::free_transform::show(app, ui, xf.rect);
+        crate::embroidery::widget::show(app, ui, xf.rect);
     }
     // Cursor.
-    if resp.hovered() {
+    if resp.hovered() && !over_widget {
         let m = ui.input(|i| i.modifiers);
         let space = ui.input(|i| i.key_down(egui::Key::Space));
         let panning = matches!(ui.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Pan { .. }));
@@ -1841,9 +1847,9 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let inner = rect.shrink2(vec2((rect.width() - 820.0).max(40.0) / 2.0, 60.0));
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(egui::Align::Min)));
     let ui = &mut child;
-    ui.label(egui::RichText::new(tl!("Welcome to VectorCraft")).font(theme::semibold(26.0)).color(t.text));
+    ui.label(egui::RichText::new(tl!("Welcome to StitchFoundry")).font(theme::semibold(26.0)).color(t.text));
     ui.add_space(4.0);
-    ui.label(egui::RichText::new(tl!("Vector illustration — fast, open, scriptable.")).size(14.0).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!("Machine embroidery digitizing — fast, open, scriptable.")).size(14.0).color(t.text_dim));
     ui.add_space(22.0);
     ui.horizontal(|ui| {
         if widgets::primary_button(ui, tl!("New file")).clicked() {

@@ -134,6 +134,12 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("printTiling", "Print Tiling Tool", None, "tool-print-tiling"),
     ],
     &[t("zoom", "Zoom Tool", Some("Z"), "tool-zoom")],
+    &[
+        t("embroideryBrush", "Embroidery Brush Tool", None, "tool-embroidery-brush"),
+        t("embroideryDirection", "Inclination Tool", None, "tool-embroidery-direction"),
+        t("embroideryStitches", "Stitch Edit Tool", None, "tool-embroidery-stitches"),
+        t("embroideryColumn", "Column A/B Tool", None, "tool-embroidery-column"),
+    ],
 ];
 
 pub fn all_tools() -> impl Iterator<Item = &'static ToolInfo> {

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=StitchFoundry
+GenericName=Embroidery Digitizer
+Comment=Digitize machine embroidery designs: DST, PES, JEF, VP3 and more
+Exec=vectorcraft %F
+TryExec=vectorcraft
+Icon=com.sitesentrix.stitchfoundry
+Terminal=false
+StartupNotify=true
+StartupWMClass=com.sitesentrix.stitchfoundry
+Categories=Graphics;2DGraphics;VectorGraphics;
+Keywords=embroidery;digitizing;stitch;dst;pes;jef;vp3;vector;svg;
+MimeType=image/svg+xml;application/pdf;

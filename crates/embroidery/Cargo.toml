@@ -1,0 +1,21 @@
+[package]
+name = "vectorcraft-embroidery"
+description = "Embroidery mode: turns stitched vector objects into a StitchFoundry stitch plan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+vectorcraft-doc = { workspace = true }
+vectorcraft-geom = { workspace = true }
+vectorcraft-color = { workspace = true }
+vectorcraft-text = { workspace = true }
+sf-core = { workspace = true }
+kurbo = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

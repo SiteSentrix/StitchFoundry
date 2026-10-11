@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and package VectorCraft for FreeBSD:
+# Build and package StitchFoundry for FreeBSD:
 #
 #   $DIST/vectorcraft-<version>-freebsd-x86_64.tar.gz   a /usr/local-style tree:
 #       vectorcraft-<version>-freebsd-x86_64/{bin, share/applications, share/icons, share/mime,
@@ -16,7 +16,7 @@ set -euo pipefail
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 LINUX="$ROOT/packaging/linux"
-APP_ID=ai.storyteller.vectorcraft
+APP_ID=com.sitesentrix.stitchfoundry
 
 SKIP_BUILD=0
 while [ $# -gt 0 ]; do
@@ -35,7 +35,7 @@ case "$(uname -m)" in
 esac
 BASENAME="vectorcraft-$VERSION-freebsd-$ARCH"
 
-echo "==> VectorCraft $VERSION for FreeBSD $ARCH"
+echo "==> StitchFoundry $VERSION for FreeBSD $ARCH"
 
 if [ "$SKIP_BUILD" = 0 ]; then
   (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli)

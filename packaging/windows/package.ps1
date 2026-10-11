@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Build, sign and package VectorCraft for Windows.
+  Build, sign and package StitchFoundry for Windows.
 
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):
@@ -54,7 +54,7 @@ New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 if (-not $env:VECTORCRAFT_BUILD_SHA) { $env:VECTORCRAFT_BUILD_SHA = (git -C $Root rev-parse HEAD 2>$null) }
 if (-not $env:VECTORCRAFT_BUILD_DATE) { $env:VECTORCRAFT_BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd') }
 
-Write-Output "VectorCraft $Version for Windows $Arch ($Target)"
+Write-Output "StitchFoundry $Version for Windows $Arch ($Target)"
 
 if (-not $SkipBuild) {
   # Static CRT: no VC++ redistributable needed. Scoped to the target so host build scripts and
@@ -92,7 +92,7 @@ Copy-Item (Join-Path $Bin 'vectorcraft.exe'), (Join-Path $Bin 'vectorcraft-cli.e
 & (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'vectorcraft.exe') (Join-Path $Stage 'vectorcraft-cli.exe')
 
 # ---- MSI ---------------------------------------------------------------------------------------
-# The setup wizard's art, drawn here from the app icon so the MSI shows VectorCraft rather than
+# The setup wizard's art, drawn here from the app icon so the MSI shows StitchFoundry rather than
 # WiX's stock bitmaps: a 493x58 banner across the top of the inner pages (the page title is drawn
 # over its left side, so that stays white) and a 493x312 backdrop for the Welcome and Finish pages
 # (their text sits on the right; the left 164 px are ours). Both must be 24-bit BMPs.
@@ -127,14 +127,14 @@ function New-InstallerArt([string] $IconPng, [string] $BannerOut, [string] $Dial
 }
 $Banner = Join-Path $Stage 'installer-banner.bmp'
 $Dialog = Join-Path $Stage 'installer-dialog.bmp'
-New-InstallerArt (Join-Path $Root 'assets\app-icon\hicolor\256x256\apps\ai.storyteller.vectorcraft.png') $Banner $Dialog
+New-InstallerArt (Join-Path $Root 'assets\app-icon\hicolor\256x256\apps\com.sitesentrix.stitchfoundry.png') $Banner $Dialog
 
 $Msi = Join-Path $Dist "vectorcraft-$Version-windows-$Arch.msi"
 Invoke-Native 'wix build' {
   wix build (Join-Path $PSScriptRoot 'vectorcraft.wxs') -arch $Arch `
     -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext `
     -culture en-US -loc (Join-Path $PSScriptRoot 'vectorcraft.en-us.wxl') `
-    -d "Version=$MsiVersion" -d "DisplayVersion=$Version" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'assets\app-icon\vectorcraft.ico')" `
+    -d "Version=$MsiVersion" -d "DisplayVersion=$Version" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'assets\app-icon\stitchfoundry.ico')" `
     -d "BannerBmp=$Banner" -d "DialogBmp=$Dialog" `
     -o $Msi
 }

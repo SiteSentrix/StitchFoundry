@@ -566,6 +566,9 @@ pub struct Document {
     /// Variables (data merge): named values bound to objects, applied per dataset.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub variables: Variables,
+    /// Embroidery: hoop, fabric, machine settings and thread chart of the stitch plan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embroidery: Option<Box<sf_core::attr::DocEmbroidery>>,
     #[serde(default)]
     pub grid: GridPrefs,
     #[serde(default = "ppi72")]
@@ -699,6 +702,7 @@ impl Document {
             views: vec![],
             saved_selections: vec![],
             variables: Variables::default(),
+            embroidery: None,
             grid: GridPrefs::default(),
             raster_effects_ppi: 72.0,
             images: BTreeMap::new(),
@@ -1265,6 +1269,26 @@ mod tests {
         assert_ne!(copy.id, g);
         let ids: Vec<NodeId> = copy.children().unwrap().iter().map(|c| c.id).collect();
         assert!(!ids.contains(&a) && !ids.contains(&b));
+    }
+
+    #[test]
+    fn embroidery_round_trips_follows_transforms_and_old_files_load() {
+        let (mut d, a, _) = doc_with_rects();
+        let plain = serde_json::to_string(&d).unwrap();
+        assert!(!plain.contains("embroidery"), "documents without embroidery write no key");
+        let mut e = sf_core::attr::Embroidery::fill();
+        e.guides.push(sf_core::direction::Guide::new(sf_core::Point::new(0.0, 0.0), sf_core::Point::new(10.0, 0.0)));
+        d.node_mut(a).unwrap().embroidery = Some(Box::new(e));
+        d.embroidery = Some(Box::default());
+        let back: Document = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(back, d);
+        // moving the object moves its inclination lines
+        d.node_mut(a).unwrap().transform(Affine::translate((5.0, 7.0)), Scaling::default());
+        let g = d.node(a).unwrap().embroidery.as_ref().unwrap().guides[0];
+        assert!((g.a.x - 5.0).abs() < 1e-9 && (g.a.y - 7.0).abs() < 1e-9);
+        // a file written before embroidery existed still loads
+        let old: Document = serde_json::from_str(&plain).unwrap();
+        assert!(old.embroidery.is_none());
     }
 
     #[test]

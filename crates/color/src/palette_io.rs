@@ -216,7 +216,7 @@ fn write_ase(lib: &SwatchLibrary) -> Result<Vec<u8>, String> {
     let entries = solid(&lib.swatches) + lib.groups.iter().map(|g| 1 + solid(&g.swatches)).sum::<usize>();
     if entries > ASE_MAX_ENTRIES {
         return Err(format!(
-            "VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}"
+            "StitchFoundry reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}"
         ));
     }
     let mut body = vec![];

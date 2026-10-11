@@ -387,7 +387,7 @@ fn same_paint(a: &Paint, b: &Paint, tint: bool) -> bool {
     }
 }
 
-fn same(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
+pub(crate) fn same(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
     let refn = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
     select_where(s, cmd, &json!({}), |_, n| !n.is_container() && eq(n, &refn))
