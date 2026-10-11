@@ -289,7 +289,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. |
 | `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. `inspect_document` lists the undo steps as `history`. |
 
-For SVG/SVGZ, `export`'s top-level `outlineText: true` writes text as paths; DXF also supports this flag.
+For SVG/SVGZ, `export`'s top-level `outlineText: true` writes text as paths; DXF takes it too (its type is outlined anyway unless `preserve: editability`).
 PDF instead uses `options: {"advanced": {"outlineText": true}}`; its default is false (live text).
 
 With `mods.shift`, a marquee dragged with the Selection tool toggles the objects it reaches (the selected ones leave
@@ -1699,7 +1699,7 @@ a pin back restores the original; every pin must be on the art's mesh, and empty
 
 ## New art
 
-The initial new-art appearance is white fill and a 1 pt black stroke, not fill-only art.
+Initially (and after `paint.default`) new art has a white fill and a 1 pt black stroke.
 New objects take the fill and stroke proxies (`paint.setFill` / `paint.setStroke` and the weight, whatever is
 selected) on top of a template. With nothing selected, `stroke.set` / `stroke.setAdvanced` (cap, join, dashes,
 arrowheads, profile…) and `graphicStyle.apply` (every fill, stroke and effect, opacity, blend mode and the link to the
