@@ -330,7 +330,7 @@ pub struct FontDb {
     /// Where the system font scan looks.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     font_paths: FontPaths,
-    /// The installed fonts' other names (localized, legacy, PostScript) by normalized name.
+    /// The installed fonts' other names (localized, legacy, full, PostScript) by normalized name.
     aliases: RwLock<HashMap<String, Vec<Alias>>>,
     /// Set once the font folders have been scanned. Lookups by family name wait for the first
     /// scan, so what they find never depends on what ran before them.
@@ -499,13 +499,14 @@ fn all_names(font: &skrifa::FontRef<'_>, id: StringId) -> Vec<String> {
 /// The names a face answers to besides its (English) family and style, normalized ([`norm`]):
 /// its family in every language (typographic, else legacy: `ヒラギノ角ゴシック`), its style likewise
 /// (`ミディアム`), its legacy family names (`Hiragino Sans W3`) with their legacy styles, paired per
-/// language record (the Mac and Windows records of a face differ), and its PostScript names
-/// (`HiraginoSans-W3`, as PDF and `.ai` files name fonts).
+/// language record (the Mac and Windows records of a face differ), its full names (name ID 4),
+/// and its PostScript names (`HiraginoSans-W3`, as PDF and `.ai` files name fonts).
 #[derive(Clone, Debug, Default)]
 struct FaceKeys {
     families: Vec<String>,
     styles: Vec<String>,
     legacy: Vec<(String, String)>,
+    full_names: Vec<String>,
     postscript: Vec<String>,
 }
 
@@ -538,14 +539,15 @@ impl FaceKeys {
                 .collect()
         };
         let mut postscript: Vec<String> = all_names(font, StringId::POSTSCRIPT_NAME).iter().map(|n| norm(n)).collect();
-        for v in [&mut families, &mut styles, &mut postscript] {
+        let mut full_names: Vec<String> = all_names(font, StringId::FULL_NAME).iter().map(|n| norm(n)).collect();
+        for v in [&mut families, &mut styles, &mut full_names, &mut postscript] {
             v.retain(|k| !k.is_empty());
             v.sort();
             v.dedup();
         }
         legacy.sort();
         legacy.dedup();
-        FaceKeys { families, styles, legacy, postscript }
+        FaceKeys { families, styles, legacy, full_names, postscript }
     }
 }
 
@@ -704,7 +706,7 @@ impl FontTraits {
 struct Alias {
     /// The family's own name.
     family: String,
-    /// The face the name names, for legacy family names and PostScript names.
+    /// The face the name names, for legacy family names, full names and PostScript names.
     style: Option<String>,
     /// A legacy family name's legacy style (`Regular` beside `Hiragino Sans W3`).
     paired: Option<String>,
@@ -720,7 +722,12 @@ impl Alias {
                 .iter()
                 .map(|(f, s)| (f.clone(), Alias { family: family.to_string(), style: Some(style.to_string()), paired: Some(s.clone()) })),
         );
-        v.extend(keys.postscript.iter().map(|k| (k.clone(), Alias { family: family.to_string(), style: Some(style.to_string()), paired: None })));
+        v.extend(
+            keys.postscript
+                .iter()
+                .chain(&keys.full_names)
+                .map(|k| (k.clone(), Alias { family: family.to_string(), style: Some(style.to_string()), paired: None })),
+        );
         v
     }
 }
@@ -833,7 +840,8 @@ fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mu
             v.sort();
             v.dedup();
         }
-        let keys = FaceKeys { families: keys.families.clone(), styles, legacy: vec![], postscript };
+        // Name ID 4 describes the default face, not every named instance of its variable font.
+        let keys = FaceKeys { families: keys.families.clone(), styles, legacy: vec![], full_names: vec![], postscript };
         let variations = tags.iter().zip(&coords).map(|(t, v)| (t.to_be_bytes(), *v)).collect();
         out.push(FaceStyle {
             family: family.to_string(),
@@ -1069,6 +1077,7 @@ impl WantedFonts {
             let names = std::iter::once(f.family.to_ascii_lowercase())
                 .chain(f.keys.families.iter().cloned())
                 .chain(f.keys.legacy.iter().map(|(family, _)| family.clone()))
+                .chain(f.keys.full_names.iter().cloned())
                 .chain(f.keys.postscript.iter().cloned());
             for n in names {
                 candidates.extend(self.by_name.get(&n).into_iter().flatten());
@@ -1111,9 +1120,13 @@ fn provides(w: &WantedFont, faces: &[FaceStyle]) -> bool {
     if let Some(f) = faces.iter().find(|f| f.keys.families.contains(&key)) {
         return styled(&f.family);
     }
-    // A legacy family with its legacy style, or a PostScript name, names its face whatever style
-    // is asked for.
-    if faces.iter().any(|f| f.keys.legacy.iter().any(|(family, style)| *family == key && *style == sk) || f.keys.postscript.contains(&key)) {
+    // A legacy family with its legacy style, a full name or a PostScript name names its face
+    // whatever style is asked for.
+    if faces.iter().any(|f| {
+        f.keys.legacy.iter().any(|(family, style)| *family == key && *style == sk)
+            || f.keys.full_names.contains(&key)
+            || f.keys.postscript.contains(&key)
+    }) {
         return true;
     }
     // A legacy family with another style: that style of the family.
@@ -1727,9 +1740,9 @@ impl FontDb {
 
     /// The family's own name and the style for a name given in a document: any of a family's
     /// names (`ヒラギノ角ゴシック` is Hiragino Sans), a legacy family name (`Hiragino Sans W6` with its
-    /// legacy style names the W6 face) or a PostScript name (`HiraginoSans-W6`, as PDF and `.ai`
-    /// files name fonts). Case and anything but letters and digits are ignored. A name nothing
-    /// answers to comes back as it is.
+    /// legacy style names the W6 face), a full name (name ID 4) or a PostScript name
+    /// (`HiraginoSans-W6`, as PDF and `.ai` files name fonts). Case and anything but letters and
+    /// digits are ignored. An unknown name is returned unchanged.
     pub fn canonical(&self, family: &str, style: &str) -> (String, String) {
         if self.is_loaded(family) || self.read_catalog().contains_key(&family.to_ascii_lowercase()) {
             return (family.to_string(), style.to_string());
@@ -1741,8 +1754,8 @@ impl FontDb {
             found.extend(v.iter().cloned());
         }
         let ns = norm(style);
-        // A family name keeps the style asked for; a legacy pair names its face; a PostScript name
-        // its face whatever style is asked for.
+        // A family name keeps the style asked for; a legacy pair names its face; a full or
+        // PostScript name its face whatever style is asked for.
         if let Some(a) = found.iter().find(|a| a.style.is_none()) {
             return (a.family.clone(), style.to_string());
         }
