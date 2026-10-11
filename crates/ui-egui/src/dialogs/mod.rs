@@ -35,6 +35,7 @@ pub mod flattener_presets;
 mod form;
 pub mod freehand;
 mod gradient_stop;
+pub mod graph_data;
 pub mod graph_design;
 pub mod graphic_style_options;
 pub mod halftone;
@@ -226,6 +227,7 @@ registry! {
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
+    GraphData: [graph_data::KIND] => graph_data::SPEC,
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphMarker: [graph_design::MARKER] => graph_design::MARKER_SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,

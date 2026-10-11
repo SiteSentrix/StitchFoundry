@@ -1077,6 +1077,11 @@
 	Delete Design	删除设计
 	Paste Design	粘贴设计
 	Select Unused	选择未使用项
+	Import Data…	导入数据…
+	Transpose	转置
+	Switch x/y	切换 x/y
+	Number of Decimals:	小数位数：
+	Column Width:	列宽：
 	No Legend	无图例
 	Standard Legend	标准图例
 	Legends in Wedges	楔形中的图例

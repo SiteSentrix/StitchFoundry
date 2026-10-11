@@ -1124,6 +1124,11 @@
 	Delete Design	Удалить дизайн
 	Paste Design	Вставить дизайн
 	Select Unused	Выбрать неиспользуемые
+	Import Data…	Импорт данных…
+	Transpose	Транспонировать
+	Switch x/y	Поменять x/y
+	Number of Decimals:	Число десятичных знаков:
+	Column Width:	Ширина столбца:
 	No Legend	Без легенды
 	Standard Legend	Стандартная легенда
 	Legends in Wedges	Легенды в секторах

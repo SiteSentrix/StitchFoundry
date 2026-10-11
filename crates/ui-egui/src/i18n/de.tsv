@@ -1110,6 +1110,11 @@
 	Delete Design	Design löschen
 	Paste Design	Design einfügen
 	Select Unused	Nicht verwendete auswählen
+	Import Data…	Daten importieren…
+	Transpose	Transponieren
+	Switch x/y	x/y vertauschen
+	Number of Decimals:	Anzahl Dezimalstellen:
+	Column Width:	Spaltenbreite:
 	No Legend	Keine Legende
 	Standard Legend	Standardlegende
 	Legends in Wedges	Legenden in Segmenten

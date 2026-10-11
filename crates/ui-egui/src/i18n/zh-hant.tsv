@@ -1101,6 +1101,11 @@
 	Delete Design	刪除設計
 	Paste Design	貼上設計
 	Select Unused	選取未使用項目
+	Import Data…	匯入資料…
+	Transpose	轉置
+	Switch x/y	切換 x/y
+	Number of Decimals:	小數位數：
+	Column Width:	欄寬：
 	No Legend	無圖例
 	Standard Legend	標準圖例
 	Legends in Wedges	楔形中的圖例

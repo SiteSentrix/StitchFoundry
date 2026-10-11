@@ -4186,6 +4186,11 @@ effect	Regular	Pravidelný
 @msg	missing panel layout	chybí rozložení panelů
 @msg	unsupported native docking operation	nepodporovaná nativní operace ukotvení
 @msg	this kind of brush has no options dialog yet	tento druh štětce zatím nemá dialogové okno možností
+	Column Width:	Šířka sloupce:
+	Import Data…	Importovat data…
+	Number of Decimals:	Počet desetinných míst:
+	Switch x/y	Prohodit x/y
+	Transpose	Transponovat
 	Phone 393×852	Telefon 393×852
 	Phone 430×932	Telefon 430×932
 	Phone 360×800	Telefon 360×800
