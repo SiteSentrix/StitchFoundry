@@ -78,6 +78,21 @@ fn board_and_art(s: &Session, p: &Value) -> (usize, bool) {
 
 /// The art that goes with artboard `i` when `art`: the objects fully inside it (locked and hidden
 /// ones only with prefs moveLockedWithArtboard), in paint order.
+/// The artboards `cmd` acts on: `indices` (several), else `index` (one), each an artboard of `d`,
+/// in order and once each.
+pub(crate) fn artboard_indices(d: &vectorcraft_doc::Document, p: &Value, cmd: &str) -> Result<Vec<usize>> {
+    let listed = match (p.get("indices"), p.get("index")) {
+        (Some(v), _) => point_indices(v),
+        (None, Some(i)) => point_indices(&json!([i])),
+        (None, None) => return Err(bad(cmd, "missing index")),
+    };
+    let mut indices =
+        listed.filter(|v| !v.is_empty() && v.iter().all(|i| *i < d.artboards.len())).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    indices.sort_unstable();
+    indices.dedup();
+    Ok(indices)
+}
+
 pub(crate) fn artboard_art(s: &Session, i: usize, art: bool) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
     let rect = d.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
