@@ -1,6 +1,8 @@
 //! Artboard tool (Shift+O).
 //!
-//! Click an artboard to make it active (dashed bounds, 8 handles and its name). Drag inside moves
+//! Click an artboard to make it active (dashed bounds, 8 handles and its name); Shift-click adds
+//! artboards to the selection or takes them out (dashed bounds), and a drag or Delete then acts on
+//! all of them (#1139). Drag inside moves
 //! it (with its artwork when the `moveArt` option is on, Shift constrains; Alt moves a copy and
 //! leaves the artboard where it was), drag a handle resizes it
 //! (Shift proportional, Alt from centre; with the `scaleArt` option on, Scale Artwork with Artboard,
@@ -26,6 +28,8 @@ enum Drag {
     /// last drag event (the step under way is a duplicate).
     Move {
         index: usize,
+        /// Several artboards move together (the selected ones, `index` among them).
+        many: bool,
         start: Point,
         rect: Rect,
         began: bool,
@@ -48,6 +52,8 @@ enum Drag {
 pub struct ArtboardTool {
     /// Index of the active artboard.
     pub active: usize,
+    /// The other selected artboards (Shift-click), in order.
+    pub others: Vec<usize>,
     /// Move artwork with the artboard.
     pub move_art: bool,
     /// Scale artwork with the artboard: a resize takes the art fully inside it along, and keeps the
@@ -69,6 +75,7 @@ impl Default for ArtboardTool {
     fn default() -> Self {
         Self {
             active: 0,
+            others: vec![],
             move_art: true,
             scale_art: false,
             drag: None,
@@ -88,6 +95,31 @@ fn rect_json(index: usize, r: Rect) -> Value {
 impl ArtboardTool {
     fn active_rect(&self, cx: &ToolContext) -> Option<Rect> {
         cx.doc.artboards.get(self.active).map(|a| a.rect)
+    }
+
+    /// The selected artboards that are still in the document: the active one and the others,
+    /// in order.
+    fn selected(&self, cx: &ToolContext) -> Vec<usize> {
+        let mut all: Vec<usize> = std::iter::once(self.active).chain(self.others.iter().copied()).filter(|i| *i < cx.doc.artboards.len()).collect();
+        all.sort_unstable();
+        all.dedup();
+        all
+    }
+
+    /// Shift-click on artboard `i`: into the selection, active, or out of it (another becomes
+    /// active).
+    fn toggle(&mut self, cx: &ToolContext, i: usize) {
+        let mut sel = self.selected(cx);
+        if let Some(at) = sel.iter().position(|j| *j == i) {
+            if sel.len() > 1 {
+                sel.remove(at);
+                self.active = if i == self.active { sel.first().copied().unwrap_or(0) } else { self.active };
+            }
+        } else {
+            sel.push(i);
+            self.active = i;
+        }
+        self.others = sel.into_iter().filter(|j| *j != self.active).collect();
     }
 
     /// Gather the Smart Guide targets for dragging artboard `index` (call before the first preview,
@@ -199,15 +231,24 @@ impl Tool for ArtboardTool {
                 if let Some(i) = cx.doc.artboard_at(p)
                     && let Some(a) = cx.doc.artboards.get(i)
                 {
-                    self.active = i;
-                    self.drag = Some(Drag::Move { index: i, start: p, rect: a.rect, began: false, copy: false });
+                    if m.shift {
+                        self.toggle(cx, i);
+                    } else if !self.selected(cx).contains(&i) {
+                        // A plain click on an artboard that isn't selected selects just it; on a
+                        // selected one, the selection stays, so the drag moves them all.
+                        self.others.clear();
+                        self.active = i;
+                    }
+                    let many = self.selected(cx).len() > 1 && self.selected(cx).contains(&i);
+                    self.drag = Some(Drag::Move { index: i, many, start: p, rect: a.rect, began: false, copy: false });
                 } else {
+                    self.others.clear();
                     let p = self.draw.press(cx, p, &[], None);
                     self.drag = Some(Drag::Create { start: p, cur: p });
                 }
                 vec![]
             }
-            (PointerKind::Drag, Some(Drag::Move { index, start, rect, began, copy })) => {
+            (PointerKind::Drag, Some(Drag::Move { index, many, start, rect, began, copy })) => {
                 let mut out = vec![];
                 let label = |copy: bool| if copy { "Duplicate Artboard" } else { "Move Artboard" };
                 if !began {
@@ -221,13 +262,14 @@ impl Tool for ArtboardTool {
                     out.push(Action::Cancel);
                     out.push(Action::Begin(label(m.alt).into()));
                 }
-                self.drag = Some(Drag::Move { index, start, rect, began: true, copy: m.alt });
+                self.drag = Some(Drag::Move { index, many, start, rect, began: true, copy: m.alt });
                 let d = self.snap_move(cx, rect, move_delta(start, p, m.shift), m.alt);
                 self.preview = Some(rect + d);
-                out.push(Action::Preview(
-                    "artboard.move".into(),
-                    json!({ "index": index, "dx": d.x, "dy": d.y, "moveArt": self.move_art, "copy": m.alt }),
-                ));
+                let mut v = json!({ "index": index, "dx": d.x, "dy": d.y, "moveArt": self.move_art, "copy": m.alt });
+                if many {
+                    v["indices"] = json!(self.selected(cx));
+                }
+                out.push(Action::Preview("artboard.move".into(), v));
                 out
             }
             (PointerKind::Drag, Some(Drag::Resize { index, handle, rect, grab, began })) => {
@@ -259,10 +301,14 @@ impl Tool for ArtboardTool {
             (PointerKind::Up, Some(d)) => {
                 self.end_drag();
                 match d {
-                    Drag::Move { began: true, copy, .. } => {
-                        // The copy, last in the previewed document, becomes the active artboard.
+                    Drag::Move { began: true, copy, many, .. } => {
+                        // The copies, last in the previewed document, become the selection (the
+                        // last one active).
                         if copy {
-                            self.active = cx.doc.artboards.len().saturating_sub(1);
+                            let n = cx.doc.artboards.len();
+                            let k = if many { self.selected(cx).len().min(n) } else { 1 };
+                            self.active = n.saturating_sub(1);
+                            self.others = (n.saturating_sub(k)..n.saturating_sub(1)).collect();
                         }
                         vec![Action::Commit]
                     }
@@ -300,7 +346,7 @@ impl Tool for ArtboardTool {
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         matches!(key, ToolKey::Delete | ToolKey::Backspace)
             && self.drag.is_none()
-            && cx.doc.artboards.len() > 1
+            && cx.doc.artboards.len() > self.selected(cx).len()
             && self.active < cx.doc.artboards.len()
     }
 
@@ -310,9 +356,14 @@ impl Tool for ArtboardTool {
                 if !self.claims_key(cx, key) {
                     return vec![];
                 }
-                let i = self.active;
-                self.active = i.saturating_sub(1);
-                vec![Action::Exec("artboard.delete".into(), json!({ "index": i }))]
+                let sel = self.selected(cx);
+                self.active = sel.first().copied().unwrap_or(0).saturating_sub(1);
+                self.others.clear();
+                let params = match sel.as_slice() {
+                    [i] => json!({ "index": i }),
+                    _ => json!({ "indices": sel }),
+                };
+                vec![Action::Exec("artboard.delete".into(), params)]
             }
             ToolKey::Escape => {
                 let busy = matches!(self.drag, Some(Drag::Move { began: true, .. } | Drag::Resize { began: true, .. }));
@@ -326,6 +377,7 @@ impl Tool for ArtboardTool {
     fn notify(&mut self, cx: &ToolContext, what: &str) {
         if what == "created" {
             self.active = cx.doc.artboards.len().saturating_sub(1);
+            self.others.clear();
         }
     }
 
@@ -339,6 +391,10 @@ impl Tool for ArtboardTool {
                 o.push(Overlay::Measure { p: cur + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.size_label(r.width(), r.height()) });
             }
             return o;
+        }
+        // The other selected artboards: dashed bounds (in a drag the document shows them moved).
+        for r in self.others.iter().filter_map(|i| cx.doc.artboards.get(*i)).map(|a| a.rect) {
+            o.push(Overlay::Path { path: polygon(&rect_corners(r), true), color: BLUE, width: 1.0, dashed: true });
         }
         let Some(ab) = cx.doc.artboards.get(self.active) else { return o };
         let r = self.preview.unwrap_or(ab.rect);
@@ -377,12 +433,24 @@ impl Tool for ArtboardTool {
     }
 
     fn options(&self) -> Value {
-        json!({ "active": self.active, "moveArt": self.move_art, "scaleArt": self.scale_art })
+        json!({ "active": self.active, "selected": std::iter::once(self.active).chain(self.others.iter().copied()).collect::<Vec<_>>(), "moveArt": self.move_art, "scaleArt": self.scale_art })
     }
 
     fn set_option(&mut self, key: &str, value: &Value) {
         match key {
-            "active" => self.active = value.as_u64().unwrap_or(0) as usize,
+            "active" => {
+                self.active = value.as_u64().unwrap_or(0) as usize;
+                self.others.clear();
+            }
+            // The selected artboards, the first active.
+            "selected" => {
+                let all: Vec<usize> =
+                    value.as_array().into_iter().flatten().filter_map(Value::as_u64).filter_map(|i| usize::try_from(i).ok()).collect();
+                if let Some((first, rest)) = all.split_first() {
+                    self.active = *first;
+                    self.others = rest.iter().copied().filter(|i| i != first).collect();
+                }
+            }
             "moveArt" => self.move_art = value.as_bool().unwrap_or(true),
             "scaleArt" => self.scale_art = value.as_bool().unwrap_or(false),
             _ => {}
@@ -521,6 +589,42 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 798.0, 100.0));
         let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 808.0, 100.0)));
         assert_eq!(v["width"].as_f64(), Some(210.0));
+    }
+
+    /// Shift-click selects several artboards (#1139): a drag moves them all, Shift-click takes one
+    /// out again, a plain click on an unselected one selects just it, and Delete removes all the
+    /// selected ones (one artboard is always left).
+    #[test]
+    fn shift_click_selects_several_artboards_that_move_and_delete_together() {
+        let mut d = two_boards();
+        let mut third = d.artboards[0].clone();
+        third.rect = Rect::new(0.0, 600.0, 200.0, 800.0);
+        d.artboards.push(third);
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let shift = Mods { shift: true, ..Default::default() };
+        let click = |t: &mut ArtboardTool, x: f64, y: f64, m: Mods| {
+            t.pointer(&c, &ev(PointerKind::Down, x, y).with_mods(m));
+            t.pointer(&c, &ev(PointerKind::Up, x, y).with_mods(m));
+        };
+        let mut t = ArtboardTool::default();
+        click(&mut t, 450.0, 450.0, Mods::default());
+        click(&mut t, 700.0, 100.0, shift);
+        assert_eq!(t.options()["selected"], json!([1, 0]), "the Shift-clicked one is active");
+        // A drag from either moves both.
+        t.pointer(&c, &ev(PointerKind::Down, 450.0, 450.0));
+        let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 470.0, 450.0)));
+        assert_eq!((v["indices"].clone(), v["dx"].as_f64()), (json!([0, 1]), Some(20.0)));
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 470.0, 450.0)), vec![Action::Commit]);
+        // Delete removes both; with all three selected it can't, so the key isn't taken.
+        assert_eq!(t.key(&c, ToolKey::Delete, Mods::default()), vec![Action::Exec("artboard.delete".into(), json!({"indices": [0, 1]}))]);
+        t.set_option("selected", &json!([0, 1, 2]));
+        assert!(!t.claims_key(&c, ToolKey::Delete));
+        // Shift-click takes one out; a plain click on an unselected one selects just it.
+        click(&mut t, 100.0, 700.0, shift);
+        assert_eq!(t.options()["selected"], json!([0, 1]));
+        click(&mut t, 100.0, 700.0, Mods::default());
+        assert_eq!(t.options()["selected"], json!([2]));
     }
 
     /// Scale Artwork with Artboard (#602): the resize asks for the art to scale, keeps the artboard's

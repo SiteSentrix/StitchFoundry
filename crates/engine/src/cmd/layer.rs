@@ -129,7 +129,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             artboard_new
         ),
-        cmd!("artboard.delete", "Delete Artboard", ["Window", "Artboards"], None, "{index}", has_doc, artboard_delete),
+        cmd!(
+            "artboard.delete",
+            "Delete Artboard",
+            ["Window", "Artboards"],
+            None,
+            "{index | indices: [index…]} delete artboards (with their guides) in one step; one is always left",
+            has_doc,
+            artboard_delete
+        ),
         cmd!(
             "artboard.setProps",
             "Artboard Options…",
@@ -749,17 +757,16 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).ok_or_else(|| bad("artboard.delete", "missing index"))? as usize;
+    let indices = super::panelcmds::artboard_indices(&s.doc()?.doc, p, "artboard.delete")?;
     s.edit("Delete Artboard", |d, sel| {
-        if d.artboards.len() <= 1 {
+        if indices.len() >= d.artboards.len() {
             return Err(EngineError::Other("a document needs at least one artboard".into()));
         }
-        if i >= d.artboards.len() {
-            return Err(EngineError::Other("no such artboard".into()));
+        // The last first, so the others keep their places; their guides go with them.
+        for &i in indices.iter().rev() {
+            let id = d.artboards.remove(i).id;
+            d.retain_guides(sel, |_, g| g.artboard != Some(id));
         }
-        // Its guides go with it.
-        let id = d.artboards.remove(i).id;
-        d.retain_guides(sel, |_, g| g.artboard != Some(id));
         Ok(())
     })?;
     ok()
