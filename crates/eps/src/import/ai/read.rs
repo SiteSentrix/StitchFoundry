@@ -106,6 +106,15 @@ pub fn read(data: &[u8]) -> Result<Structure, String> {
     r.finish()
 }
 
+/// The artboards (art space) of the editing data `data` that [`read`] can't read as a whole, as far
+/// as it gets: where to put the pages of its PDF part instead (#1068).
+pub fn artboards(data: &[u8]) -> Vec<Rect> {
+    let mut r = Reader::new(data);
+    // Artboards read before an error still say where they are.
+    let _ = r.run();
+    r.artboards.into_iter().map(|(_, rect)| rect).collect()
+}
+
 #[derive(Clone, Debug)]
 struct GState {
     fill: Paint,
