@@ -578,10 +578,12 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                             egui::RichText::new(format!("X: {}  Y: {}", u.readout(p.x), u.readout(p.y))).font(theme::mono(10.5)).color(t.text_dim),
                         );
                     }
-                    // Background saves and exports in progress, else the last message.
-                    if let Some(job) = app.background.jobs.first() {
-                        let more = app.background.jobs.len() - 1;
-                        let label = crate::i18n::msg(&job.label);
+                    // Background saves, exports and opens in progress, else the last message.
+                    let busy: Vec<&str> =
+                        app.background.jobs.iter().map(|j| j.label.as_str()).chain(app.opening.pending.iter().map(|p| p.label.as_str())).collect();
+                    if let Some(job) = busy.first() {
+                        let more = busy.len() - 1;
+                        let label = crate::i18n::msg(job);
                         let text = if more > 0 { format!("{label}… (+{more})") } else { format!("{label}…") };
                         ui.add(egui::Spinner::new().size(12.0).color(t.accent));
                         ui.add(egui::Label::new(egui::RichText::new(text).size(11.0).color(t.text)).truncate());

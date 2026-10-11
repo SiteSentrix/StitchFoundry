@@ -135,6 +135,14 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
 
 /// The `.vectorcraft` file of `doc` with the options in `p`.
 pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<u8>> {
+    let mut out = Vec::new();
+    encode_to(cmd, f, doc, p, &mut out)?;
+    Ok(out)
+}
+
+/// [`encode`], written to `w` as it is made ([`vectorcraft_format::save_to`]: give it a buffered
+/// writer).
+pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: impl std::io::Write) -> Result<()> {
     let (mut so, extras) = save_options(cmd, f, doc, p)?;
     // Include Linked Files keeps placed documents' files; older versions get their art.
     let full = if so.include_linked || so.version < vectorcraft_format::VERSION {
@@ -158,7 +166,7 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
         }
         other => other,
     };
-    vectorcraft_format::save_with(&native, &so).map_err(|e| bad(cmd, e.to_string()))
+    vectorcraft_format::save_to(&native, &so, w).map_err(|e| bad(cmd, e.to_string()))
 }
 
 /// The ICC files of the profiles `doc` is tagged with that were loaded from files (the built-in

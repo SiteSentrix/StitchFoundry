@@ -4493,3 +4493,6 @@ diagnostics	ui	rozhraní
 @plural	{n} commit|{n} commits	{n} commit|{n} commity|{n} commitů
 gradient-kind	Radial	Kruhový
 mark-style	Japanese	Japonské
+@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	komprimovaný soubor se rozbalí na více, než VectorCraft přečte ({_1} MB dokumentu, {_2} MB na obrázek)
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	dokument je příliš velký pro komprimované uložení ({0}): uložte ho s vypnutou volbou Použít kompresi
+@msg	the file stopped being read (please report this bug)	čtení souboru se přerušilo (nahlaste prosím tuto chybu)

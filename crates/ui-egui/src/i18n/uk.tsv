@@ -4169,3 +4169,6 @@ lighting	Light	Світло
 	Artistic	Художні
 	Film Grain…	Зернистість плівки…
 	Highlight Area	Область світлих тонів
+@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	стислий файл розпаковується в обсяг більший, ніж читає VectorCraft ({_1} МБ документа, {_2} МБ на зображення)
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	документ завеликий для збереження зі стиском ({0}): збережіть його з вимкненим параметром «Використовувати стиск»
+@msg	the file stopped being read (please report this bug)	читання файлу перервалося (будь ласка, повідомте про цю помилку)

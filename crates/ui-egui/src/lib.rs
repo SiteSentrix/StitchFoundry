@@ -36,6 +36,7 @@ pub mod icons;
 pub mod io;
 pub mod menus;
 pub mod native_menu;
+pub mod opening;
 pub mod palette;
 mod panel_docking;
 pub mod panels;
@@ -231,6 +232,10 @@ pub struct Services {
     /// Write a file from any thread (desktop): lets Background Save and Export write off the UI
     /// thread ([`background`]). Without it they run at once.
     pub write_shared: Option<background::SharedWriteFn>,
+    /// Write a file from any thread with what a filler writes into it (desktop): native saves
+    /// stream into the file as they are encoded instead of being held whole in memory first.
+    /// Without it they are encoded, then written with `write` / `write_shared`.
+    pub stream_shared: Option<background::SharedStreamFn>,
     /// Open a file (or a folder) in the system's default app for it (desktop: Edit Original, Show
     /// Package). Without it (the web) those answer with an error.
     pub open_file: Option<RevealFn>,
@@ -386,6 +391,8 @@ pub struct VectorcraftApp {
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
     pub background: background::Background,
+    /// Documents being read off the UI thread ([`opening`]).
+    pub opening: opening::Opening,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
@@ -482,6 +489,7 @@ impl VectorcraftApp {
             font_check: None,
             paste_chord: Default::default(),
             background: Default::default(),
+            opening: Default::default(),
             recovery: Default::default(),
             host_modifiers: Default::default(),
             synthetic_modifiers: false,
@@ -515,6 +523,11 @@ impl VectorcraftApp {
         }
         if let Some(write) = s.write_shared.take() {
             s.write_shared = Some(Arc::new(move |p: &str, b: &[u8]| file_access::check_write(p).and_then(|()| write(p, b))));
+        }
+        if let Some(stream) = s.stream_shared.take() {
+            s.stream_shared = Some(Arc::new(move |p: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
+                file_access::check_write(p).and_then(|()| stream(p, fill))
+            }));
         }
         // Edit Original and Show in Folder hand a file to another app: only one automation may read.
         for service in [&mut s.open_file, &mut s.reveal] {
@@ -982,9 +995,10 @@ impl VectorcraftApp {
         self.poll_font_check(ctx);
         picks::poll(self, ctx);
         background::poll(self);
+        opening::poll(self);
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
-        if !self.background.jobs.is_empty() {
+        if !self.background.jobs.is_empty() || !self.opening.pending.is_empty() {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }

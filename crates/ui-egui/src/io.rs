@@ -104,12 +104,18 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
 /// `document.open`'s result.
 pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
     let r = fileio::open_bytes_with(&mut app.session, name, bytes, path, p).map_err(|e| e.to_string())?;
+    opened(app, &r);
+    Ok(r)
+}
+
+/// A document just opened (`r`: `document.open`'s result): the views follow, the status bar says
+/// what didn't come in as it was, and missing links are asked about.
+pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
     if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
         app.status(format!("Opened with {} note(s): {}", w.len(), w[0].as_str().unwrap_or_default()));
     }
-    crate::dialogs::missing_links::after_open(app, &r);
-    Ok(r)
+    crate::dialogs::missing_links::after_open(app, r);
 }
 
 /// A path from the open dialog, or "cancelled".
@@ -148,9 +154,12 @@ pub fn report_open_error(app: &mut VectorcraftApp, name: &str, e: &str) {
     dialogs::confirm::tell(app, &message, &crate::i18n::message(crate::i18n::current(), e));
 }
 
-/// [`open_path`] for a file the user asked for, a failure reported ([`report_open_error`]).
+/// [`open_path`] for a file the user asked for, a failure reported ([`report_open_error`]). On
+/// the desktop a document is decoded off the UI thread ([`crate::opening`]): the result is then
+/// `{background: true, status}`, and the document opens in its tab (or the failure is reported)
+/// once it is ready.
 pub fn open_reporting(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> {
-    let r = open_path(app, path);
+    let r = open_file(app, path, crate::opening::available());
     if let Err(e) = &r {
         report_open_error(app, &fileio::file_name(path), e);
     }
@@ -163,7 +172,27 @@ fn read(app: &VectorcraftApp, path: &str) -> Result<Vec<u8>, String> {
 
 /// Open the file at `path` (see [`open_bytes`]) → `document.open`'s result, or null.
 pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> {
-    let bytes = read(app, path)?;
+    open_file(app, path, false)
+}
+
+/// [`open_path`]; with `background`, a document (not a file that installs, imports or asks
+/// first) is decoded off the UI thread ([`crate::opening::start`]).
+fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) -> Result<Value, String> {
+    let mut bytes = read(app, path)?;
+    if background && opens_as(path).is_none() {
+        // A PDF with several pages or a password, or a DXF drawing, asks first, as at once.
+        if crate::dialogs::import_pdf::offer(app, path, &bytes, Some(path.to_string()), None)
+            || crate::dialogs::dxf_import::offer(app, path, &bytes, Some(path.to_string()), None)
+        {
+            note_recent(app, path);
+            return Ok(Value::Null);
+        }
+        match crate::opening::start(app, path, bytes) {
+            Ok(r) => return Ok(r),
+            // No thread: at once.
+            Err(back) => bytes = back,
+        }
+    }
     let r = open_bytes(app, path, &bytes, Some(path.to_string()))?;
     note_recent(app, path);
     Ok(r)
@@ -459,7 +488,15 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     let enabled = app.session.prefs.background_save && target.is_some();
     // The work writes the file; the copy makes it the document's own afterwards.
     let done = job.clone();
-    let work = move |write: Writer| job.write(|p, b| write(p, b).map_err(EngineError::Other)).map_err(|e| e.to_string());
+    // A native file streams into the file as it is encoded (desktop; not to a download).
+    let stream = app.services.stream_shared.clone().filter(|_| job.streams() && !is_web(app));
+    let work = move |write: Writer| {
+        match stream {
+            Some(stream) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(EngineError::Other)),
+            None => job.write(|p, b| write(p, b).map_err(EngineError::Other)),
+        }
+        .map_err(|e| e.to_string())
+    };
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         let r = r?;
         // The document may have closed meanwhile: the file is written all the same.

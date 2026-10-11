@@ -394,7 +394,9 @@ pub struct ImageObject {
     pub placement: crate::links::PlacementOptions,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Written with its `type` first, then its fields (an internally tagged enum); read by
+/// [`kind_de`], which takes the fields straight from the file when `type` comes first.
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum NodeKind {
     /// A top-level layer or sublayer.
@@ -1634,9 +1636,280 @@ impl Node {
     }
 }
 
+/// Reading a [`NodeKind`]. Derived, an internally tagged enum buffers each kind (with every
+/// object inside a group, again at each level of nesting) before reading it, since `type` may come
+/// anywhere among its fields. Files have it first (it is written first): then the kind is read
+/// straight from the file. Otherwise (hand-written files, values whose keys are sorted) the
+/// fields before `type` are buffered, and only those.
+mod kind_de {
+    use std::fmt;
+    use std::sync::Arc;
+
+    use serde::de::value::{MapAccessDeserializer, StringDeserializer};
+    use serde::de::{self, DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, MapAccess, VariantAccess, Visitor};
+    use serde::{Deserialize, forward_to_deserialize_any};
+    use vectorcraft_geom::{Affine, FillRule, PathData};
+
+    use super::{LayerColor, LiveShape, Node, NodeKind, yes};
+    use crate::live::{BlendSpec, EnvelopeKind, GradientMesh};
+    use crate::pattern::RepeatSpec;
+    use crate::text::TextObject;
+
+    /// The kinds and their fields as [`NodeKind`] has them, with the defaults its field attributes
+    /// note (the compiler checks that every field is here), read externally tagged: the kind from
+    /// `type`, its fields from the rest of the object ([`Tagged`]).
+    #[derive(Deserialize)]
+    #[serde(remote = "NodeKind", rename_all = "lowercase")]
+    enum KindDef {
+        Layer {
+            color: LayerColor,
+            #[serde(default)]
+            template: bool,
+            #[serde(default = "yes")]
+            printable: bool,
+            children: Vec<Arc<Node>>,
+            #[serde(default)]
+            clip: bool,
+            #[serde(default = "yes")]
+            preview: bool,
+            #[serde(default)]
+            dim_images: Option<u8>,
+        },
+        Group {
+            children: Vec<Arc<Node>>,
+            #[serde(default)]
+            clip: bool,
+        },
+        Path {
+            path: PathData,
+            #[serde(default)]
+            rule: FillRule,
+            #[serde(default)]
+            live: Option<Box<LiveShape>>,
+            #[serde(default)]
+            clipping: bool,
+            #[serde(default)]
+            guide: bool,
+        },
+        Compound {
+            children: Vec<Arc<Node>>,
+            #[serde(default)]
+            rule: FillRule,
+        },
+        Text(Box<TextObject>),
+        Image(Box<super::ImageObject>),
+        SymbolInstance {
+            symbol: String,
+            xf: Affine,
+        },
+        Blend {
+            children: Vec<Arc<Node>>,
+            #[serde(default)]
+            spec: Box<BlendSpec>,
+        },
+        Envelope {
+            content: Vec<Arc<Node>>,
+            kind: Box<EnvelopeKind>,
+            #[serde(default = "crate::live::default_fidelity")]
+            fidelity: f64,
+            #[serde(default)]
+            editing: bool,
+            #[serde(default)]
+            options: crate::live::EnvelopeOptions,
+            #[serde(default)]
+            frame: Box<Affine>,
+        },
+        Mesh(GradientMesh),
+        Repeat(RepeatSpec),
+        PlacedDocument(Box<crate::placed_document::PlacedDocument>),
+    }
+
+    impl<'de> Deserialize<'de> for NodeKind {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_map(KindVisitor)
+        }
+    }
+
+    struct KindVisitor;
+
+    impl<'de> Visitor<'de> for KindVisitor {
+        type Value = NodeKind;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("an object kind (a map with `type`)")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<NodeKind, A::Error> {
+            let mut before = vec![];
+            while let Some(key) = map.next_key::<String>()? {
+                if key == "type" {
+                    let tag: String = map.next_value()?;
+                    return KindDef::deserialize(Tagged { tag, map: Buffered { before: before.into_iter(), value: None, map } });
+                }
+                before.push((key, map.next_value::<serde_json::Value>()?));
+            }
+            Err(de::Error::missing_field("type"))
+        }
+    }
+
+    /// The fields read before `type` (buffered), then the rest of the object.
+    struct Buffered<A> {
+        before: std::vec::IntoIter<(String, serde_json::Value)>,
+        value: Option<serde_json::Value>,
+        map: A,
+    }
+
+    impl<'de, A: MapAccess<'de>> MapAccess<'de> for Buffered<A> {
+        type Error = A::Error;
+
+        fn next_key_seed<K: DeserializeSeed<'de>>(&mut self, seed: K) -> Result<Option<K::Value>, A::Error> {
+            match self.before.next() {
+                Some((key, value)) => {
+                    self.value = Some(value);
+                    seed.deserialize(StringDeserializer::<A::Error>::new(key)).map(Some)
+                }
+                None => self.map.next_key_seed(seed),
+            }
+        }
+
+        fn next_value_seed<V: DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value, A::Error> {
+            match self.value.take() {
+                Some(value) => seed.deserialize(value).map_err(de::Error::custom),
+                None => self.map.next_value_seed(seed),
+            }
+        }
+    }
+
+    /// An object whose `type` was read: the kind is `tag`, its fields are the rest of `map`.
+    struct Tagged<A> {
+        tag: String,
+        map: A,
+    }
+
+    impl<'de, A: MapAccess<'de>> Deserializer<'de> for Tagged<A> {
+        type Error = A::Error;
+
+        fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, A::Error> {
+            visitor.visit_enum(self)
+        }
+
+        forward_to_deserialize_any! {
+            bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string bytes byte_buf
+            option unit unit_struct newtype_struct seq tuple tuple_struct map struct enum
+            identifier ignored_any
+        }
+    }
+
+    impl<'de, A: MapAccess<'de>> EnumAccess<'de> for Tagged<A> {
+        type Error = A::Error;
+        type Variant = Fields<A>;
+
+        fn variant_seed<V: DeserializeSeed<'de>>(self, seed: V) -> Result<(V::Value, Fields<A>), A::Error> {
+            let kind = seed.deserialize(self.tag.into_deserializer())?;
+            Ok((kind, Fields(self.map)))
+        }
+    }
+
+    /// A kind's fields: the rest of the object.
+    struct Fields<A>(A);
+
+    impl<'de, A: MapAccess<'de>> VariantAccess<'de> for Fields<A> {
+        type Error = A::Error;
+
+        fn unit_variant(self) -> Result<(), A::Error> {
+            Err(de::Error::invalid_type(de::Unexpected::UnitVariant, &"an object kind with fields"))
+        }
+
+        fn newtype_variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value, A::Error> {
+            seed.deserialize(MapAccessDeserializer::new(self.0))
+        }
+
+        fn tuple_variant<V: Visitor<'de>>(self, _: usize, _: V) -> Result<V::Value, A::Error> {
+            Err(de::Error::invalid_type(de::Unexpected::TupleVariant, &"an object kind with fields"))
+        }
+
+        fn struct_variant<V: Visitor<'de>>(self, _: &'static [&'static str], visitor: V) -> Result<V::Value, A::Error> {
+            visitor.visit_map(self.0)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A node writes its rarely set parts among the others, in the file's field order, and reads
+    /// them back into its extras; a node without any keeps none.
+    #[test]
+    fn extras_are_written_flat_in_order() {
+        let mut n = Node::path(NodeId(7), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
+        n.name = Some("n".into());
+        n.knockout_shape = true;
+        n.bbox_angle = 30.0;
+        {
+            let mut e = n.extras_mut();
+            e.mask = Some(Box::new(OpacityMask::new(Node::group(NodeId(8), vec![]), true)));
+            e.trace = Some(Box::new(serde_json::json!({"preset": "p"})));
+            e.series_index = Some(2);
+            e.graphic_style = Some(3);
+            e.attrs = Some(Box::default());
+            e.slice = Some(Box::default());
+            e.perspective = Some(Box::new(crate::PerspectiveAttachment::new("left", 1.0)));
+        }
+        /// The top-level keys of a JSON object, in the order written.
+        struct Keys(Vec<String>);
+        impl<'de> Deserialize<'de> for Keys {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                struct V;
+                impl<'de> serde::de::Visitor<'de> for V {
+                    type Value = Keys;
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        f.write_str("an object")
+                    }
+                    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut a: A) -> Result<Keys, A::Error> {
+                        let mut out = vec![];
+                        while let Some(k) = a.next_key::<String>()? {
+                            a.next_value::<serde::de::IgnoredAny>()?;
+                            out.push(k);
+                        }
+                        Ok(Keys(out))
+                    }
+                }
+                d.deserialize_map(V)
+            }
+        }
+        let text = serde_json::to_string(&n).unwrap();
+        let keys = serde_json::from_str::<Keys>(&text).unwrap().0;
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let order = [
+            "id",
+            "name",
+            "knockout_shape",
+            "appearance",
+            "mask",
+            "trace",
+            "series_index",
+            "kind",
+            "graphic_style",
+            "attrs",
+            "slice",
+            "bbox_angle",
+            "perspective",
+        ];
+        assert_eq!(keys, order);
+        assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
+        let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
+        let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
+        assert!(back.extras_box().is_none());
+        // Clearing the last extra lets them go; clearing one a node doesn't have allocates none.
+        n.extras_mut().mask = None;
+        assert!(n.extras_box().is_some());
+        *n.extras_mut() = NodeExtras::default();
+        assert!(n.extras_box().is_none());
+        n.extras_mut().mask = None;
+        assert!(n.extras_box().is_none());
+        assert_eq!(n.extras(), &NodeExtras::default());
+    }
 
     #[test]
     fn rect_live_shape_roundtrip() {
@@ -1900,5 +2173,51 @@ mod tests {
         let mut p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
         p.appearance.stroke_mut().unwrap().join = crate::appearance::LineJoin::Round;
         assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
+    }
+
+    /// A group holding a path, a compound, an image and a nested group, as a file writes it.
+    fn nested_group() -> Node {
+        let path = |id| Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        let image = ImageObject { key: "k".into(), width: 2, height: 3, xf: Affine::IDENTITY, link: None, placement: Default::default() };
+        let inner = Node::new(NodeId(5), NodeKind::Group { children: vec![Arc::new(path(6))], clip: true });
+        let compound = Node::new(NodeId(3), NodeKind::Compound { children: vec![Arc::new(path(4))], rule: FillRule::EvenOdd });
+        let kids = vec![Arc::new(path(2)), Arc::new(compound), Arc::new(Node::new(NodeId(7), NodeKind::Image(Box::new(image)))), Arc::new(inner)];
+        Node::new(NodeId(1), NodeKind::Group { children: kids, clip: false })
+    }
+
+    #[test]
+    fn kinds_read_back_with_type_first_or_anywhere() {
+        let n = nested_group();
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains(r#""kind":{"type":"group","children":["#), "written with `type` first: {json}");
+        assert_eq!(serde_json::from_str::<Node>(&json).unwrap(), n);
+        // Through a JSON value, whose keys are sorted: `type` comes after `children`.
+        let v = serde_json::to_value(&n).unwrap();
+        assert_eq!(serde_json::from_value::<Node>(v.clone()).unwrap(), n);
+        assert_eq!(serde_json::from_str::<Node>(&v.to_string()).unwrap(), n);
+        // `type` last, in the middle, and keys a newer version added (ignored, as before).
+        let kind = r#"{"children":[],"x":{"deep":[1,2]},"clip":true,"type":"group"}"#;
+        assert_eq!(serde_json::from_str::<NodeKind>(kind).unwrap(), NodeKind::Group { children: vec![], clip: true });
+        let kind = r#"{"symbol":"S","type":"symbolinstance","later":1,"xf":[1,0,0,1,5,6]}"#;
+        assert_eq!(
+            serde_json::from_str::<NodeKind>(kind).unwrap(),
+            NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((5.0, 6.0)) }
+        );
+        let kind = r#"{"width":2,"type":"image","key":"k","height":3,"xf":[1,0,0,1,0,0]}"#;
+        assert!(matches!(serde_json::from_str::<NodeKind>(kind).unwrap(), NodeKind::Image(i) if i.key == "k" && i.height == 3));
+        // Defaults as before.
+        let NodeKind::Layer { printable, preview, template, .. } =
+            serde_json::from_str(r#"{"type":"layer","color":{"Preset":0},"children":[]}"#).unwrap()
+        else {
+            panic!("a layer")
+        };
+        assert!(printable && preview && !template);
+    }
+
+    #[test]
+    fn bad_kinds_are_errors() {
+        for bad in [r#"{"children":[]}"#, r#"{"type":"nothing"}"#, r#"{"type":"group"}"#, r#"{"type":3,"children":[]}"#, r#"[]"#, r#""group""#] {
+            assert!(serde_json::from_str::<NodeKind>(bad).is_err(), "{bad}");
+        }
     }
 }

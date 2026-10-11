@@ -412,3 +412,33 @@ fn new_files_never_replace_a_file() {
     assert_eq!(std::fs::read(&path).unwrap(), b"first");
     let _ = std::fs::remove_dir_all(d);
 }
+
+#[test]
+fn a_native_save_streams_the_bytes_the_encoder_makes() {
+    let d = tmp_dir("stream");
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    for (name, compress) in [("a.vectorcraft", false), ("b.vectorcraft", true), ("c.vctemplate", true)] {
+        let path = d.join(name).to_string_lossy().to_string();
+        let p = json!({"path": path, "compress": compress});
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        let written = std::fs::read(&path).unwrap();
+        assert_eq!(r["bytes"], written.len(), "{r}");
+        let plan = save_plan(&s, SaveMode::Copy, &p).unwrap();
+        let job = save_job(&mut s, plan).unwrap();
+        assert!(job.streams());
+        assert_eq!(written, job.encode().unwrap().files[0].1, "{name}");
+        assert_eq!(vectorcraft_format::load(&written).unwrap().template, name.ends_with("vctemplate"));
+    }
+    // A writer that fails: the save fails with its error.
+    let plan = save_plan(&s, SaveMode::Copy, &json!({"path": "/x/y.vectorcraft"})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let e = job
+        .write_streamed(&mut |_, fill| {
+            fill(&mut std::io::sink()).unwrap();
+            Err(EngineError::Other("disk full".into()))
+        })
+        .unwrap_err();
+    assert_eq!(e.to_string(), "disk full");
+    let _ = std::fs::remove_dir_all(&d);
+}

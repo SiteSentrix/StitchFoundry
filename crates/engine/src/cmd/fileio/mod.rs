@@ -53,15 +53,18 @@ use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::native_file;
 pub(crate) use load::source;
-pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
+pub use load::{
+    Loaded, RasterImage, ReadFile, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_read, open_template, raster_image,
+    read_for_open,
+};
 pub use load::{losses_summary, overwrite_losses};
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;
 pub use save::{
-    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, export_folder, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates,
-    templates_dialog_folder, templates_folder,
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, export_folder, save_filters, save_format, save_job, save_plan, save_with,
+    stamp_save_dates, templates_dialog_folder, templates_folder,
 };
 pub use screens::{PRESETS as SCREEN_PRESETS, ScreenSize, preset_rows as screen_preset_rows};
 pub(crate) use screens::{
@@ -769,6 +772,13 @@ pub(crate) fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
     write_atomic(std::path::Path::new(path), bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
+/// [`write_file`] with what `fill` writes into the file (a save streamed into it).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_file_with(path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
+    may_write(path)?;
+    vectorcraft_format::write_atomic_with(std::path::Path::new(path), |f| fill(f)).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_dir(path: &str) -> Result<()> {
     may_write(path)?;
@@ -935,6 +945,11 @@ pub(crate) fn read_file(path: &str) -> Result<Vec<u8>> {
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn write_file(path: &str, _: &[u8]) -> Result<()> {
+    Err(no_fs(path))
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn write_file_with(path: &str, _: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()> {
     Err(no_fs(path))
 }
 

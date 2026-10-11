@@ -4197,3 +4197,6 @@ lighting	Light	Lumière
 	Artistic	Artistique
 	Film Grain…	Grain photographique…
 	Highlight Area	Zone des tons clairs
+@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	le fichier compressé dépasse une fois décompressé ce que VectorCraft lit ({_1} Mo de document, {_2} Mo par image)
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	le document est trop volumineux pour être enregistré compressé ({0}) : enregistrez-le avec Utiliser la compression désactivé
+@msg	the file stopped being read (please report this bug)	la lecture du fichier s’est interrompue (veuillez signaler ce bogue)

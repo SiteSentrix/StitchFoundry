@@ -4183,3 +4183,6 @@ lighting	Light	ライト
 	Artistic	アーティスティック
 	Film Grain…	フィルム粒子…
 	Highlight Area	ハイライト領域
+@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	圧縮ファイルを展開すると VectorCraft が読み込める量を超えます (ドキュメント {_1} MB、画像 1 枚あたり {_2} MB)
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	ドキュメントが大きすぎて圧縮保存できません ({0}): 「圧縮を使用」をオフにして保存してください
+@msg	the file stopped being read (please report this bug)	ファイルの読み込みが中断されました (このバグを報告してください)
