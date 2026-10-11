@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: storytold/craft-fonts
-          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
+          ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
           path: craft-fonts
       - name: Build and test in a FreeBSD VM
         uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1
@@ -68,12 +68,12 @@ jobs:
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7
-      # Japanese UI/document fonts, embedded by crates/text/build.rs (CRAFT_FONTS_DIR in the VM).
+      # Japanese, Chinese, Arabic and Thai fonts, embedded by crates/text/build.rs (CRAFT_FONTS_DIR in the VM).
       # Bump the commit deliberately; see craftrules standards/fonts.md.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: storytold/craft-fonts
-          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
+          ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
           path: craft-fonts
       - name: Package in a FreeBSD VM
         uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc

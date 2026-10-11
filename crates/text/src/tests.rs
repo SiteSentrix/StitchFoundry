@@ -779,5 +779,7 @@ fn thai_loanwords_stay_whole() {
     let text = "ยินดีต้อนรับสู่โปรแกรมวาดภาพเวกเตอร์";
     let l = layout(db(), &area(text, style(12.0), Rect::new(0.0, 0.0, 70.0, 2000.0), Justify::Left));
     let lines: Vec<&str> = l.lines.iter().map(|ln| &text[ln.start..ln.end]).collect();
-    assert!(lines.contains(&"โปรแกรม"), "{lines:?}");
+    // No line ends inside the word, whatever the Thai font's widths put beside it.
+    let word = text.find("โปรแกรม").unwrap();
+    assert!(l.lines.iter().all(|ln| ln.end <= word || ln.end >= word + "โปรแกรม".len()), "{lines:?}");
 }
