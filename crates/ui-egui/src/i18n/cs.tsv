@@ -1244,6 +1244,10 @@ lighting	Light	Světlo
 	Leading	Proklad
 	No Break	Nezalamovat
 	Proportional Metrics	Proporcionální metrika
+	Digits	Číslice
+	Arabic	Arabské
+	Hindi	Hindské
+	Farsi	Perské
 	Reset Panel	Obnovit panel
 	Roman Baseline	Latinková účaří
 	Select a text object to edit its character attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho znaků.
