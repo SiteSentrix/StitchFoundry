@@ -283,8 +283,9 @@ fn key(backend: Backend, vendor: u32, device: u32, name: &str) -> String {
 /// The order to try `candidates` in (their indices): only those that present to the window and
 /// aren't in `skip`; the one whose name contains `named` (any case) first; hardware before
 /// software; native backends before OpenGL; the GPU the compositor draws with (`compositor`); the
-/// GPUs that drive one of `displays`, the primary display's first; then by `power`; then DX12 before Vulkan, keeping the system's order among
-/// equals (all of it for [`PowerPreference::None`]). Windows lists each GPU under both, and Intel's
+/// GPUs that drive one of `displays`, the primary display's first; then by `power`; then DX12
+/// before Vulkan, keeping the system's order among equals (all of it for
+/// [`PowerPreference::None`]). Windows lists each GPU under both, and Intel's
 /// Vulkan driver made the whole window flicker black where DX12 and OpenGL didn't (#545);
 /// elsewhere there is no DX12 adapter, so the order is unchanged.
 ///
@@ -426,8 +427,8 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
 
 /// eframe's adapter choice: the first of [`adapter_order`] for `power`, the GPU the `compositor`
 /// draws with, the GPUs that drive a `displays`, `WGPU_ADAPTER_NAME` and the adapters a restart
-/// left out. Every adapter, the displays
-/// and the choice are logged: which GPU draws is the first question in every black-window report.
+/// left out. Every adapter, the displays and the choice are logged: which GPU draws is the first
+/// question in every black-window report.
 pub fn selector(
     power: PowerPreference,
     displays: Vec<DisplayGpu>,
