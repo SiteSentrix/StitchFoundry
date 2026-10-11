@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Direct Selection: no-op anchor Align preserves Undo, Redo and saved state (#1180 follow-up); Eyedropper cursor distinguished from precise crosshair (#1269); scores unchanged; Eyedropper can read visible locked and outside-isolation sources (#1251); scores unchanged; Direct Selection: independent segment picks and Delete (#1278); scores unchanged; Adding paint to an unpainted zero-width stroke restores the 1 pt default (#1253); scores unchanged; macOS save sheets offer a Format menu, #866; Attributes fill-rule controls edit the compound when a member is selected, #1197; a marquee needs to touch a path, not just lie inside its fill, #1103; earlier: Live Corners round corners between curved sides, #1144) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Curvature point display improved (#1236, in part); scores unchanged; Direct Selection: no-op anchor Align preserves Undo, Redo and saved state (#1180 follow-up); Eyedropper cursor distinguished from precise crosshair (#1269); scores unchanged; Eyedropper can read visible locked and outside-isolation sources (#1251); scores unchanged; Direct Selection: independent segment picks and Delete (#1278); scores unchanged; Adding paint to an unpainted zero-width stroke restores the 1 pt default (#1253); scores unchanged; macOS save sheets offer a Format menu, #866; Attributes fill-rule controls edit the compound when a member is selected, #1197; a marquee needs to touch a path, not just lie inside its fill, #1103; earlier: Live Corners round corners between curved sides, #1144) · **Target:** Adobe Illustrator 2026 (30.x)
 
 How VectorCraft's tools, handles, snapping and panels behave next to Illustrator's. A vector illustrator's
 trust is in the details: where a handle lands, what Shift and Alt do mid-drag, what a smart guide snaps to,
@@ -51,7 +51,7 @@ tools, never checked side by side) isn't captured row by row.
 | Auto Add/Delete on a selected path; Shift or the preference disables it | done | |
 | Pen cursors (new path ×, continue /, close o, add +, delete −, convert ^) | partial | vector cursors exist; not every state verified |
 | Each anchor snaps to Smart Guides and construction angles | done | `DrawSnap` |
-| Curvature tool: click/drag points, double-click or Alt-click for a corner, temporary Direct Selection, point conversion | partial | modifiers requested in #975 |
+| Curvature tool: click/drag points, double-click or Alt-click for a corner, temporary Direct Selection, point conversion | partial | circular point markers without direction handles or duplicate markers, Anchor Size and Hide Edges regression-tested (#1236, in part); existing-path interpolation request and modifiers requested in #975 remain |
 | Add/Delete/Anchor Point tools; Anchor Point tool drags segments to reshape | done | |
 | Pencil: Fidelity, Keep selected, Alt to Smooth, edit selected paths, close by proximity | partial | Keep selected and Alt to Smooth are missing |
 | Join tool scrubbing, Average, Join with corner/smooth choice | done | |
@@ -177,6 +177,7 @@ re-measure of the panels added since.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | Curvature: circular point markers, no direction handles or duplicate points; existing-path interpolation and #975 remain separate (#1236, in part); scores unchanged (estimated) |
 | 2026-10-12 | minor | Direct Selection: repeating anchor Align and rounding-only Align leave Undo, Redo and saved state intact (#1180 follow-up); scores unchanged (estimated) |
 | 2026-10-12 | minor | Eyedropper: original pipette at the sampling tip; precise setting and DPI checked (#1269); OS visual QA and Caps Lock unverified; scores unchanged |
 | 2026-10-12 | minor | Eyedropper can read visible locked and outside-isolation sources (#1251); scores unchanged |

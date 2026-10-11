@@ -399,6 +399,8 @@ pub enum Overlay {
     Line { a: Point, b: Point, color: [u8; 3], dashed: bool },
     /// An anchor square: filled = selected.
     Anchor { p: Point, color: [u8; 3], filled: bool, size: f32 },
+    /// A Curvature tool point, drawn as a circle; filled = the last touched point.
+    CurvePoint { p: Point, color: [u8; 3], filled: bool, size: f32 },
     /// A handle end circle.
     Handle { p: Point, color: [u8; 3] },
     /// Smart-guide style label (e.g. "anchor", "W: 100 pt").
