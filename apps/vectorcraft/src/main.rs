@@ -717,6 +717,11 @@ fn main() -> std::process::ExitCode {
             create.instance_descriptor.flags =
                 (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
             create.instance_descriptor.backends = gpu::backends(create.instance_descriptor.backends, std::env::var_os("WGPU_BACKEND").is_some());
+            // DX12 shaders compile with FXC, part of Windows: wgpu's default loads whichever
+            // dxcompiler.dll the search path finds, and one without its dxil.dll fails every shader,
+            // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
+            create.instance_descriptor.backend_options.dx12.shader_compiler =
+                eframe::wgpu::Dx12Compiler::from_env().unwrap_or(eframe::wgpu::Dx12Compiler::Fxc);
         }
         options
     };
