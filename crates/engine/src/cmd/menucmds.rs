@@ -226,6 +226,13 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
             }
         }
     }
+    // When there is no object above, or every one is locked (Lock) or hidden (Hide) already, the
+    // document and its undo history stay as they are, and selected objects that are hidden or
+    // locked are deselected.
+    if hits.iter().all(|id| d.node(*id).is_none_or(|n| if lock { n.locked } else { !n.visible })) {
+        s.select(|d, sel| sel.deselect_uneditable(d))?;
+        return Ok(json!({ "count": hits.len() }));
+    }
     let label = if lock { "Lock" } else { "Hide" };
     let n = hits.len();
     s.edit(label, |d, sel| {
@@ -249,6 +256,11 @@ fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
     let keep: Vec<NodeId> = st.selection.objects.iter().filter_map(|id| st.doc.ancestry(*id)).flatten().collect();
     let others: Vec<NodeId> = st.doc.layers.iter().map(|l| l.id).filter(|l| !keep.contains(l)).collect();
     let n = others.len();
+    // When there is no other layer, or every one is locked (Lock) or hidden (Hide) already, the
+    // document and its undo history stay as they are.
+    if others.iter().all(|id| st.doc.node(*id).is_none_or(|l| if lock { l.locked } else { !l.visible })) {
+        return Ok(json!({ "count": n }));
+    }
     s.edit(if lock { "Lock Others" } else { "Hide Others" }, |d, _| {
         for id in &others {
             if let Some(n) = d.node_mut(*id) {
@@ -300,6 +312,12 @@ fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
     let mut rng = Rng(p.get("seed").and_then(Value::as_u64).unwrap_or(0x9E37_79B9_7F4A_7C15).max(1));
     let mut sc = if sh != 100.0 || sv != 100.0 { super::object::scaling(s, p) } else { Default::default() };
     sc.patterns = super::object::transform_patterns(s, p, &roots)?;
+    // With no object to transform, or without a copy when both scales are 100% and there is no
+    // move, rotation or reflection (with or without Random), the document and its undo history
+    // stay as they are.
+    if roots.is_empty() || (!copy && sh == 100.0 && sv == 100.0 && mh == 0.0 && mv == 0.0 && rot == 0.0 && !rx && !ry) {
+        return Ok(ids_json(&roots));
+    }
     let ids = s.edit("Transform Each", |d, sel| {
         let targets = if copy { duplicate_in(d, sel, &roots, Affine::IDENTITY)? } else { roots.clone() };
         for id in &targets {
@@ -853,12 +871,18 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let move_art = bool_or(p, "moveArtwork", true);
     let locked_and_hidden = s.prefs.move_locked_with_artboard;
     let scale_strokes = false;
+    // How far each artboard moves: the grid's top-left is at the first artboard's.
+    let rects: Vec<Rect> = s.doc()?.doc.artboards.iter().map(|a| a.rect).collect();
+    let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
+    let origin = rects.first().map_or(Point::ZERO, |r| r.origin());
+    let origins = super::newdoc::grid_origins_rc(&sizes, origin, (rows, cols), spacing, layout == L::GridByColumn, rtl);
+    let deltas: Vec<Vec2> = rects.iter().zip(origins).map(|(r, o)| o - r.origin()).collect();
+    // When no artboard moves more than 1e-9 pt on either axis, or there is none, the document and
+    // its undo history stay as they are.
+    if deltas.iter().all(|dl| dl.x.abs() <= 1e-9 && dl.y.abs() <= 1e-9) {
+        return Ok(json!({ "artboards": count, "rows": rows, "columns": cols }));
+    }
     s.edit("Rearrange Artboards", |d, _| {
-        let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
-        let Some(first) = rects.first().copied() else { return Ok(()) };
-        let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
-        let origins = super::newdoc::grid_origins_rc(&sizes, first.origin(), (rows, cols), spacing, layout == L::GridByColumn, rtl);
-        let deltas: Vec<Vec2> = rects.iter().zip(origins).map(|(r, o)| o - r.origin()).collect();
         if move_art {
             let tops: Vec<(NodeId, Point)> = d
                 .layers
