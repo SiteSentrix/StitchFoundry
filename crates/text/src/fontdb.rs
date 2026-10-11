@@ -574,10 +574,12 @@ impl FontClass {
         [FontClass::Serif, FontClass::Sans, FontClass::Rounded, FontClass::Script, FontClass::Monospaced, FontClass::Decorative];
 }
 
-/// What a font menu filters on: whether a family sets Japanese, and its kind.
+/// What a font menu filters on: whether a family sets Japanese or Thai, and its kind.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FontTraits {
     pub japanese: bool,
+    /// Its character map has Thai (ก and า).
+    pub thai: bool,
     pub class: FontClass,
 }
 
@@ -595,6 +597,7 @@ impl FontTraits {
         };
         // Hiragana (bit 49) or Katakana (bit 50) in the Unicode ranges, or the JIS code page.
         let japanese = ranges2 & (0b11 << 17) != 0 || codepages & (1 << 17) != 0 || has_japanese_name;
+        let thai = ['\u{0E01}', '\u{0E32}'].iter().all(|c| font.charmap().map(*c).is_some());
         let family_type = panose.first().copied().unwrap_or(0);
         let serif_style = panose.get(1).copied().unwrap_or(0);
         let proportion = panose.get(3).copied().unwrap_or(0);
@@ -692,7 +695,7 @@ impl FontTraits {
         } else {
             FontClass::Other
         };
-        FontTraits { japanese, class }
+        FontTraits { japanese, thai, class }
     }
 }
 
