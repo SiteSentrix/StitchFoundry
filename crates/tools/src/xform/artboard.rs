@@ -341,13 +341,16 @@ impl Tool for ArtboardTool {
         }
     }
 
+    /// Escape owns the request to return to Selection (or cancel an active drag), so the UI
+    /// applies the tool's request instead of falling through to its general Escape behaviour.
     /// Delete/Backspace remove the active artboard ahead of the Clear shortcut, which would only
     /// delete selected art; with one artboard left (it can't be deleted) they stay the shortcut's.
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
-        matches!(key, ToolKey::Delete | ToolKey::Backspace)
-            && self.drag.is_none()
-            && cx.doc.artboards.len() > self.selected(cx).len()
-            && self.active < cx.doc.artboards.len()
+        matches!(key, ToolKey::Escape)
+            || (matches!(key, ToolKey::Delete | ToolKey::Backspace)
+                && self.drag.is_none()
+                && cx.doc.artboards.len() > self.selected(cx).len()
+                && self.active < cx.doc.artboards.len())
     }
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
