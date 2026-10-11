@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+//! The PDF export warnings for raster effects whose images the 64 million pixel cap rendered below
+//! the document's raster effects resolution, one per object of the document.
 
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
@@ -8,7 +9,8 @@ pub(super) struct FlattenReport {
     pub which: Which,
     requested_ppi: f64,
     reductions: Vec<Reduction>,
-    originals: HashSet<NodeId>,
+    /// Ids from here on are the flattening's own (split appearance items, groups under shadows).
+    first_new_id: u64,
 }
 
 struct Reduction {
@@ -19,13 +21,10 @@ struct Reduction {
 
 impl FlattenReport {
     pub fn new(which: Which, doc: &Document) -> Self {
-        let mut originals = HashSet::new();
-        for node in doc.layers.iter().chain(doc.symbols.iter().map(|s| &s.art)).chain(doc.patterns.iter().flat_map(|p| &p.art)) {
-            collect_ids(node, &mut originals);
-        }
-        Self { which, requested_ppi: super::effects_scale(doc) * 72.0, reductions: vec![], originals }
+        Self { which, requested_ppi: super::effects_scale(doc) * 72.0, reductions: vec![], first_new_id: doc.peek_next_id() }
     }
 
+    /// Note `image` (made for the raster effects of `original`) when the cap lowered its resolution.
     pub fn record(&mut self, original: &Node, image: &Node) {
         if let NodeKind::Image(image) = &image.kind {
             let [pixel_size, ..] = image.xf.as_coeffs();
@@ -40,12 +39,15 @@ impl FlattenReport {
         self.reductions.len()
     }
 
+    /// Give the reductions recorded since `checkpoint` on pieces the flattening made to `original`,
+    /// a document object (the innermost one, as the walk returns from it).
     pub fn attribute_since(&mut self, checkpoint: usize, original: &Node) {
-        if !self.originals.contains(&original.id) {
+        let first_new_id = self.first_new_id;
+        if original.id.0 >= first_new_id {
             return;
         }
         for reduction in self.reductions.iter_mut().skip(checkpoint) {
-            if !self.originals.contains(&reduction.id) {
+            if reduction.id.0 >= first_new_id {
                 reduction.id = original.id;
                 reduction.name.clone_from(&original.name);
             }
@@ -71,16 +73,6 @@ impl FlattenReport {
                 )
             })
             .collect()
-    }
-}
-
-fn collect_ids(node: &Node, ids: &mut HashSet<NodeId>) {
-    ids.insert(node.id);
-    for child in node.children().into_iter().flatten() {
-        collect_ids(child, ids);
-    }
-    if let Some(mask) = &node.mask {
-        collect_ids(&mask.art, ids);
     }
 }
 

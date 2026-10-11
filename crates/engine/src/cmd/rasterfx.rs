@@ -26,7 +26,6 @@ use vectorcraft_render::{AntiAlias, RenderOptions};
 
 use super::*;
 
-#[path = "rasterfx_report.rs"]
 mod report;
 use report::FlattenReport;
 

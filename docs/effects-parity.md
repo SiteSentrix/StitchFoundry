@@ -30,11 +30,9 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | SVG Filters | Apply SVG Filter… and the filter list | 0/1 | the whole submenu (SVG filters on import round-trip already) |
 | Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes |
 
-Document Raster Effects Settings exists. PDF export reports when its unchanged 64 million pixel
-budget lowers raster-effect resolution: one warning per original object, with its id/name,
-requested ppi and lowest achieved ppi across generated images. Uncapped exports remain quiet.
-Evidence: `crates/engine/src/tests_pdfraster.rs` exercises actual 2400-ppi capped fill/stroke
-images and a small uncapped export; `cmd/rasterfx_report.rs` tests lowest-resolution aggregation.
+Document Raster Effects Settings exists. When the 64 million pixel cap on an effect image lowers
+its resolution, PDF export warns once per object with the requested and the lowest achieved ppi
+(`crates/engine/src/tests_pdfraster.rs`).
 
 ## Photoshop effects
 
