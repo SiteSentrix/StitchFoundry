@@ -253,6 +253,9 @@ explicit `ids`.
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,
 or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"}`).
+For `draw_shape` and `draw_path`, omitted paint fields inherit the current [new-art appearance](#new-art).
+For a filled shape or path without an outline, pass an explicit `fill` and `stroke: "none"`.
+Lines start with no fill and a visible stroke.
 The Fill/Stroke proxy commands run through `run_command`: `paint.invert` and `paint.complement` recolour the active
 proxy keeping each colour's model, `paint.lastColor` / `paint.lastGradient` re-apply the last solid colour or gradient,
 and `paint.recent` returns the recent colours that every paint command (and the eyedropper) feeds.
@@ -285,6 +288,9 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. An empty CSV cell or a `null` in `rows` is a blank value; a number in straight quotes is a label. Edit later with `graph.setData` / `graph.setType` via `run_command`. |
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. |
 | `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. `inspect_document` lists the undo steps as `history`. |
+
+For SVG/SVGZ, `export`'s top-level `outlineText: true` writes text as paths; DXF also supports this flag.
+PDF instead uses `options: {"advanced": {"outlineText": true}}`; its default is false (live text).
 
 With `mods.shift`, a marquee dragged with the Selection tool toggles the objects it reaches (the selected ones leave
 the selection, the others join it, the rest stays), and one dragged with Direct or Group Selection toggles the anchors
@@ -1693,6 +1699,7 @@ a pin back restores the original; every pin must be on the art's mesh, and empty
 
 ## New art
 
+The initial new-art appearance is white fill and a 1 pt black stroke, not fill-only art.
 New objects take the fill and stroke proxies (`paint.setFill` / `paint.setStroke` and the weight, whatever is
 selected) on top of a template. With nothing selected, `stroke.set` / `stroke.setAdvanced` (cap, join, dashes,
 arrowheads, profile…) and `graphicStyle.apply` (every fill, stroke and effect, opacity, blend mode and the link to the
