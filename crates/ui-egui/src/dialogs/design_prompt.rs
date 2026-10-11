@@ -1,0 +1,83 @@
+//! Design from Prompt: a description, the stitched size and how many thread colours, and the
+//! Anthropic API key the request goes out with. Generate sends it and keeps the dialog open,
+//! showing that Claude is drawing; the art is placed and digitized when it arrives
+//! ([`crate::embroidery::prompt`]).
+//!
+//! Fields: `prompt`, `size` (mm, longest side), `colors`, `remember` (keep the key). The key itself
+//! is not a field: agents can read the fields.
+
+use serde_json::{Value, json};
+
+use super::{DialogSpec, form};
+use crate::embroidery::prompt;
+use crate::state::Dialog;
+use crate::theme::Tokens;
+use crate::{VectorcraftApp, widgets};
+
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Design from Prompt").into(),
+    body,
+    confirm,
+    ok: Some("Generate"),
+    min_width: 420.0,
+    max_width: Some(460.0),
+    ..DialogSpec::FORM
+};
+
+fn label(ui: &mut egui::Ui, text: &str) {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new(tl!(text)).color(t.text_dim));
+}
+
+/// A whole-number field bound to `d.fields[key]`, kept within `range`, with `suffix` (a unit).
+fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, range: (f64, f64), suffix: &str) {
+    let v = d.f64(key, range.0);
+    if let Some(n) = widgets::plain_field(ui, ("design-prompt", key), v, suffix, 0, 72.0) {
+        d.fields.insert(key.into(), json!(n.round().clamp(range.0, range.1)));
+    }
+}
+
+fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let now = ui.input(|i| i.time);
+    app.embroidery.prompt.now = now;
+    let drawing = app.embroidery.prompt.drawing_for(now);
+    label(ui, "Describe the design:");
+    form::text_area(ui, d, "prompt", 400.0, 4);
+    ui.add_space(8.0);
+    egui::Grid::new("design-prompt-grid").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
+        label(ui, "Size (longest side):");
+        number(ui, d, "size", (20.0, 400.0), "mm");
+        ui.end_row();
+        label(ui, "Thread colors");
+        number(ui, d, "colors", (1.0, 12.0), "");
+        ui.end_row();
+        label(ui, "Anthropic API key:");
+        ui.add(egui::TextEdit::singleline(&mut app.embroidery.prompt.key).password(true).desired_width(260.0).hint_text("sk-ant-…"));
+        ui.end_row();
+        ui.label("");
+        form::check(ui, d, "remember", tl!("Remember the key on this computer"));
+        ui.end_row();
+    });
+    ui.add_space(6.0);
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new(tl!("Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.")).size(11.0).color(t.text_dim));
+        if ui.link(egui::RichText::new(tl!("Get a key")).size(11.0)).clicked() {
+            app.open_url(prompt::KEY_URL);
+        }
+    });
+    ui.add_space(8.0);
+    if let Some(secs) = drawing {
+        ui.horizontal(|ui| {
+            ui.add(egui::Spinner::new());
+            ui.label(format!("{} {:.0} s", tl!("Drawing the design…"), secs));
+        });
+    } else if let Some(e) = app.embroidery.prompt.error.clone() {
+        ui.label(egui::RichText::new(crate::i18n::msg(&e)).color(t.error));
+    }
+    false
+}
+
+fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    prompt::start(app, d)
+}

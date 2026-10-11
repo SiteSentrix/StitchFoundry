@@ -145,3 +145,179 @@ fn check_design_shows_its_findings_without_closing_the_panel() {
     app.run("ui.embroideryCheck", json!({})).unwrap();
     assert_eq!(app.ui.open_panel.as_deref(), Some("embroidery"));
 }
+
+mod design_from_prompt {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    use serde_json::{Value, json};
+    use vectorcraft_engine::Session;
+
+    use crate::embroidery::prompt;
+    use crate::{HttpRequest, SecretStore, Services, VectorcraftApp};
+
+    const ART: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><circle cx="500" cy="500" r="400" fill="#e07020"/><circle cx="380" cy="420" r="70" fill="#ffffff"/><circle cx="620" cy="420" r="70" fill="#ffffff"/></svg>"##;
+
+    #[derive(Clone, Default)]
+    struct Keys(Arc<Mutex<HashMap<String, String>>>);
+
+    impl SecretStore for Keys {
+        fn load(&self, name: &str) -> Option<String> {
+            self.0.lock().unwrap().get(name).cloned()
+        }
+        fn save(&self, name: &str, value: Option<&str>) -> Result<(), String> {
+            let mut m = self.0.lock().unwrap();
+            match value {
+                Some(v) => m.insert(name.to_string(), v.to_string()),
+                None => m.remove(name),
+            };
+            Ok(())
+        }
+    }
+
+    type Sent = Arc<Mutex<Vec<HttpRequest>>>;
+
+    /// An app whose AI service answers `(status, body)` after `delay`, recording what it was sent.
+    fn app(status: u16, body: String, delay: Duration) -> (VectorcraftApp, Sent, Keys) {
+        let sent: Sent = Arc::default();
+        let keys = Keys::default();
+        let log = sent.clone();
+        let services = Services {
+            http_post: Some(Arc::new(move |r: &HttpRequest| {
+                log.lock().unwrap().push(r.clone());
+                std::thread::sleep(delay);
+                Ok((status, body.clone()))
+            })),
+            secrets: Some(Box::new(keys.clone())),
+            ..Default::default()
+        };
+        let mut app = VectorcraftApp::new(Session::new(), services);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        (app, sent, keys)
+    }
+
+    fn reply(svg: &str) -> String {
+        json!({"type": "message", "model": "claude-opus-5-5", "content": [{"type": "text", "text": svg}], "stop_reason": "end_turn"}).to_string()
+    }
+
+    /// Poll as frames do until the answer is in.
+    fn wait(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        for _ in 0..1000 {
+            prompt::poll(app, &ctx);
+            if app.embroidery.prompt.drawing_for(0.0).is_none() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("no answer");
+    }
+
+    /// Every piece of text one headless frame of the open dialog paints.
+    fn dialog_text(app: &mut VectorcraftApp) -> Vec<String> {
+        let ctx = egui::Context::default();
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
+        let out = ctx.run_ui(raw, |ui| crate::dialogs::show(app, &ui.ctx().clone()));
+        fn walk(s: &egui::Shape, into: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => into.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, into)),
+                _ => {}
+            }
+        }
+        let mut texts = Vec::new();
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        texts
+    }
+
+    fn objects(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum()
+    }
+
+    #[test]
+    fn the_art_is_drawn_placed_and_digitized_with_the_users_key() {
+        let (mut app, sent, keys) = app(200, reply(ART), Duration::ZERO);
+        assert!(crate::menus::enabled(&app, "ui.designFromPrompt"));
+        app.run("ui.designFromPrompt", json!({"prompt": "a cartoon fox head", "size": 60, "colors": 4})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!(d.kind, prompt::KIND);
+        assert_eq!((d.str("prompt").as_str(), d.f64("size", 0.0), d.f64("colors", 0.0)), ("a cartoon fox head", 60.0, 4.0));
+        let texts = dialog_text(&mut app);
+        for want in ["Design from Prompt", "Describe the design:", "Anthropic API key:", "Generate"] {
+            assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+        }
+        // the key is typed into the dialog but is never one of its fields (agents read those)
+        app.embroidery.prompt.key = " sk-ant-test ".into();
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.as_ref().is_some_and(|d| !d.fields.values().any(|v| v.as_str().is_some_and(|s| s.contains("sk-ant")))));
+        assert!(dialog_text(&mut app).iter().any(|t| t.starts_with("Drawing the design…")));
+        wait(&mut app);
+        assert!(app.ui.dialog.is_none(), "placed: the dialog closes");
+        assert!(app.ui.status.starts_with("Design placed: 3 stitched objects"), "{}", app.ui.status);
+        let sent = sent.lock().unwrap();
+        let r = &sent[0];
+        assert!(r.headers.iter().any(|(k, v)| *k == "x-api-key" && v == "sk-ant-test"));
+        let body: Value = serde_json::from_str(&r.body).unwrap();
+        assert!(body["messages"][0]["content"].as_str().unwrap().contains("a cartoon fox head"));
+        assert!(body["system"].as_str().unwrap().contains("At most 4 different fill colours"));
+        assert_eq!(keys.load(prompt::KEY_NAME).as_deref(), Some("sk-ant-test"), "remembered");
+        // one group of stitched shapes, named by its description, gone with one undo
+        let st = app.session.active().unwrap();
+        let g = st.doc.node(st.selection.objects[0]).unwrap();
+        assert_eq!(g.name.as_deref(), Some("a cartoon fox head"));
+        assert!(g.children().unwrap().iter().all(|c| c.embroidery.is_some()));
+        assert!(app.session.embroidery_plan().is_some_and(|p| !p.is_empty()));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(objects(&app), 0);
+    }
+
+    #[test]
+    fn what_goes_wrong_is_shown_in_the_dialog() {
+        let err = json!({"type": "error", "error": {"type": "authentication_error", "message": "invalid x-api-key"}}).to_string();
+        let (mut app, sent, keys) = app(401, err, Duration::ZERO);
+        keys.save(prompt::KEY_NAME, Some("sk-ant-old")).unwrap();
+        app.run("ui.designFromPrompt", json!({"prompt": "a star"})).unwrap();
+        assert_eq!(app.embroidery.prompt.key, "sk-ant-old", "the kept key is filled in");
+        // nothing is sent without a key or a description
+        app.embroidery.prompt.key.clear();
+        assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), "Enter your Anthropic API key first.");
+        app.embroidery.prompt.key = "sk-ant-bad".into();
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("prompt".into(), json!("  "));
+            d.fields.insert("remember".into(), json!(false));
+        }
+        assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), "Describe the design first.");
+        assert!(sent.lock().unwrap().is_empty());
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("prompt".into(), json!("a star"));
+        }
+        crate::dialogs::confirm(&mut app).unwrap();
+        wait(&mut app);
+        assert!(app.ui.dialog.is_some(), "the dialog stays open to try again");
+        assert_eq!(app.embroidery.prompt.error.as_deref(), Some("Anthropic refused the API key: invalid x-api-key"));
+        assert!(dialog_text(&mut app).iter().any(|t| t == "Anthropic refused the API key: invalid x-api-key"));
+        assert_eq!(keys.load(prompt::KEY_NAME), None, "Remember off: the kept key is forgotten");
+        assert_eq!(objects(&app), 0);
+    }
+
+    #[test]
+    fn cancel_stops_waiting_and_the_web_has_no_service() {
+        let (mut app, sent, _) = app(200, reply(ART), Duration::from_millis(150));
+        app.run("ui.designFromPrompt", json!({"prompt": "a star"})).unwrap();
+        app.embroidery.prompt.key = "sk-ant-test".into();
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(crate::dialogs::confirm(&mut app).is_err(), "one request at a time");
+        crate::dialogs::cancel(&mut app);
+        assert!(app.ui.dialog.is_none() && app.embroidery.prompt.drawing_for(0.0).is_none());
+        std::thread::sleep(Duration::from_millis(300));
+        prompt::poll(&mut app, &egui::Context::default());
+        assert_eq!(objects(&app), 0, "a cancelled drawing is never placed");
+        assert_eq!(sent.lock().unwrap().len(), 1);
+        // without the service (the web) it can't open
+        let mut web = VectorcraftApp::new(Session::new(), Services::default());
+        web.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        assert!(!crate::menus::enabled(&web, "ui.designFromPrompt"));
+        assert!(web.run("ui.designFromPrompt", json!({})).is_err());
+    }
+}

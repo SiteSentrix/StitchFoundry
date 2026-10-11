@@ -193,6 +193,21 @@ pub type OpenUrlFn = Box<dyn FnMut(&str)>;
 /// Shows a file in the system file manager, or opens it in its app.
 pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 
+pub use vectorcraft_embroidery::sf_core::ai::HttpRequest;
+
+/// Sends an HTTPS POST and waits for the answer → (HTTP status, body), or why none came. Called
+/// from a thread of its own.
+pub type HttpPostFn = Arc<dyn Fn(&HttpRequest) -> Result<(u16, String), String> + Send + Sync>;
+
+/// Keeps small secrets (Design from Prompt's API key) out of the settings, which the engine, the
+/// control channel and MCP agents can read.
+pub trait SecretStore {
+    /// The secret `name`, when one is kept.
+    fn load(&self, name: &str) -> Option<String>;
+    /// Keep `value` as the secret `name`; `None` forgets it.
+    fn save(&self, name: &str, value: Option<&str>) -> Result<(), String>;
+}
+
 /// Platform services injected by the host app (desktop or web).
 #[derive(Default)]
 pub struct Services {
@@ -254,6 +269,12 @@ pub struct Services {
     /// [`Self::start_pick`]'s dialogs are sheets on the window (macOS): while one is open the app
     /// neither quits nor closes documents, as under the modal dialog before.
     pub dialogs_are_sheets: bool,
+    /// Send Design from Prompt's request to the AI service (desktop). Without it (the web, for
+    /// now) Design from Prompt is unavailable.
+    pub http_post: Option<HttpPostFn>,
+    /// Where Design from Prompt keeps the API key (desktop: a private file next to the settings).
+    /// Without it a key lasts the session.
+    pub secrets: Option<Box<dyn SecretStore>>,
 }
 
 /// Cached canvas raster.

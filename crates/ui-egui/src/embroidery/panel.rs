@@ -179,6 +179,13 @@ fn digitize_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::embroidery::widget::load(app);
         }
     }
+    if crate::embroidery::prompt::available(app)
+        && button(ui, tl!("Design from Prompt…"))
+            .on_hover_text(tl!("Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it"))
+            .clicked()
+    {
+        app.run("ui.designFromPrompt", json!({})).ok();
+    }
     if !open {
         return;
     }

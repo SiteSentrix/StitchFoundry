@@ -1263,3 +1263,86 @@ fn an_objects_stitches_split_in_two() {
     assert!(s.doc().unwrap().doc.node(ids[1]).is_none());
     assert!(!own(&mut s, id).0);
 }
+
+/// A drawing like Design from Prompt's: a frame painted with nothing, a head with two eyes and a
+/// mouth on top, a speck and a linked image.
+const PROMPT_ART: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+<rect width="1000" height="1000" fill="none"/>
+<circle cx="500" cy="500" r="400" fill="#e07020"/>
+<ellipse cx="380" cy="420" rx="70" ry="90" fill="#ffffff"/>
+<ellipse cx="620" cy="420" rx="70" ry="90" fill="#fefefe"/>
+<path d="M300 640 Q500 780 700 640 L690 690 Q500 830 310 690 Z" fill="#101010"/>
+<circle cx="500" cy="300" r="3" fill="#101010"/>
+<image href="/etc/hosts" x="0" y="0" width="10" height="10"/>
+</svg>"##;
+
+#[test]
+fn place_art_places_stitches_and_threads_its_shapes_in_one_step() {
+    let mut s = session();
+    let depth = s.doc().unwrap().history.undo.len();
+    let r = s.execute("embroidery.placeArt", &json!({"svg": PROMPT_ART, "size": 80.0, "name": "Fox"})).unwrap();
+    assert_eq!(r["objects"], 4, "{r}");
+    // (the SVG reader already leaves out the frame, painted with nothing)
+    assert_eq!(r["removed"], 2, "the image and the speck: {r}");
+    assert_eq!(r["fill"].as_u64().unwrap() + r["satin"].as_u64().unwrap(), 4, "{r}");
+    assert_eq!(r["colors"], 3, "the two whites are one thread: {r}");
+    let gid = NodeId(r["id"].as_u64().unwrap());
+    {
+        let st = s.doc().unwrap();
+        let g = st.doc.node(gid).unwrap();
+        assert_eq!(g.name.as_deref(), Some("Fox"));
+        assert_eq!(st.selection.objects, vec![gid]);
+        // 80 mm is the stitched art's longest side (not the unpainted frame's), centred on the artboard
+        let b = g.geometric_bounds().unwrap();
+        let mm = |pt: f64| pt * vectorcraft_embroidery::MM_PER_PT;
+        assert!((mm(b.width().max(b.height())) - 80.0).abs() < 0.5, "{b:?}");
+        let board = st.doc.artboards[0].rect.center();
+        assert!((b.center().x - board.x).abs() < 1.0, "{b:?}");
+        // drawing order is sewing order; each shape has a chart thread and cuts what it covers out of
+        // the fills sewn before it
+        let kids = g.children().unwrap();
+        assert_eq!(kids.len(), 4);
+        for k in kids {
+            let e = k.embroidery.as_deref().unwrap();
+            assert!(e.thread.as_ref().is_some_and(|t| !t.code.is_empty()), "{e:?}");
+            assert!(e.remove_underlying);
+        }
+        let first = vectorcraft_embroidery::node_thread(&kids[0], kids[0].embroidery.as_deref().unwrap());
+        assert!(first.color.r > 180 && first.color.b < 100, "the head is sewn first: {first:?}");
+    }
+    assert!(stitches(&s) > 500, "{}", stitches(&s));
+    // one undo step
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(gid).is_none());
+    assert_eq!(stitches(&s), 0);
+}
+
+#[test]
+fn place_art_fits_the_hoop_and_refuses_what_it_cannot_stitch() {
+    let mut s = session();
+    s.execute("embroidery.settings", &json!({"hoop": {"width": 130, "height": 180}})).unwrap();
+    let r = s.execute("embroidery.placeArt", &json!({"svg": PROMPT_ART})).unwrap();
+    let b = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    assert!((b.width() * vectorcraft_embroidery::MM_PER_PT - 117.0).abs() < 0.5, "90% of the hoop's shorter side: {b:?}");
+    let before = serde_json::to_string(&s.doc().unwrap().doc).unwrap();
+    let depth = s.doc().unwrap().history.undo.len();
+    let image_only = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image href="a.png" width="10" height="10"/></svg>"#;
+    let specks_only = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><circle cx="5" cy="5" r="2" fill="#000"/><circle cx="995" cy="995" r="2" fill="#000"/></svg>"##;
+    for p in [
+        json!({}),
+        json!({"svg": "a fox"}),
+        json!({"svg": "<svg"}),
+        json!({"svg": image_only}),
+        json!({"svg": specks_only, "size": 100}),
+        json!({"svg": PROMPT_ART, "size": 0}),
+        json!({"svg": PROMPT_ART, "size": "big"}),
+        json!({"svg": PROMPT_ART, "at": [1, "x"]}),
+        json!({"svg": PROMPT_ART, "at": [1e308, 0]}),
+        json!({"svg": format!("<svg>{}</svg>", " ".repeat(sf_core::ai::MAX_SVG))}),
+    ] {
+        assert!(s.execute("embroidery.placeArt", &p).is_err(), "{p}");
+        assert_eq!(serde_json::to_string(&s.doc().unwrap().doc).unwrap(), before, "{p}: nothing changes");
+        assert_eq!(s.doc().unwrap().history.undo.len(), depth, "{p}");
+    }
+}
