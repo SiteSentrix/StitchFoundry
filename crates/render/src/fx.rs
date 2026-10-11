@@ -1116,6 +1116,46 @@ mod tests {
         assert_eq!(b.pixels, c.pixels);
     }
 
+    /// Reproduce #1257's moving, filtered rectangle without reusing a static frame's raster.
+    /// Run with `cargo test -p vectorcraft-render texture_drag_perf -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+    fn texture_drag_perf() {
+        for effect in ["texture.craquelure", "texture.mosaicTiles", "texture.stainedGlass"] {
+            let mut base = Document::new(600.0, 500.0);
+            base.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+            let (layer, id) = (base.layers[0].id, base.alloc_id());
+            let mut n = Node::path(
+                id,
+                shapes::rectangle(Rect::new(100.0, 100.0, 309.298, 370.938)),
+                Appearance::basic(Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), Paint::solid(Color::BLACK), 1.0),
+            );
+            n.appearance.effects = vec![
+                Effect { id: "stylize.roundCorners".into(), params: json!({"radius": 25.175}), visible: true },
+                Effect { id: effect.into(), params: json!({}), visible: true },
+            ];
+            base.insert(Some(layer), 0, n).unwrap();
+            let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+            let view = Affine::scale(1.9007 * 1.5);
+            let mut r = Renderer::new();
+            r.threads = crate::default_threads();
+            let mut ms = vec![];
+            for frame in 0..9 {
+                let mut doc = base.clone();
+                doc.node_mut(id).unwrap().transform(Affine::translate((3.0 + f64::from(frame) * 0.75, f64::from(frame) * 0.5)), false);
+                let start = std::time::Instant::now();
+                let image = r.render(&doc, 1800, 1500, view, &opts);
+                let time = start.elapsed().as_secs_f64() * 1000.0;
+                if frame > 0 {
+                    ms.push(time);
+                }
+                std::hint::black_box(image);
+            }
+            ms.sort_by(f64::total_cmp);
+            println!("{effect}: moved CMYK rounded rectangle at 190.07%, DPI 1.5, 1800x1500: median {:.2} ms; samples {ms:?}", (ms[3] + ms[4]) * 0.5);
+        }
+    }
+
     #[test]
     fn photoshop_filters_on_content_larger_than_the_budget() {
         // Zoomed in 200×: the 40 pt square covers 8000 × 8000 px around a 200 × 200 view.
