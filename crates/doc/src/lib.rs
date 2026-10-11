@@ -772,21 +772,15 @@ impl Document {
         // The cached path, while the node there still has the id ([`id_index`]).
         let cached = self.index.get();
         match cached.as_ref().and_then(|m| m.get(&id)) {
-            Some(Some(p)) if self.node_at(p).is_some_and(|n| n.id == id) => return Some(p.clone()),
+            Some(Some(p)) if self.node_at(&p).is_some_and(|n| n.id == id) => return Some(p),
             Some(None) => return self.walk_index_path(id),
-            Some(Some(_)) => {
-                // Stale: the tree changed. Rebuild, then answer from it (what a walk gives now).
-                return match self.index.rebuild(&self.layers).get(&id) {
-                    Some(Some(p)) => Some(p.clone()),
-                    Some(None) => self.walk_index_path(id),
-                    None => None,
-                };
-            }
-            None => {}
+            _ => {}
         }
-        // Not cached: deleted, added since, or no cache yet.
+        // A stale path (the tree changed), an id the cache doesn't have (deleted or added since),
+        // or no cache yet: walk, and rebuild now and then.
         let found = self.walk_index_path(id);
-        if cached.is_none() || (found.is_some() && self.index.missed()) {
+        let stale = cached.as_ref().is_some_and(|m| m.contains_key(&id));
+        if cached.is_none() || ((stale || found.is_some()) && self.index.missed()) {
             self.index.rebuild(&self.layers);
         }
         found
@@ -842,8 +836,8 @@ impl Document {
         // share of the document, one walk is quicker than checking each cached path.
         if let Some(cache) = self.index.get().filter(|c| want.len().saturating_mul(8) < c.len()) {
             want.retain(|id| match cache.get(id) {
-                Some(Some(p)) if self.node_at(p).is_some_and(|n| n.id == *id) => {
-                    out.insert(*id, p.clone());
+                Some(Some(p)) if self.node_at(&p).is_some_and(|n| n.id == *id) => {
+                    out.insert(*id, p);
                     false
                 }
                 _ => true,
