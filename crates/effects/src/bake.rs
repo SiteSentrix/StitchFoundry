@@ -166,7 +166,7 @@ fn piece(d: &mut Document, n: &Node, path: PathData, rule: FillRule, item: Appea
     Node {
         id,
         name: None,
-        appearance: Appearance { items: vec![item], ..Default::default() },
+        appearance: Appearance { items: vec![item], ..Default::default() }.into(),
         opacity: 1.0,
         blend: Default::default(),
         isolate: false,

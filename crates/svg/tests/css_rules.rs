@@ -188,7 +188,7 @@ fn shared_properties_read_as_svg_export_writes_them() {
 fn gradients_give_css_gradients() {
     let mut d = doc();
     let mut n = rect(&mut d, (0.0, 0.0, 200.0, 100.0), 0.0);
-    n.appearance = Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(Gradient::default()))), Paint::None, 0.0);
+    n.appearance = Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(Gradient::default()))), Paint::None, 0.0).into();
     let id = add(&mut d, n);
     let r = one(&d, id, &CssOptions::default());
     assert_eq!(prop(&r, "background-image"), Some("linear-gradient(90deg, #ffffff 0%, #000000 100%)"));
@@ -196,13 +196,13 @@ fn gradients_give_css_gradients() {
     let mut g = GradientPaint::new(Gradient::default());
     g.geom = Some(GradientGeom { start: Point::new(100.0, 0.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None });
     let mut n = rect(&mut d, (0.0, 0.0, 200.0, 100.0), 0.0);
-    n.appearance = Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0);
+    n.appearance = Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0).into();
     let id = add(&mut d, n);
     assert_eq!(prop(&one(&d, id, &CssOptions::default()), "background-image"), Some("linear-gradient(180deg, #ffffff 0%, #000000 50%)"));
     // Radial: a circle at the box's centre.
     let radial = GradientPaint::new(Gradient { kind: GradientKind::Radial, ..Gradient::default() });
     let mut n = rect(&mut d, (0.0, 0.0, 100.0, 100.0), 0.0);
-    n.appearance = Appearance::basic(Paint::Gradient(Box::new(radial)), Paint::None, 0.0);
+    n.appearance = Appearance::basic(Paint::Gradient(Box::new(radial)), Paint::None, 0.0).into();
     let id = add(&mut d, n);
     let bg = one(&d, id, &CssOptions::default()).props.into_iter().find(|(k, _)| *k == "background-image").unwrap().1;
     assert!(bg.starts_with("radial-gradient(circle ") && bg.contains(" at 50px 50px, #ffffff 0%, #000000 100%)"), "{bg}");

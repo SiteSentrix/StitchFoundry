@@ -443,7 +443,7 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
 /// Clear Appearance on `n`: no fill, no stroke, and the object's Opacity row back to Default. A
 /// group keeps no fill or stroke rows of its own.
 fn clear(n: &mut Node) {
-    n.appearance = if is_group(n) { Appearance::default() } else { Appearance::basic(Paint::None, Paint::None, 1.0) };
+    n.appearance = if is_group(n) { Appearance::default().into() } else { Appearance::basic(Paint::None, Paint::None, 1.0).into() };
     n.opacity = 1.0;
     n.blend = BlendMode::Normal;
 }
@@ -496,7 +496,7 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
                 // keeps the rows it had.
                 let fill =
                     (fill.is_some() || !is_group(n)).then(|| AppearanceItem::Fill(FillLayer::new(fill.map_or(Paint::None, |f| f.paint().clone()))));
-                n.appearance = Appearance { items: fill.into_iter().collect(), ..Default::default() };
+                n.appearance = Appearance { items: fill.into_iter().collect(), ..Default::default() }.into();
                 if let Some(AppearanceItem::Stroke(mut st)) = stroke {
                     st.effects.clear();
                     st.opacity = 1.0;
@@ -758,7 +758,7 @@ impl Picked {
                 let st = &t.runs[0].style;
                 (st.basic_appearance(), Some(t.local_bounds()), Some((st.clone(), t.para.clone())))
             }
-            _ => (n.appearance.clone(), n.geometric_bounds(), None),
+            _ => ((*n.appearance).clone(), n.geometric_bounds(), None),
         };
         Self { appearance, bounds, opacity: n.opacity, blend: n.blend, text }
     }
@@ -831,7 +831,7 @@ impl Picked {
         }
         let placed = self.placed(n.geometric_bounds());
         if ap.fill == FillAttrs::ALL && ap.stroke == StrokeAttrs::ALL {
-            n.appearance = placed;
+            n.appearance = placed.into();
         } else {
             focal_attrs(&mut n.appearance, &placed, ap);
         }

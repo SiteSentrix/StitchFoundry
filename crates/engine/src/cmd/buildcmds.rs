@@ -478,7 +478,7 @@ fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
             .filter_map(|e| {
                 let pd = e.path_data()?;
                 let sp = pd.subpaths.first().filter(|sp| sp.segment_count() > 0)?;
-                Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), e.appearance.clone()))
+                Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), (*e.appearance).clone()))
             })
             .collect();
         let mut sources = source_nodes(&old);
@@ -505,7 +505,7 @@ fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
                 && let Some(ch) = g.children_mut()
                 && let Some(e) = ch.iter_mut().find(|c| c.id == eid)
             {
-                Arc::make_mut(e).appearance = app;
+                Arc::make_mut(e).appearance = app.into();
             }
         }
         for r in roots.iter().filter(|r| **r != target) {
@@ -777,8 +777,9 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
                         ..StrokeLayer::new(paint, width * unit)
                     })],
                     ..Default::default()
-                },
-                None => fill_only(paint),
+                }
+                .into(),
+                None => fill_only(paint).into(),
             };
             children.push(Arc::new(n));
         }

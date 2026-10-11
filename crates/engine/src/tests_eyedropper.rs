@@ -126,7 +126,7 @@ fn shift_alt_click_appends_the_appearance() {
     let mut s = session();
     let (_, dst) = source_and_target(&mut s);
     click(&mut s, 325.0, 35.0, Mods { alt: true, shift: true, ..Default::default() });
-    let items = node(&s, dst).appearance.items;
+    let items = node(&s, dst).appearance.items.clone();
     assert_eq!(items.len(), 4, "the source's fill and stroke on top of the target's");
     assert_eq!((items[0].paint().color().unwrap().to_hex(), items[2].paint().color().unwrap().to_hex()), ("#ffffff".into(), "#ff0000".into()));
 }

@@ -34,7 +34,7 @@ fn sel(s: &mut Session, ids: &[NodeId]) {
 fn rect(s: &mut Session) -> NodeId {
     let a = id_of(&s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap());
     s.edit("red", |d, _| {
-        d.node_mut(a).unwrap().appearance = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+        d.node_mut(a).unwrap().appearance = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
         Ok(())
     })
     .unwrap();

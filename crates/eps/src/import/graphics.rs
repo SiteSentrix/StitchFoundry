@@ -1688,7 +1688,7 @@ pub(crate) fn collapse(nodes: &mut [Arc<Node>], shadings: &[NodeId]) {
             && shadings.contains(&fill.id)
             && let (NodeKind::Path { path, rule, clipping: true, .. }, NodeKind::Path { .. }) = (&clip.kind, &fill.kind)
         {
-            let mut p = Node::path(fill.id, path.clone(), fill.appearance.clone());
+            let mut p = Node::path(fill.id, path.clone(), (*fill.appearance).clone());
             if let NodeKind::Path { rule: r, .. } = &mut p.kind {
                 *r = *rule;
             }

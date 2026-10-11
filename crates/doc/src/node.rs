@@ -514,7 +514,7 @@ pub struct Node {
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub knockout_shape: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
-    pub appearance: Appearance,
+    pub appearance: crate::Shared<Appearance>,
     /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mask: Option<Box<OpacityMask>>,
@@ -594,7 +594,7 @@ impl Node {
             isolate: false,
             knockout: Knockout::Neutral,
             knockout_shape: false,
-            appearance: Appearance::default(),
+            appearance: Appearance::default().into(),
             mask: None,
             trace: None,
             wrap: None,
@@ -611,7 +611,7 @@ impl Node {
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {
         let mut n = Self::new(id, NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: false });
-        n.appearance = appearance;
+        n.appearance = appearance.into();
         n
     }
     pub fn group(id: NodeId, children: Vec<Arc<Node>>) -> Self {
@@ -854,7 +854,11 @@ impl Node {
                 self.appearance.scale_effects(k, f);
             }
         }
-        self.appearance.transform_gradients(a);
+        // Only through `DerefMut` when there is something to change: the appearance is shared
+        // copy-on-write (`Shared`), and a move must not copy what it leaves as it is.
+        if self.appearance.gradients().next().is_some() {
+            self.appearance.transform_gradients(a);
+        }
         if sc.patterns {
             crate::pattern::transform_pattern_paints(self, a);
         }

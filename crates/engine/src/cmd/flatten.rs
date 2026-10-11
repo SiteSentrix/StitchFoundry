@@ -655,7 +655,7 @@ impl FlattenReport {
         art.iter_mut().for_each(opaque);
         for path in areas {
             let mut n = shape_node(&mut tmp, path.clone(), None);
-            n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0);
+            n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0).into();
             art.push(n);
         }
         Some(isolated_doc(&tmp, art))
@@ -1054,7 +1054,8 @@ fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: 
             n.appearance = Appearance {
                 items: vec![AppearanceItem::Fill(FillLayer { overprint: fill.overprint, ..FillLayer::new(fill.paint) })],
                 ..Appearance::default()
-            };
+            }
+            .into();
             n.opacity = fill.alpha.min(1.0);
             children.push(Arc::new(n));
             vector += 1;

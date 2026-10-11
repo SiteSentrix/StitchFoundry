@@ -229,7 +229,7 @@ fn outline_stroke_of_line() {
     let r = s.execute("shape.line", &json!({"x1": 0, "y1": 50, "x2": 100, "y2": 50})).unwrap();
     let l = NodeId(r["id"].as_u64().unwrap());
     s.edit("t", |d, _| {
-        d.node_mut(l).unwrap().appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 10.0);
+        d.node_mut(l).unwrap().appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 10.0).into();
         Ok(())
     })
     .unwrap();
@@ -304,7 +304,7 @@ fn clean_up_removes_junk() {
     let keep = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
     let unpainted = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
     s.edit("t", |d, _| {
-        d.node_mut(unpainted).unwrap().appearance = Appearance::basic(Paint::None, Paint::None, 1.0);
+        d.node_mut(unpainted).unwrap().appearance = Appearance::basic(Paint::None, Paint::None, 1.0).into();
         Ok(())
     })
     .unwrap();

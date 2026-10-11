@@ -136,7 +136,7 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
 /// `art` in a clip group clipped by `path` filled by `rule` (a clipping path that paints nothing).
 pub(crate) fn clip_group(d: &mut Document, path: PathData, rule: FillRule, art: Node) -> Node {
     let mut clip = super::pathops::shape_node(d, path, None);
-    clip.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+    clip.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
     match &mut clip.kind {
         NodeKind::Path { clipping, rule: r, .. } => (*clipping, *r) = (true, rule),
         NodeKind::Compound { rule: r, .. } => *r = rule,
@@ -363,7 +363,7 @@ fn split_items(out: &mut Document, n: &Node) -> Option<Node> {
     }
     let mut stroke_piece = |d: &mut Document, path: &PathData, rule: FillRule, st: &StrokeLayer| {
         let mut p = super::pathops::shape_node(d, path.clone(), None);
-        p.appearance = Appearance { items: vec![AppearanceItem::Stroke(st.clone())], ..Default::default() };
+        p.appearance = Appearance { items: vec![AppearanceItem::Stroke(st.clone())], ..Default::default() }.into();
         if let NodeKind::Path { rule: r, .. } | NodeKind::Compound { rule: r, .. } = &mut p.kind {
             *r = rule;
         }

@@ -524,7 +524,7 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                             r.style.stroke = Paint::None;
                         }
                     }
-                    _ => n.appearance = Appearance::default_art(),
+                    _ => n.appearance = Appearance::default_art().into(),
                 }
             }
             Ok(())

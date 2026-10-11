@@ -661,7 +661,7 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
         let back = paths.first().map_or(0.0, |p| direction(p));
         for (i, mut p) in paths.into_iter().enumerate() {
             let pn = Arc::make_mut(&mut p);
-            pn.appearance = Appearance::default();
+            pn.appearance = Appearance::default().into();
             let flip = i > 0 && back != 0.0 && direction(pn) == back;
             if let NodeKind::Path { path, live, .. } = &mut pn.kind {
                 *live = None;
@@ -742,7 +742,7 @@ pub(super) fn as_clipping_path(c: &mut Node) -> Result<()> {
     if !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
         return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
     }
-    c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+    c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
     match &mut c.kind {
         NodeKind::Path { clipping, .. } => *clipping = true,
         NodeKind::Text(t) => {

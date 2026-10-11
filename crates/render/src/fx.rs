@@ -947,7 +947,7 @@ mod tests {
         let l = d.layers[0].id;
         let id = d.layers[0].children().unwrap()[0].id;
         let mut n = (*d.node(id).unwrap()).clone();
-        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0).into();
         if let Some(vectorcraft_doc::AppearanceItem::Stroke(s)) =
             n.appearance.items.iter_mut().find(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_)))
         {

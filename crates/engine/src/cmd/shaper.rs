@@ -334,7 +334,7 @@ fn generated(d: &mut Document, src: &[Arc<Node>], spec: &ShaperSpec, map: &Build
         let edit = edits.get(&i);
         let Some(source) = edit.and_then(|e| e.paint_source).or_else(|| fill_source(src, region)).and_then(|i| src.get(i)) else { continue };
         let path = po::unite_all(&indices.iter().filter_map(|i| map.regions.get(*i).map(|r| (&r.0.path, FillRule::NonZero))).collect::<Vec<_>>());
-        let style = edit.and_then(|e| e.paint.clone()).unwrap_or_else(|| source.appearance.clone());
+        let style = edit.and_then(|e| e.paint.clone()).unwrap_or_else(|| (*source.appearance).clone());
         let mut n = Node::path(d.alloc_id(), path, fill_style(style));
         n.opacity = source.opacity;
         n.blend = source.blend;
@@ -358,7 +358,7 @@ fn generated(d: &mut Document, src: &[Arc<Node>], spec: &ShaperSpec, map: &Build
             continue;
         }
         let Some(source) = src.get(piece.key as usize) else { continue };
-        let style = edge_edits.get(&i).and_then(|e| e.paint.clone()).unwrap_or_else(|| source.appearance.clone());
+        let style = edge_edits.get(&i).and_then(|e| e.paint.clone()).unwrap_or_else(|| (*source.appearance).clone());
         if style.stroke_paint().is_none() {
             continue;
         }
@@ -448,7 +448,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
                     for i in related {
                         let Some(selector) = face_selector(&map, &src, i) else { continue };
                         if let Some(e) = spec.faces.iter_mut().rev().find(|e| e.selector == selector) {
-                            e.paint = Some(n.appearance.clone());
+                            e.paint = Some((*n.appearance).clone());
                         } else {
                             spec.faces.push(FaceEdit {
                                 selector,
@@ -456,7 +456,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
                                 erase_edges: false,
                                 paint_source: None,
                                 merge,
-                                paint: Some(n.appearance.clone()),
+                                paint: Some((*n.appearance).clone()),
                             });
                         }
                     }
@@ -472,7 +472,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
                             && piece_point(&piece.path).is_some_and(|point| n.path_data().and_then(|p| p.nearest(point)).is_some_and(|p| p.4 < 1e-5));
                         if contained && let Some(mut e) = edge_selector(&map, &src, piece) {
                             e.erase = false;
-                            e.paint = Some(n.appearance.clone());
+                            e.paint = Some((*n.appearance).clone());
                             spec.edges.push(e);
                         }
                     }

@@ -217,7 +217,7 @@ fn unitized(mut ap: Appearance, from: Option<Rect>) -> Appearance {
 /// and stroke. Placed gradients come relative to the unit box (from the bounds of the object
 /// they're on). The pen pressure of strokes stays with their own path.
 pub(crate) fn captured(n: &Node) -> Appearance {
-    let mut ap = n.appearance.clone().without_pressure();
+    let mut ap = (*n.appearance).clone().without_pressure();
     if !ap.items.is_empty() {
         return unitized(ap, n.geometric_bounds());
     }
@@ -261,7 +261,7 @@ fn override_chars(n: &mut Node, ap: &Appearance) {
 /// Give `n` style `g`: its appearance (a group or layer too: its own, above its contents; type its
 /// characters' colour too with `chars`, Override Character Color) and transparency.
 fn style_node(n: &mut Node, g: &GraphicStyle, chars: bool) {
-    n.appearance = g.appearance_on(n).into_owned();
+    n.appearance = g.appearance_on(n).into_owned().into();
     if chars {
         override_chars(n, &g.appearance);
     }
