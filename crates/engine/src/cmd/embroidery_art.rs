@@ -8,6 +8,7 @@ use sf_core::attr::StitchType;
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Node, NodeId, NodeKind};
 use vectorcraft_embroidery::{PT_PER_MM, is_line_art, node_thread, regions_mm};
+use vectorcraft_geom::Rect;
 
 use super::*;
 use crate::EngineError;
@@ -24,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Place Artwork as Embroidery",
         [],
         None,
-        "{svg, size?: mm (longest side; default 90% of the hoop's shorter side, else 100), at?: [x, y] (default: the first artboard's centre), name?, minArea?: mm² (1)} place flat-colour SVG art (Design from Prompt's) without reading files it links to; images, unpainted shapes and areas under minArea are left out, and the shapes get stitch types, each cutting what it covers out of the fills before it, in the design chart's threads, sewn in drawing order with same-coloured shapes brought together where the stacking allows → {id, objects, satin, fill, run, removed, colors, warnings}",
+        "{svg, size?: mm (longest side; default 90% of the hoop's shorter side, else 100), at?: [x, y] (default: the first artboard's centre), frame?: [x, y, width, height] (instead of size and at: the SVG's page fitted into this rectangle, aspect kept, so art redrawn from an image lands on it), name?, minArea?: mm² (1)} place flat-colour SVG art (Design from Prompt's) without reading files it links to; images, unpainted shapes and areas under minArea are left out, and the shapes get stitch types, each cutting what it covers out of the fills before it, in the design chart's threads, sewn in drawing order with same-coloured shapes brought together where the stacking allows → {id, objects, satin, fill, run, removed, colors, warnings}",
         has_doc,
         place_art
     )]
@@ -85,6 +86,15 @@ fn art(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => Some(finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(CMD, "at must be [x, y]"))?),
         None => None,
     };
+    let frame = match p.get("frame").filter(|v| !v.is_null()) {
+        Some(v) => Some(
+            finite_numbers(v)
+                .filter(|[_, _, w, h]| *w > 0.0 && *h > 0.0)
+                .map(|[x, y, w, h]| Rect::new(x, y, x + w, y + h))
+                .ok_or_else(|| bad(CMD, "frame must be [x, y, width, height] with a positive size"))?,
+        ),
+        None => None,
+    };
     let min_area = p.get("minArea").and_then(Value::as_f64).filter(|v| v.is_finite()).unwrap_or(1.0).max(0.0);
     let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or("Artwork");
     // Its size: as asked, else to fit the hoop whatever its shape, else 100 mm.
@@ -99,7 +109,11 @@ fn art(s: &mut Session, p: &Value) -> Result<Value> {
         }
         k
     };
-    let (gid, warnings) = super::place::place_svg(s, CMD, "Place Artwork", name, svg, mm * PT_PER_MM, at, &kept)?;
+    let placement = match frame {
+        Some(r) => super::place::Fit::Frame(r),
+        None => super::place::Fit::Longest(mm * PT_PER_MM, at),
+    };
+    let (gid, warnings) = super::place::place_svg(s, CMD, "Place Artwork", name, svg, placement, &kept)?;
     let drop = {
         let g = s.doc()?.doc.node(gid).ok_or(EngineError::NoNode(gid))?;
         let mut out = Vec::new();

@@ -1,10 +1,12 @@
 //! Design from Prompt: a description, the stitched size and how many thread colours, and the
 //! Anthropic API key the request goes out with. Generate sends it and keeps the dialog open,
 //! showing that Claude is drawing; the art is placed and digitized when it arrives
-//! ([`crate::embroidery::prompt`]).
+//! ([`crate::embroidery::prompt`]). With an `image`, it is Redraw Image with Claude: the
+//! description becomes optional notes on what to change, and the user confirms they may use the
+//! artwork.
 //!
-//! Fields: `prompt`, `size` (mm, longest side), `colors`, `remember` (keep the key). The key itself
-//! is not a field: agents can read the fields.
+//! Fields: `prompt`, `size` (mm, longest side), `colors`, `remember` (keep the key); a redrawing's
+//! `image` (its id) and `rights`. The key itself is not a field: agents can read the fields.
 
 use serde_json::{Value, json};
 
@@ -15,7 +17,7 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Design from Prompt").into(),
+    heading: |d| if redraw(d) { tl!("Redraw Image with Claude").into() } else { tl!("Design from Prompt").into() },
     body,
     confirm,
     ok: Some("Generate"),
@@ -23,6 +25,11 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     max_width: Some(460.0),
     ..DialogSpec::FORM
 };
+
+/// Whether the dialog redraws an image (rather than drawing a description).
+fn redraw(d: &Dialog) -> bool {
+    d.fields.contains_key("image")
+}
 
 /// A field's label, `text` already in the UI language.
 fn label(ui: &mut egui::Ui, text: &str) {
@@ -43,8 +50,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let now = ui.input(|i| i.time);
     app.embroidery.prompt.now = now;
     let drawing = app.embroidery.prompt.drawing_for(now);
-    label(ui, tl!("Describe the design:"));
-    form::text_area(ui, d, "prompt", 400.0, 4);
+    let redraw = redraw(d);
+    label(ui, if redraw { tl!("What to change (optional):") } else { tl!("Describe the design:") });
+    form::text_area(ui, d, "prompt", 400.0, if redraw { 2 } else { 4 });
     ui.add_space(8.0);
     egui::Grid::new("design-prompt-grid").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
         label(ui, tl!("Size (longest side):"));
@@ -59,10 +67,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.label("");
         form::check(ui, d, "remember", tl!("Remember the key on this computer"));
         ui.end_row();
+        if redraw {
+            ui.label("");
+            form::check(ui, d, "rights", tl!("I own this artwork or may use it"));
+            ui.end_row();
+        }
     });
     ui.add_space(6.0);
     ui.horizontal_wrapped(|ui| {
-        ui.label(egui::RichText::new(tl!("Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.")).size(11.0).color(t.text_dim));
+        let about = if redraw {
+            tl!("Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.")
+        } else {
+            tl!("Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.")
+        };
+        ui.label(egui::RichText::new(about).size(11.0).color(t.text_dim));
         if ui.link(egui::RichText::new(tl!("Get a key")).size(11.0)).clicked() {
             app.open_url(prompt::KEY_URL);
         }

@@ -1,12 +1,14 @@
-//! Design from Prompt: what StitchFoundry asks an AI model for, and how its reply becomes artwork.
+//! Design from Prompt and Redraw Image: what StitchFoundry asks an AI model for, and how its reply
+//! becomes artwork.
 //!
 //! The model is Claude, reached through the Messages API with the user's own API key. No network
 //! code lives here: the app sends the [`HttpRequest`] that [`ArtRequest::http`] builds with its
 //! own client and hands the answer to [`parse_reply`].
 //!
 //! The art asked for is what digitizes well: filled shapes in a few flat colours, no part narrower
-//! than a satin column, stacked back to front (the order they are sewn). The art is placed and
-//! given stitches by the engine's `embroidery.placeArt`.
+//! than a satin column, stacked back to front (the order they are sewn). It is drawn from a
+//! description, or redrawn from an image ([`ArtRequest::image`]: a logo the user may use). The art
+//! is placed and given stitches by the engine's `embroidery.placeArt`.
 
 use serde_json::{Value, json};
 
@@ -30,6 +32,10 @@ pub const MIN_FEATURE_MM: f64 = 1.5;
 /// Sizes (mm, longest side) and thread colours a request may ask for.
 pub const SIZE_RANGE: (f64, f64) = (20.0, 400.0);
 pub const COLOR_RANGE: (u32, u32) = (1, 12);
+/// The longest side, in pixels, an image to redraw is sent at (the model sees no more detail).
+pub const IMAGE_SIDE: u32 = 1568;
+/// The largest image sent, as base64 (the API takes up to 5 MB an image).
+pub const MAX_IMAGE_BASE64: usize = 5_000_000;
 
 /// Artwork to ask for.
 #[derive(Clone, Debug, PartialEq)]
@@ -40,6 +46,16 @@ pub struct ArtRequest {
     pub size_mm: f64,
     /// The most thread colours the art may use.
     pub colors: u32,
+    /// An image to redraw (then `prompt` holds optional notes on what to change).
+    pub image: Option<ArtImage>,
+}
+
+/// An image to redraw: PNG or JPEG bytes in base64.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ArtImage {
+    /// `image/png` or `image/jpeg`.
+    pub media_type: &'static str,
+    pub data_base64: String,
 }
 
 /// An HTTP POST for the app's client to send.
@@ -70,6 +86,8 @@ pub enum ArtError {
     NoPrompt,
     #[error("The description is too long: keep it under 2,000 characters.")]
     LongPrompt,
+    #[error("The image is too large to send: crop it, or place a smaller copy.")]
+    LargeImage,
     /// The key was refused (401) or may not use the model (403).
     #[error("Anthropic refused the API key: {0}")]
     Key(String),
@@ -125,7 +143,13 @@ impl ArtRequest {
     /// The request with its size and colours brought into range and the description trimmed.
     pub fn new(prompt: &str, size_mm: f64, colors: u32) -> Self {
         let size_mm = if size_mm.is_finite() { size_mm.clamp(SIZE_RANGE.0, SIZE_RANGE.1) } else { 100.0 };
-        Self { prompt: prompt.trim().to_string(), size_mm, colors: colors.clamp(COLOR_RANGE.0, COLOR_RANGE.1) }
+        Self { prompt: prompt.trim().to_string(), size_mm, colors: colors.clamp(COLOR_RANGE.0, COLOR_RANGE.1), image: None }
+    }
+
+    /// The request redrawing `image` (its prompt: notes on what to change, if any).
+    pub fn with_image(mut self, image: ArtImage) -> Self {
+        self.image = Some(image);
+        self
     }
 
     /// The instructions that make the model draw stitchable art.
@@ -135,22 +159,47 @@ impl ArtRequest {
         let gap = unit.ceil();
         let colors = self.colors;
         let size = self.size_mm.round();
+        let shapes = "- Only filled shapes (path, circle, ellipse, rect, polygon), each with a solid fill=\"#rrggbb\". \
+No strokes, gradients, patterns, filters, masks, clip paths, opacity, text, images or fonts. Draw \
+outlines and lines as filled shapes too.";
+        let order = "- Shapes go back to front: the first one is sewn first and later ones lie on top of it. Where \
+the stacking allows, draw the shapes of one colour one after another (each colour change stops the \
+machine).";
+        let reply = "Reply with one SVG document and nothing else: no explanation and no Markdown code fence.";
+        if self.image.is_some() {
+            return format!(
+                "You redraw images as artwork that will be stitched by an embroidery machine. {reply}\n\
+\n\
+The attached image is the design. It will be stitched about {size} mm across its longest side. Keep \
+its composition, shapes, proportions, lettering and colours as faithfully as embroidery allows, and \
+simplify only what can't be stitched, the way a skilled embroidery digitizer would:\n\
+{shapes}\n\
+- At most {colors} different fill colours: the image's own, with gradients, shading and similar \
+shades merged into the nearest of them.\n\
+- Leave out the image's own background (paper, a photo backdrop, a plain colour around the design) \
+unless it is part of the design, like the shape of a badge or a patch.\n\
+- No detail too small to stitch: every part at least {min} units wide (about {MIN_FEATURE_MM} mm \
+stitched) and gaps between parts at least {gap} units; thicken or leave out anything finer, and no \
+shading, hatching or texture.\n\
+- Lettering as filled shapes that follow its letterforms closely. Letters shorter than about 5 mm \
+stitched can't be read: make them larger where there is room, else leave them out.\n\
+{order} Keep to about 100 shapes or fewer.\n\
+- viewBox with the image's aspect ratio and 1000 on its longest side, the drawing in the image's own \
+place on it, absolute coordinates and no transforms on the root element."
+            );
+        }
         format!(
-            "You draw artwork that will be stitched by an embroidery machine. Reply with one SVG \
-document and nothing else: no explanation and no Markdown code fence.\n\
+            "You draw artwork that will be stitched by an embroidery machine. {reply}\n\
 \n\
 The artwork is stitched about {size} mm across its longest side, so draw it the way a skilled \
 embroidery digitizer would:\n\
-- Only filled shapes (path, circle, ellipse, rect, polygon), each with a solid fill=\"#rrggbb\". \
-No strokes, gradients, patterns, filters, masks, clip paths, opacity, text, images or fonts. Draw \
-outlines and lines as filled shapes too.\n\
+{shapes}\n\
 - At most {colors} different fill colours, chosen to read well as thread on fabric. No \
 background rectangle unless the design is a patch that needs one.\n\
 - Bold, flat, simple shapes with clear silhouettes, like a sticker or a patch: no shading, \
 hatching, texture or tiny details. Every part is at least {min} units wide (about \
 {MIN_FEATURE_MM} mm stitched) and gaps between parts at least {gap} units.\n\
-- Shapes go back to front: the first one is sewn first and later ones lie on top of it. Keep to \
-about 60 shapes or fewer.\n\
+{order} Keep to about 60 shapes or fewer.\n\
 - viewBox=\"0 0 1000 1000\" (another aspect is fine with 1000 on its longest side), absolute \
 coordinates, no transforms on the root element.\n\
 \n\
@@ -162,21 +211,39 @@ that starts with \"DECLINED:\" followed by a short reason, instead of the SVG."
 
     /// The Messages API request body.
     pub fn body(&self) -> Value {
+        let content = match &self.image {
+            Some(img) => {
+                let mut text = "Redraw this image as embroidery artwork.".to_string();
+                if !self.prompt.is_empty() {
+                    text.push_str("\n\nWhat to change: ");
+                    text.push_str(&self.prompt);
+                }
+                json!([
+                    { "type": "image", "source": { "type": "base64", "media_type": img.media_type, "data": img.data_base64 } },
+                    { "type": "text", "text": text },
+                ])
+            }
+            None => json!(format!("Draw this as embroidery artwork: {}", self.prompt)),
+        };
         json!({
             "model": MODEL,
             "max_tokens": MAX_TOKENS,
             "fallbacks": "default",
             "output_config": { "effort": "medium" },
             "system": self.system_prompt(),
-            "messages": [{ "role": "user", "content": format!("Draw this as embroidery artwork: {}", self.prompt) }],
+            "messages": [{ "role": "user", "content": content }],
         })
     }
 
     /// The HTTP request to send with API key `key`.
     pub fn http(&self, key: &str) -> Result<HttpRequest, ArtError> {
         let key = clean_key(key)?;
-        if self.prompt.is_empty() {
+        // A redrawing needs no description: its notes are optional.
+        if self.prompt.is_empty() && self.image.is_none() {
             return Err(ArtError::NoPrompt);
+        }
+        if self.image.as_ref().is_some_and(|i| i.data_base64.len() > MAX_IMAGE_BASE64) {
+            return Err(ArtError::LargeImage);
         }
         if self.prompt.chars().count() > MAX_PROMPT {
             return Err(ArtError::LongPrompt);
@@ -284,6 +351,30 @@ mod tests {
         assert!(system.contains("At most 5 different fill colours"), "{system}");
         assert!(system.contains("about 80 mm") && system.contains("at least 19 units") && system.contains("at least 13 units"), "{system}");
         assert!(system.contains("starts with \"DECLINED:\""), "{system}");
+    }
+
+    #[test]
+    fn a_redrawing_sends_the_image_first_and_needs_no_description() {
+        let img = ArtImage { media_type: "image/png", data_base64: "iVBORw0KGgo=".into() };
+        let r = ArtRequest::new("", 70.0, 4).with_image(img.clone());
+        let body: Value = serde_json::from_str(&r.http("sk-ant-test").unwrap().body).unwrap();
+        let content = body["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content[0]["type"], "image");
+        assert_eq!(content[0]["source"], json!({"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo="}));
+        assert_eq!(content[1]["text"], "Redraw this image as embroidery artwork.");
+        let system = body["system"].as_str().unwrap();
+        assert!(system.contains("The attached image is the design") && system.contains("At most 4 different fill colours"), "{system}");
+        assert!(system.contains("image's aspect ratio") && !system.contains("DECLINED"), "{system}");
+        assert!(system.contains("the shapes of one colour one after another"), "{system}");
+        // notes on what to change follow the instruction
+        let r = ArtRequest::new("drop the tagline", 70.0, 4).with_image(img);
+        let body: Value = serde_json::from_str(&r.http("sk-ant-test").unwrap().body).unwrap();
+        assert!(body["messages"][0]["content"][1]["text"].as_str().unwrap().ends_with("What to change: drop the tagline"));
+        // too large to send
+        let big = ArtImage { media_type: "image/jpeg", data_base64: "A".repeat(MAX_IMAGE_BASE64 + 1) };
+        assert_eq!(ArtRequest::new("", 70.0, 4).with_image(big).http("k"), Err(ArtError::LargeImage));
+        // a description is drawn with the same colour order rule
+        assert!(ArtRequest::new("a star", 70.0, 4).system_prompt().contains("the shapes of one colour one after another"));
     }
 
     #[test]

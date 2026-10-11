@@ -67,6 +67,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("Convert Artwork to Embroidery", "embroidery.convert"),
         c("Auto-Digitize Image", "embroidery.autoDigitize"),
         c("Design from Prompt…", "ui.designFromPrompt"),
+        c("Redraw Image with Claude…", "ui.redrawImage"),
         Sep,
         sub(
             "Stitch Type",
@@ -143,6 +144,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Design from Prompt…",
         "",
         "{prompt?, size?: mm (longest side), colors?: 1-12} open Design from Prompt: describe a design and Claude draws flat-colour artwork with your own Anthropic API key, which embroidery.placeArt places and digitizes (desktop only) → {open}",
+    ),
+    (
+        "ui.redrawImage",
+        "Redraw Image with Claude…",
+        "",
+        "{prompt?: what to change, size?: mm (longest side), colors?: 1-12} open Redraw Image with Claude for the selected image: Claude redraws it as flat-colour artwork with your own Anthropic API key (you confirm you may use the artwork), and embroidery.placeArt places it on the image and digitizes it (desktop only) → {open}",
     ),
     (
         "ui.embroideryWidget",
@@ -1001,6 +1008,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     }
     if id == "ui.designFromPrompt" {
         return Some(crate::embroidery::prompt::open(app, p));
+    }
+    if id == "ui.redrawImage" {
+        return Some(crate::embroidery::prompt::open_redraw(app, p));
     }
     if id == "ui.embroideryWidget" {
         if app.session.active().is_none() {
@@ -2083,6 +2093,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.embroideryWidget" | "ui.embroideryCheck" => app.session.active().is_some(),
         "ui.designFromPrompt" => app.session.active().is_some() && crate::embroidery::prompt::available(app),
+        "ui.redrawImage" => crate::embroidery::prompt::available(app) && crate::embroidery::prompt::selected_image(app).is_some(),
         "file.export.embroidery" => app.session.embroidery_plan().is_some_and(|p| !p.is_empty()),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),

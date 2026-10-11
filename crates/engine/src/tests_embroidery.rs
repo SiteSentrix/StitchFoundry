@@ -1380,3 +1380,19 @@ fn place_art_fits_the_hoop_and_refuses_what_it_cannot_stitch() {
         assert_eq!(s.doc().unwrap().history.undo.len(), depth, "{p}");
     }
 }
+
+#[test]
+fn place_art_can_land_on_an_images_frame() {
+    let mut s = session();
+    // a page twice as wide as tall, the circle in its left half
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500"><circle cx="250" cy="250" r="200" fill="#d02020"/></svg>"##;
+    let r = s.execute("embroidery.placeArt", &json!({"svg": svg, "frame": [100, 100, 200, 100], "size": 300})).unwrap();
+    let b = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    // the page maps onto the frame (0.2 a unit), so the circle is at (150, 150) with radius 40
+    for (got, want) in [(b.x0, 110.0), (b.y0, 110.0), (b.x1, 190.0), (b.y1, 190.0)] {
+        assert!((got - want).abs() < 0.5, "{b:?}");
+    }
+    for bad in [json!([0, 0, 0, 10]), json!([0, 0, 10]), json!([1e308, 0, 10, 10]), json!("x")] {
+        assert!(s.execute("embroidery.placeArt", &json!({"svg": svg, "frame": bad})).is_err(), "{bad}");
+    }
+}
