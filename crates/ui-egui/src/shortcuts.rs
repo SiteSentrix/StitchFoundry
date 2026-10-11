@@ -624,7 +624,8 @@ mod tests {
             out.textures_delta.clear();
         };
         let kind = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.kind.clone());
-        let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        // The undo steps and the journal entries (the dialog's OK runs its command, which the journal records).
+        let steps = |app: &VectorcraftApp| (app.session.active().unwrap().history.undo.len(), app.session.journal.len());
         app.select_tool("selection");
         frame(&mut app, vec![enter()]);
         assert_eq!(kind(&app), None, "nothing is selected");
@@ -645,9 +646,11 @@ mod tests {
             frame(&mut app, vec![]);
             assert_eq!(kind(&app).as_deref(), Some(dialog), "{tool}: and it stays open");
             assert_eq!(steps(&app), before, "{tool}: the Enter that opened it didn't confirm it");
-            // The next Enter is its OK.
+            // The next Enter is its OK. With its default values only Reflect changes the art, so only
+            // Reflect records an undo step.
             frame(&mut app, vec![enter()]);
-            assert_eq!((kind(&app), steps(&app)), (None, before + 1), "{tool}: Enter confirms");
+            let after = (before.0 + usize::from(dialog == "reflect"), before.1 + 1);
+            assert_eq!((kind(&app), steps(&app)), (None, after), "{tool}: Enter confirms");
         }
         app.select_tool("rectangle");
         frame(&mut app, vec![enter()]);

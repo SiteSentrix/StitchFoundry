@@ -251,17 +251,26 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     let areas = bool_or(p, "typeAreas", false);
     let mut sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
     sc.patterns = transform_patterns(s, p, &ids)?;
-    let ids = s.edit(label, |d, sel| {
-        let targets = if copy { duplicate_in(d, sel, &ids, Affine::IDENTITY)? } else { ids.clone() };
-        for id in &targets {
-            if let Some(n) = d.node_mut(*id)
-                && !(areas && resize_type_area(n, xf))
-            {
-                n.transform(xf, sc);
+    // A transform of ids that name no object, or an identity transform without a copy, moves
+    // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
+    // With a copy, the reply lists the copies, and there are none.
+    let d = &s.doc()?.doc;
+    let none = ids.iter().all(|id| d.node(*id).is_none());
+    let ids = if none || (!copy && xf == Affine::IDENTITY) {
+        if copy { vec![] } else { ids }
+    } else {
+        s.edit(label, |d, sel| {
+            let targets = if copy { duplicate_in(d, sel, &ids, Affine::IDENTITY)? } else { ids.clone() };
+            for id in &targets {
+                if let Some(n) = d.node_mut(*id)
+                    && !(areas && resize_type_area(n, xf))
+                {
+                    n.transform(xf, sc);
+                }
             }
-        }
-        Ok(targets)
-    })?;
+            Ok(targets)
+        })?
+    };
     let st = s.doc_mut()?;
     if st.interaction.is_none() {
         st.last_transform = Some((xf, copy));
@@ -300,10 +309,19 @@ fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     let dx = f64_or(p, "dx", 0.0) * k;
     let dy = f64_or(p, "dy", 0.0) * k;
     if !s.doc()?.selection.anchors.is_empty() {
+        // When the anchors move by 0, the document and its undo history stay as they are.
+        if dx == 0.0 && dy == 0.0 {
+            return ok();
+        }
         return super::path::move_anchors(s, &json!({ "dx": dx, "dy": dy }));
     }
     if s.doc()?.selection.is_empty() {
-        return super::docmenu::guide_move(s, &json!({ "dx": dx, "dy": dy, "copy": bool_or(p, "copy", false) }));
+        let copy = bool_or(p, "copy", false);
+        // When guides move by 0 without a copy, the document and its undo history stay as they are.
+        if dx == 0.0 && dy == 0.0 && !copy {
+            return ok();
+        }
+        return super::docmenu::guide_move(s, &json!({ "dx": dx, "dy": dy, "copy": copy }));
     }
     let ids = selected_roots(s)?;
     apply_transform(s, "Move", ids, Affine::translate((dx, dy)), p)
@@ -386,7 +404,9 @@ fn arrange(s: &mut Session, how: Arrange) -> Result<Value> {
         Arrange::Backward => "Send Backward",
         Arrange::Back => "Send to Back",
     };
-    s.edit(label, |d, _| {
+    // When nothing changes order, the document and its undo history stay as they are.
+    super::overprint::edit_counted(s, label, |d| {
+        let mut moved = 0;
         // Arrange within each parent independently (selections may span layers/groups).
         let mut by_parent: Vec<(Option<vectorcraft_doc::NodeId>, Vec<vectorcraft_doc::NodeId>)> = vec![];
         for id in &ids {
@@ -411,10 +431,11 @@ fn arrange(s: &mut Session, how: Arrange) -> Result<Value> {
                 };
                 if to != idx {
                     d.move_node(*id, par, to)?;
+                    moved += 1;
                 }
             }
         }
-        Ok(())
+        Ok(moved)
     })?;
     ok()
 }
@@ -424,6 +445,11 @@ fn send_to_current_layer(s: &mut Session, _: &Value) -> Result<Value> {
     // Ids are reused after undo: the remembered current layer must still be a layer.
     let st = s.doc()?;
     let layer = st.current_layer().or_else(|| st.doc.default_layer()).ok_or_else(|| EngineError::Other("no current layer".into()))?;
+    // When the selected objects are already the topmost in the current layer, in paint order, the
+    // document and its undo history stay as they are.
+    if st.doc.children(Some(layer)).is_some_and(|c| c.iter().rev().map(|n| n.id).take(ids.len()).eq(ids.iter().rev().copied())) {
+        return ok();
+    }
     s.edit("Send to Current Layer", |d, _| {
         for id in &ids {
             d.move_node(*id, Some(layer), usize::MAX)?;
@@ -457,6 +483,11 @@ pub(crate) fn group_nodes(d: &mut Document, ids: &[NodeId]) -> Result<NodeId> {
 
 fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
+    // With no group selected, the document, the selection and the undo history stay as they are.
+    let d = &s.doc()?.doc;
+    if !ids.iter().any(|id| d.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. }))) {
+        return ok();
+    }
     s.edit("Ungroup", |d, sel| {
         let mut new_sel = vec![];
         for id in &ids {
@@ -492,6 +523,13 @@ fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn lock(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
+    // With every selected object already locked, the document and its undo history stay as they
+    // are, and the objects are deselected.
+    let d = &s.doc()?.doc;
+    if ids.iter().all(|id| d.node(*id).is_none_or(|n| n.locked)) {
+        s.select(|_, sel| sel.clear())?;
+        return ok();
+    }
     s.edit("Lock", |d, sel| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
@@ -516,6 +554,10 @@ fn collect_flag(d: &Document, f: impl Fn(&Node) -> bool) -> Vec<NodeId> {
 
 fn unlock_all(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = collect_flag(&s.doc()?.doc, |n| n.locked);
+    // With nothing locked, the document, the selection and the undo history stay as they are.
+    if ids.is_empty() {
+        return Ok(json!({ "count": 0 }));
+    }
     s.edit("Unlock All", |d, sel| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
@@ -530,6 +572,13 @@ fn unlock_all(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn hide(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
+    // With every selected object already hidden, the document and its undo history stay as they
+    // are, and the objects are deselected.
+    let d = &s.doc()?.doc;
+    if ids.iter().all(|id| d.node(*id).is_none_or(|n| !n.visible)) {
+        s.select(|_, sel| sel.clear())?;
+        return ok();
+    }
     s.edit("Hide", |d, sel| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
@@ -544,6 +593,10 @@ fn hide(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn show_all(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = collect_flag(&s.doc()?.doc, |n| !n.visible);
+    // With nothing hidden, the document, the selection and the undo history stay as they are.
+    if ids.is_empty() {
+        return Ok(json!({ "count": 0 }));
+    }
     s.edit("Show All", |d, sel| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
@@ -602,6 +655,12 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn compound_release(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
+    // With no compound path selected, the document, the selection and the undo history stay as
+    // they are.
+    let d = &s.doc()?.doc;
+    if !ids.iter().any(|id| d.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }))) {
+        return ok();
+    }
     s.edit("Release Compound Path", |d, sel| {
         let mut out = vec![];
         for id in &ids {
@@ -678,6 +737,11 @@ fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn clip_release(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
+    // With no clip group selected, the document and its undo history stay as they are.
+    let d = &s.doc()?.doc;
+    if !ids.iter().any(|id| d.node(*id).is_some_and(Node::clips)) {
+        return ok();
+    }
     s.edit("Release Clipping Mask", |d, _| {
         for id in &ids {
             release_clip(d, *id);
@@ -785,6 +849,27 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
         ),
         None => None,
     };
+    // When every object already has every value given, the document and its undo history stay as
+    // they are.
+    let flag = |k: &str| p.get(k).and_then(Value::as_bool);
+    let has_values = |n: &Node| {
+        str_param(p, "name").is_none_or(|v| n.name.as_deref() == Some(v).filter(|v| !v.is_empty()))
+            && flag("visible").is_none_or(|v| n.visible == v)
+            && flag("locked").is_none_or(|v| n.locked == v)
+            && opacity.is_none_or(|v| n.opacity == v)
+            && blend.is_none_or(|b| n.blend == b)
+            && flag("isolate").is_none_or(|v| n.isolate == v)
+            && knockout.is_none_or(|k| n.knockout == k)
+            && flag("knockoutShape").is_none_or(|v| n.knockout_shape == v)
+            && data
+                .iter()
+                .flatten()
+                .all(|(k, v)| n.attrs.as_ref().and_then(|a| a.data.iter().find(|(key, _)| key == k)).map(|(_, now)| now.as_str()) == v.as_deref())
+    };
+    let d = &s.doc()?.doc;
+    if ids.iter().all(|id| d.node(*id).is_some_and(has_values)) {
+        return ok();
+    }
     s.edit("Object Properties", |d, _| {
         for id in &ids {
             let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
@@ -864,6 +949,11 @@ fn items_bounds(d: &Document, ids: &[NodeId], preview: bool) -> Vec<(NodeId, Rec
     ids.iter().filter_map(|id| Some((*id, d.bounds_of(&[*id], preview)?))).collect()
 }
 
+/// Is every move in `moves` a rounding error (1e-9 pt or less on both axes)?
+fn moves_nothing(moves: &[(NodeId, Vec2)]) -> bool {
+    moves.iter().all(|(_, dv)| dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9)
+}
+
 /// What `object.align` aligns to: `to`, else the key object when there is one, else the
 /// selection.
 fn align_to<'a>(s: &Session, p: &'a Value) -> Option<&'a str> {
@@ -915,6 +1005,10 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .collect()
     };
+    // When nothing moves, the document and its undo history stay as they are.
+    if moves_nothing(&moves) {
+        return ok();
+    }
     s.edit("Align", |d, _| {
         for (id, dv) in &moves {
             if let Some(n) = d.node_mut(*id) {
@@ -965,6 +1059,10 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
             (*id, if horiz { Vec2::new(delta, 0.0) } else { Vec2::new(0.0, delta) })
         })
         .collect();
+    // When nothing moves, the document and its undo history stay as they are.
+    if moves_nothing(&moves) {
+        return ok();
+    }
     s.edit("Distribute", |d, _| {
         for (id, dv) in &moves {
             if let Some(n) = d.node_mut(*id) {
@@ -1008,6 +1106,10 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let fixed = spacing.and_then(|_| deltas.iter().find(|(id, _)| Some(*id) == key)).map_or(0.0, |k| k.1);
     let moves: Vec<(NodeId, Vec2)> =
         deltas.into_iter().map(|(id, d)| (id, if horiz { Vec2::new(d - fixed, 0.0) } else { Vec2::new(0.0, d - fixed) })).collect();
+    // When nothing moves, the document and its undo history stay as they are.
+    if moves_nothing(&moves) {
+        return ok();
+    }
     s.edit("Distribute Spacing", |d, _| {
         for (id, dv) in &moves {
             if let Some(n) = d.node_mut(*id) {
@@ -1057,12 +1159,23 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     let new_rp = scale * gp + (rp - gp) * f(sx, sy);
     // x, y place the reference point on the page.
     let page = frame.to_doc() * rp;
+    // When every value given is the current one, the transform is the identity. Computing it can
+    // leave a rounding error in it on a rotated object or with Use Preview Bounds.
+    let current = |k: &str, now: f64| p.get(k).and_then(Value::as_f64).is_none_or(|x| x == now);
+    if current("x", page.x) && current("y", page.y) && current("width", v.width()) && current("height", v.height()) {
+        return apply_transform(s, "Transform", ids, Affine::IDENTITY, p);
+    }
     let to = frame.to_local(Point::new(f64_or(p, "x", page.x), f64_or(p, "y", page.y)));
     apply_transform(s, "Transform", ids, frame.conjugate(Affine::translate(to - new_rp) * scale), p)
 }
 
 fn expand_shape(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
+    // With no live shape selected, the document and its undo history stay as they are.
+    let d = &s.doc()?.doc;
+    if !ids.iter().any(|id| d.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Path { live: Some(_), .. }))) {
+        return ok();
+    }
     s.edit("Expand Shape", |d, _| {
         for id in &ids {
             if let Some(NodeKind::Path { live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) {
@@ -1138,6 +1251,45 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // A polygon's Polygon Properties: its angle, radius or side length, Make Sides Equal.
     let (polygon_angle, polygon_radius, side) = (angle("polygonAngle")?, length("polygonRadius")?, length("sideLength")?);
     let equal = p.get("makeSidesEqual").and_then(Value::as_bool) == Some(true);
+    // An ellipse's pie becomes `pie_of(pie)`. An end of 0 is a full turn (Illustrator shows a whole
+    // ellipse as 0° to 360°).
+    let end_of = |a: f64| if a == 0.0 { 360.0 } else { a };
+    let pie_of = |pie: (f64, f64)| {
+        let pie = (pie_start.unwrap_or(pie.0), pie_end.map_or(pie.1, end_of));
+        if invert { (pie.1.rem_euclid(360.0), end_of(pie.0)) } else { pie }
+    };
+    // When every value given is the current one, the document and its undo history stay as they
+    // are.
+    let st = s.doc()?;
+    let has_values = |id: &NodeId| {
+        let Some(NodeKind::Path { path, live, .. }) = st.doc.node(*id).map(|n| &n.kind) else { return true };
+        match live {
+            Some(l @ LiveShape::Polygon { sides: now, .. })
+                if !(sides.is_none_or(|n| n.clamp(3, 1000) == u64::from(*now))
+                    && (!equal || l.polygon_sides_equal())
+                    && polygon_angle.is_none_or(|a| l.polygon_angle() == Some(a))
+                    && side.and_then(|len| l.polygon_radius_for_side(len)).or(polygon_radius).is_none_or(|r| l.polygon_radius() == Some(r))) =>
+            {
+                return false;
+            }
+            Some(LiveShape::Ellipse { pie, .. }) if pie_of(*pie) != *pie => return false,
+            _ => {}
+        }
+        if radius.is_none() && kind.is_none() {
+            return true;
+        }
+        let Some(c) = LiveCorners::new(path, live.as_ref()) else { return true };
+        let picked = corners_of(*id).unwrap_or_else(|| c.picked(st.selection.anchors.get(id)));
+        // Setting corners folds a scale left in a rectangle's transform into its size, which
+        // changes it.
+        live.as_ref().is_none_or(|l| l.folded() == *l)
+            && picked
+                .iter()
+                .all(|k| *k < c.base.anchor_count() && radius.is_none_or(|r| c.radius(*k) == r.max(0.0)) && kind.is_none_or(|kd| c.kind(*k) == kd))
+    };
+    if ids.iter().all(has_values) {
+        return ok();
+    }
     s.edit("Live Shape", |d, sel| {
         for id in &ids {
             let Some(NodeKind::Path { path, live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -1163,12 +1315,7 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 && (pie_start.is_some() || pie_end.is_some() || invert)
             {
                 if let LiveShape::Ellipse { pie, .. } = l {
-                    // An end of 0 is a full turn (Illustrator shows a whole ellipse as 0° to 360°).
-                    let end_of = |a: f64| if a == 0.0 { 360.0 } else { a };
-                    *pie = (pie_start.unwrap_or(pie.0), pie_end.map_or(pie.1, end_of));
-                    if invert {
-                        *pie = (pie.1.rem_euclid(360.0), end_of(pie.0));
-                    }
+                    *pie = pie_of(*pie);
                 }
                 *path = l.to_path();
             }
