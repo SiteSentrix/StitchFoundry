@@ -280,6 +280,89 @@ fn simplify_dense_polyline() {
 }
 
 #[test]
+fn simplify_refreshes_changed_path_selection_and_undo() {
+    let mut s = session();
+    let anchors: Vec<Value> = (0..20).map(|i| json!({"x": 30 + i * 15, "y": 100.0 + (i % 2) as f64 * 0.1})).collect();
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    // A one-anchor path cannot be simplified; its component selection must stay.
+    let kept = NodeId(s.execute("path.create", &json!({"anchors": [{"x": 350, "y": 180}]})).unwrap()["id"].as_u64().unwrap());
+    let unrelated = rect(&mut s, 400.0, 200.0, 40.0, 30.0);
+    s.edit("selection fixture", |d, sel| {
+        d.guides.push(vectorcraft_doc::Guide::new(true, 30.0));
+        sel.set([kept, id]);
+        sel.anchors.insert(id, [(0, 19)].into_iter().collect());
+        sel.anchors.insert(kept, [(0, 0)].into_iter().collect());
+        sel.key = Some(kept);
+        sel.target = Some(id);
+        sel.guides.push(0);
+        Ok(())
+    })
+    .unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let undo_len = s.doc().unwrap().history.undo.len();
+    let out = s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
+    assert_eq!((out["before"].as_u64(), out["after"].as_u64()), (Some(21), Some(3)));
+    assert_eq!(path_of(&s, id).0.anchor_count(), 2);
+    let mut expected_selection = selection.clone();
+    expected_selection.anchors.remove(&id);
+    assert_eq!(s.doc().unwrap().selection, expected_selection, "only the changed path becomes selected whole");
+    assert_eq!(node(&s, unrelated), before.node(unrelated).unwrap().clone());
+    let after = s.doc().unwrap().doc.clone();
+    let mut restored = after.clone();
+    std::sync::Arc::make_mut(&mut restored).node_mut(id).unwrap().kind = before.node(id).unwrap().kind.clone();
+    assert_eq!(restored, before, "all document state except the simplified geometry is preserved");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_len + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, after);
+    assert_eq!(s.doc().unwrap().selection, expected_selection);
+}
+
+#[test]
+fn add_anchor_points_refreshes_components_even_when_old_indexes_still_exist() {
+    let mut s = session();
+    let id = rect(&mut s, 20.0, 30.0, 100.0, 70.0);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 3]]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let out = s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+    assert_eq!((out["before"].as_u64(), out["after"].as_u64()), (Some(4), Some(8)));
+    assert!(s.doc().unwrap().selection.anchors.is_empty());
+    assert_eq!(s.doc().unwrap().selection.objects, selection.objects);
+    assert!(close(bounds(&s, id), before.node(id).unwrap().geometric_bounds().unwrap(), 1e-9));
+    let after = s.doc().unwrap().doc.clone();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, after);
+    assert!(s.doc().unwrap().selection.anchors.is_empty());
+}
+
+#[test]
+fn simplify_refreshes_components_inside_selected_groups() {
+    let mut s = session();
+    let anchors: Vec<Value> = (0..20).map(|i| json!({"x": 30 + i * 15, "y": 100.0 + (i % 2) as f64 * 0.1})).collect();
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    let other = rect(&mut s, 400.0, 200.0, 40.0, 30.0);
+    s.execute("select.set", &json!({"ids": [id.0, other.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.select(|_, sel| {
+        sel.anchors.insert(id, [(0, 19)].into_iter().collect());
+    })
+    .unwrap();
+    let other_before = node(&s, other);
+    s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![group]);
+    assert!(s.doc().unwrap().selection.anchors.is_empty());
+    assert_eq!(path_of(&s, id).0.anchor_count(), 2);
+    assert_eq!(node(&s, other).appearance, other_before.appearance);
+}
+
+#[test]
 fn add_anchor_points_doubles() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
