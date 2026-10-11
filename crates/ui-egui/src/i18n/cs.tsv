@@ -113,6 +113,46 @@
 	Color Settings…	Nastavení barev…
 	Assign Profile…	Přiřadit profil…
 	Keyboard Shortcuts…	Klávesové zkratky…
+# Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
+	Import Shortcut Set	Importovat sadu klávesových zkratek
+	Import Shortcut Set…	Importovat sadu klávesových zkratek…
+	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Každá položka souboru je přiřazena k nástroji, příkazu nebo panelu VectorCraftu. Zkontrolujte přiřazení a doplňte, co zbývá.
+	Keys	Klávesy
+	The file writes keys and modifiers as codes. Check the proposed meanings and answer the codes that are not known yet.	Soubor ukládá klávesy a modifikátory jako kódy. Zkontrolujte navržené významy a doplňte ty, které zatím nejsou známé.
+	Click, then press the key this code stands for (Esc cancels)	Klikněte a stiskněte klávesu, kterou tento kód označuje (Esc zruší)
+	Press a key…	Stiskněte klávesu…
+	from your earlier imports	z vašich dřívějších importů
+	from the format's public description	z veřejného popisu formátu
+	not known yet	zatím není známo
+	Shortcuts	Zkratky
+	In the File	V souboru
+	In VectorCraft	Ve VectorCraftu
+	Needs Attention Only	Jen řádky vyžadující pozornost
+	Ready	Připraveno
+	Needs a choice	Vyžaduje volbu
+	Needs a key	Vyžaduje klávesu
+	No equivalent	Bez ekvivalentu
+	Tools take a single key (optionally with Shift)	Nástroje používají jedinou klávesu (volitelně se Shift)
+	A later row takes this shortcut	Tuto zkratku přebírá pozdější řádek
+	Same item as a later row	Stejná položka jako v pozdějším řádku
+	Start from VectorCraft Defaults	Vycházet z výchozích zkratek VectorCraftu
+	Add to the Current Shortcuts	Přidat k aktuálním zkratkám
+	Remember My Choices	Zapamatovat si moje volby
+	{ready} of {total} ready	Připraveno {ready} z {total}
+	The file is too large to read in full, so only its first part is listed.	Soubor je příliš velký na úplné přečtení, proto je uvedena jen jeho první část.
+	Copy Report	Kopírovat zprávu
+	Report copied	Zpráva zkopírována
+	Line {line}	Řádek {line}
+	Line {line}: {name}: {status}	Řádek {line}: {name}: {status}
+	Not read	Nepřečteno
+	Read Shortcut Set File	Přečíst soubor sady klávesových zkratek
+	Import Matches	Přiřazení z importů
+	Remember Import Matches	Zapamatovat přiřazení z importů
+	Forget Import Matches	Zapomenout přiřazení z importů
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	shoduje se s {n} výchozí zkratkou|shoduje se s {n} výchozími zkratkami|shoduje se s {n} výchozími zkratkami
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} část souboru nebyla přečtena|{n} části souboru nebyly přečteny|{n} částí souboru nebylo přečteno
+@msg	This shortcut file is in a form VectorCraft can't read.	Tento soubor klávesových zkratek je ve formátu, který VectorCraft neumí přečíst.
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	nejde o sadu klávesových zkratek: text nezačíná názvem s lomítkem a otevírací složenou závorkou
 	Preferences…	Předvolby…
 	Object	Objekt
 	Transform	Transformace
