@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Auto Sequence",
             [],
             None,
-            "{} reorder the stitched objects (within each layer or group) for the fewest colour changes, then the shortest travel, keeping objects that overlap in their stacking order → {moved}",
+            "{ids?: groups} reorder the stitched objects (within each layer or group; with ids, only those inside these groups) for the fewest colour changes, then the shortest travel, keeping objects that overlap in their stacking order → {moved}",
             has_doc,
             auto_sequence
         ),
@@ -179,8 +179,13 @@ fn break_apart(s: &mut Session, _p: &Value) -> Result<Value> {
     Ok(ids_json(&out))
 }
 
-fn auto_sequence(s: &mut Session, _p: &Value) -> Result<Value> {
+fn auto_sequence(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.autoSequence";
+    // With `ids`, only the objects inside those groups trade places.
+    let only = match p.get("ids") {
+        Some(_) => Some(checked_ids_param(s, p, "ids", CMD)?),
+        None => None,
+    };
     let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
     // each stitched node as one item: its thread and what its objects cover
     let mut items: BTreeMap<NodeId, Item> = BTreeMap::new();
@@ -198,7 +203,19 @@ fn auto_sequence(s: &mut Session, _p: &Value) -> Result<Value> {
         let mut parents: Vec<Option<NodeId>> = items.keys().map(|id| d.parent_of(*id)).collect();
         parents.sort_by_key(|p| p.map(|x| x.0));
         parents.dedup();
+        let inside = |d: &vectorcraft_doc::Document, mut at: Option<NodeId>| {
+            while let Some(id) = at {
+                if only.as_ref().is_none_or(|o| o.contains(&id)) {
+                    return true;
+                }
+                at = d.parent_of(id);
+            }
+            false
+        };
         for parent in parents.into_iter().flatten() {
+            if !inside(d, Some(parent)) {
+                continue;
+            }
             let Some(children) = d.node(parent).and_then(|n| n.children()).cloned() else { continue };
             let slots: Vec<usize> = children.iter().enumerate().filter(|(_, c)| items.contains_key(&c.id)).map(|(i, _)| i).collect();
             if slots.len() < 2 {

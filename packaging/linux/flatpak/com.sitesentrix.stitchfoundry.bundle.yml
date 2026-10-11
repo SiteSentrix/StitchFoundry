@@ -28,9 +28,11 @@ finish-args:
   # portal, so broad filesystem access isn't needed. Pictures is granted for opening files by
   # path from the command line.
   - --filesystem=xdg-pictures
-  # Deliberately not granted: network (the optional --control server listens on 127.0.0.1 in
-  # the sandbox; `flatpak override --user --share=network com.sitesentrix.stitchfoundry` exposes it
-  # to host agents) and home/host filesystem access.
+  # Network: Embroidery › Design from Prompt sends its request to the AI service (only when the
+  # user generates a design). It also makes the optional --control server, which listens on
+  # 127.0.0.1, reachable by agents on the host, as in the other desktop builds.
+  - --share=network
+  # Deliberately not granted: home/host filesystem access.
 modules:
   - name: vectorcraft
     buildsystem: simple

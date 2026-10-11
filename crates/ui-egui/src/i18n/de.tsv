@@ -4411,3 +4411,38 @@ machine	Stop	Stopp
 	Tie off	Vernähen am Ende
 	Tiny object: may not sew cleanly	Winziges Objekt: wird evtl. nicht sauber gestickt
 	Very dense: about {n} layers of thread here	Sehr dicht: hier etwa {n} Lagen Garn
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	Stickmuster aus Beschreibung…
+	Design from Prompt	Stickmuster aus Beschreibung
+	Generate	Generieren
+	Describe the design:	Beschreiben Sie das Stickmuster:
+	Size (longest side):	Größe (längste Seite):
+	Anthropic API key:	Anthropic-API-Schlüssel:
+	Remember the key on this computer	Schlüssel auf diesem Computer speichern
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude zeichnet die Grafik mit Ihrem eigenen Anthropic-API-Schlüssel, abgerechnet über Ihr Anthropic-Konto; StitchFoundry digitalisiert sie anschließend. Prüfen Sie die Stiche vor dem Sticken.
+	Get a key	Schlüssel anfordern
+	Drawing the design…	Stickmuster wird gezeichnet…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Beschreiben Sie ein Stickmuster: Claude zeichnet eine Grafik dafür, die StitchFoundry anschließend digitalisiert
+	Place Artwork as Embroidery	Grafik als Stickerei platzieren
+	Place Artwork	Grafik platzieren
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Stickmuster platziert: {n} gesticktes Objekt|Stickmuster platziert: {n} gestickte Objekte
+@msg	Enter your Anthropic API key first.	Geben Sie zuerst Ihren Anthropic-API-Schlüssel ein.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	Der API-Schlüssel ist ungültig: Fügen Sie ihn erneut aus der Anthropic Console ein.
+@msg	Describe the design first.	Beschreiben Sie zuerst das Stickmuster.
+@msg	The description is too long: keep it under 2,000 characters.	Die Beschreibung ist zu lang: Bleiben Sie unter 2000 Zeichen.
+@msg	Anthropic refused the API key: {e}	Anthropic hat den API-Schlüssel abgelehnt: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Über Ihr Anthropic-Konto kann dies nicht bezahlt werden: {e}
+@msg	The AI service is busy: try again in a minute.	Der KI-Dienst ist ausgelastet: Versuchen Sie es in einer Minute erneut.
+@msg	The AI service failed (error {code}): try again later.	Beim KI-Dienst ist ein Fehler aufgetreten (Fehlercode {code}): Versuchen Sie es später erneut.
+@msg	The request failed (error {code}): {e}	Die Anfrage ist fehlgeschlagen (Fehlercode {code}): {e}
+@msg	The AI declined to draw this: try another description.	Die KI hat es abgelehnt, dies zu zeichnen: Versuchen Sie es mit einer anderen Beschreibung.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Die Zeichnung wurde zu detailliert, um fertiggestellt zu werden: Bitten Sie um etwas Einfacheres.
+@msg	The reply had no artwork: try again.	Die Antwort enthielt keine Grafik: Versuchen Sie es erneut.
+@msg	Couldn't reach the AI service: {e}	Der KI-Dienst konnte nicht erreicht werden: {e}
+@msg	Design from Prompt needs the desktop app for now	„Stickmuster aus Beschreibung“ erfordert vorerst die Desktop-App
+@msg	already drawing: wait for it, or Cancel	es wird bereits gezeichnet: Warten Sie, bis die Zeichnung fertig ist, oder klicken Sie auf „Abbrechen“
+@msg	the artwork has no shapes to stitch	die Grafik enthält keine Formen zum Sticken
+@msg	the artwork has nothing to place	die Grafik enthält nichts zum Platzieren
+@msg	the artwork can't be read: {e}	die Grafik kann nicht gelesen werden: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	Die KI kopiert keine fremden Logos oder Figuren: {e}

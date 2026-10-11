@@ -39,6 +39,10 @@ image = { workspace = true }
 webbrowser = { workspace = true }
 # The window's monitors, size and position (the same winit eframe runs on).
 winit = { version = "0.30", default-features = false }
+# Design from Prompt's HTTPS request to the AI service (src/ai_service.rs): blocking, on a thread of
+# its own. TLS by rustls, checking certificates against the system's own (so a company proxy's
+# certificate is trusted where the system trusts it). MIT OR Apache-2.0.
+ureq = { version = "3.4", default-features = false, features = ["rustls", "platform-verifier"] }
 
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { workspace = true }

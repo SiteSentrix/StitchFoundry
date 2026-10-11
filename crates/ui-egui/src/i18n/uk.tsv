@@ -4437,3 +4437,38 @@ machine	Stop	Зупинка
 	Tie off	Закріпка в кінці
 	Tiny object: may not sew cleanly	Крихітний об’єкт: може вишитися неакуратно
 	Very dense: about {n} layers of thread here	Дуже щільно: тут близько {n} шарів нитки
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	Дизайн за описом…
+	Design from Prompt	Дизайн за описом
+	Generate	Створити
+	Describe the design:	Опишіть дизайн:
+	Size (longest side):	Розмір (за довшою стороною):
+	Anthropic API key:	Ключ API Anthropic:
+	Remember the key on this computer	Запам’ятати ключ на цьому комп’ютері
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude створює малюнок за допомогою вашого власного ключа API Anthropic, оплата стягується з вашого облікового запису Anthropic; потім StitchFoundry його оцифровує. Перевірте стібки перед вишиванням.
+	Get a key	Отримати ключ
+	Drawing the design…	Малювання дизайну…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Опишіть дизайн — Claude створить для нього малюнок, а StitchFoundry його оцифрує
+	Place Artwork as Embroidery	Помістити малюнок як вишивку
+	Place Artwork	Помістити малюнок
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Дизайн поміщено: {n} вишиваний об’єкт|Дизайн поміщено: {n} вишивані об’єкти|Дизайн поміщено: {n} вишиваних об’єктів
+@msg	Enter your Anthropic API key first.	Спочатку введіть свій ключ API Anthropic.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	Ключ API недійсний: вставте його знову з Anthropic Console.
+@msg	Describe the design first.	Спочатку опишіть дизайн.
+@msg	The description is too long: keep it under 2,000 characters.	Опис занадто довгий: він має бути коротшим за 2000 символів.
+@msg	Anthropic refused the API key: {e}	Сервіс Anthropic відхилив ключ API: {e}
+@msg	Your Anthropic account can't pay for this: {e}	З вашого облікового запису Anthropic не вдається оплатити цей запит: {e}
+@msg	The AI service is busy: try again in a minute.	Сервіс ШІ зараз зайнятий: спробуйте ще раз за хвилину.
+@msg	The AI service failed (error {code}): try again later.	Збій сервісу ШІ (помилка {code}): спробуйте ще раз пізніше.
+@msg	The request failed (error {code}): {e}	Запит не виконано (помилка {code}): {e}
+@msg	The AI declined to draw this: try another description.	ШІ відмовляється це малювати: спробуйте інший опис.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Малюнок вийшов надто детальним, і його не вдалося завершити: попросіть щось простіше.
+@msg	The reply had no artwork: try again.	У відповіді немає малюнка: спробуйте ще раз.
+@msg	Couldn't reach the AI service: {e}	Не вдалося зв’язатися із сервісом ШІ: {e}
+@msg	Design from Prompt needs the desktop app for now	Функція «Дизайн за описом» поки що вимагає настільної програми
+@msg	already drawing: wait for it, or Cancel	малювання вже триває: дочекайтеся завершення або натисніть «Скасувати»
+@msg	the artwork has no shapes to stitch	у малюнку немає фігур для вишивання
+@msg	the artwork has nothing to place	у малюнку немає нічого для розміщення
+@msg	the artwork can't be read: {e}	не вдається прочитати малюнок: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	ШІ не копіює чужі логотипи й персонажів: {e}

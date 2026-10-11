@@ -66,6 +66,7 @@ fn embroidery_menu() -> Vec<Item> {
         Sep,
         c("Convert Artwork to Embroidery", "embroidery.convert"),
         c("Auto-Digitize Image", "embroidery.autoDigitize"),
+        c("Design from Prompt…", "ui.designFromPrompt"),
         Sep,
         sub(
             "Stitch Type",
@@ -136,6 +137,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Check Design",
         "",
         "{} run embroidery.check and list what it finds in the Embroidery panel (click a finding to select its objects) → {count}",
+    ),
+    (
+        "ui.designFromPrompt",
+        "Design from Prompt…",
+        "",
+        "{prompt?, size?: mm (longest side), colors?: 1-12} open Design from Prompt: describe a design and Claude draws flat-colour artwork with your own Anthropic API key, which embroidery.placeArt places and digitizes (desktop only) → {open}",
     ),
     (
         "ui.embroideryWidget",
@@ -991,6 +998,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     }
     if id == "ui.embroideryCheck" {
         return Some(crate::embroidery::panel::run_check(app).map(|n| json!({ "count": n })));
+    }
+    if id == "ui.designFromPrompt" {
+        return Some(crate::embroidery::prompt::open(app, p));
     }
     if id == "ui.embroideryWidget" {
         if app.session.active().is_none() {
@@ -2072,6 +2082,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.embroideryWidget" | "ui.embroideryCheck" => app.session.active().is_some(),
+        "ui.designFromPrompt" => app.session.active().is_some() && crate::embroidery::prompt::available(app),
         "file.export.embroidery" => app.session.embroidery_plan().is_some_and(|p| !p.is_empty()),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),

@@ -21,6 +21,7 @@ compile_error!("windows7 requires --target x86_64-win7-windows-msvc; the ordinar
 #[cfg(all(target_vendor = "win7", not(feature = "windows7")))]
 compile_error!("the win7 target requires --no-default-features --features windows7");
 
+mod ai_service;
 mod automation_args;
 mod clipboard;
 #[cfg(feature = "wgpu")]
@@ -508,6 +509,10 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
         // File → Print: the system's printers and print queue.
         print: Some(Box::new(printing::SystemPrint)),
+        // Embroidery › Design from Prompt: the request to the AI service, and the API key kept in a
+        // file of its own next to the settings (not kept in runs without preferences).
+        http_post: Some(std::sync::Arc::new(ai_service::post)),
+        secrets: Some(Box::new(ai_service::SecretFiles::new(prefs_path().and_then(|p| Some(p.parent()?.to_path_buf())).filter(|_| prefs_enabled())))),
         ..Default::default()
     }
 }

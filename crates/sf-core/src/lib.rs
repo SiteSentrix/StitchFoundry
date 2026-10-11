@@ -14,7 +14,9 @@
 //! * [`threads`], [`hoops`], [`fabrics`] – reference data.
 //! * [`stats`] – stitch counts, thread usage, sewing time.
 //! * [`io`] – native `.sfd` design files.
+//! * [`ai`] – Design from Prompt: the request for stitchable art and reading the reply.
 
+pub mod ai;
 pub mod attr;
 pub mod brush;
 pub mod direction;

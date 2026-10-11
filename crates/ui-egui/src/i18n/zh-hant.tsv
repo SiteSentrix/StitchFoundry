@@ -3823,3 +3823,38 @@ machine	Stop	停止
 	Tie off	收針打結
 	Tiny object: may not sew cleanly	極小物件：可能無法繡得整齊
 	Very dense: about {n} layers of thread here	過密：此處約有 {n} 層繡線
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	依描述產生圖案…
+	Design from Prompt	依描述產生圖案
+	Generate	產生
+	Describe the design:	描述圖案：
+	Size (longest side):	大小 (最長邊)：
+	Anthropic API key:	Anthropic API 金鑰：
+	Remember the key on this computer	在此電腦上記住金鑰
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude 會使用您自己的 Anthropic API 金鑰繪製圖稿，費用由您的 Anthropic 帳號支付；接著由 StitchFoundry 進行打版。繡製前請檢查針跡。
+	Get a key	取得金鑰
+	Drawing the design…	正在繪製圖案…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	描述圖案後，Claude 會為其繪製圖稿，再由 StitchFoundry 打版
+	Place Artwork as Embroidery	將圖稿作為刺繡置入
+	Place Artwork	置入圖稿
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	圖案已置入：{n} 個刺繡物件
+@msg	Enter your Anthropic API key first.	請先輸入您的 Anthropic API 金鑰。
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	API 金鑰無效：請從 Anthropic Console 重新貼上。
+@msg	Describe the design first.	請先描述圖案。
+@msg	The description is too long: keep it under 2,000 characters.	描述過長：請縮短至 2,000 個字元以內。
+@msg	Anthropic refused the API key: {e}	Anthropic 拒絕了此 API 金鑰：{e}
+@msg	Your Anthropic account can't pay for this: {e}	您的 Anthropic 帳號無法支付此費用：{e}
+@msg	The AI service is busy: try again in a minute.	AI 服務忙碌中：請一分鐘後再試一次。
+@msg	The AI service failed (error {code}): try again later.	AI 服務發生錯誤 (錯誤 {code})：請稍後再試一次。
+@msg	The request failed (error {code}): {e}	請求失敗 (錯誤 {code})：{e}
+@msg	The AI declined to draw this: try another description.	AI 拒絕繪製此內容：請嘗試其他描述。
+@msg	The drawing grew too detailed to finish: ask for something simpler.	繪圖過於精細，無法完成：請嘗試較簡單的內容。
+@msg	The reply had no artwork: try again.	回覆中沒有圖稿：請再試一次。
+@msg	Couldn't reach the AI service: {e}	無法連線到 AI 服務：{e}
+@msg	Design from Prompt needs the desktop app for now	「依描述產生圖案」目前需要桌面版應用程式
+@msg	already drawing: wait for it, or Cancel	正在繪製中：請等候完成，或按一下「取消」
+@msg	the artwork has no shapes to stitch	圖稿中沒有可繡製的形狀
+@msg	the artwork has nothing to place	圖稿中沒有可置入的內容
+@msg	the artwork can't be read: {e}	無法讀取圖稿：{e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI 不會複製他人的標誌或角色：{e}
