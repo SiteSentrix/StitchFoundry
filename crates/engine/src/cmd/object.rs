@@ -9,7 +9,7 @@ use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::corners::set_corners;
 use vectorcraft_doc::{Appearance, Document, Knockout, LiveCorners, LiveShape, Node, NodeId, NodeKind, OrientedBox, Scaling};
 use vectorcraft_geom::shapes::CornerKind;
-use vectorcraft_geom::{Affine, FillRule, Point, Rect, Vec2};
+use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, Vec2};
 
 use super::edit::{duplicate_in, selected_roots};
 use super::opacitymask::percent;
@@ -106,7 +106,15 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("object.hide", "Selection", ["Object", "Hide"], Some("Cmd+3"), "{}", has_selection, hide),
         cmd!("object.showAll", "Show All", ["Object"], Some("Cmd+Alt+3"), "{}", has_doc, show_all),
         cmd!("object.compoundPath.make", "Make", ["Object", "Compound Path"], Some("Cmd+8"), "{}", has_selection, compound_make),
-        cmd!("object.compoundPath.release", "Release", ["Object", "Compound Path"], Some("Cmd+Alt+Shift+8"), "{}", has_selection, compound_release),
+        cmd!(
+            "object.compoundPath.release",
+            "Release",
+            ["Object", "Compound Path"],
+            Some("Cmd+Alt+Shift+8"),
+            "{} release the selected compound paths into their paths, each with the compound path's paint; a path of several subpaths (an SVG `d` with several `M`s) splits into one path per subpath",
+            has_selection,
+            compound_release
+        ),
         cmd!(
             "object.clippingMask.make",
             "Make",
@@ -658,26 +666,52 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0 }))
 }
 
+/// Is `n` a compound path to release: a compound path, or a path of several subpaths (an SVG `d`
+/// with several `M`s, a PDF path), which is one in Illustrator too (#1163)?
+fn releases(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Compound { .. } => true,
+        NodeKind::Path { path, .. } => path.subpaths.len() > 1,
+        _ => false,
+    }
+}
+
 fn compound_release(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     // With no compound path selected, the document, the selection and the undo history stay as
     // they are.
     let d = &s.doc()?.doc;
-    if !ids.iter().any(|id| d.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }))) {
+    if !ids.iter().any(|id| d.node(*id).is_some_and(releases)) {
         return ok();
     }
     s.edit("Release Compound Path", |d, sel| {
         let mut out = vec![];
         for id in &ids {
-            let Some(n) = d.node(*id).cloned() else { continue };
-            let NodeKind::Compound { children, .. } = &n.kind else { continue };
+            let Some(n) = d.node(*id).cloned().filter(releases) else { continue };
             let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
             d.remove(*id)?;
-            for (k, c) in children.iter().enumerate() {
-                let mut c = (**c).clone();
-                c.appearance = n.appearance.clone();
-                out.push(c.id);
-                d.insert(par, idx + k, c)?;
+            match &n.kind {
+                NodeKind::Compound { children, .. } => {
+                    for (k, c) in children.iter().enumerate() {
+                        let mut c = (**c).clone();
+                        c.appearance = n.appearance.clone();
+                        out.push(c.id);
+                        d.insert(par, idx + k, c)?;
+                    }
+                }
+                // Each subpath becomes a path of its own with the path's paint, in the same
+                // stacking order; the first keeps the path's id.
+                NodeKind::Path { path, .. } => {
+                    for (k, sp) in path.subpaths.iter().enumerate() {
+                        let mut c = if k == 0 { n.clone() } else { d.reid(&n) };
+                        if let NodeKind::Path { path, live, .. } = &mut c.kind {
+                            (*path, *live) = (PathData::single(sp.clone()), None);
+                        }
+                        out.push(c.id);
+                        d.insert(par, idx + k, c)?;
+                    }
+                }
+                _ => {}
             }
         }
         sel.set(out);
