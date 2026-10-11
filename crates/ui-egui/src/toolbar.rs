@@ -253,7 +253,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
             });
         }
         ui.add_space(8.0);
-        bottom_controls(app, ui, &t);
+        bottom_controls(app, ui, &t, cols);
     });
 }
 
@@ -419,16 +419,21 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
 }
 
-fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
-    ui.vertical_centered(|ui| crate::panels::proxy(app, ui, 36.0));
+/// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes, screen mode and Edit Toolbar, as
+/// large as the toolbar's `cols` (one or two) leave room for (#1129): in two columns the proxy and
+/// buttons grow and the three drawing modes show side by side.
+fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usize) {
+    let two = cols == 2;
+    ui.vertical_centered(|ui| crate::panels::proxy(app, ui, if two { 54.0 } else { 36.0 }));
     ui.add_space(5.0);
     // Color (the last solid colour), Gradient (the last gradient) and None, as commands.
+    let (chip, gap) = if two { (17.0, 4.0) } else { (11.0, 2.0) };
     ui.horizontal(|ui| {
-        ui.add_space((ui.available_width() - 27.0) / 2.0);
-        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
+        ui.spacing_mut().item_spacing.x = gap;
         let mut clicked = None;
         for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
-            let (r, resp) = ui.allocate_exact_size(vec2(7.5, 7.5), Sense::click());
+            let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
             match cmd {
                 "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
                 "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
@@ -443,15 +448,28 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         }
     });
     ui.add_space(6.0);
+    let modes = [
+        (vectorcraft_engine::DrawMode::Normal, "dc-draw-normal", "Draw Normal", "normal"),
+        (vectorcraft_engine::DrawMode::Behind, "dc-draw-behind", "Draw Behind", "behind"),
+        (vectorcraft_engine::DrawMode::Inside, "dc-draw-inside", "Draw Inside", "inside"),
+    ];
+    if two {
+        // Side by side, each one a click away.
+        ui.horizontal(|ui| {
+            ui.add_space((ui.available_width() - 3.0 * 22.0) / 2.0);
+            for (mode, icon, name, id) in modes {
+                if widgets::icon_button(ui, icon, &format!("{} (Shift+D)", tl!(name)), app.session.draw_mode == mode, 22.0).clicked() {
+                    app.run("view.drawMode", json!({ "mode": id })).ok();
+                }
+            }
+        });
+    }
     ui.vertical_centered(|ui| {
-        let modes = ["dc-draw-normal", "dc-draw-behind", "dc-draw-inside"];
-        let names = ["Draw Normal", "Draw Behind", "Draw Inside"];
-        let m = match app.session.draw_mode {
-            vectorcraft_engine::DrawMode::Normal => 0,
-            vectorcraft_engine::DrawMode::Behind => 1,
-            vectorcraft_engine::DrawMode::Inside => 2,
-        };
-        if widgets::icon_button(ui, modes[m], &format!("{} (Shift+D)", tl!(names[m])), m != 0, 26.0).clicked() {
+        // One column: the current mode's button, which cycles them.
+        if !two
+            && let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
+            && widgets::icon_button(ui, icon, &format!("{} (Shift+D)", tl!(name)), mode != vectorcraft_engine::DrawMode::Normal, 26.0).clicked()
+        {
             app.run("view.drawMode", json!({})).ok();
         }
         if widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
@@ -1103,6 +1121,25 @@ pub(crate) mod tests {
         frame_in(app, ctx, time, vec![Event::PointerMoved(at), b(true)], height);
         frame_in(app, ctx, time + 0.05, vec![b(false)], height);
         frame_in(app, ctx, time + 0.1, vec![], height)
+    }
+
+    /// The Color, Gradient and None buttons grow with the toolbar, and in two columns the three
+    /// drawing modes sit side by side, each setting its mode (#1129).
+    #[test]
+    fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", serde_json::json!({"width": 200, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        frame_in(&mut app, &ctx, 0.0, vec![], 900.0);
+        assert_eq!(widget_rects(&ctx, vec2(11.0, 11.0)).len(), 3, "one column: three 11 pt chips");
+        app.ui.toolbar_double = true;
+        frame_in(&mut app, &ctx, 1.0, vec![], 900.0);
+        assert_eq!(widget_rects(&ctx, vec2(17.0, 17.0)).len(), 3, "two columns: three 17 pt chips");
+        let modes = widget_rects(&ctx, vec2(22.0, 22.0));
+        assert_eq!(modes.len(), 3, "the three drawing modes side by side");
+        assert!(modes.iter().all(|r| (r.top() - modes[0].top()).abs() < 0.5), "{modes:?}");
+        click_in(&mut app, &ctx, 2.0, modes[1].center(), PointerButton::Primary, 900.0);
+        assert_eq!(app.session.draw_mode, vectorcraft_engine::DrawMode::Behind);
     }
 
     /// How many columns of tool buttons `rects` make.
