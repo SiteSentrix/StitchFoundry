@@ -59,6 +59,9 @@ pub(crate) struct SGlyph {
     pub level: Level,
     /// An inline graphic ([`vectorcraft_doc::TextRun::inline`]) standing in for a glyph.
     pub inline: Option<InlineBox>,
+    /// A word of a script written without spaces (Thai, Lao, Khmer, Myanmar) ends after the
+    /// glyph's cluster, so a line may break there ([`mark_word_ends`]).
+    pub word_end: bool,
 }
 
 /// How `vpal` moves an upright glyph in vertical type and changes its length down the column, in
@@ -102,7 +105,7 @@ impl SGlyph {
     }
     /// A line may break after this glyph.
     pub fn break_after(&self) -> bool {
-        self.is_space() || matches!(self.ch, '-' | '\u{2010}' | '\u{2013}' | '\u{2014}' | '/' | SOFT_HYPHEN) || is_cjk(self.ch)
+        self.is_space() || self.word_end || matches!(self.ch, '-' | '\u{2010}' | '\u{2013}' | '\u{2014}' | '/' | SOFT_HYPHEN) || is_cjk(self.ch)
     }
     /// A soft (discretionary) hyphen: invisible unless a line breaks after it.
     pub fn is_soft_hyphen(&self) -> bool {
@@ -229,6 +232,34 @@ pub(crate) fn punct(c: char) -> Option<Punct> {
             Some(Punct::Closing)
         }
         _ => None,
+    }
+}
+
+/// Is `c` of a script written without spaces between words, whose line breaks need a model of its
+/// words: Thai, Lao, Khmer or Myanmar (UAX #14's class SA)?
+pub(crate) fn is_unspaced_script(c: char) -> bool {
+    matches!(c.script(), Script::Thai | Script::Lao | Script::Khmer | Script::Myanmar)
+}
+
+/// Mark the glyphs of `sg` (shaped from `text`, which starts at byte `start` of the text the
+/// glyphs index) after which a word of Thai, Lao, Khmer or Myanmar ends: where a line may break in
+/// text without spaces between words. The words come from ICU4X's line segmenter (its LSTM models
+/// for those scripts); other text keeps its own breaks.
+pub(crate) fn mark_word_ends(text: &str, start: usize, sg: &mut [SGlyph]) {
+    // The dictionaries on the desktop (the most accurate, a few megabytes); the far smaller LSTM
+    // models on the web.
+    #[cfg(not(target_arch = "wasm32"))]
+    static SEGMENTER: std::sync::LazyLock<icu_segmenter::LineSegmenterBorrowed<'static>> =
+        std::sync::LazyLock::new(|| icu_segmenter::LineSegmenter::new_dictionary(Default::default()));
+    #[cfg(target_arch = "wasm32")]
+    static SEGMENTER: std::sync::LazyLock<icu_segmenter::LineSegmenterBorrowed<'static>> =
+        std::sync::LazyLock::new(|| icu_segmenter::LineSegmenter::new_auto(Default::default()));
+    if !text.chars().any(is_unspaced_script) {
+        return;
+    }
+    let breaks: Vec<usize> = SEGMENTER.segment_str(text).map(|b| b + start).collect();
+    for g in sg.iter_mut().filter(|g| g.inline.is_none() && is_unspaced_script(g.ch)) {
+        g.word_end = breaks.binary_search(&(g.byte + g.len)).is_ok();
     }
 }
 
@@ -446,6 +477,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         // RTL text like any other glyph once the line is reordered.
         level,
         inline: Some(InlineBox { art: drawn, xf }),
+        word_end: false,
     }
 }
 
@@ -614,6 +646,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             vpal: vpal.get(gi).copied().flatten(),
             level: *level,
             inline: None,
+            word_end: false,
         });
     }
 }

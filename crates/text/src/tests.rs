@@ -728,3 +728,42 @@ fn burasagari_leaves_latin_commas_and_full_stops_inside_the_line() {
         }
     }
 }
+
+/// Thai is written without spaces between words: area type breaks its lines between words (as a
+/// model of Thai words finds them), never inside a word nor before a vowel or tone mark.
+#[test]
+fn thai_lines_break_between_words() {
+    let text = "สวัสดีครับ ภาษาไทยง่ายนิดเดียว";
+    // Narrower than the shortest words: each line holds one word.
+    let l = layout(db(), &area(text, style(12.0), Rect::new(0.0, 0.0, 70.0, 2000.0), Justify::Left));
+    let lines: Vec<&str> = l.lines.iter().map(|ln| &text[ln.start..ln.end]).collect();
+    assert!(lines.len() >= 3, "{lines:?}");
+    // Its words: สวัสดี ครับ, ภาษา ไทย ง่าย นิดเดียว ("hello", "the Thai language is very easy").
+    let words = ["สวัสดี", "ครับ ", "ภาษา", "ไทย", "ง่าย", "นิดเดียว"];
+    let ends: Vec<usize> = words
+        .iter()
+        .scan(0, |at, w| {
+            *at += w.len();
+            Some(*at)
+        })
+        .collect();
+    assert_eq!(ends.last(), Some(&text.len()));
+    for ln in &l.lines {
+        assert!(ends.contains(&ln.end), "a line ends inside a word: {lines:?}");
+    }
+    for w in l.lines.windows(2) {
+        assert_eq!(w[0].end, w[1].start, "lines tile the text");
+    }
+    let mark = |c: char| matches!(c, '\u{0E31}' | '\u{0E34}'..='\u{0E3A}' | '\u{0E47}'..='\u{0E4E}');
+    assert!(lines.iter().all(|s| s.chars().next().is_some_and(|c| !mark(c))), "a line starts with a mark: {lines:?}");
+}
+
+/// The desktop's dictionaries keep loanwords whole that a smaller model splits: โปรแกรม
+/// ("program").
+#[test]
+fn thai_loanwords_stay_whole() {
+    let text = "ยินดีต้อนรับสู่โปรแกรมวาดภาพเวกเตอร์";
+    let l = layout(db(), &area(text, style(12.0), Rect::new(0.0, 0.0, 70.0, 2000.0), Justify::Left));
+    let lines: Vec<&str> = l.lines.iter().map(|ln| &text[ln.start..ln.end]).collect();
+    assert!(lines.contains(&"โปรแกรม"), "{lines:?}");
+}
