@@ -696,6 +696,36 @@ fn arcs_with_huge_angles_end_at_their_second_angle() {
     }
 }
 
+/// An axial shading's function is one function dictionary or an array of one for each color
+/// component (PLRM 3rd ed., Table 4.13). One evaluation visits at most 257 functions, and past
+/// that the shading raises `limitcheck`: when four levels of arrays each have 100 entries that all
+/// refer to the same array of the level below (at the last level, the same function), one
+/// evaluation would visit 101,010,101 functions. Each function visited also counts against the
+/// operation budget.
+#[test]
+fn shading_functions_in_shared_arrays_stop_at_the_limits() {
+    let axial = |function: &str| format!("<< /ShadingType 2 /ColorSpace /DeviceGray /Coords [0 0 100 0] /Function {function} >>");
+    let f = "/f << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> def";
+    // `a`: an array of `n` references to the function `f`.
+    let array = |n: usize| format!("{f} /a {n} array def 0 1 {} {{ a exch f put }} for", n - 1);
+    // Each level is an array of 100 references to the level below.
+    let levels = "/l2 100 array def 0 1 99 { l2 exch a put } for /l3 100 array def 0 1 99 { l3 exch l2 put } for \
+                  /l4 100 array def 0 1 99 { l4 exch l3 put } for";
+    let limitcheck = |r: &crate::Imported| r.warnings.iter().any(|w| w.contains("limitcheck in `shfill`: Function"));
+    let r = read_soon(&format!("0 0 10 10 rectfill {} {levels} {} shfill", array(100), axial("l4")));
+    assert!(limitcheck(&r) && objects(&r.document).len() == 1, "{:?}", r.warnings);
+    // 256 references are 257 functions for each sample, the most allowed; one more raises `limitcheck`.
+    let r = read_soon(&format!("{} {} shfill", array(256), axial("a")));
+    let o = objects(&r.document);
+    assert!(r.warnings.is_empty() && matches!(fill(&o[0]), Some(Paint::Gradient(_))), "{:?}", r.warnings);
+    let r = read_soon(&format!("0 0 10 10 rectfill {} {} shfill", array(257), axial("a")));
+    assert!(limitcheck(&r) && objects(&r.document).len() == 1, "{:?}", r.warnings);
+    // Each of these shadings visits 33 * 257 functions (33 samples), and 2000 of them count for
+    // more than the operation budget.
+    let r = read(&format!("{} /sh {} def 2000 {{ sh shfill }} repeat", array(256), axial("a")));
+    assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{:?}", r.warnings);
+}
+
 #[test]
 fn cshow_runs_its_procedure_for_each_character() {
     check("/n 0 def { pop pop pop /n n 1 add def } (abc) cshow n 3 eq");

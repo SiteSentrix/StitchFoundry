@@ -37,6 +37,16 @@ const SHADING_SAMPLES: usize = 32;
 /// Most bounds of a stitched linear function that become a gradient's stops: past it, the
 /// function is sampled like any other (each stop evaluates the whole function).
 const MAX_STITCH_STOPS: usize = 1024;
+/// Most functions one evaluation of a shading's function visits: the function itself, each entry
+/// of an array of functions and, in each stitching function, the piece that applies to the input.
+/// For every shading type, the `Function` entry is one function dictionary or an array of one for
+/// each color component (PLRM 3rd ed., Tables 4.12 to 4.17; a type 7 shading has the entries of
+/// type 6). The reader allows at most [`MAX_INKS`] components, and the depth limit allows each
+/// entry a chain of at most 8 functions.
+const MAX_FUNCTION_VISITS: usize = 1 + MAX_INKS * 8;
+/// Work one function costs against the operation budget each time it is evaluated: about as much
+/// as 8 operations (measured).
+const FUNCTION_OPS: u64 = 8;
 
 pub(super) const FAR_AWAY: &str = "objects far outside the page were left out";
 pub(super) const TOO_MUCH: &str = "the file draws more than VectorCraft reads: the rest was left out";
@@ -1064,16 +1074,34 @@ impl Interp<'_> {
     /// A function (types 0, 2 and 3; an array of them, one per component) at `x` (types 2 and 3
     /// take one input).
     pub fn eval(&mut self, f: &Obj, x: &[f64], depth: u32) -> Res<Vec<f64>> {
-        if depth > 8 {
+        self.eval_inner(f, x, depth, &mut 0)
+    }
+
+    /// [`Self::eval`], with `visits` (shared by the whole recursion, incremented on every call)
+    /// counting the functions visited against [`MAX_FUNCTION_VISITS`], as [`linear_points`] counts
+    /// its nodes. The depth limit alone stops a function that refers to itself, but not one that
+    /// fans out through shared arrays: when four levels of arrays each have 100 entries that all
+    /// refer to the same array of the level below (at the last level, the same function), one
+    /// evaluation would visit 101,010,101 functions. Each function visited also counts
+    /// [`FUNCTION_OPS`] against the operation budget.
+    fn eval_inner(&mut self, f: &Obj, x: &[f64], depth: u32, visits: &mut usize) -> Res<Vec<f64>> {
+        *visits += 1;
+        if depth > 8 || *visits > MAX_FUNCTION_VISITS {
             return ps_err("limitcheck", "Function");
         }
+        self.spend(FUNCTION_OPS)?;
         let d = match f {
             Obj::Dict(d) => d.clone(),
             Obj::Array { items, .. } => {
+                // Each entry is at least one more function: an array with more entries than the
+                // visits left raises `limitcheck` before it is copied.
+                if items.len() > MAX_FUNCTION_VISITS - *visits {
+                    return ps_err("limitcheck", "Function");
+                }
                 let fs = items.to_vec();
                 let mut out = vec![];
                 for g in &fs {
-                    out.extend(self.eval(g, x, depth + 1)?.first().copied());
+                    out.extend(self.eval_inner(g, x, depth + 1, visits)?.first().copied());
                 }
                 return Ok(out);
             }
@@ -1115,7 +1143,7 @@ impl Interp<'_> {
                 let (e0, e1) = (encode.get(2 * k).copied().unwrap_or(0.0), encode.get(2 * k + 1).copied().unwrap_or(1.0));
                 let u = if b != a { e0 + (t - a) / (b - a) * (e1 - e0) } else { e0 };
                 let g = fs.and_then(|fs| fs.get(k)).ok_or(PsError::Ps("rangecheck", "Functions".into()))?;
-                self.eval(&g, &[u], depth + 1)
+                self.eval_inner(&g, &[u], depth + 1, visits)
             }
             _ => {
                 self.out.warn(UNKNOWN_FUNCTIONS);
