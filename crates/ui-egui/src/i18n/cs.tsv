@@ -166,7 +166,7 @@
 	Join	Spojit
 	Average…	Zprůměrovat…
 	Outline Stroke	Převést tah na obrys
-	Offset Path…	Posunout cestu…
+	Offset Path…	Odsadit cestu…
 	Reverse Path Direction	Obrátit směr cesty
 	Simplify…	Zjednodušit…
 	Add Anchor Points	Přidat kotevní body
@@ -301,7 +301,7 @@
 	Horizontal	Vodorovně
 	Vertical	Svisle
 	Select	Výběr
-	All	Vybrat vše
+	All	Vše
 	All on Active Artboard	Vše na aktivní pracovní ploše
 	Deselect	Zrušit výběr
 	Reselect	Znovu vybrat
@@ -369,7 +369,7 @@
 	Twist…	Zkroucení…
 	Zig Zag…	Cikcak…
 	Pathfinder	Operace s cestami
-	Add	Sjednotit
+	Add	Přidat
 	Intersect	Protnout
 	Exclude	Vyloučit
 	Subtract	Odečíst
@@ -505,7 +505,7 @@
 	Reset Bar Position	Obnovit polohu panelu
 	Tools	Nástroje
 	Toolbars	Panely nástrojů
-	Advanced	Rozšířený
+	Advanced	Rozšířené
 	Double Column	Dva sloupce
 	Actions	Akce
 	Asset Export	Export prvků
@@ -524,7 +524,7 @@
 	Layers	Vrstvy
 	Libraries	Knihovny
 	Links	Propojení
-	{count} linked image(s) changed on disk. Show the new versions?	Na disku se změnilo {count} propojených obrázků. Zobrazit nové verze?
+	{count} linked image(s) changed on disk. Show the new versions?	Počet propojených obrázků změněných na disku: {count}. Zobrazit nové verze?
 	Update Changed Links	Aktualizovat změněná propojení
 @msg	Updated {_1} linked file(s) changed on disk	Aktualizováno propojených souborů změněných na disku: {_1}
 	Magic Wand	Kouzelná hůlka
@@ -649,8 +649,8 @@
 	Hide VectorCraft	Skrýt VectorCraft
 	Hide Others	Skrýt ostatní
 	Minimize	Minimalizovat
-	Zoom	Zvětšit
-	Bring All to Front	Převést vše do popředí
+	Zoom	Zvětšení
+	Bring All to Front	Přenést vše do popředí
 	Settings	Nastavení
 	General	Obecné
 	Selection & Anchor Display	Výběr a zobrazení kotevních bodů
@@ -1280,7 +1280,7 @@ lighting	Light	Světlo
 	Save selected colors as swatches	Uložit vybrané barvy jako položky vzorníku
 	Set base color	Nastavit základní barvu
 	Set base color to the current color	Nastavit základní barvu na aktuální barvu
-	Show Tints/Shades	Zobrazit tóny a stíny
+	Show Tints/Shades	Zobrazit světlé a tmavé tóny
 	Show Vivid/Muted	Zobrazit syté a tlumené
 	Show Warm/Cool	Zobrazit teplé a studené
 	Click to select, double-click to edit	Kliknutím vyberete, dvojklikem upravíte
@@ -1454,7 +1454,7 @@ lighting	Light	Světlo
 	Show Modified	Zobrazit upravené
 	Small Thumbnails	Malé miniatury
 	Status	Stav
-	Unembedded to {}	Vložení zrušeno do {}
+	Unembedded to {}	Vložení zrušeno, uloženo do: {}
 	Update Link	Aktualizovat propojení
 	Updated {} image(s)	Aktualizováno obrázků: {}
 	Break Link	Zrušit propojení
@@ -1557,7 +1557,7 @@ lighting	Light	Světlo
 	Show Rulers (⌘R)	Zobrazit pravítka (⌘R)
 	Smart Guides (⌘U)	Chytrá vodítka (⌘U)
 	Snap Options	Možnosti přichytávání
-	Type:	Text:
+	Type:	Typ:
 	All colours are within the CMYK gamut	Všechny barvy jsou v gamutu CMYK
 	Assign:	Přiřadit:
 	Color Settings	Nastavení barev
@@ -1761,7 +1761,7 @@ lighting	Light	Světlo
 	Approximate path	Přibližná cesta
 	Colorization	Obarvení
 	Tints	Tóny
-	Tints and Shades	Tóny a stíny
+	Tints and Shades	Světlé a tmavé tóny
 	Hue Shift	Posun odstínu
 	Key Color:	Klíčová barva:
 	Size:	Velikost:
@@ -1807,8 +1807,8 @@ lighting	Light	Světlo
 	On Both Sides	Na obou stranách
 	Short	Krátký
 	Full Width	Plná šířka
-	Chamfer	Zkosení
-	Inverted Round	Obrácené zaoblení
+	Chamfer	Sražený
+	Inverted Round	Obráceně zaoblený
 	Bleed:	Spadávka:
 	Discard White Overprint in Output	Ve výstupu zahodit přetisk bílé
 	Double Quotes:	Dvojité uvozovky:
@@ -1849,7 +1849,7 @@ lighting	Light	Světlo
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Text se převede na křivky a tahy, které čára CAD nedokáže vykreslit, se stanou vyplněnými tvary.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text zůstane textem a každý tah bude čárou s vlastní tloušťkou a čárkováním.
 	Version:	Verze:
-	Spin	Rotační
+	Spin	Otáčení
 	Good	Dobrá
 	Best	Nejlepší
 	Amount	Míra
@@ -1860,7 +1860,7 @@ lighting	Light	Světlo
 	Preserve Lightness	Zachovat světlost
 	Ridges per segment:	Hřebeny na segment:
 	Temperature	Teplota
-	{effect} is already applied	{effect} je již použit
+	{effect} is already applied	Efekt {effect} je již použit
 	Odd Fields	Liché půlsnímky
 	Even Fields	Sudé půlsnímky
 	Duplication	Duplikace
@@ -1959,7 +1959,7 @@ lighting	Light	Světlo
 	Save Preset…	Uložit přednastavení…
 	Vectors	Vektory
 	A saved copy of the selected preset	Uložená kopie vybraného přednastavení
-	Built-in presets don't change: New makes a copy you can edit.	Vestavěná přednastavení se nemění: tlačítko Nové vytvoří kopii, kterou lze upravit.
+	Built-in presets don't change: New makes a copy you can edit.	Vestavěná přednastavení se nemění: tlačítko Nový vytvoří kopii, kterou lze upravit.
 	Horizontal %	Vodorovně %
 	Include Cmy Blacks	Zahrnout černé z CMY
 	Make all bleed settings the same	Nastavit všechny spadávky stejně
@@ -2032,7 +2032,7 @@ lighting	Light	Světlo
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Nahraďte jej jiným souborem, nebo jej ignorujte: jeho obrázky dál zobrazují náhled uložený s dokumentem.
 	Replace…	Nahradit…
 	Update Modified Links	Aktualizovat upravená propojení
-	{count} linked image(s) changed since this document was saved. Show the new versions?	Od uložení dokumentu se změnilo {count} propojených obrázků. Zobrazit nové verze?
+	{count} linked image(s) changed since this document was saved. Show the new versions?	Počet propojených obrázků změněných od uložení dokumentu: {count}. Zobrazit nové verze?
 	Dialog	Dialogové okno
 	Convert Process to Global	Převést procesní na globální
 	Create From:	Vytvořit z:
@@ -2077,7 +2077,7 @@ lighting	Light	Světlo
 	{count} file(s) in {folder}{note}. Show the package folder?	Souborů: {count} v {folder}{note}. Zobrazit složku balíčku?
 	{count} linked file(s) not found	Nenalezeno propojených souborů: {count}
 	fonts not copied: {fonts}	nezkopírovaná písma: {fonts}
-	Built-in presets are read-only: New… starts an editable copy.	Vestavěná přednastavení jsou jen pro čtení: Nové… vytvoří kopii, kterou lze upravit.
+	Built-in presets are read-only: New… starts an editable copy.	Vestavěná přednastavení jsou jen pro čtení: Nový… vytvoří kopii, kterou lze upravit.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na pracovní ploše odpovídá {real} {unit} ve scéně.
 	Grid Color & Opacity	Barva a krytí mřížky
 	Gridline every:	Čára mřížky každých:
@@ -2100,7 +2100,7 @@ lighting	Light	Světlo
 	Left Plane	Levá rovina
 	Move All Objects	Přesunout všechny objekty
 	Right Plane	Pravá rovina
-	Built-in presets don't change: New… starts an editable copy.	Vestavěná přednastavení se nemění: Nové… vytvoří kopii, kterou lze upravit.
+	Built-in presets don't change: New… starts an editable copy.	Vestavěná přednastavení se nemění: Nový… vytvoří kopii, kterou lze upravit.
 	One Point	Jednobodová
 	Perspective grid presets	Přednastavení perspektivní mřížky
 	Three Point	Tříbodová
@@ -2170,7 +2170,7 @@ lighting	Light	Světlo
 	Printer	Tiskárna
 	Printer profile:	Profil tiskárny:
 	Printer:	Tiskárna:
-	Rendering intent:	Způsob vykreslení:
+	Rendering intent:	Záměr vykreslení:
 	Same As Source	Stejné jako zdroj
 	Save these settings as a print preset	Uložit toto nastavení jako přednastavení tisku
 	Scaling:	Měřítko:
@@ -2190,7 +2190,7 @@ lighting	Light	Světlo
 	{pages} in all, {count} per copy	celkem {pages}, na kopii {count}
 	{page} of {count}	{page} z {count}
 	PDF File	Soubor PDF
-	[Default] is protected: New… starts an editable copy.	[Default] je chráněno: Nové… vytvoří kopii, kterou lze upravit.
+	[Default] is protected: New… starts an editable copy.	[Default] je chráněno: Nový… vytvoří kopii, kterou lze upravit.
 	A new preset starting from the selected one	Nové přednastavení vycházející z vybraného
 	Differences from {preset}:	Rozdíly oproti {preset}:
 	Edit…	Upravit…
@@ -2278,7 +2278,7 @@ lighting	Light	Světlo
 	Quality:	Kvalita:
 	Reduction:	Redukce:
 	Save the settings as a preset	Uložit nastavení jako přednastavení
-	Saved {n} files beside {path}	Uloženo {n} souborů vedle {path}
+	Saved {n} files beside {path}	Uloženo souborů: {n} vedle {path}
 	Shown with the optimised preview.	Zobrazeno s optimalizovaným náhledem.
 	Slices:	Řezy:
 	Unlock	Odemknout
@@ -2580,13 +2580,13 @@ theme	Appearance	Motiv
 	Symbol Sprayer	Rozprašovač symbolů
 	Symbolism Tool	Nástroj symbolů
 	Image Trace Presets	Přednastavení vektorizace obrazu
-	Live Paint Bucket	Kyblík živé malby
-	Live Paint Bucket (Stroke)	Kyblík živé malby (tah)
+	Live Paint Bucket	Kbelík živé malby
+	Live Paint Bucket (Stroke)	Kbelík živé malby (tah)
 	Live Paint Info	Informace o živé malbě
 	Shape Builder	Tvorba tvarů
 	Shape Builder Regions	Oblasti tvorby tvarů
 	Image Trace View	Zobrazení vektorizace obrazu
-	Edge	Hrana
+	Edge	Okraj
 	Clipboard as PDF	Schránka jako PDF
 	Clipboard as PNG	Schránka jako PNG
 	Clipboard as Text	Schránka jako text
@@ -2705,7 +2705,7 @@ theme	Appearance	Motiv
 	Import Transparency Flattener Presets	Importovat přednastavení sloučení průhlednosti
 	Save Transparency Flattener Preset	Uložit přednastavení sloučení průhlednosti
 	Transparency Flattener Presets	Přednastavení sloučení průhlednosti
-	to	do
+	to	na
 	Missing Fonts	Chybějící písma
 	Find Font Files	Najít soubory písem
 	Add Font Files	Přidat soubory písem
@@ -2873,7 +2873,7 @@ theme	Appearance	Motiv
 	Reshape	Přetvarovat
 	Set Anchors	Nastavit kotevní body
 	Minus Front	Odečíst přední
-	Offset Path	Posunout cestu
+	Offset Path	Odsadit cestu
 	Simplify	Zjednodušit
 	Split Into Grid	Rozdělit do mřížky
 	Unite	Sjednotit
@@ -3082,7 +3082,7 @@ theme	Appearance	Motiv
 	Reduce Colors	Zredukovat barvy
 	Discard Recovered Documents	Zahodit obnovené dokumenty
 	Recovery Data	Data pro obnovení
-	Restore Recovered Documents	Obnovit obnovené dokumenty
+	Restore Recovered Documents	Otevřít obnovené dokumenty
 	Save Recovery Data	Uložit data pro obnovení
 	Untitled	Bez názvu
 	Add to Selection	Přidat do výběru
@@ -3182,7 +3182,7 @@ axis	Both	Obě
 	Web 1920×1080	Web 1920×1080
 	Yellow	Žlutá
 	Auto	Automaticky
-	Center	Na střed
+	Center	Střed
 	Transform in Perspective	Transformovat v perspektivě
 	Grayscale	Stupně šedi
 	Embed	Vložit
@@ -3269,7 +3269,7 @@ axis	Both	Obě
 	Lab	Lab
 	Medium	Střední
 	Name	Název
-	None	Žádná
+	None	Žádné
 	Normal	Normální
 	Pages	Stránky
 	Regular	Normální
@@ -3314,7 +3314,7 @@ effect	Regular	Pravidelný
 	  — {n} characters from another font	  — znaky z jiného písma: {n}
 	Drag to float the panel group	Přetažením vytvoříte plovoucí skupinu panelů
 	Put back in the dock	Vrátit do doku
-	All Scripts	Všechna písma
+	All Scripts	Všechny systémy písma
 	Any Kind	Libovolný druh
 	Decorative	Dekorativní
 	Favorites	Oblíbené
@@ -3594,7 +3594,7 @@ effect	Regular	Pravidelný
 @msg	Make Guides: select paths	Vytvořit vodítka: vyberte cesty
 @msg	No saved selections (Select → Save Selection…)	Žádné uložené výběry (Výběr → Uložit výběr…)
 @msg	No saved views (View → New View…)	Žádná uložená zobrazení (Zobrazení → Nové zobrazení…)
-@msg	Offset Path: select paths	Posunout cestu: vyberte cesty
+@msg	Offset Path: select paths	Odsadit cestu: vyberte cesty
 @msg	Opened with {_1} note(s): {_2}	Otevřeno, poznámky ({_1}): {_2}
 @msg	Opened {url}	Otevřeno {url}
 @msg	Outline Stroke: no stroked paths selected	Převést tah na obrys: nejsou vybrány žádné cesty s tahem
@@ -4055,7 +4055,7 @@ effect	Regular	Pravidelný
 @msg	Saved {path} with {_1} note(s): {first}	Uloženo: {path}, poznámky ({_1}): {first}
 @msg	Exported {what} with {_1} note(s): {first}	Exportováno: {what}, poznámky ({_1}): {first}
 @msg	Exported {what}	Exportováno: {what}
-@msg	Saved {n} files beside {path}	Uloženo {n} souborů vedle {path}
+@msg	Saved {n} files beside {path}	Uloženo souborů: {n} vedle {path}
 @msg	Saving	Ukládání
 @msg	Saving {_1}	Ukládání {_1}
 @msg	Exporting {_1}	Exportování {_1}
@@ -4068,7 +4068,7 @@ effect	Regular	Pravidelný
 @msg	Relinked {n} image(s)	Znovu propojeno obrázků: {n}
 @msg	Relinked {n} image(s); not in that folder: {_1}	Znovu propojeno obrázků: {n}; nejsou v dané složce: {_1}
 @msg	Updated {_1} image(s)	Aktualizováno obrázků: {_1}
-@msg	Unembedded to {_1}	Vložení zrušeno do {_1}
+@msg	Unembedded to {_1}	Vložení zrušeno, uloženo do: {_1}
 @msg	Reset {_1}	Obnoveno: {_1}
 @msg	Sent to {_1}	Odesláno do {_1}
 @msg	{_1} files	Soubory {_1}
@@ -4124,7 +4124,7 @@ effect	Regular	Pravidelný
 @msg	larger than 256 MB	větší než 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	soubory mají dohromady více než 1 GB: přidávejte jich méně najednou
 @msg	every numbered name for it is taken in the Fonts folder	ve složce Fonts jsou obsazena všechna číslovaná jména pro tento soubor
-@msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který rozlišují jen `run` a `command_batch`
+@msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` musí být pole indexů kotevních bodů, ne {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: výsledek kroku {i} takovou hodnotu nemá (pro samotný znak $ napište $$)
@@ -4136,7 +4136,7 @@ effect	Regular	Pravidelný
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná
 @msg	automation path rejected: a link that leads nowhere: {path}	cesta automatizace odmítnuta: odkaz, který nikam nevede: {path}
-@msg	automation path rejected: cannot resolve {path}: {e}	cesta automatizace odmítnuta: {path} nelze rozlišit: {e}
+@msg	automation path rejected: cannot resolve {path}: {e}	cesta automatizace odmítnuta: {path} nelze vyhodnotit: {e}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	cesta automatizace odmítnuta: přechod do nadřazené složky pod složkou, která neexistuje: {path}
 @msg	automation path rejected: reserved device names are not allowed: {path}	cesta automatizace odmítnuta: rezervované názvy zařízení nejsou povoleny: {path}
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	vícekanálové soubory PSD nelze přečíst: uložte jej v režimu RGB, CMYK nebo stupně šedi
