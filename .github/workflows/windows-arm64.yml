@@ -32,6 +32,8 @@ env:
 
 jobs:
   package:
+    # Upstream's CI: skipped in forks such as StitchFoundry.
+    if: github.repository == 'storytold/vectorcraft'
     name: package (cross-compiled on x64)
     runs-on: windows-latest
     timeout-minutes: 90
@@ -61,6 +63,8 @@ jobs:
           retention-days: 7
 
   install:
+    # Upstream's CI: skipped in forks such as StitchFoundry.
+    if: github.repository == 'storytold/vectorcraft'
     name: install and run on ARM64
     needs: package
     runs-on: windows-11-arm
@@ -77,7 +81,7 @@ jobs:
           $msi = (Get-ChildItem dist/*.msi | Select-Object -First 1).FullName
           $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', 'install.log' -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 60; throw "msiexec /i exited $($p.ExitCode)" }
-          $dir = Join-Path $env:ProgramFiles 'VectorCraft'
+          $dir = Join-Path $env:ProgramFiles 'StitchFoundry'
           foreach ($exe in 'vectorcraft.exe', 'vectorcraft-cli.exe') {
             $path = Join-Path $dir $exe
             if (-not (Test-Path $path)) { throw "$exe not installed in $dir" }

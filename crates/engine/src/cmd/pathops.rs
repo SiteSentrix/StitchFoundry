@@ -193,22 +193,25 @@ fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
 
-/// Paint identity carried through a Pathfinder operation.
+/// Paint identity carried through a Pathfinder operation (with the stitch settings, so Minus
+/// Front cuts a hole in a stitched object and it stays stitched).
 #[derive(Clone, Debug, PartialEq)]
 struct Style {
     appearance: Appearance,
     opacity: f32,
     blend: BlendMode,
+    embroidery: Option<Box<sf_core::attr::Embroidery>>,
 }
 
 impl Style {
     fn of(n: &Node) -> Self {
-        Style { appearance: n.appearance.clone(), opacity: n.opacity, blend: n.blend }
+        Style { appearance: n.appearance.clone(), opacity: n.opacity, blend: n.blend, embroidery: n.embroidery.clone() }
     }
     fn apply(&self, n: &mut Node) {
         n.appearance = self.appearance.clone();
         n.opacity = self.opacity;
         n.blend = self.blend;
+        n.embroidery = self.embroidery.clone();
     }
 }
 
@@ -238,7 +241,7 @@ pub(crate) fn text_outline(t: &TextObject) -> PathData {
 
 fn style_of(n: &Node) -> Style {
     match &n.kind {
-        NodeKind::Text(t) => Style { appearance: t.first_style().appearance(), opacity: n.opacity, blend: n.blend },
+        NodeKind::Text(t) => Style { appearance: t.first_style().appearance(), opacity: n.opacity, blend: n.blend, embroidery: n.embroidery.clone() },
         _ => Style::of(n),
     }
 }

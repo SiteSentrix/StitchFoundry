@@ -1,0 +1,174 @@
+//! Fabric presets ("auto fabric"): stitch settings tuned for common materials.
+
+use serde::{Deserialize, Serialize};
+
+use crate::model::{Design, ObjectKind};
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Fabric {
+    pub name: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    /// Satin spacing (mm).
+    pub satin_spacing: f64,
+    /// Fill row spacing (mm).
+    pub fill_spacing: f64,
+    /// Fill stitch length (mm).
+    pub fill_stitch_length: f64,
+    /// Pull compensation (mm).
+    pub pull_comp: f64,
+    /// Tatami underlay under fills.
+    pub fill_underlay: bool,
+    /// Underlay row spacing under fills (mm).
+    pub underlay_spacing: f64,
+    /// Recommend a water-soluble topping (pile fabrics).
+    pub topping: bool,
+}
+
+pub fn fabrics() -> Vec<Fabric> {
+    vec![
+        Fabric {
+            name: "Woven (twill, poplin)".into(),
+            description: "Stable woven fabric – standard settings.".into(),
+            satin_spacing: 0.40,
+            fill_spacing: 0.40,
+            fill_stitch_length: 4.0,
+            pull_comp: 0.15,
+            fill_underlay: true,
+            underlay_spacing: 2.5,
+            topping: false,
+        },
+        Fabric {
+            name: "Pique knit (polo shirt)".into(),
+            description: "Textured knit – more underlay and pull compensation.".into(),
+            satin_spacing: 0.38,
+            fill_spacing: 0.40,
+            fill_stitch_length: 3.5,
+            pull_comp: 0.30,
+            fill_underlay: true,
+            underlay_spacing: 2.0,
+            topping: true,
+        },
+        Fabric {
+            name: "Jersey knit (T-shirt)".into(),
+            description: "Stretchy knit – lighter density, strong underlay.".into(),
+            satin_spacing: 0.45,
+            fill_spacing: 0.45,
+            fill_stitch_length: 3.5,
+            pull_comp: 0.30,
+            fill_underlay: true,
+            underlay_spacing: 2.0,
+            topping: false,
+        },
+        Fabric {
+            name: "Fleece / sweatshirt".into(),
+            description: "Thick pile – denser stitching to stay on top, use topping.".into(),
+            satin_spacing: 0.35,
+            fill_spacing: 0.38,
+            fill_stitch_length: 4.0,
+            pull_comp: 0.35,
+            fill_underlay: true,
+            underlay_spacing: 1.8,
+            topping: true,
+        },
+        Fabric {
+            name: "Towel / terry".into(),
+            description: "Loops need dense coverage and topping.".into(),
+            satin_spacing: 0.33,
+            fill_spacing: 0.36,
+            fill_stitch_length: 3.5,
+            pull_comp: 0.35,
+            fill_underlay: true,
+            underlay_spacing: 1.5,
+            topping: true,
+        },
+        Fabric {
+            name: "Denim / canvas".into(),
+            description: "Heavy stable fabric – can take open density.".into(),
+            satin_spacing: 0.42,
+            fill_spacing: 0.45,
+            fill_stitch_length: 4.5,
+            pull_comp: 0.10,
+            fill_underlay: true,
+            underlay_spacing: 3.0,
+            topping: false,
+        },
+        Fabric {
+            name: "Leather / vinyl".into(),
+            description: "Perforates easily – open density, longer stitches, little underlay.".into(),
+            satin_spacing: 0.50,
+            fill_spacing: 0.55,
+            fill_stitch_length: 5.0,
+            pull_comp: 0.05,
+            fill_underlay: false,
+            underlay_spacing: 3.5,
+            topping: false,
+        },
+        Fabric {
+            name: "Structured cap".into(),
+            description: "Firm buckram front – moderate density, centre-out sequencing.".into(),
+            satin_spacing: 0.40,
+            fill_spacing: 0.42,
+            fill_stitch_length: 3.5,
+            pull_comp: 0.25,
+            fill_underlay: true,
+            underlay_spacing: 2.5,
+            topping: false,
+        },
+        Fabric {
+            name: "Silk / lightweight".into(),
+            description: "Delicate fabric – light density to avoid puckering.".into(),
+            satin_spacing: 0.48,
+            fill_spacing: 0.50,
+            fill_stitch_length: 3.5,
+            pull_comp: 0.10,
+            fill_underlay: false,
+            underlay_spacing: 3.0,
+            topping: false,
+        },
+    ]
+}
+
+impl Default for Fabric {
+    /// Stable woven fabric: the standard settings, unnamed.
+    fn default() -> Self {
+        Fabric { name: String::new(), description: String::new(), ..fabrics().swap_remove(0) }
+    }
+}
+
+pub fn find(name: &str) -> Option<Fabric> {
+    fabrics().into_iter().find(|f| f.name == name)
+}
+
+impl Fabric {
+    /// Applies the preset's density, pull compensation and underlay settings to
+    /// every object in the design and records the fabric name.
+    pub fn apply(&self, design: &mut Design) {
+        design.fabric = self.name.to_string();
+        for obj in &mut design.objects {
+            match &mut obj.kind {
+                ObjectKind::Satin(s) => {
+                    s.params.spacing = self.satin_spacing;
+                    s.params.pull_comp = self.pull_comp;
+                }
+                ObjectKind::Fill(f) => {
+                    f.params.spacing = self.fill_spacing;
+                    f.params.stitch_length = self.fill_stitch_length;
+                    f.params.pull_comp = self.pull_comp;
+                    f.params.underlay.tatami = self.fill_underlay;
+                    f.params.underlay.spacing = self.underlay_spacing;
+                }
+                ObjectKind::Lettering(l) => {
+                    l.fill.spacing = self.satin_spacing;
+                    l.fill.pull_comp = self.pull_comp;
+                }
+                ObjectKind::Applique(a) => {
+                    a.params.cover_spacing = self.satin_spacing;
+                    a.params.pull_comp = self.pull_comp;
+                }
+                ObjectKind::Run(_) | ObjectKind::Stitches(_) => {}
+            }
+        }
+    }
+}

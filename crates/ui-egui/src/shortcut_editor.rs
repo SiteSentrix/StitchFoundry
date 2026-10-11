@@ -17,10 +17,10 @@ use crate::state::{Dialog, UiState};
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, menus, widgets};
 
-pub const PRESETS: &[&str] = &["VectorCraft Defaults", "Classic Defaults"];
+pub const PRESETS: &[&str] = &["StitchFoundry Defaults", "Classic Defaults"];
 pub const CUSTOM: &str = "Custom";
 /// Set names earlier versions saved: (old name, current name).
-pub const LEGACY_PRESETS: &[(&str, &str)] = &[("Illustrator Defaults", "Classic Defaults")]; // brand-ok: legacy preference value
+pub const LEGACY_PRESETS: &[(&str, &str)] = &[("Illustrator Defaults", "Classic Defaults"), ("VectorCraft Defaults", "StitchFoundry Defaults")]; // brand-ok: legacy preference values
 
 /// The current name of a shortcut set: names earlier versions saved map to today's.
 pub fn set_name(name: &str) -> &str {
@@ -366,7 +366,7 @@ pub fn export_json(set: &str, overrides: &BTreeMap<String, String>) -> Value {
 }
 
 pub fn import_json(v: &Value) -> Result<(String, BTreeMap<String, String>), String> {
-    let o = v.get("overrides").and_then(Value::as_object).ok_or("not a VectorCraft shortcut set (missing `overrides`)")?;
+    let o = v.get("overrides").and_then(Value::as_object).ok_or("not a StitchFoundry shortcut set (missing `overrides`)")?;
     let mut out = BTreeMap::new();
     for (k, v) in o {
         let s = v.as_str().ok_or_else(|| format!("shortcut for `{k}` must be a string"))?;
@@ -458,7 +458,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
         "shortcuts.export" => {
             let v = export_json(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
             let bytes = serde_json::to_vec_pretty(&v).unwrap_or_default();
-            let path = s("path").or_else(|| crate::picks::save(app, &crate::FilePick::named("VectorCraft Shortcuts.json")));
+            let path = s("path").or_else(|| crate::picks::save(app, &crate::FilePick::named("StitchFoundry Shortcuts.json")));
             match path {
                 Some(path) => match app.services.write.as_mut() {
                     Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
@@ -466,7 +466,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 },
                 None => match app.services.download.as_mut() {
                     Some(dl) => {
-                        dl("VectorCraft Shortcuts.json", &bytes);
+                        dl("StitchFoundry Shortcuts.json", &bytes);
                         Ok(Value::Null)
                     }
                     None => Ok(v),

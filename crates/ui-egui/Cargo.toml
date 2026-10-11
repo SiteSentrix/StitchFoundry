@@ -17,6 +17,7 @@ vectorcraft-render = { workspace = true }
 vectorcraft-text = { workspace = true }
 vectorcraft-tools = { workspace = true }
 vectorcraft-engine = { workspace = true }
+vectorcraft-embroidery = { workspace = true }
 vectorcraft-svg = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-three-d = { workspace = true }

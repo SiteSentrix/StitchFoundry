@@ -12,7 +12,7 @@
 # Clean-room: every entry was written from the plain meaning of the English label using the
 # vector-drawing vocabulary in everyday use in Taiwan (錨點, 路徑, 筆畫, 填色, 工作區域, 路徑管理員 ...).
 # No proprietary localisation resource, string table or product UI was consulted or copied; add
-# entries the same way. Product and technology names (VectorCraft, ArtCraft, SVG, OpenType, CMYK,
+# entries the same way. Product and technology names (StitchFoundry, VectorCraft, ArtCraft, SVG, OpenType, CMYK,
 # Lab ...) and paper sizes (Letter, Tabloid) stay in Latin letters; the trailing "…" of dialog
 # commands is kept. Full-width punctuation (，。：) inside sentences; half-width parentheses and
 # the " · " separators as in the English. Terms shared with PhotoCraft use the same words as its
@@ -56,7 +56,7 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	數值較小時會貼近筆畫，較大時則錨點較少、曲線較平滑。
 	A new preset starting from the selected one	以所選預設集為基礎建立新預設集
 	A saved copy of the selected preset	所選預設集的已儲存拷貝
-	About VectorCraft	關於 VectorCraft
+	About StitchFoundry	關於 StitchFoundry
 	above	以上
 	Absolute Position	絕對位置
 	Accurate	精確
@@ -159,7 +159,7 @@
 	Appearance Panel	外觀面板
 	Appearance panel	外觀面板
 	Applies when the linked file is relinked or updated.	重新連結或更新連結檔案時套用。
-	Applies the next time VectorCraft starts.	下次啟動 VectorCraft 時生效。
+	Applies the next time StitchFoundry starts.	下次啟動 StitchFoundry 時生效。
 	Apply	套用
 	Apply Brush	套用筆刷
 	Apply Character Style	套用字元樣式
@@ -197,8 +197,6 @@
 	Artboard {number}	工作區域 {number}
 	Artboard:	工作區域：
 	Artboards	工作區域
-	ArtCraft Website	ArtCraft 網站
-	ArtCraft website	ArtCraft 網站
 	Artwork Colors	圖稿顏色
 	As Multiple Assets	作為多個資產
 	As Single Asset	作為單一資產
@@ -660,7 +658,6 @@
 	Discard Recovered Documents	捨棄已復原的文件
 	Discard White Overprint in Output	輸出時捨棄白色疊印
 	Discarded {} recovered document(s)	已捨棄 {} 份復原的文件
-	Discord	Discord
 	Discretionary Hyphen	選擇性連字號
 	Discretionary Ligatures	任意連字
 	Display All Blacks Accurately	精確顯示所有黑色
@@ -1271,9 +1268,6 @@
 	Italian	義大利文
 	Japanese	日文
 	Join	連接
-	Join Our Discord	加入我們的 Discord
-	Join our Discord	加入我們的 Discord
-	Join the ArtCraft community on Discord (discord.gg/artcraft)	加入 Discord 上的 ArtCraft 社群 (discord.gg/artcraft)
 	Join the lines of each paragraph	合併每個段落的各行
 	Join Tool	連接工具
 	Justification…	對齊設定…
@@ -1868,7 +1862,6 @@
 	Paragraph Style Options	段落樣式選項
 	Paragraph Styles	段落樣式
 	Paragraph Symbol	段落符號
-	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft 的一部分。MIT OR Apache-2.0。字體：Source Sans 3、Inter、JetBrains Mono (OFL)。圖示：Lucide (ISC) + VectorCraft。
 	Password	密碼
 	Paste	貼上
 	Paste in Back	貼至後方
@@ -2042,7 +2035,7 @@
 	Quarter Space	四分之一空格
 	Quick Actions	快速動作
 	Quickly start a new file	快速開始新檔案
-	Quit VectorCraft	結束 VectorCraft
+	Quit StitchFoundry	結束 StitchFoundry
 	Radar Graph Tool	雷達圖工具
 	Radial	放射狀
 	Radial Glows	放射狀光暈
@@ -2160,7 +2153,7 @@
 	{count} folder(s) or file(s) couldn't be read	有 {count} 個資料夾或檔案無法讀取
 	The search stopped at its limit: search a smaller folder.	搜尋已達上限而停止：請搜尋較小的資料夾。
 	Copy only fonts you own or are licensed to install.	只複製您擁有或已取得安裝授權的字體。
-	VectorCraft copies the fonts to {folder}.	VectorCraft 會將字體複製到 {folder}。
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry 會將字體複製到 {folder}。
 	Registered Trademark Symbol	註冊商標符號
 	Registration marks	對位標記
 	Registry name:	登錄名稱：
@@ -2260,7 +2253,7 @@
 	Revert	回復
 	Revert to the saved version of “{name}”?	要回復為「{name}」已儲存的版本嗎？
 	Replace “{name}”, the file this document was opened from?	要取代「{name}」（開啟此文件的來源檔案）嗎？
-	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	開啟時略過了 VectorCraft 尚無法讀取的內容（{what}），取代該檔案會永久遺失這些內容。若要保留，請以其他名稱儲存。
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	開啟時略過了 StitchFoundry 尚無法讀取的內容（{what}），取代該檔案會永久遺失這些內容。若要保留，請以其他名稱儲存。
 	Revolve…	迴轉…
 	RGB Color	RGB 色彩
 	Right	右
@@ -3075,14 +3068,11 @@
 	Vector Effects	向量效果
 	Vector Halftone	向量半色調
 	Vector Halftone…	向量半色調…
-	Vector illustration — fast, open, scriptable.	向量插圖：快速、開放、可用指令碼操控。
-	VectorCraft	VectorCraft
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft 上次未正常結束。下列文件有未儲存的變更：
-	VectorCraft Help…	VectorCraft 說明…
-	VectorCraft on getartcraft.com	getartcraft.com 上的 VectorCraft
-	VectorCraft on GitHub	GitHub 上的 VectorCraft
+	StitchFoundry	StitchFoundry
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry 上次未正常結束。下列文件有未儲存的變更：
+	StitchFoundry Help…	StitchFoundry 說明…
+	StitchFoundry on GitHub	GitHub 上的 StitchFoundry
 	Vectors	向量
-	Version {version} — open-source vector illustration in pure Rust.	版本 {version} — 以純 Rust 打造的開放原始碼向量插畫軟體。
 	Version:	版本：
 	Vertical	垂直
 	Vertical %	垂直 %
@@ -3120,7 +3110,7 @@
 	Web Snap:	網頁靠齊：
 	Weight	寬度
 	Weight:	寬度：
-	Welcome to VectorCraft	歡迎使用 VectorCraft
+	Welcome to StitchFoundry	歡迎使用 StitchFoundry
 	When pasting text	貼上文字時
 	White	白色
 	Widget Position:	Widget 位置：
@@ -3307,7 +3297,7 @@ axis	Both	兩者
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	服務
-	Hide VectorCraft	隱藏 VectorCraft
+	Hide StitchFoundry	隱藏 StitchFoundry
 	Zoom	縮放
 	Bring All to Front	將全部移至最前
 	Settings	設定
@@ -3504,3 +3494,299 @@ lighting	Light	光源
 	Stroke Pressure	筆觸壓力
 	Right Diagonal	右對角線
 	Left Diagonal	左對角線
+# Embroidery (StitchFoundry)
+	Add Inclination Line	新增針跡方向線
+	After the selection	所選物件之後
+	Appliqué	貼布繡
+	Apply Fabric	套用布料
+	Artwork	圖稿
+	Auto Direction	自動方向
+	Auto Stitch Direction	自動針跡方向
+	Auto spacing	自動間距
+	Auto split	自動分割
+	Auto-Digitize Image	自動打版影像
+	Automatic underlay	自動打底
+	Back to the start	回到開頭
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Bean Run	三重平針
+	Before the selection	所選物件之前
+	Blanket	毛邊繡
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Brush Stroke	筆刷筆畫
+	Calligraphy	書法
+	Cell size	格子大小
+	Centre run	中心平針
+	Clear Inclination Lines	清除針跡方向線
+	Clear Lines	清除線條
+	Connectors	連接線
+	Constant	固定
+	Contour Fill	輪廓填充
+	Convert Artwork to Embroidery	將圖稿轉換為刺繡
+	Cover stitch	包邊針
+	Cover width	包邊寬度
+	Cross	十字
+	Cross Fill	十字繡填充
+	Delete Inclination Line	刪除針跡方向線
+	Densities (mm)	密度 (mm)
+	Density	密度
+	Design	圖案
+	Design Information	圖案資訊
+	Digitizing Widget	打版 Widget
+	Dimmed	淡化
+	Direction: automatic	方向：自動
+	Direction: fixed angle	方向：固定角度
+	Direction: one inclination line	方向：1 條針跡方向線
+	Direction: turning along	方向：沿
+	Drag across the shape to add a line; drag a bead to move it	橫越形狀拖曳以新增線條；拖曳起點或終點標記可移動它
+	Each anchor point is a needle penetration.	每個錨點都是一個落針點。
+	Edge run	邊緣平針
+	Edge run underlay	邊緣打底
+	Edit Lines	編輯線條
+	Embroidery	刺繡
+	Embroidery Brush Tool	刺繡筆刷工具
+	Embroidery Settings	刺繡設定
+	Export Machine File	匯出機繡檔案
+	Export Machine File…	匯出機繡檔案…
+	Fabric	布料
+	Fabric color	布料顏色
+	Feather	羽毛
+	Fill style	填充樣式
+	Fits the hoop	可放入繡框
+	Give objects a stitch type in the Embroidery panel.	請在刺繡面板中為物件指定針跡類型。
+	Gradient to	漸層至
+	Hidden	隱藏
+	Hide Digitizing Widget	隱藏打版 Widget
+	Hoop	繡框
+	Inclination Tool	針跡方向工具
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Larger than the hoop	超出繡框
+	Lengths (mm)	長度 (mm)
+	Let sewing start and stop at the closest points again	重新從最近的點開始與結束繡製
+	Machine Embroidery File	機繡檔案
+	Manual Stitches	手動針跡
+	Meander Fill	蜿蜒填充
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Motif	圖樣
+	Move Inclination Line	移動針跡方向線
+	Needle points	落針點
+	New strokes	新筆觸
+	No Stitches	無針跡
+	No hoop	無繡框
+	No stitches yet.	尚無針跡。
+	Not set	未設定
+	Nothing stitched yet	尚未繡製任何內容
+	Object color	物件顏色
+	Open a document to see its stitch sequence.	開啟文件以檢視其刺繡順序。
+	Open or create a document to digitize embroidery.	開啟或建立文件以進行刺繡打版。
+	Path spacing	路徑間距
+	Pause	暫停
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Pick a brush, width, density and shape from a dial, then draw on the canvas	從轉盤選擇筆刷、寬度、密度與形狀，然後在畫布上繪製
+	Place editable inclination lines (or pick the angle) automatically	自動放置可編輯的針跡方向線 (或選擇角度)
+	Placement line and stop	定位線與停止
+	Play the stitches	播放針跡
+	Pull compensation	拉力補償
+	Radial Fill	放射狀填充
+	Randomness	隨機度
+	Remove background	移除背景
+	Reset Start and Stop	重設起點與終點
+	Row offset	列位移
+	Run	平針
+	Run style	平針樣式
+	Satin	緞紋
+	Satin Fill	緞紋填充
+	Scallop	扇貝
+	Select a path, shape or compound path to give it a stitch type.	選取路徑、形狀或複合路徑以指定針跡類型。
+	Set Inclination Lines	設定針跡方向線
+	Set Start and Stop	設定起點與終點
+	Set Thread	設定繡線
+	Sew earlier	提前繡製
+	Sew first	最先繡製
+	Sew last	最後繡製
+	Sew later	延後繡製
+	Sewing time	刺繡時間
+	Sewn last	最後繡製
+	Short stitches on curves	曲線處使用短針
+	Show every stitch	顯示所有針跡
+	Show stitches	顯示針跡
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Single	單一
+	Sort by Thread Color	依繡線顏色排序
+	Spiral Fill	螺旋填充
+	Stitch Parameters	針跡參數
+	Stitch Plan	針跡計畫
+	Stitch Sequence	刺繡順序
+	Stitch Type	針跡類型
+	Stitch length	針距
+	Stitch type	針跡類型
+	Stitches	針跡
+	Stop to trim fabric	停止以修剪布料
+	Tack-down	固定針
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Tapered	漸細
+	Tatami Fill	榻榻米填充
+	Tatami underlay	榻榻米打底
+	Thread	繡線
+	Thread colors	繡線顏色數
+	Trim after	完成後剪線
+	Trims	剪線
+	Triple	三重
+	TrueView	TrueView
+	Turn the image into stitches: narrow parts become satin, the rest tatami fill.	將影像轉換為針跡：窄的部分變成緞紋，其餘變成榻榻米填充。
+	Wave	波浪
+	Widget values	Widget 值
+	Width profile	寬度描述檔
+	Widths (mm)	寬度 (mm)
+	Zigzag	之字形
+	colors	色
+	inclination lines	條針跡方向線轉向
+	stitches	針
+	trims	次剪線
+	Brush	筆刷
+	Length	長度
+	Bean	三重平針
+	Steil	緞紋線
+	Triangle	三角形
+	Hexagon	六邊形
+	Heart	心形
+	Arrow	箭頭
+	Stitch Lines	針跡線
+	Tatami	榻榻米
+# Embroidery (StitchFoundry), phase 1
+	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	由 SiteSentrix 製作，以 ArtCraft 團隊的 VectorCraft 為基礎。MIT OR Apache-2.0。字體：Source Sans 3、Inter、JetBrains Mono (OFL)。圖示：Lucide (ISC) + VectorCraft。
+	Version {version} — open-source machine embroidery digitizing in pure Rust.	版本 {version} — 以純 Rust 打造的開放原始碼電腦刺繡打版軟體。
+	Machine embroidery digitizing — fast, open, scriptable.	電腦刺繡打版：快速、開放、可用指令碼操控。
+	Split Here	在此分割
+	Split the object in two at the picked stitch	在選取的針跡處將物件一分為二
+	Split Object	分割物件
+	Check settings	檢查設定
+	Dense from (layers)	過密起點（層）
+	Give every stitched object the chart's closest thread	為每個刺繡物件指定色卡中最接近的繡線
+	Hidden (not sewn)	已隱藏（不繡製）
+	Inclination lines	針跡方向線
+	Long stitches from	長針跡起點
+	Match Threads to Chart	將繡線對應至色卡
+	Omit last stitch	略過最後一針
+	Small lettering under	小字低於
+	Start and stop	起點與終點
+	Thread chart	繡線色卡
+	Tie style	打結方式
+	Tiny objects under	微小物件低於
+	Travel by	移動單位
+	Double	雙重
+machine	Trim	剪線
+	Column A/B Tool	A/B 柱狀工具
+	Column A/B	A/B 柱狀
+	Tatami stitches	榻榻米針跡
+	Make Current	設為目前
+	New objects of this stitch type take these properties	此針跡類型的新物件會採用這些屬性
+	Properties for New Objects	新物件的屬性
+	Objects you give a stitch type take these properties.	您指定針跡類型的物件會採用這些屬性。
+	Reset to Defaults	重設為預設值
+	Fabric settings	布料設定
+	Satin density	緞紋密度
+	Fill density	填充密度
+	Fill stitch length	填充針距
+	Underlay spacing	打底間距
+	Fill underlay	填充打底
+	Topping	表面襯
+	Save as New Fabric	另存為新布料
+	Seconds per trim	每次剪線秒數
+	Seconds per color change	每次換色秒數
+	Save to Machine	儲存到機器
+	Keep these settings in the machine's profile, for new designs	將這些設定儲存到機器設定檔，供新設計使用
+	Reset Machine	重設機器
+	Put the machine's profile back to how it ships, and use it	將機器設定檔恢復為出廠狀態並使用
+	Delete Machine	刪除機器
+	Save as New Machine	另存為新機器
+	A machine profile of your own with these settings	使用這些設定建立自己的機器設定檔
+	My Machine	我的機器
+	A copy of this fabric to change	建立此布料的副本以進行修改
+	Delete Fabric	刪除布料
+	No styles yet. Select a stitched object and create one to reuse its stitch properties.	尚無樣式。選取已設定針跡的物件並建立樣式，即可重複使用其針跡屬性。
+	New Embroidery Style	新增刺繡樣式
+	Delete Embroidery Style	刪除刺繡樣式
+	Duplicate Embroidery Style	複製刺繡樣式
+	Redefine Embroidery Style	重新定義刺繡樣式
+	Break Link to Embroidery Style	中斷刺繡樣式連結
+	Rename Embroidery Style…	重新命名刺繡樣式…
+	Embroidery Styles	刺繡樣式
+	Make Properties Current	將屬性設為目前
+	Current Properties	目前屬性
+	New Object Properties	新物件屬性
+	Reset Current Properties	重設目前屬性
+	Apply Embroidery Style	套用刺繡樣式
+	Rename Embroidery Style	重新命名刺繡樣式
+	Save Fabric	儲存布料
+	Machine Profiles	機器設定檔
+	Save Machine Profile	儲存機器設定檔
+	Delete Machine Profile	刪除機器設定檔
+	Auto Sequence	自動排序
+	Branch	分支
+	Break Apart	拆分
+	Sew the objects separately again	重新分別繡製這些物件
+	These objects are sewn as one path (a branch).	這些物件以單一路徑（分支）繡製。
+	Clear Machine Function	清除機器功能
+	Insert Machine Function	插入機器功能
+	Object Stitches	物件針跡
+	Stitch Edit Tool	針跡編輯工具
+	Stitch List	針跡清單
+	Stop after	之後停止
+	Stitches edited by hand: the shape no longer changes them.	針跡已手動編輯：形狀不再改變它們。
+	Edit Stitches	編輯針跡
+	Pick, move, add and delete single stitches	逐針選取、移動、加入及刪除
+	Regenerate Stitches	重新產生針跡
+	Drop the hand edits and stitch the shape again	捨棄手動編輯並依形狀重新繡製
+	Freeze Stitches	固定針跡
+	Function	功能
+	X (mm)	X（mm）
+	Y (mm)	Y（mm）
+	Stitch	針跡
+	Jump	跳針
+	Color change	換色
+	End	結束
+	#	編號
+	Open a document to see its stitches.	開啟文件即可查看其針跡。
+	Machine	機器
+	Machine settings	機器設定
+	Longest stitch	最長針距
+	Longest jump	最長跳針
+	Shortest stitch	最短針距
+	Trim jumps longer than	跳針長於此即剪線
+	Tie length	打結長度
+	Stitches per minute	每分鐘針數
+	commercial machines	商業用機器
+	home machines	家用機器
+	Remove underlying stitching	移除下層針跡
+	Overlap	重疊
+	Turn	轉向
+	Capped	截角
+	Backstitch	回針繡
+	Check Again	重新檢查
+	Check Design	檢查圖案
+	Click to select and show it	按一下以選取並顯示
+	Design setting	圖案設定
+	Different on each side	兩側不同
+	Double zigzag	雙重之字形
+	Fill Holes	填補孔洞
+	Flip to the other side	翻到另一側
+	Lettering only {n} mm tall is hard to sew clearly	只有 {n} mm 高的文字難以繡得清楚
+	Look for dense spots, long stitches, tiny objects and small lettering	尋找過密處、長針跡、極小物件與小字
+	Makes no stitches	不產生針跡
+	No problems found.	未發現問題。
+	Passes	縫製次數
+	Preserve long stitches	保留長針跡
+	Pull comp., side 1	拉力補償（側 1）
+	Pull comp., side 2	拉力補償（側 2）
+	Remove Holes	移除孔洞
+	Reverse Stitch Direction	反轉針跡方向
+	Stem Stitch	輪廓繡
+	Stem stitch	輪廓繡
+	Stitches up to {n} mm long can snag	長達 {n} mm 的針跡可能會勾線
+	The design is larger than the hoop	圖案大於繡框
+	Thread Color	繡線顏色
+	Tie in	起針打結
+	Tie off	收針打結
+	Tiny object: may not sew cleanly	極小物件：可能無法繡得整齊
+	Very dense: about {n} layers of thread here	過密：此處約有 {n} 層繡線

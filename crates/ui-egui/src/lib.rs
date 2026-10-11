@@ -24,6 +24,7 @@ pub mod credits;
 pub mod cursors;
 pub mod dialogs;
 pub mod dock;
+pub mod embroidery;
 pub mod find_font;
 pub mod floating;
 pub mod font_menu;
@@ -75,6 +76,8 @@ mod tests_cut;
 mod tests_distortkeys;
 #[cfg(test)]
 mod tests_docsetup;
+#[cfg(test)]
+mod tests_embroidery;
 #[cfg(test)]
 mod tests_font_menu;
 #[cfg(test)]
@@ -313,6 +316,8 @@ pub struct VectorcraftApp {
     pub views: Vec<View>,
     pub services: Services,
     pub canvas: CanvasCache,
+    /// Embroidery mode: stitch overlay settings, the stitch player and its mesh.
+    pub embroidery: embroidery::EmbroideryUi,
     pub perf: Perf,
     /// macOS: the room the app bar keeps at its left for the window buttons over it, in points
     /// (0 where the OS draws no buttons over the app bar).
@@ -443,6 +448,7 @@ impl VectorcraftApp {
                 selection_bounds: None,
                 cursors: Default::default(),
             },
+            embroidery: embroidery::EmbroideryUi::default(),
             perf: Perf::default(),
             titlebar_inset: 0.0,
             last_effect: None,
@@ -636,7 +642,7 @@ impl VectorcraftApp {
         r
     }
 
-    /// Open a link in the browser (Help → Discord, website, GitHub…).
+    /// Open a link in the browser (Help → GitHub, the About and Home links).
     pub fn open_url(&mut self, url: &str) {
         match self.services.open_url.as_mut() {
             Some(open) => open(url),
@@ -1133,6 +1139,7 @@ impl VectorcraftApp {
         }
         let t0 = now_ms();
         scrub::begin_frame(self, &ctx);
+        embroidery::tick(self, &ctx);
         font_menu::end_stale_preview(self, &ctx);
         floating::track(self, &ctx);
         let t = theme::Tokens::get(&ctx);

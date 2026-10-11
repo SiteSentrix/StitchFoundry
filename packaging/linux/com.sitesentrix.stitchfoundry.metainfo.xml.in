@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata (software centres, Flathub). Template: package.sh and the Flatpak
+     manifest substitute @VERSION@ and @DATE@ from Cargo.toml and the build date. -->
+<component type="desktop-application">
+  <id>com.sitesentrix.stitchfoundry</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>StitchFoundry</name>
+  <summary>Digitize machine embroidery designs</summary>
+  <developer id="com.sitesentrix">
+    <name>SiteSentrix</name>
+  </developer>
+  <description>
+    <p>
+      StitchFoundry is an open-source machine-embroidery digitizer built on a full vector editor.
+      Give any shape satin, fill or run stitches with editable direction, letter with any font,
+      auto-digitize images, edit and sequence stitches, and read and write DST, PES, JEF, EXP,
+      VP3, XXX and U01 files. It is based on VectorCraft.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.sitesentrix.stitchfoundry.desktop</launchable>
+  <icon type="stock">com.sitesentrix.stitchfoundry</icon>
+  <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
+  <url type="homepage">https://github.com/SiteSentrix/StitchFoundry</url>
+  <url type="bugtracker">https://github.com/SiteSentrix/StitchFoundry/issues</url>
+  <url type="help">https://github.com/SiteSentrix/StitchFoundry</url>
+  <categories>
+    <category>Graphics</category>
+    <category>2DGraphics</category>
+    <category>VectorGraphics</category>
+  </categories>
+  <keywords>
+    <keyword>embroidery</keyword>
+    <keyword>digitizing</keyword>
+    <keyword>stitch</keyword>
+    <keyword>dst</keyword>
+    <keyword>pes</keyword>
+    <keyword>vp3</keyword>
+  </keywords>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Digitizing: thirty satin petals and a fill vine sewn as one thread, with the Stitch Sequence panel</caption>
+      <image>https://raw.githubusercontent.com/SiteSentrix/StitchFoundry/main/docs/images/stitchfoundry-branching.png</image>
+    </screenshot>
+  </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#f6c3cb</color>
+    <color type="primary" scheme_preference="dark">#1e2b4f</color>
+  </branding>
+  <requires>
+    <display_length compare="ge">760</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>tablet</control>
+  </supports>
+  <provides>
+    <binary>vectorcraft</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

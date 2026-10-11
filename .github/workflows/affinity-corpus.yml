@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   affinity3:
+    # Upstream's CI: skipped in forks such as StitchFoundry.
+    if: github.repository == 'storytold/vectorcraft'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

@@ -129,7 +129,7 @@ fn emf_header_frame_is_the_region_in_hundredths_of_a_millimetre() {
     let off = u32_at(b, 64) as usize;
     assert_eq!(off, 108);
     let desc: Vec<u16> = (0..n).map(|i| u16_at(b, off + 2 * i)).collect();
-    assert!(String::from_utf16_lossy(&desc).starts_with("VectorCraft\0"));
+    assert!(String::from_utf16_lossy(&desc).starts_with("StitchFoundry\0"));
     // An empty picture has empty bounds.
     let empty = emf(&doc_with(72.0, 72.0, vec![]));
     assert_eq!([i32_at(&empty.bytes, 8), i32_at(&empty.bytes, 16)], [0, -1]);

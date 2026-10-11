@@ -146,7 +146,7 @@ impl Dsc {
 /// operator that raised it and the procedure it ran in (`fault`).
 fn reason(e: &PsError, fault: Option<&Fault>) -> String {
     let what = match e {
-        PsError::Ps("undefined", at) => format!("it uses `{at}`, which VectorCraft's PostScript reader doesn't know"),
+        PsError::Ps("undefined", at) => format!("it uses `{at}`, which StitchFoundry's PostScript reader doesn't know"),
         PsError::Ps(name, at) => match fault.and_then(|f| f.op) {
             Some(op) if at.is_empty() || at == op => format!("a PostScript error ({name} in `{op}`)"),
             Some(op) => format!("a PostScript error ({name} in `{op}`: {at})"),
@@ -198,7 +198,7 @@ pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String>
     let why = match (&result, drew) {
         (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out))),
         (Ok(()), true) => return Ok(finish(out)),
-        (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
+        (Ok(()), false) => "it draws nothing StitchFoundry's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),
     };
     if let Some(p) = preview::preview(bytes, ps, frame) {

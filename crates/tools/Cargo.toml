@@ -14,6 +14,7 @@ vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
 vectorcraft-pathops = { workspace = true }
 vectorcraft-text = { workspace = true }
+sf-core = { workspace = true }
 kurbo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

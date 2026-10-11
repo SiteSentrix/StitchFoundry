@@ -25,7 +25,7 @@ pub fn prefs_path_for(name: &str, lower: &str) -> Option<PathBuf> {
 /// `text.addFontFiles` copies font files into. The folder is set whether or not
 /// `VECTORCRAFT_NO_PREFS` is set, as the Swatches and Graphic Styles folders are.
 pub fn install_fonts() {
-    if let Some(dir) = prefs_path_for("VectorCraft", "vectorcraft").and_then(|p| Some(p.parent()?.join("Fonts"))) {
+    if let Some(dir) = prefs_path_for("StitchFoundry", "stitchfoundry").and_then(|p| Some(p.parent()?.join("Fonts"))) {
         vectorcraft_text::set_app_font_dir(dir);
     }
 }
@@ -37,7 +37,7 @@ mod tests {
     #[test]
     fn the_font_scans_read_the_fonts_folder_next_to_the_settings() {
         install_fonts();
-        let fonts = prefs_path_for("VectorCraft", "vectorcraft").and_then(|p| Some(p.parent()?.join("Fonts")));
+        let fonts = prefs_path_for("StitchFoundry", "stitchfoundry").and_then(|p| Some(p.parent()?.join("Fonts")));
         assert!(fonts.is_some(), "a home folder to keep the settings in");
         assert_eq!(vectorcraft_text::app_font_dir().map(std::path::Path::to_path_buf), fonts);
         assert!(vectorcraft_text::system_font_dirs().contains(&fonts.unwrap_or_default()));

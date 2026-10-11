@@ -19,7 +19,7 @@ const MARK: f32 = 18.0;
 /// Height of the workspace switcher.
 const WIDGET_H: f32 = 22.0;
 
-/// The application bar: brand mark, Home, menus, then Discord, search and the workspace switcher
+/// The application bar: brand mark, Home, menus, then search and the workspace switcher
 /// at the right. With [`VectorcraftApp::custom_titlebar`] it is also the window's title bar
 /// ([`titlebar`]): the caption buttons take the right end and the rest of the bar drags the window.
 /// With the system title bar (Windows and Linux, `system_title_bar`) the OS draws its own icon and
@@ -49,14 +49,14 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // With the macOS menu bar the menus are at the top of the screen instead.
             let menus_end = if app.services.native_menu.is_some() {
                 let full = ui.max_rect();
-                ui.painter().text(full.center(), egui::Align2::CENTER_CENTER, "VectorCraft", egui::FontId::proportional(13.5), t.text);
+                ui.painter().text(full.center(), egui::Align2::CENTER_CENTER, crate::native_menu::APP_NAME, egui::FontId::proportional(13.5), t.text);
                 ui.cursor().min.x
             } else {
                 menus::menu_bar(app, ui)
             };
             // The right-side group fills the space after the menus from the right; when it runs
-            // short, Discord goes first (it is also under Help), then the search icon (the palette
-            // stays under its shortcut), then the workspace switcher narrows.
+            // short, the search icon goes first (the palette stays under its shortcut), then the
+            // workspace switcher narrows.
             let full = ui.max_rect();
             let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
@@ -71,7 +71,6 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let icon = 28.0;
             let search = room >= 64.0 + 8.0 + gap + icon;
             let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);
-            let discord = search && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
@@ -92,10 +91,6 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     app.ui.palette_open = !app.ui.palette_open;
                     app.ui.palette_query.clear();
                 }
-            }
-            if discord {
-                ui.add_space(10.0);
-                crate::community::discord_button(app, ui, false);
             }
         });
     });
@@ -119,8 +114,8 @@ pub fn system_title_bar(app: &VectorcraftApp) -> bool {
 pub fn window_title(app: &VectorcraftApp) -> String {
     app.session
         .active()
-        .map(|d| format!("{}{} \u{2014} VectorCraft", if d.is_dirty() { "*" } else { "" }, d.title()))
-        .unwrap_or_else(|| "VectorCraft".into())
+        .map(|d| format!("{}{} \u{2014} {}", if d.is_dirty() { "*" } else { "" }, d.title(), crate::native_menu::APP_NAME))
+        .unwrap_or_else(|| crate::native_menu::APP_NAME.into())
 }
 
 /// Keep the OS window title (and the taskbar / Alt-Tab entry) on the active file. Sends
@@ -1014,17 +1009,17 @@ mod tests {
 
     #[test]
     fn window_title_with_no_document_is_the_app_name() {
-        assert_eq!(super::window_title(&title_test_app(true)), "VectorCraft");
+        assert_eq!(super::window_title(&title_test_app(true)), "StitchFoundry");
     }
 
     #[test]
     fn window_title_follows_the_active_file() {
         let mut app = title_test_app(true);
         app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
-        assert_eq!(super::window_title(&app), "foo.svg \u{2014} VectorCraft");
+        assert_eq!(super::window_title(&app), "foo.svg \u{2014} StitchFoundry");
         // Unsaved changes gain a `*` prefix, like the `*` in the document tabs.
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-        assert_eq!(super::window_title(&app), "*foo.svg \u{2014} VectorCraft");
+        assert_eq!(super::window_title(&app), "*foo.svg \u{2014} StitchFoundry");
     }
 
     #[test]
@@ -1058,11 +1053,11 @@ mod tests {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         super::sync_window_title(&mut app, &ctx);
-        assert_eq!(app.last_window_title, "VectorCraft");
+        assert_eq!(app.last_window_title, "StitchFoundry");
         let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
         out.textures_delta.clear();
         let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
-        assert!(cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(t) if t == "VectorCraft")), "{cmds:?}");
+        assert!(cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(t) if t == "StitchFoundry")), "{cmds:?}");
         // Same document state again: the cached title stops a repeat command.
         super::sync_window_title(&mut app, &ctx);
         let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -1071,6 +1066,6 @@ mod tests {
         assert!(!cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(_))), "repeat Title: {cmds:?}");
         app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
         super::sync_window_title(&mut app, &ctx);
-        assert_eq!(app.last_window_title, "foo.svg \u{2014} VectorCraft");
+        assert_eq!(app.last_window_title, "foo.svg \u{2014} StitchFoundry");
     }
 }

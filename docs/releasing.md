@@ -6,7 +6,7 @@ installers for macOS, Windows, Linux (including Flatpak bundles) and FreeBSD, pl
 publishes it.
 
 User-facing names say **VectorCraft**. Files, binaries and ids stay lowercase
-(`vectorcraft-<version>-<platform>-<arch>.<ext>`, `ai.storyteller.vectorcraft`).
+(`vectorcraft-<version>-<platform>-<arch>.<ext>`, `com.sitesentrix.stitchfoundry`).
 
 ## Cutting a release
 
@@ -70,9 +70,9 @@ The rules are in craftrules `standards/fonts.md`, the build option in
 `packaging/macos/package.sh` builds `aarch64-apple-darwin` and `x86_64-apple-darwin` with
 `MACOSX_DEPLOYMENT_TARGET=11.0`, joins them with `lipo` and assembles `VectorCraft.app`:
 
-- `Info.plist` is generated from `Info.plist.in` (bundle id `ai.storyteller.vectorcraft`,
+- `Info.plist` is generated from `Info.plist.in` (bundle id `com.sitesentrix.stitchfoundry`,
   `LSMinimumSystemVersion` 11.0, the version and the build commit). The icon is
-  `assets/app-icon/vectorcraft.icns`. `cargo xtask bundle` fills in the same template for its
+  `assets/app-icon/stitchfoundry.icns`. `cargo xtask bundle` fills in the same template for its
   development app.
 - **Document types:** `Info.plist.in` declares every format File › Open reads, so Finder opens
   them with VectorCraft (double-click, Open With, a drop on the Dock icon). VectorCraft owns its own
@@ -153,10 +153,10 @@ non-pre-release release. The job checks both are there.
 
 **Flatpak.** The `flatpak` jobs (x86_64 on `ubuntu-24.04`, aarch64 on `ubuntu-24.04-arm`) take the
 Linux job's tarball and repackage it with `packaging/linux/flatpak-bundle.sh` and
-`packaging/linux/flatpak/ai.storyteller.vectorcraft.bundle.yml` into a single-file bundle
+`packaging/linux/flatpak/com.sitesentrix.stitchfoundry.bundle.yml` into a single-file bundle
 (`flatpak install --user vectorcraft-<v>-linux-<arch>.flatpak`), then install it and run
 `vectorcraft-cli --version` in the sandbox. No Rust build happens there, so the bundle carries the
-same binaries as the AppImage. `packaging/linux/flatpak/ai.storyteller.vectorcraft.yml` is the
+same binaries as the AppImage. `packaging/linux/flatpak/com.sitesentrix.stitchfoundry.yml` is the
 from-source manifest for a Flathub submission (its header says how to build it); packaging-lint
 keeps the runtime and sandbox permissions of the two manifests identical.
 

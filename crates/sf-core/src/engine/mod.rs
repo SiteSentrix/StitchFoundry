@@ -1,0 +1,708 @@
+//! Stitch generation: turns embroidery objects into needle penetrations and
+//! assembles a complete machine [`Pattern`] with connectors between objects.
+//!
+//! * [`object_stitches`] – one object → stitches (generators live in the
+//!   submodules: [`run`], [`satin`], [`fill`], [`special`], [`applique`]).
+//! * [`build`] / [`build_cached`] – the whole design → machine pattern, adding
+//!   jumps, trims, tie-in/tie-off locks and colour changes, splitting stitches
+//!   that are too long and merging ones that are too short.
+
+mod applique;
+mod fill;
+mod out;
+mod run;
+mod satin;
+mod special;
+mod turning;
+
+use crate::direction::{Guide, strip_from_guides};
+use crate::geom::{FLATTEN_TOLERANCE, Point, Polygon, Shape, poly, polyline};
+use crate::model::{Design, DesignSettings, EmbObject, FillKind, FillParams, LetteringObject, ObjectId, ObjectKind};
+use crate::pattern::{Cmd, Pattern, Stitch};
+use fill::ScanConfig;
+use out::Out;
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::ops::Range;
+use std::sync::Arc;
+
+/// Stitches for one object, in absolute design coordinates.
+///
+/// The first record is the object's entry point. Records use only
+/// [`Cmd::Stitch`], [`Cmd::Jump`], [`Cmd::Trim`] and [`Cmd::Stop`].
+/// `entry_hint` is where the needle currently is (the previous object's exit);
+/// objects without an explicit entry point start as close to it as possible
+/// ("closest join").
+pub fn object_stitches(obj: &EmbObject, settings: &DesignSettings, entry_hint: Option<Point>) -> Vec<Stitch> {
+    let hint = obj.entry.or(entry_hint);
+    let exit = obj.exit;
+    let trim = settings.trim_threshold;
+    match &obj.kind {
+        ObjectKind::Run(r) => run::generate(&r.path, &r.params, hint, exit),
+        ObjectKind::Satin(s) => satin::generate(&s.column, &s.params, hint, exit, settings.max_stitch),
+        ObjectKind::Fill(f) => fill_shape(&f.shape, &f.params, &f.guides, 0.0, hint, exit, (trim, settings.max_stitch)),
+        ObjectKind::Applique(a) => applique::generate(&a.shape, &a.params, hint, trim),
+        ObjectKind::Lettering(l) => lettering(l, hint, exit, (trim, settings.max_stitch)),
+        ObjectKind::Stitches(b) => b.stitches.iter().copied().filter(|s| s.cmd != Cmd::ColorChange && s.cmd != Cmd::End).collect(),
+    }
+}
+
+/// Number of boustrophedon sections and rows a straight fill of `polygon` at
+/// `angle` degrees would use (used to choose stitch angles automatically).
+pub fn fill_statistics(polygon: &Polygon, angle: f64, spacing: f64) -> Option<(usize, usize)> {
+    fill::statistics(polygon, angle, spacing)
+}
+
+/// Fills a shape (possibly made of several pieces) with underlay and top stitching.
+/// `limits` are the trim threshold and the machine's longest stitch (mm).
+fn fill_shape(
+    shape: &Shape,
+    params: &FillParams,
+    guides: &[Guide],
+    extra_angle: f64,
+    hint: Option<Point>,
+    exit: Option<Point>,
+    limits: (f64, f64),
+) -> Vec<Stitch> {
+    let (trim, max_stitch) = limits;
+    let mut pieces = fill::prepare(shape.polygon(FLATTEN_TOLERANCE));
+    let mut out = Out::new();
+    while !pieces.is_empty() {
+        let here = out.pos().or(hint);
+        let i = match here {
+            Some(h) => {
+                (0..pieces.len()).min_by(|&a, &b| pieces[a].distance_to_boundary(h).total_cmp(&pieces[b].distance_to_boundary(h))).unwrap_or(0)
+            }
+            None => 0,
+        };
+        let piece = pieces.remove(i);
+        let ex = if pieces.is_empty() { exit } else { None };
+        // Two or more inclination lines bend the stitches along the shape.
+        if guides.len() >= 2
+            && piece.holes.is_empty()
+            && matches!(params.kind, FillKind::Tatami | FillKind::Satin)
+            && let Some(strip) = strip_from_guides(&piece.outer, guides)
+        {
+            let saved = std::mem::replace(&mut out.region, vec![piece.clone()]);
+            turning::turning_fill(&piece, &strip, params, &mut out, here, trim, max_stitch);
+            out.region = saved;
+            continue;
+        }
+        // A single guide (or guides that don't form a strip) sets the angle.
+        if let Some(g) = guides.first() {
+            let p = FillParams { angle: g.angle(), ..params.clone() };
+            fill_piece(&piece, &p, 0.0, &mut out, here, ex, trim);
+        } else {
+            fill_piece(&piece, params, extra_angle, &mut out, here, ex, trim);
+        }
+    }
+    out.finish()
+}
+
+fn fill_piece(piece: &Polygon, params: &FillParams, extra_angle: f64, out: &mut Out, hint: Option<Point>, exit: Option<Point>, trim: f64) {
+    // Everything inside the piece will be covered, so connections can run inside it.
+    let saved_region = std::mem::replace(&mut out.region, vec![piece.clone()]);
+    fill_piece_inner(piece, params, extra_angle, out, hint, exit, trim);
+    out.region = saved_region;
+}
+
+fn fill_piece_inner(piece: &Polygon, params: &FillParams, extra_angle: f64, out: &mut Out, hint: Option<Point>, exit: Option<Point>, trim: f64) {
+    let angle = params.angle + extra_angle;
+    let u = &params.underlay;
+    if !matches!(params.kind, FillKind::Cross | FillKind::Meander) && (u.edge_run || u.tatami) {
+        let inset = poly::offset(std::slice::from_ref(piece), -u.inset.max(0.0));
+        if u.edge_run {
+            for p in &inset {
+                for ring in p.rings() {
+                    let here = out.pos().or(hint).unwrap_or(ring[0]);
+                    let r = polyline::closed(&polyline::ring_starting_near(ring, here));
+                    out.connect(r[0], trim, 2.5);
+                    out.stitches(polyline::resample(&r, u.stitch_length.max(0.5), run::CORNER_ANGLE));
+                }
+            }
+        }
+        if u.tatami {
+            let cfg = ScanConfig {
+                angle: angle + u.angle_offset,
+                row_spacing: u.spacing.max(0.5),
+                stitch_length: u.stitch_length.max(0.5),
+                offset: 0.5,
+                travel_length: u.stitch_length.max(0.5),
+                ..ScanConfig::default()
+            };
+            let h = out.pos().or(hint);
+            fill::scan_fill_all(&inset, &cfg, out, h, None, trim);
+        }
+    }
+    let here = out.pos().or(hint);
+    match params.kind {
+        FillKind::Tatami | FillKind::Satin => {
+            let satin = params.kind == FillKind::Satin;
+            // Satin spacing is measured between penetrations on the same side, so
+            // consecutive rows (one stitch each) are half a spacing apart.
+            let f = if satin { 0.5 } else { 1.0 };
+            let cfg = ScanConfig {
+                angle,
+                row_spacing: params.spacing.max(0.1) * f,
+                row_spacing_end: params.spacing_end * f,
+                stitch_length: if satin { f64::INFINITY } else { params.stitch_length.max(0.5) },
+                offset: params.offset,
+                split_length: if satin { params.split_length } else { 0.0 },
+                pull_comp: params.pull_comp,
+                travel_length: 2.5,
+                random: params.random,
+            };
+            fill::scan_fill_all(std::slice::from_ref(piece), &cfg, out, here, exit, trim);
+        }
+        FillKind::Contour => special::contour(piece, params.spacing.max(0.2), params.stitch_length.max(0.5), out, here, trim),
+        FillKind::Spiral => special::spiral(piece, params.spacing.max(0.2), params.stitch_length.max(0.5), out, here, trim),
+        FillKind::Radial => special::radial(piece, params.center, params.spacing.max(0.1), params.split_length, out, trim),
+        FillKind::Cross => special::cross(piece, params.stitch_length, angle, out, trim),
+        FillKind::Meander => special::meander(piece, params.spacing.max(0.8), params.stitch_length.max(0.5), params.random, out, here, trim),
+    }
+}
+
+fn lettering(l: &LetteringObject, hint: Option<Point>, exit: Option<Point>, limits: (f64, f64)) -> Vec<Stitch> {
+    let trim = limits.0;
+    let mut out = Out::new();
+    let n = l.glyphs.len();
+    for (i, g) in l.glyphs.iter().enumerate() {
+        let here = out.pos().or(hint);
+        let ex = if i + 1 == n { exit } else { None };
+        let st = fill_shape(&g.shape, &l.fill, &[], g.angle, here, ex, limits);
+        if let Some(first) = st.first() {
+            out.connect(first.pos(), trim, 2.5);
+            out.append(st);
+        }
+        if let Some(rp) = &l.outline {
+            for ring in g.shape.polygon(FLATTEN_TOLERANCE).rings() {
+                let here = out.pos().unwrap_or(ring[0]);
+                let r = polyline::closed(&polyline::ring_starting_near(ring, here));
+                let path = crate::geom::Contour::from_points(&r, false);
+                let st = run::generate(&path, rp, None, None);
+                if let Some(first) = st.first() {
+                    out.connect(first.pos(), trim, 2.5);
+                    out.append(st);
+                }
+            }
+        }
+    }
+    out.finish()
+}
+
+// ---------------------------------------------------------------------------
+// Pattern assembly
+// ---------------------------------------------------------------------------
+
+/// Where an object's stitches ended up in the built pattern.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ObjectSpan {
+    pub id: ObjectId,
+    /// Index of the object in `Design::objects`.
+    pub index: usize,
+    /// Record range in [`Built::pattern`] (the object's stitches including its ties).
+    pub range: Range<usize>,
+    /// The object's own stitches as generated (no ties or connections).
+    pub own: Arc<Vec<Stitch>>,
+}
+
+/// Result of [`build`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Built {
+    pub pattern: Pattern,
+    pub spans: Vec<ObjectSpan>,
+}
+
+impl Built {
+    /// The object that produced record `i`, if any.
+    pub fn object_at(&self, i: usize) -> Option<&ObjectSpan> {
+        let k = self.spans.partition_point(|s| s.range.end <= i);
+        self.spans.get(k).filter(|s| s.range.contains(&i))
+    }
+}
+
+/// Per-object stitch cache so interactive edits only regenerate what changed.
+#[derive(Default)]
+pub struct StitchCache {
+    map: HashMap<ObjectId, (u64, Arc<Vec<Stitch>>)>,
+}
+
+impl StitchCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    /// Stitches for an object, regenerating only if the object, settings or
+    /// entry hint changed since the last call.
+    pub fn get(&mut self, obj: &EmbObject, settings: &DesignSettings, entry_hint: Option<Point>) -> Arc<Vec<Stitch>> {
+        let key = cache_key(obj, settings, entry_hint);
+        if let Some((k, v)) = self.map.get(&obj.id)
+            && *k == key
+        {
+            return v.clone();
+        }
+        let v = Arc::new(object_stitches(obj, settings, entry_hint));
+        self.map.insert(obj.id, (key, v.clone()));
+        v
+    }
+
+    /// Drops entries for objects that no longer exist.
+    pub fn retain_ids(&mut self, ids: &[ObjectId]) {
+        self.map.retain(|k, _| ids.contains(k));
+    }
+}
+
+fn cache_key(obj: &EmbObject, settings: &DesignSettings, entry_hint: Option<Point>) -> u64 {
+    let mut h = DefaultHasher::new();
+    serde_json::to_vec(&obj.kind).unwrap_or_default().hash(&mut h);
+    serde_json::to_vec(&(obj.entry, obj.exit)).unwrap_or_default().hash(&mut h);
+    serde_json::to_vec(settings).unwrap_or_default().hash(&mut h);
+    if obj.entry.is_none()
+        && let Some(p) = entry_hint
+    {
+        ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64).hash(&mut h);
+    }
+    h.finish()
+}
+
+/// Streams records into a pattern while enforcing machine limits.
+struct Emitter<'a> {
+    p: Pattern,
+    s: &'a DesignSettings,
+    /// Thread is attached to the fabric (needs a tie-off before cutting).
+    live: bool,
+    /// Tie in at the start of the current object (its own setting, else the design's).
+    tie_in: bool,
+    /// Tie off before cutting after the object sewn last.
+    tie_off: bool,
+}
+
+impl Emitter<'_> {
+    fn last_move(&self) -> Option<Stitch> {
+        self.p.stitches.iter().rev().find(|s| s.is_move()).copied()
+    }
+
+    fn stitch(&mut self, q: Point) {
+        if let Some(prev) = self.last_move() {
+            let d = prev.pos().distance(q);
+            let prev_is_stitch = self.p.stitches.last().is_some_and(|s| s.cmd == Cmd::Stitch);
+            if prev_is_stitch && d < 1e-9 {
+                return;
+            }
+            if prev_is_stitch && d < self.s.min_stitch {
+                // Too short to sew cleanly: skip the penetration (the next stitch
+                // starts from the previous one, an error below `min_stitch`).
+                return;
+            }
+            let max = self.s.max_stitch.max(1.0);
+            if d > max {
+                let k = (d / max).ceil() as usize;
+                let from = prev.pos();
+                for m in 1..k {
+                    self.p.add(from.lerp(q, m as f64 / k as f64), Cmd::Stitch);
+                }
+            }
+        }
+        self.p.add(q, Cmd::Stitch);
+    }
+
+    fn jump(&mut self, q: Point) {
+        // The first move: the machine starts where its format says (the writers add the
+        // way from there), not at the page's corner.
+        let Some(from) = self.last_move().map(|s| s.pos()) else {
+            self.p.add(q, Cmd::Jump);
+            return;
+        };
+        let d = from.distance(q);
+        if d < 1e-9 {
+            return;
+        }
+        let max = self.s.max_jump.max(1.0);
+        let k = ((d / max).ceil() as usize).max(1);
+        for m in 1..=k {
+            self.p.add(from.lerp(q, m as f64 / k as f64), Cmd::Jump);
+        }
+    }
+
+    /// Lock stitches at the start of a sewing run (towards `next`).
+    fn tie_in(&mut self, at: Point, next: Option<Point>) {
+        if !self.tie_in {
+            return;
+        }
+        let u = next.map(|n| (n - at).normalized()).filter(|u| *u != Point::ZERO).unwrap_or(Point::new(1.0, 0.0));
+        let t = self.s.tie_length.max(self.s.min_stitch + 0.05);
+        for p in self.s.tie_style.points(at, u, t) {
+            self.p.add(p, Cmd::Stitch);
+        }
+    }
+
+    /// Lock stitches before cutting the thread.
+    fn tie_off(&mut self) {
+        if !self.live {
+            return;
+        }
+        if self.tie_off {
+            let moves: Vec<Point> = self.p.stitches.iter().rev().filter(|s| s.cmd == Cmd::Stitch).take(2).map(|s| s.pos()).collect();
+            if moves.len() == 2 {
+                let (end, prev) = (moves[0], moves[1]);
+                let u = (prev - end).normalized();
+                if u != Point::ZERO {
+                    let t = self.s.tie_length.max(self.s.min_stitch + 0.05);
+                    for p in self.s.tie_style.points(end, u, t) {
+                        self.p.add(p, Cmd::Stitch);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Running stitches from the needle through `way`, about [`TRAVEL_STITCH`] apart:
+    /// the thread carried to the next object without a trim.
+    fn travel(&mut self, way: &[Point]) {
+        let Some(mut from) = self.last_move().map(|s| s.pos()) else { return };
+        for &q in way {
+            let k = ((from.distance(q) / TRAVEL_STITCH).ceil() as usize).max(1);
+            for m in 1..=k {
+                self.stitch(from.lerp(q, m as f64 / k as f64));
+            }
+            from = q;
+        }
+    }
+
+    fn cut(&mut self) {
+        if self.live {
+            self.tie_off();
+            self.p.trim();
+            self.live = false;
+        }
+    }
+
+    /// Appends an object's records.
+    fn object(&mut self, st: &[Stitch]) {
+        for (i, rec) in st.iter().enumerate() {
+            match rec.cmd {
+                Cmd::Stitch => {
+                    let q = rec.pos();
+                    if !self.live {
+                        if self.last_move().is_none_or(|m| m.pos().distance(q) > 1e-9) {
+                            self.jump(q);
+                        }
+                        self.p.add(q, Cmd::Stitch);
+                        let next = st[i + 1..].iter().find(|s| s.cmd == Cmd::Stitch && s.pos().distance(q) > 1e-6).map(Stitch::pos);
+                        self.tie_in(q, next);
+                        self.live = true;
+                    } else {
+                        self.stitch(q);
+                    }
+                }
+                Cmd::Jump => self.jump(rec.pos()),
+                Cmd::Trim => self.cut(),
+                Cmd::Stop => {
+                    let p = self.p.current();
+                    self.p.add(p, Cmd::Stop);
+                }
+                Cmd::ColorChange | Cmd::End => {}
+            }
+        }
+    }
+}
+
+/// Length of the running stitches that carry the thread between branched objects (mm).
+const TRAVEL_STITCH: f64 = 2.5;
+/// Travel may leave the area that covers it for this far at each end (mm): it starts
+/// at the last object's exit and ends at the next one's entry, on their edges.
+const TRAVEL_SLACK: f64 = 1.0;
+
+/// For each object of a branch but its first, what it and the rest of its branch
+/// cover: thread carried into the object under that area is sewn over and hidden.
+/// `None` outside branches.
+fn branch_covers(design: &Design) -> Vec<Option<Vec<Polygon>>> {
+    let objs = &design.objects;
+    let mut out: Vec<Option<Vec<Polygon>>> = vec![None; objs.len()];
+    let mut i = 0;
+    while i < objs.len() {
+        let Some(b) = objs[i].branch else {
+            i += 1;
+            continue;
+        };
+        let end = (i..objs.len()).find(|&k| objs[k].branch != Some(b)).unwrap_or(objs.len());
+        // unions from the branch's last object back to its second
+        let mut acc: Vec<Polygon> = Vec::new();
+        for k in (i + 1..end).rev() {
+            // what is not sewn covers nothing
+            let mine: Vec<Polygon> =
+                if objs[k].visible { object_polygons(&objs[k]).into_iter().filter(|p| p.outer.len() >= 3).collect() } else { Vec::new() };
+            if !mine.is_empty() {
+                acc = if acc.is_empty() { poly::union(&mine) } else { poly::union2(&acc, &mine) };
+            }
+            if !acc.is_empty() {
+                out[k] = Some(acc.clone());
+            }
+        }
+        i = end.max(i + 1);
+    }
+    out
+}
+
+/// Where a branched object without a stop bead should end so the thread can go on
+/// under the objects after it: its point, under those, nearest to the next object.
+/// `None` when the next object is not of the same branch and thread (the thread is
+/// cut anyway) or nothing of this object is covered.
+fn branch_exit(design: &Design, index: usize, covers: &[Option<Vec<Polygon>>]) -> Option<Point> {
+    let objs = &design.objects;
+    let obj = objs.get(index)?;
+    let b = obj.branch?;
+    if obj.exit.is_some() || obj.trim_after {
+        return None;
+    }
+    let next = objs.get(index + 1).filter(|n| n.branch == Some(b) && n.visible && n.color == obj.color)?;
+    let cover = covers.get(index + 1)?.as_ref()?;
+    let mine = object_polygons(obj);
+    if mine.is_empty() {
+        return None;
+    }
+    let under = poly::intersection(&mine, cover);
+    let target = object_polygons(next);
+    let bbox = next.bbox();
+    let dist = |p: Point| {
+        if target.is_empty() {
+            let dx = (bbox.min.x - p.x).max(p.x - bbox.max.x).max(0.0);
+            let dy = (bbox.min.y - p.y).max(p.y - bbox.max.y).max(0.0);
+            dx.hypot(dy)
+        } else if target.iter().any(|t| t.contains(p)) {
+            0.0
+        } else {
+            target.iter().map(|t| t.distance_to_boundary(p)).fold(f64::INFINITY, f64::min)
+        }
+    };
+    under.iter().flat_map(|p| p.rings()).flatten().copied().min_by(|a, b| dist(*a).total_cmp(&dist(*b)))
+}
+
+/// `st` without its last needle point (when it has more than two).
+fn without_last_stitch(st: &[Stitch]) -> Vec<Stitch> {
+    let mut v = st.to_vec();
+    if v.iter().filter(|s| s.cmd == Cmd::Stitch).count() > 2
+        && let Some(i) = v.iter().rposition(|s| s.cmd == Cmd::Stitch)
+    {
+        v.remove(i);
+    }
+    v
+}
+
+/// Builds the full machine pattern for a design.
+pub fn build(design: &Design) -> Built {
+    build_cached(design, &mut StitchCache::new())
+}
+
+/// Like [`build`] but reuses cached object stitches.
+pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
+    let settings = &design.settings;
+    let mut em = Emitter { p: Pattern::new(), s: settings, live: false, tie_in: settings.tie_in, tie_off: settings.tie_off };
+    em.p.name = design.name.clone();
+    let mut spans = Vec::new();
+    let mut current_color: Option<usize> = None;
+    let mut pos: Option<Point> = None;
+    let mut force_trim = false;
+    let covers = branch_covers(design);
+    for (index, obj) in design.objects.iter().enumerate() {
+        if !obj.visible {
+            continue;
+        }
+        let st = match branch_exit(design, index, &covers) {
+            Some(exit) => cache.get(&EmbObject { exit: Some(exit), ..obj.clone() }, settings, pos),
+            None => cache.get(obj, settings, pos),
+        };
+        // Omit last stitch: one needle point less at the object's end
+        let st = if obj.omit_last { Arc::new(without_last_stitch(&st)) } else { st };
+        let Some(first) = st.iter().find(|s| s.cmd == Cmd::Stitch).map(Stitch::pos) else { continue };
+        if current_color != Some(obj.color) {
+            if current_color.is_some() {
+                em.cut();
+                em.p.color_change();
+            }
+            em.p.threads.push(design.thread(obj.color));
+            current_color = Some(obj.color);
+        } else if let (Some(p), Some(cover)) = (pos, covers.get(index).and_then(Option::as_ref))
+            && em.live
+            && !force_trim
+            && p.distance(first) > 1e-6
+            && let Some(way) = crate::travel::route(p, first, cover, TRAVEL_SLACK)
+        {
+            // branched: carry the thread across under what is still to be sewn
+            em.travel(&way);
+        } else if force_trim || pos.is_some_and(|p| p.distance(first) > settings.trim_threshold) {
+            em.cut();
+        }
+        // Cuts above tie off the previous object; from here on ties are this object's.
+        em.tie_in = obj.tie_in.unwrap_or(settings.tie_in);
+        em.tie_off = obj.tie_off.unwrap_or(settings.tie_off);
+        let start = em.p.stitches.len();
+        em.object(&st);
+        if obj.stop_after {
+            let p = em.p.current();
+            em.p.add(p, Cmd::Stop);
+        }
+        spans.push(ObjectSpan { id: obj.id, index, range: start..em.p.stitches.len(), own: st.clone() });
+        pos = em.last_move().map(|s| s.pos());
+        force_trim = obj.trim_after;
+    }
+    em.cut();
+    if !em.p.stitches.is_empty() {
+        em.p.ensure_end();
+    }
+    Built { pattern: em.p, spans }
+}
+
+/// Convenience: outline polygon of an object for hit-testing and previews.
+pub fn object_polygons(obj: &EmbObject) -> Vec<Polygon> {
+    match &obj.kind {
+        ObjectKind::Fill(f) => vec![f.shape.polygon(FLATTEN_TOLERANCE)],
+        ObjectKind::Applique(a) => vec![a.shape.polygon(FLATTEN_TOLERANCE)],
+        ObjectKind::Satin(s) => vec![Polygon::from_ring(s.column.outline(FLATTEN_TOLERANCE))],
+        ObjectKind::Lettering(l) => l.glyphs.iter().map(|g| g.shape.polygon(FLATTEN_TOLERANCE)).collect(),
+        ObjectKind::Run(_) | ObjectKind::Stitches(_) => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geom::{Column, Contour, Node, NodeKind, Rung};
+    use crate::model::*;
+
+    fn demo() -> Design {
+        let mut d = Design::new();
+        d.add(ObjectKind::Fill(FillObject::new(Shape::rect(Point::new(-20.0, -10.0), Point::new(20.0, 10.0)), FillParams::default())), 0);
+        d.add(
+            ObjectKind::Satin(SatinObject {
+                column: Column::new(vec![
+                    Rung::new(Point::new(-20.0, 12.0), Point::new(-20.0, 16.0), NodeKind::Corner),
+                    Rung::new(Point::new(20.0, 12.0), Point::new(20.0, 16.0), NodeKind::Corner),
+                ]),
+                params: SatinParams::default(),
+            }),
+            1,
+        );
+        d.add(
+            ObjectKind::Run(RunObject {
+                path: Contour::new(
+                    vec![Node::corner(Point::new(-20.0, 20.0)), Node::curve(Point::new(0.0, 25.0)), Node::corner(Point::new(20.0, 20.0))],
+                    false,
+                ),
+                params: RunParams { kind: RunKind::Triple, ..Default::default() },
+            }),
+            1,
+        );
+        d.add(
+            ObjectKind::Applique(AppliqueObject { shape: Shape::ellipse(Point::new(0.0, -30.0), 12.0, 8.0), params: AppliqueParams::default() }),
+            2,
+        );
+        d
+    }
+
+    #[test]
+    fn build_demo_design() {
+        let d = demo();
+        let built = build(&d);
+        let p = &built.pattern;
+        assert_eq!(built.spans.len(), 4);
+        assert_eq!(p.count(Cmd::ColorChange), 2);
+        assert_eq!(p.threads.len(), 3);
+        assert_eq!(p.count(Cmd::Stop), 2);
+        assert!(p.count(Cmd::Trim) >= 3);
+        assert_eq!(p.stitches.last().unwrap().cmd, Cmd::End);
+        // machine limits respected
+        let mut prev: Option<Point> = None;
+        for s in &p.stitches {
+            if s.is_move() {
+                if let Some(q) = prev {
+                    assert!(q.distance(s.pos()) <= d.settings.max_stitch.max(d.settings.max_jump) + 1e-6);
+                }
+                prev = Some(s.pos());
+            }
+        }
+        // spans are ordered and object_at works
+        let mid = built.spans[1].range.start + 3;
+        assert_eq!(built.object_at(mid).unwrap().index, 1);
+    }
+
+    #[test]
+    fn the_first_move_is_one_jump_to_the_first_stitch() {
+        // far from the page's corner, which the machine knows nothing of
+        let mut d = Design::new();
+        d.add(ObjectKind::Fill(FillObject::new(Shape::rect(Point::new(200.0, 150.0), Point::new(240.0, 170.0)), FillParams::default())), 0);
+        let p = build(&d).pattern;
+        assert_eq!((p.stitches[0].cmd, p.stitches[1].cmd), (Cmd::Jump, Cmd::Stitch));
+        assert_eq!(p.stitches[0].pos(), p.stitches[1].pos());
+        assert_eq!(p.count(Cmd::Jump), 1);
+        // so the frame goes nowhere outside what is sewn
+        assert_eq!(p.extents(), p.bounds());
+    }
+
+    #[test]
+    fn objects_override_the_design_ties() {
+        let mut d = demo();
+        d.objects.truncate(1);
+        let plain = build(&d).pattern;
+        d.objects[0].tie_in = Some(false);
+        d.objects[0].tie_off = Some(false);
+        let untied = build(&d).pattern;
+        // the default tie-in and tie-off are four stitches each
+        assert_eq!(plain.stitch_count(), untied.stitch_count() + 8);
+        d.settings.tie_in = false;
+        d.settings.tie_off = false;
+        d.objects[0].tie_in = Some(true);
+        d.objects[0].tie_off = None;
+        assert_eq!(build(&d).pattern.stitch_count(), untied.stitch_count() + 4, "tie in only");
+    }
+
+    #[test]
+    fn cache_reuses_unchanged_objects() {
+        let mut d = demo();
+        let mut cache = StitchCache::new();
+        let a = build_cached(&d, &mut cache);
+        let b = build_cached(&d, &mut cache);
+        assert_eq!(a, b);
+        if let ObjectKind::Fill(f) = &mut d.objects[0].kind {
+            f.params.angle = 0.0;
+        }
+        let c = build_cached(&d, &mut cache);
+        assert_ne!(a.pattern.stitches.len(), 0);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn every_fill_kind_generates() {
+        for kind in FillKind::ALL {
+            let mut d = Design::new();
+            let params = FillParams { kind, ..Default::default() };
+            d.add(ObjectKind::Fill(FillObject::new(Shape::ellipse(Point::ZERO, 15.0, 10.0), params)), 0);
+            let built = build(&d);
+            assert!(built.pattern.stitch_count() > 50, "{kind:?}: {}", built.pattern.stitch_count());
+        }
+    }
+
+    #[test]
+    fn lettering_glyphs_are_filled() {
+        let mut d = Design::new();
+        let glyphs = vec![
+            Glyph { ch: 'I', shape: Shape::rect(Point::new(0.0, 0.0), Point::new(2.0, 10.0)), angle: 0.0 },
+            Glyph { ch: 'I', shape: Shape::rect(Point::new(6.0, 0.0), Point::new(8.0, 10.0)), angle: 0.0 },
+        ];
+        d.add(ObjectKind::Lettering(LetteringObject { glyphs, ..Default::default() }), 0);
+        let built = build(&d);
+        assert!(built.pattern.stitch_count() > 80);
+    }
+}

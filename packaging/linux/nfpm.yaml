@@ -13,13 +13,14 @@ release: 1
 section: graphics
 priority: optional
 maintainer: ${VECTORCRAFT_MAINTAINER}
-vendor: Learning Machines LLC
-homepage: https://getartcraft.com/apps/vectorcraft
+vendor: SiteSentrix
+homepage: https://github.com/SiteSentrix/StitchFoundry
 license: MIT OR Apache-2.0
 description: |-
-  Open-source, native vector illustration app.
-  Pen, shape and brush tools, artboards, type, gradients, symbols and live
-  effects; opens and saves SVG and PDF.
+  Open-source machine-embroidery digitizing, built on a full vector editor.
+  Satin, fill and run stitches with editable direction, lettering from any font,
+  auto-digitizing, stitch editing and sequencing; reads and writes DST, PES,
+  JEF, EXP, VP3, XXX and U01, plus SVG and PDF.
   Includes vectorcraft-cli, a headless converter and command runner.
 
 # The binaries link only glibc and libgcc_s directly. Windowing (X11/Wayland, xkbcommon) and the

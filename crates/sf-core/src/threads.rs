@@ -1,0 +1,396 @@
+//! Thread colours and thread charts.
+
+use serde::{Deserialize, Serialize};
+
+/// 8-bit sRGB colour. Serialised as `"#rrggbb"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Rgb {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl Rgb {
+    pub const BLACK: Rgb = Rgb::new(0, 0, 0);
+    pub const WHITE: Rgb = Rgb::new(255, 255, 255);
+
+    pub const fn new(r: u8, g: u8, b: u8) -> Self {
+        Rgb { r, g, b }
+    }
+
+    pub const fn from_u32(v: u32) -> Self {
+        Rgb::new((v >> 16) as u8, (v >> 8) as u8, v as u8)
+    }
+
+    pub fn to_u32(self) -> u32 {
+        ((self.r as u32) << 16) | ((self.g as u32) << 8) | self.b as u32
+    }
+
+    pub fn to_hex(self) -> String {
+        format!("#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
+    }
+
+    /// Parses `#rgb`, `#rrggbb` (with or without `#`).
+    pub fn from_hex(s: &str) -> Option<Rgb> {
+        let s = s.trim().trim_start_matches('#');
+        let v = u32::from_str_radix(s, 16).ok()?;
+        match s.len() {
+            6 => Some(Rgb::from_u32(v)),
+            3 => {
+                let (r, g, b) = ((v >> 8) & 0xf, (v >> 4) & 0xf, v & 0xf);
+                Some(Rgb::new((r * 17) as u8, (g * 17) as u8, (b * 17) as u8))
+            }
+            _ => None,
+        }
+    }
+
+    /// Relative luminance in `[0, 1]` (sRGB weights, gamma ignored).
+    pub fn luma(self) -> f64 {
+        (0.2126 * self.r as f64 + 0.7152 * self.g as f64 + 0.0722 * self.b as f64) / 255.0
+    }
+
+    /// CIE L*a*b* (D65).
+    pub fn to_lab(self) -> [f64; 3] {
+        fn lin(c: u8) -> f64 {
+            let c = c as f64 / 255.0;
+            if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+        }
+        let (r, g, b) = (lin(self.r), lin(self.g), lin(self.b));
+        let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+        let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+        fn f(t: f64) -> f64 {
+            if t > 0.008856 { t.cbrt() } else { 7.787 * t + 16.0 / 116.0 }
+        }
+        let (fx, fy, fz) = (f(x), f(y), f(z));
+        [116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)]
+    }
+
+    /// Perceptual colour difference (CIE76 ΔE).
+    pub fn delta_e(self, o: Rgb) -> f64 {
+        let a = self.to_lab();
+        let b = o.to_lab();
+        ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+    }
+
+    /// Multiplies each channel by `f` (clamped), for shading.
+    pub fn scaled(self, f: f64) -> Rgb {
+        let s = |c: u8| (c as f64 * f).round().clamp(0.0, 255.0) as u8;
+        Rgb::new(s(self.r), s(self.g), s(self.b))
+    }
+
+    /// Linear blend towards `o` by `t` in `[0, 1]`.
+    pub fn mix(self, o: Rgb, t: f64) -> Rgb {
+        let m = |a: u8, b: u8| (a as f64 + (b as f64 - a as f64) * t).round().clamp(0.0, 255.0) as u8;
+        Rgb::new(m(self.r, o.r), m(self.g, o.g), m(self.b, o.b))
+    }
+}
+
+impl From<Rgb> for String {
+    fn from(c: Rgb) -> String {
+        c.to_hex()
+    }
+}
+
+impl TryFrom<String> for Rgb {
+    type Error = String;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        Rgb::from_hex(&s).ok_or_else(|| format!("invalid colour '{s}'"))
+    }
+}
+
+/// A thread: colour plus catalogue information.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Thread {
+    pub color: Rgb,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// Catalogue number within the chart (e.g. "1147").
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub code: String,
+    /// Thread chart / brand name (e.g. "Brother", "Janome").
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub chart: String,
+}
+
+impl Thread {
+    pub fn new(color: Rgb, name: impl Into<String>) -> Self {
+        Thread { color, name: name.into(), code: String::new(), chart: String::new() }
+    }
+
+    pub fn with_code(color: Rgb, name: impl Into<String>, code: impl Into<String>, chart: impl Into<String>) -> Self {
+        Thread { color, name: name.into(), code: code.into(), chart: chart.into() }
+    }
+
+    /// Short human label like `"1147 Royal Blue"`.
+    pub fn label(&self) -> String {
+        match (self.code.is_empty(), self.name.is_empty()) {
+            (false, false) => format!("{} {}", self.code, self.name),
+            (false, true) => self.code.clone(),
+            (true, false) => self.name.clone(),
+            (true, true) => self.color.to_hex(),
+        }
+    }
+}
+
+/// A named collection of threads.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ThreadChart {
+    pub name: &'static str,
+    pub threads: Vec<Thread>,
+}
+
+impl ThreadChart {
+    /// Index of the thread closest in colour to `c`.
+    pub fn nearest(&self, c: Rgb) -> usize {
+        nearest_index(self.threads.iter().map(|t| t.color), c).unwrap_or(0)
+    }
+}
+
+/// Index of the colour closest (ΔE) to `c`.
+pub fn nearest_index(colors: impl Iterator<Item = Rgb>, c: Rgb) -> Option<usize> {
+    let lab = c.to_lab();
+    colors
+        .enumerate()
+        .map(|(i, k)| {
+            let l = k.to_lab();
+            (i, (l[0] - lab[0]).powi(2) + (l[1] - lab[1]).powi(2) + (l[2] - lab[2]).powi(2))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| i)
+}
+
+fn chart(name: &'static str, entries: &[(u32, &str, &str)]) -> ThreadChart {
+    ThreadChart { name, threads: entries.iter().map(|&(c, n, code)| Thread::with_code(Rgb::from_u32(c), n, code, name)).collect() }
+}
+
+/// Default palette for new designs.
+pub fn default_palette() -> Vec<Thread> {
+    generic_chart().threads.into_iter().take(12).collect()
+}
+
+/// Generic polyester colour set, used for default palettes and for colouring
+/// colour-less formats (DST, EXP, ...).
+pub fn generic_chart() -> ThreadChart {
+    chart(
+        "Generic",
+        &[
+            (0x1a3e8c, "Royal Blue", "G01"),
+            (0xd62828, "Red", "G02"),
+            (0x111111, "Black", "G03"),
+            (0xf6c90e, "Yellow", "G04"),
+            (0x2a9d4b, "Kelly Green", "G05"),
+            (0xfafafa, "White", "G06"),
+            (0xf77f00, "Orange", "G07"),
+            (0x6a2c91, "Purple", "G08"),
+            (0x0b1f44, "Navy", "G09"),
+            (0xc9a227, "Old Gold", "G10"),
+            (0x8d99ae, "Silver Grey", "G11"),
+            (0x6b3e26, "Brown", "G12"),
+            (0xf4a6c6, "Pink", "G13"),
+            (0x5fa8d3, "Sky Blue", "G14"),
+            (0x7a1f2b, "Maroon", "G15"),
+            (0x1b4d2e, "Forest Green", "G16"),
+            (0xe9d8a6, "Cream", "G17"),
+            (0x3d3d3d, "Charcoal", "G18"),
+            (0x00a6a6, "Teal", "G19"),
+            (0xb5e48c, "Mint", "G20"),
+            (0xe85d75, "Coral", "G21"),
+            (0xd4a373, "Tan", "G22"),
+            (0x9d4edd, "Lavender", "G23"),
+            (0xffd166, "Light Gold", "G24"),
+        ],
+    )
+}
+
+/// Brother PEC palette (index 0 is a placeholder; indices 1–64 are the machine colours).
+/// Used by PES/PEC writers, which store palette indices rather than RGB values.
+pub fn pec_chart() -> ThreadChart {
+    chart(
+        "Brother",
+        &[
+            (0x000000, "Unknown", "0"),
+            (0x0e1f7c, "Prussian Blue", "1"),
+            (0x0a55a3, "Blue", "2"),
+            (0x008777, "Teal Green", "3"),
+            (0x4b6baf, "Cornflower Blue", "4"),
+            (0xed171f, "Red", "5"),
+            (0xd15c00, "Reddish Brown", "6"),
+            (0x913697, "Magenta", "7"),
+            (0xe49acb, "Light Lilac", "8"),
+            (0x915fac, "Lilac", "9"),
+            (0x9ed67d, "Mint Green", "10"),
+            (0xe8a900, "Deep Gold", "11"),
+            (0xfeba35, "Orange", "12"),
+            (0xffff00, "Yellow", "13"),
+            (0x70bc1f, "Lime Green", "14"),
+            (0xba9800, "Brass", "15"),
+            (0xa8a8a8, "Silver", "16"),
+            (0x7d6f00, "Russet Brown", "17"),
+            (0xffffb3, "Cream Brown", "18"),
+            (0x4f5556, "Pewter", "19"),
+            (0x000000, "Black", "20"),
+            (0x0b3d91, "Ultramarine", "21"),
+            (0x770176, "Royal Purple", "22"),
+            (0x293133, "Dark Gray", "23"),
+            (0x2a1301, "Dark Brown", "24"),
+            (0xf64a8a, "Deep Rose", "25"),
+            (0xb27624, "Light Brown", "26"),
+            (0xfcbbc5, "Salmon Pink", "27"),
+            (0xfe370f, "Vermilion", "28"),
+            (0xf0f0f0, "White", "29"),
+            (0x6a1c8a, "Violet", "30"),
+            (0xa8ddc4, "Seacrest", "31"),
+            (0x2584bb, "Sky Blue", "32"),
+            (0xfeb343, "Pumpkin", "33"),
+            (0xfff36b, "Cream Yellow", "34"),
+            (0xd0a660, "Khaki", "35"),
+            (0xd15400, "Clay Brown", "36"),
+            (0x66ba49, "Leaf Green", "37"),
+            (0x134a46, "Peacock Blue", "38"),
+            (0x878787, "Gray", "39"),
+            (0xd8ccc6, "Warm Gray", "40"),
+            (0x435607, "Dark Olive", "41"),
+            (0xfdd9de, "Flesh Pink", "42"),
+            (0xf993bc, "Pink", "43"),
+            (0x003822, "Deep Green", "44"),
+            (0xb2afd4, "Lavender", "45"),
+            (0x686ab0, "Wisteria Violet", "46"),
+            (0xefe3b9, "Beige", "47"),
+            (0xf73866, "Carmine", "48"),
+            (0xb54b64, "Amber Red", "49"),
+            (0x132b1a, "Olive Green", "50"),
+            (0xc70156, "Dark Fuchsia", "51"),
+            (0xfe9e32, "Tangerine", "52"),
+            (0xa8deeb, "Light Blue", "53"),
+            (0x00673e, "Emerald Green", "54"),
+            (0x4e2990, "Purple", "55"),
+            (0x2f7e20, "Moss Green", "56"),
+            (0xffcccc, "Flesh Pink", "57"),
+            (0xffd911, "Harvest Gold", "58"),
+            (0x095ba6, "Electric Blue", "59"),
+            (0xf0f970, "Lemon Yellow", "60"),
+            (0xe3f35b, "Fresh Green", "61"),
+            (0xff9900, "Orange", "62"),
+            (0xfff08d, "Cream Yellow", "63"),
+            (0xffc8c8, "Applique", "64"),
+        ],
+    )
+}
+
+/// Janome JEF palette (index 0 is a placeholder).
+pub fn jef_chart() -> ThreadChart {
+    chart(
+        "Janome",
+        &[
+            (0x000000, "Placeholder", "000"),
+            (0x000000, "Black", "002"),
+            (0xffffff, "White", "001"),
+            (0xffff17, "Yellow", "204"),
+            (0xff6600, "Orange", "203"),
+            (0x2f5933, "Olive Green", "219"),
+            (0x237336, "Green", "226"),
+            (0x65c2c8, "Sky", "217"),
+            (0xab5a96, "Purple", "208"),
+            (0xf669a0, "Pink", "201"),
+            (0xff0000, "Red", "225"),
+            (0xb1704e, "Brown", "214"),
+            (0x0b2f84, "Blue", "207"),
+            (0xe4c35d, "Gold", "003"),
+            (0x481a05, "Dark Brown", "205"),
+            (0xac9cc7, "Pale Violet", "209"),
+            (0xfcf294, "Pale Yellow", "210"),
+            (0xf999b7, "Pale Pink", "211"),
+            (0xfab381, "Peach", "212"),
+            (0xc9a480, "Beige", "213"),
+            (0x970533, "Wine Red", "215"),
+            (0xa0b8cc, "Pale Sky", "216"),
+            (0x7fc21c, "Yellow Green", "218"),
+            (0xe5e5e5, "Silver Gray", "220"),
+            (0x889b9b, "Gray", "221"),
+            (0x98d6bd, "Pale Aqua", "227"),
+            (0xb2e1e3, "Baby Blue", "228"),
+            (0x368ba0, "Powder Blue", "229"),
+            (0x4f83ab, "Bright Blue", "230"),
+            (0x386a91, "Slate Blue", "231"),
+            (0x071650, "Navy Blue", "232"),
+            (0xf999a2, "Salmon Pink", "233"),
+            (0xf9676b, "Coral", "234"),
+            (0xe3311f, "Burnt Orange", "235"),
+            (0xe2a188, "Cinnamon", "236"),
+            (0xb59474, "Umber", "237"),
+            (0xe4cf99, "Blond", "238"),
+            (0xffcb00, "Sunflower", "239"),
+            (0xe1add4, "Orchid Pink", "240"),
+            (0xc3007e, "Peony Purple", "241"),
+            (0x80004b, "Burgundy", "242"),
+            (0x540571, "Royal Purple", "243"),
+            (0xb10525, "Cardinal Red", "244"),
+            (0xcae0c0, "Opal Green", "245"),
+            (0x899856, "Moss Green", "246"),
+            (0x5c941a, "Meadow Green", "247"),
+            (0x003114, "Dark Green", "248"),
+            (0x5dae94, "Aquamarine", "249"),
+            (0x4cbf8f, "Emerald Green", "250"),
+            (0x007772, "Peacock Green", "251"),
+            (0x595b61, "Dark Gray", "252"),
+            (0xfffff2, "Ivory White", "253"),
+            (0xb15818, "Hazel", "254"),
+            (0xcb8a07, "Toast", "255"),
+            (0x986c80, "Salmon", "256"),
+            (0x98692d, "Cocoa Brown", "257"),
+            (0x4d3419, "Sienna", "258"),
+            (0x4c330b, "Sepia", "259"),
+            (0x33200a, "Dark Sepia", "260"),
+            (0x523a97, "Violet Blue", "261"),
+            (0x0d217e, "Blue Ink", "262"),
+            (0x1e77ac, "Sola Blue", "263"),
+            (0xb2dd53, "Green Dust", "264"),
+            (0xf33689, "Crimson", "265"),
+            (0xde649e, "Floral Pink", "266"),
+            (0x984161, "Wine", "267"),
+            (0x4c5612, "Olive Drab", "268"),
+            (0x4c881f, "Meadow", "269"),
+            (0xe4de79, "Mustard", "270"),
+            (0xcb8a1a, "Yellow Ocher", "271"),
+            (0xc6aa42, "Old Gold", "272"),
+            (0xecb02c, "Honey Dew", "273"),
+            (0xf88040, "Tangerine", "274"),
+            (0xffe505, "Canary Yellow", "275"),
+            (0xfa7a7a, "Vermilion", "202"),
+            (0x6be000, "Bright Green", "206"),
+            (0x386cae, "Ocean Blue", "222"),
+            (0xe3c4b4, "Beige Gray", "223"),
+            (0xe3ac81, "Bamboo", "224"),
+        ],
+    )
+}
+
+/// All built-in thread charts.
+pub fn charts() -> Vec<ThreadChart> {
+    vec![generic_chart(), pec_chart(), jef_chart()]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hex_round_trip() {
+        let c = Rgb::from_hex("#1a3e8c").unwrap();
+        assert_eq!(c, Rgb::new(0x1a, 0x3e, 0x8c));
+        assert_eq!(c.to_hex(), "#1a3e8c");
+        assert_eq!(Rgb::from_hex("f00"), Some(Rgb::new(255, 0, 0)));
+        let json = serde_json::to_string(&c).unwrap();
+        assert_eq!(json, "\"#1a3e8c\"");
+    }
+
+    #[test]
+    fn nearest_thread() {
+        let pec = pec_chart();
+        assert_eq!(pec.threads.len(), 65);
+        assert_eq!(pec.threads[pec.nearest(Rgb::new(250, 250, 0))].name, "Yellow");
+        assert_eq!(jef_chart().threads.len(), 79);
+    }
+}

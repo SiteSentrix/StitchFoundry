@@ -1,0 +1,1265 @@
+use serde_json::{Value, json};
+use sf_core::threads::Rgb;
+
+use super::*;
+
+fn session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    s
+}
+
+fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
+    let r = s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+fn stitches(s: &Session) -> usize {
+    s.embroidery_plan().map_or(0, |p| p.pattern().stitch_count())
+}
+
+#[test]
+fn stitch_type_params_and_undo() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    assert_eq!(stitches(&s), 0, "plain art is not stitched");
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let dense = stitches(&s);
+    assert!(dense > 500, "{dense}");
+    s.execute("embroidery.setParams", &json!({"params": {"spacing": 0.8, "stitchLength": 5.0}})).unwrap();
+    let sparse = stitches(&s);
+    assert!(sparse < dense, "{sparse} < {dense}");
+    let e = s.doc().unwrap().doc.node(a).unwrap().embroidery.clone().unwrap();
+    let sf_core::attr::StitchType::Fill(f) = &e.stitch else { panic!("{e:?}") };
+    assert!((f.spacing - 0.8).abs() < 1e-9 && (f.stitch_length - 5.0).abs() < 1e-9);
+    // bad values change nothing
+    assert!(s.execute("embroidery.setParams", &json!({"params": {"spacing": "dense"}})).is_err());
+    assert_eq!(stitches(&s), sparse);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(stitches(&s), dense);
+    s.execute("embroidery.set", &json!({"type": "none"})).unwrap();
+    assert_eq!(stitches(&s), 0);
+}
+
+#[test]
+fn every_type_and_brush_stitches() {
+    for t in ["run", "bean", "satin", "fill", "satinfill", "contour", "spiral", "radial", "cross", "meander", "applique", "manual"] {
+        let mut s = session();
+        rect(&mut s, 10.0, 10.0, 80.0, 40.0);
+        s.execute("embroidery.set", &json!({"type": t})).unwrap();
+        assert!(stitches(&s) > 3, "{t}: {}", stitches(&s));
+    }
+    let pts: Vec<Vec<f64>> = (0..40).map(|i| vec![20.0 + i as f64 * 4.0, 100.0 + (i as f64 * 0.3).sin() * 30.0]).collect();
+    for brush in ["run", "bean", "steil", "tapered", "calligraphy", "pressure", "applique", "fill", "satin"] {
+        let mut s = session();
+        let r = s.execute("embroidery.draw", &json!({"brush": brush, "points": pts, "width": 4.0, "pressures": [0.2, 1.0, 0.5]})).unwrap();
+        assert!(r["id"].as_u64().is_some());
+        assert!(stitches(&s) > 3, "{brush}: {}", stitches(&s));
+    }
+    for (stamp, brush) in [("ellipse", "fill"), ("rectangle", "satin"), ("star", "fill"), ("heart", "applique"), ("arrow", "fill"), ("line", "steil")]
+    {
+        let mut s = session();
+        s.execute("embroidery.draw", &json!({"brush": brush, "stamp": stamp, "from": [100, 100], "to": [200, 180]})).unwrap();
+        assert!(stitches(&s) > 3, "{stamp}");
+    }
+}
+
+#[test]
+fn inclination_lines_turn_and_follow_the_object() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 200.0, 40.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.addGuide", &json!({"id": a.0, "a": [150, 90], "b": [150, 150]})).unwrap();
+    s.execute("embroidery.addGuide", &json!({"id": a.0, "a": [250, 90], "b": [260, 150]})).unwrap();
+    let n = s.doc().unwrap().doc.node(a).unwrap().embroidery.clone().unwrap();
+    assert_eq!(n.guides.len(), 2);
+    assert!(!n.auto_direction);
+    s.execute("embroidery.moveGuide", &json!({"id": a.0, "index": 1, "b": [240, 150]})).unwrap();
+    // moving the object moves its guides
+    s.execute("object.move", &json!({"dx": 10, "dy": 20})).unwrap();
+    let g = s.doc().unwrap().doc.node(a).unwrap().embroidery.clone().unwrap().guides[0];
+    assert!((g.a.x - 160.0).abs() < 1e-6 && (g.a.y - 110.0).abs() < 1e-6, "{g:?}");
+    s.execute("embroidery.removeGuide", &json!({"id": a.0, "index": 0})).unwrap();
+    assert!(s.execute("embroidery.removeGuide", &json!({"id": a.0, "index": 5})).is_err());
+    s.execute("embroidery.clearGuides", &json!({})).unwrap();
+    let e = s.doc().unwrap().doc.node(a).unwrap().embroidery.clone().unwrap();
+    assert!(e.guides.is_empty() && e.auto_direction);
+}
+
+#[test]
+fn auto_direction_places_editable_guides() {
+    let mut s = session();
+    // a long thin bar → turning guides; a square → an angle
+    let bar = rect(&mut s, 50.0, 50.0, 300.0, 20.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    let sq = rect(&mut s, 50.0, 200.0, 100.0, 100.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.autoDirection", &json!({"ids": [bar.0, sq.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(bar).unwrap().embroidery.as_ref().unwrap().guides.len() >= 2);
+    let e = d.node(sq).unwrap().embroidery.clone().unwrap();
+    assert!(e.guides.is_empty() && !e.auto_direction);
+}
+
+#[test]
+fn convert_thread_beads_settings_info_and_sorting() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    let b = rect(&mut s, 200.0, 10.0, 100.0, 50.0);
+    let c = rect(&mut s, 400.0, 10.0, 100.0, 50.0);
+    s.execute("edit.selectAll", &json!({})).ok();
+    s.execute("embroidery.convert", &json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    assert!(stitches(&s) > 1000);
+    s.execute("embroidery.setThread", &json!({"ids": [a.0, c.0], "color": "#d62828", "name": "Red"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"ids": [b.0], "color": "#1a3e8c"})).unwrap();
+    let before = s.embroidery_plan().unwrap().pattern().count(sf_core::Cmd::ColorChange);
+    assert_eq!(before, 2);
+    s.execute("embroidery.sortByColor", &json!({})).unwrap();
+    let after = s.embroidery_plan().unwrap().pattern().count(sf_core::Cmd::ColorChange);
+    assert_eq!(after, 1, "red objects sewn together");
+    s.execute("embroidery.setBeads", &json!({"id": a.0, "entry": [10, 10], "exit": null})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).unwrap().embroidery.as_ref().unwrap().entry.is_some());
+    s.execute("embroidery.settings", &json!({"hoop": "Brother 130 × 180 (5×7)", "trimThreshold": 3.0})).unwrap();
+    s.execute("embroidery.applyFabric", &json!({"name": "Towel / terry"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert!(info["stitches"].as_u64().unwrap() > 1000);
+    assert_eq!(info["colorChanges"], 1);
+    assert_eq!(info["fabric"], "Towel / terry");
+    assert!(info["fits"].as_bool().is_some());
+    let plan = s.execute("embroidery.plan", &json!({"limit": 10})).unwrap();
+    assert_eq!(plan["stitches"].as_array().unwrap().len(), 10);
+    assert!(s.execute("embroidery.settings", &json!({"hoop": "nope"})).is_err());
+}
+
+#[test]
+fn auto_digitize_traces_an_image_into_satin_and_fill() {
+    let mut s = session();
+    // A white logo: a blue disc, a long red bar and a speck.
+    let r = vectorcraft_trace::Raster::from_fn(300, 200, |x, y| {
+        let (dx, dy) = (x as f64 - 90.0, y as f64 - 90.0);
+        if dx * dx + dy * dy <= 60.0 * 60.0 {
+            [20, 40, 200, 255]
+        } else if (60..260).contains(&x) && (170..178).contains(&y) {
+            [220, 30, 30, 255]
+        } else if (280..282).contains(&x) && (20..22).contains(&y) {
+            [20, 160, 40, 255]
+        } else {
+            [255, 255, 255, 255]
+        }
+    });
+    let png = r.encode_png();
+    s.execute("file.place", &json!({"name": "logo.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let res = s.execute("embroidery.autoDigitize", &json!({"colors": 4})).unwrap();
+    assert_eq!(res["objects"], 2, "{res}");
+    assert_eq!(res["satin"], 1, "the bar is satin: {res}");
+    assert_eq!(res["fill"], 1, "the disc is tatami: {res}");
+    assert!(stitches(&s) > 1000, "{}", stitches(&s));
+    let d = &s.doc().unwrap().doc;
+    let images = d.layers[0].children().unwrap().iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).count();
+    assert_eq!(images, 1, "the artwork stays under the stitches");
+    // One undo step back to the plain image.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), before.layers[0].children().unwrap().len());
+    assert_eq!(stitches(&s), 0);
+    // Nothing to trace without an image.
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("embroidery.autoDigitize", &json!({})).is_err());
+}
+
+#[test]
+fn type_is_stitched_from_its_glyphs() {
+    let mut s = session();
+    // Small type (24 pt, about 8.5 mm): satin columns, with the counters of B, o and b
+    // cut so the satin can turn around them.
+    let small = NodeId(s.execute("text.create", &json!({"x": 20, "y": 100, "text": "Bob", "size": 24})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [small.0]})).unwrap();
+    s.execute("embroidery.convert", &json!({})).unwrap();
+    let e = s.doc().unwrap().doc.node(small).unwrap().embroidery.clone().unwrap();
+    assert!(matches!(e.stitch, sf_core::attr::StitchType::Satin(_)), "{e:?}");
+    let plan = s.embroidery_plan().unwrap();
+    assert!(plan.design.objects.len() >= 6, "counters split into columns: {}", plan.design.objects.len());
+    assert!(stitches(&s) > 200, "{}", stitches(&s));
+    // Big type (400 pt, about 140 mm): stems too thick for satin are tatami.
+    let big = NodeId(s.execute("text.create", &json!({"x": 20, "y": 400, "text": "I", "size": 400})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [big.0]})).unwrap();
+    s.execute("embroidery.convert", &json!({})).unwrap();
+    let e = s.doc().unwrap().doc.node(big).unwrap().embroidery.clone().unwrap();
+    assert!(matches!(e.stitch, sf_core::attr::StitchType::Fill(_)), "{e:?}");
+    // Editing the text restitches it.
+    let before = stitches(&s);
+    s.execute("select.set", &json!({"ids": [small.0]})).unwrap();
+    s.execute("text.setText", &json!({"text": "Bobby"})).unwrap();
+    assert!(stitches(&s) > before, "{} > {before}", stitches(&s));
+}
+
+#[test]
+fn brush_strokes_are_sewn_before_or_after_an_object() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 60.0, 40.0);
+    let b = rect(&mut s, 100.0, 10.0, 60.0, 40.0);
+    let index = |s: &Session, id: NodeId| s.doc().unwrap().doc.position(id).unwrap().1;
+    let stroke = |s: &mut Session, extra: serde_json::Value| {
+        let mut p = json!({"brush": "run", "points": [[10, 80], [60, 90], [110, 80]]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        s.execute("embroidery.draw", &p).map(|r| NodeId(r["id"].as_u64().unwrap()))
+    };
+    let after_a = stroke(&mut s, json!({"order": "after", "relativeTo": a.0})).unwrap();
+    assert_eq!(index(&s, after_a), index(&s, a) + 1, "sewn right after a");
+    let before_b = stroke(&mut s, json!({"order": "before", "relativeTo": b.0})).unwrap();
+    assert_eq!(index(&s, before_b) + 1, index(&s, b), "sewn right before b");
+    let top = stroke(&mut s, json!({})).unwrap();
+    assert!(index(&s, top) > index(&s, b), "sewn last by default");
+    assert!(stroke(&mut s, json!({"order": "after"})).is_err(), "after what?");
+    assert!(stroke(&mut s, json!({"order": "sideways", "relativeTo": a.0})).is_err());
+}
+
+#[test]
+fn machine_files_export_and_open_as_manual_stitches() {
+    let mut s = session();
+    rect(&mut s, 20.0, 20.0, 120.0, 80.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    rect(&mut s, 160.0, 20.0, 20.0, 140.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#1a3e8c"})).unwrap();
+    let before = stitches(&s);
+    assert!(before > 1000, "{before}");
+    let files: Vec<(&str, String)> = super::cmd::embroidery::MACHINE_EXTS
+        .iter()
+        .map(|ext| {
+            let r = s.execute("embroidery.export", &json!({"format": ext})).unwrap();
+            assert!(r["bytes"].as_u64().unwrap() > 100, "{ext}: {r}");
+            (*ext, r["dataBase64"].as_str().unwrap().to_string())
+        })
+        .collect();
+    for (ext, data) in files {
+        let r = s.execute("document.open", &json!({"name": format!("design.{ext}"), "dataBase64": data})).unwrap();
+        assert_eq!(r["format"], ext, "{r}");
+        let st = s.doc().unwrap();
+        let paths: Vec<_> = st.doc.layers[0].children().unwrap().iter().filter(|n| n.embroidery.is_some()).cloned().collect();
+        let after = stitches(&s);
+        assert!(after * 10 >= before * 9 && after * 10 <= before * 13, "{ext}: {after} stitches from {before}");
+        let colors: Vec<Rgb> = paths.iter().filter_map(|n| n.embroidery.as_ref()?.thread.as_ref().map(|t| t.color)).collect();
+        assert_eq!(colors.len(), 2, "{ext}: one stitch path per thread");
+        if ext != "dst" && ext != "exp" && ext != "u01" {
+            assert!(colors[0].delta_e(Rgb::new(0xd6, 0x28, 0x28)) < 25.0, "{ext}: {colors:?}");
+            assert!(colors[1].delta_e(Rgb::new(0x1a, 0x3e, 0x8c)) < 25.0, "{ext}: {colors:?}");
+        }
+    }
+    // File › Place brings a machine file in as stitches too.
+    let dst = s.execute("embroidery.export", &json!({"format": "dst"})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    s.execute("file.place", &json!({"name": "design.dst", "dataBase64": dst})).unwrap();
+    let placed = stitches(&s);
+    assert!(placed * 10 >= before * 9, "placed {placed} of {before}");
+    // Nothing to export without stitches; unknown formats are refused.
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    assert!(s.execute("embroidery.export", &json!({"format": "dst"})).is_err());
+    assert!(s.execute("embroidery.export", &json!({"format": "zip"})).is_err());
+}
+
+#[test]
+fn minus_front_cuts_a_hole_and_keeps_the_stitches() {
+    let mut s = session();
+    let a = rect(&mut s, 20.0, 20.0, 160.0, 120.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#2a9d4b"})).unwrap();
+    let full = stitches(&s);
+    let hole = NodeId(s.execute("shape.ellipse", &json!({"x": 60, "y": 40, "width": 80, "height": 80})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, hole.0]})).unwrap();
+    s.execute("object.pathfinder.minusFront", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let stitched: Vec<_> = st.doc.layers[0].children().unwrap().iter().filter(|n| n.embroidery.is_some()).cloned().collect();
+    assert_eq!(stitched.len(), 1, "the result keeps the back object's stitches");
+    let e = stitched[0].embroidery.as_ref().unwrap();
+    assert_eq!(e.thread.as_ref().map(|t| t.color), Some(Rgb::new(0x2a, 0x9d, 0x4b)));
+    let holed = stitches(&s);
+    assert!(holed < full, "fewer stitches round the hole: {holed} of {full}");
+    // No needle goes down inside the hole (a circle of radius 40 pt round (100, 80) pt).
+    let plan = s.embroidery_plan().unwrap();
+    let (c, r) = (sf_core::Point::new(100.0, 80.0) * vectorcraft_embroidery::MM_PER_PT, 40.0 * vectorcraft_embroidery::MM_PER_PT);
+    let inside = plan.pattern().stitches.iter().filter(|st| st.cmd == sf_core::Cmd::Stitch && st.pos().distance(c) < r - 0.5).count();
+    assert_eq!(inside, 0, "stitches inside the hole");
+}
+
+#[test]
+fn run_styles_passes_ties_and_satin_options() {
+    let mut s = session();
+    let line = NodeId(s.execute("shape.line", &json!({"x1": 20, "y1": 50, "x2": 300, "y2": 50})).unwrap()["id"].as_u64().unwrap());
+    s.execute("embroidery.set", &json!({"type": "run"})).unwrap();
+    let once = stitches(&s);
+    s.execute("embroidery.setParams", &json!({"params": {"passes": 2}})).unwrap();
+    let back = stitches(&s);
+    assert!(back > once * 2 - 10 && back < once * 2 + 10, "a backtrack sews the line twice: {back} vs {once}");
+    s.execute("embroidery.set", &json!({"type": "backstitch"})).unwrap();
+    let e = s.doc().unwrap().doc.node(line).unwrap().embroidery.clone().unwrap();
+    let sf_core::attr::StitchType::Run(r) = &e.stitch else { panic!("{e:?}") };
+    assert_eq!(r.kind, sf_core::model::RunKind::Back);
+    s.execute("embroidery.set", &json!({"type": "stemstitch"})).unwrap();
+    assert!(stitches(&s) > once, "stem stitch sews forward two, back one");
+    // ties: the object can turn off the design's tie-in and tie-off
+    let tied = stitches(&s);
+    s.execute("embroidery.setParams", &json!({"params": {"tieIn": false, "tieOff": false}})).unwrap();
+    assert_eq!(stitches(&s), tied - 8);
+    let e = s.doc().unwrap().doc.node(line).unwrap().embroidery.clone().unwrap();
+    assert_eq!((e.tie_in, e.tie_off), (Some(false), Some(false)));
+    s.execute("embroidery.setParams", &json!({"params": {"tieIn": null, "tieOff": null}})).unwrap();
+    assert_eq!(stitches(&s), tied, "null follows the design again");
+
+    // satin: twin-sided pull compensation, double zigzag, preserve long stitches
+    let mut s = session();
+    let col = rect(&mut s, 50.0, 50.0, 200.0, 40.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    let plain = stitches(&s);
+    s.execute(
+        "embroidery.setParams",
+        &json!({"params": {"pullComp2": 0.4, "preserveLong": true, "underlay": {"auto": false, "zigzag": true, "doubleZigzag": true}}}),
+    )
+    .unwrap();
+    let e = s.doc().unwrap().doc.node(col).unwrap().embroidery.clone().unwrap();
+    let sf_core::attr::StitchType::Satin(p) = &e.stitch else { panic!("{e:?}") };
+    assert_eq!(p.pull_comp_2, Some(0.4));
+    assert!(p.preserve_long && p.underlay.double_zigzag);
+    assert_ne!(stitches(&s), plain);
+    s.execute("embroidery.setParams", &json!({"params": {"pullComp2": null}})).unwrap();
+    let e = s.doc().unwrap().doc.node(col).unwrap().embroidery.clone().unwrap();
+    let sf_core::attr::StitchType::Satin(p) = &e.stitch else { panic!("{e:?}") };
+    assert_eq!(p.pull_comp_2, None);
+}
+
+fn stitched_path(s: &mut Session, d: &str, ty: &str) -> NodeId {
+    let id = NodeId(s.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": ty})).unwrap();
+    id
+}
+
+fn first_and_last(s: &Session, id: NodeId) -> (sf_core::Point, sf_core::Point) {
+    let plan = s.embroidery_plan().unwrap();
+    let pat = plan.pattern();
+    let ranges = plan.records_of(id);
+    let moves: Vec<sf_core::Point> =
+        ranges.iter().flat_map(|r| pat.stitches[r.clone()].iter()).filter(|s| s.cmd == sf_core::Cmd::Stitch).map(|s| s.pos()).collect();
+    (moves[0], *moves.last().unwrap())
+}
+
+#[test]
+fn reverse_swaps_where_sewing_starts() {
+    let mut s = session();
+    let id = stitched_path(&mut s, "M20 100 L300 100", "run");
+    let (a, b) = first_and_last(&s, id);
+    s.execute("embroidery.reverse", &json!({})).unwrap();
+    let (a2, b2) = first_and_last(&s, id);
+    assert!(a2.distance(b) < 0.5 && b2.distance(a) < 0.5, "{a:?}→{b:?} became {a2:?}→{b2:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(first_and_last(&s, id).0.distance(a) < 0.5);
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("embroidery.reverse", &json!({})).is_err());
+}
+
+#[test]
+fn holes_are_removed_or_filled() {
+    let mut s = session();
+    // a 100 pt square with a 40 pt and a 4 pt square hole
+    let d = "M10 10 H110 V110 H10 Z M30 30 V70 H70 V30 Z M90 90 V94 H94 V90 Z";
+    let id = stitched_path(&mut s, d, "fill");
+    let subpaths = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths.len();
+    assert_eq!(subpaths(&s), 3);
+    // only holes under 5 mm² (the 4 pt square is ~2 mm²)
+    let r = s.execute("embroidery.removeHoles", &json!({"maxArea": 5.0})).unwrap();
+    assert_eq!(r["removed"], 1);
+    assert_eq!(subpaths(&s), 2);
+    // fill the remaining hole: a new stitched object, sewn right after
+    let r = s.execute("embroidery.fillHoles", &json!({})).unwrap();
+    let hole = NodeId(r["ids"][0].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.position(hole).unwrap().1, st.doc.position(id).unwrap().1 + 1);
+    assert!(st.doc.node(hole).unwrap().embroidery.is_some());
+    assert!(!s.embroidery_plan().unwrap().records_of(hole).is_empty(), "the hole fill is stitched");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let r = s.execute("embroidery.removeHoles", &json!({})).unwrap();
+    assert_eq!(r["removed"], 1);
+    assert_eq!(subpaths(&s), 1);
+    assert!(s.execute("embroidery.fillHoles", &json!({})).is_err(), "no holes left");
+    assert!(s.execute("embroidery.removeHoles", &json!({"maxArea": -1})).is_err());
+}
+
+#[test]
+fn select_same_thread_and_stitch_type() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#cc2233"})).unwrap();
+    let b = rect(&mut s, 100.0, 10.0, 50.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#cc2233"})).unwrap();
+    let c = rect(&mut s, 200.0, 10.0, 50.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#2233cc"})).unwrap();
+    rect(&mut s, 300.0, 10.0, 50.0, 50.0); // not stitched
+    let selected = |s: &Session| {
+        let mut v: Vec<u64> = s.doc().unwrap().selection.objects.iter().map(|i| i.0).collect();
+        v.sort();
+        v
+    };
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.same.thread", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a.0, b.0]);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.same.stitchType", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a.0, c.0]);
+}
+
+#[test]
+fn design_checks_find_sewing_problems() {
+    let mut s = session();
+    let kinds = |s: &mut Session| -> Vec<String> {
+        let r = s.execute("embroidery.check", &json!({})).unwrap();
+        r["findings"].as_array().unwrap().iter().map(|f| f["kind"].as_str().unwrap().to_string()).collect()
+    };
+    assert!(kinds(&mut s).is_empty(), "an empty design has no problems");
+    // four fills stacked on the same spot
+    for _ in 0..4 {
+        rect(&mut s, 50.0, 50.0, 60.0, 60.0);
+        s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    }
+    let k = kinds(&mut s);
+    assert!(k.contains(&"dense".to_string()), "{k:?}");
+    // a wide satin without auto split: long stitches (but under the 12 mm the
+    // machine allows, which would cut them in two)
+    rect(&mut s, 200.0, 50.0, 200.0, 30.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"splitLength": 0}})).unwrap();
+    // tiny lettering
+    let t = s.execute("text.create", &json!({"x": 50, "y": 300, "text": "abc", "size": 8})).unwrap();
+    s.execute("select.set", &json!({"ids": [t["id"]]})).unwrap();
+    s.execute("embroidery.convert", &json!({})).unwrap();
+    // a hoop too small for the design
+    s.execute("embroidery.settings", &json!({"hoop": "Brother 100 × 100 (4×4)"})).unwrap();
+    let r = s.execute("embroidery.check", &json!({})).unwrap();
+    let k: Vec<&str> = r["findings"].as_array().unwrap().iter().map(|f| f["kind"].as_str().unwrap()).collect();
+    for want in ["dense", "longStitches", "smallLettering", "hoop"] {
+        assert!(k.contains(&want), "{want} missing from {k:?}");
+    }
+    let dense: Vec<&Value> = r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "dense").collect();
+    assert!(dense.iter().any(|f| f["ids"].as_array().unwrap().len() == 4 && f["at"].as_array().is_some()), "the four stacked fills: {dense:?}");
+}
+
+#[test]
+fn satin_shapes_have_no_dense_ends() {
+    // square ends: rows parallel to the end, no fan converging on a corner
+    for (w, h) in [(200.0, 40.0), (40.0, 200.0), (150.0, 25.0), (60.0, 10.0)] {
+        let mut s = session();
+        rect(&mut s, 50.0, 50.0, w, h);
+        s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+        let r = s.execute("embroidery.check", &json!({})).unwrap();
+        let dense: Vec<&Value> = r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "dense").collect();
+        assert!(dense.is_empty(), "{w}×{h}: {dense:?}");
+    }
+    // lettering: no letter piles thread up at its stroke ends or where strokes meet
+    for (text, size) in [("Sample", 60), ("WAVE", 120), ("small agw", 24)] {
+        let mut s = session();
+        let t = s.execute("text.create", &json!({"x": 40, "y": 200, "text": text, "size": size})).unwrap();
+        s.execute("select.set", &json!({"ids": [t["id"]]})).unwrap();
+        s.execute("embroidery.convert", &json!({})).unwrap();
+        let r = s.execute("embroidery.check", &json!({})).unwrap();
+        let dense: Vec<&Value> = r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "dense").collect();
+        assert!(dense.is_empty(), "{text}: {dense:?}");
+    }
+    // two overlapping fills, or a satin border along a fill's edge, are normal
+    for border in [false, true] {
+        let mut s = session();
+        for x in if border { vec![100.0] } else { vec![100.0, 110.0] } {
+            rect(&mut s, x, 100.0, 120.0, 90.0);
+            s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+        }
+        if border {
+            let edge: Vec<Vec<f64>> = (0..=24).map(|i| vec![100.0 + i as f64 * 5.0, 100.0]).collect();
+            s.execute("embroidery.draw", &json!({"brush": "steil", "points": edge, "width": 3.0})).unwrap();
+        }
+        let r = s.execute("embroidery.check", &json!({})).unwrap();
+        assert!(r["findings"].as_array().unwrap().iter().all(|f| f["kind"] != "dense"), "{border}: {r}");
+    }
+}
+
+#[test]
+fn satin_lines_have_smart_corners() {
+    let dense = |s: &mut Session| -> Vec<f64> {
+        let r = s.execute("embroidery.check", &json!({})).unwrap();
+        r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "dense").filter_map(|f| f["value"].as_f64()).collect()
+    };
+    let l: Vec<Vec<f64>> =
+        (0..=24).map(|i| vec![100.0 + i as f64 * 5.0, 100.0]).chain((1..=18).map(|i| vec![220.0, 100.0 + i as f64 * 5.0])).collect();
+    for width in [3.0, 4.0] {
+        let mut s = session();
+        let id = s.execute("embroidery.draw", &json!({"brush": "steil", "points": l, "width": width})).unwrap()["id"].clone();
+        assert!(dense(&mut s).is_empty(), "{width} mm: {:?}", dense(&mut s));
+        // rows turning round the corner pile thread up inside it
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        s.execute("embroidery.setParams", &json!({"params": {"corners": "Turn"}})).unwrap();
+        assert!(!dense(&mut s).is_empty(), "{width} mm turned");
+    }
+    // a closed outline painted as a stroke is a satin border round the shape, not a fill
+    let mut s = session();
+    let id = s
+        .execute("embroidery.draw", &json!({"brush": "steil", "stamp": "rectangle", "from": [100, 100], "to": [300, 250], "width": 3.0}))
+        .unwrap()["id"]
+        .clone();
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let (x0, y0, x1, y1) = (100.0 / PT, 100.0 / PT, 300.0 / PT, 250.0 / PT);
+    let off_outline = |s: &Session| -> usize {
+        let plan = s.embroidery_plan().unwrap();
+        plan.pattern()
+            .stitches
+            .iter()
+            .filter(|st| st.cmd == sf_core::Cmd::Stitch)
+            .filter(|st| {
+                let (x, y) = (st.x, st.y);
+                // how far from the outline, measured square (a mitered corner is square)
+                let inside = (x - x0).min(x1 - x).min(y - y0).min(y1 - y);
+                let outside = (x0 - x).max(x - x1).max(y0 - y).max(y - y1);
+                inside.max(outside) > 2.0
+            })
+            .count()
+    };
+    assert!(stitches(&s) > 500 && off_outline(&s) == 0, "{} stitches, {} off the outline", stitches(&s), off_outline(&s));
+    assert!(dense(&mut s).is_empty(), "{:?}", dense(&mut s));
+    // its thread colour paints the stroke, so it stays a border
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#cc2200"})).unwrap();
+    assert_eq!(off_outline(&s), 0);
+    let n = s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().clone();
+    assert!(n.appearance.fill_paint().is_none(), "{:?}", n.appearance.fill_paint());
+}
+
+/// Needle positions (mm) of one object's stitches.
+fn needles(s: &Session, id: NodeId) -> Vec<sf_core::Point> {
+    let plan = s.embroidery_plan().unwrap();
+    let pat = plan.pattern();
+    plan.records_of(id).iter().flat_map(|r| pat.stitches[r.clone()].iter()).filter(|s| s.cmd == sf_core::Cmd::Stitch).map(|s| s.pos()).collect()
+}
+
+#[test]
+fn objects_remove_the_stitching_below_them() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let below = rect(&mut s, 100.0, 100.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let above = rect(&mut s, 150.0, 140.0, 80.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let (x0, y0, x1, y1) = (150.0 / PT, 140.0 / PT, 230.0 / PT, 200.0 / PT);
+    // stitches of the lower fill more than `margin` mm inside the upper one
+    let under = |s: &Session, margin: f64| {
+        needles(s, below).iter().filter(|p| p.x > x0 + margin && p.x < x1 - margin && p.y > y0 + margin && p.y < y1 - margin).count()
+    };
+    let all = needles(&s, below).len();
+    assert!(under(&s, 0.0) > 100, "{}", under(&s, 0.0));
+    s.execute("select.set", &json!({"ids": [above.0]})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"removeUnderlying": true}})).unwrap();
+    // nothing deeper than the 1 mm overlap (and the rows' pull compensation), but the
+    // overlap itself is still sewn
+    assert_eq!(under(&s, 1.5), 0);
+    assert!(under(&s, 0.0) > 0);
+    // the hole is about 13 % of the fill; rows broken by it add turns and travel
+    assert!(needles(&s, below).len() + 150 < all, "{} of {all}", needles(&s, below).len());
+    s.execute("embroidery.setParams", &json!({"params": {"underlyingOverlap": 0.0}})).unwrap();
+    assert_eq!(under(&s, 0.5), 0);
+    s.execute("embroidery.setParams", &json!({"params": {"removeUnderlying": false}})).unwrap();
+    assert_eq!(needles(&s, below).len(), all);
+    // a fill covered completely makes no stitches at all
+    let mut s = session();
+    let small = rect(&mut s, 150.0, 150.0, 40.0, 40.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"removeUnderlying": true}})).unwrap();
+    assert!(needles(&s, small).is_empty());
+    let r = s.execute("embroidery.check", &json!({})).unwrap();
+    assert!(r["findings"].as_array().unwrap().iter().any(|f| f["kind"] == "noStitches" && f["ids"][0] == small.0), "{r}");
+    // the stitches of a fill cut in two still belong to it
+    let mut s = session();
+    let wide = rect(&mut s, 100.0, 100.0, 300.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    rect(&mut s, 220.0, 80.0, 40.0, 100.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"removeUnderlying": true}})).unwrap();
+    let pts = needles(&s, wide);
+    let (left, right) = (pts.iter().filter(|p| p.x < 220.0 / PT).count(), pts.iter().filter(|p| p.x > 260.0 / PT).count());
+    let deep = pts.iter().filter(|p| p.x > 220.0 / PT + 1.5 && p.x < 260.0 / PT - 1.5).count();
+    assert!(left > 100 && right > 100 && deep == 0, "{left} left, {right} right, {deep} deep under the bar");
+}
+
+#[test]
+fn machine_profiles_set_limits_and_the_export_format() {
+    let mut s = session();
+    rect(&mut s, 50.0, 50.0, 100.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["machines"].as_array().unwrap().len(), 7, "{info}");
+    assert_eq!(info["machine"], "");
+    // a machine sets its limits and speed first; values given with it win
+    let r = s.execute("embroidery.settings", &json!({"machine": "PES", "maxJump": 7.0})).unwrap();
+    assert_eq!(r["machine"], "pes");
+    assert_eq!((r["settings"]["machine_speed"].as_f64(), r["settings"]["max_jump"].as_f64()), (Some(650.0), Some(7.0)), "{r}");
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!((info["machine"].as_str(), info["settings"]["maxJump"].as_f64()), (Some("pes"), Some(7.0)), "{info}");
+    // export writes the machine's format unless another is asked for
+    let e = s.execute("embroidery.export", &json!({})).unwrap();
+    assert_eq!(e["format"], "pes");
+    let bytes = vectorcraft_format::base64_decode(e["dataBase64"].as_str().unwrap()).unwrap();
+    assert!(bytes.starts_with(b"#PES"));
+    assert_eq!(s.execute("embroidery.export", &json!({"format": "dst"})).unwrap()["format"], "dst");
+    // unknown machines are refused; null forgets the machine but keeps its values
+    assert!(s.execute("embroidery.settings", &json!({"machine": "abc"})).is_err());
+    let r = s.execute("embroidery.settings", &json!({"machine": null})).unwrap();
+    assert!(r.get("machine").is_none(), "{r}");
+    assert_eq!(r["settings"]["machine_speed"].as_f64(), Some(650.0));
+    assert_eq!(s.execute("embroidery.export", &json!({})).unwrap()["format"], "dst");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["machine"], "pes");
+}
+
+#[test]
+fn machine_profiles_can_be_changed_and_made() {
+    let mut s = session();
+    rect(&mut s, 50.0, 50.0, 100.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    // a standard profile takes the design's machine settings, and keeps its name, format and kind
+    s.execute("embroidery.settings", &json!({"machine": "vp3", "machineSpeed": 700.0, "tieLength": 1.2, "trimSeconds": 8.0})).unwrap();
+    let r = s.execute("embroidery.machine.save", &json!({"name": "VP3", "fromDesign": true})).unwrap();
+    assert_eq!(
+        (r["name"].as_str(), r["standard"].as_bool(), r["edited"].as_bool(), r["created"].as_bool()),
+        (Some("vp3"), Some(true), Some(true), Some(false)),
+        "{r}"
+    );
+    assert!(s.execute("embroidery.machine.save", &json!({"name": "vp3", "format": "pes"})).is_err(), "a standard profile keeps its format");
+    assert!(s.execute("embroidery.machine.save", &json!({"name": "vp3", "newName": "Mine"})).is_err(), "and its name");
+    // choosing it sets its values, the advanced ones too
+    s.execute("embroidery.settings", &json!({"machine": null, "machineSpeed": 500.0, "tieLength": 0.8})).unwrap();
+    let r = s.execute("embroidery.settings", &json!({"machine": "vp3"})).unwrap();
+    let st = &r["settings"];
+    assert_eq!((st["machine_speed"].as_f64(), st["tie_length"].as_f64(), st["trim_seconds"].as_f64()), (Some(700.0), Some(1.2), Some(8.0)), "{r}");
+    // one of your own starts from its format's profile
+    let r = s
+        .execute("embroidery.machine.save", &json!({"name": "Diamond deLuxe", "format": "VP3", "speed": 850.0, "advanced": {"tieStyle": "triangle"}}))
+        .unwrap();
+    assert_eq!((r["created"].as_bool(), r["standard"].as_bool(), r["format"].as_str()), (Some(true), Some(false), Some("vp3")), "{r}");
+    let list = s.execute("embroidery.machine.list", &json!({})).unwrap();
+    let all = list["machines"].as_array().unwrap();
+    assert_eq!(all.len(), 8, "{list}");
+    let d = &all[7];
+    assert_eq!(
+        (d["name"].as_str(), d["label"].as_str(), d["kind"].as_str(), d["speed"].as_f64(), d["trimSeconds"].as_f64()),
+        (Some("Diamond deLuxe"), Some("Diamond deLuxe"), Some("home"), Some(850.0), Some(8.0)),
+        "{d}"
+    );
+    assert_eq!((d["advanced"]["tieStyle"].as_str(), d["advanced"]["tieLength"].as_f64()), (Some("triangle"), Some(1.2)), "{d}");
+    assert_eq!((all[5]["label"].as_str(), all[5]["edited"].as_bool()), (Some("VP3: home machines"), Some(true)));
+    // the design using it keeps its format too, and is exported in it
+    let r = s.execute("embroidery.settings", &json!({"machine": "diamond DELUXE"})).unwrap();
+    assert_eq!(
+        (r["machine"].as_str(), r["machine_format"].as_str(), r["settings"]["tie_style"].as_str()),
+        (Some("Diamond deLuxe"), Some("vp3"), Some("triangle"))
+    );
+    assert_eq!(s.execute("embroidery.export", &json!({})).unwrap()["format"], "vp3");
+    // renamed and given another format: the design follows
+    s.execute("embroidery.machine.save", &json!({"name": "Diamond deLuxe", "newName": "Diamond", "format": "pes"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!((info["machine"].as_str(), info["machineFormat"].as_str()), (Some("Diamond"), Some("pes")), "{info}");
+    assert_eq!(s.execute("embroidery.export", &json!({})).unwrap()["format"], "pes");
+    // names stay apart from the formats and each other; values stay sensible
+    s.execute("embroidery.machine.save", &json!({"name": "Shop", "format": "dst"})).unwrap();
+    for p in [
+        json!({"name": "Diamond", "newName": "dst"}),
+        json!({"name": "Diamond", "newName": "shop"}),
+        json!({"name": "Diamond", "newName": " "}),
+        json!({"name": "Tower", "format": "emb"}),
+        json!({"name": "Tower"}),
+        json!({"name": "Diamond", "speed": 0}),
+        json!({"name": "Diamond", "advanced": {"tieStyle": "knot"}}),
+        json!({"name": "Diamond", "advanced": 3}),
+        json!({}),
+    ] {
+        assert!(s.execute("embroidery.machine.save", &p).is_err(), "{p}");
+    }
+    // deleted, the design keeps its name and format
+    s.execute("embroidery.machine.delete", &json!({"name": "diamond"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["machines"].as_array().unwrap().len(), 8, "the standard ones and Shop");
+    assert_eq!((info["machine"].as_str(), info["machineFormat"].as_str()), (Some("Diamond"), Some("pes")));
+    assert_eq!(s.execute("embroidery.export", &json!({})).unwrap()["format"], "pes");
+    // a standard profile goes back to how it ships; one as it ships keeps no copy
+    let r = s.execute("embroidery.machine.delete", &json!({"name": "VP3"})).unwrap();
+    assert_eq!((r["name"].as_str(), r["reset"].as_bool()), (Some("vp3"), Some(true)));
+    assert!(s.execute("embroidery.machine.delete", &json!({"name": "vp3"})).is_err(), "nothing to reset");
+    assert!(s.execute("embroidery.machine.delete", &json!({"name": "Tower"})).is_err());
+    s.execute("embroidery.machine.save", &json!({"name": "dst", "speed": 900.0})).unwrap();
+    assert_eq!(s.prefs.embroidery_machines.len(), 2);
+    assert_eq!(s.execute("embroidery.machine.save", &json!({"name": "dst", "speed": 1000.0})).unwrap()["edited"], false);
+    assert_eq!(s.prefs.embroidery_machines.len(), 1, "only Shop");
+    // they are kept with the preferences, which a reset keeps
+    let json = s.prefs.to_json();
+    assert_eq!(json["embroideryMachines"][0]["name"], "Shop");
+    let back: Prefs = serde_json::from_value(json).unwrap();
+    assert_eq!(back.embroidery_machines, s.prefs.embroidery_machines);
+    s.prefs.reset(None);
+    assert_eq!(s.prefs.embroidery_machines.len(), 1);
+}
+
+/// An object's own stitches: (x, y, command) in document points.
+fn own(s: &mut Session, id: NodeId) -> (bool, Vec<(f64, f64, String)>) {
+    let r = s.execute("embroidery.stitches", &json!({"id": id.0})).unwrap();
+    let list = r["stitches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap(), q[2].as_str().unwrap().to_string()))
+        .collect();
+    (r["frozen"].as_bool().unwrap(), list)
+}
+
+fn records(s: &Session, cmd: sf_core::Cmd) -> usize {
+    s.embroidery_plan().map_or(0, |p| p.pattern().stitches.iter().filter(|st| st.cmd == cmd).count())
+}
+
+#[test]
+fn stitches_can_be_frozen_edited_and_regenerated() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let id = rect(&mut s, 50.0, 50.0, 100.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let (frozen, generated) = own(&mut s, id);
+    assert!(!frozen && generated.len() > 100, "{}", generated.len());
+    let total = stitches(&s);
+    // freezing changes nothing that is sewn
+    s.execute("embroidery.freeze", &json!({})).unwrap();
+    assert_eq!(stitches(&s), total);
+    let (frozen, list) = own(&mut s, id);
+    assert!(frozen && list.len() == generated.len());
+    assert!(s.execute("embroidery.freeze", &json!({})).is_err(), "frozen already");
+    // a moved stitch is sewn where it was moved to
+    s.execute("embroidery.stitches.edit", &json!({"id": id.0, "ops": [{"op": "move", "indices": [10], "by": [5.0, 0.0]}]})).unwrap();
+    let moved = own(&mut s, id).1[10].clone();
+    assert!((moved.0 - list[10].0 - 5.0).abs() < 1e-6 && (moved.1 - list[10].1).abs() < 1e-6);
+    let target = sf_core::Point::new(moved.0 / PT, moved.1 / PT);
+    let plan = s.embroidery_plan().unwrap();
+    assert!(plan.pattern().stitches.iter().any(|st| st.cmd == sf_core::Cmd::Stitch && st.pos().distance(target) < 1e-3));
+    // delete three, insert one in front
+    s.execute(
+        "embroidery.stitches.edit",
+        &json!({"id": id.0, "ops": [{"op": "delete", "indices": [2, 1, 0]}, {"op": "insert", "after": -1, "at": [52.0, 52.0]}]}),
+    )
+    .unwrap();
+    let list = own(&mut s, id).1;
+    assert_eq!(list.len(), generated.len() - 2);
+    assert_eq!((list[0].0, list[0].1, list[0].2.as_str()), (52.0, 52.0, "stitch"));
+    // machine functions at single stitches
+    let (stops, trims) = (records(&s, sf_core::Cmd::Stop), records(&s, sf_core::Cmd::Trim));
+    s.execute("embroidery.function.insert", &json!({"id": id.0, "at": 50, "kind": "stop"})).unwrap();
+    assert_eq!(own(&mut s, id).1[51].2, "stop");
+    assert_eq!(records(&s, sf_core::Cmd::Stop), stops + 1);
+    s.execute("embroidery.function.insert", &json!({"id": id.0, "at": 80, "kind": "trim"})).unwrap();
+    assert_eq!(records(&s, sf_core::Cmd::Trim), trims + 1);
+    s.execute("embroidery.function.insert", &json!({"id": id.0, "at": 70, "kind": "jump"})).unwrap();
+    assert_eq!(own(&mut s, id).1[70].2, "jump");
+    s.execute("embroidery.function.clear", &json!({"id": id.0, "at": 70})).unwrap();
+    assert_eq!(own(&mut s, id).1[70].2, "stitch");
+    s.execute("embroidery.function.clear", &json!({"id": id.0, "at": 51})).unwrap();
+    assert_eq!(records(&s, sf_core::Cmd::Stop), stops);
+    // bad requests change nothing
+    let before = own(&mut s, id).1;
+    for (cmd, p) in [
+        ("embroidery.function.clear", json!({"id": id.0, "at": 3})),
+        ("embroidery.function.insert", json!({"id": id.0, "at": 100000, "kind": "trim"})),
+        ("embroidery.function.insert", json!({"id": id.0, "at": 3, "kind": "colour"})),
+        ("embroidery.stitches.edit", json!({"id": id.0, "ops": [{"op": "move", "indices": [100000], "by": [1, 1]}]})),
+        ("embroidery.stitches.edit", json!({"id": id.0, "ops": [{"op": "spin"}]})),
+        ("embroidery.stitches.edit", json!({"id": id.0, "ops": [{"op": "insert", "after": -2, "at": [0, 0]}]})),
+    ] {
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+    }
+    assert_eq!(own(&mut s, id).1, before);
+    // frozen stitches follow the object when it moves
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let shifted = own(&mut s, id).1;
+    assert!((shifted[5].0 - before[5].0 - 20.0).abs() < 1e-6 && (shifted[5].1 - before[5].1).abs() < 1e-6);
+    // regenerate drops the edits; undo brings them back
+    s.execute("embroidery.regenerate", &json!({})).unwrap();
+    assert!(!own(&mut s, id).0);
+    assert!(s.execute("embroidery.regenerate", &json!({})).is_err(), "nothing to regenerate");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(own(&mut s, id), (true, shifted));
+}
+
+#[test]
+fn objects_can_stop_the_machine_after_them() {
+    let mut s = session();
+    let a = rect(&mut s, 50.0, 50.0, 100.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    rect(&mut s, 200.0, 50.0, 100.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    assert_eq!(records(&s, sf_core::Cmd::Stop), 0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"stopAfter": true}})).unwrap();
+    assert_eq!(records(&s, sf_core::Cmd::Stop), 1);
+    // the stop comes after the first object's last stitch
+    let plan = s.embroidery_plan().unwrap();
+    let last = plan.records_of(a).last().map(|r| r.end).unwrap();
+    assert_eq!(plan.pattern().stitches[last - 1].cmd, sf_core::Cmd::Stop);
+}
+
+fn color_changes(s: &Session) -> usize {
+    records(s, sf_core::Cmd::ColorChange)
+}
+
+#[test]
+fn branches_carry_the_thread_under_what_is_sewn_next() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // two squares 40 pt (14 mm) apart and a bar across both, sewn last
+    let a = rect(&mut s, 50.0, 100.0, 60.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let b = rect(&mut s, 150.0, 100.0, 60.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let bar = rect(&mut s, 40.0, 115.0, 180.0, 30.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setBeads", &json!({"id": a.0, "exit": [110.0, 130.0]})).unwrap();
+    s.execute("embroidery.setBeads", &json!({"id": b.0, "entry": [150.0, 130.0]})).unwrap();
+    let trims = records(&s, sf_core::Cmd::Trim);
+    assert!(trims >= 2, "{trims}");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert!(s.execute("embroidery.branch", &json!({})).is_err(), "one object is not a branch");
+    s.execute("select.set", &json!({"ids": [a.0, b.0, bar.0]})).unwrap();
+    let g = NodeId(s.execute("embroidery.branch", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.node(g).unwrap().embroidery.as_ref().unwrap().stitch.id(), "branch");
+    assert_eq!(st.doc.parent_of(a), Some(g));
+    assert_eq!(st.selection.objects, vec![g]);
+    // the way from the first square to the second runs under the bar, and the second
+    // ends under the bar too: no trims but the last
+    assert_eq!(records(&s, sf_core::Cmd::Trim), 1);
+    let plan = s.embroidery_plan().unwrap();
+    let (end, start) = (plan.records_of(a).last().unwrap().end, plan.records_of(b)[0].start);
+    let travel: Vec<sf_core::Point> = plan.pattern().stitches[end..start].iter().map(|r| r.pos()).collect();
+    assert!(plan.pattern().stitches[end..start].iter().all(|r| r.cmd == sf_core::Cmd::Stitch));
+    assert!(travel.len() >= 5, "{travel:?}");
+    assert!(travel.windows(2).all(|w| w[0].distance(w[1]) < 2.6), "{travel:?}");
+    assert!(travel.iter().all(|p| p.y > 115.0 / PT && p.y < 145.0 / PT), "under the bar: {travel:?}");
+    // the group is not an object of its own
+    let r = s.execute("embroidery.check", &json!({})).unwrap();
+    assert!(r["findings"].as_array().unwrap().iter().all(|f| f["ids"].as_array().is_none_or(|ids| !ids.contains(&json!(g.0)))), "{r}");
+    // breaking it apart gives the objects back, sewn on their own again
+    let r = s.execute("embroidery.breakApart", &json!({})).unwrap();
+    let mut ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    ids.sort();
+    assert_eq!(ids, vec![a.0, b.0, bar.0]);
+    let st = s.doc().unwrap();
+    assert!(st.doc.node(g).is_none());
+    assert_eq!(st.doc.parent_of(a), st.doc.parent_of(bar));
+    assert!(st.doc.position(a).unwrap().1 < st.doc.position(b).unwrap().1 && st.doc.position(b).unwrap().1 < st.doc.position(bar).unwrap().1);
+    assert_eq!(records(&s, sf_core::Cmd::Trim), trims);
+    // grouping first and branching the group marks that group
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g2 = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.execute("embroidery.branch", &json!({})).unwrap()["id"], g2.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(g2).unwrap().embroidery.is_none());
+}
+
+#[test]
+fn break_apart_gives_each_part_its_own_object() {
+    let mut s = session();
+    // a square with a hole, and a second square beside it
+    let d = "M10 10 H110 V110 H10 Z M30 30 V90 H90 V30 Z M150 10 H250 V110 H150 Z";
+    let id = stitched_path(&mut s, d, "fill");
+    s.execute("embroidery.setThread", &json!({"color": "#cc2233"})).unwrap();
+    let r = s.execute("embroidery.breakApart", &json!({})).unwrap();
+    let ids: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(ids.len(), 2);
+    let st = s.doc().unwrap();
+    assert!(st.doc.node(id).is_none());
+    let subpaths: Vec<usize> = ids.iter().map(|i| st.doc.node(*i).unwrap().path_data().unwrap().subpaths.len()).collect();
+    assert_eq!(subpaths, vec![2, 1], "the hole stays with its square");
+    for i in &ids {
+        let e = st.doc.node(*i).unwrap().embroidery.clone().unwrap();
+        assert_eq!(e.stitch.id(), "fill");
+        assert_eq!(e.thread.unwrap().color, Rgb::new(0xcc, 0x22, 0x33));
+        assert!(!s.embroidery_plan().unwrap().records_of(*i).is_empty());
+    }
+    // a single part has nothing to break apart
+    s.execute("select.set", &json!({"ids": [ids[1].0]})).unwrap();
+    assert!(s.execute("embroidery.breakApart", &json!({})).is_err());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_some());
+}
+
+#[test]
+fn auto_sequence_groups_colours_and_keeps_overlaps_in_order() {
+    let mut s = session();
+    let stitched = |s: &mut Session, x: f64, y: f64, color: &str| {
+        let id = rect(s, x, y, 50.0, 50.0);
+        s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+        s.execute("embroidery.setThread", &json!({"color": color})).unwrap();
+        id
+    };
+    let _a = stitched(&mut s, 10.0, 10.0, "#cc2233");
+    let _b = stitched(&mut s, 100.0, 10.0, "#2233cc");
+    let plain = rect(&mut s, 400.0, 300.0, 20.0, 20.0); // not stitched: stays where it is
+    let _c = stitched(&mut s, 200.0, 10.0, "#cc2233");
+    let _d = stitched(&mut s, 300.0, 10.0, "#2233cc");
+    // blue on top of red: stays on top
+    let e = stitched(&mut s, 10.0, 200.0, "#cc2233");
+    let f = stitched(&mut s, 30.0, 220.0, "#2233cc");
+    assert_eq!(color_changes(&s), 5);
+    let index = |s: &Session, id: NodeId| s.doc().unwrap().doc.position(id).unwrap().1;
+    let plain_at = index(&s, plain);
+    // sorting by thread colour leaves what is not stitched in its place
+    s.execute("embroidery.sortByColor", &json!({})).unwrap();
+    assert_eq!(color_changes(&s), 1);
+    assert_eq!(index(&s, plain), plain_at);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(color_changes(&s), 5);
+    let r = s.execute("embroidery.autoSequence", &json!({})).unwrap();
+    assert!(r["moved"].as_u64().unwrap() > 0);
+    assert_eq!(color_changes(&s), 1);
+    assert!(index(&s, e) < index(&s, f));
+    assert_eq!(index(&s, plain), plain_at);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(color_changes(&s), 5);
+    s.execute("edit.redo", &json!({})).unwrap();
+    // in order already: nothing moves
+    assert_eq!(s.execute("embroidery.autoSequence", &json!({})).unwrap()["moved"], 0);
+}
+
+#[test]
+fn branch_travel_finds_its_way_round_corners() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // two squares joined by an L sewn after them: the straight way between them is bare
+    let a = rect(&mut s, 50.0, 50.0, 60.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let b = rect(&mut s, 200.0, 200.0, 60.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let l = stitched_path(&mut s, "M65 60 H115 V215 H210 V245 H65 Z", "fill");
+    // the first square's rows end at its corner (110, 110), under the L
+    s.execute("embroidery.setBeads", &json!({"id": a.0, "exit": [110.0, 110.0]})).unwrap();
+    s.execute("embroidery.setBeads", &json!({"id": b.0, "entry": [200.0, 230.0]})).unwrap();
+    let trims = records(&s, sf_core::Cmd::Trim);
+    s.execute("select.set", &json!({"ids": [a.0, b.0, l.0]})).unwrap();
+    s.execute("embroidery.branch", &json!({})).unwrap();
+    assert!(trims >= 2, "{trims}");
+    assert_eq!(records(&s, sf_core::Cmd::Trim), 1);
+    let plan = s.embroidery_plan().unwrap();
+    let (end, start) = (plan.records_of(a).last().unwrap().end, plan.records_of(b)[0].start);
+    let travel: Vec<sf_core::Point> = plan.pattern().stitches[end..start].iter().map(|r| r.pos()).collect();
+    assert!(travel.len() >= 20, "{}", travel.len());
+    // under the L (or the square it leads into), but for the last stitch's slack
+    let under = |p: &sf_core::Point| {
+        let (x, y) = (p.x * PT, p.y * PT);
+        let vertical = (65.0..=115.0).contains(&x) && (60.0..=245.0).contains(&y);
+        let horizontal = (65.0..=210.0).contains(&x) && (215.0..=245.0).contains(&y);
+        let square = (200.0..=260.0).contains(&x) && (200.0..=260.0).contains(&y);
+        vertical || horizontal || square
+    };
+    assert!(travel.iter().all(under), "{travel:?}");
+    assert!(travel.windows(2).all(|w| w[0].distance(w[1]) < 2.6));
+}
+
+fn emb(s: &Session, id: NodeId) -> sf_core::attr::Embroidery {
+    s.doc().unwrap().doc.node(id).unwrap().embroidery.as_deref().cloned().unwrap()
+}
+
+fn fill_params(s: &Session, id: NodeId) -> sf_core::model::FillParams {
+    match emb(s, id).stitch {
+        sf_core::attr::StitchType::Fill(f) => f,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn new_objects_take_the_current_properties() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#cc2233"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"spacing": 0.3, "pullComp": 0.5, "removeUnderlying": true}})).unwrap();
+    assert_eq!(s.execute("embroidery.makeCurrent", &json!({})).unwrap()["type"], "fill");
+    // a new fill takes them (not the thread); a satin does not
+    let b = rect(&mut s, 150.0, 10.0, 100.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let f = fill_params(&s, b);
+    assert_eq!((f.spacing, f.pull_comp), (0.3, 0.5));
+    assert!(emb(&s, b).remove_underlying && emb(&s, b).thread.is_none());
+    let c = rect(&mut s, 300.0, 10.0, 100.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    let sf_core::attr::StitchType::Satin(sp) = emb(&s, c).stitch else { panic!() };
+    assert_eq!(sp.spacing, sf_core::model::SatinParams::default().spacing);
+    // changing an object's type gives it the type's stitch parameters, keeping the rest
+    s.execute("embroidery.setThread", &json!({"color": "#2233cc"})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "tatami"})).unwrap();
+    assert_eq!(fill_params(&s, c).spacing, 0.3);
+    assert!(emb(&s, c).thread.is_some() && !emb(&s, c).remove_underlying);
+    // with nothing selected, the panel edits the properties new objects take
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("embroidery.current.setParams", &json!({"type": "satin", "params": {"spacing": 0.25}})).unwrap();
+    let d = rect(&mut s, 10.0, 100.0, 100.0, 30.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    let sf_core::attr::StitchType::Satin(sp) = emb(&s, d).stitch else { panic!() };
+    assert_eq!(sp.spacing, 0.25);
+    // a run style that is a type of its own files the properties under it
+    let r = s.execute("embroidery.current.setParams", &json!({"type": "run", "params": {"kind": "Triple", "stitchLength": 3.0}})).unwrap();
+    assert_eq!(r["type"], "bean");
+    let current = s.execute("embroidery.current", &json!({})).unwrap()["current"].clone();
+    let mut keys: Vec<&str> = current.as_object().unwrap().keys().map(String::as_str).collect();
+    keys.sort();
+    assert_eq!(keys, vec!["bean", "fill", "satin"]);
+    // bad requests change nothing
+    for p in [json!({"type": "manual", "params": {}}), json!({"type": "fill", "params": {"spacing": "dense"}}), json!({"type": "fill"})] {
+        assert!(s.execute("embroidery.current.setParams", &p).is_err(), "{p}");
+    }
+    // reset one type, then all; undo brings them back
+    assert_eq!(s.execute("embroidery.current.reset", &json!({"type": "tatami"})).unwrap()["reset"], 1);
+    let e = rect(&mut s, 150.0, 100.0, 100.0, 30.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    assert_eq!(fill_params(&s, e).spacing, sf_core::model::FillParams::default().spacing);
+    assert_eq!(s.execute("embroidery.current.reset", &json!({})).unwrap()["reset"], 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("embroidery.current", &json!({})).unwrap()["current"].as_object().unwrap().len(), 2);
+    let _ = a;
+}
+
+#[test]
+fn styles_keep_objects_alike() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"spacing": 0.3}})).unwrap();
+    assert_eq!(s.execute("embroidery.style.new", &json!({"name": "Dense"})).unwrap()["name"], "Dense");
+    assert_eq!(emb(&s, a).style.as_deref(), Some("Dense"));
+    assert!(s.execute("embroidery.style.new", &json!({"name": "Dense"})).is_err(), "names are unique");
+    // two satins take the style, keeping their threads
+    let b = rect(&mut s, 150.0, 10.0, 100.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#2233cc"})).unwrap();
+    let c = rect(&mut s, 300.0, 10.0, 100.0, 50.0);
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    s.execute("embroidery.style.apply", &json!({"name": "Dense"})).unwrap();
+    for id in [b, c] {
+        assert_eq!(fill_params(&s, id).spacing, 0.3);
+        assert_eq!(emb(&s, id).style.as_deref(), Some("Dense"));
+    }
+    assert!(emb(&s, b).thread.is_some());
+    let list = s.execute("embroidery.style.list", &json!({})).unwrap();
+    assert_eq!(list["styles"][0]["uses"], 3);
+    assert_eq!(list["styles"][0]["type"], "fill");
+    // redefining from a changed object changes every object that follows the style
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"spacing": 0.5, "pullComp": 0.4}})).unwrap();
+    assert_eq!(s.execute("embroidery.style.redefine", &json!({"name": "Dense"})).unwrap()["updated"], 3);
+    for id in [a, b, c] {
+        let f = fill_params(&s, id);
+        assert_eq!((f.spacing, f.pull_comp), (0.5, 0.4));
+    }
+    // rename, duplicate, release, delete
+    s.execute("embroidery.style.rename", &json!({"name": "Dense", "to": "Firm"})).unwrap();
+    assert_eq!(emb(&s, c).style.as_deref(), Some("Firm"));
+    assert_eq!(s.execute("embroidery.style.duplicate", &json!({"name": "Firm"})).unwrap()["name"], "Firm copy");
+    assert!(s.execute("embroidery.style.rename", &json!({"name": "Firm", "to": "Firm copy"})).is_err());
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("embroidery.style.unlink", &json!({})).unwrap();
+    assert!(emb(&s, b).style.is_none());
+    assert!(s.execute("embroidery.style.unlink", &json!({})).is_err(), "follows none now");
+    assert_eq!(s.execute("embroidery.style.delete", &json!({"name": "Firm"})).unwrap()["released"], 2);
+    assert!(emb(&s, a).style.is_none());
+    assert_eq!(fill_params(&s, a).spacing, 0.5, "objects keep the properties");
+    assert!(s.execute("embroidery.style.apply", &json!({"name": "Firm"})).is_err());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(emb(&s, a).style.as_deref(), Some("Firm"));
+}
+
+#[test]
+fn fabrics_can_be_made_for_the_design() {
+    const WOVEN: &str = "Woven (twill, poplin)";
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.fabric.save", &json!({"name": "Canvas", "from": WOVEN, "fillSpacing": 0.5, "topping": true})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert!(info["fabrics"].as_array().unwrap().contains(&json!("Canvas")));
+    let canvas = info["fabricDetails"].as_array().unwrap().iter().find(|f| f["name"] == "Canvas").unwrap().clone();
+    assert_eq!((canvas["custom"].clone(), canvas["fillSpacing"].clone(), canvas["topping"].clone()), (json!(true), json!(0.5), json!(true)));
+    s.execute("embroidery.applyFabric", &json!({"name": "Canvas"})).unwrap();
+    assert_eq!(fill_params(&s, a).spacing, 0.5);
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["fabric"], "Canvas");
+    // changing it keeps what was not given
+    s.execute("embroidery.fabric.save", &json!({"name": "Canvas", "pullComp": 0.25})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    let canvas = info["fabricDetails"].as_array().unwrap().iter().find(|f| f["name"] == "Canvas").unwrap().clone();
+    assert_eq!((canvas["fillSpacing"].clone(), canvas["pullComp"].clone()), (json!(0.5), json!(0.25)));
+    // built-in names, bad values and unknown fabrics are refused
+    for p in [
+        json!({"name": WOVEN, "fillSpacing": 0.5}),
+        json!({"name": "Thin", "fillSpacing": 9.0}),
+        json!({"name": "Thin", "topping": "yes"}),
+        json!({"name": "Thin", "from": "Velvet"}),
+        json!({"name": " "}),
+    ] {
+        assert!(s.execute("embroidery.fabric.save", &p).is_err(), "{p}");
+    }
+    assert!(s.execute("embroidery.fabric.delete", &json!({"name": WOVEN})).is_err());
+    s.execute("embroidery.fabric.delete", &json!({"name": "Canvas"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert!(!info["fabrics"].as_array().unwrap().contains(&json!("Canvas")));
+    assert_eq!(info["fabric"], "");
+}
+
+#[test]
+fn columns_are_clicked_side_by_side_and_continued() {
+    let mut s = session();
+    // pairs of points across a column turning a corner (two smooth ones)
+    let pts = json!([[50, 50], [50, 80], [150, 50], [150, 80], [200, 110, true], [175, 125, true], [230, 190], [200, 200]]);
+    let id = NodeId(s.execute("embroidery.column", &json!({"points": pts})).unwrap()["id"].as_u64().unwrap());
+    {
+        let st = s.doc().unwrap();
+        let n = st.doc.node(id).unwrap();
+        let subs = &n.path_data().unwrap().subpaths;
+        assert_eq!((subs.len(), subs[0].anchors.len(), subs[1].anchors.len()), (2, 4, 4));
+        assert_eq!(subs[0].anchors[2].kind, vectorcraft_geom::path::AnchorKind::Smooth);
+        let e = n.embroidery.as_deref().unwrap();
+        assert_eq!((e.stitch.id(), e.guides.len()), ("satin", 4));
+        assert_eq!(st.selection.objects, vec![id]);
+    }
+    let before = needles(&s, id);
+    assert!(before.len() > 100, "{}", before.len());
+    // continuing it: more points, more column
+    let more = json!([[50, 50], [50, 80], [150, 50], [150, 80], [200, 110, true], [175, 125, true], [230, 190], [200, 200], [240, 260], [205, 262]]);
+    s.execute("embroidery.column", &json!({"id": id.0, "points": more})).unwrap();
+    assert!(needles(&s, id).len() > before.len() + 20);
+    assert_eq!(emb(&s, id).guides.len(), 5);
+    // new columns take the current satin properties
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("embroidery.current.setParams", &json!({"type": "satin", "params": {"spacing": 0.3}})).unwrap();
+    let id2 =
+        NodeId(s.execute("embroidery.column", &json!({"points": [[300, 50], [300, 80], [400, 50], [400, 80]]})).unwrap()["id"].as_u64().unwrap());
+    let sf_core::attr::StitchType::Satin(sp) = emb(&s, id2).stitch else { panic!() };
+    assert_eq!(sp.spacing, 0.3);
+    s.execute("select.set", &json!({"ids": [id2.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    for p in [json!({}), json!({"points": []}), json!({"points": [["a", 1]]}), json!({"points": [[1, 2]], "id": g.0})] {
+        assert!(s.execute("embroidery.column", &p).is_err(), "{p}");
+    }
+    // a run continued with the pen keeps its stitch type and sews the longer path
+    let run = stitched_path(&mut s, "M300 300 L400 300", "run");
+    let n0 = needles(&s, run).len();
+    s.execute("path.appendAnchor", &json!({"id": run.0, "x": 400.0, "y": 400.0})).unwrap();
+    assert_eq!(emb(&s, run).stitch.id(), "run");
+    assert!(needles(&s, run).len() > n0 + 10);
+}
+
+#[test]
+fn what_check_design_flags_is_a_design_setting() {
+    let mut s = session();
+    let kinds = |s: &mut Session| -> Vec<String> {
+        let r = s.execute("embroidery.check", &json!({})).unwrap();
+        r["findings"].as_array().unwrap().iter().map(|f| f["kind"].as_str().unwrap().to_string()).collect()
+    };
+    // a 10.6 mm satin without auto split: long stitches by the 8 mm default
+    rect(&mut s, 50.0, 50.0, 200.0, 30.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"splitLength": 0}})).unwrap();
+    assert!(kinds(&mut s).contains(&"longStitches".to_string()));
+    s.execute("embroidery.settings", &json!({"checks": {"longStitch": 12.0}})).unwrap();
+    assert!(!kinds(&mut s).contains(&"longStitches".to_string()));
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["settings"]["checks"]["longStitch"], 12.0);
+    assert_eq!(info["settings"]["checks"]["denseLayers"], 4.5);
+    // lower the density limit far enough and the satin itself is dense
+    s.execute("embroidery.settings", &json!({"checks": {"denseLayers": 1.5}})).unwrap();
+    assert!(kinds(&mut s).contains(&"dense".to_string()));
+    for p in [json!({"checks": {"longStitch": 50}}), json!({"checks": {"tinyObject": "big"}}), json!({"checks": 5})] {
+        assert!(s.execute("embroidery.settings", &p).is_err(), "{p}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!kinds(&mut s).contains(&"dense".to_string()));
+}
+
+#[test]
+fn tie_styles_and_omitting_the_last_stitch() {
+    let mut s = session();
+    let id = stitched_path(&mut s, "M20 100 L300 100", "run");
+    let count = |s: &Session| s.embroidery_plan().unwrap().pattern().stitches.iter().filter(|r| r.cmd == sf_core::Cmd::Stitch).count();
+    let double = count(&s);
+    // a tie-in and a tie-off: two stitches less each sewn singly, one less as triangles
+    s.execute("embroidery.settings", &json!({"tieStyle": "single"})).unwrap();
+    assert_eq!(count(&s), double - 4);
+    s.execute("embroidery.settings", &json!({"tieStyle": "triangle"})).unwrap();
+    assert_eq!(count(&s), double - 2);
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["settings"]["tieStyle"], "triangle");
+    // a triangle's corner leaves the line
+    let plan = s.embroidery_plan().unwrap();
+    let ys: Vec<f64> = plan.pattern().stitches.iter().filter(|r| r.cmd == sf_core::Cmd::Stitch).map(|r| r.y).collect();
+    assert!(ys.iter().any(|y| (y - ys[0]).abs() > 0.2), "{ys:?}");
+    assert!(s.execute("embroidery.settings", &json!({"tieStyle": "knot"})).is_err());
+    s.execute("embroidery.settings", &json!({"tieStyle": "double"})).unwrap();
+    // omit last stitch: one needle point less at the end
+    let last = |s: &Session| *needles(s, id).last().unwrap();
+    let (before, end) = (needles(&s, id).len(), last(&s));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"omitLast": true}})).unwrap();
+    assert!(emb(&s, id).omit_last);
+    assert_eq!(needles(&s, id).len(), before - 1);
+    assert!(last(&s).distance(end) > 0.5);
+}
+
+#[test]
+fn threads_are_matched_to_a_chart() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#c81e2c"})).unwrap();
+    let b = stitched_path(&mut s, "M20 100 L300 100", "run");
+    s.execute("select.none", &json!({})).unwrap();
+    let r = s.execute("embroidery.matchThreads", &json!({"chart": "Generic"})).unwrap();
+    assert_eq!(r["matched"], 2);
+    let chart = sf_core::threads::charts().into_iter().find(|c| c.name == "Generic").unwrap();
+    for id in [a, b] {
+        let t = emb(&s, id).thread.unwrap();
+        assert!(chart.threads.contains(&t), "{t:?}");
+    }
+    // the art is painted the thread's colour
+    let t = emb(&s, a).thread.unwrap();
+    let fill = s.doc().unwrap().doc.node(a).unwrap().appearance.fill_paint().clone();
+    assert_eq!(fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb8(t.color.r, t.color.g, t.color.b)));
+    assert!(s.execute("embroidery.matchThreads", &json!({"chart": "Velvet"})).is_err());
+}
+
+#[test]
+fn an_objects_stitches_split_in_two() {
+    let mut s = session();
+    let id = rect(&mut s, 50.0, 50.0, 100.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let all = own(&mut s, id).1;
+    let total = stitches(&s);
+    let r = s.execute("embroidery.stitches.split", &json!({"id": id.0, "at": 100})).unwrap();
+    let ids: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!((ids.len(), ids[0]), (2, id));
+    // the object keeps the first 100 records, the copy sewn after it the rest; both frozen
+    let (frozen_a, a) = own(&mut s, ids[0]);
+    let (frozen_b, b) = own(&mut s, ids[1]);
+    assert!(frozen_a && frozen_b);
+    assert_eq!(a, all[..100].to_vec());
+    assert_eq!(b, all[100..].to_vec());
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.position(ids[1]).unwrap().1, st.doc.position(id).unwrap().1 + 1);
+    assert_eq!(st.selection.objects, ids);
+    // the same stitches are sewn (bar the ties and the connection between the parts)
+    assert!(stitches(&s).abs_diff(total) < 20, "{} vs {total}", stitches(&s));
+    for at in [0, 1, all.len() - 1, all.len() + 5] {
+        assert!(s.execute("embroidery.stitches.split", &json!({"id": id.0, "at": at})).is_err(), "{at}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(ids[1]).is_none());
+    assert!(!own(&mut s, id).0);
+}

@@ -8,7 +8,7 @@ version = "0.8.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
-repository = "https://github.com/storytold/vectorcraft"
+repository = "https://github.com/SiteSentrix/StitchFoundry"
 
 [workspace.dependencies]
 # internal
@@ -36,10 +36,18 @@ vectorcraft-metafile = { path = "crates/metafile" }
 vectorcraft-plugins = { path = "crates/plugins" }
 vectorcraft-affinity = { path = "crates/affinity" }
 
+# StitchFoundry embroidery crates
+sf-core = { path = "crates/sf-core" }
+sf-formats = { path = "crates/sf-formats" }
+vectorcraft-embroidery = { path = "crates/embroidery" }
+
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }
 peniko = "0.6"
 thiserror = "2"
+# embroidery: robust polygon offsets/booleans for fills and underlay
+i_overlay = "9"
+base64 = "0.23"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 log = "0.4"

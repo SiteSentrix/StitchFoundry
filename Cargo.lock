@@ -1771,6 +1771,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "i_float"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ecaff1ce29bcacd72cdf581ba6fce636ef4c4e0b2da7e7846dd0137d98141e2"
+dependencies = [
+ "libm",
+]
+
+[[package]]
+name = "i_key_sort"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c6c58d0c60705e66264ce0f788a69a2f21472aeb8188559e7c8c619dbdc10fa"
+
+[[package]]
+name = "i_overlay"
+version = "9.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bc8ccb58877c937614dbff9e59b9e87f49d3c45167f5c39c21fc3d9945a6c16"
+dependencies = [
+ "i_float",
+ "i_key_sort",
+ "i_shape",
+ "i_tree",
+]
+
+[[package]]
+name = "i_shape"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa1878f91ef7921feaf1b2346253ebc5e661878b22d5715195c1d5dcf0f20ae5"
+dependencies = [
+ "i_float",
+]
+
+[[package]]
+name = "i_tree"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e9d4a992a9fe83130f41ceacceac3bb116a4355dfc9c8d6ecea4f1e4b4c6caf"
+
+[[package]]
 name = "icu_collections"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3581,6 +3623,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "sf-core"
+version = "0.8.0"
+dependencies = [
+ "base64 0.23.1",
+ "i_overlay",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "sf-formats"
+version = "0.8.0"
+dependencies = [
+ "sf-core",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4430,6 +4491,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "sf-core",
  "thiserror 2.0.21",
  "tiff",
  "vectorcraft-color",
@@ -4453,6 +4515,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-embroidery"
+version = "0.8.0"
+dependencies = [
+ "kurbo 0.13.1",
+ "serde",
+ "serde_json",
+ "sf-core",
+ "vectorcraft-color",
+ "vectorcraft-doc",
+ "vectorcraft-geom",
+ "vectorcraft-text",
+]
+
+[[package]]
 name = "vectorcraft-engine"
 version = "0.8.0"
 dependencies = [
@@ -4465,12 +4541,15 @@ dependencies = [
  "ruzstd",
  "serde",
  "serde_json",
+ "sf-core",
+ "sf-formats",
  "thiserror 2.0.21",
  "vectorcraft-affinity",
  "vectorcraft-brush",
  "vectorcraft-cad",
  "vectorcraft-color",
  "vectorcraft-doc",
+ "vectorcraft-embroidery",
  "vectorcraft-eps",
  "vectorcraft-format",
  "vectorcraft-geom",
@@ -4720,6 +4799,7 @@ dependencies = [
  "kurbo 0.13.1",
  "serde",
  "serde_json",
+ "sf-core",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-geom",
@@ -4756,6 +4836,7 @@ dependencies = [
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-effects",
+ "vectorcraft-embroidery",
  "vectorcraft-engine",
  "vectorcraft-eps",
  "vectorcraft-format",

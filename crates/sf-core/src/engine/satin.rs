@@ -1,0 +1,531 @@
+//! Satin columns: zigzag stitches swinging between two rails, with underlay,
+//! pull compensation, auto spacing, short stitches and auto split.
+
+use super::out::Out;
+use crate::geom::{Column, FLATTEN_TOLERANCE, Point, Rung, polyline};
+use crate::model::{SatinParams, TATAMI_LENGTH};
+use crate::pattern::Stitch;
+
+/// Fine samples along the column: pairs of corresponding rail points spaced
+/// `half_step(width)` apart along the longer rail.
+fn sample_pairs(col: &Column, half_step: impl Fn(f64) -> f64) -> Vec<(Point, Point)> {
+    let sections = col.sections(FLATTEN_TOLERANCE);
+    let mut out = Vec::new();
+    let last = sections.len().saturating_sub(1);
+    for (si, (a, b)) in sections.iter().enumerate() {
+        let la = polyline::length(a);
+        let lb = polyline::length(b);
+        let w0 = a.first().zip(b.first()).map(|(p, q)| p.distance(*q)).unwrap_or(0.0);
+        let w1 = a.last().zip(b.last()).map(|(p, q)| p.distance(*q)).unwrap_or(0.0);
+        let hs = half_step((w0 + w1) * 0.5).max(0.05);
+        let n = ((la.max(lb) / hs).ceil() as usize).max(1);
+        let end = if si == last { n } else { n - 1 };
+        for m in 0..=end {
+            let t = m as f64 / n as f64;
+            out.push((polyline::point_at(a, t * la), polyline::point_at(b, t * lb)));
+        }
+    }
+    out
+}
+
+/// Effective satin spacing for a column width (auto spacing opens up narrow
+/// columns so small lettering does not become bullet-proof).
+pub(crate) fn effective_spacing(params: &SatinParams, width: f64) -> f64 {
+    let s = params.spacing.max(0.1);
+    if !params.auto_spacing {
+        return s;
+    }
+    // 1 mm → +25 %, 3 mm and wider → nominal.
+    let f = 1.0 + 0.25 * ((3.0 - width) / 2.0).clamp(0.0, 1.0);
+    s * f
+}
+
+/// Splits a long stitch `p → q` into shorter staggered pieces.
+fn split_stitch(p: Point, q: Point, max_len: f64, index: usize, out: &mut Vec<Point>) {
+    let len = p.distance(q);
+    if max_len <= 0.0 || len <= max_len {
+        out.push(q);
+        return;
+    }
+    // Leave 25 % slack so the staggered split points never exceed `max_len`.
+    let k = (len / (max_len * 0.75)).ceil() as usize;
+    // Stagger the split points so they don't line up into a visible groove.
+    const PHASES: [f64; 5] = [0.0, 0.4, -0.3, 0.2, -0.4];
+    let shift = PHASES[index % PHASES.len()] / k as f64;
+    for m in 1..k {
+        let f = (m as f64 / k as f64 + shift * 0.8).clamp(0.05, 0.95);
+        out.push(p.lerp(q, f));
+    }
+    out.push(q);
+}
+
+/// Splits a stitch across a tatami border into pieces about `len` long, the needle
+/// points shifting a quarter of a stitch from row to row: the tatami pattern. They are
+/// measured from side A whichever way a row runs (rows alternate), so the pattern
+/// lines up.
+fn split_tatami(p: Point, q: Point, len: f64, row: usize, out: &mut Vec<Point>) {
+    let d = p.distance(q);
+    let min = 0.3 * len;
+    if len <= 0.0 || d <= len + min {
+        out.push(q);
+        return;
+    }
+    let phase = (row % 4) as f64 * 0.25 * len;
+    let mut cuts: Vec<f64> = (0usize..).map(|k| phase + k as f64 * len).take_while(|x| *x < d - min).filter(|x| *x > min).collect();
+    // even rows run from side A, odd ones back from side B
+    let from_a = row.is_multiple_of(2);
+    if !from_a {
+        cuts.reverse();
+    }
+    for x in cuts {
+        out.push(p.lerp(q, if from_a { x / d } else { 1.0 - x / d }));
+    }
+    out.push(q);
+}
+
+/// Satin zigzag over a list of rail pairs. Even samples land on rail A, odd ones
+/// on rail B. `pull` is the pull compensation on (rail A, rail B).
+pub(crate) fn zigzag_points(pairs: &[(Point, Point)], params: &SatinParams, pull: (f64, f64), short: bool) -> Vec<Point> {
+    if pairs.is_empty() {
+        return Vec::new();
+    }
+    // Pull compensation widens each pair, side by side.
+    let comp: Vec<(Point, Point)> = pairs
+        .iter()
+        .map(|&(a, b)| {
+            let d = (a - b).normalized();
+            (a + d * pull.0, b - d * pull.1)
+        })
+        .collect();
+
+    let nominal = params.spacing.max(0.1);
+    let mut pts: Vec<Point> = Vec::with_capacity(comp.len());
+    for (j, &(a, b)) in comp.iter().enumerate() {
+        let on_a = j % 2 == 0;
+        let mut p = if on_a { a } else { b };
+        if short {
+            // Same-side neighbour penetrations: if they crowd together (inside of a
+            // curve), pull every other one in towards the centre.
+            let other = if on_a { b } else { a };
+            let prev = j.checked_sub(2).map(|k| if on_a { comp[k].0 } else { comp[k].1 });
+            let next = comp.get(j + 2).map(|&(pa, pb)| if on_a { pa } else { pb });
+            let local = match (prev, next) {
+                (Some(x), Some(y)) => x.distance(y) * 0.5,
+                (Some(x), None) => x.distance(p),
+                (None, Some(y)) => y.distance(p),
+                (None, None) => nominal,
+            };
+            if local < nominal * 0.55 && (j / 2) % 2 == 1 {
+                let width = p.distance(other);
+                p = p.lerp(other, (0.35 * width).min(width * 0.45) / width.max(1e-9));
+            }
+        }
+        pts.push(p);
+    }
+    // Auto split long stitches.
+    let mut out = Vec::with_capacity(pts.len());
+    out.push(pts[0]);
+    for (i, w) in pts.windows(2).enumerate() {
+        if params.tatami {
+            let len = if params.split_length > 0.0 { params.split_length } else { TATAMI_LENGTH };
+            split_tatami(w[0], w[1], len, i, &mut out);
+        } else {
+            split_stitch(w[0], w[1], params.split_length, i, &mut out);
+        }
+    }
+    out
+}
+
+/// Pairs inset towards the column centre by `inset` (never past the centre).
+fn inset_pairs(pairs: &[(Point, Point)], inset: f64) -> Vec<(Point, Point)> {
+    pairs
+        .iter()
+        .map(|&(a, b)| {
+            let w = a.distance(b);
+            let d = inset.min(w * 0.5 - 0.05).max(0.0);
+            let u = (b - a).normalized();
+            (a + u * d, b - u * d)
+        })
+        .collect()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pass {
+    Center,
+    Edge,
+    Zigzag,
+    /// The return of a double zigzag: same peaks, opposite rails, so it crosses
+    /// the first pass.
+    ZigzagBack,
+}
+
+fn underlay_passes(params: &SatinParams, width: f64) -> Vec<Pass> {
+    let u = &params.underlay;
+    if u.auto {
+        if width < 1.0 {
+            vec![]
+        } else if width < 2.2 {
+            vec![Pass::Center]
+        } else if width < 4.5 {
+            vec![Pass::Edge]
+        } else {
+            vec![Pass::Edge, Pass::Zigzag]
+        }
+    } else {
+        let mut v = Vec::new();
+        if u.center_run {
+            v.push(Pass::Center);
+        }
+        if u.edge_run {
+            v.push(Pass::Edge);
+        }
+        if u.zigzag {
+            v.push(Pass::Zigzag);
+            if u.double_zigzag {
+                v.push(Pass::ZigzagBack);
+            }
+        }
+        v
+    }
+}
+
+fn reversed_pairs(pairs: &[(Point, Point)]) -> Vec<(Point, Point)> {
+    pairs.iter().rev().copied().collect()
+}
+
+/// Generates a satin column. `max_stitch` is the machine's longest stitch (mm): with
+/// `preserve_long`, longer stitches become frame moves (jumps) and one needle drop.
+pub(crate) fn generate(col: &Column, params: &SatinParams, hint: Option<Point>, exit: Option<Point>, max_stitch: f64) -> Vec<Stitch> {
+    if col.rungs.len() < 2 {
+        return Vec::new();
+    }
+    let width = col.average_width();
+    let passes = underlay_passes(params, width);
+    // Each underlay pass traverses the column once, except edge run (out and back).
+    let traversals: usize = passes.iter().map(|p| if *p == Pass::Edge { 2 } else { 1 }).sum();
+
+    let mut col = col.clone();
+    // Start at the end nearest the entry hint (closest join); otherwise try to
+    // finish near the requested exit.
+    let first = col.rungs[0].center();
+    let last = col.rungs[col.rungs.len() - 1].center();
+    let reverse = match (hint, exit) {
+        (Some(h), _) => h.distance(last) < h.distance(first),
+        (None, Some(e)) => {
+            // satin ends at the far end iff the number of traversals is even
+            let ends_far = traversals.is_multiple_of(2);
+            let far_is_closer = e.distance(last) < e.distance(first);
+            ends_far != far_is_closer
+        }
+        _ => false,
+    };
+    if reverse {
+        col.reverse();
+    }
+
+    let fine = sample_pairs(&col, |w| effective_spacing(params, w) * 0.5);
+    if fine.len() < 2 {
+        return Vec::new();
+    }
+    let mut out = Out::new();
+    stitch_pairs(&fine, params, width, max_stitch, 0.0, &mut out);
+    out.finish()
+}
+
+/// Underlay and top satin over rail pairs already in sewing order, `width` mm wide
+/// on average (it picks the automatic underlay). Shared by satin columns and the
+/// satin of closed shapes that turns along inclination lines. When `out` already
+/// has a needle position, the first stitch is reached by [`Out::connect`] (`trim`
+/// is the trim threshold).
+pub(crate) fn stitch_pairs(fine: &[(Point, Point)], params: &SatinParams, width: f64, max_stitch: f64, trim: f64, out: &mut Out) {
+    if fine.len() < 2 {
+        return;
+    }
+    let passes = underlay_passes(params, width);
+    let u = &params.underlay;
+    let run_step = u.stitch_length.max(0.5);
+    if out.pos().is_some()
+        && let Some(&(a, b)) = fine.first()
+    {
+        let start = match passes.first() {
+            Some(Pass::Center) => a.midpoint(b),
+            Some(_) => inset_pairs(&[(a, b)], u.inset).first().map_or(a, |p| p.0),
+            None => a,
+        };
+        out.connect(start, trim, 2.5);
+    }
+    let mut forward = true;
+    for pass in &passes {
+        let pairs: Vec<(Point, Point)> = if forward { fine.to_vec() } else { reversed_pairs(fine) };
+        match pass {
+            Pass::Center => {
+                let center: Vec<Point> = pairs.iter().map(|(a, b)| a.midpoint(*b)).collect();
+                out.run_along(&center, run_step);
+                forward = !forward;
+            }
+            Pass::Edge => {
+                let ins = inset_pairs(&pairs, u.inset);
+                let rail_a: Vec<Point> = ins.iter().map(|p| p.0).collect();
+                let mut rail_b: Vec<Point> = ins.iter().map(|p| p.1).collect();
+                rail_b.reverse();
+                out.run_along(&rail_a, run_step);
+                out.run_along(&rail_b, run_step);
+            }
+            Pass::Zigzag | Pass::ZigzagBack => {
+                let mut ins = inset_pairs(&pairs, u.inset);
+                if *pass == Pass::ZigzagBack {
+                    ins.iter_mut().for_each(|(a, b)| std::mem::swap(a, b));
+                }
+                let zz_params = SatinParams { spacing: u.zigzag_spacing.max(0.5), ..params.clone() };
+                let coarse = resample_pairs(&ins, zz_params.spacing * 0.5);
+                let pts = zigzag_points(&coarse, &zz_params, (0.0, 0.0), false);
+                if let Some(&p0) = pts.first() {
+                    out.run_to(p0, run_step);
+                }
+                out.stitches(pts);
+                forward = !forward;
+            }
+        }
+    }
+    let pairs = if forward { fine.to_vec() } else { reversed_pairs(fine) };
+    let pts = zigzag_points(&pairs, params, params.pull_sides(), params.short_stitches);
+    if let Some(&p0) = pts.first()
+        && out.pos().is_some()
+    {
+        out.run_to(p0, run_step);
+    }
+    if params.preserve_long {
+        for p in pts {
+            out.long_stitch(p, max_stitch);
+        }
+    } else {
+        out.stitches(pts);
+    }
+}
+
+/// Re-samples a pair list so consecutive pairs are about `step` apart (measured on
+/// the longer side).
+fn resample_pairs(pairs: &[(Point, Point)], step: f64) -> Vec<(Point, Point)> {
+    if pairs.len() < 2 {
+        return pairs.to_vec();
+    }
+    let a: Vec<Point> = pairs.iter().map(|p| p.0).collect();
+    let b: Vec<Point> = pairs.iter().map(|p| p.1).collect();
+    let la = polyline::length(&a);
+    let lb = polyline::length(&b);
+    let n = ((la.max(lb) / step.max(0.05)).ceil() as usize).max(1);
+    (0..=n)
+        .map(|m| {
+            let t = m as f64 / n as f64;
+            (polyline::point_at(&a, t * la), polyline::point_at(&b, t * lb))
+        })
+        .collect()
+}
+
+/// Satin border of `width` centred on a path (used for appliqué cover stitches
+/// and satin outlines). For closed paths, `pts` must be explicitly closed.
+pub(crate) fn border(pts: &[Point], closed: bool, width: f64, spacing: f64, pull_comp: f64) -> Vec<Point> {
+    let pts = polyline::dedup(pts, 1e-6);
+    if pts.len() < 2 {
+        return pts;
+    }
+    let path: Vec<Point> = if closed {
+        let mut p = pts.clone();
+        if p.len() > 2 && p[0].approx_eq(p[p.len() - 1], 1e-9) {
+            p.pop();
+        }
+        p
+    } else {
+        pts.clone()
+    };
+    let h = width * 0.5;
+    let a = polyline::offset_polyline(&path, h, closed, 2.0);
+    let b = polyline::offset_polyline(&path, -h, closed, 2.0);
+    let mut rungs: Vec<Rung> = a.iter().zip(&b).map(|(&a, &b)| Rung::new(a, b, Default::default())).collect();
+    if closed && !rungs.is_empty() {
+        rungs.push(rungs[0]);
+    }
+    let col = Column::new(rungs);
+    let params = SatinParams { spacing, pull_comp, auto_spacing: false, split_length: 0.0, short_stitches: true, ..Default::default() };
+    let pairs = sample_pairs(&col, |_| spacing * 0.5);
+    zigzag_points(&pairs, &params, (pull_comp, pull_comp), true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geom::{Node, NodeKind};
+    use crate::model::SatinUnderlay;
+    use crate::pattern::Cmd;
+
+    fn straight(width: f64, len: f64) -> Column {
+        Column::new(vec![
+            Rung::new(Point::new(0.0, 0.0), Point::new(0.0, width), NodeKind::Corner),
+            Rung::new(Point::new(len, 0.0), Point::new(len, width), NodeKind::Corner),
+        ])
+    }
+
+    #[test]
+    fn tatami_borders_split_every_row_in_a_pattern() {
+        let bare = SatinUnderlay { auto: false, center_run: false, ..Default::default() };
+        let params = SatinParams { tatami: true, split_length: 4.0, auto_spacing: false, pull_comp: 0.0, underlay: bare, ..Default::default() };
+        let st = generate(&straight(12.0, 30.0), &params, None, None, 12.0);
+        let moves: Vec<Point> = st.iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+        let longest = moves.windows(2).map(|w| w[0].distance(w[1])).fold(0.0, f64::max);
+        assert!(longest <= 4.0 * 1.3 + 0.05, "{longest}");
+        // needle points across the whole column, not only on its sides
+        let inside = moves.iter().filter(|p| p.y > 1.0 && p.y < 11.0).count();
+        assert!(inside > moves.len() / 2, "{inside} of {}", moves.len());
+        // the rows' split points shift from row to row
+        let ys: std::collections::BTreeSet<i64> = moves.iter().filter(|p| p.y > 1.0 && p.y < 11.0).map(|p| (p.y * 10.0).round() as i64).collect();
+        assert!(ys.len() >= 8, "{ys:?}");
+        // satin without it keeps whole stitches
+        let satin = generate(&straight(6.0, 30.0), &SatinParams { tatami: false, split_length: 8.0, ..params.clone() }, None, None, 12.0);
+        assert!(satin.iter().filter(|s| s.cmd == Cmd::Stitch).all(|s| s.pos().y < 0.3 || s.pos().y > 5.7 || s.pos().x < 0.5 || s.pos().x > 29.5));
+    }
+
+    #[test]
+    fn density_matches_spacing() {
+        let params = SatinParams {
+            auto_spacing: false,
+            pull_comp: 0.0,
+            underlay: SatinUnderlay { auto: false, center_run: false, ..Default::default() },
+            ..Default::default()
+        };
+        let st = generate(&straight(3.0, 20.0), &params, None, None, 12.0);
+        // 20 mm / 0.4 mm per A-B cycle → 50 cycles → ~101 penetrations
+        assert!((st.len() as i64 - 101).abs() <= 2, "{}", st.len());
+        for s in &st {
+            assert!(s.y.abs() < 1e-9 || (s.y - 3.0).abs() < 1e-9, "{s:?}");
+            assert_eq!(s.cmd, Cmd::Stitch);
+        }
+    }
+
+    #[test]
+    fn pull_comp_widens() {
+        let params =
+            SatinParams { pull_comp: 0.3, underlay: SatinUnderlay { auto: false, center_run: false, ..Default::default() }, ..Default::default() };
+        let st = generate(&straight(3.0, 10.0), &params, None, None, 12.0);
+        let ys: Vec<f64> = st.iter().map(|s| s.y).collect();
+        let min = ys.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        assert!((min + 0.3).abs() < 1e-9 && (max - 3.3).abs() < 1e-9, "{min} {max}");
+    }
+
+    #[test]
+    fn twin_sided_pull_comp() {
+        let params = SatinParams {
+            pull_comp: 0.0,
+            pull_comp_2: Some(0.45),
+            underlay: SatinUnderlay { auto: false, center_run: false, ..Default::default() },
+            ..Default::default()
+        };
+        let st = generate(&straight(3.0, 10.0), &params, None, None, 12.0);
+        let min = st.iter().map(|s| s.y).fold(f64::INFINITY, f64::min);
+        let max = st.iter().map(|s| s.y).fold(f64::NEG_INFINITY, f64::max);
+        // side 1 (y = 0) stays put, side 2 (y = 3) widens by 0.45
+        assert!(min.abs() < 1e-9 && (max - 3.45).abs() < 1e-9, "{min} {max}");
+        assert_eq!(SatinParams { pull_comp: 0.2, ..Default::default() }.pull_sides(), (0.2, 0.2));
+    }
+
+    #[test]
+    fn double_zigzag_crosses_the_first() {
+        let zz = |double_zigzag| SatinParams {
+            underlay: SatinUnderlay { auto: false, center_run: false, zigzag: true, double_zigzag, ..Default::default() },
+            ..Default::default()
+        };
+        let single = generate(&straight(6.0, 20.0), &zz(false), None, None, 12.0);
+        let double = generate(&straight(6.0, 20.0), &zz(true), None, None, 12.0);
+        assert!(double.len() > single.len() + 10, "{} {}", double.len(), single.len());
+        // two underlay traversals: the top satin starts back at the start
+        assert!(double.first().unwrap().x < 1.0);
+        let top_start = double.iter().position(|s| s.x > 19.0).unwrap();
+        let back = double[top_start..].iter().position(|s| s.x < 1.0).unwrap() + top_start;
+        // the return pass sews over x where the first pass had the other rail
+        let first: Vec<(i64, bool)> = double[..top_start].iter().map(|s| ((s.x * 10.0).round() as i64, s.y < 3.0)).collect();
+        let second: Vec<(i64, bool)> = double[top_start..back].iter().map(|s| ((s.x * 10.0).round() as i64, s.y < 3.0)).collect();
+        assert!(second.iter().any(|(x, low)| first.iter().any(|(fx, flow)| fx == x && flow != low)));
+    }
+
+    #[test]
+    fn preserve_long_stitches_moves_the_frame() {
+        let params = SatinParams {
+            split_length: 0.0,
+            preserve_long: true,
+            auto_spacing: false,
+            pull_comp: 0.0,
+            underlay: SatinUnderlay { auto: false, center_run: false, ..Default::default() },
+            ..Default::default()
+        };
+        // a 20 mm wide column: every satin stitch is longer than a 12 mm machine stitch
+        let st = generate(&straight(20.0, 4.0), &params, None, None, 12.0);
+        let needle: Vec<&Stitch> = st.iter().filter(|s| s.cmd == Cmd::Stitch).collect();
+        assert!(needle.iter().all(|s| s.y.abs() < 1e-9 || (s.y - 20.0).abs() < 1e-9), "needle drops only on the rails");
+        assert!(st.iter().filter(|s| s.cmd == Cmd::Jump).count() >= needle.len() - 1);
+        for w in st.windows(2) {
+            assert!(w[0].pos().distance(w[1].pos()) <= 12.0 + 1e-9);
+        }
+        // without it, the long stitches are left for the machine limit to split
+        let plain = generate(&straight(20.0, 4.0), &SatinParams { preserve_long: false, ..params }, None, None, 12.0);
+        assert_eq!(plain.iter().filter(|s| s.cmd == Cmd::Jump).count(), 0);
+    }
+
+    #[test]
+    fn split_long_stitches() {
+        let params = SatinParams { split_length: 7.0, ..Default::default() };
+        let st = generate(&straight(16.0, 10.0), &params, None, None, 12.0);
+        for w in st.windows(2) {
+            assert!(w[0].pos().distance(w[1].pos()) <= 7.5, "stitch too long");
+        }
+    }
+
+    #[test]
+    fn underlay_then_satin_returns() {
+        // centre run underlay goes out, satin comes back → ends near the start
+        let params = SatinParams { underlay: SatinUnderlay { auto: false, center_run: true, ..Default::default() }, ..Default::default() };
+        let st = generate(&straight(2.0, 30.0), &params, None, None, 12.0);
+        let first = st.first().unwrap().pos();
+        let last = st.last().unwrap().pos();
+        assert!(first.x < 1.0 && last.x < 1.0, "{first:?} {last:?}");
+    }
+
+    #[test]
+    fn hint_picks_nearest_end() {
+        let params = SatinParams::default();
+        let st = generate(&straight(3.0, 30.0), &params, Some(Point::new(40.0, 0.0)), None, 12.0);
+        assert!(st[0].x > 29.0);
+    }
+
+    #[test]
+    fn curved_column_uses_short_stitches() {
+        // A tight arc: inner radius 2, outer radius 6.
+        let rungs: Vec<Rung> = (0..=6)
+            .map(|i| {
+                let a = i as f64 / 6.0 * std::f64::consts::PI;
+                let d = Point::new(a.cos(), a.sin());
+                Rung::new(d * 6.0, d * 2.0, NodeKind::Curve)
+            })
+            .collect();
+        let col = Column::new(rungs);
+        let st = generate(&col, &SatinParams::default(), None, None, 12.0);
+        // some penetrations must lie strictly between the rails (shortened stitches)
+        let mid = st.iter().filter(|s| {
+            let r = s.pos().length();
+            r > 2.3 && r < 5.0
+        });
+        assert!(mid.count() > 3);
+        let _ = Node::corner(Point::ZERO);
+    }
+
+    #[test]
+    fn closed_border() {
+        let ring = vec![Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(20.0, 20.0), Point::new(0.0, 20.0), Point::new(0.0, 0.0)];
+        let pts = border(&ring, true, 3.0, 0.4, 0.0);
+        assert!(pts.len() > 300);
+        for p in &pts {
+            let inside_outer = p.x > -2.2 && p.x < 22.2 && p.y > -2.2 && p.y < 22.2;
+            let outside_inner = !(p.x > 1.55 && p.x < 18.45 && p.y > 1.55 && p.y < 18.45);
+            assert!(inside_outer && outside_inner, "{p:?}");
+        }
+    }
+}

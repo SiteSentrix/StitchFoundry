@@ -1,0 +1,178 @@
+//! Embroidery mode UI: the stitch overlay on the canvas, the Embroidery and Stitch
+//! Sequence panels, the stitch player and the digitizing widget.
+
+pub mod overlay;
+pub mod panel;
+pub mod sequence;
+pub mod stitch_list;
+pub mod styles;
+pub mod widget;
+
+use egui::Color32;
+
+/// How stitches are shown on the canvas.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StitchView {
+    Off,
+    /// Thin lines in thread colour.
+    Lines,
+    /// Shaded thread ("TrueView").
+    #[default]
+    TrueView,
+}
+
+/// How the artwork under the stitches is shown.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ArtView {
+    Normal,
+    /// Faded behind a fabric tint.
+    #[default]
+    Dimmed,
+    Hidden,
+}
+
+/// The stitch player (slow redraw).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Player {
+    pub active: bool,
+    pub playing: bool,
+    /// Pattern records drawn so far.
+    pub pos: f64,
+    /// Records per second.
+    pub speed: f64,
+    /// What the travel buttons step by.
+    pub travel: TravelBy,
+}
+
+impl Default for Player {
+    fn default() -> Self {
+        Player { active: false, playing: false, pos: 0.0, speed: 400.0, travel: TravelBy::default() }
+    }
+}
+
+/// A machine function's name in the interface language: "Trim" is a thread cut here,
+/// not the Pathfinder command of the same English name.
+pub(crate) fn machine_word(s: &'static str) -> &'static str {
+    crate::i18n::tr_ctx(crate::i18n::current(), "machine", s)
+}
+
+/// What the stitch player's travel buttons step by.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TravelBy {
+    Stitch,
+    #[default]
+    Object,
+    Color,
+    Trim,
+    Function,
+}
+
+impl TravelBy {
+    pub const ALL: [TravelBy; 5] = [TravelBy::Stitch, TravelBy::Object, TravelBy::Color, TravelBy::Trim, TravelBy::Function];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TravelBy::Stitch => "Stitch",
+            TravelBy::Object => "Object",
+            TravelBy::Color => "Color",
+            TravelBy::Trim => "Trim",
+            TravelBy::Function => "Function",
+        }
+    }
+}
+
+/// Where the player lands one `by` step on from `pos` (records drawn so far), forwards
+/// or back: one stitch, the end of an object, just after a colour change, a trim, or any
+/// machine function (jump, trim, stop, colour change).
+pub fn travel(plan: &vectorcraft_embroidery::StitchPlan, pos: usize, by: TravelBy, forward: bool) -> usize {
+    use vectorcraft_embroidery::sf_core::Cmd;
+    let st = &plan.pattern().stitches;
+    let n = st.len();
+    let after = |f: &dyn Fn(Cmd) -> bool| -> Vec<usize> { st.iter().enumerate().filter(|(_, s)| f(s.cmd)).map(|(i, _)| i + 1).collect() };
+    let mut stops: Vec<usize> = match by {
+        TravelBy::Stitch => return if forward { (pos + 1).min(n) } else { pos.saturating_sub(1) },
+        TravelBy::Object => plan.built.spans.iter().map(|s| s.range.end).collect(),
+        TravelBy::Color => after(&|c| c == Cmd::ColorChange),
+        TravelBy::Trim => after(&|c| c == Cmd::Trim),
+        TravelBy::Function => after(&|c| c != Cmd::Stitch),
+    };
+    stops.extend([0, n]);
+    stops.sort_unstable();
+    stops.dedup();
+    if forward { stops.into_iter().find(|&k| k > pos).unwrap_or(n) } else { stops.into_iter().rev().find(|&k| k < pos).unwrap_or(0) }
+}
+
+/// The document object whose stitches the player drew last at `pos`.
+pub fn object_at(plan: &vectorcraft_embroidery::StitchPlan, pos: usize) -> Option<vectorcraft_doc::NodeId> {
+    let last = pos.checked_sub(1)?;
+    let span = plan.built.spans.iter().rev().find(|s| s.range.start <= last)?;
+    plan.nodes.get(span.index).copied()
+}
+
+pub struct EmbroideryUi {
+    pub stitches: StitchView,
+    pub art: ArtView,
+    pub connectors: bool,
+    pub needle_points: bool,
+    /// Show the selected objects' start and stop beads.
+    pub beads: bool,
+    /// Show the selected objects' inclination lines with any tool.
+    pub guides: bool,
+    /// Fabric colour under the stitches.
+    pub fabric: Color32,
+    pub player: Player,
+    pub mesh: overlay::MeshCache,
+    /// The digitizing widget.
+    pub widget: widget::WidgetState,
+    /// Auto-Digitize: thread colours to trace with, and whether the background is dropped.
+    pub digitize_colors: u32,
+    pub digitize_background: bool,
+    /// The last Check Design results (`embroidery.check` findings); `None` until run.
+    pub checks: Option<Vec<serde_json::Value>>,
+    /// The stitch type whose properties for new objects the Embroidery panel shows.
+    pub new_type: String,
+}
+
+impl Default for EmbroideryUi {
+    fn default() -> Self {
+        EmbroideryUi {
+            stitches: StitchView::TrueView,
+            art: ArtView::Dimmed,
+            connectors: false,
+            needle_points: false,
+            beads: true,
+            guides: false,
+            fabric: Color32::from_rgb(246, 243, 236),
+            player: Player::default(),
+            mesh: overlay::MeshCache::default(),
+            widget: widget::WidgetState::default(),
+            digitize_colors: 6,
+            digitize_background: true,
+            checks: None,
+            new_type: "fill".into(),
+        }
+    }
+}
+
+/// Advances the stitch player and opens the digitizing widget when the
+/// embroidery brush is picked; call once per frame.
+pub fn tick(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
+    let tool = app.session.tool_id();
+    if tool != app.embroidery.widget.last_tool {
+        if tool == widget::TOOL {
+            app.embroidery.widget.open = true;
+        }
+        app.embroidery.widget.last_tool = tool;
+    }
+    if !(app.embroidery.player.active && app.embroidery.player.playing) {
+        return;
+    }
+    let total = app.session.embroidery_plan().map_or(0, |p| p.pattern().stitches.len()) as f64;
+    let dt = ctx.input(|i| i.stable_dt).min(0.1) as f64;
+    let p = &mut app.embroidery.player;
+    p.pos = (p.pos + p.speed * dt).min(total);
+    if p.pos >= total {
+        p.playing = false;
+    }
+    ctx.request_repaint();
+}

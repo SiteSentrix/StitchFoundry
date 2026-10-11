@@ -43,6 +43,79 @@ fn todos(label: &'static str, sc: &'static str) -> Item {
 fn sub(label: &'static str, items: Vec<Item>) -> Item {
     Item::Sub(label, items)
 }
+/// One entry per machine embroidery format (File › Export, Embroidery menu).
+fn machine_file_items() -> Vec<Item> {
+    let f = |label: &'static str, ext: &'static str| cp(label, "file.export.embroidery", json!({ "format": ext }));
+    vec![
+        f("Tajima DST (.dst)…", "dst"),
+        f("Brother PES (.pes)…", "pes"),
+        f("Janome JEF (.jef)…", "jef"),
+        f("Melco EXP (.exp)…", "exp"),
+        f("Pfaff VP3 (.vp3)…", "vp3"),
+        f("Singer XXX (.xxx)…", "xxx"),
+        f("Barudan U01 (.u01)…", "u01"),
+        f("Brother PEC (.pec)…", "pec"),
+    ]
+}
+
+/// Embroidery: digitizing, stitch types, stitch direction and the stitch order.
+fn embroidery_menu() -> Vec<Item> {
+    let ty = |label: &'static str, ty: &'static str| cp(label, "embroidery.set", json!({ "type": ty }));
+    vec![
+        c("Digitizing Widget", "ui.embroideryWidget"),
+        Sep,
+        c("Convert Artwork to Embroidery", "embroidery.convert"),
+        c("Auto-Digitize Image", "embroidery.autoDigitize"),
+        Sep,
+        sub(
+            "Stitch Type",
+            vec![
+                ty("Run", "run"),
+                ty("Bean Run", "bean"),
+                ty("Backstitch", "backstitch"),
+                ty("Stem Stitch", "stemstitch"),
+                ty("Blanket", "blanket"),
+                ty("Satin", "satin"),
+                ty("Tatami Fill", "fill"),
+                ty("Satin Fill", "satinfill"),
+                ty("Contour Fill", "contour"),
+                ty("Spiral Fill", "spiral"),
+                ty("Radial Fill", "radial"),
+                ty("Cross Fill", "cross"),
+                ty("Meander Fill", "meander"),
+                ty("Appliqué", "applique"),
+                ty("Manual Stitches", "manual"),
+                Sep,
+                ty("No Stitches", "none"),
+            ],
+        ),
+        c("Auto Direction", "embroidery.autoDirection"),
+        c("Clear Inclination Lines", "embroidery.clearGuides"),
+        c("Reverse Stitch Direction", "embroidery.reverse"),
+        c("Make Properties Current", "embroidery.makeCurrent"),
+        Sep,
+        c("Remove Holes", "embroidery.removeHoles"),
+        c("Fill Holes", "embroidery.fillHoles"),
+        Sep,
+        c("Sort by Thread Color", "embroidery.sortByColor"),
+        c("Match Threads to Chart", "embroidery.matchThreads"),
+        c("Auto Sequence", "embroidery.autoSequence"),
+        c("Branch", "embroidery.branch"),
+        c("Break Apart", "embroidery.breakApart"),
+        c("Check Design", "ui.embroideryCheck"),
+        Sep,
+        c("Freeze Stitches", "embroidery.freeze"),
+        c("Regenerate Stitches", "embroidery.regenerate"),
+        Sep,
+        sub("Export Machine File", machine_file_items()),
+        Sep,
+        cp("Embroidery", "window.panel", json!({ "panel": "embroidery" })),
+        cp("Stitch Sequence", "window.panel", json!({ "panel": "stitchSequence" })),
+        cp("Stitch List", "window.panel", json!({ "panel": "stitchList" })),
+        cp("Embroidery Styles", "window.panel", json!({ "panel": "embroideryStyles" })),
+    ]
+}
+
 /// Window → … Libraries until the code-generated libraries land (disabled entries).
 fn library_placeholders() -> Vec<Item> {
     vec![todo("Built-in Libraries"), todo("User Defined"), Sep, todo("Other Library…")]
@@ -52,6 +125,24 @@ use Item::Sep;
 
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
+    (
+        "file.export.embroidery",
+        "Export Machine File…",
+        "",
+        "{format?: dst|exp|jef|pes|pec|vp3|xxx|u01 (dst), path?, name?, center?} write the stitch plan as a machine embroidery file (embroidery.export) to path, else a picked file (the web downloads it) → {path}",
+    ),
+    (
+        "ui.embroideryCheck",
+        "Check Design",
+        "",
+        "{} run embroidery.check and list what it finds in the Embroidery panel (click a finding to select its objects) → {count}",
+    ),
+    (
+        "ui.embroideryWidget",
+        "Digitizing Widget",
+        "",
+        "{} show or hide the embroidery digitizing widget: a dial of brushes, widths, densities, stitch lengths and shapes in the canvas's lower-left corner; showing it picks the Embroidery Brush tool → open",
+    ),
     (
         "app.language",
         "Interface Language",
@@ -177,7 +268,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "shortcuts.preset",
         "Keyboard Shortcut Set",
         "",
-        "{name: \"VectorCraft Defaults\" | \"Classic Defaults\"} (names of earlier versions are accepted)",
+        "{name: \"StitchFoundry Defaults\" | \"Classic Defaults\"} (names of earlier versions are accepted)",
     ),
     ("shortcuts.export", "Export Keyboard Shortcuts…", "", "{path?}"),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
@@ -316,9 +407,9 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} opens the Save PDF dialog; with params = document.exportPdf options written to path (asked when missing; viewAfterSaving opens the file) → {path, bytes, warnings}",
     ),
-    ("help.about", "About VectorCraft", "", "{}"),
+    ("help.about", "About StitchFoundry", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
-    ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
+    ("app.quit", "Quit StitchFoundry", "Cmd+Q", "{}"),
     (
         "ui.swatchOptions",
         "Swatch Options…",
@@ -570,7 +661,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.pdfPresetDialog",
         "PDF Preset",
         "",
-        "{name?: a saved preset to edit | preset?: the preset a new one starts from (default VectorCraft Default)} open the preset editor (dialog `pdfPreset`: the Save PDF dialog's option fields plus `name` and `description`); OK runs pdf.preset.save and returns to PDF Presets",
+        "{name?: a saved preset to edit | preset?: the preset a new one starts from (default StitchFoundry Default)} open the preset editor (dialog `pdfPreset`: the Save PDF dialog's option fields plus `name` and `description`); OK runs pdf.preset.save and returns to PDF Presets",
     ),
     ("file.openRecent11", "Open Recent File 11", "", "{}"),
     ("file.openRecent12", "Open Recent File 12", "", "{}"),
@@ -843,6 +934,24 @@ pub(crate) fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    if id == "file.export.embroidery" {
+        let ext = p.get("format").and_then(Value::as_str).unwrap_or("dst").to_ascii_lowercase();
+        return Some(io::save_command_output(app, "embroidery.export", &ext, p.clone()).map(|path| json!({ "path": path })));
+    }
+    if id == "ui.embroideryCheck" {
+        return Some(crate::embroidery::panel::run_check(app).map(|n| json!({ "count": n })));
+    }
+    if id == "ui.embroideryWidget" {
+        if app.session.active().is_none() {
+            return Some(Err("no document".into()));
+        }
+        let open = !app.embroidery.widget.open;
+        app.embroidery.widget.open = open;
+        if open {
+            crate::embroidery::widget::load(app);
+        }
+        return Some(Ok(json!(open)));
+    }
     if id == "app.language" {
         let lang = p.get("lang").and_then(Value::as_str).unwrap_or("");
         let value = if lang.eq_ignore_ascii_case("auto") {
@@ -1396,6 +1505,9 @@ fn go_to_artboard(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
+    if id == "ui.embroideryWidget" {
+        return Some(app.embroidery.widget.open);
+    }
     if id == "app.language" {
         let lang = p.get("lang").and_then(Value::as_str).unwrap_or("");
         let pref = app.session.prefs.interface_language.as_str();
@@ -1898,6 +2010,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
+        "ui.embroideryWidget" | "ui.embroideryCheck" => app.session.active().is_some(),
+        "file.export.embroidery" => app.session.embroidery_plan().is_some_and(|p| !p.is_empty()),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
@@ -1939,13 +2053,13 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id }));
     vec![
         (
-            // The application menu: About and Discord only. The in-window bar never shows it (File
+            // The application menu: About only. The in-window bar never shows it (File
             // is first there, as in Illustrator); on macOS `native_menu::mac_layout` composes the
             // App menu from this entry and the other menus (About from Help, Settings from Edit,
             // Quit from File, Language and Appearance synthesized). It stays first: `from_tree`
             // gives the first menu the App role.
-            "VectorCraft",
-            vec![c("About VectorCraft", "help.about"), c("Join Our Discord", "help.discord")],
+            crate::native_menu::APP_NAME,
+            vec![c("About StitchFoundry", "help.about")],
         ),
         (
             "File",
@@ -1980,6 +2094,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Export As…", "file.exportAs"),
                         c("Export As SVG…", "file.export.svg"),
                         c("Export As PNG…", "file.export.png"),
+                        sub("Machine Embroidery File", machine_file_items()),
                         c("Save for Web (Legacy)…", "file.saveForWeb"),
                     ],
                 ),
@@ -2355,6 +2470,9 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Shape", "select.same.shapeType"),
                         c("Symbol Instance", "select.same.symbolInstance"),
                         Sep,
+                        c("Thread Color", "select.same.thread"),
+                        c("Stitch Type", "select.same.stitchType"),
+                        Sep,
                         c("Font Family", "select.same.fontFamily"),
                         c("Font Family & Style", "select.same.fontFamilyStyle"),
                         c("Font Family, Style & Size", "select.same.fontFamilyStyleSize"),
@@ -2391,6 +2509,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             v
         }),
         ("Effect", effect_menu()),
+        ("Embroidery", embroidery_menu()),
         (
             "View",
             vec![
@@ -2560,15 +2679,12 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
         (
             "Help",
             vec![
-                c("Join Our Discord", "help.discord"),
-                c("ArtCraft Website", "help.website"),
-                c("VectorCraft on getartcraft.com", "help.appPage"),
-                c("VectorCraft on GitHub", "help.github"),
+                c("StitchFoundry on GitHub", "help.github"),
                 Sep,
                 c("Search Commands…", "help.commandPalette"),
-                todos("VectorCraft Help…", "F1"),
+                todos("StitchFoundry Help…", "F1"),
                 Sep,
-                c("About VectorCraft", "help.about"),
+                c("About StitchFoundry", "help.about"),
             ],
         ),
     ]
@@ -2749,8 +2865,8 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     let mut clicked: Option<(String, Value)> = None;
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
     // No application menu in the window (as in Illustrator): the bar starts at File on every
-    // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
-    let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != "VectorCraft").collect();
+    // platform. The app's menu stays in the tree: the native Mac bar takes it from there.
+    let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != crate::native_menu::APP_NAME).collect();
     let (end, open) = egui::MenuBar::new()
         .ui(ui, |ui| {
             let mut titles = Vec::with_capacity(tree.len());
@@ -3103,7 +3219,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         return;
     }
     // Help links: the command returns the URL; a menu click opens it (agents just get the URL).
-    if matches!(id, "help.discord" | "help.website" | "help.appPage" | "help.github") {
+    if id == "help.github" {
         app.open_link(id);
         return;
     }
@@ -3592,7 +3708,7 @@ mod tests {
         for t in titles {
             assert!(shown.iter().any(|s| s == t), "{t} missing from {shown:?}");
         }
-        assert!(!shown.iter().any(|s| s == "VectorCraft"), "{shown:?}");
+        assert!(!shown.iter().any(|s| s == crate::native_menu::APP_NAME), "{shown:?}");
     }
 
     #[test]

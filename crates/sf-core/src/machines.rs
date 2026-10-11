@@ -1,0 +1,287 @@
+//! Machine profiles: the file format a machine reads and the design settings that suit it, as a
+//! starting point for a design (longest stitch and frame move, speed and trim time for time
+//! estimates, and optionally the shortest stitch, trims and ties it wants).
+//!
+//! The standard profiles, one per format, ship with the app and are named by their format
+//! (`"dst"`); their values are deliberately generic. The user can change them (the changes are
+//! kept apart, so a standard profile can go back to how it ships) and make profiles of their own
+//! for their machines, each writing one of the formats.
+
+use crate::model::{DesignSettings, TieStyle};
+use serde::{Deserialize, Serialize};
+
+/// Commercial (multi-needle) or home machines.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MachineKind {
+    Commercial,
+    #[default]
+    Home,
+}
+
+impl MachineKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            MachineKind::Commercial => "commercial machines",
+            MachineKind::Home => "home machines",
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            MachineKind::Commercial => "commercial",
+            MachineKind::Home => "home",
+        }
+    }
+}
+
+/// The design settings a profile can carry besides its stitch limits, speed and trim time: the
+/// shortest stitch, when connectors are trimmed, the ties and the colour change time.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MachineAdvanced {
+    /// Stitches shorter than this are merged away (mm).
+    pub min_stitch: f64,
+    /// Connectors longer than this (mm) are trimmed instead of jumped.
+    pub trim_threshold: f64,
+    pub tie_in: bool,
+    pub tie_off: bool,
+    /// Size of tie-in and tie-off stitches (mm).
+    pub tie_length: f64,
+    pub tie_style: TieStyle,
+    /// Seconds per colour change, for time estimates.
+    pub color_change_seconds: f64,
+}
+
+impl Default for MachineAdvanced {
+    fn default() -> Self {
+        Self::of(&DesignSettings::default())
+    }
+}
+
+impl MachineAdvanced {
+    /// The advanced values of the design settings `s`.
+    pub fn of(s: &DesignSettings) -> Self {
+        MachineAdvanced {
+            min_stitch: s.min_stitch,
+            trim_threshold: s.trim_threshold,
+            tie_in: s.tie_in,
+            tie_off: s.tie_off,
+            tie_length: s.tie_length,
+            tie_style: s.tie_style,
+            color_change_seconds: s.color_change_seconds,
+        }
+    }
+
+    fn apply(&self, s: &mut DesignSettings) {
+        s.min_stitch = self.min_stitch;
+        s.trim_threshold = self.trim_threshold;
+        s.tie_in = self.tie_in;
+        s.tie_off = self.tie_off;
+        s.tie_length = self.tie_length;
+        s.tie_style = self.tie_style;
+        s.color_change_seconds = self.color_change_seconds;
+    }
+}
+
+/// A machine, or a family of machines, the file format it reads and settings that suit it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MachineProfile {
+    /// A standard profile's format (`"pes"`); the user's name for one of their own.
+    pub name: String,
+    /// File extension of the format the machine reads (`"dst"`, `"pes"`, ...).
+    pub format: String,
+    pub kind: MachineKind,
+    /// Longest stitch (mm); longer ones are split.
+    pub max_stitch: f64,
+    /// Longest single frame move (mm); longer jumps are split.
+    pub max_jump: f64,
+    /// Typical sewing speed (stitches per minute), for time estimates.
+    pub speed: f64,
+    /// Seconds a trim takes, for time estimates.
+    pub trim_seconds: f64,
+    /// The other design settings the machine wants; none keeps the design's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advanced: Option<MachineAdvanced>,
+}
+
+impl Default for MachineProfile {
+    fn default() -> Self {
+        standard_row(STANDARD[0])
+    }
+}
+
+use MachineKind::{Commercial, Home};
+
+/// The standard profiles: format, kind, longest stitch and frame move (mm) and speed (stitches
+/// per minute).
+const STANDARD: [(&str, MachineKind, f64, f64); 7] = [
+    // DST moves at most 12.1 mm per record
+    ("dst", Commercial, 12.1, 1000.0),
+    ("exp", Commercial, 12.0, 1000.0),
+    ("u01", Commercial, 12.0, 1000.0),
+    ("pes", Home, 12.0, 650.0),
+    ("jef", Home, 12.0, 800.0),
+    ("vp3", Home, 12.0, 800.0),
+    ("xxx", Home, 12.0, 650.0),
+];
+
+fn standard_row((format, kind, max, speed): (&str, MachineKind, f64, f64)) -> MachineProfile {
+    let trim_seconds = match kind {
+        Commercial => 4.0,
+        Home => 6.0,
+    };
+    MachineProfile { name: format.to_string(), format: format.to_string(), kind, max_stitch: max, max_jump: max, speed, trim_seconds, advanced: None }
+}
+
+/// The standard profiles as they ship, one per format.
+pub fn standard_profiles() -> Vec<MachineProfile> {
+    STANDARD.into_iter().map(standard_row).collect()
+}
+
+/// The standard profile for machines reading `format` (`"pes"`, `"PES"`), as it ships.
+pub fn standard(format: &str) -> Option<MachineProfile> {
+    STANDARD.into_iter().find(|r| r.0.eq_ignore_ascii_case(format.trim())).map(standard_row)
+}
+
+/// The formats a machine profile can write, by extension.
+pub fn formats() -> impl Iterator<Item = &'static str> {
+    STANDARD.iter().map(|r| r.0)
+}
+
+impl MachineProfile {
+    /// Whether this is one of the standard profiles (they are named by their format).
+    pub fn is_standard(&self) -> bool {
+        standard(&self.name).is_some()
+    }
+
+    /// "PES: home machines" for a standard profile; the name of one of the user's.
+    pub fn label(&self) -> String {
+        if self.is_standard() { format!("{}: {}", self.format.to_uppercase(), self.kind.label()) } else { self.name.clone() }
+    }
+
+    /// The design settings with this machine's values.
+    pub fn apply(&self, s: &DesignSettings) -> DesignSettings {
+        let mut out = DesignSettings {
+            max_stitch: self.max_stitch,
+            max_jump: self.max_jump,
+            machine_speed: self.speed,
+            trim_seconds: self.trim_seconds,
+            ..s.clone()
+        };
+        if let Some(a) = &self.advanced {
+            a.apply(&mut out);
+        }
+        out
+    }
+
+    /// This profile with the machine values of the design settings `s`, advanced ones too (its
+    /// name, format and kind stay).
+    pub fn with_settings(&self, s: &DesignSettings) -> MachineProfile {
+        MachineProfile {
+            max_stitch: s.max_stitch,
+            max_jump: s.max_jump,
+            speed: s.machine_speed,
+            trim_seconds: s.trim_seconds,
+            advanced: Some(MachineAdvanced::of(s)),
+            ..self.clone()
+        }
+    }
+}
+
+/// The saved copy of the standard profile `std`, kept to its name, format and kind.
+fn saved_standard(saved: &[MachineProfile], std: &MachineProfile) -> Option<MachineProfile> {
+    saved.iter().find(|m| m.name.eq_ignore_ascii_case(&std.name)).map(|m| MachineProfile {
+        name: std.name.clone(),
+        format: std.format.clone(),
+        kind: std.kind,
+        ..m.clone()
+    })
+}
+
+/// Every profile: the standard ones (as `saved` changes them) in format order, then the user's
+/// own. `saved` is what the user keeps: changed standard profiles and their own ones; a profile
+/// of their own without a name or a format the app writes is left out.
+pub fn profiles(saved: &[MachineProfile]) -> Vec<MachineProfile> {
+    let mut v: Vec<MachineProfile> = standard_profiles().into_iter().map(|m| saved_standard(saved, &m).unwrap_or(m)).collect();
+    v.extend(saved.iter().filter(|m| !m.name.trim().is_empty() && !m.is_standard() && standard(&m.format).is_some()).map(|m| {
+        let mut m = m.clone();
+        m.format.make_ascii_lowercase();
+        m
+    }));
+    v
+}
+
+/// The profile named `name` (any case), standard or the user's.
+pub fn find(saved: &[MachineProfile], name: &str) -> Option<MachineProfile> {
+    profiles(saved).into_iter().find(|m| m.name.eq_ignore_ascii_case(name.trim()))
+}
+
+/// Whether the standard profile `name` differs from how it ships.
+pub fn is_edited(saved: &[MachineProfile], name: &str) -> bool {
+    match (standard(name), find(saved, name)) {
+        (Some(std), Some(cur)) => std != cur,
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profiles_set_the_machine_values_and_keep_the_rest() {
+        let pes = standard("PES").expect("pes");
+        assert_eq!(pes.label(), "PES: home machines");
+        assert!(pes.is_standard());
+        let base = DesignSettings { tie_length: 1.1, ..DesignSettings::default() };
+        let s = pes.apply(&base);
+        assert_eq!((s.max_stitch, s.machine_speed, s.tie_length), (12.0, 650.0, 1.1));
+        assert!(standard("abc").is_none());
+        // one profile per format
+        let all = standard_profiles();
+        for (i, m) in all.iter().enumerate() {
+            assert!(all.iter().skip(i + 1).all(|o| o.format != m.format));
+        }
+        assert_eq!(formats().count(), all.len());
+        assert_eq!(profiles(&[]), all);
+    }
+
+    #[test]
+    fn edited_and_custom_profiles() {
+        let design = DesignSettings { machine_speed: 700.0, tie_length: 1.4, ..DesignSettings::default() };
+        let dst = standard("dst").expect("dst").with_settings(&design);
+        let diamond = MachineProfile { name: "Diamond deLuxe".into(), ..standard("vp3").expect("vp3") };
+        let saved = vec![dst.clone(), diamond.clone()];
+        let all = profiles(&saved);
+        assert_eq!(all.len(), 8, "seven standard, then the user's");
+        assert_eq!(all[0], dst);
+        assert_eq!(all[7].label(), "Diamond deLuxe");
+        assert!(!all[7].is_standard());
+        assert_eq!(find(&saved, "diamond DELUXE").map(|m| m.format), Some("vp3".to_string()));
+        assert!(is_edited(&saved, "DST") && !is_edited(&saved, "pes") && !is_edited(&saved, "Diamond deLuxe"));
+        // an edited standard profile with advanced settings sets them too
+        let s = find(&saved, "dst").expect("dst").apply(&DesignSettings::default());
+        assert_eq!((s.machine_speed, s.tie_length), (700.0, 1.4));
+        // a saved copy keeps the standard profile's format and kind, whatever it says
+        let odd = MachineProfile { name: "DST".into(), format: "pes".into(), kind: Home, speed: 900.0, ..standard("dst").expect("dst") };
+        let m = find(&[odd], "dst").expect("dst");
+        assert_eq!((m.name.as_str(), m.format.as_str(), m.kind, m.speed), ("dst", "dst", Commercial, 900.0));
+        assert!(!is_edited(&[MachineProfile { name: "DST".into(), ..standard("dst").expect("dst") }], "dst"), "the same values in another case");
+        // one of the user's without a format the app writes is left out
+        assert_eq!(profiles(&[MachineProfile { format: "emb".into(), ..diamond }]).len(), 7);
+    }
+
+    #[test]
+    fn profiles_read_back_from_their_saved_form() {
+        let m = standard("jef").expect("jef").with_settings(&DesignSettings { tie_style: TieStyle::Triangle, ..DesignSettings::default() });
+        let json = serde_json::to_value(&m).expect("json");
+        assert_eq!(json["maxStitch"], 12.0);
+        assert_eq!(json["advanced"]["tieStyle"], "triangle");
+        assert_eq!(serde_json::from_value::<MachineProfile>(json).expect("back"), m);
+        // a profile saved before advanced settings existed reads without them
+        let old: MachineProfile = serde_json::from_str(r#"{"name": "Shop", "format": "dst", "kind": "commercial", "speed": 900}"#).expect("old");
+        assert_eq!((old.speed, old.max_stitch, old.advanced), (900.0, 12.1, None));
+    }
+}

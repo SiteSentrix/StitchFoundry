@@ -10,17 +10,16 @@
 # language names, OpenType, the built-in workspace names and the bracketed perspective grid preset
 # names.
 	Glowing Edges…	Zářící okraje…
-	About VectorCraft	O aplikaci VectorCraft
+	About StitchFoundry	O aplikaci StitchFoundry
 	Align to Path	Zarovnat k cestě
 	Cut Path at Selected Anchor Points	Rozdělit cestu ve vybraných kotevních bodech
-	Join Our Discord	Připojit se k našemu Discordu
 	Language	Jazyk
 	UI Brightness	Jas rozhraní
 	Dark	Tmavý
 	Medium Dark	Středně tmavý
 	Medium Light	Středně světlý
 	Light	Světlý
-	Quit VectorCraft	Ukončit VectorCraft
+	Quit StitchFoundry	Ukončit StitchFoundry
 	File	Soubor
 	New…	Nový…
 	New from Template…	Nový ze šablony…
@@ -580,11 +579,9 @@
 	Save Swatch Library…	Uložit knihovnu vzorníku…
 	Symbol Libraries	Knihovny symbolů
 	Help	Nápověda
-	ArtCraft Website	Web ArtCraft
-	VectorCraft on getartcraft.com	VectorCraft na getartcraft.com
-	VectorCraft on GitHub	VectorCraft na GitHubu
+	StitchFoundry on GitHub	StitchFoundry na GitHubu
 	Search Commands…	Hledat příkazy…
-	VectorCraft Help…	Nápověda VectorCraft…
+	StitchFoundry Help…	Nápověda StitchFoundry…
 	Automatic	Automaticky
 	Isolate Selected Group	Izolovat vybranou skupinu
 	Exit Isolation Mode	Ukončit izolovaný režim
@@ -636,7 +633,7 @@
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Služby
-	Hide VectorCraft	Skrýt VectorCraft
+	Hide StitchFoundry	Skrýt StitchFoundry
 	Hide Others	Skrýt ostatní
 	Minimize	Minimalizovat
 	Zoom	Zvětšit
@@ -731,3 +728,60 @@ lighting	Light	Světlo
 	Spatter…	Rozstřik…
 	Sprayed Strokes…	Stříkané tahy…
 	Sumi-e…	Sumi-e…
+# Embroidery (StitchFoundry)
+	Embroidery	Výšivka
+	Digitizing Widget	Ovladač digitalizace
+	Convert Artwork to Embroidery	Převést kresbu na výšivku
+	Auto-Digitize Image	Automaticky digitalizovat obraz
+	Stitch Type	Typ stehu
+	Run	Rovný steh
+	Bean Run	Trojitý steh
+	Blanket	Festonový steh
+	Satin	Saténový steh
+	Tatami Fill	Výplň tatami
+	Satin Fill	Saténová výplň
+	Contour Fill	Obrysová výplň
+	Spiral Fill	Spirálová výplň
+	Radial Fill	Paprsková výplň
+	Cross Fill	Křížková výplň
+	Meander Fill	Meandrová výplň
+	Appliqué	Aplikace
+	Manual Stitches	Ruční stehy
+	No Stitches	Bez stehů
+	Auto Direction	Automatický směr
+	Clear Inclination Lines	Vymazat čáry sklonu
+	Sort by Thread Color	Seřadit podle barvy nitě
+	Export Machine File	Exportovat soubor pro stroj
+	Stitch Sequence	Pořadí vyšívání
+	Machine Embroidery File	Soubor pro vyšívací stroj
+	Tajima DST (.dst)…	Tajima DST (.dst)…
+	Brother PES (.pes)…	Brother PES (.pes)…
+	Janome JEF (.jef)…	Janome JEF (.jef)…
+	Melco EXP (.exp)…	Melco EXP (.exp)…
+	Pfaff VP3 (.vp3)…	Pfaff VP3 (.vp3)…
+	Singer XXX (.xxx)…	Singer XXX (.xxx)…
+	Barudan U01 (.u01)…	Barudan U01 (.u01)…
+	Brother PEC (.pec)…	Brother PEC (.pec)…
+# Embroidery (StitchFoundry), phase 1
+	Clear Machine Function	Odstranit funkci stroje
+	Insert Machine Function	Vložit funkci stroje
+	Object Stitches	Stehy objektu
+	Backstitch	Zpětný steh
+	Stem Stitch	Stonkový steh
+	Reverse Stitch Direction	Obrátit směr stehů
+	Remove Holes	Odstranit otvory
+	Fill Holes	Vyplnit otvory
+	Check Design	Zkontrolovat vzor
+	Thread Color	Barva nitě
+	Stitch Edit Tool	Nástroj Úprava stehů
+	Stitch List	Seznam stehů
+	Freeze Stitches	Zmrazit stehy
+	Regenerate Stitches	Znovu vytvořit stehy
+	Auto Sequence	Automatické pořadí
+	Branch	Spojit do větve
+	Break Apart	Rozdělit
+	Make Properties Current	Nastavit vlastnosti jako aktuální
+	Embroidery Styles	Styly výšivky
+	Column A/B Tool	Nástroj Sloupec A/B
+	Match Threads to Chart	Přizpůsobit nitě vzorníku
+machine	Trim	Střih nitě

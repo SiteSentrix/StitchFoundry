@@ -1,6 +1,6 @@
 //! `cargo xtask brands`: no other vendor's product or company names in what users and agents read.
 //!
-//! VectorCraft names its own features; where a comparison is needed, text says "the reference
+//! StitchFoundry (like VectorCraft before it) names its own features; where a comparison is needed, text says "the reference
 //! app". Scanned:
 //! * string literals in Rust sources (command labels and params docs, `UI_COMMANDS`, menus, panels,
 //!   MCP tool definitions…). Comments and test code (`tests*.rs`, `*_tests.rs`, `tests/` and
@@ -30,6 +30,10 @@ const DENY: &[&str] = &[
     "myriad",
     "pantone",
     "aicb",
+    // VectorCraft's makers: StitchFoundry, a modified version, must not carry their name (their
+    // brand licence); the plain-text credit in the About box says `brand-ok`.
+    "artcraft",
+    "getartcraft",
 ];
 
 /// Marks a line that keeps a legacy name on purpose.

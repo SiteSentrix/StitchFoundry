@@ -1,0 +1,507 @@
+//! # Embroidery mode
+//!
+//! Bridges VectorCraft documents and the StitchFoundry embroidery engine
+//! ([`sf_core`]). Any path, compound path or (soon) type object can carry an
+//! [`Embroidery`] record ([`vectorcraft_doc::Node::embroidery`]); the stitch plan
+//! is generated from the artwork in paint order (bottom first = sewn first),
+//! like Ink/Stitch does inside an SVG editor.
+//!
+//! Units: documents are in points (y down); the embroidery engine works in
+//! millimetres (y down). [`mm`] and [`pt`] convert between them.
+
+mod convert;
+
+pub use convert::{holes, parts};
+
+use sf_core::attr::Embroidery;
+use sf_core::engine::{Built, StitchCache, build_cached, object_polygons};
+use sf_core::geom::{BBox, FLATTEN_TOLERANCE, Polygon, Shape, poly};
+use sf_core::model::{Design, EmbObject, ObjectId, ObjectKind};
+use sf_core::pattern::Pattern;
+use sf_core::stats::{PatternStats, pattern_stats};
+use sf_core::threads::{Rgb, Thread};
+use std::collections::HashMap;
+use std::sync::Arc;
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+
+pub use sf_core;
+
+/// Millimetres per point.
+pub const MM_PER_PT: f64 = 25.4 / 72.0;
+/// Points per millimetre.
+pub const PT_PER_MM: f64 = 72.0 / 25.4;
+
+/// Document point (pt) → embroidery point (mm).
+#[inline]
+pub fn mm(p: kurbo::Point) -> sf_core::Point {
+    sf_core::Point::new(p.x * MM_PER_PT, p.y * MM_PER_PT)
+}
+
+/// Embroidery point (mm) → document point (pt).
+#[inline]
+pub fn pt(p: sf_core::Point) -> kurbo::Point {
+    kurbo::Point::new(p.x * PT_PER_MM, p.y * PT_PER_MM)
+}
+
+/// The stitch plan of a document.
+#[derive(Clone, Debug, Default)]
+pub struct StitchPlan {
+    /// Embroidery objects in sewing order (millimetres).
+    pub design: Design,
+    /// The document node each design object came from.
+    pub nodes: Vec<NodeId>,
+    /// The machine pattern (millimetres) and where each object's stitches are.
+    pub built: Built,
+    pub stats: Option<PatternStats>,
+}
+
+impl StitchPlan {
+    pub fn pattern(&self) -> &Pattern {
+        &self.built.pattern
+    }
+
+    /// The document node that sews pattern record `i`.
+    pub fn node_at_record(&self, i: usize) -> Option<NodeId> {
+        let span = self.built.object_at(i)?;
+        self.nodes.get(span.index).copied()
+    }
+
+    /// Pattern record ranges sewn by a node.
+    pub fn records_of(&self, node: NodeId) -> Vec<std::ops::Range<usize>> {
+        self.built.spans.iter().filter(|s| self.nodes.get(s.index) == Some(&node)).map(|s| s.range.clone()).collect()
+    }
+
+    /// A node's own stitches (millimetres) as its objects generate them, without the
+    /// lock stitches and connections the plan adds round them; parts too far apart
+    /// to sew across are separated by a trim.
+    pub fn own_stitches(&self, node: NodeId) -> Vec<sf_core::Stitch> {
+        let trim = self.design.settings.trim_threshold;
+        let mut out: Vec<sf_core::Stitch> = Vec::new();
+        for span in self.built.spans.iter().filter(|s| self.nodes.get(s.index) == Some(&node)) {
+            let last = out.iter().rev().find(|s| s.is_move()).copied();
+            let first = span.own.iter().find(|s| s.cmd == sf_core::Cmd::Stitch).copied();
+            if let (Some(a), Some(b)) = (last, first)
+                && a.pos().distance(b.pos()) > trim
+            {
+                out.push(sf_core::Stitch::new(a.x, a.y, sf_core::Cmd::Trim));
+            }
+            out.extend(span.own.iter().copied());
+        }
+        out
+    }
+
+    /// Whether the plan has any stitches.
+    pub fn is_empty(&self) -> bool {
+        self.built.pattern.stitches.is_empty()
+    }
+}
+
+/// Every stitched node in sewing order (paint order: bottom layer first, back to
+/// front), skipping hidden ones.
+pub fn stitched_nodes(doc: &Document) -> Vec<Arc<Node>> {
+    fn walk(n: &Arc<Node>, visible: bool, out: &mut Vec<Arc<Node>>) {
+        let visible = visible && n.visible;
+        if !visible {
+            return;
+        }
+        if n.embroidery.is_some() {
+            out.push(n.clone());
+            // a stitched group or compound is one object: don't descend
+            if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
+                return;
+            }
+        }
+        if let Some(children) = n.children() {
+            for c in children {
+                walk(c, visible, out);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for l in &doc.layers {
+        walk(l, true, &mut out);
+    }
+    out
+}
+
+/// Thread of a stitched node: its own thread, else its paint colour.
+pub fn node_thread(node: &Node, e: &Embroidery) -> Thread {
+    if let Some(t) = &e.thread {
+        return t.clone();
+    }
+    let prefer_stroke = matches!(e.stitch, sf_core::attr::StitchType::Run(_) | sf_core::attr::StitchType::Manual)
+        || (matches!(e.stitch, sf_core::attr::StitchType::Satin(_)) && node.appearance.fill_paint().is_none());
+    let c = convert::paint_color(node, prefer_stroke).unwrap_or(Rgb::BLACK);
+    Thread::new(c, c.to_hex())
+}
+
+/// An editable vector path for a StitchFoundry contour (corner nodes stay corners,
+/// curve nodes get smooth Bézier handles). Coordinates are passed through as is.
+pub fn contour_to_path(c: &sf_core::geom::Contour) -> vectorcraft_geom::path::PathData {
+    use vectorcraft_geom::path::{Anchor, AnchorKind, PathData, SubPath};
+    let handles = sf_core::geom::shape::bezier_handles(&c.nodes, c.closed);
+    let anchors = c
+        .nodes
+        .iter()
+        .zip(handles)
+        .map(|(n, (hin, hout))| {
+            let p = kurbo::Point::new(n.p.x, n.p.y);
+            Anchor {
+                p,
+                h_in: kurbo::Point::new(n.p.x + hin.x, n.p.y + hin.y),
+                h_out: kurbo::Point::new(n.p.x + hout.x, n.p.y + hout.y),
+                kind: if n.kind == sf_core::geom::NodeKind::Curve { AnchorKind::Smooth } else { AnchorKind::Corner },
+            }
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, c.closed))
+}
+
+/// The filled regions of a path or compound path, in millimetres.
+pub fn regions_mm(node: &Node) -> Vec<sf_core::geom::Polygon> {
+    match convert::node_lines(node) {
+        Some((lines, rule)) => convert::regions(&lines, rule),
+        None => Vec::new(),
+    }
+}
+
+/// Whether a node's geometry is all open paths (a stroke rather than an area).
+pub fn is_open(node: &Node) -> bool {
+    convert::node_lines(node).is_some_and(|(lines, _)| !lines.is_empty() && lines.iter().all(|l| !l.closed))
+}
+
+/// Whether satin sews a node along its paths rather than across its area: open
+/// paths, and closed ones painted with a stroke but no fill (a satin border round a
+/// shape).
+pub fn is_line_art(node: &Node) -> bool {
+    is_open(node) || (!has_fill(node) && !matches!(node.kind, NodeKind::Text(_)) && convert::node_lines(node).is_some_and(|(l, _)| !l.is_empty()))
+}
+
+/// Whether a node can carry embroidery (paths, compound paths and type).
+pub fn stitchable(node: &Node) -> bool {
+    matches!(node.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_))
+}
+
+/// Satin stitches stay this short at most (mm): thicker shapes are filled.
+pub const MAX_SATIN_WIDTH: f64 = 7.0;
+
+/// The stitch type an object reads as, the way a digitizer would pick it: areas
+/// (type included) are satin when every part is at most [`MAX_SATIN_WIDTH`] thick
+/// (thin columns, small lettering) and tatami otherwise; strokes are satin lines
+/// when wide, bean (triple) runs when medium and runs when hairlines.
+pub fn suggest(node: &Node) -> Embroidery {
+    let area = matches!(node.kind, NodeKind::Text(_)) || (convert::paint_color(node, false).is_some() && !is_open(node) && has_fill(node));
+    if area {
+        let regions = regions_mm(node);
+        let thin = !regions.is_empty() && regions.iter().all(|r| r.thickness() <= MAX_SATIN_WIDTH);
+        return if thin { Embroidery::satin() } else { Embroidery::fill() };
+    }
+    let stroke_w = node.appearance.stroke_width() * MM_PER_PT;
+    if stroke_w >= 1.2 {
+        let mut e = Embroidery::satin();
+        e.width = Some(stroke_w);
+        e
+    } else if stroke_w >= 0.6 {
+        Embroidery::new(sf_core::attr::StitchType::Run(sf_core::model::RunParams { kind: sf_core::model::RunKind::Triple, ..Default::default() }))
+    } else {
+        Embroidery::run()
+    }
+}
+
+/// Whether a node paints a fill (type always does).
+pub(crate) fn has_fill(node: &Node) -> bool {
+    !matches!(node.appearance.fill_paint(), vectorcraft_color::Paint::None)
+}
+
+/// Builds the embroidery design of a document (no caching).
+pub fn design_from_doc(doc: &Document) -> (Design, Vec<NodeId>) {
+    let mut p = Planner::default();
+    let plan = p.plan(doc);
+    (plan.design.clone(), plan.nodes.clone())
+}
+
+struct NodeEntry {
+    node: Arc<Node>,
+    objects: Vec<EmbObject>,
+}
+
+/// Incremental stitch planner. Unchanged nodes (same shared `Arc`) reuse their
+/// converted objects, and unchanged objects reuse their stitches.
+///
+/// The planner keeps a reference to every stitched node it has seen, so the
+/// document's copy-on-write edits always give a changed node a new `Arc`: pointer
+/// equality is a reliable "unchanged" test.
+#[derive(Default)]
+pub struct Planner {
+    nodes: HashMap<NodeId, NodeEntry>,
+    cache: StitchCache,
+    last: Option<Snapshot>,
+}
+
+struct Snapshot {
+    order: Vec<Arc<Node>>,
+    settings: Option<sf_core::attr::DocEmbroidery>,
+    plan: Arc<StitchPlan>,
+}
+
+impl Planner {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The stitch plan for `doc`, reusing everything that didn't change.
+    pub fn plan(&mut self, doc: &Document) -> Arc<StitchPlan> {
+        let order = stitched_nodes(doc);
+        let settings = doc.embroidery.as_deref().cloned();
+        if let Some(s) = &self.last
+            && s.settings == settings
+            && s.order.len() == order.len()
+            && s.order.iter().zip(&order).all(|(a, b)| Arc::ptr_eq(a, b))
+        {
+            return s.plan.clone();
+        }
+        let plan = Arc::new(self.build(doc, &order));
+        self.last = Some(Snapshot { order, settings, plan: plan.clone() });
+        plan
+    }
+
+    fn build(&mut self, doc: &Document, stitched: &[Arc<Node>]) -> StitchPlan {
+        let settings = doc.embroidery.as_ref().map(|e| e.settings.clone()).unwrap_or_default();
+        let mut design = Design::new();
+        design.palette.clear();
+        design.settings = settings;
+        design.hoop = doc.embroidery.as_ref().and_then(|e| e.hoop.clone());
+        let mut node_ids = Vec::new();
+        let branches = branch_groups(doc);
+        // objects that remove the stitching below them: (first object index, what they cover)
+        let mut cuts: Vec<(usize, Vec<Polygon>)> = Vec::new();
+        let mut fresh: HashMap<NodeId, NodeEntry> = HashMap::with_capacity(stitched.len());
+        for n in stitched {
+            let Some(e) = n.embroidery.as_deref() else { continue };
+            let objects = match self.nodes.remove(&n.id) {
+                Some(entry) if Arc::ptr_eq(&entry.node, n) => entry.objects,
+                _ => {
+                    let thread = node_thread(n, e);
+                    let name = n.name.clone().unwrap_or_else(|| e.stitch.label().to_string());
+                    let kinds = convert::convert(n, e);
+                    let count = kinds.len();
+                    kinds
+                        .into_iter()
+                        .enumerate()
+                        .map(|(k, kind)| {
+                            // stable ids per node part keep the stitch cache warm
+                            let id: ObjectId = n.id.0.wrapping_mul(64).wrapping_add(k as u64);
+                            let mut o = EmbObject::new(id, kind, 0);
+                            o.name = name.clone();
+                            o.entry = e.entry.map(|p| p * MM_PER_PT);
+                            o.exit = e.exit.map(|p| p * MM_PER_PT);
+                            o.trim_after = e.trim_after;
+                            o.tie_in = e.tie_in;
+                            o.tie_off = e.tie_off;
+                            o.stop_after = e.stop_after && k + 1 == count;
+                            o.omit_last = e.omit_last && k + 1 == count;
+                            // the palette index is resolved below; keep the thread colour
+                            o.color = usize::from(thread.color.r) << 16 | usize::from(thread.color.g) << 8 | usize::from(thread.color.b);
+                            o
+                        })
+                        .collect()
+                }
+            };
+            let start = design.objects.len();
+            let branch = branches.get(&n.id).map(|g| g.0);
+            for o in &objects {
+                let mut o = o.clone();
+                o.branch = branch;
+                let rgb = Rgb::new((o.color >> 16) as u8, (o.color >> 8) as u8, o.color as u8);
+                let thread = e.thread.clone().filter(|t| t.color == rgb).unwrap_or_else(|| Thread::new(rgb, rgb.to_hex()));
+                o.color = design.thread_index(&thread);
+                design.objects.push(o);
+                node_ids.push(n.id);
+            }
+            if e.remove_underlying && start > 0 {
+                let cover = cover_of(&design.objects[start..], e.cut_overlap());
+                if !cover.is_empty() {
+                    cuts.push((start, cover));
+                }
+            }
+            fresh.insert(n.id, NodeEntry { node: n.clone(), objects });
+        }
+        self.nodes = fresh;
+        cut_underlying(&mut design.objects, &mut node_ids, cuts);
+        order_branches(&mut design.objects, &mut node_ids);
+        design.next_id = design.objects.iter().map(|o| o.id).max().unwrap_or(0) + 1;
+        let built = build_cached(&design, &mut self.cache);
+        let stats = (!built.pattern.stitches.is_empty()).then(|| pattern_stats(&built.pattern, &design.settings));
+        StitchPlan { design, nodes: node_ids, built, stats }
+    }
+}
+
+/// The branch group (a group whose stitch type is Branch) each node belongs to.
+fn branch_groups(doc: &Document) -> HashMap<NodeId, NodeId> {
+    fn walk(n: &Arc<Node>, branch: Option<NodeId>, out: &mut HashMap<NodeId, NodeId>) {
+        let here = match n.embroidery.as_deref().map(|e| &e.stitch) {
+            Some(sf_core::attr::StitchType::Branch) if matches!(n.kind, NodeKind::Group { .. }) => Some(n.id),
+            _ => branch,
+        };
+        if let Some(g) = here
+            && g != n.id
+        {
+            out.insert(n.id, g);
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, here, out);
+        }
+    }
+    let mut out = HashMap::new();
+    for l in &doc.layers {
+        walk(l, None, &mut out);
+    }
+    out
+}
+
+/// Sews each branch's objects in the order with the fewest colour changes and the
+/// shortest travel, starting where the design is before it, keeping objects that
+/// overlap in paint order.
+fn order_branches(objects: &mut [EmbObject], nodes: &mut [NodeId]) {
+    let mut i = 0;
+    while i < objects.len() {
+        let Some(b) = objects[i].branch else {
+            i += 1;
+            continue;
+        };
+        let end = (i..objects.len()).find(|&k| objects[k].branch != Some(b)).unwrap_or(objects.len());
+        let items: Vec<sf_core::sequence::Item> =
+            objects[i..end].iter().map(|o| sf_core::sequence::Item { color: o.color, area: object_polygons(o), bbox: o.bbox() }).collect();
+        let start = i.checked_sub(1).map(|k| objects[k].bbox().center());
+        let order = sf_core::sequence::sequence(&items, start);
+        let objs: Vec<EmbObject> = order.iter().map(|&k| objects[i + k].clone()).collect();
+        let ids: Vec<NodeId> = order.iter().map(|&k| nodes[i + k]).collect();
+        objects[i..end].clone_from_slice(&objs);
+        nodes[i..end].copy_from_slice(&ids);
+        i = end;
+    }
+}
+
+/// Fill pieces smaller than this (mm²) left over by a cut are dropped.
+const MIN_PIECE: f64 = 1.0;
+
+/// What objects cover, less `overlap` round the edge: the part the fills sewn before
+/// them leave out when they remove the stitching below them.
+fn cover_of(objects: &[EmbObject], overlap: f64) -> Vec<Polygon> {
+    let polys: Vec<Polygon> = objects.iter().flat_map(object_polygons).filter(|p| p.outer.len() >= 3).collect();
+    if polys.is_empty() {
+        return Vec::new();
+    }
+    poly::offset(&poly::union(&polys), -overlap)
+}
+
+/// Removes underlying stitching: every fill sewn before a cutting object loses the
+/// part the cutter covers. A fill cut into pieces becomes one object per piece (the
+/// extra ones with ids of their own); one covered completely makes no stitches.
+fn cut_underlying(objects: &mut Vec<EmbObject>, nodes: &mut Vec<NodeId>, mut cuts: Vec<(usize, Vec<Polygon>)>) {
+    for c in 0..cuts.len() {
+        let (end, cover) = (cuts[c].0, std::mem::take(&mut cuts[c].1));
+        let Some(bb) = cover.iter().map(Polygon::bbox).reduce(BBox::union) else { continue };
+        let (mut i, mut end) = (0, end);
+        while i < end {
+            let ObjectKind::Fill(f) = &objects[i].kind else {
+                i += 1;
+                continue;
+            };
+            let region = f.shape.polygon(FLATTEN_TOLERANCE);
+            if !region.bbox().intersects(&bb) {
+                i += 1;
+                continue;
+            }
+            let pieces: Vec<Polygon> =
+                poly::difference(std::slice::from_ref(&region), &cover).into_iter().filter(|p| p.area() >= MIN_PIECE).collect();
+            if region.area() - pieces.iter().map(Polygon::area).sum::<f64>() < 1e-3 {
+                i += 1;
+                continue;
+            }
+            let (obj, node) = (objects[i].clone(), nodes[i]);
+            let made: Vec<EmbObject> = if pieces.is_empty() {
+                vec![EmbObject { visible: false, ..obj }]
+            } else {
+                pieces
+                    .iter()
+                    .enumerate()
+                    .map(|(k, p)| {
+                        let mut o = obj.clone();
+                        if let ObjectKind::Fill(f) = &mut o.kind {
+                            f.shape = Shape::from_polygon(p);
+                        }
+                        o.id = obj.id.wrapping_add((k as u64) << 48);
+                        o
+                    })
+                    .collect()
+            };
+            let added = made.len() - 1;
+            objects.splice(i..=i, made);
+            nodes.splice(i..=i, std::iter::repeat_n(node, added + 1));
+            for later in cuts.iter_mut().skip(c + 1) {
+                later.0 += added;
+            }
+            end += added;
+            i += added + 1;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sf_core::attr::StitchType;
+    use sf_core::pattern::Cmd;
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::Appearance;
+    use vectorcraft_geom::{Rect, shapes};
+
+    fn doc_with(e: Embroidery, rect: Rect, color: Color) -> (Document, NodeId) {
+        let mut d = Document::new(612.0, 792.0);
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut n = Node::path(id, shapes::rectangle(rect), Appearance::basic(Paint::solid(color), Paint::None, 0.0));
+        n.embroidery = Some(Box::new(e));
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+        (d, id)
+    }
+
+    #[test]
+    fn filled_rectangle_becomes_stitches_in_its_colour() {
+        // 72 × 36 pt = 25.4 × 12.7 mm
+        let (d, id) = doc_with(Embroidery::fill(), Rect::new(0.0, 0.0, 72.0, 36.0), Color::rgb8(200, 20, 30));
+        let mut p = Planner::new();
+        let plan = p.plan(&d);
+        assert_eq!(plan.nodes, vec![id]);
+        let pat = plan.pattern();
+        assert!(pat.stitch_count() > 300, "{}", pat.stitch_count());
+        assert_eq!(pat.threads[0].color, Rgb::new(200, 20, 30));
+        let b = pat.bounds();
+        assert!((b.width() - 25.4).abs() < 1.0 && (b.height() - 12.7).abs() < 1.0, "{b:?}");
+        assert_eq!(plan.node_at_record(pat.stitches.len() / 2), Some(id));
+        // the same document gives the same (cached) plan
+        assert!(Arc::ptr_eq(&plan, &p.plan(&d)));
+    }
+
+    #[test]
+    fn every_stitch_type_converts() {
+        let types =
+            [Embroidery::run(), Embroidery::satin(), Embroidery::fill(), Embroidery::satin_fill(), Embroidery::applique(), Embroidery::manual()];
+        for e in types {
+            let label = e.stitch.id();
+            let (d, _) = doc_with(e, Rect::new(0.0, 0.0, 60.0, 20.0), Color::rgb8(10, 120, 40));
+            let plan = Planner::new().plan(&d);
+            assert!(plan.pattern().stitch_count() > 3, "{label}: {}", plan.pattern().stitch_count());
+            assert_eq!(plan.pattern().stitches.last().map(|s| s.cmd), Some(Cmd::End));
+        }
+        let _ = StitchType::Manual;
+    }
+
+    #[test]
+    fn units_convert() {
+        let p = pt(mm(kurbo::Point::new(72.0, 36.0)));
+        assert!((p.x - 72.0).abs() < 1e-9 && (p.y - 36.0).abs() < 1e-9);
+        assert!((mm(kurbo::Point::new(72.0, 0.0)).x - 25.4).abs() < 1e-9);
+    }
+}

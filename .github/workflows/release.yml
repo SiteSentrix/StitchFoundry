@@ -1,5 +1,5 @@
 # Release pipeline: every push to `release` builds signed installers for every platform and
-# creates or updates the draft GitHub Release "VectorCraft v<version>". See docs/releasing.md.
+# creates or updates the draft GitHub Release "StitchFoundry v<version>". See docs/releasing.md.
 #
 # Jobs that sign (macOS, Windows) and the job that creates the release run in the `release`
 # environment (restricted to the `release` branch), which holds the signing secrets. Every secret
@@ -60,7 +60,7 @@ jobs:
             echo "date=$(date -u +%Y-%m-%d)"
             echo "prerelease=$pre"
           } >>"$GITHUB_OUTPUT"
-          echo "### VectorCraft v$v (\`${GITHUB_SHA::9}\`)" >>"$GITHUB_STEP_SUMMARY"
+          echo "### StitchFoundry v$v (\`${GITHUB_SHA::9}\`)" >>"$GITHUB_STEP_SUMMARY"
 
   macos:
     name: macOS universal
@@ -225,7 +225,7 @@ jobs:
           dpkg-deb --info dist/release/*.deb
           dpkg-deb --contents dist/release/*.deb | grep -E 'usr/bin/vectorcraft$|metainfo|applications'
           ldd target/release/vectorcraft
-          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/flatpak/ai.storyteller.vectorcraft.yml')); assert m['id'] == 'ai.storyteller.vectorcraft'"
+          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/flatpak/com.sitesentrix.stitchfoundry.yml')); assert m['id'] == 'com.sitesentrix.stitchfoundry'"
           for appimage in dist/release/*.AppImage; do
             chmod +x "$appimage"
             APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --version
@@ -327,7 +327,7 @@ jobs:
             export CARGO_TARGET_DIR=/var/tmp/vectorcraft-target CARGO_BUILD_JOBS=4
             bash packaging/freebsd/package.sh
             tar -tzf dist/release/vectorcraft-*-freebsd-x86_64.tar.gz \
-              | grep -E '/bin/vectorcraft$|/bin/vectorcraft-cli$|/share/applications/ai\.storyteller\.vectorcraft\.desktop$'
+              | grep -E '/bin/vectorcraft$|/bin/vectorcraft-cli$|/share/applications/com\.sitesentrix\.stitchfoundry\.desktop$'
       - uses: actions/upload-artifact@v7
         with:
           name: release-freebsd
@@ -405,7 +405,7 @@ jobs:
         working-directory: artifacts
         run: |
           tag="v$VERSION"
-          title="VectorCraft v$VERSION"
+          title="StitchFoundry v$VERSION"
           pre=()
           if [ "$PRERELEASE" = true ]; then pre=(--prerelease); fi
           if draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null)"; then

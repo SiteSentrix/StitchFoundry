@@ -1,0 +1,845 @@
+# StitchFoundry build spec
+
+The hand-off document for anyone, person or Claude Code session, continuing StitchFoundry. It
+says what the product is, the rules, what exists today, everything still to build to reach
+feature parity with the reference digitizing suite (Wilcom EmbroideryStudio 2026), in what
+order, and how to verify it.
+
+State described: branch `stitchforge/embroidery-core`, end of the first build session (2026-10-11).
+User-facing behaviour of what exists is in [`embroidery.md`](embroidery.md).
+
+- [1. What StitchFoundry is](#1-what-stitchfoundry-is)
+- [2. Start here (new session checklist)](#2-start-here-new-session-checklist)
+- [3. Ground rules](#3-ground-rules)
+- [4. Architecture](#4-architecture)
+- [5. What exists today](#5-what-exists-today)
+- [6. Parity matrix](#6-parity-matrix)
+- [7. Designs for the large missing pieces](#7-designs-for-the-large-missing-pieces)
+- [8. Roadmap and estimates](#8-roadmap-and-estimates)
+- [9. Verification and the quality bar](#9-verification-and-the-quality-bar)
+- [10. Decisions for the owner](#10-decisions-for-the-owner)
+- [11. Open source and AI features](#11-open-source-and-ai-features)
+- [Appendix A: driving the app for screenshots](#appendix-a-driving-the-app-for-screenshots)
+- [Appendix B: public sources](#appendix-b-public-sources)
+
+---
+
+## 1. What StitchFoundry is
+
+**A standalone machine-embroidery design and digitizing application** (not a plugin). It is a
+fork of [VectorCraft](https://github.com/storytold/vectorcraft), a pure-Rust, clean-room
+vector illustration app, with embroidery built into its document model, engine and UI. It runs
+natively on macOS, Windows, Linux and FreeBSD, and in the browser through WebAssembly.
+
+**Goal:** the complete workflow of a professional digitizing suite, using the feature set of
+Wilcom EmbroideryStudio 2026 (Designing level, all add-on Elements, multi-decoration) as the
+checklist, written clean-room. On top of that:
+
+- the digitizing **widget** of Embroidery Legacy (radial dial of brushes, widths, densities,
+  stitch lengths and shapes);
+- ideas from **Ink/Stitch** (any vector object carries embroidery parameters; guided fills,
+  meander, satin along paths), as feature references only;
+- **automation**: every feature is an engine command, reachable from the MCP server, the
+  control channel and the CLI, so AI agents can digitize too.
+
+**Why a VectorCraft fork:** the reference suite pairs its embroidery engine with a full vector
+editor (CorelDRAW inside, "graphics mode"). VectorCraft gives us that editor, already built:
+pen, shapes, type with OpenType, pathfinder, image trace, SVG/PDF/AI/EPS/DXF/EMF import and
+export, layers, symbols, variables, undo, i18n, MCP. Embroidery is an attribute any vector
+object can carry, so there is no separate "graphics mode": art and stitches live in one
+document.
+
+**Users:** professional digitizers, embroidery shops (production, team names, multi-head),
+and home embroiderers.
+
+**Out of scope:** CorelDRAW integration (VectorCraft replaces it); the reference suite's
+proprietary EMB format, fonts, motif and monogram libraries and sample designs (we make our
+own); vendor machine protocols that are not publicly documented.
+
+---
+
+## 2. Start here (new session checklist)
+
+1. **Get the code.** The private repository `stitchforge` (owner's GitHub), branch `main`
+   (pushed from `stitchforge/embroidery-core`). If it isn't on GitHub yet, restore it from the
+   git bundle the owner has (`RESTORE.md`: clone `storytold/vectorcraft`, check out `6f7f32c6`,
+   fetch the bundle).
+2. **Read, in order:** this spec, [`embroidery.md`](embroidery.md), the repo's
+   [`CLAUDE.md`](../CLAUDE.md) and `AGENTS.md` (VectorCraft's rules apply unchanged), then
+   `docs/development.md`.
+3. **Build and run** (Rust 1.97+):
+   ```sh
+   export CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0   # keeps target/ small
+   cargo run -p vectorcraft -- --control 7979
+   ```
+   On a headless Linux box install `xvfb libegl1 libegl-mesa0 mesa-vulkan-drivers
+   libxkbcommon-x11-0 x11-utils` and run with `DISPLAY=:99 WGPU_BACKEND=vulkan
+   VECTORCRAFT_NO_PREFS=1 VECTORCRAFT_SYNC_RENDER=1` under `Xvfb :99` (Appendix A).
+4. **Fast checks while working:**
+   ```sh
+   cargo test -p sf-core -p sf-formats -p vectorcraft-embroidery
+   cargo test -p vectorcraft-engine --lib tests_embroidery
+   cargo test -p vectorcraft-tools embroidery
+   cargo test -p vectorcraft-ui-egui --lib i18n        # new strings need translations
+   ```
+   **Before every commit:** `cargo xtask ci` (fmt, clippy `-D warnings` with the no-panic
+   lints, all tests, assets, brands, layers, wasm). Last full run: 5,173 tests passing, clippy
+   clean, wasm clean.
+5. **Pick work** from [§8](#8-roadmap-and-estimates) in order, one task id per commit
+   (`E1.3: stitch edit mode`). For each feature: engine command(s) + tests → tool/UI →
+   translations → docs ([`embroidery.md`](embroidery.md)) → look at it in the running app
+   (Appendix A) → `cargo xtask ci` → commit → push.
+6. **Update this spec** when you finish a task: flip its status in [§6](#6-parity-matrix) and
+   note anything learned.
+
+Disk: a target dir grows past 20 GB. Use the variables above, delete
+`target/debug/incremental` when space is short, and give each parallel agent its own
+`CARGO_TARGET_DIR` (or its own git worktree), deleted when it finishes.
+
+---
+
+## 3. Ground rules
+
+All of VectorCraft's non-negotiables in `CLAUDE.md` apply: clean-room, asset rules, no fonts
+in the repo, never crash (no `unwrap`/`expect`/`panic`, untrusted input everywhere),
+everything is a command, layering, thin UI, Rust only, never break wasm, quality gates.
+Embroidery adds:
+
+- **Clean-room toward the reference suite.** Never install, run, automate, screenshot or
+  measure Wilcom (or any other commercial digitizing) software, and never compare our stitches
+  against its output. Never read or copy anything from its installs: fonts, motifs, monograms,
+  templates, sample designs, thread charts as shipped files, help text. Behaviour comes only
+  from public documentation (docs.wilcom.com online help, product pages, release notes),
+  cited by URL, rewritten in our own words, and from files users own (used locally, never
+  committed). Feature names may be paraphrased; the UI uses our own names.
+- **No GPL code.** Ink/Stitch (GPL) and Embroidermodder 2 are feature references only. MIT or
+  zlib projects (pyembroidery, libembroidery) may be read to understand public file formats,
+  but write our own code; pyembroidery may be used **outside the repo** as a test oracle
+  (scratch virtualenv), never vendored.
+- **Brands:** no vendor names in user-visible strings except file-format names (Tajima DST,
+  Brother PES…), which identify formats. `cargo xtask brands` checks Rust literals.
+- **Embroidery fonts and content are ours.** Lettering comes from OFL fonts in
+  `storytold/craft-fonts` (or the user's installed fonts) converted at run time, plus
+  embroidery "recipes" we author (data, attributed in `ASSETS.md`). Same for motifs,
+  monogram templates, buttonhole presets, sequin shapes.
+- **Units:** documents are in points (1/72 in), y down; `sf-core` works in millimetres, y
+  down; stitch parameters are always shown in mm. Convert only at the crate boundary
+  (`vectorcraft_embroidery::{mm, pt, MM_PER_PT, PT_PER_MM}`).
+- **Stitch order is paint order** (bottom object sews first), so sequencing is arranging.
+
+---
+
+## 4. Architecture
+
+```
+            apps/vectorcraft (desktop)   apps/vectorcraft-web (wasm)   vectorcraft-cli (MCP, batch)
+                                 \               |                /
+L6  vectorcraft-ui-egui   embroidery/{overlay,panel,sequence,widget}.rs, menus, toolbar
+L5  vectorcraft-engine    cmd/embroidery.rs (embroidery.* commands), fileio (open/place machine files)
+L4  vectorcraft-tools     embroidery.rs: Embroidery Brush tool, Inclination tool
+L2  vectorcraft-embroidery  document → embroidery objects (mm), Planner (cached per node), StitchPlan
+L1  sf-formats            machine file readers/writers (DST EXP JEF PES PEC VP3 XXX U01)
+L1  vectorcraft-doc       Node.embroidery, Document.embroidery (serde, optional)
+L0  sf-core               geometry, model, stitch engine, direction, brushes, threads, hoops, fabrics
+```
+
+**Data model**
+
+- `Node.embroidery: Option<Box<sf_core::attr::Embroidery>>` on paths, compound paths and type.
+  `Embroidery { stitch: StitchType, thread: Option<Thread>, width, profile: WidthProfile,
+  guides: Vec<Guide>, auto_direction, entry, exit, trim_after }`.
+  `StitchType = Run(RunParams) | Satin(SatinParams) | Fill(FillParams) |
+  Applique(AppliqueParams) | Manual`. Guides and beads are in document points and follow the
+  node's transforms (`Node::transform_scaled` calls `Embroidery::transform`).
+- `Document.embroidery: Option<Box<DocEmbroidery>>`: hoop, fabric, design settings (trim
+  threshold, ties…), thread chart, palette.
+- Both are `serde(default, skip_serializing_if)`: documents without embroidery are unchanged.
+
+**Pipeline:** `Planner::plan(&Document)` walks visible stitched nodes in paint order,
+converts each (`crates/embroidery/src/convert.rs`: flatten to mm, regions by fill rule, split
+holes and stroke joins for satin, automatic direction) into `sf_core::model::ObjectKind`s,
+builds them with `sf_core::engine::build_cached` (object id = node id × 64 + part) into one
+`Pattern` (absolute mm records: Stitch, Jump, Trim, ColorChange, Stop, End) and caches per
+node by `Arc` pointer, so editing one object restitches only that object. The canvas, the
+statistics, the player and every export read that plan.
+
+**Stitch engine** (`crates/sf-core/src/engine/`): runs (single, triple, blanket, zigzag,
+motif), satin columns (rails/rungs, half-step pairs, pull compensation, auto spacing, short
+stitches, auto split, underlay centre/edge/zigzag), scanline fills (boustrophedon sections,
+travel graph with Dijkstra, tatami offsets, gradient spacing, jitter), turning fills along
+strips built from guides, contour/spiral/radial/cross/meander fills, appliqué sequences, ties,
+trims, tiny-stitch removal.
+
+**Direction** (`crates/sf-core/src/direction.rs`): `Guide` lines; `strip_from_guides`;
+`auto_guides` (tip search, rails paired by dynamic time warping, quality check); 
+`auto_fill_angle`. Satin shapes are pre-cut by `poly::split_holes` and `poly::split_branches`.
+
+**Commands today:** `embroidery.set`, `setParams`, `setThread`, `autoDirection`, `setGuides`,
+`addGuide`, `moveGuide`, `removeGuide`, `clearGuides`, `setBeads`, `convert`, `autoDigitize`,
+`export`, `draw`, `settings`, `applyFabric`, `sortByColor`, `info`, `plan`; UI commands
+`ui.embroideryWidget`, `file.export.embroidery`; tools `embroideryBrush`,
+`embroideryDirection`; panels `embroidery`, `stitchSequence`. Params are documented in each
+command's spec (`document.commands`, MCP `list_commands`).
+
+---
+
+## 5. What exists today
+
+Working and tested (see [`embroidery.md`](embroidery.md) for behaviour):
+
+- Stitch types on any path, shape or type: run, bean, blanket, zigzag, motif runs (5 motifs),
+  satin (columns between rails, satin lines along paths with constant/tapered/calligraphy/
+  pressure width, turning satin on closed shapes), tatami, satin fill, contour, spiral,
+  radial, cross-hatch, meander fills, appliqué (placement, tack-down, cover, stops), manual
+  stitches.
+- Underlay (auto by width, centre run, edge run, zigzag, tatami), pull compensation, auto
+  spacing, short stitches, auto split, tatami offsets, gradient density, randomised needle
+  points, ties, trims by connector length, tiny-stitch removal, closest joins.
+- Automatic, editable stitch direction: auto inclination lines, best fill angle, splitting at
+  holes and stroke joins; Inclination tool; draggable start/stop beads.
+- Digitizing widget + Embroidery Brush (9 brushes, 11 shapes, sew before/after selection,
+  snapping, editable value lists).
+- Lettering from any font (satin for small text, tatami for large, counters split).
+- Auto-Digitize (trace an image, satin vs tatami by thickness, colour-by-colour order).
+- Machine files: DST, PES, PEC, JEF, EXP, VP3, XXX, U01 export, open and place.
+  Cross-checked against an independent library in both directions.
+- Hoops (27 presets, outline on canvas, fit check), fabrics (9 presets), thread charts
+  (generic, PEC, JEF), design statistics (stitches, trims, colours, time, thread).
+- TrueView shaded-thread canvas, stitch lines, connectors, needle points, fabric tint,
+  stitch player, Stitch Sequence panel (grouped by thread, reorder, sort by colour).
+- Embroidery menu, toolbar section, Embroidery panel; translations in 11 languages;
+  pathfinder keeps stitch settings (holes via Minus Front).
+- Tests: `sf-core` 62, `sf-formats` 43, engine embroidery 10, tools 2, plus the workspace's
+  5,173 overall.
+
+Known weak spots: satin splitting on unusual glyph shapes, auto-digitize on photos,
+VP3/XXX/U01 interop beyond the oracle, not yet sewn on real machines.
+
+---
+
+## 6. Parity matrix
+
+Every feature the reference suite lists in its public product comparison (2025 edition) and
+its 2025–2026 release notes, in our words, with our status and approach.
+
+**Status:** **Done** works and is tested · **Partial** works with gaps (noted) · **Missing**
+not started · **Out** out of scope (reason given). **Phase** points to [§8](#8-roadmap-and-estimates).
+
+### 6.1 Basics, viewing and threads
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| BAS-01 | Graphics and embroidery in one workspace (reference: switch to CorelDRAW mode) | Done | VectorCraft is the graphics editor; embroidery overlays the same document | – |
+| BAS-02 | Design library browser | Missing | See DM-* | 6 |
+| BAS-03 | Object properties view | Done | Embroidery panel | – |
+| BAS-04 | Choose the target machine format for the design | Done | Design › Machine picks a machine profile; export writes its format unless another is chosen | 1 |
+| BAS-05 | Open machine designs | Done | 8 formats as manual-stitch paths | – |
+| BAS-06 | New design from template | Partial | VectorCraft templates keep embroidery; no embroidery template gallery | 6 |
+| BAS-07 | Save native design | Done | `.vectorcraft` keeps every stitch setting | – |
+| BAS-08 | Send design by email | Out | Desktop share sheets vary; users attach the exported file | – |
+| BAS-09 | Select objects | Done | VectorCraft selection tools | – |
+| BAS-10 | Grids, rulers, guides, units, measure | Done | VectorCraft (major/minor grid, guides, smart guides, measure tool) | – |
+| BAS-11 | View embroidery / artwork / both, zoom, pan, overview | Done | Show stitches (Hidden/Lines/TrueView), artwork (Normal/Dimmed/Hidden), Navigator panel | – |
+| BAS-12 | Stitch player (slow redraw) | Done | Stitch Sequence panel player | – |
+| BAS-13 | Travel tools: step through a design by stitch, object, colour, trim, function | Done | Stitch Sequence panel: Travel by (stitch, object, colour, trim, function) with back and next buttons; the object reached is selected | 1 |
+| BAS-14 | Colour-Object list (objects in sewing order, grouped by colour) | Done | Stitch Sequence panel: rows grouped by thread, drag to reorder, Shift/Ctrl multi-select, eye and lock per row, hidden objects listed to show again | 1 |
+| BAS-15 | Show repeats (preview tiled/repeated layouts) | Missing | Draw design copies for VectorCraft Repeat objects | 2 |
+| BAS-16 | Design information (stitches, size, colours, time, thread, cost) | Partial | Panel stats; add cost estimate (OUT-*) | 6 |
+| BAS-17 | Print preview of designs | Partial | VectorCraft printing prints art; embroidery worksheets in RP-* | 6 |
+| BAS-18 | Thread palette, assign and edit thread colours | Done | Panel colour + chart picker | – |
+| BAS-19 | Create and edit thread charts (custom charts, import/export) | Partial | Built-in generic/PEC/JEF; add user charts (CSV import/export), more brand-neutral charts | 6 |
+
+### 6.2 Settings and hardware
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| SYS-01 | Autosave and backup | Done | VectorCraft recovery | – |
+| SYS-02 | Digitizing presets (default properties for new objects) | Done | Current properties per stitch type (`DocEmbroidery.current`), saved with the design: Stitch Type, Convert Artwork and Set Thread give new objects them; the panel edits them with nothing selected | 1 |
+| SYS-03 | Inserted-file thread handling (keep, match to chart) | Done | Machine files keep their colours; Match Threads to Chart (`embroidery.matchThreads`) maps them to a chart's closest threads | 1 |
+| SYS-04 | Object property apply options (apply to selection vs. new objects) | Done | The Embroidery panel edits the selection, or with nothing selected the properties new objects take (`embroidery.current.setParams`) | 1 |
+| SYS-05 | Custom hoop list, hoop options | Partial | 27 presets; add custom hoops, list editing | 6 |
+| SYS-06 | Registration-mark settings for multi-hooping | Missing | MH-* | 6 |
+| SYS-07 | Reshape options (show stitch angles, beads, guides) | Done | Start and stop and Inclination lines toggles in the panel: the selection's beads and stitch-angle lines with any tool | 1 |
+| SYS-08 | Warning options (long stitches, small objects, density too high) | Done | Check settings: density, long stitch, small lettering and tiny object limits saved with the design (`embroidery.settings {checks}`) | 1 |
+| HW-01 | Machine connection / design queue manager | Missing | Hot folders and network shares first; vendor protocols only if publicly documented | 6 |
+| HW-02 | Runtime analyst (machine run statistics) | Out | Needs vendor machine telemetry | – |
+| HW-03 | Scanner input | Out | Use the OS scanner app, then place the image | – |
+| HW-04 | Digitizing tablet | Done | Pen pressure drives the pressure brush | – |
+
+### 6.3 Machine formats and stitch generation limits
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| MF-01 | Machine format profiles (max stitch, max jump, trim method, tie-in/off, colour change codes) | Done | Seven built-in profiles, one per format (commercial: DST, EXP, U01; home: PES, JEF, VP3, XXX), set the design's longest stitch and jump, speed and trim time; `embroidery.settings {machine}`, Machine settings in the panel | 1 |
+| MF-02 | Edit standard profiles, advanced settings | Done | Save to Machine keeps the design's machine settings in its profile: limits, speed and trim time, and the advanced ones (shortest stitch, trim length, ties, colour change time); Reset Machine puts a standard profile back; `embroidery.machine.save` / `delete` | 1 |
+| MF-03 | Custom machine formats | Done | Profiles of your own (a name and one of the formats) kept in the preferences; Save as New Machine, rename, change format, delete; a design keeps its machine's name and format | 1 |
+| MF-04 | More file formats | Partial | Add SEW, HUS, SHV, PCS, ZSK Z00, Barudan FDR/U00, Happy TAP, Toyota 100, Tajima TBF (with sequin codes), Melco CND (condensed), plus CSV/JSON stitch dumps | 6 |
+
+### 6.4 Stitch types and digitizing input
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| ST-01 | Run (single) | Done | | – |
+| ST-02 | Sculpture run (raised, satin-like run) | Missing | Run with a short back-and-forth zigzag of set width | 2 |
+| ST-03 | Backstitch, stemstitch | Done | Backstitch and stem stitch run styles (forward two, back one; stem slanted) | 1 |
+| ST-04 | Satin borders and fills | Done | | – |
+| ST-05 | Tatami borders and fills | Done | Fills; tatami borders: *Tatami stitches* on any satin column, line or border (rows split at the stitch length, offset a quarter per row) | 1 |
+| ST-06 | Graphical digitizing (draw vectors, then stitch) | Done | | – |
+| ST-07 | Rounded-corner rectangles, per-corner radii | Done | VectorCraft live corners | – |
+| ST-08 | Column C (regular column of set width along a line) | Done | Steil brush / satin along a path | – |
+| ST-09 | Column A/B (irregular column: click left/right rail points alternately) | Done | Column A/B tool (`embroidery.column`): clicks alternate between the sides, Alt for smooth points, each pair an inclination line; Backspace, Enter, Undo per click | 1 |
+| ST-10 | Complex turning / complex fill (free shapes with holes, stitch angles) | Done | Closed shapes, guides, holes | – |
+| ST-11 | Continue digitizing an object from its exit (or entry) | Done | Column A/B tool continues the selected column from its end; the Pen tool continues a stitched open path from either end, keeping its stitch type | 1 |
+
+### 6.5 Object properties, styles, colorways
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| OP-01 | Change properties of selected objects | Done | | – |
+| OP-02 | Make selected object's properties current | Done | Make Current in the panel, Embroidery › Make Properties Current (`embroidery.makeCurrent`) | 1 |
+| OP-03 | Fabrics: choose, apply, manage custom fabrics | Done | 9 presets plus fabrics saved with the design: Fabric settings in the panel, `embroidery.fabric.save` / `delete`; a library shared between designs comes with templates (OP-05) | 1 |
+| OP-04 | Styles: named property sets, apply and update | Done | Embroidery Styles panel and `embroidery.style.*`: new from the selection, apply, redefine (updates every object following it), break link, rename, duplicate, delete | 1 |
+| OP-05 | Design templates (properties + layout) | Partial | VectorCraft templates | 6 |
+| CW-01 | Colorways (several thread schemes per design) | Missing | `DocEmbroidery.colorways: Vec<Colorway>` mapping thread slots; active colorway | 6 |
+| CW-02 | Name design elements | Done | Layers/object names | – |
+| CW-03 | Split colour blocks (same colour, separate stops) | Missing | Per-object "own colour block" flag | 6 |
+| CW-04 | Backgrounds (fabric colour, garment image) | Partial | Fabric colour; add background image | 6 |
+| CW-05 | Product visualizer (design on a garment mockup) | Missing | Place design on product images (user-supplied or ours) | 6 |
+| CW-06 | Change colour schemes (recolour design) | Partial | VectorCraft Recolor Artwork recolours art; make it recolour threads too | 6 |
+
+### 6.6 Combine, sequence, transform, reshape
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| CO-01 | Copy, paste, duplicate, clone | Done | | – |
+| CO-02 | Group and lock | Done | | – |
+| CO-03 | Select by colour or stitch type | Done | Select › Same › Thread Color and Stitch Type (`select.same.thread`, `select.same.stitchType`) | 1 |
+| CO-04 | Sequence objects (move earlier/later, to start/end) | Done | | – |
+| CO-05 | Auto-sequence whole design (by colour, by object, closest path) | Done | Embroidery › Auto Sequence (`embroidery.autoSequence`): fewest colour changes, then the closest next object; objects that overlap keep their stacking order; reorders within each layer or group. Sort by Thread Color as before | 1 |
+| TR-01 | Position, align, distribute, scale, rotate, skew, mirror | Done | Stitch settings follow transforms | – |
+| PT-01 | Decorative borders (frames around designs) | Missing | Border generator: shape + stitch preset | 2 |
+| PT-02 | Stars and rings (stitched rings with satin/run/fill) | Partial | Star stamp; add ring object (annulus with satin) | 2 |
+| PT-03 | Basic shapes | Done | | – |
+| PT-04 | Add / remove holes; fill holes | Done | `embroidery.removeHoles {maxArea?}` and `embroidery.fillHoles` (a fill object per hole) | 1 |
+| PT-05 | Offsets and outlines (closed, open) | Partial | Offset Path; add "outline with stitch type" and open offsets | 2 |
+| PT-06 | Wreaths and arrays (mirror-merge) | Partial | VectorCraft Repeat exists; make Repeat objects stitchable | 2 |
+| RS-01 | Reshape objects and stitch angles | Done | Direct selection + Inclination tool | – |
+| RS-02 | Reshape stars and rings | Partial | With PT-02 | 2 |
+| RS-03 | Envelopes on embroidery | Partial | Envelope works on art; make Envelope objects stitchable (expand on the fly) | 2 |
+| RS-04 | Break apart branched objects | Done | Embroidery › Break Apart (`embroidery.breakApart`): a branch gives back its objects; a stitched path or compound path of separate parts becomes one object per part, holes staying with their part | 1 |
+| RS-05 | Knife (cut shapes) | Done | VectorCraft knife/scissors | – |
+| RS-06 | Automatic knife (split long shapes into sewable parts) | Missing | Split objects longer than a limit along their medial axis | 2 |
+| RS-07 | Shaping tools (weld, trim, intersect on embroidery) | Done | Pathfinder keeps stitch settings | – |
+
+### 6.7 Stitch editing, reinforcement, quality, connectors
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| SE-01 | Stitch edit: select, move, insert, delete individual stitches | Done | Stitch Edit tool: pick (click, Shift, marquee), drag to move, Alt-click to insert, Delete; the first edit freezes the object (`Embroidery.frozen`, host coordinates, follows transforms); Regenerate Stitches; `embroidery.stitches.edit` | 1 |
+| SE-02 | Split an object's stitches | Done | Split Here (panel, one stitch picked with the Stitch Edit tool) or `embroidery.stitches.split {id, at}`: the object keeps the stitches before, a copy sewn right after it the rest, both frozen | 1 |
+| SE-03 | Insert/edit/clear machine functions (trim, stop, colour change, jump) at stitches | Done | `embroidery.function.insert {kind: trim|stop|jump}` and `.clear` at single stitches (freezes); Stop after per object without freezing. Colour changes inside an object are not supported | 1 |
+| SE-04 | Stitch list (table of stitches with coordinates and functions) | Done | Stitch List panel: every record with function, position, length and object; click plays to it and selects the object; follows the player | 1 |
+| SE-05 | Manual stitches | Done | | – |
+| SE-06 | Convert selected stitches to objects (recognise runs/satin/fill from stitch data) | Missing | Heuristic classifier on imported stitches | 5 |
+| RE-01 | Backtrack / repeat outlines | Done | Passes 1–9 on every run style; 2 = backtrack | 1 |
+| RE-02 | Reverse stitch direction | Done | `embroidery.reverse` swaps where sewing starts and stops | 1 |
+| RE-03 | Automatic underlay | Done | | – |
+| RE-04 | Underlay by shape (choose per object), double zigzag | Done | Centre/edge/zigzag/double zigzag/tatami, automatic by width; per-type underlay presets through the current properties (SYS-02) | 1 |
+| RE-05 | Pull compensation, twin-sided (different per side) | Done | Pull compensation per side (`pull_comp_2`) | 1 |
+| RE-06 | Laydown (open base stitching for pile fabrics) | Missing | Open tatami/grid underlay layer object-wide | 2 |
+| SQ-01 | Remove underlying stitching (cut lower fills where upper objects cover) | Done | Per-object option with overlap (default 1 mm): fills sewn before it are cut by what it covers, live | 1 |
+| SQ-02 | Stitch angles, density | Done | | – |
+| SQ-03 | Remove small stitches | Done | | – |
+| SQ-04 | Smart corners (satin corner treatment: mitre, cap, overlap) | Done | Corners on satin lines and satin borders: automatic (turn ≤ 45°, miter ≤ 110°, capped beyond), turn, miter, capped; no fold-back on tight curves. An overlap (lap) corner is not built | 1 |
+| SQ-05 | Reduce bunching (short stitches at inner curves) | Done | | – |
+| SQ-06 | Split long stitches | Done | Auto split | – |
+| SQ-07 | Preserve long stitches (keep long satin as is) | Done | Preserve long stitches: frame moves in steps, one needle drop | 1 |
+| SQ-08 | Fractional / accordion spacing control | Partial | Gradient end spacing; see SP-10 | 2 |
+| SQ-09 | Design checks (density hot spots, tiny objects, long jumps, gaps) | Done | `embroidery.check`: dense spots (thread layers over 2 × 2 mm), long stitches, tiny objects, small lettering, no stitches, hoop; Check Design in the panel | 1 |
+| CN-01 | Automatic connectors (jump vs trim by length) | Done | | – |
+| CN-02 | Manual tie-offs and trims | Done | Trim after; per-object tie-in/tie-off on/off; design tie style (single, double, triangle) and tie length | 1 |
+| CN-03 | Keep / omit last stitch | Done | Omit last stitch object option | 1 |
+| CN-04 | Entry/exit points | Done | Beads | – |
+| CN-05 | Closest join | Done | | – |
+| CN-06 | Branching (sew a group as one path, travel hidden under later fills) | Done | Embroidery › Branch (`embroidery.branch`), §7.2: closest-first order keeping overlaps, exits aimed under the objects still to sew, travel runs routed inside them; trims where nothing covers the way | 1 |
+
+### 6.8 Patterned, curved and motif stitching
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| PS-01 | Tatami offsets (texture by row offset patterns) | Done | | – |
+| PS-02 | Program splits (needle-point patterns inside fills) | Missing | Pattern library of penetration grids; §7.3 | 2 |
+| PS-03 | User-defined splits (draw split lines) | Missing | Split guide lines on the object | 2 |
+| PS-04 | Carving stamps (embossed patterns pressed into fills) | Missing | Stamp shapes break stitches along their outline | 2 |
+| CS-01 | Contour fill/outline | Done | | – |
+| CS-02 | Offset fills (concentric offsets) | Partial | Contour fill; add offset-ring fill with set count/spacing | 2 |
+| CS-03 | Spiral fills | Done | | – |
+| CS-04 | Radial (ripple) fills | Done | | – |
+| CS-05 | Flexi-splits (split lines following a curve) | Missing | Split penetrations along guide curves | 2 |
+| CS-06 | Florentine effect (stitches follow a drawn curve) | Done | Turning fill along inclination lines | – |
+| CS-07 | Liquid effect (curved fill between two guide curves) | Partial | Turning fill with two guides; add explicit two-curve mode | 2 |
+| MO-01 | Single motifs (place one stitched motif) | Missing | Motif library + placement tool | 2 |
+| MO-02 | Motif runs | Done | 5 built-in motifs | – |
+| MO-03 | Graded motif runs (motif size varies along the line) | Missing | Size ramp on motif runs | 2 |
+| MO-04 | Motif fills, paired motif fills, 3D motif fills | Missing | Motif tiled on a grid inside the shape | 2 |
+| MO-05 | Graded motif columns | Missing | Motif sized to column width | 2 |
+| MO-06 | Motif sets and custom motifs (make a motif from an object) | Missing | Motif library in document + prefs | 2 |
+
+### 6.9 Specialty stitching
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| SP-01 | Freehand embroidery | Done | Brush tool | – |
+| SP-02 | Hand-stitch effect (random spacing and thickness) | Missing | Randomised run/satin parameters | 2 |
+| SP-03 | Jagged edges (random satin length) | Missing | Satin edge jitter | 2 |
+| SP-04 | String stitching (long free-hanging threads) | Missing | Run with long stitches and anchors | 2 |
+| SP-05 | Zigzag and E-stitch borders/fills | Partial | Zigzag and blanket runs; add zigzag/E-stitch fills | 2 |
+| SP-06 | Stippling (random meandering run fill) | Partial | Meander fill; add stipple with stitch length and spacing controls | 2 |
+| SP-07 | Maze-like fills | Done | Meander | – |
+| SP-08 | Trapunto (open fill with raised outline effect) | Missing | Fill flag: travel along outline instead of inside, open spacing | 2 |
+| SP-09 | Accordion spacing with custom profiles | Partial | Linear gradient spacing; add profile curves (2026 feature) | 2 |
+| SP-10 | Colour blending / multi-blend (several layered fills with graded density) | Missing | §7.4 | 2 |
+| SP-11 | Chenille-type patterns on regular machines (square, coil) | Missing | Pattern generators | 4 |
+| SP-12 | Cross-stitch fills (X stitches on a grid) | Partial | Cross-hatch fill exists; add true X-stitch grid fill | 2 |
+| SP-13 | Redwork (outlines grouped into one path, entry = exit) | Missing | Group outlines, route as one tour (2026 feature) | 2 |
+| SP-14 | Buttonholes (preset types, single or a string) | Missing | Satin bartacks + sides; docker for spacing (2026 feature) | 2 |
+
+### 6.10 Multi-decoration
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| MD-01 | Virtual decoration preview (print, foil, etc.) | Missing | Non-stitched layer types rendered in the preview | 4 |
+| MD-02 | Multi-head cording / couching | Missing | Cord objects with couching stitch + machine function codes | 4 |
+| MD-03 | Boring (cut-work holes) | Missing | Boring objects + device codes | 4 |
+| SQN-01 | Sequin mode, sequin palette (sizes, shapes, colours) | Missing | §7.5 | 4 |
+| SQN-02 | Sequin runs, multi-sequin runs, sequin fixings | Missing | §7.5 | 4 |
+| SQN-03 | Sequin fills (digitize, border, fancy, multi, split, flip) | Missing | §7.5 | 4 |
+| SQN-04 | Convert objects to sequins; manual sequins; custom sequins | Missing | §7.5 | 4 |
+| BD-01 | Beading: bead runs, fixings, edit runs, manual beads | Missing | Like sequins with bead device codes | 4 |
+| BL-01 | Bling: palettes, runs, fills, borders, manual stones, bling lettering, edit | Missing | §7.6 | 4 |
+| AP-01 | Convert vectors to appliqué; create appliqué | Done | Appliqué type | – |
+| AP-02 | Fabric swatches on appliqué (show the fabric) | Missing | Image fill in preview | 4 |
+| AP-03 | Partial-cover appliqué (cover only uncovered edges) | Missing | Cover satin skips edges covered by later objects | 4 |
+| AP-04 | Combine appliqué components (one sequence for several pieces) | Missing | Group-level appliqué sequencing | 4 |
+| AP-05 | Auto-close and break-up appliqué (open shapes, overlapping pieces) | Missing | Close open paths; split overlapping pieces into layers (Embroidery Legacy features) | 4 |
+
+### 6.11 Lettering, team names, monograms, fonts
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| LT-01 | Create lettering on the canvas | Done | VectorCraft Type tool + stitch type | – |
+| LT-02 | Format text (font, size, spacing, case) | Done | VectorCraft Character/Paragraph | – |
+| LT-03 | Baselines: straight, arc, circle, vertical, free line, any shape | Partial | Point/area/path type; add arc and circle baselines with radius handles, vertical stacking | 3 |
+| LT-04 | Edit text, scale, transform | Done | Restitches live | – |
+| LT-05 | Adjust individual letters (position, size, rotation, stitch settings) | Partial | Kerning/baseline shift; add per-letter transforms and stitch overrides | 3 |
+| LT-06 | Break apart lettering | Done | Create Outlines, then stitch | – |
+| LT-07 | Special characters | Done | Glyphs panel | – |
+| LT-08 | Lettering stitch types | Partial | Satin/tatami automatic; add per-text choice of column vs fill recipes | 3 |
+| LT-09 | Lettering art (envelopes, arcs, warps) | Partial | VectorCraft envelopes; needs stitchable envelopes (RS-03) | 3 |
+| LT-10 | Letter sequencing (left-right, centre-out) and join methods (closest, baseline) | Missing | Option on lettering objects | 3 |
+| LT-11 | Auto kerning and letter spacing | Done | Font kerning, tracking | – |
+| LT-12 | Lettering underlay | Done | Auto underlay | – |
+| LT-13 | Recommended minimum/maximum height per font shown while typing | Missing | Per-recipe limits; warning in panel (2025 feature) | 3 |
+| LT-14 | Small-text optimisation (short stitches, lighter pull compensation, special underlay) | Partial | Thickness-based; add small-text profile | 3 |
+| TM-01 | Team names: many names under one design, CSV import/export | Missing | §7.7, built on VectorCraft variables | 3 |
+| TM-02 | Team-name templates; output per name (files, multi-head) | Missing | §7.7 | 3 |
+| TM-03 | Monograms: templates, letter styles, ornaments, borders | Missing | §7.7; our own templates | 3 |
+| CL-01 | Convert TrueType/OpenType fonts | Done | Live from glyph outlines | – |
+| CL-02 | User-refined letters (save edited glyphs) | Missing | Recipe overrides per glyph | 3 |
+| CL-03 | Create custom embroidery fonts (from art or fonts) | Missing | §7.8 font recipes + editor | 3 |
+| CL-04 | Merge fonts | Missing | Recipe sets | 3 |
+| KDC-01 | Keyboard design collections (map designs to keys, type with them) | Missing | Design-per-character sets usable as fonts (2025 feature) | 3 |
+| KI-01 | Lettering kiosk (simplified mode for counter staff) | Missing | Locked-down "kiosk" workspace with templates | 6 |
+
+### 6.12 Artwork and automatic digitizing
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| BM-01 | Insert, paste, crop bitmaps; edit in another app | Done | VectorCraft place, crop, Edit Original | – |
+| BM-02 | Smooth bitmaps, prepare (reduce colours, clean edges) | Partial | Trace presets; add a prepare step with preview | 5 |
+| BM-03 | Add and match image colours to threads | Partial | Thread = traced colour; add nearest-chart matching | 5 |
+| VE-01 | Create, colour, import vectors (SVG, PDF, AI, EPS, DXF, EMF) | Done | VectorCraft | – |
+| VE-02 | Auto-trace bitmaps to vectors | Done | Image Trace | – |
+| VE-03 | Smooth curves | Done | Smooth tool, Simplify | – |
+| AD-01 | Convert vector objects to embroidery (and back) | Done | Stitch types on vectors; "No Stitches" removes | – |
+| AD-02 | Convert between stitch types | Done | | – |
+| AD-03 | Auto-digitize shapes (click a region to stitch it) | Partial | Whole-image Auto-Digitize; add click-to-stitch (magic wand region → object) | 5 |
+| AD-04 | Smart design (auto-digitize with outlines, details as runs, sequencing) | Partial | Satin/tatami by thickness; add outlines as satin borders, details as runs, background removal choices | 5 |
+| PH-01 | Photo line embroidery (photo flash: lines of varying density) | Missing | §7.9 | 5 |
+| PH-02 | Coral / single-run photo stitch | Missing | §7.9 | 5 |
+| PH-03 | Colour photo stitch | Missing | §7.9 | 5 |
+
+### 6.13 Hooping, production, output, management
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| HO-01 | Hoop selection, manual and automatic (smallest that fits) | Partial | Manual; auto selection exists in `sf-core::hoops::smallest_fitting`, add UI | 6 |
+| HO-02 | Auto start and end (start/finish at centre or a corner) | Missing | Design-level start/end points | 6 |
+| HO-03 | Hoop positioning (auto centre vs fixed), rotate hoop, custom hoops | Partial | Centred; add fixed position, rotation, custom hoops | 6 |
+| MH-01 | Multi-hooping, automatic and manual (split designs over several hoopings) | Missing | §7.10 | 6 |
+| MH-02 | Registration marks, multi-position hoops, printing per hooping | Missing | §7.10 | 6 |
+| RP-01 | Production worksheets and approval sheets (PDF/print, customisable) | Missing | §7.11 | 6 |
+| RP-02 | Barcodes on worksheets (Code 39, Code 128) | Missing | §7.11 | 6 |
+| RP-03 | Print colorways, colour blocks | Missing | §7.11 | 6 |
+| RP-04 | Output designs as images | Partial | Art exports; add rendered stitch image export (PNG/SVG of TrueView) | 6 |
+| MFL-01 | Native design file | Done | `.vectorcraft` (the reference's EMB is proprietary: Out) | – |
+| MFL-02 | Condensed formats (Melco CND), colour-merge | Missing | MF-04 | 6 |
+| OUT-01 | Export for machine | Done | 8 formats | – |
+| OUT-02 | Batch output profiles (machine files + design + worksheets in one step) | Missing | `embroidery.output {profile}` (2026 feature) | 6 |
+| OUT-03 | Send to machine / USB / network queue | Partial | Export to USB drives works; add hot-folder targets | 6 |
+| OUT-04 | Wireless transfer to specific machine brands | Out | Proprietary protocols; revisit if documented | – |
+| OUT-05 | Cost estimate (stitches, thread, time, machine heads) | Missing | Cost model in settings, shown in stats and worksheets | 6 |
+| MDO-01 | Export vectors, appliqué cut files, bling templates, multi-decoration files | Missing | SVG/DXF/PLT exports of the relevant layers | 4 |
+| NET-01 | Machine networking (device setup, queues, device settings) | Out | Vendor ecosystems | – |
+| DM-01 | Design library: browse folders, thumbnails, search, design info | Missing | §7.12 | 6 |
+| DM-02 | Job orders, batch convert, output selected designs | Missing | §7.12 | 6 |
+| DM-03 | Embroidery clipart (insert library designs) | Missing | Our own small clipart set + user libraries | 6 |
+| CH-01 | Chenille machines (chain and moss stitches) | Missing | Chenille object types + formats with chenille codes | 7 |
+| CH-02 | Schiffli machines | Out | Separate industry; low demand |  – |
+| CH-03 | Cross-stitch designer (pattern-based X stitch designs) | Missing | Grid editor mode | 7 |
+
+### 6.14 Newest reference features (2025–2026)
+
+| Id | Feature | Status | Our approach / gap | Phase |
+|---|---|---|---|---|
+| NEW-01 | Multi Blend (stacked layers of fills with graded spacing in one object) | Missing | §7.4 | 2 |
+| NEW-02 | Custom accordion profiles | Missing | SP-09 | 2 |
+| NEW-03 | Redwork | Missing | SP-13 | 2 |
+| NEW-04 | Buttonholes | Missing | SP-14 | 2 |
+| NEW-05 | Grids, guides, snapping to objects | Done | VectorCraft | – |
+| NEW-06 | Continue digitizing | Done | ST-11 | 1 |
+| NEW-07 | In-app assistant for embroidery questions | Partial | Agents can already drive the app over MCP; add an "Ask" panel that calls Claude, paid by AI credits or the user's own key | A |
+| NEW-08 | Contour fill robustness on tiny objects | Done | Falls back cleanly | – |
+| NEW-09 | Twin-sided pull compensation | Done | RE-05 | 1 |
+| NEW-10 | AI text to embroidery: a prompt becomes flat-colour art drawn to digitize well, then a design | Missing | §11; image model + Auto-Digitize | A |
+| NEW-11 | AI image or logo to embroidery: the upload is redrawn as clean flat art, then digitized | Missing | §11; with AD-03, AD-04 | A |
+| NEW-12 | AI product mockups: the design shown on a shirt, cap or bag | Missing | §11; MD-01 | A |
+| NEW-10 | Batch output, barcode formats | Missing | OUT-02, RP-02 | 6 |
+| NEW-11 | Lettering min/max height display | Missing | LT-13 | 3 |
+| NEW-12 | Background exports with history | Missing | Exports run off the UI thread, Exports panel | 6 |
+| NEW-13 | Keyboard design collections | Missing | KDC-01 | 3 |
+| NEW-14 | Laydown stitch | Missing | RE-06 | 2 |
+| NEW-15 | Magnetic hoop presets | Partial | Add more hoop presets (data only) | 6 |
+
+### 6.15 Beyond the reference
+
+| Id | Feature | Status | Notes |
+|---|---|---|---|
+| BEY-01 | Radial digitizing widget (Embroidery Legacy style) | Done | Brushes, shapes, widths, densities, lengths, sew before/after, snapping |
+| BEY-02 | Any vector object carries stitches (Ink/Stitch style) | Done | |
+| BEY-03 | Agents digitize through MCP / control channel | Done | Every feature is a command |
+| BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
+| BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
+
+**Tally:** 228 rows (grouping the roughly 300 features the reference lists): 66 done,
+51 partial, 105 missing, 6 out of scope. Most of what is missing is breadth (more stitch
+effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
+in place.
+
+---
+
+## 7. Designs for the large missing pieces
+
+### 7.1 Stitch editing and machine functions (SE-01…04)
+
+- Add `Embroidery.frozen: Option<FrozenStitches>`: the object's own stitches (mm, relative to
+  the node's transform at freeze time) plus inserted functions. When present the planner uses
+  them instead of generating. Editing the outline asks: regenerate (drop edits) or keep.
+- **Stitch Edit tool:** shows needle points of the selected object; click/marquee selects
+  stitches, drag moves them, Alt-click inserts, Delete removes; Shift extends. Each gesture is
+  one `embroidery.stitches.edit {id, ops}` command (Begin/Preview/Commit).
+- **Machine functions:** `embroidery.function.insert {id, at, kind: trim|stop|colorChange|jump}`
+  and `.clear`. Functions live in the frozen list, or as object-level properties
+  (`trim_after`, `stop_after`, tie-in/tie-off) when the object isn't frozen.
+- **Stitch List panel:** virtualised table of the plan (index, x, y, function, object),
+  synced with the selection and the player.
+- Tests: edit, undo, transform a frozen object, export round trip, regenerate.
+
+### 7.2 Branching and travel optimisation (CN-06, CO-05)
+
+- Branching turns a group of objects into one sewing path: order the objects and route
+  connectors as running stitches **inside regions that are sewn later** (so they get
+  covered), falling back to jumps/trims.
+- Model: a `branch` flag on a group; the planner builds a graph of object entry/exit
+  candidates, solves an open travelling-salesman path (nearest neighbour + 2-opt) under the
+  constraint that paint order between overlapping objects is kept, and emits travel runs
+  through later-covered areas.
+- Also used by Redwork (SP-13: entry = exit, tour of outlines with doubled travel).
+- Built (phase 1): a branch is a group with the stitch type `Branch`. The planner orders its
+  objects greedily (same thread first, then the nearest, overlapping objects in paint order;
+  no 2-opt yet), aims each object's exit (when it has no stop bead) at its point under the
+  objects still to sew that is nearest to the next one, and routes travel as the shortest
+  way inside those objects (`sf_core::travel`: visibility graph over the covering area's
+  bending corners, 0.4 mm in from its edge), in 2.5 mm running stitches. No covered way →
+  tie off and trim as before.
+
+### 7.3 Pattern library: program splits, user splits, carving stamps (PS-02…04)
+
+- A program split is a 2D tile of needle-penetration offsets applied to each tatami row. Store
+  as data (`PatternDef { tile_w, tile_h, points }`), 40+ original patterns generated in code
+  (bricks, waves, weaves, diamonds…).
+- User-defined split: split lines drawn on the object; rows break where they cross a line.
+- Carving stamp: a shape (or stamp library entry) whose outline forces penetrations on fills
+  under it, producing embossed lines.
+- All three plug into `engine::fill::row_points` as "penetration rules".
+
+### 7.4 Multi Blend and accordion profiles (SP-09, SP-10, NEW-01…02)
+
+- An object holds `layers: Vec<BlendLayer { thread, stitch: FillParams, spacing_profile:
+  Curve }>`; each layer is a fill whose spacing follows its profile across the object (in the
+  stitch direction), so stacked layers blend colours.
+- Profile editor: a small curve widget (presets: linear, ease, step; flip).
+- Sewing order: lighter layers first, underlay once.
+
+### 7.5 Sequins and beads (SQN-*, BD-01)
+
+- New stitch types `Sequin(SequinParams)` and `Bead(BeadParams)`: palette of sizes/shapes
+  (round 3–9 mm, square, star, custom from a vector), drop spacing, fixing stitch pattern
+  (single, double, tri), device number.
+- Runs: sequins along a path at spacing ≥ sequin size. Fills: hexagonal or grid packing inside
+  a shape (borders: offset run of sequins; fancy: motif-shaped; multi: several sizes; split:
+  half-overlap; flip: alternating faces).
+- Machine output: sequin drop commands. Add the codes to `sf-formats` where formats support
+  them (Tajima TBF/DST variants, Barudan, ZSK); otherwise export a sequin layout PDF/SVG.
+- Preview: draw sequins as discs with specular highlight under/over stitches.
+
+### 7.6 Bling / rhinestones (BL-01, MDO-01)
+
+- `Bling` objects: stone palette (SS6–SS30 sizes, colours), placement along paths
+  (runs/borders), in shapes (fills: grid, offset rows, contour), manual placement, lettering.
+- Output: template cut files (SVG, DXF, PLT/HPGL) with hole diameters + stone counts; not
+  sewn, so excluded from machine files.
+
+### 7.7 Team names and monograms (TM-*)
+
+- Team names reuse VectorCraft **Variables** (data-driven text): a lettering object bound to
+  a column of a CSV/XLSX table; Output produces one machine file per row (or a multi-head
+  batch), name-based file names, and a worksheet listing.
+- Monograms: templates (our own designs) with 1–3 letter slots, letter styles (font recipes),
+  ornaments and borders; a Monogram panel builds them.
+
+### 7.8 Embroidery font recipes and font editor (CL-02…04, LT-08, LT-13)
+
+- A **recipe** is per-glyph embroidery structure derived from an outline font and refined by
+  hand: columns (two rails + rung guides), fills with angles, run details, entry/exit, min/max
+  recommended height, small-text variant. Stored as JSON data files (our own, attributed in
+  `ASSETS.md`), keyed by font family + glyph.
+- Without a recipe, lettering keeps today's automatic conversion. With one, conversion uses
+  it, scaled to the text size.
+- Font editor: open a glyph, adjust its columns/guides with the Inclination and direct
+  selection tools, save into the recipe. "Merge fonts" combines glyph sets.
+
+### 7.9 Photo digitizing (PH-01…03)
+
+- Photo line embroidery: grayscale → parallel run lines whose spacing/zigzag amplitude follows
+  darkness (density modulation), in one colour.
+- Coral / single run: one continuous run following a space-filling or stippled path whose
+  density follows darkness.
+- Colour photo stitch: quantise to N thread colours (Lab, nearest chart threads), dither, and
+  stitch each colour as short-stitch tatami fragments, lightest first.
+- All outputs are ordinary objects (editable), from `embroidery.photoStitch {mode, …}`.
+
+### 7.10 Multi-hooping (MH-*)
+
+- Choose hoop, overlap and split direction; the design is cut into hoopings by region (whole
+  objects where possible; long objects split along gaps). Each hooping gets registration marks
+  (small crosses sewn first and last), its own start/end, and its own machine file
+  (`name-1.dst`, `name-2.dst`), plus a placement sheet.
+
+### 7.11 Worksheets and reports (RP-*)
+
+- `embroidery.worksheet {kind: production|approval, colorway?, format: pdf|png}` renders through
+  VectorCraft's PDF writer: design image (TrueView), size, stitches, trims, colours table with
+  chart codes and stitch counts per colour, sewing sequence, hoop, fabric, notes, barcode
+  (Code 39 / Code 128 generated in code), cost.
+
+### 7.12 Design library (DM-*)
+
+- An index (SQLite-free: a JSON cache) of folders the user adds: thumbnails rendered from
+  machine files and native documents, stitch/colour/size metadata, search and filters, batch
+  convert and output. Desktop only (web: drag-drop folders).
+
+---
+
+## 8. Roadmap and estimates
+
+Estimates are in **agent-days**: one Claude Code session working steadily for a day (about
+6–8 hours of tool use), including tests, UI, translations and verification. They assume the
+pace of the work so far (the current state took about 2 agent-days) and the existing
+VectorCraft base. With two or three agents in parallel on separate crates (one git worktree
+and target dir each) calendar time drops by roughly half.
+
+| Phase | Scope (matrix ids) | Agent-days |
+|---|---|---|
+| **0. Ground truth** | Push repo, CI on GitHub; owner test-sews the sample files on their machine(s); fix what the sew-out shows | 0.5 + sewing time |
+| **1. Digitizing core parity** | MF-01…03 machine profiles; SE-01…04 stitch editing + Stitch List; ST-03, ST-05, ST-09, ST-11; OP-02…04 presets, fabrics, styles; CO-03, CO-05; RE-01…05; SQ-01, SQ-04, SQ-07, SQ-09; CN-02, CN-03, CN-06 branching; RS-04; PT-04; BAS-13, BAS-14; SYS-02…08 | 5–7 |
+| **2. Stitch effects library** | PS-02…04; CS-02, CS-05, CS-07; MO-01…06; SP-02…14 (incl. Multi Blend, accordion profiles, redwork, buttonholes); ST-02; RE-06 laydown; PT-01, PT-02, PT-05, PT-06; RS-02, RS-03, RS-06; BAS-15 | 5–7 |
+| **3. Lettering suite** | LT-03, LT-05, LT-08…10, LT-13, LT-14; font recipes and editor (CL-02…04); team names (TM-01, TM-02); monograms (TM-03); KDC-01 | 6–8 |
+| **4. Multi-decoration** | Sequins (SQN-*), beads (BD-01), bling (BL-01), appliqué completion (AP-02…05), cording/boring (MD-02, MD-03), virtual decoration (MD-01), chenille-type patterns (SP-11), multi-decoration outputs (MDO-01) | 5–7 |
+| **5. Auto and photo digitizing** | AD-03, AD-04, BM-02, BM-03, PH-01…03, SE-06 | 3–5 |
+| **6. Production and management** | Colorways and visualizer (CW-*); worksheets, barcodes, images (RP-*); batch output (OUT-02); cost (OUT-05); hooping and multi-hooping (HO-*, MH-*); more formats (MF-04, MFL-02); hot folders (OUT-03); design library (DM-*); templates and clipart; kiosk (KI-01); background exports | 6–8 |
+| **R. Release readiness** | Rebrand done 2026-10-11: StitchFoundry by SiteSentrix, an original icon, app id `com.sitesentrix.stitchfoundry`, its own preferences folder (reads VectorCraft's once), the ArtCraft name, logos and links removed, presets and profiles renamed with their old names still accepted; the repository is public at github.com/SiteSentrix/StitchFoundry. Left: binary and package names (`vectorcraft` → `stitchfoundry`, so both apps install side by side), the native file extension and macOS document type, release artifact names, the CI jobs that only run in the upstream repository; the maintainer address in the Linux packages; check the provenance of bundled data (thread charts) in `ASSETS.md`; signed installers; website and download page; a community space | 2–3, plus the owner's Apple and Windows developer accounts |
+| **A. AI service** | The cloud AI features ([§11](#11-open-source-and-ai-features)): accounts, credits and billing behind a small cloud backend; text to embroidery (NEW-10) first, then image or logo to embroidery (NEW-11, pulling in AD-03 and AD-04), the assistant panel (NEW-07) and product mockups (NEW-12); bring-your-own-key for every AI feature | 8–12, plus the owner's payment, AI provider and hosting accounts |
+| **7. Hardening and extras** | Real-machine tuning from sew-outs, performance at 100k+ stitches, web app embroidery pass, translation review, chenille machines and cross-stitch designer (CH-01, CH-03), assistant panel (NEW-07), Ink/Stitch-inspired extras (BEY-05) | 5–10, spread over the calendar |
+
+**Status (October 2026):** phase 1 is complete, every item in its row (machine profiles of your
+own and edited standard ones, MF-02 and MF-03, came last). Phase 0 is still open: nothing has been
+sewn on a real machine yet; the owner has the VP3 test kit.
+
+**Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
+service comes right after the public launch because it pays for the project.
+
+**Totals:** feature breadth comparable to the reference suite's Designing level (phases 1–6)
+is about **30–42 agent-days**: roughly 6–8 weeks with one session a day, or 3–5 weeks with
+parallel agents. Production-grade stitch quality needs real sew-outs on real fabric; plan
+**another 1–2 months** of weekly test-sew → fix cycles alongside, driven by the owner's
+machine. A few items will not reach parity by design (proprietary EMB files, the reference's
+licensed fonts and content, vendor-locked machine networking).
+
+Suggested parallel split (each with its own worktree and target dir): an **engine** agent
+(sf-core stitch types and effects), a **lettering** agent (fonts, team names, monograms), and
+a **production** agent (formats, worksheets, hooping, library), with one integrating agent
+owning the engine commands and UI.
+
+---
+
+## 9. Verification and the quality bar
+
+Every task is done when:
+
+1. Engine command(s) with params documented, `enabled` checks, and tests (behaviour,
+   undo, bad params, round trip through save/open).
+2. Untrusted input stays safe: importers and parsers extend the fuzz tests
+   (`crates/sf-formats/tests/robustness.rs`, `engine/tests/import_fuzz.rs`).
+3. UI: tool/panel/menu entries; every new string translated (run the i18n tests; dump the
+   missing strings with `VECTORCRAFT_I18N_DUMP=…` and fill the `.tsv` catalogs).
+4. Looked at in the running app (Appendix A): screenshot of the feature on a realistic design.
+5. `cargo xtask ci` passes; docs updated ([`embroidery.md`](embroidery.md), this spec's
+   status column).
+
+**Stitch quality checks** to automate as we go (property tests over generated shapes):
+stitch length within machine limits; no stitch longer than the satin split length unless
+"preserve long stitches"; density (stitch length per mm²) within ±15 % of the setting; no
+penetrations outside an object by more than its pull compensation + 0.1 mm; satin rungs
+cross the column (rung length ≤ 1.6 × thickness); no zero-length or duplicate stitches;
+connectors over the trim threshold always trimmed.
+
+**Format checks:** each writer round-trips through our reader; files are read by an
+independent library (pyembroidery, scratch venv only) with the same stitch, trim and colour
+counts; files that library writes open correctly here. Real-machine sew-outs before
+declaring a format production-ready.
+
+**Golden designs:** keep a small set of original test designs (logo, lettering at 6, 10, 25 mm,
+appliqué, satin-heavy badge, large fill) as `.vectorcraft` files in `crates/engine/tests/`
+(original work, small) and check stitch counts and checks above in CI.
+
+---
+
+## 10. Decisions for the owner
+
+1. **Machines — answered 2026-10-11:** the owner sews on a Husqvarna Viking Designer Diamond
+   deLuxe (VP3; Designer Splendid Square 120 × 120, Crown 260 × 200 and Royal 360 × 200 hoops
+   included, up to 360 × 350 mm; automatic jump stitch trim cuts the top thread). VP3 comes
+   first; its hoops are in the hoop list (as "Husqvarna 120 × 120", "260 × 200", "360 × 200"
+   and "360 × 350"), and the phase 0 test kit is VP3 for this machine.
+2. **Names — decided 2026-10-11:** this app, the embroidery digitizing software, is
+   **StitchFoundry**, published by **SiteSentrix** (the GitHub organization `SiteSentrix`).
+   ("StitchForge", the working name, is taken in this niche: stitchforge.com is a pre-launch AI
+   image-to-embroidery service.) Planned siblings: **StitchBench** and **StitchShop** (running an
+   embroidery business: quotes by stitch count, orders and approvals, mockups, production
+   schedule, worksheets, costing; phase 6's production items move there), connected by
+   **StitchHub** (a working name: "StitchHub" is taken by a cross-stitch app with its own .hub
+   format). Check the domains and run trademark searches before launch. Phase R has rebranded the
+   app; internal names (crates `sf-*`, `vectorcraft-*`, the `vectorcraft` binary) stay for now.
+3. **Open source — decided 2026-10-11:** StitchFoundry is free and open source, everything in it;
+   cloud AI features are planned on optional credits, and work free with your own AI keys; see
+   [§11](#11-open-source-and-ai-features).
+4. **Priorities:** which phase matters most to your work (for example lettering and team
+   names for a shop, multi-decoration for fashion, photo stitch for gifts)?
+5. **AI assistant:** do you want an in-app "Ask" panel that calls Claude (needs an API key)?
+
+---
+
+## 11. Open source and AI features
+
+Decided by the owner on 2026-10-11: StitchFoundry is free and open source, and stays that way.
+
+- **Everything is open source:** the app, the AI features and the server behind them, under the
+  workspace licence (MIT OR Apache-2.0). No editions, licence keys or feature gates.
+- **AI features (phase A)** run in the cloud on optional credits, or free with your own AI keys.
+  The app is complete without them. In build order:
+  1. **Text to embroidery** (NEW-10): a prompt becomes flat-colour art from an image model, drawn
+     in a style that digitizes well, and Auto-Digitize turns it into a design. Easiest to make
+     sew well, because we choose the art style.
+  2. **Image or logo to embroidery** (NEW-11): an image model redraws the upload as clean flat
+     art, then it is digitized; needs AD-03, AD-04 and good test-sews.
+  3. **Assistant** (NEW-07): Claude answers embroidery questions and edits the design by running
+     engine commands (every feature is already a command).
+  4. **Product mockups** (NEW-12): the design shown on a shirt, cap or bag, for selling to
+     customers.
+  Uploads need terms of service: users confirm they may use the art, and prompts for others'
+  characters or logos are refused. Server secrets (API keys, billing settings) live in
+  configuration, never in the repository.
+- A public GitHub repository with CI, signed release builds, a download page, and a community
+  space for questions, test-sew photos and designs.
+- The free benchmark is Ink/Stitch (GPL).
+
+**Rules for the code:**
+
+- New code is MIT OR Apache-2.0. Bundled data and assets follow `CLAUDE.md` › Assets: each has
+  a row in `ASSETS.md`, and only original or openly licensed data ships (check where the PEC and
+  JEF palette tables came from, and credit their source).
+- Clean-room rules are unchanged (§3): public documentation only, and never install, run or
+  compare against the reference suite or other commercial digitizing software.
+- VectorCraft's brand licence (`docs/brand/LICENSE-brand.txt` in the VectorCraft repository)
+  requires a published modified version to drop the ArtCraft name, wordmark, logos and links:
+  StitchFoundry carries none of them (phase R removed them), and new code must not add them back
+  (`cargo xtask brands` checks). Saying in plain text that StitchFoundry is based on VectorCraft
+  by the ArtCraft team is allowed. Keep VectorCraft's copyright notices (`NOTICE`, the licence
+  files).
+- Sign the installers (Apple Developer Program, Windows code signing) so they open without
+  security warnings.
+
+---
+
+## Appendix A: driving the app for screenshots
+
+```python
+# drive.py — start the app under Xvfb and drive it over the control channel (keep outside the repo)
+import json, os, socket, subprocess, time
+env = dict(os.environ, DISPLAY=":99", VECTORCRAFT_NO_PREFS="1", VECTORCRAFT_SYNC_RENDER="1", WGPU_BACKEND="vulkan")
+subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1600x1000x24"]); time.sleep(1.5)
+app = subprocess.Popen(["target/debug/vectorcraft", "--control", "7979"], env=env)
+for _ in range(240):
+    try: s = socket.create_connection(("127.0.0.1", 7979)); break
+    except OSError: time.sleep(0.5)
+f = s.makefile("rw"); n = 0
+def call(method, params=None):
+    global n; n += 1
+    f.write(json.dumps({"id": n, "method": method, "params": params or {}}) + "\n"); f.flush()
+    return json.loads(f.readline())
+def run(cmd, params=None): return call("engine.execute", {"command": cmd, "params": params or {}})
+call("ui.resize", {"width": 1600, "height": 1000})
+run("file.new", {"width": 400, "height": 300})
+run("shape.ellipse", {"x": 60, "y": 40, "width": 200, "height": 200}); run("embroidery.set", {"type": "fill"})
+run("view.fitArtboard"); call("ui.screenshot", {"path": "/tmp/shot.png"})
+call("app.quit")
+```
+
+`ui.click {x, y}`, `ui.drag`, `ui.key`, `ui.pointer` drive tools and widgets; methods are listed
+in `crates/ui-egui/src/control.rs` and `docs/control-protocol.md`.
+
+## Appendix B: public sources
+
+Behaviour references (public documentation only, read for feature scope, not copied):
+
+- EmbroideryStudio product comparison (2025 edition):
+  https://docs.wilcom.com/embroiderystudio/27/en/OnlineHelp/Release/comparison/comparison-1.htm
+- EmbroideryStudio 2026 release notes:
+  https://docs.wilcom.com/embroiderystudio/28/en/downloads/ReleaseNotes.pdf
+- Top new features of EmbroideryStudio 2025:
+  https://wilcom.com/resources/blog/top-10-new-features-of-wilcom-embroiderystudio-2025
+- Lettering overview: https://wilcom.com/explore/lettering
+- Florentine effect: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Decorative/curves/curves-10.htm
+- Embroidery Legacy digitizing widget and Ink/Stitch documentation (feature references for
+  BEY-01, BEY-02).

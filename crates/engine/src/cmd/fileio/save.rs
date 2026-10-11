@@ -104,7 +104,7 @@ pub fn templates_folder(prefs: &Prefs) -> Option<String> {
     if !prefs.templates_folder.is_empty() {
         return Some(prefs.templates_folder.clone());
     }
-    Some(documents_folder()?.join("VectorCraft Templates").to_string_lossy().to_string())
+    Some(documents_folder()?.join("StitchFoundry Templates").to_string_lossy().to_string())
 }
 
 /// The Templates folder for a file dialog to start in (#703): made when it's missing; where it
@@ -351,7 +351,7 @@ fn blank_pages(doc: &Document) -> Document {
 }
 
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
-const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
+const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: StitchFoundry opens it as before, other apps show empty pages";
 
 /// The encoder's params for a `.ai` file, from a save's or an export's: a PDF of every artboard
 /// with the PDF options, always carrying the native document, its layers and sublayers PDF layers
@@ -682,7 +682,7 @@ mod tests_folders {
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
         let mut prefs = crate::Prefs::default();
-        let wanted = base.join("Modelli").join("VectorCraft Templates");
+        let wanted = base.join("Modelli").join("StitchFoundry Templates");
         prefs.templates_folder = wanted.to_string_lossy().into_owned();
         assert_eq!(super::templates_dialog_folder(&prefs).map(PathBuf::from), Some(wanted.clone()));
         assert!(wanted.is_dir(), "made");

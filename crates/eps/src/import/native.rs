@@ -34,7 +34,7 @@ use super::ate::{Story, Texts};
 /// The notes that say the import left out something the file has (see [`is_loss`]).
 const TEXT_LEFT_OUT: &str = "text objects on hidden layers or hidden objects couldn't be read, so they are left out";
 /// The same for a file without a page to take shown type from.
-const TYPE_LEFT_OUT: &str = "text objects of kinds VectorCraft doesn't read from the file's text document yet are left out";
+const TYPE_LEFT_OUT: &str = "text objects of kinds StitchFoundry doesn't read from the file's text document yet are left out";
 const ART_LEFT_OUT: &str = "hidden layers have art this can't read";
 const LAYERS_UNREAD: &str = "the file's layers weren't read";
 
