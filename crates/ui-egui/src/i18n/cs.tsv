@@ -1037,8 +1037,8 @@ lighting	Light	Světlo
 	Expand:	Rozložit:
 	Gradient (.)	Přechod (.)
 	H:	V:
-	Modify	Upravit
-	Navigate	Navigace
+	Modify	Úpravy
+	Navigate	Pohled
 	None (/)	Žádná (/)
 	Select All Pins	Vybrat všechny špendlíky
 	Show Mesh	Zobrazit síť
@@ -3303,7 +3303,7 @@ effect	Regular	Pravidelný
 	Join the ArtCraft community on Discord (discord.gg/artcraft)	Připojte se ke komunitě ArtCraft na Discordu (discord.gg/artcraft)
 	Source code on GitHub	Zdrojový kód na GitHubu
 	All Tools	Všechny nástroje
-	Draw	Kreslení
+	Draw	Kresba
 	Reset	Obnovit
 	  — missing	  — chybí
 	(closest)	(nejbližší)
@@ -4227,3 +4227,220 @@ effect	Regular	Pravidelný
 	Page Cover 1640×624	Úvodní obrázek stránky 1640×624
 	Video Banner 2560×1440	Banner videa 2560×1440
 	Video Thumbnail 1280×720	Miniatura videa 1280×720
+# Keyboard Shortcuts dialog (shortcut_editor.rs)
+	Keyboard Shortcuts	Klávesové zkratky
+	Set:	Sada:
+	Reset to Defaults	Obnovit výchozí hodnoty
+	Tool	Nástroj
+	Command	Příkaz
+	Shortcut	Zkratka
+	Menu Commands	Příkazy nabídky
+	Press keys…	Stiskněte klávesy…
+	Use Default	Použít výchozí
+	Go to Conflict	Přejít ke konfliktu
+	Remove the shortcut	Odebrat zkratku
+	Click, then press the new shortcut (Esc cancels)	Klikněte a stiskněte novou zkratku (Esc zruší)
+	All shortcuts reset to defaults.	Všechny zkratky byly obnoveny na výchozí hodnoty.
+	Imported. Press OK to keep the imported set.	Importováno. Importovanou sadu zachováte stisknutím OK.
+	⚠ {chord} was already used by {names} — it has been removed there.	Pozor: zkratka {chord} už byla použita pro {names} — tam byla odebrána.
+	VectorCraft Defaults	Výchozí VectorCraft
+@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	{n} zkratka je přiřazena více než jednou|{n} zkratky jsou přiřazeny více než jednou|{n} zkratek je přiřazeno více než jednou
+# Print dialog: overprints note and choice labels
+	Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).	Možnost Simulovat vytiskne přetisky tak, jak je ukazuje Náhled přetisků; separace je vždy zachovávají. Přednastavení před tiskem sloučí průhlednost (soubory PostScript ji sloučí vždy).
+	Preserve	Zachovat
+	Simulate	Simulovat
+	Portrait (flipped)	Na výšku (převrácené)
+	Landscape (flipped)	Na šířku (převrácené)
+	Visible & Printable Layers	Viditelné a tisknutelné vrstvy
+	Visible Layers	Viditelné vrstvy
+	All Layers	Všechny vrstvy
+	Do Not Scale	Neměnit měřítko
+	Fit to Page	Přizpůsobit stránce
+	Custom Scale	Vlastní měřítko
+	Tile Imageable Areas	Dlaždice z potisknutelných oblastí
+	Composite	Kompozitní
+	Separations	Separace
+	Up (right reading)	Nahoru (čitelné)
+	Down (right reading)	Dolů (čitelné)
+	Positive	Pozitiv
+	Negative	Negativ
+	Subset	Podmnožina
+	Complete	Úplná
+	[Custom]	[Vlastní]
+	[Default]	[Výchozí]
+# PDF options: choice labels
+	No downsampling	Bez převzorkování
+	Subsample	Podvzorkování
+	Bicubic	Bikubické
+	Minimum	Minimální
+	Run Length	Délka běhu
+	Roman	Římské
+	No conversion	Bez převodu
+	Convert to destination	Převést do cíle
+	Convert to destination (preserve numbers)	Převést do cíle (zachovat hodnoty)
+	Don't include profiles	Nezahrnovat profily
+	Include all profiles	Zahrnout všechny profily
+	Include destination profile	Zahrnout cílový profil
+	Include tagged source profiles	Zahrnout označené zdrojové profily
+	Low resolution (150 ppi)	Nízké rozlišení (150 ppi)
+	High resolution	Vysoké rozlišení
+	Inserting, deleting and rotating pages	Vkládání, mazání a otáčení stránek
+	Filling in form fields and signing	Vyplňování formulářových polí a podepisování
+	Commenting, filling in form fields and signing	Komentování, vyplňování formulářových polí a podepisování
+	Any except extracting pages	Vše kromě extrahování stránek
+	Bounding Box	Ohraničovací rámeček
+# New Document preset categories
+	Mobile	Mobil
+	Film & Video	Film a video
+	Art & Illustration	Umění a ilustrace
+	Branding	Branding
+	Social	Sociální sítě
+# Arrowheads (Stroke panel)
+	Triangle	Trojúhelník
+	Triangle (open)	Trojúhelník (otevřený)
+	Circle (open)	Kruh (otevřený)
+	Square (open)	Čtverec (otevřený)
+	Bar	Příčka
+	Arrow	Šipka
+	Arrow (open)	Šipka (otevřená)
+	Barbed	S protihroty
+	Half Arrow (left)	Poloviční šipka (vlevo)
+	Half Arrow (right)	Poloviční šipka (vpravo)
+	Concave	Vkleslá
+	Double Bar	Dvojitá příčka
+	Feather	Pírko
+	Dot on Bar	Tečka na příčce
+	Chevron	Véčko
+	Double Arrow	Dvojitá šipka
+	Cross	Kříž
+	Plus	Plus
+	Hexagon	Šestiúhelník
+	Hexagon (open)	Šestiúhelník (otevřený)
+	Tag	Štítek
+	Tag (open)	Štítek (otevřený)
+	Half Circle	Půlkruh
+	Drop	Kapka
+	Slash	Lomítko
+	Double Slash	Dvojité lomítko
+	Diamond (open)	Kosočtverec (otevřený)
+	Reverse Triangle	Obrácený trojúhelník
+	Swallowtail	Vlaštovčí ocas
+	Bracket	Závorka
+	Fork	Vidlice
+	Leaf	List
+	Kite	Deltoid
+	Triangle to Bar	Trojúhelník k příčce
+	Oval	Ovál
+# Colour harmony rules (Color Guide, Recolor Artwork, Color Themes)
+	Complementary	Komplementární
+	Complementary 2	Komplementární 2
+	Split Complementary	Rozdělená komplementární
+	Left Complement	Levý doplněk
+	Right Complement	Pravý doplněk
+	Analogous	Analogická
+	Analogous 2	Analogická 2
+	Monochromatic	Monochromatická
+	Shades	Tmavé tóny
+	Triad	Triáda
+	Triad 2	Triáda 2
+	Triad 3	Triáda 3
+	Tetrad	Tetráda
+	Tetrad 2	Tetráda 2
+	Tetrad 3	Tetráda 3
+	Compound	Složená
+	Compound 2	Složená 2
+	High Contrast	Vysoký kontrast
+	High Contrast 2	Vysoký kontrast 2
+	High Contrast 3	Vysoký kontrast 3
+	Pentagram	Pentagram
+# Rendering intents, recolor methods, gradient kinds
+	Perceptual	Percepční
+	Relative Colorimetric	Relativní kolorimetrický
+	Absolute Colorimetric	Absolutní kolorimetrický
+	Exact	Přesná
+	Preserve Tints	Zachovat světlé tóny
+	Scale Tints	Změnit měřítko světlých tónů
+	Linear	Lineární
+	Freeform	Volný
+# DXF options
+	8 Colors	8 barev
+	16 Colors	16 barev
+	256 Colors	256 barev
+	True Colors	Plné barvy
+	Preserve Appearance	Zachovat vzhled
+	Maximize Editability	Maximalizovat upravitelnost
+# Layers panel: generated names <Kind>
+	Clip Group	Ořezová skupina
+	Guide	Vodítko
+	Symbol	Symbol
+	Envelope	Obálka
+	Mesh	Síť
+	Placed Document	Umístěný dokument
+	Radial Repeat	Kruhové opakování
+	Grid Repeat	Mřížkové opakování
+	Mirror Repeat	Zrcadlové opakování
+# Generic parameter dialog (command.rs): Area Type Options
+	Auto Size	Automatická velikost
+	Shrink Text to Fit	Zmenšit text, aby se vešel
+	Ascent	Výška nad účařím
+	Cap Height	Výška verzálek
+	x Height	Výška x
+	Justify	Do bloku
+	First Baseline	První účaří
+	Vertical Align	Svislé zarovnání
+	Save Selection	Uložit výběr
+# Liquify tools
+	Twirl	Zatočení
+	Pucker	Smrštění
+	Bloat	Vyboulení
+	Scallop	Vroubkování
+	Wrinkle	Zvrásnění
+# File Info, Flattener Preview, Flattener presets
+	Unknown	Neznámý
+	Copyrighted	Chráněno autorským právem
+	Public Domain	Volné dílo
+	None (Color Preview)	Žádné (náhled barev)
+	Rasterized Complex Regions	Rastrované složité oblasti
+	Transparent Objects	Průhledné objekty
+	All Affected Objects	Všechny dotčené objekty
+	Expanded Patterns	Rozložené vzorky
+	Outlined Strokes	Tahy převedené na křivky
+	Outlined Text	Text převedený na křivky
+	All Rasterized Regions	Všechny rastrované oblasti
+	High Resolution	Vysoké rozlišení
+	Medium Resolution	Střední rozlišení
+	Low Resolution	Nízké rozlišení
+# Save for Web, EPS, raster export options
+	Copyright and Contact Info	Autorská práva a kontaktní údaje
+	All Slices	Všechny řezy
+	Selected Slices	Vybrané řezy
+	No Slices	Žádné řezy
+	Images Only	Jen obrazy
+	HTML and Images	HTML a obrazy
+	Selective	Selektivní
+	Adaptive	Adaptivní
+	Black & White	Černobílá
+	No Dither	Bez rozptylu
+	Diffusion	Difuze
+	Unsorted	Neseřazeno
+	Sort by Hue	Řadit podle odstínu
+	Sort by Luminance	Řadit podle jasu
+	Sort by Popularity	Řadit podle četnosti
+	Baseline (Standard)	Základní (standardní)
+	Baseline Optimized	Základní optimalizovaná
+	Art Optimized	Optimalizováno pro kresbu
+	Type Optimized	Optimalizováno pro text
+	Language Level 2	Jazyková úroveň 2
+	Language Level 3	Jazyková úroveň 3
+	TIFF (Black & White)	TIFF (černobílý)
+	TIFF (8-bit Color)	TIFF (8bitová barva)
+	1 bit	1 bit
+	4 bit	4 bity
+	8 bit	8 bitů
+	16 bit	16 bitů
+	24 bit	24 bitů
+	32 bit	32 bitů
+	16 bits/pixel	16 bitů na pixel
+	24 bits/pixel	24 bitů na pixel
+	32 bits/pixel	32 bitů na pixel
+	DWG (use DXF)	DWG (použijte DXF)
