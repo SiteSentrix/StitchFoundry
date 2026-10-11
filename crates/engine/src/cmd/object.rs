@@ -167,7 +167,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Align",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the key object when the selection has one, select.key, else the selection), artboard?: index (0-based; with to: \"artboard\", the artboard to align to; the app passes the active one; default: the artboard under the center of the selection, else the first), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the key object when the selection has one, select.key, else the selection), artboard?: index (0-based; with to: \"artboard\", the artboard to align to; the app passes the active one; default: the artboard under the center of the selection, else the first), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} With anchor points selected (Direct Selection), the points align instead: to their own bounds, or to the artboard (#1180)",
             has_selection,
             align
         ),
@@ -1080,6 +1080,10 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
     if h.is_none() && v.is_none() {
         return Err(bad("object.align", "give horizontal or vertical"));
     }
+    // Anchor points selected with Direct Selection align themselves, as in Illustrator (#1180).
+    if !s.doc()?.selection.anchors.is_empty() {
+        return align_anchors(s, p, &ids, (h, v));
+    }
     let r = reference_rect(s, p, &ids, preview)?;
     let key = key_root(s, &ids);
     let moves: Vec<(NodeId, Vec2)> = {
@@ -1105,6 +1109,49 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
             .collect()
     };
     apply_moves(s, "Align", p, &ids, &moves)
+}
+
+/// [`align`] of the selected anchor points (whole paths among them give all theirs): each point
+/// moves to the edge or centre of the points' bounds, or of the artboard with Align To Artboard.
+fn align_anchors(s: &mut Session, p: &Value, ids: &[NodeId], (h, v): (Option<&str>, Option<&str>)) -> Result<Value> {
+    let targets = super::path::anchor_targets(s)?;
+    let d = &s.doc()?.doc;
+    let pts: Vec<Point> = targets
+        .iter()
+        .flat_map(|(id, refs)| refs.iter().filter_map(move |(si, ai)| d.node(*id)?.path_data()?.subpaths.get(*si)?.anchors.get(*ai).map(|a| a.p)))
+        .collect();
+    let Some(bounds) = pts.iter().skip(1).fold(pts.first().map(|q| Rect::from_points(*q, *q)), |b, q| b.map(|b| b.union_pt(*q))) else {
+        return ok();
+    };
+    // shortcut: no key anchor yet, so Align To Key Object aligns to the points' bounds as Selection does.
+    let r = if align_to(s, p) == Some("artboard") { reference_rect(s, p, ids, false)? } else { bounds };
+    let target = |q: Point| {
+        let x = match h {
+            Some("left") => r.x0,
+            Some("center") => r.center().x,
+            Some("right") => r.x1,
+            _ => q.x,
+        };
+        let y = match v {
+            Some("top") => r.y0,
+            Some("center") => r.center().y,
+            Some("bottom") => r.y1,
+            _ => q.y,
+        };
+        Point::new(x, y)
+    };
+    s.edit("Align", |d, _| {
+        for (id, refs) in &targets {
+            let path = super::path::path_mut(d, *id)?;
+            for &(si, ai) in refs {
+                if let Some(a) = path.anchor_mut(si, ai) {
+                    a.translate(target(a.p) - a.p);
+                }
+            }
+        }
+        Ok(())
+    })?;
+    ok()
 }
 
 fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
