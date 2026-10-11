@@ -116,7 +116,7 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-fn path_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Result<&mut PathData> {
+pub(super) fn path_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Result<&mut PathData> {
     let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
     match &mut n.kind {
         NodeKind::Path { path, live, .. } => {
@@ -378,9 +378,9 @@ fn join(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-type AnchorTargets = Vec<(NodeId, Vec<(usize, usize)>)>;
+pub(super) type AnchorTargets = Vec<(NodeId, Vec<(usize, usize)>)>;
 
-fn anchor_targets(s: &Session) -> Result<AnchorTargets> {
+pub(super) fn anchor_targets(s: &Session) -> Result<AnchorTargets> {
     let st = s.doc()?;
     let mut out = vec![];
     for id in &st.selection.objects {

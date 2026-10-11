@@ -1700,6 +1700,27 @@ fn file_list_lists_a_folder_within_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// #1180: with anchor points selected (Direct Selection), Align moves those points, not the whole
+/// path: to the points' own bounds, or to the artboard.
+#[test]
+fn align_moves_selected_anchor_points() {
+    let mut s = session();
+    let id = NodeId(s.execute("path.create", &json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap());
+    let anchors = |s: &Session| -> Vec<(f64, f64)> {
+        s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| (a.p.x, a.p.y)).collect()
+    };
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+    s.execute("object.align", &json!({"vertical": "top", "to": "selection"})).unwrap();
+    assert_eq!(anchors(&s), [(100.0, 40.0), (200.0, 40.0), (150.0, 160.0)]);
+    s.execute("object.align", &json!({"horizontal": "center", "to": "artboard"})).unwrap();
+    let mid = s.doc().unwrap().doc.artboards[0].rect.center().x;
+    assert_eq!(anchors(&s), [(mid, 40.0), (mid, 40.0), (150.0, 160.0)], "the third point stays");
+    // A path selected whole still moves as an object.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.align", &json!({"vertical": "top", "to": "artboard"})).unwrap();
+    assert_eq!(anchors(&s)[2].1 - anchors(&s)[0].1, 120.0, "its shape kept");
+}
+
 /// #1197: Make Compound Path cuts holes where the paths in front overlap the backmost one, also
 /// when they were drawn running the same way.
 #[test]
