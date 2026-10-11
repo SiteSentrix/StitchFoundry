@@ -4451,3 +4451,38 @@ machine	Stop	停止
 	Tie off	縫い終わりの止め縫い
 	Tiny object: may not sew cleanly	極小のオブジェクト: きれいに縫えない場合があります
 	Very dense: about {n} layers of thread here	高密度: ここは約 {n} 層の糸があります
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	プロンプトからデザインを作成…
+	Design from Prompt	プロンプトからデザインを作成
+	Generate	生成
+	Describe the design:	デザインの説明:
+	Size (longest side):	サイズ (長辺):
+	Anthropic API key:	Anthropic API キー:
+	Remember the key on this computer	このコンピューターにキーを保存
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude がお持ちの Anthropic API キーでアートワークを描き、StitchFoundry がそれをデジタイズします。料金はお使いの Anthropic アカウントに請求されます。縫う前にステッチを確認してください。
+	Get a key	キーを取得
+	Drawing the design…	デザインを描画中…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	デザインを説明すると、Claude がアートワークを描き、StitchFoundry がそれをデジタイズします
+	Place Artwork as Embroidery	アートワークを刺繍として配置
+	Place Artwork	アートワークの配置
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	デザインを配置しました: {n} 個の刺繍オブジェクト
+@msg	Enter your Anthropic API key first.	先に Anthropic API キーを入力してください。
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	API キーが正しくありません: Anthropic Console からもう一度貼り付けてください。
+@msg	Describe the design first.	先にデザインの説明を入力してください。
+@msg	The description is too long: keep it under 2,000 characters.	説明が長すぎます: 2,000 文字未満にしてください。
+@msg	Anthropic refused the API key: {e}	Anthropic が API キーを拒否しました: {e}
+@msg	Your Anthropic account can't pay for this: {e}	お使いの Anthropic アカウントではこの料金を支払えません: {e}
+@msg	The AI service is busy: try again in a minute.	AI サービスが混み合っています: 1 分ほどしてからもう一度お試しください。
+@msg	The AI service failed (error {code}): try again later.	AI サービスでエラーが発生しました (エラー {code}): しばらくしてからもう一度お試しください。
+@msg	The request failed (error {code}): {e}	リクエストに失敗しました (エラー {code}): {e}
+@msg	The AI declined to draw this: try another description.	AI はこの内容の描画を断りました: 別の説明でお試しください。
+@msg	The drawing grew too detailed to finish: ask for something simpler.	描画が細かくなりすぎて完成できませんでした: もっとシンプルなものを依頼してください。
+@msg	The reply had no artwork: try again.	応答にアートワークが含まれていませんでした: もう一度お試しください。
+@msg	Couldn't reach the AI service: {e}	AI サービスに接続できませんでした: {e}
+@msg	Design from Prompt needs the desktop app for now	「プロンプトからデザインを作成」には、今のところデスクトップアプリが必要です
+@msg	already drawing: wait for it, or Cancel	すでに描画中です: 完了を待つか、「キャンセル」をクリックしてください
+@msg	the artwork has no shapes to stitch	アートワークにステッチにできるシェイプがありません
+@msg	the artwork has nothing to place	アートワークに配置するものがありません
+@msg	the artwork can't be read: {e}	アートワークを読み込めません: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI は他者のロゴやキャラクターをコピーしません: {e}

@@ -373,6 +373,32 @@ fn structured_junk() {
         ("object.puppetWarp", json!({"rest": true, "pins": [[1e308, 0]], "moved": [[0, 0]], "expand": -5})),
         ("object.puppetWarp", json!({"rest": true, "ids": [u64::MAX], "pins": [[0, 0]], "moved": [[0, 0]]})),
         ("object.puppetWarp.pins", json!({"ids": [0, 1, 2], "expand": 1e308})),
+        // Design from Prompt's art is whatever a model wrote.
+        ("embroidery.placeArt", json!({"svg": "<svg xmlns='http://www.w3.org/2000/svg'><path d='M0 0 L1e308 1e308 L-1e308 0 Z' fill='red'/></svg>"})),
+        (
+            "embroidery.placeArt",
+            json!({"svg": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 0 0'><circle r='1e308' fill='red'/></svg>", "size": 2000}),
+        ),
+        (
+            "embroidery.placeArt",
+            json!({"svg": "<svg xmlns='http://www.w3.org/2000/svg'><g><g><g><rect width='5' height='5' fill='#fff' transform='scale(1e-300)'/></g></g></g></svg>"}),
+        ),
+        (
+            "embroidery.placeArt",
+            json!({"svg": "<svg xmlns='http://www.w3.org/2000/svg'><text>FOX</text><use href='#a'/><image href='file:///etc/passwd'/></svg>", "minArea": -1e308}),
+        ),
+        (
+            "embroidery.placeArt",
+            json!({"svg": "<svg xmlns='http://www.w3.org/2000/svg'><clipPath id='c'><circle r='5'/></clipPath><rect width='9' height='9' fill='#000' clip-path='url(#c)'/></svg>", "minArea": 1e308}),
+        ),
+        (
+            "embroidery.placeArt",
+            json!({"svg": "<!DOCTYPE svg [<!ENTITY a 'aaaaaaaaaa'><!ENTITY b '&a;&a;&a;&a;&a;&a;'>]><svg xmlns='http://www.w3.org/2000/svg'><desc>&b;&b;</desc></svg>"}),
+        ),
+        (
+            "embroidery.placeArt",
+            json!({"svg": "<svg xmlns='http://www.w3.org/2000/svg'><rect width='9' height='9' fill='#000'/></svg>", "at": [1e308, -1e308], "size": 5}),
+        ),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {

@@ -17,6 +17,7 @@ mod color_picker;
 mod command;
 pub mod confirm;
 pub mod corners;
+mod design_prompt;
 mod document_setup;
 pub mod dxf_import;
 pub mod dxf_options;
@@ -292,6 +293,7 @@ registry! {
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
+    DesignFromPrompt: [crate::embroidery::prompt::KIND] => design_prompt::SPEC,
 }
 
 /// The button labels the shared dialog frame can show (OK, discard and the fixed Cancel/Close),
@@ -323,8 +325,13 @@ fn run_and_close(app: &mut VectorcraftApp, id: &str, params: Value) -> DialogRes
 /// Close the open dialog as Cancel does, rolling back a live preview (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
-    if app.ui.dialog.take().is_some_and(|d| spec(&d.kind).preview) {
-        let _ = app.session.cancel_interaction();
+    match app.ui.dialog.take() {
+        Some(d) if spec(&d.kind).preview => {
+            let _ = app.session.cancel_interaction();
+        }
+        // Design from Prompt stops waiting for the drawing on its way.
+        Some(d) if d.kind == crate::embroidery::prompt::KIND => crate::embroidery::prompt::cancel(app),
+        _ => {}
     }
     settle(app);
 }

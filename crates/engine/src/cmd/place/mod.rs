@@ -426,6 +426,74 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
     )
 }
 
+/// SVG art made elsewhere (Design from Prompt's) placed as one group named `name`, its longest side
+/// `longest` points, centred on `at` (else the first artboard's centre), as an edit labelled
+/// `label`. The files it links to aren't read, and only the objects `keep` accepts are placed (see
+/// [`pruned`]) → (the group, the import's warnings).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn place_svg(
+    s: &mut Session,
+    cmd: &str,
+    label: &str,
+    name: &str,
+    svg: &str,
+    longest: f64,
+    at: Option<Point>,
+    keep: &dyn Fn(&Node) -> bool,
+) -> Result<(NodeId, Vec<String>)> {
+    if !(longest.is_finite() && longest > 0.0) {
+        return Err(bad(cmd, "the size must be positive"));
+    }
+    if at.is_some_and(|c| !(c.x.abs() <= MAX_COORD && c.y.abs() <= MAX_COORD)) {
+        return Err(bad(cmd, "at lies outside the canvas"));
+    }
+    let format = fileio::detect("art.svg", svg.as_bytes()).ok_or_else(|| bad(cmd, "the artwork isn't SVG"))?;
+    let (mut doc, warnings) = vectorcraft_svg::import_with_report(svg).map_err(|e| bad(cmd, format!("the artwork can't be read: {e}")))?;
+    doc.drop_edit_modes();
+    let layers = std::mem::take(&mut doc.layers);
+    let nodes = pruned(art_of(layers.iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten())), keep);
+    let natural = nodes.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds()));
+    let natural = natural.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, "the artwork has nothing to place"))?;
+    let st = s.doc()?;
+    let centre = at.or_else(|| st.doc.artboards.first().map(|a| a.rect.center())).unwrap_or_default();
+    let k = longest / natural.width().max(natural.height());
+    let m = Affine::translate(centre.to_vec2()) * Affine::scale(k) * Affine::translate(-natural.center().to_vec2());
+    let parent = st.insertion_parent();
+    let loaded = Loaded {
+        name: name.to_string(),
+        format,
+        art: Art::Vector { src: Box::new(doc), nodes, clip: None },
+        natural,
+        warnings: vec![],
+        link: None,
+        board: None,
+    };
+    let id = s.edit(label, |d, sel| {
+        let node = transformed(build(d, loaded, None), m);
+        let id = d.insert(parent, usize::MAX, node)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok((id, warnings))
+}
+
+/// `nodes` without the objects `keep` rejects, looked for inside groups (a compound path is one
+/// object). A clip group that loses its clipping path is a plain group.
+fn pruned(nodes: Vec<Node>, keep: &dyn Fn(&Node) -> bool) -> Vec<Node> {
+    nodes
+        .into_iter()
+        .filter(|n| keep(n))
+        .map(|mut n| {
+            if let NodeKind::Group { children, clip } = &mut n.kind {
+                let kids = pruned(children.iter().map(|c| (**c).clone()).collect(), keep);
+                *clip = *clip && kids.first().is_some_and(|c| matches!(c.kind, NodeKind::Path { clipping: true, .. }));
+                *children = kids.into_iter().map(Arc::new).collect();
+            }
+            n
+        })
+        .collect()
+}
+
 /// The artboard under `at`, else the first.
 fn board_at(d: &Document, at: Option<Point>) -> Option<Rect> {
     at.and_then(|c| d.artboards.iter().find(|a| a.rect.contains(c))).or(d.artboards.first()).map(|a| a.rect)

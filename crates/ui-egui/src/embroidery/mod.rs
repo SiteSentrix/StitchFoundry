@@ -3,6 +3,7 @@
 
 pub mod overlay;
 pub mod panel;
+pub mod prompt;
 pub mod sequence;
 pub mod stitch_list;
 pub mod styles;
@@ -131,6 +132,8 @@ pub struct EmbroideryUi {
     pub checks: Option<Vec<serde_json::Value>>,
     /// The stitch type whose properties for new objects the Embroidery panel shows.
     pub new_type: String,
+    /// Design from Prompt: the API key and the request on its way.
+    pub prompt: prompt::PromptState,
 }
 
 impl Default for EmbroideryUi {
@@ -150,6 +153,7 @@ impl Default for EmbroideryUi {
             digitize_background: true,
             checks: None,
             new_type: "fill".into(),
+            prompt: prompt::PromptState::default(),
         }
     }
 }
@@ -157,6 +161,7 @@ impl Default for EmbroideryUi {
 /// Advances the stitch player and opens the digitizing widget when the
 /// embroidery brush is picked; call once per frame.
 pub fn tick(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
+    prompt::poll(app, ctx);
     let tool = app.session.tool_id();
     if tool != app.embroidery.widget.last_tool {
         if tool == widget::TOOL {

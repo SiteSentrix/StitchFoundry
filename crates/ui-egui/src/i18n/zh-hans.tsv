@@ -4039,3 +4039,38 @@ machine	Stop	停止
 	Tie off	收针打结
 	Tiny object: may not sew cleanly	极小对象：可能无法绣得整齐
 	Very dense: about {n} layers of thread here	过密：此处约有 {n} 层绣线
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	根据描述生成图案…
+	Design from Prompt	根据描述生成图案
+	Generate	生成
+	Describe the design:	描述图案：
+	Size (longest side):	尺寸 (最长边)：
+	Anthropic API key:	Anthropic API 密钥：
+	Remember the key on this computer	在此计算机上记住密钥
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude 使用您自己的 Anthropic API 密钥绘制图稿，费用计入您的 Anthropic 账户；随后由 StitchFoundry 打版。绣制前请检查针迹。
+	Get a key	获取密钥
+	Drawing the design…	正在绘制图案…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	描述图案后，Claude 会为其绘制图稿，再由 StitchFoundry 打版
+	Place Artwork as Embroidery	将图稿作为刺绣置入
+	Place Artwork	置入图稿
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	图案已置入：{n} 个刺绣对象
+@msg	Enter your Anthropic API key first.	请先输入您的 Anthropic API 密钥。
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	API 密钥无效：请从 Anthropic Console 重新粘贴。
+@msg	Describe the design first.	请先描述图案。
+@msg	The description is too long: keep it under 2,000 characters.	描述过长：请缩短到 2,000 个字符以内。
+@msg	Anthropic refused the API key: {e}	Anthropic 拒绝了此 API 密钥：{e}
+@msg	Your Anthropic account can't pay for this: {e}	您的 Anthropic 账户无法支付此费用：{e}
+@msg	The AI service is busy: try again in a minute.	AI 服务繁忙：请一分钟后重试。
+@msg	The AI service failed (error {code}): try again later.	AI 服务出错 (错误 {code})：请稍后重试。
+@msg	The request failed (error {code}): {e}	请求失败 (错误 {code})：{e}
+@msg	The AI declined to draw this: try another description.	AI 拒绝绘制此内容：请尝试其他描述。
+@msg	The drawing grew too detailed to finish: ask for something simpler.	绘图过于精细，无法完成：请尝试更简单的内容。
+@msg	The reply had no artwork: try again.	回复中没有图稿：请重试。
+@msg	Couldn't reach the AI service: {e}	无法连接到 AI 服务：{e}
+@msg	Design from Prompt needs the desktop app for now	“根据描述生成图案”目前需要桌面应用
+@msg	already drawing: wait for it, or Cancel	正在绘制：请等待完成，或单击“取消”
+@msg	the artwork has no shapes to stitch	图稿中没有可绣制的形状
+@msg	the artwork has nothing to place	图稿中没有可置入的内容
+@msg	the artwork can't be read: {e}	无法读取图稿：{e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI 不会复制他人的标志或角色：{e}

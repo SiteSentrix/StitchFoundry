@@ -4457,3 +4457,38 @@ machine	Stop	Arresto
 	Tie off	Fermatura finale
 	Tiny object: may not sew cleanly	Oggetto minuscolo: potrebbe non ricamarsi bene
 	Very dense: about {n} layers of thread here	Molto denso: qui circa {n} strati di filo
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	Disegno da descrizione…
+	Design from Prompt	Disegno da descrizione
+	Generate	Genera
+	Describe the design:	Descrivi il disegno:
+	Size (longest side):	Dimensione (lato più lungo):
+	Anthropic API key:	Chiave API Anthropic:
+	Remember the key on this computer	Ricorda la chiave su questo computer
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude disegna la grafica con la tua chiave API Anthropic personale, con addebito sul tuo account Anthropic; poi StitchFoundry la digitalizza. Controlla i punti prima di ricamare.
+	Get a key	Ottieni una chiave
+	Drawing the design…	Disegno in corso…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Descrivi un disegno e Claude ne crea la grafica, poi StitchFoundry la digitalizza
+	Place Artwork as Embroidery	Inserisci grafica come ricamo
+	Place Artwork	Inserisci grafica
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Disegno inserito: {n} oggetto ricamato|Disegno inserito: {n} oggetti ricamati
+@msg	Enter your Anthropic API key first.	Inserisci prima la tua chiave API Anthropic.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	La chiave API non è valida: incollala di nuovo dalla Anthropic Console.
+@msg	Describe the design first.	Descrivi prima il disegno.
+@msg	The description is too long: keep it under 2,000 characters.	La descrizione è troppo lunga: resta sotto i 2000 caratteri.
+@msg	Anthropic refused the API key: {e}	Anthropic ha rifiutato la chiave API: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Il tuo account Anthropic non può pagare questa richiesta: {e}
+@msg	The AI service is busy: try again in a minute.	Il servizio di IA è occupato: riprova tra un minuto.
+@msg	The AI service failed (error {code}): try again later.	Il servizio di IA ha restituito un errore (codice {code}): riprova più tardi.
+@msg	The request failed (error {code}): {e}	La richiesta non è riuscita (errore {code}): {e}
+@msg	The AI declined to draw this: try another description.	L'IA si è rifiutata di disegnarlo: prova con un'altra descrizione.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Il disegno è diventato troppo dettagliato per essere completato: chiedi qualcosa di più semplice.
+@msg	The reply had no artwork: try again.	La risposta non conteneva alcuna grafica: riprova.
+@msg	Couldn't reach the AI service: {e}	Impossibile raggiungere il servizio di IA: {e}
+@msg	Design from Prompt needs the desktop app for now	Disegno da descrizione richiede per ora l'app desktop
+@msg	already drawing: wait for it, or Cancel	disegno già in corso: attendi che finisca oppure fai clic su Annulla
+@msg	the artwork has no shapes to stitch	la grafica non contiene forme da ricamare
+@msg	the artwork has nothing to place	la grafica non contiene nulla da inserire
+@msg	the artwork can't be read: {e}	impossibile leggere la grafica: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	L'IA non copia loghi o personaggi altrui: {e}
