@@ -627,9 +627,10 @@ fn show_all(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    let Some(top) = ids.last().copied() else { return Err(EngineError::Other("nothing selected".into())) };
+    let Some(backmost) = ids.first().copied() else { return Err(EngineError::Other("nothing selected".into())) };
+    let top = ids.last().copied().unwrap_or(backmost);
     let id = s.edit("Make Compound Path", |d, sel| {
-        let appearance = d.node(top).map(|n| n.appearance.clone()).unwrap_or_default();
+        let appearance = d.node(backmost).ok_or(EngineError::NoNode(backmost))?.appearance.clone();
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let mut paths: Vec<Arc<Node>> = vec![];
         for id in &ids {
