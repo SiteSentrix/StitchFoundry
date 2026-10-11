@@ -113,7 +113,7 @@ struct Snapshot {
     options: Value,
     undo: usize,
     redo: usize,
-    journal: Vec<(String, Value)>,
+    journal: vectorcraft_engine::Journal,
     dirty: bool,
 }
 

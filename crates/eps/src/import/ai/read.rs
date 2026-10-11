@@ -1528,7 +1528,8 @@ impl<'a> Reader<'a> {
         }
         if self.color_model.unwrap_or(self.cmyk_colors > self.rgb_colors) {
             doc.color_mode = ColorMode::Cmyk;
-            (doc.swatches, doc.swatch_groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+            let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+            (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
         }
         for n in &self.spots {
             if doc.swatch(&n.name).is_none() {

@@ -180,6 +180,7 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
         if h.len() > from {
             h.truncate(from + 1);
             h[from].label = label.to_string();
+            st.history.recost_last(&st.doc);
         }
     }
 }

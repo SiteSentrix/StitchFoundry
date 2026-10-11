@@ -755,7 +755,7 @@ fn discard_empty(s: &mut Session, p: &Value) -> Result<Value> {
     // plus the text (and its id), roll back to it without a trace.
     let st = s.doc_mut()?;
     if st.interaction.is_none()
-        && let Some(k) = st.history.undo.iter().rposition(|e| e.doc.node(id).is_none())
+        && let Some(k) = st.history.undo.iter().rposition(|e| e.doc.node_uncached(id).is_none())
         && let Some(created) = st.history.undo.get(k)
     {
         let mut now = (*st.doc).clone();

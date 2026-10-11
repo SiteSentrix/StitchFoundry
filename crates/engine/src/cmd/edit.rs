@@ -215,11 +215,11 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let e = st.history.undo.pop().ok_or_else(|| EngineError::Other("nothing to undo".into()))?;
     let label = e.label.clone();
     let editing = st.doc.mask_edit.map(|m| m.layer);
-    st.history.redo.push(crate::HistoryEntry {
-        label: e.label,
-        doc: std::mem::replace(&mut st.doc, e.doc),
-        selection: std::mem::replace(&mut st.selection, e.selection),
-    });
+    let doc = std::mem::replace(&mut st.doc, e.doc);
+    let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
+    let selection = shared_selection(selection, st.history.redo.last());
+    st.history.redo.push(crate::HistoryEntry::kept(e.label, doc, selection, &st.doc));
+    st.history.trim();
     st.revision += 1;
     st.selection.prune(&st.doc);
     super::maskedit::follow_history(st, editing);
@@ -231,15 +231,23 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let e = st.history.redo.pop().ok_or_else(|| EngineError::Other("nothing to redo".into()))?;
     let label = e.label.clone();
     let editing = st.doc.mask_edit.map(|m| m.layer);
-    st.history.undo.push(crate::HistoryEntry {
-        label: e.label,
-        doc: std::mem::replace(&mut st.doc, e.doc),
-        selection: std::mem::replace(&mut st.selection, e.selection),
-    });
+    let doc = std::mem::replace(&mut st.doc, e.doc);
+    let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
+    let selection = shared_selection(selection, st.history.undo.last());
+    st.history.undo.push(crate::HistoryEntry::kept(e.label, doc, selection, &st.doc));
+    st.history.trim();
     st.revision += 1;
     st.selection.prune(&st.doc);
     super::maskedit::follow_history(st, editing);
     Ok(json!({ "redone": label }))
+}
+
+/// `selection` for an undo (redo) step, sharing that of `like`, the step beside it, when the same.
+fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::HistoryEntry>) -> Arc<vectorcraft_doc::Selection> {
+    match like {
+        Some(l) if *l.selection == selection => l.selection.clone(),
+        _ => Arc::new(selection),
+    }
 }
 
 /// Selected top-level objects in paint order, dropping any whose ancestor is also selected.

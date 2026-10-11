@@ -543,8 +543,7 @@ impl Session {
         for st in &mut self.docs {
             if history_changed {
                 st.history.limit = self.prefs.history_states as usize;
-                let over = st.history.undo.len().saturating_sub(st.history.limit);
-                st.history.undo.drain(..over);
+                st.history.trim();
             }
             // Documents in pattern editing mode redraw their tile edge.
             if tile_edge_changed && st.doc.pattern_edit.is_some() {

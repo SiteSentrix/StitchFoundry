@@ -1198,6 +1198,7 @@ fn persp_draw(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(e) = st.history.undo.last_mut() {
             e.label = "Draw in Perspective".into();
         }
+        st.history.recost_last(&st.doc);
     }
     res?;
     Ok(json!({ "id": id.0, "plane": plane.id() }))
@@ -1268,7 +1269,9 @@ fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
 /// in every undo state (the flat view is never an undo step of its own).
 pub(crate) fn finish_edit_text(st: &mut crate::DocState, id: NodeId) {
     let clear = |doc: &mut Arc<Document>| {
-        if doc.node(id).and_then(|n| n.perspective.as_deref()).is_some_and(|p| p.editing)
+        // Undo steps keep no lookup cache: look without building one, and drop the one an edit
+        // builds (the document now keeps its own).
+        if doc.node_uncached(id).and_then(|n| n.perspective.as_deref()).is_some_and(|p| p.editing)
             && let Some(p) = Arc::make_mut(doc).node_mut(id).and_then(|n| n.perspective.as_deref_mut())
         {
             p.editing = false;
@@ -1281,6 +1284,7 @@ pub(crate) fn finish_edit_text(st: &mut crate::DocState, id: NodeId) {
     }
     for e in st.history.undo.iter_mut().chain(st.history.redo.iter_mut()) {
         clear(&mut e.doc);
+        e.doc.drop_lookup_cache();
     }
     if let Some(it) = &mut st.interaction {
         clear(&mut it.doc);

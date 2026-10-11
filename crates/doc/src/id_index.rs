@@ -93,6 +93,19 @@ impl IdIndex {
         self.0.read().ok().and_then(|g| g.clone())
     }
 
+    /// Let go of the cache (a document kept in the undo history): the next lookup builds it again.
+    pub(crate) fn clear(&self) {
+        if let Ok(mut g) = self.0.write() {
+            *g = None;
+        }
+        self.1.store(0, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether a cache was built (and not cleared since).
+    pub(crate) fn is_built(&self) -> bool {
+        self.0.read().is_ok_and(|g| g.is_some())
+    }
+
     /// Rebuild the cache from `layers` (one walk) and return it.
     pub(crate) fn rebuild(&self, layers: &[Arc<Node>]) -> Arc<Paths> {
         fn walk(nodes: &[Arc<Node>], parent: u32, out: &mut Paths) {

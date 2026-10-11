@@ -148,7 +148,7 @@ fn grid_continue(preselected: bool, snap_to_grid: bool) {
     assert_eq!(path_ids(&s), vec![id], "clicking the advertised endpoint must continue it, not create a snapped path");
     assert_eq!(node(&s, id), &original);
     assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
-    assert!(!s.journal[journal_start..].iter().any(|(command, _)| command == "path.create"));
+    assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
     let before_append = s.doc().unwrap().history.undo.len();
     gesture(&mut s, view, &[(200.0, 300.0)], Mods::default());
     assert_eq!(path_ids(&s), vec![id]);
@@ -328,7 +328,7 @@ fn snapped_only_continue(preselected: bool) {
         assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
         let expected = if first { [(200.0, 300.0), (100.0, 300.0)] } else { [(100.0, 300.0), (200.0, 300.0)] };
         assert_eq!(points(&s, id), expected, "continue from the snapped end: selected={preselected}, first={first}");
-        assert!(!s.journal[journal_start..].iter().any(|(command, _)| command == "path.create"));
+        assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
         assert!(!s.in_interaction() && !s.tool_busy());
         assert_eq!(s.doc().unwrap().history.undo.len(), before_continue + usize::from(first));
         let continued = node(&s, id).clone();
@@ -342,7 +342,7 @@ fn snapped_only_continue(preselected: bool) {
         assert_eq!(path_ids(&s), vec![id]);
         assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
         assert_eq!(points(&s, id), [expected[0], expected[1], next]);
-        assert!(!s.journal[journal_start..].iter().any(|(command, _)| command == "path.create"));
+        assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
         assert!(!s.in_interaction() && !s.tool_busy());
         assert_eq!(s.doc().unwrap().history.undo.len(), before_append + 1);
         let extended = node(&s, id).clone();
@@ -393,7 +393,7 @@ fn raw_unselected_endpoint_precedes_snapped_selected_endpoint() {
     assert_eq!(path_ids(&s), vec![selected, raw]);
     assert_eq!(node(&s, selected), &original_selected);
     assert_eq!(node(&s, raw), &original_raw);
-    assert!(!s.journal[journal_start..].iter().any(|(command, _)| command == "path.create"));
+    assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
     assert!(!s.in_interaction() && !s.tool_busy());
     assert_eq!(s.doc().unwrap().history.undo.len(), before_append);
 
@@ -402,7 +402,7 @@ fn raw_unselected_endpoint_precedes_snapped_selected_endpoint() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![raw]);
     assert_eq!(node(&s, selected), &original_selected);
     assert_eq!(points(&s, raw), [(13.0, 303.0), (63.0, 303.0), (200.0, 400.0)]);
-    assert!(!s.journal[journal_start..].iter().any(|(command, _)| command == "path.create"));
+    assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
     assert!(!s.in_interaction() && !s.tool_busy());
     assert_eq!(s.doc().unwrap().history.undo.len(), before_append + 1);
     let extended = node(&s, raw).clone();

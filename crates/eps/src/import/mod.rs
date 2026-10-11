@@ -250,7 +250,8 @@ fn finish_with(out: Out, layers: Vec<Arc<Node>>) -> Imported {
     let mut doc = out.doc;
     if out.cmyk > out.rgb {
         doc.color_mode = ColorMode::Cmyk;
-        (doc.swatches, doc.swatch_groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
     }
     for (name, color) in out.spots {
         if doc.swatch(&name).is_none() {

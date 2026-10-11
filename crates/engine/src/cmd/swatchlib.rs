@@ -606,7 +606,7 @@ fn reset_defaults(s: &mut Session, p: &Value) -> Result<Value> {
         let mut added = vec![];
         if replace {
             let before: Vec<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
-            (d.swatches, d.swatch_groups) = (defaults, groups);
+            (d.swatches, d.swatch_groups) = (defaults.into(), groups.into());
             added.extend(d.swatches_iter().filter(|w| !before.contains(&w.name)).map(|w| w.name.clone()));
             live.extend(d.swatches_iter().filter(|w| w.global).map(|w| w.name.clone()));
             d.map_solid_paints(&mut |_, l, _| unlink_dead(&live, l));
