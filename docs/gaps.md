@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -166,9 +166,10 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G15 Performance budgets and a GPU renderer
 
-- **Missing:** an idle-machine run of `vectorcraft-cli perf` (last: 2026-10-01 on a loaded machine, 290 ms for
-  a 50k-path fit against a 16 ms budget), fixes for any budget missed, dirty-region rendering, the GPU backend
-  spike (M5).
+- **Missing:** an idle-machine run of `vectorcraft-cli perf` at 50k paths (last: 2026-10-11 at 25k paths, every
+  budget met, 400% zoom 12.3 ms against 16 ms, measured), a spatial index for zoomed-in frames, dirty-region
+  rendering, the GPU backend spike (M5). Large-selection edits, cached live effects and Pathfinder Trim, Merge,
+  Crop and Outline landed in #1173.
 - **Estimate:** 15–25 h (the budget run and fixes block beta).
 
 ## G16 Localization: the five missing key languages
@@ -203,6 +204,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | G15: large-selection edits, cached live effects and faster Pathfinder (#1173); a 25k-path perf run meets every budget; estimate unchanged |
 | 2026-10-11 | minor | G4: Middle Eastern digit types done (Character panel menu › Digits); estimate unchanged |
 | 2026-10-11 | minor | G4: proportional vertical metrics (#966) done; estimate unchanged |
 | 2026-10-11 | minor | G11: #893 fixed (merged regions of crossing lines left seams); #937 still open, estimate unchanged |
