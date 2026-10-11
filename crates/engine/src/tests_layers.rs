@@ -108,6 +108,38 @@ fn new_art_is_refused_when_no_layer_is_shown_and_unlocked() {
     }
 }
 
+/// Send to Current Layer fails with the error that new art gets (#1002) when the current layer is
+/// hidden or locked, or is inside a hidden or locked layer: the objects stay where they were and stay
+/// selected, and no undo step is recorded. Once the layer is shown and unlocked again, the command
+/// moves them.
+#[test]
+fn send_to_current_layer_refuses_a_hidden_or_locked_current_layer() {
+    for prop in ["visible", "locked"] {
+        let mut s = session();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let a = rect(&mut s, 0.0);
+        let other = id(&run(&mut s, "layer.new", json!({})));
+        let sub = id(&run(&mut s, "layer.newSublayer", json!({})));
+        assert_eq!(parent(&s, sub), Some(other), "the sublayer is in the new layer");
+        run(&mut s, "layer.setProps", json!({"ids": [other.0], prop: prop == "locked"}));
+        run(&mut s, "select.set", json!({"ids": [a.0]}));
+        for current in [other, sub] {
+            // A click on the layer's row makes that layer current and keeps the selection.
+            run(&mut s, "layer.setCurrent", json!({"id": current.0}));
+            let (before, undo) = (s.doc().unwrap().doc.clone(), undos(&s));
+            let e = s.execute("object.arrange.sendToCurrentLayer", &json!({})).unwrap_err();
+            assert_eq!(e.to_string(), "the target layer is locked or hidden", "{prop} {current:?}");
+            assert_eq!(s.doc().unwrap().doc.layers, before.layers, "{prop} {current:?}: nothing moved");
+            assert_eq!(parent(&s, a), Some(layer), "{prop} {current:?}");
+            assert_eq!(undos(&s), undo, "{prop} {current:?}: no undo step");
+            assert_eq!(s.doc().unwrap().selection.objects, vec![a], "{prop} {current:?}");
+        }
+        run(&mut s, "layer.setProps", json!({"ids": [other.0], prop: prop != "locked"}));
+        run(&mut s, "object.arrange.sendToCurrentLayer", json!({}));
+        assert_eq!(parent(&s, a), Some(sub), "{prop}");
+    }
+}
+
 #[test]
 fn clicking_rows_at_any_depth_highlights_them_and_sets_the_current_layer() {
     let mut s = session();
