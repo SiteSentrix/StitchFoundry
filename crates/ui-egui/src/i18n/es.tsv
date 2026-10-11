@@ -4141,3 +4141,5 @@ lighting	Light	Luz
 @msg	invalid native panel set	Conjunto nativo de paneles no válido
 @msg	missing panel layout	Falta la distribución de paneles
 @msg	unsupported native docking operation	Operación nativa de anclaje no admitida
+	Linux Display Server	Servidor de pantalla de Linux
+	X11 (XWayland)	X11 (XWayland)

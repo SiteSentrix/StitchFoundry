@@ -564,6 +564,9 @@ pub struct Prefs {
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
     pub render_threads: i32,
+    /// Linux: `automatic` opens the window on the session's display server; `x11` opens it through
+    /// XWayland on a Wayland session, where dropped files arrive (#1151). Read when the app starts.
+    pub linux_display_server: String,
     // File Handling
     pub background_save: bool,
     pub background_export: bool,
@@ -769,6 +772,7 @@ impl Default for Prefs {
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,
+            linux_display_server: s("automatic"),
             background_save: true,
             background_export: true,
             autosave_recovery: true,

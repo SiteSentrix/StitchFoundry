@@ -4097,3 +4097,5 @@ theme	Appearance	Erscheinungsbild
 @msg	invalid native panel set	Ungültiger nativer Bedienfeldsatz
 @msg	missing panel layout	Bedienfeldanordnung fehlt
 @msg	unsupported native docking operation	Nicht unterstützte native Docking-Operation
+	Linux Display Server	Linux-Anzeigeserver
+	X11 (XWayland)	X11 (XWayland)
