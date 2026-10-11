@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Hide Others",
             ["Window", "Layers"],
             None,
-            "{ids?} hide every top-level layer but those holding the highlighted rows (else the current layer). One undo step → {count}",
+            "{ids?} hide every top-level layer but those holding the highlighted rows (else the current layer), which show. One undo step → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Visible, false)
         ),
@@ -96,7 +96,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Others",
             ["Window", "Layers"],
             None,
-            "{ids?} turn Preview off (outline view) for every top-level layer but those holding the highlighted rows (else the current layer) → {count}",
+            "{ids?} turn Preview off (outline view) for every top-level layer but those holding the highlighted rows (else the current layer), which preview → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Preview, false)
         ),
@@ -114,7 +114,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Lock Others",
             ["Window", "Layers"],
             None,
-            "{ids?} lock every top-level layer but those holding the highlighted rows (else the current layer) → {count}",
+            "{ids?} lock every top-level layer but those holding the highlighted rows (else the current layer), which unlock → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Locked, true)
         ),
@@ -176,23 +176,23 @@ impl Flag {
     }
 }
 
-/// Set `flag` to `v` on `ids` (layers that differ) in one undo step labelled `label` → how many
+/// Set `flag` on each of `changes` (id, value; layers that differ) in one undo step labelled `label` → how many
 /// changed.
-fn set_flag(s: &mut Session, ids: Vec<NodeId>, flag: Flag, v: bool, label: &str) -> Result<Value> {
+fn set_flag(s: &mut Session, changes: Vec<(NodeId, bool)>, flag: Flag, label: &str) -> Result<Value> {
     let d = &s.doc()?.doc;
-    let ids: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(|n| flag.get(n) != v)).collect();
-    if !ids.is_empty() {
+    let changes: Vec<(NodeId, bool)> = changes.into_iter().filter(|(id, v)| d.node(*id).is_some_and(|n| flag.get(n) != *v)).collect();
+    if !changes.is_empty() {
         s.edit(label, |d, sel| {
-            for id in &ids {
+            for (id, v) in &changes {
                 if let Some(n) = d.node_mut(*id) {
-                    flag.set(n, v);
+                    flag.set(n, *v);
                 }
             }
             sel.deselect_uneditable(d);
             Ok(())
         })?;
     }
-    Ok(json!({ "count": ids.len() }))
+    Ok(json!({ "count": changes.len() }))
 }
 
 /// The top-level layers holding the rows a command acts on.
@@ -202,20 +202,22 @@ fn kept_layers(s: &Session, p: &Value) -> Result<HashSet<NodeId>> {
     Ok(ids.iter().filter_map(|id| d.layer_of(*id)).collect())
 }
 
+/// Every top-level layer but the kept ones set to `v`, and the kept ones to the opposite: Alt-click
+/// on a hidden layer's eye shows just that layer (#1158).
 fn others(s: &mut Session, p: &Value, flag: Flag, v: bool) -> Result<Value> {
     let keep = kept_layers(s, p)?;
-    let ids: Vec<NodeId> = s.doc()?.doc.layers.iter().map(|l| l.id).filter(|l| !keep.contains(l)).collect();
-    set_flag(s, ids, flag, v, flag.label(v))
+    let changes = s.doc()?.doc.layers.iter().map(|l| (l.id, !keep.contains(&l.id) == v)).collect();
+    set_flag(s, changes, flag, flag.label(v))
 }
 
 fn all(s: &mut Session, flag: Flag, v: bool) -> Result<Value> {
     let mut ids = vec![];
     s.doc()?.doc.walk(|n| {
         if n.is_layer() {
-            ids.push(n.id);
+            ids.push((n.id, v));
         }
     });
-    set_flag(s, ids, flag, v, flag.label(v))
+    set_flag(s, ids, flag, flag.label(v))
 }
 
 fn template(s: &mut Session, p: &Value) -> Result<Value> {
