@@ -363,10 +363,10 @@ fn picas_in_use(d: &Dialog) -> bool {
 }
 
 fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
-    // Use the same outlined checkbox as the rest of the app. egui's default
-    // checkbox inherits an invisible resting border from the panel theme.
-    if widgets::check(ui, tl!(label), d.bool(key), ui.is_enabled()) {
-        d.fields.insert(key.into(), json!(!d.bool(key)));
+    // The app's outlined checkbox (it translates `label`): egui's own has no border at rest.
+    let on = d.bool(key);
+    if widgets::check(ui, label, on, ui.is_enabled()) {
+        d.fields.insert(key.into(), json!(!on));
     }
 }
 
@@ -396,10 +396,8 @@ mod tests {
             theme::apply(&ctx, brightness);
             for checked in [false, true] {
                 let mut d = Dialog::new("preferences", json!({"showToolTips": checked}));
-                let raw = egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 200.0))),
-                    ..Default::default()
-                };
+                let raw =
+                    egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 200.0))), ..Default::default() };
                 let mut out = ctx.run_ui(raw, |ui| bool_row(ui, &mut d, "showToolTips", "Show Tool Tips"));
                 out.textures_delta.clear();
                 let outlined = out.shapes.iter().any(|shape| match &shape.shape {
