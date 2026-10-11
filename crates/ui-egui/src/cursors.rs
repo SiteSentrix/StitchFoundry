@@ -257,8 +257,54 @@ fn shape_builder(p: &mut Ink, o: Pos2, erase: bool) {
     }
 }
 
+/// The Hand tool and Space: an open hand (palm and four fingers, thumb to the left), or the same
+/// hand closed while it drags the view. Windows has no system hand that isn't a pointing finger
+/// (winit maps egui's Grab and Grabbing to the four-headed move cursor), so it is drawn like the
+/// other tool cursors. Hotspot in the palm.
+fn hand(p: &mut Ink, o: Pos2, closed: bool) {
+    // Thumb out to the left, four fingers up from the palm (open) or folded over it (closed),
+    // then the palm, a rounded block below the hotspot, over their bases.
+    let mut parts = vec![vec![o + vec2(-7.0, 0.0), o + vec2(-13.0, -4.0), o + vec2(-14.0, -1.0), o + vec2(-9.0, 5.0)]];
+    for (i, x) in [-5.5f32, -1.75, 2.0, 5.75].into_iter().enumerate() {
+        let top = if closed {
+            -5.0
+        } else if i == 0 || i == 3 {
+            -11.0
+        } else {
+            -14.0
+        };
+        parts.push(vec![o + vec2(x - 1.5, 0.0), o + vec2(x - 1.5, top), o + vec2(x + 1.5, top), o + vec2(x + 1.5, 0.0)]);
+    }
+    parts.push(vec![o + vec2(-7.0, -2.0), o + vec2(7.25, -2.0), o + vec2(8.0, 6.0), o + vec2(4.0, 11.0), o + vec2(-5.0, 11.0), o + vec2(-9.0, 5.0)]);
+    // Every halo first, so no part's halo covers another's outline.
+    for part in &parts {
+        p.add(Shape::closed_line(part.clone(), Stroke::new(3.0, HALO)));
+    }
+    for part in parts {
+        p.add(Shape::convex_polygon(part.clone(), HALO, Stroke::NONE));
+        p.add(Shape::closed_line(part, Stroke::new(1.0, INK)));
+    }
+}
+
+/// The Zoom tool: a magnifier with a plus in the lens (Alt: a minus), the lens centred on the
+/// hotspot, the handle down to the right.
+fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
+    const R: f32 = 7.0;
+    p.circle_stroke(o, R, Stroke::new(3.0, HALO));
+    let d = vec2(R * 0.72, R * 0.72);
+    line(p, o + d, o + d + vec2(7.0, 7.0));
+    p.circle_filled(o, R, HALO);
+    p.circle_stroke(o, R, Stroke::new(1.2, INK));
+    // Inside the white lens, without halos: a halo would cut the plus's other bar.
+    let bar = Stroke::new(1.2, INK);
+    p.line_segment([o - vec2(3.5, 0.0), o + vec2(3.5, 0.0)], bar);
+    if !out {
+        p.line_segment([o - vec2(0.0, 3.5), o + vec2(0.0, 3.5)], bar);
+    }
+}
+
 /// The shapes of cursor `c` with its hotspot at `p`; `None` for cursors that stay system cursors
-/// (hand, zoom, busy states).
+/// (the busy states).
 fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
     let ink = &mut Ink::default();
     match c {
@@ -299,6 +345,10 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::TypeWidget => type_widget(ink, p),
         Cursor::ShapeBuilder => shape_builder(ink, p, false),
         Cursor::ShapeBuilderErase => shape_builder(ink, p, true),
+        Cursor::Hand => hand(ink, p, false),
+        Cursor::HandGrab => hand(ink, p, true),
+        Cursor::ZoomIn => magnifier(ink, p, false),
+        Cursor::ZoomOut => magnifier(ink, p, true),
         _ => return None,
     }
     Some(std::mem::take(&mut ink.0))
@@ -437,7 +487,11 @@ mod tests {
     use crate::VectorcraftApp;
 
     /// Every cursor with a glyph.
-    const GLYPHS: [Cursor; 34] = [
+    const GLYPHS: [Cursor; 38] = [
+        Cursor::Hand,
+        Cursor::HandGrab,
+        Cursor::ZoomIn,
+        Cursor::ZoomOut,
         Cursor::Arrow,
         Cursor::ArrowHollow,
         Cursor::Move,
@@ -492,9 +546,7 @@ mod tests {
                 assert!(img.rgba.as_chunks::<4>().0.iter().any(|p| p[3] == 255), "{c:?}: nothing opaque");
             }
         }
-        for c in [Cursor::Hand, Cursor::HandGrab, Cursor::ZoomIn, Cursor::ZoomOut, Cursor::NotAllowed] {
-            assert!(rasterize(c, 1.0).is_none(), "{c:?} stays a system cursor");
-        }
+        assert!(rasterize(Cursor::NotAllowed, 1.0).is_none(), "the busy states stay system cursors");
         for ppp in [0.0, -1.0, f32::NAN, f32::INFINITY, 1e9] {
             assert!(rasterize(Cursor::Arrow, ppp).is_none(), "{ppp}");
         }
@@ -529,7 +581,7 @@ mod tests {
         let b = images.get(Cursor::Pen, 1.5).unwrap();
         assert!(Arc::ptr_eq(&a.rgba, &b.rgba));
         assert!(!Arc::ptr_eq(&a.rgba, &images.get(Cursor::Pen, 2.0).unwrap().rgba));
-        assert!(images.get(Cursor::Hand, 1.5).is_none());
+        assert!(images.get(Cursor::NotAllowed, 1.5).is_none());
         assert!(images.get(Cursor::Arrow, f32::NAN).is_none());
         assert_eq!(images.0.len(), 2);
     }

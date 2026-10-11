@@ -442,14 +442,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let space = ui.input(|i| i.key_down(egui::Key::Space));
         let panning = matches!(ui.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Pan { .. }));
         let zooming = if space { m.command } else { app.session.tool_id() == "zoom" };
-        let cur = if panning {
-            egui::CursorIcon::Grabbing
+        // The hand and the magnifier are drawn like the tool cursors below: Windows has no
+        // system cursor for them (winit shows the four-headed move cursor for Grab).
+        let view_cursor = if panning {
+            Some(Cursor::HandGrab)
         } else if zooming {
-            if m.alt { egui::CursorIcon::ZoomOut } else { egui::CursorIcon::ZoomIn }
+            Some(if m.alt { Cursor::ZoomOut } else { Cursor::ZoomIn })
         } else if space || app.session.tool_id() == "hand" {
-            egui::CursorIcon::Grab
-        } else if let Some(p) = app.hover_doc {
-            let c = app.session.cursor(p, mods(m, space), view_info);
+            Some(Cursor::Hand)
+        } else {
+            None
+        };
+        let cur = if let Some(c) = view_cursor.or_else(|| app.hover_doc.map(|p| app.session.cursor(p, mods(m, space), view_info))) {
             let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("tool-cursor")));
             // The loaded place cursor carries the file's thumbnail.
             if app.session.tool_id() == "place"
