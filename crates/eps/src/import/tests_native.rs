@@ -237,6 +237,49 @@ fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
     assert!(w.iter().any(|w| w.contains("different page")), "{w:?}");
 }
 
+/// A `.ai` whose layers can't be read comes in as its PDF part, a page per artboard in a row; its
+/// pages still go where its editing data puts its artboards, with their art (#1068).
+#[test]
+fn an_ai_file_read_as_its_pdf_part_keeps_its_artboard_layout() {
+    // Two 100-point artboards, the second below the first (art space, y up).
+    let board = |x0: i32, y0: i32| {
+        format!(
+            "%_/Dictionary :\n%_{x0} {} /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} {y0} /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            y0 + 100,
+            x0 + 100
+        )
+    };
+    let boards = |list: &[(i32, i32)]| {
+        let all: String = list.iter().map(|(x, y)| board(*x, *y)).collect();
+        format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{all}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n")
+    };
+    // An operator this doesn't know, so the layers aren't read.
+    let unread = |list: &[(i32, i32)]| native(&(boards(list) + &layer("Art", true, &(square(10, 10) + "\n1 Zz"))));
+    // The PDF part: the pages side by side, 20 points apart, a square on each.
+    let mut pdf = pdf_part(10.0, 10.0);
+    let second = pdf_part(130.0, 10.0).layers[0].children().unwrap()[0].clone();
+    let mut second = (*second).clone();
+    second.id = pdf.alloc_id();
+    let layer_id = pdf.layers[0].id;
+    pdf.insert(Some(layer_id), 1, second).unwrap();
+    let mut page = pdf.artboards[0].clone();
+    (page.id, page.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(page);
+    let squares = |d: &Document| d.layers[0].children().unwrap().iter().map(|n| n.visual_bounds().unwrap().origin()).collect::<Vec<_>>();
+    let (d, w) = crate::layered_ai(&private(&unread(&[(0, 0), (0, -150)])), pdf.clone(), vec![], false);
+    assert!(w.iter().any(|w| w.contains("layers weren't read")), "{w:?}");
+    let rects: Vec<_> = d.artboards.iter().map(|a| a.rect).collect();
+    assert_eq!(rects, [vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0), vectorcraft_geom::Rect::new(0.0, 150.0, 100.0, 250.0)]);
+    let moved = squares(&d);
+    assert!((moved[0] - squares(&pdf)[0]).hypot() < 1e-6, "the first page's art stays: {moved:?}");
+    assert!((moved[1] - vectorcraft_geom::Point::new(10.0, 160.0)).hypot() < 1e-6, "the second's goes with its page: {moved:?}");
+    // Artboards that don't match the pages leave them in a row.
+    for list in [&[(0, 0)][..], &[(0, 0), (0, -150), (200, 0)]] {
+        let (d, _) = crate::layered_ai(&private(&unread(list)), pdf.clone(), vec![], false);
+        assert_eq!(d.artboards[1].rect, pdf.artboards[1].rect, "{list:?}");
+    }
+}
+
 #[test]
 fn a_gray_is_a_grayscale_colour() {
     // `g` is a gray: 0.25 is 75 % of the black ink, as the page's own CMYK black says; the colour

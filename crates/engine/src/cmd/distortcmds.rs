@@ -323,11 +323,13 @@ fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
 fn width_point_remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.remove";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let mut indices: Vec<usize> = match (p.get("indices").and_then(Value::as_array), p.get("index").and_then(Value::as_u64)) {
-        (Some(a), _) => a.iter().filter_map(Value::as_u64).map(|i| i as usize).collect(),
-        (None, Some(i)) => vec![i as usize],
+    let indices = match (p.get("indices"), p.get("index")) {
+        (Some(a), _) => point_indices(a),
+        (None, Some(i)) => point_indices(&json!([i])),
         (None, None) => return Err(bad(C, "missing index")),
     };
+    // A malformed index fails the whole delete instead of being dropped while the others go.
+    let mut indices = indices.ok_or_else(|| bad(C, "no such width point"))?;
     indices.sort_unstable();
     indices.dedup();
     s.edit("Delete Width Point", |d, _| {

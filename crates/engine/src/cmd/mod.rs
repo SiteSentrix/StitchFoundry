@@ -340,6 +340,12 @@ pub(crate) fn finite_numbers<const N: usize>(v: &Value) -> Option<[f64; N]> {
     Some(out)
 }
 
+/// `v` as a list of point indices: `None` unless it is an array of non-negative integers, so no
+/// malformed index is dropped or wrapped round.
+pub(crate) fn point_indices(v: &Value) -> Option<Vec<usize>> {
+    v.as_array()?.iter().map(|i| usize::try_from(i.as_u64()?).ok()).collect()
+}
+
 pub(crate) fn point_param(p: &Value, key: &str) -> Option<Point> {
     let a = p.get(key)?.as_array()?;
     Some(Point::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?))

@@ -55,6 +55,7 @@ fn harness(app: VectorcraftApp, size: egui::Vec2) -> Harness<'static, Vectorcraf
         move |ui, app: &mut VectorcraftApp| {
             if !ready {
                 crate::theme::install_fonts(ui.ctx());
+                egui_extras::install_image_loaders(ui.ctx());
                 crate::theme::apply(ui.ctx(), crate::theme::Brightness::MediumDark);
                 ready = true;
                 return;
