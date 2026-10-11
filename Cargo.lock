@@ -4504,6 +4504,8 @@ dependencies = [
  "vectorcraft-engine",
  "vectorcraft-text",
  "vectorcraft-ui-egui",
+ "wayland-client",
+ "wayland-protocols",
  "webbrowser",
  "windows",
  "winit",
