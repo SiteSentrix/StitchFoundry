@@ -3471,9 +3471,11 @@ theme	Appearance	外観
 @msg	`at` must be [x, y]	`at` は [x, y] の形式で指定してください
 @msg	`color` must be a colour	`color` にはカラーを指定してください
 @msg	`freeform.points` must be an array	`freeform.points` には配列を指定してください
+@msg	`freeform.lines` must be an array	`freeform.lines` には配列を指定してください
 @msg	`{key}` must be a number	`{key}` には数値を指定してください
 @msg	a freeform gradient keeps at least one point	フリーフォームグラデーションには少なくとも 1 つのポイントが必要です
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	フリーフォームのポイント {i} には `at` [x, y] と有効な `color` が必要です
+@msg	freeform line {i} must be an array of point indices	フリーフォームのライン {i} にはポイントのインデックスの配列を指定してください
 @msg	no point {i} (the gradient has {_1})	ポイント {i} はありません (このグラデーションのポイントは {_1} 個です)
 @msg	no segment {segment} on line {line}	ライン {line} にセグメント {segment} はありません
 @msg	unknown freeform mode `{m}` (points, lines)	`{m}` は不明なフリーフォームのモードです (points、lines)

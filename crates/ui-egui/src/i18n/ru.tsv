@@ -3418,6 +3418,7 @@ axis	Both	Оба
 @msg	`color` must be a colour	`color` должно быть цветом
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` должно быть командой, пункт меню которой открывает диалоговое окно (см. ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` должно быть массивом
+@msg	`freeform.lines` must be an array	`freeform.lines` должно быть массивом
 @msg	`gradient` must be an object	`gradient` должно быть объектом
 @msg	`library` is a library id or name (see {list})	`library` — это идентификатор или имя библиотеки (см. {list})
 @msg	`mode` applies to freeform gradients	`mode` применяется к произвольным градиентам
@@ -3519,6 +3520,7 @@ axis	Both	Оба
 @msg	empty path	пустой контур
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	версия файла {0} новее, чем поддерживает этот VectorCraft ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	произвольной точке {i} нужны `at` [x, y] и допустимый `color`
+@msg	freeform line {i} must be an array of point indices	произвольная линия {i} должна быть массивом индексов точек
 @msg	give both `start` and `end` [x, y] (or neither)	укажите и `start`, и `end` [x, y] (или ни одного)
 @msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
 @msg	give the path `id` and the width point `index`	укажите `id` контура и `index` точки ширины

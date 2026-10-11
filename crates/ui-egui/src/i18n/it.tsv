@@ -3422,6 +3422,7 @@ axis	Both	Entrambi
 @msg	`color` must be a colour	`color` deve essere un colore
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` deve essere un comando la cui voce di menu apre una finestra di dialogo (vedi ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` deve essere un array
+@msg	`freeform.lines` must be an array	`freeform.lines` deve essere un array
 @msg	`gradient` must be an object	`gradient` deve essere un oggetto
 @msg	`library` is a library id or name (see {list})	`library` è l'id o il nome di una libreria (vedi {list})
 @msg	`mode` applies to freeform gradients	`mode` si applica alle sfumature a forma libera
@@ -3523,6 +3524,7 @@ axis	Both	Entrambi
 @msg	empty path	tracciato vuoto
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	la versione del file {0} è più recente di quelle supportate da questo VectorCraft ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	il punto a forma libera {i} richiede `at` [x, y] e un `color` valido
+@msg	freeform line {i} must be an array of point indices	la linea a forma libera {i} deve essere un array di indici di punti
 @msg	give both `start` and `end` [x, y] (or neither)	specifica sia `start` sia `end` [x, y] (o nessuno dei due)
 @msg	give corners of the path: anchors between two straight sides	specifica angoli del tracciato: punti di ancoraggio tra due lati diritti
 @msg	give the path `id` and the width point `index`	specifica l'`id` del tracciato e l'`index` del punto di larghezza

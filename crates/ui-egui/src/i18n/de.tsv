@@ -3321,6 +3321,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`color` must be a colour	`color` muss eine Farbe sein
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` muss ein Befehl sein, dessen Menüeintrag ein Dialogfeld öffnet (siehe ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` muss ein Array sein
+@msg	`freeform.lines` must be an array	`freeform.lines` muss ein Array sein
 @msg	`gradient` must be an object	`gradient` muss ein Objekt sein
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
@@ -3422,6 +3423,7 @@ theme	Appearance	Erscheinungsbild
 @msg	empty path	leerer Pfad
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	die Dateiversion {0} ist neuer, als dieses VectorCraft unterstützt ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	Freiformpunkt {i} braucht `at` [x, y] und eine gültige `color`
+@msg	freeform line {i} must be an array of point indices	Freiformlinie {i} muss ein Array von Punktindizes sein
 @msg	give both `start` and `end` [x, y] (or neither)	geben Sie sowohl `start` als auch `end` [x, y] an (oder keines von beiden)
 @msg	give corners of the path: anchors between two straight sides	geben Sie Ecken des Pfads an: Ankerpunkte zwischen zwei geraden Seiten
 @msg	give the path `id` and the width point `index`	geben Sie die `id` des Pfads und den `index` des Breitenpunkts an
