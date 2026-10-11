@@ -3854,6 +3854,7 @@ theme	Appearance	Erscheinungsbild
 	ICF Bottom/Left	ICF unten/links
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` muss ein Array von Ankerpunkt-Indizes sein, nicht {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: Das Ergebnis von Schritt {i} hat keinen solchen Wert (schreiben Sie $$ für ein literales $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: Vor diesem Schritt gibt es keinen Schritt {i} (Schritte zählen ab 0; schreiben Sie $$ für ein literales $)
 @msg	object ids are non-negative integers, not {v}	Objekt-IDs sind nicht negative ganze Zahlen, nicht {v}
