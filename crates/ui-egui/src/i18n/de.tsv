@@ -2583,6 +2583,8 @@
 	Size Tile to Art	Kachelgröße an Grafik anpassen
 	Size/Leading	Größe/Zeilenabstand
 	Size:	Größe:
+	Ridges per segment:	Zacken pro Segment:
+effect	Points	Punkte
 	Size: {size}  Tracking: {tracking}	Größe: {size}  Laufweite: {tracking}
 	Skew	Neigen
 	Skin Tone Ramps	Hauttonskalen

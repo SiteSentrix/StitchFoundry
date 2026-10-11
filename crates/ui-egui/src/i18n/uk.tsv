@@ -2626,6 +2626,8 @@
 	Size Tile to Art	Підігнати плитку за малюнком
 	Size/Leading	Розмір/інтерліньяж
 	Size:	Розмір:
+	Ridges per segment:	Гребенів на сегмент:
+effect	Points	Точки
 	Size: {size}  Tracking: {tracking}	Розмір: {size} Трекінг: {tracking}
 	Skew	Скіс
 	Skin Tone Ramps	Шкали тонів шкіри

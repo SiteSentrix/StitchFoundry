@@ -540,3 +540,18 @@ fn artboard_options_position_moves_art_only_with_the_tool_option_on() {
         assert_eq!(*app.session.doc().unwrap().doc, *before);
     }
 }
+
+/// Zig Zag's dialog has Size and Ridges per segment sliders, and Relative / Absolute and Smooth /
+/// Corner as radio buttons, not dropdowns (#1133).
+#[test]
+fn zig_zag_has_sliders_and_radio_buttons() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.zigZag"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Size:", "Relative", "Absolute", "Ridges per segment:", "Points", "Smooth", "Corner"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    assert!(!lines.contains(&"Ridges:"), "{lines:?}");
+}

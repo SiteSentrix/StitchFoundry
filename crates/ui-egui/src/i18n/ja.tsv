@@ -2456,6 +2456,7 @@
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
 	Size/Leading	サイズ/行送り
 	Size:	サイズ:
+	Ridges per segment:	セグメントごとの山数:
 	Size: {size}  Tracking: {tracking}	サイズ：{size}  トラッキング：{tracking}
 	Skip Blank Artboards	空白のアートボードをスキップ
 	Slice Options	スライスオプション
