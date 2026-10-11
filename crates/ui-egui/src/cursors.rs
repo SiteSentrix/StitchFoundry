@@ -262,13 +262,10 @@ fn shape_builder(p: &mut Ink, o: Pos2, erase: bool) {
 /// (winit maps egui's Grab and Grabbing to the four-headed move cursor), so it is drawn like the
 /// other tool cursors. Hotspot in the palm.
 fn hand(p: &mut Ink, o: Pos2, closed: bool) {
-    // Palm: a rounded block below the hotspot.
-    let palm = vec![o + vec2(-7.0, -2.0), o + vec2(7.0, -2.0), o + vec2(8.0, 6.0), o + vec2(4.0, 11.0), o + vec2(-5.0, 11.0), o + vec2(-9.0, 5.0)];
-    poly(p, palm, HALO, INK);
-    // Thumb, out to the left.
-    poly(p, vec![o + vec2(-7.0, 0.0), o + vec2(-13.0, -4.0), o + vec2(-14.0, -1.0), o + vec2(-9.0, 5.0)], HALO, INK);
-    // Four fingers: up from the palm (open), or folded over it (closed).
-    for (i, x) in [-5.5f32, -1.5, 2.5, 6.0].into_iter().enumerate() {
+    // Thumb out to the left, four fingers up from the palm (open) or folded over it (closed),
+    // then the palm, a rounded block below the hotspot, over their bases.
+    let mut parts = vec![vec![o + vec2(-7.0, 0.0), o + vec2(-13.0, -4.0), o + vec2(-14.0, -1.0), o + vec2(-9.0, 5.0)]];
+    for (i, x) in [-5.5f32, -1.75, 2.0, 5.75].into_iter().enumerate() {
         let top = if closed {
             -5.0
         } else if i == 0 || i == 3 {
@@ -276,7 +273,16 @@ fn hand(p: &mut Ink, o: Pos2, closed: bool) {
         } else {
             -14.0
         };
-        poly(p, vec![o + vec2(x - 1.8, -2.0), o + vec2(x - 1.8, top), o + vec2(x + 1.8, top), o + vec2(x + 1.8, -2.0)], HALO, INK);
+        parts.push(vec![o + vec2(x - 1.5, 0.0), o + vec2(x - 1.5, top), o + vec2(x + 1.5, top), o + vec2(x + 1.5, 0.0)]);
+    }
+    parts.push(vec![o + vec2(-7.0, -2.0), o + vec2(7.25, -2.0), o + vec2(8.0, 6.0), o + vec2(4.0, 11.0), o + vec2(-5.0, 11.0), o + vec2(-9.0, 5.0)]);
+    // Every halo first, so no part's halo covers another's outline.
+    for part in &parts {
+        p.add(Shape::closed_line(part.clone(), Stroke::new(3.0, HALO)));
+    }
+    for part in parts {
+        p.add(Shape::convex_polygon(part.clone(), HALO, Stroke::NONE));
+        p.add(Shape::closed_line(part, Stroke::new(1.0, INK)));
     }
 }
 
@@ -289,9 +295,11 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
     line(p, o + d, o + d + vec2(7.0, 7.0));
     p.circle_filled(o, R, HALO);
     p.circle_stroke(o, R, Stroke::new(1.2, INK));
-    line(p, o - vec2(3.5, 0.0), o + vec2(3.5, 0.0));
+    // Inside the white lens, without halos: a halo would cut the plus's other bar.
+    let bar = Stroke::new(1.2, INK);
+    p.line_segment([o - vec2(3.5, 0.0), o + vec2(3.5, 0.0)], bar);
     if !out {
-        line(p, o - vec2(0.0, 3.5), o + vec2(0.0, 3.5));
+        p.line_segment([o - vec2(0.0, 3.5), o + vec2(0.0, 3.5)], bar);
     }
 }
 
