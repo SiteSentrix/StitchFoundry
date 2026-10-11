@@ -655,6 +655,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        // Proportional Metrics: full-width glyphs on the font's proportional widths (`palt`).
+        let proportional = s.as_ref().is_some_and(|s| s.proportional_metrics);
+        if menu_item(ui, tl!("Proportional Metrics"), has, proportional) {
+            format(app, json!({"proportionalMetrics": !proportional}));
+        }
         ui.separator();
     }
     for l in ["Standard Vertical Roman Alignment", "Tate-chu-yoko", "Fractional Widths", "System Layout", "No Break"] {
@@ -784,17 +789,20 @@ mod tests {
         assert!(!crate::menus::enabled(&app, "type.bold"));
     }
 
-    /// Character Alignment is in the panel menu with the East Asian options only (as Mojikumi Set
-    /// and Top-to-Top Leading are in the Paragraph panel).
+    /// Character Alignment and Proportional Metrics are in the panel menu with the East Asian
+    /// options only (as Mojikumi Set and Top-to-Top Leading are in the Paragraph panel).
     #[test]
     fn character_alignment_shows_with_the_east_asian_options() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
         let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "雅楽"})).unwrap()["id"].clone();
         app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
-        let shown = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, menu).contains("Character Alignment");
-        assert!(!shown(&mut app));
+        let shown = |app: &mut VectorcraftApp| {
+            let text = crate::tests_labels::painted_text(app, menu);
+            (text.contains("Character Alignment"), text.contains("Proportional Metrics"))
+        };
+        assert_eq!(shown(&mut app), (false, false));
         app.session.prefs.show_east_asian_options = true;
-        assert!(shown(&mut app));
+        assert_eq!(shown(&mut app), (true, true));
     }
 }

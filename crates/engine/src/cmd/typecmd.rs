@@ -859,6 +859,34 @@ mod area_tests {
         }
     }
 
+    /// Proportional Metrics (#966): a character attribute, saved only when on.
+    #[test]
+    fn proportional_metrics_is_a_character_attribute_saved_only_when_on() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "雅楽"})).unwrap()["id"].as_u64().unwrap();
+        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.runs.clone(),
+            _ => panic!("text"),
+        };
+        assert!(!runs(&s)[0].style.proportional_metrics);
+        assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("proportionalMetrics").is_none());
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        s.execute("text.setFormat", &json!({"proportionalMetrics": true})).unwrap();
+        assert!(runs(&s).iter().all(|r| r.style.proportional_metrics));
+        assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["proportionalMetrics"], true);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(!runs(&s)[0].style.proportional_metrics);
+        // Characters selected with the Type tool: only the range takes it (雅 is 3 bytes).
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "proportionalMetrics": true})).unwrap();
+        let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.proportional_metrics)).collect();
+        assert_eq!(on, [("雅".to_string(), false), ("楽".to_string(), true)]);
+        // Styles written without it (documents from before it) read as off.
+        let old = serde_json::to_value(&runs(&s)[0].style).unwrap();
+        assert!(old.get("proportionalMetrics").is_none());
+        assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().proportional_metrics);
+    }
+
     #[test]
     fn new_type_is_composed_with_line_end_half_width_punctuation() {
         use vectorcraft_doc::Mojikumi;
