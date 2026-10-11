@@ -150,7 +150,7 @@ Embroidery adds:
 ## 4. Architecture
 
 ```
-            apps/vectorcraft (desktop)   apps/vectorcraft-web (wasm)   vectorcraft-cli (MCP, batch)
+            apps/vectorcraft (desktop)   apps/vectorcraft-web (wasm)   stitchfoundry-cli (MCP, batch)
                                  \               |                /
 L6  vectorcraft-ui-egui   embroidery/{overlay,panel,sequence,widget}.rs, menus, toolbar
 L5  vectorcraft-engine    cmd/embroidery.rs (embroidery.* commands), fileio (open/place machine files)
@@ -696,7 +696,7 @@ and target dir each) calendar time drops by roughly half.
 | **4. Multi-decoration** | Sequins (SQN-*), beads (BD-01), bling (BL-01), appliqué completion (AP-02…05), cording/boring (MD-02, MD-03), virtual decoration (MD-01), chenille-type patterns (SP-11), multi-decoration outputs (MDO-01) | 5–7 |
 | **5. Auto and photo digitizing** | AD-03, AD-04, BM-02, BM-03, PH-01…03, SE-06 | 3–5 |
 | **6. Production and management** | Colorways and visualizer (CW-*); worksheets, barcodes, images (RP-*); batch output (OUT-02); cost (OUT-05); hooping and multi-hooping (HO-*, MH-*); more formats (MF-04, MFL-02); hot folders (OUT-03); design library (DM-*); templates and clipart; kiosk (KI-01); background exports | 6–8 |
-| **R. Release readiness** | Rebrand done 2026-10-11: StitchFoundry by SiteSentrix, an original icon, app id `com.sitesentrix.stitchfoundry`, its own preferences folder (reads VectorCraft's once), the ArtCraft name, logos and links removed, presets and profiles renamed with their old names still accepted; the repository is public at github.com/SiteSentrix/StitchFoundry, and CI (`.github/workflows/ci.yml`) runs `cargo xtask ci` on every push to main and every pull request; the Brother and Janome thread palettes are credited to pyembroidery (MIT) in `NOTICE`. Left: binary and package names (`vectorcraft` → `stitchfoundry`, so both apps install side by side), the native file extension and macOS document type, release artifact names; VectorCraft's packaging and platform workflows, which only run in its repository; the maintainer address in the Linux packages; signed installers; website and download page; a community space | 2–3, plus the owner's Apple and Windows developer accounts |
+| **R. Release readiness** | Rebrand done 2026-10-11: StitchFoundry by SiteSentrix, an original icon, app id `com.sitesentrix.stitchfoundry`, its own preferences folder (reads VectorCraft's once), the ArtCraft name, logos and links removed, presets and profiles renamed with their old names still accepted; the repository is public at github.com/SiteSentrix/StitchFoundry, and CI (`.github/workflows/ci.yml`) runs `cargo xtask ci` on every push to main and every pull request; the Brother and Janome thread palettes are credited to pyembroidery (MIT) in `NOTICE`. The programs are `stitchfoundry` and `stitchfoundry-cli`, and the packages, installers and release files are named `stitchfoundry` too, so both apps install side by side (the Cargo packages keep VectorCraft's names). Left: the native file extension and macOS document type; the web build's file names; VectorCraft's packaging and platform workflows, which only run in its repository; the maintainer address in the Linux packages; signed installers; website and download page; a community space | 2–3, plus the owner's Apple and Windows developer accounts |
 | **A. AI service** | The cloud AI features ([§11](#11-open-source-and-ai-features)): accounts, credits and billing behind a small cloud backend; text to embroidery (NEW-10) first, then image or logo to embroidery (NEW-11, pulling in AD-03 and AD-04), the assistant panel (NEW-07) and product mockups (NEW-12); bring-your-own-key for every AI feature | 8–12, plus the owner's payment, AI provider and hosting accounts |
 | **7. Hardening and extras** | Real-machine tuning from sew-outs, performance at 100k+ stitches, web app embroidery pass, translation review, chenille machines and cross-stitch designer (CH-01, CH-03), assistant panel (NEW-07), Ink/Stitch-inspired extras (BEY-05) | 5–10, spread over the calendar |
 
@@ -768,7 +768,8 @@ appliqué, satin-heavy badge, large fill) as `.vectorcraft` files in `crates/eng
    schedule, worksheets, costing; phase 6's production items move there), connected by
    **StitchHub** (a working name: "StitchHub" is taken by a cross-stitch app with its own .hub
    format). Check the domains and run trademark searches before launch. Phase R has rebranded the
-   app; internal names (crates `sf-*`, `vectorcraft-*`, the `vectorcraft` binary) stay for now.
+   app and its programs (`stitchfoundry`, `stitchfoundry-cli`); internal names (crates `sf-*` and
+   `vectorcraft-*`, the Cargo packages `vectorcraft` and `vectorcraft-cli`) stay.
 3. **Open source — decided 2026-10-11:** StitchFoundry is free and open source, everything in it;
    cloud AI features are planned on optional credits, and work free with your own AI keys; see
    [§11](#11-open-source-and-ai-features).
@@ -827,7 +828,7 @@ Decided by the owner on 2026-10-11: StitchFoundry is free and open source, and s
 import json, os, socket, subprocess, time
 env = dict(os.environ, DISPLAY=":99", VECTORCRAFT_NO_PREFS="1", VECTORCRAFT_SYNC_RENDER="1", WGPU_BACKEND="vulkan")
 subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1600x1000x24"]); time.sleep(1.5)
-app = subprocess.Popen(["target/debug/vectorcraft", "--control", "7979"], env=env)
+app = subprocess.Popen(["target/debug/stitchfoundry", "--control", "7979"], env=env)
 for _ in range(240):
     try: s = socket.create_connection(("127.0.0.1", 7979)); break
     except OSError: time.sleep(0.5)

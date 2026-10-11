@@ -4,8 +4,8 @@
 
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):
-    vectorcraft-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
-    vectorcraft-<version>-windows-<arch>-portable.zip   vectorcraft.exe + vectorcraft-cli.exe
+    stitchfoundry-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
+    stitchfoundry-<version>-windows-<arch>-portable.zip   stitchfoundry.exe + stitchfoundry-cli.exe
 
   The binaries link the C runtime statically (+crt-static), so neither the MSI nor the portable
   zip needs the Visual C++ redistributable. Signing is delegated to sign.ps1 (skipped with a
@@ -78,7 +78,7 @@ function Get-PeHeader([string] $Path) {
   return @{ Machine = [BitConverter]::ToUInt16($bytes, $pe + 4); Subsystem = [BitConverter]::ToUInt16($bytes, $pe + 0x5C) }
 }
 $Machine = switch ($Arch) { 'x64' { 0x8664 } 'x86' { 0x14C } 'arm64' { 0xAA64 } }
-foreach ($check in @(@('vectorcraft.exe', 2), @('vectorcraft-cli.exe', 3))) {
+foreach ($check in @(@('stitchfoundry.exe', 2), @('stitchfoundry-cli.exe', 3))) {
   $h = Get-PeHeader (Join-Path $Bin $check[0])
   if ($h.Machine -ne $Machine) { throw "$($check[0]) is for machine 0x$('{0:X}' -f $h.Machine), expected 0x$('{0:X}' -f $Machine) ($Arch)" }
   if ($h.Subsystem -ne $check[1]) { throw "$($check[0]) has PE subsystem $($h.Subsystem), expected $($check[1])" }
@@ -87,9 +87,9 @@ foreach ($check in @(@('vectorcraft.exe', 2), @('vectorcraft-cli.exe', 3))) {
 $Stage = Join-Path $TargetDir "windows-package\$Arch"
 Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Stage | Out-Null
-Copy-Item (Join-Path $Bin 'vectorcraft.exe'), (Join-Path $Bin 'vectorcraft-cli.exe') $Stage
+Copy-Item (Join-Path $Bin 'stitchfoundry.exe'), (Join-Path $Bin 'stitchfoundry-cli.exe') $Stage
 
-& (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'vectorcraft.exe') (Join-Path $Stage 'vectorcraft-cli.exe')
+& (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'stitchfoundry.exe') (Join-Path $Stage 'stitchfoundry-cli.exe')
 
 # ---- MSI ---------------------------------------------------------------------------------------
 # The setup wizard's art, drawn here from the app icon so the MSI shows StitchFoundry rather than
@@ -129,7 +129,7 @@ $Banner = Join-Path $Stage 'installer-banner.bmp'
 $Dialog = Join-Path $Stage 'installer-dialog.bmp'
 New-InstallerArt (Join-Path $Root 'assets\app-icon\hicolor\256x256\apps\com.sitesentrix.stitchfoundry.png') $Banner $Dialog
 
-$Msi = Join-Path $Dist "vectorcraft-$Version-windows-$Arch.msi"
+$Msi = Join-Path $Dist "stitchfoundry-$Version-windows-$Arch.msi"
 Invoke-Native 'wix build' {
   wix build (Join-Path $PSScriptRoot 'vectorcraft.wxs') -arch $Arch `
     -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext `
@@ -143,7 +143,7 @@ Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Ms
 & (Join-Path $PSScriptRoot 'sign.ps1') $Msi
 
 # ---- portable zip ------------------------------------------------------------------------------
-$Portable = Join-Path $TargetDir "windows-package\vectorcraft-$Version-windows-$Arch-portable"
+$Portable = Join-Path $TargetDir "windows-package\stitchfoundry-$Version-windows-$Arch-portable"
 Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable
@@ -157,7 +157,7 @@ if ($env:CRAFT_FONTS_DIR) {
     Copy-Item $ofl.FullName (Join-Path $Portable "OFL-$($ofl.Directory.Name).txt")
   }
 }
-$Zip = Join-Path $Dist "vectorcraft-$Version-windows-$Arch-portable.zip"
+$Zip = Join-Path $Dist "stitchfoundry-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip
 
@@ -165,8 +165,8 @@ Compress-Archive -Path $Portable -DestinationPath $Zip
 # here; .github/workflows/windows-arm64.yml installs and runs it on ARM64 instead.
 $HostArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
 if ($Arch -ne 'arm64' -or $HostArch -eq 'arm64') {
-  Invoke-Native 'vectorcraft-cli --version' { & (Join-Path $Stage 'vectorcraft-cli.exe') --version }
+  Invoke-Native 'stitchfoundry-cli --version' { & (Join-Path $Stage 'stitchfoundry-cli.exe') --version }
 } else {
-  Write-Output "skipping vectorcraft-cli --version: an $Arch build doesn't run on this $HostArch machine"
+  Write-Output "skipping stitchfoundry-cli --version: an $Arch build doesn't run on this $HostArch machine"
 }
 Get-Item $Msi, $Zip | Format-Table Name, Length

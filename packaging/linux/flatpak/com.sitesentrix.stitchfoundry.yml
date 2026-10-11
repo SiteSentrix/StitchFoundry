@@ -15,7 +15,7 @@ runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
-command: vectorcraft
+command: stitchfoundry
 finish-args:
   # Keep identical to com.sitesentrix.stitchfoundry.bundle.yml (the release bundle); comments there.
   - --share=ipc
@@ -37,7 +37,7 @@ modules:
         CARGO_NET_OFFLINE: 'true'
     build-commands:
       - cargo --offline build --release --locked -p vectorcraft
-      - install -Dm755 target/release/vectorcraft /app/bin/vectorcraft
+      - install -Dm755 target/release/stitchfoundry /app/bin/stitchfoundry
       - install -Dm644 packaging/linux/com.sitesentrix.stitchfoundry.desktop /app/share/applications/com.sitesentrix.stitchfoundry.desktop
       - install -Dm644 packaging/linux/com.sitesentrix.stitchfoundry.mime.xml /app/share/mime/packages/com.sitesentrix.stitchfoundry.xml
       - mkdir -p /app/share/icons && cp -R assets/app-icon/hicolor /app/share/icons/

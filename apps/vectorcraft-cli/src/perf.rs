@@ -1,4 +1,4 @@
-//! `vectorcraft-cli perf`: the performance budgets (plan §4) measured on a synthetic document.
+//! `stitchfoundry-cli perf`: the performance budgets (plan §4) measured on a synthetic document.
 //!
 //! Each row is the median of several runs. Timings are wall-clock: on a busy machine (load
 //! average above the core count) they are noise, and the report says so.

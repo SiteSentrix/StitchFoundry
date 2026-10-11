@@ -68,7 +68,7 @@ too.
 Rust 1.97 or newer.
 
 ```sh
-cargo run --release -p vectorcraft                          # the app (its binary is still named vectorcraft)
+cargo run --release -p vectorcraft                          # the app (the program is stitchfoundry)
 cargo run --release -p vectorcraft -- --control 7979        # + JSON control channel
 cargo run --release -p vectorcraft-cli -- mcp               # MCP server (stdio)
 cargo xtask ci                                              # fmt, clippy, tests, layering, wasm, vendor names

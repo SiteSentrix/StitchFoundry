@@ -347,7 +347,7 @@ tool list for all parameters):
 | `embroidery.info`, `embroidery.plan` | statistics; the stitches themselves |
 | `embroidery.export {format}` | a machine file (`dataBase64`) |
 
-From the control channel (`vectorcraft --control 7979`, one JSON object per line):
+From the control channel (`stitchfoundry --control 7979`, one JSON object per line):
 
 ```json
 {"id": 1, "method": "engine.execute", "params": {"command": "shape.ellipse", "params": {"x": 50, "y": 50, "width": 200, "height": 200}}}

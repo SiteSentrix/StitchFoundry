@@ -95,8 +95,8 @@ jobs:
             export CARGO_TARGET_DIR=/var/tmp/vectorcraft-target CARGO_BUILD_JOBS=4
             bash packaging/freebsd/package.sh
             # Every part the package must have, the craft-fonts licences included.
-            tar -tzf dist/release/vectorcraft-*-freebsd-x86_64.tar.gz >/var/tmp/contents.txt
-            for want in '/bin/vectorcraft$' '/bin/vectorcraft-cli$' '/share/applications/.*\.desktop$' '/share/icons/hicolor/' '/share/doc/vectorcraft/NOTICE$' '/share/doc/vectorcraft/OFL-.*\.txt$'; do
+            tar -tzf dist/release/stitchfoundry-*-freebsd-x86_64.tar.gz >/var/tmp/contents.txt
+            for want in '/bin/stitchfoundry$' '/bin/stitchfoundry-cli$' '/share/applications/.*\.desktop$' '/share/icons/hicolor/' '/share/doc/stitchfoundry/NOTICE$' '/share/doc/stitchfoundry/OFL-.*\.txt$'; do
               grep -Eq "$want" /var/tmp/contents.txt || { echo "missing from the package: $want"; exit 1; }
             done
       - uses: actions/upload-artifact@v7

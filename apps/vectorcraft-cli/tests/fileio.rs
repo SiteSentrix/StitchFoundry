@@ -6,7 +6,7 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft-cli");
+const BIN: &str = env!("CARGO_BIN_EXE_stitchfoundry-cli");
 
 fn tmp(name: &str) -> String {
     let dir = std::env::temp_dir().join(format!("vectorcraft-cli-fileio-{}", std::process::id()));

@@ -1,6 +1,6 @@
 # Control protocol
 
-`vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). One JSON request per line:
+`stitchfoundry --control <port>` listens on `127.0.0.1:<port>` (loopback only). One JSON request per line:
 `{"id": 1, "method": "ui.inspect", "params": {}}` → `{"id": 1, "ok": true, "result": {...}}` or `{"id":1,"ok":false,"error":"..."}`.
 
 Set `VECTORCRAFT_CONFIG_DIR` to a dedicated directory for an isolated native test profile. Preferences,
@@ -21,12 +21,12 @@ so only enable it while you use it. Transport: `apps/vectorcraft/src/control_ser
 ## Confining file access
 
 ```sh
-vectorcraft --control 7979 --automation-read-root /work/project --automation-write-root /work/project/out
+stitchfoundry --control 7979 --automation-read-root /work/project --automation-write-root /work/project/out
 ```
 
 `--automation-read-root <dir>` and `--automation-write-root <dir>` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` /
 `VECTORCRAFT_AUTOMATION_WRITE_ROOT`; `--flag=<dir>` works too) confine what the control channel reads and
-writes, with the same flags as `vectorcraft-cli mcp` and the other Craft apps. Every path a request reads
+writes, with the same flags as `stitchfoundry-cli mcp` and the other Craft apps. Every path a request reads
 (open, place, relink, library and profile loads, plug-ins…) must lie inside the read root, every path it
 writes (save, export, package, captures, library saves…) inside the write root; anything else is an
 ordinary error reply. Paths are made absolute against the app's working directory, links are followed

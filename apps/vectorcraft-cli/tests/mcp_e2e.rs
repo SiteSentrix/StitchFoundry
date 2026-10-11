@@ -8,7 +8,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use serde_json::{Value, json};
 use vectorcraft_testkit::raster::Image;
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft-cli");
+const BIN: &str = env!("CARGO_BIN_EXE_stitchfoundry-cli");
 
 struct Mcp {
     child: Child,
@@ -82,7 +82,7 @@ impl Mcp {
         let v =
             self.request("initialize", json!({"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "e2e", "version": "0"}}));
         let r = &v["result"];
-        assert_eq!(r["serverInfo"]["name"], "vectorcraft");
+        assert_eq!(r["serverInfo"]["name"], "stitchfoundry");
         assert!(r["protocolVersion"].is_string());
         assert!(r["capabilities"]["tools"].is_object());
         self.notify("notifications/initialized");

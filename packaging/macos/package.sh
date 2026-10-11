@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build, sign and (optionally) notarize the macOS release artifacts:
 #
-#   $DIST/vectorcraft-<version>-macos-<arch>.dmg          StitchFoundry.app on a drag-to-Applications DMG
-#   $DIST/vectorcraft-cli-<version>-macos-<arch>.zip      the headless CLI
+#   $DIST/stitchfoundry-<version>-macos-<arch>.dmg          StitchFoundry.app on a drag-to-Applications DMG
+#   $DIST/stitchfoundry-cli-<version>-macos-<arch>.zip      the headless CLI
 #
 # Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build]
 #
@@ -40,8 +40,8 @@ IDENTITY="${MACOS_SIGN_IDENTITY:--}"
 SHORT_VERSION="${VERSION%%-*}"
 WORK="$CARGO_TARGET_DIR/macos-package"
 APP="$WORK/StitchFoundry.app"
-DMG="$DIST/vectorcraft-$VERSION-macos-$ARCH.dmg"
-CLI_ZIP="$DIST/vectorcraft-cli-$VERSION-macos-$ARCH.zip"
+DMG="$DIST/stitchfoundry-$VERSION-macos-$ARCH.dmg"
+CLI_ZIP="$DIST/stitchfoundry-cli-$VERSION-macos-$ARCH.zip"
 
 NOTARIZE=0
 if [ "$IDENTITY" = "-" ]; then
@@ -63,7 +63,7 @@ fi
 
 rm -rf "$WORK"
 mkdir -p "$WORK/bin"
-for bin in vectorcraft vectorcraft-cli; do
+for bin in stitchfoundry stitchfoundry-cli; do
   inputs=()
   for t in "${TARGETS[@]}"; do inputs+=("$CARGO_TARGET_DIR/$t/release/$bin"); done
   lipo -create -output "$WORK/bin/$bin" "${inputs[@]}"
@@ -101,7 +101,7 @@ notarize() {
 echo "==> assembling $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Executable and icon carry the display name (CFBundleExecutable / CFBundleIconFile).
-cp "$WORK/bin/vectorcraft" "$APP/Contents/MacOS/StitchFoundry"
+cp "$WORK/bin/stitchfoundry" "$APP/Contents/MacOS/StitchFoundry"
 cp "$ROOT/assets/app-icon/stitchfoundry.icns" "$APP/Contents/Resources/StitchFoundry.icns"
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHORT_VERSION@/$SHORT_VERSION/g" \
   -e "s/@BUILD_SHA@/${VECTORCRAFT_BUILD_SHA:-unknown}/g" \
@@ -177,17 +177,17 @@ fi
 
 # ---- CLI ---------------------------------------------------------------------------------------
 echo "==> building $CLI_ZIP"
-CLI_DIR="$WORK/vectorcraft-cli-$VERSION-macos-$ARCH"
+CLI_DIR="$WORK/stitchfoundry-cli-$VERSION-macos-$ARCH"
 mkdir -p "$CLI_DIR"
-cp "$WORK/bin/vectorcraft-cli" "$CLI_DIR/"
+cp "$WORK/bin/stitchfoundry-cli" "$CLI_DIR/"
 copy_docs "$CLI_DIR"
-sign --options runtime "$CLI_DIR/vectorcraft-cli"
-codesign --verify --strict --verbose=2 "$CLI_DIR/vectorcraft-cli"
+sign --options runtime "$CLI_DIR/stitchfoundry-cli"
+codesign --verify --strict --verbose=2 "$CLI_DIR/stitchfoundry-cli"
 rm -f "$CLI_ZIP"
 ditto -c -k --keepParent "$CLI_DIR" "$CLI_ZIP"
 # A bare Mach-O can't carry a stapled ticket; Gatekeeper looks the notarization up online.
 if [ "$NOTARIZE" = 1 ]; then notarize "$CLI_ZIP"; fi
 
-"$WORK/bin/vectorcraft-cli" --version
+"$WORK/bin/stitchfoundry-cli" --version
 echo "==> done"
 ls -lh "$DMG" "$CLI_ZIP"
