@@ -500,7 +500,10 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
 fn candidates(s: &Session, p: &Value, points: &[Point], tolerance: f64) -> Result<Vec<NodeId>> {
     let st = s.doc()?;
     let area = points.iter().fold(Rect::new(f64::MAX, f64::MAX, f64::MIN, f64::MIN), |b, p| b.union_pt(*p)).inflate(tolerance, tolerance);
-    let supplied = p.get("ids").and_then(Value::as_array).map(|v| v.iter().filter_map(Value::as_u64).map(NodeId).collect::<Vec<_>>());
+    let supplied = match p.get("ids") {
+        Some(_) => Some(checked_ids_param(s, p, "ids", "shaper.scribble")?),
+        None => None,
+    };
     let expand = supplied.is_none() && st.selection.objects.len() < 2;
     let ids = supplied.unwrap_or_else(|| if st.selection.objects.len() > 1 { st.selection.objects.clone() } else { st.doc.selectable_art() });
     let eligible: Vec<NodeId> = ids
