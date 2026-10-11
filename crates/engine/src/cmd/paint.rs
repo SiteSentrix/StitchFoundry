@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray)} sets the selection's fill and the default (new art fits a gradient to itself); while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -407,6 +407,9 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
     let selected = item.targets(s, p)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
+    // The gradient mesh point last clicked with the Mesh tool or Direct Selection: a solid fill
+    // recolours just that point of its mesh.
+    let mesh_point = if fill && matches!(paint, Paint::Solid { .. }) { focused_mesh_point(s) } else { None };
     let label = if fill { "Fill Color" } else { "Stroke Color" };
     edit_items_then(
         s,
@@ -416,6 +419,15 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
         label,
         fill,
         |n, index| {
+            if index.is_none()
+                && let Paint::Solid { color, .. } = &paint
+                && let Some((_, i)) = mesh_point.filter(|(id, _)| *id == n.id)
+                && let NodeKind::Mesh(m) = &mut n.kind
+                && let Some(q) = m.points.get_mut(i)
+            {
+                q.color = *color;
+                return Ok(());
+            }
             if index.is_none()
                 && let NodeKind::Text(t) = &mut n.kind
             {
@@ -455,6 +467,14 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     }
     s.remember_paint(&paint);
     ok()
+}
+
+/// The mesh point the active tool has focused (its `meshPoint` option: the Mesh tool's or Direct
+/// Selection's point last clicked).
+fn focused_mesh_point(s: &Session) -> Option<(NodeId, usize)> {
+    let o = s.tool_options();
+    let pt = o.get("meshPoint")?;
+    Some((NodeId(pt.get("id")?.as_u64()?), usize::try_from(pt.get("index")?.as_u64()?).ok()?))
 }
 
 /// A type run's stroke; a painted stroke on a run without one gets 1 pt.
