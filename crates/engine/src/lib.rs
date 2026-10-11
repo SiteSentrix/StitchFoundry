@@ -346,6 +346,14 @@ impl DocState {
         // A sublayer takes new art only while it and the layers around it are shown and unlocked.
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()) && self.doc.is_editable(*l)).or_else(|| self.doc.default_layer())
     }
+    /// [`Self::insertion_parent`] for new art, which a locked or hidden layer never takes: an error
+    /// when no layer is shown and unlocked, so the art is refused rather than hidden or locked away.
+    pub fn target_parent(&self) -> Result<Option<NodeId>> {
+        match self.insertion_parent() {
+            Some(p) if !self.doc.is_editable(p) => Err(EngineError::Other("the target layer is locked or hidden".into())),
+            parent => Ok(parent),
+        }
+    }
     /// The highlighted Layers panel rows that still exist (ids are reused after undo, so a
     /// remembered row must still be in the document).
     pub fn highlighted_rows(&self) -> Vec<NodeId> {
@@ -1033,6 +1041,8 @@ impl Session {
     /// Add a document and make it active.
     pub fn add_document(&mut self, mut doc: Document, path: Option<String>) -> usize {
         Self::refresh_text_bounds(&mut doc);
+        // Guides from files saved before guides had layers go on a layer.
+        doc.adopt_guides();
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -1048,6 +1058,7 @@ impl Session {
             return false;
         }
         Self::refresh_text_bounds(&mut doc);
+        doc.adopt_guides();
         if self.active == Some(index) {
             // Pending tool work (typing, a drag) belongs to the content being thrown away.
             self.reset_tool_for_doc_switch();
@@ -1313,6 +1324,11 @@ impl Session {
         {
             let st = self.doc_mut()?;
             let Some(it) = &st.interaction else { return Err(EngineError::Other("no interaction in progress".into())) };
+            // Undoing the previous preview counts as a change, so views redraw even when the command
+            // below returns without an edit.
+            if !Arc::ptr_eq(&st.doc, &it.doc) || st.selection != it.selection {
+                st.revision += 1;
+            }
             st.doc = it.doc.clone();
             st.selection = it.selection.clone();
         }
@@ -1621,6 +1637,8 @@ mod tests_recolor;
 #[cfg(test)]
 mod tests_recovery;
 #[cfg(test)]
+mod tests_reflecthit;
+#[cfg(test)]
 mod tests_registration;
 #[cfg(test)]
 mod tests_save;
@@ -1672,6 +1690,8 @@ mod tests_toolsettings;
 mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_typearea;
+#[cfg(test)]
+mod tests_typescale;
 #[cfg(test)]
 mod tests_units;
 #[cfg(test)]

@@ -61,7 +61,7 @@ the two can still win that race.
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?}` | |
 | `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` | fill and submit the open dialog |
 | `ui.screenshot` | `{path?, data?}` | capture the window (PNG), written to `path`; `data: true` sends it back as `pngBase64` too. Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
-| `ui.render` | `{path?, scale?, data?}` | render the artboard headlessly (PNG): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
+| `ui.render` | `{path?, scale?, artboard?, data?}` | render an artboard headlessly (PNG; `artboard`: its 0-based index, default the first): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
 | `ui.resize` / `ui.focus` | | |
 | `app.open` / `app.save` / `app.export` / `app.quit` | `{path}` / `{path?}` / `{path?, format?, artboard?, range?, scale?, …}` | `app.open` reads every format `document.open` reads (see `document.formats`) and returns its result (`{index, title, format, warnings, …}`; `warnings` say what didn't come in as it was, such as an EPS shown as its preview image and why its PostScript couldn't be read), or null when a dialog asks first or a library loads. `app.export` encodes through the engine's `document.export` (same options; the document keeps its path) and writes `path` through the host; without `path` it returns `{dataBase64, format, bytes}`, as headless mode does. `app.quit`, `file.close` and `file.closeAll` first open a `saveChanges` dialog for each modified document (they return `{"pending": "saveChanges"}`): `ui.dialog.confirm` saves, `ui.dialog.set {field: "discard", value: true}` then confirm discards, `ui.dialog.cancel` cancels the whole close or quit |
 | `app.export` with `useArtboards` | `{path, useArtboards: true, range? \| artboards?, …}` | Export As: PNG, JPEG and WebP write one file per chosen artboard (default all; SVG does so for a `range`), `<path stem>-<artboard>.<ext>`, and return `{path, files: [path…]}`; a PDF keeps them as pages of `path`. `useArtboards: false` covers the bounds of the visible art. The menu's Export As… is `file.exportAs`: the `exportAs` dialog (`format`, `useArtboards`, `all`, `range`), then a save dialog and the format's options: `pngOptions` / `jpgOptions` / `webpOptions`, `svgOptions`, or `savePdf` for a PDF with Use Artboards |
@@ -261,17 +261,38 @@ Constrain acts as Shift held (proportional scaling, moves and rotations by 45°)
 where it is greyed. The modifier keys still work while dragging (Cmd on a corner distorts it freely, Cmd+Alt+Shift in
 perspective, Cmd on a side shears).
 
+Ruler guides are layer objects: `guide.add` puts a guide on the current layer (or `layer`), where it shows, hides,
+locks and is deleted with its layer and is listed in the Layers panel (a click on its row selects it, a drag onto
+another layer's rows moves it there); `guide.setLayer {index?, indexes?, layer}` moves guides to another layer, and
+`guide.list` gives each guide's `layer`, `shown` and `editable`. Guides on a hidden or locked layer leave the selection
+and can't be picked, moved or deleted, and no guide goes onto a locked layer; Duplicate copies a layer's guides, Merge
+Selected and Flatten Artwork keep them on the merged layer (Flatten discards a hidden layer's). Guides in files saved
+before guides had layers go on the top visible, unlocked layer when the document opens.
+
 Floating panels: dragging a dock tab, a panel icon or a popped-out panel's title out of the dock floats that panel
 inside the window, and the strip right of the dock's tabs floats the whole Properties | Layers | Libraries group. A
 floating group moves by its title bar (or the strip right of its tabs); a tab dragged out of it floats on its own;
 dropped on another group's title bar or tabs it stacks with that group, and dropped on the dock (lit up while the
-pointer is over it) or closed with its × its panels go back to the tabbed group or the icon column.
-`window.panel.float {panel, x?, y?, onto?, group?}` floats a panel (with `group`, its whole group) with its top-left
-corner at `x`, `y` (window points; default cascaded), or stacks it with the floating group holding `onto`;
-`window.panel.dock {panel, group?}` puts it back. `panel` takes the `window.panel` ids and labels, and `"tools"` for
+pointer is over it) or closed with its × its panels go back to the tabbed group or the icon column. Dropped on the upper or
+lower half of another group, floating or docked (a line shows where), a group joins it in a set right above or below
+it: the groups stack top to bottom, each
+showing one of its panels, and move together by the top group's title bar, whose × docks them all; a group dragged by
+its tab strip (a lone panel's tab or the strip right of the tabs) leaves the set. A double-click on a tab collapses a
+group to its tabs, and another expands it. Dropped on the left edge of the icon column or of a dock column, a set
+docks as a new dock column there: its groups stack in it as in a floating set, take groups dropped on their edges and
+tabs, and leave it dragged by their tab strip; the strip along the column's top floats the whole column again, and
+its × puts its panels back where they live.
+`window.panel.float {panel, x?, y?, onto?, below?, above?, group?, collapsed?}` floats a panel (with `group`, its whole
+group) with its top-left corner at `x`, `y` (window points; default cascaded), or stacks it as a tab with the floating
+group holding `onto`, or puts its group in a set right `below` or `above` the group holding that panel; `collapsed`
+collapses or expands its group;
+`window.panel.dock {panel, group?, column?}` puts it back, or with `column` (`true`, or the place: 1 next to the icon
+column, counting left) docks its group and set as a dock column; `window.panel.float` on a docked panel floats its
+column. `panel` takes the `window.panel` ids and labels, and `"tools"` for
 the Tools panel, which floats by its title bar and docks on the window's left edge. `window.panel` on a floating
-panel shows its tab. `ui.floating_panels` in `ui.inspect` lists the groups (panel ids, the index of the tab shown,
-the top-left corner) and `ui.toolbar_pos` the Tools panel's corner (null: docked); both are saved with the
+panel shows its tab (expanding its group). `ui.floating_panels` in `ui.inspect` lists the groups (panel ids, the
+index of the tab shown, the top-left corner, `column`: the set it is stacked in, top to bottom in list order,
+`collapsed`, and `docked`: the dock column it stands in) and `ui.toolbar_pos` the Tools panel's corner (null: docked); both are saved with the
 preferences and in user workspaces (the built-in workspaces dock everything), and a corner saved on a bigger window
 is clamped into this one when drawn. Floating panels stay inside the app window (no separate OS windows).
 

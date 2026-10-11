@@ -1,10 +1,11 @@
 //! Dragging mesh points and their handles on the canvas, shared by the Mesh tool and Direct
 //! Selection: gradient meshes and mesh envelopes alike (`object.mesh.movePoint`). Clicking a
-//! point focuses it: its handles show and can be dragged too.
+//! point focuses it: its handles show and can be dragged too, and on a gradient mesh a solid fill
+//! colour recolours it (the tool's `meshPoint` option).
 
 use std::borrow::Cow;
 
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_doc::live::{GradientMesh, envelope_grid};
 use vectorcraft_doc::{EnvelopeKind, Node, NodeId, NodeKind};
 use vectorcraft_geom::Point;
@@ -89,6 +90,12 @@ impl MeshEdit {
     /// Forget the focused point.
     pub fn unfocus(&mut self) {
         self.focus = None;
+    }
+
+    /// `{meshPoint: {id, index}|null}`: the focused point, which a solid fill colour recolours
+    /// (`paint.setFill` on a gradient mesh).
+    pub fn options(&self) -> Value {
+        json!({"meshPoint": self.focus.map(|(id, index)| json!({"id": id.0, "index": index}))})
     }
 
     /// The focused point's handles (lines and ends).

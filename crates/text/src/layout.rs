@@ -200,15 +200,21 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
 }
 
 /// Shrink Text to Fit for text that overflows at full size: the largest scale in `min..1` at which
-/// it fits, searched by bisection over the first run's size in steps of 0.1 pt (so its scaled size
+/// it fits, searched by bisection over the first run's document size in steps of 0.1 pt (so its scaled size
 /// is a whole number of tenths of a point, the same every time). Down at `min` it lays out there,
 /// still overflowing. None (keep the full-size layout) when the text has no usable size.
 fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) -> Option<TextLayout> {
-    let size = t.runs.first().map(|r| r.style.size).filter(|s| s.is_finite() && *s >= 0.1)?;
+    // Exact size edits after object scaling may store a local size below 0.1. Fit in the
+    // same document points as the Character controls, independent of that representation.
+    let points = t.style_scale()?.points;
+    let size = t.runs.first().map(|r| r.style.size * points).filter(|s| s.is_finite() && *s >= 0.1)?;
     if !(min.is_finite() && min < 1.0) {
         return None;
     }
     let tenths = size * 10.0;
+    if !tenths.is_finite() {
+        return None;
+    }
     // Candidate sizes k/10 pt for k in lo..hi: `hi` (full size, rounded down) is known to overflow
     // unless it is below the full size; `lo` is the smallest allowed.
     let mut lo = (tenths * min).ceil().max(1.0);
@@ -234,7 +240,7 @@ fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) ->
     }
     // Invariant: everything at `hi` or above overflows; `lo` fits or is the floor.
     while hi - lo > 1.0 && passes + 1 < SHRINK_PASSES {
-        let mid = ((lo + hi) * 0.5).floor();
+        let mid = (lo + (hi - lo) * 0.5).floor();
         let l = at(mid);
         passes += 1;
         if l.overflow {
@@ -381,7 +387,8 @@ fn tate_chu_yoko(g: &mut [SGlyph], size: impl Fn(&SGlyph) -> f64) {
 /// Half an em of `g`'s size when it is full-width Japanese punctuation of kind `kind` (its
 /// advance an em, give or take a tenth), the space that mojikumi can take off.
 fn punct_half(g: &SGlyph, kind: Punct) -> Option<f64> {
-    if punct(g.ch)? != kind || g.tcy.is_some() {
+    // A glyph Proportional Metrics re-spaced has no empty half left to take off (#966).
+    if punct(g.ch)? != kind || g.tcy.is_some() || g.proportional {
         return None;
     }
     let em = g.face.units_per_em();
@@ -1170,6 +1177,7 @@ mod wrapping_tests {
                 tcy: None,
                 inline: None,
                 lead: 0.0,
+                proportional: false,
                 level: unicode_bidi::Level::ltr(),
             })
             .collect()

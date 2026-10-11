@@ -2043,6 +2043,7 @@
 	Proof Colors	Пробні кольори
 	Proof Setup	Налаштування кольоропроби
 	Properties	Властивості
+	Proportional Metrics	Пропорційні метрики
 	Proportional Oldstyle	Пропорційні цифри старого стилю
 	Pucker & Bloat…	Зморщування та роздування …
 	Pucker Tool	Інструмент «Зморщування»
@@ -3305,6 +3306,7 @@ axis	Horizontal	Горизонтальна
 axis	Vertical	Вертикальна
 axis	Both	Обидві
 	Drag to move	Перетягніть для переміщення
+	Drag to move out of the set	Перетягніть, щоб винести з набору
 	Drag to float as a toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Put back in the toolbar	Повернути на панель інструментів
 	Float Panel	Від’єднати панель
@@ -3403,6 +3405,7 @@ axis	Both	Обидві
 @msg	`color` must be a colour	`color` має бути кольором
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` має бути командою, пункт меню якої відкриває діалогове вікно (див. ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` має бути масивом
+@msg	`freeform.lines` must be an array	`freeform.lines` має бути масивом
 @msg	`gradient` must be an object	`gradient` має бути об’єктом
 @msg	`library` is a library id or name (see {list})	`library` — це ідентифікатор або ім’я бібліотеки (див. {list})
 @msg	`mode` applies to freeform gradients	`mode` застосовується до довільних градієнтів
@@ -3504,6 +3507,7 @@ axis	Both	Обидві
 @msg	empty path	порожній контур
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	версія файлу {0} новіша, ніж підтримує цей VectorCraft ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	довільній точці {i} потрібні `at` [x, y] та допустимий `color`
+@msg	freeform line {i} must be an array of point indices	довільна лінія {i} має бути масивом індексів точок
 @msg	give both `start` and `end` [x, y] (or neither)	вкажіть `start`, `end` [x, y] (або жодного)
 @msg	give corners of the path: anchors between two straight sides	вкажіть кути контуру: опорні точки між двома прямими сторонами
 @msg	give the path `id` and the width point `index`	вкажіть `id` контуру та `index` точки ширини
@@ -3742,6 +3746,8 @@ axis	Both	Обидві
 @msg	the image's pixels don't match its size	пікселі зображення не відповідають його розміру
 @msg	the layer has no objects to clip by	у шарі немає об’єктів для обрізки
 @msg	the layer or group is locked	шар чи група заблоковані
+@msg	the guide is on a hidden or locked layer	напрямна розташована на прихованому або заблокованому шарі
+@msg	the target layer is locked or hidden	цільовий шар заблокований або прихований
 @msg	the layer to flatten into is hidden	шар для об’єднання прихований
 @msg	the object already has an opacity mask	об’єкт вже має маску непрозорості.
 @msg	the object has no geometry	об’єкт не має геометрії
@@ -3766,7 +3772,7 @@ axis	Both	Обидві
 @msg	the {tool} tool has no options	інструмент {tool} не має параметрів
 @msg	there are no objects to release	немає об’єктів для звільнення
 @msg	there are no printer settings to open here	тут немає налаштувань принтера для відкриття
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	цей файл PostScript неможливо прочитати ({_1}): збережіть його як PDF або SVG у додатку, який його створив
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	цей файл PostScript неможливо прочитати ({why}): збережіть його як PDF або SVG у додатку, який його створив
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript цього файлу неможливо прочитати ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	цей формат містить одну монтажну область: експортуйте кілька як PDF або за допомогою document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	це креслення DWG, яке неможливо прочитати: збережіть його з CAD як ASCII DXF і відкрийте його
@@ -3855,6 +3861,9 @@ axis	Both	Обидві
 @msg	tool (a tool id) is required	потрібно tool (ідентифікатор інструменту)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входить до групи панелі інструментів з кількох інструментів
 @msg	onto must name a panel floating in another group	onto має називати панель, що плаває в іншій групі
+@msg	below and above must name a panel floating in another group	below і above мають називати панель, що плаває в іншій групі
+@msg	give only one of onto, below and above	вкажіть лише один із onto, below і above
+@msg	column must be true or a number from 1	column має бути true або числом від 1
 @msg	x and y must both be numbers	x і y мають бути числами
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" не є кольором: запишіть його як #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	це не логотип із плоских кольорів ({_1}% його суцільних областей збігається з кількома плоскими кольорами), тому режим «Плоский логотип» перетворив би градієнти на плями: використовуйте режим «Колір»
@@ -3915,6 +3924,7 @@ axis	Both	Обидві
 	Exit	Вийти
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — це посилання на крок {r}, яке розв’язують лише `run` і `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` має бути масивом ідентифікаторів об’єктів, а не {v}
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` має бути масивом індексів опорних точок, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: у результаті кроку {i} немає такого значення (щоб написати сам $, введіть $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед цим кроком немає кроку {i} (кроки рахуються з 0; щоб написати сам $, введіть $$)
 @msg	object ids are non-negative integers, not {v}	ідентифікатори об’єктів — невід’ємні цілі числа, а не {v}
@@ -4045,3 +4055,62 @@ axis	Both	Обидві
 @msg	{key} must be a finite coordinate	{key} має бути скінченною координатою
 @msg	x and y must be provided together	x та y потрібно вказувати разом
 @msg	invalid restored panel group	Відновлена група панелей неприпустима
+
+# Interactive Revolve controls.
+	Lighting	Освітлення
+	Revolve angle	Кут обертання
+	Axis side	Бік осі
+	Rotation X	Обертання X
+	Rotation Y	Обертання Y
+	Rotation Z	Обертання Z
+	Shading	Затінення
+	Direction	Напрямок
+	Elevation	Висота
+	Ambient	Навколишнє освітлення
+	Segments	Сегменти
+	Show axis	Показати вісь
+	Reset all	Скинути все
+	Reset to default	Відновити типове значення
+	Reset all Revolve settings to their defaults.	Відновити типові значення всіх параметрів обертання.
+	Drag values or labels. Double-click a value to type.	Перетягуйте значення або підписи. Двічі клацніть значення, щоб увести його.
+	Drag rings to rotate. Shift snaps to 15°.	Перетягуйте кільця для обертання. Shift задає крок 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Перетягуйте джерело світла або його кільця. Shift задає крок 15°.
+	Keep visible surfaces only when expanding	Під час розгортання зберігати лише видимі поверхні
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Обрізає приховану геометрію під час розгортання оформлення. Попередній перегляд зберігає всю поверхню. Прозорі заливки та поверхні, що перевищують обмеження видимості, зберігають усі грані.
+lighting	Light	Світло
+	Accented Edges…	Акцент на краях…
+	Angled Strokes…	Похилі мазки…
+	Crosshatch…	Перехресне штрихування…
+	Dark Strokes…	Темні мазки…
+	Ink Outlines…	Контури тушшю…
+	Spatter…	Розбризкування…
+	Sprayed Strokes…	Розпилені мазки…
+	Sumi-e…	Сумі-е…
+	Accented Edges	Акцент на краях
+	Angled Strokes	Похилі мазки
+	Crosshatch	Перехресне штрихування
+	Dark Strokes	Темні мазки
+	Ink Outlines	Контури тушшю
+	Spatter	Розбризкування
+	Sprayed Strokes	Розпилені мазки
+	Sumi-e	Сумі-е
+	Direction Balance	Баланс напрямку
+	Stroke Length	Довжина мазка
+	Sharpness	Різкість
+	Strength	Сила
+	Balance	Баланс
+	Black Intensity	Інтенсивність чорного
+	White Intensity	Інтенсивність білого
+	Dark Intensity	Інтенсивність темного
+	Spray Radius	Радіус розпилення
+	Stroke Direction	Напрямок мазків
+	Stroke Width	Ширина мазка
+	Stroke Pressure	Натиск мазка
+	Right Diagonal	Діагональ праворуч
+	Left Diagonal	Діагональ ліворуч
+	Vertical Guide	Вертикальна напрямна
+	Horizontal Guide	Горизонтальна напрямна
+	Move Guide to Layer	Перемістити напрямну на шар
+@msg	invalid native panel set	Неприпустимий власний набір панелей
+@msg	missing panel layout	Відсутнє розташування панелей
+@msg	unsupported native docking operation	Непідтримувана власна операція прикріплення

@@ -229,6 +229,26 @@ fn effect_dialog_applies_to_its_appearance_item() {
 }
 
 #[test]
+fn revolve_dialog_preview_cancel_confirm_and_undo() {
+    let mut app = app();
+    app.run("path.create", json!({"d":"M150 40 L180 60 L180 140 L150 160"})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    app.run("effect.dialog", json!({"effect":"threeD.revolve","item":null})).unwrap();
+    frame(&mut app, Default::default());
+    assert!(app.session.in_interaction());
+    cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    app.run("effect.dialog", json!({"effect":"threeD.revolve","item":null})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(180));
+    frame(&mut app, Default::default());
+    confirm(&mut app).unwrap();
+    assert_ne!(app.session.doc().unwrap().doc, before);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+}
+
+#[test]
 fn dialogs_are_as_tall_as_their_content() {
     // The save prompt, shown after a taller dialog, is as tall as its text and buttons: no empty
     // band around the buttons, nothing inherited from the other dialog.
@@ -412,6 +432,38 @@ fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     assert!(app.ui.dialog.is_none());
     let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
     assert_eq!(node.appearance.effects.last().map(|e| e.params["scaleH"].clone()), Some(json!(50.0)));
+}
+
+/// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
+/// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
+#[test]
+fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 40})).unwrap();
+    app.run("object.rasterize", json!({"ppi": 72})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let entry = crate::menus::menu_entries(&app).into_iter().find(|e| e.label == "Create Object Mosaic…").expect("menu item");
+    let (cmd, params) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
+    crate::menus::invoke(&mut app, &cmd, params);
+    // Its first field, Columns, is focused: type 3 over it and press Enter.
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("3".into())]);
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(&mut app, vec![enter]);
+    assert!(app.ui.dialog.is_none());
+    let mut tiles = None;
+    app.session.doc().unwrap().doc.walk(|n| {
+        if n.name.as_deref() == Some("Object Mosaic") {
+            tiles = n.children().map(|c| c.len());
+        }
+    });
+    assert_eq!(tiles, Some(3 * 10));
 }
 
 /// #793: Artboard Options lists its fields as Name, Width, Height, not by key.

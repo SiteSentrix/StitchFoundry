@@ -49,6 +49,9 @@ pub(crate) struct SGlyph {
     /// Japanese composition: the space taken off before the glyph (an opening bracket after
     /// another, see [`crate::layout`]); the glyph is drawn that much earlier on the line.
     pub lead: f64,
+    /// Proportional Metrics changed the glyph's advance (`palt`): it has its proportional width,
+    /// and Japanese composition takes no more space off it (#966).
+    pub proportional: bool,
     /// Resolved Unicode bidi embedding level (logical source order).
     pub level: Level,
     /// An inline graphic ([`vectorcraft_doc::TextRun::inline`]) standing in for a glyph.
@@ -117,6 +120,7 @@ pub(crate) fn hyphen_glyph(g: &SGlyph) -> SGlyph {
     h.len = 0;
     h.ch = '-';
     h.inline = None;
+    h.proportional = false;
     h
 }
 
@@ -422,6 +426,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         ch: text.get(range.clone()).and_then(|s| s.chars().next()).unwrap_or(INLINE_CHAR),
         tcy: None,
         lead: 0.0,
+        proportional: false,
         // U+FFFC is a bidi neutral (ON): its level, resolved from its neighbours, places it in
         // RTL text like any other glyph once the line is reordered.
         level,
@@ -470,34 +475,48 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let first_char = |byte: usize| text[byte..].chars().next().unwrap_or(' ');
 
     let mut raw: Vec<(u32, u32, i32, i32, i32)> = Vec::with_capacity(text_seg.len()); // gid, cluster, xadv, xoff, yoff
+    // Proportional Metrics: which glyphs `palt` gave another advance than their full width.
+    let mut proportional = vec![];
     let shaped = face.hb().map(|hb| {
         let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
-        let mut buf = UnicodeBuffer::new();
-        for (i, c) in text_seg.char_indices() {
-            let cl = (range.start + i) as u32;
-            if upper {
-                for u in c.to_uppercase() {
-                    buf.add(u, cl);
+        let shape = |feats: &[Feature]| {
+            let mut buf = UnicodeBuffer::new();
+            for (i, c) in text_seg.char_indices() {
+                let cl = (range.start + i) as u32;
+                if upper {
+                    for u in c.to_uppercase() {
+                        buf.add(u, cl);
+                    }
+                } else {
+                    buf.add(c, cl);
                 }
-            } else {
-                buf.add(c, cl);
             }
-        }
-        buf.set_direction(if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight });
-        buf.guess_segment_properties();
-        // Harfrust keeps this Unicode context for joining/positional shaping, but does not emit
-        // glyphs for it. This retains context at real style/font segmentation boundaries without
-        // shaping across those boundaries or claiming cross-style ligatures/mark attachment.
-        if let Some(pre) = text.get(context.start..range.start) {
-            buf.set_pre_context(pre);
-        }
-        if let Some(post) = text.get(range.end..context.end) {
-            buf.set_post_context(post);
-        }
-        let feats: Vec<Feature> = feats.resolve(st);
-        let gb = shaper.shape(buf, ShapeOptions::new().features(&feats));
-        for (info, pos) in gb.glyph_infos().iter().zip(gb.glyph_positions()) {
-            raw.push((info.glyph_id, info.cluster, pos.x_advance, pos.x_offset, pos.y_offset));
+            buf.set_direction(if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight });
+            buf.guess_segment_properties();
+            // Harfrust keeps this Unicode context for joining/positional shaping, but does not emit
+            // glyphs for it. This retains context at real style/font segmentation boundaries without
+            // shaping across those boundaries or claiming cross-style ligatures/mark attachment.
+            if let Some(pre) = text.get(context.start..range.start) {
+                buf.set_pre_context(pre);
+            }
+            if let Some(post) = text.get(range.end..context.end) {
+                buf.set_post_context(post);
+            }
+            let gb = shaper.shape(buf, ShapeOptions::new().features(feats));
+            gb.glyph_infos()
+                .iter()
+                .zip(gb.glyph_positions())
+                .map(|(info, pos)| (info.glyph_id, info.cluster, pos.x_advance, pos.x_offset, pos.y_offset))
+                .collect::<Vec<_>>()
+        };
+        raw = shape(&feats.resolve(st));
+        if feats.proportional(st) {
+            // `palt` is positioning only: the same glyphs set on their full widths tell which
+            // advances it changed (kerning and the rest change both alike).
+            let full = shape(&feats.resolve_fixed_width(st));
+            if full.len() == raw.len() && full.iter().zip(&raw).all(|(a, b)| a.0 == b.0) {
+                proportional = full.iter().zip(&raw).map(|(a, b)| a.2 != b.2).collect();
+            }
         }
     });
     if shaped.is_none() {
@@ -553,6 +572,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             ch,
             tcy: None,
             lead: 0.0,
+            proportional: proportional.get(gi).copied().unwrap_or(false),
             level: *level,
             inline: None,
         });

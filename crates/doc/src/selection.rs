@@ -29,8 +29,9 @@ pub struct Selection {
     /// clears them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub slices: Vec<NodeId>,
-    /// Ruler guides selected with a selection tool, as indexes into [`Document::guides`]. They are
-    /// selected on their own: any change to the object selection clears them.
+    /// Ruler guides selected with a selection tool, as indexes into [`Document::guides`]. A new
+    /// selection ([`Self::set`]) clears them; Shift-adding or -removing objects keeps them, so
+    /// guides and objects can be selected together, in either order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<usize>,
 }
@@ -66,7 +67,6 @@ impl Selection {
     pub fn add(&mut self, id: NodeId) {
         self.target = None;
         self.slices.clear();
-        self.guides.clear();
         if !self.objects.contains(&id) {
             self.objects.push(id);
         }
@@ -74,7 +74,6 @@ impl Selection {
     pub fn remove(&mut self, id: NodeId) {
         self.target = None;
         self.slices.clear();
-        self.guides.clear();
         self.objects.retain(|x| *x != id);
         self.anchors.remove(&id);
         if self.key == Some(id) {
@@ -99,6 +98,15 @@ impl Selection {
             }
         }
     }
+    /// Add ruler guide `i` to the selection, or take it out, keeping the selected objects (a
+    /// Shift-click on a guide).
+    pub fn toggle_guide(&mut self, i: usize) {
+        if let Some(k) = self.guides.iter().position(|g| *g == i) {
+            self.guides.remove(k);
+        } else {
+            self.guides.push(i);
+        }
+    }
     pub fn toggle(&mut self, id: NodeId) {
         if self.contains(id) { self.remove(id) } else { self.add(id) }
     }
@@ -117,7 +125,8 @@ impl Selection {
             self.target = None;
         }
         self.slices.retain(|id| doc.is_slice(*id));
-        self.guides.retain(|i| *i < doc.guides.len());
+        // Guides on a hidden or locked layer can't stay selected.
+        self.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
     }
     /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected
     /// (the art of its sublayers too), anything else is selected itself.
@@ -180,14 +189,52 @@ mod tests {
         s.set_guides([2, 0, 2]);
         assert_eq!((s.objects.clone(), s.guides.clone()), (vec![], vec![2, 0]));
         assert!(s.has_objects_or_guides() && s.is_empty());
+        // Shift-adding an object keeps them; a new selection doesn't.
         s.add(NodeId(1));
+        assert_eq!(s.guides, vec![2, 0]);
+        s.set([NodeId(1)]);
         assert!(s.guides.is_empty());
+        // Toggled, a guide joins (or leaves) the selected objects.
+        s.toggle_guide(0);
+        assert_eq!((s.objects.clone(), s.guides.clone()), (vec![NodeId(1)], vec![0]));
+        s.toggle_guide(0);
+        assert_eq!((s.objects.clone(), s.guides.clone()), (vec![NodeId(1)], vec![]));
         // Pruning drops guides the document no longer has.
         let mut d = Document::new(100.0, 100.0);
         d.guides.push(crate::Guide::new(true, 10.0));
         s.set_guides([0, 1]);
         s.prune(&d);
         assert_eq!(s.guides, vec![0]);
+    }
+
+    #[test]
+    fn guides_show_and_lock_with_their_layer() {
+        let mut d = Document::new(100.0, 100.0);
+        let layer = d.layers[0].id;
+        let g = crate::Guide { layer: Some(layer), ..crate::Guide::new(true, 10.0) };
+        assert!(d.guide_shown(&g) && d.guide_editable(&g));
+        d.node_mut(layer).unwrap().locked = true;
+        assert!(d.guide_shown(&g) && !d.guide_editable(&g), "locked: shown, not editable");
+        d.node_mut(layer).unwrap().visible = false;
+        assert!(!d.guide_shown(&g) && !d.guide_editable(&g), "hidden");
+        // On no layer, or a layer that's gone: always there.
+        assert!(d.guide_shown(&crate::Guide::new(false, 5.0)));
+        let gone = crate::Guide { layer: Some(NodeId(9999)), ..crate::Guide::new(true, 1.0) };
+        assert!(d.guide_shown(&gone) && d.guide_editable(&gone));
+        d.guides.push(g);
+        assert_eq!(d.guides_on(layer).count(), 1);
+        // Guides on no layer, or a gone one, are adopted by the top visible, unlocked layer.
+        d.node_mut(layer).unwrap().visible = true;
+        d.node_mut(layer).unwrap().locked = false;
+        d.guides.push(crate::Guide::new(false, 5.0));
+        d.guides.push(gone);
+        assert_eq!(d.adopt_guides(), 2);
+        assert!(d.guides.iter().all(|g| g.layer == Some(layer)));
+        assert_eq!(d.adopt_guides(), 0, "once");
+        // A guide saved before guides had layers reads as one on no layer.
+        let old: crate::Guide = serde_json::from_str(r#"{"vertical": true, "pos": 5.0}"#).unwrap();
+        assert_eq!(old.layer, None);
+        assert!(!serde_json::to_string(&crate::Guide::new(true, 5.0)).unwrap().contains("layer"), "nothing new written");
     }
 
     #[test]

@@ -1170,8 +1170,8 @@ fn spin_generic(
             && let Some(p) = sresp.interact_pointer_pos()
             && let Some(v) = value
         {
-            let nv = if up.contains(p) { v + step } else { v - step };
-            out = Some(SpinPick::Value(nv.max(min)));
+            let modifiers = ui.input(|i| i.modifiers);
+            out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
         if let Some(v) = field(ui, fw) {
@@ -1196,6 +1196,14 @@ fn spin_generic(
         }
     });
     out
+}
+
+/// Spinner buttons follow the same modifier sizes as ↑/↓ in a focused number field:
+/// Shift ×10, Ctrl/Cmd ÷10, otherwise the caller's normal step.
+fn spinner_step(value: f64, step: f64, min: f64, up: bool, modifiers: egui::Modifiers) -> f64 {
+    let multiplier = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)).map_or(1.0, |(_, factor)| *factor);
+    let delta = step * multiplier;
+    (value + if up { delta } else { -delta }).max(min)
 }
 
 /// Drag phase of a live slider/handle: previews while dragging, commits on release.
@@ -1825,4 +1833,22 @@ pub fn text_presets(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, val
         });
     });
     out
+}
+
+#[cfg(test)]
+mod spinner_modifier_tests {
+    use super::*;
+
+    #[test]
+    fn shift_steps_stroke_weight_by_ten_points() {
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::SHIFT), 24.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 4.0);
+    }
+
+    #[test]
+    fn unmodified_and_command_steps_keep_existing_behavior() {
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::NONE), 15.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND), 13.9);
+        assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 0.0);
+    }
 }

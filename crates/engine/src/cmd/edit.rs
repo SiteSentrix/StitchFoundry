@@ -268,6 +268,8 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return super::docmenu::guide_remove(s, &json!({}));
     }
     let st = s.doc()?;
+    // Guides selected with the art go with it (not when ids are given).
+    let with_guides = explicit.is_none();
     let targets = explicit.unwrap_or_else(|| st.selection.in_paint_order(&st.doc));
     // Keep the selected ids themselves, without promoting compound members. Delete a selected
     // ancestor just once; its selected descendants leave with it. Layers themselves are kept.
@@ -283,6 +285,10 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Clear", |d, sel| {
         for id in &ids {
             d.remove(*id)?;
+        }
+        if with_guides {
+            let gone = sel.guides.clone();
+            d.retain_guides(sel, |i, _| !gone.contains(&i));
         }
         sel.clear();
         Ok(())
@@ -346,7 +352,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     let off = s.prefs.paste_offset;
     let st = s.doc()?;
     let same_doc = clip.source_doc == Some(st.uid);
-    let parent = st.insertion_parent();
+    let parent = st.target_parent()?;
     // A copied artboard comes back with its art: right of the last artboard, or where it was
     // (Paste in Place, in Front, in Back). Paste on All Artboards pastes only the art.
     let board = clip

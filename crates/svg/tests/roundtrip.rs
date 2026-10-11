@@ -811,6 +811,31 @@ fn import_absolute_units_keep_their_physical_size() {
     }
 }
 
+/// #1010: a root with one absolute side and one unitless or px side opens as if both were
+/// absolute (CSS pixels at 96 per inch), so nothing is stretched and the viewport keeps its size.
+#[test]
+fn import_mixed_root_units_scale_both_sides_alike() {
+    let rect = |d: &Document| art(d)[0].geometric_bounds().unwrap();
+    for (size, board) in [
+        (r#"width="96pt" height="96""#, Rect::new(0.0, 0.0, 96.0, 72.0)),
+        (r#"width="96pt" height="96px""#, Rect::new(0.0, 0.0, 96.0, 72.0)),
+        (r#"width="96pt" height="72pt""#, Rect::new(0.0, 0.0, 96.0, 72.0)),
+        (r#"width="128" height="72pt""#, Rect::new(0.0, 0.0, 96.0, 72.0)),
+    ] {
+        let svg =
+            |extra: &str| format!(r##"<svg xmlns="http://www.w3.org/2000/svg" {size} {extra}><rect width="32" height="32" fill="#f00"/></svg>"##);
+        let d = import(&svg("")).unwrap();
+        assert!(close_rect(d.artboards[0].rect, board, 1e-6), "{size}: {:?}", d.artboards[0].rect);
+        assert!(close_rect(rect(&d), Rect::new(0.0, 0.0, 24.0, 24.0), 1e-6), "{size}: {:?}", rect(&d));
+        // With a viewBox: fitted uniformly (xMidYMid meet), unless preserveAspectRatio is none.
+        let d = import(&svg(r#"viewBox="0 0 32 32""#)).unwrap();
+        assert!(close_rect(d.artboards[0].rect, board, 1e-6), "{size}: {:?}", d.artboards[0].rect);
+        assert!(close_rect(rect(&d), Rect::new(12.0, 0.0, 84.0, 72.0), 1e-6), "{size} viewBox: {:?}", rect(&d));
+        let d = import(&svg(r#"viewBox="0 0 32 32" preserveAspectRatio="none""#)).unwrap();
+        assert!(close_rect(rect(&d), board, 1e-6), "{size} none: {:?}", rect(&d));
+    }
+}
+
 #[test]
 fn full_document_roundtrip_is_stable() {
     // export → import → export produces identical SVG.

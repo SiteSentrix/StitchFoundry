@@ -362,6 +362,9 @@
 	Position Panel Above Text	Bedienfeld über dem Text positionieren
 	Clear Appearance	Aussehen löschen
 	Clear Guides	Hilfslinien löschen
+	Vertical Guide	Vertikale Hilfslinie
+	Horizontal Guide	Horizontale Hilfslinie
+	Move Guide to Layer	Hilfslinie auf Ebene verschieben
 	Clear Overrides	Abweichungen löschen
 	Clear Recent Files	Liste der zuletzt geöffneten Dateien leeren
 	Click	Klicken
@@ -1997,6 +2000,7 @@
 	Proof Colors	Farbproof
 	Proof Setup	Proof einrichten
 	Properties	Eigenschaften
+	Proportional Metrics	Proportionale Metrik
 	Proportional Oldstyle	Proportionale Mediävalziffern
 	Pucker & Bloat…	Zusammenziehen und aufblasen…
 	Pucker Tool	Zusammenziehen-Werkzeug
@@ -3213,6 +3217,7 @@ axis	Vertical	Vertikal
 axis	Both	Beide
 theme	Appearance	Erscheinungsbild
 	Drag to move	Zum Verschieben ziehen
+	Drag to move out of the set	Ziehen, um aus dem Satz zu lösen
 	Drag to float as a toolbar	Ziehen, um als eigene Werkzeugleiste abzulösen
 	Put back in the toolbar	Zurück in die Werkzeugleiste setzen
 	Float Panel	Bedienfeld ablösen
@@ -3316,6 +3321,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`color` must be a colour	`color` muss eine Farbe sein
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` muss ein Befehl sein, dessen Menüeintrag ein Dialogfeld öffnet (siehe ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` muss ein Array sein
+@msg	`freeform.lines` must be an array	`freeform.lines` muss ein Array sein
 @msg	`gradient` must be an object	`gradient` muss ein Objekt sein
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
@@ -3417,6 +3423,7 @@ theme	Appearance	Erscheinungsbild
 @msg	empty path	leerer Pfad
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	die Dateiversion {0} ist neuer, als dieses VectorCraft unterstützt ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	Freiformpunkt {i} braucht `at` [x, y] und eine gültige `color`
+@msg	freeform line {i} must be an array of point indices	Freiformlinie {i} muss ein Array von Punktindizes sein
 @msg	give both `start` and `end` [x, y] (or neither)	geben Sie sowohl `start` als auch `end` [x, y] an (oder keines von beiden)
 @msg	give corners of the path: anchors between two straight sides	geben Sie Ecken des Pfads an: Ankerpunkte zwischen zwei geraden Seiten
 @msg	give the path `id` and the width point `index`	geben Sie die `id` des Pfads und den `index` des Breitenpunkts an
@@ -3656,6 +3663,8 @@ theme	Appearance	Erscheinungsbild
 @msg	the image's pixels don't match its size	die Pixel des Bilds passen nicht zu seiner Größe
 @msg	the layer has no objects to clip by	die Ebene hat keine Objekte, an denen beschnitten werden könnte
 @msg	the layer or group is locked	die Ebene oder Gruppe ist gesperrt
+@msg	the guide is on a hidden or locked layer	die Hilfslinie liegt auf einer ausgeblendeten oder gesperrten Ebene
+@msg	the target layer is locked or hidden	die Zielebene ist gesperrt oder ausgeblendet
 @msg	the layer to flatten into is hidden	die Ebene, auf die reduziert werden soll, ist ausgeblendet
 @msg	the object already has an opacity mask	das Objekt hat bereits eine Deckkraftmaske
 @msg	the object has no geometry	das Objekt hat keine Geometrie
@@ -3680,7 +3689,7 @@ theme	Appearance	Erscheinungsbild
 @msg	the {tool} tool has no options	das Werkzeug „{tool}“ hat keine Optionen
 @msg	there are no objects to release	es gibt keine Objekte zum Zurückwandeln
 @msg	there are no printer settings to open here	hier lassen sich keine Druckereinstellungen öffnen
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	diese PostScript-Datei kann nicht gelesen werden ({_1}): Speichern Sie sie in der App, mit der sie erstellt wurde, als PDF oder SVG
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	diese PostScript-Datei kann nicht gelesen werden ({why}): Speichern Sie sie in der App, mit der sie erstellt wurde, als PDF oder SVG
 @msg	this file's PostScript couldn't be read ({why}): {what}	das PostScript dieser Datei konnte nicht gelesen werden ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	dieses Format fasst eine Zeichenfläche: Exportieren Sie mehrere als PDF oder mit document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	dies ist eine DWG-Zeichnung, die nicht gelesen werden kann: Speichern Sie sie in der CAD-App als ASCII-DXF und öffnen Sie diese Datei
@@ -3768,6 +3777,9 @@ theme	Appearance	Erscheinungsbild
 @msg	tool (a tool id) is required	tool (eine Werkzeug-ID) ist erforderlich
 @msg	{tool} isn't in a toolbar group of several tools	{tool} gehört zu keiner Werkzeuggruppe mit mehreren Werkzeugen
 @msg	onto must name a panel floating in another group	onto muss ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
+@msg	below and above must name a panel floating in another group	below und above müssen ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
+@msg	give only one of onto, below and above	nur eines von onto, below und above angeben
+@msg	column must be true or a number from 1	column muss true oder eine Zahl ab 1 sein
 @msg	x and y must both be numbers	x und y müssen beide Zahlen sein
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ist keine Farbe: Schreiben Sie sie als #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dies ist kein Logo aus flächigen Farben ({_1} % seiner einfarbigen Bereiche entsprechen wenigen flächigen Farben), daher würde der Modus „Flaches Logo“ seine Verläufe in Flecken zerlegen: Verwenden Sie stattdessen den Modus „Farbe“
@@ -3842,6 +3854,7 @@ theme	Appearance	Erscheinungsbild
 	ICF Bottom/Left	ICF unten/links
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` muss ein Array von Ankerpunkt-Indizes sein, nicht {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: Das Ergebnis von Schritt {i} hat keinen solchen Wert (schreiben Sie $$ für ein literales $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: Vor diesem Schritt gibt es keinen Schritt {i} (Schritte zählen ab 0; schreiben Sie $$ für ein literales $)
 @msg	object ids are non-negative integers, not {v}	Objekt-IDs sind nicht negative ganze Zahlen, nicht {v}
@@ -4019,3 +4032,59 @@ theme	Appearance	Erscheinungsbild
 @msg	zone must be tab, center, left, right, top or bottom	zone muss tab, center, left, right, top oder bottom sein
 @msg	{key} must be a finite coordinate	{key} muss eine endliche Koordinate sein
 @msg	invalid restored panel group	Ungültige wiederhergestellte Bedienfeldgruppe
+# 3D and Materials › Revolve: its options dialog and gizmos.
+	Ambient	Umgebungslicht
+	Axis side	Achsenseite
+	Direction	Richtung
+	Drag rings to rotate. Shift snaps to 15°.	Ziehen Sie die Ringe, um zu drehen. Mit Shift in 15°-Schritten.
+	Drag the light, or its rings. Shift snaps to 15°.	Ziehen Sie das Licht oder seine Ringe. Mit Shift in 15°-Schritten.
+	Drag values or labels. Double-click a value to type.	Ziehen Sie Werte oder Beschriftungen. Doppelklicken Sie auf einen Wert, um ihn einzugeben.
+	Elevation	Höhe
+	Intensity	Intensität
+	Keep visible surfaces only when expanding	Beim Umwandeln nur sichtbare Flächen behalten
+	Lighting	Beleuchtung
+	Reset all	Alle zurücksetzen
+	Reset all Revolve settings to their defaults.	Alle Einstellungen für „Kreiseln“ auf ihre Standardwerte zurücksetzen.
+	Reset to default	Auf Standard zurücksetzen
+	Revolve angle	Kreiselwinkel
+	Rotation X	Drehung X
+	Rotation Y	Drehung Y
+	Rotation Z	Drehung Z
+	Segments	Segmente
+	Shading	Schattierung
+	Show axis	Achse einblenden
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Entfernt bei „Aussehen umwandeln“ verdeckte Geometrie. Die Live-Vorschau behält die ganze Oberfläche. Transparente Farben und Oberflächen jenseits der Sichtbarkeitsgrenzen behalten alle Flächen.
+	Accented Edges…	Kanten betonen…
+	Angled Strokes…	Schräge Striche…
+	Crosshatch…	Kreuzschraffur…
+	Dark Strokes…	Dunkle Striche…
+	Ink Outlines…	Tintenumrisse…
+	Spatter…	Spritzer…
+	Sprayed Strokes…	Gesprühte Striche…
+	Sumi-e…	Sumi-e…
+	Accented Edges	Kanten betonen
+	Angled Strokes	Schräge Striche
+	Crosshatch	Kreuzschraffur
+	Dark Strokes	Dunkle Striche
+	Ink Outlines	Tintenumrisse
+	Spatter	Spritzer
+	Sprayed Strokes	Gesprühte Striche
+	Sumi-e	Sumi-e
+	Direction Balance	Richtungsbalance
+	Stroke Length	Strichlänge
+	Sharpness	Schärfe
+	Strength	Stärke
+	Balance	Balance
+	Black Intensity	Schwarzintensität
+	White Intensity	Weißintensität
+	Dark Intensity	Dunkle Intensität
+	Light Intensity	Lichtintensität
+	Spray Radius	Sprühradius
+	Stroke Direction	Strichrichtung
+	Stroke Width	Strichbreite
+	Stroke Pressure	Strichdruck
+	Right Diagonal	Diagonal nach rechts
+	Left Diagonal	Diagonal nach links
+@msg	invalid native panel set	Ungültiger nativer Bedienfeldsatz
+@msg	missing panel layout	Bedienfeldanordnung fehlt
+@msg	unsupported native docking operation	Nicht unterstützte native Docking-Operation

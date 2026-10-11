@@ -284,7 +284,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. With `copy`, the first step duplicates. |
 | `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. An empty CSV cell or a `null` in `rows` is a blank value; a number in straight quotes is a label. Edit later with `graph.setData` / `graph.setType` via `run_command`. |
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. |
-| `undo` / `redo` | `{}` | |
+| `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. `inspect_document` lists the undo steps as `history`. |
 
 With `mods.shift`, a marquee dragged with the Selection tool toggles the objects it reaches (the selected ones leave
 the selection, the others join it, the rest stays), and one dragged with Direct or Group Selection toggles the anchors
@@ -817,6 +817,34 @@ default) white ones knock out instead; `"discard"` writes none.
 {"name":"run_command","arguments":{"command":"object.setOverprint","params":{"ids":[12],"stroke":true}}}
 {"name":"run_command","arguments":{"command":"attributes.info","params":{"ids":[12]}}}
 {"name":"run_command","arguments":{"command":"view.overprintPreview","params":{"on":true}}}
+```
+
+## Revolve (initial 3D effect)
+
+`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path
+or compound path. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
+`effect.expandAppearance` bakes it into shaded vector faces. Native saves keep the editable source;
+SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is supported per profile.
+
+Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
+`edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspective`
+(0..100%, default 0), `segments` (8..128, default 64), `shade` (default true), `lightAzimuth`
+(degrees, default -45), `lightElevation` (degrees, default 45), `lightIntensity` (0..100%, default 80),
+`ambient` (0..100%, default 25), and `expandVisibleOnly` (boolean, default true). A vertical-line profile needs a positive offset to have a radius.
+Open profiles have no end caps. Visibility of intersecting surfaces is approximate.
+The dialog's Lighting tab manipulates the same `lightAzimuth` and `lightElevation` parameters;
+its guide visibility and tab choice are UI state, excluded from saved effect parameters.
+`expandVisibleOnly` is saved with the effect. It trims covered portions of opaque solid surfaces only
+when running `effect.expandAppearance`, preserving visible interiors through openings. Set it to false
+to expand all faces. Live preview and SVG/PDF baking keep the full surface. Transparent/unknown paint,
+non-normal blending, later geometry effects or bounded visibility failures preserve all faces.
+See [Revolve](revolve.md) for the scope and limitations.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.revolve","item":null,"params":{"angle":360,"offset":20,"edge":"left","rotationX":0,"rotationY":0,"rotationZ":0}}}}
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"angle":180,"lightAzimuth":30}}}}
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"expandVisibleOnly":true}}}}
+{"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{}}}
 ```
 
 ## Edit Colors and Recolor Artwork
@@ -2597,6 +2625,19 @@ without ideographs uses its em box. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"charAlign":"icfTop"}}}
+```
+
+## Proportional Metrics
+
+`text.setFormat {proportionalMetrics: true}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end,
+proportionalMetrics}` (a range) set full-width glyphs on the proportional widths the font gives them with the
+OpenType `palt` feature; glyphs the font doesn't re-space keep their full width. Line-end Punctuation Half Width then takes nothing more off the punctuation `palt` re-spaced (the opening
+bracket at a line's start, consecutive punctuation, the closing mark at a line's end); punctuation left full width is
+trimmed as before. Off by default and saved only when on. Horizontal type only for now: vertical type sets as before.
+One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
 ```
 
 ## New type in a Japanese interface

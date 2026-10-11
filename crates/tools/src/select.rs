@@ -444,7 +444,7 @@ impl Tool for SelectionTool {
 
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         match self.state {
-            State::Rotating { .. } => return Cursor::Rotate,
+            State::Rotating { center, .. } => return Cursor::rotate_about(center, p),
             State::Scaling { handle, bx, .. } => return handle_cursor(handle, bx.angle),
             State::Moving { began: true, .. } => return Cursor::Arrow,
             State::Corner(_) => return Cursor::CornerRadius,
@@ -468,7 +468,7 @@ impl Tool for SelectionTool {
         {
             match box_hit(cx, &bx, p) {
                 Some(BoxHit::Handle(h)) => return handle_cursor(h, bx.angle),
-                Some(BoxHit::Rotate) => return Cursor::Rotate,
+                Some(BoxHit::Rotate) => return Cursor::rotate_about(bx.center(), p),
                 None => {}
             }
         }
@@ -586,6 +586,24 @@ mod tests {
         assert!(!t.busy());
         // A double-click there doesn't go through to the art.
         assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 160.0, 150.0)).is_empty());
+    }
+
+    /// Just outside each corner of the box the rotate cursor bows toward that corner, its arc
+    /// opening toward the box: at the top right it opens to the bottom left.
+    #[test]
+    fn the_rotate_cursor_wraps_the_corner_it_is_at() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let t = SelectionTool::default();
+        // The box runs from (100, 100) to (200, 200); 10 pt out from each corner, diagonally.
+        for ((x, y), octant) in [((93.0, 93.0), 7), ((207.0, 93.0), 1), ((207.0, 207.0), 3), ((93.0, 207.0), 5)] {
+            assert_eq!(t.cursor(&cx, Point::new(x, y), Mods::default()), Cursor::RotateToward(octant), "at ({x}, {y})");
+        }
+        assert_eq!(Cursor::rotate_about(Point::new(1.0, 1.0), Point::new(1.0, 1.0)), Cursor::Rotate, "on the centre");
+        assert_eq!(Cursor::rotate_about(Point::ORIGIN, Point::new(0.0, -5.0)), Cursor::RotateToward(0), "straight up");
     }
 
     #[test]

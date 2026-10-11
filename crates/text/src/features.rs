@@ -160,6 +160,23 @@ impl OtFeatures {
             // and digits itself (they would lie upside down, and tate-chu-yoko break).
             v.push(f(b"vert", true));
         }
+        if self.proportional(st) {
+            v.push(f(b"palt", true));
+        }
+        v
+    }
+
+    /// Does text in style `st` take proportional widths (`palt`)? Proportional Metrics in
+    /// horizontal type; vertical type (`vpal`) needs vertical shaping, so it sets as before.
+    pub(crate) fn proportional(&self, st: &CharStyle) -> bool {
+        st.proportional_metrics && !self.vertical
+    }
+
+    /// The harfrust features for text in style `st` with full-width glyphs on their full widths:
+    /// [`Self::resolve`] without `palt`.
+    pub(crate) fn resolve_fixed_width(&self, st: &CharStyle) -> Vec<Feature> {
+        let mut v = self.resolve(st);
+        v.retain(|x| x.tag != Tag::new(b"palt"));
         v
     }
 }

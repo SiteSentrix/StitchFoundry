@@ -1721,6 +1721,7 @@
 	Proof Colors	Provar Cores
 	Proof Setup	Configuração de Prova
 	Properties	Propriedades
+	Proportional Metrics	Métrica Proporcional
 	Pucker & Bloat…	Encolher e Inchar…
 	Pucker Tool	Ferramenta Encolher
 	Punctuation Space	Espaço de Pontuação
@@ -2697,6 +2698,7 @@
 	% of all commits	% de todos os commits
 	Lines +/−	Linhas +/−
 	Drag to move	Arraste para mover
+	Drag to move out of the set	Arraste para tirar do conjunto
 	Drag to float as a toolbar	Arraste para flutuar como barra de ferramentas
 	Put back in the toolbar	Devolver à barra de ferramentas
 	Float Panel	Flutuar Painel
@@ -2762,3 +2764,40 @@
 	Group with	Agrupar com
 	Resize panels	Redimensionar painéis
 	Resize panel window	Redimensionar janela do painel
+
+# Interactive Revolve controls.
+	Lighting	Iluminação
+	Revolve angle	Ângulo de giro
+	Axis side	Lado do eixo
+	Rotation X	Rotação X
+	Rotation Y	Rotação Y
+	Rotation Z	Rotação Z
+	Shading	Sombreamento
+	Direction	Direção
+	Elevation	Elevação
+	Intensity	Intensidade
+	Ambient	Luz ambiente
+	Segments	Segmentos
+	Show axis	Mostrar eixo
+	Reset all	Redefinir tudo
+	Reset to default	Restaurar padrão
+	Reset all Revolve settings to their defaults.	Restaurar os valores padrão de todas as configurações de revolução.
+	Drag values or labels. Double-click a value to type.	Arraste os valores ou rótulos. Clique duas vezes em um valor para digitá-lo.
+	Drag rings to rotate. Shift snaps to 15°.	Arraste os anéis para girar. Shift ajusta em incrementos de 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Arraste a luz ou seus anéis. Shift ajusta em incrementos de 15°.
+lighting	Light	Luz
+	Keep visible surfaces only when expanding	Manter apenas as superfícies visíveis ao expandir
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Recortar a geometria coberta ao expandir a aparência. A visualização ao vivo mantém toda a superfície. Pinturas transparentes e superfícies que excedem os limites de visibilidade mantêm todas as faces.
+	Left	Esquerda
+	Right	Direita
+	Offset	Deslocamento
+	Accented Edges…	Bordas Acentuadas…
+	Angled Strokes…	Traços Angulares…
+	Crosshatch…	Hachura Cruzada…
+	Dark Strokes…	Traços Escuros…
+	Ink Outlines…	Contornos a Tinta…
+	Spatter…	Respingo…
+	Sprayed Strokes…	Traços Borrifados…
+	Sumi-e…	Sumi-e…
+	Vertical Guide	Guia vertical
+	Horizontal Guide	Guia horizontal

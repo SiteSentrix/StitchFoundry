@@ -105,6 +105,20 @@ fn rich_text_writes_spacing_shift_and_scale() {
     assert_eq!(attr(tags[1], "y"), attr(tags[0], "y"));
 }
 
+/// Proportional Metrics (#966) is written as the `palt` feature, beside the character's own.
+#[test]
+fn proportional_metrics_write_palt() {
+    let proportional = CharStyle { proportional_metrics: true, ..style(12.0) };
+    let both = CharStyle { proportional_metrics: true, features: vec!["dlig".into()], ..style(12.0) };
+    let d = area_doc(vec![run("雅楽 ", style(12.0)), run("「あ」 ", proportional), run("ab", both)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    let tags = tspans(&svg);
+    assert_eq!(tags.len(), 3, "{svg}");
+    assert!(!tags[0].contains("palt"), "{}", tags[0]);
+    assert!(tags[1].contains("font-feature-settings:&quot;palt&quot; 1"), "{}", tags[1]);
+    assert!(tags[2].contains("dlig") && tags[2].contains("palt"), "{}", tags[2]);
+}
+
 #[test]
 fn fewer_tspans_writes_one_per_line() {
     let bold = CharStyle { font_style: "Bold".into(), ..style(12.0) };

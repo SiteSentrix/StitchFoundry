@@ -572,3 +572,27 @@ fn copy_from_requires_source() {
     assert!(s.execute("appearance.copyFrom", &json!({})).is_err());
     assert!(s.execute("appearance.copyFrom", &json!({"source": 9999})).is_err());
 }
+
+#[test]
+fn distort_rejects_malformed_coordinates_and_ids_without_editing_art() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let original = bounds(&s, a);
+    let history = undo_len(&s);
+    let corners = json!([[10, 0], [90, 0], [100, 100], [0, 100]]);
+    for p in [
+        json!({"corners": [[10, 0, 50], [90, 0], [100, 100], [0, 100]]}),
+        json!({"corners": [[10, 0], [90, 0], ["bad", 100], [0, 100]]}),
+        json!({"corners": [[10, 0], [90, 0], [100, 100], [0, 100], ["bad"]]}),
+        json!({"corners": corners, "from": [0, 0, 100]}),
+        json!({"corners": corners, "from": "not bounds"}),
+        json!({"corners": corners, "ids": [a.0, "bad"]}),
+        json!({"corners": corners, "ids": [a.0, u64::MAX]}),
+    ] {
+        assert!(s.execute("object.distort", &p).is_err(), "invalid input: {p}");
+        assert!(close(bounds(&s, a), original));
+        assert_eq!(undo_len(&s), history);
+    }
+    s.execute("object.distort", &json!({"corners": corners, "from": [0, 0, 100, 100], "ids": [a.0]})).unwrap();
+    assert_eq!(undo_len(&s), history + 1);
+}

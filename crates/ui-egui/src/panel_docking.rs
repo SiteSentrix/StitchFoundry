@@ -163,6 +163,28 @@ fn placement(params: &Value) -> Result<Placement<String>, String> {
 }
 
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+    if matches!(id, "window.panel.float" | "window.panel.dock")
+        && (params.get("above").is_some()
+            || params.get("below").is_some()
+            || params.get("column").is_some()
+            || params.get("collapsed").is_some()
+            || params
+                .get("onto")
+                .and_then(Value::as_str)
+                .and_then(normalize)
+                .and_then(|id| crate::floating::group_of(&app.ui, id))
+                .and_then(|i| app.ui.floating_panels.get(i))
+                .is_some_and(decorated)
+            || params
+                .get("panel")
+                .and_then(Value::as_str)
+                .and_then(normalize)
+                .and_then(|id| crate::floating::group_of(&app.ui, id))
+                .and_then(|i| app.ui.floating_panels.get(i))
+                .is_some_and(decorated))
+    {
+        return Some(native_change(app, id, params));
+    }
     if id == "window.panel.layout" {
         return Some(
             params
@@ -244,6 +266,10 @@ fn apply_action(app: &mut VectorcraftApp, action: Action<String>) -> Result<Valu
         Action::Float { panel, .. } => float_fallback(&layout, panel),
         _ => None,
     };
+    let activated = match &action {
+        Action::Activate { panel } => Some(panel.clone()),
+        _ => None,
+    };
     layout.apply(action).map_err(|error| error.to_string())?;
     restore_float_fallback(&mut layout, fallback)?;
     if let Some((panel, location)) = returning {
@@ -254,6 +280,13 @@ fn apply_action(app: &mut VectorcraftApp, action: Action<String>) -> Result<Valu
     }
     app.ui.docking_icons = icons;
     app.ui.docking = Some(layout);
+    if let Some(panel) = activated {
+        for group in &mut app.ui.floating_panels {
+            if group.panels.contains(&panel) {
+                group.collapsed = false;
+            }
+        }
+    }
     sync_legacy(app);
     app.ui.open_panel = None;
     Ok(json!({"layout": app.ui.docking}))
@@ -448,6 +481,13 @@ fn change(app: &mut VectorcraftApp, operation: &str, params: &Value) -> Result<V
     app.ui.docking = Some(layout);
     app.ui.docking_hidden = hidden;
     app.ui.docking_icons = icons;
+    if operation == "activate" {
+        for group in &mut app.ui.floating_panels {
+            if group.panels.iter().any(|id| id == panel) {
+                group.collapsed = false;
+            }
+        }
+    }
     sync_legacy(app);
     app.ui.open_panel = None;
     app.ui.dock = true;
@@ -533,9 +573,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
                     app.ui.status = error;
                 }
                 if let Some(panel) = normalize(&drag.panel)
-                    && let Some((_, rect)) = crate::floating::drop_target(app, ui.ctx(), crate::floating::Moving::Panel(panel), pos)
+                    && let Some((target, rect)) = crate::floating::drop_target(app, ui.ctx(), crate::floating::Moving::Panel(panel), pos)
                 {
-                    crate::floating::highlight(ui.ctx(), rect);
+                    crate::floating::preview(ui.ctx(), target, rect);
                 }
             } else {
                 if let Some(panel) = normalize(&drag.panel)
@@ -544,6 +584,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
                     let (id, params) = match target {
                         crate::floating::Drop::Dock => ("window.panel.dock", json!({"panel":panel,"group":true})),
                         crate::floating::Drop::Stack(onto) => ("window.panel.float", json!({"panel":panel,"group":true,"onto":onto})),
+                        crate::floating::Drop::Below(onto) => ("window.panel.float", json!({"panel":panel,"group":true,"below":onto})),
+                        crate::floating::Drop::Above(onto) => ("window.panel.float", json!({"panel":panel,"group":true,"above":onto})),
+                        crate::floating::Drop::Column(slot) => ("window.panel.dock", json!({"panel":panel,"group":true,"column":slot})),
                     };
                     if let Err(error) = app.run(id, params) {
                         app.ui.status = error;
@@ -578,7 +621,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
     let layout = layout.clone();
     let t = crate::theme::Tokens::get(ui.ctx());
     let collapsed = app.ui.dock_collapsed;
-    let display = if collapsed { Layout { root: None, floating: layout.floating.clone() } } else { layout.clone() };
+    let mut display = if collapsed { Layout { root: None, floating: layout.floating.clone() } } else { layout.clone() };
+    display
+        .floating
+        .retain(|group| !app.ui.floating_panels.iter().any(|native| decorated(native) && native.panels.iter().any(|id| group.panels.contains(id))));
     let mut draw = |ui: &mut egui::Ui| {
         if layout.root.is_some() && crate::dock::collapse_header(ui, collapsed) {
             let _ = app.run("window.collapseDock", json!({"collapsed":!collapsed}));
@@ -643,37 +689,76 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
     };
     if let Some(panel) = output.group_drag.as_deref().and_then(normalize)
         && let Some(pos) = ui.input(|input| input.pointer.interact_pos())
-        && let Some((_, rect)) = crate::floating::drop_target(app, ui.ctx(), crate::floating::Moving::Panel(panel), pos)
+        && let Some((target, rect)) = crate::floating::drop_target(app, ui.ctx(), crate::floating::Moving::Panel(panel), pos)
     {
-        crate::floating::highlight(ui.ctx(), rect);
+        crate::floating::preview(ui.ctx(), target, rect);
     }
     if let Some(error) = output.error {
         app.ui.status = error.to_string();
     }
+    // Tab and icon tears finish as model actions; title moves finish as group_drop.
+    // Native sets are absent from the shared render tree, so their pointer target must win
+    // over a float proposal or a root target drawn behind the native window.
+    let tab_drop = ui.input(|input| input.pointer.primary_released().then(|| input.pointer.interact_pos()).flatten()).and_then(|pos| {
+        output.actions.iter().find_map(|action| {
+            let panel = match action {
+                Action::Float { panel, .. } | Action::Move { panel, .. } => normalize(panel)?,
+                _ => return None,
+            };
+            crate::floating::drop_target(app, ui.ctx(), crate::floating::Moving::Panel(panel), pos)
+                .filter(|(target, _)| !matches!(target, crate::floating::Drop::Dock))
+                .map(|(target, _)| (panel, target))
+        })
+    });
     if ui.input(|input| input.pointer.any_released()) {
-        if !output.actions.iter().any(|action| matches!(action, Action::Move { .. } | Action::Float { .. })) && cancel_legacy_drag(app, ui.ctx()) {
+        let native_drop = output.group_drop.as_ref().is_some_and(|(panel, pos)| {
+            normalize(panel).and_then(|id| crate::floating::drop_target(app, ui.ctx(), crate::floating::Moving::Panel(id), *pos)).is_some()
+        });
+        if !output.actions.iter().any(|action| matches!(action, Action::Move { .. } | Action::Float { .. }))
+            && !native_drop
+            && tab_drop.is_none()
+            && cancel_legacy_drag(app, ui.ctx())
+        {
             return app.ui.docking.is_some();
         }
         ui.ctx().data_mut(|data| data.remove::<LegacyDrag>(egui::Id::new("vectorcraft-panel-docking").with("legacy-origin")));
     }
     for action in output.actions {
+        if tab_drop
+            .is_some_and(|(panel, _)| matches!(&action, Action::Float { panel: moved, .. } | Action::Move { panel: moved, .. } if moved == panel))
+        {
+            continue;
+        }
         if let Err(error) = app.run("window.panel.layout", json!({"action": action})) {
             app.ui.status = error;
         }
     }
-    if let Some((panel, pos)) = output.group_drop
-        && let Some(panel) = normalize(&panel)
-        && let Some((target, _)) = crate::floating::drop_target(app, ui.ctx(), crate::floating::Moving::Panel(panel), pos)
-    {
+    let group_drop = output.group_drop.and_then(|(panel, pos)| {
+        let panel = normalize(&panel)?;
+        crate::floating::drop_target(app, ui.ctx(), crate::floating::Moving::Panel(panel), pos).map(|(target, _)| (panel, target, true))
+    });
+    if let Some((panel, target, whole_group)) = group_drop.or_else(|| tab_drop.map(|(panel, target)| (panel, target, false))) {
         let (command, params) = match target {
-            crate::floating::Drop::Dock => ("window.panel.dock", json!({"panel": panel, "group": true})),
-            crate::floating::Drop::Stack(onto) => ("window.panel.float", json!({"panel": panel, "group": true, "onto": onto})),
+            crate::floating::Drop::Dock => ("window.panel.dock", json!({"panel": panel, "group": whole_group})),
+            crate::floating::Drop::Stack(onto) => ("window.panel.float", json!({"panel": panel, "group": whole_group, "onto": onto})),
+            crate::floating::Drop::Below(onto) => ("window.panel.float", json!({"panel":panel,"group":whole_group,"below":onto})),
+            crate::floating::Drop::Above(onto) => ("window.panel.float", json!({"panel":panel,"group":whole_group,"above":onto})),
+            crate::floating::Drop::Column(slot) => ("window.panel.dock", json!({"panel":panel,"group":whole_group,"column":slot})),
         };
-        if let Err(error) = app.run(command, params) {
-            app.ui.status = error;
+        // Shared and native windows have already chosen their render ownership for this
+        // frame. Switch representations only after both renderers finish, so a panel's
+        // widgets never appear in two layers in the same frame.
+        ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new("vectorcraft-native-panel-drop"), (command, params)));
+    }
+    for group in &display.floating {
+        if let Some(first) = group.panels.first()
+            && let Some(rect) = ui.ctx().memory(|memory| memory.area_rect(area.with(("floating", first))))
+        {
+            ui.ctx().data_mut(|data| data.insert_temp(crate::floating::group_rect_id(first), rect));
         }
     }
     icon_rail(app, ui);
+    crate::floating::docked_columns(app, ui);
     true
 }
 
@@ -777,8 +862,89 @@ pub(crate) fn legacy_tab(app: &mut VectorcraftApp, ui: &mut egui::Ui, panel: &st
 }
 
 // Keep the legacy inspection schema useful; shared layout remains the rendering authority.
+pub(crate) fn decorated(group: &crate::state::FloatingPanels) -> bool {
+    group.column.is_some() || group.docked.is_some() || group.collapsed
+}
+
+/// Keep the native set metadata alongside the validated shared ownership tree. Return locations
+/// and root splits survive the mirror update; failed reconciliation restores the whole UI state.
+pub(crate) fn reconcile_native(app: &mut VectorcraftApp, before: crate::state::UiState) -> Result<(), String> {
+    if before.docking.is_none() {
+        return Ok(());
+    }
+    let desired = app.ui.floating_panels.clone();
+    let result = (|| {
+        let prior = before.docking.as_ref().ok_or("missing panel layout")?;
+        app.ui.docking = Some(prior.clone());
+        for group in &prior.floating {
+            for panel in &group.panels {
+                if !desired.iter().any(|g| g.panels.contains(panel)) {
+                    change(app, "dock", &json!({"panel":panel}))?;
+                }
+            }
+        }
+        let mut layout = app.ui.docking.clone().ok_or("missing panel layout")?;
+        for group in &desired {
+            for panel in &group.panels {
+                if (Layout { root: layout.root.clone(), floating: vec![] }).contains(panel) {
+                    if let Ok(location) = layout.location(panel) {
+                        app.ui.docking_hidden.insert(panel.clone(), location);
+                    }
+                    layout.apply(Action::Close { panel: panel.clone() }).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        layout.floating = desired
+            .iter()
+            .map(|group| {
+                let height = prior.floating.iter().find(|g| g.panels.iter().any(|id| group.panels.contains(id))).map_or(400.0, |g| g.rect[3]);
+                Floating {
+                    panels: group.panels.clone(),
+                    active: group.active,
+                    rect: [group.pos[0], group.pos[1], group.width.unwrap_or(300.0), height],
+                }
+            })
+            .collect();
+        if !valid(&layout) {
+            return Err("invalid native panel set".into());
+        }
+        app.ui.docking = Some(layout);
+        app.ui.floating_panels = desired;
+        Ok(())
+    })();
+    if result.is_err() {
+        app.ui = before;
+    }
+    result
+}
+
+fn native_change(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<Value, String> {
+    let before = app.ui.clone();
+    let result = (|| {
+        let panel = params.get("panel").and_then(Value::as_str).and_then(normalize).ok_or("panel must name a registered panel")?;
+        if crate::floating::group_of(&app.ui, panel).is_none() {
+            let mut initial = params.clone();
+            if let Some(object) = initial.as_object_mut() {
+                for key in ["above", "below", "column", "collapsed", "onto"] {
+                    object.remove(key);
+                }
+            }
+            change(app, "float", &initial)?;
+        }
+        let baseline = app.ui.clone();
+        let value = crate::floating::command(app, id, params).ok_or("unsupported native docking operation")??;
+        reconcile_native(app, baseline)?;
+        Ok(value)
+    })();
+    if result.is_err() {
+        app.ui = before;
+    }
+    result
+}
+
 fn sync_legacy(app: &mut VectorcraftApp) {
     if let Some(layout) = &app.ui.docking {
+        let old = app.ui.floating_panels.clone();
         let mut pending: Vec<_> = layout.root.iter().collect();
         while let Some(node) = pending.pop() {
             match node {
@@ -799,6 +965,12 @@ fn sync_legacy(app: &mut VectorcraftApp) {
                 active: group.active,
                 pos: [group.rect[0], group.rect[1]],
                 width: Some(group.rect[2]),
+                column: old.iter().find(|native| group.panels.first().is_some_and(|first| native.panels.contains(first))).and_then(|g| g.column),
+                collapsed: old
+                    .iter()
+                    .find(|native| group.panels.first().is_some_and(|first| native.panels.contains(first)))
+                    .is_some_and(|g| g.collapsed),
+                docked: old.iter().find(|native| group.panels.first().is_some_and(|first| native.panels.contains(first))).and_then(|g| g.docked),
             })
             .collect();
     }
@@ -807,3 +979,13 @@ fn sync_legacy(app: &mut VectorcraftApp) {
 #[cfg(test)]
 #[path = "panel_docking_tests.rs"]
 mod tests;
+
+/// Commit a pointer drop after shared and native panel windows have finished rendering.
+pub(crate) fn finish_native_drop(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if let Some((command, params)) =
+        ctx.data_mut(|data| data.remove_temp::<(&'static str, serde_json::Value)>(egui::Id::new("vectorcraft-native-panel-drop")))
+        && let Err(error) = app.run(command, params)
+    {
+        app.ui.status = error;
+    }
+}

@@ -52,6 +52,67 @@ fn group_ungroup() {
     assert_eq!(s.doc().unwrap().selection.len(), 2);
 }
 
+/// Makes 10 pt squares at (0, 90) and (50, 100) into a compound path or group with the commands in
+/// `make`, each run on the selection (the last one makes `outer`), draws a 10 pt square `r` at
+/// (200, 0), selects the second square and `r`, and sets the selection's `key` to that square
+/// → (session, key, outer, r).
+fn key_inside(make: &[&str]) -> (Session, NodeId, NodeId, NodeId) {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 90.0, 10.0, 10.0);
+    let key = rect(&mut s, 50.0, 100.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, key.0]})).unwrap();
+    let mut outer = key;
+    for cmd in make {
+        outer = NodeId(s.execute(cmd, &json!({})).unwrap()["id"].as_u64().unwrap());
+    }
+    let r = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [key.0, r.0]})).unwrap();
+    s.select(|_, sel| sel.key = Some(key)).unwrap();
+    (s, key, outer, r)
+}
+
+/// Aligns the selection left to its key object and, after Undo, spaces it 5 pt apart vertically
+/// → the top-left corners of `outer` and `r` after each.
+fn aligned_then_spaced(s: &mut Session, outer: NodeId, r: NodeId) -> [((f64, f64), (f64, f64)); 2] {
+    let at = |s: &Session, id| {
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        (b.x0, b.y0)
+    };
+    s.execute("object.align", &json!({"horizontal": "left", "bounds": "geometric"})).unwrap();
+    let aligned = (at(s, outer), at(s, r));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.distributeSpacing", &json!({"axis": "vertical", "spacing": 5, "bounds": "geometric"})).unwrap();
+    [aligned, (at(s, outer), at(s, r))]
+}
+
+/// Align and Distribute Spacing move a compound path as one object. With one of its members as the
+/// key object, the compound path stays where it is: Align moves the others to the member's edge,
+/// and Distribute Spacing spaces them from the compound path.
+#[test]
+fn a_compound_path_that_contains_the_key_object_stays_in_place() {
+    let (mut s, key, outer, r) = key_inside(&["object.compoundPath.make"]);
+    assert_eq!(s.doc().unwrap().selection.key, Some(key));
+    let [aligned, spaced] = aligned_then_spaced(&mut s, outer, r);
+    assert_eq!(aligned, ((0.0, 90.0), (50.0, 0.0)), "it stays, the other moved to the key");
+    assert_eq!(spaced, ((0.0, 90.0), (200.0, 75.0)), "5 pt apart, it stays");
+}
+
+/// The key object stays the key when the group that contains it is added to the selection, by
+/// `select.add` or by the Group Selection tool's click on a selected member. Align and Distribute
+/// Spacing move that group as one object, and the group stays where it is, also when the key is in
+/// a group inside it.
+#[test]
+fn a_selected_group_that_contains_the_key_object_stays_in_place() {
+    for make in [&["object.group"][..], &["object.group", "object.group"]] {
+        let (mut s, key, outer, r) = key_inside(make);
+        s.execute("select.add", &json!({"ids": [outer.0]})).unwrap();
+        assert_eq!(s.doc().unwrap().selection.key, Some(key), "{make:?}");
+        let [aligned, spaced] = aligned_then_spaced(&mut s, outer, r);
+        assert_eq!(aligned, ((0.0, 90.0), (50.0, 0.0)), "{make:?}: it stays, the other moved to the key");
+        assert_eq!(spaced, ((0.0, 90.0), (200.0, 75.0)), "{make:?}: 5 pt apart, it stays");
+    }
+}
+
 #[test]
 fn arrange_order() {
     let mut s = session();
@@ -132,6 +193,74 @@ fn fill_and_stroke_commands() {
     assert_eq!(s.doc().unwrap().doc.node(a).unwrap().appearance.stroke_paint().color().unwrap().to_hex(), "#ff0000");
     s.execute("paint.setFill", &json!({"swatch": "Cyan"})).unwrap();
     s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}})).unwrap();
+}
+
+#[test]
+fn stroke_rejects_invalid_dash_components_and_preserves_defaults_on_error() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 40.0, 30.0);
+    s.execute("stroke.set", &json!({"weight": 3, "dash": [6, 3]})).unwrap();
+    let previous_weight = s.paint.stroke_width;
+    let previous_stroke = s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().cloned();
+
+    for params in [
+        json!({"weight": 10, "dash": [6, "not a number", 3]}),
+        json!({"weight": 10, "ids": "not an array"}),
+        json!({"weight": 10, "item": "invalid"}),
+        json!({"weight": 10, "arrowAlign": "unknown"}),
+    ] {
+        assert!(s.execute("stroke.set", &params).is_err(), "{params} must fail");
+        assert_eq!(s.paint.stroke_width, previous_weight, "failed stroke edit changed new-art defaults");
+        assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().cloned(), previous_stroke);
+    }
+
+    // A valid dash list still updates the selected stroke and new-art default width.
+    s.execute("stroke.set", &json!({"weight": 7, "dash": [4, 2]})).unwrap();
+    assert_eq!(s.paint.stroke_width, 7.0);
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().width, 7.0);
+
+    // With nothing selected the panel sets up the next object drawn: a rejected edit doesn't.
+    s.execute("select.none", &json!({})).unwrap();
+    let next = s.new_art();
+    assert!(s.execute("stroke.set", &json!({"weight": 12, "dash": [2, 2], "arrowAlign": "unknown"})).is_err());
+    assert_eq!(s.new_art(), next);
+    s.execute("stroke.set", &json!({"weight": 12, "dash": [2, 2]})).unwrap();
+    let next = s.new_art();
+    let stroke = next.stroke().unwrap();
+    assert_eq!((stroke.width, stroke.dash.as_ref().map(|d| d.pattern.clone())), (12.0, Some(vec![2.0, 2.0])));
+}
+
+#[test]
+fn rejected_paint_edits_leave_new_art_defaults_and_focus_unchanged() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    let defaults = s.paint.clone();
+    let focused = s.fill_active;
+    let original_fill = s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint();
+    let original_stroke = s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint();
+
+    // Both shortcut commands used to change defaults before checking invalid ids.
+    for (command, params) in [
+        ("paint.swap", json!({"ids": "not an array"})),
+        ("paint.default", json!({"ids": ["not an object id"]})),
+        ("paint.setFill", json!({"color": "#123456", "ids": [false]})),
+        ("paint.setStroke", json!({"color": "#123456", "ids": "not an array"})),
+        ("paint.setFill", json!({"color": "#123456", "item": "invalid"})),
+    ] {
+        assert!(s.execute(command, &params).is_err(), "{command} should reject {params}");
+        assert_eq!(s.paint, defaults, "{command} changed new-art defaults on failure");
+        assert_eq!(s.fill_active, focused, "{command} changed the active proxy on failure");
+        let appearance = &s.doc().unwrap().doc.node(id).unwrap().appearance;
+        assert_eq!(appearance.fill_paint(), original_fill);
+        assert_eq!(appearance.stroke_paint(), original_stroke);
+    }
+
+    // Successful operations still update both the selected object and new-art defaults.
+    s.execute("paint.swap", &json!({})).unwrap();
+    assert_eq!(s.paint.fill, defaults.stroke);
+    assert_eq!(s.paint.stroke, defaults.fill);
 }
 
 #[test]
@@ -260,6 +389,426 @@ fn selection_tool_drag_is_one_undo_step() {
     assert_eq!(s.journal.last().unwrap().0, "object.transform");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap().x0, 100.0);
+}
+
+/// How many steps there are to undo and to redo, and whether the document has unsaved changes.
+fn history(s: &Session) -> (usize, usize, bool) {
+    let st = s.doc().unwrap();
+    (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+}
+
+/// Select `ids` with a move of them left to redo, and mark the document saved.
+fn select_with_a_step_to_redo(s: &mut Session, ids: &[NodeId]) {
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+}
+
+/// An Align that moves nothing (one object on the artboard's left edge, a pair already aligned, a
+/// pair that an earlier Align left a rounding error apart) records no undo step: the step to redo
+/// stays, the document stays unmodified, and the journal, which the Actions panel records from,
+/// still has the command.
+#[test]
+fn an_align_that_moves_nothing_records_no_undo_step() {
+    let mut s = session();
+    let x0 = |s: &Session, id| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+    let left = json!({"horizontal": "left"});
+    let a = rect(&mut s, 0.0, 50.0, 40.0, 40.0);
+    select_with_a_step_to_redo(&mut s, &[a]);
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+    // Object › Align sends no `to`, and the Align panel aligns one object to the artboard.
+    for p in [left.clone(), json!({"horizontal": "left", "to": "artboard"})] {
+        s.execute("object.align", &p).unwrap();
+        assert_eq!(history(&s), before, "one object and no key: {p}");
+        assert_eq!(s.journal.last().unwrap(), &("object.align".to_string(), p));
+    }
+    let b = rect(&mut s, 0.0, 200.0, 80.0, 20.0);
+    select_with_a_step_to_redo(&mut s, &[a, b]);
+    let before = history(&s);
+    s.execute("object.align", &left).unwrap();
+    assert_eq!(history(&s), before, "a pair already aligned");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!((x0(&s, a), x0(&s, b)), (5.0, 5.0), "Redo brings back the move");
+    // An Align that moves something is one undo step, and it clears Redo.
+    let c = rect(&mut s, 120.0, 300.0, 20.0, 20.0);
+    select_with_a_step_to_redo(&mut s, &[a, c]);
+    let undo = history(&s).0;
+    s.execute("object.align", &left).unwrap();
+    assert_eq!(history(&s), (undo + 1, 0, true));
+    assert_eq!(x0(&s, c), 5.0);
+    // Aligning a rectangle at 51.8 to one at 10.7 leaves it a rounding error off 10.7, and a
+    // second Align records no step.
+    let d = rect(&mut s, 10.7, 400.0, 20.0, 20.0);
+    let e = rect(&mut s, 51.8, 450.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [d.0, e.0]})).unwrap();
+    s.execute("object.align", &left).unwrap();
+    assert!(x0(&s, e) != 10.7 && (x0(&s, e) - 10.7).abs() < 1e-12, "{}", x0(&s, e));
+    s.doc_mut().unwrap().mark_saved();
+    let before = history(&s);
+    s.execute("object.align", &left).unwrap();
+    assert_eq!(history(&s), before, "a pair the first Align aligned");
+}
+
+/// Distribute and Distribute Spacing over objects already evenly spaced move nothing and record no
+/// undo step either.
+#[test]
+fn a_distribute_that_moves_nothing_records_no_undo_step() {
+    let mut s = session();
+    // The rectangles are 20 pt wide and 30 pt apart.
+    let ids = [0.0, 50.0, 100.0].map(|x| rect(&mut s, x, 0.0, 20.0, 20.0));
+    select_with_a_step_to_redo(&mut s, &ids);
+    let before = history(&s);
+    let calls = [
+        ("object.distribute", json!({"horizontal": "left"})),
+        ("object.distribute", json!({"horizontal": "center"})),
+        ("object.distribute", json!({"horizontal": "right"})),
+        ("object.distributeSpacing", json!({"axis": "horizontal"})),
+        ("object.distributeSpacing", json!({"axis": "horizontal", "spacing": 30})),
+    ];
+    for (id, p) in calls {
+        s.execute(id, &p).unwrap();
+        assert_eq!(history(&s), before, "{id} {p}");
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), p));
+    }
+    // Distribute Spacing keeps the key object still and spaces the others from it.
+    s.execute("select.key", &json!({"id": ids[1].0})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.key, Some(ids[1]));
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal", "spacing": 30})).unwrap();
+    assert_eq!(history(&s), before, "spaced 30 pt from the key object");
+    // After the middle one moves 10 pt right, Distribute moves it back in one undo step.
+    s.execute("select.set", &json!({"ids": [ids[1].0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": ids.map(|i| i.0)})).unwrap();
+    let undo = history(&s).0;
+    s.execute("object.distribute", &json!({"horizontal": "left"})).unwrap();
+    assert_eq!(history(&s).0, undo + 1);
+    assert_eq!(s.doc().unwrap().doc.node(ids[1]).unwrap().geometric_bounds().unwrap().x0, 50.0);
+    // For rectangles 30.1 pt apart, the gap Distribute Spacing computes moves the third one by a
+    // rounding error.
+    let ids = [0.1, 50.2, 100.3].map(|x| rect(&mut s, x, 100.0, 20.0, 20.0));
+    select_with_a_step_to_redo(&mut s, &ids);
+    let before = history(&s);
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal"})).unwrap();
+    assert_eq!(history(&s), before, "30.1 pt apart");
+    // Distributing these three leaves the middle one a rounding error off halfway between the
+    // others, and a second Distribute records no step.
+    let ids = [40.045, 433.482, 1935.587].map(|x| rect(&mut s, x, 200.0, 20.0, 20.0));
+    s.execute("select.set", &json!({"ids": ids.map(|i| i.0)})).unwrap();
+    s.execute("object.distribute", &json!({"horizontal": "left"})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = history(&s);
+    s.execute("object.distribute", &json!({"horizontal": "left"})).unwrap();
+    assert_eq!(history(&s), before, "three objects the first Distribute spaced");
+}
+
+/// Move by 0 pt, Rotate and Shear by 0°, Scale to 100%, an identity Transform, Set Bounds with the
+/// current position and size, a Nudge of 0 (of objects, anchors or ruler guides), a Transform with
+/// no object to transform and a Selection tool drag that ends where it started record no undo
+/// step. Transform Again then repeats the identity, and a Nudge of 0 of a live rectangle's anchor
+/// leaves the rectangle a live shape.
+#[test]
+fn a_transform_that_moves_nothing_records_no_undo_step() {
+    let mut s = session();
+    // The Nudges of a guide and of anchors below use this ruler guide and this plain path.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 600})).unwrap();
+    let made = s.execute("path.create", &json!({"anchors": [{"x": 300, "y": 300}, {"x": 400, "y": 300}]})).unwrap();
+    let path = NodeId(made["id"].as_u64().unwrap());
+    let a = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
+    select_with_a_step_to_redo(&mut s, &[a]);
+    let before = history(&s);
+    let calls = [
+        ("object.move", json!({"dx": 0, "dy": 0})),
+        ("object.rotate", json!({"angle": 0})),
+        ("object.scale", json!({"sx": 100})),
+        ("object.shear", json!({"angle": 0})),
+        ("object.transform", json!({"matrix": [1, 0, 0, 1, 0, 0]})),
+        ("object.nudge", json!({"dx": 0, "dy": 0})),
+        ("object.setBounds", json!({})),
+        ("object.transformAgain", json!({})),
+    ];
+    for (id, p) in calls {
+        assert_eq!(s.execute(id, &p).unwrap(), json!({"ids": [a.0]}), "{id} {p}");
+        assert_eq!(history(&s), before, "{id} {p}");
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), p));
+    }
+    assert_eq!(s.doc().unwrap().last_transform, Some((Affine::IDENTITY, false)));
+    // A Nudge of 0 with an anchor of the rectangle direct-selected keeps it a live shape.
+    let is_live = |s: &Session| matches!(s.doc().unwrap().doc.node(a).unwrap().kind, NodeKind::Path { live: Some(_), .. });
+    assert!(is_live(&s), "a rectangle is a live shape");
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]]})).unwrap();
+    s.execute("object.nudge", &json!({"dx": 0, "dy": 0})).unwrap();
+    assert!(is_live(&s), "a Nudge of 0 keeps it a live shape");
+    assert_eq!(history(&s), before, "an anchor of the live rectangle, then object.nudge");
+    // A Nudge of 0 with anchors direct-selected or with only a ruler guide selected, and a
+    // Transform with nothing selected or with ids that name no object, with or without a copy,
+    // record no undo step either.
+    let calls = [
+        ("select.anchors", json!({"id": path.0, "anchors": [[0, 0]]}), "object.nudge", json!({"dx": 0, "dy": 0})),
+        ("guide.select", json!({"indexes": [0]}), "object.nudge", json!({"dx": 0, "dy": 0})),
+        ("select.set", json!({"ids": []}), "object.transform", json!({"matrix": [1, 0, 0, 1, 5, 0]})),
+        ("select.set", json!({"ids": []}), "object.transform", json!({"matrix": [1, 0, 0, 1, 5, 0], "copy": true})),
+        ("select.set", json!({"ids": [a.0]}), "object.transform", json!({"matrix": [1, 0, 0, 1, 5, 0], "ids": [999999]})),
+        ("select.set", json!({"ids": [a.0]}), "object.transform", json!({"matrix": [1, 0, 0, 1, 5, 0], "ids": [999999], "copy": true})),
+    ];
+    for (select, sp, id, p) in calls {
+        s.execute(select, &sp).unwrap();
+        s.execute(id, &p).unwrap();
+        assert_eq!(history(&s), before, "{select} {sp}, then {id} {p}");
+    }
+    // A copy of no object lists no copies and keeps the selection.
+    let p = json!({"matrix": [1, 0, 0, 1, 5, 0], "ids": [999999], "copy": true});
+    assert_eq!(s.execute("object.transform", &p).unwrap(), json!({"ids": []}));
+    assert_eq!(s.doc().unwrap().selection.objects, [a]);
+    // A Selection tool drag that ends where it started records no undo step either. Back at the
+    // start, the revision advances, so views redraw the object where it was.
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let x0 = |s: &Session| s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap().x0;
+    let revision = |s: &Session| s.doc().unwrap().revision;
+    s.pointer(&PointerEvent::new(PointerKind::Down, 30.0, 35.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 60.0, 35.0), v).unwrap();
+    assert_ne!(x0(&s), 10.0, "the preview moves it");
+    let moved = revision(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 30.0, 35.0), v).unwrap();
+    assert_eq!(x0(&s), 10.0);
+    assert!(revision(&s) > moved, "views redraw it back at the start");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 30.0, 35.0), v).unwrap();
+    assert_eq!(history(&s), before, "a drag back to the start");
+    assert_eq!(s.journal.last().unwrap().0, "object.transform");
+    // With a copy, a Move by 0 pt duplicates the object in one undo step.
+    let count = |s: &Session| s.doc().unwrap().doc.layers[0].children().unwrap().len();
+    let n = count(&s);
+    s.execute("object.move", &json!({"dx": 0, "dy": 0, "copy": true})).unwrap();
+    assert_eq!(history(&s), (before.0 + 1, 0, true));
+    assert_eq!(count(&s), n + 1);
+}
+
+/// Arrange commands that leave the stacking order as it is record no undo step: Bring to Front and
+/// Bring Forward on the front objects, Send to Back and Send Backward on the back ones, and Send to
+/// Current Layer on objects already on top of the current layer.
+#[test]
+fn an_arrange_that_changes_no_order_records_no_undo_step() {
+    let mut s = session();
+    let ids = [0.0, 30.0, 60.0].map(|x| rect(&mut s, x, 0.0, 20.0, 20.0));
+    let order = |s: &Session| s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    let calls = [
+        (vec![ids[2]], "object.arrange.bringToFront"),
+        (vec![ids[2]], "object.arrange.bringForward"),
+        (vec![ids[0]], "object.arrange.sendToBack"),
+        (vec![ids[0]], "object.arrange.sendBackward"),
+        (vec![ids[2]], "object.arrange.sendToCurrentLayer"),
+        (vec![ids[1], ids[2]], "object.arrange.bringToFront"),
+        (vec![ids[1], ids[2]], "object.arrange.bringForward"),
+        (vec![ids[0], ids[1]], "object.arrange.sendToBack"),
+        (vec![ids[0], ids[1]], "object.arrange.sendBackward"),
+        (vec![ids[1], ids[2]], "object.arrange.sendToCurrentLayer"),
+    ];
+    for (sel, c) in calls {
+        select_with_a_step_to_redo(&mut s, &sel);
+        let before = history(&s);
+        s.execute(c, &json!({})).unwrap();
+        assert_eq!(history(&s), before, "{c} {sel:?}");
+        assert_eq!(order(&s), ids, "{c} {sel:?}");
+    }
+    // Bring to Front on the back object is one undo step, and it clears Redo.
+    select_with_a_step_to_redo(&mut s, &[ids[0]]);
+    let undo = history(&s).0;
+    s.execute("object.arrange.bringToFront", &json!({})).unwrap();
+    assert_eq!(history(&s), (undo + 1, 0, true));
+    assert_eq!(order(&s), [ids[1], ids[2], ids[0]]);
+}
+
+/// Ungroup, Release Compound Path and Release Clipping Mask with none of their objects selected,
+/// and Expand Shape with no live shape selected, record no undo step and keep the selection and its
+/// key object.
+#[test]
+fn ungroup_release_and_expand_shape_with_nothing_to_act_on_record_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(&mut s, 40.0, 0.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    // Expand Shape makes the two rectangles plain paths in one undo step.
+    let undo = history(&s).0;
+    s.execute("object.expandShape", &json!({})).unwrap();
+    assert_eq!(history(&s).0, undo + 1);
+    select_with_a_step_to_redo(&mut s, &[a, b]);
+    s.execute("select.key", &json!({"id": a.0})).unwrap();
+    let (before, selection) = (history(&s), s.doc().unwrap().selection.clone());
+    assert_eq!(selection.key, Some(a));
+    for c in ["object.ungroup", "object.compoundPath.release", "object.clippingMask.release", "object.expandShape"] {
+        s.execute(c, &json!({})).unwrap();
+        assert_eq!(history(&s), before, "{c}");
+        assert_eq!(s.doc().unwrap().selection, selection, "{c}");
+        assert_eq!(s.journal.last().unwrap().0, c);
+    }
+    // Ungroup with a group selected is one undo step.
+    s.execute("object.group", &json!({})).unwrap();
+    let undo = history(&s).0;
+    s.execute("object.ungroup", &json!({})).unwrap();
+    assert_eq!(history(&s).0, undo + 1);
+}
+
+/// Unlock All with nothing locked and Show All with nothing hidden record no undo step and keep the
+/// selection. Lock with every selected object already locked and Hide with every one already
+/// hidden record no undo step and deselect them.
+#[test]
+fn lock_hide_unlock_all_and_show_all_with_nothing_to_do_record_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    select_with_a_step_to_redo(&mut s, &[a]);
+    let before = history(&s);
+    for c in ["object.unlockAll", "object.showAll"] {
+        assert_eq!(s.execute(c, &json!({})).unwrap(), json!({"count": 0}), "{c}");
+        assert_eq!(history(&s), before, "{c}");
+        assert_eq!(s.doc().unwrap().selection.objects, [a], "{c}");
+    }
+    // With the object locked or hidden, each is one undo step that selects it.
+    for (off, on) in [("object.lock", "object.unlockAll"), ("object.hide", "object.showAll")] {
+        s.execute(off, &json!({})).unwrap();
+        let undo = history(&s).0;
+        assert_eq!(s.execute(on, &json!({})).unwrap(), json!({"count": 1}), "{on}");
+        assert_eq!(history(&s).0, undo + 1, "{on}");
+        assert_eq!(s.doc().unwrap().selection.objects, [a], "{on}");
+    }
+    // Object Properties locks (then hides) a new rectangle `b`, and `select.set` selects it.
+    // Lock (then Hide) deselects it and records no undo step. With `a` selected too, it is one
+    // undo step.
+    for (c, props) in [("object.lock", json!({"locked": true})), ("object.hide", json!({"visible": false}))] {
+        let b = rect(&mut s, 40.0, 0.0, 20.0, 20.0);
+        s.execute("object.setProps", &props).unwrap();
+        select_with_a_step_to_redo(&mut s, &[a]);
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        let before = history(&s);
+        s.execute(c, &json!({})).unwrap();
+        assert_eq!(history(&s), before, "{c}");
+        assert!(s.doc().unwrap().selection.objects.is_empty(), "{c}");
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute(c, &json!({})).unwrap();
+        assert_eq!(history(&s), (before.0 + 1, 0, true), "{c} with a");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+/// Set Bounds with the current position and size records no undo step on a rotated object, with
+/// and without Use Preview Bounds, and on an unrotated object with Use Preview Bounds. In these
+/// cases computing the transform can leave a rounding error in it.
+#[test]
+fn set_bounds_with_the_current_position_and_size_records_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
+    s.execute("stroke.set", &json!({"weight": 5})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let c = rect(&mut s, 0.1, 0.05, 10.1, 6.06);
+    s.execute("stroke.set", &json!({"weight": 0.3})).unwrap();
+    select_with_a_step_to_redo(&mut s, &[a]);
+    let before = history(&s);
+    for (id, preview) in [(a, false), (a, true), (c, true)] {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("prefs.set", &json!({"key": "usePreviewBounds", "value": preview})).unwrap();
+        // The Transform panel's values: X and Y place the reference point, W and H are the sides.
+        let b = s.transform_box(&[id]).unwrap();
+        let (rp, w, h) = (b.reference_point(4), b.rect.width(), b.rect.height());
+        for p in [json!({}), json!({"x": rp.x, "y": rp.y, "width": w, "height": h}), json!({"width": w, "proportional": true})] {
+            assert_eq!(s.execute("object.setBounds", &p).unwrap(), json!({"ids": [id.0]}), "{p}");
+            assert_eq!(history(&s), before, "{id:?}, Use Preview Bounds {preview}: {p}");
+            assert_eq!(s.journal.last().unwrap().0, "object.setBounds");
+        }
+    }
+    // A new width is one undo step, and it clears Redo.
+    s.execute("object.setBounds", &json!({"width": 50})).unwrap();
+    assert_eq!(history(&s), (before.0 + 1, 0, true));
+}
+
+/// Object Properties with the values the objects already have records no undo step: every
+/// property, data already set or already absent, and no object. A value that differs on one of
+/// the objects is one undo step, and an id that names no object is still an error.
+#[test]
+fn object_properties_already_set_record_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(&mut s, 40.0, 0.0, 20.0, 20.0);
+    let set = json!({"ids": [a.0], "name": "A", "opacity": 50, "blend": "Multiply", "knockout": "on", "data": {"pivot": "1,2"}});
+    s.execute("object.setProps", &set).unwrap();
+    select_with_a_step_to_redo(&mut s, &[a, b]);
+    let before = history(&s);
+    let defaults = json!({
+        "id": b.0, "name": "", "visible": true, "locked": false, "opacity": 100, "blend": "Normal", "isolate": false,
+        "knockout": "neutral", "knockoutShape": false, "data": {"pivot": null}
+    });
+    let calls =
+        [set, defaults, json!({"id": a.0, "data": {"data-pivot": "1,2", "other": null}}), json!({"visible": true}), json!({}), json!({"ids": []})];
+    for p in calls {
+        s.execute("object.setProps", &p).unwrap();
+        assert_eq!(history(&s), before, "{p}");
+        assert_eq!(s.journal.last().unwrap(), &("object.setProps".to_string(), p));
+    }
+    // `a` already has 50% opacity, and `b` does not.
+    s.execute("object.setProps", &json!({"opacity": 50})).unwrap();
+    assert_eq!(history(&s), (before.0 + 1, 0, true));
+    assert!(s.execute("object.setProps", &json!({"ids": [999999], "visible": true})).is_err());
+}
+
+/// Live Shape Properties that a shape already has record no undo step: a polygon's sides, angle,
+/// radius, side length and equal sides, an ellipse's pie, Invert Pie on a whole ellipse, and the
+/// radius and kind its corners have (given corners, the Direct-Selected one, or all). A value that
+/// differs is one undo step. Setting the radius of a rectangle that kept a scale in its transform
+/// is one undo step too, because it folds the scale into the rectangle's size.
+#[test]
+fn live_shape_properties_already_set_record_no_undo_step() {
+    let mut s = session();
+    let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 60.0);
+    let polygon = id(s.execute("shape.polygon", &json!({"cx": 300, "cy": 100, "radius": 50, "sides": 6})).unwrap());
+    let ellipse = id(s.execute("shape.ellipse", &json!({"x": 0, "y": 200, "width": 80, "height": 40})).unwrap());
+    let star = id(s.execute("shape.star", &json!({"cx": 300, "cy": 300, "radius1": 60, "radius2": 30})).unwrap());
+    // The rectangle's corners get 8 pt radii, its top-right corner gets 12 pt, and the polygon gets
+    // 30 pt sides.
+    for p in [json!({"id": r.0, "radius": 8}), json!({"id": r.0, "corners": [1], "radius": 12}), json!({"id": polygon.0, "sideLength": 30})] {
+        s.execute("object.setLiveShape", &p).unwrap();
+    }
+    let NodeKind::Path { live: Some(l), .. } = &s.doc().unwrap().doc.node(polygon).unwrap().kind else { panic!("not a live polygon") };
+    let (angle, radius) = (l.polygon_angle().unwrap(), l.polygon_radius().unwrap());
+    select_with_a_step_to_redo(&mut s, &[r, polygon, ellipse, star]);
+    let before = history(&s);
+    let calls = [
+        json!({"id": polygon.0, "sides": 6, "polygonAngle": angle, "polygonRadius": radius, "makeSidesEqual": true}),
+        json!({"id": polygon.0, "sideLength": 30, "kind": "round"}),
+        json!({"id": ellipse.0, "pieStart": 0, "pieEnd": 360}),
+        json!({"id": ellipse.0, "invertPie": true}),
+        json!({"id": r.0, "corners": [0, 2, 3], "radius": 8, "kind": "round"}),
+        json!({"items": [{"id": r.0, "corners": [1]}], "radius": 12}),
+        json!({"id": star.0, "radius": 0}),
+    ];
+    for p in calls {
+        s.execute("object.setLiveShape", &p).unwrap();
+        assert_eq!(history(&s), before, "{p}");
+        assert_eq!(s.journal.last().unwrap(), &("object.setLiveShape".to_string(), p));
+    }
+    // With an anchor of the top-left corner direct-selected, the radius applies to that corner.
+    s.execute("select.anchors", &json!({"id": r.0, "anchors": [[0, 0]]})).unwrap();
+    s.execute("object.setLiveShape", &json!({"radius": 8})).unwrap();
+    assert_eq!(history(&s), before, "the Direct-Selected corner");
+    for p in [json!({"id": polygon.0, "sides": 7}), json!({"id": ellipse.0, "pieEnd": 90}), json!({"radius": 9})] {
+        let undo = history(&s).0;
+        s.execute("object.setLiveShape", &p).unwrap();
+        assert_eq!(history(&s).0, undo + 1, "{p}");
+    }
+    // The rectangle is now 50 × 60 pt with 10 pt corners, stretched to 100 × 60 pt by its
+    // transform, as files from before #291 saved it. Setting the radius its corners show makes the
+    // corners circles.
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let NodeKind::Path { path, live: Some(live), .. } = &mut d.node_mut(r).unwrap().kind else { panic!("not a live rectangle") };
+        let xf = Affine::scale_non_uniform(2.0, 1.0);
+        *live = vectorcraft_doc::LiveShape::Rectangle { w: 50.0, h: 60.0, radii: [10.0; 4], kinds: Default::default(), xf };
+        *path = live.to_path();
+    }
+    let shown = vectorcraft_doc::LiveCorners::of(s.doc().unwrap().doc.node(r).unwrap()).unwrap().radius(0);
+    let undo = history(&s).0;
+    s.execute("object.setLiveShape", &json!({"id": r.0, "radius": shown})).unwrap();
+    assert_eq!(history(&s).0, undo + 1, "a stretched rectangle");
 }
 
 #[test]
@@ -891,4 +1440,67 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
     s.execute("select.all", &json!({})).unwrap();
     assert!(s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "size": 40})).is_err(), "two type objects: which one?");
     assert!(s.execute("text.setRangeStyle", &json!({"id": "two", "size": 40})).is_err());
+}
+
+#[test]
+fn malformed_anchor_selection_never_replaces_or_partially_changes_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 30.0, 20.0);
+    let b = rect(&mut s, 50.0, 10.0, 30.0, 20.0);
+    let expected = s.doc().unwrap().selection.objects.clone();
+    let expected_anchors = s.doc().unwrap().selection.anchors.clone();
+    for p in [
+        json!({"id": a.0, "anchors": [[0, 0], ["bad", 2]]}),
+        json!({"id": a.0, "anchors": [[0, 0, 1]]}),
+        json!({"id": a.0, "anchors": "not an array"}),
+        json!({"id": u64::MAX, "anchors": []}),
+        json!({"id": a.0, "anchors": [], "mode": "missing"}),
+    ] {
+        assert!(s.execute("select.anchors", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, expected);
+        assert_eq!(s.doc().unwrap().selection.anchors, expected_anchors);
+    }
+    for p in [
+        json!({"items": [{"id": a.0, "anchors": [[0, 0]]}, {"id": b.0, "anchors": [[0, "bad"]]}]}),
+        json!({"items": [{"id": a.0, "anchors": [[0, 0]]}, {"id": "bad", "anchors": [[0, 0]]}]}),
+        json!({"items": [{"id": u64::MAX, "anchors": []}]}),
+        json!({"items": [{"id": a.0}]}),
+    ] {
+        assert!(s.execute("select.anchorsMany", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, expected);
+        assert_eq!(s.doc().unwrap().selection.anchors, expected_anchors);
+    }
+    s.execute("select.anchorsMany", &json!({"items": [{"id": a.0, "anchors": [[0, 0]]}]})).unwrap();
+    assert!(s.doc().unwrap().selection.contains(a));
+    assert!(!s.doc().unwrap().selection.contains(b));
+}
+
+#[test]
+fn path_commands_reject_bad_anchors_before_modifying_geometry() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 50.0, 30.0);
+    let original_points: Vec<_> = s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect();
+    let history = s.doc().unwrap().history.undo.len();
+    let valid = json!({"x": 10, "y": 20});
+    for invalid in [
+        json!({"x": "bad", "y": 40}),
+        json!({"x": 50}),
+        json!({"x": 50, "y": 40, "in": [0]}),
+        json!({"x": 50, "y": 40, "out": [1, "bad"]}),
+        json!({"x": 50, "y": 40, "smooth": "yes"}),
+    ] {
+        let anchors = json!([valid.clone(), invalid]);
+        assert!(s.execute("path.create", &json!({"anchors": anchors})).is_err(), "{anchors}");
+        assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": anchors}]})).is_err(), "{anchors}");
+        let points: Vec<_> = s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect();
+        assert_eq!(points, original_points);
+        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    }
+    assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": []}, {"closed": true}]})).is_err());
+    assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": [valid.clone()], "closed": "yes"}]})).is_err());
+    // The Pen's append reads its anchor the same way.
+    assert!(s.execute("path.appendAnchor", &json!({"id": a.0, "x": 5, "y": 5, "out": [1]})).is_err());
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": [{"x": 0, "y": 0}, {"x": 30, "y": 40}], "closed": false}]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchor_count(), 2);
 }

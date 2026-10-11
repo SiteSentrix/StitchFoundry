@@ -59,8 +59,10 @@ fn harness(app: VectorcraftApp, size: egui::Vec2) -> Harness<'static, Vectorcraf
                 ready = true;
                 return;
             }
+            crate::floating::track(app, ui.ctx());
             crate::dock::show(app, ui);
             egui::CentralPanel::default().show(ui, |_| {});
+            crate::floating::show(app, ui.ctx());
         },
         app,
     );
@@ -414,4 +416,160 @@ fn iconic_origin_tracks_explicit_custom_dock_and_legacy_saved_floats() {
     legacy.run("window.panel.dock", json!({"panel":"color"})).unwrap();
     assert!(!legacy.ui.docking.as_ref().unwrap().contains(&"color".into()), "legacy icon floats return to rail");
     assert_eq!(legacy.ui.open_panel.as_deref(), Some("color"));
+}
+
+#[test]
+fn native_sets_columns_and_collapse_preserve_shared_splits_and_saved_origins() {
+    let mut app = app();
+    app.run("window.panel.move", json!({"panel":"swatches","anchor":"layers","zone":"top"})).unwrap();
+    let original = app.ui.docking.clone().unwrap();
+    app.run("window.panel.float", json!({"panel":"stroke","x":100,"y":100})).unwrap();
+    app.run("window.panel.float", json!({"panel":"color","below":"stroke","collapsed":true})).unwrap();
+    let root = app.ui.docking.as_ref().unwrap().root.clone();
+    assert_eq!(root, original.root);
+    let column = app.ui.floating_panels.first().unwrap().column;
+    assert!(column.is_some());
+    assert_eq!(app.ui.floating_panels.len(), 2);
+    assert!(app.ui.floating_panels.iter().all(|g| g.column == column));
+    app.run("window.panel.dock", json!({"panel":"stroke","group":true,"column":true})).unwrap();
+    assert!(app.ui.floating_panels.iter().all(|g| g.docked == Some(1)));
+    app.run("window.workspace.new", json!({"name":"Mixed shared native"})).unwrap();
+    let saved = app.ui.floating_panels.clone();
+    app.run("window.workspace", json!({"name":"Essentials"})).unwrap();
+    app.run("window.workspace", json!({"name":"Mixed shared native"})).unwrap();
+    assert_eq!(app.ui.floating_panels, saved);
+    assert_eq!(app.ui.docking.as_ref().unwrap().root, root);
+    app.run("window.panel.float", json!({"panel":"stroke","group":true})).unwrap();
+    assert!(app.ui.floating_panels.iter().all(|g| g.docked.is_none()));
+    let before = serde_json::to_value(&app.ui).unwrap();
+    assert!(app.run("window.panel.float", json!({"panel":"stroke","below":"unknown"})).is_err());
+    // Error reporting may change status, but ownership, metadata and root remain atomic.
+    let mut after = serde_json::to_value(&app.ui).unwrap();
+    let mut before = before;
+    before.as_object_mut().unwrap().remove("status");
+    after.as_object_mut().unwrap().remove("status");
+    assert_eq!(before, after);
+    app.run("window.panel.dock", json!({"panel":"stroke","group":true})).unwrap();
+    app.run("window.panel.dock", json!({"panel":"color","group":true})).unwrap();
+    assert_eq!(app.ui.docking.as_ref().unwrap().root, original.root);
+    assert!(app.ui.floating_panels.is_empty());
+    assert!(valid(app.ui.docking.as_ref().unwrap()));
+}
+
+#[test]
+fn native_set_close_pointer_restores_shared_split_ownership() {
+    let mut app = app();
+    app.run("window.panel.move", json!({"panel":"swatches","anchor":"layers","zone":"top"})).unwrap();
+    let root = app.ui.docking.as_ref().unwrap().root.clone();
+    app.run("window.panel.float", json!({"panel":"stroke","x":70,"y":90})).unwrap();
+    app.run("window.panel.float", json!({"panel":"color","below":"stroke"})).unwrap();
+    let mut h = harness(app, vec2(1280.0, 900.0));
+    if let Some(directory) = std::env::var_os("CRAFT_UI_DOCKING_SNAPSHOT_DIR") {
+        let directory = std::path::PathBuf::from(directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        h.render().unwrap().save(directory.join("vectorcraft-native-set-shared-split.png")).unwrap();
+    }
+    let area = h.ctx.memory(|m| m.area_rect(crate::floating::area_id("stroke"))).unwrap();
+    let at = egui::pos2(area.right() - 10.0, area.top() + 1.0 + crate::floating::TITLE / 2.0);
+    for pressed in [true, false] {
+        h.event(Event::PointerMoved(at));
+        h.event(Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE });
+        h.run_steps(1);
+    }
+    h.run_steps(3);
+    assert!(h.state().ui.floating_panels.is_empty());
+    assert_eq!(h.state().ui.docking.as_ref().unwrap().root, root);
+    assert!(valid(h.state().ui.docking.as_ref().unwrap()));
+}
+
+#[test]
+fn a_single_native_tab_redock_retains_the_remaining_float_and_return_origin() {
+    let mut app = app();
+    app.run("window.panel.move", json!({"panel":"swatches","anchor":"layers","zone":"top"})).unwrap();
+    let root = app.ui.docking.as_ref().unwrap().root.clone();
+    app.run("window.panel.float", json!({"panel":"swatches","x":80,"y":90})).unwrap();
+    app.run("window.panel.float", json!({"panel":"color","onto":"swatches","collapsed":true})).unwrap();
+    assert!(
+        matches!(app.ui.docking.as_ref().unwrap().root.as_ref(), Some(Node::Tabs { panels, active }) if panels.get(*active).is_some_and(|panel| panel == "properties")),
+        "floating Color intentionally activates the first root fallback, Properties"
+    );
+    let mut expected = Layout { root, floating: vec![] };
+    expected.apply(Action::Activate { panel: "properties".to_string() }).unwrap();
+    app.run("window.panel.dock", json!({"panel":"swatches"})).unwrap();
+    assert_eq!(app.ui.docking.as_ref().unwrap().root, expected.root);
+    assert_eq!(app.ui.floating_panels.len(), 1);
+    assert_eq!(app.ui.floating_panels[0].panels, ["color"]);
+    assert!(valid(app.ui.docking.as_ref().unwrap()));
+}
+
+#[test]
+fn explicit_shared_activation_expands_a_native_collapsed_owner() {
+    let mut app = app();
+    app.run("window.panel.float", json!({"panel":"layers","collapsed":true})).unwrap();
+    assert!(app.ui.floating_panels[0].collapsed);
+    app.run("window.panel.layout", json!({"action":Action::Activate { panel:"layers".to_string() }})).unwrap();
+    assert!(!app.ui.floating_panels[0].collapsed);
+    assert_eq!(app.ui.floating_panels[0].panels, ["layers"]);
+    assert!(valid(app.ui.docking.as_ref().unwrap()));
+}
+
+#[test]
+fn escape_restores_native_set_position_and_metadata_after_several_frames() {
+    let mut app = app();
+    app.run("window.panel.float", json!({"panel":"stroke","x":80,"y":100})).unwrap();
+    app.run("window.panel.float", json!({"panel":"color","below":"stroke"})).unwrap();
+    let mut h = harness(app, vec2(1280.0, 900.0));
+    let original = h.state().ui.floating_panels.clone();
+    let layout = h.state().ui.docking.clone();
+    let area = h.ctx.memory(|m| m.area_rect(crate::floating::area_id("stroke"))).unwrap();
+    let from = area.left_top() + vec2(30.0, 1.0 + crate::floating::TITLE / 2.0);
+    h.event(Event::PointerMoved(from));
+    h.event(Event::PointerButton { pos: from, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE });
+    h.run_steps(1);
+    for step in 1..=8 {
+        h.event(Event::PointerMoved(from + vec2(step as f32 * 12.0, step as f32 * 9.0)));
+        h.run_steps(1);
+    }
+    assert_ne!(h.state().ui.floating_panels, original, "actual title gesture moved the set");
+    h.event(Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+    assert_eq!(h.state().ui.floating_panels, original);
+    assert_eq!(h.state().ui.docking, layout);
+}
+
+#[test]
+fn first_legacy_icon_tear_can_join_a_native_set() {
+    let mut app = app();
+    crate::floating::float(&mut app.ui, &["stroke"], "stroke", egui::pos2(100.0, 100.0));
+    crate::floating::float(&mut app.ui, &["color"], "color", egui::pos2(100.0, 100.0));
+    crate::floating::attach(&mut app.ui, &[1], "stroke", true);
+    assert!(app.ui.docking.is_none());
+    let mut h = harness(app, vec2(1280.0, 900.0));
+    let source = h.query_all_by_label("Swatches").find(|node| node.rect().height() <= 45.0).unwrap().rect().center();
+    let color = h.ctx.data(|data| data.get_temp::<egui::Rect>(crate::floating::group_rect_id("color"))).unwrap();
+    drag(&mut h, source, egui::pos2(color.center().x, color.bottom() + 2.0));
+    assert!(h.state().ui.docking.is_some(), "successful first tear retains shared ownership");
+    let groups = &h.state().ui.floating_panels;
+    let color = groups.iter().find(|g| g.panels.iter().any(|p| p == "color")).unwrap();
+    let swatches = groups.iter().find(|g| g.panels.iter().any(|p| p == "swatches")).unwrap();
+    assert!(color.column.is_some());
+    assert_eq!(swatches.column, color.column);
+    assert!(valid(h.state().ui.docking.as_ref().unwrap()));
+}
+
+#[test]
+fn native_set_drop_targets_respect_the_visible_layer_above_an_ordinary_float() {
+    let mut app = app();
+    app.run("window.panel.float", json!({"panel":"swatches","x":100,"y":100})).unwrap();
+    app.run("window.panel.float", json!({"panel":"stroke","x":100,"y":100})).unwrap();
+    app.run("window.panel.float", json!({"panel":"color","below":"stroke"})).unwrap();
+    let h = harness(app, vec2(1280.0, 900.0));
+    let rect = h.ctx.data(|data| data.get_temp::<egui::Rect>(crate::floating::group_rect_id("stroke"))).unwrap();
+    let at = rect.center();
+    assert_eq!(h.ctx.layer_id_at(at).unwrap().id, crate::floating::area_id("stroke"), "native set is visibly above the ordinary shared float");
+    let target = crate::floating::drop_target(h.state(), &h.ctx, crate::floating::Moving::Panel("layers"), at).unwrap().0;
+    assert!(
+        matches!(target, crate::floating::Drop::Above("stroke") | crate::floating::Drop::Below("stroke")),
+        "visible native group owns the drop: {target:?}"
+    );
 }

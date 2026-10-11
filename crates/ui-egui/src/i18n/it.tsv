@@ -2051,6 +2051,7 @@
 	Proof Colors	Colori di prova
 	Proof Setup	Impostazione prova
 	Properties	Proprietà
+	Proportional Metrics	Metrica proporzionale
 	Proportional Oldstyle	Proporzionali stile antico
 	Pucker & Bloat…	Contrai e gonfia…
 	Pucker Tool	Strumento Contrai
@@ -3317,6 +3318,7 @@ axis	Horizontal	Orizzontale
 axis	Vertical	Verticale
 axis	Both	Entrambi
 	Drag to move	Trascina per spostare
+	Drag to move out of the set	Trascina per spostare fuori dall’insieme
 	Drag to float as a toolbar	Trascina per rendere mobile come barra degli strumenti
 	Put back in the toolbar	Riporta nella barra degli strumenti
 	Float Panel	Rendi mobile pannello
@@ -3420,6 +3422,7 @@ axis	Both	Entrambi
 @msg	`color` must be a colour	`color` deve essere un colore
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` deve essere un comando la cui voce di menu apre una finestra di dialogo (vedi ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` deve essere un array
+@msg	`freeform.lines` must be an array	`freeform.lines` deve essere un array
 @msg	`gradient` must be an object	`gradient` deve essere un oggetto
 @msg	`library` is a library id or name (see {list})	`library` è l'id o il nome di una libreria (vedi {list})
 @msg	`mode` applies to freeform gradients	`mode` si applica alle sfumature a forma libera
@@ -3521,6 +3524,7 @@ axis	Both	Entrambi
 @msg	empty path	tracciato vuoto
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	la versione del file {0} è più recente di quelle supportate da questo VectorCraft ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	il punto a forma libera {i} richiede `at` [x, y] e un `color` valido
+@msg	freeform line {i} must be an array of point indices	la linea a forma libera {i} deve essere un array di indici di punti
 @msg	give both `start` and `end` [x, y] (or neither)	specifica sia `start` sia `end` [x, y] (o nessuno dei due)
 @msg	give corners of the path: anchors between two straight sides	specifica angoli del tracciato: punti di ancoraggio tra due lati diritti
 @msg	give the path `id` and the width point `index`	specifica l'`id` del tracciato e l'`index` del punto di larghezza
@@ -3759,6 +3763,8 @@ axis	Both	Entrambi
 @msg	the image's pixels don't match its size	i pixel dell'immagine non corrispondono alle sue dimensioni
 @msg	the layer has no objects to clip by	il livello non ha oggetti con cui ritagliare
 @msg	the layer or group is locked	il livello o il gruppo è bloccato
+@msg	the guide is on a hidden or locked layer	la guida si trova su un livello nascosto o bloccato
+@msg	the target layer is locked or hidden	il livello di destinazione è bloccato o nascosto
 @msg	the layer to flatten into is hidden	il livello in cui appiattire è nascosto
 @msg	the object already has an opacity mask	l'oggetto ha già una maschera di opacità
 @msg	the object has no geometry	l'oggetto non ha geometria
@@ -3783,7 +3789,7 @@ axis	Both	Entrambi
 @msg	the {tool} tool has no options	lo strumento {tool} non ha opzioni
 @msg	there are no objects to release	non ci sono oggetti da rilasciare
 @msg	there are no printer settings to open here	non ci sono impostazioni della stampante da aprire qui
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	impossibile leggere questo file PostScript ({_1}): salvalo come PDF o SVG nell'app che lo ha creato
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	impossibile leggere questo file PostScript ({why}): salvalo come PDF o SVG nell'app che lo ha creato
 @msg	this file's PostScript couldn't be read ({why}): {what}	impossibile leggere il PostScript di questo file ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	questo formato contiene una sola tavola da disegno: esportane più di una come PDF o con document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	questo è un disegno DWG, che non può essere letto: salvalo dall'app CAD come DXF ASCII e apri quel file
@@ -3872,6 +3878,9 @@ axis	Both	Entrambi
 @msg	tool (a tool id) is required	tool (un id di strumento) è obbligatorio
 @msg	{tool} isn't in a toolbar group of several tools	{tool} non fa parte di un gruppo di più strumenti nella barra degli strumenti
 @msg	onto must name a panel floating in another group	onto deve indicare un pannello mobile in un altro gruppo
+@msg	below and above must name a panel floating in another group	below e above devono indicare un pannello mobile in un altro gruppo
+@msg	give only one of onto, below and above	indica solo uno tra onto, below e above
+@msg	column must be true or a number from 1	column deve essere true o un numero da 1
 @msg	x and y must both be numbers	x e y devono essere entrambi numeri
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" non è un colore: scrivilo come #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	questo non è un logo a colori piatti ({_1}% delle sue aree piene corrisponde a pochi colori piatti), quindi la modalità Logo piatto trasformerebbe i suoi sfumati in macchie: usa la modalità Colore
@@ -3932,6 +3941,7 @@ axis	Both	Entrambi
 	Perspective Distort	Distorsione prospettica
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` è il riferimento al passaggio {r}, che solo `run` e `command_batch` risolvono
 @msg	`ids` must be an array of object ids, not {v}	`ids` deve essere un elenco di ID oggetto, non {v}
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` deve essere un elenco di indici di punti di ancoraggio, non {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: il risultato del passaggio {i} non ha questo valore (scrivi $$ per un $ letterale)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: non c’è un passaggio {i} prima di questo (i passaggi si contano da 0; scrivi $$ per un $ letterale)
 @msg	object ids are non-negative integers, not {v}	gli ID oggetto sono interi non negativi, non {v}
@@ -4064,3 +4074,64 @@ effect	Regular	Normale
 @msg	{key} must be a finite coordinate	{key} deve essere una coordinata finita
 @msg	x and y must be provided together	x e y devono essere forniti insieme
 @msg	invalid restored panel group	Il gruppo di pannelli ripristinato non è valido
+
+# Revolve profile guidance.
+
+# Interactive Revolve controls.
+	Lighting	Illuminazione
+	Revolve angle	Angolo di rivoluzione
+	Axis side	Lato dell’asse
+	Rotation X	Rotazione X
+	Rotation Y	Rotazione Y
+	Rotation Z	Rotazione Z
+	Shading	Ombreggiatura
+	Direction	Direzione
+	Elevation	Elevazione
+	Ambient	Luce ambientale
+	Segments	Segmenti
+	Show axis	Mostra asse
+	Reset all	Ripristina tutto
+	Reset to default	Ripristina valore predefinito
+	Reset all Revolve settings to their defaults.	Ripristina tutte le impostazioni di rivoluzione ai valori predefiniti.
+	Drag values or labels. Double-click a value to type.	Trascina i valori o le etichette. Fai doppio clic su un valore per digitarlo.
+	Drag rings to rotate. Shift snaps to 15°.	Trascina gli anelli per ruotare. Shift usa incrementi di 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Trascina la luce o i suoi anelli. Shift usa incrementi di 15°.
+lighting	Light	Luce
+	Keep visible surfaces only when expanding	Mantieni solo le superfici visibili durante l’espansione
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Ritaglia la geometria coperta durante Espandi aspetto. L’anteprima mantiene la superficie completa. Le tinte trasparenti e le superfici che superano i limiti di visibilità mantengono tutte le facce.
+	Accented Edges…	Bordi accentuati…
+	Angled Strokes…	Pennellate angolate…
+	Crosshatch…	Tratteggio incrociato…
+	Dark Strokes…	Pennellate scure…
+	Ink Outlines…	Contorni a china…
+	Spatter…	Spruzzo…
+	Sprayed Strokes…	Pennellate spruzzate…
+	Sumi-e…	Sumi-e…
+	Accented Edges	Bordi accentuati
+	Angled Strokes	Pennellate angolate
+	Crosshatch	Tratteggio incrociato
+	Dark Strokes	Pennellate scure
+	Ink Outlines	Contorni a china
+	Spatter	Spruzzo
+	Sprayed Strokes	Pennellate spruzzate
+	Sumi-e	Sumi-e
+	Direction Balance	Bilanciamento direzione
+	Stroke Length	Lunghezza pennellata
+	Sharpness	Nitidezza
+	Strength	Forza
+	Balance	Bilanciamento
+	Black Intensity	Intensità nero
+	White Intensity	Intensità bianco
+	Dark Intensity	Intensità scuri
+	Spray Radius	Raggio spruzzo
+	Stroke Direction	Direzione pennellata
+	Stroke Width	Larghezza pennellata
+	Stroke Pressure	Pressione pennellata
+	Right Diagonal	Diagonale destra
+	Left Diagonal	Diagonale sinistra
+	Vertical Guide	Guida verticale
+	Horizontal Guide	Guida orizzontale
+	Move Guide to Layer	Sposta guida nel livello
+@msg	invalid native panel set	Gruppo nativo di pannelli non valido
+@msg	missing panel layout	Disposizione dei pannelli mancante
+@msg	unsupported native docking operation	Operazione nativa di ancoraggio non supportata

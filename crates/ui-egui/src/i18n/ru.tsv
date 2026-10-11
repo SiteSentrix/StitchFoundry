@@ -2047,6 +2047,7 @@
 	Proof Colors	Цветопроба
 	Proof Setup	Настройка цветопробы
 	Properties	Свойства
+	Proportional Metrics	Пропорциональные метрики
 	Proportional Oldstyle	Пропорциональные старого стиля
 	Pucker & Bloat…	Сморщивание и раздувание…
 	Pucker Tool	Инструмент «Сморщивание»
@@ -3313,6 +3314,7 @@ axis	Horizontal	Горизонтально
 axis	Vertical	Вертикально
 axis	Both	Оба
 	Drag to move	Перетащите для перемещения
+	Drag to move out of the set	Перетащите, чтобы вынести из набора
 	Drag to float as a toolbar	Перетащите, чтобы сделать плавающей панелью инструментов
 	Put back in the toolbar	Вернуть на панель инструментов
 	Float Panel	Сделать панель плавающей
@@ -3416,6 +3418,7 @@ axis	Both	Оба
 @msg	`color` must be a colour	`color` должно быть цветом
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` должно быть командой, пункт меню которой открывает диалоговое окно (см. ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` должно быть массивом
+@msg	`freeform.lines` must be an array	`freeform.lines` должно быть массивом
 @msg	`gradient` must be an object	`gradient` должно быть объектом
 @msg	`library` is a library id or name (see {list})	`library` — это идентификатор или имя библиотеки (см. {list})
 @msg	`mode` applies to freeform gradients	`mode` применяется к произвольным градиентам
@@ -3517,6 +3520,7 @@ axis	Both	Оба
 @msg	empty path	пустой контур
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	версия файла {0} новее, чем поддерживает этот VectorCraft ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	произвольной точке {i} нужны `at` [x, y] и допустимый `color`
+@msg	freeform line {i} must be an array of point indices	произвольная линия {i} должна быть массивом индексов точек
 @msg	give both `start` and `end` [x, y] (or neither)	укажите и `start`, и `end` [x, y] (или ни одного)
 @msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
 @msg	give the path `id` and the width point `index`	укажите `id` контура и `index` точки ширины
@@ -3755,6 +3759,8 @@ axis	Both	Оба
 @msg	the image's pixels don't match its size	пиксели изображения не соответствуют его размеру
 @msg	the layer has no objects to clip by	в слое нет объектов для обрезки
 @msg	the layer or group is locked	слой или группа заблокированы
+@msg	the guide is on a hidden or locked layer	направляющая находится на скрытом или заблокированном слое
+@msg	the target layer is locked or hidden	целевой слой заблокирован или скрыт
 @msg	the layer to flatten into is hidden	слой для объединения скрыт
 @msg	the object already has an opacity mask	у объекта уже есть непрозрачная маска
 @msg	the object has no geometry	у объекта нет геометрии
@@ -3779,7 +3785,7 @@ axis	Both	Оба
 @msg	the {tool} tool has no options	инструмент {tool} не имеет параметров
 @msg	there are no objects to release	нет объектов для освобождения
 @msg	there are no printer settings to open here	здесь нет настроек принтера для открытия
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	этот файл PostScript невозможно прочитать ({_1}): сохраните его как PDF или SVG в приложении, которое его создало
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	этот файл PostScript невозможно прочитать ({why}): сохраните его как PDF или SVG в приложении, которое его создало
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript этого файла невозможно прочитать ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	этот формат содержит одну монтажную область: экспортируйте несколько как PDF или с помощью document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	это чертёж DWG, который невозможно прочитать: сохраните его из приложения CAD как ASCII DXF и откройте его
@@ -3868,6 +3874,9 @@ axis	Both	Оба
 @msg	tool (a tool id) is required	требуется tool (идентификатор инструмента)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входит в группу панели инструментов из нескольких инструментов
 @msg	onto must name a panel floating in another group	onto должен называть панель, плавающую в другой группе
+@msg	below and above must name a panel floating in another group	below и above должны называть панель, плавающую в другой группе
+@msg	give only one of onto, below and above	укажите только один из onto, below и above
+@msg	column must be true or a number from 1	column должен быть true или числом от 1
 @msg	x and y must both be numbers	x и y должны быть числами
 @msg	"{0}" is not a colour: write it as #rrggbb	«{0}» не является цветом: запишите его как #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	это не логотип из плоских цветов ({_1}% его сплошных областей совпадает с несколькими плоскими цветами), поэтому режим «Плоский логотип» превратил бы градиенты в пятна: используйте режим «Цвет»
@@ -3930,6 +3939,7 @@ axis	Both	Оба
 	Exit	Выйти
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — это ссылка на шаг {r}, которую разрешают только `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` должен быть массивом идентификаторов объектов, а не {v}
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` должен быть массивом индексов опорных точек, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: в результате шага {i} нет такого значения (чтобы написать сам $, введите $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед этим шагом нет шага {i} (шаги считаются с 0; чтобы написать сам $, введите $$)
 @msg	object ids are non-negative integers, not {v}	идентификаторы объектов — неотрицательные целые числа, а не {v}
@@ -4060,3 +4070,64 @@ axis	Both	Оба
 @msg	{key} must be a finite coordinate	{key} должен быть конечной координатой
 @msg	x and y must be provided together	x и y необходимо указывать вместе
 @msg	invalid restored panel group	Восстановленная группа панелей недопустима
+
+# Revolve profile guidance.
+
+# Interactive Revolve controls.
+	Lighting	Освещение
+	Revolve angle	Угол вращения профиля
+	Axis side	Сторона оси
+	Rotation X	Поворот X
+	Rotation Y	Поворот Y
+	Rotation Z	Поворот Z
+	Shading	Затенение
+	Direction	Направление
+	Elevation	Высота
+	Ambient	Фоновое освещение
+	Segments	Сегменты
+	Show axis	Показать ось
+	Reset all	Сбросить всё
+	Reset to default	Вернуть значение по умолчанию
+	Reset all Revolve settings to their defaults.	Возвращает все настройки вращения профиля к значениям по умолчанию.
+	Drag values or labels. Double-click a value to type.	Перетаскивайте значения или подписи. Для ввода дважды щёлкните значение.
+	Drag rings to rotate. Shift snaps to 15°.	Перетаскивайте кольца для вращения. Shift задаёт шаг 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Перетаскивайте источник света или кольца. Shift задаёт шаг 15°.
+lighting	Light	Свет
+	Keep visible surfaces only when expanding	При разборе сохранять только видимые поверхности
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Удаляет скрытую геометрию при разборе оформления. Предпросмотр сохраняет всю поверхность. Прозрачные краски и поверхности, превышающие ограничения видимости, сохраняют все грани.
+	Accented Edges…	Акцент на краях…
+	Angled Strokes…	Наклонные мазки…
+	Crosshatch…	Перекрёстная штриховка…
+	Dark Strokes…	Тёмные мазки…
+	Ink Outlines…	Контуры тушью…
+	Spatter…	Разбрызгивание…
+	Sprayed Strokes…	Распылённые мазки…
+	Sumi-e…	Суми-э…
+	Accented Edges	Акцент на краях
+	Angled Strokes	Наклонные мазки
+	Crosshatch	Перекрёстная штриховка
+	Dark Strokes	Тёмные мазки
+	Ink Outlines	Контуры тушью
+	Spatter	Разбрызгивание
+	Sprayed Strokes	Распылённые мазки
+	Sumi-e	Суми-э
+	Direction Balance	Баланс направления
+	Stroke Length	Длина мазка
+	Sharpness	Резкость
+	Strength	Сила
+	Balance	Баланс
+	Black Intensity	Интенсивность чёрного
+	White Intensity	Интенсивность белого
+	Dark Intensity	Интенсивность тёмного
+	Spray Radius	Радиус распыления
+	Stroke Direction	Направление мазков
+	Stroke Width	Ширина мазка
+	Stroke Pressure	Нажим мазка
+	Right Diagonal	Диагональ вправо
+	Left Diagonal	Диагональ влево
+	Vertical Guide	Вертикальная направляющая
+	Horizontal Guide	Горизонтальная направляющая
+	Move Guide to Layer	Переместить направляющую на слой
+@msg	invalid native panel set	Недопустимый собственный набор панелей
+@msg	missing panel layout	Отсутствует расположение панелей
+@msg	unsupported native docking operation	Неподдерживаемая собственная операция прикрепления

@@ -37,6 +37,7 @@
 	Em Box Top/Right	仮想ボディの上 / 右
 	ICF Top/Right	平均字面の上 / 右
 	ICF Bottom/Left	平均字面の下 / 左
+	Proportional Metrics	プロポーショナルメトリクス
 	Favorites	お気に入り
 	Flip	反転
 	Japanese	日本語
@@ -3265,6 +3266,7 @@ axis	Horizontal	水平方向
 axis	Vertical	垂直方向
 axis	Both	両方
 	Drag to move	移動するにはドラッグ
+	Drag to move out of the set	ドラッグしてセットから出す
 	Drag to float as a toolbar	ドラッグしてツールバーとして浮かせる
 	Put back in the toolbar	ツールバーに戻す
 	Float Panel	パネルをフローティング
@@ -3469,9 +3471,11 @@ theme	Appearance	外観
 @msg	`at` must be [x, y]	`at` は [x, y] の形式で指定してください
 @msg	`color` must be a colour	`color` にはカラーを指定してください
 @msg	`freeform.points` must be an array	`freeform.points` には配列を指定してください
+@msg	`freeform.lines` must be an array	`freeform.lines` には配列を指定してください
 @msg	`{key}` must be a number	`{key}` には数値を指定してください
 @msg	a freeform gradient keeps at least one point	フリーフォームグラデーションには少なくとも 1 つのポイントが必要です
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	フリーフォームのポイント {i} には `at` [x, y] と有効な `color` が必要です
+@msg	freeform line {i} must be an array of point indices	フリーフォームのライン {i} にはポイントのインデックスの配列を指定してください
 @msg	no point {i} (the gradient has {_1})	ポイント {i} はありません (このグラデーションのポイントは {_1} 個です)
 @msg	no segment {segment} on line {line}	ライン {line} にセグメント {segment} はありません
 @msg	unknown freeform mode `{m}` (points, lines)	`{m}` は不明なフリーフォームのモードです (points、lines)
@@ -3497,6 +3501,8 @@ theme	Appearance	外観
 @msg	no selection bounds	選択範囲に境界がありません
 @msg	the layer has no objects to clip by	レイヤーにクリッピングマスクとして使えるオブジェクトがありません
 @msg	the layer or group is locked	レイヤーまたはグループがロックされています
+@msg	the guide is on a hidden or locked layer	ガイドが非表示またはロックされたレイヤー上にあります
+@msg	the target layer is locked or hidden	ターゲットレイヤーがロックされているか非表示です
 @msg	the layer to flatten into is hidden	統合先のレイヤーが非表示になっています
 @msg	there are no objects to release	レイヤーに分配するオブジェクトがありません
 @msg	no library `{id}`	ライブラリ `{id}` が見つかりません
@@ -3633,7 +3639,7 @@ theme	Appearance	外観
 @msg	shadings of an unknown type were left out	種類が不明なシェーディングは除外されました
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	関数の種類が不明なシェーディングは中間の色で塗りつぶされています
 @msg	the file's preview header points outside the file	ファイルのプレビューヘッダーがファイルの範囲外を指しています
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	この PostScript ファイルは読み込めません ({_1}): 作成したアプリで PDF または SVG として保存してください
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	この PostScript ファイルは読み込めません ({why}): 作成したアプリで PDF または SVG として保存してください
 @msg	this is not a PostScript file	PostScript ファイルではありません
 @msg	a PostScript error ({name} in `{op}`)	PostScript エラー (`{op}` での {name})
 @msg	a PostScript error ({name} in `{op}`), in {procs}	{procs} 内の PostScript エラー (`{op}` での {name})
@@ -3795,6 +3801,9 @@ theme	Appearance	外観
 @msg	give the path `id` and the width point `index`	パスの `id` と幅ポイントの `index` を指定してください
 @msg	no such width point	指定された幅ポイントが見つかりません
 @msg	onto must name a panel floating in another group	onto には、別のグループでフローティングしているパネルを指定してください
+@msg	below and above must name a panel floating in another group	below と above には別のグループでフローティングしているパネルを指定してください
+@msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
+@msg	column must be true or a number from 1	column には true または 1 以上の数値を指定してください
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
@@ -3925,6 +3934,7 @@ theme	Appearance	外観
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ステップ {i} の結果にその値はありません ($ そのものを書くには $$ と入力してください)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: この前にステップ {i} はありません (ステップは 0 から数えます。$ そのものを書くには $$ と入力してください)
 @msg	object ids are non-negative integers, not {v}	オブジェクト ID は 0 以上の整数です ({v} は使えません)
@@ -4058,3 +4068,64 @@ effect	Vertical	垂直
 @msg	zone must be a string	zone は文字列にしてください
 @msg	zone must be tab, center, left, right, top or bottom	zone は tab、center、left、right、top、bottom のいずれかにしてください
 @msg	{key} must be a finite coordinate	{key} は有限の座標にしてください
+
+# Revolve profile guidance.
+
+# Interactive Revolve controls.
+	Lighting	照明
+	Revolve angle	回転体の角度
+	Axis side	軸の位置
+	Rotation X	X 軸回転
+	Rotation Y	Y 軸回転
+	Rotation Z	Z 軸回転
+	Shading	陰影
+	Direction	方向
+	Elevation	仰角
+	Ambient	環境光
+	Segments	分割数
+	Show axis	軸を表示
+	Reset all	すべてリセット
+	Reset to default	初期値に戻す
+	Reset all Revolve settings to their defaults.	回転体のすべての設定を初期値に戻します。
+	Drag values or labels. Double-click a value to type.	数値やラベルをドラッグして調整。数値をダブルクリックすると入力できます。
+	Drag rings to rotate. Shift snaps to 15°.	リングをドラッグして回転。Shiftで15°刻みに調整。
+	Drag the light, or its rings. Shift snaps to 15°.	ライトやリングをドラッグ。Shiftで15°刻みに調整。
+lighting	Light	ライト
+	Keep visible surfaces only when expanding	アピアランス分割時に見える面だけを保持
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	アピアランスの分割時に隠れた部分を除去します。プレビューでは面全体を保持します。透明なペイントや可視性処理の制限を超える面は、すべての面を保持します。
+	Accented Edges…	エッジの強調…
+	Angled Strokes…	斜めのストローク…
+	Crosshatch…	クロスハッチ…
+	Dark Strokes…	暗いストローク…
+	Ink Outlines…	インクの輪郭…
+	Spatter…	はね…
+	Sprayed Strokes…	スプレーストローク…
+	Sumi-e…	墨絵…
+	Accented Edges	エッジの強調
+	Angled Strokes	斜めのストローク
+	Crosshatch	クロスハッチ
+	Dark Strokes	暗いストローク
+	Ink Outlines	インクの輪郭
+	Spatter	はね
+	Sprayed Strokes	スプレーストローク
+	Sumi-e	墨絵
+	Direction Balance	方向のバランス
+	Stroke Length	ストロークの長さ
+	Sharpness	シャープさ
+	Strength	強度
+	Balance	バランス
+	Black Intensity	黒の強さ
+	White Intensity	白の強さ
+	Dark Intensity	暗部の強さ
+	Spray Radius	スプレー半径
+	Stroke Direction	ストロークの方向
+	Stroke Width	ストロークの幅
+	Stroke Pressure	ストロークの筆圧
+	Right Diagonal	右斜め
+	Left Diagonal	左斜め
+	Vertical Guide	垂直ガイド
+	Horizontal Guide	水平ガイド
+	Move Guide to Layer	ガイドをレイヤーへ移動
+@msg	invalid native panel set	ネイティブパネルセットが無効です
+@msg	missing panel layout	パネル配置がありません
+@msg	unsupported native docking operation	ネイティブドッキング操作は未対応です

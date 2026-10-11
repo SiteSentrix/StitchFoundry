@@ -442,12 +442,26 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
         }
         ui.add_space(10.0);
-        if widgets::icon_button(ui, "flip-horizontal-2", tl!("Flip Along Horizontal Axis"), false, 24.0).clicked() {
+        // Lucide's flip icons are named for their mirror line: flip-vertical-2 draws a vertical
+        // line (the left-right flip), flip-horizontal-2 a horizontal one (top-bottom).
+        if widgets::icon_button(ui, "flip-vertical-2", tl!("Flip Along Horizontal Axis"), false, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "vertical"})).ok();
         }
-        if widgets::icon_button(ui, "flip-vertical-2", tl!("Flip Along Vertical Axis"), false, 24.0).clicked() {
+        if widgets::icon_button(ui, "flip-horizontal-2", tl!("Flip Along Vertical Axis"), false, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "horizontal"})).ok();
         }
+        // More Options: the Transform panel's Scale Corners and Scale Strokes & Effects, open
+        // while they are toggled.
+        let more = widgets::icon_button(ui, "ellipsis", tl!("More Options"), false, 24.0);
+        egui::Popup::menu(&more).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            let (sc, ss) = (app.session.prefs.scale_corners, app.session.prefs.scale_strokes);
+            if widgets::check(ui, tl!("Scale Corners"), sc, true) {
+                super::transform::set_pref(app, "scaleCorners", !sc);
+            }
+            if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
+                super::transform::set_pref(app, "scaleStrokes", !ss);
+            }
+        });
     });
     // Live shape properties.
     if let Some(n) = first_selected(app)
@@ -621,6 +635,44 @@ mod tests {
         };
         let widths = [field("35 pt"), field("0°"), field("0 pt"), field("100%")];
         assert!(widths.iter().all(|w| (w - widths[0]).abs() < 1.0), "X, rotation, corner radius, opacity: {widths:?}");
+    }
+
+    /// The Transform section's More Options holds Scale Corners and Scale Strokes & Effects, and
+    /// stays open while they are toggled.
+    #[test]
+    fn transform_more_options_toggles_scale_corners_and_strokes() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap();
+        let ctx = egui::Context::default();
+        let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(!has(&texts, "Scale Corners"), "closed at first");
+        // The button is an icon at the end of the angle row, under the H: field: sweep that row.
+        let h = texts.iter().find(|(t, _)| t == "H:").unwrap().1;
+        let mut open = None;
+        'sweep: for dy in (12..60).step_by(6) {
+            for x in (120..300).step_by(6) {
+                let at = egui::pos2(x as f32, h.bottom() + dy as f32);
+                let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+                frame(&mut app, &ctx, vec![Event::PointerMoved(at), b(true)]);
+                frame(&mut app, &ctx, vec![b(false)]);
+                let texts = frame(&mut app, &ctx, vec![]);
+                if has(&texts, "Scale Corners") {
+                    open = Some(texts);
+                    break 'sweep;
+                }
+            }
+        }
+        let texts = open.expect("More Options opens the popup");
+        let (sc, ss) = (app.session.prefs.scale_corners, app.session.prefs.scale_strokes);
+        click(&mut app, &ctx, &texts, "Scale Corners");
+        assert_eq!(app.session.prefs.scale_corners, !sc);
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(has(&texts, "Scale Strokes & Effects"), "still open after a toggle");
+        click(&mut app, &ctx, &texts, "Scale Strokes & Effects");
+        assert_eq!(app.session.prefs.scale_strokes, !ss);
     }
 
     /// Both panels forward the Move Artwork toggle when their actual X field is edited.

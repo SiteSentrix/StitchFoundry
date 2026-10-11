@@ -95,6 +95,11 @@ pub struct CharStyle {
     /// their line line up with it.
     #[serde(default, rename = "charAlign", skip_serializing_if = "crate::skip::is_default")]
     pub char_align: CharAlign,
+    /// Proportional Metrics (Character panel menu, East Asian options): full-width glyphs take the
+    /// font's own proportional widths, OpenType `palt` (#966). Vertical type sets them as before
+    /// for now.
+    #[serde(default, rename = "proportionalMetrics", skip_serializing_if = "crate::skip::is_default")]
+    pub proportional_metrics: bool,
 }
 
 /// Where a character smaller than the largest on its line lines up with it: on the Roman
@@ -205,6 +210,7 @@ impl Default for CharStyle {
             stroke_dash: None,
             position: CharPosition::Normal,
             char_align: CharAlign::RomanBaseline,
+            proportional_metrics: false,
             small_caps: None,
         }
     }
@@ -954,7 +960,49 @@ pub struct TextObject {
     pub cached_baselines: Vec<(Point, Point)>,
 }
 
+/// Conversion from stored character attributes to document-space type controls.
+/// Point size follows the transformed em-height axis; horizontal scale is the ratio of
+/// the two transformed em axes. Rotation, reflection and shear remain in the affine.
+#[derive(Clone, Copy, Debug)]
+pub struct TextStyleScale {
+    pub points: f64,
+    pub horizontal: f64,
+}
+
 impl TextObject {
+    /// None for collapsed or unrepresentable transforms, whose type dimensions cannot
+    /// be edited by compensating the stored attributes.
+    pub fn style_scale(&self) -> Option<TextStyleScale> {
+        let [a, b, c, d, e, f] = self.xf.as_coeffs();
+        if ![a, b, c, d, e, f].iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        let (sx, sy) = (a.hypot(b), c.hypot(d));
+        let determinant = (a / sx) * (d / sy) - (b / sx) * (c / sy);
+        let horizontal = sx / sy;
+        if !sy.is_finite() || sy <= 0.0 || !horizontal.is_finite() || horizontal <= 0.0 || !determinant.is_finite() || determinant.abs() <= 1e-12 {
+            return None;
+        }
+        // Avoid a pure rotation turning otherwise identical fields into mixed values.
+        let unit = |v: f64| if (v - 1.0).abs() <= 1e-12 { 1.0 } else { v };
+        Some(TextStyleScale { points: unit(sy), horizontal: unit(horizontal) })
+    }
+
+    /// Character attributes as presented by controls (stored runs stay local for layout
+    /// and rich-text clipboard operations). Explicit vertical character scale stays separate.
+    pub fn effective_char_style(&self, style: &CharStyle) -> Option<CharStyle> {
+        let scale = self.style_scale()?;
+        let mut style = style.clone();
+        style.size *= scale.points;
+        style.leading = style.leading.map(|v| v * scale.points);
+        style.baseline_shift *= scale.points;
+        style.h_scale *= scale.horizontal;
+        if ![style.size, style.leading.unwrap_or(0.0), style.baseline_shift, style.h_scale].iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        Some(style)
+    }
+
     pub fn point(origin: Point, text: &str, style: CharStyle) -> Self {
         Self {
             vertical: false,
@@ -1189,6 +1237,19 @@ impl TextObject {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn character_controls_reject_collapsed_and_nonfinite_transforms() {
+        let mut t = TextObject::point(Point::ZERO, "Text", CharStyle::default());
+        for matrix in [[0.0; 6], [1.0, 1.0, 2.0, 2.0, 0.0, 0.0], [f64::INFINITY, 0.0, 0.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 1.0, f64::NAN, 0.0]] {
+            t.xf = Affine::new(matrix);
+            assert!(t.effective_char_style(&t.first_style()).is_none());
+        }
+        t.xf = Affine::rotate(0.83);
+        assert_eq!(t.effective_char_style(&t.first_style()).unwrap().size, 12.0);
+        t.xf = Affine::scale(1e308);
+        assert!(t.effective_char_style(&t.first_style()).is_none(), "overflowing point size");
+    }
 
     #[test]
     fn point_text_basics() {

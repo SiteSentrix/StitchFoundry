@@ -81,23 +81,6 @@ fn every_command_without_a_document() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// Known bugs (see the `#[ignore]` repro tests below): (command, param key) pairs skipped by the
-/// junk sweep so the rest of the sweep stays meaningful.
-const KNOWN_BUGS: &[(&str, &str)] = &[
-    ("object.scale", "sx"),
-    ("object.transformEach", "scaleH"),
-    ("object.transformEach", "scaleV"),
-    ("object.distributeSpacing", "spacing"),
-    ("artboard.setProps", "x"),
-    ("artboard.setProps", "y"),
-    ("artboard.setProps", "width"),
-    ("artboard.setProps", "height"),
-];
-
-fn known_bug(id: &str, p: &Value) -> bool {
-    KNOWN_BUGS.iter().any(|(c, k)| *c == id && p.get(*k).is_some())
-}
-
 /// Regression: huge column counts used to panic with `capacity overflow`; in every layout and
 /// order (#681), with huge and negative spacing too.
 #[test]
@@ -157,9 +140,6 @@ fn every_command_with_junk_params() {
                 cases.truncate(12);
             }
             for p in &cases {
-                if known_bug(c.id, p) {
-                    continue;
-                }
                 calls += 1;
                 if let Some(f) = probe(fx, c.id, p) {
                     failures.push(f);
@@ -292,6 +272,26 @@ fn structured_junk() {
         ("effect.apply", json!({"effect": "blur.radial", "params": {"amount": 1e308, "method": 5, "quality": "best"}})),
         ("effect.apply", json!({"effect": "blur.smart", "params": {"radius": 1e308, "threshold": -1e308, "quality": null}})),
         ("effect.apply", json!({"effect": "sharpen.unsharpMask", "params": {"amount": -1, "radius": "1e999", "threshold": 1e308}})),
+        (
+            "effect.apply",
+            json!({"effect": "brushStrokes.accentedEdges", "params": {"edgeWidth": 1e308, "edgeBrightness": "NaN", "smoothness": -1e308}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "brushStrokes.angledStrokes", "params": {"directionBalance": [1], "strokeLength": 1e308, "sharpness": null}}),
+        ),
+        ("effect.apply", json!({"effect": "brushStrokes.crosshatch", "params": {"strokeLength": "1e999", "sharpness": 1e308, "strength": -1e308}})),
+        ("effect.apply", json!({"effect": "brushStrokes.darkStrokes", "params": {"balance": -1e308, "blackIntensity": {}, "whiteIntensity": 1e308}})),
+        (
+            "effect.apply",
+            json!({"effect": "brushStrokes.inkOutlines", "params": {"strokeLength": -1, "darkIntensity": 1e308, "lightIntensity": "x"}}),
+        ),
+        ("effect.apply", json!({"effect": "brushStrokes.spatter", "params": {"sprayRadius": 1e308, "smoothness": "NaN"}})),
+        (
+            "effect.apply",
+            json!({"effect": "brushStrokes.sprayedStrokes", "params": {"strokeLength": 1e308, "sprayRadius": -1e308, "strokeDirection": 3}}),
+        ),
+        ("effect.apply", json!({"effect": "brushStrokes.sumiE", "params": {"strokeWidth": 0, "strokePressure": 1e308, "contrast": [1]}})),
         ("effect.apply", json!({"effect": "pixelate.colorHalftone", "params": {"maxRadius": 1e308, "channel1": "1e999", "channel4": null}})),
         ("effect.apply", json!({"effect": "pixelate.crystallize", "params": {"cellSize": -1e308}})),
         ("effect.apply", json!({"effect": "pixelate.mezzotint", "params": {"type": 5}})),
@@ -474,9 +474,6 @@ fn fuzzed_calls_keep_documents_serializable() {
                 let k = if k == "path" { continue } else { k };
                 let mut s = Fixture::Multi.session();
                 let p = json!({ k.clone(): v });
-                if known_bug(c.id, &p) {
-                    continue;
-                }
                 let ok = catch_quiet(|| s.execute(c.id, &p)).map(|r| r.is_ok()).unwrap_or(false);
                 if ok && let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
                     failures.push(format!("{} {p}: {e}", c.id));

@@ -129,7 +129,7 @@ fn path_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Result<&mut PathDa
 
 fn append_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("path.appendAnchor", "missing id"))?;
-    let a = anchor_from_json(p).ok_or_else(|| bad("path.appendAnchor", "missing x/y"))?;
+    let a = anchor_from_json(p, "path.appendAnchor")?;
     s.edit("Pen", |d, sel| {
         let path = path_mut(d, id)?;
         match path.subpaths.last_mut() {
@@ -217,12 +217,21 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let data = PathData::new(
         subs.iter()
             .map(|sp| {
-                SubPath::new(
-                    sp.get("anchors").and_then(Value::as_array).map(|a| a.iter().filter_map(anchor_from_json).collect()).unwrap_or_default(),
-                    bool_or(sp, "closed", false),
-                )
+                let anchors = sp
+                    .get("anchors")
+                    .and_then(Value::as_array)
+                    .ok_or_else(|| bad("path.setAnchors", "each subpath needs an anchors array"))?
+                    .iter()
+                    .map(|a| anchor_from_json(a, "path.setAnchors"))
+                    .collect::<Result<Vec<_>>>()?;
+                let closed = match sp.get("closed") {
+                    None | Some(Value::Null) => false,
+                    Some(Value::Bool(v)) => *v,
+                    Some(_) => return Err(bad("path.setAnchors", "closed must be a boolean")),
+                };
+                Ok(SubPath::new(anchors, closed))
             })
-            .collect(),
+            .collect::<Result<Vec<_>>>()?,
     );
     s.edit("Reshape", |d, _| {
         *path_mut(d, id)? = data;
