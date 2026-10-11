@@ -52,6 +52,67 @@ fn group_ungroup() {
     assert_eq!(s.doc().unwrap().selection.len(), 2);
 }
 
+/// Makes 10 pt squares at (0, 90) and (50, 100) into a compound path or group with the commands in
+/// `make`, each run on the selection (the last one makes `outer`), draws a 10 pt square `r` at
+/// (200, 0), selects the second square and `r`, and sets the selection's `key` to that square
+/// → (session, key, outer, r).
+fn key_inside(make: &[&str]) -> (Session, NodeId, NodeId, NodeId) {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 90.0, 10.0, 10.0);
+    let key = rect(&mut s, 50.0, 100.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, key.0]})).unwrap();
+    let mut outer = key;
+    for cmd in make {
+        outer = NodeId(s.execute(cmd, &json!({})).unwrap()["id"].as_u64().unwrap());
+    }
+    let r = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [key.0, r.0]})).unwrap();
+    s.select(|_, sel| sel.key = Some(key)).unwrap();
+    (s, key, outer, r)
+}
+
+/// Aligns the selection left to its key object and, after Undo, spaces it 5 pt apart vertically
+/// → the top-left corners of `outer` and `r` after each.
+fn aligned_then_spaced(s: &mut Session, outer: NodeId, r: NodeId) -> [((f64, f64), (f64, f64)); 2] {
+    let at = |s: &Session, id| {
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        (b.x0, b.y0)
+    };
+    s.execute("object.align", &json!({"horizontal": "left", "bounds": "geometric"})).unwrap();
+    let aligned = (at(s, outer), at(s, r));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.distributeSpacing", &json!({"axis": "vertical", "spacing": 5, "bounds": "geometric"})).unwrap();
+    [aligned, (at(s, outer), at(s, r))]
+}
+
+/// Align and Distribute Spacing move a compound path as one object. With one of its members as the
+/// key object, the compound path stays where it is: Align moves the others to the member's edge,
+/// and Distribute Spacing spaces them from the compound path.
+#[test]
+fn a_compound_path_that_contains_the_key_object_stays_in_place() {
+    let (mut s, key, outer, r) = key_inside(&["object.compoundPath.make"]);
+    assert_eq!(s.doc().unwrap().selection.key, Some(key));
+    let [aligned, spaced] = aligned_then_spaced(&mut s, outer, r);
+    assert_eq!(aligned, ((0.0, 90.0), (50.0, 0.0)), "it stays, the other moved to the key");
+    assert_eq!(spaced, ((0.0, 90.0), (200.0, 75.0)), "5 pt apart, it stays");
+}
+
+/// The key object stays the key when the group that contains it is added to the selection, by
+/// `select.add` or by the Group Selection tool's click on a selected member. Align and Distribute
+/// Spacing move that group as one object, and the group stays where it is, also when the key is in
+/// a group inside it.
+#[test]
+fn a_selected_group_that_contains_the_key_object_stays_in_place() {
+    for make in [&["object.group"][..], &["object.group", "object.group"]] {
+        let (mut s, key, outer, r) = key_inside(make);
+        s.execute("select.add", &json!({"ids": [outer.0]})).unwrap();
+        assert_eq!(s.doc().unwrap().selection.key, Some(key), "{make:?}");
+        let [aligned, spaced] = aligned_then_spaced(&mut s, outer, r);
+        assert_eq!(aligned, ((0.0, 90.0), (50.0, 0.0)), "{make:?}: it stays, the other moved to the key");
+        assert_eq!(spaced, ((0.0, 90.0), (200.0, 75.0)), "{make:?}: 5 pt apart, it stays");
+    }
+}
+
 #[test]
 fn arrange_order() {
     let mut s = session();

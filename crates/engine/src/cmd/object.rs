@@ -976,13 +976,22 @@ fn reference_rect(s: &Session, p: &Value, ids: &[NodeId], preview: bool) -> Resu
     }
 }
 
+/// Returns the selected root (one of `ids`) that is the key object or contains it, such as the
+/// compound path or selected group the key is in. Align to the key object and Distribute Spacing
+/// with a spacing keep it in place.
+fn key_root(s: &Session, ids: &[NodeId]) -> Option<NodeId> {
+    let st = s.doc().ok()?;
+    let ancestry = st.doc.ancestry(st.selection.key?)?;
+    ids.iter().copied().find(|id| ancestry.contains(id))
+}
+
 fn align(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let preview = preview_bounds(s, p, "object.align")?;
     let r = reference_rect(s, p, &ids, preview)?;
     let h = str_param(p, "horizontal");
     let v = str_param(p, "vertical");
-    let key = s.doc()?.selection.key;
+    let key = key_root(s, &ids);
     let moves: Vec<(NodeId, Vec2)> = {
         let d = &s.doc()?.doc;
         items_bounds(d, &ids, preview)
@@ -1100,9 +1109,9 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
         deltas.push((*id, pos - start(r)));
         pos += size(r) + gap;
     }
-    // With a spacing (aligning to a key object) the key object stays where it is: the others
-    // are spaced from it.
-    let key = s.doc()?.selection.key;
+    // With a spacing (aligning to a key object) the key object stays where it is, with the
+    // compound path or selected group it is in: the others are spaced from it.
+    let key = key_root(s, &ids);
     let fixed = spacing.and_then(|_| deltas.iter().find(|(id, _)| Some(*id) == key)).map_or(0.0, |k| k.1);
     let moves: Vec<(NodeId, Vec2)> =
         deltas.into_iter().map(|(id, d)| (id, if horiz { Vec2::new(d - fixed, 0.0) } else { Vec2::new(0.0, d - fixed) })).collect();
