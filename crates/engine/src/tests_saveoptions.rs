@@ -58,7 +58,7 @@ fn three_artboards_give_four_files() {
     // No path: the bytes of every file.
     let r = s.execute("file.saveCopy", &json!({"separateArtboards": true})).unwrap();
     let names: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["Poster copy.vectorcraft", "Poster copy-A.vectorcraft", "Poster copy-B.vectorcraft", "Poster copy-C.vectorcraft"]);
+    assert_eq!(names, ["Poster copy.stitchfoundry", "Poster copy-A.stitchfoundry", "Poster copy-B.stitchfoundry", "Poster copy-C.stitchfoundry"]);
     assert!(vectorcraft_format::sniff(&bytes_of(&r["files"][3]["dataBase64"])));
 }
 

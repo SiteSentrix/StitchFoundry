@@ -333,7 +333,7 @@ fn add_text_on_or_in_a_path_takes_its_color() {
 fn save_file_describes_the_formats_it_writes() {
     let tools = tool_definitions();
     let d = tools.iter().find(|t| t["name"] == "save_file").and_then(|t| t["description"].as_str()).unwrap();
-    for ext in [".vectorcraft", ".vctemplate", ".pdf", ".svg", ".svgz", ".ai"] {
+    for ext in [".stitchfoundry", ".vctemplate", ".pdf", ".svg", ".svgz", ".ai"] {
         assert!(d.contains(ext), "{ext}: {d}");
     }
     assert!(d.contains("its own format"), "{d}");

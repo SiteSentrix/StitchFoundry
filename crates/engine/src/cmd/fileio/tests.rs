@@ -173,7 +173,7 @@ fn export_extensions_name_every_writable_format() {
     assert_eq!(
         exts,
         [
-            "vectorcraft",
+            "stitchfoundry",
             "svg",
             "svgz",
             "pdf",

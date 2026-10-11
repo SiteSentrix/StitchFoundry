@@ -120,7 +120,7 @@ fn save_a_copy_keeps_the_path_title_and_modified_state() {
     s.execute("document.save", &json!({"path": native})).unwrap();
     rect(&mut s);
     let r = s.execute("file.saveCopy", &json!({})).unwrap();
-    assert_eq!((r["name"].as_str(), r["folder"].as_str()), (Some("poster copy.vectorcraft"), Some(d.to_string_lossy().as_ref())));
+    assert_eq!((r["name"].as_str(), r["folder"].as_str()), (Some("poster copy.stitchfoundry"), Some(d.to_string_lossy().as_ref())));
     let copy = path(&d, "poster copy.svg");
     s.execute("file.saveCopy", &json!({"path": copy})).unwrap();
     assert!(std::fs::read_to_string(&copy).unwrap().starts_with("<?xml"));
@@ -218,9 +218,9 @@ fn older_native_files_open_converted_and_save_under_a_new_name() {
     let mut s = Session::new();
     s.execute("document.open", &json!({"path": legacy})).unwrap();
     assert_eq!(s.doc().unwrap().title(), "logo [Converted]");
-    // Save doesn't overwrite the old file: it asks for a .vectorcraft name.
+    // Save doesn't overwrite the old file: it asks for a .stitchfoundry name.
     let r = s.execute("document.save", &json!({})).unwrap();
-    assert_eq!((r["name"].as_str(), r.get("path")), (Some("logo.vectorcraft"), None));
+    assert_eq!((r["name"].as_str(), r.get("path")), (Some("logo.stitchfoundry"), None));
     assert_eq!(std::fs::read(&legacy).unwrap(), old_file(true));
     let r = s.execute("document.open", &json!({"path": v1})).unwrap();
     assert_eq!(r["title"], "badge [Converted]");
@@ -297,7 +297,7 @@ fn save_plans_suggest_names_and_folders() {
     s.execute("file.info", &json!({"title": "Map"})).unwrap();
     let plan = |s: &Session, mode, p: Value| save_plan(s, mode, &p).unwrap();
     let p = plan(&s, SaveMode::Save, json!({}));
-    assert_eq!((p.path, p.name.as_str(), p.format.id, p.folder), (None, "Map.vectorcraft", "vectorcraft", None));
+    assert_eq!((p.path, p.name.as_str(), p.format.id, p.folder), (None, "Map.stitchfoundry", "vectorcraft", None));
     assert_eq!(plan(&s, SaveMode::Copy, json!({"format": "pdf"})).name, "Map copy.pdf");
     assert_eq!(plan(&s, SaveMode::Template, json!({"format": "svg"})).format.id, "template", "a template is always native");
     assert_eq!(SaveMode::of("file.saveCopy"), Some(SaveMode::Copy));

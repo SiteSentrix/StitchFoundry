@@ -80,7 +80,7 @@ fn images_open_at_their_pixel_size() {
 #[test]
 fn help_lists_readable_formats() {
     let out = ok(&["--help"]);
-    assert!(out.contains("Readable formats: .vectorcraft") && out.contains(".ait") && out.contains(".webp"), "{out}");
+    assert!(out.contains("Readable formats: .stitchfoundry") && out.contains(".ait") && out.contains(".webp"), "{out}");
 }
 
 /// `info` reports the import warnings: an EPS read only up to an error names it.
