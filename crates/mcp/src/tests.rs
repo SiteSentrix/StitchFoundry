@@ -579,6 +579,30 @@ fn shift_marquee_gesture_toggles_the_selection() {
     }
 }
 
+/// A click on one of two selected objects makes it the key object: `pointer_gesture` replies
+/// with it as `key` and `inspect_document` lists it, and a click on the key again lets it go.
+#[test]
+fn pointer_gestures_report_the_key_object() {
+    let mut s = server();
+    let square = |s: &mut Server, id: u64, x: u64| {
+        let r = call(s, id, "draw_shape", json!({"shape": "rectangle", "x": x, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (square(&mut s, 1, 100), square(&mut s, 2, 200));
+    let r = call(&mut s, 3, "run_command", json!({"command": "select.set", "params": {"ids": [a, b]}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let click = |s: &mut Server, id: u64| {
+        let events = json!([{"kind": "down", "x": 225, "y": 125}, {"kind": "up", "x": 225, "y": 125}]);
+        let r = call(s, id, "pointer_gesture", json!({"tool": "selection", "events": events}));
+        assert_eq!(r["isError"], false, "{r}");
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap().get("key").cloned()
+    };
+    assert_eq!(click(&mut s, 4), Some(json!(b)), "a click on a selected object makes it the key");
+    let doc: Value = serde_json::from_str(&text_of(&call(&mut s, 5, "inspect_document", json!({})))).unwrap();
+    assert_eq!(doc.get("key"), Some(&json!(b)));
+    assert_eq!(click(&mut s, 6), Some(Value::Null), "a click on the key again lets it go");
+}
+
 /// Preferences › Type › Show Font Names in English (#394): agents set it with `prefs.set`;
 /// `text.fontList` stays the English (canonical) family names used by `text.setStyle`, not the
 /// native UI labels.

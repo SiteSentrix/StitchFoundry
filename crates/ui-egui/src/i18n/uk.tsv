@@ -3666,6 +3666,7 @@ axis	Both	Обидві
 @msg	nothing to wrap	нічого обтікати
 @msg	object {0} cannot have children	об’єкт {0} не може мати нащадків
 @msg	object {id} is not a path	об’єкт {id} не є контуром
+@msg	object {id} is not a selected top-level object	об’єкт {id} не є виділеним об’єктом верхнього рівня
 @msg	page size {w} × {h}	розмір сторінки {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	сторінка {0} не існує (в PDF{1})
 @msg	paste unavailable	вставка недоступна

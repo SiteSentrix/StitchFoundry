@@ -37,7 +37,8 @@ enum State {
         /// selection.
         deselect: Option<NodeId>,
         /// Pressed (no modifier) on this object of a selection of several: released without a
-        /// drag, it becomes the key object that Align aligns to (the key again: no key).
+        /// drag, it becomes the key object that Align aligns to if `can_be_key` allows it (the key
+        /// again: no key).
         key: Option<NodeId>,
     },
     Scaling {
@@ -409,8 +410,8 @@ impl Tool for SelectionTool {
                     (false, Some(id), _) => vec![Action::Exec("select.toggle".into(), json!({ "id": id.0 }))],
                     // A click on the key object again: no key.
                     (false, None, Some(id)) if cx.selection.key == Some(id) => vec![Action::Exec("select.key".into(), json!({}))],
-                    (false, None, Some(id)) => vec![Action::Exec("select.key".into(), json!({ "id": id.0 }))],
-                    (false, None, None) => vec![],
+                    (false, None, Some(id)) if can_be_key(cx, id) => vec![Action::Exec("select.key".into(), json!({ "id": id.0 }))],
+                    (false, None, _) => vec![],
                 }
             }
             (PointerKind::Up, State::Scaling { .. } | State::Rotating { .. }) => {
@@ -510,6 +511,17 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
     let stack = objects_at(cx.doc, p, cx.hit_options(), cx.isolation);
     let next = stack.iter().rposition(|id| cx.selection.contains(*id)).map_or(0, |i| i + 1);
     stack.get(next).or(stack.first()).copied()
+}
+
+/// Can a click make `id` the key object? `select.key` takes only a selected top-level object. In
+/// isolation mode a click can pick a sublayer (inside an isolated layer), a compound-path member
+/// (inside an isolated compound path) or an object inside another selected object (inside an
+/// isolated group that is also selected), and `select.key` returns an error for all three.
+fn can_be_key(cx: &ToolContext, id: NodeId) -> bool {
+    let inside_selected = cx.doc.ancestry(id).unwrap_or_default().iter().any(|a| *a != id && cx.selection.contains(*a));
+    // `paint_owner` returns a compound-path member's compound path.
+    let member = crate::xform::paint_owner(cx.doc, id) != id;
+    cx.doc.node(id).is_some_and(|n| !n.is_layer()) && !inside_selected && !member
 }
 
 /// Is `n` area type (text in a frame) whose frame the tools reshape? Type in perspective isn't:
@@ -795,6 +807,68 @@ mod tests {
         let mut one = Selection::default();
         one.add(rect);
         assert!(click(&one, 150.0, 150.0).is_empty());
+    }
+
+    /// In isolation mode a click makes only a selected top-level object the key, as `select.key`
+    /// takes no other: a click on a sublayer's art inside an isolated layer picks the sublayer,
+    /// a click inside an isolated group that is also selected picks an object inside it, and a
+    /// click inside an isolated compound path picks a member.
+    #[test]
+    fn a_click_makes_only_a_selected_top_level_object_the_key() {
+        use vectorcraft_doc::{Appearance, Document, LayerColor, Node, NodeKind};
+        use vectorcraft_geom::shapes;
+        let p = paint();
+        let click = |d: &Document, s: &Selection, isolation: NodeId| {
+            let c = ToolContext { isolation: Some(isolation), ..cx(d, s, &p) };
+            let mut t = SelectionTool::default();
+            assert!(t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0)).is_empty());
+            t.pointer(&c, &ev(PointerKind::Up, 150.0, 150.0))
+        };
+        let path = |id: NodeId, r: Rect| Node::path(id, shapes::rectangle(r), Appearance::default_art());
+        let (under, beside) = (Rect::new(100.0, 100.0, 200.0, 200.0), Rect::new(300.0, 300.0, 340.0, 340.0));
+        // An isolated layer whose art under the click is in a sublayer.
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let (sub, a, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        d.insert(Some(l), 0, Node::layer(sub, "Sub", LayerColor::Preset(1))).unwrap();
+        d.insert(Some(sub), 0, path(a, under)).unwrap();
+        d.insert(Some(l), 1, path(b, beside)).unwrap();
+        let mut s = Selection::default();
+        s.add(sub);
+        s.add(b);
+        assert!(click(&d, &s, l).is_empty(), "a sublayer is not a key object");
+        // An isolated group that is also selected.
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let (g, a, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        d.insert(Some(l), 0, Node::group(g, vec![])).unwrap();
+        d.insert(Some(g), 0, path(a, under)).unwrap();
+        d.insert(Some(g), 1, path(b, beside)).unwrap();
+        let mut s = Selection::default();
+        s.add(a);
+        s.add(g);
+        assert!(click(&d, &s, g).is_empty(), "an object inside the selected group is not a key object");
+        s.key = Some(a);
+        assert_eq!(click(&d, &s, g), vec![Action::Exec("select.key".into(), json!({}))], "the key again: no key");
+        // With the group not selected, the object becomes the key.
+        let mut s = Selection::default();
+        s.add(a);
+        s.add(b);
+        assert_eq!(click(&d, &s, g), vec![Action::Exec("select.key".into(), json!({"id": a.0}))]);
+        // An isolated compound path. Make Compound Path clears its members' appearance, so these
+        // members have none, and the click is on a's outline.
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let (c, a, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let member = |id: NodeId, r: Rect| std::sync::Arc::new(Node::path(id, shapes::rectangle(r), Appearance::default()));
+        let children = vec![member(a, Rect::new(150.0, 100.0, 250.0, 200.0)), member(b, beside)];
+        let mut compound = Node::new(c, NodeKind::Compound { children, rule: Default::default() });
+        compound.appearance = Appearance::default_art().into();
+        d.insert(Some(l), 0, compound).unwrap();
+        let mut s = Selection::default();
+        s.add(a);
+        s.add(b);
+        assert!(click(&d, &s, c).is_empty(), "a compound-path member is not a key object");
     }
 
     #[test]
