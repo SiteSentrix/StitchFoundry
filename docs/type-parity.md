@@ -42,7 +42,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Touch Type tool | missing | listed in the toolbar, not implemented |
 | Retype (identify fonts in outlines/images) | missing | Illustrator's uses a cloud model |
 | Snap to Glyph | missing | menu stub |
-| Thai, Lao, Khmer, Myanmar: shaping (marks, reordering), lines broken between words | done | words found by ICU4X's line segmenter: dictionaries on the desktop, LSTM models on the web |
+| Thai, Lao, Khmer, Myanmar: shaping (marks, reordering), lines broken between words, word-by-word caret and double-click | done | words found by ICU4X's line segmenter: dictionaries on the desktop, LSTM models on the web |
 | Middle Eastern: bidirectional layout, Paragraph Direction | done | |
 | Middle Eastern: Character Direction, digit types, kashidas, Middle Eastern composers, split caret | missing | |
 | CJK: input methods (marked text, candidate window) | done | |
@@ -55,6 +55,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | Thai, Lao, Khmer and Myanmar words for the caret (Ctrl/Alt+arrows) and double-click; combining marks count as part of a word; score unchanged (estimated) |
 | 2026-10-11 | minor | Font menu: a Thai script filter beside Japanese and Latin; score unchanged (estimated) |
 | 2026-10-11 | minor | Thai, Lao, Khmer and Myanmar text breaks its lines between words (ICU4X line segmenter) instead of only at spaces; score unchanged (estimated) |
 | 2026-10-11 | minor | The Type tool's arrows and Delete move by grapheme cluster, never between a Thai consonant and its vowel or tone marks; score unchanged (estimated) |
