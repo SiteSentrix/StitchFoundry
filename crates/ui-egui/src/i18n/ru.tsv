@@ -4286,10 +4286,7 @@ lighting	Light	Свет
 	Width profile	Профиль ширины
 	Widths (mm)	Ширины (мм)
 	Zigzag	Зигзаг
-	colors	цветов
 	inclination lines	линий наклона
-	stitches	стежков
-	trims	обрезок
 	Brush	Кисть
 	Length	Длина
 	Bean	Тройная
@@ -4329,6 +4326,9 @@ lighting	Light	Свет
 	Travel by	Переход по
 	Double	Двойная
 machine	Trim	Обрезка нити
+@plural	{n} stitch|{n} stitches	{n} стежок|{n} стежка|{n} стежков
+@plural	{n} trim|{n} trims	{n} обрезка|{n} обрезки|{n} обрезок
+machine	Stop	Остановка
 	Column A/B Tool	Инструмент «Колонна A/B»
 	Column A/B	Колонна A/B
 	Tatami stitches	Стежки татами

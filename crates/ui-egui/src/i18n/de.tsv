@@ -4244,10 +4244,7 @@ theme	Appearance	Erscheinungsbild
 	Width profile	Breitenprofil
 	Widths (mm)	Breiten (mm)
 	Zigzag	Zickzack
-	colors	Farben
 	inclination lines	Neigungslinien
-	stitches	Stiche
-	trims	Fadenschnitte
 	Brush	Pinsel
 	Length	Länge
 	Bean	Bohnenstich
@@ -4287,6 +4284,9 @@ theme	Appearance	Erscheinungsbild
 	Travel by	Springen nach
 	Double	Doppelt
 machine	Trim	Fadenschnitt
+@plural	{n} stitch|{n} stitches	{n} Stich|{n} Stiche
+@plural	{n} trim|{n} trims	{n} Fadenschnitt|{n} Fadenschnitte
+machine	Stop	Stopp
 	Column A/B Tool	Säule-A/B-Werkzeug
 	Column A/B	Säule A/B
 	Tatami stitches	Tatamistiche

@@ -3888,10 +3888,7 @@ lighting	Light	光源
 	Width profile	宽度配置文件
 	Widths (mm)	宽度 (mm)
 	Zigzag	之字形
-	colors	色
 	inclination lines	条针迹方向线转向
-	stitches	针
-	trims	次剪线
 	Brush	画笔
 	Length	长度
 	Bean	三重平针
@@ -3926,6 +3923,9 @@ lighting	Light	光源
 	Travel by	移动单位
 	Double	双重
 machine	Trim	剪线
+@plural	{n} stitch|{n} stitches	{n} 针
+@plural	{n} trim|{n} trims	{n} 次剪线
+machine	Stop	停止
 	Column A/B Tool	A/B 柱状工具
 	Column A/B	A/B 柱状
 	Tatami stitches	榻榻米针迹

@@ -4298,10 +4298,7 @@ lighting	Light	Lumière
 	Width profile	Profil de largeur
 	Widths (mm)	Largeurs (mm)
 	Zigzag	Zigzag
-	colors	couleurs
 	inclination lines	lignes d’inclinaison
-	stitches	points
-	trims	coupes
 	Brush	Pinceau
 	Length	Longueur
 	Bean	Triple
@@ -4341,6 +4338,9 @@ lighting	Light	Lumière
 	Travel by	Parcourir par
 	Double	Double
 machine	Trim	Coupe du fil
+@plural	{n} stitch|{n} stitches	{n} point|{n} points
+@plural	{n} trim|{n} trims	{n} coupe du fil|{n} coupes du fil
+machine	Stop	Arrêt
 	Column A/B Tool	Outil Colonne A/B
 	Column A/B	Colonne A/B
 	Tatami stitches	Points tatami

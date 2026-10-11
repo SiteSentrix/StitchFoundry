@@ -139,19 +139,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         p.pos = pos as f64;
     }
     if let Some(st) = &plan.stats {
-        ui.label(
-            egui::RichText::new(format!(
-                "{} {} · {} {} · {} {}",
-                st.stitches,
-                tl!("stitches"),
-                st.colors.len(),
-                tl!("colors"),
-                st.trims,
-                tl!("trims")
-            ))
-            .color(t.text_dim)
-            .size(11.5),
-        );
+        let counts = [
+            crate::i18n::tn(st.stitches as u64, "{n} stitch", "{n} stitches"),
+            crate::i18n::tn(st.colors.len() as u64, "{n} color", "{n} colors"),
+            crate::i18n::tn(st.trims as u64, "{n} trim", "{n} trims"),
+        ];
+        ui.label(egui::RichText::new(counts.join(" · ")).color(t.text_dim).size(11.5));
     }
     ui.add_space(4.0);
     // the selection follows the travel buttons
