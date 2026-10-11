@@ -4813,6 +4813,7 @@ dependencies = [
  "unicode-bidi",
  "unicode-general-category",
  "unicode-script",
+ "unicode-segmentation",
  "vectorcraft-doc",
  "vectorcraft-geom",
  "windows-registry",

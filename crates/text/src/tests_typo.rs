@@ -791,3 +791,17 @@ fn proportional_metrics_set_full_width_glyphs_on_their_proportional_widths() {
     let moved = x0(&half)[1] - x0(&none)[1];
     assert!((moved - 10.0).abs() < 0.01, "〙's empty half goes past the line's end: あ moved {moved}");
 }
+
+/// The arrows pass a Thai consonant with its vowel and tone marks whole (น้ำ: no, mai tho, sara am),
+/// as an accented letter written with a combining mark; plain text moves a character at a time.
+#[test]
+fn caret_moves_over_whole_clusters() {
+    let s = "กน\u{0E49}\u{0E33}e\u{0301}x";
+    let stops: Vec<usize> = std::iter::successors(Some(0), |&i| (i < s.len()).then(|| edit::next_cluster(s, i))).collect();
+    assert_eq!(stops, [0, 3, 12, 15, 16]);
+    let back: Vec<usize> = std::iter::successors(Some(s.len()), |&i| (i > 0).then(|| edit::prev_cluster(s, i))).collect();
+    assert_eq!(back, [16, 15, 12, 3, 0]);
+    // Inside a cluster (a caret left there by a click), the arrows go to its edges.
+    assert_eq!((edit::prev_cluster(s, 6), edit::next_cluster(s, 6)), (3, 12));
+    assert_eq!((edit::next_cluster("", 0), edit::prev_cluster("ab", 99)), (0, 1));
+}

@@ -21,6 +21,9 @@ subsetter = { version = "0.2", default-features = false, features = ["variable-f
 unicode-bidi = "0.3.18"
 unicode-general-category = "1"
 unicode-script = "0.5"
+# Grapheme clusters (a Thai consonant with its vowel and tone marks, an accented letter, an emoji
+# sequence) for caret movement; MIT OR Apache-2.0, already in the build.
+unicode-segmentation = "1.13"
 # Builds a small variable font for tests (`test_fonts`; no font file is committed). MIT OR
 # Apache-2.0, already in the build through subsetter.
 write-fonts = { version = "0.48", optional = true }
