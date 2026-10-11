@@ -39,6 +39,24 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("edit.undo", "Undo", ["Edit"], Some("Cmd+Z"), "{}", can_undo, undo),
         cmd!("edit.redo", "Redo", ["Edit"], Some("Cmd+Shift+Z"), "{}", can_redo, redo),
+        cmd!(
+            "edit.undoGroup.begin",
+            "Begin Undo Group",
+            [],
+            None,
+            "{label?: string} until edit.undoGroup.end, the edits made in the active document are one undo step, named `label` (else after its first edit): for automation, such as MCP command_batch with `atomic` (#1163)",
+            has_doc,
+            undo_group_begin
+        ),
+        cmd!(
+            "edit.undoGroup.end",
+            "End Undo Group",
+            [],
+            None,
+            "{cancel?: bool} close the undo group: its edits stay one undo step or, with `cancel`, are undone",
+            has_doc,
+            undo_group_end
+        ),
         cmd!("edit.cut", "Cut", ["Edit"], Some("Cmd+X"), "{} (the Artboard tool chosen: artboard.cut)", has_selection_or_artboard_tool, cut),
         cmd!("edit.copy", "Copy", ["Edit"], Some("Cmd+C"), "{} (the Artboard tool chosen: artboard.copy)", has_selection_or_artboard_tool, copy),
         cmd!(
@@ -165,6 +183,22 @@ fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
 /// A typing session in progress (the Type tool previews the whole session as one interaction).
 pub(crate) fn typing_in_progress(s: &Session) -> bool {
     s.active().and_then(|d| d.interaction.as_ref()).is_some_and(|it| it.label == "Typing" && it.preview.is_some())
+}
+
+fn undo_group_begin(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.undoGroup.begin";
+    let label = match p.get("label") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(l)) if !l.trim().is_empty() && l.chars().count() <= 200 => Some(l.trim().to_string()),
+        Some(_) => return Err(bad(C, "`label` must be a non-empty name of at most 200 characters")),
+    };
+    s.begin_named_undo_group(label);
+    ok()
+}
+
+fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
+    s.end_undo_group(bool_or(p, "cancel", false));
+    ok()
 }
 
 fn undo(s: &mut Session, _: &Value) -> Result<Value> {

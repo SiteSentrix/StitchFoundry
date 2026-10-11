@@ -2130,6 +2130,8 @@
 	Redefine Symbol	重新定義符號
 	Redefine {kind} Style	重新定義{kind}樣式
 	Redo	重做
+	Begin Undo Group	開始還原群組
+	End Undo Group	結束還原群組
 	Redo {name}	重做 {name}
 	Redo {}	重做 {}
 	Reduce Colors	縮減顏色
