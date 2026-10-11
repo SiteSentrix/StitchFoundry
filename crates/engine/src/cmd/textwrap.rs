@@ -8,7 +8,6 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, TextKind, TextWrap, WrapShape};
 use vectorcraft_geom::{PathData, shapes};
 
-use super::edit::selected_roots;
 use super::typecmd::refresh_bounds;
 use super::*;
 
@@ -36,19 +35,12 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match p.get("ids").and_then(Value::as_array) {
-        Some(a) => Ok(a.iter().filter_map(Value::as_u64).map(NodeId).collect()),
-        None => selected_roots(s),
-    }
-}
-
 fn wrap_param(p: &Value, base: TextWrap) -> TextWrap {
     TextWrap { offset: f64_or(p, "offset", base.offset).clamp(-1000.0, 1000.0), invert: bool_or(p, "invert", base.invert) }
 }
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = targets(s, p)?;
+    let ids = checked_ids_or_selection(s, p, "object.textWrap.make")?;
     let w = wrap_param(p, TextWrap::default());
     s.edit("Make Text Wrap", |d, _| {
         for id in &ids {
@@ -66,7 +58,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
     let ids: Vec<NodeId> = {
         let d = &s.doc()?.doc;
-        targets(s, p)?.into_iter().filter(|i| d.node(*i).is_some_and(|n| n.wrap.is_some())).collect()
+        checked_ids_or_selection(s, p, "object.textWrap.release")?.into_iter().filter(|i| d.node(*i).is_some_and(|n| n.wrap.is_some())).collect()
     };
     if ids.is_empty() {
         return Err(EngineError::Other("Text Wrap: select a wrap object".into()));
@@ -83,7 +75,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn options(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = targets(s, p)?;
+    let ids = checked_ids_or_selection(s, p, "object.textWrap.options")?;
     let current = {
         let d = &s.doc()?.doc;
         ids.iter().find_map(|i| d.node(*i).and_then(|n| n.wrap)).unwrap_or_default()
@@ -210,6 +202,35 @@ mod tests {
     fn lines(s: &Session, id: u64) -> Vec<(f64, f64)> {
         let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| n.kind.clone()) else { panic!() };
         vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).lines.iter().map(|l| l.avail).collect()
+    }
+
+    /// Invalid explicit ids must not turn a requested multi-object edit into a partial one.
+    #[test]
+    fn text_wrap_commands_reject_malformed_target_lists_without_editing() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+        let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 80})).unwrap()["id"].as_u64().unwrap();
+        let other = s.execute("shape.rectangle", &json!({"x": 120, "y": 10, "width": 80, "height": 80})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+
+        let before = s.doc().unwrap().history.undo.len();
+        for command in ["object.textWrap.make", "object.textWrap.release", "object.textWrap.options"] {
+            for ids in [json!([id, "invalid"]), json!([id, 99999]), json!({"not": "an array"})] {
+                let e = s.execute(command, &json!({"ids": ids, "offset": 12})).unwrap_err().to_string();
+                assert!(e.contains("id") || e.contains("array"), "{command}: {e}");
+                assert_eq!(s.doc().unwrap().history.undo.len(), before, "{command} added history on error");
+                assert!(s.doc().unwrap().doc.node(NodeId(id)).unwrap().wrap.is_none());
+                assert!(s.doc().unwrap().doc.node(NodeId(other)).unwrap().wrap.is_none());
+            }
+        }
+
+        s.execute("object.textWrap.make", &json!({"ids": [id]})).unwrap();
+        assert!(s.doc().unwrap().doc.node(NodeId(id)).unwrap().wrap.is_some());
+        assert!(s.doc().unwrap().doc.node(NodeId(other)).unwrap().wrap.is_none());
+        s.execute("object.textWrap.options", &json!({"ids": [id], "offset": 12})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.node(NodeId(id)).unwrap().wrap.unwrap().offset, 12.0);
+        s.execute("object.textWrap.release", &json!({"ids": [id]})).unwrap();
+        assert!(s.doc().unwrap().doc.node(NodeId(id)).unwrap().wrap.is_none());
     }
 
     #[test]

@@ -81,7 +81,6 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Менше значення точніше відтворює обведення; більше дає менше точок і плавніші криві.
 	A new preset starting from the selected one	Новий набір на основі вибраного
 	A saved copy of the selected preset	Збережена копія вибраного набору
-	About StitchFoundry	Про програму StitchFoundry
 	above	зверху
 	Absolute Position	Абсолютна позиція
 	Accurate	Точний
@@ -184,7 +183,6 @@
 	Appearance Panel	Панель «Оформлення»
 	Appearance panel	Панель «Оформлення»
 	Applies when the linked file is relinked or updated.	Використовується при повторній прив’язці або оновленні пов’язаного файлу.
-	Applies the next time StitchFoundry starts.	Застосовується при наступному запуску StitchFoundry.
 	Apply	Застосувати
 	Apply Brush	Застосувати пензель
 	Apply Character Style	Застосувати стиль символу
@@ -1329,6 +1327,7 @@
 	Last Effect…	Останній ефект…
 	Last Page	Остання сторінка
 	Latin	Латиниця
+	Thai	Тайська
 	Latin Extended	Розширена латиниця
 	Latin-1 Supplement	Додаток Latin-1
 	Layer	Шар
@@ -1551,6 +1550,7 @@
 	Move Rows	Перемістити рядки
 	Move Slices	Перемістити фрагменти
 	Move Spine Point	Перемістити точку осі
+	Reshape Spine Segment	Змінити форму сегмента осі
 	Move Swatch	Перемістити зразок
 	Move Up	Перемістити вгору
 	Move…	Перемістити…
@@ -2036,6 +2036,11 @@
 	Proof Colors	Пробні кольори
 	Proof Setup	Налаштування кольоропроби
 	Properties	Властивості
+	Proportional Metrics	Пропорційні метрики
+	Digits	Цифри
+	Arabic	Арабські
+	Hindi	Гінді
+	Farsi	Фарсі
 	Proportional Oldstyle	Пропорційні цифри старого стилю
 	Pucker & Bloat…	Зморщування та роздування …
 	Pucker Tool	Інструмент «Зморщування»
@@ -2049,7 +2054,6 @@
 	Quarter Space	Четверта шпація
 	Quick Actions	Швидкі дії
 	Quickly start a new file	Швидко створити новий файл
-	Quit StitchFoundry	Вийти з StitchFoundry
 	Radar Graph Tool	Інструмент «Пелюсткова діаграма»
 	Radial	Радіальний
 	Radial Glows	Радіальні світіння
@@ -2135,6 +2139,9 @@
 	Redefine Symbol	Перевизначити символ
 	Redefine {kind} Style	Перевизначити стиль {kind}
 	Redo	Повторити
+	List Folder	Показати вміст теки
+	Begin Undo Group	Почати групу скасування
+	End Undo Group	Завершити групу скасування
 	Redo {name}	Повторити {name}
 	Redo {}	Повторити {}
 	Reduce Colors	Скоротити кількість кольорів
@@ -2167,7 +2174,6 @@
 	{count} folder(s) or file(s) couldn't be read	Не вдалося прочитати папок або файлів: {count}
 	The search stopped at its limit: search a smaller folder.	Пошук зупинився на межі: виберіть меншу папку.
 	Copy only fonts you own or are licensed to install.	Копіюйте лише шрифти, які належать вам або які ви маєте право встановлювати за ліцензією.
-	StitchFoundry copies the fonts to {folder}.	StitchFoundry копіює шрифти в {folder}.
 	Registered Trademark Symbol	Символ зареєстрованого товарного знаку
 	Registration marks	Мітки поєднання
 	Registry name:	Ім’я у реєстрі:
@@ -2267,7 +2273,6 @@
 	Revert	Повернути
 	Revert to the saved version of “{name}”?	Повернутися до збереженої версії «{name}»?
 	Replace “{name}”, the file this document was opened from?	Замінити «{name}» — файл, з якого відкрито цей документ?
-	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	При відкритті було пропущено те, що StitchFoundry поки що не вміє читати ({what}), тому заміна файлу втратить це назавжди. Щоб зберегти це, збережіть документ під іншим ім’ям.
 	Revolve…	Обертання…
 	RGB Color	Колір RGB
 	Right	Праворуч
@@ -2618,6 +2623,8 @@
 	Size Tile to Art	Підігнати плитку за малюнком
 	Size/Leading	Розмір/інтерліньяж
 	Size:	Розмір:
+	Ridges per segment:	Гребенів на сегмент:
+effect	Points	Точки
 	Size: {size}  Tracking: {tracking}	Розмір: {size} Трекінг: {tracking}
 	Skew	Скіс
 	Skin Tone Ramps	Шкали тонів шкіри
@@ -2887,6 +2894,9 @@
 	Tool Options…	Параметри інструменту…
 	Toolbar: Advanced / Basic	Панель інструментів: розширена/основна
 	Toolbar: Single/Double Column	Панель інструментів: один/два стовпці
+	Toolbar: Add Tool	Панель інструментів: додати інструмент
+	Toolbar: Remove Tool	Панель інструментів: вилучити інструмент
+	Toolbar: Reset	Панель інструментів: скинути
 	Toolbars	Панелі інструментів
 	Tools	Інструменти
 	Top	Вгорі
@@ -3077,9 +3087,6 @@
 	Vector Effects	Векторні ефекти
 	Vector Halftone	Векторний напівтон
 	Vector Halftone…	Векторний напівтон…
-	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry не завершився нормально минулого разу. У цих документах були незбережені зміни:
-	StitchFoundry Help…	Довідка StitchFoundry…
-	StitchFoundry on GitHub	StitchFoundry на GitHub
 	Vectors	Вектори
 	Version:	Версія:
 	Vertical	Вертикально
@@ -3117,7 +3124,6 @@
 	Web Snap:	Прив’язка до web:
 	Weight	Товщина
 	Weight:	Товщина:
-	Welcome to StitchFoundry	Ласкаво просимо до StitchFoundry
 	When pasting text	При вставці тексту
 	White	Білий
 	Widget Position:	Положення віджету:
@@ -3295,6 +3301,7 @@ axis	Horizontal	Горизонтальна
 axis	Vertical	Вертикальна
 axis	Both	Обидві
 	Drag to move	Перетягніть для переміщення
+	Drag to move out of the set	Перетягніть, щоб винести з набору
 	Drag to float as a toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Put back in the toolbar	Повернути на панель інструментів
 	Float Panel	Від’єднати панель
@@ -3393,6 +3400,7 @@ axis	Both	Обидві
 @msg	`color` must be a colour	`color` має бути кольором
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` має бути командою, пункт меню якої відкриває діалогове вікно (див. ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` має бути масивом
+@msg	`freeform.lines` must be an array	`freeform.lines` має бути масивом
 @msg	`gradient` must be an object	`gradient` має бути об’єктом
 @msg	`library` is a library id or name (see {list})	`library` — це ідентифікатор або ім’я бібліотеки (див. {list})
 @msg	`mode` applies to freeform gradients	`mode` застосовується до довільних градієнтів
@@ -3455,6 +3463,7 @@ axis	Both	Обидві
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art або type
 @msg	artboard {0} does not exist	монтажна область {0} не існує
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	при цьому масштабі малюнок має розмір {w} × {h} пт, що більше полотна: виберіть менший масштаб або впишіть його в монтажну область
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
@@ -3468,7 +3477,6 @@ axis	Both	Обидві
 @msg	can't encode the document: {0}	не вдалося закодувати документ: {0}
 @msg	can't parse shortcut `{c}`	не вдалося розібрати поєднання `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	не вдалося розібрати поєднання `{s}` для `{k}`
-@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	не вдалося зберегти версію {0}: StitchFoundry записує версії від {MIN_VERSION} до {VERSION}
 @msg	can't write .{ext} images	не вдалося записати зображення .{ext}
 @msg	cannot distort a zero-size bounding box	не можна спотворити обмежувальну рамку нульового розміру
 @msg	cannot read PDF: {0}	не вдалося прочитати PDF: {0}
@@ -3492,10 +3500,11 @@ axis	Both	Обидві
 @msg	empty brush stroke	порожній мазок пензля
 @msg	empty cutter	порожній різак
 @msg	empty path	порожній контур
-@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	версія файлу {0} новіша, ніж підтримує цей StitchFoundry ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	довільній точці {i} потрібні `at` [x, y] та допустимий `color`
+@msg	freeform line {i} must be an array of point indices	довільна лінія {i} має бути масивом індексів точок
 @msg	give both `start` and `end` [x, y] (or neither)	вкажіть `start`, `end` [x, y] (або жодного)
-@msg	give corners of the path: anchors between two straight sides	вкажіть кути контуру: опорні точки між двома прямими сторонами
+@msg	give corners of the path: anchors where its sides meet at an angle	вкажіть кути контуру: опорні точки, у яких його сторони сходяться під кутом
+@msg	give horizontal or vertical	вкажіть horizontal або vertical
 @msg	give the path `id` and the width point `index`	вкажіть `id` контуру та `index` точки ширини
 @msg	guides are locked	напрямні заблоковані
 @msg	image '{key}' has no pixels and was left out	зображення '{key}' не має пікселів і було пропущено
@@ -3509,9 +3518,6 @@ axis	Both	Обидві
 @msg	invalid PDF setting: {0}	неприпустимий параметр PDF: {0}
 @msg	invalid image data for `{0}`	неприпустимі дані зображення для `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	неприпустимі параметри для `{cmd}`: {msg}
-@msg	is not an image StitchFoundry reads	не є зображенням, яке читає StitchFoundry
-@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	використовує `{at}`, яке не знає читач PostScript у StitchFoundry
-@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	використовує `{at}`, яке не знає читач PostScript у StitchFoundry, у {procs}
 @msg	its Windows metafile preview was opened instead, which may simplify the art	натомість було відкрито його попереднє подання метафайлу Windows, що може спростити малюнок
 @msg	its preview was placed instead, at screen resolution	замість цього було вміщено його попереднє подання у роздільній здатності екрану
 @msg	join needs open paths	з’єднання вимагає відкритих контурів
@@ -3615,7 +3621,6 @@ axis	Both	Обидві
 @msg	node {_1} is not text	вузол {_1} не є текстом
 @msg	not a DXF drawing	не є кресленням DXF
 @msg	not a VectorCraft file: {0}	не є файлом VectorCraft: {0}
-@msg	not a StitchFoundry shortcut set (missing `overrides`)	не є набором поєднань клавіш StitchFoundry (відсутнє `overrides`)
 @msg	not a graphic style library (format `{_1}`)	не є бібліотекою графічних стилів (формат `{_1}`)
 @msg	not a stored central record	не є збереженим центральним записом
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
@@ -3732,6 +3737,8 @@ axis	Both	Обидві
 @msg	the image's pixels don't match its size	пікселі зображення не відповідають його розміру
 @msg	the layer has no objects to clip by	у шарі немає об’єктів для обрізки
 @msg	the layer or group is locked	шар чи група заблоковані
+@msg	the guide is on a hidden or locked layer	напрямна розташована на прихованому або заблокованому шарі
+@msg	the target layer is locked or hidden	цільовий шар заблокований або прихований
 @msg	the layer to flatten into is hidden	шар для об’єднання прихований
 @msg	the object already has an opacity mask	об’єкт вже має маску непрозорості.
 @msg	the object has no geometry	об’єкт не має геометрії
@@ -3756,7 +3763,7 @@ axis	Both	Обидві
 @msg	the {tool} tool has no options	інструмент {tool} не має параметрів
 @msg	there are no objects to release	немає об’єктів для звільнення
 @msg	there are no printer settings to open here	тут немає налаштувань принтера для відкриття
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	цей файл PostScript неможливо прочитати ({_1}): збережіть його як PDF або SVG у додатку, який його створив
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	цей файл PostScript неможливо прочитати ({why}): збережіть його як PDF або SVG у додатку, який його створив
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript цього файлу неможливо прочитати ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	цей формат містить одну монтажну область: експортуйте кілька як PDF або за допомогою document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	це креслення DWG, яке неможливо прочитати: збережіть його з CAD як ASCII DXF і відкрийте його
@@ -3835,9 +3842,6 @@ axis	Both	Обидві
 @msg	Sent to {_1}	Відправлено до {_1}
 @msg	{_1} files	{_1} файлів
 @msg	The graphics were lost and have been restarted	Графіка була втрачена та перезапущена
-@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Графічний процесор, обраний першим, не зміг показати вікно, тому StitchFoundry запустився знову на {summary}
-@msg	Loading StitchFoundry…	Завантаження StitchFoundry…
-@msg	StitchFoundry failed to start: {e}	StitchFoundry не вдалося запустити: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Потрібен браузер із WebGPU або WebGL2.
 @msg	The graphics were lost and couldn't be restarted.	Графіку було втрачено, і її не вдалося перезапустити.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Ваші незбережені зміни зберігаються у цьому браузері: перезавантажте сторінку, щоб повернути їх.
@@ -3845,6 +3849,9 @@ axis	Both	Обидві
 @msg	tool (a tool id) is required	потрібно tool (ідентифікатор інструменту)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входить до групи панелі інструментів з кількох інструментів
 @msg	onto must name a panel floating in another group	onto має називати панель, що плаває в іншій групі
+@msg	below and above must name a panel floating in another group	below і above мають називати панель, що плаває в іншій групі
+@msg	give only one of onto, below and above	вкажіть лише один із onto, below і above
+@msg	column must be true or a number from 1	column має бути true або числом від 1
 @msg	x and y must both be numbers	x і y мають бути числами
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" не є кольором: запишіть його як #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	це не логотип із плоских кольорів ({_1}% його суцільних областей збігається з кількома плоскими кольорами), тому режим «Плоский логотип» перетворив би градієнти на плями: використовуйте режим «Колір»
@@ -3856,23 +3863,18 @@ axis	Both	Обидві
 @msg	it has more than {MAX_NODES} objects	в них більше {MAX_NODES} об’єктів
 @msg	it has no layers	у них немає шарів
 @msg	it has too many values in a row	у них занадто багато значень поспіль
-@msg	it has {_1}, which StitchFoundry doesn't read from it yet	у них є {_1}, які StitchFoundry поки не читає
 @msg	its objects are nested too deeply	об’єкти в них вкладені надто глибоко
 @msg	its section ending with `%{end}` doesn't end	розділ, що закінчується на `%{end}`, не закінчується
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	об’єкти з кількома заливками або обведеннями, ефектами або пензлями імпортовані в намальованому вигляді ({_1}): їх оформлення поки що не можна редагувати
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градієнт «{name}» не визначено у файлі: замість нього використовується суцільний колір
-@msg	an image StitchFoundry can't read was left out	зображення, яке StitchFoundry не може прочитати, пропущено
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	цей файл збережений без сумісності з PDF, і його дані редагування не вдається прочитати ({why})
 @msg	No fonts are missing in this document	У цьому документі немає відсутніх шрифтів
-@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry не шукає в папках інших програм і системи: {path}
-@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry не шукає в папках Shared і Public у Users: {path}
 @msg	{path} is not a folder	{path} не є папкою
 @msg	the search couldn't start: try again in a moment	не вдалося почати пошук: спробуйте ще раз за мить
 @msg	searching a folder isn't available on the web	пошук у папці недоступний у веб-версії
 @msg	every search thread stopped on an internal error (please report this bug)	усі потоки пошуку зупинилися через внутрішню помилку (повідомте про цю помилку)
-@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папку Fonts StitchFoundry тут не задано: її задають настільна програма та vectorcraft-cli
 @msg	choose the font files to add	виберіть файли шрифтів для додавання
 @msg	{n} font file(s) are now in {folder}	Файлів шрифтів тепер у {folder}: {n}
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлів шрифтів тепер у {folder}: {n}; не вдалося додати {failed}: {reason}
@@ -3884,7 +3886,6 @@ axis	Both	Обидві
 @msg	the files come to more than 1 GB: add fewer at a time	файли займають понад 1 ГБ: додавайте менше за раз
 @msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 	Services	Служби
-	Hide StitchFoundry	Приховати StitchFoundry
 	Zoom	Масштаб
 	Bring All to Front	Усі вікна на передній план
 	Settings	Налаштування
@@ -3894,6 +3895,8 @@ axis	Both	Обидві
 	Images: link to the file instead of only embedding it.	Зображення: пов’язувати із файлом замість простого впровадження.
 	VectorCraft documents: one locked object, updated when the file changes.	Документи VectorCraft: один заблокований об’єкт, який оновлюється під час зміни файлу.
 	A file dialog is open: choose there first	Відкрито вікно вибору файлу: спочатку зробіть вибір у ньому
+	The document was closed while its file dialog was open	Документ було закрито, поки було відкрито його вікно вибору файлу
+	The dialog was closed before its file dialog answered	Діалогове вікно було закрито раніше, ніж відповіло його вікно вибору файлу
 	Shaper	Формоутворення
 	Expand Shaper Group	Розібрати групу формоутворення
 	Release Shaper Group	Звільнити групу формоутворення
@@ -3905,6 +3908,7 @@ axis	Both	Обидві
 	Exit	Вийти
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — це посилання на крок {r}, яке розв’язують лише `run` і `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` має бути масивом ідентифікаторів об’єктів, а не {v}
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` має бути масивом індексів опорних точок, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: у результаті кроку {i} немає такого значення (щоб написати сам $, введіть $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед цим кроком немає кроку {i} (кроки рахуються з 0; щоб написати сам $, введіть $$)
 @msg	object ids are non-negative integers, not {v}	ідентифікатори об’єктів — невід’ємні цілі числа, а не {v}
@@ -4010,6 +4014,31 @@ axis	Both	Обидві
 	Define a variable first	Спочатку визначте змінну
 	Text	Текст
 	Visibility	Видимість
+# Shared panel docking
+	Activate Panel	Активувати панель
+	Change Panel Layout	Змінити розташування панелей
+	Close Panel	Закрити панель
+	Move Panel	Перемістити панель
+	Group with	Згрупувати з
+	Resize panels	Змінити розмір панелей
+	Resize panel window	Змінити розмір вікна панелі
+@msg	Invalid panel layout; restored the default dock	Неприпустиме розташування панелей; відновлено типове розташування
+@msg	action is required	Потрібно вказати action
+@msg	anchor must name a registered panel	anchor має вказувати зареєстровану панель
+@msg	before must name a panel	before має вказувати панель
+@msg	docking action contains an unknown panel or an excessive split path	Дія прикріплення містить невідому панель або надто довгий шлях поділів
+@msg	group must be true or false	group має мати значення true або false
+@msg	move requires a destination panel	Для переміщення потрібна цільова панель
+@msg	move requires an existing destination panel	Для переміщення потрібна наявна цільова панель
+@msg	onto must name a floating panel	onto має вказувати плаваючу панель
+@msg	panel group is empty	Група панелей порожня
+@msg	panel must name a registered panel	panel має вказувати зареєстровану панель
+@msg	saved panel layout is invalid; reset the workspace first	Збережене розташування панелей неприпустиме; спочатку скиньте робоче середовище
+@msg	zone must be a string	zone має бути рядком
+@msg	zone must be tab, center, left, right, top or bottom	zone має мати значення tab, center, left, right, top або bottom
+@msg	{key} must be a finite coordinate	{key} має бути скінченною координатою
+@msg	x and y must be provided together	x та y потрібно вказувати разом
+@msg	invalid restored panel group	Відновлена група панелей неприпустима
 
 # Interactive Revolve controls.
 	Lighting	Освітлення
@@ -4063,6 +4092,39 @@ lighting	Light	Світло
 	Stroke Pressure	Натиск мазка
 	Right Diagonal	Діагональ праворуч
 	Left Diagonal	Діагональ ліворуч
+	Vertical Guide	Вертикальна напрямна
+	Horizontal Guide	Горизонтальна напрямна
+	Move Guide to Layer	Перемістити напрямну на шар
+@msg	invalid native panel set	Неприпустимий власний набір панелей
+@msg	missing panel layout	Відсутнє розташування панелей
+@msg	unsupported native docking operation	Непідтримувана власна операція прикріплення
+	Linux Display Server	Дисплейний сервер Linux
+	X11 (XWayland)	X11 (XWayland)
+	About StitchFoundry	Про програму StitchFoundry
+	Applies the next time StitchFoundry starts.	Застосовується при наступному запуску StitchFoundry.
+	Quit StitchFoundry	Вийти з StitchFoundry
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry копіює шрифти в {folder}.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	При відкритті було пропущено те, що StitchFoundry поки що не вміє читати ({what}), тому заміна файлу втратить це назавжди. Щоб зберегти це, збережіть документ під іншим ім’ям.
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry не завершився нормально минулого разу. У цих документах були незбережені зміни:
+	StitchFoundry Help…	Довідка StitchFoundry…
+	StitchFoundry on GitHub	StitchFoundry на GitHub
+	Welcome to StitchFoundry	Ласкаво просимо до StitchFoundry
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	не вдалося зберегти версію {0}: StitchFoundry записує версії від {MIN_VERSION} до {VERSION}
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	версія файлу {0} новіша, ніж підтримує цей StitchFoundry ({VERSION})
+@msg	is not an image StitchFoundry reads	не є зображенням, яке читає StitchFoundry
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	використовує `{at}`, яке не знає читач PostScript у StitchFoundry
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	використовує `{at}`, яке не знає читач PostScript у StitchFoundry, у {procs}
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	не є набором поєднань клавіш StitchFoundry (відсутнє `overrides`)
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Графічний процесор, обраний першим, не зміг показати вікно, тому StitchFoundry запустився знову на {summary}
+@msg	Loading StitchFoundry…	Завантаження StitchFoundry…
+@msg	StitchFoundry failed to start: {e}	StitchFoundry не вдалося запустити: {e}
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	у них є {_1}, які StitchFoundry поки не читає
+@msg	an image StitchFoundry can't read was left out	зображення, яке StitchFoundry не може прочитати, пропущено
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry не шукає в папках інших програм і системи: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry не шукає в папках Shared і Public у Users: {path}
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папку Fonts StitchFoundry тут не задано: її задають настільна програма та vectorcraft-cli
+	Hide StitchFoundry	Приховати StitchFoundry
+
 # Embroidery (StitchFoundry)
 	Add Inclination Line	Додати лінію нахилу
 	After the selection	Після виділеного
@@ -4227,6 +4289,7 @@ lighting	Light	Світло
 @msg	{_1} export failed: {e}	не вдалося експортувати у формат {_1}: {e}
 	Stitch Lines	Лінії стібків
 	Tatami	Татамі
+
 # Embroidery (StitchFoundry), phase 1
 	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Від SiteSentrix, на основі VectorCraft від команди ArtCraft. MIT OR Apache-2.0. Шрифти: Source Sans 3, Inter, JetBrains Mono (OFL). Значки: Lucide (ISC) + VectorCraft.
 	Version {version} — open-source machine embroidery digitizing in pure Rust.	Версія {version} — оцифрування машинної вишивки з відкритим кодом, написане на Rust.

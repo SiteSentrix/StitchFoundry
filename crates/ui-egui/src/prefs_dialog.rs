@@ -306,6 +306,8 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     }
                 });
             }
+            // Linux only: the other platforms have a single display server.
+            PrefKind::Choice(_) if sp.key == "linuxDisplayServer" && !cfg!(target_os = "linux") => {}
             PrefKind::Choice(opts) => {
                 labeled(ui, sp.label, |ui| {
                     let cur = v.as_str().unwrap_or("");
@@ -315,8 +317,8 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                         d.fields.insert(sp.key.into(), json!(opts[i].0));
                     }
                 });
-                if sp.key == "gpuPreference" {
-                    // The window's graphics device is chosen once, when the app starts.
+                if sp.key == "gpuPreference" || sp.key == "linuxDisplayServer" {
+                    // The window's graphics device and display server are chosen once, when the app starts.
                     ui.label(egui::RichText::new(tl!("Applies the next time StitchFoundry starts.")).color(t.text_dim).size(11.0));
                 }
             }
@@ -363,9 +365,10 @@ fn picas_in_use(d: &Dialog) -> bool {
 }
 
 fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
-    let mut b = d.bool(key);
-    if ui.checkbox(&mut b, tl!(label)).changed() {
-        d.fields.insert(key.into(), json!(b));
+    // The app's outlined checkbox (it translates `label`): egui's own has no border at rest.
+    let on = d.bool(key);
+    if widgets::check(ui, label, on, ui.is_enabled()) {
+        d.fields.insert(key.into(), json!(!on));
     }
 }
 
@@ -385,6 +388,28 @@ mod tests {
     use super::*;
     use crate::Services;
     use vectorcraft_engine::Session;
+
+    /// A resting checkbox must have a visible outline in both states and every brightness.
+    #[test]
+    fn preference_checkboxes_draw_outlines_without_hover() {
+        for brightness in Brightness::ALL {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            theme::apply(&ctx, brightness);
+            for checked in [false, true] {
+                let mut d = Dialog::new("preferences", json!({"showToolTips": checked}));
+                let raw =
+                    egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 200.0))), ..Default::default() };
+                let mut out = ctx.run_ui(raw, |ui| bool_row(ui, &mut d, "showToolTips", "Show Tool Tips"));
+                out.textures_delta.clear();
+                let outlined = out.shapes.iter().any(|shape| match &shape.shape {
+                    egui::Shape::Rect(r) => r.stroke.width > 0.0 && r.rect.width() <= 24.0 && r.rect.height() <= 24.0,
+                    _ => false,
+                });
+                assert!(outlined, "{brightness:?}, checked={checked}: no checkbox outline");
+            }
+        }
+    }
 
     /// User Interface › Canvas Color (#663): White and the three greys paint the canvas around the
     /// artboards; Match User Interface Brightness keeps the theme's.
@@ -560,8 +585,9 @@ mod tests {
         out.textures_delta.clear();
         let mut shown = vec![];
         out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-        assert!(shown.iter().any(|t| t == "System Title Bar"), "{shown:?}");
-        assert!(shown.iter().any(|t| t == "Applies the next time StitchFoundry starts."), "{shown:?}");
+        let supported = cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")));
+        assert_eq!(shown.iter().any(|t| t == "System Title Bar"), supported, "{shown:?}");
+        assert_eq!(shown.iter().any(|t| t == "Applies the next time StitchFoundry starts."), supported, "{shown:?}");
         a.ui.dialog.as_mut().unwrap().fields.insert("systemTitleBar".into(), json!(true));
         confirm(&mut a).unwrap();
         assert!(a.session.prefs.system_title_bar);

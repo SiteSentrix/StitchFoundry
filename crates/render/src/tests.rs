@@ -385,3 +385,41 @@ fn images_take_their_nearest_pixel_without_smoothing() {
     assert!(greys(true) >= 4, "smooth: a ramp from black to white");
     assert_eq!(greys(false), 0, "nearest: black, then white");
 }
+
+/// Art Optimized exports are supersampled (#983): two red shapes meeting along a diagonal leave no
+/// seam of the white background between them, where shape-by-shape smoothing shows one; the outer
+/// edges stay smooth.
+#[test]
+fn supersampled_art_leaves_no_seam_between_shapes_that_meet() {
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    // Two triangles sharing the diagonal of the square (10, 10)–(90, 90).
+    for pts in [[(10.0, 10.0), (90.0, 10.0), (90.0, 90.0)], [(10.0, 10.0), (90.0, 90.0), (10.0, 90.0)]] {
+        let mut b = vectorcraft_geom::BezPath::new();
+        b.move_to(pts[0]);
+        b.line_to(pts[1]);
+        b.line_to(pts[2]);
+        b.close_path();
+        let id = d.alloc_id();
+        d.insert(Some(layer), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&b), Appearance::basic(red(), Paint::None, 0.0))).unwrap();
+    }
+    let draw = |supersample: bool| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), precise: true, supersample, ..Default::default() };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    // The palest pixel on the shared diagonal, away from the corners.
+    let palest = |r: &Rendered| (20..80).map(|i| r.pixel(i, i)[1].max(r.pixel(i + 1, i)[1])).max().unwrap();
+    assert!(palest(&draw(false)) > 20, "shape-by-shape smoothing shows the seam");
+    assert_eq!(palest(&draw(true)), 0, "supersampled: no seam");
+    // The outer edge is still smoothed: a pixel half covered is between white and red.
+    let ss = draw(true);
+    let edge = ss.pixel(50, 9);
+    assert!(edge == [255, 255, 255, 255] || (edge[1] > 0 && edge[1] < 255) || ss.pixel(50, 10)[1] < 255, "{edge:?}");
+    // The factor fits the size and the renderer's limits.
+    assert_eq!(supersample_factor(100, 100), Some(4));
+    assert_eq!(supersample_factor(2000, 2000), Some(3));
+    assert_eq!(supersample_factor(3000, 3000), Some(2));
+    assert_eq!(supersample_factor(5000, 5000), None);
+    assert_eq!(supersample_factor(40_000, 10), None);
+}

@@ -109,15 +109,19 @@ pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
         // Manual kerning replaces the font's pair kerning.
         p.push(("font-kerning", "none".into()));
     }
-    if !st.features.is_empty() {
-        let v: Vec<String> = st
-            .features
-            .iter()
-            .map(|t| match t.strip_prefix('-') {
-                Some(off) => format!("\"{off}\" 0"),
-                None => format!("\"{t}\" 1"),
-            })
-            .collect();
+    let mut v: Vec<String> = st
+        .features
+        .iter()
+        .map(|t| match t.strip_prefix('-') {
+            Some(off) => format!("\"{off}\" 0"),
+            None => format!("\"{t}\" 1"),
+        })
+        .collect();
+    // Proportional Metrics: `palt` (SVG writes vertical type as outlines).
+    if st.proportional_metrics {
+        v.push("\"palt\" 1".into());
+    }
+    if !v.is_empty() {
         p.push(("font-feature-settings", v.join(", ")));
     }
     match (st.underline, st.strikethrough) {

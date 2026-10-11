@@ -69,7 +69,6 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Ein niedrigerer Wert folgt dem Strich genauer; ein höherer ergibt weniger Punkte und glattere Kurven.
 	A new preset starting from the selected one	Eine neue Vorgabe auf Grundlage der ausgewählten
 	A saved copy of the selected preset	Eine gespeicherte Kopie der ausgewählten Vorgabe
-	About StitchFoundry	Über StitchFoundry
 	above	bei mehr als
 	Absolute Position	Absolute Position
 	Accurate	Genau
@@ -172,7 +171,6 @@
 	Appearance Panel	Bedienfeld „Aussehen“
 	Appearance panel	Bedienfeld „Aussehen“
 	Applies when the linked file is relinked or updated.	Gilt, wenn die verknüpfte Datei neu verknüpft oder aktualisiert wird.
-	Applies the next time StitchFoundry starts.	Gilt ab dem nächsten Start von StitchFoundry.
 	Apply	Anwenden
 	Apply Brush	Pinsel anwenden
 	Apply Character Style	Zeichenformat anwenden
@@ -360,6 +358,9 @@
 	Position Panel Above Text	Bedienfeld über dem Text positionieren
 	Clear Appearance	Aussehen löschen
 	Clear Guides	Hilfslinien löschen
+	Vertical Guide	Vertikale Hilfslinie
+	Horizontal Guide	Horizontale Hilfslinie
+	Move Guide to Layer	Hilfslinie auf Ebene verschieben
 	Clear Overrides	Abweichungen löschen
 	Clear Recent Files	Liste der zuletzt geöffneten Dateien leeren
 	Click	Klicken
@@ -1314,6 +1315,7 @@
 	Last Effect…	Letzter Effekt…
 	Last Page	Letzte Seite
 	Latin	Lateinisch
+	Thai	Thai
 	Latin Extended	Lateinisch, erweitert
 	Latin-1 Supplement	Lateinisch-1, Ergänzung
 	Layer	Ebene
@@ -1536,6 +1538,7 @@
 	Move Rows	Zeilen verschieben
 	Move Slices	Slices verschieben
 	Move Spine Point	Achsenpunkt verschieben
+	Reshape Spine Segment	Achsensegment umformen
 	Move Swatch	Farbfeld verschieben
 	Move Up	Nach oben verschieben
 	Move…	Verschieben…
@@ -1990,6 +1993,11 @@
 	Proof Colors	Farbproof
 	Proof Setup	Proof einrichten
 	Properties	Eigenschaften
+	Proportional Metrics	Proportionale Metrik
+	Digits	Ziffern
+	Arabic	Arabisch
+	Hindi	Hindi
+	Farsi	Farsi
 	Proportional Oldstyle	Proportionale Mediävalziffern
 	Pucker & Bloat…	Zusammenziehen und aufblasen…
 	Pucker Tool	Zusammenziehen-Werkzeug
@@ -2003,7 +2011,6 @@
 	Quarter Space	Viertelgeviert-Leerzeichen
 	Quick Actions	Schnellaktionen
 	Quickly start a new file	Schnell eine neue Datei beginnen
-	Quit StitchFoundry	StitchFoundry beenden
 	Radar Graph Tool	Netzdiagramm-Werkzeug
 	Radial	Radial
 	Radial Glows	Radiale Leuchteffekte
@@ -2089,6 +2096,9 @@
 	Redefine Symbol	Symbol neu definieren
 	Redefine {kind} Style	{kind}format neu definieren
 	Redo	Wiederholen
+	List Folder	Ordner auflisten
+	Begin Undo Group	Rückgängig-Gruppe beginnen
+	End Undo Group	Rückgängig-Gruppe beenden
 	Redo {name}	Wiederholen: {name}
 	Redo {}	Wiederholen: {}
 	Reduce Colors	Farben reduzieren
@@ -2121,7 +2131,6 @@
 	{count} folder(s) or file(s) couldn't be read	{count} Ordner oder Datei(en) konnten nicht gelesen werden
 	The search stopped at its limit: search a smaller folder.	Die Suche hat ihr Limit erreicht: Durchsuchen Sie einen kleineren Ordner.
 	Copy only fonts you own or are licensed to install.	Kopieren Sie nur Schriften, die Ihnen gehören oder für deren Installation Sie eine Lizenz haben.
-	StitchFoundry copies the fonts to {folder}.	StitchFoundry kopiert die Schriften nach {folder}.
 	Registered Trademark Symbol	Symbol für eingetragene Marke
 	Registration marks	Passermarken
 	Registry name:	Registrierungsname:
@@ -2221,7 +2230,6 @@
 	Revert	Zurück zur letzten Version
 	Revert to the saved version of “{name}”?	Zur gespeicherten Version von „{name}“ zurückkehren?
 	Replace “{name}”, the file this document was opened from?	„{name}“ ersetzen, die Datei, aus der dieses Dokument geöffnet wurde?
-	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Beim Öffnen wurde ausgelassen, was StitchFoundry noch nicht lesen kann ({what}); beim Ersetzen geht das endgültig verloren. Speichern Sie unter einem anderen Namen, um es zu behalten.
 	Revolve…	Kreiseln…
 	RGB Color	RGB-Farbe
 	Right	Rechts
@@ -2572,6 +2580,8 @@
 	Size Tile to Art	Kachelgröße an Grafik anpassen
 	Size/Leading	Größe/Zeilenabstand
 	Size:	Größe:
+	Ridges per segment:	Zacken pro Segment:
+effect	Points	Punkte
 	Size: {size}  Tracking: {tracking}	Größe: {size}  Laufweite: {tracking}
 	Skew	Neigen
 	Skin Tone Ramps	Hauttonskalen
@@ -2824,6 +2834,9 @@
 	Tool Options…	Werkzeugoptionen…
 	Toolbar: Advanced / Basic	Werkzeugleiste: Erweitert / Einfach
 	Toolbar: Single/Double Column	Werkzeugleiste: ein-/zweispaltig
+	Toolbar: Add Tool	Werkzeugleiste: Werkzeug hinzufügen
+	Toolbar: Remove Tool	Werkzeugleiste: Werkzeug entfernen
+	Toolbar: Reset	Werkzeugleiste: Zurücksetzen
 	Toolbars	Werkzeugleisten
 	Tools	Werkzeuge
 	Top	Oben
@@ -2981,9 +2994,6 @@
 	Vector Effects	Vektoreffekte
 	Vector Halftone	Vektor-Halbton
 	Vector Halftone…	Vektor-Halbton…
-	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry wurde beim letzten Mal nicht normal beendet. Diese Dokumente hatten ungespeicherte Änderungen:
-	StitchFoundry Help…	StitchFoundry-Hilfe…
-	StitchFoundry on GitHub	StitchFoundry auf GitHub
 	Vectors	Vektoren
 	Version:	Version:
 	Vertical	Vertikal
@@ -3021,7 +3031,6 @@
 	Web Snap:	Web-Ausrichtung:
 	Weight	Stärke
 	Weight:	Stärke:
-	Welcome to StitchFoundry	Willkommen bei StitchFoundry
 	When pasting text	Beim Einfügen von Text
 	White	Weiß
 	Widget Position:	Widget-Position:
@@ -3203,6 +3212,7 @@ axis	Vertical	Vertikal
 axis	Both	Beide
 theme	Appearance	Erscheinungsbild
 	Drag to move	Zum Verschieben ziehen
+	Drag to move out of the set	Ziehen, um aus dem Satz zu lösen
 	Drag to float as a toolbar	Ziehen, um als eigene Werkzeugleiste abzulösen
 	Put back in the toolbar	Zurück in die Werkzeugleiste setzen
 	Float Panel	Bedienfeld ablösen
@@ -3306,6 +3316,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`color` must be a colour	`color` muss eine Farbe sein
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` muss ein Befehl sein, dessen Menüeintrag ein Dialogfeld öffnet (siehe ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` muss ein Array sein
+@msg	`freeform.lines` must be an array	`freeform.lines` muss ein Array sein
 @msg	`gradient` must be an object	`gradient` muss ein Objekt sein
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
@@ -3368,6 +3379,7 @@ theme	Appearance	Erscheinungsbild
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art oder type
 @msg	artboard {0} does not exist	Zeichenfläche {0} ist nicht vorhanden
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	in diesem Maßstab misst die Zeichnung {w} × {h} pt, mehr als die Arbeitsfläche fasst: Wählen Sie einen kleineren Maßstab oder passen Sie sie an die Zeichenfläche an
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis muss "vertical", "horizontal" oder ein Winkel in Grad sein, nicht `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black oder eine Farbe wie "#ff8800"
 @msg	bad color {v}	ungültige Farbe {v}
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
@@ -3381,7 +3393,6 @@ theme	Appearance	Erscheinungsbild
 @msg	can't encode the document: {0}	das Dokument kann nicht kodiert werden: {0}
 @msg	can't parse shortcut `{c}`	Tastaturbefehl `{c}` kann nicht ausgewertet werden
 @msg	can't parse shortcut `{s}` for `{k}`	Tastaturbefehl `{s}` für `{k}` kann nicht ausgewertet werden
-@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	Version {0} kann nicht gespeichert werden: StitchFoundry schreibt die Versionen {MIN_VERSION} bis {VERSION}
 @msg	can't write .{ext} images	.{ext}-Bilder können nicht geschrieben werden
 @msg	cannot distort a zero-size bounding box	ein Begrenzungsrahmen ohne Ausdehnung kann nicht verzerrt werden
 @msg	cannot read PDF: {0}	PDF kann nicht gelesen werden: {0}
@@ -3405,10 +3416,11 @@ theme	Appearance	Erscheinungsbild
 @msg	empty brush stroke	leerer Pinselstrich
 @msg	empty cutter	leeres Schneidobjekt
 @msg	empty path	leerer Pfad
-@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	die Dateiversion {0} ist neuer, als dieses StitchFoundry unterstützt ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	Freiformpunkt {i} braucht `at` [x, y] und eine gültige `color`
+@msg	freeform line {i} must be an array of point indices	Freiformlinie {i} muss ein Array von Punktindizes sein
 @msg	give both `start` and `end` [x, y] (or neither)	geben Sie sowohl `start` als auch `end` [x, y] an (oder keines von beiden)
-@msg	give corners of the path: anchors between two straight sides	geben Sie Ecken des Pfads an: Ankerpunkte zwischen zwei geraden Seiten
+@msg	give corners of the path: anchors where its sides meet at an angle	geben Sie Ecken des Pfads an: Ankerpunkte, an denen seine Seiten im Winkel aufeinandertreffen
+@msg	give horizontal or vertical	geben Sie horizontal oder vertical an
 @msg	give the path `id` and the width point `index`	geben Sie die `id` des Pfads und den `index` des Breitenpunkts an
 @msg	guides are locked	die Hilfslinien sind gesperrt
 @msg	image '{key}' has no pixels and was left out	das Bild '{key}' hat keine Pixel und wurde ausgelassen
@@ -3422,9 +3434,6 @@ theme	Appearance	Erscheinungsbild
 @msg	invalid PDF setting: {0}	ungültige PDF-Einstellung: {0}
 @msg	invalid image data for `{0}`	ungültige Bilddaten für `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	ungültige Parameter für `{cmd}`: {msg}
-@msg	is not an image StitchFoundry reads	ist kein Bild, das StitchFoundry lesen kann
-@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	es verwendet `{at}`, das der PostScript-Leser von StitchFoundry nicht kennt
-@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	es verwendet `{at}`, das der PostScript-Leser von StitchFoundry nicht kennt, in {procs}
 @msg	its Windows metafile preview was opened instead, which may simplify the art	stattdessen wurde seine Windows-Metadatei-Vorschau geöffnet, die die Grafik möglicherweise vereinfacht
 @msg	its preview was placed instead, at screen resolution	stattdessen wurde seine Vorschau in Bildschirmauflösung platziert
 @msg	join needs open paths	zum Zusammenfügen sind offene Pfade nötig
@@ -3529,7 +3538,6 @@ theme	Appearance	Erscheinungsbild
 @msg	node {_1} is not text	Knoten {_1} ist kein Text
 @msg	not a DXF drawing	keine DXF-Zeichnung
 @msg	not a VectorCraft file: {0}	keine VectorCraft-Datei: {0}
-@msg	not a StitchFoundry shortcut set (missing `overrides`)	kein StitchFoundry-Tastaturbefehlssatz (`overrides` fehlt)
 @msg	not a graphic style library (format `{_1}`)	keine Grafikstil-Bibliothek (Format `{_1}`)
 @msg	not a stored central record	kein gespeicherter zentraler Eintrag
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
@@ -3646,6 +3654,8 @@ theme	Appearance	Erscheinungsbild
 @msg	the image's pixels don't match its size	die Pixel des Bilds passen nicht zu seiner Größe
 @msg	the layer has no objects to clip by	die Ebene hat keine Objekte, an denen beschnitten werden könnte
 @msg	the layer or group is locked	die Ebene oder Gruppe ist gesperrt
+@msg	the guide is on a hidden or locked layer	die Hilfslinie liegt auf einer ausgeblendeten oder gesperrten Ebene
+@msg	the target layer is locked or hidden	die Zielebene ist gesperrt oder ausgeblendet
 @msg	the layer to flatten into is hidden	die Ebene, auf die reduziert werden soll, ist ausgeblendet
 @msg	the object already has an opacity mask	das Objekt hat bereits eine Deckkraftmaske
 @msg	the object has no geometry	das Objekt hat keine Geometrie
@@ -3670,7 +3680,7 @@ theme	Appearance	Erscheinungsbild
 @msg	the {tool} tool has no options	das Werkzeug „{tool}“ hat keine Optionen
 @msg	there are no objects to release	es gibt keine Objekte zum Zurückwandeln
 @msg	there are no printer settings to open here	hier lassen sich keine Druckereinstellungen öffnen
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	diese PostScript-Datei kann nicht gelesen werden ({_1}): Speichern Sie sie in der App, mit der sie erstellt wurde, als PDF oder SVG
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	diese PostScript-Datei kann nicht gelesen werden ({why}): Speichern Sie sie in der App, mit der sie erstellt wurde, als PDF oder SVG
 @msg	this file's PostScript couldn't be read ({why}): {what}	das PostScript dieser Datei konnte nicht gelesen werden ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	dieses Format fasst eine Zeichenfläche: Exportieren Sie mehrere als PDF oder mit document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	dies ist eine DWG-Zeichnung, die nicht gelesen werden kann: Speichern Sie sie in der CAD-App als ASCII-DXF und öffnen Sie diese Datei
@@ -3748,9 +3758,6 @@ theme	Appearance	Erscheinungsbild
 @msg	Sent to {_1}	An {_1} gesendet
 @msg	{_1} files	{_1}-Dateien
 @msg	The graphics were lost and have been restarted	Die Grafikausgabe ging verloren und wurde neu gestartet
-@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde StitchFoundry auf {summary} neu gestartet
-@msg	Loading StitchFoundry…	StitchFoundry wird geladen…
-@msg	StitchFoundry failed to start: {e}	StitchFoundry konnte nicht gestartet werden: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Ein Browser mit WebGPU oder WebGL2 ist erforderlich.
 @msg	The graphics were lost and couldn't be restarted.	Die Grafikausgabe ging verloren und konnte nicht neu gestartet werden.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Ihre ungespeicherten Änderungen bleiben in diesem Browser erhalten: Laden Sie die Seite neu, um sie zurückzuholen.
@@ -3758,6 +3765,9 @@ theme	Appearance	Erscheinungsbild
 @msg	tool (a tool id) is required	tool (eine Werkzeug-ID) ist erforderlich
 @msg	{tool} isn't in a toolbar group of several tools	{tool} gehört zu keiner Werkzeuggruppe mit mehreren Werkzeugen
 @msg	onto must name a panel floating in another group	onto muss ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
+@msg	below and above must name a panel floating in another group	below und above müssen ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
+@msg	give only one of onto, below and above	nur eines von onto, below und above angeben
+@msg	column must be true or a number from 1	column muss true oder eine Zahl ab 1 sein
 @msg	x and y must both be numbers	x und y müssen beide Zahlen sein
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ist keine Farbe: Schreiben Sie sie als #rrggbb
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dies ist kein Logo aus flächigen Farben ({_1} % seiner einfarbigen Bereiche entsprechen wenigen flächigen Farben), daher würde der Modus „Flaches Logo“ seine Verläufe in Flecken zerlegen: Verwenden Sie stattdessen den Modus „Farbe“
@@ -3769,23 +3779,18 @@ theme	Appearance	Erscheinungsbild
 @msg	it has more than {MAX_NODES} objects	es enthält mehr als {MAX_NODES} Objekte
 @msg	it has no layers	es enthält keine Ebenen
 @msg	it has too many values in a row	es enthält zu viele Werte hintereinander
-@msg	it has {_1}, which StitchFoundry doesn't read from it yet	es enthält {_1}, was StitchFoundry daraus noch nicht liest
 @msg	its objects are nested too deeply	seine Objekte sind zu tief verschachtelt
 @msg	its section ending with `%{end}` doesn't end	sein Abschnitt, der mit `%{end}` enden soll, endet nicht
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	Objekte mit mehreren Flächen oder Konturen, Effekten oder Pinseln wurden so übernommen, wie sie gezeichnet aussehen ({_1}): Ihr Aussehen ist noch nicht bearbeitbar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	der Verlauf „{name}“ ist in der Datei nicht definiert: Eine einfache Farbe steht an seiner Stelle
-@msg	an image StitchFoundry can't read was left out	ein Bild, das StitchFoundry nicht lesen kann, wurde ausgelassen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	diese Datei wurde ohne PDF-Kompatibilität gespeichert, und ihre Bearbeitungsdaten können nicht gelesen werden ({why})
 @msg	No fonts are missing in this document	In diesem Dokument fehlen keine Schriften
-@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry durchsucht keine Ordner anderer Apps oder des Systems: {path}
-@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry durchsucht nicht den Ordner „Shared“ oder „Public“ unter „Users“: {path}
 @msg	{path} is not a folder	{path} ist kein Ordner
 @msg	the search couldn't start: try again in a moment	die Suche konnte nicht gestartet werden: Versuchen Sie es gleich noch einmal
 @msg	searching a folder isn't available on the web	das Durchsuchen eines Ordners ist im Web nicht verfügbar
 @msg	every search thread stopped on an internal error (please report this bug)	alle Such-Threads wurden mit einem internen Fehler beendet (bitte melden Sie diesen Fehler)
-@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	der Schriftenordner von StitchFoundry ist hier nicht festgelegt: Die Desktop-App und vectorcraft-cli legen ihn fest
 @msg	choose the font files to add	wählen Sie die Schriftdateien aus, die hinzugefügt werden sollen
 @msg	{n} font file(s) are now in {folder}	{n} Schriftdatei(en) liegen jetzt in {folder}
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} Schriftdatei(en) liegen jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}
@@ -3799,7 +3804,6 @@ theme	Appearance	Erscheinungsbild
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
-	Hide StitchFoundry	StitchFoundry ausblenden
 	Zoom	Zoomen
 	Bring All to Front	Alle nach vorne bringen
 	Settings	Einstellungen
@@ -3809,6 +3813,8 @@ theme	Appearance	Erscheinungsbild
 	Images: link to the file instead of only embedding it.	Bilder: mit der Datei verknüpfen, statt sie nur einzubetten.
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-Dokumente: ein gesperrtes Objekt, das aktualisiert wird, wenn sich die Datei ändert.
 	A file dialog is open: choose there first	Ein Dateidialog ist geöffnet: Treffen Sie zuerst dort Ihre Auswahl
+	The document was closed while its file dialog was open	Das Dokument wurde geschlossen, während sein Dateidialog geöffnet war
+	The dialog was closed before its file dialog answered	Das Dialogfeld wurde geschlossen, bevor sein Dateidialog geantwortet hat
 	Shaper	Shaper
 	Expand Shaper Group	Shaper-Gruppe umwandeln
 	Release Shaper Group	Shaper-Gruppe zurückwandeln
@@ -3832,6 +3838,7 @@ theme	Appearance	Erscheinungsbild
 	ICF Bottom/Left	ICF unten/links
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` muss ein Array von Ankerpunkt-Indizes sein, nicht {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: Das Ergebnis von Schritt {i} hat keinen solchen Wert (schreiben Sie $$ für ein literales $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: Vor diesem Schritt gibt es keinen Schritt {i} (Schritte zählen ab 0; schreiben Sie $$ für ein literales $)
 @msg	object ids are non-negative integers, not {v}	Objekt-IDs sind nicht negative ganze Zahlen, nicht {v}
@@ -3984,6 +3991,31 @@ theme	Appearance	Erscheinungsbild
 	Define a variable first	Definieren Sie zuerst eine Variable
 	Text	Text
 	Visibility	Sichtbarkeit
+
+	Activate Panel	Bedienfeld aktivieren
+	Change Panel Layout	Bedienfeldanordnung ändern
+	Close Panel	Bedienfeld schließen
+	Move Panel	Bedienfeld verschieben
+	Group with	Gruppieren mit
+	Resize panel window	Bedienfeldfenster skalieren
+	Resize panels	Bedienfelder skalieren
+@msg	Invalid panel layout; restored the default dock	Ungültige Bedienfeldanordnung; Standarddock wiederhergestellt
+@msg	action is required	Eine Aktion ist erforderlich
+@msg	anchor must name a registered panel	Der Anker muss ein registriertes Bedienfeld benennen
+@msg	before must name a panel	before muss ein Bedienfeld benennen
+@msg	docking action contains an unknown panel or an excessive split path	Die Docking-Aktion enthält ein unbekanntes Bedienfeld oder einen zu langen Teilungspfad
+@msg	group must be true or false	group muss true oder false sein
+@msg	move requires a destination panel	Das Verschieben erfordert ein Zielbedienfeld
+@msg	move requires an existing destination panel	Das Verschieben erfordert ein vorhandenes Zielbedienfeld
+@msg	onto must name a floating panel	onto muss ein schwebendes Bedienfeld benennen
+@msg	panel group is empty	Die Bedienfeldgruppe ist leer
+@msg	panel must name a registered panel	panel muss ein registriertes Bedienfeld benennen
+@msg	saved panel layout is invalid; reset the workspace first	Die gespeicherte Bedienfeldanordnung ist ungültig; zuerst den Arbeitsbereich zurücksetzen
+@msg	x and y must be provided together	x und y müssen zusammen angegeben werden
+@msg	zone must be a string	zone muss eine Zeichenfolge sein
+@msg	zone must be tab, center, left, right, top or bottom	zone muss tab, center, left, right, top oder bottom sein
+@msg	{key} must be a finite coordinate	{key} muss eine endliche Koordinate sein
+@msg	invalid restored panel group	Ungültige wiederhergestellte Bedienfeldgruppe
 # 3D and Materials › Revolve: its options dialog and gizmos.
 	Ambient	Umgebungslicht
 	Axis side	Achsenseite
@@ -4037,6 +4069,36 @@ theme	Appearance	Erscheinungsbild
 	Stroke Pressure	Strichdruck
 	Right Diagonal	Diagonal nach rechts
 	Left Diagonal	Diagonal nach links
+@msg	invalid native panel set	Ungültiger nativer Bedienfeldsatz
+@msg	missing panel layout	Bedienfeldanordnung fehlt
+@msg	unsupported native docking operation	Nicht unterstützte native Docking-Operation
+	Linux Display Server	Linux-Anzeigeserver
+	X11 (XWayland)	X11 (XWayland)
+	About StitchFoundry	Über StitchFoundry
+	Applies the next time StitchFoundry starts.	Gilt ab dem nächsten Start von StitchFoundry.
+	Quit StitchFoundry	StitchFoundry beenden
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry kopiert die Schriften nach {folder}.
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Beim Öffnen wurde ausgelassen, was StitchFoundry noch nicht lesen kann ({what}); beim Ersetzen geht das endgültig verloren. Speichern Sie unter einem anderen Namen, um es zu behalten.
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry wurde beim letzten Mal nicht normal beendet. Diese Dokumente hatten ungespeicherte Änderungen:
+	StitchFoundry Help…	StitchFoundry-Hilfe…
+	StitchFoundry on GitHub	StitchFoundry auf GitHub
+	Welcome to StitchFoundry	Willkommen bei StitchFoundry
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	Version {0} kann nicht gespeichert werden: StitchFoundry schreibt die Versionen {MIN_VERSION} bis {VERSION}
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	die Dateiversion {0} ist neuer, als dieses StitchFoundry unterstützt ({VERSION})
+@msg	is not an image StitchFoundry reads	ist kein Bild, das StitchFoundry lesen kann
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	es verwendet `{at}`, das der PostScript-Leser von StitchFoundry nicht kennt
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	es verwendet `{at}`, das der PostScript-Leser von StitchFoundry nicht kennt, in {procs}
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	kein StitchFoundry-Tastaturbefehlssatz (`overrides` fehlt)
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde StitchFoundry auf {summary} neu gestartet
+@msg	Loading StitchFoundry…	StitchFoundry wird geladen…
+@msg	StitchFoundry failed to start: {e}	StitchFoundry konnte nicht gestartet werden: {e}
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	es enthält {_1}, was StitchFoundry daraus noch nicht liest
+@msg	an image StitchFoundry can't read was left out	ein Bild, das StitchFoundry nicht lesen kann, wurde ausgelassen
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry durchsucht keine Ordner anderer Apps oder des Systems: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry durchsucht nicht den Ordner „Shared“ oder „Public“ unter „Users“: {path}
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	der Schriftenordner von StitchFoundry ist hier nicht festgelegt: Die Desktop-App und vectorcraft-cli legen ihn fest
+	Hide StitchFoundry	StitchFoundry ausblenden
+
 # Embroidery (StitchFoundry)
 	Add Inclination Line	Neigungslinie hinzufügen
 	After the selection	Nach der Auswahl
@@ -4201,6 +4263,7 @@ theme	Appearance	Erscheinungsbild
 @msg	{_1} export failed: {e}	Export als {_1} fehlgeschlagen: {e}
 	Stitch Lines	Stichlinien
 	Tatami	Tatami
+
 # Embroidery (StitchFoundry), phase 1
 	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Von SiteSentrix, auf Basis von VectorCraft vom ArtCraft-Team. MIT OR Apache-2.0. Schriften: Source Sans 3, Inter, JetBrains Mono (OFL). Symbole: Lucide (ISC) + VectorCraft.
 	Version {version} — open-source machine embroidery digitizing in pure Rust.	Version {version} – Open-Source-Maschinenstickerei-Digitalisierung in reinem Rust.

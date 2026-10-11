@@ -24,6 +24,7 @@ pub mod credits;
 pub mod cursors;
 pub mod dialogs;
 pub mod dock;
+mod edit_toolbar;
 pub mod embroidery;
 pub mod find_font;
 pub mod floating;
@@ -37,6 +38,7 @@ pub mod io;
 pub mod menus;
 pub mod native_menu;
 pub mod palette;
+mod panel_docking;
 pub mod panels;
 pub mod picks;
 pub mod place;
@@ -245,9 +247,13 @@ pub struct Services {
     /// The macOS menu bar, when the desktop app installed one: the in-window menus are hidden then.
     pub native_menu: Option<native_menu::NativeMenu>,
     /// Show file dialogs off the UI thread (desktop Linux, where a dialog in line holds the window
-    /// and the compositor finds it not answering): what asked runs again with the answer
-    /// ([`picks`]). Without it they are shown in line.
+    /// and the compositor finds it not answering, #592) or as sheets on the window (macOS, where a
+    /// dialog in line aborts the app, #867): what asked runs again with the answer ([`picks`]).
+    /// Without it they are shown in line.
     pub start_pick: Option<picks::StartPick>,
+    /// [`Self::start_pick`]'s dialogs are sheets on the window (macOS): while one is open the app
+    /// neither quits nor closes documents, as under the modal dialog before.
+    pub dialogs_are_sheets: bool,
 }
 
 /// Cached canvas raster.
@@ -585,6 +591,16 @@ impl VectorcraftApp {
             return r;
         }
         let mut params = params;
+        // Paste in place, in front, in back (#693), Select › All on Active Artboard (#1006) and Align to
+        // Artboard: onto, on or to the active artboard, the view's. A batch passes it on to those steps.
+        if (vectorcraft_engine::ON_ACTIVE_ARTBOARD.contains(&id) || id == "command.batch")
+            && params.get("artboard").is_none()
+            && self.view().is_some()
+            && let Some(n) = self.session.active().map(|d| d.doc.artboards.len())
+            && let Some(p) = params.as_object_mut()
+        {
+            p.insert("artboard".into(), serde_json::json!(panels::artboards::selected(self, n)));
+        }
         if id.starts_with("edit.paste") {
             if let Err(e) = self.adopt_system_clipboard() {
                 self.ui.status = e.clone();
@@ -597,14 +613,6 @@ impl VectorcraftApp {
                 && let Some(p) = params.as_object_mut()
             {
                 p.insert("center".into(), serde_json::json!([c.x, c.y]));
-            }
-            // In place, in front, in back: onto the active artboard (#693).
-            if matches!(id, "edit.pasteInPlace" | "edit.pasteInFront" | "edit.pasteInBack")
-                && params.get("artboard").is_none()
-                && let Some(i) = self.view().map(|v| v.artboard)
-                && let Some(p) = params.as_object_mut()
-            {
-                p.insert("artboard".into(), serde_json::json!(i));
             }
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;
@@ -682,8 +690,13 @@ impl VectorcraftApp {
             let reply = req.reply.clone();
             // Guarded per request: a panic must not drop the channel (taken out of `self` above).
             let roots = self.automation_roots.clone();
-            let outcome = file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req)))
-                .unwrap_or_else(|msg| control::err(format!("internal error: {msg} (please report this bug)")));
+            let outcome = match file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req))) {
+                Ok(outcome) => outcome,
+                Err(msg) => {
+                    self.picks.recover();
+                    control::err(format!("internal error: {msg} (please report this bug)"))
+                }
+            };
             match outcome {
                 control::Outcome::Done(v) => {
                     let _ = reply.send(v);
@@ -792,6 +805,8 @@ impl VectorcraftApp {
             return;
         }
         let last: f64 = ctx.data(|d| d.get_temp(last_key)).unwrap_or(f64::NEG_INFINITY);
+        // The active document as the last look saw it: its uid and revision.
+        let (seen_key, doc) = (egui::Id::new("linkWatch.seen"), self.session.active().map(|d| (d.uid, d.revision)));
         if now - last >= 2.0 || (focused && !was_focused) {
             // Walking the document's links costs a pass over it: only when a look is due.
             // `start_link_scan` starts none for a document without links, which then doesn't
@@ -799,13 +814,34 @@ impl VectorcraftApp {
             ctx.data_mut(|d| d.insert_temp(last_key, now));
             self.session.start_link_scan();
             let links = self.session.link_scan.is_some();
-            ctx.data_mut(|d| d.insert_temp(egui::Id::new("linkWatch.links"), links));
+            ctx.data_mut(|d| {
+                d.insert_temp(egui::Id::new("linkWatch.links"), links);
+                d.insert_temp(seen_key, doc);
+            });
         }
         if self.session.link_scan.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         } else if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("linkWatch.links"))).unwrap_or(false) {
             ctx.request_repaint_after(std::time::Duration::from_millis(2000));
+        } else if ctx.data(|d| d.get_temp::<Option<(u64, u64)>>(seen_key)).is_some_and(|seen| seen != doc) {
+            // The document changed (a file placed into one without links) or another came to the
+            // front since that look: wake for the next one even if the app sits idle until then,
+            // or a file placed and changed meanwhile is first seen after the change, which is then
+            // never acted on.
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64((last + 2.0 - now).clamp(0.0, 2.0)));
         }
+    }
+
+    /// A file dialog is open off the UI thread (a sheet on macOS, [`picks`]): what asked for it runs
+    /// again when it answers.
+    pub fn file_dialog_open(&self) -> bool {
+        self.picks.is_waiting()
+    }
+
+    /// A file dialog is open as a sheet on the window ([`Services::dialogs_are_sheets`]): nothing
+    /// closes or quits until it answers.
+    pub fn file_sheet_open(&self) -> bool {
+        self.services.dialogs_are_sheets && self.file_dialog_open()
     }
 
     /// Show a transient status message.
@@ -896,6 +932,7 @@ impl VectorcraftApp {
     pub fn logic(&mut self, ctx: &egui::Context) {
         let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
         if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.logic_frame(ctx))) {
+            self.picks.recover();
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }
@@ -949,10 +986,14 @@ impl VectorcraftApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         // The window's close button (or the system quitting the app) asks about unsaved documents,
-        // once the saves running in the background are done.
+        // once the saves running in the background are done. Not while a file dialog's sheet is on
+        // the window: what asked for it runs again when it answers.
         if ctx.input(|i| i.viewport().close_requested()) {
             background::wait_all(self);
-            if unsaved::any_dirty(self) {
+            if self.file_sheet_open() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.status(picks::busy());
+            } else if unsaved::any_dirty(self) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 if let Err(e) = unsaved::close_all(self, "quit") {
                     self.status(e);
@@ -993,8 +1034,8 @@ impl VectorcraftApp {
         self.take_dropped_files(ctx);
     }
 
-    /// Files dropped on the window: documents opened, pictures and text placed on the canvas
-    /// ([`Self::drop_target`]).
+    /// Files dropped on the window: documents, libraries, presets and plug-ins opened, pictures
+    /// and text placed on the canvas ([`Self::drop_target`]).
     #[cfg(not(target_arch = "wasm32"))]
     fn take_dropped_files(&mut self, ctx: &egui::Context) {
         let (dropped, shift) = ctx.input(|i| (i.raw.dropped_files.clone(), i.modifiers.shift));
@@ -1070,7 +1111,9 @@ impl VectorcraftApp {
         // The native menu's key equivalents become the input their keys make, ahead of what came
         // after them (see `native_menu`).
         let keys = self.services.native_menu.as_mut().map(native_menu::NativeMenu::take_keys).unwrap_or_default();
-        if !keys.is_empty() {
+        // The menu bar does nothing while a file dialog is open (`native_menu`): a key that raced it
+        // going inert is dropped.
+        if !keys.is_empty() && !self.file_dialog_open() {
             let events: Vec<egui::Event> = keys.into_iter().flat_map(|k| native_menu::key_events(k, || self.system_clipboard_text())).collect();
             raw.events.splice(0..0, events);
         }
@@ -1127,6 +1170,7 @@ impl VectorcraftApp {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
         if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.ui_frame(ui))) {
+            self.picks.recover();
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }

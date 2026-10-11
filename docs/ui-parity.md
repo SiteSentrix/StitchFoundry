@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first checklist: pen, anchors, handles, snapping, nudging, modifiers, panels) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (a marquee needs to touch a path, not just lie inside its fill, #1103; earlier: Live Corners round corners between curved sides, #1144) · **Target:** Adobe Illustrator 2026 (30.x)
 
 How VectorCraft's tools, handles, snapping and panels behave next to Illustrator's. A vector illustrator's
 trust is in the details: where a handle lands, what Shift and Alt do mid-drag, what a smart guide snaps to,
@@ -62,14 +62,16 @@ tools, never checked side by side) isn't captured row by row.
 | Behaviour | Status | Notes |
 |---|---|---|
 | Click/Shift-click anchors; marquee toggles with Shift | done | #483 |
+| A marquee selects the objects whose paths it touches (anchors or segments): drawn inside a filled shape, over a background, it leaves that shape (Preview and Outline) | done | #1103 |
 | Drag a curved segment to bend it, a straight one to move its anchors | done | |
+| Drag by an anchor of a path selected whole moves the whole path; Alt-drag by an anchor or a segment copies it, Alt toggles the copy during the drag, and the copy snaps by the anchor pressed, onto the original too | done | #1104 |
 | Handles shown are the handles that drag; tolerance from Selection & Anchor Display | done | #494 |
 | Drag a handle with Shift (45° about its anchor), Alt (move one handle alone) | done | handles snap to smart guides |
 | Show handles when multiple anchors are selected; Highlight anchors on mouse over; anchor and handle size | done | Preferences › Selection & Anchor Display |
 | Convert selected anchors to corner/smooth from the Control bar and Properties | done | |
 | Cut path at selected anchors, Remove Anchor Points, Delete removes segments | done | |
 | Live Corners widgets (radius readout, Alt-click cycles kind, double-click the Corners dialog) | done | clicking a widget without pre-selecting the anchor (#908) missing |
-| Corners between curved sides, Relative rounding | missing | |
+| Corners between curved sides (#1144), Relative rounding | partial | Relative rounding missing |
 | Isolation mode by double-click, breadcrumbs, Esc to exit | done | |
 | "Magnetic" moves of selected anchors with a modifier (#955 request) | missing | not an Illustrator feature as documented; under discussion |
 
@@ -90,7 +92,8 @@ tools, never checked side by side) isn't captured row by row.
 | Snapping panel/popover consolidating the snap options (30.0) | missing | |
 | Customisable rotation snap angle (#973) | missing | Illustrator: Constrain Angle and construction angles only |
 | Ruler guides: drag out, select, move, delete, lock, Make/Release Guides | done | #414, #451 |
-| Ruler guides as Layers rows; Alt swaps a ruler guide's orientation while dragging | missing | |
+| Ruler guides as Layers rows: shown, hidden, locked and deleted with their layer; rows dragged to another layer | done | `guide.setLayer`; guides from older files go on a layer |
+| Alt swaps a ruler guide's orientation while dragging | missing | |
 | Global and video rulers | missing | menu stubs |
 
 ## Transform handles, bounding box, Free Transform
@@ -124,6 +127,7 @@ tools, never checked side by side) isn't captured row by row.
 | Space: Hand; Cmd+Space / Cmd+Alt+Space: zoom in/out; middle button pans | done | |
 | Cmd/Ctrl: last-used selection tool; Cmd+Alt: Group Selection inside Direct Selection | partial | |
 | Alt-drag duplicates (objects, artboards with their art) | done | |
+| Shift-click selects several artboards (Artboard tool, Artboards panel); they move, Alt-copy and delete together | done | `artboard.move`/`artboard.delete` `indices` (#1139) |
 | Shape tools: Shift constrains, Alt from centre, Space moves while dragging, arrows change sides/points/rows | done | |
 | Tool double-click opens its options | done | |
 | Per-platform mapping (Cmd ↔ Ctrl, Option ↔ Alt) | done | |
@@ -143,7 +147,9 @@ Layers panel.
 |---|---|---|
 | ~40 panels with ≡ menus; dock, icon column, collapse, tabs | done | 51 panel modules incl. tests |
 | Panels float inside the window, stack, dock back | done | #495 |
+| Floating groups stack into sets; sets dock as extra dock columns (a multi-column dock); groups drop anywhere in a set or column, or onto its tabs; a column taller than the window scrolls | done | `window.panel.float {below, above}`, `window.panel.dock {column}` |
 | Panels outside the app window (another monitor) | missing | single OS window |
+| Edit Toolbar (•••): the All Tools drawer opens beside the toolbar by its button (Escape or a click outside closes it), dims the tools already in the toolbar; while it is open, tools drag from it onto the toolbar (between two tools, or onto one to join its group), from the toolbar into it, and within the toolbar; each toolbar keeps its edits | done | #1018; `window.editToolbar`, `toolbar.addTool`/`removeTool`/`reset`; the drawer's Reset (Illustrator has it in a drawer menu); dragging a toolbar button moves the tool it shows, not its whole group; New/Manage Toolbars missing |
 | Properties panel per context (every selection type's Quick Actions) | partial | |
 | Contextual task bar | done | |
 | Control bar with Transform and Stroke popovers | done | |
@@ -164,4 +170,9 @@ re-measure of the panels added since.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | A marquee inside a filled shape no longer selects it: only touching its path does (#1103); score unchanged (estimated) |
+| 2026-10-11 | minor | Live Corners: corners between curved sides round too, the curve trimmed to what the cut leaves (#1144); score unchanged (estimated) |
+| 2026-10-11 | minor | Artboards: Shift-click selects several, which move, copy and delete together (#1139); score unchanged (estimated) |
+| 2026-10-11 | minor | Edit Toolbar opens the All Tools drawer beside the toolbar instead of a centred dialog, dims the tools the toolbar holds, and edits the toolbar by drag and drop while it is open (#1018); score unchanged (estimated) |
+| 2026-10-11 | minor | Direct Selection: dragging a path selected whole by an anchor moves it whole; Alt-drag copies by an anchor too, toggles during the drag and snaps onto the original (#1104); score unchanged (estimated) |
 | 2026-10-10 | major | First checklist, built from the tool sources and tests against Illustrator 2026's public documentation |

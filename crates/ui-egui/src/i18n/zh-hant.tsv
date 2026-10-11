@@ -56,7 +56,6 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	數值較小時會貼近筆畫，較大時則錨點較少、曲線較平滑。
 	A new preset starting from the selected one	以所選預設集為基礎建立新預設集
 	A saved copy of the selected preset	所選預設集的已儲存拷貝
-	About StitchFoundry	關於 StitchFoundry
 	above	以上
 	Absolute Position	絕對位置
 	Accurate	精確
@@ -159,7 +158,6 @@
 	Appearance Panel	外觀面板
 	Appearance panel	外觀面板
 	Applies when the linked file is relinked or updated.	重新連結或更新連結檔案時套用。
-	Applies the next time StitchFoundry starts.	下次啟動 StitchFoundry 時生效。
 	Apply	套用
 	Apply Brush	套用筆刷
 	Apply Character Style	套用字元樣式
@@ -1310,6 +1308,7 @@
 	Last Effect…	最後一次效果…
 	Last Page	最後一頁
 	Latin	拉丁文
+	Thai	泰文
 	Latin Extended	拉丁文擴充
 	Latin-1 Supplement	拉丁文-1 補充
 	Layer	圖層
@@ -1532,6 +1531,7 @@
 	Move Rows	移動列
 	Move Slices	移動切片
 	Move Spine Point	移動脊線點
+	Reshape Spine Segment	改變脊線線段外框
 	Move Swatch	移動色票
 	Move Up	上移
 	Move…	移動…
@@ -2022,6 +2022,11 @@
 	Proof Colors	校樣色彩
 	Proof Setup	校樣設定
 	Properties	內容
+	Proportional Metrics	比例度量
+	Digits	數字
+	Arabic	阿拉伯數字
+	Hindi	印地數字
+	Farsi	波斯數字
 	Proportional Oldstyle	比例舊式數字
 	Pucker & Bloat…	縮攏與膨脹…
 	Pucker Tool	縮攏工具
@@ -2035,7 +2040,6 @@
 	Quarter Space	四分之一空格
 	Quick Actions	快速動作
 	Quickly start a new file	快速開始新檔案
-	Quit StitchFoundry	結束 StitchFoundry
 	Radar Graph Tool	雷達圖工具
 	Radial	放射狀
 	Radial Glows	放射狀光暈
@@ -2121,6 +2125,9 @@
 	Redefine Symbol	重新定義符號
 	Redefine {kind} Style	重新定義{kind}樣式
 	Redo	重做
+	List Folder	列出資料夾
+	Begin Undo Group	開始還原群組
+	End Undo Group	結束還原群組
 	Redo {name}	重做 {name}
 	Redo {}	重做 {}
 	Reduce Colors	縮減顏色
@@ -2153,7 +2160,6 @@
 	{count} folder(s) or file(s) couldn't be read	有 {count} 個資料夾或檔案無法讀取
 	The search stopped at its limit: search a smaller folder.	搜尋已達上限而停止：請搜尋較小的資料夾。
 	Copy only fonts you own or are licensed to install.	只複製您擁有或已取得安裝授權的字體。
-	StitchFoundry copies the fonts to {folder}.	StitchFoundry 會將字體複製到 {folder}。
 	Registered Trademark Symbol	註冊商標符號
 	Registration marks	對位標記
 	Registry name:	登錄名稱：
@@ -2253,7 +2259,6 @@
 	Revert	回復
 	Revert to the saved version of “{name}”?	要回復為「{name}」已儲存的版本嗎？
 	Replace “{name}”, the file this document was opened from?	要取代「{name}」（開啟此文件的來源檔案）嗎？
-	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	開啟時略過了 StitchFoundry 尚無法讀取的內容（{what}），取代該檔案會永久遺失這些內容。若要保留，請以其他名稱儲存。
 	Revolve…	迴轉…
 	RGB Color	RGB 色彩
 	Right	右
@@ -2604,6 +2609,7 @@
 	Size Tile to Art	拼貼符合圖稿大小
 	Size/Leading	大小/行距
 	Size:	大小：
+	Ridges per segment:	每段起伏數：
 	Size: {size}  Tracking: {tracking}	大小：{size}  字距：{tracking}
 	Skew	傾斜
 	Skin Tone Ramps	膚色漸階
@@ -2873,6 +2879,9 @@
 	Tool Options…	工具選項…
 	Toolbar: Advanced / Basic	工具列：進階 / 基本
 	Toolbar: Single/Double Column	工具列：單欄/雙欄
+	Toolbar: Add Tool	工具列：新增工具
+	Toolbar: Remove Tool	工具列：移除工具
+	Toolbar: Reset	工具列：重設
 	Toolbars	工具列
 	Tools	工具
 	Top	上
@@ -3068,10 +3077,6 @@
 	Vector Effects	向量效果
 	Vector Halftone	向量半色調
 	Vector Halftone…	向量半色調…
-	StitchFoundry	StitchFoundry
-	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry 上次未正常結束。下列文件有未儲存的變更：
-	StitchFoundry Help…	StitchFoundry 說明…
-	StitchFoundry on GitHub	GitHub 上的 StitchFoundry
 	Vectors	向量
 	Version:	版本：
 	Vertical	垂直
@@ -3110,7 +3115,6 @@
 	Web Snap:	網頁靠齊：
 	Weight	寬度
 	Weight:	寬度：
-	Welcome to StitchFoundry	歡迎使用 StitchFoundry
 	When pasting text	貼上文字時
 	White	白色
 	Widget Position:	Widget 位置：
@@ -3285,6 +3289,7 @@ axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	兩者
 	Drag to move	拖曳以移動
+	Drag to move out of the set	拖曳以移出該組合
 	Drag to float as a toolbar	拖曳使其浮動為工具列
 	Put back in the toolbar	放回工具列
 	Float Panel	浮動面板
@@ -3297,7 +3302,6 @@ axis	Both	兩者
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	服務
-	Hide StitchFoundry	隱藏 StitchFoundry
 	Zoom	縮放
 	Bring All to Front	將全部移至最前
 	Settings	設定
@@ -3307,6 +3311,8 @@ axis	Both	兩者
 	Images: link to the file instead of only embedding it.	影像：連結至檔案，而不只是嵌入。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft 文件：單一鎖定物件，檔案變更時隨之更新。
 	A file dialog is open: choose there first	檔案對話方塊已開啟：請先在其中選擇
+	The document was closed while its file dialog was open	檔案對話方塊開啟期間，文件已關閉
+	The dialog was closed before its file dialog answered	檔案對話方塊回應之前，對話方塊已關閉
 	Shaper	Shaper
 	Expand Shaper Group	展開 Shaper 群組
 	Release Shaper Group	釋放 Shaper 群組
@@ -3439,6 +3445,14 @@ effect	Soft	柔和
 	Define a variable first	請先定義一個變數
 	Text	文字
 	Visibility	可見性
+# Shared panel docking
+	Activate Panel	啟用面板
+	Change Panel Layout	變更面板配置
+	Close Panel	關閉面板
+	Move Panel	移動面板
+	Group with	群組至
+	Resize panels	調整面板大小
+	Resize panel window	調整面板視窗大小
 
 # Revolve profile guidance.
 
@@ -3494,6 +3508,24 @@ lighting	Light	光源
 	Stroke Pressure	筆觸壓力
 	Right Diagonal	右對角線
 	Left Diagonal	左對角線
+	Vertical Guide	垂直參考線
+	Horizontal Guide	水平參考線
+	Move Guide to Layer	將參考線移至圖層
+	Linux Display Server	Linux 顯示伺服器
+	X11 (XWayland)	X11 (XWayland)
+
+	About StitchFoundry	關於 StitchFoundry
+	Applies the next time StitchFoundry starts.	下次啟動 StitchFoundry 時生效。
+	Quit StitchFoundry	結束 StitchFoundry
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry 會將字體複製到 {folder}。
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	開啟時略過了 StitchFoundry 尚無法讀取的內容（{what}），取代該檔案會永久遺失這些內容。若要保留，請以其他名稱儲存。
+	StitchFoundry	StitchFoundry
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry 上次未正常結束。下列文件有未儲存的變更：
+	StitchFoundry Help…	StitchFoundry 說明…
+	StitchFoundry on GitHub	GitHub 上的 StitchFoundry
+	Welcome to StitchFoundry	歡迎使用 StitchFoundry
+	Hide StitchFoundry	隱藏 StitchFoundry
+
 # Embroidery (StitchFoundry)
 	Add Inclination Line	新增針跡方向線
 	After the selection	所選物件之後
@@ -3653,6 +3685,7 @@ lighting	Light	光源
 	Arrow	箭頭
 	Stitch Lines	針跡線
 	Tatami	榻榻米
+
 # Embroidery (StitchFoundry), phase 1
 	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	由 SiteSentrix 製作，以 ArtCraft 團隊的 VectorCraft 為基礎。MIT OR Apache-2.0。字體：Source Sans 3、Inter、JetBrains Mono (OFL)。圖示：Lucide (ISC) + VectorCraft。
 	Version {version} — open-source machine embroidery digitizing in pure Rust.	版本 {version} — 以純 Rust 打造的開放原始碼電腦刺繡打版軟體。

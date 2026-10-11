@@ -97,6 +97,8 @@ impl RasterExportOptions {
             anti_alias: self.anti_alias,
             // Opaque art stays exactly opaque where translucent edges cross it (#787).
             precise: true,
+            // Shapes meeting edge to edge leave no seam (#983).
+            supersample: true,
             ..Default::default()
         }
     }

@@ -21,7 +21,7 @@ use vectorcraft_geom::{FillRule, PathData};
 
 use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
-use crate::import_scan::{MAX_NESTING, Ocgs, Scan, all_on, hides_forms, scan_page, tag_key};
+use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, all_on, hides_forms, scan_page, tag_key};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
 use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
@@ -692,8 +692,9 @@ struct Builder<'p> {
     /// Mask keys of CMYK images whose mask turned out to hide nothing.
     opaque: HashSet<u128>,
     warnings: Vec<String>,
-    /// Fonts by cache key → base font name (from [`scan_page`]).
-    fonts: HashMap<u128, String>,
+    /// Fonts by cache key → base font name and whether the file carries its glyphs (from
+    /// [`scan_page`]).
+    fonts: FontNames,
     font_names: HashMap<u128, FontInfo>,
     families: Option<Families>,
     missing_fonts: Vec<String>,
@@ -1346,7 +1347,7 @@ impl<'p> Builder<'p> {
             return n.clone();
         }
         let data = o.font_data();
-        let name = self.fonts.get(&key).cloned().or_else(|| data.as_ref().and_then(|d| d.postscript_name.clone()));
+        let name = self.fonts.get(&key).map(|(n, _)| n.clone()).or_else(|| data.as_ref().and_then(|d| d.postscript_name.clone()));
         let (weight, italic) = data.as_ref().map_or((None, false), |d| (d.weight, d.is_italic));
         // A subset's six-letter tag.
         let ps = name.as_deref().map(|n| match n.split_once('+') {
@@ -1429,7 +1430,12 @@ impl<'p> Builder<'p> {
         let upright = width.is_some_and(|w| w.abs() <= 1.0);
         let top = m * kurbo::Point::new(f64::from(width.filter(|w| *w > 1.0).unwrap_or(1000.0)) * 0.5, 880.0);
         let mut info = self.font_name(key, o);
-        if let Some(face) = &info.face {
+        // A font the file doesn't carry is drawn with a stand-in: its glyphs can't tell which
+        // style of the installed family it is, so the name decides.
+        let embedded = self.fonts.get(&key).is_none_or(|(_, e)| *e);
+        if let Some(face) = &info.face
+            && embedded
+        {
             let decided = match self.matched.get(&key) {
                 Some(m) => m.clone(),
                 // A glyph that can't be compared (several characters, a vertical form) decides

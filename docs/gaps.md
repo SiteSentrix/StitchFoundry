@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (moved from the ROADMAP's "Where we're lacking", re-ranked, added file-format, stability, hardware, localization, ecosystem and AI gaps) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -55,8 +55,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Missing:** faithful layer and group structure from the editing data in real files (#951: 109 layers instead
   of 14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
-  lines (#779), open speed on large files (#758), legacy `.ai` without the prolog, live effects, brushes, symbols
-  and pattern fills as live objects (#637). Writing Illustrator's own editing data is out of scope
+  lines (#779), open speed on large files (#758), legacy type in `.ai` files in PostScript form (those without
+  their prolog open since #1027), live effects, brushes and symbols as live objects (#637; pattern fills and global colours are read since #1025). Writing Illustrator's own editing data is out of scope
   (undocumented); Save As `.ai` stays PDF-compatible.
 - **Evidence:** the issues above; 28 of the 350 issues are about `.ai`/EPS (about 22 people, the most common single
   format theme), 20 fixed, and the 8 open ones are about structure (layers, guides, speed, live objects), not missing
@@ -86,8 +86,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G11 Correctness bugs in core tools
 
-- **Missing:** Shape Builder misses planar regions and targets whole shapes (#937, #893); Asset Export
-  anti-aliasing ghost borders (#983); Transform effect dialog's invisible checkboxes and missing options (#885);
+- **Done:** scaled text's size and horizontal-scale controls account for object/group transforms (#1034),
+  including exact sizes across grouped labels and resetting horizontal stretch while keeping editable text.
+- **Missing:** Shape Builder misses planar regions and targets whole shapes (#937); Transform effect dialog's invisible checkboxes and missing options (#885);
   PDF text boxes moving on open (#722); SVG units reverting to points (#864); bezier drag preview freezing (#834).
 - **Impact:** wrong output in everyday work.
 - **Estimate:** 8–15 h.
@@ -95,9 +96,10 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G4 Advanced type
 
 - **Missing:** hyphenation and justification options, Optical Margin Alignment (type core); CJK vertical
-  composition (ruby, mojikumi sets and dialog, proportional vertical metrics #966, kinsoku settings #633, manual
-  tate-chu-yoko), Middle Eastern features beyond bidi, variable font axes, spell check with an open dictionary,
-  Touch Type, Retype, Snap to Glyph. Itemized in [type-parity.md](type-parity.md).
+  composition (ruby, mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
+  features beyond bidi and digit types (Character Direction, kashidas, composers), variable font axes, spell check with an open dictionary,
+  Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
+  Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
 - **Estimate:** 34–47 h (type core 14–19 h blocks beta).
 
@@ -201,6 +203,12 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | G4: Middle Eastern digit types done (Character panel menu › Digits); estimate unchanged |
+| 2026-10-11 | minor | G4: proportional vertical metrics (#966) done; estimate unchanged |
+| 2026-10-11 | minor | G11: #893 fixed (merged regions of crossing lines left seams); #937 still open, estimate unchanged |
+| 2026-10-11 | minor | #1034: corrected scaled type controls; optional group font-size preservation remains separate. Estimates unchanged at this rounding. |
+| 2026-10-11 | minor | G9: legacy `.ai` without the prolog opens with its layers (#1027) |
+| 2026-10-11 | minor | G9: `.ai` pattern fills and global colours read from the editing data (#1025) |
 | 2026-10-10 | minor | G3: initial Revolve landed (#846), 45–75 h left |
 | 2026-10-10 | minor | G9 evidence counted from the tracker (28 `.ai`/EPS issues, 20 fixed); impact narrowed to handing files back |
 | 2026-10-10 | minor | Alpha blockers checked against the core-workflow gate: none |

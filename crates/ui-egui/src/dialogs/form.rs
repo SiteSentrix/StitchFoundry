@@ -248,7 +248,7 @@ pub(super) fn param_fields(
             match v {
                 Value::Number(n) => {
                     if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), "", 3, 140.0) {
-                        d.fields.insert(k, json!(x));
+                        d.fields.insert(k, typed_number(x));
                         changed = true;
                     }
                 }
@@ -291,6 +291,13 @@ pub(super) fn param_fields(
     changed
 }
 
+/// A number typed in a command's dialog as JSON: a whole number as an integer, as counts are read
+/// (`as_u64`: Object Mosaic's columns and rows, #1000), which `12.0` isn't; a fraction stays one.
+/// Commands that take any number read either.
+fn typed_number(x: f64) -> Value {
+    if x.fract() == 0.0 && x.abs() < 1e15 { json!(x as i64) } else { json!(x) }
+}
+
 /// Editor for a plug-in's parameters from its schema (plug-in filter and effect dialogs): numbers
 /// within their range, whole numbers, checkboxes and dropdowns, in declaration order. Returns
 /// true when a value changed. The labels (from the parameter keys) and choices are the plug-in's
@@ -313,8 +320,8 @@ pub(super) fn schema_fields(ui: &mut egui::Ui, d: &mut Dialog, specs: &[(String,
                     crate::widgets::range_field(ui, ("plugin-int", k), x, *min as f64..=*max as f64, "", 0, 100.0).map(|x| json!(x as i64))
                 }
                 ParamSpec::Bool { .. } => {
-                    let mut b = cur.as_bool().unwrap_or(false);
-                    ui.checkbox(&mut b, "").changed().then(|| json!(b))
+                    let b = cur.as_bool().unwrap_or(false);
+                    crate::widgets::check(ui, "", b, true).then(|| json!(!b))
                 }
                 ParamSpec::Choice { options, .. } => {
                     let labels: Vec<&str> = options.iter().map(String::as_str).collect();
@@ -551,4 +558,20 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
 pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(tl!(text)).size(11.0).color(t.text_dim));
+}
+
+#[cfg(test)]
+mod typed_number_tests {
+    use super::*;
+
+    #[test]
+    fn whole_numbers_are_integers_and_fractions_stay_fractions() {
+        // Whatever the field held before: a count typed after a fraction is a count again.
+        assert_eq!(typed_number(24.0).as_u64(), Some(24));
+        assert_eq!(typed_number(-4.0), json!(-4));
+        assert_eq!(typed_number(0.0), json!(0));
+        assert_eq!(typed_number(2.5), json!(2.5));
+        // Numbers past exact integers stay floats.
+        assert!(typed_number(1e20).is_f64());
+    }
 }

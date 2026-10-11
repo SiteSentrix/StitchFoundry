@@ -248,7 +248,7 @@ struct Walker<'w, 'p> {
     /// The groups that are off for the interpreter (none once [`all_on`] turned them on).
     off: HashSet<ObjectIdentifier>,
     xref: &'p hayro_syntax::xref::XRef,
-    fonts: &'w mut HashMap<u128, String>,
+    fonts: &'w mut FontNames,
     visible: Vec<bool>,
     ops: usize,
     max_ops: usize,
@@ -296,7 +296,7 @@ impl Walker<'_, '_> {
             if let Some(f) = res.fonts.get::<Dict<'_>>(key.as_ref())
                 && let Some(name) = f.get::<Name<'_>>(b"BaseFont")
             {
-                self.fonts.entry(f.cache_key()).or_insert_with(|| String::from_utf8_lossy(name.as_ref()).into_owned());
+                self.fonts.entry(f.cache_key()).or_insert_with(|| (String::from_utf8_lossy(name.as_ref()).into_owned(), embeds_glyphs(&f)));
             }
         }
     }
@@ -372,13 +372,32 @@ impl Walker<'_, '_> {
     }
 }
 
+/// The fonts of a document by cache key: base font name, and whether the file carries the glyphs
+/// ([`embeds_glyphs`]).
+pub(crate) type FontNames = HashMap<u128, (String, bool)>;
+
+/// Whether font `f` carries its own glyphs: a font program in its descriptor (a composite font's in
+/// its descendant's), or a Type 3 font's glyph procedures. A font that doesn't is drawn with a
+/// stand-in, whose glyphs say nothing about which installed face the document means.
+fn embeds_glyphs(f: &Dict<'_>) -> bool {
+    if f.get::<Name<'_>>(b"Subtype").is_some_and(|s| s.as_ref() == b"Type3") {
+        return true;
+    }
+    // A font program is a stream, so always an indirect object.
+    let program = |d: &Dict<'_>| {
+        d.get::<Dict<'_>>(b"FontDescriptor").is_some_and(|fd| [&b"FontFile"[..], b"FontFile2", b"FontFile3"].iter().any(|k| fd.get_ref(*k).is_some()))
+    };
+    program(f) || f.get::<Array<'_>>(b"DescendantFonts").and_then(|a| a.iter::<Dict<'_>>().next()).is_some_and(|d| program(&d))
+}
+
 /// Walk `page` as the interpreter will: `all_on` when [`all_on`] turned every group on. Fonts
-/// found are noted in `fonts` (their cache key → base font name).
-pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &mut HashMap<u128, String>) -> Scan {
+/// found are noted in `fonts` (their cache key → base font name, and whether the file carries its
+/// glyphs).
+pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &mut FontNames) -> Scan {
     walk_page(page, ocgs, all_on, fonts).out
 }
 
-fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &'w mut HashMap<u128, String>) -> Walker<'w, 'p> {
+fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &'w mut FontNames) -> Walker<'w, 'p> {
     let off = if all_on { HashSet::new() } else { ocgs.off.clone() };
     let mut w = Walker { ocgs, off, xref: page.xref(), fonts, visible: vec![], ops: 0, max_ops: max_ops(), out: Scan::default(), hidden_form: false };
     w.walk(page.typed_operations(), page.resources(), 0);

@@ -39,6 +39,24 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("edit.undo", "Undo", ["Edit"], Some("Cmd+Z"), "{}", can_undo, undo),
         cmd!("edit.redo", "Redo", ["Edit"], Some("Cmd+Shift+Z"), "{}", can_redo, redo),
+        cmd!(
+            "edit.undoGroup.begin",
+            "Begin Undo Group",
+            [],
+            None,
+            "{label?: string} until edit.undoGroup.end, the edits made in the active document are one undo step, named `label` (else after its first edit): for automation, such as MCP command_batch with `atomic` (#1163)",
+            has_doc,
+            undo_group_begin
+        ),
+        cmd!(
+            "edit.undoGroup.end",
+            "End Undo Group",
+            [],
+            None,
+            "{cancel?: bool} close the undo group: its edits stay one undo step or, with `cancel`, are undone",
+            has_doc,
+            undo_group_end
+        ),
         cmd!("edit.cut", "Cut", ["Edit"], Some("Cmd+X"), "{} (the Artboard tool chosen: artboard.cut)", has_selection_or_artboard_tool, cut),
         cmd!("edit.copy", "Copy", ["Edit"], Some("Cmd+C"), "{} (the Artboard tool chosen: artboard.copy)", has_selection_or_artboard_tool, copy),
         cmd!(
@@ -167,6 +185,22 @@ pub(crate) fn typing_in_progress(s: &Session) -> bool {
     s.active().and_then(|d| d.interaction.as_ref()).is_some_and(|it| it.label == "Typing" && it.preview.is_some())
 }
 
+fn undo_group_begin(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.undoGroup.begin";
+    let label = match p.get("label") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(l)) if !l.trim().is_empty() && l.chars().count() <= 200 => Some(l.trim().to_string()),
+        Some(_) => return Err(bad(C, "`label` must be a non-empty name of at most 200 characters")),
+    };
+    s.begin_named_undo_group(label);
+    ok()
+}
+
+fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
+    s.end_undo_group(bool_or(p, "cancel", false));
+    ok()
+}
+
 fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     // What is still in progress (typing, a drag) is the step to undo: keep it first, so Undo takes
     // back only that and Redo brings it back, instead of dropping it and undoing the step before.
@@ -268,6 +302,8 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return super::docmenu::guide_remove(s, &json!({}));
     }
     let st = s.doc()?;
+    // Guides selected with the art go with it (not when ids are given).
+    let with_guides = explicit.is_none();
     let targets = explicit.unwrap_or_else(|| st.selection.in_paint_order(&st.doc));
     // Keep the selected ids themselves, without promoting compound members. Delete a selected
     // ancestor just once; its selected descendants leave with it. Layers themselves are kept.
@@ -283,6 +319,10 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Clear", |d, sel| {
         for id in &ids {
             d.remove(*id)?;
+        }
+        if with_guides {
+            let gone = sel.guides.clone();
+            d.retain_guides(sel, |i, _| !gone.contains(&i));
         }
         sel.clear();
         Ok(())
@@ -346,7 +386,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     let off = s.prefs.paste_offset;
     let st = s.doc()?;
     let same_doc = clip.source_doc == Some(st.uid);
-    let parent = st.insertion_parent();
+    let parent = st.target_parent()?;
     // A copied artboard comes back with its art: right of the last artboard, or where it was
     // (Paste in Place, in Front, in Back). Paste on All Artboards pastes only the art.
     let board = clip

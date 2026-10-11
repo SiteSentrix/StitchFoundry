@@ -48,7 +48,6 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	数值较小时紧贴所绘线条，较大时锚点较少、曲线更平滑。
 	A new preset starting from the selected one	以所选预设为基础的新预设
 	A saved copy of the selected preset	所选预设的副本
-	About StitchFoundry	关于 StitchFoundry
 	above	以上
 	Absolute Position	绝对位置
 	Accurate	精确
@@ -1488,6 +1487,7 @@
 	Move Plane to Match Object	移动平面以符合对象
 	Move Slices	移动切片
 	Move Spine Point	移动脊线点
+	Reshape Spine Segment	整形脊线线段
 	Move Swatch	移动色板
 	Move Up	上移
 	Move…	移动…
@@ -1969,6 +1969,11 @@
 	Proof Colors	校样颜色
 	Proof Setup	校样设置
 	Properties	属性
+	Proportional Metrics	比例度量
+	Digits	数字
+	Arabic	阿拉伯数字
+	Hindi	印地数字
+	Farsi	波斯数字
 	Proportional Oldstyle	比例旧式数字
 	Pucker & Bloat…	缩拢与膨胀…
 	Pucker Tool	收缩工具
@@ -1982,7 +1987,6 @@
 	Quarter Space	四分之一空格
 	Quick Actions	快速操作
 	Quickly start a new file	快速新建文件
-	Quit StitchFoundry	退出 StitchFoundry
 	Radar Graph Tool	雷达图工具
 	Radial	径向
 	Radial Glows	径向光晕
@@ -2068,6 +2072,9 @@
 	Redefine Symbol	重新定义符号
 	Redefine {kind} Style	重新定义{kind}样式
 	Redo	重做
+	List Folder	列出文件夹
+	Begin Undo Group	开始还原组
+	End Undo Group	结束还原组
 	Redo {name}	重做 {name}
 	Redo {}	重做 {}
 	Reduce Colors	减少颜色
@@ -2100,7 +2107,6 @@
 	{count} folder(s) or file(s) couldn't be read	有 {count} 个文件夹或文件无法读取
 	The search stopped at its limit: search a smaller folder.	搜索已达上限而停止：请搜索较小的文件夹。
 	Copy only fonts you own or are licensed to install.	只复制您拥有或已获得安装许可的字体。
-	StitchFoundry copies the fonts to {folder}.	StitchFoundry 会将字体复制到 {folder}。
 	Registered Trademark Symbol	注册商标符号
 	Registration marks	对位标记
 	Registry name:	登录名称：
@@ -2198,7 +2204,6 @@
 	Revert	恢复
 	Revert to the saved version of “{name}”?	要恢复为“{name}”已存储的版本吗？
 	Replace “{name}”, the file this document was opened from?	要替换“{name}”（打开此文档的源文件）吗？
-	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	打开时略去了 StitchFoundry 尚无法读取的内容（{what}），替换该文件会永久丢失这些内容。要保留它们，请以其他名称存储。
 	Revolve…	回转…
 	RGB Color	RGB 颜色
 	Right	右
@@ -2514,6 +2519,7 @@
 	Size Tile to Art	使拼贴适合图稿
 	Size/Leading	字号/行距
 	Size:	尺寸：
+	Ridges per segment:	每段起伏数：
 	Size: {size}  Tracking: {tracking}	大小：{size}  字距：{tracking}
 	Skew	倾斜
 	Skin Tone Ramps	肤色渐变
@@ -2782,6 +2788,9 @@
 	Tool Options…	工具选项…
 	Toolbar: Advanced / Basic	工具栏：高级 / 基本
 	Toolbar: Single/Double Column	工具列：单列/双列
+	Toolbar: Add Tool	工具栏：添加工具
+	Toolbar: Remove Tool	工具栏：移除工具
+	Toolbar: Reset	工具栏：重置
 	Toolbars	工具栏
 	Tools	工具
 	Top	上
@@ -2976,10 +2985,6 @@
 	Vector Effects	矢量效果
 	Vector Halftone	矢量半色调
 	Vector Halftone…	矢量半调…
-	StitchFoundry	StitchFoundry
-	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry 上次未正常退出。以下文档有未存储的更改：
-	StitchFoundry Help…	StitchFoundry 说明…
-	StitchFoundry on GitHub	GitHub 上的 StitchFoundry
 	Vectors	矢量
 	Version:	版本：
 	Vertical	竖排
@@ -3018,7 +3023,6 @@
 	Web Snap:	Web 色偏：
 	Weight	粗细
 	Weight:	粗细：
-	Welcome to StitchFoundry	欢迎使用 StitchFoundry
 	When pasting text	粘贴文字时
 	White	白色
 	Widget Position:	Widget 位置：
@@ -3153,7 +3157,6 @@
 	  — {n} characters from another font	  — {n} 个字符来自其他字体
 	[Normal Character Style]	[正常字符样式]
 	[Normal Paragraph Style]	[正常段落样式]
-	StitchFoundry Defaults	StitchFoundry 默认
 	Menu Commands	菜单命令
 	Tool	工具
 	Command	命令
@@ -3265,10 +3268,7 @@
 	Visible & Printable Layers	可见且可打印的图层
 	SVG 1.1	SVG 1.1
 	Unsorted	不排序
-	Differences from StitchFoundry Default:	与 StitchFoundry 默认设置的差异：
 	Differences from [Default]:	与 [默认] 的差异：
-	Keeps the document editable: StitchFoundry reopens the PDF with nothing lost. For files you'll edit again.	保持文档可编辑：StitchFoundry 可无损重新打开该 PDF。适合还会再次编辑的文件。
-	StitchFoundry Default	StitchFoundry 默认设置
 	PDF 1.7	PDF 1.7
 	[Default]	[默认]
 	[Custom]	[自定义]
@@ -3281,7 +3281,6 @@
 	[PDF/X-4:2010]	[PDF/X-4:2010]
 	[Press Quality]	[印刷质量]
 	[Smallest File Size]	[最小文件大小]
-	[StitchFoundry Default]	[StitchFoundry 默认设置]
 	High Resolution	高分辨率
 	Maximize Editability	最大化可编辑性
 	Preserve Appearance	保留外观
@@ -3359,7 +3358,6 @@
 	Technical Drawing	技术绘图
 	Photo Low Fidelity	低保真照片
 	Restricted Colors	受限颜色
-	StitchFoundry Generic CMYK (SWOP-like)	StitchFoundry 通用 CMYK (类 SWOP)
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	Working RGB	工作 RGB
 	Dot Gain 15%	网点扩大 15%
@@ -3388,7 +3386,6 @@
 # The Layers panel, the graphics processor preference and the font menu's filters.
 	All Scripts	所有文字系统
 	Any Kind	所有类型
-	Applies the next time StitchFoundry starts.	下次启动 StitchFoundry 时生效。
 	Collapse to Icons	折叠为图标
 	Decorative	装饰
 	Dim Images to:	图像变暗至：
@@ -3397,6 +3394,7 @@
 	Graphics: {adapter}	显卡：{adapter}
 	Japanese	日文
 	Latin	拉丁文
+	Thai	泰文
 	Layer Options	图层选项
 	Layers Panel Options	图层面板选项
 	Monospaced	等宽
@@ -3506,6 +3504,7 @@ axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	两者
 	Drag to move	拖动以移动
+	Drag to move out of the set	拖动以移出该组合
 	Drag to float as a toolbar	拖动使其浮动为工具栏
 	Put back in the toolbar	放回工具栏
 	Float Panel	浮动面板
@@ -3518,7 +3517,6 @@ axis	Both	两者
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	服务
-	Hide StitchFoundry	隐藏 StitchFoundry
 	Bring All to Front	前置全部窗口
 	Settings	设置
 	Break Link	断开链接
@@ -3527,6 +3525,8 @@ axis	Both	两者
 	Images: link to the file instead of only embedding it.	图像：链接到文件，而不只是嵌入。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft 文档：一个锁定对象，文件更改时随之更新。
 	A file dialog is open: choose there first	文件对话框已打开：请先在其中选择
+	The document was closed while its file dialog was open	文件对话框打开期间，文档已关闭
+	The dialog was closed before its file dialog answered	文件对话框给出结果之前，对话框已关闭
 	Expand Shaper Group	扩展 Shaper 组
 	Release Shaper Group	释放 Shaper 组
 	Select Shaper Face	选择 Shaper 区域
@@ -3657,6 +3657,14 @@ effect	Vertical	垂直
 	Define a variable first	请先定义一个变量
 	Text	文本
 	Visibility	可见性
+# Shared panel docking
+	Activate Panel	激活面板
+	Change Panel Layout	更改面板布局
+	Close Panel	关闭面板
+	Move Panel	移动面板
+	Group with	组合到
+	Resize panels	调整面板大小
+	Resize panel window	调整面板窗口大小
 
 # Revolve profile guidance.
 
@@ -3712,6 +3720,29 @@ lighting	Light	光源
 	Stroke Pressure	描边压力
 	Right Diagonal	右对角线
 	Left Diagonal	左对角线
+	Vertical Guide	垂直参考线
+	Horizontal Guide	水平参考线
+	Move Guide to Layer	将参考线移至图层
+	Linux Display Server	Linux 显示服务器
+	X11 (XWayland)	X11 (XWayland)
+	About StitchFoundry	关于 StitchFoundry
+	Quit StitchFoundry	退出 StitchFoundry
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry 会将字体复制到 {folder}。
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	打开时略去了 StitchFoundry 尚无法读取的内容（{what}），替换该文件会永久丢失这些内容。要保留它们，请以其他名称存储。
+	StitchFoundry	StitchFoundry
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry 上次未正常退出。以下文档有未存储的更改：
+	StitchFoundry Help…	StitchFoundry 说明…
+	StitchFoundry on GitHub	GitHub 上的 StitchFoundry
+	Welcome to StitchFoundry	欢迎使用 StitchFoundry
+	StitchFoundry Defaults	StitchFoundry 默认
+	Differences from StitchFoundry Default:	与 StitchFoundry 默认设置的差异：
+	Keeps the document editable: StitchFoundry reopens the PDF with nothing lost. For files you'll edit again.	保持文档可编辑：StitchFoundry 可无损重新打开该 PDF。适合还会再次编辑的文件。
+	StitchFoundry Default	StitchFoundry 默认设置
+	[StitchFoundry Default]	[StitchFoundry 默认设置]
+	StitchFoundry Generic CMYK (SWOP-like)	StitchFoundry 通用 CMYK (类 SWOP)
+	Applies the next time StitchFoundry starts.	下次启动 StitchFoundry 时生效。
+	Hide StitchFoundry	隐藏 StitchFoundry
+
 # Embroidery (StitchFoundry)
 	Add Inclination Line	添加针迹方向线
 	After the selection	所选对象之后
@@ -3871,6 +3902,7 @@ lighting	Light	光源
 	Arrow	箭头
 	Stitch Lines	针迹线
 	Tatami	榻榻米
+
 # Embroidery (StitchFoundry), phase 1
 	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	由 SiteSentrix 制作，基于 ArtCraft 团队的 VectorCraft。MIT OR Apache-2.0。字体：Source Sans 3、Inter、JetBrains Mono (OFL)。图标：Lucide (ISC) + VectorCraft。
 	Version {version} — open-source machine embroidery digitizing in pure Rust.	版本 {version} — 以纯 Rust 打造的开放原始码电脑刺绣制版软件。

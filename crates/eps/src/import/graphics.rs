@@ -339,6 +339,12 @@ fn turn(a: f64, b: f64) -> f64 {
     if d > std::f64::consts::PI { d - std::f64::consts::TAU } else { d }
 }
 
+/// The angle from `a` counterclockwise to `b` (degrees, 0 to 360), worked out from what is left
+/// of each after whole turns.
+fn ccw_turn(a: f64, b: f64) -> f64 {
+    (b % 360.0 - a % 360.0).rem_euclid(360.0)
+}
+
 impl Interp<'_> {
     /// User space → document space.
     pub fn xf(&self) -> Affine {
@@ -436,18 +442,19 @@ impl Interp<'_> {
 
     /// `arc` / `arcn`: from angle `a1` to `a2` (degrees, counter-clockwise or clockwise).
     fn arc(&mut self, c: Point, r: f64, a1: f64, a2: f64, ccw: bool) -> Res {
-        let (a1, mut a2) = (a1.to_radians(), a2.to_radians());
-        let tau = std::f64::consts::TAU;
-        if ccw {
-            while a2 < a1 {
-                a2 += tau;
-            }
+        // `arc` raises `a2` by multiples of 360 until it is at least `a1`, and `arcn` lowers it
+        // until it is at most `a1` (PLRM 3rd ed., `arc` and `arcn` in chapter 8). Those sweeps,
+        // and the first endpoint, are worked out from what is left of each angle after whole turns.
+        let sweep = if ccw && a2 < a1 {
+            ccw_turn(a1, a2)
+        } else if !ccw && a2 > a1 {
+            -ccw_turn(a2, a1)
         } else {
-            while a2 > a1 {
-                a2 -= tau;
-            }
-        }
-        let sweep = (a2 - a1).clamp(-tau * 4.0, tau * 4.0);
+            a2 - a1
+        };
+        let tau = std::f64::consts::TAU;
+        let sweep = sweep.to_radians().clamp(-tau * 4.0, tau * 4.0);
+        let a1 = (a1 % 360.0).to_radians();
         let start = c + Vec2::new(r * a1.cos(), r * a1.sin());
         self.append_user(std::iter::once(PathEl::MoveTo(start)))?;
         let arc = kurbo::Arc::new(c, Vec2::new(r, r), a1, sweep, 0.0);

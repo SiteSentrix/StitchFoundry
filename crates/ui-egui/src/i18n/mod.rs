@@ -87,8 +87,9 @@ pub static LANGUAGES: [LangInfo; 12] = [
     // Japanese: the whole interface (every menu string and `tl!` literal) and the status and error
     // messages, keeping the product, workspace and perspective preset names in English (`MENU_KEEP_AS_IS`).
     LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
-    // Czech: every menu label (`menu_catalogs_translate_every_menu_label`); panels and dialogs not yet.
-    LangInfo { code: "cs", name: "Čeština", source: include_str!("cs.tsv"), plural: plural_czech, complete_menus: false, catalog: OnceLock::new() },
+    // Czech: the whole interface (every menu string and `tl!` literal) and the status and error
+    // messages, with one/few/other plurals, keeping the same names in English as Spanish.
+    LangInfo { code: "cs", name: "Čeština", source: include_str!("cs.tsv"), plural: plural_czech, complete_menus: true, catalog: OnceLock::new() },
     // German: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `de-*` locale (`de-DE`, `de-AT`, `de-CH`, `de-LU` …) resolves here.
     LangInfo {
@@ -266,6 +267,7 @@ pub fn lang_from_tag(tag: &str) -> Option<Lang> {
 
 /// True when `tag` names the generic `C` / `POSIX` locale (or a variant like `C.UTF-8`), which on
 /// macOS means "no particular language" rather than English: the system language list decides.
+#[cfg(not(target_arch = "wasm32"))]
 fn is_c_locale(tag: &str) -> bool {
     let base = tag.split(['.', '@']).next().unwrap_or("").to_ascii_lowercase();
     matches!(base.as_str(), "c" | "posix")

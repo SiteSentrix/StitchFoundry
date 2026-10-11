@@ -292,7 +292,21 @@ fn run(args: &[String]) -> Result<(), String> {
 
     let mut h = Headless::new();
     let mut out = std::io::stdout().lock();
-    let mut emit = |v: Value| writeln!(out, "{v}").map_err(|e| e.to_string());
+    // A reader that stopped early (a closed pipe) isn't an error, and the batch goes on: its later
+    // steps (an export…) still run, unprinted.
+    let mut closed = false;
+    let mut emit = |v: Value| {
+        if closed {
+            return Ok(());
+        }
+        match writeln!(out, "{v}") {
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                closed = true;
+                Ok(())
+            }
+            r => r.map_err(|e| e.to_string()),
+        }
+    };
     if let Some(path) = &input {
         let r = h.call("app.open", json!({"path": path})).map_err(|e| format!("open {path}: {e}"))?;
         emit(json!({"step": "open", "path": path, "result": r}))?;

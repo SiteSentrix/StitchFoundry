@@ -982,12 +982,11 @@ pub fn link_label(ui: &mut Ui, text: &str) -> Response {
     resp
 }
 
-/// The row of a checkbox or radio button: allocates a 13 pt box plus `label`, draws the label and
-/// returns the box, the response and the box's border colour.
-fn choice_row(ui: &mut Ui, label: &str, enabled: bool) -> (Rect, Response, Color32) {
+/// The row of a checkbox or radio button: allocates a 13 pt box plus `text` (already translated),
+/// draws the text and returns the box, the response and the box's border colour.
+fn choice_row(ui: &mut Ui, text: &str, enabled: bool) -> (Rect, Response, Color32) {
     let t = Tokens::get(ui.ctx());
-    let galley =
-        ui.painter().layout_no_wrap(tl!(label).to_string(), egui::FontId::proportional(12.5), if enabled { t.text } else { t.text_disabled });
+    let galley = ui.painter().layout_no_wrap(text.to_string(), egui::FontId::proportional(12.5), if enabled { t.text } else { t.text_disabled });
     let (rect, resp) =
         ui.allocate_exact_size(vec2(18.0 + galley.size().x, 20.0f32.max(galley.size().y)), if enabled { Sense::click() } else { Sense::hover() });
     let bx = Rect::from_min_size(pos2(rect.left(), rect.center().y - 6.5), Vec2::splat(13.0));
@@ -1009,21 +1008,27 @@ pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
 
 /// [`check`] with tooltip `tip` on the box and its label. Returns true when toggled.
 pub fn check_tip(ui: &mut Ui, label: &str, value: bool, enabled: bool, tip: &str) -> bool {
-    let (clicked, resp) = check_row(ui, label, Some(value), enabled);
+    let (clicked, resp) = check_row(ui, tl!(label), Some(value), enabled);
     resp.on_hover_text(tip);
     clicked
 }
 
 /// Three-state [`check`]: `None` shows a dash (a neutral or mixed state). Returns true when clicked.
 pub fn check3(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> bool {
-    check_row(ui, label, value, enabled).0
+    check_row(ui, tl!(label), value, enabled).0
 }
 
-/// [`check3`], also returning the row's response (what a tooltip goes on: a widget around it never
-/// counts as hovered under the box).
-fn check_row(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> (bool, Response) {
+/// [`check`] for a name of the document's (an artboard's, an asset's), shown as it is, never
+/// translated. Returns true when toggled.
+pub fn check_name(ui: &mut Ui, name: &str, value: bool) -> bool {
+    check_row(ui, name, Some(value), true).0
+}
+
+/// [`check3`] with its `text` already translated, also returning the row's response (what a
+/// tooltip goes on: a widget around it never counts as hovered under the box).
+fn check_row(ui: &mut Ui, text: &str, value: Option<bool>, enabled: bool) -> (bool, Response) {
     let t = Tokens::get(ui.ctx());
-    let (bx, resp, border) = choice_row(ui, label, enabled);
+    let (bx, resp, border) = choice_row(ui, text, enabled);
     let checked = value == Some(true);
     ui.painter().rect_filled(bx, CornerRadius::same(2), if checked && enabled { t.accent_strong } else { t.input });
     ui.painter().rect_stroke(bx, CornerRadius::same(2), Stroke::new(1.0, border), StrokeKind::Inside);
@@ -1045,7 +1050,7 @@ fn check_row(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> (b
 /// Radio button in the style of [`check`], with a disabled state. Returns true when clicked.
 pub fn radio(ui: &mut Ui, label: &str, selected: bool, enabled: bool) -> bool {
     let t = Tokens::get(ui.ctx());
-    let (bx, resp, border) = choice_row(ui, label, enabled);
+    let (bx, resp, border) = choice_row(ui, tl!(label), enabled);
     let c = bx.center();
     ui.painter().circle(c, 6.0, if selected && enabled { t.accent_strong } else { t.input }, Stroke::new(1.0, border));
     if selected {
@@ -1170,8 +1175,8 @@ fn spin_generic(
             && let Some(p) = sresp.interact_pointer_pos()
             && let Some(v) = value
         {
-            let nv = if up.contains(p) { v + step } else { v - step };
-            out = Some(SpinPick::Value(nv.max(min)));
+            let modifiers = ui.input(|i| i.modifiers);
+            out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
         if let Some(v) = field(ui, fw) {
@@ -1196,6 +1201,14 @@ fn spin_generic(
         }
     });
     out
+}
+
+/// Spinner buttons follow the same modifier sizes as ↑/↓ in a focused number field:
+/// Shift ×10, Ctrl/Cmd ÷10, otherwise the caller's normal step.
+fn spinner_step(value: f64, step: f64, min: f64, up: bool, modifiers: egui::Modifiers) -> f64 {
+    let multiplier = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)).map_or(1.0, |(_, factor)| *factor);
+    let delta = step * multiplier;
+    (value + if up { delta } else { -delta }).max(min)
 }
 
 /// Drag phase of a live slider/handle: previews while dragging, commits on release.
@@ -1825,4 +1838,22 @@ pub fn text_presets(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, val
         });
     });
     out
+}
+
+#[cfg(test)]
+mod spinner_modifier_tests {
+    use super::*;
+
+    #[test]
+    fn shift_steps_stroke_weight_by_ten_points() {
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::SHIFT), 24.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 4.0);
+    }
+
+    #[test]
+    fn unmodified_and_command_steps_keep_existing_behavior() {
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::NONE), 15.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND), 13.9);
+        assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 0.0);
+    }
 }
