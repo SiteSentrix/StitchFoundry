@@ -189,15 +189,16 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// The rows a panel command acts on: `ids` or `id`, else the highlighted rows, else the current
 /// layer (capped at [`MAX_ROWS`]).
-pub(crate) fn rows_param(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    let mut ids = match (ids_param(p, "ids"), id_param(p, "id")) {
-        (Some(ids), _) => ids,
-        (None, Some(id)) => vec![id],
-        (None, None) => {
-            let st = s.doc()?;
-            let rows = st.highlighted_rows();
-            if rows.is_empty() { st.current_layer().into_iter().collect() } else { rows }
-        }
+pub(crate) fn rows_param(s: &Session, p: &Value, command: &str) -> Result<Vec<NodeId>> {
+    // Presence is explicit intent: validate every target before fallback, truncation or edits.
+    let mut ids = if p.get("ids").is_some() {
+        checked_ids_param(s, p, "ids", command)?
+    } else if let Some(id) = p.get("id") {
+        vec![checked_id(s, id, command)?]
+    } else {
+        let st = s.doc()?;
+        let rows = st.highlighted_rows();
+        if rows.is_empty() { st.current_layer().into_iter().collect() } else { rows }
     };
     ids.truncate(MAX_ROWS);
     Ok(ids)
@@ -457,7 +458,7 @@ fn new_sublayer(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn delete_rows(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = rows_param(s, p)?;
+    let ids = rows_param(s, p, "layer.delete")?;
     let st = s.doc()?;
     let ids = row_roots(&st.doc, &ids);
     if ids.is_empty() {
@@ -484,7 +485,7 @@ fn delete_rows(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = rows_param(s, p)?;
+    let ids = rows_param(s, p, "layer.duplicate")?;
     let ids = row_roots(&s.doc()?.doc, &ids);
     if ids.is_empty() {
         return Err(bad("layer.duplicate", "no such rows"));
@@ -551,7 +552,7 @@ fn highlight(s: &mut Session, p: &Value) -> Result<Value> {
 fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setProps";
     check_options(C, p)?;
-    let ids = rows_param(s, p)?;
+    let ids = rows_param(s, p, C)?;
     if ids.is_empty() {
         return Err(bad(C, "no rows"));
     }
@@ -567,12 +568,11 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn collect(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.collectInNew";
-    let ids = match ids_param(p, "ids") {
-        Some(ids) => ids,
-        None => {
-            let rows = s.doc()?.highlighted_rows();
-            if rows.is_empty() { super::edit::selected_roots(s)? } else { rows }
-        }
+    let ids = if p.get("ids").is_some() {
+        checked_ids_param(s, p, "ids", C)?
+    } else {
+        let rows = s.doc()?.highlighted_rows();
+        if rows.is_empty() { super::edit::selected_roots(s)? } else { rows }
     };
     let ids = row_roots(&s.doc()?.doc, &ids);
     let Some(top) = ids.last().copied() else { return Err(bad(C, "select rows or objects to collect")) };

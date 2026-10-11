@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             None,
             "{ids?} hide every top-level layer but those holding the highlighted rows (else the current layer), which show. One undo step → {count}",
             has_doc,
-            |s, p| others(s, p, Flag::Visible, false)
+            |s, p| others(s, p, Flag::Visible, false, "layer.hideOthers")
         ),
         cmd!("layer.showAll", "Show All Layers", ["Window", "Layers"], None, "{} show every layer and sublayer → {count}", has_doc, |s, _| all(
             s,
@@ -98,7 +98,7 @@ pub fn specs() -> Vec<CommandSpec> {
             None,
             "{ids?} turn Preview off (outline view) for every top-level layer but those holding the highlighted rows (else the current layer), which preview → {count}",
             has_doc,
-            |s, p| others(s, p, Flag::Preview, false)
+            |s, p| others(s, p, Flag::Preview, false, "layer.outlineOthers")
         ),
         cmd!(
             "layer.previewAll",
@@ -116,7 +116,7 @@ pub fn specs() -> Vec<CommandSpec> {
             None,
             "{ids?} lock every top-level layer but those holding the highlighted rows (else the current layer), which unlock → {count}",
             has_doc,
-            |s, p| others(s, p, Flag::Locked, true)
+            |s, p| others(s, p, Flag::Locked, true, "layer.lockOthers")
         ),
         cmd!(
             "layer.unlockAll",
@@ -196,16 +196,16 @@ fn set_flag(s: &mut Session, changes: Vec<(NodeId, bool)>, flag: Flag, label: &s
 }
 
 /// The top-level layers holding the rows a command acts on.
-fn kept_layers(s: &Session, p: &Value) -> Result<HashSet<NodeId>> {
-    let ids = rows_param(s, p)?;
+fn kept_layers(s: &Session, p: &Value, command: &str) -> Result<HashSet<NodeId>> {
+    let ids = rows_param(s, p, command)?;
     let d = &s.doc()?.doc;
     Ok(ids.iter().filter_map(|id| d.layer_of(*id)).collect())
 }
 
 /// Every top-level layer but the kept ones set to `v`, and the kept ones to the opposite: Alt-click
 /// on a hidden layer's eye shows just that layer (#1158).
-fn others(s: &mut Session, p: &Value, flag: Flag, v: bool) -> Result<Value> {
-    let keep = kept_layers(s, p)?;
+fn others(s: &mut Session, p: &Value, flag: Flag, v: bool, command: &str) -> Result<Value> {
+    let keep = kept_layers(s, p, command)?;
     let changes = s.doc()?.doc.layers.iter().map(|l| (l.id, !keep.contains(&l.id) == v)).collect();
     set_flag(s, changes, flag, flag.label(v))
 }
@@ -221,7 +221,7 @@ fn all(s: &mut Session, flag: Flag, v: bool) -> Result<Value> {
 }
 
 fn template(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = rows_param(s, p)?;
+    let ids = rows_param(s, p, "layer.template")?;
     let d = &s.doc()?.doc;
     let ids: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(Node::is_layer)).collect();
     let Some(first) = ids.first().and_then(|id| d.node(*id)) else { return Err(bad("layer.template", "select a layer")) };
@@ -268,7 +268,7 @@ fn merge_into(d: &mut Document, into: NodeId, others: &[NodeId]) -> Result<()> {
 
 fn merge(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.merge";
-    let ids = rows_param(s, p)?;
+    let ids = rows_param(s, p, C)?;
     let st = s.doc()?;
     let d = &st.doc;
     let mut seen = HashSet::new();
@@ -300,7 +300,10 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.flatten";
     let st = s.doc()?;
     let d = &st.doc;
-    let from = id_param(p, "id").or_else(|| st.highlighted_rows().last().copied()).or(st.current_layer());
+    let from = match p.get("id") {
+        Some(id) => Some(checked_id(s, id, C)?),
+        None => st.highlighted_rows().last().copied().or(st.current_layer()),
+    };
     let into = from.and_then(|id| d.layer_of(id)).ok_or_else(|| bad(C, "no layer"))?;
     if !d.node(into).is_some_and(|n| n.visible) {
         return Err(EngineError::Other("the layer to flatten into is hidden".into()));
@@ -389,7 +392,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.reverse";
-    let ids = rows_param(s, p)?;
+    let ids = rows_param(s, p, C)?;
     let d = &s.doc()?.doc;
     let ids = row_roots(d, &ids);
     // Rows grouped by the layer or group holding them (None: top-level layers).
