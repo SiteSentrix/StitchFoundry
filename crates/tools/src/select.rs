@@ -120,9 +120,17 @@ impl MoveSnap {
             guides = ov;
         }
         if let (Some(t), Some(b)) = (targets, self.bounds) {
-            let (adj, ov) = t.snap_rect(b + d, cx.snap_tol());
-            d += adj;
-            guides = ov;
+            // The point the selection was grabbed by, near another object's anchor or centre,
+            // lands on it, rather than the bounds lining up a little beside it (#955).
+            if t.has_point_near(start + d, cx.snap_tol()) {
+                let (q, ov) = t.snap_point(start + d, cx.snap_tol());
+                d = q - start;
+                guides = ov;
+            } else {
+                let (adj, ov) = t.snap_rect(b + d, cx.snap_tol());
+                d += adj;
+                guides = ov;
+            }
         }
         if cx.snap_to_pixel
             && let Some(b) = self.bounds
@@ -531,6 +539,31 @@ mod tests {
 
     fn ev(kind: PointerKind, x: f64, y: f64) -> PointerEvent {
         PointerEvent::new(kind, x, y)
+    }
+
+    /// #955: grabbed by an anchor and dropped near another object's anchor, the anchor lands
+    /// exactly on it with Smart Guides, even where lining the bounds up would leave it beside it.
+    #[test]
+    fn a_move_grabbed_by_an_anchor_lands_it_on_another_anchor() {
+        let (mut d, id) = doc_with_rect();
+        let l = d.layers[0].id;
+        let tri = d.alloc_id();
+        let pts = [Point::new(350.3, 250.0), Point::new(300.0, 320.0), Point::new(420.0, 330.0)];
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(tri, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let (none, mut picked) = (Selection::default(), Selection::default());
+        picked.add(id);
+        let p = paint();
+        let mut t = SelectionTool::default();
+        // Grab the rectangle (not selected yet: no bounding box) by its bottom-right corner
+        // (200, 200); the press selects it, then drop it beside the tip.
+        let before = cx(&d, &none, &p);
+        t.pointer(&before, &ev(PointerKind::Move, 201.0, 201.0));
+        t.pointer(&before, &ev(PointerKind::Down, 201.0, 201.0));
+        let a = t.pointer(&cx(&d, &picked, &p), &ev(PointerKind::Drag, 350.0, 249.8));
+        let Some(Action::Preview(_, v)) = a.get(1) else { panic!("{a:?}") };
+        let (x, y) = (v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap());
+        assert!((200.0 + x - 350.3).abs() < 1e-9 && (200.0 + y - 250.0).abs() < 1e-9, "the corner lands at ({}, {})", 200.0 + x, 200.0 + y);
     }
 
     /// #812: with Smart Guides on, hovering near an object's centre or an anchor labels it, and a
