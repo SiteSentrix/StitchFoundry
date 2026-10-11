@@ -887,6 +887,40 @@ mod area_tests {
         assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().proportional_metrics);
     }
 
+    /// Digits (Character panel menu, Middle Eastern options): a character attribute, saved only
+    /// when set; the text keeps the digits that were typed.
+    #[test]
+    fn digits_are_a_character_attribute_saved_only_when_set() {
+        use vectorcraft_doc::Digits;
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "صفحة 12"})).unwrap()["id"].as_u64().unwrap();
+        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.runs.clone(),
+            _ => panic!("text"),
+        };
+        assert_eq!(runs(&s)[0].style.digits, Digits::Default);
+        assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("digits").is_none());
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        for (key, want) in [("hindi", Digits::Hindi), ("farsi", Digits::Farsi), ("arabic", Digits::Arabic), ("default", Digits::Default)] {
+            s.execute("text.setFormat", &json!({"digits": key})).unwrap();
+            assert!(runs(&s).iter().all(|r| r.style.digits == want));
+            let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+            assert_eq!(saved.get("digits").and_then(|v| v.as_str()), (want != Digits::Default).then_some(key));
+            // The text is as typed: only the glyphs change.
+            assert_eq!(runs(&s).iter().map(|r| r.text.as_str()).collect::<String>(), "صفحة 12");
+        }
+        s.execute("text.setFormat", &json!({"digits": "hindi"})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(runs(&s)[0].style.digits, Digits::Default);
+        let err = s.execute("text.setFormat", &json!({"digits": "roman"})).unwrap_err().to_string();
+        assert!(err.contains("`digits` must be"), "{err}");
+        // Characters selected with the Type tool: only the range takes it (صفحة is 8 bytes).
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 9, "end": 11, "digits": "farsi"})).unwrap();
+        let set: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.digits)).collect();
+        assert_eq!(set, [("صفحة ".to_string(), Digits::Default), ("12".to_string(), Digits::Farsi)]);
+    }
+
     #[test]
     fn new_type_is_composed_with_line_end_half_width_punctuation() {
         use vectorcraft_doc::Mojikumi;
