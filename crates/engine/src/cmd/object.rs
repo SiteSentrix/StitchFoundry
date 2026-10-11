@@ -72,7 +72,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             shear
         ),
-        cmd!("object.transformAgain", "Transform Again", ["Object", "Transform"], Some("Cmd+D"), "{}", has_selection, transform_again),
+        cmd!(
+            "object.transformAgain",
+            "Transform Again",
+            ["Object", "Transform"],
+            Some("Cmd+D"),
+            "{copy?, strokes?, corners?, patterns?, typeAreas?: bool (as object.transform's; default: the value the transform it repeats used, else object.transform's default)} the last transform's matrix on the selection (after a perspective move or scale: that plane-space transform, without these params)",
+            has_selection,
+            transform_again
+        ),
         cmd!(
             "object.nudge",
             "Nudge",
@@ -253,8 +261,8 @@ pub(crate) fn transform_patterns(s: &mut Session, p: &Value, ids: &[NodeId]) -> 
 }
 
 /// Apply `xf` to `ids` (`copy` param: duplicate first; `strokes`/`corners`: see [`scaling`];
-/// `patterns`: see [`transform_patterns`]; `typeAreas`: see [`resize_type_area`]). Records
-/// Transform Again.
+/// `patterns`: see [`transform_patterns`]; `typeAreas`: see [`resize_type_area`]). Outside an
+/// interaction, records `xf` and the options it used for Transform Again.
 pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, p: &Value) -> Result<Value> {
     let copy = bool_or(p, "copy", false);
     let areas = bool_or(p, "typeAreas", false);
@@ -284,7 +292,12 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     };
     let st = s.doc_mut()?;
     if st.interaction.is_none() {
-        st.last_transform = Some((xf, copy));
+        let mut options = json!({ "copy": copy, "typeAreas": areas, "patterns": sc.patterns });
+        if Scaling::factor(xf).is_some() {
+            options["strokes"] = json!(sc.strokes);
+            options["corners"] = json!(!sc.keep_corners);
+        }
+        st.last_transform = Some((xf, options));
         st.last_perspective = None;
     }
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
@@ -393,13 +406,18 @@ fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     apply_transform(s, "Shear", ids, about(o, m), p)
 }
 
-fn transform_again(s: &mut Session, _: &Value) -> Result<Value> {
+/// The last transform's matrix on the selection, with the options `last_transform` keeps for it; an
+/// option that `p` sets to true or false (a recorded Transform Again's) takes precedence.
+fn transform_again(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(again) = s.doc()?.last_perspective.clone() {
         return super::distortcmds::transform_again(s, &again);
     }
-    let (m, copy) = s.doc()?.last_transform.ok_or_else(|| EngineError::Other("no previous transform".into()))?;
+    let (m, mut options) = s.doc()?.last_transform.clone().ok_or_else(|| EngineError::Other("no previous transform".into()))?;
+    if let (Some(o), Some(given)) = (options.as_object_mut(), p.as_object()) {
+        o.extend(given.iter().filter(|(_, v)| v.is_boolean()).map(|(k, v)| (k.clone(), v.clone())));
+    }
     let ids = selected_roots(s)?;
-    apply_transform(s, "Transform Again", ids, m, &json!({ "copy": copy }))
+    apply_transform(s, "Transform Again", ids, m, &options)
 }
 
 enum Arrange {

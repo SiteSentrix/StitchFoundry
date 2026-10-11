@@ -1444,6 +1444,10 @@ its strokes' effects (drop shadow offsets and blur, offsets, radii…; `effect.l
 relative Roughen, Tweak and Zig Zag sizes stay percentages), in groups and layers too. With it off, nothing painted
 changes size, and type keeps its character strokes' weight. With Scale Corners off, live corner radii keep their
 size. The journal entry of a scaling command records the `strokes` and `corners` it used, so actions replay alike.
+`object.transformAgain` applies the last transform's matrix with the `copy`, `strokes`, `corners`, `patterns` and
+`typeAreas` values that transform used, and a true or false value given in its own params takes precedence. After a
+drag of art without a pattern, `patterns` follows the preference `transformPatternTiles`. Its journal entry records
+the `strokes`, `corners` and `patterns` it used, as a transform's does.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"strokes":true}}}

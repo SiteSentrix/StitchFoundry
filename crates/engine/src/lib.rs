@@ -133,8 +133,11 @@ pub struct DocState {
     pub interaction: Option<Interaction>,
     /// Edits made while this is open are one undo step (a scrubbed numeric field).
     pub undo_group: Option<UndoGroup>,
-    /// For Object → Transform → Transform Again (⌘D).
-    pub last_transform: Option<(Affine, bool)>,
+    /// For Object → Transform → Transform Again (⌘D): the last transform's matrix and the options
+    /// Transform Again passes with it. A transform command keeps the `copy`, `typeAreas` and
+    /// `patterns` it used, and `strokes` and `corners` when it scales; a drag keeps the params of its
+    /// last preview with the values that preview noted ([`Session::note_journal`]).
+    pub last_transform: Option<(Affine, Value)>,
     /// What Select → Reselect repeats: the last selection command, its params and the objects
     /// selected when it ran (a Same command's reference objects).
     pub last_selection_cmd: Option<(String, Value, Vec<NodeId>)>,
@@ -1388,7 +1391,14 @@ impl Session {
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
             if let Some(m) = m {
-                st.last_transform = Some((m, copy));
+                // The options are the last preview's params with the values it noted, without the
+                // matrix and the ids.
+                let mut options = preview.1.clone();
+                if let Some(o) = options.as_object_mut() {
+                    o.remove("matrix");
+                    o.remove("ids");
+                }
+                st.last_transform = Some((m, options));
                 st.last_perspective = None;
             }
         }
