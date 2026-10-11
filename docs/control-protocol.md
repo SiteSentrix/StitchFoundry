@@ -246,6 +246,13 @@ that open its flyout raise the strip instead. The strips (`ui.floating_flyouts` 
 and the strip's top-left corner) are saved with the preferences and in user workspaces; the built-in workspaces
 float none.
 
+Edit Toolbar: the ••• button at the bottom of the toolbar (or `window.editToolbar {open?}`) opens the All Tools
+drawer beside the toolbar; Escape or a click outside closes it. While it is open, `ui.drag` a tool from it onto the
+toolbar to add it (onto a button's top or bottom edge: its own slot before or after; onto its middle: into its
+group), from the toolbar into it to remove it, or within the toolbar to move it. `toolbar.addTool {tool, slot?,
+place?}`, `toolbar.removeTool {tool, group?}` and `toolbar.reset` do the same for the current Basic or Advanced
+toolbar and return its slots; the edits (`ui.toolbar_edits`) are saved with the preferences.
+
 The Contextual Task Bar: its handle (the grip at its left end) drags it anywhere on the canvas, which always holds
 it whole, also when the window shrinks. Unpinned, the bar keeps that offset as it follows the selection, until
 another document becomes active. Its More Options (…) menu has Hide Bar (`window.taskBar`); Pin Bar Position

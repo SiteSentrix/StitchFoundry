@@ -52,7 +52,6 @@ fn kinds_map_to_their_dialogs() {
         assert_eq!(DialogKind::of(kind), Some(want), "{kind}");
     }
     assert_eq!(DialogKind::of("nope"), None);
-    assert!(spec("allTools").ok.is_none());
     assert!(spec("effect").preview && spec("recolor").preview && !spec("move").preview);
     assert!(spec("preferences").window.is_some() && spec("rectangle").window.is_none());
 }
@@ -89,7 +88,6 @@ fn every_dialog_draws() {
     for (kind, fields) in [
         ("move", json!({"dx": "0 pt", "dy": "0 pt"})),
         ("average", json!({"axis": "both"})),
-        ("allTools", json!({})),
         (crate::unsaved::KIND, json!({"index": 0, "name": "Untitled-1", "then": "close"})),
         ("newWorkspace", json!({"name": "Mine"})),
         ("shortcuts", json!({})),
@@ -107,10 +105,6 @@ fn enter_confirms_through_the_dialog_spec() {
     frame(&mut app, enter());
     assert!(app.ui.dialog.is_none());
     assert_eq!(objects(&app), 1);
-    // All Tools has no OK: Enter leaves it open.
-    open(&mut app, "allTools", json!({}));
-    frame(&mut app, enter());
-    assert!(app.ui.dialog.is_some());
     // An unregistered kind still closes on OK without running anything.
     open(&mut app, "unregistered", json!({}));
     assert_eq!(confirm(&mut app), Ok(serde_json::Value::Null));

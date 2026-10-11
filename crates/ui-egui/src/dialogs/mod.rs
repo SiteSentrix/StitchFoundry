@@ -7,7 +7,6 @@
 //! Shortcuts, Workspaces, Find Font) draw their own window.
 
 mod about;
-mod all_tools;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
@@ -211,7 +210,6 @@ registry! {
     PathOp: ["average", "offsetPath", "simplify", "splitIntoGrid"] => path_ops::SPEC,
     DocumentSetup: ["documentSetup"] => document_setup::SPEC,
     ArtboardOptions: [artboard_options::KIND] => artboard_options::SPEC,
-    AllTools: ["allTools"] => all_tools::SPEC,
     ExportForScreens: ["exportForScreens"] => export_for_screens::SPEC,
     Recolor: [recolor::KIND] => recolor::SPEC,
     Command: ["command"] => command::SPEC,
