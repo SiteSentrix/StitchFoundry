@@ -7,7 +7,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::marks::{MarkStyle, TrimMarks};
-use vectorcraft_doc::{Appearance, ImageObject, LiveShape, Node, NodeId, NodeKind, RasterColorModel, RasterEffectsSettings};
+use vectorcraft_doc::{Appearance, ImageObject, LiveShape, Node, NodeId, NodeKind, RasterColorModel, RasterEffectsSettings, Scaling};
 use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, Vec2};
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
@@ -156,7 +156,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (locked and hidden art only with prefs moveLockedWithArtboard)} lay the artboards out in their order, the grid's top-left at the first artboard's → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (locked and hidden art only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} lay the artboards out in their order, the grid's top-left at the first artboard's → {artboards, rows, columns}",
             has_doc,
             rearrange_artboards
         ),
@@ -870,35 +870,40 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = bool_or(p, "moveArtwork", true);
     let locked_and_hidden = s.prefs.move_locked_with_artboard;
-    let scale_strokes = false;
-    // How far each artboard moves: the grid's top-left is at the first artboard's.
-    let rects: Vec<Rect> = s.doc()?.doc.artboards.iter().map(|a| a.rect).collect();
+    let d = &s.doc()?.doc;
+    let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
-    let origin = rects.first().map_or(Point::ZERO, |r| r.origin());
-    let origins = super::newdoc::grid_origins_rc(&sizes, origin, (rows, cols), spacing, layout == L::GridByColumn, rtl);
+    let first = rects.first().map_or(Point::ZERO, |r| r.origin());
+    let origins = super::newdoc::grid_origins_rc(&sizes, first, (rows, cols), spacing, layout == L::GridByColumn, rtl);
     let deltas: Vec<Vec2> = rects.iter().zip(origins).map(|(r, o)| o - r.origin()).collect();
     // When no artboard moves more than 1e-9 pt on either axis, or there is none, the document and
     // its undo history stay as they are.
     if deltas.iter().all(|dl| dl.x.abs() <= 1e-9 && dl.y.abs() <= 1e-9) {
         return Ok(json!({ "artboards": count, "rows": rows, "columns": cols }));
     }
+    // With moveArtwork, each top-level object moves with the artboard its center is on; locked and
+    // hidden art moves only when prefs moveLockedWithArtboard is on.
+    let art: Vec<(NodeId, Vec2)> = if move_art {
+        d.layers
+            .iter()
+            .filter(|l| l.rides_with_artboard(locked_and_hidden))
+            .flat_map(|l| l.children().into_iter().flatten())
+            .filter(|n| n.rides_with_artboard(locked_and_hidden))
+            .filter_map(|n| {
+                let c = n.geometric_bounds()?.center();
+                let dl = *rects.iter().position(|r| r.contains(c)).and_then(|i| deltas.get(i))?;
+                (dl != Vec2::ZERO).then_some((n.id, dl))
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+    let ids: Vec<NodeId> = art.iter().map(|(id, _)| *id).collect();
+    let sc = Scaling { patterns: super::object::transform_patterns(s, p, &ids)?, ..Scaling::default() };
     s.edit("Rearrange Artboards", |d, _| {
-        if move_art {
-            let tops: Vec<(NodeId, Point)> = d
-                .layers
-                .iter()
-                .filter(|l| l.rides_with_artboard(locked_and_hidden))
-                .flat_map(|l| l.children().into_iter().flatten())
-                .filter(|n| n.rides_with_artboard(locked_and_hidden))
-                .filter_map(|n| Some((n.id, n.geometric_bounds()?.center())))
-                .collect();
-            for (id, c) in tops {
-                if let Some(&dl) = rects.iter().position(|r| r.contains(c)).and_then(|i| deltas.get(i))
-                    && dl != Vec2::ZERO
-                    && let Some(n) = d.node_mut(id)
-                {
-                    n.transform(Affine::translate(dl), scale_strokes);
-                }
+        for (id, dl) in &art {
+            if let Some(n) = d.node_mut(*id) {
+                n.transform(Affine::translate(*dl), sc);
             }
         }
         let mut moved = vec![];
