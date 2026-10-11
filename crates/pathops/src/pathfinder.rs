@@ -358,9 +358,11 @@ impl FaceMerger {
 
 /// Pathfinder Outline: split every shape's boundary at junctions of the arrangement.
 fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
+    // Sorted by x (then y), so a segment needs only the junctions inside its control box.
     let junctions = arr.junctions();
     let scale = shapes.iter().filter_map(|s| s.path.control_bounds()).map(|r| r.width().max(r.height())).fold(1.0, f64::max);
     let tol = scale * 1e-7;
+    let reach = tol.max(1e-6);
     // (chain, key, source index)
     let mut chains: Vec<(Vec<Seg>, u64)> = Vec::new();
     for s in shapes {
@@ -375,11 +377,19 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
             for i in 0..sp.segment_count() {
                 let c = sp.segment(i);
                 let line = sp.segment_is_line(i);
+                // A point within `reach` of the curve is within `reach` of its control box (the
+                // curve stays inside its control points' hull), so the other junctions can't match.
+                let b = kurbo::Shape::bounding_box(&c).union(kurbo::Rect::from_points(c.p1, c.p2)).inflate(reach, reach);
+                let lo = junctions.partition_point(|j| j.x < b.x0);
                 let mut ts: Vec<f64> = junctions
+                    .get(lo..)
+                    .unwrap_or_default()
                     .iter()
+                    .take_while(|j| j.x <= b.x1)
+                    .filter(|j| j.y >= b.y0 && j.y <= b.y1)
                     .filter_map(|&j| {
                         let nr = c.nearest(j, 1e-9);
-                        (nr.distance_sq.sqrt() <= tol.max(1e-6)).then_some(nr.t)
+                        (nr.distance_sq.sqrt() <= reach).then_some(nr.t)
                     })
                     .collect();
                 ts.sort_by(f64::total_cmp);
@@ -417,24 +427,41 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
             }
         }
     }
-    // De-duplicate coincident chains, keeping the front-most key (later shapes overwrite).
+    // De-duplicate coincident chains, keeping the front-most key (later shapes overwrite). A
+    // match has its midpoint within `near` of this one's, so only the chains in the grid cells
+    // around it are candidates; the first of them in `out` order is the one a scan would find.
     let mut out: Vec<(Vec<Seg>, u64)> = Vec::new();
+    let mut sigs: Vec<(Point, Point, Point)> = Vec::new();
     let sig = |c: &[Seg]| -> (Point, Point, Point) {
         let a = c[0].c.p0;
         let b = c[c.len() - 1].c.p3;
         let mid = mid_point(c);
         (a, b, mid)
     };
+    let d = reach * 10.0;
+    let near = |p: Point, q: Point| p.distance(q) <= d;
+    let cell = |p: Point| ((p.x / d).floor() as i64, (p.y / d).floor() as i64);
+    let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
     for (chain, key) in chains {
         let (a, b, m) = sig(&chain);
-        let near = |p: Point, q: Point| p.distance(q) <= tol.max(1e-6) * 10.0;
-        if let Some(e) = out.iter_mut().find(|(c, _)| {
-            let (a2, b2, m2) = sig(c);
-            near(m, m2) && ((near(a, a2) && near(b, b2)) || (near(a, b2) && near(b, a2)))
-        }) {
-            e.1 = key;
-        } else {
-            out.push((chain, key));
+        let (cx, cy) = cell(m);
+        let found = (cx - 1..=cx + 1)
+            .flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y)))
+            .filter_map(|k| grid.get(&k))
+            .flatten()
+            .copied()
+            .filter(|&i| {
+                let (a2, b2, m2) = sigs[i];
+                near(m, m2) && ((near(a, a2) && near(b, b2)) || (near(a, b2) && near(b, a2)))
+            })
+            .min();
+        match found {
+            Some(i) => out[i].1 = key,
+            None => {
+                grid.entry((cx, cy)).or_default().push(out.len());
+                sigs.push((a, b, m));
+                out.push((chain, key));
+            }
         }
     }
     out.into_iter()

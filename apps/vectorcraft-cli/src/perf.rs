@@ -207,6 +207,13 @@ fn deep(n: usize) -> Result<(), String> {
         }),
     ));
     note("after typing");
+    // Output hashes, to compare builds: the SVG export and a save → open → save round trip.
+    let fnv = |b: &[u8]| b.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &x| (h ^ u64::from(x)).wrapping_mul(0x100_0000_01b3));
+    let doc = synthetic(n)?;
+    let svg = vectorcraft_svg::export(&doc, &vectorcraft_svg::ExportOptions::default());
+    let saved = vectorcraft_format::save_file(&doc);
+    let reopened = vectorcraft_format::load(&saved).map_err(|e| e.to_string())?;
+    outln!("  output hash: SVG export {:016x}, save→open→save {:016x}", fnv(svg.as_bytes()), fnv(&vectorcraft_format::save_file(&reopened)));
     outln!("  tracked (no budget yet)");
     for (name, ms) in &rows {
         outln!("  {name:<52} {ms:>10.2} ms");

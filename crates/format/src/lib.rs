@@ -145,6 +145,19 @@ fn preview_mime(bytes: &[u8]) -> &'static str {
 /// The JSON of a file and the data after it (v4), split at [`BLOB_MAGIC`] after the first JSON
 /// value.
 fn split_tail(text: &[u8]) -> (&[u8], &[u8]) {
+    // JSON holds no raw NUL, so the marker (which has one) starts at the first NUL, if the file
+    // has one. The writer puts it right after the JSON's last byte; found there, it is where the
+    // first JSON value ends, without parsing the JSON twice. Anything else takes the parse.
+    let Some(nul) = text.iter().position(|&b| b == 0) else {
+        // No NUL, so no marker: the parse below would find none either.
+        return (text, &[]);
+    };
+    if let Some(at) = nul.checked_sub(1)
+        && text.get(at..).is_some_and(|r| r.starts_with(BLOB_MAGIC))
+        && at.checked_sub(1).and_then(|k| text.get(k)).is_some_and(|b| matches!(b, b'}' | b']' | b'"'))
+    {
+        return (text.get(..at).unwrap_or(text), text.get(at + BLOB_MAGIC.len()..).unwrap_or_default());
+    }
     let mut values = serde_json::Deserializer::from_slice(text).into_iter::<serde::de::IgnoredAny>();
     if values.next().is_some_and(|v| v.is_ok()) {
         let end = values.byte_offset();
