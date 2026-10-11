@@ -11,6 +11,7 @@ pub mod encode;
 mod freeform;
 mod fx;
 mod group;
+mod images;
 mod ink;
 mod live;
 mod paint;
@@ -32,6 +33,7 @@ use ink::Ink;
 
 pub use brush_fx::instance_art;
 pub use effects::stroke::width_outline;
+pub use images::{IMAGE_CACHE_MAX, image_cache_bytes, set_image_cache_budget};
 pub use live::expand_live;
 pub use pattern::render_pattern_swatch;
 pub use vectorcraft_effects as effects;
@@ -119,6 +121,10 @@ pub struct RenderOptions {
     /// edge leave no seam of the background between them (#983). Off, edges are smoothed shape by
     /// shape (the canvas).
     pub supersample: bool,
+    /// Screen views: an image drawn at half its size or smaller samples a copy shrunk by halves
+    /// (box-filtered from the full image, kept with the decoded images), so the full image needn't
+    /// stay in memory or be sampled. Off, images always sample their full pixels (exports).
+    pub image_mips: bool,
 }
 
 /// The opacity of the art around an isolated group or layer.
@@ -192,6 +198,7 @@ impl Default for RenderOptions {
             isolated: None,
             precise: false,
             supersample: false,
+            image_mips: false,
         }
     }
 }
@@ -340,7 +347,8 @@ type ClipEntry = (Arc<Node>, Option<Arc<(BezPath, FillRule)>>);
 /// A clipping path (kept alive) and what it paints: its fills and its strokes ([`Node::clip_paint`]).
 type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>>);
 
-/// Reusable renderer (keeps the render context, decoded images and glyph caches between frames).
+/// Reusable renderer (keeps the render context, geometry and glyph caches between frames; decoded
+/// images are shared by all renderers, see [`set_image_cache_budget`]).
 pub struct Renderer {
     texts: PtrMap<usize, (Arc<Node>, Arc<TextGeom>)>,
     /// The [`vectorcraft_text::FontDb::generation`] `texts` was laid out with: type lays out
@@ -367,7 +375,6 @@ pub struct Renderer {
     alpha: f32,
     ctx: Option<RenderContext>,
     resources: Resources,
-    images: HashMap<String, Arc<Pixmap>>,
     /// Statistics of the last frame.
     pub stats: FrameStats,
     /// Brush art per brushed stroke.
@@ -399,15 +406,11 @@ pub struct Renderer {
     clip_paths: Vec<(BezPath, FillRule, Affine)>,
     /// What clipping paths paint, per clipping path (see [`Self::clip_paint_of`]).
     clip_paints: PtrMap<usize, ClipPaintEntry>,
-    /// Placed images as painted in ink planes (see [`ink`]).
-    ink_images: ink::InkImages,
-    /// CMYK images as shown through the working CMYK profile (see [`ink`]).
-    cmyk_images: ink::CmykImages,
     /// Gradients along or across strokes, keyed like `strokes` (see [`Self::fill_path_gradient`]).
     stroke_slices: PtrMap<(usize, i32), SliceEntry>,
-    /// The keys and sizes of the recoloured images colour adjustments made in `images`, oldest
-    /// first (see [`Self::adjusted_image`]).
-    adjusted: std::collections::VecDeque<(String, usize)>,
+    /// What the image keys colour adjustments give their recoloured images name: the image
+    /// recoloured and the adjustment, with its hash (see [`Self::adjusted_image`]).
+    adjusts: HashMap<String, (String, u64, vectorcraft_effects::ColorMap)>,
     /// Layer Options → Dim Images to, of the layer being drawn (screen views only): images show
     /// faded to this opacity over white.
     dim_images: Option<f32>,
@@ -490,7 +493,6 @@ impl Renderer {
             alpha: 1.0,
             ctx: None,
             resources: Resources::new(),
-            images: HashMap::new(),
             stats: FrameStats::default(),
             brushes: Default::default(),
             shadows: PtrMap::default(),
@@ -504,10 +506,8 @@ impl Renderer {
             blends: PtrMap::default(),
             clip_paths: vec![],
             clip_paints: PtrMap::default(),
-            ink_images: Default::default(),
-            cmyk_images: Default::default(),
             stroke_slices: PtrMap::default(),
-            adjusted: Default::default(),
+            adjusts: HashMap::new(),
             dim_images: None,
             inline_depth: 0,
             raster: vello_cpu::RasterizerSettings::default(),
@@ -547,10 +547,11 @@ impl Renderer {
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let frame = Frame { mt: threads > 0, doc, view, visible, px, opts, ink: Ink::Display };
-        self.stamp += 1;
+        self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.mask.as_deref()) {
             let pixels = self.mask_values(&frame, m, w, h).into_iter().flat_map(|v| [v, v, v, 255]).collect();
+            self.end_frame();
             self.stats.micros = now().saturating_sub(start);
             return Rendered { width: w as u32, height: h as u32, pixels };
         }
@@ -564,7 +565,22 @@ impl Renderer {
         } else {
             self.draw_frame(&frame, w, h)
         };
-        // Drop cache entries not seen for a few frames.
+        self.end_frame();
+        if !inks {
+            proof::post(&mut pixels, opts);
+        }
+        self.stats.micros = now().saturating_sub(start);
+        Rendered { width: w as u32, height: h as u32, pixels }
+    }
+
+    /// Start a frame: cache entries used from now on are marked with its stamp.
+    fn begin_frame(&mut self) {
+        self.stamp += 1;
+    }
+
+    /// End a frame: drop cache entries not used for a few frames (every render, thumbnails too,
+    /// so the nodes they hold go with them).
+    fn end_frame(&mut self) {
         let g = self.stamp;
         if self.geom.len() > 1024 {
             self.geom.retain(|_, e| g - e.stamp <= 3);
@@ -583,11 +599,6 @@ impl Renderer {
         }
         // Filtered rasters are large: only those of the last frame stay.
         self.pixel_fx.retain(|_, e| e.stamp == g);
-        if !inks {
-            proof::post(&mut pixels, opts);
-        }
-        self.stats.micros = now().saturating_sub(start);
-        Rendered { width: w as u32, height: h as u32, pixels }
     }
 
     /// Draw frame `f` (`w`×`h` pixels): the background, the artboards and the page's art.
@@ -705,18 +716,37 @@ impl Renderer {
         let mut ctx = single_threaded_context(w, h);
         let opts = RenderOptions::default();
         let frame = Frame { mt: false, doc, view, visible, px, opts: &opts, ink: Ink::Display };
+        self.begin_frame();
         (self.knockout, self.nested, self.backdrop) = (false, 0, None);
         self.clip_paths.clear();
         self.draw_arc(&mut ctx, &frame, n);
         ctx.flush();
         let mut pm = Pixmap::new(w, h);
         ctx.render(&mut pm, &mut self.resources);
+        self.end_frame();
         Some(Rendered { width: w as u32, height: h as u32, pixels: pm.data_as_u8_slice().to_vec() })
     }
 
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
     /// `size`×`size` pixels, optionally over a solid premultiplied background.
     pub fn render_node_thumbnail(&mut self, doc: &Document, n: &Node, size: u32, background: Option<[u8; 4]>) -> Option<Rendered> {
+        self.render_node_thumbnail_with(doc, n, size, background, &RenderOptions::default())
+    }
+
+    /// [`Self::render_thumbnail`] with `opts` (e.g. [`RenderOptions::image_mips`]).
+    pub fn render_thumbnail_with(&mut self, doc: &Document, id: NodeId, size: u32, opts: &RenderOptions) -> Option<Rendered> {
+        self.render_node_thumbnail_with(doc, doc.node(id)?, size, None, opts)
+    }
+
+    /// [`Self::render_node_thumbnail`] with `opts` (e.g. [`RenderOptions::image_mips`]).
+    pub fn render_node_thumbnail_with(
+        &mut self,
+        doc: &Document,
+        n: &Node,
+        size: u32,
+        background: Option<[u8; 4]>,
+        opts: &RenderOptions,
+    ) -> Option<Rendered> {
         let b = brush_fx::cull_bounds(n)?;
         let s = (size as f64 - 2.0) / b.width().max(b.height()).max(1e-6);
         let view = Affine::translate((size as f64 / 2.0, size as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
@@ -726,13 +756,15 @@ impl Renderer {
             ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
             ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));
         }
-        let frame = Frame { mt: false, doc, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts: &RenderOptions::default(), ink: Ink::Display };
+        let frame = Frame { mt: false, doc, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts, ink: Ink::Display };
+        self.begin_frame();
         (self.knockout, self.nested, self.backdrop) = (false, 0, None);
         self.clip_paths.clear();
         self.draw_node(&mut ctx, &frame, n, true);
         ctx.flush();
         let mut pm = Pixmap::new(w, w);
         ctx.render(&mut pm, &mut self.resources);
+        self.end_frame();
         Some(Rendered { width: size, height: size, pixels: pm.data_as_u8_slice().to_vec() })
     }
 
@@ -1569,14 +1601,12 @@ impl Renderer {
         // Outline mode draws the image's frame, and with Document Setup → Show Images in Outline
         // Mode its pixels in greyscale under the frame.
         let outline = f.opts.outline;
-        // A linked image's preview is cached apart from the file's pixels, which share its key.
-        let cache_key = match f.doc.images.get(&im.key) {
-            Some(b) if b.is_proxy() => std::borrow::Cow::Owned(format!("{}\u{0}proxy", im.key)),
-            _ => std::borrow::Cow::Borrowed(im.key.as_str()),
-        };
-        let pixels = if outline && !f.doc.setup.outline_images { None } else { self.image_pixmap(f.doc, &im.key, &cache_key, outline) };
-        if let Some(pm) = pixels {
-            let pm = if outline { pm } else { self.ink_image(&cache_key, &pm, f.ink, f.doc.images.get(&im.key)) };
+        // With mips the full pixels are only looked at (not marked used) until they're drawn.
+        let mips = f.opts.image_mips;
+        let pixels = if outline && !f.doc.setup.outline_images { None } else { self.image_pixmap(f.doc, &im.key, outline, !mips) };
+        if let Some((key, pm)) = pixels {
+            let (key, pm) = if outline { (key, pm) } else { ink::ink_image(&key, &pm, f.ink, f.doc.images.get(&im.key), !mips) };
+            let pm = if mips { image_mip(&key, pm, f.view * im.xf * Affine::scale_non_uniform(im.width as f64, im.height as f64)) } else { pm };
             let sx = im.width as f64 / pm.width().max(1) as f64;
             let sy = im.height as f64 / pm.height().max(1) as f64;
             let quality = if f.opts.smooth_images { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };
@@ -1619,60 +1649,57 @@ impl Renderer {
         }
     }
 
-    /// Cache the pixels of image blob `key` recoloured by `map` as `derived` (the key the adjusted
-    /// art's image takes). The latest ones are kept up to a memory budget: dropping one drops the
-    /// cached art too, so it is made again.
-    fn adjusted_image(&mut self, doc: &Document, key: &str, derived: String, map: &vectorcraft_effects::ColorMap) {
-        const BUDGET: usize = 256 << 20;
-        if self.images.contains_key(&derived) {
+    /// Name image `key` recoloured by `map` (its hash `hash`) as `derived` (the key the adjusted
+    /// art's image takes): drawing `derived` draws the recoloured pixels, made when first drawn and
+    /// kept with the decoded images. Names past a limit drop the art made with them too, so it is
+    /// made again.
+    fn adjusted_image(&mut self, key: &str, derived: String, hash: u64, map: &vectorcraft_effects::ColorMap) {
+        if self.adjusts.contains_key(&derived) {
             return;
         }
-        let Some(src) = self.image_pixmap(doc, key, key, false) else { return };
-        let mut pm = (*src).clone();
-        let mut memo: HashMap<[u8; 4], [u8; 3]> = HashMap::new();
-        for px in pm.data_mut().iter_mut().filter(|p| p.a > 0) {
-            let a = px.a as u32;
-            let [r, g, b] = *memo.entry([px.r, px.g, px.b, px.a]).or_insert_with(|| {
-                // Premultiplied to straight, adjusted, then premultiplied again.
-                let straight = [px.r, px.g, px.b].map(|v| ((v as u32 * 255 + a / 2) / a).min(255) as u8);
-                map.apply_rgb8(straight).map(|v| ((v as u32 * a + 127) / 255) as u8)
-            });
-            (px.r, px.g, px.b) = (r, g, b);
-        }
-        let bytes = pm.data().len() * 4;
-        self.images.insert(derived.clone(), Arc::new(pm));
-        self.adjusted.push_back((derived, bytes));
-        let mut total: usize = self.adjusted.iter().map(|(_, b)| b).sum();
-        while total > BUDGET && self.adjusted.len() > 1 {
-            let Some((old, b)) = self.adjusted.pop_front() else { break };
-            self.images.remove(&old);
+        if self.adjusts.len() >= 1024 {
+            self.adjusts.clear();
             self.fx_arts.clear();
-            total -= b;
         }
+        self.adjusts.insert(derived, (key.to_string(), hash, map.clone()));
     }
 
-    /// The decoded pixels of image blob `key` (cached as `cache_key`), or a greyscale copy of them.
-    fn image_pixmap(&mut self, doc: &Document, key: &str, cache_key: &str, grey: bool) -> Option<Arc<Pixmap>> {
-        let colour = match self.images.get(cache_key) {
-            Some(p) => p.clone(),
+    /// The pixels of image `key` (a blob of `doc`, or a recoloured one named by
+    /// [`Self::adjusted_image`]), or a greyscale copy of them, with their key in the shared store.
+    /// `touch` marks them used there.
+    fn image_pixmap(&mut self, doc: &Document, key: &str, grey: bool, touch: bool) -> Option<(images::ImageKey, Arc<Pixmap>)> {
+        let (key, colour) = match doc.images.get(key) {
+            Some(blob) => blob_pixmap(blob, touch)?,
             None => {
-                let blob = doc.images.get(key)?;
-                match self.cmyk_image(blob, cache_key) {
-                    Some(pm) => pm,
+                let (src, hash, map) = self.adjusts.get(key)?.clone();
+                let (src_key, src) = self.image_pixmap(doc, &src, false, touch)?;
+                let key = images::ImageKey { adjust: Some(hash), ..src_key };
+                match lookup(&key, touch) {
+                    Some(pm) => (key, pm),
                     None => {
-                        let pm = Arc::new(paint::decode_pixmap(&blob.bytes)?);
-                        self.images.insert(cache_key.to_string(), pm.clone());
-                        pm
+                        let mut pm = (*src).clone();
+                        let mut memo: HashMap<[u8; 4], [u8; 3]> = HashMap::new();
+                        for px in pm.data_mut().iter_mut().filter(|p| p.a > 0) {
+                            let a = px.a as u32;
+                            let [r, g, b] = *memo.entry([px.r, px.g, px.b, px.a]).or_insert_with(|| {
+                                // Premultiplied to straight, adjusted, then premultiplied again.
+                                let straight = [px.r, px.g, px.b].map(|v| ((v as u32 * 255 + a / 2) / a).min(255) as u8);
+                                map.apply_rgb8(straight).map(|v| ((v as u32 * a + 127) / 255) as u8)
+                            });
+                            (px.r, px.g, px.b) = (r, g, b);
+                        }
+                        let pm = images::store().insert(key.clone(), Arc::new(pm));
+                        (key, pm)
                     }
                 }
             }
         };
         if !grey {
-            return Some(colour);
+            return Some((key, colour));
         }
-        let grey_key = format!("{cache_key}\u{0}grey");
-        if let Some(p) = self.images.get(&grey_key) {
-            return Some(p.clone());
+        let key = images::ImageKey { grey: true, ..key };
+        if let Some(p) = lookup(&key, touch) {
+            return Some((key, p));
         }
         let mut pm = (*colour).clone();
         for px in pm.data_mut() {
@@ -1680,10 +1707,60 @@ impl Renderer {
             let l = (0.2126 * px.r as f32 + 0.7152 * px.g as f32 + 0.0722 * px.b as f32 + 0.5) as u8;
             (px.r, px.g, px.b) = (l, l, l);
         }
-        let pm = Arc::new(pm);
-        self.images.insert(grey_key, pm.clone());
-        Some(pm)
+        let pm = images::store().insert(key.clone(), Arc::new(pm));
+        Some((key, pm))
     }
+}
+
+/// `key`'s pixels in the shared image store; `touch` marks them used.
+fn lookup(key: &images::ImageKey, touch: bool) -> Option<Arc<Pixmap>> {
+    let mut s = images::store();
+    if touch { s.get(key) } else { s.peek(key) }
+}
+
+/// The decoded pixels of `blob` (a CMYK image's inks shown through the working CMYK profile, again
+/// when the colour settings change), from the shared store, and their key there.
+fn blob_pixmap(blob: &vectorcraft_doc::ImageBlob, touch: bool) -> Option<(images::ImageKey, Arc<Pixmap>)> {
+    let id = images::blob_id(blob);
+    let lut = id.cmyk.then(ink::display_lut);
+    let key =
+        images::ImageKey { content: id.content, adjust: None, grey: false, ink: Ink::Display, luts: (lut.as_ref().map_or(0, |l| l.1), 0), mip: 0 };
+    if let Some(pm) = lookup(&key, touch) {
+        return Some((key, pm));
+    }
+    // Decoded outside the lock: other renderers carry on meanwhile.
+    let pm = match lut.and_then(|(lut, _)| ink::cmyk_pixmap(blob, &lut)) {
+        Some(pm) => pm,
+        None => paint::decode_pixmap(&blob.bytes)?,
+    };
+    let pm = images::store().insert(key.clone(), Arc::new(pm));
+    Some((key, pm))
+}
+
+/// Image pixels `pm` (stored as `key`) to draw through `m` (unit square → device pixels), shrunk
+/// by halves while still at least as fine as the device pixels ([`images::mip_level`]); the
+/// pixels drawn are marked used in the store.
+fn image_mip(key: &images::ImageKey, pm: Arc<Pixmap>, m: Affine) -> Arc<Pixmap> {
+    let (w, h) = (pm.width(), pm.height());
+    let level = images::mip_level(m * Affine::scale_non_uniform(1.0 / w.max(1) as f64, 1.0 / h.max(1) as f64), w, h);
+    let mut s = images::store();
+    if level == 0 {
+        let _ = s.get(key); // Marks the full pixels used (they were only looked at).
+        return pm;
+    }
+    let at = |l: u8| images::ImageKey { mip: l, ..key.clone() };
+    if let Some(p) = s.get(&at(level)) {
+        return p;
+    }
+    // From the finest level kept below it.
+    let (mut l, mut cur) = (1..level).rev().find_map(|l| s.peek(&at(l)).map(|p| (l, p))).unwrap_or((0, pm));
+    drop(s);
+    while l < level {
+        l += 1;
+        let half = Arc::new(images::half(&cur));
+        cur = images::store().insert(at(l), half);
+    }
+    cur
 }
 
 /// Can image node `n` (`im`) clipped by `region` be painted straight into the region: visible,
@@ -1933,6 +2010,8 @@ mod tests_isolation;
 mod tests_knockout;
 #[cfg(test)]
 mod tests_layeropts;
+#[cfg(test)]
+mod tests_memory;
 #[cfg(test)]
 mod tests_objectfx;
 #[cfg(test)]
