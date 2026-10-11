@@ -126,7 +126,8 @@
     </ComponentGroup>
 
     <!-- Installed only with INSTALLDESKTOPSHORTCUT set (the Shortcuts page's box); removed with the
-         app. A per-machine install puts it on the common desktop. -->
+         app. A per-machine install puts it on the common desktop. `wix msi validate` reports ICE38,
+         ICE43 and ICE57 for it: they take a desktop shortcut for per-user data, which it isn't here. -->
     <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="498F2D4C-E655-47F6-B406-2D4C449B8D26" Condition="INSTALLDESKTOPSHORTCUT">
       <Shortcut Id="DesktopShortcut" Name="VectorCraft" Description="VectorCraft vector illustration app"
           Target="[#VectorcraftExe]" WorkingDirectory="INSTALLFOLDER" Icon="VectorcraftIcon.ico" IconIndex="0" />
