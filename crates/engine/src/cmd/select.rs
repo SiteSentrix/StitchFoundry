@@ -188,12 +188,51 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// Selectable objects: children of visible, unlocked layers (or of the isolation container).
 /// The objects Select All takes: those of the isolated container, else of every layer (looking
-/// through sublayers, which are not objects).
+/// through sublayers, which are not objects). In isolation mode there are none while the isolated
+/// container, or a group or layer it is in, is hidden, locked or a template layer.
 fn selectable(d: &Document, iso: Option<NodeId>) -> Vec<NodeId> {
     match iso.and_then(|i| d.node(i)) {
-        Some(c) => c.layer_art(true),
+        Some(c) if d.ancestry(c.id).is_some_and(|a| a.iter().all(|i| d.node(*i).is_some_and(|n| n.visible && !n.locked && !n.is_template()))) => {
+            c.layer_art(true)
+        }
+        Some(_) => vec![],
         None => d.selectable_art(),
     }
+}
+
+/// Visit, in paint order, the objects Select All takes ([`selectable`]) and the objects inside
+/// them, leaving out every hidden or locked object with what it holds. `f` returns whether to
+/// visit the objects inside the one it is given.
+pub(crate) fn walk_selectable(d: &Document, iso: Option<NodeId>, mut f: impl FnMut(&Node) -> bool) {
+    fn inside(n: &Node, f: &mut impl FnMut(&Node) -> bool) {
+        if n.visible && !n.locked && f(n) {
+            for c in n.children().into_iter().flatten() {
+                inside(c, f);
+            }
+        }
+    }
+    fn find(n: &Node, tops: &BTreeSet<NodeId>, f: &mut impl FnMut(&Node) -> bool) {
+        if tops.contains(&n.id) {
+            return inside(n, f);
+        }
+        for c in n.children().into_iter().flatten() {
+            find(c, tops, f);
+        }
+    }
+    let tops: BTreeSet<NodeId> = selectable(d, iso).into_iter().collect();
+    for l in &d.layers {
+        find(l, &tops, &mut f);
+    }
+}
+
+/// The objects [`walk_selectable`] visits.
+pub(crate) fn selectable_ids(d: &Document, iso: Option<NodeId>) -> BTreeSet<NodeId> {
+    let mut ids = BTreeSet::new();
+    walk_selectable(d, iso, |n| {
+        ids.insert(n.id);
+        true
+    });
+    ids
 }
 
 fn all(s: &mut Session, _: &Value) -> Result<Value> {
@@ -259,12 +298,17 @@ fn inverse(s: &mut Session, _: &Value) -> Result<Value> {
 fn step(s: &mut Session, dir: i64) -> Result<Value> {
     let st = s.doc()?;
     let Some(cur) = st.selection.objects.first().copied() else { return ok() };
-    let Some((par, idx, n)) = st.doc.position(cur) else { return ok() };
-    let j = idx as i64 + dir;
-    if j < 0 || j >= n as i64 {
-        return ok();
-    }
-    let Some(id) = st.doc.children(par).and_then(|c| c.get(j as usize)).map(|n| n.id) else { return ok() };
+    let Some((par, idx, _)) = st.doc.position(cur) else { return ok() };
+    let Some(siblings) = st.doc.children(par) else { return ok() };
+    // The nearest sibling in that direction that `walk_selectable` visits: hidden and locked
+    // objects and sublayers are passed over.
+    let can = selectable_ids(&st.doc, st.isolation);
+    let next = if dir > 0 {
+        siblings.iter().skip(idx + 1).find(|n| can.contains(&n.id))
+    } else {
+        siblings.iter().take(idx).rev().find(|n| can.contains(&n.id))
+    };
+    let Some(id) = next.map(|n| n.id) else { return ok() };
     s.select(|_, sel| sel.set([id]))?;
     ok()
 }
@@ -475,26 +519,18 @@ fn same(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result
     select_where(s, cmd, &json!({}), |_, n| !n.is_container() && eq(n, &refn))
 }
 
-/// Select the visible, unlocked objects in visible, unlocked layers that `f` accepts (not looking
-/// inside accepted ones); Select > Reselect repeats `cmd` with `p`.
+/// Select the objects [`walk_selectable`] visits that `f` accepts (not looking inside accepted
+/// ones); Select > Reselect repeats `cmd` with `p`.
 fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node) -> bool) -> Result<Value> {
-    fn visit(d: &Document, n: &Node, f: &impl Fn(&Document, &Node) -> bool, ids: &mut Vec<NodeId>) {
-        // Hidden or locked objects and sublayers (and what they hold) are out of reach.
-        if !n.visible || n.locked || n.is_template() {
-            return;
-        }
-        if !n.is_layer() && f(d, n) {
-            return ids.push(n.id);
-        }
-        for c in n.children().into_iter().flatten() {
-            visit(d, c, f, ids);
-        }
-    }
     let st = s.doc()?;
     let mut ids = vec![];
-    for l in st.doc.layers.iter().filter(|l| l.visible && !l.locked) {
-        visit(&st.doc, l, &f, &mut ids);
-    }
+    walk_selectable(&st.doc, st.isolation, |n| {
+        if f(&st.doc, n) {
+            ids.push(n.id);
+            return false;
+        }
+        true
+    });
     let from = st.selection.objects.clone();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), p.clone(), from));
@@ -543,7 +579,14 @@ fn same_layers(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
     // The layers or sublayers the selected objects are on (art in their sublayers too).
     let layers: BTreeSet<NodeId> = st.selection.objects.iter().filter_map(|id| st.doc.layer_containing(*id)).collect();
-    let ids: Vec<NodeId> = layers.iter().filter_map(|l| st.doc.node(*l)).flat_map(|l| l.layer_art(true)).collect();
+    let mut on = BTreeSet::new();
+    for l in layers.iter().filter_map(|l| st.doc.node(*l)) {
+        l.walk(&mut |n| {
+            on.insert(n.id);
+        });
+    }
+    // The objects Select All takes there (in isolation mode, those in the isolated group or layer).
+    let ids: Vec<NodeId> = selectable(&st.doc, st.isolation).into_iter().filter(|id| on.contains(id)).collect();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     ok()
 }
@@ -551,13 +594,12 @@ fn same_layers(s: &mut Session, _: &Value) -> Result<Value> {
 fn by_kind(s: &mut Session, f: fn(&Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
     let mut ids = vec![];
-    for l in st.doc.layers.iter().filter(|l| l.visible && !l.locked) {
-        l.walk(&mut |n| {
-            if f(n) {
-                ids.push(n.id)
-            }
-        });
-    }
+    walk_selectable(&st.doc, st.isolation, |n| {
+        if f(n) {
+            ids.push(n.id);
+        }
+        true
+    });
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     Ok(json!({ "count": ids.len() }))
 }

@@ -10,6 +10,7 @@ use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, 
 use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
+use super::select::{selectable_ids, walk_selectable};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -57,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Direction Handles",
             ["Select", "Object"],
             None,
-            "{} direct-select every anchor (showing all handles) of the selected paths → {anchors}",
+            "{} direct-select every anchor (showing all handles) of the selected paths and the paths inside the selected objects, leaving out paths that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer → {anchors}",
             has_selection,
             direction_handles
         ),
@@ -103,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recall Selection",
             ["Select"],
             None,
-            "{name} select the objects of a saved selection (those since deleted are left out) → {count}",
+            "{name} select the objects of a saved selection, leaving out those deleted since and those that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer → {count}",
             has_saved_selection,
             recall_selection
         ),
@@ -243,13 +244,12 @@ impl Session {
 fn candidates(s: &Session, f: impl Fn(&Node) -> bool) -> Result<Vec<NodeId>> {
     let st = s.doc()?;
     let mut ids = vec![];
-    for l in st.doc.layers.iter().filter(|l| l.visible && !l.locked) {
-        l.walk(&mut |n| {
-            if !n.is_container() && n.visible && !n.locked && f(n) {
-                ids.push(n.id);
-            }
-        });
-    }
+    walk_selectable(&st.doc, st.isolation, |n| {
+        if !n.is_container() && f(n) {
+            ids.push(n.id);
+        }
+        true
+    });
     Ok(ids)
 }
 
@@ -304,12 +304,17 @@ fn by_kind(s: &mut Session, f: fn(&Node) -> bool) -> Result<Value> {
 
 fn direction_handles(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
-    let d = &s.doc()?.doc;
+    let st = s.doc()?;
+    let d = &st.doc;
+    // Only paths that `walk_selectable` visits.
+    let can = selectable_ids(d, st.isolation);
     let mut items: Vec<(NodeId, BTreeSet<(usize, usize)>)> = vec![];
     for r in &roots {
         if let Some(n) = d.node(*r) {
             n.walk(&mut |c| {
-                if let Some(p) = c.path_data() {
+                if can.contains(&c.id)
+                    && let Some(p) = c.path_data()
+                {
                     items.push((c.id, p.anchors().map(|(si, ai, _)| (si, ai)).collect()));
                 }
             });
@@ -352,7 +357,9 @@ fn recall_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").ok_or_else(|| bad(C, "missing name"))?;
     let ids = s.doc()?.doc.saved_selections.iter().find(|x| x.name == name).map(|x| x.objects.clone());
     let ids = ids.ok_or_else(|| bad(C, format!("no saved selection `{name}`")))?;
-    s.select(|d, sel| sel.set(ids.into_iter().filter(|id| d.node(*id).is_some())))?;
+    let st = s.doc()?;
+    let can = selectable_ids(&st.doc, st.isolation);
+    s.select(|_, sel| sel.set(ids.into_iter().filter(|id| can.contains(id))))?;
     Ok(json!({ "count": s.doc()?.selection.len() }))
 }
 
