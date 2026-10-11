@@ -899,6 +899,35 @@ mod tests {
         assert!(edited.pixels == Renderer::new().render(&e, 400, 400, view, &opts).pixels, "and matches a fresh render");
     }
 
+    /// The multithreaded rasterizer draws the same pixels with any number of workers, so the
+    /// automatic thread count can follow the machine.
+    #[test]
+    fn pixels_do_not_depend_on_the_thread_count() {
+        let mut d = effects_page();
+        // Overlapping translucent and blended objects on top of the effects.
+        let l = d.layers[0].id;
+        for i in 0..400 {
+            let id = d.alloc_id();
+            let (x, y) = ((i * 37 % 190) as f64, (i * 53 % 190) as f64);
+            let mut n = Node::path(
+                id,
+                shapes::ellipse(Rect::new(x, y, x + 14.0, y + 9.0)),
+                Appearance::basic(Paint::solid(Color::rgb(0.9, 0.3, 0.1)), Paint::solid(Color::BLACK), 0.7),
+            );
+            n.opacity = 0.6;
+            d.insert(Some(l), usize::MAX, n).unwrap();
+        }
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut frames = vec![];
+        for threads in [Some(0), Some(1), Some(4), Some(8)] {
+            crate::set_default_threads(threads);
+            let mut r = Renderer::new();
+            frames.push(r.render(&d, 1200, 900, Affine::scale(6.0), &opts).pixels);
+        }
+        crate::set_default_threads(None);
+        assert!(frames.windows(2).all(|w| w[0] == w[1]), "the thread count changed pixels");
+    }
+
     #[test]
     fn thumbnails_of_glowing_objects_render_without_panicking() {
         // Regression: thumbnails used vello's default (multithreaded) context, which panics on filters.
