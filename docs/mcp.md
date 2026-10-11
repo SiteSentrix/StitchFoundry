@@ -2689,6 +2689,20 @@ undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
 ```
 
+## Digits
+
+`text.setFormat {digits: "default"|"arabic"|"hindi"|"farsi"}` (the selected type, or `ids`) and `text.setRangeStyle {id,
+start, end, digits}` (a range) set the numeral system the characters' digits are drawn in, as the Character panel menu's
+Digits does with the Middle Eastern (Indic) options shown: `arabic` draws every digit as the Western 0–9, `hindi` as the
+Arabic-Indic ٠–٩ (U+0660–U+0669) and `farsi` as the Eastern Arabic-Indic ۰–۹ (U+06F0–U+06F9), whichever of the three sets
+was typed; `default` leaves each digit as typed. The text keeps the digits that were typed (`text.get`, search, the
+caret and selection are unchanged); only the glyphs change, as with All Caps, and SVG export writes the digits as drawn.
+A digit the font lacks comes from a fallback font. Default and saved only when set. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"digits":"hindi"}}}
+```
+
 ## New type in a Japanese interface
 
 While the interface is in Japanese (Preferences › User Interface › Language, or `auto` on a Japanese system), new type starts with em

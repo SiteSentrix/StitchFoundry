@@ -369,6 +369,8 @@ pub(crate) fn shape_range(
         let mut script = Script::Common;
         for (i, c) in text[a..b].char_indices() {
             let i = a + i;
+            // Digits are drawn in the style's numeral system: the font must cover that digit.
+            let c = st.digits.map(c);
             let level = level_at(i);
             let covered = c.is_whitespace() || c.is_control() || pmap.as_ref().is_none_or(|m| m.map(c).is_some());
             let face = if covered {
@@ -542,6 +544,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             let mut buf = UnicodeBuffer::new();
             for (i, c) in text_seg.char_indices() {
                 let cl = (range.start + i) as u32;
+                let c = st.digits.map(c);
                 if upper {
                     for u in c.to_uppercase() {
                         buf.add(u, cl);
@@ -605,6 +608,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             let gm = f.glyph_metrics(Size::unscaled(), face.location());
             for (i, c) in text_seg.char_indices() {
                 let cl = (range.start + i) as u32;
+                let c = st.digits.map(c);
                 let chars: Vec<char> = if upper { c.to_uppercase().collect() } else { vec![c] };
                 for u in chars {
                     let g = cmap.map(u).unwrap_or_default();

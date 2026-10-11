@@ -362,3 +362,39 @@ fn craft_arabic_fonts_load_and_noto_sans_arabic_is_the_arabic_fallback() {
     let a = db.face_covering('a').expect("some face covers 'a'");
     assert!(!arabic.iter().any(|f| f.family == a.family), "Latin now falls back to {}", a.family);
 }
+
+/// Digits (Character panel menu): the style's numeral system draws every digit, whatever was
+/// typed, while the text and its clusters stay as typed. Needs an installed font with the
+/// Arabic-Indic digits.
+#[test]
+fn digits_draw_every_digit_in_the_styles_numeral_system() {
+    use vectorcraft_doc::Digits;
+    let db = FontDb::global();
+    let Some(face) = ["Arial", "Noto Sans Arabic", "Geeza Pro", "Segoe UI", "DejaVu Sans"]
+        .into_iter()
+        .filter_map(|name| db.face(name, "Regular"))
+        .find(|face| face.covers('3') && face.covers('٣') && face.covers('۳'))
+    else {
+        eprintln!("SKIPPED: digits_draw_every_digit_in_the_styles_numeral_system; no installed font covers 3, ٣ and ۳");
+        return;
+    };
+    eprintln!("ASSERTIONS RUN: digits_draw_every_digit_in_the_styles_numeral_system; {} {}", face.family, face.style);
+    let st = |digits: Digits| CharStyle { digits, ..arabic_style(&face) };
+    let lay = |s: &str, digits: Digits| layout(db, &TextObject::point(Point::ZERO, s, st(digits)));
+    let gids = |l: &TextLayout| l.glyphs.iter().map(|g| (g.gid, g.font_id)).collect::<Vec<_>>();
+    let clusters = |l: &TextLayout| l.glyphs.iter().map(|g| (g.byte, g.len)).collect::<Vec<_>>();
+    // Typed Western, drawn Arabic-Indic (Hindi) or Eastern Arabic-Indic (Farsi): the glyphs of
+    // the typed Arabic-Indic digits, on the typed text's clusters.
+    let typed = lay("page 3", Digits::Default);
+    let hindi = lay("page 3", Digits::Hindi);
+    assert_eq!(gids(&hindi), gids(&lay("page ٣", Digits::Default)));
+    assert_ne!(gids(&hindi), gids(&typed));
+    assert_eq!(clusters(&hindi), clusters(&typed));
+    assert_eq!(gids(&lay("page 3", Digits::Farsi)), gids(&lay("page ۳", Digits::Default)));
+    // Typed Arabic-Indic, drawn Western (Arabic): the Western glyphs on the 2-byte clusters.
+    let arabic = lay("صفحة ٣", Digits::Arabic);
+    assert_eq!(gids(&arabic), gids(&lay("صفحة 3", Digits::Default)));
+    assert_eq!(clusters(&arabic), clusters(&lay("صفحة ٣", Digits::Default)));
+    // Default leaves each digit as typed.
+    assert_ne!(gids(&lay("3 ٣ ۳", Digits::Default)), gids(&lay("3 ٣ ۳", Digits::Hindi)));
+}

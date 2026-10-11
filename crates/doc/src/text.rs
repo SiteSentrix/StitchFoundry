@@ -100,6 +100,47 @@ pub struct CharStyle {
     /// its proportional heights, `vpal`.
     #[serde(default, rename = "proportionalMetrics", skip_serializing_if = "crate::skip::is_default")]
     pub proportional_metrics: bool,
+    /// Digits (Character panel menu, Middle Eastern options): the numeral system the digits of
+    /// these characters are drawn in, whatever digits were typed.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub digits: Digits,
+}
+
+/// The numeral system digits are drawn in ([`CharStyle::digits`]): as typed, or every digit of
+/// the Western, Arabic-Indic and Eastern Arabic-Indic sets drawn in one of them. The text keeps
+/// the digits that were typed; only the glyphs change (like All Caps).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Digits {
+    /// Each digit as typed.
+    #[default]
+    Default,
+    /// Western digits 0–9 (the digits Arabic typography calls Arabic).
+    Arabic,
+    /// Arabic-Indic digits ٠–٩ (U+0660–U+0669), used in Arabic.
+    Hindi,
+    /// Eastern Arabic-Indic digits ۰–۹ (U+06F0–U+06F9), used in Persian and Urdu.
+    Farsi,
+}
+
+impl Digits {
+    /// The digit `c` is drawn as in this numeral system: the same digit in the chosen set, or `c`
+    /// itself when `c` isn't a digit of the Western, Arabic-Indic or Eastern Arabic-Indic set.
+    pub fn map(self, c: char) -> char {
+        let value = match c {
+            '0'..='9' => c as u32 - '0' as u32,
+            '\u{660}'..='\u{669}' => c as u32 - 0x660,
+            '\u{6F0}'..='\u{6F9}' => c as u32 - 0x6F0,
+            _ => return c,
+        };
+        let base = match self {
+            Digits::Default => return c,
+            Digits::Arabic => '0' as u32,
+            Digits::Hindi => 0x660,
+            Digits::Farsi => 0x6F0,
+        };
+        char::from_u32(base + value).unwrap_or(c)
+    }
 }
 
 /// Where a character smaller than the largest on its line lines up with it: on the Roman
@@ -212,6 +253,7 @@ impl Default for CharStyle {
             char_align: CharAlign::RomanBaseline,
             proportional_metrics: false,
             small_caps: None,
+            digits: Digits::Default,
         }
     }
 }
@@ -1237,6 +1279,29 @@ impl TextObject {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Digits map every digit of the three sets into the chosen one, leave the rest alone, and
+    /// are saved only when set.
+    #[test]
+    fn digits_map_between_the_numeral_systems() {
+        let map = |d: Digits, s: &str| -> String { s.chars().map(|c| d.map(c)).collect() };
+        for s in ["0123456789", "٠١٢٣٤٥٦٧٨٩", "۰۱۲۳۴۵۶۷۸۹"] {
+            assert_eq!(map(Digits::Default, s), s);
+            assert_eq!(map(Digits::Arabic, s), "0123456789");
+            assert_eq!(map(Digits::Hindi, s), "٠١٢٣٤٥٦٧٨٩");
+            assert_eq!(map(Digits::Farsi, s), "۰۱۲۳۴۵۶۷۸۹");
+        }
+        // Letters, punctuation and other scripts' digits (Devanagari ३) are not digits of these sets.
+        assert_eq!(map(Digits::Hindi, "a-Z ३ ٪ ۔"), "a-Z ३ ٪ ۔");
+        let st = CharStyle::default();
+        assert!(serde_json::to_value(&st).unwrap().get("digits").is_none());
+        let farsi = CharStyle { digits: Digits::Farsi, ..CharStyle::default() };
+        assert_eq!(serde_json::to_value(&farsi).unwrap()["digits"], "farsi");
+        // Styles written before the attribute existed (no `digits` key) read as Default.
+        let old = serde_json::to_value(&st).unwrap();
+        assert_eq!(serde_json::from_value::<CharStyle>(old).unwrap().digits, Digits::Default);
+        assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&farsi).unwrap()).unwrap(), farsi);
+    }
 
     #[test]
     fn character_controls_reject_collapsed_and_nonfinite_transforms() {

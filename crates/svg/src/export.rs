@@ -1861,9 +1861,9 @@ impl Writer<'_> {
                 self.fonts.len() - 1
             });
             let Some(chars) = self.fonts.get_mut(at).map(|u| &mut u.chars) else { continue };
-            // As written: a hyphen where a line breaks, capitals for All Caps.
+            // As written: a hyphen where a line breaks, capitals for All Caps, the style's Digits.
             let src = if g.len == 0 { "-" } else { plain.get(g.byte..g.byte + g.len).unwrap_or("") };
-            for c in src.chars().filter(|c| !c.is_control() && *c != '\u{ad}') {
+            for c in src.chars().filter(|c| !c.is_control() && *c != '\u{ad}').map(|c| st.digits.map(c)) {
                 if st.all_caps {
                     chars.extend(c.to_uppercase());
                 } else {
@@ -2055,7 +2055,7 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                 continue;
             }
             cluster = Some(g.byte);
-            let src: String = source(g).chars().filter(|c| *c != '\u{ad}').collect();
+            let src: String = source(g).chars().filter(|c| *c != '\u{ad}').map(|c| run.style.digits.map(c)).collect();
             let piece = if run.style.all_caps { src.to_uppercase() } else { src };
             let brk = piece == "\t" || (split_words && !piece.is_empty() && piece.chars().all(char::is_whitespace));
             let fresh = std::mem::take(&mut after_inline);
