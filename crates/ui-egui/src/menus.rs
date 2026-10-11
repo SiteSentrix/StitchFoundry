@@ -1331,7 +1331,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.spotColors" => crate::dialogs::spot_colors::open(app),
         "ui.menuDialog" => match s("command").as_deref() {
             Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
-            c => match c.and_then(menu_dialog) {
+            c => match c.and_then(|c| menu_dialog(app, c)) {
                 Some((kind, fields)) => {
                     app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
                     Ok(Value::Null)
@@ -2976,7 +2976,7 @@ fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
 }
 
 /// The dialog (kind, fields) the menu item of command `id` opens, as the reference app's does.
-fn menu_dialog(id: &str) -> Option<(&'static str, Value)> {
+fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Value)> {
     Some(match id {
         "object.move" => ("move", json!({"dx": "0 pt", "dy": "0 pt"})),
         "object.rotate" => ("rotate", json!({"angle": 0})),
@@ -2985,6 +2985,8 @@ fn menu_dialog(id: &str) -> Option<(&'static str, Value)> {
         "object.reflect" => ("reflect", json!({"axis": "vertical"})),
         "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal"})),
         "path.average" => ("average", json!({"axis": "both"})),
+        // Offset Path opens on the values it was last confirmed with.
+        "object.path.offsetPath" if app.ui.offset_path.is_object() => ("offsetPath", app.ui.offset_path.clone()),
         "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
         "object.path.simplify" => ("simplify", json!({"tolerance": "1 pt"})),
         "object.path.splitIntoGrid" => ("splitIntoGrid", json!({"rows": 2, "columns": 2, "gutter": "12 pt"})),
@@ -3041,7 +3043,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
         return;
     }
-    if let Some((kind, fields)) = menu_dialog(id)
+    if let Some((kind, fields)) = menu_dialog(app, id)
         && p.as_object().is_none_or(|o| o.is_empty())
     {
         app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
