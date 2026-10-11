@@ -54,13 +54,21 @@ fn fields_of(n: &Node) -> serde_json::Map<String, Value> {
 /// the current layer), filled in from the first.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
-    let ids: Vec<NodeId> = match (p.get("ids").and_then(Value::as_array), p.get("id").and_then(Value::as_u64)) {
-        (Some(a), _) => a.iter().filter_map(Value::as_u64).map(NodeId).collect(),
-        (None, Some(id)) => vec![NodeId(id)],
-        (None, None) => {
-            let rows = st.highlighted_rows();
-            if rows.is_empty() { st.current_layer().into_iter().collect() } else { rows }
-        }
+    let parse_id = |value: &Value| -> Result<NodeId, String> {
+        let id = NodeId(value.as_u64().ok_or_else(|| format!("invalid layer or object id: {value}"))?);
+        st.doc.node(id).ok_or_else(|| format!("no such layer or object id: {}", id.0))?;
+        Ok(id)
+    };
+    let ids: Vec<NodeId> = match p.get("ids") {
+        Some(Value::Array(values)) => values.iter().map(parse_id).collect::<Result<_, _>>()?,
+        Some(_) => return Err("`ids` must be an array of layer or object ids".into()),
+        None => match p.get("id") {
+            Some(value) => vec![parse_id(value)?],
+            None => {
+                let rows = st.highlighted_rows();
+                if rows.is_empty() { st.current_layer().into_iter().collect() } else { rows }
+            }
+        },
     };
     let first = ids.first().and_then(|id| st.doc.node(*id)).ok_or("no such layer or object")?;
     let mut f = fields_of(first);
@@ -250,6 +258,25 @@ mod tests {
 
     fn set(app: &mut VectorcraftApp, k: &str, v: Value) {
         app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    }
+
+    /// Explicit object ids must not silently disappear or fall back to the highlighted row.
+    #[test]
+    fn invalid_layer_options_targets_do_not_open_a_partial_dialog() {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        for params in [
+            json!({"ids": [id, "invalid"]}),
+            json!({"ids": [id, 999999]}),
+            json!({"ids": "invalid"}),
+            json!({"id": "invalid"}),
+            json!({"id": null}),
+        ] {
+            assert!(app.run("ui.layerOptions", params.clone()).is_err(), "accepted {params}");
+            assert!(app.ui.dialog.is_none(), "opened partial options for {params}");
+        }
+        app.run("ui.layerOptions", json!({"ids": [id]})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["ids"], json!([id]));
     }
 
     #[test]
