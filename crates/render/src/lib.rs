@@ -1186,6 +1186,9 @@ impl Renderer {
     }
 
     fn draw_shape(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, bp: &BezPath, rule: FillRule) {
+        if !drawable(bp, f.view, n) {
+            return;
+        }
         if fx::has_fx(n) {
             return self.draw_shape_fx(ctx, f, n, bp, rule);
         }
@@ -1698,6 +1701,21 @@ fn mask_value(r: u8, g: u8, b: u8, a: u8, clip: bool, invert: bool) -> u8 {
         l = 1.0 - l;
     }
     (l.clamp(0.0, 1.0) * 255.0 + 0.5) as u8
+}
+
+/// Most pixels from the origin that a shape handed to the rasterizer may reach, or a stroke be
+/// wide. A document's art stays within 4 million points, 2.6 billion pixels at the closest zoom.
+/// Geometry far beyond that (from a malformed file) makes vello_cpu panic on a worker thread or ask
+/// for more memory than there is, either of which ends the app: it is left undrawn.
+const MAX_DEVICE: f64 = 1e10;
+
+/// Can shape `bp` of `n` be drawn through `view`: its control points (finite) within
+/// [`MAX_DEVICE`] pixels, and its visible strokes no wider?
+fn drawable(bp: &BezPath, view: Affine, n: &Node) -> bool {
+    let b = view.transform_rect_bbox(bp.control_box());
+    let scale = view.determinant().abs().sqrt();
+    let widest = n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(st) = i { Some(st.width) } else { None }).fold(0.0, f64::max);
+    [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_DEVICE) && (widest * scale).is_finite() && widest * scale <= MAX_DEVICE
 }
 
 /// A render context on the calling thread. vello_cpu's `RenderContext::new` defaults to a
