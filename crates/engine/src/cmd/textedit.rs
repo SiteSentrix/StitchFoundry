@@ -542,7 +542,7 @@ enum Step {
 }
 
 /// The Type tool's selected text while it edits (its typing session ends first: one undo step).
-fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, usize)>> {
+pub(crate) fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, usize)>> {
     let o = s.tool_options();
     let Some(id) = o.get("editing").and_then(Value::as_u64).map(NodeId) else { return Ok(None) };
     if super::edit::typing_in_progress(s) {
