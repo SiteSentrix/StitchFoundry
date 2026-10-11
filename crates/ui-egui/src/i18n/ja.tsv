@@ -14,7 +14,6 @@
 # tested) — and the status and error messages (`@msg` rows at the end, `COMPLETE_MESSAGES`, tested).
 # Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
-	About StitchFoundry	StitchFoundry について
 	All Scripts	すべての文字
 	Anchors:	アンカー:
 	Any Kind	すべての種類
@@ -37,6 +36,11 @@
 	Em Box Top/Right	仮想ボディの上 / 右
 	ICF Top/Right	平均字面の上 / 右
 	ICF Bottom/Left	平均字面の下 / 左
+	Proportional Metrics	プロポーショナルメトリクス
+	Digits	数字
+	Arabic	アラビア数字
+	Hindi	ヒンディー数字
+	Farsi	ペルシャ数字
 	Favorites	お気に入り
 	Flip	反転
 	Japanese	日本語
@@ -46,6 +50,7 @@
 	Hard	強い禁則
 	Soft	弱い禁則
 	Latin	欧文
+	Thai	タイ文字
 	Monospaced	等幅
 	Roman Baseline	欧文ベースライン
 	Rounded	丸ゴシック
@@ -62,7 +67,6 @@
 	Medium Dark	やや暗い
 	Medium Light	やや明るい
 	Light	明るい
-	Quit StitchFoundry	StitchFoundry を終了
 	File	ファイル
 	New…	新規…
 	New from Template…	テンプレートから新規…
@@ -99,6 +103,9 @@
 	Edit	編集
 	Undo	取り消し
 	Redo	やり直し
+	List Folder	フォルダーの内容を一覧表示
+	Begin Undo Group	取り消しグループを開始
+	End Undo Group	取り消しグループを終了
 	Cut	切り取り
 	Copy	コピー
 	Paste	貼り付け
@@ -633,9 +640,7 @@
 	Save Swatch Library…	スウォッチライブラリを保存…
 	Symbol Libraries	シンボルライブラリ
 	Help	ヘルプ
-	StitchFoundry on GitHub	GitHub の StitchFoundry
 	Search Commands…	コマンドを検索…
-	StitchFoundry Help…	StitchFoundry ヘルプ…
 	Preview	プレビュー
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
@@ -819,7 +824,6 @@
 	Appearance Panel	アピアランスパネル
 	Appearance of Black	ブラックのアピアランス
 	Appearance panel	アピアランスパネル
-	Applies the next time StitchFoundry starts.	StitchFoundry の次回起動時に適用されます。
 	Applies when the linked file is relinked or updated.	リンクファイルを再リンクまたは更新したときに適用されます。
 	Apply Brush	ブラシを適用
 	Apply Character Style	文字スタイルを適用
@@ -1690,6 +1694,7 @@
 	Move Rows	行を移動
 	Move Slices	スライスを移動
 	Move Spine Point	スパインポイントを移動
+	Reshape Spine Segment	スパインセグメントをシェイプ変形
 	Move Swatch	スウォッチを移動
 	Move Up	上へ移動
 	Move in Perspective	遠近で移動
@@ -2172,7 +2177,6 @@
 	{count} folder(s) or file(s) couldn't be read	{count} 個のフォルダーまたはファイルを読み込めませんでした
 	The search stopped at its limit: search a smaller folder.	検索は上限で停止しました。より小さなフォルダーを検索してください。
 	Copy only fonts you own or are licensed to install.	所有しているフォント、またはインストールするライセンスがあるフォントだけをコピーしてください。
-	StitchFoundry copies the fonts to {folder}.	StitchFoundry はフォントを {folder} にコピーします。
 	Registry name:	レジストリ名:
 	Release Compound Shape	複合シェイプを解除
 	Release Opacity Mask	不透明マスクを解除
@@ -2241,7 +2245,6 @@
 	Reverse Path Direction On	パスの方向を反転: オン
 	Revert to the saved version of “{name}”?	「{name}」を保存済みの状態に戻しますか？
 	Replace “{name}”, the file this document was opened from?	このドキュメントの開き元のファイル「{name}」を置き換えますか？
-	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	開いたときに StitchFoundry がまだ読み込めない内容（{what}）が除外されたため、置き換えるとそれは完全に失われます。保持するには別の名前で保存してください。
 	Right Grid:	右グリッド:
 	Right Indent	右インデント
 	Right Plane	右面
@@ -2449,6 +2452,7 @@
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
 	Size/Leading	サイズ/行送り
 	Size:	サイズ:
+	Ridges per segment:	セグメントごとの山数:
 	Size: {size}  Tracking: {tracking}	サイズ：{size}  トラッキング：{tracking}
 	Skip Blank Artboards	空白のアートボードをスキップ
 	Slice Options	スライスオプション
@@ -2633,6 +2637,9 @@
 	Tool Options…	ツールオプション…
 	Toolbar: Advanced / Basic	ツールバー: 詳細／基本
 	Toolbar: Single/Double Column	ツールバー: 1 列／2 列
+	Toolbar: Add Tool	ツールバー: ツールを追加
+	Toolbar: Remove Tool	ツールバー: ツールを削除
+	Toolbar: Reset	ツールバー: リセット
 	Top:	上:
 	Total Width:	合計幅:
 	Touch Type Tool	文字タッチツール
@@ -2741,7 +2748,6 @@
 	Variable Width Profile	可変幅プロファイル
 	Variation:	バリエーション:
 	Vector Halftone	ベクトルハーフトーン
-	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry は前回正常に終了しませんでした。次のドキュメントに未保存の変更があります:
 	Vectors	ベクター
 	Version:	バージョン:
 	Vertical Area Type Tool	縦書きエリア内文字ツール
@@ -2761,7 +2767,6 @@
 	Web Shift	Web シフト
 	Web Snap:	Web スナップ:
 	Weight:	線幅:
-	Welcome to StitchFoundry	StitchFoundry へようこそ
 	When pasting text	テキストをペーストするとき
 	White	白
 	Widget Position:	ウィジェットの位置:
@@ -3255,6 +3260,7 @@ axis	Horizontal	水平方向
 axis	Vertical	垂直方向
 axis	Both	両方
 	Drag to move	移動するにはドラッグ
+	Drag to move out of the set	ドラッグしてセットから出す
 	Drag to float as a toolbar	ドラッグしてツールバーとして浮かせる
 	Put back in the toolbar	ツールバーに戻す
 	Float Panel	パネルをフローティング
@@ -3267,7 +3273,6 @@ axis	Both	両方
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	サービス
-	Hide StitchFoundry	StitchFoundry を隠す
 	Zoom	拡大/縮小
 	Bring All to Front	すべてを手前に移動
 	Settings	環境設定
@@ -3278,6 +3283,8 @@ theme	Appearance	外観
 	Images: link to the file instead of only embedding it.	画像：埋め込むだけでなく、ファイルにリンクします。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft ドキュメント：ロックされた 1 つのオブジェクト。ファイルの変更時に更新されます。
 	A file dialog is open: choose there first	ファイルダイアログが開いています。先にそちらで選択してください
+	The document was closed while its file dialog was open	ファイルダイアログが開いている間にドキュメントが閉じられました
+	The dialog was closed before its file dialog answered	ファイルダイアログが応答する前にダイアログが閉じられました
 	Shaper	Shaper
 	Expand Shaper Group	Shaper グループを拡張
 	Release Shaper Group	Shaper グループを解除
@@ -3346,13 +3353,10 @@ theme	Appearance	外観
 @msg	its type is to come in as outlines, which only its page has	文字をアウトラインとして読み込む設定ですが、アウトラインはページにしかありません
 @msg	{_1} files	{_1} 個のファイル
 @msg	A browser with WebGPU or WebGL2 is required.	WebGPU または WebGL2 に対応したブラウザーが必要です。
-@msg	Loading StitchFoundry…	StitchFoundry を読み込んでいます…
 @msg	Reload the page to go on (changes not saved yet may be lost).	続けるにはページを再読み込みしてください (未保存の変更は失われる場合があります)。
 @msg	The graphics were lost and couldn't be restarted.	グラフィックス機能が利用できなくなり、再起動できませんでした。
 @msg	The graphics were lost and have been restarted	グラフィックス機能が利用できなくなったため、再起動しました
-@msg	StitchFoundry failed to start: {e}	StitchFoundry を起動できませんでした: {e}
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	未保存の変更はこのブラウザーに残っています: 復元するにはページを再読み込みしてください。
-@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で StitchFoundry を再起動しました
 @msg	not a DXF drawing	DXF 図面ではありません
 @msg	scale must be a number from {_1} to {_2}, not {s}	縮尺は {_1} から {_2} までの数値にしてください ({s} は指定できません)
 @msg	the artboard to fit must be a positive size up to {_1} pt	合わせる先のアートボードのサイズは 0 より大きく {_1} pt 以下にしてください
@@ -3459,9 +3463,11 @@ theme	Appearance	外観
 @msg	`at` must be [x, y]	`at` は [x, y] の形式で指定してください
 @msg	`color` must be a colour	`color` にはカラーを指定してください
 @msg	`freeform.points` must be an array	`freeform.points` には配列を指定してください
+@msg	`freeform.lines` must be an array	`freeform.lines` には配列を指定してください
 @msg	`{key}` must be a number	`{key}` には数値を指定してください
 @msg	a freeform gradient keeps at least one point	フリーフォームグラデーションには少なくとも 1 つのポイントが必要です
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	フリーフォームのポイント {i} には `at` [x, y] と有効な `color` が必要です
+@msg	freeform line {i} must be an array of point indices	フリーフォームのライン {i} にはポイントのインデックスの配列を指定してください
 @msg	no point {i} (the gradient has {_1})	ポイント {i} はありません (このグラデーションのポイントは {_1} 個です)
 @msg	no segment {segment} on line {line}	ライン {line} にセグメント {segment} はありません
 @msg	unknown freeform mode `{m}` (points, lines)	`{m}` は不明なフリーフォームのモードです (points、lines)
@@ -3487,6 +3493,8 @@ theme	Appearance	外観
 @msg	no selection bounds	選択範囲に境界がありません
 @msg	the layer has no objects to clip by	レイヤーにクリッピングマスクとして使えるオブジェクトがありません
 @msg	the layer or group is locked	レイヤーまたはグループがロックされています
+@msg	the guide is on a hidden or locked layer	ガイドが非表示またはロックされたレイヤー上にあります
+@msg	the target layer is locked or hidden	ターゲットレイヤーがロックされているか非表示です
 @msg	the layer to flatten into is hidden	統合先のレイヤーが非表示になっています
 @msg	there are no objects to release	レイヤーに分配するオブジェクトがありません
 @msg	no library `{id}`	ライブラリ `{id}` が見つかりません
@@ -3512,6 +3520,8 @@ theme	Appearance	外観
 @msg	nothing to align	整列するものがありません
 @msg	select a clip group	クリップグループを選択してください
 @msg	select two or more objects to distribute	分布させるオブジェクトを 2 つ以上選択してください
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis には "vertical"、"horizontal"、度単位の角度のいずれかを指定してください (`{v}` は指定できません)
+@msg	give horizontal or vertical	horizontal または vertical を指定してください
 @msg	selection has no bounds	選択範囲に境界がありません
 @msg	the top object must be a path, compound path or text object to use as a clipping mask	クリッピングマスクとして使うには、最前面のオブジェクトがパス、複合パス、テキストオブジェクトのいずれかである必要があります
 @msg	no target object has an opacity mask: select one or give `id`	不透明マスクのあるターゲットオブジェクトがありません: 該当するオブジェクトを選択するか、`id` を指定してください
@@ -3612,10 +3622,8 @@ theme	Appearance	外観
 @msg	it has more than {MAX_NODES} objects	オブジェクトが {MAX_NODES} 個を超えています
 @msg	it has no layers	レイヤーがありません
 @msg	it has too many values in a row	連続する値が多すぎます
-@msg	it has {_1}, which StitchFoundry doesn't read from it yet	{_1} が含まれていますが、StitchFoundry はまだこのファイルからは読み込めません
 @msg	its objects are nested too deeply	オブジェクトの入れ子が深すぎます
 @msg	its section ending with `%{end}` doesn't end	`%{end}` で終わるはずのセクションが終わっていません
-@msg	an image StitchFoundry can't read was left out	StitchFoundry で読み込めない画像は除外されました
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
@@ -3623,14 +3631,13 @@ theme	Appearance	外観
 @msg	shadings of an unknown type were left out	種類が不明なシェーディングは除外されました
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	関数の種類が不明なシェーディングは中間の色で塗りつぶされています
 @msg	the file's preview header points outside the file	ファイルのプレビューヘッダーがファイルの範囲外を指しています
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	この PostScript ファイルは読み込めません ({_1}): 作成したアプリで PDF または SVG として保存してください
+@msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	この PostScript ファイルは読み込めません ({why}): 作成したアプリで PDF または SVG として保存してください
 @msg	this is not a PostScript file	PostScript ファイルではありません
 @msg	a PostScript error ({name} in `{op}`)	PostScript エラー (`{op}` での {name})
 @msg	a PostScript error ({name} in `{op}`), in {procs}	{procs} 内の PostScript エラー (`{op}` での {name})
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript エラー (`{op}` での {name}: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	{procs} 内の PostScript エラー (`{op}` での {name}: {at})
 @msg	a PostScript error ({name})	PostScript エラー ({name})
-@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	StitchFoundry の PostScript 読み込み機能が対応していない `{at}` を使用しています
 @msg	the file was read up to an error ({why}): what follows it was left out	ファイルはエラーが発生した箇所まで読み込まれました ({why}): それ以降の内容は除外されました
 @msg	this file's PostScript couldn't be read ({why}): {what}	このファイルの PostScript を読み込めませんでした ({why}): {what}
 @msg	it has no page	ページがありません
@@ -3644,7 +3651,6 @@ theme	Appearance	外観
 @msg	its Windows metafile preview was opened instead, which may simplify the art	代わりに Windows メタファイルのプレビューを開いたため、アートが簡略化されている場合があります
 @msg	its preview was placed instead, at screen resolution	代わりにプレビューを画面解像度で配置しました
 @msg	shadings of more than 4096 patches or triangles were left out	パッチまたは三角形が 4096 個を超えるシェーディングは除外されました
-@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	{procs} 内で、StitchFoundry の PostScript 読み込み機能が対応していない `{at}` を使用しています
 @msg	the export region is not finite	書き出し範囲に無効な数値が含まれています
 @msg	a page out of range	範囲外のページがあります
 @msg	a page's placement is not finite	ページの配置に無効な数値が含まれています
@@ -3653,8 +3659,6 @@ theme	Appearance	外観
 @msg	the preview image is empty	プレビュー画像が空です
 @msg	the thumbnail image is malformed	サムネール画像の形式が正しくありません
 @msg	can't encode the document: {0}	ドキュメントをエンコードできません: {0}
-@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	バージョン {0} では保存できません: StitchFoundry で保存できるのはバージョン {MIN_VERSION} から {VERSION} までです
-@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	ファイルのバージョン {0} は、この StitchFoundry が対応するバージョン ({VERSION}) より新しいものです
 @msg	invalid image data for `{0}`	`{0}` の画像データが正しくありません
 @msg	not a VectorCraft file: {0}	VectorCraft ファイルではありません: {0}
 @msg	the compressed file unpacks to more than {_1} MB	圧縮ファイルを展開すると {_1} MB を超えます
@@ -3703,7 +3707,6 @@ theme	Appearance	外観
 @msg	plug-in output: {0}	プラグインの出力に問題があります: {0}
 @msg	plug-in parameters: {0}	プラグインのパラメーターに問題があります: {0}
 @msg	plug-in trapped: {0}	プラグインが異常終了しました: {0}
-@msg	is not an image StitchFoundry reads	StitchFoundry で読み込める画像ではありません
 @msg	not found	見つかりません
 @msg	SVG parse error: {0}	SVG を解析できませんでした: {0}
 @msg	decimals must be {_1}–{_2} (got {_3})	小数点以下の桁数は {_1} から {_2} までにしてください (指定値: {_3})
@@ -3722,7 +3725,7 @@ theme	Appearance	外観
 @msg	no blend options	ブレンドオプションがありません
 @msg	bad color {v}	カラー {v} が正しくありません
 @msg	Corners edits the corners of a path	「コーナー」で編集できるのはパスの角だけです
-@msg	give corners of the path: anchors between two straight sides	パスの角 (2 本の直線の辺に挟まれたアンカーポイント) を指定してください
+@msg	give corners of the path: anchors where its sides meet at an angle	パスの角 (辺が角度をなして交わるアンカーポイント) を指定してください
 @msg	select one path, or give its `id`	パスを 1 つ選択するか、その `id` を指定してください
 @msg	the drawing is no longer loaded	図面はもう読み込まれていません
 @msg	No saved selections (Select → Save Selection…)	保存した選択範囲はありません (選択 → 選択範囲を保存…)
@@ -3785,6 +3788,9 @@ theme	Appearance	外観
 @msg	give the path `id` and the width point `index`	パスの `id` と幅ポイントの `index` を指定してください
 @msg	no such width point	指定された幅ポイントが見つかりません
 @msg	onto must name a panel floating in another group	onto には、別のグループでフローティングしているパネルを指定してください
+@msg	below and above must name a panel floating in another group	below と above には別のグループでフローティングしているパネルを指定してください
+@msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
+@msg	column must be true or a number from 1	column には true または 1 以上の数値を指定してください
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
@@ -3876,7 +3882,6 @@ theme	Appearance	外観
 @msg	no dialog open	ダイアログが開かれていません
 @msg	no file reader	ファイルの読み込み機能がありません
 @msg	no file writer	ファイルの書き込み機能がありません
-@msg	not a StitchFoundry shortcut set (missing `overrides`)	StitchFoundry のショートカットセットではありません (`overrides` がありません)
 @msg	shortcut for `{k}` must be a string	`{k}` のショートカットは文字列で指定してください
 @msg	tool shortcuts must be a single key (optionally with Shift)	ツールのショートカットには 1 つのキーを指定してください (Shift との組み合わせも可)
 @msg	unknown preset (one of {_1})	不明なプリセットです ({_1} のいずれかを指定してください)
@@ -3896,13 +3901,10 @@ theme	Appearance	外観
 @msg	unknown workspace (one of {_1})	不明なワークスペースです ({_1} のいずれかを指定してください)
 @msg	workspace name can't be empty	ワークスペース名を入力してください
 @msg	No fonts are missing in this document	このドキュメントには見つからないフォントはありません
-@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry は他のアプリやシステムのフォルダーを検索しません: {path}
-@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry は Users 内の Shared フォルダーと Public フォルダーを検索しません: {path}
 @msg	{path} is not a folder	{path} はフォルダーではありません
 @msg	the search couldn't start: try again in a moment	検索を開始できませんでした: しばらくしてからもう一度お試しください
 @msg	searching a folder isn't available on the web	Web 版ではフォルダーを検索できません
 @msg	every search thread stopped on an internal error (please report this bug)	すべての検索スレッドが内部エラーで停止しました (このバグを報告してください)
-@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	この環境では StitchFoundry の Fonts フォルダーが設定されていません: デスクトップアプリと vectorcraft-cli が設定します
 @msg	choose the font files to add	追加するフォントファイルを選択してください
 @msg	{n} font file(s) are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
 @msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
@@ -3915,6 +3917,7 @@ theme	Appearance	外観
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
+@msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ステップ {i} の結果にその値はありません ($ そのものを書くには $$ と入力してください)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: この前にステップ {i} はありません (ステップは 0 から数えます。$ そのものを書くには $$ と入力してください)
 @msg	object ids are non-negative integers, not {v}	オブジェクト ID は 0 以上の整数です ({v} は使えません)
@@ -4022,6 +4025,32 @@ effect	Vertical	垂直
 	Define a variable first	先に変数を定義してください
 	Text	テキスト
 	Visibility	表示状態
+# tested). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
+# Shared panel docking
+	Activate Panel	パネルをアクティブにする
+	Change Panel Layout	パネルの配置を変更
+	Close Panel	パネルを閉じる
+	Move Panel	パネルを移動
+	Group with	グループ化先
+	Resize panels	パネルのサイズを変更
+	Resize panel window	パネルウィンドウのサイズを変更
+@msg	invalid restored panel group	復元されたパネルグループが無効です
+@msg	Invalid panel layout; restored the default dock	パネル配置が無効です。既定のドックを復元しました
+@msg	action is required	action を指定してください
+@msg	anchor must name a registered panel	anchor に登録済みパネルを指定してください
+@msg	before must name a panel	before にパネルを指定してください
+@msg	docking action contains an unknown panel or an excessive split path	ドッキング操作に不明なパネルまたは長すぎる分割パスが含まれています
+@msg	group must be true or false	group は true または false にしてください
+@msg	move requires a destination panel	移動先のパネルを指定してください
+@msg	move requires an existing destination panel	移動先には既存のパネルを指定してください
+@msg	onto must name a floating panel	onto にフローティングパネルを指定してください
+@msg	panel group is empty	パネルグループが空です
+@msg	panel must name a registered panel	panel に登録済みパネルを指定してください
+@msg	saved panel layout is invalid; reset the workspace first	保存されたパネル配置が無効です。先にワークスペースをリセットしてください
+@msg	x and y must be provided together	x と y は両方指定してください
+@msg	zone must be a string	zone は文字列にしてください
+@msg	zone must be tab, center, left, right, top or bottom	zone は tab、center、left、right、top、bottom のいずれかにしてください
+@msg	{key} must be a finite coordinate	{key} は有限の座標にしてください
 
 # Revolve profile guidance.
 
@@ -4077,6 +4106,39 @@ lighting	Light	ライト
 	Stroke Pressure	ストロークの筆圧
 	Right Diagonal	右斜め
 	Left Diagonal	左斜め
+	Vertical Guide	垂直ガイド
+	Horizontal Guide	水平ガイド
+	Move Guide to Layer	ガイドをレイヤーへ移動
+@msg	invalid native panel set	ネイティブパネルセットが無効です
+@msg	missing panel layout	パネル配置がありません
+@msg	unsupported native docking operation	ネイティブドッキング操作は未対応です
+	Linux Display Server	Linux ディスプレイサーバー
+	X11 (XWayland)	X11 (XWayland)
+	About StitchFoundry	StitchFoundry について
+	Quit StitchFoundry	StitchFoundry を終了
+	StitchFoundry on GitHub	GitHub の StitchFoundry
+	StitchFoundry Help…	StitchFoundry ヘルプ…
+	Applies the next time StitchFoundry starts.	StitchFoundry の次回起動時に適用されます。
+	StitchFoundry copies the fonts to {folder}.	StitchFoundry はフォントを {folder} にコピーします。
+	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	開いたときに StitchFoundry がまだ読み込めない内容（{what}）が除外されたため、置き換えるとそれは完全に失われます。保持するには別の名前で保存してください。
+	StitchFoundry didn't quit normally last time. These documents had unsaved changes:	StitchFoundry は前回正常に終了しませんでした。次のドキュメントに未保存の変更があります:
+	Welcome to StitchFoundry	StitchFoundry へようこそ
+	Hide StitchFoundry	StitchFoundry を隠す
+@msg	Loading StitchFoundry…	StitchFoundry を読み込んでいます…
+@msg	StitchFoundry failed to start: {e}	StitchFoundry を起動できませんでした: {e}
+@msg	The graphics processor tried first couldn't show the window, so StitchFoundry started again on {summary}	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で StitchFoundry を再起動しました
+@msg	it has {_1}, which StitchFoundry doesn't read from it yet	{_1} が含まれていますが、StitchFoundry はまだこのファイルからは読み込めません
+@msg	an image StitchFoundry can't read was left out	StitchFoundry で読み込めない画像は除外されました
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know	StitchFoundry の PostScript 読み込み機能が対応していない `{at}` を使用しています
+@msg	it uses `{at}`, which StitchFoundry's PostScript reader doesn't know, in {procs}	{procs} 内で、StitchFoundry の PostScript 読み込み機能が対応していない `{at}` を使用しています
+@msg	can't save version {0}: StitchFoundry writes versions {MIN_VERSION} to {VERSION}	バージョン {0} では保存できません: StitchFoundry で保存できるのはバージョン {MIN_VERSION} から {VERSION} までです
+@msg	file version {0} is newer than this StitchFoundry supports ({VERSION})	ファイルのバージョン {0} は、この StitchFoundry が対応するバージョン ({VERSION}) より新しいものです
+@msg	is not an image StitchFoundry reads	StitchFoundry で読み込める画像ではありません
+@msg	not a StitchFoundry shortcut set (missing `overrides`)	StitchFoundry のショートカットセットではありません (`overrides` がありません)
+@msg	StitchFoundry doesn't search other apps' or the system's folders: {path}	StitchFoundry は他のアプリやシステムのフォルダーを検索しません: {path}
+@msg	StitchFoundry doesn't search the Shared or Public folder in Users: {path}	StitchFoundry は Users 内の Shared フォルダーと Public フォルダーを検索しません: {path}
+@msg	StitchFoundry's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	この環境では StitchFoundry の Fonts フォルダーが設定されていません: デスクトップアプリと vectorcraft-cli が設定します
+
 # Embroidery (StitchFoundry)
 	Add Inclination Line	縫い方向線を追加
 	After the selection	選択範囲の後
@@ -4241,6 +4303,7 @@ lighting	Light	ライト
 @msg	{_1} export failed: {e}	{_1} の書き出しに失敗しました: {e}
 	Stitch Lines	縫い目の線
 	Tatami	タタミ
+
 # Embroidery (StitchFoundry), phase 1
 	By SiteSentrix, based on VectorCraft by the ArtCraft team. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	SiteSentrix 制作。ArtCraft チームの VectorCraft がベースです。MIT OR Apache-2.0。フォント：Source Sans 3、Inter、JetBrains Mono (OFL)。アイコン：Lucide (ISC) + VectorCraft。
 	Version {version} — open-source machine embroidery digitizing in pure Rust.	バージョン {version} — Rust だけで書かれたオープンソースのミシン刺繍デジタイズアプリ。

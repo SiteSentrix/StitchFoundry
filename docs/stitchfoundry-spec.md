@@ -60,10 +60,9 @@ own); vendor machine protocols that are not publicly documented.
 
 ## 2. Start here (new session checklist)
 
-1. **Get the code.** The private repository `stitchforge` (owner's GitHub), branch `main`
-   (pushed from `stitchforge/embroidery-core`). If it isn't on GitHub yet, restore it from the
-   git bundle the owner has (`RESTORE.md`: clone `storytold/vectorcraft`, check out `6f7f32c6`,
-   fetch the bundle).
+1. **Get the code.** The public repository
+   [SiteSentrix/StitchFoundry](https://github.com/SiteSentrix/StitchFoundry), branch `main`. It
+   keeps VectorCraft's history, so VectorCraft's updates merge in (below).
 2. **Read, in order:** this spec, [`embroidery.md`](embroidery.md), the repo's
    [`CLAUDE.md`](../CLAUDE.md) and `AGENTS.md` (VectorCraft's rules apply unchanged), then
    `docs/development.md`.
@@ -83,7 +82,7 @@ own); vendor machine protocols that are not publicly documented.
    cargo test -p vectorcraft-ui-egui --lib i18n        # new strings need translations
    ```
    **Before every commit:** `cargo xtask ci` (fmt, clippy `-D warnings` with the no-panic
-   lints, all tests, assets, brands, layers, wasm). Last full run: 5,173 tests passing, clippy
+   lints, all tests, assets, brands, layers, wasm). Last full run: 5,512 tests passing, clippy
    clean, wasm clean.
 5. **Pick work** from [§8](#8-roadmap-and-estimates) in order, one task id per commit
    (`E1.3: stitch edit mode`). For each feature: engine command(s) + tests → tool/UI →
@@ -91,6 +90,25 @@ own); vendor machine protocols that are not publicly documented.
    (Appendix A) → `cargo xtask ci` → commit → push.
 6. **Update this spec** when you finish a task: flip its status in [§6](#6-parity-matrix) and
    note anything learned.
+
+**Merging VectorCraft's updates** (last: VectorCraft 0.9.0 and later, upstream `d1a6926f`,
+merged 2026-10-11):
+
+```sh
+git remote add upstream https://github.com/storytold/vectorcraft   # once
+git fetch upstream main && git merge upstream/main
+```
+
+- The 11 translation catalogs conflict whenever both sides add rows. Merge them row by row
+  (context + source): keep both sides' rows, our renames (StitchFoundry) and our removals
+  (Discord, the old product strings), and carry upstream's translations of a renamed string over
+  under its new name. A language upstream makes complete (`complete_menus`, `COMPLETE_MESSAGES`)
+  then needs our embroidery strings too.
+- Upstream's new user-visible text and links still say VectorCraft or point to ArtCraft: rename
+  them (`cargo xtask brands` catches ArtCraft names, not "VectorCraft").
+- StitchFoundry keeps its own preferences folder (`APP_FOLDER` in
+  `apps/vectorcraft/src/prefs_dir.rs`) and reads VectorCraft's once; check that upstream changes
+  to the profile code keep that.
 
 Disk: a target dir grows past 20 GB. Use the variables above, delete
 `target/debug/incremental` when space is short, and give each parallel agent its own

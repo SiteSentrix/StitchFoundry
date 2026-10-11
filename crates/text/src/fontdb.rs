@@ -391,6 +391,36 @@ struct SysFallback {
     misses: std::collections::HashSet<char>,
 }
 
+/// Fonts made for Thai, tried first (when installed) for Thai the font in use lacks: Windows
+/// (Leelawadee UI; Tahoma before Windows 8), macOS (Thonburi, Sukhumvit Set) and Linux (Noto,
+/// TLWG).
+pub const THAI_FAMILIES: &[&str] = &[
+    "Leelawadee UI",
+    "Leelawadee",
+    "Tahoma",
+    "Thonburi",
+    "Sukhumvit Set",
+    "Noto Sans Thai",
+    "Noto Sans Thai UI",
+    "Noto Sans Thai Looped",
+    "Waree",
+    "Loma",
+    "Garuda",
+];
+
+/// The families tried first for character `c`, in a script whose text only fonts made for it set
+/// well (Thai, Lao, Khmer, Myanmar); none for other characters.
+fn script_families(c: char) -> &'static [&'static str] {
+    use unicode_script::{Script, UnicodeScript};
+    match c.script() {
+        Script::Thai => THAI_FAMILIES,
+        Script::Lao => &["Lao UI", "Leelawadee UI", "Lao Sangam MN", "Noto Sans Lao", "Noto Sans Lao UI", "Phetsarath OT"],
+        Script::Khmer => &["Khmer UI", "Khmer Sangam MN", "Noto Sans Khmer", "Noto Sans Khmer UI", "Khmer OS"],
+        Script::Myanmar => &["Myanmar Text", "Myanmar Sangam MN", "Noto Sans Myanmar", "Noto Sans Myanmar UI", "Padauk"],
+        _ => &[],
+    }
+}
+
 /// Families tried (when installed) for characters the loaded fonts lack: CJK, symbols, emoji.
 #[cfg(not(target_arch = "wasm32"))]
 const SYSTEM_FALLBACKS: &[&str] = &[
@@ -544,10 +574,12 @@ impl FontClass {
         [FontClass::Serif, FontClass::Sans, FontClass::Rounded, FontClass::Script, FontClass::Monospaced, FontClass::Decorative];
 }
 
-/// What a font menu filters on: whether a family sets Japanese, and its kind.
+/// What a font menu filters on: whether a family sets Japanese or Thai, and its kind.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FontTraits {
     pub japanese: bool,
+    /// Its character map has Thai (ก and า).
+    pub thai: bool,
     pub class: FontClass,
 }
 
@@ -565,6 +597,7 @@ impl FontTraits {
         };
         // Hiragana (bit 49) or Katakana (bit 50) in the Unicode ranges, or the JIS code page.
         let japanese = ranges2 & (0b11 << 17) != 0 || codepages & (1 << 17) != 0 || has_japanese_name;
+        let thai = ['\u{0E01}', '\u{0E32}'].iter().all(|c| font.charmap().map(*c).is_some());
         let family_type = panose.first().copied().unwrap_or(0);
         let serif_style = panose.get(1).copied().unwrap_or(0);
         let proportion = panose.get(3).copied().unwrap_or(0);
@@ -662,7 +695,7 @@ impl FontTraits {
         } else {
             FontClass::Other
         };
-        FontTraits { japanese, class }
+        FontTraits { japanese, thai, class }
     }
 }
 
@@ -1917,6 +1950,18 @@ impl FontDb {
     /// First face (fallback family first, then load order) that covers `c`; on native, system
     /// fonts are loaded lazily the first time no loaded face covers a character.
     pub(crate) fn fallback_for(&self, c: char, exclude: u32) -> Option<Arc<FontFace>> {
+        // Thai (Lao, Khmer, Myanmar) takes a font made for it, when one is installed, rather than
+        // whichever face covering it happened to load first (a display face, say).
+        let prefer = script_families(c);
+        if let Some(f) = self.family_fallback(c, exclude, prefer) {
+            return Some(f);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.load_families(c, prefer)
+            && let Some(f) = self.family_fallback(c, exclude, prefer)
+        {
+            return Some(f);
+        }
         if let Some(f) = self.loaded_fallback(c, exclude) {
             return Some(f);
         }
@@ -1932,6 +1977,28 @@ impl FontDb {
     /// are remembered, so they are looked for once.
     pub fn face_covering(&self, c: char) -> Option<Arc<FontFace>> {
         self.fallback_for(c, 0)
+    }
+
+    /// The loaded face of the first of `families` that covers `c` (upright, nearest Regular).
+    fn family_fallback(&self, c: char, exclude: u32, families: &[&str]) -> Option<Arc<FontFace>> {
+        let faces = self.read_faces();
+        families.iter().find_map(|fam| {
+            faces
+                .iter()
+                .filter(|f| f.id != exclude && f.family.eq_ignore_ascii_case(fam) && f.covers(c))
+                .min_by_key(|f| (f.italic, (f.weight - 400.0).abs() as i32))
+                .cloned()
+        })
+    }
+
+    /// Load the first of the installed `families` not loaded yet that covers `c` (with system
+    /// fallback on). Returns whether one was loaded.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn load_families(&self, c: char, families: &[&str]) -> bool {
+        if families.is_empty() || !self.sys.lock().unwrap_or_else(|e| e.into_inner()).enabled {
+            return false;
+        }
+        families.iter().any(|fam| !self.is_loaded(fam) && self.load_cataloged(fam) && self.family_fallback(c, 0, &[fam]).is_some())
     }
 
     fn loaded_fallback(&self, c: char, exclude: u32) -> Option<Arc<FontFace>> {

@@ -129,7 +129,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             artboard_new
         ),
-        cmd!("artboard.delete", "Delete Artboard", ["Window", "Artboards"], None, "{index}", has_doc, artboard_delete),
+        cmd!(
+            "artboard.delete",
+            "Delete Artboard",
+            ["Window", "Artboards"],
+            None,
+            "{index | indices: [index…]} delete artboards (with their guides) in one step; one is always left",
+            has_doc,
+            artboard_delete
+        ),
         cmd!(
             "artboard.setProps",
             "Artboard Options…",
@@ -221,7 +229,7 @@ pub(crate) fn accepts(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
 }
 
 /// Whether `id` or a container around it is locked.
-fn locked_within(d: &Document, id: NodeId) -> bool {
+pub(crate) fn locked_within(d: &Document, id: NodeId) -> bool {
     d.ancestry(id).unwrap_or_default().iter().any(|a| d.node(*a).is_some_and(|n| n.locked))
 }
 
@@ -462,6 +470,8 @@ fn delete_rows(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             d.remove(*id)?;
         }
+        // The guides on the deleted layers go with them.
+        d.drop_guides_of_deleted_layers(sel);
         sel.prune(d);
         Ok(())
     })?;
@@ -487,6 +497,7 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
             let mut c = d.reid(&n);
             if n.is_layer() {
                 c.name = Some(format!("{} copy", n.display_name()));
+                d.copy_layer_guides(&n, &c);
             }
             out.push(d.insert(par, idx + 1, c)?);
         }
@@ -548,11 +559,7 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             apply_options(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, p);
         }
-        // Hidden or locked content can't stay selected.
-        let hidden: Vec<NodeId> = sel.objects.iter().copied().filter(|o| !d.is_editable(*o)).collect();
-        for h in hidden {
-            sel.remove(h);
-        }
+        sel.deselect_uneditable(d);
         Ok(())
     })?;
     ok()
@@ -679,7 +686,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             nodes.push(if copy {
                 let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
-                d.reid(&n)
+                let c = d.reid(&n);
+                if n.is_layer() {
+                    d.copy_layer_guides(&n, &c);
+                }
+                c
             } else {
                 Arc::unwrap_or_clone(d.remove(*id)?)
             });
@@ -746,17 +757,16 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).ok_or_else(|| bad("artboard.delete", "missing index"))? as usize;
+    let indices = super::panelcmds::artboard_indices(&s.doc()?.doc, p, "artboard.delete")?;
     s.edit("Delete Artboard", |d, sel| {
-        if d.artboards.len() <= 1 {
+        if indices.len() >= d.artboards.len() {
             return Err(EngineError::Other("a document needs at least one artboard".into()));
         }
-        if i >= d.artboards.len() {
-            return Err(EngineError::Other("no such artboard".into()));
+        // The last first, so the others keep their places; their guides go with them.
+        for &i in indices.iter().rev() {
+            let id = d.artboards.remove(i).id;
+            d.retain_guides(sel, |_, g| g.artboard != Some(id));
         }
-        // Its guides go with it.
-        let id = d.artboards.remove(i).id;
-        d.retain_guides(sel, |_, g| g.artboard != Some(id));
         Ok(())
     })?;
     ok()

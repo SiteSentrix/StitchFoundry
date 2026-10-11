@@ -4,13 +4,14 @@ members = ["crates/*", "apps/*", "xtask"]
 default-members = ["crates/*", "apps/vectorcraft", "apps/vectorcraft-cli", "xtask"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
 repository = "https://github.com/SiteSentrix/StitchFoundry"
 
 [workspace.dependencies]
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }
@@ -69,7 +70,7 @@ usvg = "0.48"
 krilla = "0.8"
 skrifa = "0.47"
 harfrust = "0.13"
-linesweeper = "0.4"
+linesweeper = "0.5"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 # Zstandard decoder (pure Rust, builds for wasm32 too): the editing copy an EPS carries of its art.
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }

@@ -1,27 +1,25 @@
-//! Where VectorCraft keeps its settings, `ui.json`, and next to it folders of the user's own
+//! Where StitchFoundry keeps its settings, `ui.json`, and next to it folders of the user's own
 //! (Swatches, Graphic Styles, Fonts, Data Recovery, logs). The desktop app and `vectorcraft-cli`
 //! (which shares this file) read the same Fonts folder.
 
 use std::path::PathBuf;
 
+#[path = "profile.rs"]
+mod profile;
+
 /// The settings file `ui.json` of the app `name`: in a folder named `name` in ~/Library/Application
 /// Support (macOS) or %APPDATA% (Windows), or `lower` in $XDG_CONFIG_HOME or ~/.config (Linux and
 /// BSD).
 pub fn prefs_path_for(name: &str, lower: &str) -> Option<PathBuf> {
-    let base = if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support").join(name))
-    } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join(name))
-    } else {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(std::path::PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
-            .map(|c| c.join(lower))
-    };
-    base.map(|b| b.join("ui.json"))
+    // Any other app's profile is one StitchFoundry only migrates from (VectorCraft's).
+    let legacy = (name, lower) != APP_FOLDER;
+    profile::prefs_path(name, lower, legacy)
 }
 
-/// Have the font scans read VectorCraft's own Fonts folder, next to the settings, which
+/// StitchFoundry's own settings folder: its name on macOS and Windows, and on Linux and BSD.
+pub const APP_FOLDER: (&str, &str) = ("StitchFoundry", "stitchfoundry");
+
+/// Have the font scans read StitchFoundry's own Fonts folder, next to the settings, which
 /// `text.addFontFiles` copies font files into. The folder is set whether or not
 /// `VECTORCRAFT_NO_PREFS` is set, as the Swatches and Graphic Styles folders are.
 pub fn install_fonts() {

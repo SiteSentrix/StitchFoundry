@@ -133,14 +133,44 @@ fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
     m
 }
 
+/// Every attribute name `T` reads, including those its JSON leaves out at their defaults (Auto
+/// leading and kerning, no mojikumi…): the field names serde's derive hands `deserialize_struct`.
+/// Not `justify_auto`, which [`to_map`] turns into `"justify": "Auto"`.
+fn attr_names<T: DeserializeOwned>() -> Vec<&'static str> {
+    use serde::de::{Error as _, Visitor, value::Error};
+
+    struct Names<'a>(&'a mut &'static [&'static str]);
+    impl<'de> serde::Deserializer<'de> for Names<'_> {
+        type Error = Error;
+        fn deserialize_any<V: Visitor<'de>>(self, _: V) -> std::result::Result<V::Value, Error> {
+            Err(Error::custom("not a struct"))
+        }
+        fn deserialize_struct<V: Visitor<'de>>(self, _: &'static str, fields: &'static [&'static str], _: V) -> std::result::Result<V::Value, Error> {
+            *self.0 = fields;
+            Err(Error::custom("field names only"))
+        }
+        serde::forward_to_deserialize_any! {
+            bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string bytes byte_buf option unit
+            unit_struct newtype_struct seq tuple tuple_struct map enum identifier ignored_any
+        }
+    }
+
+    let mut fields: &'static [&'static str] = &[];
+    // Always an error: the probe only records the names.
+    let _ = T::deserialize(Names(&mut fields));
+    fields.iter().copied().filter(|&f| f != "justify_auto").collect()
+}
+
 /// `base` with `attrs` written over it (unknown or ill-typed attributes are an error).
 fn with_attrs<T: Serialize + DeserializeOwned>(base: &T, attrs: &Map<String, Value>, cmd: &str) -> Result<T> {
     let mut m = to_attrs(base);
     if let Some(full) = to_map(base) {
         m.insert("style_name".into(), full.get("style_name").cloned().unwrap_or(Value::Null));
     }
+    let names = attr_names::<T>();
     for (k, v) in attrs {
-        if !m.contains_key(k) {
+        // Not only the keys `base` writes: those at their defaults (Auto leading…) are left out.
+        if !m.contains_key(k) && !names.contains(&k.as_str()) {
             return Err(bad(cmd, format!("unknown attribute `{k}`")));
         }
         m.insert(k.clone(), v.clone());
@@ -573,6 +603,44 @@ mod tests {
         s.execute("charStyle.apply", &json!({"name": "Pink"})).unwrap();
         let fill = serde_json::to_value(&runs(&s, id)[0].style.fill).unwrap();
         assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Pink").unwrap().attrs["fill"], fill);
+    }
+
+    /// #1001: attributes their JSON leaves out at the defaults (Auto leading and kerning, no
+    /// mojikumi) are still attributes a style can set, and a style captured with one applies to
+    /// text at the default, is duplicated and comes back out of a library.
+    #[test]
+    fn styles_take_attributes_left_out_at_their_defaults() {
+        let (mut s, id) = session_with_text("A");
+        s.execute("charStyle.new", &json!({"name": "Kerned", "attrs": {"kerning": 40, "leading": 30}})).unwrap();
+        s.execute("charStyle.setAttrs", &json!({"name": "Kerned", "attrs": {"kerning": 20, "small_caps": 70}})).unwrap();
+        s.execute("paraStyle.new", &json!({"name": "Punctuation", "attrs": {"mojikumi": "lineEndHalf"}})).unwrap();
+        s.execute("paraStyle.setAttrs", &json!({"name": "Punctuation", "attrs": {"direction": "rightToLeft"}})).unwrap();
+        for bad in [json!({"nope": 1}), json!({"justify_auto": true})] {
+            assert!(s.execute("paraStyle.new", &json!({"name": "Bad", "attrs": bad})).is_err(), "{bad}");
+        }
+        // Captured from text with explicit leading, applied to fresh Auto-leading text.
+        s.execute("text.setStyle", &json!({"leading": 30})).unwrap();
+        s.execute("charStyle.new", &json!({"name": "Spaced"})).unwrap();
+        let fresh = s.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(runs(&s, fresh)[0].style.leading, None);
+        for clear in [false, true] {
+            s.execute("charStyle.apply", &json!({"name": "Spaced", "id": fresh, "clearOverrides": clear})).unwrap();
+            assert_eq!(runs(&s, fresh)[0].style.leading, Some(30.0));
+        }
+        let copy = s.execute("charStyle.duplicate", &json!({"name": "Spaced"})).unwrap()["name"].as_str().unwrap().to_string();
+        assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == copy).unwrap().attrs["leading"], 30.0);
+        s.execute("charStyle.apply", &json!({"name": "Kerned", "id": fresh})).unwrap();
+        let st = runs(&s, fresh)[0].style.clone();
+        assert_eq!((st.kerning, st.small_caps), (Some(20.0), Some(70.0)));
+        s.execute("paraStyle.apply", &json!({"name": "Punctuation", "id": id})).unwrap();
+        let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!() };
+        assert_eq!((t.para.mojikumi, t.para.direction), (vectorcraft_doc::Mojikumi::LineEndHalf, Some(vectorcraft_doc::ParaDirection::RightToLeft)));
+        // A library keeps the captured attributes and makes the style again where it's used.
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let lib = s.execute("library.add", &json!({"kind": "charStyle", "name": "Lib Spaced"})).unwrap();
+        let other = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "C"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("library.use", &json!({"library": lib["library"], "kind": "charStyle", "item": lib["name"]})).unwrap();
+        assert_eq!(runs(&s, other)[0].style.leading, Some(30.0));
     }
 
     #[test]

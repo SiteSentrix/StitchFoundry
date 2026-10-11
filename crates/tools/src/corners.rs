@@ -1,6 +1,6 @@
 //! Live Corners: the widgets inside the corners of the selected paths. The Selection tool shows
 //! them on live rectangles and polygons, Direct Selection on any path (a star, a pen path) at each
-//! corner anchor: one without handles between two straight sides. Dragging one rounds (or
+//! corner anchor: one that isn't smooth, where two sides, straight or curved, meet at an angle. Dragging one rounds (or
 //! sharpens) the corners whose widgets show together, on every selected path (#938): every corner
 //! of a path selected whole, those with a selected anchor when Direct Selection picked some. Alt-clicking a widget cycles their corner
 //! kind (round, inverted round, chamfer); double-clicking one opens the Corners dialog. The
@@ -701,7 +701,7 @@ mod tests {
         assert!(red, "six arcs at the limit");
     }
 
-    /// A pen path's middle corner shows a widget; its ends and curved corners don't.
+    /// A pen path's corners show widgets, curved ones too (#1144); its ends don't.
     #[test]
     fn a_pen_path_shows_widgets_on_its_corners_only() {
         let mut sp = vectorcraft_geom::SubPath::polyline(
@@ -713,7 +713,7 @@ mod tests {
         let s = selected(id);
         let p = paint();
         let w = CornerWidgets::for_tool(&cx(&d, &s, &p), true).unwrap();
-        assert_eq!(w.corners(), [1]);
-        assert_eq!(pts(&w), [Point::new(290.0, 110.0)]);
+        assert_eq!(w.corners(), [1, 2]);
+        assert_eq!(pts(&w)[0], Point::new(290.0, 110.0));
     }
 }

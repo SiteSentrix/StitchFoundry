@@ -160,6 +160,40 @@ impl OtFeatures {
             // and digits itself (they would lie upside down, and tate-chu-yoko break).
             v.push(f(b"vert", true));
         }
+        if self.proportional(st) {
+            v.push(f(b"palt", true));
+        }
+        v
+    }
+
+    /// Does text in style `st` take proportional widths (`palt`)? Proportional Metrics in
+    /// horizontal type; vertical type takes proportional heights instead
+    /// ([`Self::proportional_vertical`]).
+    pub(crate) fn proportional(&self, st: &CharStyle) -> bool {
+        st.proportional_metrics && !self.vertical
+    }
+
+    /// Does text in style `st` take proportional heights (`vpal`)? Proportional Metrics in
+    /// vertical type.
+    pub(crate) fn proportional_vertical(&self, st: &CharStyle) -> bool {
+        st.proportional_metrics && self.vertical
+    }
+
+    /// The harfrust features for vertical text in style `st` shaped top to bottom: [`Self::resolve`],
+    /// with `vpal` when `proportional`.
+    pub(crate) fn resolve_vertical(&self, st: &CharStyle, proportional: bool) -> Vec<Feature> {
+        let mut v = self.resolve(st);
+        if proportional {
+            v.push(f(b"vpal", true));
+        }
+        v
+    }
+
+    /// The harfrust features for text in style `st` with full-width glyphs on their full widths:
+    /// [`Self::resolve`] without `palt`.
+    pub(crate) fn resolve_fixed_width(&self, st: &CharStyle) -> Vec<Feature> {
+        let mut v = self.resolve(st);
+        v.retain(|x| x.tag != Tag::new(b"palt"));
         v
     }
 }

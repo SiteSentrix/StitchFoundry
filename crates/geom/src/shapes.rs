@@ -235,8 +235,9 @@ pub fn polar_grid(r: Rect, concentric: u32, radial: u32) -> Vec<PathData> {
         let f = i as f64 / (concentric + 1) as f64;
         out.push(ellipse(Rect::from_center_size(c, (r.width() * f, r.height() * f))));
     }
-    for i in 0..radial.max(1) {
-        let a = -PI / 2.0 + TAU * i as f64 / radial.max(1) as f64;
+    // No dividers at 0 (the loop never divides by it).
+    for i in 0..radial {
+        let a = -PI / 2.0 + TAU * i as f64 / radial as f64;
         out.push(line(c, Point::new(c.x + r.width() / 2.0 * a.cos(), c.y + r.height() / 2.0 * a.sin())));
     }
     out
@@ -402,6 +403,10 @@ mod tests {
     fn grids() {
         assert_eq!(rectangular_grid(Rect::new(0.0, 0.0, 10.0, 10.0), 5, 5, true).len(), 11);
         assert_eq!(polar_grid(Rect::new(0.0, 0.0, 10.0, 10.0), 5, 5).len(), 11);
+        // #1008: no radial dividers is none, only the outer ellipse without concentric ones.
+        for (radial, len) in [(0, 1), (1, 2), (2, 3)] {
+            assert_eq!(polar_grid(Rect::new(0.0, 0.0, 10.0, 10.0), 0, radial).len(), len, "{radial}");
+        }
     }
 
     #[test]

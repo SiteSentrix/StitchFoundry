@@ -831,7 +831,7 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
         spec.categories = vec!["A".into(), "B".into(), "C".into(), "D".into()];
         spec.rows = vec![vec![3.0, 2.0], vec![5.0, 4.0], vec![4.0, 6.0], vec![7.0, 5.0]];
     }
-    let parent = s.doc()?.insertion_parent();
+    let parent = s.doc()?.target_parent()?;
     let id = s.edit("Graph", |d, sel| {
         let gid = d.alloc_id();
         let mut g = Node::group(gid, vec![]);

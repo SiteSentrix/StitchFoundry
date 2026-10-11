@@ -235,12 +235,16 @@ pub(crate) struct Tidy {
     keep: Vec<Point>,
     /// Input curves (with inflated bounds) used to rebuild split pieces exactly.
     curves: Vec<(kurbo::Rect, CubicBez)>,
+    /// `curves` indices by the left edge of their bounds, and the widest bounds: the curves whose
+    /// bounds can hold a point, without testing them all.
+    by_x: Vec<usize>,
+    max_width: f64,
 }
 
 impl Tidy {
     /// Merge any smooth joint.
     pub(crate) fn free(precision: f64) -> Self {
-        Self { precision, keep: Vec::new(), curves: Vec::new() }
+        Self { precision, ..Default::default() }
     }
     /// Keep every on-curve point of `paths`.
     pub(crate) fn keeping<'a>(precision: f64, paths: impl IntoIterator<Item = &'a BezPath>) -> Self {
@@ -257,7 +261,10 @@ impl Tidy {
             }
         }
         keep.sort_by(|a, b| a.x.total_cmp(&b.x));
-        Self { precision, keep, curves }
+        let mut by_x: Vec<usize> = (0..curves.len()).collect();
+        by_x.sort_by(|&i, &j| curves[i].0.x0.total_cmp(&curves[j].0.x0));
+        let max_width = curves.iter().map(|(r, _)| r.width()).fold(0.0, f64::max);
+        Self { precision, keep, curves, by_x, max_width }
     }
     fn is_kept(&self, p: Point) -> bool {
         let tol = 1e-6 * (1.0 + p.x.abs().max(p.y.abs()));
@@ -322,10 +329,11 @@ impl Arrangement {
 pub(crate) fn contours_to_path(c: &Contours, idx: impl IntoIterator<Item = ContourIdx>, tidy: &Tidy) -> PathData {
     let mut subpaths = Vec::new();
     for i in idx {
-        if is_sliver(&c[i].path, tidy.precision) {
+        let path = tidy.repair(&c[i].path);
+        if is_sliver(&path, tidy.precision) {
             continue;
         }
-        if let Some(sp) = tidy_bezpath(&c[i].path, tidy) {
+        if let Some(sp) = tidy_bezpath(&path, tidy) {
             subpaths.push(sp);
         }
     }
@@ -515,6 +523,84 @@ fn exact_merge(run: &[Seg], tidy: &Tidy) -> Option<CubicBez> {
     None
 }
 
+impl Tidy {
+    /// The input curves whose bounds hold both `a` and `b`.
+    fn curves_around(&self, a: Point, b: Point) -> impl Iterator<Item = &CubicBez> {
+        let x = a.x.min(b.x);
+        let hi = self.by_x.partition_point(|&i| self.curves[i].0.x0 <= x);
+        let lo = self.by_x[..hi].partition_point(|&i| self.curves[i].0.x0 < x - self.max_width);
+        self.by_x[lo..hi].iter().map(|&i| &self.curves[i]).filter(move |(r, _)| r.contains(a) && r.contains(b)).map(|(_, c)| c)
+    }
+
+    /// `bp` with each curve piece that strays from the one input curve through both its ends
+    /// rebuilt as that curve's exact sub-curve. linesweeper 0.5 can emit a piece that doesn't
+    /// follow its curve; out and back between two points of one curve, such pieces are a lens
+    /// instead of nothing (issue #1028). A piece on a curve, or whose ends two different input
+    /// curves pass through (a real lens between them), is left as it is.
+    pub(crate) fn repair(&self, bp: &BezPath) -> BezPath {
+        use kurbo::{ParamCurve, ParamCurveNearest, PathEl};
+        if self.curves.is_empty() {
+            return bp.clone();
+        }
+        let mut out = BezPath::new();
+        let mut cur = Point::ZERO;
+        let mut start = Point::ZERO;
+        for el in bp.iter() {
+            let piece = match el {
+                PathEl::QuadTo(c, p) => Some(kurbo::QuadBez::new(cur, c, p).raise()),
+                PathEl::CurveTo(c1, c2, p) => Some(CubicBez::new(cur, c1, c2, p)),
+                _ => None,
+            };
+            match (el, piece) {
+                (_, Some(raw)) => {
+                    let (a, b) = (raw.p0, raw.p3);
+                    let scale = 1.0 + a.x.abs().max(a.y.abs()).max(b.x.abs()).max(b.y.abs());
+                    let tol = 1e-6 * scale;
+                    let mut subs: Vec<CubicBez> = vec![];
+                    let mut follows = false;
+                    for c in self.curves_around(a, b) {
+                        let (na, nb) = (c.nearest(a, 1e-12), c.nearest(b, 1e-12));
+                        if na.distance_sq.sqrt() > tol || nb.distance_sq.sqrt() > tol || (na.t - nb.t).abs() < 1e-12 {
+                            continue;
+                        }
+                        if [0.25, 0.5, 0.75].iter().all(|&t| c.nearest(raw.eval(t), 1e-12).distance_sq.sqrt() <= tol * 10.0) {
+                            follows = true;
+                            break;
+                        }
+                        let sub = if na.t < nb.t {
+                            c.subsegment(na.t..nb.t)
+                        } else {
+                            let r = c.subsegment(nb.t..na.t);
+                            CubicBez::new(r.p3, r.p2, r.p1, r.p0)
+                        };
+                        subs.push(CubicBez::new(a, sub.p1, sub.p2, b));
+                    }
+                    let same = |p: &CubicBez, q: &CubicBez| p.p1.distance(q.p1) <= tol * 10.0 && p.p2.distance(q.p2) <= tol * 10.0;
+                    match subs.split_first() {
+                        Some((sub, rest)) if !follows && rest.iter().all(|q| same(sub, q)) => out.curve_to(sub.p1, sub.p2, b),
+                        _ => out.push(el),
+                    }
+                    cur = b;
+                }
+                (PathEl::MoveTo(p), None) => {
+                    out.push(el);
+                    (cur, start) = (p, p);
+                }
+                (PathEl::LineTo(p), None) => {
+                    out.push(el);
+                    cur = p;
+                }
+                (PathEl::ClosePath, None) => {
+                    out.push(el);
+                    cur = start;
+                }
+                (_, None) => out.push(el),
+            }
+        }
+        out
+    }
+}
+
 /// Resolve self-intersections / overlaps of a single filled path into simple, consistently
 /// oriented contours (outer contours and holes).
 pub fn normalize(path: &PathData, rule: FillRule) -> PathData {
@@ -590,5 +676,59 @@ pub fn area(path: &PathData, rule: FillRule) -> f64 {
     match normalize_bez(&bp, rule) {
         Ok(c) => c.contours().map(|ct| ct.path.area()).sum::<f64>().abs(),
         Err(_) => 0.0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use kurbo::ParamCurve;
+
+    use super::*;
+
+    /// A quarter-circle-like arc, the input curve the pieces below are cut from.
+    fn arc() -> CubicBez {
+        CubicBez::new((0.0, 0.0), (0.0, 55.0), (45.0, 100.0), (100.0, 100.0))
+    }
+
+    #[test]
+    fn a_stray_piece_out_and_back_along_one_curve_is_no_outline() {
+        // Issue #1028: linesweeper 0.5 handed back a contour running out along an input curve and
+        // back by a piece that doesn't follow it, which refit into a visible lens.
+        let c = arc();
+        let tidy =
+            Tidy::keeping(DEFAULT_PRECISION, [&BezPath::from_vec(vec![kurbo::PathEl::MoveTo(c.p0), kurbo::PathEl::CurveTo(c.p1, c.p2, c.p3)])]);
+        let out = c.subsegment(0.2..0.6);
+        let mut contour = BezPath::new();
+        contour.move_to(out.p0);
+        contour.curve_to(out.p1, out.p2, out.p3);
+        // back to the start, bulging off the curve and overshooting the end like the reported piece
+        contour.curve_to(out.p0 + (out.p0 - out.p3) * 0.15 + kurbo::Vec2::new(4.0, -3.0), out.p1 + kurbo::Vec2::new(3.0, -2.0), out.p0);
+        contour.close_path();
+        assert!(!is_sliver(&contour, tidy.precision), "the stray piece makes a lens");
+        let fixed = tidy.repair(&contour);
+        assert!(is_sliver(&fixed, tidy.precision), "{}", fixed.to_svg());
+        // a piece on its curve is left exactly as it is
+        let mut on = BezPath::new();
+        on.move_to(out.p0);
+        on.curve_to(out.p1, out.p2, out.p3);
+        on.line_to(out.p0);
+        on.close_path();
+        assert_eq!(tidy.repair(&on), on);
+    }
+
+    #[test]
+    fn a_lens_between_two_curves_through_the_same_points_stays() {
+        // Two input curves meeting at both ends bound a real face: neither piece is "repaired"
+        // onto the other.
+        let lower = CubicBez::new((0.0, 0.0), (30.0, 20.0), (70.0, 20.0), (100.0, 0.0));
+        let upper = CubicBez::new((0.0, 0.0), (30.0, -20.0), (70.0, -20.0), (100.0, 0.0));
+        let input = |c: CubicBez| BezPath::from_vec(vec![kurbo::PathEl::MoveTo(c.p0), kurbo::PathEl::CurveTo(c.p1, c.p2, c.p3)]);
+        let tidy = Tidy::keeping(DEFAULT_PRECISION, [&input(lower), &input(upper)]);
+        let mut lens = BezPath::new();
+        lens.move_to(lower.p0);
+        lens.curve_to(lower.p1, lower.p2, lower.p3);
+        lens.curve_to(upper.p2, upper.p1, upper.p0);
+        lens.close_path();
+        assert_eq!(tidy.repair(&lens), lens);
     }
 }

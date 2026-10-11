@@ -87,6 +87,10 @@ const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
 /// `automatic` (#502).
 pub const GPU_PREFERENCES: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("lowPower", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
+/// Performance › Linux Display Server (`linuxDisplayServer`), read by the desktop app at startup:
+/// `x11` opens the window through XWayland on a Wayland session, where dropped files arrive
+/// (winit 0.30 has no Wayland drag and drop, #1151).
+const LINUX_DISPLAY_SERVERS: &[(&str, &str)] = &[("automatic", "Automatic"), ("x11", "X11 (XWayland)")];
 const BLACK: &[(&str, &str)] = &[("accurate", "Display All Blacks Accurately"), ("rich", "Display All Blacks as Rich Black")];
 const BLACK_OUT: &[(&str, &str)] = &[("accurate", "Output All Blacks Accurately"), ("rich", "Output All Blacks as Rich Black")];
 
@@ -290,6 +294,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("historyStates", "Performance", "", "History States", int(5, 1000)),
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),
+    p!("linuxDisplayServer", "Performance", "", "Linux Display Server", choice(LINUX_DISPLAY_SERVERS)),
     // File Handling
     p!("backgroundSave", "File Handling", "", "Enable Background Save", bool),
     p!("backgroundExport", "File Handling", "", "Enable Background Export", bool),

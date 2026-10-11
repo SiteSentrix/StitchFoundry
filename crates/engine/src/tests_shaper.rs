@@ -42,6 +42,22 @@ fn stroke(s: &Session, id: NodeId, x: f64, y: f64) -> bool {
     })
 }
 
+/// An invalid explicit Shaper target must never silently change which shapes get edited.
+#[test]
+fn shaper_scribble_rejects_malformed_explicit_targets() {
+    let mut s = session();
+    let a = rectangle(&mut s, 0.0, "#ff0000");
+    let untouched = s.doc().unwrap().doc.layers.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for ids in [json!([a.0, "bad"]), json!([a.0, 999999]), json!({"id": a.0}), json!("bad")] {
+        let err = s.execute("shaper.scribble", &json!({"points": [[25, 20], [35, 30]], "ids": ids}));
+        assert!(err.is_err(), "malformed targets were accepted");
+        assert_eq!(s.doc().unwrap().doc.layers, untouched);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    }
+    s.execute("shaper.scribble", &json!({"points": [[25, 20], [35, 30]], "ids": [a.0]})).unwrap();
+}
+
 #[test]
 fn shaper_merges_with_origin_color_keeps_live_originals_and_undoes_once() {
     for reverse in [false, true] {

@@ -108,8 +108,8 @@ fn laid_out(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
     app.canvas_rect.expect("the canvas is laid out")
 }
 
-/// Where the platform tells where files were dropped (the web), they go as in Illustrator: placed
-/// at the pointer on the canvas whatever they are, opened off it (the tab bar).
+/// Where the platform tells where files were dropped (the web), documents, pictures and text go
+/// as in Illustrator: placed at the pointer on the canvas, opened off it (the tab bar).
 #[test]
 fn a_drop_with_a_position_places_on_the_canvas_and_opens_off_it() {
     let mut app = app();
@@ -139,6 +139,57 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
     for name in ["a.png", "a.jpg", "a.tiff", "a.webp", "a.txt"] {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Place(DropAt { doc: uid, at: center, embed: false }), "{name}");
     }
+}
+
+/// Swatch libraries and color books, graphic style libraries, Libraries panel files, presets and
+/// plug-ins open as File → Open opens them, dropped with or without a position, on the canvas too.
+#[test]
+fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let rect = laid_out(&mut app, &ctx);
+    let on_canvas = rect.center() + vec2(60.0, -40.0);
+    let libraries = ["a.vcswatches", "a.gpl", "a.ase", "a.acb", "a.vcstyles", "a.vclibrary"];
+    let presets_and_plugins = ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.wasm"];
+    for name in libraries.into_iter().chain(presets_and_plugins) {
+        assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
+        assert_eq!(app.drop_target(name, Some(on_canvas), true), DropTarget::Open, "{name} on the canvas");
+    }
+}
+
+/// A swatch library dropped on the window while a document is open loads in the library panel,
+/// as File → Open loads it.
+#[test]
+fn a_dropped_swatch_library_opens_in_the_library_panel() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let gpl = temp_file("dropped.gpl", b"GIMP Palette\nName: Dropped\n#\n255   0   0\tRed\n  0 128 255\tSky\n");
+    frame(&mut app, &ctx, vec![], &[&gpl], false);
+    let id = format!("loaded/{gpl}");
+    assert_eq!(app.ui.library_panel.as_ref().map(|o| o.id.as_str()), Some(id.as_str()), "{}", app.ui.status);
+    let lib = app.session.execute("swatch.library.get", &json!({"library": id})).unwrap();
+    let names: Vec<&str> = lib["swatches"].as_array().unwrap().iter().filter_map(|w| w["name"].as_str()).collect();
+    assert_eq!((lib["name"].as_str(), names), (Some("Dropped"), vec!["Red", "Sky"]));
+    assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
+    assert_eq!(app.ui.recent_files.first(), Some(&gpl), "added to Open Recent Files as File → Open adds it");
+}
+
+/// A Libraries panel file dropped on the window while a document is open is added to the
+/// Libraries panel as a new library, as File → Open adds it.
+#[test]
+fn a_dropped_libraries_panel_file_is_added_as_a_new_library() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let file = json!({"name": "Dropped", "colors": [{"name": "Red", "color": {"model": "rgb", "r": 1, "g": 0, "b": 0}}]});
+    let path = temp_file("dropped.vclibrary", file.to_string().as_bytes());
+    frame(&mut app, &ctx, vec![], &[&path], false);
+    assert_eq!(app.ui.status, "Imported library Dropped");
+    let lib = app.session.execute("library.get", &json!({})).unwrap();
+    let colors: Vec<&str> = lib["colors"].as_array().unwrap().iter().filter_map(|c| c["name"].as_str()).collect();
+    assert_eq!((lib["name"].as_str(), colors), (Some("Dropped"), vec!["Red"]));
+    assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
 }
 
 #[test]
@@ -545,4 +596,72 @@ fn crop_image_shows_a_box_that_apply_crops_to() {
     // Without an image selected there's nothing to crop.
     app.run("select.none", json!({})).unwrap();
     assert!(!crate::menus::enabled(&app, "ui.cropImage") && app.run("ui.cropImage", json!({})).is_err());
+}
+
+/// One headless frame of the whole window at `time` → how long the app asked to wait before the
+/// next one.
+fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::time::Duration {
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(time), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        app.logic(ui.ctx());
+        app.ui(ui);
+    });
+    out.textures_delta.clear();
+    out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay)
+}
+
+/// The window sits idle for `secs` from `*time` (a frame now, then only the frames the app asks
+/// for) or until `done` → whether it was.
+fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64, done: &dyn Fn(&VectorcraftApp) -> bool) -> bool {
+    let end = *time + secs;
+    let real_end = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        let wait = frame_at(app, ctx, *time);
+        if done(app) {
+            return true;
+        }
+        let next = *time + wait.as_secs_f64().max(1.0 / 60.0);
+        if next > end {
+            *time = end;
+            return false;
+        }
+        // The look runs on a worker thread, in real time: the clock waits for it, else a busy
+        // machine's slow look outlasts the simulated seconds and the test fails at random.
+        if app.session.link_scan.is_some() && std::time::Instant::now() < real_end {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            continue;
+        }
+        *time = next;
+    }
+}
+
+/// A file placed into a document whose last look found no links, then changed by another app
+/// while the window sits idle in the background, follows Update Links: Automatically: the app
+/// wakes itself to see the new link before the change, so the change isn't taken for the file as
+/// first seen.
+#[test]
+fn a_file_placed_while_idle_follows_its_changes() {
+    let mut app = app();
+    app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
+    let ctx = egui::Context::default();
+    let mut time = 0.0;
+    idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
+    // A look finds the new document without links: no wakes of its own for it.
+    assert_eq!(frame_at(&mut app, &ctx, time), std::time::Duration::MAX, "{:?}", ctx.repaint_causes());
+    // Half a second later, before the next look is due, a file is placed. The place itself is a
+    // frame (as any command); then nothing happens for 3 s.
+    time += 0.5;
+    let path = temp_file("idle-watch.png", &png(40, 30, 72.0));
+    app.run("file.place", json!({"path": path})).unwrap();
+    let id = app.session.active().unwrap().selection.objects[0];
+    idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    let changed = png(60, 30, 72.0);
+    std::fs::write(&path, &changed).unwrap();
+    let hash = vectorcraft_doc::links::hash_bytes(&changed);
+    let updated = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        matches!(&st.doc.node(id).unwrap().kind, NodeKind::Image(im) if im.link.as_ref().and_then(|l| l.hash.as_deref()) == Some(hash.as_str()))
+    };
+    assert!(idle(&mut app, &ctx, &mut time, 10.0, &updated), "the changed file was never read again");
 }

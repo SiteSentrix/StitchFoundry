@@ -312,6 +312,22 @@ fn inspect_document_reports_the_paint_of_type() {
     assert_eq!((t["fill"].as_str(), t["stroke"].as_str(), t["strokeWidth"].as_f64()), (Some("#0000ff"), Some("#00ff00"), Some(3.0)), "{t}");
 }
 
+/// #1003: type made on or in a path takes add_text's `color` too, over the current fill.
+#[test]
+fn add_text_on_or_in_a_path_takes_its_color() {
+    for mode in ["onPath", "area"] {
+        let mut s = server();
+        let r = call(&mut s, 2, "draw_shape", json!({"shape": "rectangle", "x": 40, "y": 40, "width": 180, "height": 60, "fill": "#0000ff"}));
+        let path = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].clone();
+        let r = call(&mut s, 3, "add_text", json!({"text": "Hello", "path": path, "mode": mode, "color": "#ff0000"}));
+        assert_eq!(r["isError"], false, "{r}");
+        let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].clone();
+        let v: Value = serde_json::from_str(&text_of(&call(&mut s, 4, "inspect_document", json!({})))).unwrap();
+        let t = v["layers"][0]["children"].as_array().unwrap().iter().find(|c| c["id"] == id).cloned().unwrap();
+        assert_eq!(t["fill"].as_str(), Some("#ff0000"), "{mode}: {t}");
+    }
+}
+
 /// save_file says it saves in the document's own format or the one the path's extension picks.
 #[test]
 fn save_file_describes_the_formats_it_writes() {

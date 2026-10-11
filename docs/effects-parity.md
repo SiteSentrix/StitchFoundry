@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first checklist, counted from the effects catalogue) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (PDF raster-effect resolution-cap warnings; Zig Zag's dialog with sliders and radio buttons, #1133; earlier: Brush Strokes landed) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -30,7 +30,9 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | SVG Filters | Apply SVG Filter… and the filter list | 0/1 | the whole submenu (SVG filters on import round-trip already) |
 | Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes |
 
-Document Raster Effects Settings exists.
+Document Raster Effects Settings exists. When the 64 million pixel cap on an effect image lowers
+its resolution, PDF export warns once per object with the requested and the lowest achieved ppi
+(`crates/engine/src/tests_pdfraster.rs`).
 
 ## Photoshop effects
 
@@ -72,6 +74,8 @@ rendering, Turntable, 3D export) is 45–75 h, still the largest single gap.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | PDF cap warnings identify original objects after appearance splitting and report the lowest achieved ppi; cap/rendering and scores unchanged |
+| 2026-10-11 | minor | Zig Zag's dialog: Size and Ridges per segment sliders, Points as Smooth / Corner radio buttons (#1133) |
 | 2026-10-11 | minor | Brush Strokes landed (8 filters): 28/57 Photoshop effects |
 | 2026-10-10 | minor | Initial Revolve landed (#846) |
 | 2026-10-10 | major | First checklist, counted from the effects catalogue (20/57 Photoshop effects, 44/50 Illustrator effects) |

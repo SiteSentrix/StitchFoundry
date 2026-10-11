@@ -367,7 +367,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let artboard_tool = app.session.tool_id() == "artboard";
     let tool_labelled = artboard_tool.then(|| app.session.tool_options()["active"].as_u64()).flatten();
     for (i, ab) in doc.artboards.iter().enumerate() {
-        let r = xf.rect_to_screen(ab.rect);
         let c = if i == active_ab { Color32::from_gray(0) } else { Color32::from_gray(120) };
         painter.add(Shape::closed_line(xf.quad(ab.rect), Stroke::new(if i == active_ab { 1.0 } else { 0.6 }, c)));
         // The bleed (Document Setup) as a red outline around the artboard.
@@ -375,7 +374,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             painter.add(Shape::closed_line(xf.quad(doc.setup.bleed_rect(ab.rect)), Stroke::new(1.0, t.bleed)));
         }
         if (artboard_tool || doc.artboards.len() > 1) && tool_labelled != u64::try_from(i).ok() {
-            artboard_label(&painter, r, &format!("{:02} - {}", i + 1, ab.name), t.text_dim);
+            // At the artboard's own top-left corner, which a rotated view turns away from its
+            // bounding box's (#1095).
+            let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
+            artboard_label(&painter, corner, (ab.rect.width() * xf.zoom) as f32, &format!("{:02} - {}", i + 1, ab.name), t.text_dim);
         }
     }
     if app.ui.view.guides {
@@ -383,7 +385,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Selected guides in the selection colour.
         let picked = LineLook { color: t.selection, ..look };
         let selected: &[usize] = app.session.active().map_or(&[], |st| &st.selection.guides);
-        for (i, g) in doc.guides.iter().enumerate() {
+        // Guides on a hidden layer hide with it.
+        for (i, g) in doc.guides.iter().enumerate().filter(|(_, g)| doc.guide_shown(g)) {
             let at = |along: f64| xf.to_screen(if g.vertical { Point::new(g.pos, along) } else { Point::new(along, g.pos) });
             // An artboard guide runs across its artboard, a canvas guide across the window.
             let (a, b) = match doc.guide_span(g) {
@@ -493,7 +496,7 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::ResizeV => C::ResizeVertical,
         Cursor::ResizeNwSe => C::ResizeNwSe,
         Cursor::ResizeNeSw => C::ResizeNeSw,
-        Cursor::Rotate => C::Alias,
+        Cursor::Rotate | Cursor::RotateToward(_) => C::Alias,
         Cursor::Pen | Cursor::PenAdd | Cursor::PenDelete | Cursor::PenClose | Cursor::PenContinue | Cursor::PenJoin | Cursor::PenConvert => {
             C::Crosshair
         }
@@ -910,7 +913,8 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_e
         v.artboard = i;
     }
     // A press with a selection tool inside an artboard makes it the active one (#693), as the
-    // Artboard tool's does: Paste in Place and in Front or Back then paste onto it.
+    // Artboard tool's does: Paste in Place and in Front or Back then paste onto it, Align to
+    // Artboard aligns to it, and All on Active Artboard selects on it.
     if ev.kind == PointerKind::Down
         && vectorcraft_tools::catalog::is_selection_tool(app.session.tool_id())
         && let Some(i) = app.session.active().and_then(|d| d.doc.artboard_at(ev.pos))
@@ -1240,6 +1244,8 @@ fn node_outline(n: &Node) -> BezPath {
             [b, c, d].into_iter().for_each(|q| bp.line_to(q));
             bp.close_path();
         }
+        // A gradient mesh shows its mesh lines (#1111).
+        NodeKind::Mesh(m) => bp.extend(m.lines().to_bezpath()),
         // An envelope shows its mesh (or top object), not its content.
         NodeKind::Envelope { .. } => {
             if let Some((lines, _)) = vectorcraft_doc::live::envelope_overlay(c) {
@@ -1634,9 +1640,15 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         let partial = st.selection.partial(*id);
         // Path outlines.
         stroke_path(p, &node_outline(n), xf, Stroke::new(1.0, color));
-        // Anchors (and handles for selected anchors in direct mode); a mesh envelope's points.
+        // Anchors (and handles for selected anchors in direct mode); a gradient mesh's or a mesh
+        // envelope's points.
         walk_drawn(n, &mut |c| {
-            if let Some((_, Some(grid))) = vectorcraft_doc::live::envelope_overlay(c) {
+            let envelope = vectorcraft_doc::live::envelope_overlay(c).and_then(|(_, grid)| grid);
+            let grid = match &c.kind {
+                NodeKind::Mesh(m) => Some(m),
+                _ => envelope.as_ref(),
+            };
+            if let Some(grid) = grid {
                 for q in &grid.points {
                     anchor_square(p, xf.to_screen(q.p), color, false, anchor(direct));
                 }
@@ -1757,16 +1769,16 @@ fn ime_output(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) {
 /// out rather than spilling over its neighbours.
 const MIN_LABELLED_ARTBOARD: f32 = 24.0;
 
-/// Artboard `name` above the top-left corner of its on-screen rect `r`, no wider than the
-/// artboard: a longer name ends in "…", and an artboard too narrow shows none (#949).
-fn artboard_label(painter: &egui::Painter, r: egui::Rect, name: &str, color: Color32) {
-    if r.width() < MIN_LABELLED_ARTBOARD {
+/// Artboard `name` above its top-left `corner` on screen, no wider than the artboard (`width` on
+/// screen): a longer name ends in "…", and an artboard too narrow shows none (#949).
+fn artboard_label(painter: &egui::Painter, corner: Pos2, width: f32, name: &str, color: Color32) {
+    if !width.is_finite() || width < MIN_LABELLED_ARTBOARD {
         return;
     }
     let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), egui::FontId::proportional(11.0), color);
-    job.wrap = egui::text::TextWrapping { max_width: r.width(), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    job.wrap = egui::text::TextWrapping { max_width: width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     let galley = painter.layout_job(job);
-    painter.galley(r.left_top() - vec2(0.0, 4.0 + galley.size().y), galley, color);
+    painter.galley(corner - vec2(0.0, 4.0 + galley.size().y), galley, color);
 }
 
 /// Is overlay label `text` the Artboard tool's "01 - <artboard name>"? It holds a name, so it is
@@ -2197,6 +2209,37 @@ mod tests {
         assert_eq!((b.x0, b.y0), (boards[2].x0 + 10.0, boards[2].y0 + 15.0));
     }
 
+    /// A Shift-click with the Selection tool on an empty spot inside an artboard makes it the active
+    /// one and keeps the selection, and Align to Artboard then aligns the objects to it unless the
+    /// call names another artboard.
+    #[test]
+    fn a_shift_click_activates_its_artboard_and_align_to_artboard_aligns_to_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+        let mut rect = |x: f64, y: f64| {
+            let r = app.session.execute("shape.rectangle", &json!({"x": boards[0].x0 + x, "y": boards[0].y0 + y, "width": 20, "height": 20}));
+            vectorcraft_doc::NodeId(r.unwrap()["id"].as_u64().unwrap())
+        };
+        let ids = [rect(10.0, 15.0), rect(50.0, 40.0)];
+        app.session.execute("select.set", &json!({"ids": [ids[0].0, ids[1].0]})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("selection");
+        let view = app.view_info();
+        let shift = Mods { shift: true, ..Default::default() };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, pressure: 1.0 }, view);
+        }
+        assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
+        assert_eq!(app.session.active().unwrap().selection.objects, ids, "the selection stays");
+        let lefts = |app: &VectorcraftApp| ids.map(|id| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0);
+        app.run("object.align", json!({"horizontal": "left", "to": "artboard"})).unwrap();
+        assert_eq!(lefts(&app), [boards[2].x0; 2], "the left edges are on the active artboard's");
+        app.run("object.align", json!({"horizontal": "left", "to": "artboard", "artboard": 1})).unwrap();
+        assert_eq!(lefts(&app), [boards[1].x0; 2], "an artboard the caller names is kept");
+    }
+
     /// Enable Touch Gestures (#585): a two-finger tap undoes and a three-finger one redoes, and the
     /// first finger's press (the pointer egui makes of it) draws nothing. Off, a tap does nothing.
     #[test]
@@ -2245,8 +2288,9 @@ mod tests {
     fn artboard_labels_fit_their_artboard() {
         let ctx = egui::Context::default();
         let drawn = |width: f32| {
-            let r = egui::Rect::from_min_size(pos2(50.0, 50.0), vec2(width, 40.0));
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| artboard_label(ui.painter(), r, "01 - A long artboard name", Color32::WHITE));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                artboard_label(ui.painter(), pos2(50.0, 50.0), width, "01 - A long artboard name", Color32::WHITE)
+            });
             out.textures_delta.clear();
             out.shapes
                 .into_iter()
@@ -2478,8 +2522,10 @@ mod tests {
             used
         };
         let bounds = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
-        // Direct Selection used last: the drag moves the rectangle's bottom-right corner only.
+        // Direct Selection used last: the drag moves the rectangle's bottom-right corner only (once
+        // the rectangle isn't selected whole, which would move all its anchors).
         app.select_tool("directSelection");
+        app.session.execute("select.none", &json!({})).unwrap();
         let corner = xf.to_screen(Point::new(200.0, 150.0));
         assert_eq!(cmd_drag(&mut app, corner, corner + vec2(20.0, 20.0)), "directSelection");
         let b = bounds(&app);
@@ -2514,6 +2560,34 @@ mod tests {
         assert!(points < 100 && squares < 100, "{points} outline points, {squares} squares");
         let (points, squares) = drawn(200);
         assert!(points > 200 && squares > 200, "{points} outline points, {squares} squares");
+    }
+
+    /// #1111: a selected gradient mesh shows its mesh lines and points to the selection tools, not
+    /// only to the Mesh tool.
+    #[test]
+    fn a_selected_gradient_mesh_shows_its_lines_and_points() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 200, "height": 100})).unwrap();
+        app.session.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+        let ctx = egui::Context::default();
+        let drawn = |app: &mut VectorcraftApp| {
+            frame(app, &ctx, vec![]);
+            let shapes = shapes(app, &ctx);
+            let lines = shapes.iter().filter(|s| matches!(s, Shape::Path(ps) if ps.points.len() > 1)).count();
+            (lines, shapes.iter().filter(|s| matches!(s, Shape::Rect(_))).count())
+        };
+        let (none_lines, none_points) = {
+            app.session.execute("select.none", &json!({})).unwrap();
+            drawn(&mut app)
+        };
+        for tool in ["selection", "directSelection"] {
+            app.select_tool(tool);
+            app.session.execute("select.all", &json!({})).unwrap();
+            let (lines, points) = drawn(&mut app);
+            // The outline, two inner lines each way; the 3 × 3 points.
+            assert!(lines >= none_lines + 3 && points >= none_points + 9, "{tool}: {lines} lines, {points} points");
+        }
     }
 
     /// #541: the key object's outline is drawn thicker than the rest of the selection's.

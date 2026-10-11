@@ -219,11 +219,13 @@ fn weighted_stroke(d: &mut Document, id: NodeId) -> Result<&mut vectorcraft_doc:
     Ok(st)
 }
 
-/// The `index` param, checked against the points of `prof`.
+/// The `index` param (none when absent or null), checked against the points of `prof`: a malformed
+/// one is refused like one out of range, never wrapped round or taken as missing.
 fn point_index(p: &Value, prof: &WidthProfile, cmd: &str) -> Result<Option<usize>> {
-    match p.get("index").and_then(Value::as_u64).map(|v| v as usize) {
-        Some(i) if i >= prof.points.len() => Err(bad(cmd, "no such width point")),
-        i => Ok(i),
+    let Some(v) = p.get("index").filter(|v| !v.is_null()) else { return Ok(None) };
+    match point_indices(&json!([v])).and_then(|i| i.first().copied()) {
+        Some(i) if i < prof.points.len() => Ok(Some(i)),
+        _ => Err(bad(cmd, "no such width point")),
     }
 }
 
@@ -323,11 +325,13 @@ fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
 fn width_point_remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.remove";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let mut indices: Vec<usize> = match (p.get("indices").and_then(Value::as_array), p.get("index").and_then(Value::as_u64)) {
-        (Some(a), _) => a.iter().filter_map(Value::as_u64).map(|i| i as usize).collect(),
-        (None, Some(i)) => vec![i as usize],
+    let indices = match (p.get("indices"), p.get("index")) {
+        (Some(a), _) => point_indices(a),
+        (None, Some(i)) => point_indices(&json!([i])),
         (None, None) => return Err(bad(C, "missing index")),
     };
+    // A malformed index fails the whole delete instead of being dropped while the others go.
+    let mut indices = indices.ok_or_else(|| bad(C, "no such width point"))?;
     indices.sort_unstable();
     indices.dedup();
     s.edit("Delete Width Point", |d, _| {

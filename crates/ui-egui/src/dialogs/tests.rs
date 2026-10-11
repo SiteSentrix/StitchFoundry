@@ -52,7 +52,6 @@ fn kinds_map_to_their_dialogs() {
         assert_eq!(DialogKind::of(kind), Some(want), "{kind}");
     }
     assert_eq!(DialogKind::of("nope"), None);
-    assert!(spec("allTools").ok.is_none());
     assert!(spec("effect").preview && spec("recolor").preview && !spec("move").preview);
     assert!(spec("preferences").window.is_some() && spec("rectangle").window.is_none());
 }
@@ -89,7 +88,6 @@ fn every_dialog_draws() {
     for (kind, fields) in [
         ("move", json!({"dx": "0 pt", "dy": "0 pt"})),
         ("average", json!({"axis": "both"})),
-        ("allTools", json!({})),
         (crate::unsaved::KIND, json!({"index": 0, "name": "Untitled-1", "then": "close"})),
         ("newWorkspace", json!({"name": "Mine"})),
         ("shortcuts", json!({})),
@@ -107,10 +105,6 @@ fn enter_confirms_through_the_dialog_spec() {
     frame(&mut app, enter());
     assert!(app.ui.dialog.is_none());
     assert_eq!(objects(&app), 1);
-    // All Tools has no OK: Enter leaves it open.
-    open(&mut app, "allTools", json!({}));
-    frame(&mut app, enter());
-    assert!(app.ui.dialog.is_some());
     // An unregistered kind still closes on OK without running anything.
     open(&mut app, "unregistered", json!({}));
     assert_eq!(confirm(&mut app), Ok(serde_json::Value::Null));
@@ -434,6 +428,38 @@ fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     assert_eq!(node.appearance.effects.last().map(|e| e.params["scaleH"].clone()), Some(json!(50.0)));
 }
 
+/// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
+/// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
+#[test]
+fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 40})).unwrap();
+    app.run("object.rasterize", json!({"ppi": 72})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let entry = crate::menus::menu_entries(&app).into_iter().find(|e| e.label == "Create Object Mosaic…").expect("menu item");
+    let (cmd, params) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
+    crate::menus::invoke(&mut app, &cmd, params);
+    // Its first field, Columns, is focused: type 3 over it and press Enter.
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("3".into())]);
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(&mut app, vec![enter]);
+    assert!(app.ui.dialog.is_none());
+    let mut tiles = None;
+    app.session.doc().unwrap().doc.walk(|n| {
+        if n.name.as_deref() == Some("Object Mosaic") {
+            tiles = n.children().map(|c| c.len());
+        }
+    });
+    assert_eq!(tiles, Some(3 * 10));
+}
+
 /// #793: Artboard Options lists its fields as Name, Width, Height, not by key.
 #[test]
 fn artboard_options_lists_name_then_width_and_height() {
@@ -513,4 +539,19 @@ fn artboard_options_position_moves_art_only_with_the_tool_option_on() {
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(*app.session.doc().unwrap().doc, *before);
     }
+}
+
+/// Zig Zag's dialog has Size and Ridges per segment sliders, and Relative / Absolute and Smooth /
+/// Corner as radio buttons, not dropdowns (#1133).
+#[test]
+fn zig_zag_has_sliders_and_radio_buttons() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.zigZag"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Size:", "Relative", "Absolute", "Ridges per segment:", "Points", "Smooth", "Corner"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    assert!(!lines.contains(&"Ridges:"), "{lines:?}");
 }

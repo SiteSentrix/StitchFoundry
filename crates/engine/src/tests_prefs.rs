@@ -156,6 +156,23 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.gpu_preference, "automatic");
 }
 
+/// Performance › Linux Display Server (#1151): automatic by default, X11 by value or label, and
+/// anything else is an error that changes nothing.
+#[test]
+fn linux_display_server_defaults_to_automatic_and_validates() {
+    let mut s = Session::new();
+    assert_eq!(s.prefs.linux_display_server, "automatic");
+    s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": "X11 (XWayland)"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "x11");
+    for bad in [json!("wayland"), json!(""), json!(11), json!(null)] {
+        assert!(s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.prefs.linux_display_server, "x11");
+    }
+    assert_eq!(s.prefs.to_json()["linuxDisplayServer"], "x11");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "automatic");
+}
+
 /// Selection & Anchor Display › Tolerance, Object Selection by Path Only and Command Click to
 /// Select Objects Behind, and General › Double Click To Isolate, as the Selection tool sees them
 /// (#394).
@@ -450,6 +467,50 @@ fn transform_pattern_tiles_is_the_transforms_default() {
     assert_eq!(tiles(&s), [1.0, 0.0, 0.0, 1.0, 10.0, 0.0], "the param wins");
     s.execute("object.scale", &json!({"sx": 50, "origin": [0, 0]})).unwrap();
     assert_eq!(tiles(&s), [0.5, 0.0, 0.0, 0.5, 5.0, 0.0]);
+}
+
+/// General › Transform Pattern Tiles (#394) applies to Align and Distribute as it does to the
+/// transforms: off, the tiles of a pattern-filled square stay in place when the square moves;
+/// on, they move with it, and `patterns: false` keeps them in place for one call.
+#[test]
+fn align_and_distribute_follow_transform_pattern_tiles() {
+    use vectorcraft_color::Paint;
+    let mut s = new_doc();
+    let plain = square(&mut s, 0.0, 0.0);
+    s.execute("select.set", &json!({"ids": [plain.0]})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    let far = square(&mut s, 300.0, 0.0);
+    let filled = square(&mut s, 100.0, 0.0);
+    s.execute("paint.setFill", &json!({"ids": [filled.0], "swatch": "Dots"})).unwrap();
+    s.execute("select.set", &json!({"ids": [plain.0, filled.0, far.0]})).unwrap();
+    let tiles = |s: &Session| match s.doc().unwrap().doc.node(filled).unwrap().appearance.fill_paint() {
+        Paint::Pattern { xf, .. } => xf.as_coeffs(),
+        p => panic!("not a pattern: {p:?}"),
+    };
+    // Align left moves the square 100 pt left, to the left edge of `plain`. Both Distribute
+    // commands move it 50 pt right, halfway between the other two.
+    for (cmd, p, dx) in [
+        ("object.align", json!({"horizontal": "left"}), -100.0),
+        ("object.distribute", json!({"horizontal": "left"}), 50.0),
+        ("object.distributeSpacing", json!({"axis": "horizontal"}), 50.0),
+    ] {
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(tiles(&s), [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], "{cmd}: off, the tiles stay");
+        assert_eq!(s.journal.last().unwrap().1["patterns"], json!(false), "{cmd}: the journal keeps the choice");
+        s.execute("edit.undo", &json!({})).unwrap();
+        set_pref(&mut s, "transformPatternTiles", json!(true));
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(tiles(&s), [1.0, 0.0, 0.0, 1.0, dx, 0.0], "{cmd}: on, they move with the square");
+        assert_eq!(s.journal.last().unwrap().1["patterns"], json!(true), "{cmd}: the journal keeps the choice");
+        s.execute("edit.undo", &json!({})).unwrap();
+        let mut p = p;
+        p["patterns"] = json!(false);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(tiles(&s), [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], "{cmd}: the param wins");
+        s.execute("edit.undo", &json!({})).unwrap();
+        set_pref(&mut s, "transformPatternTiles", json!(false));
+    }
 }
 
 /// General › Select Same Tint % (#394): off, Select › Same › Fill Color takes every tint of the

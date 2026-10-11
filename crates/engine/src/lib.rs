@@ -100,6 +100,8 @@ pub struct UndoGroup {
     first: Option<Arc<Document>>,
     /// The journal's length when the group began: a cancelled group drops the entries after it.
     journal: usize,
+    /// The undo step's name; else the first edit's.
+    label: Option<String>,
 }
 
 /// Per-document editing state.
@@ -288,13 +290,16 @@ impl DocState {
     }
     /// Record undo step `e` (the document before an edit). In an undo group only the group's first
     /// edit records one: the edits after it extend that step.
-    fn push_undo(&mut self, e: HistoryEntry) {
+    fn push_undo(&mut self, mut e: HistoryEntry) {
         if let Some(g) = &mut self.undo_group {
             let recorded = |first: &Arc<Document>| self.history.undo.last().is_some_and(|l| Arc::ptr_eq(&l.doc, first));
             if g.first.as_ref().is_some_and(recorded) {
                 return;
             }
             g.first = Some(e.doc.clone());
+            if let Some(l) = &g.label {
+                e.label = l.clone();
+            }
         }
         self.history.undo.push(e);
         if self.history.undo.len() > self.history.limit {
@@ -349,6 +354,14 @@ impl DocState {
         // A sublayer takes new art only while it and the layers around it are shown and unlocked.
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()) && self.doc.is_editable(*l)).or_else(|| self.doc.default_layer())
     }
+    /// [`Self::insertion_parent`] for new art, which a locked or hidden layer never takes: an error
+    /// when no layer is shown and unlocked, so the art is refused rather than hidden or locked away.
+    pub fn target_parent(&self) -> Result<Option<NodeId>> {
+        match self.insertion_parent() {
+            Some(p) if !self.doc.is_editable(p) => Err(EngineError::Other("the target layer is locked or hidden".into())),
+            parent => Ok(parent),
+        }
+    }
     /// The highlighted Layers panel rows that still exist (ids are reused after undo, so a
     /// remembered row must still be in the document).
     pub fn highlighted_rows(&self) -> Vec<NodeId> {
@@ -364,10 +377,27 @@ impl DocState {
 /// Coordinates beyond this (points) are rejected: ~1,400 m, far past Illustrator's large canvas.
 pub const MAX_COORD: f64 = 4.0e6;
 
+/// The commands that act on the active artboard (#693), which the app passes as their `artboard`:
+/// Paste in Place, in Front and in Back paste onto it, Align to Artboard aligns to it, and All on
+/// Active Artboard selects on it. A `command.batch` given `artboard` passes it on to each of their
+/// steps that names none.
+pub const ON_ACTIVE_ARTBOARD: [&str; 5] = ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack", "object.align", "select.allOnArtboard"];
+
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
-/// (dates from the clock: `cmd::clock_date`); an action leaves them out
+/// (dates from the clock: `cmd::clock_date`; the active artboard the app passes to the
+/// [`ON_ACTIVE_ARTBOARD`] commands and to a batch); an action leaves them out
 /// ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 3] = [("file.new", "created"), ("document.save", "modified"), ("file.saveAs", "modified")];
+const REPLAY_ONLY: [(&str, &str); 9] = [
+    ("file.new", "created"),
+    ("document.save", "modified"),
+    ("file.saveAs", "modified"),
+    ("edit.pasteInPlace", "artboard"),
+    ("edit.pasteInFront", "artboard"),
+    ("edit.pasteInBack", "artboard"),
+    ("object.align", "artboard"),
+    ("select.allOnArtboard", "artboard"),
+    ("command.batch", "artboard"),
+];
 
 /// `p`, the params of command `id`, without its [`REPLAY_ONLY`] values (a batch: its steps').
 fn strip_replay_only(id: &str, p: &mut Value) {
@@ -542,6 +572,9 @@ pub struct Prefs {
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
     pub render_threads: i32,
+    /// Linux: `automatic` opens the window on the session's display server; `x11` opens it through
+    /// XWayland on a Wayland session, where dropped files arrive (#1151). Read when the app starts.
+    pub linux_display_server: String,
     // File Handling
     pub background_save: bool,
     pub background_export: bool,
@@ -752,6 +785,7 @@ impl Default for Prefs {
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,
+            linux_display_server: s("automatic"),
             background_save: true,
             background_export: true,
             autosave_recovery: true,
@@ -1042,6 +1076,8 @@ impl Session {
     /// Add a document and make it active.
     pub fn add_document(&mut self, mut doc: Document, path: Option<String>) -> usize {
         Self::refresh_text_bounds(&mut doc);
+        // Guides from files saved before guides had layers go on a layer.
+        doc.adopt_guides();
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -1057,6 +1093,7 @@ impl Session {
             return false;
         }
         Self::refresh_text_bounds(&mut doc);
+        doc.adopt_guides();
         if self.active == Some(index) {
             // Pending tool work (typing, a drag) belongs to the content being thrown away.
             self.reset_tool_for_doc_switch();
@@ -1322,6 +1359,11 @@ impl Session {
         {
             let st = self.doc_mut()?;
             let Some(it) = &st.interaction else { return Err(EngineError::Other("no interaction in progress".into())) };
+            // Undoing the previous preview counts as a change, so views redraw even when the command
+            // below returns without an edit.
+            if !Arc::ptr_eq(&st.doc, &it.doc) || st.selection != it.selection {
+                st.revision += 1;
+            }
             st.doc = it.doc.clone();
             st.selection = it.selection.clone();
         }
@@ -1342,10 +1384,17 @@ impl Session {
         let Some(mut it) = st.interaction.take() else { return Ok(()) };
         let Some(preview) = it.preview.take() else { return Ok(()) };
         let perspective_again = it.perspective_again.take();
+        let copy = preview.0 == "object.transform" && preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
+        // Alt pressed or released during a move drag turns it into a copy or back: name it for
+        // what it did in the end.
+        match (it.label.as_str(), copy) {
+            ("Move", true) => it.label = "Copy".into(),
+            ("Copy", false) if preview.0 == "object.transform" => it.label = "Move".into(),
+            _ => {}
+        }
         st.keep_interaction(it);
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
-            let copy = preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
             if let Some(m) = m {
                 st.last_transform = Some((m, copy));
                 st.last_perspective = None;
@@ -1382,11 +1431,16 @@ impl Session {
     /// applies each value it passes as its own command, as a typed value is applied; the drag is
     /// one step.
     pub fn begin_undo_group(&mut self) {
+        self.begin_named_undo_group(None);
+    }
+
+    /// [`Session::begin_undo_group`] with the undo step named `label` (else after its first edit).
+    pub fn begin_named_undo_group(&mut self, label: Option<String>) {
         let journal = self.journal.len();
         if let Some(st) = self.active_mut()
             && st.undo_group.is_none()
         {
-            st.undo_group = Some(UndoGroup { first: None, journal });
+            st.undo_group = Some(UndoGroup { first: None, journal, label });
         }
     }
 
@@ -1632,6 +1686,8 @@ mod tests_recolor;
 #[cfg(test)]
 mod tests_recovery;
 #[cfg(test)]
+mod tests_reflecthit;
+#[cfg(test)]
 mod tests_registration;
 #[cfg(test)]
 mod tests_save;
@@ -1683,6 +1739,8 @@ mod tests_toolsettings;
 mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_typearea;
+#[cfg(test)]
+mod tests_typescale;
 #[cfg(test)]
 mod tests_units;
 #[cfg(test)]

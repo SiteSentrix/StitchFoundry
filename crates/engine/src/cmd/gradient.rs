@@ -270,13 +270,8 @@ pub(crate) fn apply_gradient_edit_in(
         gp.swatch = None;
     }
     if bool_or(p, "reverse", false) {
+        // Midpoints mirrored with their segments.
         gp.gradient.reverse();
-        // Midpoints belong to the segment to the right; mirror them.
-        let n = gp.gradient.stops.len();
-        let mids: Vec<f32> = gp.gradient.stops.iter().map(|s| s.midpoint).collect();
-        for i in 0..n {
-            gp.gradient.stops[i].midpoint = if i + 1 < n { 1.0 - mids[n - 2 - i] } else { 0.5 };
-        }
     }
     // Angle and aspect edits keep the focal point in its place in the extent ellipse.
     let before = gp.geom;
