@@ -105,8 +105,19 @@ pub fn source(name: &str) -> ImageSource<'static> {
     table().source(name)
 }
 
-/// Paint icon `name` into `rect` tinted with `tint`.
+/// Paint icon `name` into `rect` tinted with `tint`. The Selection and Direct Selection arrows are
+/// black and white whatever the theme, as users know them (a light theme colour would make the
+/// Selection arrow look like Direct Selection's): their fill is painted first, then their outline
+/// in `tint`.
 pub fn paint(ui: &Ui, name: &str, rect: Rect, tint: Color32) {
+    let fill = match name {
+        "dc-selection" => Some(Color32::BLACK),
+        "dc-direct" => Some(Color32::WHITE),
+        _ => None,
+    };
+    if let Some(fill) = fill {
+        egui::Image::new(source("dc-arrow-fill")).tint(fill).fit_to_exact_size(rect.size()).paint_at(ui, rect);
+    }
     egui::Image::new(source(name)).tint(tint).fit_to_exact_size(rect.size()).paint_at(ui, rect);
 }
 
@@ -120,6 +131,35 @@ pub fn icon(ui: &mut Ui, name: &str, size: f32, tint: Color32) -> egui::Response
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The tints of the images `name` paints, bottom first.
+    fn tints(name: &str, tint: Color32) -> Vec<Color32> {
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        let draw = |ui: &mut Ui| paint(ui, name, Rect::from_min_size(egui::Pos2::ZERO, Vec2::splat(24.0)), tint);
+        // The first frame loads the images; the second draws them.
+        ctx.run_ui(egui::RawInput::default(), draw).textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), draw);
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Mesh(m) => m.vertices.first().map(|v| v.color),
+                egui::Shape::Rect(r) if r.brush.is_some() => Some(r.fill),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The Selection arrow is black and Direct Selection's white in every theme (a reported swap
+    /// in the dark themes), under an outline in the theme's colour; other icons are one layer.
+    #[test]
+    fn the_selection_arrows_are_black_and_white_under_the_theme_outline() {
+        let light = Color32::from_gray(220);
+        assert_eq!(tints("dc-selection", light), [Color32::BLACK, light]);
+        assert_eq!(tints("dc-direct", light), [Color32::WHITE, light]);
+        assert_eq!(tints("dc-group-select", light), [light]);
+    }
 
     /// Characterize the pre-extraction loader against every embedded asset, including custom
     /// icons. A shared-crate update must not silently change our stroke weight or cache keys.
