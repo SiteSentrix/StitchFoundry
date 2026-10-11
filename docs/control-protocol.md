@@ -449,6 +449,26 @@ Then, with the preference `updateLinks: "askWhenModified"`, modified linked file
 the front and a linked file of the active document changed meanwhile (asked once per change of a file); with
 `"automatically"` the files are read again at once, with `"manually"` the Links panel shows them as modified.
 
+Find Linked Files: in the `missingLinks` dialog, `ui.dialog.set {field: "searchFolder", value}` then `ui.dialog.confirm`
+is Find in Folder…: the dialog becomes `findLinks`, which looks in that folder and its subfolders for every file the
+dialog still asks about (`links.findFiles`). Fields: `document` (the document's uid), `missing` (`[{name, path, ids}]`),
+`modified`, `back`, `state` (empty, `searching`, `done`, `stopped` or `failed`), `search` (the search's `id`), `folder`,
+`found` (`links.findFiles`'s `links`, with the files found), `searched`, `skipped`, `unreadable`, `stopped`, `error`,
+`picks` (the file chosen for each row of `missing`, or null; with each search result, a row not chosen in the dialog
+gets its only same file, else its only file found), `touched` (the rows whose file was chosen in the dialog; search
+results leave their pick as it is), `copy` (Copy into the document's folder, shown for a saved document) and
+`searchFolder`. `ui.dialog.set {field: "searchFolder", value}` then `ui.dialog.confirm` searches that folder and keeps
+the dialog open. The fields change as frames draw the dialog; `links.findFiles {}` reports the search directly.
+`ui.dialog.confirm` without `searchFolder` is Relink: each row with a file runs `links.relink {ids, path, copy}`, one
+undo step each (`copy` for images only: a placed document is relinked where its file is), and it returns `{relinked,
+failed}`; the status line names the first file that failed. With `back` (opened from `missingLinks`), the rows left
+without a file and those that failed go back to that dialog, then the modified files are offered for update.
+`ui.dialog.cancel` closes it and stops its search. `ui.findLinksInFolder {folder?, ids?}` (Find in Folder… in the Links
+panel menu) asks for a folder (or takes `folder`), then opens the dialog for the files of `ids`, else of the selected
+linked images and placed documents, else the missing ones; with nothing to look for, it fails with "No linked files to
+look for" and asks for no folder. On the web, `ui.findLinksInFolder` is disabled, `links.findFiles` can't start a search
+and the dialog doesn't open.
+
 Missing fonts: once the missing linked file questions are answered, or at once when there are none, `app.open` of a
 document whose type uses fonts that aren't available (`text.missingFonts`) opens the `missingFonts` dialog, one document
 at a time, and so does `links.editOriginal` of a placed document. When another dialog takes its place (Import PDF for a

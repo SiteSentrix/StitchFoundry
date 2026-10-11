@@ -1460,6 +1460,13 @@ lighting	Light	Světlo
 	Relinked {n} image(s); not in that folder: {}	Znovu propojeno obrázků: {n}; nejsou v dané složce: {}
 	Relinked {} image(s)	Znovu propojeno obrázků: {}
 	Relink…	Znovu propojit…
+	Find Linked Files	Najít propojené soubory
+	Find Linked Files in Folder…	Najít propojené soubory ve složce…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Pro každý propojený soubor vyberte soubor, ke kterému jej chcete znovu propojit. Soubory s velikostí a obsahem uloženými s propojením jsou uvedeny jako první.
+	Same file	Stejný soubor
+	Same size	Stejná velikost
+	Don't Relink	Znovu nepropojovat
+	Copy into the document's folder	Kopírovat do složky dokumentu
 	Select an image to see its Link Info.	Vyberte obrázek, abyste viděli informace o propojení.
 	Show Embedded	Zobrazit vložené
 	Show Link Info	Zobrazit informace o propojení
@@ -4141,6 +4148,9 @@ effect	Regular	Pravidelný
 @msg	larger than 256 MB	větší než 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	soubory mají dohromady více než 1 GB: přidávejte jich méně najednou
 @msg	every numbered name for it is taken in the Fonts folder	ve složce Fonts jsou obsazena všechna číslovaná jména pro tento soubor
+@msg	every numbered name for {name} is taken in the document's folder	ve složce dokumentu jsou obsazena všechna číslovaná jména pro {name}
+@msg	No linked files to look for	Žádné propojené soubory k vyhledání
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Znovu propojeno obrázků: {n}; nepodařilo se znovu propojit {name}: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` musí být pole indexů kotevních bodů, ne {v}

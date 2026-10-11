@@ -918,6 +918,9 @@ pub struct Session {
     /// The last search for the files of missing fonts (`text.findFontFiles`), until another
     /// starts; dropping it stops it.
     pub(crate) font_search: Option<cmd::fontfiles::FontSearch>,
+    /// The last search for the files of linked images and placed documents (`links.findFiles`),
+    /// until another starts; dropping it stops it.
+    pub(crate) link_search: Option<cmd::linkfiles::LinkSearch>,
     /// Where folder searches may go; `None`: this computer's rules ([`cmd::findfiles::Rules`]).
     /// Tests set it.
     pub search_rules: Option<cmd::findfiles::Rules>,
@@ -982,6 +985,7 @@ impl Session {
             plane_widget_press: false,
             ruler_guide: None,
             font_search: None,
+            link_search: None,
             search_rules: None,
             search_threads: None,
             link_stamps: Default::default(),
@@ -1591,6 +1595,8 @@ mod tests_layers;
 mod tests_library;
 #[cfg(test)]
 mod tests_linked_stops;
+#[cfg(test)]
+mod tests_linkfiles;
 #[cfg(test)]
 mod tests_links;
 #[cfg(test)]

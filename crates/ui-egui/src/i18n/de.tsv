@@ -2181,6 +2181,13 @@
 	Relinked {n} image(s); not in that folder: {}	{n} Bild(er) neu verknüpft; nicht in diesem Ordner: {}
 	Relinked {} image(s)	{} Bild(er) neu verknüpft
 	Relink…	Neu verknüpfen…
+	Find Linked Files	Verknüpfte Dateien suchen
+	Find Linked Files in Folder…	Verknüpfte Dateien in Ordner suchen…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Wählen Sie für jede verknüpfte Datei die Datei aus, mit der sie neu verknüpft werden soll. Dateien mit der Größe und dem Inhalt, die mit der Verknüpfung gespeichert sind, stehen oben.
+	Same file	Gleiche Datei
+	Same size	Gleiche Größe
+	Don't Relink	Nicht neu verknüpfen
+	Copy into the document's folder	In den Ordner des Dokuments kopieren
 	Reload Plug-ins	Plug-ins neu laden
 	Remove	Entfernen
 	Remove Anchor Points	Ankerpunkte entfernen
@@ -3856,6 +3863,9 @@ theme	Appearance	Erscheinungsbild
 @msg	larger than 256 MB	größer als 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	die Dateien sind zusammen größer als 1 GB: Fügen Sie weniger auf einmal hinzu
 @msg	every numbered name for it is taken in the Fonts folder	alle nummerierten Namen dafür sind im Schriftenordner bereits vergeben
+@msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
+@msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	{n} Bild(er) neu verknüpft; {name} konnte nicht neu verknüpft werden: {reason}
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste

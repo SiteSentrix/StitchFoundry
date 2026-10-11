@@ -2224,6 +2224,13 @@
 	Relinked {n} image(s); not in that folder: {}	Відновлено зв’язок із зображеннями: {n}; немає в цій папці: {}
 	Relinked {} image(s)	Відновлено зв’язок із зображеннями: {}
 	Relink…	Відновити зв’язок…
+	Find Linked Files	Знайти пов’язані файли
+	Find Linked Files in Folder…	Знайти пов’язані файли в папці…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Виберіть для кожного пов’язаного файлу файл, з яким потрібно відновити зв’язок. Спершу йдуть файли з розміром і вмістом, збереженими разом зі зв’язком.
+	Same file	Той самий файл
+	Same size	Той самий розмір
+	Don't Relink	Не відновлювати зв’язок
+	Copy into the document's folder	Копіювати в папку документа
 	Reload Plug-ins	Перезавантажити модулі
 	Remove	Прибрати
 	Remove Anchor Points	Забрати опорні точки
@@ -3940,6 +3947,9 @@ axis	Both	Обидві
 @msg	larger than 256 MB	більше 256 МБ
 @msg	the files come to more than 1 GB: add fewer at a time	файли займають понад 1 ГБ: додавайте менше за раз
 @msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
+@msg	every numbered name for {name} is taken in the document's folder	усі нумеровані імена для {name} уже зайняті в папці документа
+@msg	No linked files to look for	Немає пов’язаних файлів для пошуку
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Відновлено зв’язок із зображеннями: {n}; не вдалося відновити зв’язок із {name}: {reason}
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб

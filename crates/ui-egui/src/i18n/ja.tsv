@@ -2201,6 +2201,13 @@
 	Relink	再リンク
 	Relink to Folder…	フォルダーに再リンク…
 	Relink…	再リンク…
+	Find Linked Files	リンクファイルを検索
+	Find Linked Files in Folder…	フォルダー内のリンクファイルを検索…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	リンクファイルごとに、再リンク先のファイルを選んでください。リンクに保存されたサイズと内容が同じファイルが先頭に表示されます。
+	Same file	同じファイル
+	Same size	同じサイズ
+	Don't Relink	再リンクしない
+	Copy into the document's folder	ドキュメントのフォルダーにコピー
 	Remove	削除
 	Remove Asset	アセットを削除
 	Remove Brush Stroke	ブラシストロークを削除
@@ -3971,6 +3978,9 @@ theme	Appearance	外観
 @msg	larger than 256 MB	256 MB を超えています
 @msg	the files come to more than 1 GB: add fewer at a time	ファイルの合計が 1 GB を超えています: 一度に追加するファイルを減らしてください
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
+@msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
+@msg	No linked files to look for	検索するリンクファイルがありません
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	画像を {n} 枚再リンクしましたが、{name} は再リンクできませんでした: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)

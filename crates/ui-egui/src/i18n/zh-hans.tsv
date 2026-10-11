@@ -2154,6 +2154,13 @@
 	Relinked {n} image(s); not in that folder: {}	已重新链接 {n} 张图像；不在该文件夹中：{}
 	Relinked {} image(s)	已重新链接 {} 张图像
 	Relink…	重新链接…
+	Find Linked Files	查找链接文件
+	Find Linked Files in Folder…	在文件夹中查找链接文件…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	请为每个链接文件选择要重新链接到的文件。大小和内容与链接中保存的相同的文件排在最前面。
+	Same file	相同文件
+	Same size	相同大小
+	Don't Relink	不重新链接
+	Copy into the document's folder	复制到文档所在的文件夹
 	Reload Plug-ins	重新载入增效工具
 	Remove	移除
 	Remove Anchor Points	移除锚点

@@ -382,6 +382,10 @@ pub struct UiState {
     /// dialog is gone.
     #[serde(skip)]
     pub dialog_search: Option<u64>,
+    /// The search the Find Linked Files dialog started (`links.findFiles`'s `id`), stopped once the
+    /// dialog is gone.
+    #[serde(skip)]
+    pub links_search: Option<u64>,
     /// The DXF Options chosen last (`document.exportDxf` options; null: never used).
     #[serde(default)]
     pub dxf_options: Value,
@@ -641,6 +645,7 @@ impl Default for UiState {
             pending_fonts: vec![],
             fonts_dialog: None,
             dialog_search: None,
+            links_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,

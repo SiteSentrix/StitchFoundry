@@ -29,6 +29,7 @@ mod export_as;
 mod export_for_screens;
 pub mod eyedropper;
 pub mod file_info;
+pub mod find_links;
 pub mod flare_options;
 pub mod flatten;
 pub mod flattener_presets;
@@ -261,6 +262,7 @@ registry! {
     RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
     MissingLinks: [missing_links::KIND] => missing_links::SPEC,
     MissingFonts: [missing_fonts::KIND] => missing_fonts::SPEC,
+    FindLinks: [find_links::KIND] => find_links::SPEC,
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
@@ -346,11 +348,13 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 }
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
-/// for its turn again, the search a Missing Fonts dialog started stops once that dialog is gone,
-/// and with no dialog open the next document's Missing Fonts dialog opens (one dialog at a time).
+/// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
+/// that dialog is gone, and with no dialog open the next document's Missing Fonts dialog opens
+/// (one dialog at a time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
+    find_links::stop_when_closed(app);
     missing_fonts::open_next(app);
 }
 

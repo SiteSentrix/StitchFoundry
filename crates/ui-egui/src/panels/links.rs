@@ -1,8 +1,9 @@
 //! Links panel: every image in the document, linked files with their status (missing, modified)
 //! and embedded images, as rows with a thumbnail, name, page and status. Clicking a row selects
 //! its image; the buttons Relink, Go To, Update and Edit Original act on the selected rows; Link
-//! Info shows the details of the first. The flyout adds Relink to Folder, Embed / Unembed,
-//! Placement Options, Show filters, Sort, thumbnail size and Show in Folder.
+//! Info shows the details of the first. The flyout adds Relink to Folder, Find in Folder (Find
+//! Linked Files: `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Show filters, Sort,
+//! thumbnail size and Show in Folder.
 //!
 //! Everything runs through the `links.*` commands (`links.editOriginal` and `links.reveal` are UI
 //! commands: they hand the file to the system).
@@ -455,6 +456,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Relink to Folder…"), (any || missing_any) && app.services.pick_folder.is_some(), false) {
         relink_to_folder(app, ids(&sel, |_| true));
+    }
+    if menu_item(ui, tl!("Find in Folder…"), (!linked.is_empty() || missing_any) && app.services.pick_folder.is_some(), false) {
+        crate::menus::invoke(app, "ui.findLinksInFolder", json!({ "ids": linked }));
     }
     if menu_item(ui, tl!("Go To Link"), sel.len() == 1, false)
         && let Some(id) = sel.first().and_then(|r| r["id"].as_u64())

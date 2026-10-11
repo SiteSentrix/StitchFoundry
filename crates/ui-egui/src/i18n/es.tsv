@@ -2232,6 +2232,13 @@
 	Relinked {n} image(s); not in that folder: {}	Se volvieron a vincular {n} imagen(es); no están en esa carpeta: {}
 	Relinked {} image(s)	Se volvieron a vincular {} imagen(es)
 	Relink…	Volver a vincular…
+	Find Linked Files	Buscar archivos vinculados
+	Find Linked Files in Folder…	Buscar archivos vinculados en una carpeta…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Elige el archivo con el que volver a vincular cada archivo vinculado. Los archivos con el tamaño y el contenido guardados con el vínculo aparecen primero.
+	Same file	Mismo archivo
+	Same size	Mismo tamaño
+	Don't Relink	No volver a vincular
+	Copy into the document's folder	Copiar en la carpeta del documento
 	Reload Plug-ins	Volver a cargar plugins
 	Remove	Quitar
 	Remove Anchor Points	Quitar puntos de ancla
@@ -3956,6 +3963,9 @@ axis	Both	Ambos
 @msg	larger than 256 MB	mayor de 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	los archivos suman más de 1 GB: agrega menos a la vez
 @msg	every numbered name for it is taken in the Fonts folder	todos los nombres numerados para él ya existen en la carpeta Fonts
+@msg	every numbered name for {name} is taken in the document's folder	todos los nombres numerados para {name} ya existen en la carpeta del documento
+@msg	No linked files to look for	No hay archivos vinculados que buscar
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Se volvieron a vincular {n} imagen(es); no se pudo volver a vincular {name}: {reason}
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios

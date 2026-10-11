@@ -666,6 +666,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{ids?} open Placement Options for images `ids` (default: the selected ones; dialog `placementOptions`: ids, preserve, align, clip, see links.placementOptions); OK runs links.placementOptions",
     ),
     (
+        "ui.findLinksInFolder",
+        "Find Linked Files in Folder…",
+        "",
+        "{folder?, ids?: [image or placed document ids]} the Links panel's Find in Folder…: asks for a folder (or takes folder), then opens Find Linked Files (dialog `findLinks`) looking in it and its subfolders for the files of linked objects `ids` (default: the selected linked images and placed documents, else every missing file; links.findFiles). An error when there is nothing to look for. Disabled where there is no folder picker (the web)",
+    ),
+    (
         "ui.packageDialog",
         "Package…",
         "Cmd+Alt+Shift+P",
@@ -1366,6 +1372,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "links.editOriginal" => crate::panels::links::open_file(app, p, false),
         "links.reveal" => crate::panels::links::open_file(app, p, true),
         "ui.placementOptionsDialog" => crate::dialogs::placement_options::open(app, p),
+        "ui.findLinksInFolder" => {
+            crate::dialogs::find_links::find_in_folder_command(app, s("folder"), p.get("ids").and_then(Value::as_array).cloned())
+        }
         "ui.packageDialog" => crate::dialogs::package::open(app),
         "file.showPackage" => crate::dialogs::package::show_package(app, p),
         "docInfo.save" => crate::panels::doc_info::save_report(app, p),
@@ -1971,6 +1980,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
+        "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
