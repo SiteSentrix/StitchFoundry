@@ -381,6 +381,31 @@ fn clipping_and_compound() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![b]);
 }
 
+/// #1163: a path of several subpaths (an SVG `d` with several `M`s) is a compound path to Release:
+/// one path per subpath, each with the path's paint, in its stacking order, in one undo step.
+#[test]
+fn release_splits_a_path_of_several_subpaths() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute("path.create", &json!({"d": "M0 0 L10 0 L10 10 Z M20 0 L30 0 L30 10 Z M40 0 L50 0 L50 10 Z"})).unwrap()["id"].as_u64().unwrap(),
+    );
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("object.compoundPath.release", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.history.undo.len(), undo + 1);
+    let sel = st.selection.objects.clone();
+    assert_eq!((sel.len(), sel[0]), (3, id), "the first keeps its id");
+    let layer = st.doc.layers[0].children().unwrap();
+    for (k, n) in sel.iter().map(|i| st.doc.node(*i).unwrap()).enumerate() {
+        let NodeKind::Path { path, .. } = &n.kind else { panic!("a path") };
+        assert_eq!(path.subpaths.len(), 1);
+        assert_eq!(path.bounds().unwrap().x0, 20.0 * k as f64, "in order");
+        assert_eq!(n.appearance.fill_paint().color().unwrap().to_hex(), "#ff0000", "the path's paint");
+        assert_eq!(layer[k].id, n.id, "stacked bottom to top");
+    }
+}
+
 /// `object.align` without `horizontal` or `vertical` (an unknown key such as `align` counts as
 /// neither) returns an error: nothing moves, and the undo and redo stacks stay as they were.
 #[test]
