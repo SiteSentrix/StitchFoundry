@@ -3668,3 +3668,7 @@ axis	Both	Ambos
 @msg	invalid native panel set	conjunto de painéis nativos inválido
 @msg	missing panel layout	layout de painéis ausente
 @msg	unsupported native docking operation	operação de encaixe nativa não suportada
+	Artistic	Artístico
+	Film Grain…	Granulação de filme…
+	Grain	Grão
+	Highlight Area	Área de realces

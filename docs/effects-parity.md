@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (PDF raster-effect resolution-cap warnings; Zig Zag's dialog with sliders and radio buttons, #1133; earlier: Brush Strokes landed) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G2: Film Grain added; Photoshop effects 29/57; 28 filters remain) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -12,7 +12,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | Group | Illustrator | VectorCraft | % | Remaining (h) |
 |---|---:|---:|---:|---:|
 | Illustrator effects (vector and stylize) | 50 | 44 | 88% | 6–10 |
-| Photoshop effects (raster, Effect Gallery) | 57 | 28 | 49% | 24–40 |
+| Photoshop effects (raster, Effect Gallery) | 57 | 29 | 51% | 23–39 |
 | 3D and Materials | 4 (+3 Classic) | 1 (initial Revolve) | ~8% | 45–75 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
 
@@ -38,7 +38,7 @@ its resolution, PDF export warns once per object with the requested and the lowe
 
 | Submenu | Items | Ours | Missing |
 |---|---|---:|---|
-| Artistic | Colored Pencil, Cutout, Dry Brush, Film Grain, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor | 0/15 | all |
+| Artistic | Colored Pencil, Cutout, Dry Brush, Film Grain, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor | 1/15 (approximate Film Grain) | Colored Pencil, Cutout, Dry Brush, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor |
 | Blur | Gaussian Blur, Radial Blur, Smart Blur | 3/3 | Smart Blur's Edge Only and Overlay Edge modes |
 | Brush Strokes | Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes, Sumi-e | 8/8 | — |
 | Distort | Diffuse Glow, Glass, Ocean Ripple | 3/3 | Glass's Load Texture |
@@ -52,8 +52,33 @@ its resolution, PDF export warns once per object with the requested and the lowe
 
 The pixel-filter pipeline (`vectorcraft_effects::pixel`) is in place: each new filter is one function, a
 catalogue row, a menu entry and translations. Measured throughput: 0.7–1.2 agent hours per filter
-(see [calibration](target-app-parity.md#calibration)), so the 29 missing filters are ~20–35 h and the Effect
+(see [calibration](target-app-parity.md#calibration)), so the 28 missing filters are ~19–34 h and the Effect
 Gallery dialog another 4–6 h. These parallelize well across agents.
+
+Film Grain (`artistic.filmGrain`, Effect › Artistic) adds stable monochrome noise to shadows and
+midtones, with Grain, Highlight Area and Intensity sliders, live preview and appearance editing.
+Its smooth grain field follows translations, preserves transparency and stays in document units;
+zoomed-out rendering uses bounded approximate footprint filtering. Changing the bounds shifts
+the pattern. Command exports bake it to an image in SVG and PDF, while the native document keeps the effect editable. Behaviour is an original visual
+approximation based on [Illustrator's public effects reference](https://helpx.adobe.com/illustrator/using/summary-effects.html)
+and the [public Artistic filters guide](https://helpx.adobe.com/photoshop-elements/using/artistic-filters.html),
+not a pixel-identical proprietary implementation. Intensity is interpreted as highlight strength and
+quieter highlight grain. Grain strength stays even across shadows and midtones and rolls off above
+mid-grey to a quarter-strength floor at full Intensity before highlight headroom; cream retains
+soft grain, black takes light speckles and white stays clean. The tonal curve and endpoint behaviour
+are interpretations, not verified proprietary behaviour. Saturated colour channels may clip. The parameter
+ranges and defaults are chosen for VectorCraft, not asserted as measured proprietary defaults.
+Near white, highlight headroom can limit grain equally at every Intensity; highlight lift still
+depends on Intensity when Highlight Area is nonzero.
+The two rotated, variance-normalised noise layers can leave a faint diagonal weave at high
+magnification. Removing that remaining direction would require a more expensive field; the
+current implementation keeps bounded per-pixel work. Film Grain is still slower than Texture
+Grain (Regular), particularly when its wider footprint needs four samples.
+Calibration on uniform grey at Grain 20, using 32×32 fine samples per coarse pixel, measured
+grain standard deviation within about 15% of the dense area average at pixel widths of 2, 4
+and 8 document units (ratios 1.13, 0.89, 0.85). This is evidence for the bounded approximation,
+not an accuracy guarantee for arbitrary artwork. Tests: `pixel::tests::film_grain_*`,
+`tests_rasterfilters`, `tests_adjust::film_grain_dialog_*` and `tests_labels::effect_menu_lists_film_grain_*`.
 
 ## 3D and Materials
 
@@ -74,6 +99,7 @@ rendering, Turntable, 3D export) is 45–75 h, still the largest single gap.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | G2: Artistic › Film Grain added with live controls and raster exports; measured Photoshop filters 29/57, 28 remaining (23–39 h). |
 | 2026-10-11 | minor | PDF cap warnings identify original objects after appearance splitting and report the lowest achieved ppi; cap/rendering and scores unchanged |
 | 2026-10-11 | minor | Zig Zag's dialog: Size and Ridges per segment sliders, Points as Smooth / Corner radio buttons (#1133) |
 | 2026-10-11 | minor | Brush Strokes landed (8 filters): 28/57 Photoshop effects |

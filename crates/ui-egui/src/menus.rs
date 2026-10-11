@@ -3403,7 +3403,8 @@ fn font_items(english_names: bool) -> Vec<Item> {
 
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the
 /// vector effects): (submenu, the catalogue's menu path of its effects).
-const RASTER_MENUS: [(&str, &[&str]); 7] = [
+const RASTER_MENUS: [(&str, &[&str]); 8] = [
+    ("Artistic", &["Effect", "Artistic"]),
     ("Blur", &["Effect", "Blur"]),
     ("Brush Strokes", &["Effect", "Brush Strokes"]),
     ("Distort", &["Effect", "Distort"]),
@@ -3620,6 +3621,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
     }
     out.extend(crate::prefs_dialog::UI_FIELDS.iter().map(|f| f.2.to_string()));
     out.extend(crate::dialogs::button_labels().into_iter().map(str::to_string));
+    out.extend(crate::dialogs::FILM_GRAIN_FIELDS.iter().map(|(_, label, _)| label.to_string()));
     out.extend(crate::chrome::hint_strings().into_iter().map(str::to_string));
     out.remove("");
     out
