@@ -1144,6 +1144,12 @@ fn align_anchors(s: &mut Session, p: &Value, ids: &[NodeId], (h, v): (Option<&st
         };
         Point::new(x, y)
     };
+    if pts.iter().all(|q| {
+        let dv = target(*q) - *q;
+        dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9
+    }) {
+        return ok();
+    }
     s.edit("Align", |d, _| {
         for (id, refs) in &targets {
             let path = super::path::path_mut(d, *id)?;

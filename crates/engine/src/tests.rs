@@ -2130,6 +2130,52 @@ fn align_moves_selected_anchor_points() {
     assert_eq!(anchors(&s)[2].1 - anchors(&s)[0].1, 120.0, "its shape kept");
 }
 
+/// Repeating anchor Align must leave one Undo for the move that actually changed the path.
+#[test]
+fn repeating_anchor_alignment_does_not_consume_undo() {
+    let mut s = session();
+    let id = NodeId(s.execute("path.create", &json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+    let original = s.doc().unwrap().doc.clone();
+    let top = json!({"vertical": "top", "to": "selection"});
+    s.execute("object.align", &top).unwrap();
+    let aligned = s.doc().unwrap().doc.clone();
+    assert_ne!(serde_json::to_value(&original).unwrap(), serde_json::to_value(&aligned).unwrap());
+    let before = history(&s);
+    s.execute("object.align", &top).unwrap();
+    assert_eq!(history(&s), before, "the repeated Align adds no undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), serde_json::to_value(&original).unwrap());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), serde_json::to_value(&aligned).unwrap());
+}
+
+/// As whole-object Align does, tiny rounding differences leave a saved path and its Redo intact.
+#[test]
+fn a_noop_anchor_alignment_keeps_redo_and_saved_state() {
+    let mut s = session();
+    let id =
+        NodeId(s.execute("path.create", &json!({"d": "M0.0000000005 40 C50 40 40 60 0.0000000005 60 L20 100"})).unwrap()["id"].as_u64().unwrap());
+    select_with_a_step_to_redo(&mut s, &[id]);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false));
+    let doc = s.doc().unwrap().doc.clone();
+    let revision = s.doc().unwrap().revision;
+    let left = json!({"horizontal": "left", "to": "artboard"});
+    s.execute("object.align", &left).unwrap();
+    assert_eq!(history(&s), before);
+    assert_eq!(s.doc().unwrap().revision, revision);
+    assert_eq!(
+        serde_json::to_value(&s.doc().unwrap().doc).unwrap(),
+        serde_json::to_value(&doc).unwrap(),
+        "anchors, handles and other artwork unchanged"
+    );
+    assert_eq!(s.journal.last().unwrap(), &("object.align".to_string(), left));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_ne!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), serde_json::to_value(&doc).unwrap(), "Redo still restores the earlier move");
+}
+
 /// #1197: Make Compound Path cuts holes where the paths in front overlap the backmost one, also
 /// when they were drawn running the same way.
 #[test]
