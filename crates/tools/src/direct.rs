@@ -136,6 +136,9 @@ pub struct DirectSelectionTool {
     /// The anchor under the pointer (Highlight anchors on mouse over): its path, where it is.
     hover: Option<(NodeId, Point)>,
     guide: GuideEdit,
+    /// The already selected anchor the press landed on: a click (no drag) selects it alone, as a
+    /// drag moves every selected anchor with it.
+    click: Option<(NodeId, usize, usize)>,
 }
 
 impl DirectSelectionTool {
@@ -152,6 +155,7 @@ impl DirectSelectionTool {
             move_snap: None,
             hover: None,
             guide: GuideEdit::default(),
+            click: None,
         }
     }
 }
@@ -360,6 +364,7 @@ impl Tool for DirectSelectionTool {
                 vec![]
             }
             (PointerKind::Down, _) => {
+                self.click = None;
                 if let Some(c) = CornerDrag::hit(cx, ev, true) {
                     self.state = State::Corner(c);
                     return vec![];
@@ -412,6 +417,9 @@ impl Tool for DirectSelectionTool {
                     if ev.mods.shift {
                         return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "toggle"}))];
                     }
+                    // Pressed among other selected anchors: a click selects this one alone (the
+                    // drag, which moves them all, keeps them).
+                    self.click = already.then_some((id, si, ai));
                     if !already {
                         return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))];
                     }
@@ -628,7 +636,13 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Idle;
                 self.guides.clear();
                 (self.anchor_snap, self.copy_snap, self.move_snap) = (None, None, None);
-                if began { vec![Action::Commit] } else { vec![] }
+                match (began, self.click.take()) {
+                    (true, _) => vec![Action::Commit],
+                    (false, Some((id, si, ai))) => {
+                        vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))]
+                    }
+                    (false, None) => vec![],
+                }
             }
             (PointerKind::Up, State::Handle { .. } | State::SpineHandle { .. }) => {
                 self.state = State::Idle;
@@ -967,6 +981,35 @@ mod tests {
         let shift = Mods { shift: true, ..Default::default() };
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(shift));
         assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "toggle"}))]);
+    }
+
+    /// A click (no drag) on an anchor that is selected with others, whether the whole path is or
+    /// some of its anchors, selects that anchor alone, as in Illustrator: a press keeps the
+    /// selection so a drag moves it all, the release without a drag narrows it. Shift still
+    /// toggles, and a click on a path's only selected anchor changes nothing visible.
+    #[test]
+    fn a_click_on_a_selected_anchor_selects_it_alone() {
+        let (d, id) = doc_with_rect();
+        let p = paint();
+        let alone = vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "set"}))];
+        let mut whole = Selection::default();
+        whole.set([id]);
+        for s in [whole, anchors_of(id, &[(0, 0), (0, 1)])] {
+            let cx = cx(&d, &s, &p);
+            let mut t = DirectSelectionTool::new(false);
+            assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty(), "{s:?}");
+            assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)), alone, "{s:?}");
+            // Dragged instead: moved, selection kept.
+            assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
+            assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 100.0)), vec![Action::Commit], "{s:?}");
+        }
+        // An anchor not yet selected is selected on the press, and the release adds nothing.
+        let none = Selection::default();
+        let cx = cx(&d, &none, &p);
+        let mut t = DirectSelectionTool::new(false);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)), alone);
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)).is_empty());
     }
 
     /// Alt-pressing an anchor picks the whole path, as Alt on a segment does, and the drag copies
