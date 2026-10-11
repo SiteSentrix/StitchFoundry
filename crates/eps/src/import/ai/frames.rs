@@ -12,6 +12,9 @@ use std::collections::HashMap;
 
 use kurbo::{BezPath, Point};
 
+use super::find;
+use super::lex::number;
+
 /// The most text objects read.
 const MAX_OBJECTS: usize = 100_000;
 /// How far past `/AI11Text :` an object's `/Art` path may end (bytes).
@@ -48,17 +51,9 @@ pub(crate) fn text_frames(data: &[u8]) -> HashMap<(u32, usize), BezPath> {
     out
 }
 
-fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    hay.windows(needle.len()).position(|w| w == needle)
-}
-
 /// The words of `text`, without the `%_` that leads lines inside dictionaries.
 fn words(text: &[u8]) -> impl Iterator<Item = &[u8]> {
     text.split(|b| b.is_ascii_whitespace()).map(|w| w.strip_prefix(b"%_").unwrap_or(w)).filter(|w| !w.is_empty())
-}
-
-fn number(w: &[u8]) -> Option<f64> {
-    std::str::from_utf8(w).ok()?.parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 /// The number written just before `key` (`49 /StoryIndex`) in `head`.
