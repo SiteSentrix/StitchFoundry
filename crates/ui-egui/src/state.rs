@@ -388,6 +388,10 @@ pub struct UiState {
     /// The EPS Options chosen last (`document.exportEps` options; null: never used).
     #[serde(default)]
     pub eps_options: Value,
+    /// The Offset Path fields confirmed last (offset, joins, miterLimit; null: never used): its
+    /// dialog opens on them (#1152).
+    #[serde(default)]
+    pub offset_path: Value,
     /// The DXF Import Options chosen last (fit, scaleLineweights, center, mergeLayers; null:
     /// never used).
     #[serde(default)]
@@ -639,6 +643,7 @@ impl Default for UiState {
             dialog_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
+            offset_path: Value::Null,
             dxf_import: Value::Null,
             home: None,
             layers_panel: Default::default(),

@@ -40,5 +40,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (id, params) = command(d);
-    if d.kind == "offsetPath" { form::commit_preview(app, id, params) } else { run_and_close(app, id, params) }
+    if d.kind != "offsetPath" {
+        return run_and_close(app, id, params);
+    }
+    let r = form::commit_preview(app, id, params)?;
+    // The fields as the dialog held them, so they show as typed when it opens again.
+    let kept = ["offset", "joins", "miterLimit"].into_iter().filter_map(|k| Some((k.to_string(), d.fields.get(k)?.clone())));
+    app.ui.offset_path = Value::Object(kept.collect());
+    Ok(r)
 }
