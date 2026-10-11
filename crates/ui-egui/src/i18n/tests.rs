@@ -801,6 +801,46 @@ fn spaced_catalogs_keep_the_spaces_around_fragments() {
 fn czech_plurals_have_three_forms() {
     let forms: Vec<usize> = [0, 1, 2, 4, 5, 11, 21].into_iter().map(plural_czech).collect();
     assert_eq!(forms, [2, 0, 1, 1, 2, 2, 2]);
+    // Every Czech plural row has the three forms, and each count picks its own.
+    let (entries, _) = parse_entries(cs().0.source);
+    let mut count = 0;
+    for (ctx, src, translated) in entries {
+        if ctx != "@plural" {
+            continue;
+        }
+        count += 1;
+        let (one, other) = src.split_once('|').expect("one|other source");
+        let forms: Vec<_> = translated.split('|').collect();
+        assert_eq!(forms.len(), 3, "{src}");
+        for (n, form) in [(1, 0), (2, 1), (4, 1), (0, 2), (5, 2), (11, 2), (21, 2), (u64::MAX, 2)] {
+            assert_eq!(trn(cs(), n, one, other), forms[form].replace("{n}", &n.to_string()), "{src}: {n}");
+        }
+    }
+    assert!(count >= 13, "Czech plural rows missing");
+}
+
+/// Czech uses the vector-illustration vocabulary its users know, has three plural forms
+/// (one/few/other), and translates the reason inside a message too.
+#[test]
+fn czech_reads_as_czech() {
+    for (en, want) in [
+        ("Artboard Tool", "Nástroj Pracovní plocha"),
+        ("Swatches", "Vzorník"),
+        ("Pathfinder", "Operace s cestami"),
+        ("Stroke", "Tah"),
+        ("Fill", "Výplň"),
+        ("Direct Selection Tool", "Nástroj Přímý výběr"),
+        ("Save As…", "Uložit jako…"),
+        ("Undo", "Zpět"),
+    ] {
+        assert_eq!(tr(cs(), en), want);
+    }
+    for (n, word) in [(0, "vrstev"), (1, "vrstva"), (2, "vrstvy"), (4, "vrstvy"), (5, "vrstev"), (11, "vrstev")] {
+        assert_eq!(trn(cs(), n, "{n} Layer", "{n} Layers"), format!("{n} {word}"));
+    }
+    assert_eq!(tr_ctx(cs(), "axis", "Both"), "Obě");
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(cs(), nested), "příkaz `object.group` nyní není k dispozici: nic není vybráno");
 }
 
 #[test]
@@ -955,7 +995,7 @@ fn align_reflect_and_shear_param_errors_are_translated() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["de", "es", "fr", "it", "ja", "ru", "uk"];
+const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "it", "ja", "ru", "uk"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
