@@ -4,11 +4,11 @@
 //! design named "New Design"), Rename (to the name typed), Delete Design (the selected designs),
 //! Paste Design (a copy of the selected design into the document, selected, to edit) and Select
 //! Unused (the designs no graph draws with), each run at once by `graph.design`; Close closes.
-//! Marker: the design the selected graph series draw their data points with; OK runs
-//! `graph.marker`.
+//! Marker: the design the selected graph series draw their data points with, or None (the default
+//! square marker); OK runs `graph.marker`.
 //!
-//! Fields: `selected` (the selected designs' names; Marker: one name) and, in Graph Design, `name`
-//! (the name Rename gives).
+//! Fields: `selected` (the selected designs' names; Marker: one name, null for None) and, in Graph
+//! Design, `name` (the name Rename gives).
 
 use serde_json::{Value, json};
 
@@ -38,14 +38,7 @@ pub(super) const DESIGN_SPEC: DialogSpec = DialogSpec {
 pub(super) const MARKER_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Graph Marker").into(),
     body: marker_body,
-    confirm: |app, d| {
-        let design = d.str("selected");
-        if design.is_empty() {
-            app.ui.dialog = None;
-            return Ok(Value::Null);
-        }
-        run_and_close(app, "graph.marker", json!({ "design": design }))
-    },
+    confirm: |app, d| run_and_close(app, "graph.marker", json!({ "design": d.fields.get("selected").and_then(Value::as_str) })),
     min_width: 300.0,
     ..DialogSpec::FORM
 };
@@ -59,11 +52,10 @@ pub fn open_design(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// Open Marker for the selected graph series, on the design they draw with (else the first).
+/// Open Marker for the selected graph series, on the design they draw with (None for the default).
 pub fn open_marker(app: &mut VectorcraftApp) -> Result<Value, String> {
     let v = app.session.execute("graph.marker", &json!({})).map_err(|e| e.to_string())?;
-    let current = v["design"].as_str().map(str::to_string).or_else(|| names(app).ok()?.first().cloned()).unwrap_or_default();
-    app.ui.dialog = Some(Dialog::new(MARKER, json!({ "selected": current })));
+    app.ui.dialog = Some(Dialog::new(MARKER, json!({ "selected": v["design"].as_str() })));
     Ok(Value::Null)
 }
 
@@ -200,12 +192,18 @@ fn design_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> b
 
 fn marker_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let names = names(app).unwrap_or_default();
+    // A list as wide as Graph Design's, not the whole window.
+    ui.set_width(220.0);
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().id_salt("graph-markers").min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.set_min_height(160.0);
+            let current = d.fields.get("selected").and_then(Value::as_str).map(str::to_string);
+            if ui.selectable_label(current.is_none(), tl!("None")).clicked() {
+                d.fields.insert("selected".into(), Value::Null);
+            }
             for n in &names {
-                if ui.selectable_label(d.str("selected") == *n, n.as_str()).clicked() {
+                if ui.selectable_label(current.as_deref() == Some(n.as_str()), n.as_str()).clicked() {
                     d.fields.insert("selected".into(), json!(n));
                 }
             }
@@ -265,11 +263,17 @@ mod tests {
         let g = app.run("graph.create", json!({"type": "line", "x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [g]})).unwrap();
         super::open_marker(&mut app).unwrap();
-        let d: Dialog = app.ui.dialog.take().unwrap();
-        assert_eq!(d.str("selected"), "New Design", "the first design");
+        let mut d: Dialog = app.ui.dialog.take().unwrap();
+        assert_eq!(d.fields["selected"], json!(null), "None: the default marker");
+        d.fields.insert("selected".into(), json!("New Design"));
         (super::MARKER_SPEC.confirm)(&mut app, &d).unwrap();
         assert_eq!(app.session.execute("graph.marker", &json!({})).unwrap()["design"], "New Design");
         super::open_marker(&mut app).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("selected"), "New Design");
+        let mut d: Dialog = app.ui.dialog.take().unwrap();
+        assert_eq!(d.str("selected"), "New Design");
+        // None goes back to the default marker.
+        d.fields.insert("selected".into(), json!(null));
+        (super::MARKER_SPEC.confirm)(&mut app, &d).unwrap();
+        assert_eq!(app.session.execute("graph.marker", &json!({})).unwrap()["design"], json!(null));
     }
 }
