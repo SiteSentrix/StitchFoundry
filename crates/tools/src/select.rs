@@ -863,7 +863,7 @@ mod tests {
         let member = |id: NodeId, r: Rect| std::sync::Arc::new(Node::path(id, shapes::rectangle(r), Appearance::default()));
         let children = vec![member(a, Rect::new(150.0, 100.0, 250.0, 200.0)), member(b, beside)];
         let mut compound = Node::new(c, NodeKind::Compound { children, rule: Default::default() });
-        compound.appearance = Appearance::default_art();
+        compound.appearance = Appearance::default_art().into();
         d.insert(Some(l), 0, compound).unwrap();
         let mut s = Selection::default();
         s.add(a);
