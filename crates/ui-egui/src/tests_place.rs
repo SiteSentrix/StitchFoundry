@@ -614,6 +614,7 @@ fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::ti
 /// for) or until `done` → whether it was.
 fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64, done: &dyn Fn(&VectorcraftApp) -> bool) -> bool {
     let end = *time + secs;
+    let real_end = std::time::Instant::now() + std::time::Duration::from_secs(20);
     loop {
         let wait = frame_at(app, ctx, *time);
         if done(app) {
@@ -624,9 +625,11 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
             *time = end;
             return false;
         }
-        if app.session.link_scan.is_some() {
-            // The look runs on a worker thread, in real time.
+        // The look runs on a worker thread, in real time: the clock waits for it, else a busy
+        // machine's slow look outlasts the simulated seconds and the test fails at random.
+        if app.session.link_scan.is_some() && std::time::Instant::now() < real_end {
             std::thread::sleep(std::time::Duration::from_millis(5));
+            continue;
         }
         *time = next;
     }
