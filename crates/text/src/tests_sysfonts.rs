@@ -569,3 +569,23 @@ fn family_display_name_follows_show_font_names_in_english() {
     let face = db.face("ヒラギノ角ゴシック", "Regular").unwrap();
     assert_eq!(face.family, "Hiragino Sans");
 }
+
+/// Thai typed in a font without Thai takes an installed font made for Thai (Leelawadee UI,
+/// Thonburi, Noto Sans Thai…), whatever other face covering Thai loaded first; Latin beside it keeps
+/// the font chosen. Skipped where none of those families is installed.
+#[test]
+fn thai_falls_back_to_a_font_made_for_thai() {
+    let db = FontDb::global();
+    let Some(thai) = crate::fontdb::THAI_FAMILIES.iter().find(|f| db.has_family(f)) else {
+        eprintln!("skipped: no Thai font installed");
+        return;
+    };
+    let st = vectorcraft_doc::CharStyle { size: 20.0, ..Default::default() };
+    let l = layout(db, &TextObject::point(kurbo::Point::ZERO, "Thai ภาษาไทย", st));
+    let family = |g: &PositionedGlyph| db.face_by_id(g.font_id).map(|f| f.family.clone()).unwrap_or_default();
+    let (latin, thai_glyphs) = l.glyphs.split_at(5);
+    assert!(latin.iter().all(|g| family(g) == FALLBACK_FAMILY), "{:?}", latin.iter().map(family).collect::<Vec<_>>());
+    let first = crate::fontdb::THAI_FAMILIES.iter().find(|f| thai_glyphs.iter().all(|g| family(g).eq_ignore_ascii_case(f)));
+    assert!(first.is_some(), "Thai drawn in {:?}; {thai} is installed", thai_glyphs.iter().map(family).collect::<Vec<_>>());
+    assert!(thai_glyphs.iter().all(|g| g.gid != 0), "no .notdef");
+}

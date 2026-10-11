@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Proportional Metrics in vertical type, `vpal`, #966; document-point character controls after object/group scaling, #1034) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -27,6 +27,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Preserve font sizes while scaling a group | missing | Separate enhancement; scaling still scales text with the other artwork. |
 | OpenType panel, Glyphs panel, alternates | done | Highlight Alternate Glyphs preference unused (#394) |
 | Font menu: samples, live preview, filters, favourites; font matching by any name; Find Font | done | #339 |
+| Missing glyphs set in an installed font made for their script (Thai, Lao, Khmer, Myanmar first; then any font that has them) | done | Thai: Leelawadee UI, Tahoma, Thonburi, Sukhumvit Set, Noto Sans Thai, TLWG |
 | Variable fonts | partial | named instances as styles; axis sliders missing |
 | Colour fonts (OpenType SVG / COLR) | partial | |
 | Every-line and Single-line composers | done | tuned by eye, never compared side by side |
@@ -51,6 +52,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | Thai (Lao, Khmer, Myanmar) missing from the font in use falls back to an installed font made for the script instead of whichever face covering it loaded first; score unchanged (estimated) |
 | 2026-10-11 | minor | Proportional Metrics done: `palt` in horizontal type, `vpal` in vertical type (#966, #1082); ruby and manual tate-chu-yoko still missing |
 | 2026-10-10 | minor | #1034: transformed character controls and regression coverage; preserving group font sizes remains a separate enhancement. Scores/hours unchanged at this rounding. |
 | 2026-10-10 | major | First checklist, split out of the parity table's Type core and Type advanced rows |
