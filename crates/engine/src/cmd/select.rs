@@ -377,7 +377,10 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
         // A path selected as a whole has every anchor selected: toggle and add start from them all.
         let whole = sel.contains(id) && sel.partial(id).is_none();
         sel.add(id);
-        sel.segments.remove(&id);
+        // A segment pick's endpoints aren't selected anchors: start from none of them.
+        if sel.segments.remove(&id).is_some() {
+            sel.anchors.remove(&id);
+        }
         let e = sel.anchors.entry(id).or_default();
         if whole && let Some(path) = d.node(id).and_then(|n| n.path_data()) {
             e.extend(path.anchors().map(|(s, i, _)| (s, i)));
@@ -416,7 +419,8 @@ fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
             sel.clear();
         }
         for (id, refs) in items {
-            sel.segments.remove(&id);
+            // A segment pick's endpoints aren't selected anchors: start from none of them.
+            let segment_pick = sel.segments.remove(&id).is_some();
             let all: BTreeSet<(usize, usize)> =
                 d.node(id).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, i, _)| (s, i)).collect()).unwrap_or_default();
             // Anything but a path is selected, toggled or deselected as a whole.
@@ -430,6 +434,7 @@ fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // From the anchors selected now (all of them for a path selected as a whole).
             let now = match sel.partial(id) {
+                _ if segment_pick => BTreeSet::new(),
                 Some(a) => a.clone(),
                 None if sel.contains(id) => all.clone(),
                 None => BTreeSet::new(),

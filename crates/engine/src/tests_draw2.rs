@@ -724,6 +724,25 @@ fn direct_segment_delete_keeps_the_other_rectangle_edges_and_one_undo() {
     }
 }
 
+/// A segment pick's endpoints are hollow: Shift-clicking or Shift-marqueeing one selects that
+/// anchor, rather than toggling it off and leaving the other endpoint selected.
+#[test]
+fn selecting_an_anchor_after_a_segment_pick_starts_from_no_anchors() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 150.0);
+    let segment = json!({"id": id.0, "segments": [[0, 0]]});
+    s.execute("select.segments", &segment).unwrap();
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0]], "mode": "toggle"})).unwrap();
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!(sel.partial(id), Some(&[(0, 0)].into()));
+    assert!(sel.segments.is_empty());
+    s.execute("select.segments", &segment).unwrap();
+    s.execute("select.anchorsMany", &json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "add"})).unwrap();
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!(sel.partial(id), Some(&[(0, 1)].into()));
+    assert!(sel.segments.is_empty());
+}
+
 #[test]
 fn segment_delete_preserves_curves_appearance_and_unrelated_contours() {
     let data = "M100 100C110 70 150 130 170 100C180 75 230 125 250 100C270 140 280 80 310 100C320 120 140 140 100 100Z M400 100L500 100L500 200Z";
