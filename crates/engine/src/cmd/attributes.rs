@@ -69,6 +69,16 @@ fn ruled<'a>(n: &'a Node, out: &mut Vec<(&'a Node, FillRule)>) {
     }
 }
 
+/// A directly selected compound member fills with its compound's rule. Its other attributes
+/// and path direction still belong to the member itself.
+fn fill_rule_owner(d: &Document, id: NodeId) -> Option<&Node> {
+    let n = d.node(id)?;
+    match d.parent_of(id).and_then(|parent| d.node(parent)) {
+        Some(parent) if matches!(parent.kind, NodeKind::Compound { .. }) => Some(parent),
+        _ => Some(n),
+    }
+}
+
 /// The Attributes panel's values of `info.ids` beyond overprinting.
 pub(super) fn fill_info(d: &Document, info: &mut AttributesInfo) {
     let nodes: Vec<&Node> = info.ids.iter().filter_map(|id| d.node(*id)).collect();
@@ -78,7 +88,7 @@ pub(super) fn fill_info(d: &Document, info: &mut AttributesInfo) {
     info.url = same(attrs().map(|a| a.url));
     info.note = same(attrs().map(|a| a.note));
     let mut all = vec![];
-    nodes.iter().for_each(|n| ruled(n, &mut all));
+    nodes.iter().filter_map(|n| fill_rule_owner(d, n.id)).for_each(|n| ruled(n, &mut all));
     info.fill_rule = same(all.into_iter().map(|(_, r)| r));
     let paths = paths_in(d, &info.ids);
     let subpaths = paths.iter().filter_map(|id| d.node(*id)?.path_data()).flat_map(|p| &p.subpaths);
@@ -172,7 +182,7 @@ fn set_fill_rule(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = targets(s, p)?;
     let changed = edit_counted(s, "Fill Rule", |d| {
         let mut all = vec![];
-        ids.iter().filter_map(|id| d.node(*id)).for_each(|n| ruled(n, &mut all));
+        ids.iter().filter_map(|id| fill_rule_owner(d, *id)).for_each(|n| ruled(n, &mut all));
         let todo: BTreeSet<_> = all.into_iter().filter(|(_, r)| *r != rule).map(|(n, _)| n.id).collect();
         for id in &todo {
             if let Some(NodeKind::Path { rule: r, .. } | NodeKind::Compound { rule: r, .. }) = d.node_mut(*id).map(|n| &mut n.kind) {
