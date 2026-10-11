@@ -502,7 +502,7 @@ fn set_run_stroke(style: &mut CharStyle, paint: Paint) {
 }
 
 /// Use the existing 1 pt default when adding paint to an unpainted zero-width stroke.
-fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>, paint: &Paint) {
+pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>, paint: &Paint) {
     if !paint.is_none()
         && let Some(stroke) = ap.stroke_at_mut(index)
         && stroke.paint.is_none()

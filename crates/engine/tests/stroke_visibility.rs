@@ -105,3 +105,15 @@ fn existing_weights_and_explicitly_zero_painted_strokes_keep_their_widths() {
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     assert_eq!(width(&s, id), 0.0, "fill edits and removing paint do not enable a stroke");
 }
+
+#[test]
+fn appearance_panel_stroke_colour_restores_an_unpainted_zero_width_stroke() {
+    let (mut s, id) = fixture();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 0})).unwrap();
+    s.execute("appearance.setItem", &json!({"index": 1, "color": "#00ff00"})).unwrap();
+    assert_eq!(width(&s, id), 1.0);
+    s.execute("appearance.setItem", &json!({"index": 1, "weight": 0})).unwrap();
+    s.execute("appearance.setItem", &json!({"index": 1, "color": "#0000ff"})).unwrap();
+    assert_eq!(width(&s, id), 0.0, "a painted stroke keeps an explicit zero width");
+}

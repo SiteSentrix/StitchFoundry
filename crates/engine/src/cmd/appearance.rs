@@ -522,6 +522,11 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Appearance", |d, _| {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
+            if p.get("weight").is_none()
+                && let Some(pa) = &paint
+            {
+                super::paint::restore_unpainted_stroke(&mut n.appearance, Some(idx), pa);
+            }
             let bounds = n.geometric_bounds();
             let Some(item) = n.appearance.items.get_mut(idx) else { continue };
             let (pp, op, bl, vis, bounds) = match item {
