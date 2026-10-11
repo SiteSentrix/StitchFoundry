@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Zig Zag's dialog with sliders and radio buttons, #1133; earlier: Brush Strokes landed) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (PDF raster-effect resolution-cap warnings; Zig Zag's dialog with sliders and radio buttons, #1133; earlier: Brush Strokes landed) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -30,7 +30,11 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | SVG Filters | Apply SVG Filter… and the filter list | 0/1 | the whole submenu (SVG filters on import round-trip already) |
 | Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes |
 
-Document Raster Effects Settings exists.
+Document Raster Effects Settings exists. PDF export reports when its unchanged 64 million pixel
+budget lowers raster-effect resolution: one warning per original object, with its id/name,
+requested ppi and lowest achieved ppi across generated images. Uncapped exports remain quiet.
+Evidence: `crates/engine/src/tests_pdfraster.rs` exercises actual 2400-ppi capped fill/stroke
+images and a small uncapped export; `cmd/rasterfx_report.rs` tests lowest-resolution aggregation.
 
 ## Photoshop effects
 
@@ -72,6 +76,7 @@ rendering, Turntable, 3D export) is 45–75 h, still the largest single gap.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | PDF cap warnings identify original objects after appearance splitting and report the lowest achieved ppi; cap/rendering and scores unchanged |
 | 2026-10-11 | minor | Zig Zag's dialog: Size and Ridges per segment sliders, Points as Smooth / Corner radio buttons (#1133) |
 | 2026-10-11 | minor | Brush Strokes landed (8 filters): 28/57 Photoshop effects |
 | 2026-10-10 | minor | Initial Revolve landed (#846) |

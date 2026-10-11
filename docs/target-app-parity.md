@@ -2,6 +2,8 @@
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Drawing tools: Live Corners round corners between curved sides, #1144; Type advanced: proportional vertical metrics (`vpal`) done, #966; Shape Builder: #893 fixed, merged regions of crossing lines no longer keep seams; scores unchanged while #937 is open; #1034: document-point character controls after object/group scaling; full readiness recomputed as the standard's additive weighted sum, ~62%; per-audience hours; essentials-user score ~75% added; ready-for-real-work re-examined: 50% → 55%, mainstream 65% added; earlier the same day: full re-measure against Illustrator 2026 30.x; merged the ROADMAP's parity estimate, honest assessment and "Shipped so far" into this file) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
+Evidence update (2026-10-11, minor): PDF raster-effect resolution-cap warnings verified; scores and hours unchanged.
+
 The authoritative parity assessment. [`ROADMAP.md`](../ROADMAP.md) summarizes it; [`gaps.md`](gaps.md) is
 the work list made from it. Deep areas have their own checklists: [UI and interaction](ui-parity.md),
 [file formats](file-format-parity.md), [hardware](hardware-parity.md), [languages](localization-parity.md),
@@ -74,7 +76,7 @@ dominate; 3D, graphs and automation are specialist). They sum to 105. Feature de
 | Strokes, brushes, width profiles | 5 | 88% | Art brush Overlap, Pattern brush auto corners, brush libraries, pen pressure on macOS, tilt/bearing/rotation | 8–15 | estimated |
 | Appearance, transparency, graphic styles, masks | 5 | 97% | raster effect reach in preview bounds | 1–2 | estimated |
 | Live vector effects | 5 | 85% | Outline Object, Effect › Rasterize, Pathfinder Hard Mix/Soft Mix/Trap, SVG Filters, the Transform effect's missing options (#885) | 6–10 | measured count 44/50, depth estimated |
-| Raster effects (Effect Gallery) | 4 | 48% | 29 Photoshop-style filters (Artistic, Sketch), the Effect Gallery dialog, Load Texture | 24–40 | measured count 28/57 |
+| Raster effects (Effect Gallery) | 4 | 48% | 29 Photoshop-style filters (Artistic, Sketch), the Effect Gallery dialog, Load Texture | 24–40 | measured count 28/57; PDF resolution-cap reporting tested, score unchanged |
 | 3D and Materials (and Turntable) | 4 | ~8% | initial live Revolve done (flat shading, one light, no caps, approximate visibility for intersecting surfaces); Extrude & Bevel, Inflate, Rotate, materials, Turntable views, 3D export | 50–85 | estimated (Revolve landed after the first measure, #846) |
 | Type core | 9 | 80% | hyphenation and justification options, Optical Margin Alignment, Middle Eastern features beyond bidi layout, optional group font-size preservation; transformed character controls fixed (#1034), see [type-parity.md](type-parity.md) | 14–19 | estimated |
 | Type advanced (CJK, spelling, Touch Type, Retype) | 4 | 50% | CJK vertical composition (ruby, mojikumi), variable font axes, tab leaders, spell check, Touch Type, Retype | 20–28 | estimated |
@@ -456,10 +458,16 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 - **Graphics processor:** the canvas is rasterized on the CPU and the GPU only composites it, so any GPU that can show the window will do. Preferences › Performance › Graphics Processor (`gpuPreference`) is Automatic by default: the power-saving GPU on Windows and macOS (the integrated one on hybrid-graphics laptops, where presenting from the discrete GPU made the window flicker, #306), and the GPU the desktop runs on under Linux, where KWin on an NVIDIA GPU refused frames from a Ryzen's integrated GPU and 0.5.0 crashed at startup (#502). Power Saving and High Performance pick a kind of GPU; `WGPU_POWER_PREF`, `WGPU_ADAPTER_NAME` and `WGPU_BACKEND` override them. The app picks among the adapters that can present to the window (native backends before OpenGL, hardware before software, and on Windows a GPU's DX12 adapter before its Vulkan one: Intel's Vulkan driver made the whole window flicker black, #545), and if the window fails on one while starting up it starts again without it instead of crashing; Help › About, `ui.inspect` and the log name the adapter in use. When the browser drops the page's WebGPU device or WebGL context, the web build writes recovery copies, starts again on new graphics with the same app and uploads its textures again; if it can't, it removes the stale canvas and says to reload, which offers the copies back. The desktop app writes the copies and says to restart (#369). On Windows and Linux the tools' cursors are OS cursors (bitmaps rasterized once per display scale), which the system moves itself: painted into the window, they trailed the pointer by the frames waiting to be shown, and the window now queues one frame instead of two (#444). macOS and the web still paint them (macOS sizes cursor bitmaps in points, eframe has no bitmap cursors on the web). Pens and touch drive the tools as the mouse does, and a tap pressed and lifted within one frame clicks where it tapped (#491); pen pressure reaches the Liquify tools' Use Pressure Pen on Windows, while winit 0.30 reports none on macOS or Linux and egui none on the web. On Linux, see `docs/development.md` for pens under Wayland.
 - **Tests and robustness:** ~2,840 automated tests: model-based property tests, a junk-parameter sweep over every command, import fuzzing (SVG, PDF, libraries), golden renders, and MCP end-to-end tests over stdio. Shipped code never panics (workspace lints and a rollback safety net; see `docs/development.md`).
 
+- **PDF raster-effect budget reporting (2026-10-11):** `crates/engine/src/tests_pdfraster.rs`
+  exports actual capped 2400-ppi fill/stroke images and verifies one warning for the original
+  object's id/name at the lowest achieved ppi; a small uncapped export and the existing PDF
+  raster-fidelity suite stay warning-free. The renderer and 64 million pixel cap are unchanged.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | PDF raster-effect cap reductions are reported per original object with requested/achieved ppi; scores and hours unchanged |
 | 2026-10-11 | minor | Platforms: Preferences › Performance › Linux Display Server opens the window through XWayland, where file drops work (#1151); score unchanged (estimated) |
 | 2026-10-11 | minor | Drawing tools: Live Corners on corners between curved sides (#1144) leaves the missing list; score and hours unchanged at this rounding (estimated) |
 | 2026-10-11 | minor | Type advanced: Proportional Metrics in vertical type (`vpal`, #966) leaves the missing list; score and hours unchanged at this rounding (estimated) |
