@@ -76,3 +76,8 @@ display_name = "Jason Brashear"
 
 [people.Losminek]
 sync_github_name = true
+
+[people.atoslins]
+real_name = "Atos Lins"
+display_name = "Atos Lins"
+sync_github_name = false
