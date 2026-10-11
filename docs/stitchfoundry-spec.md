@@ -83,7 +83,7 @@ own); vendor machine protocols that are not publicly documented.
    ```
    **Before every commit:** `cargo xtask ci` (fmt, clippy `-D warnings` with the no-panic
    lints, all tests, assets, brands, layers, wasm); GitHub runs the same on every push, with
-   Rust 1.97.0. Last full run: 5,512 tests passing, clippy clean, wasm clean.
+   Rust 1.97.0. Last full run: 5,524 tests passing, clippy clean, wasm clean.
 5. **Pick work** from [§8](#8-roadmap-and-estimates) in order, one task id per commit
    (`E1.3: stitch edit mode`). For each feature: engine command(s) + tests → tool/UI →
    translations → docs ([`embroidery.md`](embroidery.md)) → look at it in the running app
