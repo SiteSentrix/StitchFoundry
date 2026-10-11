@@ -375,6 +375,20 @@ mod tests {
         assert!(hit_test(&d, Point::new(50.5, 25.0), HitOptions::default()).is_some());
     }
 
+    /// #1103: a marquee drawn over a background picks what is on it, not the background, whose
+    /// outline it doesn't touch.
+    #[test]
+    fn a_marquee_inside_a_background_leaves_the_background() {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let (back, small) = (d.alloc_id(), d.alloc_id());
+        d.insert(Some(l), 0, Node::path(back, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Appearance::default_art())).unwrap();
+        d.insert(Some(l), 1, Node::path(small, shapes::rectangle(Rect::new(50.0, 50.0, 60.0, 60.0)), Appearance::default_art())).unwrap();
+        assert_eq!(marquee(&d, Rect::new(40.0, 40.0, 70.0, 70.0), None, false), vec![small]);
+        // Reaching the background's edge takes it too.
+        assert_eq!(marquee(&d, Rect::new(-5.0, 40.0, 70.0, 70.0), None, false), vec![back, small]);
+    }
+
     #[test]
     fn group_top_object() {
         let mut d = Document::new(200.0, 200.0);

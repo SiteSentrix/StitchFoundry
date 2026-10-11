@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Live Corners round corners between curved sides, #1144; earlier: several artboards selected at once, #1139) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (a marquee needs to touch a path, not just lie inside its fill, #1103; earlier: Live Corners round corners between curved sides, #1144) · **Target:** Adobe Illustrator 2026 (30.x)
 
 How VectorCraft's tools, handles, snapping and panels behave next to Illustrator's. A vector illustrator's
 trust is in the details: where a handle lands, what Shift and Alt do mid-drag, what a smart guide snaps to,
@@ -62,6 +62,7 @@ tools, never checked side by side) isn't captured row by row.
 | Behaviour | Status | Notes |
 |---|---|---|
 | Click/Shift-click anchors; marquee toggles with Shift | done | #483 |
+| A marquee selects the objects whose paths it touches (anchors or segments): drawn inside a filled shape, over a background, it leaves that shape (Preview and Outline) | done | #1103 |
 | Drag a curved segment to bend it, a straight one to move its anchors | done | |
 | Drag by an anchor of a path selected whole moves the whole path; Alt-drag by an anchor or a segment copies it, Alt toggles the copy during the drag, and the copy snaps by the anchor pressed, onto the original too | done | #1104 |
 | Handles shown are the handles that drag; tolerance from Selection & Anchor Display | done | #494 |
@@ -169,6 +170,7 @@ re-measure of the panels added since.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | A marquee inside a filled shape no longer selects it: only touching its path does (#1103); score unchanged (estimated) |
 | 2026-10-11 | minor | Live Corners: corners between curved sides round too, the curve trimmed to what the cut leaves (#1144); score unchanged (estimated) |
 | 2026-10-11 | minor | Artboards: Shift-click selects several, which move, copy and delete together (#1139); score unchanged (estimated) |
 | 2026-10-11 | minor | Edit Toolbar opens the All Tools drawer beside the toolbar instead of a centred dialog, dims the tools the toolbar holds, and edits the toolbar by drag and drop while it is open (#1018); score unchanged (estimated) |
