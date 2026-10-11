@@ -62,9 +62,9 @@ impl Selection {
     }
     pub fn set(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.clear();
-        for id in ids {
-            self.add(id);
-        }
+        // What `add` per id does after a clear, without its linear duplicate check per id.
+        let mut seen = std::collections::HashSet::new();
+        self.objects.extend(ids.into_iter().filter(|id| seen.insert(*id)));
     }
     pub fn add(&mut self, id: NodeId) {
         self.target = None;
@@ -118,10 +118,13 @@ impl Selection {
     }
     /// Drop ids that no longer exist or are no longer editable.
     pub fn prune(&mut self, doc: &Document) {
-        self.objects.retain(|id| doc.node(*id).is_some());
-        self.anchors.retain(|id, _| doc.node(*id).is_some());
+        // Every id this looks up, found in one walk of the tree.
+        let ids = self.objects.iter().chain(self.anchors.keys()).copied().chain(self.key).chain(self.target);
+        let found = doc.index_paths(ids);
+        self.objects.retain(|id| found.contains_key(id));
+        self.anchors.retain(|id, _| found.contains_key(id));
         // The key object stays while another selected object lies outside it.
-        let keep = self.key.and_then(|k| doc.node(k)).is_some_and(|n| {
+        let keep = self.key.and_then(|k| found.get(&k)).and_then(|p| doc.node_at(p)).is_some_and(|n| {
             let mut inside = BTreeSet::new();
             n.walk(&mut |c| {
                 inside.insert(c.id);
@@ -131,7 +134,7 @@ impl Selection {
         if !keep {
             self.key = None;
         }
-        if self.target.is_some_and(|t| doc.node(t).is_none()) {
+        if self.target.is_some_and(|t| !found.contains_key(&t)) {
             self.target = None;
         }
         self.slices.retain(|id| doc.is_slice(*id));

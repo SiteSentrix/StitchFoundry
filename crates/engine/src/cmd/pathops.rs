@@ -203,10 +203,10 @@ struct Style {
 
 impl Style {
     fn of(n: &Node) -> Self {
-        Style { appearance: n.appearance.clone(), opacity: n.opacity, blend: n.blend }
+        Style { appearance: (*n.appearance).clone(), opacity: n.opacity, blend: n.blend }
     }
     fn apply(&self, n: &mut Node) {
-        n.appearance = self.appearance.clone();
+        n.appearance = self.appearance.clone().into();
         n.opacity = self.opacity;
         n.blend = self.blend;
     }
@@ -377,7 +377,7 @@ fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
                     // Outline: open edges stroked with the face's former fill.
                     let fill = st.appearance.fill_paint();
                     let paint = if fill.is_none() { st.appearance.stroke_paint() } else { fill };
-                    n.appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], ..Default::default() };
+                    n.appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], ..Default::default() }.into();
                 }
                 children.push(Arc::new(n));
             }
@@ -519,7 +519,7 @@ pub(crate) fn outlined_stroke(
         overprint: st.overprint,
         ..vectorcraft_doc::appearance::FillLayer::new(st.paint.clone())
     };
-    n.appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() };
+    n.appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() }.into();
     Some(n)
 }
 
@@ -554,7 +554,7 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
 /// A plain copy of path `l` (new ids, no transparency, name or mask) painted with `items`.
 pub(crate) fn styled_copy(d: &mut Document, l: &Node, items: Vec<AppearanceItem>) -> Node {
     let mut f = d.reid(l);
-    f.appearance = Appearance { items, ..Default::default() };
+    f.appearance = Appearance { items, ..Default::default() }.into();
     f.opacity = 1.0;
     f.blend = BlendMode::Normal;
     f.name = None;

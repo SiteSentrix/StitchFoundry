@@ -463,7 +463,7 @@ mod tests {
         d.insert(Some(l), 0, Node::path(a, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default_art())).unwrap();
         let inner = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 0.0, 150.0, 50.0)), Appearance::default());
         let mut compound = Node::new(c, NodeKind::Compound { children: vec![Arc::new(inner)], rule: vectorcraft_geom::FillRule::NonZero });
-        compound.appearance = Appearance::default_art();
+        compound.appearance = Appearance::default_art().into();
         d.insert(Some(l), 9, compound).unwrap();
         let path_only = HitOptions { path_only: true, ..Default::default() };
         for (id, inside, edge) in [(a, Point::new(25.0, 25.0), Point::new(0.5, 25.0)), (c, Point::new(125.0, 25.0), Point::new(100.5, 25.0))] {

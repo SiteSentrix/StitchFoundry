@@ -242,7 +242,8 @@ pub(crate) fn transform_patterns(s: &mut Session, p: &Value, ids: &[NodeId]) -> 
     let on = bool_or(p, "patterns", s.prefs.transform_pattern_tiles);
     let d = &s.doc()?.doc;
     let mut uses = false;
-    for n in ids.iter().filter_map(|id| d.node(*id)) {
+    let paths = d.index_paths(ids.iter().copied());
+    for n in ids.iter().filter_map(|id| paths.get(id)).filter_map(|p| d.node_at(p)) {
         n.walk(&mut |c| uses |= vectorcraft_doc::pattern::uses_pattern(c, None));
     }
     if uses {
@@ -263,14 +264,16 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
     // With a copy, the reply lists the copies, and there are none.
     let d = &s.doc()?.doc;
-    let none = ids.iter().all(|id| d.node(*id).is_none());
+    let none = d.index_paths(ids.iter().copied()).is_empty();
     let ids = if none || (!copy && xf == Affine::IDENTITY) {
         if copy { vec![] } else { ids }
     } else {
         s.edit(label, |d, sel| {
             let targets = if copy { duplicate_in(d, sel, &ids, Affine::IDENTITY)? } else { ids.clone() };
+            // Transforms don't move nodes in the tree, so the paths found up front stay right.
+            let paths = d.index_paths(targets.iter().copied());
             for id in &targets {
-                if let Some(n) = d.node_mut(*id)
+                if let Some(n) = paths.get(id).and_then(|p| d.node_mut_at(p))
                     && !(areas && resize_type_area(n, xf))
                 {
                     n.transform(xf, sc);
@@ -658,7 +661,7 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
         let back = paths.first().map_or(0.0, |p| direction(p));
         for (i, mut p) in paths.into_iter().enumerate() {
             let pn = Arc::make_mut(&mut p);
-            pn.appearance = Appearance::default();
+            pn.appearance = Appearance::default().into();
             let flip = i > 0 && back != 0.0 && direction(pn) == back;
             if let NodeKind::Path { path, live, .. } = &mut pn.kind {
                 *live = None;
@@ -739,7 +742,7 @@ pub(super) fn as_clipping_path(c: &mut Node) -> Result<()> {
     if !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
         return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
     }
-    c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+    c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
     match &mut c.kind {
         NodeKind::Path { clipping, .. } => *clipping = true,
         NodeKind::Text(t) => {

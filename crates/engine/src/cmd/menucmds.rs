@@ -575,7 +575,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     let mut bare = node.clone();
     bare.opacity = 1.0;
     bare.blend = Default::default();
-    bare.appearance = Appearance::default();
+    bare.appearance = Appearance::default().into();
     bare.visible = true;
     let tmp = isolated_doc(&st.doc, vec![bare]);
     let region = Rect::new(r.x0, r.y0, r.x0 + (r.width() * scale).round().max(1.0) / scale, r.y0 + (r.height() * scale).round().max(1.0) / scale);

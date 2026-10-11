@@ -79,7 +79,7 @@ fn instances_the_def_cant_stand_for_get_their_own_art() {
     let mut d = symbol_doc(6.0, &[Affine::translate((40.0, 60.0)), rot, scaled]);
     // Stained: its fill tints the art.
     let mut stained = instance(&mut d, "My Mark", Affine::translate((40.0, 20.0)));
-    stained.appearance = Appearance::basic(Paint::solid(Color::rgb8(255, 0, 0)), Paint::None, 0.0);
+    stained.appearance = Appearance::basic(Paint::solid(Color::rgb8(255, 0, 0)), Paint::None, 0.0).into();
     stained.appearance.items.retain(|i| i.is_fill());
     if let vectorcraft_doc::AppearanceItem::Fill(f) = &mut stained.appearance.items[0] {
         f.opacity = 0.5;

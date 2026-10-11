@@ -261,6 +261,16 @@ pub(crate) struct ShadowEntry {
     pub(crate) stamp: u64,
 }
 
+/// Live-effect geometry of a node, kept across frames: the object-level result and each
+/// appearance item's own result on it (filled in as items are drawn). The node is kept alive, so
+/// its address names it alone and a hit is exact.
+pub(crate) struct FxGeom {
+    node: Arc<Node>,
+    g: Arc<BezPath>,
+    items: Vec<Option<Arc<BezPath>>>,
+    pub(crate) stamp: u64,
+}
+
 impl Renderer {
     /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) from a cached raster:
     /// the silhouette is rendered once into a small crop, blurred and tinted on the CPU, and reused
@@ -340,12 +350,43 @@ impl Renderer {
 
     /// `draw_shape` for nodes with live effects.
     pub(crate) fn draw_shape_fx(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, bp: &BezPath, rule: FillRule) {
-        let g = effected_path(n, bp);
+        // The node `draw_arc` is drawing gets its geometry from the cache: `bp` is its own path,
+        // made from the node alone, so the effects give the same result every frame.
+        let owner = self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned();
+        let mut cached = owner.map(|o| {
+            let key = Arc::as_ptr(&o) as usize;
+            let stamp = self.stamp;
+            let e = match self.fx_geom.remove(&key) {
+                Some(e) if Arc::ptr_eq(&e.node, &o) => e,
+                _ => FxGeom { g: Arc::new(effected_path(n, bp)), items: vec![None; n.appearance.items.len()], node: o, stamp },
+            };
+            (key, FxGeom { stamp, ..e })
+        });
+        let g = match &cached {
+            Some((_, e)) => e.g.clone(),
+            None => Arc::new(effected_path(n, bp)),
+        };
+        self.draw_shape_fx_geom(ctx, f, n, &g, rule, cached.as_mut().map(|(_, e)| &mut e.items));
+        if let Some((key, e)) = cached {
+            self.fx_geom.insert(key, e);
+        }
+    }
+
+    /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry.
+    fn draw_shape_fx_geom(
+        &mut self,
+        ctx: &mut RenderContext,
+        f: &Frame,
+        n: &Node,
+        g: &BezPath,
+        rule: FillRule,
+        items: Option<&mut Vec<Option<Arc<BezPath>>>>,
+    ) {
         if g.elements().is_empty() {
             return;
         }
         if f.opts.outline {
-            self.hairline(ctx, f, &g, [0, 0, 0, 255]);
+            self.hairline(ctx, f, g, [0, 0, 0, 255]);
             return;
         }
         let gctx = GeomContext::of(n);
@@ -353,8 +394,9 @@ impl Renderer {
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
         let reach = g.bounding_box().inflate(outset, outset);
-        let content = Content { node: n, cache: Some(0), reach, outline: Some((&g, rule)) };
-        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, n, &g, rule, &gctx));
+        let content = Content { node: n, cache: Some(0), reach, outline: Some((g, rule)) };
+        let mut items = items;
+        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, n, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
     }
 
@@ -698,32 +740,49 @@ impl Renderer {
 
     /// Paint the fills and strokes of `n` on geometry `g`, applying per-item geometry effects and
     /// painting per-item raster effects around that item alone.
-    fn paint_items(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, g: &BezPath, rule: FillRule, gctx: &GeomContext) {
+    #[allow(clippy::too_many_arguments)]
+    fn paint_items(
+        &mut self,
+        ctx: &mut RenderContext,
+        f: &Frame,
+        n: &Node,
+        g: &BezPath,
+        rule: FillRule,
+        gctx: &GeomContext,
+        mut cache: Option<&mut Vec<Option<Arc<BezPath>>>>,
+    ) {
         let bounds = g.bounding_box();
         for (j, item) in n.appearance.items.iter().enumerate() {
             if !item.visible() || item.paint().is_none() {
                 continue;
             }
-            let ig = apply(item_effects(item), g, &gctx.item(item));
+            // The item's own geometry effects on `g`, from the cache when there is one.
+            let slot = cache.as_deref_mut().and_then(|c| c.get_mut(j));
+            let ig: Arc<BezPath> = match slot {
+                Some(Some(ig)) => ig.clone(),
+                Some(s) => s.insert(Arc::new(apply(item_effects(item), g, &gctx.item(item)))).clone(),
+                None => Arc::new(apply(item_effects(item), g, &gctx.item(item))),
+            };
+            let ig = &*ig;
             let ib = if effects::has_geometry(item_effects(item)) && !ig.elements().is_empty() { ig.bounding_box() } else { bounds };
             let rfx = effects::raster_effects(item_effects(item));
             if rfx.is_empty() {
-                self.paint_item(ctx, f, n, item, &ig, rule, ib);
+                self.paint_item(ctx, f, n, item, ig, rule, ib);
                 continue;
             }
             // The item's silhouette: its fill area, or the outline of its stroke.
             let outline = match item {
                 AppearanceItem::Fill(_) => ig.clone(),
                 AppearanceItem::Stroke(st) => {
-                    let w = effects::stroke::aligned_width(st, effects::stroke::is_closed(&ig));
-                    effects::stroke::line_outline(&effects::stroke::stroke_pieces(&ig, st).line, st, w, f.px * 0.25)
+                    let w = effects::stroke::aligned_width(st, effects::stroke::is_closed(ig));
+                    effects::stroke::line_outline(&effects::stroke::stroke_pieces(ig, st).line, st, w, f.px * 0.25)
                 }
             };
             let outset = n.appearance.outset();
             let orule = if item.is_fill() { rule } else { FillRule::NonZero };
             // Each item's shadows get their own cache slots.
             let content = Content { node: n, cache: Some((j + 1) << 8), reach: ib.inflate(outset, outset), outline: Some((&outline, orule)) };
-            self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_item(c, fr, n, item, &ig, rule, ib));
+            self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_item(c, fr, n, item, ig, rule, ib));
             ctx.set_transform(Affine::IDENTITY);
         }
     }
@@ -790,6 +849,85 @@ mod tests {
 
     const WHITE: u32 = 765;
 
+    /// A page of objects with object-level and item-level geometry effects (Offset Path, Roughen,
+    /// Warp, Outline Stroke, Transform) under drop shadows and in groups.
+    fn effects_page() -> Document {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let fx = |id: &str, p: serde_json::Value| Effect { id: id.into(), params: p, visible: true };
+        for i in 0..24 {
+            let (x, y) = (10.0 + (i % 6) as f64 * 30.0, 10.0 + (i / 6) as f64 * 45.0);
+            let id = d.alloc_id();
+            let r = Rect::new(x, y, x + 20.0, y + 30.0);
+            let shape = if i % 2 == 0 { shapes::ellipse(r) } else { shapes::star(r.center(), 12.0, 5.0, 5, 0.0) };
+            let mut n = Node::path(id, shape, Appearance::basic(Paint::solid(Color::rgb(0.2, 0.4, 0.9)), Paint::solid(Color::BLACK), 1.5));
+            n.appearance.effects = match i % 4 {
+                0 => vec![fx("path.offsetPath", json!({"offset": 3}))],
+                1 => vec![fx("distort.roughen", json!({"size": 4, "relative": true})), fx("stylize.dropShadow", json!({}))],
+                2 => vec![fx("warp.arc", json!({"bend": 30})), fx("path.outlineStroke", json!({}))],
+                _ => vec![fx("path.offsetPath", json!({"offset": -2})), fx("distort.transform", json!({"moveH": 4, "rotate": 10}))],
+            };
+            if let Some(f) = n.appearance.fill_mut() {
+                f.effects.push(fx("path.offsetPath", json!({"offset": 2})));
+            }
+            d.insert(Some(l), usize::MAX, n).unwrap();
+        }
+        d
+    }
+
+    /// Cached live-effect geometry draws exactly what computing it afresh draws: a second (warm)
+    /// frame, a frame after panning, and a fresh renderer all give the same pixels, and an edited
+    /// object (a new node) draws its new geometry, not the cached one.
+    #[test]
+    fn cached_effect_geometry_draws_the_same_pixels() {
+        let d = effects_page();
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let view = Affine::scale(2.0);
+        let mut r = Renderer::new();
+        let cold = r.render(&d, 400, 400, view, &opts);
+        let warm = r.render(&d, 400, 400, view, &opts);
+        assert!(cold.pixels == warm.pixels, "a warm frame differs from the cold one");
+        let _ = r.render(&d, 400, 400, Affine::translate((15.0, 0.0)) * view, &opts);
+        assert!(r.render(&d, 400, 400, view, &opts).pixels == cold.pixels, "after a pan");
+        assert!(Renderer::new().render(&d, 400, 400, view, &opts).pixels == cold.pixels, "a fresh renderer");
+        // Edit one object's effect: the warm renderer must draw the new result.
+        let mut e = d.clone();
+        let id = e.layers[0].children().unwrap()[0].id;
+        e.node_mut(id).unwrap().appearance.effects = vec![Effect { id: "path.offsetPath".into(), params: json!({"offset": 9}), visible: true }];
+        let edited = r.render(&e, 400, 400, view, &opts);
+        assert!(edited.pixels != cold.pixels, "the edit shows");
+        assert!(edited.pixels == Renderer::new().render(&e, 400, 400, view, &opts).pixels, "and matches a fresh render");
+    }
+
+    /// The multithreaded rasterizer draws the same pixels with any number of workers, so the
+    /// automatic thread count can follow the machine.
+    #[test]
+    fn pixels_do_not_depend_on_the_thread_count() {
+        let mut d = effects_page();
+        // Overlapping translucent and blended objects on top of the effects.
+        let l = d.layers[0].id;
+        for i in 0..400 {
+            let id = d.alloc_id();
+            let (x, y) = ((i * 37 % 190) as f64, (i * 53 % 190) as f64);
+            let mut n = Node::path(
+                id,
+                shapes::ellipse(Rect::new(x, y, x + 14.0, y + 9.0)),
+                Appearance::basic(Paint::solid(Color::rgb(0.9, 0.3, 0.1)), Paint::solid(Color::BLACK), 0.7),
+            );
+            n.opacity = 0.6;
+            d.insert(Some(l), usize::MAX, n).unwrap();
+        }
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut frames = vec![];
+        for threads in [Some(0), Some(1), Some(4), Some(8)] {
+            crate::set_default_threads(threads);
+            let mut r = Renderer::new();
+            frames.push(r.render(&d, 1200, 900, Affine::scale(6.0), &opts).pixels);
+        }
+        crate::set_default_threads(None);
+        assert!(frames.windows(2).all(|w| w[0] == w[1]), "the thread count changed pixels");
+    }
+
     #[test]
     fn thumbnails_of_glowing_objects_render_without_panicking() {
         // Regression: thumbnails used vello's default (multithreaded) context, which panics on filters.
@@ -809,7 +947,7 @@ mod tests {
         let l = d.layers[0].id;
         let id = d.layers[0].children().unwrap()[0].id;
         let mut n = (*d.node(id).unwrap()).clone();
-        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0).into();
         if let Some(vectorcraft_doc::AppearanceItem::Stroke(s)) =
             n.appearance.items.iter_mut().find(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_)))
         {

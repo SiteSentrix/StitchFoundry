@@ -561,7 +561,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         d.remove(pid)?;
         let id = d.alloc_id();
         let mut n = Node::new(id, NodeKind::Text(Box::new(t)));
-        n.appearance = Appearance::default();
+        n.appearance = Appearance::default().into();
         n.opacity = node.opacity;
         n.name = node.name.clone();
         d.insert(par, idx, n)?;

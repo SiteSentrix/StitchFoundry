@@ -619,7 +619,7 @@ impl Lerp {
             }
         };
         n.id = NodeId(0);
-        n.appearance = lerp_appearance(&a.appearance, &b.appearance, t);
+        n.appearance = lerp_appearance(&a.appearance, &b.appearance, t).into();
         n.opacity = lerp_f32(a.opacity, b.opacity, t as f32);
         n.blend = base.blend;
         n.visible = true;

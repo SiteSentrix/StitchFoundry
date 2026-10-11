@@ -860,7 +860,7 @@ impl Importer {
         text::fold_scale(&mut obj, grow);
         let mut n = self.named(&name, NodeKind::Text(Box::new(obj)));
         if let Some(ap) = under {
-            n.appearance = ap;
+            n.appearance = ap.into();
         }
         Some(vec![Arc::new(n)])
     }
@@ -1190,7 +1190,7 @@ impl Importer {
                 .map(|sp| {
                     let id = self.doc.alloc_id();
                     let mut c = Node::new(id, NodeKind::Path { path: PathData::single(sp), rule: r, live: None, clipping: false, guide: false });
-                    c.appearance = appearance.clone();
+                    c.appearance = appearance.clone().into();
                     Arc::new(c)
                 })
                 .collect();
@@ -1198,7 +1198,7 @@ impl Importer {
         } else {
             self.named(p.id(), NodeKind::Path { path, rule: r, live: None, clipping: false, guide: false })
         };
-        n.appearance = appearance;
+        n.appearance = appearance.into();
         Some(n)
     }
 

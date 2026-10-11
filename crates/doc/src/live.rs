@@ -1524,7 +1524,7 @@ fn pattern_art(n: &Node, tiles: PatternTiles) -> Option<Node> {
     };
     let plain = |items: Vec<AppearanceItem>| {
         Arc::new(Node {
-            appearance: Appearance { items, ..Default::default() },
+            appearance: Appearance { items, ..Default::default() }.into(),
             opacity: 1.0,
             blend: Default::default(),
             isolate: false,
@@ -1560,7 +1560,7 @@ fn pattern_art(n: &Node, tiles: PatternTiles) -> Option<Node> {
     }
     Some(Node {
         kind: NodeKind::Group { children: pieces, clip: false },
-        appearance: Appearance { effects: n.appearance.effects.clone(), ..Default::default() },
+        appearance: Appearance { effects: n.appearance.effects.clone(), ..Default::default() }.into(),
         ..n.clone()
     })
 }

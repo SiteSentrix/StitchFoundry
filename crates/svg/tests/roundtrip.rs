@@ -144,7 +144,7 @@ fn compound_evenodd_roundtrip() {
     let i = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(25.0, 25.0, 75.0, 75.0)), Appearance::default());
     let cid = d.alloc_id();
     let mut c = Node::new(cid, NodeKind::Compound { children: vec![Arc::new(o), Arc::new(i)], rule: FillRule::EvenOdd });
-    c.appearance = Appearance::basic(solid("#123456"), Paint::None, 1.0);
+    c.appearance = Appearance::basic(solid("#123456"), Paint::None, 1.0).into();
     let d = doc_with(vec![c]);
     let s = export(&d, &ExportOptions::default());
     assert_eq!(s.matches("<path").count(), 1, "{s}");

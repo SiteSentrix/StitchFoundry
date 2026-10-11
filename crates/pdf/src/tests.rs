@@ -469,7 +469,7 @@ fn import_invalid_dash_array_strokes_solid() {
     // And the exporter never writes an invalid array back.
     let mut d2 = doc(100.0, 100.0);
     let mut n = rect_node(Rect::new(10.0, 10.0, 90.0, 90.0), Color::rgb(1.0, 0.0, 0.0));
-    n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0);
+    n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0).into();
     if let Some(AppearanceItem::Stroke(st)) = n.appearance.items.last_mut() {
         st.dash = Some(Dash { pattern: vec![-5.0, 3.0], offset: 0.0, align_corners: false });
     }

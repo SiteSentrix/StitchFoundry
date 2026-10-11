@@ -75,8 +75,10 @@ fn arrangement(shapes: &[Shape]) -> Option<Arrangement> {
     Arrangement::new(bps).ok()
 }
 
-fn topmost(m: &[bool]) -> Option<usize> {
-    m.iter().rposition(|&b| b)
+/// The one item of `it`, if it has exactly one.
+fn only(mut it: impl Iterator<Item = usize>) -> Option<usize> {
+    let first = it.next()?;
+    it.next().is_none().then_some(first)
 }
 
 fn one(path: PathData, key: u64) -> Vec<Shape> {
@@ -102,10 +104,16 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
     let p = &arr.tidy;
     match op {
         PathfinderOp::Unite => unite(),
-        PathfinderOp::MinusFront => one(all_contours_to_path(&arr.contours(|m| m[0] && !m[1..].iter().any(|&b| b)), p), shapes[0].key),
-        PathfinderOp::MinusBack => one(all_contours_to_path(&arr.contours(|m| m[n - 1] && !m[..n - 1].iter().any(|&b| b)), p), front_key),
-        PathfinderOp::Intersect => one(all_contours_to_path(&arr.contours(|m| m.iter().all(|&b| b)), p), front_key),
-        PathfinderOp::Exclude => one(all_contours_to_path(&arr.contours(|m| m.iter().filter(|&&b| b).count() % 2 == 1), p), front_key),
+        // The tests read the covering inputs straight off the windings ([`Arrangement::covered`]);
+        // each is the coverage-mask test in its comment.
+        // m[0] && !m[1..].any()
+        PathfinderOp::MinusFront => one(all_contours_to_path(&arr.contours_where(|w| only(arr.covered(w)) == Some(0)), p), shapes[0].key),
+        // m[n - 1] && !m[..n - 1].any()
+        PathfinderOp::MinusBack => one(all_contours_to_path(&arr.contours_where(|w| only(arr.covered(w)) == Some(n - 1)), p), front_key),
+        // m.all()
+        PathfinderOp::Intersect => one(all_contours_to_path(&arr.contours_where(|w| arr.covered(w).count() == n), p), front_key),
+        // m.count() is odd
+        PathfinderOp::Exclude => one(all_contours_to_path(&arr.contours_where(|w| arr.covered(w).count() % 2 == 1), p), front_key),
         PathfinderOp::Divide => regions_of(&arr)
             .into_iter()
             .filter_map(|r| {
@@ -113,7 +121,10 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
                 Some(Shape::new(r.path, FillRule::NonZero, key))
             })
             .collect(),
-        PathfinderOp::Trim => (0..n).flat_map(|i| one(all_contours_to_path(&arr.contours(|m| topmost(m) == Some(i)), p), shapes[i].key)).collect(),
+        // topmost(m) == Some(i)
+        PathfinderOp::Trim => {
+            (0..n).flat_map(|i| one(all_contours_to_path(&arr.contours_where(|w| arr.covered(w).next_back() == Some(i)), p), shapes[i].key)).collect()
+        }
         PathfinderOp::Merge => {
             let mut keys: Vec<u64> = Vec::new();
             for s in shapes {
@@ -123,7 +134,8 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
             }
             let mut out = Vec::new();
             for k in keys {
-                let c = arr.contours(|m| topmost(m).is_some_and(|t| shapes[t].key == k));
+                // topmost(m) is a shape with key k
+                let c = arr.contours_where(|w| arr.covered(w).next_back().is_some_and(|t| shapes[t].key == k));
                 for g in c.grouped() {
                     out.extend(one(contours_to_path(&c, g, p), k));
                 }
@@ -136,7 +148,11 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
             }
             (0..n - 1)
                 .flat_map(|i| {
-                    let c = arr.contours(|m| m[n - 1] && topmost(&m[..n - 1]) == Some(i));
+                    // m[n - 1] && topmost(&m[..n - 1]) == Some(i): the front shape, then i below it
+                    let c = arr.contours_where(|w| {
+                        let mut c = arr.covered(w).rev();
+                        c.next() == Some(n - 1) && c.next() == Some(i)
+                    });
                     one(all_contours_to_path(&c, p), shapes[i].key)
                 })
                 .collect()
@@ -342,9 +358,11 @@ impl FaceMerger {
 
 /// Pathfinder Outline: split every shape's boundary at junctions of the arrangement.
 fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
+    // Sorted by x (then y), so a segment needs only the junctions inside its control box.
     let junctions = arr.junctions();
     let scale = shapes.iter().filter_map(|s| s.path.control_bounds()).map(|r| r.width().max(r.height())).fold(1.0, f64::max);
     let tol = scale * 1e-7;
+    let reach = tol.max(1e-6);
     // (chain, key, source index)
     let mut chains: Vec<(Vec<Seg>, u64)> = Vec::new();
     for s in shapes {
@@ -359,11 +377,19 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
             for i in 0..sp.segment_count() {
                 let c = sp.segment(i);
                 let line = sp.segment_is_line(i);
+                // A point within `reach` of the curve is within `reach` of its control box (the
+                // curve stays inside its control points' hull), so the other junctions can't match.
+                let b = kurbo::Shape::bounding_box(&c).union(kurbo::Rect::from_points(c.p1, c.p2)).inflate(reach, reach);
+                let lo = junctions.partition_point(|j| j.x < b.x0);
                 let mut ts: Vec<f64> = junctions
+                    .get(lo..)
+                    .unwrap_or_default()
                     .iter()
+                    .take_while(|j| j.x <= b.x1)
+                    .filter(|j| j.y >= b.y0 && j.y <= b.y1)
                     .filter_map(|&j| {
                         let nr = c.nearest(j, 1e-9);
-                        (nr.distance_sq.sqrt() <= tol.max(1e-6)).then_some(nr.t)
+                        (nr.distance_sq.sqrt() <= reach).then_some(nr.t)
                     })
                     .collect();
                 ts.sort_by(f64::total_cmp);
@@ -401,24 +427,41 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
             }
         }
     }
-    // De-duplicate coincident chains, keeping the front-most key (later shapes overwrite).
+    // De-duplicate coincident chains, keeping the front-most key (later shapes overwrite). A
+    // match has its midpoint within `near` of this one's, so only the chains in the grid cells
+    // around it are candidates; the first of them in `out` order is the one a scan would find.
     let mut out: Vec<(Vec<Seg>, u64)> = Vec::new();
+    let mut sigs: Vec<(Point, Point, Point)> = Vec::new();
     let sig = |c: &[Seg]| -> (Point, Point, Point) {
         let a = c[0].c.p0;
         let b = c[c.len() - 1].c.p3;
         let mid = mid_point(c);
         (a, b, mid)
     };
+    let d = reach * 10.0;
+    let near = |p: Point, q: Point| p.distance(q) <= d;
+    let cell = |p: Point| ((p.x / d).floor() as i64, (p.y / d).floor() as i64);
+    let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
     for (chain, key) in chains {
         let (a, b, m) = sig(&chain);
-        let near = |p: Point, q: Point| p.distance(q) <= tol.max(1e-6) * 10.0;
-        if let Some(e) = out.iter_mut().find(|(c, _)| {
-            let (a2, b2, m2) = sig(c);
-            near(m, m2) && ((near(a, a2) && near(b, b2)) || (near(a, b2) && near(b, a2)))
-        }) {
-            e.1 = key;
-        } else {
-            out.push((chain, key));
+        let (cx, cy) = cell(m);
+        let found = (cx - 1..=cx + 1)
+            .flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y)))
+            .filter_map(|k| grid.get(&k))
+            .flatten()
+            .copied()
+            .filter(|&i| {
+                let (a2, b2, m2) = sigs[i];
+                near(m, m2) && ((near(a, a2) && near(b, b2)) || (near(a, b2) && near(b, a2)))
+            })
+            .min();
+        match found {
+            Some(i) => out[i].1 = key,
+            None => {
+                grid.entry((cx, cy)).or_default().push(out.len());
+                sigs.push((a, b, m));
+                out.push((chain, key));
+            }
         }
     }
     out.into_iter()

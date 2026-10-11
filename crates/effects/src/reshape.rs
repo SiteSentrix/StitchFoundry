@@ -141,7 +141,7 @@ pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
             if let NodeKind::Path { clipping, .. } = &mut clip.kind {
                 *clipping = true;
             }
-            let image = Node { appearance: Appearance::default(), ..Node::new(n.id, n.kind.clone()) };
+            let image = Node { appearance: Appearance::default().into(), ..Node::new(n.id, n.kind.clone()) };
             Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })
         }
         _ => outline_art(n, symbol_art)?,

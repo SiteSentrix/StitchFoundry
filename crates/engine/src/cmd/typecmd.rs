@@ -248,14 +248,14 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 }
                 let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
                 let mut node = shape_node(d, path, None);
-                node.appearance = st.appearance();
+                node.appearance = st.appearance().into();
                 children.push(Arc::new(node));
             }
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
                 let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
                 let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
-                node.appearance = st.appearance();
+                node.appearance = st.appearance().into();
                 children.push(Arc::new(node));
             }
             let (par, idx, _) = d.position(tid).ok_or(EngineError::NoNode(tid))?;

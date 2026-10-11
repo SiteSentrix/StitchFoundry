@@ -236,13 +236,13 @@ impl Builder {
                 let appearance = self.appearance(fills, strokes, to_doc);
                 if children.is_empty() {
                     let mut p = self.base(n, NodeKind::Path { path: data, rule, live: None, clipping: false, guide: false });
-                    p.appearance = appearance;
+                    p.appearance = appearance.into();
                     p
                 } else {
                     // A shape clips its children: VectorCraft's clipping path keeps its paint, its
                     // fill behind the clipped art and its stroke over it, as Affinity draws it.
                     let mut clip = Node::new(self.doc.alloc_id(), NodeKind::Path { path: data, rule, live: None, clipping: true, guide: false });
-                    clip.appearance = appearance;
+                    clip.appearance = appearance.into();
                     let mut kids = vec![Arc::new(clip)];
                     kids.extend(children);
                     self.base(n, NodeKind::Group { children: kids, clip: true })
@@ -259,7 +259,7 @@ impl Builder {
                         guide: false,
                     },
                 );
-                clip.appearance = self.appearance(background, strokes, to_doc);
+                clip.appearance = self.appearance(background, strokes, to_doc).into();
                 let mut kids = vec![Arc::new(clip)];
                 kids.extend(children);
                 let mut g = self.base(n, NodeKind::Group { children: kids, clip: true });

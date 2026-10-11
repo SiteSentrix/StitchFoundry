@@ -1330,7 +1330,7 @@ impl<'a> Reader<'a> {
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
-        node.appearance = Appearance { items, ..Appearance::default() };
+        node.appearance = Appearance { items, ..Appearance::default() }.into();
         node.opacity = gs.opacity;
         node.blend = gs.blend;
         node.knockout_shape = gs.knockout_shape;

@@ -656,9 +656,13 @@ impl Writer<'_> {
 
     fn path_d(&self, p: &PathData, m: Affine) -> String {
         let mut s = String::new();
-        let pt = |p: Point| {
+        // Each point as "x y", appended in place (no string per number or per point).
+        let dec = self.opts.decimals;
+        let pt = |s: &mut String, p: Point| {
             let p = m * p;
-            format!("{} {}", self.num(p.x), self.num(p.y))
+            crate::push_num(s, p.x, dec);
+            s.push(' ');
+            crate::push_num(s, p.y, dec);
         };
         for sp in &p.subpaths {
             let n = sp.anchors.len();
@@ -669,16 +673,22 @@ impl Writer<'_> {
                 s.push(' ');
             }
             s.push('M');
-            s.push_str(&pt(sp.anchors[0].p));
+            pt(&mut s, sp.anchors[0].p);
             for i in 0..sp.segment_count() {
                 let (a, b) = (&sp.anchors[i], &sp.anchors[(i + 1) % n]);
                 if sp.segment_is_line(i) {
                     if sp.closed && i == n - 1 {
                         break;
                     }
-                    s.push_str(&format!(" L{}", pt(b.p)));
+                    s.push_str(" L");
+                    pt(&mut s, b.p);
                 } else {
-                    s.push_str(&format!(" C{} {} {}", pt(a.h_out), pt(b.h_in), pt(b.p)));
+                    s.push_str(" C");
+                    pt(&mut s, a.h_out);
+                    s.push(' ');
+                    pt(&mut s, b.h_in);
+                    s.push(' ');
+                    pt(&mut s, b.p);
                 }
             }
             if sp.closed {
