@@ -805,3 +805,22 @@ fn caret_moves_over_whole_clusters() {
     assert_eq!((edit::prev_cluster(s, 6), edit::next_cluster(s, 6)), (3, 12));
     assert_eq!((edit::next_cluster("", 0), edit::prev_cluster("ab", 99)), (0, 1));
 }
+
+/// Word steps and double-click stop between Thai words, which no space separates: ภาษา|ไทย|ง่าย.
+#[test]
+fn thai_words_are_words_to_the_caret() {
+    let s = "ภาษาไทยง่าย ok";
+    let (thai, easy) = ("ภาษา".len(), "ภาษาไทย".len());
+    let end = "ภาษาไทยง่าย".len();
+    assert_eq!(edit::next_word(s, 0), thai);
+    assert_eq!(edit::next_word(s, thai), easy);
+    assert_eq!(edit::next_word(s, easy), end);
+    assert_eq!(edit::prev_word(s, end), easy);
+    assert_eq!(edit::prev_word(s, easy), thai);
+    assert_eq!(edit::prev_word(s, thai), 0);
+    assert_eq!(edit::word_at(s, thai + 3), thai..easy, "double-click inside ไทย");
+    assert_eq!(edit::word_at(s, 0), 0..thai);
+    // Latin keeps its words.
+    assert_eq!(edit::word_at(s, s.len() - 1), end + 1..s.len());
+    assert_eq!(edit::next_word("hello world", 0), 5);
+}

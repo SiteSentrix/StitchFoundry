@@ -241,13 +241,12 @@ pub(crate) fn is_unspaced_script(c: char) -> bool {
     matches!(c.script(), Script::Thai | Script::Lao | Script::Khmer | Script::Myanmar)
 }
 
-/// Mark the glyphs of `sg` (shaped from `text`, which starts at byte `start` of the text the
-/// glyphs index) after which a word of Thai, Lao, Khmer or Myanmar ends: where a line may break in
-/// text without spaces between words. The words come from ICU4X's line segmenter (its LSTM models
-/// for those scripts); other text keeps its own breaks.
-pub(crate) fn mark_word_ends(text: &str, start: usize, sg: &mut [SGlyph]) {
-    // The dictionaries on the desktop (the most accurate, a few megabytes); the far smaller LSTM
-    // models on the web.
+/// The byte offsets of `text` where a word of Thai, Lao, Khmer or Myanmar starts or ends: where a
+/// line may break, and where the caret stops word by word, in text without spaces between words.
+/// They come from ICU4X's line segmenter (its dictionaries on the desktop, its far smaller LSTM
+/// models on the web); empty when `text` has none of those scripts. Offsets elsewhere (around
+/// other text) are UAX #14's breaks.
+pub(crate) fn unspaced_word_breaks(text: &str) -> Vec<usize> {
     #[cfg(not(target_arch = "wasm32"))]
     static SEGMENTER: std::sync::LazyLock<icu_segmenter::LineSegmenterBorrowed<'static>> =
         std::sync::LazyLock::new(|| icu_segmenter::LineSegmenter::new_dictionary(Default::default()));
@@ -255,9 +254,19 @@ pub(crate) fn mark_word_ends(text: &str, start: usize, sg: &mut [SGlyph]) {
     static SEGMENTER: std::sync::LazyLock<icu_segmenter::LineSegmenterBorrowed<'static>> =
         std::sync::LazyLock::new(|| icu_segmenter::LineSegmenter::new_auto(Default::default()));
     if !text.chars().any(is_unspaced_script) {
+        return vec![];
+    }
+    SEGMENTER.segment_str(text).collect()
+}
+
+/// Mark the glyphs of `sg` (shaped from `text`, which starts at byte `start` of the text the
+/// glyphs index) after which a word of Thai, Lao, Khmer or Myanmar ends ([`unspaced_word_breaks`]);
+/// other text keeps its own breaks.
+pub(crate) fn mark_word_ends(text: &str, start: usize, sg: &mut [SGlyph]) {
+    let breaks: Vec<usize> = unspaced_word_breaks(text).into_iter().map(|b| b + start).collect();
+    if breaks.is_empty() {
         return;
     }
-    let breaks: Vec<usize> = SEGMENTER.segment_str(text).map(|b| b + start).collect();
     for g in sg.iter_mut().filter(|g| g.inline.is_none() && is_unspaced_script(g.ch)) {
         g.word_end = breaks.binary_search(&(g.byte + g.len)).is_ok();
     }
