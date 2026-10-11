@@ -1650,7 +1650,7 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "effect.last" => match &app.last_effect {
             Some((e, _)) => {
                 let name = vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str());
-                fmt(tl!("Last Effect: {name}"), &[("name", tl!(name))])
+                fmt(tl!("Last Effect: {name}"), &[("name", crate::i18n::tr_id(lang, e, name))])
             }
             None => crate::i18n::tr_id(lang, id, label).to_string(),
         },
@@ -1659,6 +1659,19 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
             if shows_a_name(id, &shown) { shown } else { crate::i18n::tr_id(lang, id, &shown).to_string() }
         }
     }
+}
+
+/// The label of an Effect menu item in the UI language, by the effect's own id. Every effect item
+/// runs `effect.apply` or `effect.dialog`, so the command id can't tell them apart; an `@id` row
+/// for the effect id (for example `pathfinder.add`) wins over the plain row of the English label.
+/// `None` when the catalog has no such row, and the plain translation applies.
+fn effect_item_label(id: &str, p: &Value) -> Option<String> {
+    if !matches!(id, "effect.apply" | "effect.dialog") {
+        return None;
+    }
+    let effect = p.get("effect")?.as_str()?;
+    let shown = crate::i18n::tr_id(crate::i18n::current(), effect, "");
+    (!shown.is_empty()).then(|| shown.to_string())
 }
 
 /// Menu slots that are left out while they have nothing to show (unused saved views, recent files,
@@ -1793,7 +1806,7 @@ pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
             Entry::Item(Row {
                 command: Some((id, p)),
                 source: label,
-                label: display_label(app, id, label).into(),
+                label: effect_item_label(id, p).unwrap_or_else(|| display_label(app, id, label)).into(),
                 shortcut: item_shortcut(id, p),
                 enabled,
                 checked,
