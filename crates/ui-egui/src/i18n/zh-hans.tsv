@@ -2077,6 +2077,8 @@
 	Redefine Symbol	重新定义符号
 	Redefine {kind} Style	重新定义{kind}样式
 	Redo	重做
+	Begin Undo Group	开始还原组
+	End Undo Group	结束还原组
 	Redo {name}	重做 {name}
 	Redo {}	重做 {}
 	Reduce Colors	减少颜色

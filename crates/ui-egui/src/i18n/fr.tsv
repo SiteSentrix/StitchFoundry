@@ -2149,6 +2149,8 @@
 	Redefine Symbol	Redéfinir le symbole
 	Redefine {kind} Style	Redéfinir le style de {kind}
 	Redo	Rétablir
+	Begin Undo Group	Commencer un groupe d’annulation
+	End Undo Group	Terminer le groupe d’annulation
 	Redo {name}	Rétablir {name}
 	Redo {}	Rétablir {}
 	Reduce Colors	Réduire les couleurs

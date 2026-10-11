@@ -2152,6 +2152,8 @@
 	Redefine Symbol	Ridefinisci simbolo
 	Redefine {kind} Style	Ridefinisci stile {kind}
 	Redo	Ripeti
+	Begin Undo Group	Inizia gruppo di annullamento
+	End Undo Group	Termina gruppo di annullamento
 	Redo {name}	Ripeti {name}
 	Redo {}	Ripeti {}
 	Reduce Colors	Riduci colori

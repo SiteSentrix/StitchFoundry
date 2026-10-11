@@ -2144,6 +2144,8 @@
 	Redefine Symbol	Перевизначити символ
 	Redefine {kind} Style	Перевизначити стиль {kind}
 	Redo	Повторити
+	Begin Undo Group	Почати групу скасування
+	End Undo Group	Завершити групу скасування
 	Redo {name}	Повторити {name}
 	Redo {}	Повторити {}
 	Reduce Colors	Скоротити кількість кольорів
