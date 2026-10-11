@@ -15,6 +15,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/SiteSentrix/StitchFoundry/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SiteSentrix/StitchFoundry/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Status: pre-release" src="https://img.shields.io/badge/status-pre--release-f2546b">
   <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-b83a24?logo=rust&logoColor=white">
   <img alt="Runs on macOS, Windows, Linux, FreeBSD and the web" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20FreeBSD%20%C2%B7%20Web-555555">
