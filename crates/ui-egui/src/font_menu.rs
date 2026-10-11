@@ -84,14 +84,26 @@ const SAMPLES_PER_FRAME: usize = 4;
 const MAX_PENDING: usize = 8;
 /// What a sample shows when the font lacks the selected text's characters (or there is none).
 const FALLBACK_SAMPLE: &str = "Sample";
-/// The script filter's choices: all, Japanese, Latin.
-const SCRIPTS: usize = 3;
+/// The script filter's choices: all, Japanese, Latin, Thai.
+const SCRIPTS: usize = 4;
 
 fn script_label(i: usize) -> &'static str {
     match i {
         1 => tl!("Japanese"),
         2 => tl!("Latin"),
+        3 => tl!("Thai"),
         _ => tl!("All Scripts"),
+    }
+}
+
+/// Does a family of `traits` pass script filter `script` ([`SCRIPTS`])? Latin: neither Japanese
+/// nor Thai.
+fn script_matches(script: usize, traits: vectorcraft_text::FontTraits) -> bool {
+    match script {
+        1 => traits.japanese,
+        2 => !traits.japanese && !traits.thai,
+        3 => traits.thai,
+        _ => true,
     }
 }
 
@@ -283,7 +295,7 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
                 return true;
             }
             let traits = db.family_traits(f);
-            (st.script == 0 || (st.script == 1) == traits.japanese) && st.class.is_none_or(|c| c == traits.class)
+            script_matches(st.script, traits) && st.class.is_none_or(|c| c == traits.class)
         };
         let mut rows: Vec<Row> = vec![];
         for f in db.menu_family_list().iter().filter(|f| wanted(f)) {
@@ -748,6 +760,21 @@ pub(crate) fn sample_text(app: &VectorcraftApp) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+
+    /// The script filter: Thai lists families with Thai; Latin, those with neither Thai nor
+    /// Japanese.
+    #[test]
+    fn the_thai_filter_lists_fonts_with_thai() {
+        use vectorcraft_text::FontTraits;
+        let (thai, japanese, latin) =
+            (FontTraits { thai: true, ..Default::default() }, FontTraits { japanese: true, ..Default::default() }, FontTraits::default());
+        let passing = |t: FontTraits| (0..super::SCRIPTS).filter(|s| super::script_matches(*s, t)).collect::<Vec<_>>();
+        assert_eq!(passing(thai), [0, 3]);
+        assert_eq!(passing(japanese), [0, 1]);
+        assert_eq!(passing(latin), [0, 2]);
+        assert_eq!(super::script_label(3), "Thai");
+    }
+
     use super::{Row, remap_highlight};
 
     fn family(name: &str) -> Row {

@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Thai, Lao, Khmer and Myanmar lines break between words; the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (the font menu's script filter lists Thai fonts; Thai, Lao, Khmer and Myanmar lines break between words; the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -26,6 +26,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Character size and horizontal scale after object/group scaling | done | #1034: fields and setters compensate the stored affine; point size follows the transformed em-height axis, not the glyph ink bounds. Range edits, keyboard increments, leading and baseline shift use document points; rotation, reflection and shear remain editable. |
 | Preserve font sizes while scaling a group | missing | Separate enhancement; scaling still scales text with the other artwork. |
 | OpenType panel, Glyphs panel, alternates | done | Highlight Alternate Glyphs preference unused (#394) |
+| Font menu: samples, live preview, filters, favourites; font matching by any name; Find Font | done | #339; script filter: Japanese, Latin, Thai |
 | Font menu: samples, live preview, filters, favourites; font matching by any name; Find Font | done | #339 |
 | Missing glyphs set in an installed font made for their script (Thai, Lao, Khmer, Myanmar first; then any font that has them) | done | Thai: Leelawadee UI, Tahoma, Thonburi, Sukhumvit Set, Noto Sans Thai, TLWG |
 | Variable fonts | partial | named instances as styles; axis sliders missing |
@@ -54,6 +55,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | Font menu: a Thai script filter beside Japanese and Latin; score unchanged (estimated) |
 | 2026-10-11 | minor | Thai, Lao, Khmer and Myanmar text breaks its lines between words (ICU4X line segmenter) instead of only at spaces; score unchanged (estimated) |
 | 2026-10-11 | minor | The Type tool's arrows and Delete move by grapheme cluster, never between a Thai consonant and its vowel or tone marks; score unchanged (estimated) |
 | 2026-10-11 | minor | Thai (Lao, Khmer, Myanmar) missing from the font in use falls back to an installed font made for the script instead of whichever face covering it loaded first; score unchanged (estimated) |
