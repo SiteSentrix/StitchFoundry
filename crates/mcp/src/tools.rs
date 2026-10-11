@@ -113,8 +113,11 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "render_preview",
             "Render a preview",
-            "Render the first artboard as inline PNG without changing the document. max_side defaults to 1024, limited to 1..4096.",
-            obj(json!({"max_side":{"type":"integer","minimum":1,"maximum":4096}}), &[]),
+            "Render an artboard (default the first) as inline PNG without changing the document. max_side defaults to 1024, limited to 1..4096.",
+            obj(
+                json!({"max_side":{"type":"integer","minimum":1,"maximum":4096},"artboard":{"type":"integer","minimum":0,"description":"0-based artboard (default 0)"}}),
+                &[],
+            ),
             true,
         ),
         tool("ui_inspect", "Inspect the interface", "Inspect the connected desktop interface; returns a tool error in headless mode.", empty(), true),
@@ -946,8 +949,13 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
         None => 1024,
         Some(v) => v.as_u64().filter(|v| (1..=4096).contains(v)).ok_or("`max_side` must be an integer in 1..4096")?,
     };
+    let index = match a.get("artboard") {
+        None => 0,
+        Some(v) => v.as_u64().ok_or("`artboard` must be a 0-based artboard index")?,
+    };
     let doc = b.call("document.inspect", json!({"depth":0}))?;
-    let board = doc.get("artboards").and_then(Value::as_array).and_then(|v| v.first()).ok_or("no such artboard")?;
+    let board =
+        doc.get("artboards").and_then(Value::as_array).and_then(|v| v.get(usize::try_from(index).ok()?)).ok_or(format!("no artboard {index}"))?;
     let width = board.get("width").and_then(Value::as_f64).ok_or("artboard has no width")?;
     let height = board.get("height").and_then(Value::as_f64).ok_or("artboard has no height")?;
     if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
@@ -959,7 +967,7 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     if width.max(height) * scale > 4096.0 {
         return Err("artboard is too large for a bounded preview".into());
     }
-    let r = b.call("ui.render", json!({"scale":scale}))?;
+    let r = b.call("ui.render", json!({"scale":scale, "artboard": index}))?;
     let encoded = r.get("pngBase64").and_then(Value::as_str).ok_or("renderer returned no image")?;
     let png = vectorcraft_format::base64_decode(encoded).ok_or("renderer returned bad base64")?;
     let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| format!("read preview: {e}"))?;
