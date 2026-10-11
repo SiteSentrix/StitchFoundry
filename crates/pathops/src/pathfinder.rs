@@ -75,8 +75,10 @@ fn arrangement(shapes: &[Shape]) -> Option<Arrangement> {
     Arrangement::new(bps).ok()
 }
 
-fn topmost(m: &[bool]) -> Option<usize> {
-    m.iter().rposition(|&b| b)
+/// The one item of `it`, if it has exactly one.
+fn only(mut it: impl Iterator<Item = usize>) -> Option<usize> {
+    let first = it.next()?;
+    it.next().is_none().then_some(first)
 }
 
 fn one(path: PathData, key: u64) -> Vec<Shape> {
@@ -102,10 +104,16 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
     let p = &arr.tidy;
     match op {
         PathfinderOp::Unite => unite(),
-        PathfinderOp::MinusFront => one(all_contours_to_path(&arr.contours(|m| m[0] && !m[1..].iter().any(|&b| b)), p), shapes[0].key),
-        PathfinderOp::MinusBack => one(all_contours_to_path(&arr.contours(|m| m[n - 1] && !m[..n - 1].iter().any(|&b| b)), p), front_key),
-        PathfinderOp::Intersect => one(all_contours_to_path(&arr.contours(|m| m.iter().all(|&b| b)), p), front_key),
-        PathfinderOp::Exclude => one(all_contours_to_path(&arr.contours(|m| m.iter().filter(|&&b| b).count() % 2 == 1), p), front_key),
+        // The tests read the covering inputs straight off the windings ([`Arrangement::covered`]);
+        // each is the coverage-mask test in its comment.
+        // m[0] && !m[1..].any()
+        PathfinderOp::MinusFront => one(all_contours_to_path(&arr.contours_where(|w| only(arr.covered(w)) == Some(0)), p), shapes[0].key),
+        // m[n - 1] && !m[..n - 1].any()
+        PathfinderOp::MinusBack => one(all_contours_to_path(&arr.contours_where(|w| only(arr.covered(w)) == Some(n - 1)), p), front_key),
+        // m.all()
+        PathfinderOp::Intersect => one(all_contours_to_path(&arr.contours_where(|w| arr.covered(w).count() == n), p), front_key),
+        // m.count() is odd
+        PathfinderOp::Exclude => one(all_contours_to_path(&arr.contours_where(|w| arr.covered(w).count() % 2 == 1), p), front_key),
         PathfinderOp::Divide => regions_of(&arr)
             .into_iter()
             .filter_map(|r| {
@@ -113,7 +121,10 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
                 Some(Shape::new(r.path, FillRule::NonZero, key))
             })
             .collect(),
-        PathfinderOp::Trim => (0..n).flat_map(|i| one(all_contours_to_path(&arr.contours(|m| topmost(m) == Some(i)), p), shapes[i].key)).collect(),
+        // topmost(m) == Some(i)
+        PathfinderOp::Trim => {
+            (0..n).flat_map(|i| one(all_contours_to_path(&arr.contours_where(|w| arr.covered(w).next_back() == Some(i)), p), shapes[i].key)).collect()
+        }
         PathfinderOp::Merge => {
             let mut keys: Vec<u64> = Vec::new();
             for s in shapes {
@@ -123,7 +134,8 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
             }
             let mut out = Vec::new();
             for k in keys {
-                let c = arr.contours(|m| topmost(m).is_some_and(|t| shapes[t].key == k));
+                // topmost(m) is a shape with key k
+                let c = arr.contours_where(|w| arr.covered(w).next_back().is_some_and(|t| shapes[t].key == k));
                 for g in c.grouped() {
                     out.extend(one(contours_to_path(&c, g, p), k));
                 }
@@ -136,7 +148,11 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
             }
             (0..n - 1)
                 .flat_map(|i| {
-                    let c = arr.contours(|m| m[n - 1] && topmost(&m[..n - 1]) == Some(i));
+                    // m[n - 1] && topmost(&m[..n - 1]) == Some(i): the front shape, then i below it
+                    let c = arr.contours_where(|w| {
+                        let mut c = arr.covered(w).rev();
+                        c.next() == Some(n - 1) && c.next() == Some(i)
+                    });
                     one(all_contours_to_path(&c, p), shapes[i].key)
                 })
                 .collect()
