@@ -1,7 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (the caret steps over whole clusters such as Thai consonants with their marks; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
