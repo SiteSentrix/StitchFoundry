@@ -88,6 +88,15 @@ pub fn specs() -> Vec<CommandSpec> {
             load::open
         ),
         cmd!(
+            query "file.list",
+            "List Folder",
+            [],
+            None,
+            "{path} the files and folders in folder `path`, by name: what an agent may open there (held to the automation read root when one is in force) → {path, entries: [{name, kind: file|folder|link, size? (files, bytes)}], truncated (more than 5000 entries)} (#1163)",
+            always,
+            file_list
+        ),
+        cmd!(
             query "document.serialize",
             "Serialize Document",
             [],
@@ -781,6 +790,48 @@ pub(crate) fn write_new_file(path: &str, bytes: &[u8]) -> Result<()> {
         let _ = std::fs::remove_file(path);
         err(e)
     })
+}
+
+/// The most entries `file.list` returns.
+const LIST_MAX: usize = 5000;
+
+fn file_list(_: &mut Session, p: &Value) -> Result<Value> {
+    let path = p.get("path").and_then(Value::as_str).filter(|s| !s.is_empty()).ok_or_else(|| bad("file.list", "missing `path`"))?;
+    let (entries, truncated) = list_dir(path, LIST_MAX)?;
+    Ok(json!({ "path": absolute_path(path), "entries": entries, "truncated": truncated }))
+}
+
+/// The entries of folder `path`, sorted by name: at most `max`, and whether there were more. A
+/// link isn't followed: its target may lie outside the automation roots.
+#[cfg(not(target_arch = "wasm32"))]
+fn list_dir(path: &str, max: usize) -> Result<(Vec<Value>, bool)> {
+    may_read(path)?;
+    let dir = std::fs::read_dir(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    let mut entries: Vec<(String, Value)> = vec![];
+    let mut truncated = false;
+    for e in dir.flatten() {
+        if entries.len() == max {
+            truncated = true;
+            break;
+        }
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Ok(t) = e.file_type() else { continue };
+        let entry = if t.is_symlink() {
+            json!({ "name": name, "kind": "link" })
+        } else if t.is_dir() {
+            json!({ "name": name, "kind": "folder" })
+        } else {
+            json!({ "name": name, "kind": "file", "size": e.metadata().map(|m| m.len()).ok() })
+        };
+        entries.push((name, entry));
+    }
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok((entries.into_iter().map(|(_, v)| v).collect(), truncated))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn list_dir(_: &str, _: usize) -> Result<(Vec<Value>, bool)> {
+    Err(EngineError::Other("no file system here".into()))
 }
 
 /// A file's size (bytes) and modification time (ms since the Unix epoch, when the file system

@@ -69,6 +69,7 @@ the suite) keep the agent to the folders you give it:
 - Every file a command writes must lie inside the **write root**: `save_file`, `export`, the save and
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
   library and preset saves to a path.
+- `file.list {path}` (through `run_command`) lists a folder's files and folders, held to the read root like any read, so an agent can see what it was given (#1163).
 - Read and write access are separate. Give the same folder twice for both; a root left out grants none
   of its access (with only `--automation-read-root`, nothing can be written to disk, though `export` and
   the save commands without a path still return the bytes). Without either flag nothing changes.

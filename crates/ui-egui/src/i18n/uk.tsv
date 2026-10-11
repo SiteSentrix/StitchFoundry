@@ -2144,6 +2144,7 @@
 	Redefine Symbol	Перевизначити символ
 	Redefine {kind} Style	Перевизначити стиль {kind}
 	Redo	Повторити
+	List Folder	Показати вміст теки
 	Begin Undo Group	Почати групу скасування
 	End Undo Group	Завершити групу скасування
 	Redo {name}	Повторити {name}

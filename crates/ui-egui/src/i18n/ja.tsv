@@ -101,6 +101,7 @@
 	Edit	編集
 	Undo	取り消し
 	Redo	やり直し
+	List Folder	フォルダーの内容を一覧表示
 	Begin Undo Group	取り消しグループを開始
 	End Undo Group	取り消しグループを終了
 	Cut	切り取り
