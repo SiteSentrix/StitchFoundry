@@ -652,11 +652,19 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
             d.remove(*id)?;
         }
         let ch = d.node_mut(cid).and_then(|n| n.children_mut()).ok_or(EngineError::NoNode(cid))?;
-        for mut p in paths {
+        // The paths in front run against the backmost one, so where they overlap it they cut holes
+        // under the non-zero fill rule (#1197).
+        let direction = |n: &Node| n.path_data().and_then(|pd| pd.subpaths.first()).map_or(0.0, |sp| sp.signed_area().signum());
+        let back = paths.first().map_or(0.0, |p| direction(p));
+        for (i, mut p) in paths.into_iter().enumerate() {
             let pn = Arc::make_mut(&mut p);
             pn.appearance = Appearance::default();
-            if let NodeKind::Path { live, .. } = &mut pn.kind {
+            let flip = i > 0 && back != 0.0 && direction(pn) == back;
+            if let NodeKind::Path { path, live, .. } = &mut pn.kind {
                 *live = None;
+                if flip {
+                    path.reverse();
+                }
             }
             ch.push(p);
         }
