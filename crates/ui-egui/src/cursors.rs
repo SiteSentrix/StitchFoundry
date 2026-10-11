@@ -66,6 +66,17 @@ fn crosshair(p: &mut Ink, o: Pos2) {
     }
 }
 
+/// A pipette pointing down-left: the sampling tip is the hotspot, with the tube and bulb above
+/// right. Drawn here so bitmap and painted cursors share the same original glyph (#1269).
+fn eyedropper(p: &mut Ink, o: Pos2) {
+    let tube = [(0.0, 0.0), (1.0, -5.0), (14.0, -18.0), (18.0, -14.0), (5.0, -1.0)];
+    poly(p, tube.iter().map(|(x, y)| o + vec2(*x, *y)).collect(), HALO, INK);
+    let bulb = o + vec2(20.0, -20.0);
+    p.circle_filled(bulb, 6.5, HALO);
+    p.circle_filled(bulb, 5.0, INK);
+    line(p, o + vec2(11.0, -19.0), o + vec2(19.0, -11.0));
+}
+
 fn pen(p: &mut Ink, o: Pos2, badge: &str) {
     // Nib pointing to the top-left hotspot.
     let pts = vec![o, o + vec2(4.0, 12.0), o + vec2(8.0, 16.0), o + vec2(16.0, 8.0), o + vec2(12.0, 4.0)];
@@ -314,7 +325,8 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             arrow(ink, p, false);
             double_arrow(ink, p + vec2(15.0, 18.0), vec2(1.0, 0.0));
         }
-        Cursor::Crosshair | Cursor::Eyedropper => crosshair(ink, p),
+        Cursor::Crosshair => crosshair(ink, p),
+        Cursor::Eyedropper => eyedropper(ink, p),
         Cursor::ResizeH => double_arrow(ink, p, vec2(1.0, 0.0)),
         Cursor::ResizeV => double_arrow(ink, p, vec2(0.0, 1.0)),
         Cursor::ResizeNwSe => double_arrow(ink, p, vec2(1.0, 1.0)),
@@ -545,6 +557,15 @@ mod tests {
                 assert!(w as f32 <= 50.0 * ppp && h as f32 <= 50.0 * ppp, "{c:?} at {ppp}: {img:?}");
                 assert!(img.rgba.as_chunks::<4>().0.iter().any(|p| p[3] == 255), "{c:?}: nothing opaque");
             }
+            // #1269: the normal Eyedropper is a pipette, with its tip at the hotspot; only
+            // Use Precise Cursors turns it into a crosshair.
+            let dropper = rasterize(Cursor::Eyedropper, ppp).unwrap();
+            let precise = rasterize(Cursor::Eyedropper.precise(), ppp).unwrap();
+            assert_ne!(dropper, precise, "Eyedropper must be distinguishable from its precise cursor at {ppp}");
+            let [hx, hy] = dropper.hotspot.map(usize::from);
+            let halo = (3.0 * ppp).ceil(); // The bitmap bounds round out to whole physical pixels.
+            assert!(hx as f32 <= halo && f32::from(dropper.size[1]) - hy as f32 <= halo, "the tip is at the lower-left: {dropper:?}");
+            assert!(pixel(&dropper, hx, hy)[3] > 0, "the tip covers the hotspot at {ppp}");
         }
         assert!(rasterize(Cursor::NotAllowed, 1.0).is_none(), "the busy states stay system cursors");
         for ppp in [0.0, -1.0, f32::NAN, f32::INFINITY, 1e9] {
