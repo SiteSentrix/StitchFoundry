@@ -681,15 +681,17 @@ impl Story {
             }
             self.paras.last().map(|(_, p)| p)
         };
-        let breaks: Vec<usize> = self.text.chars().enumerate().filter(|(_, c)| matches!(c, '\r' | '\x03')).map(|(i, _)| i).collect();
         let chars: Vec<char> = self.text.chars().collect();
+        let breaks: Vec<usize> = chars.iter().enumerate().filter(|(_, c)| matches!(c, '\r' | '\x03')).map(|(i, _)| i).collect();
+        // More lines than breaks: area type wraps, and which break ends which line is unknown.
+        let wraps = self.lines.len() > breaks.len() + 1;
         self.lines.windows(2).enumerate().find_map(|(i, w)| {
             let pitch = w[1].1 - w[0].1;
-            let at = *breaks.get(i)?;
-            let between = if chars.get(at) == Some(&'\r') {
-                para_at(at).map_or(0.0, |p| p.space_after) + para_at(at + 1).map_or(0.0, |p| p.space_before)
-            } else {
-                0.0
+            let between = match breaks.get(i) {
+                Some(&at) if !wraps && chars.get(at) == Some(&'\r') => {
+                    para_at(at).map_or(0.0, |p| p.space_after) + para_at(at + 1).map_or(0.0, |p| p.space_before)
+                }
+                _ => 0.0,
             };
             let l = (pitch - between) * scale;
             (l.is_finite() && l > 0.0).then_some(l)
@@ -850,6 +852,10 @@ mod tests {
         assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
         // Paragraphs without spacing: the distance as it was.
         let s = story("one\rtwo\r", &[0.0, 15.6], &Para::default());
+        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
+        // Area type whose paragraph wraps: lines and breaks don't pair up, so nothing is taken off.
+        let para = Para { space_after: -5.0, ..Para::default() };
+        let s = story("one two three\rfour\r", &[0.0, 15.6, 31.2, 41.8], &para);
         assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
         // One line has no distance to read.
         assert_eq!(story("one\r", &[0.0], &Para::default()).line_leading(1.0), None);
