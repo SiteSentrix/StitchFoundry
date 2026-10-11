@@ -424,3 +424,22 @@ fn glyphs_spaced_each_their_own_way_keep_their_place() {
         }
     });
 }
+
+/// Evenly tracked type on a path comes back with its tracking: each glyph where it was along the
+/// curve, not closed up to the font's advances.
+#[test]
+fn evenly_tracked_type_on_a_path_keeps_its_length() {
+    let mut arc = BezPath::new();
+    arc.move_to((40.0, 200.0));
+    arc.curve_to((100.0, 80.0), (260.0, 80.0), (320.0, 200.0));
+    let mut t = TextObject::point(Point::ORIGIN, "ARCHING TYPE", CharStyle { tracking: 80.0, ..style(24.0) });
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&arc), start: 0.0, end: None };
+    let d = doc(vec![t]);
+    let want = origins(&d);
+    let back = import_as(&pdf(&d, false).bytes, TextAs::default());
+    let got = origins(&back);
+    assert_eq!(got.len(), want.len(), "{:?}", texts(&back));
+    for (g, w) in got.iter().zip(&want) {
+        assert!(g.distance(*w) < 0.3, "{got:?}\nvs {want:?}");
+    }
+}
