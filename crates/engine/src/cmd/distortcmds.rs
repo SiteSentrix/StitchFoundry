@@ -323,23 +323,13 @@ fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
 fn width_point_remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.remove";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let mut indices: Vec<usize> = match p.get("indices") {
-        Some(Value::Array(values)) => values
-            .iter()
-            .map(|value| {
-                let id = value.as_u64().ok_or_else(|| bad(C, format!("invalid width point index {value}: expected an integer")))?;
-                usize::try_from(id).map_err(|_| bad(C, format!("width point index {id} is out of range")))
-            })
-            .collect::<Result<_>>()?,
-        Some(_) => return Err(bad(C, "indices must be an array of non-negative integers")),
-        None => match p.get("index") {
-            Some(value) => {
-                let id = value.as_u64().ok_or_else(|| bad(C, "index must be a non-negative integer"))?;
-                vec![usize::try_from(id).map_err(|_| bad(C, "index is out of range"))?]
-            }
-            None => return Err(bad(C, "missing index")),
-        },
+    let indices = match (p.get("indices"), p.get("index")) {
+        (Some(a), _) => point_indices(a),
+        (None, Some(i)) => point_indices(&json!([i])),
+        (None, None) => return Err(bad(C, "missing index")),
     };
+    // A malformed index fails the whole delete instead of being dropped while the others go.
+    let mut indices = indices.ok_or_else(|| bad(C, "no such width point"))?;
     indices.sort_unstable();
     indices.dedup();
     s.edit("Delete Width Point", |d, _| {
