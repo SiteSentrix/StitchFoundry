@@ -274,6 +274,12 @@ pub struct UiState {
     /// Tool flyouts torn off the toolbar into floating panels.
     #[serde(default)]
     pub floating_flyouts: Vec<FloatingFlyout>,
+    /// The Basic and Advanced toolbars as Edit Toolbar left them (none: as they ship).
+    #[serde(default)]
+    pub toolbar_edits: ToolbarEdits,
+    /// Edit Toolbar's All Tools drawer is open beside the toolbar (`window.editToolbar`).
+    #[serde(skip)]
+    pub tools_drawer: bool,
     /// Panels dragged out of the dock: each group floats as its own stack of tabs.
     #[serde(default)]
     pub floating_panels: Vec<FloatingPanels>,
@@ -426,6 +432,25 @@ pub struct FloatingFlyout {
     pub pos: [f32; 2],
 }
 
+/// A category of an edited toolbar: its name (one of the Basic toolbar's; none in the Advanced
+/// toolbar) and its slots, each a tool group (the first tool is the slot's default).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ToolbarCategory {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub slots: Vec<Vec<String>>,
+}
+
+/// The toolbars Edit Toolbar changed: each one is `None` while it is as it ships.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ToolbarEdits {
+    #[serde(default)]
+    pub basic: Option<Vec<ToolbarCategory>>,
+    #[serde(default)]
+    pub advanced: Option<Vec<ToolbarCategory>>,
+}
+
 /// Where the Contextual Task Bar sits once its handle has moved it (`window.taskBar.pin`,
 /// `window.taskBar.reset`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -531,6 +556,7 @@ impl UiState {
     pub fn sanitized(mut self) -> Self {
         self.dialog = None;
         self.flyout = None;
+        self.tools_drawer = false;
         self.palette_open = false;
         self.status.clear();
         self.about = false;
@@ -545,6 +571,7 @@ impl UiState {
             f.tools.first().is_some_and(|k| seen.insert(k.clone()))
         });
         FloatingPanels::sanitize(&mut self.floating_panels, &mut self.toolbar_pos);
+        crate::edit_toolbar::sanitize(&mut self.toolbar_edits);
         self.docking = self.docking.filter(crate::panel_docking::valid);
         self.docking_icons.retain(|id| ICON_PANELS.iter().any(|entry| entry.0 == id));
         // Overrides that can't fire (modifier-only chords recorded by older versions, #487) give
@@ -570,6 +597,8 @@ impl Default for UiState {
             task_bar_place: TaskBarPlace::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],
+            toolbar_edits: ToolbarEdits::default(),
+            tools_drawer: false,
             floating_panels: vec![],
             docking: None,
             docking_hidden: Default::default(),

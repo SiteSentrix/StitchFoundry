@@ -2,7 +2,8 @@
 //! Draw, Modify, Type, Navigate, Color). Window → Toolbars → Advanced shows every tool group; the
 //! double arrow at the top (or Window → Toolbars → Double Column, `window.toolbarColumns`) lays the
 //! tools out in one or two columns.
-//! Bottom: fill/stroke proxy, colour/gradient/none, drawing modes, screen mode, Edit Toolbar.
+//! Bottom: fill/stroke proxy, colour/gradient/none, drawing modes, screen mode, Edit Toolbar (its
+//! All Tools drawer and the toolbar edits it makes: `edit_toolbar`).
 
 use egui::{Color32, CornerRadius, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -69,9 +70,12 @@ pub(crate) fn tip(t: &ToolInfo) -> String {
     }
 }
 
-/// Slots of the current layout: (category label for the first slot of a category, tool ids).
-fn slots(app: &VectorcraftApp) -> Vec<(Option<&'static str>, Vec<&'static str>)> {
-    if app.ui.toolbar_advanced {
+/// Slots of the current layout, as Edit Toolbar left it: (category label for the first slot of a
+/// category, tool ids).
+pub(crate) fn slots(app: &VectorcraftApp) -> Vec<(Option<&'static str>, Vec<&'static str>)> {
+    if let Some(edited) = crate::edit_toolbar::edited_slots(app) {
+        edited
+    } else if app.ui.toolbar_advanced {
         TOOL_GROUPS.iter().map(|g| (None, g.iter().map(|t| t.id).collect())).collect()
     } else {
         BASIC.iter().flat_map(|(cat, ss)| ss.iter().enumerate().map(move |(i, s)| (if i == 0 { Some(*cat) } else { None }, s.to_vec()))).collect()
@@ -122,6 +126,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // layers in one frame).
     floating(app, ui.ctx());
     flyout(app, ui.ctx());
+    crate::edit_toolbar::drawer(app, ui.ctx());
 }
 
 /// The Tools panel's contents, docked or floating at `floating`.
@@ -129,6 +134,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
     let t = Tokens::get(ui.ctx());
     let all = slots(app);
     let bounds = ui.max_rect();
+    // The drawer opens beside it; a click in it leaves the drawer open.
+    ui.data_mut(|d| d.insert_temp(crate::edit_toolbar::toolbar_id(), bounds));
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     // Title bar with » and a grip strip: a drag on either floats the panel or moves it.
     let (hdr, hresp) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::click_and_drag());
@@ -164,6 +171,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
             ui.data_mut(|d| d.remove::<egui::Id>(held_id));
         }
         let held: Option<egui::Id> = ui.data(|d| d.get_temp(held_id));
+        // While Edit Toolbar's drawer is open, the tools drag (to new places or into the drawer)
+        // instead of opening their flyouts.
+        let editing = app.ui.tools_drawer;
+        let mut buttons: Vec<(usize, egui::Rect)> = vec![];
         let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
         // A group torn off into a floating flyout is raised instead of opening its flyout.
         let mut raise: Option<&'static str> = None;
@@ -215,7 +226,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                         let c = rect.center() + vec2(12.5, 10.0);
                         ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)], t.icon, Stroke::NONE));
                     }
-                    let press = if slot.len() > 1 { flyout_press(ui, &resp, rect) } else { None };
+                    if editing {
+                        buttons.push((k, rect));
+                        resp.dnd_set_drag_payload(crate::edit_toolbar::ToolDrag { tool: shown.id, from_toolbar: true });
+                    }
+                    let press = if slot.len() > 1 && !editing { flyout_press(ui, &resp, rect) } else { None };
                     let alt = ui.input(|inp| inp.modifiers.alt);
                     if press.is_some() {
                         if is_floating(app, slot[0]) {
@@ -241,6 +256,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                 }
             });
             i += row.len();
+        }
+        if editing {
+            crate::edit_toolbar::toolbar_drop(app, ui, &buttons, cols, bounds);
         }
         if let Some(key) = raise {
             raise_floating(ui.ctx(), key);
@@ -475,8 +493,11 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
         if widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
             app.run("view.screenMode", json!({})).ok();
         }
-        if widgets::icon_button(ui, "ellipsis", "Edit Toolbar", false, 26.0).clicked() {
-            app.ui.dialog = Some(crate::state::Dialog::new("allTools", json!({})));
+        // Edit Toolbar: the All Tools drawer opens beside the toolbar, by this button.
+        let edit = widgets::icon_button(ui, "ellipsis", "Edit Toolbar", app.ui.tools_drawer, 26.0);
+        ui.data_mut(|d| d.insert_temp(crate::edit_toolbar::button_id(), edit.rect));
+        if edit.clicked() {
+            app.run("window.editToolbar", json!({})).ok();
         }
     });
     let _ = t;
@@ -526,7 +547,7 @@ fn raise_floating(ctx: &egui::Context, key: &str) {
 }
 
 /// A flyout's frame: drop shadow and border (the accent while it flashes).
-fn flyout_frame(t: &Tokens, flash: bool) -> egui::Frame {
+pub(crate) fn flyout_frame(t: &Tokens, flash: bool) -> egui::Frame {
     egui::Frame::NONE
         .fill(t.panel)
         .stroke(if flash { Stroke::new(1.5, t.accent) } else { Stroke::new(1.0, t.input_border) })

@@ -227,6 +227,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     let typing = ctx.egui_wants_keyboard_input();
+    // Escape closes Edit Toolbar's drawer first (egui drops a drag from it on Escape already).
+    if app.ui.tools_drawer && !typing && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+        app.ui.tools_drawer = false;
+    }
     let view = app.view_info();
     // While an IME composes, Enter and Escape are its own (confirm / cancel).
     let composing = app.session.tool_composing();

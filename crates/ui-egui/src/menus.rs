@@ -256,6 +256,30 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{tool: id, floating?: bool} float the toolbar group holding `tool` (in the current Basic or Advanced layout) as its own strip of tool buttons (true), put it back in the toolbar (false) or toggle (omitted), as dragging or clicking a flyout's tear-off bar and the strip's × do; returns the new state",
     ),
+    (
+        "window.editToolbar",
+        "Edit Toolbar",
+        "",
+        "{open?: bool} open (true), close (false) or toggle (omitted) the All Tools drawer beside the toolbar, as the toolbar's ••• button does; while it is open, tools drag from it onto the toolbar and from the toolbar into it (Escape or a click outside closes it); returns the new state",
+    ),
+    (
+        "toolbar.addTool",
+        "Toolbar: Add Tool",
+        "",
+        "{tool: id, slot?: n, place?: \"before\"|\"after\"|\"group\"} put `tool` in the current (Basic or Advanced) toolbar, moving it if it is there already: before (default) or after slot `slot` (0 = the first; omitted: at the end) in its own slot, or into that slot's group (its flyout), as dropping a tool from the Edit Toolbar drawer does; saved with the preferences; returns the toolbar's slots (lists of tool ids)",
+    ),
+    (
+        "toolbar.removeTool",
+        "Toolbar: Remove Tool",
+        "",
+        "{tool: id, group?: bool} take `tool` (with `group`, its whole group) out of the current toolbar (one not in it stays out), as dragging it into the Edit Toolbar drawer does; returns the toolbar's slots",
+    ),
+    (
+        "toolbar.reset",
+        "Toolbar: Reset",
+        "",
+        "{} put the current (Basic or Advanced) toolbar back as it ships, undoing Edit Toolbar's changes; returns its slots",
+    ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
         "window.taskBar.pin",
@@ -888,6 +912,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     if let Some(r) = crate::shortcut_editor::run_command(app, id, p)
         .or_else(|| crate::workspaces::run_command(app, id, p))
         .or_else(|| crate::floating::command(app, id, p))
+        .or_else(|| crate::edit_toolbar::command(app, id, p))
     {
         return Some(r);
     }
@@ -1469,6 +1494,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
         "window.toolbarColumns" => app.ui.toolbar_double,
+        "window.editToolbar" => app.ui.tools_drawer,
         "window.floatTools" => {
             let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
             app.ui.floating_flyouts.iter().any(|f| f.tools.iter().any(|id| id == tool))
