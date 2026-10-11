@@ -6,7 +6,7 @@ installers for macOS, Windows, Linux (including Flatpak bundles and a RISC-V tar
 publishes it.
 
 User-facing names say **VectorCraft**. Files, binaries and ids stay lowercase
-(`vectorcraft-<version>-<platform>-<arch>.<ext>`, `com.sitesentrix.stitchfoundry`).
+(`stitchfoundry-<version>-<platform>-<arch>.<ext>`, `com.sitesentrix.stitchfoundry`).
 
 ## Cutting a release
 
@@ -44,7 +44,7 @@ and no draft release is created.
 
 | Platform | Artifacts | Built on |
 |---|---|---|
-| macOS 11+ (universal: Apple silicon and Intel) | `vectorcraft-<v>-macos-universal.dmg`, `vectorcraft-cli-<v>-macos-universal.zip` | `macos-15` |
+| macOS 11+ (universal: Apple silicon and Intel) | `vectorcraft-<v>-macos-universal.dmg`, `stitchfoundry-cli-<v>-macos-universal.zip` | `macos-15` |
 | Windows x64 | `vectorcraft-<v>-windows-x64.msi`, `vectorcraft-<v>-windows-x64-portable.zip` | `windows-latest` |
 | Windows x86 (32-bit) | `vectorcraft-<v>-windows-x86.msi`, `vectorcraft-<v>-windows-x86-portable.zip` | `windows-latest` |
 | Windows on ARM64 | `vectorcraft-<v>-windows-arm64.msi`, `vectorcraft-<v>-windows-arm64-portable.zip` | `windows-latest` (cross-compiled) |
@@ -56,7 +56,7 @@ and no draft release is created.
 | FreeBSD 14 x86_64 | `vectorcraft-<v>-freebsd-x86_64.tar.gz` | a FreeBSD 14.3 VM on `ubuntu-latest` |
 | Web | `vectorcraft-web-<v>.zip`, a static site (see [`packaging/web/README.md`](../packaging/web/README.md)) | `ubuntu-latest` |
 
-`vectorcraft --version` and `vectorcraft-cli --version` print the version from `Cargo.toml`.
+`stitchfoundry --version` and `stitchfoundry-cli --version` print the version from `Cargo.toml`.
 
 **Fonts.** Every build job checks out [craft-fonts](https://github.com/storytold/craft-fonts) at a
 pinned commit (the `ref:` of its craft-fonts checkout step) and builds with `CRAFT_FONTS_DIR` and
@@ -90,7 +90,7 @@ The rules are in craftrules `standards/fonts.md`, the build option in
   `codesign --verify --strict --deep` (#1085). Its Finder window (background, icon size and positions) comes from
   [`packaging/macos/dmg/`](../packaging/macos/dmg/README.md), and its volume is named `VectorCraft`
   without the version, which the window's background needs; the DMG file name keeps the version.
-- **CLI:** the universal `vectorcraft-cli` is signed the same way, zipped, and the zip is
+- **CLI:** the universal `stitchfoundry-cli` is signed the same way, zipped, and the zip is
   notarized. A bare executable can't hold a stapled ticket, so Gatekeeper looks the CLI's ticket up
   online the first time a downloaded copy runs.
 
@@ -109,10 +109,10 @@ so neither the MSI nor the portable zip needs the Visual C++ redistributable. Th
 to the target triple, so host build scripts aren't affected.
 
 - Before packaging, the script checks each binary's PE machine type against `-Arch` (an x64 build
-  can never ship labelled arm64), that `vectorcraft.exe` is a GUI program (no console window) and
-  that `vectorcraft-cli.exe` is a console program.
+  can never ship labelled arm64), that `stitchfoundry.exe` is a GUI program (no console window) and
+  that `stitchfoundry-cli.exe` is a console program.
 - `vectorcraft.wxs` (WiX) is a per-machine install into Program Files with a Start Menu shortcut
-  and an App Paths entry (Win+R `vectorcraft`). Same-version upgrades are allowed, so release
+  and an App Paths entry (Win+R `stitchfoundry`). Same-version upgrades are allowed, so release
   candidates replace each other.
 - Double-clicking the MSI opens a setup wizard (WixUI_InstallDir without the licence page):
   Welcome, install folder (remembered for upgrades in `HKLM\Software\VectorCraft\InstallDir`),
@@ -124,7 +124,7 @@ to the target triple, so host build scripts aren't affected.
   extensions: `wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2`.
 - The ARM64 build is cross-compiled on the x64 runner. `.github/workflows/windows-arm64.yml`
   installs that MSI on a Windows 11 ARM64 runner, checks that both installed programs are ARM64,
-  runs `vectorcraft-cli --version` natively and uninstalls.
+  runs `stitchfoundry-cli --version` natively and uninstalls.
 - **Signing:** `packaging/windows/sign.ps1` signs both `.exe` files and then the `.msi` with
   `signtool` (SHA-256, RFC 3161 timestamp), using whichever material is present:
   1. a `.pfx` certificate (`WINDOWS_CERTIFICATE`, base64, and `WINDOWS_CERTIFICATE_PASSWORD`), or
@@ -150,10 +150,10 @@ metadata and contents, runs `ldd` on the binary and runs each AppImage with `--v
 **RISC-V.** The `linux-riscv64` job cross-compiles `riscv64gc-unknown-linux-gnu` on `ubuntu-24.04`
 against riscv64 libraries from ports.ubuntu.com (so the floor there is glibc 2.39) and runs
 `package.sh --formats tar` with `CROSS_ARCH`, `CROSS_TARGET`, `CROSS_COMPILE` and
-`EMULATOR=qemu-riscv64` set: a `.tar.gz` only, with `vectorcraft-cli --version` run under QEMU.
+`EMULATOR=qemu-riscv64` set: a `.tar.gz` only, with `stitchfoundry-cli --version` run under QEMU.
 
 **AppImage updates.** Each AppImage embeds the update information
-`gh-releases-zsync|storytold|vectorcraft|latest|vectorcraft-*-linux-<arch>.AppImage.zsync`
+`gh-releases-zsync|SiteSentrix|StitchFoundry|latest|stitchfoundry-*-linux-<arch>.AppImage.zsync`
 (appimagetool `-u`), and `package.sh` writes the matching `.zsync` beside it when `zsyncmake` (the
 `zsync` package) is installed. [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate)
 and AppImageLauncher then download only the changed blocks from the newest published,
@@ -163,7 +163,7 @@ non-pre-release release. The job checks both are there.
 Linux job's tarball and repackage it with `packaging/linux/flatpak-bundle.sh` and
 `packaging/linux/flatpak/com.sitesentrix.stitchfoundry.bundle.yml` into a single-file bundle
 (`flatpak install --user vectorcraft-<v>-linux-<arch>.flatpak`), then install it and run
-`vectorcraft-cli --version` in the sandbox. No Rust build happens there, so the bundle carries the
+`stitchfoundry-cli --version` in the sandbox. No Rust build happens there, so the bundle carries the
 same binaries as the AppImage. `packaging/linux/flatpak/com.sitesentrix.stitchfoundry.yml` is the
 from-source manifest for a Flathub submission (its header says how to build it); packaging-lint
 keeps the runtime and sandbox permissions of the two manifests identical.
@@ -173,7 +173,7 @@ keeps the runtime and sandbox permissions of the two manifests identical.
 GitHub has no FreeBSD runners, so the job builds in a FreeBSD 14.3 VM on `ubuntu-latest` (the same
 image as `.github/workflows/freebsd.yml`). `packaging/freebsd/package.sh` writes a
 `/usr/local`-style tree; users install it with
-`tar -xzf vectorcraft-*-freebsd-x86_64.tar.gz --strip-components 1 -C /usr/local`.
+`tar -xzf stitchfoundry-*-freebsd-x86_64.tar.gz --strip-components 1 -C /usr/local`.
 
 ### Web
 

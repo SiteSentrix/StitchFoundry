@@ -2,9 +2,9 @@
 //!
 //! Without a logger every `log::warn!`/`log::error!` in the workspace (the graphics adapter, a
 //! lost graphics device, a panic the engine's guard recovered from) vanished. A launch from a desktop menu
-//! has no terminal, so the file is what a bug report can attach: `<settings dir>/logs/vectorcraft.log`,
+//! has no terminal, so the file is what a bug report can attach: `<settings dir>/logs/stitchfoundry.log`,
 //! next to the preferences (`prefs_path` in `main.rs`). Each start moves the previous log to
-//! `vectorcraft.1.log` (and that one to `.2`), so the log of a run that crashed survives the next
+//! `stitchfoundry.1.log` (and that one to `.2`), so the log of a run that crashed survives the next
 //! launch. Runs without preferences (`VECTORCRAFT_NO_PREFS`) log to standard error only.
 //!
 //! Levels: `info` for VectorCraft's own crates, `warn` for everything else (wgpu and naga are
@@ -28,15 +28,16 @@ use std::time::SystemTime;
 use log::LevelFilter;
 
 /// The current log file's name inside the log directory.
-pub const LOG_FILE: &str = "vectorcraft.log";
-/// How many previous logs are kept (`vectorcraft.1.log` … `vectorcraft.<KEEP>.log`).
+pub const LOG_FILE: &str = "stitchfoundry.log";
+/// How many previous logs are kept (`stitchfoundry.1.log` … `stitchfoundry.<KEEP>.log`).
 pub const KEEP: usize = 2;
 /// The log file stops growing past this size (a runaway warning can't fill the disk).
 pub const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 /// Records kept in memory until the log file is attached.
 pub const MAX_PENDING: usize = 512;
-/// The built-in filter when `RUST_LOG` is unset or empty.
-pub const DEFAULT_FILTER: &str = "warn,vectorcraft*=info";
+/// The built-in filter when `RUST_LOG` is unset or empty: the app's own targets (`stitchfoundry`)
+/// and the `vectorcraft_*` and `sf_*` crates at info.
+pub const DEFAULT_FILTER: &str = "warn,stitchfoundry*=info,vectorcraft*=info,sf_*=info";
 
 /// Per-target level filter parsed from env_logger-style directives.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -118,7 +119,7 @@ fn civil_from_days(days: u64) -> (u64, u64, u64) {
 }
 
 fn numbered(dir: &Path, n: usize) -> PathBuf {
-    if n == 0 { dir.join(LOG_FILE) } else { dir.join(format!("vectorcraft.{n}.log")) }
+    if n == 0 { dir.join(LOG_FILE) } else { dir.join(format!("stitchfoundry.{n}.log")) }
 }
 
 /// Shift the previous logs up one (`.log` → `.1.log` → … → `.<KEEP>.log`, the oldest dropped)
@@ -307,8 +308,9 @@ mod tests {
     #[test]
     fn the_default_filter_shows_vectorcraft_info_and_other_crates_warnings() {
         let f = Filter::parse(DEFAULT_FILTER);
-        assert_eq!(f.level_for("vectorcraft"), LevelFilter::Info);
-        assert_eq!(f.level_for("vectorcraft::window"), LevelFilter::Info);
+        assert_eq!(f.level_for("stitchfoundry"), LevelFilter::Info);
+        assert_eq!(f.level_for("stitchfoundry::window"), LevelFilter::Info);
+        assert_eq!(f.level_for("sf_formats::vp3"), LevelFilter::Info);
         assert_eq!(f.level_for("vectorcraft_engine::guard"), LevelFilter::Info);
         assert_eq!(f.level_for("vectorcraft_ui_egui::io"), LevelFilter::Info);
         assert_eq!(f.level_for("wgpu_core::device"), LevelFilter::Warn);
@@ -409,9 +411,9 @@ mod tests {
             std::fs::write(&path, format!("run {run}")).expect("write");
         }
         assert_eq!(read(&dir.join(LOG_FILE)), "run 4");
-        assert_eq!(read(&dir.join("vectorcraft.1.log")), "run 3");
-        assert_eq!(read(&dir.join("vectorcraft.2.log")), "run 2");
-        assert!(!dir.join("vectorcraft.3.log").exists(), "only {KEEP} old logs are kept");
+        assert_eq!(read(&dir.join("stitchfoundry.1.log")), "run 3");
+        assert_eq!(read(&dir.join("stitchfoundry.2.log")), "run 2");
+        assert!(!dir.join("stitchfoundry.3.log").exists(), "only {KEEP} old logs are kept");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -517,7 +519,7 @@ mod tests {
         assert!(!logger.enabled(&log::Metadata::builder().level(log::Level::Info).target("naga").build()));
         // Attaching again rotates: the first log becomes `.1`.
         logger.attach_dir(&dir).expect("attach again");
-        assert_eq!(read(&dir.join("vectorcraft.1.log")), text);
+        assert_eq!(read(&dir.join("stitchfoundry.1.log")), text);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

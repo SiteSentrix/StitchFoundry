@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft-cli");
+const BIN: &str = env!("CARGO_BIN_EXE_stitchfoundry-cli");
 
 fn tmp(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("vectorcraft-cli-test-{}", std::process::id()));
@@ -78,7 +78,7 @@ fn mcp_headless_over_stdio() {
     assert!(out.status.success());
     let replies: Vec<Value> = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
     assert_eq!(replies.iter().map(|r| r["id"].as_u64().unwrap()).collect::<Vec<_>>(), [1, 2, 3, 4]);
-    assert_eq!(replies[0]["result"]["serverInfo"]["name"], "vectorcraft");
+    assert_eq!(replies[0]["result"]["serverInfo"]["name"], "stitchfoundry");
     assert_eq!(replies[2]["result"]["isError"], false);
     assert_eq!(replies[3]["result"]["content"][0]["type"], "image");
 }
@@ -201,7 +201,7 @@ fn mcp_protocol_over_stdio() {
         json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}),
     );
     let r = recv(&mut lines, &mut notes, 1);
-    assert_eq!(r["result"]["serverInfo"]["name"], "vectorcraft");
+    assert_eq!(r["result"]["serverInfo"]["name"], "stitchfoundry");
     assert!(r["result"]["capabilities"]["prompts"].is_object(), "{r}");
     send(&mut stdin, json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
 

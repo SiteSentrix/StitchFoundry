@@ -186,7 +186,7 @@ impl Server {
                         "completions": {},
                         "logging": {},
                     },
-                    "serverInfo": {"name": "vectorcraft", "title": "StitchFoundry", "version": env!("CARGO_PKG_VERSION")},
+                    "serverInfo": {"name": "stitchfoundry", "title": "StitchFoundry", "version": env!("CARGO_PKG_VERSION")},
                     "instructions": format!("{INSTRUCTIONS} Backend: {}.", self.backend.describe()),
                 }))
             }

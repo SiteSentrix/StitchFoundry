@@ -61,7 +61,7 @@ jobs:
           src = yaml.safe_load(open("packaging/linux/flatpak/com.sitesentrix.stitchfoundry.yml"))
           bundle = yaml.safe_load(open("packaging/linux/flatpak/com.sitesentrix.stitchfoundry.bundle.yml"))
           for m in (src, bundle):
-              assert m["id"] == "com.sitesentrix.stitchfoundry" and m["command"] == "vectorcraft", m["id"]
+              assert m["id"] == "com.sitesentrix.stitchfoundry" and m["command"] == "stitchfoundry", m["id"]
           for key in ("runtime", "runtime-version", "sdk", "finish-args"):
               assert src[key] == bundle[key], f"Flatpak manifests disagree on {key}: {src[key]} vs {bundle[key]}"
           print("Flatpak manifests ok")

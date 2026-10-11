@@ -4,7 +4,7 @@
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft");
+const BIN: &str = env!("CARGO_BIN_EXE_stitchfoundry");
 
 /// Invalid roots must exit before desktop initialization on every platform, including a CI
 /// machine with no display. A regression must fail rather than hang with a window open.
@@ -37,7 +37,7 @@ fn rejects(args: &[&str], message: &str) {
     assert!(out.stdout.is_empty(), "{args:?}: {:?}", out.stdout);
     // Exact stderr excludes unrelated startup warnings or display errors that could otherwise
     // make a malformed invocation fail for an unrelated reason.
-    assert_eq!(String::from_utf8(out.stderr).unwrap(), format!("vectorcraft: {message}\n"), "{args:?}");
+    assert_eq!(String::from_utf8(out.stderr).unwrap(), format!("stitchfoundry: {message}\n"), "{args:?}");
 }
 
 #[test]
@@ -65,6 +65,6 @@ fn duplicate_roots_fail_for_both_spellings() {
 fn explicit_dash_folder_does_not_consume_version() {
     let out = Command::new(BIN).args(["--automation-read-root=-folder", "--automation-write-root", "./-folder", "--version"]).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("stitchfoundry {}\n", env!("CARGO_PKG_VERSION")));
     assert!(out.stderr.is_empty());
 }

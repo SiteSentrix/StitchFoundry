@@ -223,8 +223,8 @@ jobs:
       - name: Check the packages
         run: |
           dpkg-deb --info dist/release/*.deb
-          dpkg-deb --contents dist/release/*.deb | grep -E 'usr/bin/vectorcraft$|metainfo|applications'
-          ldd target/release/vectorcraft
+          dpkg-deb --contents dist/release/*.deb | grep -E 'usr/bin/stitchfoundry$|metainfo|applications'
+          ldd target/release/stitchfoundry
           python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/flatpak/com.sitesentrix.stitchfoundry.yml')); assert m['id'] == 'com.sitesentrix.stitchfoundry'"
           for appimage in dist/release/*.AppImage; do
             chmod +x "$appimage"
@@ -233,7 +233,7 @@ jobs:
             # No APPIMAGE_EXTRACT_AND_RUN here: with it the runtime passes --appimage-* flags on
             # to the app instead of answering them itself.
             "$appimage" --appimage-updateinformation \
-              | grep -F "gh-releases-zsync|${GITHUB_REPOSITORY%%/*}|${GITHUB_REPOSITORY#*/}|latest|vectorcraft-*-linux-${{ matrix.arch }}.AppImage.zsync"
+              | grep -F "gh-releases-zsync|${GITHUB_REPOSITORY%%/*}|${GITHUB_REPOSITORY#*/}|latest|stitchfoundry-*-linux-${{ matrix.arch }}.AppImage.zsync"
             test -s "$appimage.zsync"
           done
       - uses: actions/upload-artifact@v7
@@ -273,7 +273,7 @@ jobs:
           # Ubuntu 24.04's AppArmor blocks the unprivileged user namespaces bubblewrap needs.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Build the Flatpak bundle
-        run: packaging/linux/flatpak-bundle.sh "dist/linux/vectorcraft-$VECTORCRAFT_VERSION-linux-${{ matrix.arch }}.tar.gz"
+        run: packaging/linux/flatpak-bundle.sh "dist/linux/stitchfoundry-$VECTORCRAFT_VERSION-linux-${{ matrix.arch }}.tar.gz"
       - uses: actions/upload-artifact@v7
         with:
           name: release-flatpak-${{ matrix.arch }}
@@ -326,8 +326,8 @@ jobs:
             export CRAFT_FONTS_DIR="$PWD/craft-fonts" CRAFT_FONTS_REQUIRED=1
             export CARGO_TARGET_DIR=/var/tmp/vectorcraft-target CARGO_BUILD_JOBS=4
             bash packaging/freebsd/package.sh
-            tar -tzf dist/release/vectorcraft-*-freebsd-x86_64.tar.gz \
-              | grep -E '/bin/vectorcraft$|/bin/vectorcraft-cli$|/share/applications/com\.sitesentrix\.stitchfoundry\.desktop$'
+            tar -tzf dist/release/stitchfoundry-*-freebsd-x86_64.tar.gz \
+              | grep -E '/bin/stitchfoundry$|/bin/stitchfoundry-cli$|/share/applications/com\.sitesentrix\.stitchfoundry\.desktop$'
       - uses: actions/upload-artifact@v7
         with:
           name: release-freebsd
@@ -383,7 +383,7 @@ jobs:
     # Cross-compiled on x86_64 (no hosted RISC-V runners) against the runner's own Ubuntu release
     # from ports.ubuntu.com, so the binaries need that release's glibc (24.04: 2.39). 22.04's
     # riscv64 ports lag its amd64 updates, which breaks the multiarch install. tar.gz only; the
-    # CLI is smoke-tested under QEMU (package.sh runs `vectorcraft-cli --version` through $EMULATOR).
+    # CLI is smoke-tested under QEMU (package.sh runs `stitchfoundry-cli --version` through $EMULATOR).
     runs-on: ubuntu-24.04
     # No `environment: release`: this job signs nothing, so it gets no release secrets.
     env:
@@ -448,9 +448,9 @@ jobs:
         run: packaging/linux/package.sh --formats tar
       - name: Check the package
         run: |
-          tar -tzf dist/release/vectorcraft-*-linux-riscv64.tar.gz \
-            | grep -E '/bin/vectorcraft$|/bin/vectorcraft-cli$|/share/applications/com\.sitesentrix\.stitchfoundry\.desktop$'
-          file target/riscv64gc-unknown-linux-gnu/release/vectorcraft | grep -F 'RISC-V'
+          tar -tzf dist/release/stitchfoundry-*-linux-riscv64.tar.gz \
+            | grep -E '/bin/stitchfoundry$|/bin/stitchfoundry-cli$|/share/applications/com\.sitesentrix\.stitchfoundry\.desktop$'
+          file target/riscv64gc-unknown-linux-gnu/release/stitchfoundry | grep -F 'RISC-V'
       - uses: actions/upload-artifact@v7
         with:
           name: release-linux-riscv64

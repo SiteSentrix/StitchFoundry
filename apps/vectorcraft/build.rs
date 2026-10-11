@@ -1,4 +1,4 @@
-//! Windows only: embed the app icon and version info (VERSIONINFO) into `vectorcraft.exe`.
+//! Windows only: embed the app icon and version info (VERSIONINFO) into `stitchfoundry.exe`.
 //!
 //! On every other target this does nothing. A missing resource compiler is a warning, so a
 //! cross-compile from macOS or Linux still links, unless `VECTORCRAFT_REQUIRE_WINRES=1` turns it into
@@ -17,13 +17,13 @@ fn main() -> Result<(), String> {
         .set("FileDescription", "StitchFoundry machine embroidery digitizer")
         .set("CompanyName", "SiteSentrix")
         .set("LegalCopyright", "Copyright (c) SiteSentrix and the VectorCraft authors. MIT OR Apache-2.0.")
-        .set("OriginalFilename", "vectorcraft.exe")
-        .set("InternalName", "vectorcraft");
+        .set("OriginalFilename", "stitchfoundry.exe")
+        .set("InternalName", "stitchfoundry");
     if let Err(e) = res.compile() {
         if std::env::var_os("VECTORCRAFT_REQUIRE_WINRES").is_some() {
             return Err(format!("embedding Windows resources failed: {e}"));
         }
-        println!("cargo:warning=vectorcraft.exe built without icon/version resources: {e}");
+        println!("cargo:warning=stitchfoundry.exe built without icon/version resources: {e}");
     }
     Ok(())
 }

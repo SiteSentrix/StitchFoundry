@@ -158,7 +158,7 @@ fn end_before_teardown(frames: u64) {
 fn open_files(app: &mut VectorcraftApp, files: Vec<String>) {
     for f in files {
         if let Err(e) = vectorcraft_ui_egui::io::open_reporting(app, &f) {
-            eprintln!("vectorcraft: {f}: {e}");
+            eprintln!("stitchfoundry: {f}: {e}");
         }
     }
 }
@@ -604,7 +604,7 @@ fn main() -> std::process::ExitCode {
             Ok(true) => continue,
             Ok(false) => {}
             Err(e) => {
-                eprintln!("vectorcraft: {e}");
+                eprintln!("stitchfoundry: {e}");
                 return std::process::ExitCode::FAILURE;
             }
         }
@@ -612,7 +612,7 @@ fn main() -> std::process::ExitCode {
             "--control" => control_port = args.next().and_then(|p| p.parse().ok()),
             "--in-window-menus" => in_window_menus = true,
             "--version" => {
-                println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
+                println!("stitchfoundry {}", env!("CARGO_PKG_VERSION"));
                 return std::process::ExitCode::SUCCESS;
             }
             _ => files.push(a),
@@ -655,7 +655,7 @@ fn main() -> std::process::ExitCode {
             Ok(roots) => roots,
             Err(e) => {
                 log::error!("{e}");
-                eprintln!("vectorcraft: {e}");
+                eprintln!("stitchfoundry: {e}");
                 return std::process::ExitCode::FAILURE;
             }
         }

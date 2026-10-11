@@ -3,7 +3,7 @@
 # exports VERSION and NFPM_ARCH.
 #
 #   nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/release/
-name: vectorcraft
+name: stitchfoundry
 arch: ${NFPM_ARCH}
 platform: linux
 version: ${VERSION}
@@ -21,7 +21,7 @@ description: |-
   Satin, fill and run stitches with editable direction, lettering from any font,
   auto-digitizing, stitch editing and sequencing; reads and writes DST, PES,
   JEF, EXP, VP3, XXX and U01, plus SVG and PDF.
-  Includes vectorcraft-cli, a headless converter and command runner.
+  Includes stitchfoundry-cli, a headless converter and command runner.
 
 # The binaries link only glibc and libgcc_s directly. Windowing (X11/Wayland, xkbcommon) and the
 # GPU (Vulkan, EGL/GL) are loaded at runtime, so they are dependencies/recommendations here
@@ -56,11 +56,11 @@ overrides:
       - xdg-desktop-portal
 
 contents:
-  - src: ${STAGE}/usr/bin/vectorcraft
-    dst: /usr/bin/vectorcraft
+  - src: ${STAGE}/usr/bin/stitchfoundry
+    dst: /usr/bin/stitchfoundry
     file_info: { mode: 0755 }
-  - src: ${STAGE}/usr/bin/vectorcraft-cli
-    dst: /usr/bin/vectorcraft-cli
+  - src: ${STAGE}/usr/bin/stitchfoundry-cli
+    dst: /usr/bin/stitchfoundry-cli
     file_info: { mode: 0755 }
   - src: ${STAGE}/usr/share/
     dst: /usr/share/

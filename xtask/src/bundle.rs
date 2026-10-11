@@ -18,8 +18,8 @@ pub fn run(root: &Path) -> Result<(), String> {
     let _ = std::fs::remove_dir_all(root.join("dist/StitchFoundry.app"));
     std::fs::create_dir_all(app.join("MacOS")).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(app.join("Resources")).map_err(|e| e.to_string())?;
-    std::fs::copy(target.join("release/vectorcraft"), app.join("MacOS/StitchFoundry")).map_err(|e| format!("copy app: {e}"))?;
-    std::fs::copy(target.join("release/vectorcraft-cli"), app.join("MacOS/vectorcraft-cli")).map_err(|e| format!("copy cli: {e}"))?;
+    std::fs::copy(target.join("release/stitchfoundry"), app.join("MacOS/StitchFoundry")).map_err(|e| format!("copy app: {e}"))?;
+    std::fs::copy(target.join("release/stitchfoundry-cli"), app.join("MacOS/stitchfoundry-cli")).map_err(|e| format!("copy cli: {e}"))?;
     std::fs::copy(root.join("assets/app-icon/stitchfoundry.icns"), app.join("Resources/StitchFoundry.icns"))
         .map_err(|e| format!("copy icon: {e}"))?;
     let sha = std::env::var("VECTORCRAFT_BUILD_SHA").unwrap_or_else(|_| "unknown".into());

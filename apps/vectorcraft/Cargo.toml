@@ -4,7 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-default-run = "vectorcraft"
+default-run = "stitchfoundry"
+
+# The program is named stitchfoundry (so it installs beside VectorCraft); the package keeps
+# VectorCraft's name, so `cargo run -p vectorcraft` still works.
+[[bin]]
+name = "stitchfoundry"
+path = "src/main.rs"
 
 [lints]
 workspace = true
@@ -74,5 +80,5 @@ wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client"] }
 
 [build-dependencies]
-# Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.
+# Icon + VERSIONINFO for stitchfoundry.exe; build.rs only uses it when targeting Windows.
 winresource = "0.1"

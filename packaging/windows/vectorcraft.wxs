@@ -110,18 +110,18 @@
   <Fragment>
     <ComponentGroup Id="VectorcraftFiles" Directory="INSTALLFOLDER">
       <Component Id="VectorcraftApp" Guid="4C957E70-848A-478D-95BF-4394D7E225FF">
-        <File Id="VectorcraftExe" Source="$(var.BinDir)\vectorcraft.exe" KeyPath="yes">
+        <File Id="VectorcraftExe" Source="$(var.BinDir)\stitchfoundry.exe" KeyPath="yes">
           <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="StitchFoundry"
               Description="StitchFoundry machine embroidery digitizer" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
               Icon="VectorcraftIcon.ico" IconIndex="0" />
         </File>
 
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\vectorcraft.exe" Value="[#VectorcraftExe]" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\stitchfoundry.exe" Value="[#VectorcraftExe]" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\StitchFoundry" Name="InstallDir" Value="[INSTALLFOLDER]" Type="string" />
       </Component>
 
       <Component Id="VectorcraftCli">
-        <File Id="VectorcraftCliExe" Source="$(var.BinDir)\vectorcraft-cli.exe" KeyPath="yes" />
+        <File Id="VectorcraftCliExe" Source="$(var.BinDir)\stitchfoundry-cli.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 

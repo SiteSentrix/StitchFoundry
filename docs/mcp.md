@@ -1,6 +1,6 @@
-# VectorCraft MCP server
+# StitchFoundry MCP server
 
-`vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
+`stitchfoundry-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
 draw, inspect and look at VectorCraft documents.
 
@@ -8,8 +8,8 @@ It has two backends:
 
 | Mode | How | What works |
 |---|---|---|
-| **Remote** | `vectorcraft-cli mcp --connect 127.0.0.1:7979` (the app must run with `vectorcraft --control 7979`) | Everything. Tool calls are forwarded over the [control protocol](control-protocol.md), so you watch the app change live. |
-| **Headless** | `vectorcraft-cli mcp --headless` | An in-process engine session with a CPU renderer. Everything except the UI-only tools (`inspect_ui`, `type_text`, `open_panel`, `screenshot {window:true}`). |
+| **Remote** | `stitchfoundry-cli mcp --connect 127.0.0.1:7979` (the app must run with `stitchfoundry --control 7979`) | Everything. Tool calls are forwarded over the [control protocol](control-protocol.md), so you watch the app change live. |
+| **Headless** | `stitchfoundry-cli mcp --headless` | An in-process engine session with a CPU renderer. Everything except the UI-only tools (`inspect_ui`, `type_text`, `open_panel`, `screenshot {window:true}`). |
 
 With no flag, the server tries `127.0.0.1:7979` and falls back to headless. Logs go to stderr; stdout carries
 only protocol messages.
@@ -18,45 +18,45 @@ only protocol messages.
 
 ```sh
 cargo build --release -p vectorcraft-cli
-claude mcp add vectorcraft -- "$PWD/target/release/vectorcraft-cli" mcp
+claude mcp add stitchfoundry -- "$PWD/target/release/stitchfoundry-cli" mcp
 # or pin a mode:
-claude mcp add vectorcraft-headless -- "$PWD/target/release/vectorcraft-cli" mcp --headless
-claude mcp add vectorcraft-app -- "$PWD/target/release/vectorcraft-cli" mcp --connect 127.0.0.1:7979
+claude mcp add stitchfoundry-headless -- "$PWD/target/release/stitchfoundry-cli" mcp --headless
+claude mcp add stitchfoundry-app -- "$PWD/target/release/stitchfoundry-cli" mcp --connect 127.0.0.1:7979
 ```
 
 Other clients use the same command in their JSON config:
 
 ```json
-{"mcpServers": {"vectorcraft": {"command": "/abs/path/target/release/vectorcraft-cli", "args": ["mcp"]}}}
+{"mcpServers": {"stitchfoundry": {"command": "/abs/path/target/release/stitchfoundry-cli", "args": ["mcp"]}}}
 ```
 
 For a live session, start the app first: `cargo run --release -p vectorcraft -- --control 7979`.
 
 ### From an installed release
 
-The release packages ship `vectorcraft-cli` alongside the desktop app, so no build is needed:
+The release packages ship `stitchfoundry-cli` alongside the desktop app, so no build is needed:
 
 | Install | CLI |
 |---|---|
-| Windows (MSI) | `C:\Program Files\VectorCraft\vectorcraft-cli.exe` by default (wherever you installed it otherwise), not on `PATH` |
-| Linux (deb, rpm) | `/usr/bin/vectorcraft-cli` |
-| macOS | the separate `vectorcraft-cli-<version>-macos-<arch>.zip` release asset (the `.app` holds only the desktop app) |
+| Windows (MSI) | `C:\Program Files\StitchFoundry\stitchfoundry-cli.exe` by default (wherever you installed it otherwise), not on `PATH` |
+| Linux (deb, rpm) | `/usr/bin/stitchfoundry-cli` |
+| macOS | the separate `stitchfoundry-cli-<version>-macos-<arch>.zip` release asset (the `.app` holds only the desktop app) |
 
 ```sh
 # Windows, default install folder
-claude mcp add vectorcraft -- "C:\Program Files\VectorCraft\vectorcraft-cli.exe" mcp
+claude mcp add stitchfoundry -- "C:\Program Files\StitchFoundry\stitchfoundry-cli.exe" mcp
 # Linux, or macOS with the CLI unzipped onto PATH
-claude mcp add vectorcraft -- vectorcraft-cli mcp
+claude mcp add stitchfoundry -- stitchfoundry-cli mcp
 ```
 
 ## Confining file access
 
 ```sh
-vectorcraft-cli mcp --automation-read-root /work/project --automation-write-root /work/project/out
+stitchfoundry-cli mcp --automation-read-root /work/project --automation-write-root /work/project/out
 ```
 
 ```json
-{"mcpServers": {"vectorcraft": {"command": "/abs/path/target/release/vectorcraft-cli",
+{"mcpServers": {"stitchfoundry": {"command": "/abs/path/target/release/stitchfoundry-cli",
   "args": ["mcp", "--automation-read-root", "/work/project", "--automation-write-root", "/work/project/out"]}}}
 ```
 
@@ -93,7 +93,7 @@ the suite) keep the agent to the folders you give it:
 
 The flags confine the headless server and imply `--headless`; `--connect` with them is an error, since
 the server would otherwise talk to an app that isn't confined. A running app confines itself: start it
-with the same flags, `vectorcraft --control 7979 --automation-read-root <dir> --automation-write-root
+with the same flags, `stitchfoundry --control 7979 --automation-read-root <dir> --automation-write-root
 <dir>`, and connect as usual (see [Control protocol](control-protocol.md#confining-file-access)). The
 server then writes nothing itself: `screenshot {path}` asks the app to write the file.
 
@@ -135,7 +135,7 @@ arguments filled in. A missing required argument is `-32602`.
 
 ```sh
 echo '{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"poster","arguments":{"brief":"a jazz festival"}}}' \
-  | vectorcraft-cli mcp --headless
+  | stitchfoundry-cli mcp --headless
 ```
 
 ### Resource templates
@@ -189,7 +189,7 @@ place. From then on the engine's own `log` records arrive as `notifications/mess
 `logger` and `data`. A `null` level turns it back off. Nothing is sent before the client asks, and
 records queued at the old level are dropped rather than replayed at the new one.
 
-Installing the logger that receives those records is `vectorcraft-cli`'s job, not the library's: a
+Installing the logger that receives those records is `stitchfoundry-cli`'s job, not the library's: a
 crate that installed one would override whatever logger an embedder had already set up. Embedding
 `vectorcraft-mcp` directly means calling `vectorcraft_mcp::logging::install()` yourself if you want
 log records to reach your client.
@@ -629,17 +629,17 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"draw_shape","arguments":{"shape":"ellipse","x":10,"y":10,"width":100,"height":80,"fill":"#ff0000"}}}' \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"inspect_document","arguments":{}}}' \
-  | target/release/vectorcraft-cli mcp --headless
+  | target/release/stitchfoundry-cli mcp --headless
 ```
 
 ## Headless batch CLI
 
 ```sh
-vectorcraft-cli commands                          # command catalogue (JSON)
-vectorcraft-cli run --in in.svg \
+stitchfoundry-cli commands                          # command catalogue (JSON)
+stitchfoundry-cli run --in in.svg \
   --cmd select.all --cmd paint.setFill --params '{"color":"#ff0000"}' \
   --export out.svg --export out.png --scale 2
-vectorcraft-cli run --cmd file.new --params '{"width":800,"height":600}' \
+stitchfoundry-cli run --cmd file.new --params '{"width":800,"height":600}' \
   --cmd shape.star --params '{"cx":400,"cy":300,"radius1":200,"radius2":90}' \
   --export star.vectorcraft
 ```
@@ -647,7 +647,7 @@ vectorcraft-cli run --cmd file.new --params '{"width":800,"height":600}' \
 `run` prints one JSON line per step (`open`, `cmd`, `export`) and exits non-zero on the first failure. `--params`
 applies to the `--cmd` just before it. `run` also accepts the host commands `file.open`, `file.save`, `file.export`,
 `file.exportForScreens` and `tool.select`. `run --in`, `convert` and `info` read every format `document.open` reads
-(`vectorcraft-cli --help` lists them).
+(`stitchfoundry-cli --help` lists them).
 
 A step can use an earlier step's result, in `run` as in the `command_batch` tool. A parameter string that is exactly
 `$N` or `$N.path` takes that value from the result of step `N` (counting from 0, in the order they ran; `run --in`'s
@@ -656,7 +656,7 @@ open isn't a step), and `$last…` from the step before. A path goes into object
 reference that names no value fails the step, so a command never runs with one left in it:
 
 ```sh
-vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd text.create --params '{"x":10,"y":60,"text":"plain and bold words","size":30}'   --cmd text.setRangeStyle --params '{"id":"$1.id","start":10,"end":14,"style":"Bold"}'
+stitchfoundry-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd text.create --params '{"x":10,"y":60,"text":"plain and bold words","size":30}'   --cmd text.setRangeStyle --params '{"id":"$1.id","start":10,"end":14,"style":"Bold"}'
 ```
 
 ## Transparency and opacity masks
@@ -1564,7 +1564,7 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 {"name":"pointer_gesture","arguments":{"tool":"selection","mods":{"cmd":true},"events":[{"kind":"down","x":175,"y":125},{"kind":"up","x":175,"y":125}]}}
 ```
 
-The preferences for the view need the desktop app (`vectorcraft-cli mcp --connect`): `zoomWithMouseWheel` (the
+The preferences for the view need the desktop app (`stitchfoundry-cli mcp --connect`): `zoomWithMouseWheel` (the
 wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel sideways; the control channel's
 `ui.wheel` turns the wheel), `zoomToSelection` (on: Zoom In and Zoom Out centre the selection), `showToolTips`,
 `anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle`, `showPixelGrid` (on by
@@ -2811,15 +2811,15 @@ tone (mono, or CMYK screens multiplied over each other), clipped to the art's ou
 
 Type can use the bundled fonts, fonts added to the session and the fonts installed on the system (none on the web):
 the system's and the user's font folders (Windows: `Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, plus fonts
-registered outside them, such as fonts installed as shortcuts, and in the desktop app and `vectorcraft-cli` (MCP
+registered outside them, such as fonts installed as shortcuts, and in the desktop app and `stitchfoundry-cli` (MCP
 included) the fonts in DirectWrite's system font collection, such as those Adobe Fonts activates while Creative Cloud runs; macOS: `/System/Library/Fonts`, `/Library/Fonts`,
-`/Network/Library/Fonts`, `~/Library/Fonts` and downloaded system fonts, plus in the desktop app and `vectorcraft-cli`
+`/Network/Library/Fonts`, `~/Library/Fonts` and downloaded system fonts, plus in the desktop app and `stitchfoundry-cli`
 the fonts CoreText's font manager lists outside them, such as those apps and font managers register from their own
 folders; Linux and BSD: `/usr/share/fonts`,
 `/usr/local/share/fonts`, `~/.fonts` and the XDG data folders' `fonts`, `~/.local/share/fonts` among them, and in a
 Flatpak sandbox the host's fonts). Faces without outlines VectorCraft draws (no `glyf`, `CFF`, `CFF2` or `VARC` table, such
 as bitmap-only fonts) are left out. The scan also reads the folder the `fontsFolder` preference names (Preferences › Type ›
-Additional Fonts Folder) with its subfolders and, in the desktop app and `vectorcraft-cli`, VectorCraft's own `Fonts` folder
+Additional Fonts Folder) with its subfolders and, in the desktop app and `stitchfoundry-cli`, VectorCraft's own `Fonts` folder
 next to the preferences: `~/Library/Application Support/VectorCraft/Fonts` on macOS, `%APPDATA%\VectorCraft\Fonts` on
 Windows, and `$XDG_CONFIG_HOME/vectorcraft/Fonts` or `~/.config/vectorcraft/Fonts` on Linux and BSD. `text.addFontFiles`
 copies fonts into that folder. The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
@@ -2874,7 +2874,7 @@ scans the fonts again, and type set in them redraws. It copies only regular `.tt
 and `.woff2` files and suitcase fonts (with their resource fork), at most 256 MB a file and 1 GB in all, and lists any
 other file in `skipped`. It never replaces a file: a file with the same contents is kept (`kept`), and when another
 file has the name, the copy gets a number (`Name 2.otf`). Copy only fonts you own or are licensed to install. `command.batch` returns before a search ends; later requests over MCP or the control channel poll
-`text.findFontFiles {}`. `vectorcraft-cli run` stops the search when its last step ends. The web build has no Fonts
+`text.findFontFiles {}`. `stitchfoundry-cli run` stops the search when its last step ends. The web build has no Fonts
 folder and no folder search.
 
 ```json

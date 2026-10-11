@@ -14,8 +14,8 @@ in Preferences and `WGPU_POWER_PREF` do not control this OpenGL build.
 
 In your GitHub fork, open **Actions → Windows 7 x64 compatibility → Run workflow** (it
 also runs weekly, never on pull requests).
-When it succeeds, download the `vectorcraft-windows7-x64-portable` artifact, extract the
-contained portable ZIP, then run `vectorcraft.exe` on Windows 7. The CLI is included.
+When it succeeds, download the `stitchfoundry-windows7-x64-portable` artifact, extract the
+contained portable ZIP, then run `stitchfoundry.exe` on Windows 7. The CLI is included.
 No MSI is provided: the existing installer remains for modern Windows.
 
 To build locally, use a **Windows 10/11 build computer**, with Rust/rustup and Visual Studio
@@ -70,12 +70,12 @@ A successful build on the Windows 2022 CI runner does **not** prove Windows 7 ru
 compatibility. Before declaring support, test on a Windows 7 SP1 x64 machine and record
 its GPU, driver version, Windows updates and any missing-DLL/entry-point error:
 
-- Start `vectorcraft.exe`; verify a visible canvas, resizing, minimize/restore and exit.
+- Start `stitchfoundry.exe`; verify a visible canvas, resizing, minimize/restore and exit.
 - Draw a shape, save a `.vectorcraft` document, close and reopen it.
 - Open `examples/dusk-poster.vectorcraft`; export PNG and PDF and inspect both.
 - Exercise native Open/Save dialogs, clipboard text/images and drag-and-drop.
 - Change a preference, exit and verify it survives restarting.
-- Run `vectorcraft-cli.exe --version` and a headless export from a Command Prompt in the
+- Run `stitchfoundry-cli.exe --version` and a headless export from a Command Prompt in the
   extracted application folder.
 
 This build is experimental until that checklist passes. New dependency versions can add
