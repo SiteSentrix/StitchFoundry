@@ -747,7 +747,7 @@ pub(crate) fn sample_text(app: &VectorcraftApp) -> Option<String> {
 }
 
 #[cfg(test)]
-mod highlight_rebuild_tests {
+mod tests {
     use super::{Row, remap_highlight};
 
     fn family(name: &str) -> Row {
