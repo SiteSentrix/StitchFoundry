@@ -46,7 +46,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     // Every corner given is one of the path's: none is left out of the edit.
     if corners.is_empty() || !corners.iter().all(|k| live.corner(*k).is_some()) {
-        return Err("give corners of the path: anchors between two straight sides".into());
+        return Err("give corners of the path: anchors where its sides meet at an angle".into());
     }
     let (radius, kind) = live.style(&corners);
     let mut fields = json!({"id": id.0, "corners": corners});
