@@ -258,7 +258,7 @@ impl<'a> Lexer<'a> {
 }
 
 /// A finite number token (`12`, `-3.5`, `.5`, `1e-3`), or `None`.
-fn number(w: &[u8]) -> Option<f64> {
+pub(super) fn number(w: &[u8]) -> Option<f64> {
     let first = *w.first()?;
     if !(first.is_ascii_digit() || matches!(first, b'+' | b'-' | b'.')) {
         return None;

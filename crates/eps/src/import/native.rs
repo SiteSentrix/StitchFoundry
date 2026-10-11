@@ -29,8 +29,8 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Affine, Point, Rect, Vec2};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind};
+use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 
 use super::Imported;
 use super::ai::{self, Structure, slot_of};
@@ -78,6 +78,8 @@ struct SlotInfo {
     frame: usize,
     /// It, its layer and the objects round it show.
     shown: bool,
+    /// Its own frame or path, where the file places it ([`ai::text_frames`]).
+    art_path: Option<PathData>,
 }
 
 /// The text slots of the layers and objects, in order.
@@ -85,7 +87,7 @@ fn collect_slots(nodes: &[Arc<Node>], shown: bool, out: &mut Vec<SlotInfo>) {
     for n in nodes {
         let shown = shown && n.visible;
         if let Some(story) = slot_of(n.name.as_deref()) {
-            out.push(SlotInfo { story, frame: ai::slot_frame(n.name.as_deref()), shown });
+            out.push(SlotInfo { story, frame: ai::slot_frame(n.name.as_deref()), shown, art_path: None });
         } else if let Some(c) = n.children().filter(|_| !matches!(n.kind, NodeKind::Compound { .. })) {
             collect_slots(c, shown, out);
         }
@@ -473,8 +475,24 @@ fn plan(
     if let Some(t) = template {
         for (k, info) in infos.iter().enumerate() {
             let Some(Some(story)) = stories.get(k) else { continue };
-            let Some(node) = story.node(NodeId(0), info.frame, t, to_doc) else { continue };
-            let region = story.region(t, to_doc);
+            let Some(mut node) = story.node(NodeId(0), info.frame, t, to_doc) else { continue };
+            let mut region = story.region(t, to_doc);
+            // Area type and type on a path in the object's own frame: the text document's frame
+            // of a copied object keeps its original's path.
+            if let (Some(path), NodeKind::Text(text)) = (&info.art_path, &mut node.kind) {
+                let size = text.runs.iter().map(|r| r.style.size).fold(0.0, f64::max);
+                match &mut text.kind {
+                    TextKind::Area { frame } => {
+                        *frame = path.clone();
+                        region = path.bounds();
+                    }
+                    TextKind::OnPath { path: on, .. } => {
+                        *on = path.clone();
+                        region = path.bounds().map(|r| r.inflate(size * 1.5, size * 1.5));
+                    }
+                    TextKind::Point => {}
+                }
+            }
             if let Some(c) = content.get_mut(k) {
                 *c = Content::Made(Box::new(node), region.filter(|_| info.shown), false, vec![]);
             }
@@ -860,6 +878,11 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool) ->
     }
     let mut infos = vec![];
     collect_slots(&doc.layers, true, &mut infos);
+    // Each text object's own frame or path, by its story and frame.
+    let frames = ai::text_frames(data);
+    for info in &mut infos {
+        info.art_path = info.story.and_then(|s| frames.get(&(s, info.frame))).map(|p| PathData::from_bezpath(&(to_doc * p.clone())));
+    }
     // Type asked for as outlines is the page's: the text objects that show can't be filled.
     if outlined && infos.iter().any(|i| i.shown) {
         return Err("its type is to come in as outlines, which only its page has".into());
