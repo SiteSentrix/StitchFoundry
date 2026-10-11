@@ -965,8 +965,9 @@ impl Importer {
             nodes = rest;
         }
         let mut children: Vec<Arc<Node>> = nodes.iter().filter_map(|c| self.node(c, ts)).map(Arc::new).collect();
+        // Mask art that is all hidden draws nothing: that is an empty mask, not no mask (black all
+        // over when clipped, white when not, inverted when the mask is).
         let art = match children.len() {
-            0 => return None,
             1 => Arc::unwrap_or_clone(children.pop()?),
             _ => self.named("", NodeKind::Group { children, clip: false }),
         };
