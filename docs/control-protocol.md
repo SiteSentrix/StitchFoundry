@@ -36,6 +36,11 @@ nowhere and Windows device names are refused. A root left out grants none of its
 existing folders, or the app doesn't start; without `--control` they are ignored. See `docs/mcp.md`
 › Confining file access for the details.
 
+Each root flag may be given once; a command-line root overrides its environment default. Missing or
+empty values, another option used as a value, and duplicate flags stop the desktop before it starts
+any services, even without `--control`. For a folder name starting with `-`, use `--flag=-folder`
+or the relative path `./-folder`.
+
 What is confined: the requests themselves, the frames that carry input they inject (`ui.click`, `ui.key`,
 `ui.text`…, so a menu item an agent clicks is confined too), the background saves and exports they start,
 and window captures. The person at the keyboard is not: files opened from the command line, Finder or a
