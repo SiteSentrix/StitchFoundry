@@ -4270,10 +4270,7 @@ lighting	Light	Світло
 	Width profile	Профіль ширини
 	Widths (mm)	Ширини (мм)
 	Zigzag	Зигзаг
-	colors	кольорів
 	inclination lines	ліній нахилу
-	stitches	стібків
-	trims	обрізань
 	Brush	Пензель
 	Length	Довжина
 	Bean	Потрійна
@@ -4313,6 +4310,9 @@ lighting	Light	Світло
 	Travel by	Перехід за
 	Double	Подвійна
 machine	Trim	Обрізка нитки
+@plural	{n} stitch|{n} stitches	{n} стібок|{n} стібки|{n} стібків
+@plural	{n} trim|{n} trims	{n} обрізка|{n} обрізки|{n} обрізок
+machine	Stop	Зупинка
 	Column A/B Tool	Інструмент «Колона A/B»
 	Column A/B	Колона A/B
 	Tatami stitches	Стібки татамі

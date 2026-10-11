@@ -20,7 +20,7 @@ fn function(c: Cmd) -> &'static str {
         Cmd::Jump => tl!("Jump"),
         Cmd::Trim => super::machine_word("Trim"),
         Cmd::ColorChange => tl!("Color change"),
-        Cmd::Stop => tl!("Stop"),
+        Cmd::Stop => super::machine_word("Stop"),
         Cmd::End => tl!("End"),
     }
 }

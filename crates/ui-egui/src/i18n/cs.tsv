@@ -4225,6 +4225,9 @@ effect	Regular	Pravidelný
 	Column A/B Tool	Nástroj Sloupec A/B
 	Match Threads to Chart	Přizpůsobit nitě vzorníku
 machine	Trim	Odstřih
+@plural	{n} stitch|{n} stitches	{n} steh|{n} stehy|{n} stehů
+@plural	{n} trim|{n} trims	{n} odstřih|{n} odstřihy|{n} odstřihů
+machine	Stop	Zastavení
 
 # Embroidery (StitchFoundry): the strings added when Czech became complete (2026-10-11)
 	Opening it left out what StitchFoundry can't read yet ({what}): replacing it loses that for good. Save under another name to keep it.	Při otevření tohoto souboru bylo vynecháno to, co StitchFoundry zatím neumí přečíst ({what}): jeho nahrazením o to natrvalo přijdete. Chcete-li to zachovat, uložte dokument pod jiným názvem.
@@ -4339,10 +4342,7 @@ machine	Trim	Odstřih
 	Width profile	Profil šířky
 	Widths (mm)	Šířky (mm)
 	Zigzag	Cik-cak
-	colors	barev
 	inclination lines	čar směru stehu
-	stitches	stehů
-	trims	odstřihů
 	Brush	Štětec
 	Length	Délka
 	Bean	Trojitý steh

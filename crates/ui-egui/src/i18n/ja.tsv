@@ -4284,10 +4284,7 @@ lighting	Light	ライト
 	Width profile	幅プロファイル
 	Widths (mm)	幅 (mm)
 	Zigzag	ジグザグ
-	colors	色
 	inclination lines	本の縫い方向線に沿って回転
-	stitches	針
-	trims	回の糸切り
 	Brush	ブラシ
 	Length	長さ
 	Bean	三重縫い
@@ -4327,6 +4324,9 @@ lighting	Light	ライト
 	Travel by	移動単位
 	Double	ダブル
 machine	Trim	糸切り
+@plural	{n} stitch|{n} stitches	{n} 針
+@plural	{n} trim|{n} trims	{n} 回の糸切り
+machine	Stop	停止
 	Column A/B Tool	コラム A/B ツール
 	Column A/B	コラム A/B
 	Tatami stitches	タタミステッチ

@@ -4288,10 +4288,7 @@ lighting	Light	Luz
 	Width profile	Perfil de anchura
 	Widths (mm)	Anchuras (mm)
 	Zigzag	Zigzag
-	colors	colores
 	inclination lines	líneas de inclinación
-	stitches	puntadas
-	trims	cortes
 	Brush	Pincel
 	Length	Longitud
 	Bean	Triple
@@ -4331,6 +4328,9 @@ lighting	Light	Luz
 	Travel by	Desplazarse por
 	Double	Doble
 machine	Trim	Corte de hilo
+@plural	{n} stitch|{n} stitches	{n} puntada|{n} puntadas
+@plural	{n} trim|{n} trims	{n} corte de hilo|{n} cortes de hilo
+machine	Stop	Parada
 	Column A/B Tool	Herramienta Columna A/B
 	Column A/B	Columna A/B
 	Tatami stitches	Puntadas tatami
