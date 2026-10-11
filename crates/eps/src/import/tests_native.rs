@@ -806,3 +806,20 @@ fn shown_type_the_page_draws_in_pieces_comes_whole_from_the_text_document() {
     assert_eq!(all, ["Letters"], "{:?}", r.warnings);
     assert!(!r.warnings.iter().any(|w| w.contains("page's type")), "{:?}", r.warnings);
 }
+
+#[test]
+fn a_copied_area_type_object_is_framed_where_its_own_art_path_is() {
+    // The text document's frame is the original's (art 10..60 × 20..40); this copy's own `/Art`
+    // path puts it at 30..80 × 50..70.
+    let area = format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(10.0, 20.0, 60.0, 40.0));
+    let doc = document_of(&[area], &[story("Copied\r", &[0], "/0 0", "/1 8.0")]);
+    let copy = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n/Art :\nX=\n30 50 m\n80 50 L\n80 70 L\n30 70 L\nN\n;\n/ConfiningPath ,\n2 /TextAntialiasing ,\n;\n";
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, copy)), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let vectorcraft_doc::TextKind::Area { frame } = &texts[0].kind else { panic!("area type: {:?}", texts[0].kind) };
+    // Art y 50..70 is 30..50 down the 100 pt page.
+    let b = frame.bounds().unwrap();
+    assert!((b.x0 - 30.0).abs() < 1e-6 && (b.y0 - 30.0).abs() < 1e-6 && (b.x1 - 80.0).abs() < 1e-6 && (b.y1 - 50.0).abs() < 1e-6, "{b:?}");
+}
