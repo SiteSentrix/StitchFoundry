@@ -76,7 +76,7 @@ fn package_writes_the_folder_then_offers_to_show_it() {
     let r = confirm(&mut app).unwrap();
     assert!(!app.session.active().unwrap().is_dirty());
     let root = std::path::Path::new(&out).join("card Folder");
-    assert!(root.join("card.vectorcraft").is_file() && root.join("Links/pic.png").is_file(), "{r}");
+    assert!(root.join("card.stitchfoundry").is_file() && root.join("Links/pic.png").is_file(), "{r}");
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.kind.as_str(), d.str("__command")), (confirm::KIND, "file.showPackage".to_string()));
     let opened: Rc<RefCell<Vec<String>>> = Rc::default();

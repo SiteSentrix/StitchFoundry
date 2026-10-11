@@ -323,7 +323,7 @@ pub fn tool_definitions() -> Vec<Value> {
             "save_file",
             "Save file",
             &format!(
-                "Save the active document with the engine's document.save: by default to its own file in its own format (native .vectorcraft unless it was opened from or saved as SVG, PDF or a restorable .ai). With `path`, the extension picks the format: .{}. Other formats are exports (see export). The reply's `format` says what was written and `warnings` what that format loses.",
+                "Save the active document with the engine's document.save: by default to its own file in its own format (native .stitchfoundry unless it was opened from or saved as SVG, PDF or a restorable .ai). With `path`, the extension picks the format: .{}. Other formats are exports (see export). The reply's `format` says what was written and `warnings` what that format loses.",
                 save_extensions().join(", .")
             ),
             obj(json!({"path": string("Destination; its extension picks the format (default: the document's own file)")}), &[]),

@@ -53,7 +53,7 @@ fn preview_opens_with_a_warning_and_never_saves_to_the_source() {
         let plan = save_plan(&s, SaveMode::Save, &json!({})).unwrap();
         assert!(plan.path.is_none(), "Save must ask for a new destination");
         assert_eq!(plan.format.id, "vectorcraft");
-        assert!(plan.name.ends_with(".vectorcraft"));
+        assert!(plan.name.ends_with(".stitchfoundry"));
     }
     let f = format("affinity").unwrap();
     assert!(f.read && !f.write);
