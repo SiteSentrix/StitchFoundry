@@ -66,7 +66,10 @@ pub fn stroke_contains(path: &BezPath, width: f64, tol: f64, p: Point) -> bool {
     quick.contains(p) && distance_to_outline(path, p) <= width / 2.0 + tol
 }
 
-/// Does the path intersect (or lie inside) the rect? Used for marquee selection.
+/// Does the path touch the rect: an anchor inside it, or a segment crossing its edges? Used for
+/// marquee selection, which (as in Illustrator) needs the path itself: a rect wholly inside a
+/// filled shape doesn't touch it, so a marquee drawn over a background picks only what is on it
+/// (#1103).
 pub fn intersects_rect(path: &PathData, r: Rect) -> bool {
     let Some(b) = path.bounds() else { return false };
     if b.intersect(r).area() <= 0.0 && !(b.width() == 0.0 || b.height() == 0.0) {
@@ -83,16 +86,7 @@ pub fn intersects_rect(path: &PathData, r: Rect) -> bool {
         kurbo::Line::new((r.x1, r.y1), (r.x0, r.y1)),
         kurbo::Line::new((r.x0, r.y1), (r.x0, r.y0)),
     ];
-    let bp = path.to_bezpath();
-    for seg in bp.segments() {
-        for e in &edges {
-            if !seg.intersect_line(*e).is_empty() {
-                return true;
-            }
-        }
-    }
-    // Rect entirely inside a closed shape counts as touching it.
-    path.is_closed() && fill_contains(&bp, FillRule::NonZero, r.center())
+    path.to_bezpath().segments().any(|seg| edges.iter().any(|e| !seg.intersect_line(*e).is_empty()))
 }
 
 #[cfg(test)]
@@ -152,8 +146,10 @@ mod tests {
         assert!(!intersects_rect(&p, Rect::new(20.0, 20.0, 30.0, 30.0)));
         // corner region of the bbox that misses the ellipse outline
         assert!(!intersects_rect(&p, Rect::new(0.0, 0.0, 0.5, 0.5)));
-        // fully inside
-        assert!(intersects_rect(&p, Rect::new(4.0, 4.0, 6.0, 6.0)));
+        // Wholly inside the shape, touching neither its anchors nor its outline (#1103).
+        assert!(!intersects_rect(&p, Rect::new(4.0, 4.0, 6.0, 6.0)));
+        // Around the whole shape.
+        assert!(intersects_rect(&p, Rect::new(-1.0, -1.0, 11.0, 11.0)));
         // crossing a line
         let l = shapes::line(Point::new(0.0, 0.0), Point::new(10.0, 10.0));
         assert!(intersects_rect(&l, Rect::new(4.0, 0.0, 6.0, 10.0)));
