@@ -49,11 +49,6 @@ fn names_param(p: &Value, cmd: &str, fallback: Option<String>, nothing: &str) ->
     }
 }
 
-/// The objects a bind acts on: `ids` when given (every one checked), else the selection.
-fn target_ids(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
-    if p.get("ids").is_some() { checked_ids_param(s, p, "ids", cmd) } else { selected_roots(s) }
-}
-
 /// Refuse what a variable of `kind` can't drive: art that is locked or on a hidden or locked
 /// layer is not the document's to rewrite, and a text variable only drives type.
 fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: VariableKind, cmd: &str) -> Result<()> {
@@ -203,7 +198,7 @@ fn list(s: &mut Session, _p: &Value) -> Result<Value> {
 fn bind(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.bind";
     let name = named(str_param(p, "variable"), "variable", C)?;
-    let ids = target_ids(s, p, C)?;
+    let ids = checked_ids_or_selection(s, p, C)?;
     if ids.is_empty() {
         return Err(bad(C, "nothing to bind"));
     }
@@ -218,7 +213,7 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.unbind";
-    let ids = target_ids(s, p, C)?;
+    let ids = checked_ids_or_selection(s, p, C)?;
     let name = defined_variable(s, p, C)?;
     let n = s.edit("Unbind Variable", |d, _| {
         let mut n = 0;
