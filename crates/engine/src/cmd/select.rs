@@ -62,10 +62,10 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!(
             "select.key",
-            "Set Key Object",
+            "Cancel Key Object",
             [],
             None,
-            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object), one of two or more (the Selection tool: a click on one object of a selection of several; on the key again: no id)} the key object Align aligns to and Distribute Spacing spaces from; without `id` it clears the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members); any other id is an error that leaves the key as it was → {key} (the resulting key object, or null)",
+            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object), one of two or more (the Selection tool: a click on one object of a selection of several; on the key again: no id)} the key object Align aligns to and Distribute Spacing spaces from; without `id` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members); any other id is an error that leaves the key as it was → {key} (the resulting key object, or null)",
             has_doc,
             key
         ),
