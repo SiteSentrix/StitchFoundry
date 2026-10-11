@@ -103,3 +103,99 @@ fn image_mips_are_opt_in_and_change_nothing_off() {
     let near = Affine::scale(0.75);
     assert!(Renderer::new().render(&d, 48, 48, near, &on).pixels == Renderer::new().render(&d, 48, 48, near, &off).pixels);
 }
+
+/// A document of `n` point type objects reading `word`, in rows.
+fn text_doc(n: usize, word: &str) -> Document {
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    for i in 0..n {
+        let at = vectorcraft_geom::Point::new(10.0 + (i % 8) as f64 * 48.0, 30.0 + (i / 8) as f64 * 30.0);
+        let style = CharStyle { size: 18.0, ..Default::default() };
+        let mut t = Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(at, word, style))));
+        t.id = d.alloc_id();
+        d.insert(Some(l), 0, t).unwrap();
+    }
+    d
+}
+
+/// The cache keys of `d`'s type objects (their nodes' addresses).
+fn text_keys(d: &Document) -> Vec<usize> {
+    let mut keys = vec![];
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            keys.push(n as *const Node as usize);
+        }
+    });
+    keys
+}
+
+/// More type than the glyph cache's budget holds: the entries kept stay from frame to frame (the
+/// rest is laid out again), where emptying the cache when full laid out every object every frame.
+#[test]
+fn type_over_the_text_budget_keeps_its_entries_between_frames() {
+    let d = text_doc(40, "Type");
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    let want = r.render(&d, 400, 400, Affine::IDENTITY, &opts).pixels;
+    assert_eq!(r.texts.len(), 40);
+    let all = r.texts.bytes();
+    let mut r = Renderer::new();
+    r.texts = FrameCache::new(all / 2, 1024);
+    let keys = text_keys(&d);
+    let kept = |r: &Renderer| keys.iter().filter(|k| r.texts.contains_key(*k)).copied().collect::<Vec<_>>();
+    assert_eq!(r.render(&d, 400, 400, Affine::IDENTITY, &opts).pixels, want);
+    let first = kept(&r);
+    assert!(!first.is_empty() && first.len() < 40 && r.texts.bytes() <= all / 2, "{} entries, {} bytes", first.len(), r.texts.bytes());
+    for _ in 0..3 {
+        assert_eq!(r.render(&d, 400, 400, Affine::IDENTITY, &opts).pixels, want);
+        assert_eq!(kept(&r), first, "the same entries stay");
+    }
+    // Other type: its entries replace the earlier frames' ones, within the budget.
+    let e = text_doc(40, "Other");
+    r.render(&e, 400, 400, Affine::IDENTITY, &opts);
+    assert!(kept(&r).is_empty(), "entries of earlier frames went first");
+    assert!(!r.texts.is_empty() && r.texts.bytes() <= all / 2);
+}
+
+/// Type no longer drawn leaves the glyph cache after a few frames, and its bytes with it.
+#[test]
+fn swept_type_entries_give_back_their_bytes() {
+    let d = text_doc(12, "Swept");
+    let mut r = Renderer::new();
+    r.texts = FrameCache::new(lru::TEXT_BUDGET, 0);
+    r.render(&d, 400, 400, Affine::IDENTITY, &RenderOptions::default());
+    let full = r.texts.bytes();
+    assert!(full > 0 && r.texts.len() == 12);
+    let empty = Document::new(10.0, 10.0);
+    for _ in 0..5 {
+        r.render(&empty, 10, 10, Affine::IDENTITY, &RenderOptions::default());
+    }
+    assert_eq!((r.texts.len(), r.texts.bytes()), (0, 0));
+}
+
+/// Each run draws exactly the outlines it drew when kept as a path of its own: its glyphs and
+/// decorations in layout order (the whole text's path is kept once, the runs as spans of it).
+#[test]
+fn text_runs_draw_their_own_glyphs_from_the_shared_outlines() {
+    use vectorcraft_doc::text::{CharStyle, TextObject, TextRun};
+    let plain = CharStyle { size: 24.0, ..Default::default() };
+    let under = CharStyle { underline: true, ..plain.clone() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(10.0, 40.0), "Ab", plain.clone());
+    t.runs.push(TextRun::new("cd", under));
+    t.runs.push(TextRun::new("ef", plain));
+    let g = text_geom(&t);
+    let db = vectorcraft_text::FontDb::global();
+    let layout = vectorcraft_text::layout(db, &t);
+    let mut want = vec![BezPath::new(); t.runs.len()];
+    for gl in &layout.glyphs {
+        want[gl.run].extend(gl.outline.iter());
+    }
+    for (run, bar) in vectorcraft_text::decorations(&layout, db, &t) {
+        want[run].extend(bar.iter());
+    }
+    for (i, w) in want.iter().enumerate() {
+        assert_eq!(g.run(i).elements(), w.elements(), "run {i}");
+    }
+    assert!(g.run(7).elements().is_empty());
+}

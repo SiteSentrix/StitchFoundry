@@ -14,6 +14,7 @@ mod group;
 mod images;
 mod ink;
 mod live;
+mod lru;
 mod paint;
 mod pattern;
 pub mod placed_document;
@@ -30,6 +31,7 @@ use vello_cpu::{Pixmap, RenderContext, Resources};
 
 use group::Composite;
 use ink::Ink;
+use lru::FrameCache;
 
 pub use brush_fx::instance_art;
 pub use effects::stroke::width_outline;
@@ -350,12 +352,13 @@ type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>>);
 /// Reusable renderer (keeps the render context, geometry and glyph caches between frames; decoded
 /// images are shared by all renderers, see [`set_image_cache_budget`]).
 pub struct Renderer {
-    texts: PtrMap<usize, (Arc<Node>, Arc<TextGeom>)>,
+    /// Glyph geometry per text object, keyed by `Arc` identity like `geom` (see [`Self::text_geom_of`]).
+    texts: FrameCache<usize, (Arc<Node>, Arc<TextGeom>)>,
     /// The [`vectorcraft_text::FontDb::generation`] `texts` was laid out with: type lays out
     /// again when fonts are added or rescanned.
     text_fonts: u64,
     /// Clip regions per clipping path (see [`Self::clip_of`]).
-    clips: PtrMap<usize, ClipEntry>,
+    clips: FrameCache<usize, ClipEntry>,
     /// Context reused when rendering single-threaded (`threads == 0`).
     ctx_st: Option<RenderContext>,
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
@@ -392,7 +395,7 @@ pub struct Renderer {
     /// opacity and without its opacity mask (see [`Self::draw_knockout`]); 0 = none.
     shape_of: usize,
     /// The art drawn for objects with effects that apply through it (see `fx::has_object_fx`).
-    fx_arts: PtrMap<usize, (Arc<Node>, Arc<Node>)>,
+    fx_arts: FrameCache<usize, (Arc<Node>, Arc<Node>)>,
     /// Layers open around the drawing point in the current context: a non-isolated group can copy
     /// its backdrop only when there are none (see [`Self::group`]).
     nested: u32,
@@ -405,7 +408,7 @@ pub struct Renderer {
     /// again from a picture of it pushes them again (see [`Self::group`]).
     clip_paths: Vec<(BezPath, FillRule, Affine)>,
     /// What clipping paths paint, per clipping path (see [`Self::clip_paint_of`]).
-    clip_paints: PtrMap<usize, ClipPaintEntry>,
+    clip_paints: FrameCache<usize, ClipPaintEntry>,
     /// Gradients along or across strokes, keyed like `strokes` (see [`Self::fill_path_gradient`]).
     stroke_slices: PtrMap<(usize, i32), SliceEntry>,
     /// What the image keys colour adjustments give their recoloured images name: the image
@@ -479,9 +482,9 @@ impl Frame<'_> {
 impl Renderer {
     pub fn new() -> Self {
         Self {
-            texts: PtrMap::default(),
+            texts: FrameCache::new(lru::TEXT_BUDGET, 1024),
             text_fonts: 0,
-            clips: PtrMap::default(),
+            clips: FrameCache::new(lru::CLIP_BUDGET, 256),
             ctx_st: None,
             threads: default_threads(),
             geom: PtrMap::default(),
@@ -500,12 +503,12 @@ impl Renderer {
             live: live::LiveCache::default(),
             knockout: false,
             shape_of: 0,
-            fx_arts: PtrMap::default(),
+            fx_arts: FrameCache::new(lru::FX_ART_BUDGET, 256),
             nested: 0,
             backdrop: None,
             blends: PtrMap::default(),
             clip_paths: vec![],
-            clip_paints: PtrMap::default(),
+            clip_paints: FrameCache::new(lru::CLIP_BUDGET, 256),
             stroke_slices: PtrMap::default(),
             adjusts: HashMap::new(),
             dim_images: None,
@@ -599,6 +602,12 @@ impl Renderer {
         }
         // Filtered rasters are large: only those of the last frame stay.
         self.pixel_fx.retain(|_, e| e.stamp == g);
+        self.texts.sweep(g);
+        self.clips.sweep(g);
+        self.clip_paints.sweep(g);
+        self.fx_arts.sweep(g);
+        self.brushes.entries.sweep(g);
+        self.live.sweep(g);
     }
 
     /// Draw frame `f` (`w`×`h` pixels): the background, the artboards and the page's art.
@@ -799,16 +808,14 @@ impl Renderer {
     /// outlining text and uniting shapes is too slow to repeat every frame.
     fn clip_of(&mut self, a: &Arc<Node>) -> Option<Arc<(BezPath, FillRule)>> {
         let key = Arc::as_ptr(a) as usize;
-        if let Some((node, region)) = self.clips.get(&key)
+        if let Some((node, region)) = self.clips.get(&key, self.stamp)
             && Arc::ptr_eq(node, a)
         {
             return region.clone();
         }
         let region = effects::clip_outline(a).map(Arc::new);
-        if self.clips.len() > 1024 {
-            self.clips.clear();
-        }
-        self.clips.insert(key, (a.clone(), region.clone()));
+        let bytes = size_of::<ClipEntry>() + region.as_ref().map_or(0, |r| lru::path_bytes(&r.0));
+        self.clips.insert(key, (a.clone(), region.clone()), bytes, self.stamp);
         region
     }
 
@@ -816,17 +823,15 @@ impl Renderer {
     /// allocations between frames, so their own geometry stays cached.
     fn clip_paint_of(&mut self, a: &Arc<Node>) -> (Option<Arc<Node>>, Option<Arc<Node>>) {
         let key = Arc::as_ptr(a) as usize;
-        if let Some((node, fill, stroke)) = self.clip_paints.get(&key)
+        if let Some((node, fill, stroke)) = self.clip_paints.get(&key, self.stamp)
             && Arc::ptr_eq(node, a)
         {
             return (fill.clone(), stroke.clone());
         }
         let paint = a.clip_paint();
         let (fill, stroke) = (paint.fill.map(Arc::new), paint.stroke.map(Arc::new));
-        if self.clip_paints.len() > 1024 {
-            self.clip_paints.clear();
-        }
-        self.clip_paints.insert(key, (a.clone(), fill.clone(), stroke.clone()));
+        let bytes = size_of::<ClipPaintEntry>() + [&fill, &stroke].iter().filter_map(|p| p.as_deref()).map(lru::node_bytes).sum::<usize>();
+        self.clip_paints.insert(key, (a.clone(), fill.clone(), stroke.clone()), bytes, self.stamp);
         (fill, stroke)
     }
 
@@ -1477,16 +1482,13 @@ impl Renderer {
             self.text_fonts = fonts;
         }
         let key = Arc::as_ptr(a) as usize;
-        if let Some((node, g)) = self.texts.get(&key)
+        if let Some((node, g)) = self.texts.get(&key, self.stamp)
             && Arc::ptr_eq(node, a)
         {
             return g.clone();
         }
         let g = Arc::new(text_geom(t));
-        if self.texts.len() > 4096 {
-            self.texts.clear();
-        }
-        self.texts.insert(key, (a.clone(), g.clone()));
+        self.texts.insert(key, (a.clone(), g.clone()), g.bytes(), self.stamp);
         g
     }
 
@@ -1535,7 +1537,8 @@ impl Renderer {
             }
         }
         for (i, run) in t.runs.iter().enumerate() {
-            let Some(path) = g.runs.get(i) else { continue };
+            let path = g.run(i);
+            let path = path.as_ref();
             if path.elements().is_empty() {
                 continue;
             }
@@ -1865,10 +1868,12 @@ pub fn default_threads() -> u16 {
     }
 }
 
-/// Glyph outlines grouped by run, plus the whole text as one path.
+/// The whole text's glyph outlines as one path, and which of them each run draws.
 struct TextGeom {
-    runs: Vec<BezPath>,
     all: BezPath,
+    /// Spans of `all`'s elements drawn by a run, in order: (run, start, end). Outlines of runs
+    /// the text doesn't have are in `all` only.
+    spans: Vec<(usize, usize, usize)>,
     bounds: Rect,
     /// The boxes of characters whose font is missing (drawn in a substitute), and of glyphs the
     /// font lacks (drawn from a fallback font): Document Setup's substitution highlights.
@@ -1876,6 +1881,33 @@ struct TextGeom {
     substituted_glyphs: BezPath,
     /// Inline graphics placed by the layout.
     inlines: Vec<vectorcraft_text::InlineGlyph>,
+}
+
+impl TextGeom {
+    /// The outlines run `i` draws: the glyphs of `all` it has, in their order. Kept once rather
+    /// than per run as well, which held every outline twice.
+    fn run(&self, i: usize) -> std::borrow::Cow<'_, BezPath> {
+        let els = self.all.elements();
+        if let [(r, 0, end)] = self.spans[..]
+            && r == i
+            && end == els.len()
+        {
+            return std::borrow::Cow::Borrowed(&self.all);
+        }
+        let mut p = BezPath::new();
+        for &(_, start, end) in self.spans.iter().filter(|s| s.0 == i) {
+            p.extend(els.get(start..end).unwrap_or_default().iter().copied());
+        }
+        std::borrow::Cow::Owned(p)
+    }
+
+    /// Approximate heap bytes, for the cache's budget.
+    fn bytes(&self) -> usize {
+        size_of::<Self>()
+            + [&self.all, &self.substituted_fonts, &self.substituted_glyphs].into_iter().map(lru::path_bytes).sum::<usize>()
+            + self.spans.len() * size_of::<(usize, usize, usize)>()
+            + self.inlines.len() * size_of::<vectorcraft_text::InlineGlyph>()
+    }
 }
 
 fn text_geom(t: &TextObject) -> TextGeom {
@@ -1889,8 +1921,21 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
     if let Some(xf) = snap {
         layout.snap_to_pixels(xf);
     }
-    let mut runs = vec![BezPath::new(); t.runs.len()];
     let mut all = BezPath::new();
+    let mut spans: Vec<(usize, usize, usize)> = vec![];
+    // Append `outline` to `all`, drawn by `run` when the text has that run.
+    let mut push = |all: &mut BezPath, run: usize, outline: &BezPath| {
+        let start = all.elements().len();
+        all.extend(outline.iter());
+        let end = all.elements().len();
+        if run >= t.runs.len() || start == end {
+            return;
+        }
+        match spans.last_mut() {
+            Some((r, _, e)) if *r == run && *e == start => *e = end,
+            _ => spans.push((run, start, end)),
+        }
+    };
     // Per run: is its family missing, and the face its glyphs should come from.
     let faces: Vec<(bool, Option<u32>)> = t
         .runs
@@ -1906,10 +1951,7 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
         .collect();
     let (mut substituted_fonts, mut substituted_glyphs) = (BezPath::new(), BezPath::new());
     for g in &layout.glyphs {
-        if let Some(r) = runs.get_mut(g.run) {
-            r.extend(g.outline.iter());
-        }
-        all.extend(g.outline.iter());
+        push(&mut all, g.run, &g.outline);
         let Some(&(missing, face)) = faces.get(g.run) else { continue };
         let target = if missing {
             &mut substituted_fonts
@@ -1925,12 +1967,9 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
     }
     // Underline and strikethrough bars, painted as their run's type is (#847).
     for (run, bar) in vectorcraft_text::decorations(&layout, db, t) {
-        if let Some(r) = runs.get_mut(run) {
-            r.extend(bar.iter());
-        }
-        all.extend(bar.iter());
+        push(&mut all, run, &bar);
     }
-    TextGeom { runs, all, bounds: layout.bounds, substituted_fonts, substituted_glyphs, inlines: layout.inlines }
+    TextGeom { all, spans, bounds: layout.bounds, substituted_fonts, substituted_glyphs, inlines: layout.inlines }
 }
 
 /// Document Setup's highlight behind substituted fonts and glyphs (screen only).

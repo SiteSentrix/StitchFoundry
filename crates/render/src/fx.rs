@@ -482,7 +482,7 @@ impl Renderer {
     fn fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>, cache: bool) -> Arc<Node> {
         let key = Arc::as_ptr(a) as usize;
         if cache
-            && let Some((node, art)) = self.fx_arts.get(&key)
+            && let Some((node, art)) = self.fx_arts.get(&key, self.stamp)
             && Arc::ptr_eq(node, a)
         {
             return art.clone();
@@ -516,10 +516,8 @@ impl Renderer {
             ..art
         });
         if cache {
-            if self.fx_arts.len() > 1024 {
-                self.fx_arts.clear();
-            }
-            self.fx_arts.insert(key, (a.clone(), art.clone()));
+            let bytes = crate::lru::node_bytes(&art);
+            self.fx_arts.insert(key, (a.clone(), art.clone()), bytes, self.stamp);
         }
         art
     }
