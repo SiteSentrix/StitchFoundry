@@ -1041,7 +1041,49 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
         Err(why) => {
             let mut all = warnings;
             all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
+            let mut visible = visible;
+            place_pages(&ai::artboards(&data), &mut visible);
             (visible, all)
+        }
+    }
+}
+
+/// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) moved, with
+/// the art on each, to where `boards` (the artboards of its editing data, in art space) are, so
+/// the artboards keep their layout when the layers can't be read (#1068). Left as they are unless
+/// there are as many artboards as pages, of the same sizes.
+fn place_pages(boards: &[Rect], doc: &mut Document) {
+    let (Some(first), true) = (boards.first(), boards.len() == doc.artboards.len() && boards.len() > 1) else { return };
+    if boards.iter().zip(&doc.artboards).any(|(b, a)| (b.width() - a.rect.width()).abs() > 0.5 || (b.height() - a.rect.height()).abs() > 0.5) {
+        return;
+    }
+    // Art space (y up) → the document, the first artboard's top left at the origin, as `read` has it.
+    let to_doc = Affine::new([1.0, 0.0, 0.0, -1.0, -first.x0, first.y1]);
+    let pages: Vec<Rect> = doc.artboards.iter().map(|a| a.rect).collect();
+    let moves: Vec<Vec2> = boards.iter().zip(&pages).map(|(b, page)| to_doc.transform_rect_bbox(*b).origin() - page.origin()).collect();
+    for layer in &mut doc.layers {
+        place_art(Arc::make_mut(layer), &pages, &moves);
+    }
+    for (a, v) in doc.artboards.iter_mut().zip(&moves) {
+        a.rect = a.rect + *v;
+    }
+}
+
+/// The objects in `layer` (and its sublayers) moved by the move of the page they are on.
+fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
+    let Some(children) = layer.children_mut() else { return };
+    for child in children {
+        if matches!(child.kind, NodeKind::Layer { .. }) {
+            place_art(Arc::make_mut(child), pages, moves);
+            continue;
+        }
+        let Some(r) = child.visual_bounds() else { continue };
+        // The page it is on: the one with most of it (pages keep only the art that reaches into
+        // them), else the nearest.
+        let fit = |p: &Rect| (p.intersect(r).area().max(0.0), -(p.center() - r.center()).hypot());
+        let Some((i, _)) = pages.iter().map(fit).enumerate().max_by(|(_, a), (_, b)| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1))) else { continue };
+        if let Some(v) = moves.get(i).filter(|v| **v != Vec2::ZERO) {
+            Arc::make_mut(child).transform(Affine::translate(*v), false);
         }
     }
 }
