@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -43,6 +43,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G1 Interaction fidelity
 
+- **Done (#1251):** Eyedropper source reads are independent of locks and isolation, including Shift/Shift+Alt and gradient stops. Source and selection preservation, unchanged Alt reverse/selection restrictions, hidden art and Undo/Redo have regression coverage. This addresses the reported behavior, with no new full-parity measurement.
 - **Done (#1253):** adding paint to an unpainted zero-width stroke restores the existing 1 pt default, including new-art defaults and Swap Fill/Stroke. The real Eyedropper inheritance sequence, targeted appearance items, preserved widths and Undo/Redo have regression coverage.
 - **Missing:** a tool-by-tool, panel-by-panel pass over modifiers, cursors, the Properties panel per context,
   isolation mode and small behaviours, against the public tool and shortcut documentation. Itemized in
@@ -206,6 +207,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged |
 | 2026-10-12 | minor | G11: Direct Selection segment Delete retains neighboring geometry and appearance (#1278); estimates unchanged |
 | 2026-10-12 | minor | G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged |
 | 2026-10-11 | minor | G15: large-selection edits, cached live effects and faster Pathfinder (#1173); a 25k-path perf run meets every budget; estimate unchanged |
