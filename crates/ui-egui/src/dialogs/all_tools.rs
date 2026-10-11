@@ -10,11 +10,16 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, icons, widgets};
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("All Tools").into(), body, ok: None, min_width: 560.0, ..DialogSpec::FORM };
+/// A compact drawer two tools wide, however wide the window (#1018); the dialog frame narrows it
+/// further in a narrow window.
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading: |_| tl!("All Tools").into(), body, ok: None, min_width: WIDTH, max_width: Some(WIDTH), ..DialogSpec::FORM };
 
 /// A tool's cell: its icon and name.
 const CELL: egui::Vec2 = vec2(176.0, 28.0);
 const ICON: f32 = 20.0;
+/// The drawer's width: two cells, the gap between them and room for the scroll bar.
+const WIDTH: f32 = 2.0 * CELL.x + 24.0;
 
 /// The heading a tool is listed under: its Basic toolbar group, else one for the tools only the
 /// Advanced toolbar shows.
@@ -106,5 +111,27 @@ mod tests {
         assert_eq!(&heads[..3], ["Select", "Shapes", "Draw"]);
         assert!(heads.contains(&"Symbols") && heads.contains(&"Graph"), "{heads:?}");
         assert!(!heads.contains(&"More"), "every tool has a named heading: {heads:?}");
+    }
+
+    /// The drawer stays two tools wide in a wide window and fits a narrow one (#1018).
+    #[test]
+    fn all_tools_dialog_has_a_bounded_width() {
+        use egui::{Pos2, RawInput, Rect};
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.ui.dialog = Some(Dialog::new("allTools", serde_json::json!({})));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        for width in [1280.0, 430.0] {
+            let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 900.0));
+            for _ in 0..6 {
+                let mut out = ctx.run_ui(RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+                out.textures_delta.clear();
+            }
+            let rect = ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", "allTools")))).expect("drawer is shown");
+            assert!(rect.width() <= width, "drawer exceeds viewport: {rect:?}");
+            assert!(rect.width() < 3.0 * CELL.x, "drawer wider than two tools: {rect:?}");
+        }
     }
 }
