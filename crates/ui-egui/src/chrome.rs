@@ -562,8 +562,12 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
                         egui::RichText::new(format!(
-                            "render {:.1} ms · ui {:.1} ms · {:.0} fps",
-                            app.perf.render_ms, app.perf.frame_ms, app.perf.fps
+                            "{} {:.1} ms · {} {:.1} ms · {:.0} fps",
+                            crate::i18n::tr_ctx(crate::i18n::current(), "diagnostics", "render"),
+                            app.perf.render_ms,
+                            crate::i18n::tr_ctx(crate::i18n::current(), "diagnostics", "ui"),
+                            app.perf.frame_ms,
+                            app.perf.fps
                         ))
                         .size(10.5)
                         .color(t.text_disabled),

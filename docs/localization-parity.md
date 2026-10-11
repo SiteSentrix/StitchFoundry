@@ -1,13 +1,14 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first per-language table, measured from the catalogs) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
 [target-app-parity.md](target-app-parity.md).
 
 **How it is measured:** rows with a translation in each `crates/ui-egui/src/i18n/<code>.tsv`, counted on
-origin/main `01e165af`. The reference is the French catalog, which the tests hold complete: 3,416 interface
+origin/main `01e165af`, except the Czech row updated against the current local catalog.
+The reference is the French catalog, which the tests hold complete: 3,416 interface
 strings (menus, command labels, `tl!` literals: panels, dialogs, tooltips, Preferences) plus 604 `@msg` status and
 error messages, 4,020 in all. A language's % is its rows over 4,020 (capped at 100% per part). The
 `complete_menus` flag and `COMPLETE_MESSAGES` list make `i18n::tests` fail if a complete language misses a
@@ -48,11 +49,25 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Italian | `it` | 4,011 / 4,020 | full |
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
-| Czech | `cs` | 679 / 4,020 (17%): every menu label | menus only |
+| Czech | `cs` | 4,411 catalog entries, including 636 `@msg` rows (measured locally 2026-10-11); menu, literal and message coverage enforced by tests | catalog complete; render-site gaps reduced; native review pending |
 
 Eleven non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
 interface languages (including Korean, Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
 editions with Arabic and Hebrew); it doesn't ship Hindi, Indonesian or Vietnamese.
+
+## Czech render-site follow-up
+
+The desktop and web file pickers look up filter labels at assignment time; format names and
+extensions stay unchanged. Diagnostics retain numeric values and units. New Document's suggested
+preset name uses `Preset {number}`. Contributor tooltips use named placeholders and Czech plurals;
+handles and chosen names remain unchanged. Gradient descriptions reuse `{kind} Gradient` with a
+contextual radial adjective. PDF/Print mark styles use `mark-style`, so `Japanese` displays as
+`Japonské` while the language name stays `Japonština`; their Summary uses the same context.
+
+The search placeholder, Home screen, toolbar/panel tooltips and Preferences already use lookups.
+No new `tl!("literal")` keys were needed: only `cs.tsv` adds 19 AI-draft rows and revises the gradient
+template. Other catalogs fall back to English for new variable/template lookups. Native review is
+still needed, and catalog coverage does not prove that every variable in the UI is translated.
 
 ## Not done in any language
 
@@ -63,4 +78,5 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | Czech render-site follow-up: file-dialog filters, diagnostics, preset numbering, contributor tooltips/plurals, gradient grammar and contextual printer mark styles; estimates unchanged |
 | 2026-10-10 | major | First per-language table, measured from the catalog row counts against the complete French catalog |

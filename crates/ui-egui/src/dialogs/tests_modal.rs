@@ -296,3 +296,11 @@ fn simplify_dialog_ok_keeps_exactly_one_undo_with_or_without_preview() {
         assert!(app.session.doc().unwrap().selection.anchors.is_empty());
     }
 }
+
+#[test]
+fn printer_mark_labels_are_distinct_from_language_names() {
+    let cs = crate::i18n::Lang::from_code("cs").unwrap();
+    assert_eq!(save_pdf::choice_label(cs, "marks.kind", "Japanese"), "Japonské");
+    assert_eq!(save_pdf::choice_label(cs, "language", "Japanese"), "Japonština");
+    assert_eq!(save_pdf::choice_label(crate::i18n::Lang::EN, "marks.kind", "Japanese"), "Japanese");
+}
