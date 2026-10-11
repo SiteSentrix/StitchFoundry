@@ -292,6 +292,42 @@ fn tick_values(lo: f64, hi: f64, step: f64) -> Vec<f64> {
 struct Gen<'a> {
     d: &'a mut Document,
     out: Vec<Arc<Node>>,
+    /// The labels' kept character styles.
+    styles: &'a vectorcraft_doc::LabelStyles,
+}
+
+/// What a graph label shows, for its kept character style.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Role {
+    Value,
+    Category,
+    Legend,
+}
+
+/// The character style labels of `role` are set in: the kept one, else 9 pt black.
+fn label_style(styles: &vectorcraft_doc::LabelStyles, role: Role) -> CharStyle {
+    let kept = match role {
+        Role::Value => &styles.values,
+        Role::Category => &styles.categories,
+        Role::Legend => &styles.legend,
+    };
+    let mut st = kept.clone().unwrap_or_else(|| CharStyle { size: LABEL_SIZE, fill: Paint::solid(Color::BLACK), ..CharStyle::default() });
+    // A file's style within the limits the Character controls keep to (it is copied onto every label).
+    let within = |v: f64, lo: f64, hi: f64, or: f64| if v.is_finite() { v.clamp(lo, hi) } else { or };
+    st.size = within(st.size, 0.1, 1296.0, LABEL_SIZE);
+    st.leading = st.leading.map(|l| within(l, 0.1, 5000.0, LABEL_SIZE * 1.2));
+    st.tracking = within(st.tracking, -1000.0, 10000.0, 0.0);
+    st.h_scale = within(st.h_scale, 1.0, 10000.0, 100.0);
+    st.v_scale = within(st.v_scale, 1.0, 10000.0, 100.0);
+    st.stroke_width = within(st.stroke_width, 0.0, 1000.0, 0.0);
+    st.font_family = st.font_family.chars().take(256).collect();
+    st.font_style = st.font_style.chars().take(256).collect();
+    st
+}
+
+/// How big labels of `role` are set: a kept style's size, else 9 pt. The labels' spacing follows it.
+fn label_size(styles: &vectorcraft_doc::LabelStyles, role: Role) -> f64 {
+    label_style(styles, role).size
 }
 
 impl Gen<'_> {
@@ -304,8 +340,8 @@ impl Gen<'_> {
         bp.line_to(b);
         self.path(PathData::from_bezpath(&bp), Paint::None, Paint::solid(Color::BLACK), 0.5)
     }
-    fn text(&mut self, at: Point, s: &str, justify: Justify) -> Arc<Node> {
-        let style = CharStyle { size: LABEL_SIZE, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    fn text(&mut self, role: Role, at: Point, s: &str, justify: Justify) -> Arc<Node> {
+        let style = label_style(self.styles, role);
         let mut t = TextObject::point(at, s, style);
         t.para.justify = justify;
         refresh_bounds(&mut t);
@@ -313,10 +349,10 @@ impl Gen<'_> {
     }
     /// A category or series label: a `|` in it starts a new line (Add graph labels). `middle`: the lines are centred
     /// on `at` (labels beside an axis or in a wedge) instead of running down from it.
-    fn label(&mut self, at: Point, s: &str, justify: Justify, middle: bool) -> Arc<Node> {
+    fn label(&mut self, role: Role, at: Point, s: &str, justify: Justify, middle: bool) -> Arc<Node> {
         let lines = s.split('|').count();
-        let at = if middle { Point::new(at.x, at.y - (lines - 1) as f64 * LABEL_SIZE * 1.2 / 2.0) } else { at };
-        self.text(at, &s.replace('|', "\n"), justify)
+        let at = if middle { Point::new(at.x, at.y - (lines - 1) as f64 * label_size(self.styles, role) * 1.2 / 2.0) } else { at };
+        self.text(role, at, &s.replace('|', "\n"), justify)
     }
     fn group(&mut self, name: &str, children: Vec<Arc<Node>>) -> Arc<Node> {
         let mut g = Node::group(self.d.alloc_id(), children);
@@ -379,8 +415,8 @@ fn shadow_of(d: &mut Document, n: &Node) -> Arc<Node> {
 }
 
 /// How wide label `s` is set (its widest line), without adding it to a document.
-fn label_width(s: &str) -> f64 {
-    let style = CharStyle { size: LABEL_SIZE, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+fn label_width(styles: &vectorcraft_doc::LabelStyles, s: &str) -> f64 {
+    let style = label_style(styles, Role::Legend);
     let mut t = TextObject::point(Point::ZERO, &s.replace('|', "\n"), style);
     refresh_bounds(&mut t);
     Node::new(NodeId(0), NodeKind::Text(Box::new(t))).geometric_bounds().map_or(0.0, |b| b.width())
@@ -468,7 +504,10 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         designs.clear();
     }
     let design = |s: usize| designs.get(s).and_then(Option::as_ref);
-    let mut b = Gen { d, out: vec![] };
+    let mut b = Gen { d, out: vec![], styles: &g.label_styles };
+    // The labels' sizes (9 pt unless formatted), which their spacing follows.
+    let (vs, cs, ls) =
+        (label_size(&g.label_styles, Role::Value), label_size(&g.label_styles, Role::Category), label_size(&g.label_styles, Role::Legend));
     let r = g.rect;
     let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
     let ncat = g.rows.len().max(1);
@@ -580,8 +619,10 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                             // Two thirds of the way out (of the ring, for a stacked pie).
                             let mid = a0 + sweep / 2.0;
                             let at = centre + dir(mid) * (hole + (rad - hole) * 0.62);
-                            let t = b.label(Point::new(at.x, at.y + LABEL_SIZE * 0.35), &label, Justify::Center, true);
-                            wedge_labels.push(if dark { recolour_text(&t, Color::WHITE) } else { t });
+                            let t = b.label(Role::Legend, Point::new(at.x, at.y + ls * 0.35), &label, Justify::Center, true);
+                            // White on a dark wedge, unless the legend labels were given a colour of their own.
+                            let own_colour = g.label_styles.legend.as_ref().is_some_and(|st| st.fill != Paint::solid(Color::BLACK));
+                            wedge_labels.push(if dark && !own_colour { recolour_text(&t, Color::WHITE) } else { t });
                         }
                     }
                     a0 += sweep;
@@ -590,11 +631,11 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     if stacked {
                         // Just above its own outline, all its lines, and drawn over the pies.
                         let lines = cat.split('|').count() as f64;
-                        let at = Point::new(centre.x, centre.y - rad - LABEL_SIZE * 0.4 - (lines - 1.0) * LABEL_SIZE * 1.2);
-                        let t = b.label(at, cat, Justify::Center, false);
+                        let at = Point::new(centre.x, centre.y - rad - cs * 0.4 - (lines - 1.0) * cs * 1.2);
+                        let t = b.label(Role::Category, at, cat, Justify::Center, false);
                         on_top.push(t);
                     } else {
-                        let t = b.label(Point::new(centre.x, centre.y + rad + LABEL_SIZE * 1.6), cat, Justify::Center, false);
+                        let t = b.label(Role::Category, Point::new(centre.x, centre.y + rad + cs * 1.6), cat, Justify::Center, false);
                         b.out.push(t);
                     }
                 }
@@ -612,8 +653,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             for c in 0..ncat {
                 axes.push(b.line(centre, at(c, hi)));
                 if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
-                    let p = at(c, hi) + (at(c, hi) - centre).normalize() * (LABEL_SIZE * 1.2);
-                    axes.push(b.label(Point::new(p.x, p.y + LABEL_SIZE * 0.35), cat, Justify::Center, true));
+                    let p = at(c, hi) + (at(c, hi) - centre).normalize() * (cs * 1.2);
+                    axes.push(b.label(Role::Category, Point::new(p.x, p.y + cs * 0.35), cat, Justify::Center, true));
                 }
             }
             for v in tick_values(lo, hi, step).into_iter().skip(1) {
@@ -738,11 +779,11 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                         let (prefix, suffix) = affixes.get(a).map_or(("", ""), |(p, s)| (p.as_str(), s.as_str()));
                         let label = format!("{prefix}{}{suffix}", fmt_value(v));
                         let t = if horizontal {
-                            b.text(Point::new(q, r.y1 + 4.0 + LABEL_SIZE * 1.1), &label, Justify::Center)
+                            b.text(Role::Value, Point::new(q, r.y1 + 4.0 + vs * 1.1), &label, Justify::Center)
                         } else if a == 1 {
-                            b.text(Point::new(r.x1 + 6.0, q + LABEL_SIZE * 0.35), &label, Justify::Left)
+                            b.text(Role::Value, Point::new(r.x1 + 6.0, q + vs * 0.35), &label, Justify::Left)
                         } else {
-                            b.text(Point::new(r.x0 - 6.0, q + LABEL_SIZE * 0.35), &label, Justify::Right)
+                            b.text(Role::Value, Point::new(r.x0 - 6.0, q + vs * 0.35), &label, Justify::Right)
                         };
                         axes.push(t);
                     }
@@ -802,9 +843,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 for c in 0..ncat {
                     if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
                         let t = if horizontal {
-                            b.label(Point::new(r.x0 - 6.0, cat_mid(c) + LABEL_SIZE * 0.35), cat, Justify::Right, true)
+                            b.label(Role::Category, Point::new(r.x0 - 6.0, cat_mid(c) + cs * 0.35), cat, Justify::Right, true)
                         } else {
-                            b.label(Point::new(cat_mid(c), r.y1 + LABEL_SIZE * 1.4), cat, Justify::Center, false)
+                            b.label(Role::Category, Point::new(cat_mid(c), r.y1 + cs * 1.4), cat, Justify::Center, false)
                         };
                         axes.push(t);
                     }
@@ -854,7 +895,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 while x <= xh + xs * 1e-6 {
                     let q = r.x0 + (x - xl) / (xh - xl) * r.width();
                     axes.push(b.line(Point::new(q, r.y1), Point::new(q, r.y1 + 4.0)));
-                    axes.push(b.text(Point::new(q, r.y1 + 4.0 + LABEL_SIZE * 1.1), &fmt_value(x), Justify::Center));
+                    axes.push(b.text(Role::Value, Point::new(q, r.y1 + 4.0 + vs * 1.1), &fmt_value(x), Justify::Center));
                     x += xs;
                 }
                 for (si, s) in (0..nser).step_by(2).enumerate() {
@@ -1001,7 +1042,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         let mut rows: Vec<Vec<(usize, String, f64)>> = vec![vec![]];
         let mut used = 0.0;
         for (s, label) in entries {
-            let w = 12.0 + label_width(&label) + 12.0;
+            let w = 12.0 + label_width(&g.label_styles, &label) + 12.0;
             // The gap after an entry may run past the plot's edge.
             if used + w - 12.0 > r.width() && rows.last().is_some_and(|row| !row.is_empty()) {
                 rows.push(vec![]);
@@ -1012,7 +1053,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 row.push((s, label, w));
             }
         }
-        let height = |row: &[(usize, String, f64)]| LABEL_SIZE * 1.8 * row.iter().map(|(_, l, _)| l.split('|').count()).max().unwrap_or(1) as f64;
+        let height = |row: &[(usize, String, f64)]| ls * 1.8 * row.iter().map(|(_, l, _)| l.split('|').count()).max().unwrap_or(1) as f64;
         // Above the plot and anything drawn over it (radar and stacked-pie labels).
         let top = b.out.iter().chain(on_top.iter()).filter_map(|n| n.geometric_bounds()).map(|bb| bb.y0).fold(r.y0, f64::min);
         let top = bars_reach.map_or(top, |b| top.min(b.y0));
@@ -1026,7 +1067,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 if let Some(items) = series.get_mut(*s) {
                     items.push(swatch);
                 }
-                labels.push(b.label(Point::new(x + 12.0, y + 7.5), label, Justify::Left, false));
+                labels.push(b.label(Role::Legend, Point::new(x + 12.0, y + 7.5 + (ls - LABEL_SIZE) * 0.35), label, Justify::Left, false));
                 x += w;
             }
             y += height(row);
@@ -1039,16 +1080,16 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             let label = if g.kind == GraphKind::Scatter { series_label(s * 2) } else { series_label(s) };
             let row_y = y;
             if blank_label(&label) {
-                y += LABEL_SIZE * 1.8;
+                y += ls * 1.8;
                 continue;
             }
-            y += LABEL_SIZE * 1.8 * label.split('|').count() as f64;
+            y += ls * 1.8 * label.split('|').count() as f64;
             let y = row_y;
             // Series drawn with markers show their marker design in the legend.
             let marked = matches!(g.kind, GraphKind::Scatter | GraphKind::Radar) || kind(s) == GraphKind::Line;
             let paint = mark(s, true, Paint::None, 0.0);
             items.push(b.marker(design(s).filter(|_| marked), Rect::new(x, y, x + 8.0, y + 8.0), paint));
-            labels.push(b.label(Point::new(x + 12.0, y + 7.5), &label, Justify::Left, false));
+            labels.push(b.label(Role::Legend, Point::new(x + 12.0, y + 7.5 + (ls - LABEL_SIZE) * 0.35), &label, Justify::Left, false));
         }
     }
     // Areas at the back, lines and points in front of columns; one graph type keeps the series order.
@@ -1287,6 +1328,71 @@ fn switch_xy(g: &mut GraphSpec) {
         g.series.pop();
     }
     g.set_cells(cells);
+}
+
+/// Every generated label of the document's graphs: its graph and what it shows. Inside a graph's Axes group the
+/// value axis numbers come first and the category labels (one per category with a label) last; a scatter graph's
+/// are all numbers, a radar graph's all categories. Legend groups hold legend labels, and a pie graph's own texts
+/// name its pies.
+fn graph_labels(doc: &Document) -> HashMap<NodeId, (NodeId, Role)> {
+    let mut out = HashMap::new();
+    doc.walk(|n| {
+        let Some(g) = n.graph.as_deref() else { return };
+        for c in n.children().into_iter().flatten() {
+            match (&c.kind, c.name.as_deref(), c.series_index) {
+                (NodeKind::Text(_), _, _) if g.kind == GraphKind::Pie => {
+                    out.insert(c.id, (n.id, Role::Category));
+                }
+                (NodeKind::Group { .. }, Some("Legend"), None) => {
+                    for t in c.children().into_iter().flatten().filter(|t| matches!(t.kind, NodeKind::Text(_))) {
+                        out.insert(t.id, (n.id, Role::Legend));
+                    }
+                }
+                (NodeKind::Group { .. }, Some("Axes"), None) => {
+                    let texts: Vec<NodeId> =
+                        c.children().into_iter().flatten().filter(|t| matches!(t.kind, NodeKind::Text(_))).map(|t| t.id).collect();
+                    let cats = match g.kind {
+                        GraphKind::Scatter => 0,
+                        GraphKind::Radar => texts.len(),
+                        _ => g.categories.iter().take(g.rows.len().max(1)).filter(|c| !c.is_empty()).count().min(texts.len()),
+                    };
+                    for (i, t) in texts.iter().enumerate() {
+                        out.insert(*t, (n.id, if i + cats >= texts.len() { Role::Category } else { Role::Value }));
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+    out
+}
+
+/// Keep a formatting change made to graph labels `ids` (Character or Appearance, on the whole graph or on labels
+/// picked with Group Selection) for every label of their kind: `change` is applied to the kind's kept style (or
+/// the default one), so the labels look the same when the graph is drawn again. Called inside the same edit, so
+/// they undo together.
+pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) {
+    if ids.is_empty() {
+        return;
+    }
+    let labels = graph_labels(doc);
+    if labels.is_empty() {
+        return;
+    }
+    let mut kinds: Vec<(NodeId, Role)> = ids.iter().filter_map(|id| labels.get(id).copied()).collect();
+    kinds.sort_by_key(|(g, r)| (g.0, *r as u8));
+    kinds.dedup();
+    for (graph, role) in kinds {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.graph.as_deref_mut()) else { continue };
+        let mut style = label_style(&spec.label_styles, role);
+        change(&mut style);
+        let slot = match role {
+            Role::Value => &mut spec.label_styles.values,
+            Role::Category => &mut spec.label_styles.categories,
+            Role::Legend => &mut spec.label_styles.legend,
+        };
+        *slot = Some(style);
+    }
 }
 
 fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1788,7 +1894,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
 mod tests {
     use serde_json::json;
     use vectorcraft_color::Paint;
-    use vectorcraft_doc::{GraphKind, GraphSpec, NodeKind};
+    use vectorcraft_doc::{CharStyle, GraphKind, GraphSpec, NodeKind};
 
     use crate::{NodeId, Session};
 
@@ -3642,5 +3748,183 @@ mod tests {
         let line = graph(&mut s, "line");
         let v = s.execute("graph.setType", &json!({"id": line.0})).unwrap();
         assert!(v.get("firstRowInFront").is_none() && v.get("filledLines").is_some());
+    }
+
+    /// The Axes and Legend texts with their size and fill, after the graph is drawn again.
+    fn label_looks(s: &mut Session, id: NodeId) -> Vec<(String, f64, String)> {
+        s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let mut out = vec![];
+        for g in ["Axes", "Legend"] {
+            for c in group(&n, g).children().unwrap() {
+                if let NodeKind::Text(t) = &c.kind {
+                    let st = &t.runs[0].style;
+                    out.push((t.plain_text(), st.size, st.fill.color().map(|c| c.to_hex()).unwrap_or_default()));
+                }
+            }
+        }
+        out
+    }
+
+    fn text_id(s: &Session, id: NodeId, grp: &str, text: &str) -> NodeId {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, grp).children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == text)).unwrap().id
+    }
+
+    #[test]
+    fn formatting_the_whole_graphs_text_survives_it_being_drawn_again() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 12})).unwrap();
+        let looks = label_looks(&mut s, id);
+        assert!(looks.iter().all(|(_, size, _)| (*size - 12.0).abs() < 1e-6), "{looks:?}");
+        let g = spec(&s, id);
+        assert!(g.label_styles.values.is_some() && g.label_styles.categories.is_some() && g.label_styles.legend.is_some());
+        // One undo takes the data change back, the next the formatting and the kept styles together.
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(spec(&s, id).label_styles.values.is_some());
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(spec(&s, id).label_styles, vectorcraft_doc::LabelStyles::default());
+    }
+
+    #[test]
+    fn formatting_one_label_keeps_that_kind_of_label() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        // A legend label (Group Selection), recoloured with the Character panel's fill.
+        let l = text_id(&s, id, "Legend", "2025");
+        s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"fill": "#ff0000"})).unwrap();
+        // A category label, resized.
+        let c = text_id(&s, id, "Axes", "Q2");
+        s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 14})).unwrap();
+        // A value axis number, painted with the Appearance fill.
+        let v = text_id(&s, id, "Axes", "4");
+        s.execute("paint.setFill", &json!({"ids": [v.0], "color": "#0000ff"})).unwrap();
+        let looks = label_looks(&mut s, id);
+        let look = |t: &str| looks.iter().find(|(x, _, _)| x == t).cloned().unwrap();
+        assert_eq!(look("2024"), ("2024".into(), 9.0, "#ff0000".into()), "every legend label");
+        assert_eq!(look("Q1").1, 14.0, "every category label");
+        assert_eq!(look("Q1").2, "#000000");
+        assert_eq!(look("0").2, "#0000ff", "every value axis number");
+        assert_eq!(look("0").1, 9.0);
+        // Kept through save and open; nothing written when unset.
+        let path = vectorcraft_testkit::temp_dir("graph-labels").join("labels.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        assert_eq!(spec(&s, id).label_styles.categories.as_ref().unwrap().size, 14.0);
+        assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("labelStyles").is_none());
+    }
+
+    #[test]
+    fn pie_names_and_wedge_labels_keep_their_style() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b\nP1,1,2");
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let name = n.children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == "P1")).unwrap().id;
+        s.execute("select.set", &json!({"ids": [name.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 16})).unwrap();
+        assert_eq!(spec(&s, id).label_styles.categories.as_ref().unwrap().size, 16.0);
+        s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+        let w = text_id(&s, id, "Legend", "a");
+        s.execute("select.set", &json!({"ids": [w.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"fill": "#00ff00"})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[3, 1]]})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let fills: Vec<String> = group(&n, "Legend")
+            .children()
+            .unwrap()
+            .iter()
+            .filter_map(|c| match &c.kind {
+                NodeKind::Text(t) => t.runs[0].style.fill.color().map(|c| c.to_hex()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(fills, ["#00ff00", "#00ff00"], "the kept fill, also on the dark wedge");
+    }
+
+    #[test]
+    fn labels_are_told_apart_by_where_they_come_not_by_their_text() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        // Categories named like the value axis numbers.
+        let id = make(&mut s, "column", ",a\n2,1\n4,3\n6,5");
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let texts: Vec<(NodeId, String)> = group(&n, "Axes")
+            .children()
+            .unwrap()
+            .iter()
+            .filter_map(|c| match &c.kind {
+                NodeKind::Text(t) => Some((c.id, t.plain_text())),
+                _ => None,
+            })
+            .collect();
+        // The value axis "2" comes before the category "2".
+        let value_two = texts.iter().find(|(_, t)| t == "2").unwrap().0;
+        s.execute("select.set", &json!({"ids": [value_two.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 7})).unwrap();
+        let g = spec(&s, id);
+        assert!(g.label_styles.values.is_some() && g.label_styles.categories.is_none(), "{:?}", g.label_styles);
+        // A scatter graph's numbers are all values.
+        let sc = graph(&mut s, "scatter");
+        s.execute("select.set", &json!({"ids": [sc.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 8})).unwrap();
+        let g = spec(&s, sc);
+        assert!(g.label_styles.values.is_some() && g.label_styles.categories.is_none());
+        // Part of a label's text: nothing kept.
+        let col = graph(&mut s, "column");
+        let q = text_id(&s, col, "Axes", "Q2");
+        s.execute("select.set", &json!({"ids": [q.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 20, "start": 0, "end": 1})).unwrap();
+        assert!(spec(&s, col).label_styles.categories.is_none());
+        // Only the change is kept: a size given to the whole graph leaves the label colours as they were.
+        let pie = make(&mut s, "pie", ",a,b\nP,1,1");
+        s.execute("graph.setType", &json!({"id": pie.0, "pieLegend": "wedges"})).unwrap();
+        s.execute("select.set", &json!({"ids": [pie.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 11})).unwrap();
+        let legend = spec(&s, pie).label_styles.legend.unwrap();
+        assert_eq!((legend.size, legend.fill.color().unwrap().to_hex()), (11.0, "#000000".into()));
+        s.execute("graph.setData", &json!({"id": pie.0, "rows": [[2, 1]]})).unwrap();
+        let n = s.doc().unwrap().doc.node(pie).unwrap().clone();
+        let fill = match &group(&n, "Legend").children().unwrap()[0].kind {
+            NodeKind::Text(t) => t.runs[0].style.fill.color().unwrap().to_hex(),
+            _ => panic!(),
+        };
+        assert_eq!(fill, "#ffffff", "still white on the black wedge");
+    }
+
+    #[test]
+    fn character_formats_are_kept_and_bigger_labels_space_out() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("text.setFormat", &json!({"underline": true, "baselineShift": 1})).unwrap();
+        let g = spec(&s, id);
+        let st = g.label_styles.legend.unwrap();
+        assert!(st.underline && (st.baseline_shift - 1.0).abs() < 1e-9);
+        // 20 pt legend labels: the rows move apart so they don't overlap.
+        s.execute("text.setStyle", &json!({"size": 20})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": ",a,b,c\nQ1,1,2,3"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let mut rows: Vec<_> = group(&n, "Legend").children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        rows.sort_by(|a, b| a.y0.total_cmp(&b.y0));
+        assert!(rows.windows(2).all(|w| w[1].y0 >= w[0].y1 - 1e-6), "{rows:?}");
+        // A file's absurd style is kept within the Character limits.
+        let mut g = spec(&s, id);
+        g.label_styles.values = Some(CharStyle { size: 1e300, tracking: f64::INFINITY, ..CharStyle::default() });
+        let mut d = (*s.doc().unwrap().doc).clone();
+        let art = super::generate(&mut d, &g);
+        let axes = art.iter().find(|n| n.name.as_deref() == Some("Axes")).unwrap();
+        for t in axes.children().unwrap() {
+            if let NodeKind::Text(t) = &t.kind {
+                assert!(t.runs[0].style.size <= 1296.0 && t.runs[0].style.tracking.is_finite());
+            }
+        }
     }
 }

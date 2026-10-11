@@ -287,52 +287,54 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         }),
     };
     let range = super::typecmd::TextRange::parse(p, C)?;
+    // The character attributes, given the baseline shift and horizontal scale in the type's own units.
+    let chars = |st: &mut vectorcraft_doc::CharStyle, baseline_shift: Option<f64>, h_scale: Option<f64>| {
+        if let Some(k) = kerning {
+            st.kerning = k;
+        }
+        if let Some(v) = baseline_shift {
+            st.baseline_shift = v;
+        }
+        if let Some(v) = h_scale {
+            st.h_scale = v;
+        }
+        if let Some(v) = num("vScale") {
+            st.v_scale = v.clamp(1.0, 10000.0);
+        }
+        if let Some(v) = num("rotation") {
+            st.rotation = ((v + 180.0).rem_euclid(360.0)) - 180.0;
+        }
+        if let Some(v) = flag("underline") {
+            st.underline = v;
+        }
+        if let Some(v) = flag("strikethrough") {
+            st.strikethrough = v;
+        }
+        if let Some(v) = flag("allCaps") {
+            st.all_caps = v;
+        }
+        if let Some(v) = position {
+            st.position = v;
+        }
+        if let Some(v) = small_caps {
+            st.small_caps = v;
+        }
+        if let Some(v) = char_align {
+            st.char_align = v;
+        }
+        if let Some(v) = digits {
+            st.digits = v;
+        }
+        if let Some(v) = flag("proportionalMetrics") {
+            st.proportional_metrics = v;
+        }
+    };
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let baseline_shift = num("baselineShift").map(|v| super::typecmd::local_type_value(t, v, (-1296.0, 1296.0), false, C)).transpose()?;
             let h_scale = num("hScale").map(|v| super::typecmd::local_type_value(t, v, (1.0, 10000.0), true, C)).transpose()?;
-            super::typecmd::style_chars(t, range, |st| {
-                if let Some(k) = kerning {
-                    st.kerning = k;
-                }
-                if let Some(v) = baseline_shift {
-                    st.baseline_shift = v;
-                }
-                if let Some(v) = h_scale {
-                    st.h_scale = v;
-                }
-                if let Some(v) = num("vScale") {
-                    st.v_scale = v.clamp(1.0, 10000.0);
-                }
-                if let Some(v) = num("rotation") {
-                    st.rotation = ((v + 180.0).rem_euclid(360.0)) - 180.0;
-                }
-                if let Some(v) = flag("underline") {
-                    st.underline = v;
-                }
-                if let Some(v) = flag("strikethrough") {
-                    st.strikethrough = v;
-                }
-                if let Some(v) = flag("allCaps") {
-                    st.all_caps = v;
-                }
-                if let Some(v) = position {
-                    st.position = v;
-                }
-                if let Some(v) = small_caps {
-                    st.small_caps = v;
-                }
-                if let Some(v) = char_align {
-                    st.char_align = v;
-                }
-                if let Some(v) = flag("proportionalMetrics") {
-                    st.proportional_metrics = v;
-                }
-                if let Some(v) = digits {
-                    st.digits = v;
-                }
-            });
+            super::typecmd::style_chars(t, range, |st| chars(st, baseline_shift, h_scale));
             let span = super::typecmd::para_span(range, t);
             t.edit_paras(span, |para| {
                 if let Some(v) = num("leftIndent") {
@@ -373,6 +375,12 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             });
             super::typecmd::refresh_bounds(t);
+        }
+        // Graph labels keep a change made to all of their text through the graph being drawn again.
+        if range.is_none() {
+            let shift = num("baselineShift").map(|v| v.clamp(-1296.0, 1296.0));
+            let scale = num("hScale").map(|v| v.clamp(1.0, 10000.0));
+            super::graph::capture_label_styles(d, &ids, &|st| chars(st, shift, scale));
         }
         Ok(())
     })?;

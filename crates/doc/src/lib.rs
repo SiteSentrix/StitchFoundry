@@ -70,7 +70,8 @@ pub use appearance::{
 pub use assets::ExportAsset;
 pub use corners::LiveCorners;
 pub use graph::{
-    GraphDesign, GraphKind, GraphSpec, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
+    GraphDesign, GraphKind, GraphSpec, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, PiePosition, PieSort, SeriesPaint, TickLength,
+    ValueAxisSide,
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
