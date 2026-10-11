@@ -2697,8 +2697,9 @@ OpenType `palt` feature; glyphs the font doesn't re-space keep their full width.
 the proportional heights of the font's `vpal` feature (the glyphs are shaped top to bottom for it) and move with them;
 a font without vertical metrics keeps its cells. Line-end Punctuation Half Width then takes nothing more off the
 punctuation `palt` or `vpal` re-spaced (the opening bracket at a line's start, consecutive punctuation, the closing
-mark at a line's end); punctuation left full width is trimmed as before. Off by default and saved only when on. One
-undo step.
+mark at a line's end); punctuation left full width is trimmed as before. With automatic kerning the font's kerning
+for the re-spaced glyphs comes too: `apkn` with `palt`, and `vkrn` and `vapk` with `vpal` (vertical type is otherwise
+not kerned). Off by default and saved only when on. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
