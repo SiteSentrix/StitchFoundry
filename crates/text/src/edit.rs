@@ -190,6 +190,21 @@ pub fn next_char(s: &str, i: usize) -> usize {
     s[i..].chars().next().map(|c| i + c.len_utf8()).unwrap_or(s.len())
 }
 
+/// The start of the grapheme cluster before `i` (Left arrow): a Thai consonant with its vowel and
+/// tone marks, an accented letter or an emoji sequence is passed over whole.
+pub fn prev_cluster(s: &str, i: usize) -> usize {
+    use unicode_segmentation::GraphemeCursor;
+    let i = floor_char(s, i);
+    GraphemeCursor::new(i, s.len(), true).prev_boundary(s, 0).ok().flatten().unwrap_or(0)
+}
+
+/// The end of the grapheme cluster at `i` (Right arrow, Delete): see [`prev_cluster`].
+pub fn next_cluster(s: &str, i: usize) -> usize {
+    use unicode_segmentation::GraphemeCursor;
+    let i = floor_char(s, i);
+    GraphemeCursor::new(i, s.len(), true).next_boundary(s, 0).ok().flatten().unwrap_or(s.len())
+}
+
 fn is_word_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '\'' || c == '’'
 }

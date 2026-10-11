@@ -1,5 +1,6 @@
 # Type parity
 
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (the caret steps over whole clusters such as Thai consonants with their marks; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
@@ -37,6 +38,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Hidden characters (Show Hidden Characters) | done | `type.hiddenCharacters` |
 | Spell check (Check Spelling, Auto Spell Check, custom dictionary) | missing | menu stubs; needs an openly licensed dictionary |
 | Smart Punctuation, Change Case, Find & Replace | done | |
+| Caret: the arrows and Delete step over whole clusters (Thai consonant with its marks, combining accents, emoji); Backspace removes one character | done | |
 | Touch Type tool | missing | listed in the toolbar, not implemented |
 | Retype (identify fonts in outlines/images) | missing | Illustrator's uses a cloud model |
 | Snap to Glyph | missing | menu stub |
@@ -52,6 +54,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | The Type tool's arrows and Delete move by grapheme cluster, never between a Thai consonant and its vowel or tone marks; score unchanged (estimated) |
 | 2026-10-11 | minor | Thai (Lao, Khmer, Myanmar) missing from the font in use falls back to an installed font made for the script instead of whichever face covering it loaded first; score unchanged (estimated) |
 | 2026-10-11 | minor | Proportional Metrics done: `palt` in horizontal type, `vpal` in vertical type (#966, #1082); ruby and manual tate-chu-yoko still missing |
 | 2026-10-10 | minor | #1034: transformed character controls and regression coverage; preserving group font sizes remains a separate enhancement. Scores/hours unchanged at this rounding. |
