@@ -4166,6 +4166,8 @@ lighting	Light	Світло
 @msg	unsupported native docking operation	Непідтримувана власна операція прикріплення
 	Linux Display Server	Дисплейний сервер Linux
 	X11 (XWayland)	X11 (XWayland)
+	Ruler Origin	Початок координат лінійок
+	Reset Ruler Origin	Скинути початок координат лінійок
 	Artistic	Художні
 	Film Grain…	Зернистість плівки…
 	Highlight Area	Область світлих тонів

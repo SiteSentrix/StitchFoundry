@@ -313,15 +313,21 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     && ui.available_width() >= INLINE_TRANSFORM_WIDTH
                 {
                     let c = b.center();
+                    let origin = app.ruler_origin();
                     let link = app.session.prefs.constrain_proportions;
-                    for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", b.rect.width()), ("height", "H:", b.rect.height())] {
+                    for (k, lbl, v, offset) in [
+                        ("x", "X:", c.x, origin.x),
+                        ("y", "Y:", c.y, origin.y),
+                        ("width", "W:", b.rect.width(), 0.0),
+                        ("height", "H:", b.rect.height(), 0.0),
+                    ] {
                         // The W/H link sits between W and H.
                         if k == "height" {
                             crate::panels::transform::constrain_link(app, ui);
                         }
                         widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
-                        if let Some(nv) = widgets::num_field(ui, ("cb", k), Some(v), units, 80.0) {
-                            app.run("object.setBounds", json!({k: nv, "reference": 4, "proportional": link})).ok();
+                        if let Some(nv) = widgets::num_field(ui, ("cb", k), Some(v - offset), units, 80.0) {
+                            app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link})).ok();
                         }
                     }
                 }

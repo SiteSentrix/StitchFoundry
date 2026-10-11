@@ -551,6 +551,9 @@ pub struct Document {
     pub template: bool,
     #[serde(default)]
     pub units: Unit,
+    /// The rulers' zero point in document coordinates. Moving it changes measurements, never art.
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub ruler_origin: Point,
     #[serde(default)]
     pub color_mode: ColorMode,
     pub artboards: Vec<Artboard>,
@@ -706,6 +709,7 @@ impl Document {
             title: "Untitled-1".into(),
             template: false,
             units: Unit::Points,
+            ruler_origin: Point::ZERO,
             color_mode: mode,
             artboards: vec![Artboard {
                 id: 1,

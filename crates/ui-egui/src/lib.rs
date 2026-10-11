@@ -122,6 +122,8 @@ mod tests_recovery;
 #[cfg(test)]
 mod tests_removeanchors;
 #[cfg(test)]
+mod tests_ruler_origin;
+#[cfg(test)]
 mod tests_save;
 #[cfg(test)]
 mod tests_saveext;
@@ -550,6 +552,17 @@ impl VectorcraftApp {
 
     pub fn view(&self) -> Option<&View> {
         self.session.active_index().and_then(|i| self.views.get(i))
+    }
+
+    /// The zero point shown by rulers and position fields; command coordinates stay absolute.
+    pub(crate) fn ruler_origin(&self) -> vectorcraft_geom::Point {
+        let origin = self.session.active().map_or(vectorcraft_geom::Point::ZERO, |d| d.doc.ruler_origin);
+        // An untrusted file cannot make the ruler's tick loop or position fields overflow.
+        if origin.is_finite() && origin.x.abs() <= vectorcraft_engine::MAX_COORD && origin.y.abs() <= vectorcraft_engine::MAX_COORD {
+            origin
+        } else {
+            vectorcraft_geom::Point::ZERO
+        }
     }
     pub fn view_mut(&mut self) -> Option<&mut View> {
         self.sync_views();

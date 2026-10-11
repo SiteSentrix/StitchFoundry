@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, Unit};
-use vectorcraft_geom::{Affine, Vec2};
+use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::clipboard::SwatchChoices;
 use super::*;
@@ -36,6 +36,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "{units: \"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Pixels\"|\"Feet & Inches\"|\"Meters\"|\"Yards\"|\"Feet\"} the document's units: every length the UI shows and reads (General)",
             has_doc,
             set_units
+        ),
+        cmd!(query "document.rulerOrigin", "Ruler Origin", [], None, "{} → {x, y} the rulers' zero point, in absolute document points", has_doc, |s, _| Ok(json!(s.doc()?.doc.ruler_origin))),
+        cmd!(
+            "document.setRulerOrigin",
+            "Ruler Origin",
+            [],
+            None,
+            "{x, y} set the rulers' zero point in absolute document points; art, guides and command coordinates stay in place",
+            has_doc,
+            set_ruler_origin
+        ),
+        cmd!(
+            "document.resetRulerOrigin",
+            "Reset Ruler Origin",
+            [],
+            None,
+            "{artboard?: index=0} reset the rulers' zero point to that artboard's top-left corner",
+            has_doc,
+            reset_ruler_origin
         ),
         cmd!("edit.undo", "Undo", ["Edit"], Some("Cmd+Z"), "{}", can_undo, undo),
         cmd!("edit.redo", "Redo", ["Edit"], Some("Cmd+Shift+Z"), "{}", can_redo, redo),
@@ -178,6 +197,35 @@ fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
     let u = str_param(p, "units").and_then(Unit::named).ok_or_else(|| bad("document.setUnits", "unknown units"))?;
     s.set_document_units(u)?;
     ok()
+}
+
+fn set_ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "document.setRulerOrigin";
+    let origin = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
+    change_ruler_origin(s, origin, "Ruler Origin")
+}
+
+fn reset_ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "document.resetRulerOrigin";
+    let index = match p.get("artboard") {
+        None => 0,
+        Some(v) => v.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| bad(C, "index out of range"))?,
+    };
+    let ab = s.doc()?.doc.artboards.get(index).ok_or_else(|| bad(C, "index out of range"))?;
+    change_ruler_origin(s, Point::new(ab.rect.x0, ab.rect.y0), "Reset Ruler Origin")
+}
+
+fn change_ruler_origin(s: &mut Session, origin: Point, label: &str) -> Result<Value> {
+    if !origin.is_finite() || origin.x.abs() > crate::MAX_COORD || origin.y.abs() > crate::MAX_COORD {
+        return Err(EngineError::Other("result would exceed the canvas (coordinates out of range)".into()));
+    }
+    if s.doc()?.doc.ruler_origin != origin {
+        s.edit(label, |d, _| {
+            d.ruler_origin = origin;
+            Ok(())
+        })?;
+    }
+    Ok(json!(origin))
 }
 
 /// A typing session in progress (the Type tool previews the whole session as one interaction).

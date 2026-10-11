@@ -4194,6 +4194,8 @@ lighting	Light	Lumière
 @msg	unsupported native docking operation	Opération native d’ancrage non prise en charge
 	Linux Display Server	Serveur d’affichage Linux
 	X11 (XWayland)	X11 (XWayland)
+	Ruler Origin	Origine des règles
+	Reset Ruler Origin	Réinitialiser l’origine des règles
 	Artistic	Artistique
 	Film Grain…	Grain photographique…
 	Highlight Area	Zone des tons clairs

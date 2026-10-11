@@ -4180,6 +4180,8 @@ lighting	Light	ライト
 @msg	unsupported native docking operation	ネイティブドッキング操作は未対応です
 	Linux Display Server	Linux ディスプレイサーバー
 	X11 (XWayland)	X11 (XWayland)
+	Ruler Origin	定規の原点
+	Reset Ruler Origin	定規の原点をリセット
 	Artistic	アーティスティック
 	Film Grain…	フィルム粒子…
 	Highlight Area	ハイライト領域

@@ -4198,6 +4198,8 @@ effect	Regular	Pravidelný
 @msg	missing panel layout	chybí rozložení panelů
 @msg	unsupported native docking operation	nepodporovaná nativní operace ukotvení
 @msg	this kind of brush has no options dialog yet	tento druh štětce zatím nemá dialogové okno možností
+	Ruler Origin	Počátek pravítek
+	Reset Ruler Origin	Obnovit počátek pravítek
 	Column Width:	Šířka sloupce:
 	Import Data…	Importovat data…
 	Number of Decimals:	Počet desetinných míst:
