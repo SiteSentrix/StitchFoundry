@@ -4178,3 +4178,52 @@ effect	Regular	Pravidelný
 @msg	missing panel layout	chybí rozložení panelů
 @msg	unsupported native docking operation	nepodporovaná nativní operace ukotvení
 @msg	this kind of brush has no options dialog yet	tento druh štětce zatím nemá dialogové okno možností
+	Phone 393×852	Telefon 393×852
+	Phone 430×932	Telefon 430×932
+	Phone 360×800	Telefon 360×800
+	Phone 412×915	Telefon 412×915
+	Phone 375×667	Telefon 375×667
+	Tablet 768×1024	Tablet 768×1024
+	Tablet 820×1180	Tablet 820×1180
+	Tablet 834×1194	Tablet 834×1194
+	Tablet 1024×1366	Tablet 1024×1366
+	Tablet 800×1280	Tablet 800×1280
+	Watch 184×224	Hodinky 184×224
+	Watch 198×242	Hodinky 198×242
+	Web 1600×900	Web 1600×900
+	Web 1440×900	Web 1440×900
+	Web 1366×768	Web 1366×768
+	Web 1280×800	Web 1280×800
+	Web 1024×768	Web 1024×768
+	Legal	Legal
+	Tabloid	Tabloid
+	A3	A3
+	A4	A4
+	A5	A5
+	B4	B4
+	B5	B5
+	HDTV 1080p	HDTV 1080p
+	HDTV 720p	HDTV 720p
+	4K UHD	4K UHD
+	8K UHD	8K UHD
+	2K Cinema	Kino 2K
+	4K Cinema	Kino 4K
+	Greeting Card	Blahopřání
+	Square 8 × 8 in	Čtverec 8 × 8 in
+	Poster 18 × 24 in	Plakát 18 × 24 in
+	Poster 24 × 36 in	Plakát 24 × 36 in
+	Logo 1000×1000	Logo 1000×1000
+	Business Card 3.5 × 2 in	Vizitka 3,5 × 2 in
+	Business Card 85 × 55 mm	Vizitka 85 × 55 mm
+	Letterhead Letter	Hlavičkový papír Letter
+	Letterhead A4	Hlavičkový papír A4
+	Envelope DL	Obálka DL
+	Envelope #10	Obálka #10
+	Social Portrait Post 1080×1350	Portrétní příspěvek pro sociální sítě 1080×1350
+	Social Landscape Post 1200×630	Příspěvek na šířku pro sociální sítě 1200×630
+	Social Story 1080×1920	Příběh pro sociální sítě 1080×1920
+	Social Tall Post 1000×1500	Vysoký příspěvek pro sociální sítě 1000×1500
+	Profile Cover 1500×500	Úvodní obrázek profilu 1500×500
+	Page Cover 1640×624	Úvodní obrázek stránky 1640×624
+	Video Banner 2560×1440	Banner videa 2560×1440
+	Video Thumbnail 1280×720	Miniatura videa 1280×720
