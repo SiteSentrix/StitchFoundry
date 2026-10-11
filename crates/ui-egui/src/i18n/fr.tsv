@@ -2145,6 +2145,9 @@
 	Rectangle: Sunshine	Rectangle : soleil
 	Rectangle…	Rectangle…
 	Rectangular Grid	Grille rectangulaire
+# Rectangular Grid click dialog.
+	Horizontal Dividers:	Séparations horizontales :
+	Vertical Dividers:	Séparations verticales :
 	Rectangular Grid Tool	Outil Grille rectangulaire
 	Red	Rouge
 	Redefine Character Style	Redéfinir le style de caractère

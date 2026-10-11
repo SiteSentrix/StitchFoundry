@@ -2140,6 +2140,9 @@
 	Rectangle: Sunshine	Прямокутник: Сонце
 	Rectangle…	Прямокутник…
 	Rectangular Grid	Прямокутна сітка
+# Rectangular Grid click dialog.
+	Horizontal Dividers:	Горизонтальні розділювачі:
+	Vertical Dividers:	Вертикальні розділювачі:
 	Rectangular Grid Tool	Інструмент «Прямокутна сітка»
 	Red	Червоний
 	Redefine Character Style	Перевизначити стиль символу

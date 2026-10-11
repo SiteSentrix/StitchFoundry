@@ -2097,6 +2097,9 @@
 	Rectangle: Sunshine	Rechteck: Sonnenschein
 	Rectangle…	Rechteck…
 	Rectangular Grid	Rechteckiges Raster
+# Rectangular Grid click dialog.
+	Horizontal Dividers:	Horizontale Trennlinien:
+	Vertical Dividers:	Vertikale Trennlinien:
 	Rectangular Grid Tool	Rechteckiges-Raster-Werkzeug
 	Red	Rot
 	Redefine Character Style	Zeichenformat neu definieren
