@@ -205,7 +205,8 @@ pub fn generic_chart() -> ThreadChart {
 }
 
 /// Brother PEC palette (index 0 is a placeholder; indices 1–64 are the machine colours).
-/// Used by PES/PEC writers, which store palette indices rather than RGB values.
+/// Used by PES/PEC writers, which store palette indices rather than RGB values. The table is
+/// the one pyembroidery publishes (MIT License, by Tatarize; see `NOTICE`).
 pub fn pec_chart() -> ThreadChart {
     chart(
         "Brother",
@@ -279,7 +280,8 @@ pub fn pec_chart() -> ThreadChart {
     )
 }
 
-/// Janome JEF palette (index 0 is a placeholder).
+/// Janome JEF palette (index 0 is a placeholder). The table is the one pyembroidery publishes
+/// (MIT License, by Tatarize; see `NOTICE`).
 pub fn jef_chart() -> ThreadChart {
     chart(
         "Janome",
@@ -354,12 +356,12 @@ pub fn jef_chart() -> ThreadChart {
             (0x4c881f, "Meadow", "269"),
             (0xe4de79, "Mustard", "270"),
             (0xcb8a1a, "Yellow Ocher", "271"),
-            (0xc6aa42, "Old Gold", "272"),
-            (0xecb02c, "Honey Dew", "273"),
-            (0xf88040, "Tangerine", "274"),
+            (0xcba21c, "Old Gold", "272"),
+            (0xff9805, "Honey Dew", "273"),
+            (0xfcb257, "Tangerine", "274"),
             (0xffe505, "Canary Yellow", "275"),
-            (0xfa7a7a, "Vermilion", "202"),
-            (0x6be000, "Bright Green", "206"),
+            (0xf0331f, "Vermilion", "202"),
+            (0x1a842d, "Bright Green", "206"),
             (0x386cae, "Ocean Blue", "222"),
             (0xe3c4b4, "Beige Gray", "223"),
             (0xe3ac81, "Bamboo", "224"),
