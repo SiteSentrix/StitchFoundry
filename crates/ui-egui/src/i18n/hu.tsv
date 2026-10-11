@@ -1439,6 +1439,29 @@
 	Graph	Diagram
 	Graph Data	Diagramadatok
 	Graph Type	Diagramtípus
+	Select Segments	Szakaszok kijelölése
+	Artistic	Művészi
+	Film Grain…	Filmszemcse…
+	Highlight Area	Csúcsfény-terület
+	English	English
+	Graph Design	Diagramminta
+	Graph Marker	Diagramjelölő
+	New Design	Új minta
+	Delete Design	Minta törlése
+	Paste Design	Minta beillesztése
+	Select Unused	Nem használtak kijelölése
+	Import Data…	Adatok importálása…
+	Transpose	Transzponálás
+	Switch x/y	x/y felcserélése
+	Number of Decimals:	Tizedesjegyek száma:
+	Column Width:	Oszlopszélesség:
+	No Legend	Nincs jelmagyarázat
+	Standard Legend	Normál jelmagyarázat
+	Legends in Wedges	Jelmagyarázat a cikkekben
+	Ratio	Arányos
+	Even	Egyenlő
+	Stacked	Halmozott
+	Horizontal & Vertical Align Center	Vízszintes és függőleges igazítás középre
 	Graphic	Grafika
 	Graphic Style	Grafikai stílus
 	Graphic Style Libraries	Grafikaistílus-könyvtárak
@@ -2696,6 +2719,13 @@
 	Relinked {n} image(s); not in that folder: {}	Újracsatolt képek: {n}; nincs a mappában: {}
 	Relinked {} image(s)	Újracsatolt képek: {}
 	Relink…	Újracsatolás…
+	Find Linked Files	Csatolt fájlok keresése
+	Find Linked Files in Folder…	Csatolt fájlok keresése mappában…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Válaszd ki minden csatolt fájlhoz azt a fájlt, amelyhez újra kell csatolni. A csatolással mentett méretű és tartalmú fájlok állnak elöl.
+	Same file	Azonos fájl
+	Same size	Azonos méret
+	Don't Relink	Újracsatolás nélkül
+	Copy into the document's folder	Másolás a dokumentum mappájába
 	Reload Plug-ins	Bővítmények újratöltése
 	Remove	Eltávolít
 	Remove Anchor Points	Horgonypontok eltávolítása
@@ -4082,6 +4112,9 @@ theme	Appearance	Kinézet
 @msg	empty cutter	üres vágóobjektum
 @msg	empty path	üres útvonal
 @msg	every numbered name for it is taken in the Fonts folder	a Fonts mappában minden sorszámozott név foglalt hozzá
+@msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
+@msg	No linked files to look for	Nincs keresendő csatolt fájl
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Újracsatolt képek: {n}; nem sikerült újracsatolni: {name}: {reason}
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
