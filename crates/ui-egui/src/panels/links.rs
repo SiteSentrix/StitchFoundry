@@ -234,7 +234,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::dim_label(ui, tl!("No document"));
         return;
     };
-    let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return };
+    let Some(st) = app.session.active() else { return };
+    let doc = st.doc.clone();
+    let thumbs = super::layers::ThumbSource::of(app, st, &doc);
     let selected = selected_images(app);
     let rows: &[Value] = cache.list["links"].as_array().map_or(&[], Vec::as_slice);
     let mut clicked: Option<(u64, bool, bool)> = None;
@@ -267,8 +269,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if o.thumb > 0.0 {
                     let tr = egui::Rect::from_min_size(egui::pos2(x, rect.center().y - o.thumb / 2.0), vec2(o.thumb, o.thumb));
                     ui.painter().rect_filled(tr, 0.0, egui::Color32::WHITE);
-                    if let Some(n) = doc.node(NodeId(id)) {
-                        super::layers::real_thumb(ui, &doc, n, tr);
+                    if let Some(n) = super::layers::node_arc(&doc, NodeId(id)) {
+                        super::layers::real_thumb(ui, &thumbs, &n, tr);
                     }
                     ui.painter().rect_stroke(tr, 0.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
                     x = tr.right() + 6.0;

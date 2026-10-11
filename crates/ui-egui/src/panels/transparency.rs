@@ -248,7 +248,8 @@ fn mask_items(mask: Option<&OpacityMask>, can_make: bool) -> [(&'static str, &'s
 }
 
 /// A rendered thumbnail of `n` (which may live outside the tree, like mask art). One texture per
-/// slot, re-rendered only when the document revision, object or size changes.
+/// slot, re-rendered only when the document revision, object or size changes, and not during a
+/// drag (every pointer move is a new revision): the last one stays until it ends.
 fn node_thumb(app: &VectorcraftApp, ui: &Ui, slot: &str, n: &vectorcraft_doc::Node, r: egui::Rect, bg: Option<[u8; 4]>) -> bool {
     use std::cell::RefCell;
     thread_local! {
@@ -256,14 +257,15 @@ fn node_thumb(app: &VectorcraftApp, ui: &Ui, slot: &str, n: &vectorcraft_doc::No
     }
     let Some(st) = app.session.active() else { return false };
     let px = (r.width().min(r.height()) * ui.ctx().pixels_per_point()).round().max(8.0) as u32;
-    let (slot_id, key) = (egui::Id::new(slot), egui::Id::new((st.uid, st.revision, n.id, bg, px)));
-    let cached: Option<(egui::Id, egui::TextureHandle)> = ui.ctx().data(|d| d.get_temp(slot_id));
+    let (slot_id, key) = (egui::Id::new(slot), egui::Id::new((st.uid, n.id, bg, px)));
+    let busy = st.interaction.is_some() || app.session.tool_busy();
+    let cached: Option<(egui::Id, u64, egui::TextureHandle)> = ui.ctx().data(|d| d.get_temp(slot_id));
     let tex = match cached {
-        Some((k, tex)) if k == key => Some(tex),
-        _ => RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail(&st.doc, n, px, bg)).map(|img| {
+        Some((k, rev, tex)) if k == key && (rev == st.revision || busy) => Some(tex),
+        _ => RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail_with(&st.doc, n, px, bg, &super::layers::thumb_options())).map(|img| {
             let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
             let tex = ui.ctx().load_texture(slot, color, egui::TextureOptions::LINEAR);
-            ui.ctx().data_mut(|d| d.insert_temp(slot_id, (key, tex.clone())));
+            ui.ctx().data_mut(|d| d.insert_temp(slot_id, (key, st.revision, tex.clone())));
             tex
         }),
     };

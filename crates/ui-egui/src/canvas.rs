@@ -305,6 +305,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             smooth_images,
             // Isolation mode: the art around the isolated group or layer is dimmed (#833).
             isolated: key.isolated.map(vectorcraft_doc::NodeId),
+            // Images far smaller on screen than they are sample their mip levels (#1244).
+            image_mips: true,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
