@@ -1699,3 +1699,19 @@ fn file_list_lists_a_folder_within_the_read_root() {
     assert!(s.execute("file.list", &json!({})).is_err());
     let _ = std::fs::remove_dir_all(base);
 }
+
+/// #1197: Make Compound Path cuts holes where the paths in front overlap the backmost one, also
+/// when they were drawn running the same way.
+#[test]
+fn a_compound_path_has_holes_where_its_paths_overlap() {
+    let mut s = session();
+    let square = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let diamond = NodeId(s.execute("path.create", &json!({"d": "M50 -20 L120 50 L50 120 L-20 50 Z"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [square.0, diamond.0]})).unwrap();
+    let c = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let hit =
+        |x: f64, y: f64| vectorcraft_doc::hit::hit_test(&s.doc().unwrap().doc, Point::new(x, y), Default::default()).map(|h| h.top_object(None));
+    assert_eq!(hit(50.0, 50.0), None, "the overlap is a hole");
+    assert_eq!(hit(3.0, 3.0), Some(c), "the square's corner is filled");
+    assert_eq!(hit(110.0, 50.0), Some(c), "the diamond's point outside the square is filled");
+}
