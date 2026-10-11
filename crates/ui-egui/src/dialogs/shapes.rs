@@ -16,6 +16,7 @@ fn title(kind: &str) -> &'static str {
         "ellipse" => tl!("Ellipse"),
         "polygon" => tl!("Polygon"),
         "star" => tl!("Star"),
+        "rectangularGrid" => tl!("Rectangular Grid"),
         _ => tl!("Line Segment Tool Options"),
     }
 }
@@ -29,6 +30,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             "shape.star",
             json!({"cx": x, "cy": y, "radius1": d.f64("radius1", 50.0), "radius2": d.f64("radius2", 25.0), "points": d.f64("points", 5.0) as u64}),
         ),
+        "rectangularGrid" => (
+            "shape.rectangularGrid",
+            json!({"x": x, "y": y, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0),
+                "rows": (d.f64("rows", 5.0) as u64).min(999), "columns": (d.f64("columns", 5.0) as u64).min(999)}),
+        ),
         "lineSegment" => {
             let (l, a) = (d.f64("length", 100.0), d.f64("angle", 0.0).to_radians());
             ("shape.line", json!({"x1": x, "y1": y, "x2": x + l * a.cos(), "y2": y - l * a.sin()}))
@@ -39,8 +45,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         ),
     };
     // On the active plane while the perspective grid shows, sized in plane units from the click.
-    match vectorcraft_engine::perspective_click(&app.session, id, &params, vectorcraft_geom::Point::new(x, y)) {
+    let options = (d.kind == "rectangularGrid").then(|| json!({"rows": params["rows"], "columns": params["columns"]}));
+    let result = match vectorcraft_engine::perspective_click(&app.session, id, &params, vectorcraft_geom::Point::new(x, y)) {
         Some((id, params)) => run_and_close(app, &id, params),
         None => run_and_close(app, id, params),
+    }?;
+    if let Some(options) = options {
+        app.run("tool.setOption", json!({"tool": "rectangularGrid", "values": options}))?;
     }
+    Ok(result)
 }

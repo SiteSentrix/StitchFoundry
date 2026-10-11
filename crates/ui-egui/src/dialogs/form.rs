@@ -49,7 +49,7 @@ pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, key: &str, unit: Unit, w
 fn lengths(kind: &str) -> &'static [&'static str] {
     match kind {
         "move" => &["dx", "dy"],
-        "rectangle" | "ellipse" | "artboardOptions" => &["width", "height"],
+        "rectangle" | "ellipse" | "rectangularGrid" | "artboardOptions" => &["width", "height"],
         "roundedRectangle" => &["width", "height", "radius"],
         "polygon" => &["radius"],
         "star" => &["radius1", "radius2"],
@@ -67,6 +67,7 @@ fn order(kind: &str) -> &'static [&'static str] {
     match kind {
         "offsetPath" => &["offset", "joins", "miterLimit"],
         "splitIntoGrid" => &["rows", "columns", "gutter"],
+        "rectangularGrid" => &["width", "height", "rows", "columns"],
         "artboardOptions" => &["name", "width", "height"],
         _ => &[],
     }
@@ -178,7 +179,12 @@ pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
             if lengths.contains(&k.as_str()) {
                 length_field(ui, d, &k, &humanized(&k), unit);
             } else if options.is_empty() {
-                field(ui, d, &k, &humanized(&k));
+                let label = match (d.kind.as_str(), k.as_str()) {
+                    ("rectangularGrid", "rows") => tl!("Horizontal Dividers:").into(),
+                    ("rectangularGrid", "columns") => tl!("Vertical Dividers:").into(),
+                    _ => humanized(&k),
+                };
+                field(ui, d, &k, &label);
             } else {
                 row_label(ui, &humanized(&k));
                 dropdown(ui, d, &k, FIELD_W, &options, true);

@@ -2144,6 +2144,9 @@
 	Rectangle: Sunshine	Прямоугольник: Солнце
 	Rectangle…	Прямоугольник…
 	Rectangular Grid	Прямоугольная сетка
+# Rectangular Grid click dialog.
+	Horizontal Dividers:	Горизонтальные разделители:
+	Vertical Dividers:	Вертикальные разделители:
 	Rectangular Grid Tool	Инструмент «Прямоугольная сетка»
 	Red	Красный
 	Redefine Character Style	Переопределить стиль символа
