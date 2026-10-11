@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Design…",
             ["Object", "Graph"],
             None,
-            "{save?: name (the selected art becomes a graph design; put a rectangle at the back to set the size it draws at), paste?: name (a copy of the design's art into the document, selected, to edit and save again), delete?: name (graphs drawing it go back to their default marks)}; no params → {designs: [names]}",
+            "{new?: name|true (New Design: the selected art becomes a graph design, named \"New Design\" when true; put a rectangle at the back to set the size it draws at), rename?: name, to?: new name (the graphs drawing it follow), paste?: name (Paste Design: a copy of the design's art into the document, selected, to edit and save again), delete?: name|[names] (graphs drawing them go back to their default marks)}; no params or selectUnused → {designs: [names], unused: [the names no graph draws with]}",
             has_doc,
             design
         ),
@@ -1092,16 +1092,47 @@ fn refresh_graphs_using(d: &mut Document, name: &str) -> Result<()> {
     Ok(())
 }
 
+/// The designs no graph's series draw with (Select Unused).
+fn unused_designs(d: &Document) -> Vec<String> {
+    let mut used = std::collections::HashSet::new();
+    d.walk(|n| {
+        if let Some(g) = n.graph.as_deref() {
+            used.extend(g.series_markers.iter().flatten().cloned());
+        }
+    });
+    d.graph_designs.iter().map(|x| x.name.clone()).filter(|n| !used.contains(n)).collect()
+}
+
+/// Design names from param `key`: one name or a list of names.
+fn names_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Vec<String>>> {
+    match p.get(key) {
+        None => Ok(None),
+        Some(Value::String(n)) => Ok(Some(vec![n.clone()])),
+        Some(Value::Array(a)) if !a.is_empty() => a
+            .iter()
+            .map(|v| v.as_str().map(str::to_string).ok_or_else(|| bad(cmd, format!("`{key}` is a design name or a list of them"))))
+            .collect::<Result<_>>()
+            .map(Some),
+        Some(_) => Err(bad(cmd, format!("`{key}` is a design name or a list of them"))),
+    }
+}
+
 fn design(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graph.design";
-    for key in ["save", "paste", "delete"] {
+    for key in ["paste", "rename", "to"] {
         if p.get(key).is_some_and(|v| !v.is_string()) {
             return Err(bad(C, format!("`{key}` is a design name")));
         }
     }
-    if let Some(name) = str_param(p, "save") {
-        let name = GraphDesign::clean_name(name).ok_or_else(|| bad(C, "a design needs a name"))?;
-        if s.doc()?.doc.graph_designs.iter().any(|x| x.name == name) {
+    let taken = |s: &Session, name: &str| s.doc().is_ok_and(|st| st.doc.graph_designs.iter().any(|x| x.name == name));
+    // New Design: the selected art, named `new` or "New Design" (numbered when that's taken).
+    if let Some(v) = p.get("new") {
+        let name = match v {
+            Value::String(n) => GraphDesign::clean_name(n).ok_or_else(|| bad(C, "a design needs a name"))?,
+            Value::Bool(true) | Value::Null => super::unique_name("New Design", |n| taken(s, n)),
+            _ => return Err(bad(C, "`new` is a design name, or true")),
+        };
+        if taken(s, &name) {
             return Err(bad(C, format!("there is already a design named `{name}`")));
         }
         if s.doc()?.doc.graph_designs.len() >= GraphDesign::MAX {
@@ -1114,12 +1145,46 @@ fn design(s: &mut Session, p: &Value) -> Result<Value> {
         // A graph saved as a design is kept as the art it draws.
         let art = GraphDesign::plain_art(&art);
         let saved = name.clone();
-        s.edit("Graph Design", |d, _| {
+        s.edit("New Design", |d, _| {
             let art = d.reid(&art);
             d.graph_designs.push(GraphDesign { name: saved.clone(), art: Arc::new(art) });
             refresh_graphs_using(d, &saved)
         })?;
         return Ok(json!({ "name": name }));
+    }
+    // Rename: the graphs drawing the design follow it to its new name.
+    if let Some(old) = str_param(p, "rename") {
+        if !taken(s, old) {
+            return Err(bad(C, format!("no design named `{old}`")));
+        }
+        let to = str_param(p, "to").and_then(GraphDesign::clean_name).ok_or_else(|| bad(C, "`to` is the design's new name"))?;
+        if to == old {
+            return Ok(json!({ "name": to }));
+        }
+        if taken(s, &to) {
+            return Err(bad(C, format!("there is already a design named `{to}`")));
+        }
+        let (old, new) = (old.to_string(), to.clone());
+        s.edit("Rename Design", |d, _| {
+            if let Some(x) = d.graph_designs.iter_mut().find(|x| x.name == old) {
+                x.name = new.clone();
+            }
+            let mut graphs = vec![];
+            d.walk(|n| {
+                if n.graph.as_deref().is_some_and(|g| g.series_markers.iter().flatten().any(|m| *m == old)) {
+                    graphs.push(n.id);
+                }
+            });
+            for id in graphs {
+                if let Some(g) = d.node_mut(id).and_then(|n| n.graph.as_deref_mut()) {
+                    for m in g.series_markers.iter_mut().flatten().filter(|m| **m == old) {
+                        *m = new.clone();
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        return Ok(json!({ "name": to }));
     }
     if let Some(name) = str_param(p, "paste") {
         let art = s
@@ -1140,18 +1205,22 @@ fn design(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
         return Ok(json!({ "id": id.0 }));
     }
-    if let Some(name) = str_param(p, "delete") {
-        if !s.doc()?.doc.graph_designs.iter().any(|x| x.name == name) {
-            return Err(bad(C, format!("no design named `{name}`")));
+    if let Some(names) = names_param(p, "delete", C)? {
+        if let Some(n) = names.iter().find(|n| !taken(s, n)) {
+            return Err(bad(C, format!("no design named `{n}`")));
         }
-        let name = name.to_string();
         s.edit("Delete Design", |d, _| {
-            d.graph_designs.retain(|x| x.name != name);
-            refresh_graphs_using(d, &name)
+            d.graph_designs.retain(|x| !names.contains(&x.name));
+            for name in &names {
+                refresh_graphs_using(d, name)?;
+            }
+            Ok(())
         })?;
         return ok();
     }
-    Ok(json!({ "designs": design_names(&s.doc()?.doc) }))
+    // The list, with the designs no graph draws with (Select Unused picks those).
+    let d = &s.doc()?.doc;
+    Ok(json!({ "designs": design_names(d), "unused": unused_designs(d) }))
 }
 
 fn set_marker(s: &mut Session, p: &Value) -> Result<Value> {
@@ -2491,7 +2560,7 @@ mod tests {
         let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
         let e = s.execute("shape.ellipse", &json!({"x": 595, "y": 600, "width": 20, "height": 10})).unwrap()["id"].as_u64().unwrap();
         s.execute("select.set", &json!({"ids": [r, e]})).unwrap();
-        s.execute("graph.design", &json!({"save": name})).unwrap();
+        s.execute("graph.design", &json!({"new": name})).unwrap();
     }
 
     /// The marks of series `index` (legend swatch last) and their bounds.
@@ -2562,12 +2631,12 @@ mod tests {
     fn graph_designs_are_saved_pasted_and_deleted() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
-        assert!(s.execute("graph.design", &json!({"save": "Pill"})).is_err(), "nothing selected");
+        assert!(s.execute("graph.design", &json!({"new": "Pill"})).is_err(), "nothing selected");
         save_design(&mut s, "Pill");
         let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
         s.execute("select.set", &json!({"ids": [r]})).unwrap();
-        assert!(s.execute("graph.design", &json!({"save": "Pill"})).is_err(), "the name is taken");
-        assert!(s.execute("graph.design", &json!({"save": "  "})).is_err(), "no name");
+        assert!(s.execute("graph.design", &json!({"new": "Pill"})).is_err(), "the name is taken");
+        assert!(s.execute("graph.design", &json!({"new": "  "})).is_err(), "no name");
         // Paste Design: a copy of the art, selected, with ids of its own.
         let pasted = NodeId(s.execute("graph.design", &json!({"paste": "Pill"})).unwrap()["id"].as_u64().unwrap());
         assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [pasted]);
@@ -2618,7 +2687,7 @@ mod tests {
         let id = graph(&mut s, "line");
         s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
         s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
-        s.execute("graph.design", &json!({"save": "Chart"})).unwrap();
+        s.execute("graph.design", &json!({"new": "Chart"})).unwrap();
         let art = s.doc().unwrap().doc.graph_designs[1].art.clone();
         let mut graphs = 0;
         art.walk(&mut |n| graphs += usize::from(n.graph.is_some() || n.series_index.is_some()));
@@ -2645,7 +2714,7 @@ mod tests {
             .map(|i| s.execute("shape.rectangle", &json!({"x": i % 40, "y": i / 40, "width": 1, "height": 1})).unwrap()["id"].as_u64().unwrap())
             .collect();
         s.execute("select.set", &json!({"ids": ids})).unwrap();
-        s.execute("graph.design", &json!({"save": "Big"})).unwrap();
+        s.execute("graph.design", &json!({"new": "Big"})).unwrap();
         let rows: Vec<Vec<f64>> = (0..200).map(|i| vec![i as f64]).collect();
         let id = NodeId(
             s.execute("graph.create", &json!({"type": "line", "x": 0, "y": 0, "width": 300, "height": 200, "rows": rows})).unwrap()["id"]
@@ -2666,7 +2735,7 @@ mod tests {
             .map(|i| s.execute("shape.rectangle", &json!({"x": i % 40, "y": i / 40, "width": 1, "height": 1})).unwrap()["id"].as_u64().unwrap())
             .collect();
         s.execute("select.set", &json!({"ids": ids})).unwrap();
-        assert!(s.execute("graph.design", &json!({"save": "Huge"})).is_err());
+        assert!(s.execute("graph.design", &json!({"new": "Huge"})).is_err());
     }
 
     #[test]
@@ -2716,7 +2785,7 @@ mod tests {
     fn graph_design_params_are_names() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
-        for p in [json!({"save": 5}), json!({"paste": null}), json!({"delete": ["a"]})] {
+        for p in [json!({"new": 5}), json!({"paste": null}), json!({"delete": ["a"]})] {
             assert!(s.execute("graph.design", &p).is_err(), "{p}");
         }
     }
@@ -2728,10 +2797,34 @@ mod tests {
         let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
         s.execute("paint.setFill", &json!({"ids": [r], "color": "#123456"})).unwrap();
         s.execute("select.set", &json!({"ids": [r]})).unwrap();
-        s.execute("graph.design", &json!({"save": "Blue"})).unwrap();
+        s.execute("graph.design", &json!({"new": "Blue"})).unwrap();
         s.execute("edit.clear", &json!({})).unwrap();
         let mut seen = false;
         s.doc().unwrap().doc.visit_paints(&mut |p| seen |= p.color().is_some_and(|c| c.to_hex() == "#123456"));
         assert!(seen, "the colour is used by the design");
+    }
+
+    #[test]
+    fn new_design_rename_delete_and_select_unused() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [r]})).unwrap();
+        // New Design names it "New Design", numbered when that's taken.
+        assert_eq!(s.execute("graph.design", &json!({"new": true})).unwrap()["name"], "New Design");
+        assert_eq!(s.execute("graph.design", &json!({"new": true})).unwrap()["name"], "New Design 2");
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"id": id.0, "design": "New Design"})).unwrap();
+        let v = s.execute("graph.design", &json!({"selectUnused": true})).unwrap();
+        assert_eq!(v["unused"], json!(["New Design 2"]));
+        // Renaming a design the graph draws with: the graph follows, still drawing it.
+        s.execute("graph.design", &json!({"rename": "New Design", "to": "Dot"})).unwrap();
+        assert_eq!(spec(&s, id).series_markers, [Some("Dot".to_string()), Some("Dot".to_string())]);
+        assert!(s.execute("graph.design", &json!({"rename": "Dot", "to": "New Design 2"})).is_err(), "taken");
+        assert!(s.execute("graph.design", &json!({"rename": "Nope", "to": "X"})).is_err());
+        // Delete several at once.
+        s.execute("graph.design", &json!({"delete": ["Dot", "New Design 2"]})).unwrap();
+        assert_eq!(s.execute("graph.design", &json!({})).unwrap()["designs"], json!([]));
+        assert!(s.execute("graph.design", &json!({"delete": ["Nope"]})).is_err());
     }
 }

@@ -1,11 +1,14 @@
 //! Object › Graph › Design… and Marker…: the document's graph designs in a list.
 //!
-//! Graph Design: Save (Save Design) makes the selected art a design under the name typed, Paste (Paste Design) puts
-//! a copy of the selected design into the document, Delete Design removes it (`graph.design`); each
-//! runs at once and Close closes. Marker: the design (or the default marker) the selected graph
-//! series draw their data points with; OK runs `graph.marker`.
+//! Graph Design: the designs, a preview of the selected one, and New Design (the selected art as a
+//! design named "New Design"), Rename (to the name typed), Delete Design (the selected designs),
+//! Paste Design (a copy of the selected design into the document, selected, to edit) and Select
+//! Unused (the designs no graph draws with), each run at once by `graph.design`; Close closes.
+//! Marker: the design the selected graph series draw their data points with; OK runs
+//! `graph.marker`.
 //!
-//! Fields: `selected` (a design's name; empty for the default marker) and, in Graph Design, `name`.
+//! Fields: `selected` (the selected designs' names; Marker: one name) and, in Graph Design, `name`
+//! (the name Rename gives).
 
 use serde_json::{Value, json};
 
@@ -17,6 +20,9 @@ use crate::{VectorcraftApp, widgets};
 pub const DESIGN: &str = "graphDesign";
 pub const MARKER: &str = "graphMarker";
 
+/// The preview's size.
+const PREVIEW: f32 = 120.0;
+
 pub(super) const DESIGN_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Graph Design").into(),
     body: design_body,
@@ -25,7 +31,7 @@ pub(super) const DESIGN_SPEC: DialogSpec = DialogSpec {
         Ok(Value::Null)
     },
     ok: None,
-    min_width: 380.0,
+    min_width: 420.0,
     ..DialogSpec::FORM
 };
 
@@ -33,7 +39,11 @@ pub(super) const MARKER_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Graph Marker").into(),
     body: marker_body,
     confirm: |app, d| {
-        let design = Some(d.str("selected")).filter(|s| !s.is_empty());
+        let design = d.str("selected");
+        if design.is_empty() {
+            app.ui.dialog = None;
+            return Ok(Value::Null);
+        }
         run_and_close(app, "graph.marker", json!({ "design": design }))
     },
     min_width: 300.0,
@@ -43,15 +53,16 @@ pub(super) const MARKER_SPEC: DialogSpec = DialogSpec {
 /// Open Graph Design.
 pub fn open_design(app: &mut VectorcraftApp) -> Result<Value, String> {
     let names = names(app)?;
-    let first = names.first().cloned().unwrap_or_default();
-    app.ui.dialog = Some(Dialog::new(DESIGN, json!({ "selected": first, "name": "" })));
+    let first: Vec<String> = names.first().cloned().into_iter().collect();
+    let name = first.first().cloned().unwrap_or_default();
+    app.ui.dialog = Some(Dialog::new(DESIGN, json!({ "selected": first, "name": name })));
     Ok(Value::Null)
 }
 
-/// Open Marker for the selected graph series, on the design they draw with.
+/// Open Marker for the selected graph series, on the design they draw with (else the first).
 pub fn open_marker(app: &mut VectorcraftApp) -> Result<Value, String> {
     let v = app.session.execute("graph.marker", &json!({})).map_err(|e| e.to_string())?;
-    let current = v["design"].as_str().unwrap_or_default();
+    let current = v["design"].as_str().map(str::to_string).or_else(|| names(app).ok()?.first().cloned()).unwrap_or_default();
     app.ui.dialog = Some(Dialog::new(MARKER, json!({ "selected": current })));
     Ok(Value::Null)
 }
@@ -62,55 +73,119 @@ fn names(app: &VectorcraftApp) -> Result<Vec<String>, String> {
     Ok(st.doc.graph_designs.iter().map(|d| d.name.clone()).collect())
 }
 
-/// The designs as a list to pick from (with the default marker first when `default` is given).
-fn list(ui: &mut egui::Ui, d: &mut Dialog, names: &[String], default: Option<&str>) {
-    widgets::list_box(ui, |ui| {
-        egui::ScrollArea::vertical().id_salt("graph-designs").min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.set_min_height(160.0);
-            let entries = default.map(|label| ("", label)).into_iter().chain(names.iter().map(|n| (n.as_str(), n.as_str())));
-            for (value, label) in entries {
-                if ui.selectable_label(d.str("selected") == value, label).clicked() {
-                    d.fields.insert("selected".into(), json!(value));
-                }
+/// Graph Design's selected designs.
+fn selected(d: &Dialog) -> Vec<String> {
+    d.fields.get("selected").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default()
+}
+
+fn select(d: &mut Dialog, names: Vec<String>) {
+    d.fields.insert("name".into(), json!(names.first().cloned().unwrap_or_default()));
+    d.fields.insert("selected".into(), json!(names));
+}
+
+/// A design's art drawn in `r` (cached by the art's identity).
+fn preview(ui: &egui::Ui, app: &VectorcraftApp, name: &str, r: egui::Rect) {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    thread_local! {
+        static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
+        static CACHE: crate::graphics::TexCache<HashMap<usize, egui::TextureHandle>> = crate::graphics::TexCache::default();
+    }
+    let Some(st) = app.session.active() else { return };
+    let Some(art) = st.doc.graph_designs.iter().find(|x| x.name == name).map(|x| x.art.clone()) else { return };
+    let key = std::sync::Arc::as_ptr(&art) as usize;
+    let px = (r.width() * ui.ctx().pixels_per_point()).round() as u32;
+    let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).or_else(|| {
+        let img = RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail(&st.doc, &art, px.max(16), Some([255, 255, 255, 255])))?;
+        let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+        let tex = ui.ctx().load_texture(format!("graph-design-{key}"), color, egui::TextureOptions::LINEAR);
+        CACHE.with(|c| {
+            let mut c = c.borrow_mut();
+            if c.len() > 200 {
+                c.clear();
             }
+            c.insert(key, tex.clone());
         });
+        Some(tex)
     });
+    if let Some(t) = tex {
+        ui.painter().image(t.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+    }
 }
 
 fn design_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let names = names(app).unwrap_or_default();
-    list(ui, d, &names, None);
-    let selected = d.str("selected").to_string();
-    let chosen = names.contains(&selected);
-    let mut run = None;
-    ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        if ui.add_enabled_ui(chosen, |ui| widgets::flat_button(ui, tl!("Paste"), 64.0)).inner.clicked() {
-            run = Some(json!({ "paste": selected }));
-        }
-        if ui.add_enabled_ui(chosen, |ui| widgets::flat_button(ui, tl!("Delete"), 64.0)).inner.clicked() {
-            run = Some(json!({ "delete": selected }));
-        }
-    });
-    ui.add_space(10.0);
+    let chosen: Vec<String> = selected(d).into_iter().filter(|n| names.contains(n)).collect();
+    let one = chosen.first().cloned();
     let has_art = app.session.active().is_some_and(|st| !st.selection.is_empty());
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Name:"));
-        form::text(ui, d, "name", 170.0);
-        let named = !d.str("name").trim().is_empty();
-        let save = ui.add_enabled_ui(has_art && named, |ui| widgets::flat_button(ui, tl!("Save"), 64.0)).inner;
-        if save.clicked() {
-            run = Some(json!({ "save": d.str("name") }));
-        }
+    let mut run = None;
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.set_width(220.0);
+            // Click picks a design; Cmd/Ctrl-click adds or removes one.
+            widgets::list_box(ui, |ui| {
+                egui::ScrollArea::vertical().id_salt("graph-designs").min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.set_min_height(160.0);
+                    for n in &names {
+                        if ui.selectable_label(chosen.contains(n), n.as_str()).clicked() {
+                            let mut now = chosen.clone();
+                            if ui.input(|i| i.modifiers.command) {
+                                if let Some(k) = now.iter().position(|x| x == n) {
+                                    now.remove(k);
+                                } else {
+                                    now.push(n.clone());
+                                }
+                            } else {
+                                now = vec![n.clone()];
+                            }
+                            select(d, now);
+                        }
+                    }
+                });
+            });
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                widgets::dim_label(ui, tl!("Name:"));
+                form::text(ui, d, "name", 150.0);
+            });
+        });
+        ui.add_space(10.0);
+        ui.vertical(|ui| {
+            let (r, _) = ui.allocate_exact_size(egui::vec2(PREVIEW, PREVIEW), egui::Sense::hover());
+            ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, egui::Color32::from_gray(160)), egui::StrokeKind::Inside);
+            if let Some(n) = &one {
+                preview(ui, app, n, r.shrink(4.0));
+            }
+            ui.add_space(6.0);
+            let button =
+                |ui: &mut egui::Ui, on: bool, label: &str| ui.add_enabled_ui(on, |ui| widgets::flat_button(ui, label, PREVIEW)).inner.clicked();
+            if button(ui, has_art, tl!("New Design")) {
+                run = Some(json!({ "new": true }));
+            }
+            let to = d.str("name");
+            if button(ui, chosen.len() == 1 && !to.trim().is_empty(), tl!("Rename")) {
+                run = one.clone().map(|n| json!({ "rename": n, "to": to }));
+            }
+            if button(ui, !chosen.is_empty(), tl!("Delete Design")) {
+                run = Some(json!({ "delete": chosen }));
+            }
+            if button(ui, chosen.len() == 1, tl!("Paste Design")) {
+                run = one.clone().map(|n| json!({ "paste": n }));
+            }
+            if button(ui, !names.is_empty(), tl!("Select Unused")) {
+                run = Some(json!({ "selectUnused": true }));
+            }
+        });
     });
     if let Some(p) = run {
         match app.run("graph.design", p.clone()) {
             Ok(r) => {
                 if let Some(n) = r["name"].as_str() {
-                    d.fields.insert("selected".into(), json!(n));
-                    d.fields.insert("name".into(), json!(""));
+                    select(d, vec![n.to_string()]);
+                }
+                if let Some(unused) = r["unused"].as_array().filter(|_| p.get("selectUnused").is_some()) {
+                    select(d, unused.iter().filter_map(|v| v.as_str().map(str::to_string)).collect());
                 }
                 // Paste Design leaves the copy selected to edit, as the dialog closes.
                 if p.get("paste").is_some() {
@@ -125,7 +200,17 @@ fn design_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> b
 
 fn marker_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let names = names(app).unwrap_or_default();
-    list(ui, d, &names, Some(tl!("Default")));
+    widgets::list_box(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("graph-markers").min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.set_min_height(160.0);
+            for n in &names {
+                if ui.selectable_label(d.str("selected") == *n, n.as_str()).clicked() {
+                    d.fields.insert("selected".into(), json!(n));
+                }
+            }
+        });
+    });
     false
 }
 
@@ -143,16 +228,22 @@ mod tests {
         out.textures_delta.clear();
     }
 
-    #[test]
-    fn the_graph_menu_opens_both_dialogs_and_they_draw() {
+    fn app_with_design() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let r = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [r]})).unwrap();
-        app.run("graph.design", json!({"save": "Box"})).unwrap();
+        app.run("graph.design", json!({"new": true})).unwrap();
+        app
+    }
+
+    #[test]
+    fn the_graph_menu_opens_both_dialogs_and_they_draw_with_a_preview() {
+        let mut app = app_with_design();
         crate::menus::invoke(&mut app, "graph.design", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(super::DESIGN));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("selected"), "Box");
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.kind, super::DESIGN);
+        assert_eq!((super::selected(d), d.str("name")), (vec!["New Design".to_string()], "New Design".to_string()));
         frame(&mut app);
         frame(&mut app);
         assert!(app.ui.dialog.is_some());
@@ -169,31 +260,16 @@ mod tests {
     }
 
     #[test]
-    fn graph_design_saves_and_marker_applies_a_design() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let r = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [r]})).unwrap();
-        super::open_design(&mut app).unwrap();
-        let mut d = app.ui.dialog.take().unwrap();
-        d.fields.insert("name".into(), json!("Box"));
-        // What Save Design runs.
-        app.run("graph.design", json!({"save": d.str("name")})).unwrap();
+    fn marker_lists_the_designs_and_applies_the_one_picked() {
+        let mut app = app_with_design();
         let g = app.run("graph.create", json!({"type": "line", "x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [g]})).unwrap();
         super::open_marker(&mut app).unwrap();
-        let mut d: Dialog = app.ui.dialog.take().unwrap();
-        assert_eq!(d.str("selected"), "", "the default marker");
-        d.fields.insert("selected".into(), json!("Box"));
+        let d: Dialog = app.ui.dialog.take().unwrap();
+        assert_eq!(d.str("selected"), "New Design", "the first design");
         (super::MARKER_SPEC.confirm)(&mut app, &d).unwrap();
-        let v = app.session.execute("graph.marker", &json!({})).unwrap();
-        assert_eq!(v["design"], "Box");
-        // Back to the default.
+        assert_eq!(app.session.execute("graph.marker", &json!({})).unwrap()["design"], "New Design");
         super::open_marker(&mut app).unwrap();
-        let mut d: Dialog = app.ui.dialog.take().unwrap();
-        assert_eq!(d.str("selected"), "Box");
-        d.fields.insert("selected".into(), json!(""));
-        (super::MARKER_SPEC.confirm)(&mut app, &d).unwrap();
-        assert!(app.session.execute("graph.marker", &json!({})).unwrap()["design"].is_null());
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("selected"), "New Design");
     }
 }
