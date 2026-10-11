@@ -729,6 +729,20 @@ fn burasagari_leaves_latin_commas_and_full_stops_inside_the_line() {
     }
 }
 
+/// With craft-fonts and no installed fonts (the web), Thai is set in Noto Sans Thai, not as empty
+/// boxes. Skipped when built without craft-fonts or with a checkout that has no Thai font.
+#[test]
+fn thai_without_installed_fonts_takes_the_craft_fonts_thai_font() {
+    if !crate::CRAFT_FONTS.iter().any(|f| f.is_thai()) {
+        eprintln!("skipping: no Thai font in craft-fonts (set CRAFT_FONTS_DIR to a checkout that has one)");
+        return;
+    }
+    let l = layout(db(), &point("ภาษาไทย", style(20.0)));
+    assert!(!l.glyphs.is_empty() && l.glyphs.iter().all(|g| g.gid != 0), "no .notdef");
+    let families: Vec<String> = l.glyphs.iter().filter_map(|g| db().face_by_id(g.font_id)).map(|f| f.family.clone()).collect();
+    assert!(families.iter().all(|f| f == "Noto Sans Thai"), "{families:?}");
+}
+
 /// Thai is written without spaces between words: area type breaks its lines between words (as a
 /// model of Thai words finds them), never inside a word nor before a vowel or tone mark.
 #[test]
