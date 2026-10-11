@@ -3526,7 +3526,7 @@ axis	Both	Оба
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	произвольной точке {i} нужны `at` [x, y] и допустимый `color`
 @msg	freeform line {i} must be an array of point indices	произвольная линия {i} должна быть массивом индексов точек
 @msg	give both `start` and `end` [x, y] (or neither)	укажите и `start`, и `end` [x, y] (или ни одного)
-@msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
+@msg	give corners of the path: anchors where its sides meet at an angle	укажите углы контура: опорные точки, в которых его стороны сходятся под углом
 @msg	give horizontal or vertical	укажите horizontal или vertical
 @msg	give the path `id` and the width point `index`	укажите `id` контура и `index` точки ширины
 @msg	guides are locked	направляющие заблокированы

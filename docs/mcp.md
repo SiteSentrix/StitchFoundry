@@ -1434,8 +1434,9 @@ size. The journal entry of a scaling command records the `strokes` and `corners`
 ## Live Corners
 
 `object.setLiveShape {id?, ids?, radius?, kind?, corners?, items?}` sets the corners of any path (one undo step): a live
-rectangle's or polygon's, a star's, a pen path's. A corner is an anchor without handles between two straight sides
-(not an open path's ends, not a smooth anchor, not one the sides run straight on through). `radius` (pt) and `kind`
+rectangle's or polygon's, a star's, a pen path's. A corner is an anchor where two sides, straight or curved, meet at an angle
+(not an open path's ends, not a smooth anchor, not one the sides run straight on through); a curved side is trimmed to
+what the cut leaves of it. `radius` (pt) and `kind`
 (`round`, `invertedRound` or `chamfer`) go to the `corners` given, else to the corners holding a Direct-Selected
 anchor (`select.anchors`), else to every corner. `corners` are anchor indices of the path with its corners uncut,
 counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a
