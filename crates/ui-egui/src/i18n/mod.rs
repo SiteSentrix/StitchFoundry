@@ -82,7 +82,7 @@ fn plural_east_slavic(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 12] = [
+pub static LANGUAGES: [LangInfo; 13] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Japanese: the whole interface (every menu string and `tl!` literal) and the status and error
     // messages, keeping the product, workspace and perspective preset names in English (`MENU_KEEP_AS_IS`).
@@ -143,6 +143,10 @@ pub static LANGUAGES: [LangInfo; 12] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
+    // Hungarian: the whole interface and the status and error messages, keeping the same names in
+    // English as Spanish; a count takes the singular ("3 réteg"), so plurals have one form. Every
+    // `hu-*` locale (including `hu-HU`) resolves here.
+    LangInfo { code: "hu", name: "Magyar", source: include_str!("hu.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     // Brazilian Portuguese: every menu label (`menu_catalogs_translate_every_menu_label`), every
     // `tl!` literal and the plural messages; left English on purpose are the `MENU_KEEP_AS_IS`
     // strings (product name, language names, workspace names, perspective grid presets).
