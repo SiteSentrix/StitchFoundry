@@ -535,7 +535,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-13 | Keyboard design collections | Missing | KDC-01 | 3 |
 | NEW-14 | Laydown stitch | Missing | RE-06 | 2 |
 | NEW-15 | Magnetic hoop presets | Partial | Add more hoop presets (data only) | 6 |
-| NEW-16 | AI text to embroidery: a prompt becomes flat-colour art drawn to digitize well, then a design | Partial | Embroidery › Design from Prompt (desktop): Claude draws flat-colour SVG with the user's own Anthropic API key (`sf_core::ai`), and `embroidery.placeArt` places it, gives its shapes stitch types sewn in drawing order with underlying fills cut, and matches the chart's threads, in one undo step. Left: StitchFoundry accounts and credits (§11), the web app | A |
+| NEW-16 | AI text to embroidery: a prompt becomes flat-colour art drawn to digitize well, then a design | Partial | Embroidery › Design from Prompt (desktop): Claude draws flat-colour SVG with the user's own Anthropic API key (`sf_core::ai`), and `embroidery.placeArt` places it, gives its shapes stitch types with underlying fills cut (0.4 mm overlap), matches the chart's threads and brings same-coloured shapes together where the stacking allows (`embroidery.autoSequence {ids}`), in one undo step. Left: StitchFoundry accounts and credits (§11), the web app | A |
 | NEW-17 | AI image or logo to embroidery: the upload is redrawn as clean flat art, then digitized | Missing | §11; with AD-03, AD-04 | A |
 | NEW-18 | AI product mockups: the design shown on a shirt, cap or bag | Missing | §11; MD-01 | A |
 

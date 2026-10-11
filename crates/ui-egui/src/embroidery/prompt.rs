@@ -35,6 +35,8 @@ pub struct PromptState {
 
 struct Pending {
     rx: Receiver<Result<Art, ArtError>>,
+    /// The key sent, kept once Anthropic takes it (Remember the key).
+    keep: Option<String>,
     /// The placed art's name (the description) and size (mm).
     name: String,
     size: f64,
@@ -101,19 +103,18 @@ pub fn start(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         m
     })?;
     let post = app.services.http_post.clone().ok_or("Design from Prompt needs the desktop app for now")?;
-    // Keep (or forget) the key as asked; a store that can't still lets this request go.
-    if let Some(store) = app.services.secrets.as_ref() {
-        let kept = if d.bool("remember") { store.save(KEY_NAME, Some(st.key.trim())) } else { store.save(KEY_NAME, None) };
-        if let Err(e) = kept {
-            log::warn!("Design from Prompt: the API key: {e}");
-        }
+    // Remember off forgets a kept key now; on, the key is kept once Anthropic takes it ([`poll`]).
+    let keep = d.bool("remember").then(|| st.key.trim().to_string());
+    if keep.is_none() {
+        keep_key(app.services.secrets.as_deref(), None);
     }
+    let st = &mut app.embroidery.prompt;
     let (tx, rx) = channel();
     std::thread::Builder::new()
         .name("design-from-prompt".into())
         .spawn(move || {
             let r = vectorcraft_engine::guard::catch_panic(|| post(&http))
-                .unwrap_or_else(|msg| Err(format!("internal error: {msg}")))
+                .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")))
                 .map_err(ArtError::Network)
                 .and_then(|(status, body)| vectorcraft_embroidery::sf_core::ai::parse_reply(status, &body));
             // Nothing waits any more once the dialog was cancelled.
@@ -122,8 +123,15 @@ pub fn start(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         .map_err(|e| format!("can't send the request: {e}"))?;
     let name: String = request.prompt.chars().take(60).collect();
     st.error = None;
-    st.pending = Some(Pending { rx, name, size: request.size_mm, since: now });
+    st.pending = Some(Pending { rx, keep, name, size: request.size_mm, since: now });
     Ok(json!({ "drawing": true }))
+}
+
+/// Keep `key` as the API key (`None`: forget it). A store that can't only costs the convenience.
+fn keep_key(store: Option<&dyn crate::SecretStore>, key: Option<&str>) {
+    if let Some(Err(e)) = store.map(|s| s.save(KEY_NAME, key)) {
+        log::warn!("Design from Prompt: the API key: {e}");
+    }
 }
 
 /// Stop waiting for the request on its way (Cancel). The service may still bill it.
@@ -145,6 +153,10 @@ pub fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
         Err(TryRecvError::Disconnected) => Err(ArtError::Network("the request stopped".into())),
     };
     let Some(p) = app.embroidery.prompt.pending.take() else { return };
+    // Anthropic took the key unless it said otherwise.
+    if let Some(key) = p.keep.as_deref().filter(|_| !matches!(r, Err(ArtError::Key(_)))) {
+        keep_key(app.services.secrets.as_deref(), Some(key));
+    }
     let open = app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND);
     let placed = r.map_err(|e| e.to_string()).and_then(|art| {
         if app.session.active().is_none() {

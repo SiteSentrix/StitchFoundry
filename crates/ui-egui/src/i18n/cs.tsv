@@ -4482,3 +4482,38 @@ machine	Stop	Zastavení
 	Tie off	Zapošití na konci
 	Tiny object: may not sew cleanly	Drobný objekt: nemusí se vyšít čistě
 	Very dense: about {n} layers of thread here	Velmi husté místo: asi {n} vrstvy nití
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	Motiv podle popisu…
+	Design from Prompt	Motiv podle popisu
+	Generate	Generovat
+	Describe the design:	Popište motiv:
+	Size (longest side):	Velikost (delší strana):
+	Anthropic API key:	Klíč API Anthropic:
+	Remember the key on this computer	Zapamatovat si klíč v tomto počítači
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Kresbu vytvoří Claude pomocí vašeho vlastního klíče API Anthropic a zaplatíte ji ze svého účtu Anthropic; StitchFoundry ji pak digitalizuje. Před vyšíváním zkontrolujte stehy.
+	Get a key	Získat klíč
+	Drawing the design…	Kreslí se motiv…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Popište motiv a Claude k němu vytvoří kresbu, kterou pak StitchFoundry digitalizuje
+	Place Artwork as Embroidery	Umístit kresbu jako výšivku
+	Place Artwork	Umístit kresbu
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Motiv umístěn: {n} vyšívaný objekt|Motiv umístěn: {n} vyšívané objekty|Motiv umístěn: {n} vyšívaných objektů
+@msg	Enter your Anthropic API key first.	Nejprve zadejte svůj klíč API Anthropic.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	Klíč API není platný: vložte ho znovu z Anthropic Console.
+@msg	Describe the design first.	Nejprve popište motiv.
+@msg	The description is too long: keep it under 2,000 characters.	Popis je příliš dlouhý: zkraťte ho na méně než 2000 znaků.
+@msg	Anthropic refused the API key: {e}	Anthropic odmítl klíč API: {e}
+@msg	Your Anthropic account can't pay for this: {e}	Z vašeho účtu Anthropic to nelze zaplatit: {e}
+@msg	The AI service is busy: try again in a minute.	Služba AI je právě vytížená: zkuste to znovu za minutu.
+@msg	The AI service failed (error {code}): try again later.	Služba AI selhala (chyba {code}): zkuste to znovu později.
+@msg	The request failed (error {code}): {e}	Požadavek selhal (chyba {code}): {e}
+@msg	The AI declined to draw this: try another description.	AI odmítla tento motiv nakreslit: zkuste jiný popis.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Kresba byla příliš podrobná a nedala se dokončit: požádejte o něco jednoduššího.
+@msg	The reply had no artwork: try again.	Odpověď neobsahovala žádnou kresbu: zkuste to znovu.
+@msg	Couldn't reach the AI service: {e}	Ke službě AI se nelze připojit: {e}
+@msg	Design from Prompt needs the desktop app for now	Motiv podle popisu zatím vyžaduje desktopovou aplikaci
+@msg	already drawing: wait for it, or Cancel	kreslení už probíhá: počkejte na dokončení nebo klikněte na Zrušit
+@msg	the artwork has no shapes to stitch	kresba neobsahuje žádné tvary k vyšití
+@msg	the artwork has nothing to place	kresba neobsahuje nic k umístění
+@msg	the artwork can't be read: {e}	kresbu nelze přečíst: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	AI nekopíruje cizí loga ani postavy: {e}

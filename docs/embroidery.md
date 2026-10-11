@@ -187,9 +187,11 @@ service, a drawing that grew too detailed), the dialog says so and stays open to
 Claude is asked for what digitizes well: filled shapes in flat colours, no part narrower than
 1.5 mm stitched, no shading or tiny details, drawn back to front. The drawing arrives as one group
 named after the description. Its shapes get stitch types as with Convert Artwork to Embroidery
-(satin for narrow parts, tatami for the rest), sewn in the order they were drawn, and each one cuts
-what it covers out of the fills sewn before it (Remove Underlying Stitching), so stacked shapes
-don't pile up thread. Its colours become the design chart's closest threads. Images, invisible
+(satin for narrow parts, tatami for the rest), and each one cuts what it covers out of the fills
+sewn before it (Remove Underlying Stitching, with a 0.4 mm overlap so small details on top don't
+stack thread), so stacked shapes don't pile up. They are sewn in the order they were drawn, with
+shapes of one colour brought together where the stacking allows (Auto Sequence, within the group),
+so there are fewer colour changes. Its colours become the design chart's closest threads. Images, invisible
 shapes and specks under 1 mm² are left out. One undo step undoes it all. As with any automatic
 digitizing, check the stitches (Check Design, the stitch player) before you sew. Claude won't copy
 someone else's logo, trademark or character: the dialog says so, and an original design described
@@ -197,10 +199,10 @@ in your own words draws fine.
 
 **Your own API key.** Design from Prompt uses your Anthropic API key, and each design is billed to
 your Anthropic account; get a key in the [Anthropic Console](https://console.anthropic.com/settings/keys).
-Paste it into the dialog. With **Remember the key on this computer** (turn it off to forget a kept
-key), it is kept in a file of its own, `anthropic-api-key`, next to StitchFoundry's settings and
+Paste it into the dialog. With **Remember the key on this computer**, once Anthropic accepts the
+key it is kept in a file of its own, `anthropic-api-key`, next to StitchFoundry's settings and
 readable by you alone: not in the settings themselves, which the control channel and MCP agents
-can read. Without a kept key, the `ANTHROPIC_API_KEY` environment variable is used.
+can read. Turn the option off and Generate to forget a kept key. Without a kept key, the `ANTHROPIC_API_KEY` environment variable is used.
 
 Only your description, the size and the colour count are sent, to `api.anthropic.com` over HTTPS,
 and only when you click Generate; nothing from your design leaves the computer. Certificates are
@@ -368,7 +370,7 @@ tool list for all parameters):
 | `embroidery.settings {hoop, fabric, chart, machine, …}`, `embroidery.applyFabric {name}` | design settings |
 | `embroidery.machine.list`, `embroidery.machine.save {name, newName?, format?, fromDesign?, …}`, `embroidery.machine.delete {name}` | machine profiles: change the standard ones, make, rename and delete your own |
 | `embroidery.sortByColor` | sew each colour in one go |
-| `embroidery.autoSequence` | reorder for the fewest colour changes and the shortest travel, overlaps kept |
+| `embroidery.autoSequence {ids?}` | reorder for the fewest colour changes and the shortest travel, overlaps kept; with `ids`, only inside those groups |
 | `embroidery.matchThreads {chart?, all?}` | the chart's closest thread for each stitched object |
 | `embroidery.makeCurrent`, `embroidery.current`, `embroidery.current.setParams {type, params}`, `embroidery.current.reset {type?}` | the properties new objects take |
 | `embroidery.style.new {name?}` / `apply {name}` / `redefine {name}` / `unlink` / `rename {name, to}` / `duplicate` / `delete` / `list` | embroidery styles |

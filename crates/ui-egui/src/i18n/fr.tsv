@@ -4465,3 +4465,38 @@ machine	Stop	Arrêt
 	Tie off	Point d’arrêt à la fin
 	Tiny object: may not sew cleanly	Objet minuscule : risque de mal se broder
 	Very dense: about {n} layers of thread here	Très dense : environ {n} couches de fil ici
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	Dessin à partir d’une description…
+	Design from Prompt	Dessin à partir d’une description
+	Generate	Générer
+	Describe the design:	Décrivez le dessin :
+	Size (longest side):	Taille (côté le plus long) :
+	Anthropic API key:	Clé API Anthropic :
+	Remember the key on this computer	Mémoriser la clé sur cet ordinateur
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude dessine l’illustration avec votre propre clé API Anthropic et l’utilisation est facturée sur votre compte Anthropic ; StitchFoundry la digitalise ensuite. Vérifiez les points avant de broder.
+	Get a key	Obtenir une clé
+	Drawing the design…	Dessin en cours…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Décrivez un dessin et Claude crée l’illustration correspondante, puis StitchFoundry la digitalise
+	Place Artwork as Embroidery	Importer l’illustration comme broderie
+	Place Artwork	Importer l’illustration
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Dessin importé : {n} objet brodé|Dessin importé : {n} objets brodés
+@msg	Enter your Anthropic API key first.	Saisissez d’abord votre clé API Anthropic.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	La clé API n’est pas valide : collez-la de nouveau depuis l’Anthropic Console.
+@msg	Describe the design first.	Décrivez d’abord le dessin.
+@msg	The description is too long: keep it under 2,000 characters.	La description est trop longue : limitez-la à moins de 2000 caractères.
+@msg	Anthropic refused the API key: {e}	Anthropic a refusé la clé API : {e}
+@msg	Your Anthropic account can't pay for this: {e}	Votre compte Anthropic ne permet pas de payer cette demande : {e}
+@msg	The AI service is busy: try again in a minute.	Le service d’IA est occupé : réessayez dans une minute.
+@msg	The AI service failed (error {code}): try again later.	Le service d’IA a échoué (erreur {code}) : réessayez plus tard.
+@msg	The request failed (error {code}): {e}	La requête a échoué (erreur {code}) : {e}
+@msg	The AI declined to draw this: try another description.	L’IA a refusé de dessiner ceci : essayez une autre description.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Le dessin est devenu trop détaillé pour être terminé : demandez quelque chose de plus simple.
+@msg	The reply had no artwork: try again.	La réponse ne contenait aucune illustration : réessayez.
+@msg	Couldn't reach the AI service: {e}	Impossible de joindre le service d’IA : {e}
+@msg	Design from Prompt needs the desktop app for now	Dessin à partir d’une description nécessite pour l’instant l’application de bureau
+@msg	already drawing: wait for it, or Cancel	dessin déjà en cours : attendez qu’il se termine ou cliquez sur Annuler
+@msg	the artwork has no shapes to stitch	l’illustration ne contient aucune forme à broder
+@msg	the artwork has nothing to place	l’illustration ne contient rien à importer
+@msg	the artwork can't be read: {e}	impossible de lire l’illustration : {e}
+@msg	The AI won't copy someone else's logo or character: {e}	L’IA ne copie pas les logos ni les personnages d’autrui : {e}

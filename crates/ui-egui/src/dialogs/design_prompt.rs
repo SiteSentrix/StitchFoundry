@@ -24,9 +24,10 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
+/// A field's label, `text` already in the UI language.
 fn label(ui: &mut egui::Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(tl!(text)).color(t.text_dim));
+    ui.label(egui::RichText::new(text).color(t.text_dim));
 }
 
 /// A whole-number field bound to `d.fields[key]`, kept within `range`, with `suffix` (a unit).
@@ -42,17 +43,17 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let now = ui.input(|i| i.time);
     app.embroidery.prompt.now = now;
     let drawing = app.embroidery.prompt.drawing_for(now);
-    label(ui, "Describe the design:");
+    label(ui, tl!("Describe the design:"));
     form::text_area(ui, d, "prompt", 400.0, 4);
     ui.add_space(8.0);
     egui::Grid::new("design-prompt-grid").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        label(ui, "Size (longest side):");
-        number(ui, d, "size", (20.0, 400.0), "mm");
+        label(ui, tl!("Size (longest side):"));
+        number(ui, d, "size", (20.0, 400.0), " mm");
         ui.end_row();
-        label(ui, "Thread colors");
+        label(ui, tl!("Thread colors"));
         number(ui, d, "colors", (1.0, 12.0), "");
         ui.end_row();
-        label(ui, "Anthropic API key:");
+        label(ui, tl!("Anthropic API key:"));
         ui.add(egui::TextEdit::singleline(&mut app.embroidery.prompt.key).password(true).desired_width(260.0).hint_text("sk-ant-…"));
         ui.end_row();
         ui.label("");

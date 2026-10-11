@@ -222,9 +222,10 @@ mod design_from_prompt {
         let raw =
             || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
         for _ in 0..4 {
-            let _ = ctx.run_ui(raw(), |ui| crate::dialogs::show(app, &ui.ctx().clone()));
+            ctx.run_ui(raw(), |ui| crate::dialogs::show(app, &ui.ctx().clone())).textures_delta.clear();
         }
-        let out = ctx.run_ui(raw(), |ui| crate::dialogs::show(app, &ui.ctx().clone()));
+        let mut out = ctx.run_ui(raw(), |ui| crate::dialogs::show(app, &ui.ctx().clone()));
+        out.textures_delta.clear();
         fn walk(s: &egui::Shape, into: &mut Vec<String>) {
             match s {
                 egui::Shape::Text(t) => into.push(t.galley.text().to_string()),
@@ -291,7 +292,6 @@ mod design_from_prompt {
         app.embroidery.prompt.key = "sk-ant-bad".into();
         if let Some(d) = app.ui.dialog.as_mut() {
             d.fields.insert("prompt".into(), json!("  "));
-            d.fields.insert("remember".into(), json!(false));
         }
         assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), "Describe the design first.");
         assert!(sent.lock().unwrap().is_empty());
@@ -303,8 +303,15 @@ mod design_from_prompt {
         assert!(app.ui.dialog.is_some(), "the dialog stays open to try again");
         assert_eq!(app.embroidery.prompt.error.as_deref(), Some("Anthropic refused the API key: invalid x-api-key"));
         assert!(dialog_text(&mut app).iter().any(|t| t == "Anthropic refused the API key: invalid x-api-key"));
-        assert_eq!(keys.load(prompt::KEY_NAME), None, "Remember off: the kept key is forgotten");
+        assert_eq!(keys.load(prompt::KEY_NAME).as_deref(), Some("sk-ant-old"), "a refused key isn't remembered");
         assert_eq!(objects(&app), 0);
+        // Remember off forgets the kept key
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("remember".into(), json!(false));
+        }
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(keys.load(prompt::KEY_NAME), None);
+        wait(&mut app);
     }
 
     #[test]

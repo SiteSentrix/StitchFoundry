@@ -4453,3 +4453,38 @@ machine	Stop	Остановка
 	Tie off	Закрепка в конце
 	Tiny object: may not sew cleanly	Крошечный объект: может вышиться неаккуратно
 	Very dense: about {n} layers of thread here	Очень плотно: здесь около {n} слоёв нити
+
+# Embroidery (StitchFoundry): Design from Prompt
+	Design from Prompt…	Дизайн по описанию…
+	Design from Prompt	Дизайн по описанию
+	Generate	Создать
+	Describe the design:	Опишите дизайн:
+	Size (longest side):	Размер (по длинной стороне):
+	Anthropic API key:	Ключ API Anthropic:
+	Remember the key on this computer	Запомнить ключ на этом компьютере
+	Claude draws the artwork with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude создаёт рисунок с помощью вашего собственного ключа API Anthropic, оплата списывается с вашей учётной записи Anthropic; затем StitchFoundry оцифровывает его. Проверьте стежки перед вышиванием.
+	Get a key	Получить ключ
+	Drawing the design…	Рисование дизайна…
+	Describe a design and Claude draws artwork for it, then StitchFoundry digitizes it	Опишите дизайн — Claude создаст для него рисунок, а StitchFoundry его оцифрует
+	Place Artwork as Embroidery	Поместить рисунок как вышивку
+	Place Artwork	Поместить рисунок
+@plural	Design placed: {n} stitched object|Design placed: {n} stitched objects	Дизайн помещён: {n} вышиваемый объект|Дизайн помещён: {n} вышиваемых объекта|Дизайн помещён: {n} вышиваемых объектов
+@msg	Enter your Anthropic API key first.	Сначала введите свой ключ API Anthropic.
+@msg	The API key isn't valid: paste it again from the Anthropic Console.	Ключ API недействителен: вставьте его заново из Anthropic Console.
+@msg	Describe the design first.	Сначала опишите дизайн.
+@msg	The description is too long: keep it under 2,000 characters.	Описание слишком длинное: оно должно быть короче 2000 символов.
+@msg	Anthropic refused the API key: {e}	Сервис Anthropic отклонил ключ API: {e}
+@msg	Your Anthropic account can't pay for this: {e}	С вашей учётной записи Anthropic не удаётся оплатить этот запрос: {e}
+@msg	The AI service is busy: try again in a minute.	Сервис ИИ сейчас занят: повторите попытку через минуту.
+@msg	The AI service failed (error {code}): try again later.	Сбой сервиса ИИ (ошибка {code}): повторите попытку позже.
+@msg	The request failed (error {code}): {e}	Запрос не выполнен (ошибка {code}): {e}
+@msg	The AI declined to draw this: try another description.	ИИ отказывается это рисовать: попробуйте другое описание.
+@msg	The drawing grew too detailed to finish: ask for something simpler.	Рисунок получился слишком детальным, и его не удалось закончить: попросите что-нибудь попроще.
+@msg	The reply had no artwork: try again.	В ответе нет рисунка: повторите попытку.
+@msg	Couldn't reach the AI service: {e}	Не удалось связаться с сервисом ИИ: {e}
+@msg	Design from Prompt needs the desktop app for now	Функция «Дизайн по описанию» пока требует настольного приложения
+@msg	already drawing: wait for it, or Cancel	рисование уже идёт: дождитесь окончания или нажмите «Отмена»
+@msg	the artwork has no shapes to stitch	в рисунке нет фигур для вышивки
+@msg	the artwork has nothing to place	в рисунке нет ничего для размещения
+@msg	the artwork can't be read: {e}	не удаётся прочитать рисунок: {e}
+@msg	The AI won't copy someone else's logo or character: {e}	ИИ не копирует чужие логотипы и персонажей: {e}

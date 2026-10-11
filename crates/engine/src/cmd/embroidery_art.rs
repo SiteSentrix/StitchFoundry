@@ -14,13 +14,17 @@ use crate::EngineError;
 
 const CMD: &str = "embroidery.placeArt";
 
+/// How far (mm) the fills below run in under a shape drawn on top: little, so small details on
+/// top (eyes, highlights) don't stack thread layers under their edges.
+const OVERLAP: f64 = 0.4;
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
         "embroidery.placeArt",
         "Place Artwork as Embroidery",
         [],
         None,
-        "{svg, size?: mm (longest side; default 90% of the hoop's shorter side, else 100), at?: [x, y] (default: the first artboard's centre), name?, minArea?: mm² (1)} place flat-colour SVG art (Design from Prompt's) without reading files it links to; images, unpainted shapes and areas under minArea are left out, and the shapes get stitch types sewn in drawing order, each cutting what it covers out of the fills before it, in the design chart's threads → {id, objects, satin, fill, run, removed, colors, warnings}",
+        "{svg, size?: mm (longest side; default 90% of the hoop's shorter side, else 100), at?: [x, y] (default: the first artboard's centre), name?, minArea?: mm² (1)} place flat-colour SVG art (Design from Prompt's) without reading files it links to; images, unpainted shapes and areas under minArea are left out, and the shapes get stitch types, each cutting what it covers out of the fills before it, in the design chart's threads, sewn in drawing order with same-coloured shapes brought together where the stacking allows → {id, objects, satin, fill, run, removed, colors, warnings}",
         has_doc,
         place_art
     )]
@@ -122,8 +126,10 @@ fn art(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let list: Vec<u64> = ids.iter().map(|i| i.0).collect();
     // Shapes drawn on top cut what they cover out of the fills below (no stitches piled up).
-    s.execute("embroidery.setParams", &json!({ "ids": list, "params": { "remove_underlying": true } }))?;
+    s.execute("embroidery.setParams", &json!({ "ids": list, "params": { "remove_underlying": true, "underlying_overlap": OVERLAP } }))?;
     s.execute("embroidery.matchThreads", &json!({ "ids": list }))?;
+    // Fewer colour changes where the stacking allows (each one stops a single-needle machine).
+    s.execute("embroidery.autoSequence", &json!({ "ids": [gid.0] }))?;
     let (mut satin, mut fill, mut run, mut colors) = (0usize, 0usize, 0usize, Vec::new());
     let d = &s.doc()?.doc;
     for n in ids.iter().filter_map(|id| d.node(*id)) {

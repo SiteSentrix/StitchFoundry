@@ -934,6 +934,40 @@ fn auto_sequence_groups_colours_and_keeps_overlaps_in_order() {
 }
 
 #[test]
+fn auto_sequence_can_keep_to_some_groups() {
+    let mut s = session();
+    let stitched = |s: &mut Session, x: f64, color: &str| {
+        let id = rect(s, x, 10.0, 30.0, 30.0);
+        s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+        s.execute("embroidery.setThread", &json!({"color": color})).unwrap();
+        id.0
+    };
+    let group = |s: &mut Session, x: f64| {
+        let ids: Vec<u64> =
+            ["#cc2233", "#2233cc", "#cc2233", "#2233cc"].iter().enumerate().map(|(k, c)| stitched(s, x + k as f64 * 40.0, c)).collect();
+        s.execute("select.set", &json!({"ids": ids})).unwrap();
+        let g = s.execute("object.group", &json!({})).unwrap();
+        NodeId(g["id"].as_u64().unwrap())
+    };
+    let (a, b) = (group(&mut s, 10.0), group(&mut s, 300.0));
+    let order = |s: &Session, g: NodeId| -> Vec<NodeId> { s.doc().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|c| c.id).collect() };
+    let before_b = order(&s, b);
+    assert_eq!(color_changes(&s), 7);
+    let r = s.execute("embroidery.autoSequence", &json!({"ids": [a.0]})).unwrap();
+    assert!(r["moved"].as_u64().unwrap() > 0);
+    // group a's colours come together; group b stays as it was
+    let threads = |s: &Session, g: NodeId| -> Vec<String> {
+        let d = &s.doc().unwrap().doc;
+        order(s, g).iter().map(|id| d.node(*id).unwrap().embroidery.as_ref().unwrap().thread.as_ref().unwrap().color.to_hex()).collect()
+    };
+    let a_threads = threads(&s, a);
+    assert_eq!(a_threads.windows(2).filter(|w| w[0] != w[1]).count(), 1, "{a_threads:?}");
+    assert!(color_changes(&s) < 7);
+    assert_eq!(order(&s, b), before_b);
+    assert!(s.execute("embroidery.autoSequence", &json!({"ids": [u64::MAX]})).is_err());
+}
+
+#[test]
 fn branch_travel_finds_its_way_round_corners() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
