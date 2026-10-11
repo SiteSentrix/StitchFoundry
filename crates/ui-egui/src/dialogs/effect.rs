@@ -167,7 +167,6 @@ pub(crate) const FILM_GRAIN_FIELDS: [(&str, &str, f64); 3] =
 
 fn film_grain_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let before = d.fields.clone();
-    let rail = |v: f32| egui::Color32::from_gray((48.0 + 192.0 * v).round() as u8);
     // Use one column wide enough for this language's longest label, keeping every rail aligned.
     let font = egui::TextStyle::Body.resolve(ui.style());
     let text = Tokens::get(ui.ctx()).text;
@@ -178,7 +177,7 @@ fn film_grain_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         .ceil()
         + 4.0;
     for (key, label, max) in FILM_GRAIN_FIELDS {
-        form::slider_w(ui, d, (key, label, label_w), 0.0..=max, "", &rail);
+        form::slider_w(ui, d, (key, label, label_w), 0.0..=max, "", &grey_rail);
     }
     before != d.fields
 }
