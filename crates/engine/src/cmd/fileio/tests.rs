@@ -43,7 +43,7 @@ fn image_bytes(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
 fn image_of(s: &Session) -> vectorcraft_doc::ImageObject {
     let doc = &s.doc().unwrap().doc;
     match &doc.layers[0].children().unwrap()[0].kind {
-        NodeKind::Image(im) => im.clone(),
+        NodeKind::Image(im) => (**im).clone(),
         other => panic!("expected an image, got {other:?}"),
     }
 }

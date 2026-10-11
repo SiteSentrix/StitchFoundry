@@ -73,15 +73,47 @@ pub struct HistoryEntry {
     /// Roughly the memory this step keeps of its own: what of `doc` the step after it (or the
     /// document now) doesn't share ([`Document::retained_bytes`]).
     pub bytes: usize,
+    /// The same the other way round: what that next state keeps that `doc` doesn't share. Undoing
+    /// (redoing) this step makes a step that keeps the next state: this is its `bytes`.
+    next_bytes: usize,
+    /// Which document the figures were taken against (its address): the next state.
+    next: usize,
 }
 
 impl HistoryEntry {
     /// A step keeping `doc` and `selection`, as they were before the edit that made `next`.
     pub(crate) fn kept(label: String, doc: Arc<Document>, selection: Arc<Selection>, next: &Document) -> Self {
         doc.drop_lookup_cache();
-        let bytes = doc.retained_bytes(next);
-        HistoryEntry { label, doc, selection, bytes }
+        let (bytes, next_bytes) = doc.retained_bytes_each(next);
+        HistoryEntry { label, doc, selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize }
     }
+
+    /// The step that undoing (redoing) the step `costs` came from makes: it keeps `doc`, the
+    /// document before the undo, whose next state is now `now` (that step's document). Its figures
+    /// are that step's the other way round when `doc` is still the document they were taken
+    /// against (nothing replaced it since), so undo and redo needn't walk the documents again. A
+    /// change made to it in place without an undo step (a setting, a refresh) goes unnoticed: a
+    /// small error, for an estimate.
+    pub(crate) fn turned(label: String, doc: Arc<Document>, selection: Arc<Selection>, now: &Arc<Document>, costs: StepCosts) -> Self {
+        if costs.next != Arc::as_ptr(&doc) as usize {
+            return Self::kept(label, doc, selection, now);
+        }
+        doc.drop_lookup_cache();
+        HistoryEntry { label, doc, selection, bytes: costs.next_bytes, next_bytes: costs.bytes, next: Arc::as_ptr(now) as usize }
+    }
+
+    /// The figures [`HistoryEntry::turned`] reuses.
+    pub(crate) fn costs(&self) -> StepCosts {
+        StepCosts { bytes: self.bytes, next_bytes: self.next_bytes, next: self.next }
+    }
+}
+
+/// A step's memory figures ([`HistoryEntry::costs`]).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct StepCosts {
+    bytes: usize,
+    next_bytes: usize,
+    next: usize,
 }
 
 /// The undo history of a document: bounded by a number of steps (Preferences › Performance ›
@@ -141,7 +173,8 @@ impl History {
     /// merged into it, or an undo group extended it).
     pub(crate) fn recost_last(&mut self, now: &Document) {
         if let Some(e) = self.undo.last_mut() {
-            e.bytes = e.doc.retained_bytes(now);
+            (e.bytes, e.next_bytes) = e.doc.retained_bytes_each(now);
+            e.next = std::ptr::from_ref(now) as usize;
         }
     }
 }

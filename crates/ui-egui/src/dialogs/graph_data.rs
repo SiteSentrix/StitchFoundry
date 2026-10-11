@@ -52,8 +52,9 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     // The query fails without a graph selected, with the engine's own message.
     let v = app.session.execute("graph.setData", &json!({})).map_err(|e| e.to_string())?;
     let graph = app.session.active().and_then(|st| st.selection.objects.iter().find_map(|id| graph_of(&st.doc, *id)).map(|id| (st, id)));
-    let scatter =
-        graph.is_some_and(|(st, id)| st.doc.node(id).and_then(|n| n.graph.as_deref()).is_some_and(|g| g.kind == vectorcraft_doc::GraphKind::Scatter));
+    let scatter = graph.is_some_and(|(st, id)| {
+        st.doc.node(id).and_then(|n| n.extras().graph.as_deref()).is_some_and(|g| g.kind == vectorcraft_doc::GraphKind::Scatter)
+    });
     let id = graph.map(|(_, id)| id.0);
     let grid = grid_from_data(&v);
     let entry = cell(&grid, 0, 1);
@@ -68,7 +69,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 fn graph_of(doc: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId) -> Option<vectorcraft_doc::NodeId> {
     let mut cur = Some(id);
     while let Some(c) = cur {
-        if doc.node(c).is_some_and(|n| n.graph.is_some()) {
+        if doc.node(c).is_some_and(|n| n.extras().graph.is_some()) {
             return Some(c);
         }
         cur = doc.parent_of(c);

@@ -472,7 +472,7 @@ fn rich_doc() -> Document {
         link: None,
         placement: Default::default(),
     };
-    let n = Node::new(d.alloc_id(), NodeKind::Image(im));
+    let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
     add(&mut d, n);
     d.swatches.push(Swatch { name: "Spot".into(), paint: Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0)), global: true, spot: true });
     let spot = Paint::Solid { color: Color::cmyk(0.0, 0.5, 1.0, 0.0), swatch: Some("Spot".into()), tint: 1.0 };

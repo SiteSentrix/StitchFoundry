@@ -76,7 +76,7 @@ pub(crate) fn is_trace(n: &Node) -> bool {
 /// What the selection is: an Image Trace object (with its stored settings), a plain image, or neither.
 fn target(app: &VectorcraftApp) -> (bool, bool, Option<Value>) {
     let Some(n) = first_selected(app) else { return (false, false, None) };
-    (is_trace(&n), matches!(n.kind, NodeKind::Image(_)), n.trace.map(|t| *t))
+    (is_trace(&n), matches!(n.kind, NodeKind::Image(_)), n.extras().trace.as_deref().cloned())
 }
 
 /// The one selected Image Trace object's preset ("Custom" once its settings were changed) and view.
@@ -84,7 +84,7 @@ pub(crate) fn selected_trace(app: &VectorcraftApp) -> Option<(String, TraceView)
     let st = app.session.active()?;
     let [id] = st.selection.objects[..] else { return None };
     let n = st.doc.node(id).filter(|n| is_trace(n))?;
-    Some((n.trace.as_ref().and_then(|t| t["preset"].as_str()).unwrap_or("Custom").to_string(), n.trace_view()))
+    Some((n.extras().trace.as_ref().and_then(|t| t["preset"].as_str()).unwrap_or("Custom").to_string(), n.trace_view()))
 }
 
 /// Image Trace › View, in the UI language.

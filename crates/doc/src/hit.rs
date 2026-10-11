@@ -157,7 +157,7 @@ fn hit_children(
         return None;
     }
     for (i, c) in children.iter().enumerate().rev() {
-        if parent.shaper.is_some() {
+        if parent.extras().shaper.is_some() {
             let construction = children.first().is_some_and(|source| Some(source.id) == opt.scope);
             if (i == 0) != construction {
                 continue;
@@ -169,7 +169,7 @@ fn hit_children(
         }
         // (An envelope's content sits where it was, not where the envelope draws it.)
         if !(edits_contents(c)
-            || c.shaper.is_some() && c.children().and_then(|children| children.first()).is_some_and(|source| Some(source.id) == opt.scope))
+            || c.extras().shaper.is_some() && c.children().and_then(|children| children.first()).is_some_and(|source| Some(source.id) == opt.scope))
             && let Some(b) = c.reach_bounds()
             && !b.inflate(opt.tol, opt.tol).contains(p)
         {
@@ -534,7 +534,7 @@ mod tests {
         let l = d.layers[0].id;
         let mut add = |t: TextObject, perspective: Option<Affine>| {
             let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
-            n.perspective = perspective.map(|a| {
+            n.extras_mut().perspective = perspective.map(|a| {
                 Box::new(PerspectiveAttachment { projection: Some(Homography::from_affine(a).to_array()), ..PerspectiveAttachment::new("left", 0.0) })
             });
             let id = n.id;

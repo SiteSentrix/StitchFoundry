@@ -880,7 +880,13 @@ impl Exporter<'_> {
     /// A luminosity mask that is 1 − the knockout shape of `c`: white, then black through an alpha
     /// mask of `c` (at full object opacity without its own mask, unless those define its shape).
     fn knockout_mask(&mut self, s: &mut Surface, c: &Node, page: Rect) -> krilla::mask::Mask {
-        let shape = if c.knockout_shape { c.clone() } else { Node { opacity: 1.0, mask: None, ..c.clone() } };
+        let shape = if c.knockout_shape {
+            c.clone()
+        } else {
+            let mut s = c.clone().with_mask(None);
+            s.opacity = 1.0;
+            s
+        };
         let mut sb = s.stream_builder();
         let mut ms = sb.surface();
         cover(&mut ms, page, 255, 1.0);
@@ -948,7 +954,7 @@ impl Exporter<'_> {
             }
             pushes += 1;
         }
-        if let Some(m) = n.mask.as_deref()
+        if let Some(m) = n.extras().mask.as_deref()
             && !m.disabled
         {
             let mask = self.soft_mask(s, m, page);

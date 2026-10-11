@@ -35,7 +35,7 @@ fn native_data(raw: &str) -> Document {
 fn imported_decimal_whitespace_references_survive_export() {
     let doc = import(&svg(r#"<rect id="shape" width="20" height="20" data-value="a&#10;b" data-tab="a&#9;b" data-cr="a&#13;b"/>"#)).unwrap();
     assert_eq!(
-        named(&doc, "shape").attrs.as_deref().unwrap().data,
+        named(&doc, "shape").extras().attrs.as_deref().unwrap().data,
         [("value".into(), "a\nb".into()), ("tab".into(), "a\tb".into()), ("cr".into(), "a\rb".into())]
     );
     for styling in styles() {
@@ -47,7 +47,7 @@ fn imported_decimal_whitespace_references_survive_export() {
                 assert_eq!(n.attribute(key), Some(value));
             }
             let back = import(&text).unwrap();
-            assert_eq!(named(&back, "shape").attrs.as_deref().unwrap().data, named(&doc, "shape").attrs.as_deref().unwrap().data);
+            assert_eq!(named(&back, "shape").extras().attrs.as_deref().unwrap().data, named(&doc, "shape").extras().attrs.as_deref().unwrap().data);
         }
     }
 }
@@ -70,7 +70,7 @@ fn unicode_data_names_survive_each_encoding() {
         r#"<rect id="shape" width="20" height="20" data-ok="safe" data-配方="blend" data-á="accent" data-𐀀="supplementary" data-·="suffix"/>"#,
     ))
     .unwrap();
-    assert_eq!(named(&doc, "shape").attrs.as_deref().unwrap().data.len(), 5);
+    assert_eq!(named(&doc, "shape").extras().attrs.as_deref().unwrap().data.len(), 5);
     for styling in styles() {
         for encoding in [Encoding::Utf8, Encoding::Utf16, Encoding::Latin1] {
             for minify in [false, true] {
@@ -89,7 +89,10 @@ fn unicode_data_names_survive_each_encoding() {
                     assert_eq!(out.encoding, encoding);
                 }
                 let back = import(&out.svg).unwrap();
-                assert_eq!(named(&back, "shape").attrs.as_deref().unwrap().data, named(&doc, "shape").attrs.as_deref().unwrap().data);
+                assert_eq!(
+                    named(&back, "shape").extras().attrs.as_deref().unwrap().data,
+                    named(&doc, "shape").extras().attrs.as_deref().unwrap().data
+                );
             }
         }
     }
@@ -199,7 +202,7 @@ fn reid_imported_nodes_keeps_unique_ids_references_and_data() {
             let back = import(&text).unwrap();
             let mut copies = 0;
             back.walk(|n| {
-                if n.attrs.as_deref().is_some_and(|a| a.data.iter().any(|(k, v)| k == "配方" && v == value)) {
+                if n.extras().attrs.as_deref().is_some_and(|a| a.data.iter().any(|(k, v)| k == "配方" && v == value)) {
                     copies += 1;
                 }
             });

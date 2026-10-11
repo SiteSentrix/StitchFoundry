@@ -723,7 +723,7 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             // A clipping path's name is underlined, a masked object's with a dashed line.
             if clip_path {
                 painter.line_segment([text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text));
-            } else if n.mask.is_some() {
+            } else if n.extras().mask.is_some() {
                 painter.extend(egui::Shape::dashed_line(&[text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text), 3.0, 2.0));
             }
         }

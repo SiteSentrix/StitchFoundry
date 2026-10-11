@@ -552,7 +552,7 @@ impl Renderer {
         let frame = Frame { mt: threads > 0, doc, view, visible, px, opts, ink: Ink::Display };
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
-        if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.mask.as_deref()) {
+        if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
             let pixels = self.mask_values(&frame, m, w, h).into_iter().flat_map(|v| [v, v, v, 255]).collect();
             self.end_frame();
             self.stats.micros = now().saturating_sub(start);
@@ -790,7 +790,7 @@ impl Renderer {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(a) => {
                 let mut acc: Option<Rect> = None;
                 // An Image Trace object's hidden source image shows in some of its views.
-                let source = a.trace.is_some().then(|| children.first()).flatten();
+                let source = a.extras().trace.is_some().then(|| children.first()).flatten();
                 for c in children {
                     if c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)) {
                         acc = vectorcraft_geom::union_opt(acc, self.bounds_of(c));
@@ -873,7 +873,7 @@ impl Renderer {
         if self.skipped(f, a) {
             return;
         }
-        if let Some(m) = a.mask.as_deref()
+        if let Some(m) = a.extras().mask.as_deref()
             && !m.disabled
             && !f.opts.outline
             && !self.is_shape(a)

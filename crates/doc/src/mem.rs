@@ -2,9 +2,11 @@
 //!
 //! Documents share structure (`Arc<Node>` children, [`crate::Shared`] resources), so an old
 //! version kept in the undo history holds only what the edits after it replaced. The estimate
-//! walks the old version beside the newer one and visits only what isn't shared: a subtree whose
-//! `Arc` the newer document also holds costs nothing and isn't entered, so the walk is about as
-//! long as the edit was (plus a pass over each changed child list). It counts the heap the values
+//! walks two versions side by side and visits only what isn't shared: a subtree whose `Arc` both
+//! hold costs nothing and isn't entered, so the walk is about as long as the edit was (plus a pass
+//! over each changed child list). One walk gives both directions: what the older version keeps
+//! that the newer one doesn't (the undo step's cost) and the other way round (the cost of the redo
+//! step that undoing it makes), so undo and redo needn't walk again. It counts the heap the values
 //! own (struct sizes, vector capacities, strings, JSON) plus a typical allocator overhead per
 //! allocation, without following every last field: an estimate in the right ballpark, for a
 //! memory budget, not an exact figure.
@@ -15,17 +17,18 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup};
-use vectorcraft_geom::{Anchor, PathData, SubPath};
+use vectorcraft_geom::{Affine, Anchor, PathData, SubPath};
 
+use crate::live::{BlendSpec, EnvelopeKind};
 use crate::text::{ParaStyle, TextObject, TextRun, TextStyleDef};
-use crate::{Appearance, AppearanceItem, Document, Effect, GraphicStyle, Node, NodeKind, SavedSelection, Shared};
+use crate::{Appearance, AppearanceItem, Document, Effect, GraphicStyle, ImageObject, Node, NodeExtras, NodeKind, SavedSelection, Shared};
 
 /// Bookkeeping and rounding a typical allocator adds to each allocation.
 const ALLOC: usize = 16;
 /// An `Arc`'s two reference counts.
 const ARC: usize = 16;
-/// The kinds of node this doesn't break down (meshes, envelopes' settings, placed documents…):
-/// a typical size of what they own besides the node.
+/// The kinds of node this doesn't break down (meshes, repeats' settings, placed documents…): a
+/// typical size of what they own besides the node.
 const OTHER_KIND: usize = 256;
 
 impl Document {
@@ -33,23 +36,48 @@ impl Document {
     /// keeping this version in the undo history costs while `newer` (a later version) is kept too.
     /// Visits only the parts that aren't shared (see the [module docs](self)).
     pub fn retained_bytes(&self, newer: &Document) -> usize {
-        if std::ptr::eq(self, newer) {
-            return 0;
+        self.retained_bytes_each(newer).0
+    }
+
+    /// [`Document::retained_bytes`] both ways in one walk: what this document keeps that `other`
+    /// doesn't share, and what `other` keeps that this one doesn't.
+    pub fn retained_bytes_each(&self, other: &Document) -> (usize, usize) {
+        if std::ptr::eq(self, other) {
+            return (0, 0);
         }
-        let mut w = Walk { newer, seen: None, bytes: size_of::<Document>() + ALLOC + ARC };
-        w.list(&self.layers, Some(&newer.layers));
-        for (i, s) in self.symbols.iter().enumerate() {
-            w.bytes += s.name.capacity();
-            w.tree(&s.art, newer.symbols.get(i).map(|n| &n.art));
+        let own = size_of::<Document>() + ALLOC + ARC;
+        let mut w = Walk { docs: [self, other], seen: [None, None], bytes: [own, own] };
+        w.list(&self.layers, &other.layers);
+        for i in 0..self.symbols.len().max(other.symbols.len()) {
+            match (self.symbols.get(i), other.symbols.get(i)) {
+                (Some(a), Some(b)) => w.pair(&a.art, &b.art),
+                (a, b) => {
+                    a.into_iter().for_each(|a| w.alone(0, &a.art));
+                    b.into_iter().for_each(|b| w.alone(1, &b.art));
+                }
+            }
         }
-        w.bytes += vec_bytes(&self.symbols);
-        for (i, p) in self.patterns.iter().enumerate() {
-            w.bytes += p.name.capacity();
-            w.list(&p.art, newer.patterns.get(i).map(|n| &n.art));
+        for i in 0..self.patterns.len().max(other.patterns.len()) {
+            match (self.patterns.get(i), other.patterns.get(i)) {
+                (Some(a), Some(b)) => w.list(&a.art, &b.art),
+                (a, b) => {
+                    a.into_iter().flat_map(|a| &a.art).for_each(|n| w.alone(0, n));
+                    b.into_iter().flat_map(|b| &b.art).for_each(|n| w.alone(1, n));
+                }
+            }
         }
-        w.bytes += vec_bytes(&self.patterns);
-        w.bytes += self.resources_bytes(newer);
-        w.bytes
+        let [mut a, mut b] = w.bytes;
+        a += self.lists_bytes() + self.resources_bytes(other);
+        b += other.lists_bytes() + other.resources_bytes(self);
+        (a, b)
+    }
+
+    /// The symbol and pattern lists themselves (their art is counted as nodes).
+    fn lists_bytes(&self) -> usize {
+        vec_bytes(&self.symbols)
+            + self.symbols.iter().map(|s| s.name.capacity()).sum::<usize>()
+            + vec_bytes(&self.patterns)
+            + self.patterns.iter().map(|p| p.name.capacity()).sum::<usize>()
     }
 
     /// The document-wide lists and settings: a copy of the document copies those that aren't
@@ -92,47 +120,99 @@ impl Document {
     }
 }
 
-/// One estimate in progress.
+/// One estimate in progress: two documents walked side by side.
 struct Walk<'a> {
-    newer: &'a Document,
-    /// Every node the newer document holds (by address), built the first time a node has no
-    /// counterpart in place: then a node moved elsewhere (grouped, say) is still found shared.
-    seen: Option<HashSet<usize>>,
-    bytes: usize,
+    docs: [&'a Document; 2],
+    /// For each side, every node the other document holds (by address), built the first time a
+    /// node of that side that the other may share has no counterpart in place: then a node moved
+    /// elsewhere (grouped, say) is still found shared.
+    seen: [Option<HashSet<usize>>; 2],
+    /// For each side, what it keeps that the other doesn't.
+    bytes: [usize; 2],
 }
 
 impl Walk<'_> {
-    /// The nodes of `list` that `newer` (the counterpart list, if any) doesn't share.
-    fn list(&mut self, list: &[Arc<Node>], newer: Option<&Vec<Arc<Node>>>) {
-        for (i, n) in list.iter().enumerate() {
-            self.tree(n, newer.and_then(|l| l.get(i)));
+    /// Two versions of a child list: the nodes in the same place on both sides (the same `Arc`, or
+    /// versions of the same object) are compared in place; the others (inserted, deleted, moved)
+    /// may still be shared from elsewhere.
+    fn list(&mut self, a: &[Arc<Node>], b: &[Arc<Node>]) {
+        let same = |x: &Arc<Node>, y: &Arc<Node>| Arc::ptr_eq(x, y) || x.id == y.id;
+        // In place from the start and from the end: an insertion or deletion shifts only what is
+        // between.
+        let head = a.iter().zip(b).take_while(|(x, y)| same(x, y)).count();
+        let (a_rest, b_rest) = (a.get(head..).unwrap_or_default(), b.get(head..).unwrap_or_default());
+        let tail = a_rest.iter().rev().zip(b_rest.iter().rev()).take_while(|(x, y)| same(x, y)).count();
+        for (x, y) in a.iter().zip(b).take(head).chain(a_rest.iter().rev().zip(b_rest.iter().rev()).take(tail)) {
+            self.pair(x, y);
+        }
+        let a_mid = a_rest.get(..a_rest.len().saturating_sub(tail)).unwrap_or_default();
+        let b_mid = b_rest.get(..b_rest.len().saturating_sub(tail)).unwrap_or_default();
+        for i in 0..a_mid.len().max(b_mid.len()) {
+            match (a_mid.get(i), b_mid.get(i)) {
+                (Some(x), Some(y)) if same(x, y) => self.pair(x, y),
+                (x, y) => {
+                    x.into_iter().for_each(|x| self.alone(0, x));
+                    y.into_iter().for_each(|y| self.alone(1, y));
+                }
+            }
         }
     }
 
-    /// Node `n` and what under it isn't shared; `newer` is the node in its place in the newer
-    /// document, if any.
-    fn tree(&mut self, n: &Arc<Node>, newer: Option<&Arc<Node>>) {
-        if newer.is_some_and(|m| Arc::ptr_eq(n, m)) {
+    /// Node `a` and `b` in the same place on the two sides: nothing when they are the same `Arc`,
+    /// both nodes and what under them isn't shared when they are versions of the same object.
+    fn pair(&mut self, a: &Arc<Node>, b: &Arc<Node>) {
+        if Arc::ptr_eq(a, b) {
             return;
         }
-        // In its place is another version of the same object (edited, moved): compare their
-        // children in place. Else it may sit elsewhere in the newer document.
-        let counterpart = newer.filter(|m| m.id == n.id);
-        if counterpart.is_none() && self.newer_holds(n) {
+        if a.id != b.id {
+            self.alone(0, a);
+            self.alone(1, b);
             return;
         }
-        self.bytes += node_bytes(n, counterpart.map(|m| &**m));
-        if let Some(ch) = n.children() {
-            self.list(ch, counterpart.and_then(|m| m.children()));
+        self.bytes[0] += node_bytes(a, Some(b));
+        self.bytes[1] += node_bytes(b, Some(a));
+        match (a.children(), b.children()) {
+            (Some(x), Some(y)) => self.list(x, y),
+            (x, y) => {
+                x.into_iter().flatten().for_each(|c| self.alone(0, c));
+                y.into_iter().flatten().for_each(|c| self.alone(1, c));
+            }
         }
-        if let Some(mask) = &n.mask {
-            self.tree(&mask.art, counterpart.and_then(|m| m.mask.as_ref()).map(|m| &m.art));
+        match (&a.extras().mask, &b.extras().mask) {
+            (Some(x), Some(y)) => self.pair(&x.art, &y.art),
+            (x, y) => {
+                x.iter().for_each(|m| self.alone(0, &m.art));
+                y.iter().for_each(|m| self.alone(1, &m.art));
+            }
         }
     }
 
-    fn newer_holds(&mut self, n: &Arc<Node>) -> bool {
-        let newer = self.newer;
-        let seen = self.seen.get_or_insert_with(|| {
+    /// Node `n` of side `side` without a counterpart in place, and what under it the other side
+    /// doesn't hold.
+    fn alone(&mut self, side: usize, n: &Arc<Node>) {
+        if self.other_holds(side, n) {
+            return;
+        }
+        if let Some(b) = self.bytes.get_mut(side) {
+            *b += node_bytes(n, None);
+        }
+        for c in n.children().into_iter().flatten() {
+            self.alone(side, c);
+        }
+        if let Some(m) = &n.extras().mask {
+            self.alone(side, &m.art);
+        }
+    }
+
+    /// Whether the document across from `side` holds node `n` somewhere.
+    fn other_holds(&mut self, side: usize, n: &Arc<Node>) -> bool {
+        // Held only where it was found: not in the other document (which would hold it too). So
+        // new art inserted by the edit is told apart without looking.
+        if Arc::strong_count(n) == 1 {
+            return false;
+        }
+        let (Some(other), Some(seen)) = (self.docs.get(1 - side.min(1)), self.seen.get_mut(side)) else { return false };
+        let seen = seen.get_or_insert_with(|| {
             fn add(n: &Arc<Node>, out: &mut HashSet<usize>) {
                 // A node already seen was entered already (a node shared within the document).
                 if !out.insert(Arc::as_ptr(n) as usize) {
@@ -141,12 +221,12 @@ impl Walk<'_> {
                 for c in n.children().into_iter().flatten() {
                     add(c, out);
                 }
-                if let Some(m) = &n.mask {
+                if let Some(m) = &n.extras().mask {
                     add(&m.art, out);
                 }
             }
             let mut out = HashSet::new();
-            let roots = newer.layers.iter().chain(newer.symbols.iter().map(|s| &s.art)).chain(newer.patterns.iter().flat_map(|p| &p.art));
+            let roots = other.layers.iter().chain(other.symbols.iter().map(|s| &s.art)).chain(other.patterns.iter().flat_map(|p| &p.art));
             for n in roots {
                 add(n, &mut out);
             }
@@ -157,28 +237,29 @@ impl Walk<'_> {
 }
 
 /// One node's own heap: the node, and what it owns besides its children and mask art (counted
-/// as nodes of their own). Its appearance counts unless `newer`, its newer version, shares it.
-fn node_bytes(n: &Node, newer: Option<&Node>) -> usize {
+/// as nodes of their own). Its appearance counts unless `other`, its other version, shares it.
+fn node_bytes(n: &Node, other: Option<&Node>) -> usize {
     fn boxed<T>(b: &Option<Box<T>>) -> usize {
         b.as_ref().map_or(0, |_| ALLOC + size_of::<T>())
     }
     let mut b = ALLOC + ARC + size_of::<Node>();
     b += n.name.as_ref().map_or(0, String::capacity);
-    if !newer.is_some_and(|m| Shared::ptr_eq(&m.appearance, &n.appearance)) {
+    if !other.is_some_and(|m| Shared::ptr_eq(&m.appearance, &n.appearance)) {
         b += ALLOC + ARC + appearance_heap(&n.appearance);
     }
-    b += boxed(&n.mask) + boxed(&n.graph) + boxed(&n.shaper) + boxed(&n.attrs) + boxed(&n.slice) + boxed(&n.perspective);
-    b += n.trace.as_ref().map_or(0, |t| ALLOC + json_bytes(t));
+    if let Some(e) = n.extras_box() {
+        b += ALLOC + size_of::<NodeExtras>();
+        b += boxed(&e.mask) + boxed(&e.graph) + boxed(&e.shaper) + boxed(&e.attrs) + boxed(&e.slice) + boxed(&e.perspective);
+        b += e.trace.as_ref().map_or(0, |t| ALLOC + size_of::<Value>() + json_bytes(t));
+    }
     b += match &n.kind {
-        NodeKind::Path { path, .. } => path_bytes(path),
-        NodeKind::Layer { children, .. }
-        | NodeKind::Group { children, .. }
-        | NodeKind::Compound { children, .. }
-        | NodeKind::Blend { children, .. }
-        | NodeKind::Envelope { content: children, .. } => vec_bytes(children),
+        NodeKind::Path { path, live, .. } => path_bytes(path) + boxed(live),
+        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => vec_bytes(children),
+        NodeKind::Blend { children, .. } => vec_bytes(children) + ALLOC + size_of::<BlendSpec>(),
+        NodeKind::Envelope { content, .. } => vec_bytes(content) + 2 * ALLOC + size_of::<EnvelopeKind>() + size_of::<Affine>(),
         NodeKind::Repeat(r) => vec_bytes(&r.source) + OTHER_KIND,
         NodeKind::Text(t) => ALLOC + text_bytes(t),
-        NodeKind::Image(im) => im.key.capacity(),
+        NodeKind::Image(im) => ALLOC + size_of::<ImageObject>() + im.key.capacity(),
         NodeKind::SymbolInstance { symbol, .. } => symbol.capacity(),
         _ => OTHER_KIND,
     };
@@ -273,7 +354,8 @@ mod tests {
     }
 
     /// Moving every rectangle: each keeps its old node and anchors (its appearance stays shared).
-    /// The process grew by about 775 bytes per moved rectangle when measured (#1244).
+    /// The process grew by about 775 bytes per moved rectangle when measured (#1244), about 490
+    /// once nodes kept their rarely set parts out of line.
     #[test]
     fn moving_rectangles_costs_their_nodes() {
         let n = 1000;
@@ -305,6 +387,26 @@ mod tests {
         assert_eq!(ids.len(), 100);
         let bytes = before.retained_bytes(&after);
         assert!(bytes < 8192, "only the old layer and its child list: {bytes}");
+    }
+
+    /// One walk gives both ways, each what a walk the other way gives; an insertion and a deletion
+    /// cost the side that has the objects.
+    #[test]
+    fn both_ways_at_once() {
+        let before = doc_with_rects(100);
+        let mut after = before.clone();
+        let layer = after.layers[0].id;
+        for at in [0, 50, usize::MAX] {
+            let id = after.alloc_id();
+            let r = shapes::rectangle(kurbo::Rect::new(0.0, 0.0, 10.0, 10.0));
+            after.insert(Some(layer), at, Node::path(id, r, Appearance::default_art())).unwrap();
+        }
+        let (kept, added) = before.retained_bytes_each(&after);
+        assert_eq!((kept, added), (before.retained_bytes(&after), after.retained_bytes(&before)));
+        assert_eq!(after.retained_bytes_each(&before), (added, kept));
+        // The old layer and its list are the old version's own; the new one holds three new nodes.
+        assert!(kept < 4096, "{kept}");
+        assert!(added > kept + 3 * 300, "{added} for three new rectangles");
     }
 
     #[test]

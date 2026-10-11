@@ -1054,7 +1054,7 @@ impl<'a> Reader<'a> {
                 true
             });
         }
-        if let Some(m) = &mut n.mask {
+        if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
             self.reid(Arc::make_mut(&mut m.art));
         }
         if let Some(children) = n.children_mut() {
@@ -1437,7 +1437,7 @@ impl<'a> Reader<'a> {
         self.doc.images.entry(key.clone()).or_insert(blob);
         let gs = self.gs.clone();
         let im = ImageObject { key, width: w as u32, height: h as u32, xf, link: None, placement: Default::default() };
-        let mut node = self.new_node(NodeKind::Image(im), &gs);
+        let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
         self.add(node, false)

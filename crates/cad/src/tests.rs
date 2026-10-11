@@ -355,7 +355,7 @@ fn images_link_png_or_jpeg_files() {
             link: None,
             placement: Default::default(),
         };
-        vec![Node::new(d.alloc_id(), NodeKind::Image(im))]
+        vec![Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
     });
     d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
     let out = export(&d, &opts(&d)).unwrap();

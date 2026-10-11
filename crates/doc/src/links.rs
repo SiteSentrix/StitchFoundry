@@ -136,7 +136,7 @@ fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
 /// `n` and every descendant, opacity-mask art included.
 fn walk_all<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
     f(n);
-    if let Some(m) = &n.mask {
+    if let Some(m) = &n.extras().mask {
         walk_all(&m.art, f);
     }
     for c in n.children().into_iter().flatten() {
@@ -295,7 +295,7 @@ impl Document {
                 NodeKind::PlacedDocument(placed) => f(&mut placed.link),
                 _ => {}
             }
-            if let Some(mask) = &mut n.mask {
+            if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
                 walk(&mut mask.art, f);
             }
             for child in n.children_mut().into_iter().flatten() {
@@ -331,7 +331,7 @@ impl Document {
             {
                 f(im);
             }
-            if let Some(m) = &mut n.mask {
+            if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
                 update(&mut m.art, pick, f);
             }
             for c in n.children_mut().into_iter().flatten() {
@@ -370,7 +370,14 @@ mod tests {
             0,
             Node::new(
                 id,
-                NodeKind::Image(ImageObject { key: key.into(), width: 4, height: 4, xf: Affine::IDENTITY, link, placement: Default::default() }),
+                NodeKind::Image(Box::new(ImageObject {
+                    key: key.into(),
+                    width: 4,
+                    height: 4,
+                    xf: Affine::IDENTITY,
+                    link,
+                    placement: Default::default(),
+                })),
             ),
         )
         .unwrap()

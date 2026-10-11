@@ -99,7 +99,7 @@ fn opacity_masks_take_screen_luminance() {
     let mut d = Document::new_with_mode(20.0, 20.0, ColorMode::Cmyk);
     let mut n = rect(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
     let art = rect(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), CYAN);
-    n.mask = Some(Box::new(OpacityMask::new(art, true)));
+    n.extras_mut().mask = Some(Box::new(OpacityMask::new(art, true)));
     add(&mut d, n);
     let [r, g, b] = CYAN.to_rgb();
     let cover = MASK_LUM[0] * r + MASK_LUM[1] * g + MASK_LUM[2] * b;
@@ -116,7 +116,14 @@ fn placed_images_are_separated_not_blackened() {
     d.images.insert("red".into(), ImageBlob::new("image/png", png));
     let n = Node::new(
         d.alloc_id(),
-        NodeKind::Image(ImageObject { key: "red".into(), width: 4, height: 4, xf: Affine::IDENTITY, link: None, placement: Default::default() }),
+        NodeKind::Image(Box::new(ImageObject {
+            key: "red".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+        })),
     );
     add(&mut d, n);
     let got = Renderer::new().render_region(&d, d.artboards[0].rect, 1.0, true).pixel(1, 1);

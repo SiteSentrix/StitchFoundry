@@ -285,7 +285,7 @@ fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
                 link,
                 placement: Default::default(),
             };
-            Node::new(d.alloc_id(), NodeKind::Image(im))
+            Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))
         }
         Art::Text(t) => Node::new(d.alloc_id(), NodeKind::Text(Box::new(text::area_text(t, l.natural)))),
         Art::Document(s, link, bounding) => document::node(d, &s, link, bounding),

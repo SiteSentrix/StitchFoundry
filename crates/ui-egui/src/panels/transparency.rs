@@ -65,7 +65,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     widgets::divider(ui);
     // Thumbnails and the opacity-mask controls.
     let hide_thumbs: bool = pstate(ui.ctx(), "tr-hide-thumbs");
-    let mask = n.as_ref().and_then(|n| n.mask.as_deref());
+    let mask = n.as_ref().and_then(|n| n.extras().mask.as_deref());
     let (new_clip, new_invert) = app.session.new_mask_defaults();
     ui.horizontal(|ui| {
         if !hide_thumbs {
@@ -79,7 +79,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             if let Some(n) = &n {
                 let mut bare = n.clone();
-                bare.mask = None;
+                bare.extras_mut().mask = None;
                 if !node_thumb(app, ui, "tr-obj", &bare, r.shrink(3.0), None) {
                     let (f, s) = current_paints(app);
                     let inner = r.shrink2(vec2(6.0, 10.0));
@@ -195,7 +195,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The masked object's mask, also while editing it (the selection then is the mask art).
     let editing = app.session.active().is_some_and(|d| d.doc.mask_edit.is_some());
     let (_, n) = state(app, ui.ctx());
-    let mask = n.as_ref().and_then(|n| n.mask.as_deref());
+    let mask = n.as_ref().and_then(|n| n.extras().mask.as_deref());
     for (label, id, enabled) in mask_items(mask, n.is_some() && !editing) {
         if menu_item(ui, tl!(label), enabled, false) {
             app.run(id, json!({})).ok();
@@ -320,7 +320,7 @@ mod tests {
         let (info, n) = state(&app, &egui::Context::default());
         assert_eq!((info.ids, n.as_ref().map(|n| n.id.0)), (vec![vectorcraft_doc::NodeId(a)], Some(a)));
         // The menu is enabled for the masked object while editing (Make is not).
-        let items = mask_items(n.as_ref().and_then(|n| n.mask.as_deref()), false);
+        let items = mask_items(n.as_ref().and_then(|n| n.extras().mask.as_deref()), false);
         assert_eq!(items.map(|(_, _, on)| on), [false, true, true, true]);
         // The panel's controls run without ids and reach the masked object.
         run(&mut app, "transparency.setOpacityMask", json!({"clip": false}));
@@ -329,7 +329,7 @@ mod tests {
         frame(&mut app);
         let st = app.session.active().unwrap();
         let obj = st.doc.node(vectorcraft_doc::NodeId(a)).unwrap();
-        let m = obj.mask.as_ref().unwrap();
+        let m = obj.extras().mask.as_ref().unwrap();
         assert!(!m.clip && !m.linked && obj.blend == BlendMode::Multiply);
         assert!(st.doc.mask_edit.is_some());
         // Release leaves editing and puts the drawn mask art back.

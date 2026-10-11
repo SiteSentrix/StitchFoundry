@@ -24,7 +24,7 @@ fn doc_with_image(key: &str, bytes: Vec<u8>, w: u32, h: u32) -> Document {
     d.images.insert(key.into(), ImageBlob::new("image/png", bytes));
     let (id, layer) = (d.alloc_id(), d.layers[0].id);
     let im = ImageObject { key: key.into(), width: w, height: h, xf: Affine::IDENTITY, link: None, placement: Default::default() };
-    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(im))).unwrap();
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
     d
 }
 

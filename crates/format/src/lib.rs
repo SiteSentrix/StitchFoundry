@@ -605,7 +605,7 @@ mod tests {
         // Only images in use are saved.
         let img = d.alloc_id();
         let im = ImageObject { key: "k".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default() };
-        d.insert(Some(l), 1, Node::new(img, NodeKind::Image(im))).unwrap();
+        d.insert(Some(l), 1, Node::new(img, NodeKind::Image(Box::new(im)))).unwrap();
         let bytes = save(&d, true);
         assert!(sniff(&bytes));
         let back = load(&bytes).unwrap();

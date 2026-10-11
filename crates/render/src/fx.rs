@@ -505,16 +505,14 @@ impl Renderer {
         // A path's geometry effects still apply when it is drawn.
         let path = matches!(art.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
         art.appearance.effects.retain(|e| path && effects::is_geometry(&e.id));
-        let art = Arc::new(Node {
-            opacity: 1.0,
-            blend: Default::default(),
-            isolate: false,
-            // One element: its pieces never knock each other out (a group's members still do as
-            // its knockout setting says).
-            knockout: if container { a.knockout } else { vectorcraft_doc::Knockout::Off },
-            mask: None,
-            ..art
-        });
+        let mut art = art.with_mask(None);
+        art.opacity = 1.0;
+        art.blend = Default::default();
+        art.isolate = false;
+        // One element: its pieces never knock each other out (a group's members still do as its
+        // knockout setting says).
+        art.knockout = if container { a.knockout } else { vectorcraft_doc::Knockout::Off };
+        let art = Arc::new(art);
         if cache {
             let bytes = crate::lru::node_bytes(&art);
             self.fx_arts.insert(key, (a.clone(), art.clone()), bytes, self.stamp);

@@ -439,7 +439,7 @@ struct Targets {
 /// What `n` is when Liquify can't distort it (and doesn't look inside it).
 fn not_liquified(n: &Node) -> Option<&'static str> {
     Some(match &n.kind {
-        NodeKind::Group { .. } if n.graph.is_some() => "graphs",
+        NodeKind::Group { .. } if n.extras().graph.is_some() => "graphs",
         NodeKind::Text(_) => "type",
         NodeKind::SymbolInstance { .. } => "symbols",
         NodeKind::Image(_) => "images",
@@ -1252,7 +1252,7 @@ fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
         let (Some(flat), Some(drawn)) = (t.bounds(), t.bounds().and_then(|b| h.map_rect_bbox(b))) else { return Ok(()) };
         let shift = vectorcraft_geom::Affine::translate(drawn.center() - flat.center());
         t.transform(shift);
-        if let Some(rec) = n.perspective.as_deref_mut() {
+        if let Some(rec) = n.extras_if_any().and_then(|e| e.perspective.as_deref_mut()) {
             rec.projection = Some(h.then_after(&Homography::from_affine(shift.inverse())).to_array());
             rec.editing = true;
         }
@@ -1271,8 +1271,8 @@ pub(crate) fn finish_edit_text(st: &mut crate::DocState, id: NodeId) {
     let clear = |doc: &mut Arc<Document>| {
         // Undo steps keep no lookup cache: look without building one, and drop the one an edit
         // builds (the document now keeps its own).
-        if doc.node_uncached(id).and_then(|n| n.perspective.as_deref()).is_some_and(|p| p.editing)
-            && let Some(p) = Arc::make_mut(doc).node_mut(id).and_then(|n| n.perspective.as_deref_mut())
+        if doc.node_uncached(id).and_then(|n| n.extras().perspective.as_deref()).is_some_and(|p| p.editing)
+            && let Some(p) = Arc::make_mut(doc).node_mut(id).and_then(|n| n.extras_if_any().and_then(|e| e.perspective.as_deref_mut()))
         {
             p.editing = false;
         }

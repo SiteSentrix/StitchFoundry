@@ -220,7 +220,7 @@ fn deep(n: usize) -> Result<(), String> {
             let xf = Affine::translate((f64::from(i % 2) * 800.0, f64::from(i / 2) * 600.0)) * Affine::scale(800.0 / 6000.0);
             let image = vectorcraft_doc::ImageObject { key, width: 6000, height: 4000, xf, link: None, placement: Default::default() };
             let id = d.alloc_id();
-            d.insert(l, usize::MAX, Node::new(id, vectorcraft_doc::NodeKind::Image(image))).map_err(|e| e.to_string())?;
+            d.insert(l, usize::MAX, Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(image)))).map_err(|e| e.to_string())?;
         }
         note("4 embedded 24 MP photos");
         let mut renderers = [Renderer::new(), Renderer::new(), Renderer::new()];

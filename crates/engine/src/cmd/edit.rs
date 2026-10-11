@@ -214,11 +214,12 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     let e = st.history.undo.pop().ok_or_else(|| EngineError::Other("nothing to undo".into()))?;
     let label = e.label.clone();
+    let costs = e.costs();
     let editing = st.doc.mask_edit.map(|m| m.layer);
     let doc = std::mem::replace(&mut st.doc, e.doc);
     let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
     let selection = shared_selection(selection, st.history.redo.last());
-    st.history.redo.push(crate::HistoryEntry::kept(e.label, doc, selection, &st.doc));
+    st.history.redo.push(crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs));
     st.history.trim();
     st.revision += 1;
     st.selection.prune(&st.doc);
@@ -230,11 +231,12 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     let e = st.history.redo.pop().ok_or_else(|| EngineError::Other("nothing to redo".into()))?;
     let label = e.label.clone();
+    let costs = e.costs();
     let editing = st.doc.mask_edit.map(|m| m.layer);
     let doc = std::mem::replace(&mut st.doc, e.doc);
     let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
     let selection = shared_selection(selection, st.history.undo.last());
-    st.history.undo.push(crate::HistoryEntry::kept(e.label, doc, selection, &st.doc));
+    st.history.undo.push(crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs));
     st.history.trim();
     st.revision += 1;
     st.selection.prune(&st.doc);

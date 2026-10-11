@@ -547,7 +547,7 @@ fn same_graphic_style(s: &mut Session, _: &Value) -> Result<Value> {
         .and_then(|id| super::style::linked_style(&st.doc, st.doc.node(*id)?))
         .map(|g| g.id)
         .ok_or_else(|| bad(cmd, "the selection has no graphic style"))?;
-    select_where(s, cmd, &json!({}), |d, n| n.graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
+    select_where(s, cmd, &json!({}), |d, n| n.extras().graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
 }
 
 /// An appearance attribute Select > Same > Appearance Attribute matches.

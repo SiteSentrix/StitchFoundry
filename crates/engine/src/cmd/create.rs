@@ -157,7 +157,7 @@ fn draw_mode(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn path_kind(path: PathData, live: Option<LiveShape>) -> NodeKind {
-    NodeKind::Path { path, rule: FillRule::NonZero, live, clipping: false, guide: false }
+    NodeKind::Path { path, rule: FillRule::NonZero, live: live.map(Box::new), clipping: false, guide: false }
 }
 
 fn rect_of(p: &Value, cmd: &str) -> Result<Rect> {

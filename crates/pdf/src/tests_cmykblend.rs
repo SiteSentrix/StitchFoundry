@@ -70,7 +70,7 @@ fn rgb_documents_and_opaque_cmyk_pages_are_unchanged() {
 fn soft_mask_groups_keep_screen_luminance() {
     let mut d = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
     let mut n = rect(Rect::new(0.0, 0.0, 100.0, 100.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
-    n.mask = Some(Box::new(OpacityMask::new(rect(Rect::new(0.0, 0.0, 50.0, 100.0), Color::WHITE), true)));
+    n.extras_mut().mask = Some(Box::new(OpacityMask::new(rect(Rect::new(0.0, 0.0, 50.0, 100.0), Color::WHITE), true)));
     add(&mut d, n);
     let t = text(&d);
     // The page's group blends in CMYK; the mask's group measures luminance in RGB.

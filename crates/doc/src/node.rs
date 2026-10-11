@@ -427,8 +427,9 @@ pub enum NodeKind {
         path: PathData,
         #[serde(default, skip_serializing_if = "crate::skip::is_default")]
         rule: FillRule,
+        /// Boxed: few paths are live shapes, and the shape is larger than the rest of the variant.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        live: Option<LiveShape>,
+        live: Option<Box<LiveShape>>,
         /// This path acts as a clipping path inside a clip group.
         #[serde(default, skip_serializing_if = "crate::skip::is_default")]
         clipping: bool,
@@ -443,7 +444,8 @@ pub enum NodeKind {
         rule: FillRule,
     },
     Text(Box<TextObject>),
-    Image(ImageObject),
+    /// Boxed, as the other large kinds: a node is as large as its largest kind.
+    Image(Box<ImageObject>),
     SymbolInstance {
         symbol: String,
         xf: Affine,
@@ -453,12 +455,12 @@ pub enum NodeKind {
     Blend {
         children: Vec<Arc<Node>>,
         #[serde(default)]
-        spec: BlendSpec,
+        spec: Box<BlendSpec>,
     },
     /// Live envelope distortion of `content`.
     Envelope {
         content: Vec<Arc<Node>>,
-        kind: EnvelopeKind,
+        kind: Box<EnvelopeKind>,
         /// Envelope Options → Fidelity (0–100).
         #[serde(default = "crate::live::default_fidelity")]
         fidelity: f64,
@@ -472,7 +474,7 @@ pub enum NodeKind {
         /// the page axes can't stand for (rotation, shear, reflection). The content maps from its
         /// bounds in this frame, and a warp bends along it.
         #[serde(default, skip_serializing_if = "crate::skip::is_default")]
-        frame: Affine,
+        frame: Box<Affine>,
     },
     /// Gradient mesh.
     Mesh(GradientMesh),
@@ -491,70 +493,326 @@ fn one() -> f32 {
 }
 
 /// One object in the tree. Children are `Arc`s so documents share structure between undo states.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+///
+/// What most objects have is kept inline; what few have is in [`NodeExtras`], allocated only for
+/// the objects that have any of it: every undo step of an edit copies the nodes it changed, so a
+/// small node is a cheap step. Files keep the flat field list either way: a node is written field
+/// by field from where each lives, and read through a flat `NodeWire`.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(from = "NodeWire")]
 pub struct Node {
     pub id: NodeId,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(default = "yes", skip_serializing_if = "crate::skip::is_true")]
     pub visible: bool,
-    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub locked: bool,
-    #[serde(default = "one", skip_serializing_if = "crate::skip::is_one")]
     pub opacity: f32,
-    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub blend: BlendMode,
-    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub isolate: bool,
     /// Knockout Group: whether a container's children knock each other out (see [`Knockout`]).
-    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub knockout: Knockout,
     /// Opacity & Mask Define Knockout Shape: inside a knockout group, this object's opacity and
     /// opacity mask scale how much of the objects below it in the group it knocks out.
-    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub knockout_shape: bool,
-    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub appearance: crate::Shared<Appearance>,
-    /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mask: Option<Box<OpacityMask>>,
-    /// Image Trace object: `{preset, params, view?}` it was traced with (the Image Trace panel shows
-    /// them; `view` is its [`crate::TraceView`] id, absent for the tracing result).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trace: Option<Box<serde_json::Value>>,
-    /// Object → Text Wrap: area type below this object (in the same layer) flows around it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub wrap: Option<crate::text::TextWrap>,
-    /// Graph object: the group's children are generated from this spec (Object → Graph).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub graph: Option<Box<crate::graph::GraphSpec>>,
-    /// Index of the graph series this generated group belongs to. Axes, the legend and other
-    /// children leave it unset, so a series named "Legend" or "Axes" is not mistaken for them.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub series_index: Option<u32>,
-    /// Editable Shaper composition; the original art is retained in its source child.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
     pub kind: NodeKind,
-    /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
-    /// that style's look: editing its appearance or transparency breaks the link.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub graphic_style: Option<u32>,
-    /// Attributes panel: centre point display, image map, URL and note (`None`: all defaults).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attrs: Option<Box<ObjectAttributes>>,
-    /// Object → Slice → Make: the object is an object slice (its slice follows its bounds) with
-    /// these options.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub slice: Option<Box<crate::SliceOptions>>,
     /// The angle of the object's own axes, counter-clockwise degrees (0: square to the page): its
     /// bounding box and handles stand at this angle. Transforms turn it with the object (see
     /// [`crate::orient`]); Reset Bounding Box sets it back to 0.
-    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub bbox_angle: f64,
+    /// The rarely set parts, read with [`Node::extras`] and changed with [`Node::extras_mut`]
+    /// (public so that `Node { opacity: 1.0, ..node }` works).
+    pub extras: Extras,
+}
+
+/// The parts of a [`Node`] that few objects have: kept out of line, so that the nodes without
+/// them stay small ([`Node::extras`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NodeExtras {
+    /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
+    pub mask: Option<Box<OpacityMask>>,
+    /// Image Trace object: `{preset, params, view?}` it was traced with (the Image Trace panel shows
+    /// them; `view` is its [`crate::TraceView`] id, absent for the tracing result).
+    pub trace: Option<Box<serde_json::Value>>,
+    /// Object → Text Wrap: area type below this object (in the same layer) flows around it.
+    pub wrap: Option<crate::text::TextWrap>,
+    /// Graph object: the group's children are generated from this spec (Object → Graph).
+    pub graph: Option<Box<crate::graph::GraphSpec>>,
+    /// Index of the graph series this generated group belongs to. Axes, the legend and other
+    /// children leave it unset, so a series named "Legend" or "Axes" is not mistaken for them.
+    pub series_index: Option<u32>,
+    /// Editable Shaper composition; the original art is retained in its source child.
+    pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
+    /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
+    /// that style's look: editing its appearance or transparency breaks the link.
+    pub graphic_style: Option<u32>,
+    /// Attributes panel: centre point display, image map, URL and note (`None`: all defaults).
+    pub attrs: Option<Box<ObjectAttributes>>,
+    /// Object → Slice → Make: the object is an object slice (its slice follows its bounds) with
+    /// these options.
+    pub slice: Option<Box<crate::SliceOptions>>,
     /// Object › Perspective: the perspective grid plane the object is attached to.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub perspective: Option<Box<crate::PerspectiveAttachment>>,
+}
+
+/// No extras: what [`Node::extras`] gives for a node without any.
+static NO_EXTRAS: NodeExtras = NodeExtras {
+    mask: None,
+    trace: None,
+    wrap: None,
+    graph: None,
+    series_index: None,
+    shaper: None,
+    graphic_style: None,
+    attrs: None,
+    slice: None,
+    perspective: None,
+};
+
+/// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal
+/// none.
+#[derive(Clone, Debug, Default)]
+pub struct Extras(Option<Box<NodeExtras>>);
+
+impl Extras {
+    fn get(&self) -> &NodeExtras {
+        self.0.as_deref().unwrap_or(&NO_EXTRAS)
+    }
+}
+
+impl PartialEq for Extras {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (Some(a), Some(b)) => a == b,
+            _ => self.get() == other.get(),
+        }
+    }
+}
+
+impl Node {
+    /// The rarely set parts of this node (all unset when it has none).
+    #[inline]
+    pub fn extras(&self) -> &NodeExtras {
+        self.extras.get()
+    }
+    /// The rarely set parts of this node, to change: when the change is done (the guard dropped),
+    /// extras that were set are allocated and extras left all unset are let go. Setting one to
+    /// `None` on a node without extras allocates nothing.
+    #[inline]
+    pub fn extras_mut(&mut self) -> ExtrasMut<'_> {
+        ExtrasMut { slot: &mut self.extras.0, local: NodeExtras::default() }
+    }
+    /// The rarely set parts of this node, if it has any: to change what is there in place.
+    #[inline]
+    pub fn extras_if_any(&mut self) -> Option<&mut NodeExtras> {
+        self.extras.0.as_deref_mut()
+    }
+    /// The live shape of a path object, if it is one.
+    pub fn live_shape(&self) -> Option<&LiveShape> {
+        match &self.kind {
+            NodeKind::Path { live, .. } => live.as_deref(),
+            _ => None,
+        }
+    }
+    /// The live shape of a path object, if it is one, to change.
+    pub fn live_shape_mut(&mut self) -> Option<&mut LiveShape> {
+        match &mut self.kind {
+            NodeKind::Path { live, .. } => live.as_deref_mut(),
+            _ => None,
+        }
+    }
+    /// This node with opacity mask `mask` (or none).
+    pub fn with_mask(mut self, mask: Option<Box<OpacityMask>>) -> Self {
+        self.extras_mut().mask = mask;
+        self
+    }
+    /// The extras, if this node has them allocated (for [`crate::mem`]'s estimate).
+    pub(crate) fn extras_box(&self) -> Option<&NodeExtras> {
+        self.extras.0.as_deref()
+    }
+}
+
+/// [`Node::extras_mut`]: the node's extras while they change.
+pub struct ExtrasMut<'a> {
+    slot: &'a mut Option<Box<NodeExtras>>,
+    /// Stands for the extras of a node without any, boxed into it when dropped if one was set.
+    local: NodeExtras,
+}
+
+impl std::ops::Deref for ExtrasMut<'_> {
+    type Target = NodeExtras;
+    fn deref(&self) -> &NodeExtras {
+        self.slot.as_deref().unwrap_or(&self.local)
+    }
+}
+
+impl std::ops::DerefMut for ExtrasMut<'_> {
+    fn deref_mut(&mut self) -> &mut NodeExtras {
+        match self.slot.as_deref_mut() {
+            Some(e) => e,
+            None => &mut self.local,
+        }
+    }
+}
+
+impl Drop for ExtrasMut<'_> {
+    fn drop(&mut self) {
+        match self.slot.as_deref() {
+            Some(e) if *e == NO_EXTRAS => *self.slot = None,
+            Some(_) => {}
+            None if self.local != NO_EXTRAS => *self.slot = Some(Box::new(std::mem::take(&mut self.local))),
+            None => {}
+        }
+    }
+}
+
+/// How a [`Node`] is written: the flat field list of the file format, in its order, borrowed from
+/// the node and its extras (nothing is copied). The node reads back through `NodeWire`.
+impl Serialize for Node {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use crate::skip::{is_default, is_one, is_true};
+        use serde::ser::SerializeStruct;
+        let e = self.extras();
+        // As the derive did: the fields written, then each field written or skipped in order.
+        let skips = [
+            false,
+            self.name.is_none(),
+            is_true(&self.visible),
+            is_default(&self.locked),
+            is_one(&self.opacity),
+            is_default(&self.blend),
+            is_default(&self.isolate),
+            is_default(&self.knockout),
+            is_default(&self.knockout_shape),
+            is_default(&self.appearance),
+            e.mask.is_none(),
+            e.trace.is_none(),
+            e.wrap.is_none(),
+            e.graph.is_none(),
+            e.series_index.is_none(),
+            e.shaper.is_none(),
+            false,
+            e.graphic_style.is_none(),
+            e.attrs.is_none(),
+            e.slice.is_none(),
+            is_default(&self.bbox_angle),
+            e.perspective.is_none(),
+        ];
+        let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
+        let mut skip = skips.into_iter();
+        macro_rules! field {
+            ($name:literal, $v:expr) => {
+                if skip.next().unwrap_or(false) {
+                    st.skip_field($name)?;
+                } else {
+                    st.serialize_field($name, $v)?;
+                }
+            };
+        }
+        field!("id", &self.id);
+        field!("name", &self.name);
+        field!("visible", &self.visible);
+        field!("locked", &self.locked);
+        field!("opacity", &self.opacity);
+        field!("blend", &self.blend);
+        field!("isolate", &self.isolate);
+        field!("knockout", &self.knockout);
+        field!("knockout_shape", &self.knockout_shape);
+        field!("appearance", &self.appearance);
+        field!("mask", &e.mask);
+        field!("trace", &e.trace);
+        field!("wrap", &e.wrap);
+        field!("graph", &e.graph);
+        field!("series_index", &e.series_index);
+        field!("shaper", &e.shaper);
+        field!("kind", &self.kind);
+        field!("graphic_style", &e.graphic_style);
+        field!("attrs", &e.attrs);
+        field!("slice", &e.slice);
+        field!("bbox_angle", &self.bbox_angle);
+        field!("perspective", &e.perspective);
+        st.end()
+    }
+}
+
+/// How a [`Node`] is read: the flat field list of the file format. Fields move into the node
+/// (and its extras, allocated only when one is set) without a copy of what they own.
+#[derive(Deserialize)]
+#[serde(rename = "Node")]
+struct NodeWire {
+    id: NodeId,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default = "yes")]
+    visible: bool,
+    #[serde(default)]
+    locked: bool,
+    #[serde(default = "one")]
+    opacity: f32,
+    #[serde(default)]
+    blend: BlendMode,
+    #[serde(default)]
+    isolate: bool,
+    #[serde(default)]
+    knockout: Knockout,
+    #[serde(default)]
+    knockout_shape: bool,
+    #[serde(default)]
+    appearance: crate::Shared<Appearance>,
+    #[serde(default)]
+    mask: Option<Box<OpacityMask>>,
+    #[serde(default)]
+    trace: Option<Box<serde_json::Value>>,
+    #[serde(default)]
+    wrap: Option<crate::text::TextWrap>,
+    #[serde(default)]
+    graph: Option<Box<crate::graph::GraphSpec>>,
+    #[serde(default)]
+    series_index: Option<u32>,
+    #[serde(default)]
+    shaper: Option<Box<crate::shaper::ShaperSpec>>,
+    kind: NodeKind,
+    #[serde(default)]
+    graphic_style: Option<u32>,
+    #[serde(default)]
+    attrs: Option<Box<ObjectAttributes>>,
+    #[serde(default)]
+    slice: Option<Box<crate::SliceOptions>>,
+    #[serde(default)]
+    bbox_angle: f64,
+    #[serde(default)]
+    perspective: Option<Box<crate::PerspectiveAttachment>>,
+}
+
+impl From<NodeWire> for Node {
+    fn from(w: NodeWire) -> Self {
+        let extras = NodeExtras {
+            mask: w.mask,
+            trace: w.trace,
+            wrap: w.wrap,
+            graph: w.graph,
+            series_index: w.series_index,
+            shaper: w.shaper,
+            graphic_style: w.graphic_style,
+            attrs: w.attrs,
+            slice: w.slice,
+            perspective: w.perspective,
+        };
+        Node {
+            id: w.id,
+            name: w.name,
+            visible: w.visible,
+            locked: w.locked,
+            opacity: w.opacity,
+            blend: w.blend,
+            isolate: w.isolate,
+            knockout: w.knockout,
+            knockout_shape: w.knockout_shape,
+            appearance: w.appearance,
+            kind: w.kind,
+            bbox_angle: w.bbox_angle,
+            extras: Extras((extras != NO_EXTRAS).then(|| Box::new(extras))),
+        }
+    }
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -595,18 +853,9 @@ impl Node {
             knockout: Knockout::Neutral,
             knockout_shape: false,
             appearance: Appearance::default().into(),
-            mask: None,
-            trace: None,
-            wrap: None,
-            graph: None,
-            series_index: None,
-            shaper: None,
             kind,
-            graphic_style: None,
-            attrs: None,
-            slice: None,
             bbox_angle: 0.0,
-            perspective: None,
+            extras: Extras::default(),
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {
@@ -691,7 +940,7 @@ impl Node {
             && !self.isolate
             && self.knockout == Knockout::Neutral
             && !self.knockout_shape
-            && self.mask.is_none()
+            && self.extras().mask.is_none()
     }
     /// Kind name as the Layers panel / Properties panel shows it.
     pub fn kind_label(&self) -> &'static str {
@@ -772,7 +1021,7 @@ impl Node {
             }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => children
                 .iter()
-                .skip(usize::from(self.shaper.is_some()))
+                .skip(usize::from(self.extras().shaper.is_some()))
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds())),
             NodeKind::Text(t) => self.projected(t.bounds()),
@@ -782,7 +1031,7 @@ impl Node {
                 let b = crate::live::nodes_bounds(children);
                 vectorcraft_geom::union_opt(b, spec.spine.as_ref().and_then(|s| s.bounds()))
             }
-            NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, *frame),
+            NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, **frame),
             NodeKind::Mesh(m) => m.bounds(),
             NodeKind::Repeat(r) => r.bounds(),
             NodeKind::PlacedDocument(p) => Some(p.bounds()),
@@ -806,7 +1055,7 @@ impl Node {
                 let o = self.appearance.outset();
                 children
                     .iter()
-                    .skip(usize::from(self.shaper.is_some()))
+                    .skip(usize::from(self.extras().shaper.is_some()))
                     .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()))
                     .map(|b| b.inflate(o, o))
             }
@@ -903,8 +1152,8 @@ impl Node {
                 for c in content.iter_mut() {
                     Arc::make_mut(c).transform_scaled(a, sc);
                 }
-                *frame = crate::live::envelope_frame(a * *frame);
-                match kind {
+                **frame = crate::live::envelope_frame(a * **frame);
+                match &mut **kind {
                     EnvelopeKind::Mesh { points, handles, .. } => {
                         for p in points.iter_mut() {
                             *p = a * *p;
@@ -923,7 +1172,7 @@ impl Node {
             NodeKind::Mesh(m) => m.transform(a),
             NodeKind::Repeat(r) => r.transform(a, *sc),
         }
-        if let Some(m) = &mut self.mask
+        if let Some(m) = self.extras_if_any().and_then(|e| e.mask.as_mut())
             && m.linked
         {
             Arc::make_mut(&mut m.art).transform_scaled(a, sc);
@@ -1039,7 +1288,7 @@ impl Node {
                 }
             }
             NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
-                for c in children.iter().skip(usize::from(self.shaper.is_some())).filter(|c| c.visible) {
+                for c in children.iter().skip(usize::from(self.extras().shaper.is_some())).filter(|c| c.visible) {
                     c.push_clip_shapes(text, out);
                 }
             }
@@ -1324,25 +1573,25 @@ impl ImageMap {
 impl Node {
     /// The URL this object links to, if any.
     pub fn url(&self) -> Option<&str> {
-        self.attrs.as_deref().map(|a| a.url.as_str()).filter(|u| !u.is_empty())
+        self.extras().attrs.as_deref().map(|a| a.url.as_str()).filter(|u| !u.is_empty())
     }
 
     /// Whether the canvas shows this object's centre point when it is selected: as set in the
     /// Attributes panel, else [`Self::shows_center_by_default`].
     pub fn shows_center(&self) -> bool {
-        self.attrs.as_deref().and_then(|a| a.show_center).unwrap_or_else(|| self.shows_center_by_default())
+        self.extras().attrs.as_deref().and_then(|a| a.show_center).unwrap_or_else(|| self.shows_center_by_default())
     }
 
     /// Shapes drawn with the shape tools (live rectangles, ellipses and polygons) show their centre.
     pub fn shows_center_by_default(&self) -> bool {
-        matches!(&self.kind, NodeKind::Path { live: Some(l), .. } if !matches!(l, LiveShape::Line { .. } | LiveShape::Path { .. }))
+        matches!(&self.kind, NodeKind::Path { live: Some(l), .. } if !matches!(**l, LiveShape::Line { .. } | LiveShape::Path { .. }))
     }
 
     /// Change this object's attributes with `f`; all-default attributes are dropped.
     pub fn edit_attrs<R>(&mut self, f: impl FnOnce(&mut ObjectAttributes) -> R) -> R {
-        let mut a = self.attrs.take().unwrap_or_default();
+        let mut a = self.extras_mut().attrs.take().unwrap_or_default();
         let r = f(&mut a);
-        self.attrs = (*a != ObjectAttributes::default()).then_some(a);
+        self.extras_mut().attrs = (*a != ObjectAttributes::default()).then_some(a);
         r
     }
 }
@@ -1358,7 +1607,7 @@ impl Node {
         self.visible
             && (self.opacity < 1.0
                 || self.blend != BlendMode::Normal
-                || self.mask.as_ref().is_some_and(|m| !m.disabled)
+                || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
                 || effects(&self.appearance.effects)
                 || self
                     .appearance
@@ -1454,13 +1703,14 @@ mod tests {
         let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), xf };
         let mut n = Node::path(NodeId(1), live.to_path(), Appearance::default_art());
         if let NodeKind::Path { live: slot, .. } = &mut n.kind {
-            *slot = Some(live);
+            *slot = Some(Box::new(live));
         }
         n
     }
 
     fn live_of(n: &Node) -> (f64, f64, [f64; 4], Affine) {
-        let NodeKind::Path { live: Some(LiveShape::Rectangle { w, h, radii, xf, .. }), .. } = &n.kind else { panic!("not a live rectangle") };
+        let NodeKind::Path { live: Some(l), .. } = &n.kind else { panic!("not a live shape") };
+        let LiveShape::Rectangle { w, h, radii, xf, .. } = &**l else { panic!("not a live rectangle") };
         (*w, *h, *radii, *xf)
     }
 
@@ -1595,7 +1845,7 @@ mod tests {
             |n| n.knockout = Knockout::On,
             |n| n.knockout = Knockout::Off,
             |n| n.knockout_shape = true,
-            |n| n.mask = Some(Box::new(OpacityMask::new(n.clone(), true))),
+            |n| n.extras_mut().mask = Some(Box::new(OpacityMask::new(n.clone(), true))),
         ];
         for tweak in tweaks {
             let mut n = p();

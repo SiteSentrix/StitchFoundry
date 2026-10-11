@@ -124,3 +124,32 @@ fn steps_share_an_unchanged_selection() {
     assert!(Arc::ptr_eq(&st.history.redo[0].selection, &st.history.redo[1].selection));
     assert_eq!(st.selection.objects.len(), 100);
 }
+
+/// Undo and redo don't estimate the steps again: the step an undo (redo) makes takes the undone
+/// step's figures the other way round, which are what a fresh estimate gives.
+#[test]
+fn undo_and_redo_reuse_the_estimates() {
+    let mut s = session_with_rects(200);
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    // A deletion is lopsided: the step before it keeps the objects, the one after keeps nothing.
+    s.execute("edit.clear", &json!({})).unwrap();
+    let fresh = |e: &HistoryEntry, now: &Document| e.doc.retained_bytes(now);
+    let st = s.doc().unwrap();
+    let delete = st.history.undo.last().unwrap();
+    assert!(delete.bytes > 200 * 300, "the deleted objects: {}", delete.bytes);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let redo = st.history.redo.last().unwrap();
+    assert_eq!(redo.bytes, fresh(redo, &st.doc));
+    assert!(redo.bytes < 4096, "the document without the objects keeps little of its own: {}", redo.bytes);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let undo = st.history.undo.last().unwrap();
+    assert_eq!(undo.label, "Move");
+    assert_eq!(undo.bytes, fresh(undo, &st.doc));
+    s.execute("edit.redo", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let delete = st.history.undo.last().unwrap();
+    assert_eq!(delete.bytes, fresh(delete, &st.doc));
+}
