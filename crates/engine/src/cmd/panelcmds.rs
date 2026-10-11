@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
             has_doc,
             set_format
         ),
@@ -185,14 +185,7 @@ const MAX_PARA: f64 = 1296.0;
 
 fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setFormat";
-    let ids: Vec<NodeId> = {
-        let ids = targets(s, p)?;
-        let d = &s.doc()?.doc;
-        ids.into_iter().filter(|id| matches!(d.node(*id).map(|n| &n.kind), Some(NodeKind::Text(_)))).collect()
-    };
-    if ids.is_empty() {
-        return Err(bad(C, "no text objects selected"));
-    }
+    let ids = super::typecmd::text_targets(s, p, C)?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64);
     let flag = |k: &str| p.get(k).and_then(Value::as_bool);
     let kerning = match p.get("kerning") {
@@ -285,15 +278,17 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            let baseline_shift = num("baselineShift").map(|v| super::typecmd::local_type_value(t, v, (-1296.0, 1296.0), false, C)).transpose()?;
+            let h_scale = num("hScale").map(|v| super::typecmd::local_type_value(t, v, (1.0, 10000.0), true, C)).transpose()?;
             super::typecmd::style_chars(t, range, |st| {
                 if let Some(k) = kerning {
                     st.kerning = k;
                 }
-                if let Some(v) = num("baselineShift") {
-                    st.baseline_shift = v.clamp(-1296.0, 1296.0);
+                if let Some(v) = baseline_shift {
+                    st.baseline_shift = v;
                 }
-                if let Some(v) = num("hScale") {
-                    st.h_scale = v.clamp(1.0, 10000.0);
+                if let Some(v) = h_scale {
+                    st.h_scale = v;
                 }
                 if let Some(v) = num("vScale") {
                     st.v_scale = v.clamp(1.0, 10000.0);

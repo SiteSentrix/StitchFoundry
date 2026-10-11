@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first checklist, split out of the parity table's two type rows) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (document-point character controls after object/group scaling, #1034) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -23,6 +23,8 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Threaded text, Fit Headline, Text Wrap | done | |
 | Type on a Path effects and options; brackets | done | #429 |
 | Character and Paragraph panels, styles with overrides | done | mixed-value display for differing paragraphs missing |
+| Character size and horizontal scale after object/group scaling | done | #1034: fields and setters compensate the stored affine; point size follows the transformed em-height axis, not the glyph ink bounds. Range edits, keyboard increments, leading and baseline shift use document points; rotation, reflection and shear remain editable. |
+| Preserve font sizes while scaling a group | missing | Separate enhancement; scaling still scales text with the other artwork. |
 | OpenType panel, Glyphs panel, alternates | done | Highlight Alternate Glyphs preference unused (#394) |
 | Font menu: samples, live preview, filters, favourites; font matching by any name; Find Font | done | #339 |
 | Variable fonts | partial | named instances as styles; axis sliders missing |
@@ -48,4 +50,5 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | #1034: transformed character controls and regression coverage; preserving group font sizes remains a separate enhancement. Scores/hours unchanged at this rounding. |
 | 2026-10-10 | major | First checklist, split out of the parity table's Type core and Type advanced rows |

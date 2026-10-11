@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text)",
+            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text)",
             has_doc,
             set_style
         ),
@@ -289,6 +289,22 @@ pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Node
     Ok(t)
 }
 
+/// Clamp in the units shown to the user, then compensate the text's affine. Clamping
+/// the local result would make small sizes impossible after enlarging an object.
+pub(crate) fn local_type_value(t: &TextObject, value: f64, limits: (f64, f64), horizontal: bool, cmd: &str) -> Result<f64> {
+    if !value.is_finite() {
+        return Err(bad(cmd, "type dimension must be finite"));
+    }
+    let scale = t.style_scale().ok_or_else(|| bad(cmd, "text transform is collapsed or unrepresentable"))?;
+    let local = value.clamp(limits.0, limits.1) / if horizontal { scale.horizontal } else { scale.points };
+    // Bound local dimensions too: an extreme inverse scale can produce a finite size
+    // whose leading, glyph advances or layout bounds overflow before the edit's geometry check.
+    if !local.is_finite() || local.abs() > crate::MAX_COORD || (value != 0.0 && local == 0.0) {
+        return Err(bad(cmd, "type dimension cannot be represented with this text transform"));
+    }
+    Ok(local)
+}
+
 /// Optional `start`/`end` byte offsets of a text command: the character range it styles and the
 /// paragraphs it touches. Without either, the command applies to all the text.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -415,6 +431,8 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            let size = size.map(|v| local_type_value(t, v, (0.1, 1296.0), false, C)).transpose()?;
+            let leading = leading.map(|v| v.map(|v| local_type_value(t, v, (0.1, 5000.0), false, C)).transpose()).transpose()?;
             let before = protect.then(|| t.runs.clone());
             style_chars(t, range, |st| {
                 if let Some(f) = &font {
@@ -428,7 +446,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                     st.font_version = None;
                 }
                 if let Some(v) = size {
-                    st.size = v.clamp(0.1, 1296.0);
+                    st.size = v;
                 }
                 if let Some(l) = leading {
                     st.leading = l;
