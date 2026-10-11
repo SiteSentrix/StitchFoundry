@@ -1,28 +1,19 @@
 //! Icon lookup and drawing (SVGs rasterized by egui_extras, tinted with theme colours).
 
-use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use craft_ui::icons::{SvgIconSet, SvgStyle};
 use egui::{Color32, ImageSource, Rect, Ui, Vec2};
 
-fn table() -> &'static HashMap<&'static str, &'static [u8]> {
-    static T: OnceLock<HashMap<&'static str, &'static [u8]>> = OnceLock::new();
+fn table() -> &'static SvgIconSet {
+    static T: OnceLock<SvgIconSet> = OnceLock::new();
     T.get_or_init(|| {
-        crate::icon_data::ICONS
-            .iter()
-            .map(|(n, b)| {
-                // Icons use currentColor; render white and tint at draw time. Slightly thinner strokes
-                // than Lucide's default read closer to Illustrator's glyph weight.
-                let s = String::from_utf8_lossy(b).replace("currentColor", "white").replace("stroke-width=\"2\"", "stroke-width=\"1.6\"");
-                let leaked: &'static [u8] = Box::leak(s.into_bytes().into_boxed_slice());
-                (*n, leaked)
-            })
-            .collect()
+        SvgIconSet::new(crate::icon_data::ICONS, SvgStyle { current_color: "white", stroke_width: Some("1.6") }, "bytes://icon/", "square-dashed")
     })
 }
 
 pub fn exists(name: &str) -> bool {
-    table().contains_key(name)
+    table().contains(name)
 }
 
 /// Map tool-catalogue icon names to SVG files.
@@ -102,7 +93,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-zoom" => "zoom-in",
         other => {
             if exists(other) {
-                table().get_key_value(other).map(|(k, _)| *k).unwrap_or("square-dashed")
+                table().canonical_name(other).unwrap_or("square-dashed")
             } else {
                 "square-dashed"
             }
@@ -111,8 +102,7 @@ pub fn tool_icon(name: &str) -> &'static str {
 }
 
 pub fn source(name: &str) -> ImageSource<'static> {
-    let bytes = table().get(name).or_else(|| table().get("square-dashed")).copied().unwrap_or(&[]);
-    ImageSource::Bytes { uri: format!("bytes://icon/{name}.svg").into(), bytes: egui::load::Bytes::Static(bytes) }
+    table().source(name)
 }
 
 /// Paint icon `name` into `rect` tinted with `tint`.
@@ -125,4 +115,34 @@ pub fn icon(ui: &mut Ui, name: &str, size: f32, tint: Color32) -> egui::Response
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), egui::Sense::hover());
     paint(ui, name, rect, tint);
     resp
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Characterize the pre-extraction loader against every embedded asset, including custom
+    /// icons. A shared-crate update must not silently change our stroke weight or cache keys.
+    #[test]
+    fn shared_catalog_preserves_existing_icons() {
+        for (name, original) in crate::icon_data::ICONS {
+            let expected = String::from_utf8_lossy(original).replace("currentColor", "white").replace("stroke-width=\"2\"", "stroke-width=\"1.6\"");
+            let ImageSource::Bytes { uri, bytes } = source(name) else { panic!("expected SVG bytes") };
+            assert_eq!(uri.as_ref(), format!("bytes://icon/{name}.svg"));
+            assert_eq!(bytes.as_ref(), expected.as_bytes(), "{name}");
+            assert!(exists(name));
+            assert_eq!(tool_icon(name), *name);
+        }
+    }
+
+    #[test]
+    fn shared_catalog_preserves_fallback_and_tool_aliases() {
+        let ImageSource::Bytes { uri, bytes } = source("missing-icon") else { panic!("expected SVG bytes") };
+        let ImageSource::Bytes { bytes: fallback, .. } = source("square-dashed") else { panic!("expected SVG bytes") };
+        assert_eq!(uri.as_ref(), "bytes://icon/missing-icon.svg");
+        assert_eq!(bytes.as_ref(), fallback.as_ref());
+        assert!(!exists("missing-icon"));
+        assert_eq!(tool_icon("missing-icon"), "square-dashed");
+        assert_eq!(tool_icon("tool-selection"), "dc-selection");
+    }
 }

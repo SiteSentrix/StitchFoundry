@@ -189,7 +189,42 @@ fn read_prefs() -> Option<vectorcraft_ui_egui::UiState> {
         return None;
     }
     let bytes = prefs_path().and_then(|p| std::fs::read(p).ok()).or_else(|| legacy_prefs_path().and_then(|p| std::fs::read(p).ok()))?;
-    serde_json::from_slice(&bytes).ok()
+    decode_saved_prefs(&bytes)
+}
+
+/// Recover only optional persisted docking metadata. Runtime UiState and command decoding
+/// remains strict, and an unreadable workspace layout cannot discard unrelated preferences.
+fn decode_saved_prefs(bytes: &[u8]) -> Option<vectorcraft_ui_egui::UiState> {
+    use serde_json::{Map, Value, json};
+
+    fn recover(object: &mut Map<String, Value>, hidden_key: &str) {
+        if let Some(layout) = object.get("docking")
+            && serde_json::from_value::<vectorcraft_ui_egui::UiState>(json!({"docking": layout})).is_err()
+        {
+            object.remove("docking");
+        }
+        if let Some(hidden) = object.get_mut(hidden_key) {
+            if let Value::Object(entries) = hidden {
+                entries.retain(|panel, location| {
+                    serde_json::from_value::<vectorcraft_ui_egui::UiState>(json!({"docking_hidden": {panel: location}})).is_ok()
+                });
+            } else {
+                object.remove(hidden_key);
+            }
+        }
+    }
+
+    let mut value: Value = serde_json::from_slice(bytes).ok()?;
+    let object = value.as_object_mut()?;
+    recover(object, "docking_hidden");
+    if let Some(Value::Array(workspaces)) = object.get_mut("custom_workspaces") {
+        for workspace in workspaces {
+            if let Some(object) = workspace.as_object_mut() {
+                recover(object, "dockingHidden");
+            }
+        }
+    }
+    serde_json::from_value(value).ok()
 }
 
 fn load_prefs(app: &mut VectorcraftApp, saved: Option<vectorcraft_ui_egui::UiState>) {
@@ -647,6 +682,51 @@ mod tests {
 
     fn ui_state_with_prefs(engine_prefs: serde_json::Value) -> vectorcraft_ui_egui::UiState {
         vectorcraft_ui_egui::UiState { engine_prefs, ..Default::default() }
+    }
+
+    #[test]
+    fn unreadable_saved_docking_keeps_preferences_and_every_workspace() {
+        use serde_json::json;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("window.panel.float", json!({"panel":"layers"})).unwrap();
+        app.ui.toolbar = false;
+        app.ui.engine_prefs = json!({"interfaceLanguage":"fr", "uiBrightness":"light"});
+        app.ui.custom_workspaces =
+            vec![vectorcraft_ui_egui::workspaces::capture(&app.ui, "Future"), vectorcraft_ui_egui::workspaces::capture(&app.ui, "Valid")];
+        let original = serde_json::to_value(&app.ui).unwrap();
+        let valid_location = original["docking_hidden"]["layers"].clone();
+        assert!(valid_location.is_object());
+        for invalid_layout in [json!({"root":{"FutureNode":{}},"floating":[]}), json!(false)] {
+            for invalid_hidden in [json!({"layers":{"placement":{"FuturePlacement":{}}},"swatches":valid_location}), json!(["malformed"])] {
+                let mut raw = original.clone();
+                raw["docking"] = invalid_layout.clone();
+                raw["docking_hidden"] = invalid_hidden.clone();
+                raw["custom_workspaces"][0]["docking"] = invalid_layout.clone();
+                raw["custom_workspaces"][0]["dockingHidden"] = invalid_hidden.clone();
+                assert!(serde_json::from_value::<vectorcraft_ui_egui::UiState>(raw.clone()).is_err(), "runtime serde stays strict");
+                let loaded = decode_saved_prefs(&serde_json::to_vec(&raw).unwrap()).unwrap();
+                assert_eq!(loaded.engine_prefs, app.ui.engine_prefs);
+                assert!(!loaded.toolbar);
+                assert!(loaded.docking.is_none());
+                assert!(!loaded.docking_hidden.contains_key("layers"));
+                if invalid_hidden.is_object() {
+                    assert_eq!(serde_json::to_value(loaded.docking_hidden.get("swatches")).unwrap(), valid_location);
+                } else {
+                    assert!(loaded.docking_hidden.is_empty());
+                }
+                assert_eq!(loaded.custom_workspaces.len(), 2);
+                assert_eq!(loaded.custom_workspaces[0].name, "Future");
+                assert!(loaded.custom_workspaces[0].docking.is_none());
+                assert!(!loaded.custom_workspaces[0].docking_hidden.contains_key("layers"));
+                assert_eq!(serde_json::to_value(&loaded.custom_workspaces[1]).unwrap(), original["custom_workspaces"][1]);
+            }
+        }
+        let roundtrip = decode_saved_prefs(&serde_json::to_vec(&original).unwrap()).unwrap();
+        assert_eq!(serde_json::to_value(roundtrip).unwrap(), original);
+        assert!(
+            decode_saved_prefs(&serde_json::to_vec(&json!({"toolbar":"invalid"})).unwrap()).is_none(),
+            "unrelated fields retain normal strict parsing"
+        );
     }
 
     #[test]

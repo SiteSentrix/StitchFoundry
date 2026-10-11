@@ -4059,6 +4059,31 @@ effect	Soft	Doux
 	Define a variable first	Définissez d’abord une variable
 	Text	Texte
 	Visibility	Visibilité
+# Shared panel docking
+	Activate Panel	Activer le panneau
+	Change Panel Layout	Modifier la disposition des panneaux
+	Close Panel	Fermer le panneau
+	Move Panel	Déplacer le panneau
+	Group with	Regrouper avec
+	Resize panels	Redimensionner les panneaux
+	Resize panel window	Redimensionner la fenêtre du panneau
+@msg	Invalid panel layout; restored the default dock	La disposition des panneaux est invalide ; la disposition ancrée par défaut a été restaurée
+@msg	action is required	action est requis
+@msg	anchor must name a registered panel	anchor doit désigner un panneau enregistré
+@msg	before must name a panel	before doit désigner un panneau
+@msg	docking action contains an unknown panel or an excessive split path	L’action d’ancrage contient un panneau inconnu ou un chemin de divisions trop long
+@msg	group must be true or false	group doit être true ou false
+@msg	move requires a destination panel	Le déplacement nécessite un panneau de destination
+@msg	move requires an existing destination panel	Le déplacement nécessite un panneau de destination existant
+@msg	onto must name a floating panel	onto doit désigner un panneau flottant
+@msg	panel group is empty	Le groupe de panneaux est vide
+@msg	panel must name a registered panel	panel doit désigner un panneau enregistré
+@msg	saved panel layout is invalid; reset the workspace first	La disposition enregistrée des panneaux est invalide ; réinitialisez d’abord l’espace de travail
+@msg	zone must be a string	zone doit être une chaîne de caractères
+@msg	zone must be tab, center, left, right, top or bottom	zone doit être tab, center, left, right, top ou bottom
+@msg	{key} must be a finite coordinate	{key} doit être une coordonnée finie
+@msg	x and y must be provided together	x et y doivent être fournis ensemble
+@msg	invalid restored panel group	Le groupe de panneaux restauré est invalide
 
 # Interactive Revolve controls.
 	Lighting	Éclairage
@@ -4115,3 +4140,6 @@ lighting	Light	Lumière
 	Vertical Guide	Repère vertical
 	Horizontal Guide	Repère horizontal
 	Move Guide to Layer	Déplacer le repère vers le calque
+@msg	invalid native panel set	Ensemble natif de panneaux invalide
+@msg	missing panel layout	Disposition des panneaux manquante
+@msg	unsupported native docking operation	Opération native d’ancrage non prise en charge

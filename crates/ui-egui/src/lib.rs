@@ -36,6 +36,7 @@ pub mod io;
 pub mod menus;
 pub mod native_menu;
 pub mod palette;
+mod panel_docking;
 pub mod panels;
 pub mod picks;
 pub mod place;

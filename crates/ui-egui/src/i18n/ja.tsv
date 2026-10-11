@@ -4042,6 +4042,32 @@ effect	Vertical	垂直
 	Define a variable first	先に変数を定義してください
 	Text	テキスト
 	Visibility	表示状態
+# tested). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
+# Shared panel docking
+	Activate Panel	パネルをアクティブにする
+	Change Panel Layout	パネルの配置を変更
+	Close Panel	パネルを閉じる
+	Move Panel	パネルを移動
+	Group with	グループ化先
+	Resize panels	パネルのサイズを変更
+	Resize panel window	パネルウィンドウのサイズを変更
+@msg	invalid restored panel group	復元されたパネルグループが無効です
+@msg	Invalid panel layout; restored the default dock	パネル配置が無効です。既定のドックを復元しました
+@msg	action is required	action を指定してください
+@msg	anchor must name a registered panel	anchor に登録済みパネルを指定してください
+@msg	before must name a panel	before にパネルを指定してください
+@msg	docking action contains an unknown panel or an excessive split path	ドッキング操作に不明なパネルまたは長すぎる分割パスが含まれています
+@msg	group must be true or false	group は true または false にしてください
+@msg	move requires a destination panel	移動先のパネルを指定してください
+@msg	move requires an existing destination panel	移動先には既存のパネルを指定してください
+@msg	onto must name a floating panel	onto にフローティングパネルを指定してください
+@msg	panel group is empty	パネルグループが空です
+@msg	panel must name a registered panel	panel に登録済みパネルを指定してください
+@msg	saved panel layout is invalid; reset the workspace first	保存されたパネル配置が無効です。先にワークスペースをリセットしてください
+@msg	x and y must be provided together	x と y は両方指定してください
+@msg	zone must be a string	zone は文字列にしてください
+@msg	zone must be tab, center, left, right, top or bottom	zone は tab、center、left、right、top、bottom のいずれかにしてください
+@msg	{key} must be a finite coordinate	{key} は有限の座標にしてください
 
 # Revolve profile guidance.
 
@@ -4100,3 +4126,6 @@ lighting	Light	ライト
 	Vertical Guide	垂直ガイド
 	Horizontal Guide	水平ガイド
 	Move Guide to Layer	ガイドをレイヤーへ移動
+@msg	invalid native panel set	ネイティブパネルセットが無効です
+@msg	missing panel layout	パネル配置がありません
+@msg	unsupported native docking operation	ネイティブドッキング操作は未対応です

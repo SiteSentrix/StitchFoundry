@@ -1,5 +1,9 @@
 # VectorCraft Roadmap
 
+- UI.5: Shared docking adds tab reordering, docking into other groups, dock splits and resizable floating panel groups. Panel positions and return locations persist with workspaces; the native icon rail and Tools panel remain available.
+
+- UI.4: Dock and floating-panel headers use shared accessible tabs with bounded overflow. Widget-state theme application uses `craft-ui`; all four palettes, font stacks and preferences remain app-owned.
+
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Effect › Brush Strokes landed: Photoshop-style filters 28 of 57, raster effects 40% → 48%) · **Target:** Adobe Illustrator 2026 (30.x)

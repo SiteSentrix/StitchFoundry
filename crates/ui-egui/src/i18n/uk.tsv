@@ -4030,6 +4030,31 @@ axis	Both	Обидві
 	Define a variable first	Спочатку визначте змінну
 	Text	Текст
 	Visibility	Видимість
+# Shared panel docking
+	Activate Panel	Активувати панель
+	Change Panel Layout	Змінити розташування панелей
+	Close Panel	Закрити панель
+	Move Panel	Перемістити панель
+	Group with	Згрупувати з
+	Resize panels	Змінити розмір панелей
+	Resize panel window	Змінити розмір вікна панелі
+@msg	Invalid panel layout; restored the default dock	Неприпустиме розташування панелей; відновлено типове розташування
+@msg	action is required	Потрібно вказати action
+@msg	anchor must name a registered panel	anchor має вказувати зареєстровану панель
+@msg	before must name a panel	before має вказувати панель
+@msg	docking action contains an unknown panel or an excessive split path	Дія прикріплення містить невідому панель або надто довгий шлях поділів
+@msg	group must be true or false	group має мати значення true або false
+@msg	move requires a destination panel	Для переміщення потрібна цільова панель
+@msg	move requires an existing destination panel	Для переміщення потрібна наявна цільова панель
+@msg	onto must name a floating panel	onto має вказувати плаваючу панель
+@msg	panel group is empty	Група панелей порожня
+@msg	panel must name a registered panel	panel має вказувати зареєстровану панель
+@msg	saved panel layout is invalid; reset the workspace first	Збережене розташування панелей неприпустиме; спочатку скиньте робоче середовище
+@msg	zone must be a string	zone має бути рядком
+@msg	zone must be tab, center, left, right, top or bottom	zone має мати значення tab, center, left, right, top або bottom
+@msg	{key} must be a finite coordinate	{key} має бути скінченною координатою
+@msg	x and y must be provided together	x та y потрібно вказувати разом
+@msg	invalid restored panel group	Відновлена група панелей неприпустима
 
 # Interactive Revolve controls.
 	Lighting	Освітлення
@@ -4086,3 +4111,6 @@ lighting	Light	Світло
 	Vertical Guide	Вертикальна напрямна
 	Horizontal Guide	Горизонтальна напрямна
 	Move Guide to Layer	Перемістити напрямну на шар
+@msg	invalid native panel set	Неприпустимий власний набір панелей
+@msg	missing panel layout	Відсутнє розташування панелей
+@msg	unsupported native docking operation	Непідтримувана власна операція прикріплення

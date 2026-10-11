@@ -4007,6 +4007,31 @@ theme	Appearance	Erscheinungsbild
 	Define a variable first	Definieren Sie zuerst eine Variable
 	Text	Text
 	Visibility	Sichtbarkeit
+
+	Activate Panel	Bedienfeld aktivieren
+	Change Panel Layout	Bedienfeldanordnung ändern
+	Close Panel	Bedienfeld schließen
+	Move Panel	Bedienfeld verschieben
+	Group with	Gruppieren mit
+	Resize panel window	Bedienfeldfenster skalieren
+	Resize panels	Bedienfelder skalieren
+@msg	Invalid panel layout; restored the default dock	Ungültige Bedienfeldanordnung; Standarddock wiederhergestellt
+@msg	action is required	Eine Aktion ist erforderlich
+@msg	anchor must name a registered panel	Der Anker muss ein registriertes Bedienfeld benennen
+@msg	before must name a panel	before muss ein Bedienfeld benennen
+@msg	docking action contains an unknown panel or an excessive split path	Die Docking-Aktion enthält ein unbekanntes Bedienfeld oder einen zu langen Teilungspfad
+@msg	group must be true or false	group muss true oder false sein
+@msg	move requires a destination panel	Das Verschieben erfordert ein Zielbedienfeld
+@msg	move requires an existing destination panel	Das Verschieben erfordert ein vorhandenes Zielbedienfeld
+@msg	onto must name a floating panel	onto muss ein schwebendes Bedienfeld benennen
+@msg	panel group is empty	Die Bedienfeldgruppe ist leer
+@msg	panel must name a registered panel	panel muss ein registriertes Bedienfeld benennen
+@msg	saved panel layout is invalid; reset the workspace first	Die gespeicherte Bedienfeldanordnung ist ungültig; zuerst den Arbeitsbereich zurücksetzen
+@msg	x and y must be provided together	x und y müssen zusammen angegeben werden
+@msg	zone must be a string	zone muss eine Zeichenfolge sein
+@msg	zone must be tab, center, left, right, top or bottom	zone muss tab, center, left, right, top oder bottom sein
+@msg	{key} must be a finite coordinate	{key} muss eine endliche Koordinate sein
+@msg	invalid restored panel group	Ungültige wiederhergestellte Bedienfeldgruppe
 # 3D and Materials › Revolve: its options dialog and gizmos.
 	Ambient	Umgebungslicht
 	Axis side	Achsenseite
@@ -4060,3 +4085,6 @@ theme	Appearance	Erscheinungsbild
 	Stroke Pressure	Strichdruck
 	Right Diagonal	Diagonal nach rechts
 	Left Diagonal	Diagonal nach links
+@msg	invalid native panel set	Ungültiger nativer Bedienfeldsatz
+@msg	missing panel layout	Bedienfeldanordnung fehlt
+@msg	unsupported native docking operation	Nicht unterstützte native Docking-Operation

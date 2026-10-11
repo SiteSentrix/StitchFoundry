@@ -4047,6 +4047,31 @@ axis	Both	Ambos
 	Define a variable first	Defina primero una variable
 	Text	Texto
 	Visibility	Visibilidad
+# Shared panel docking
+	Activate Panel	Activar panel
+	Change Panel Layout	Cambiar distribución de paneles
+	Close Panel	Cerrar panel
+	Move Panel	Mover panel
+	Group with	Agrupar con
+	Resize panels	Cambiar tamaño de los paneles
+	Resize panel window	Cambiar tamaño de la ventana del panel
+@msg	Invalid panel layout; restored the default dock	La distribución de paneles no es válida; se restauró el anclaje predeterminado
+@msg	action is required	Se requiere action
+@msg	anchor must name a registered panel	anchor debe indicar un panel registrado
+@msg	before must name a panel	before debe indicar un panel
+@msg	docking action contains an unknown panel or an excessive split path	La acción de anclaje contiene un panel desconocido o una ruta de divisiones demasiado larga
+@msg	group must be true or false	group debe ser true o false
+@msg	move requires a destination panel	Para mover se requiere un panel de destino
+@msg	move requires an existing destination panel	Para mover se requiere un panel de destino existente
+@msg	onto must name a floating panel	onto debe indicar un panel flotante
+@msg	panel group is empty	El grupo de paneles está vacío
+@msg	panel must name a registered panel	panel debe indicar un panel registrado
+@msg	saved panel layout is invalid; reset the workspace first	La distribución guardada de paneles no es válida; primero restablece el espacio de trabajo
+@msg	zone must be a string	zone debe ser una cadena de texto
+@msg	zone must be tab, center, left, right, top or bottom	zone debe ser tab, center, left, right, top o bottom
+@msg	{key} must be a finite coordinate	{key} debe ser una coordenada finita
+@msg	x and y must be provided together	x e y deben proporcionarse juntos
+@msg	invalid restored panel group	El grupo de paneles restaurado no es válido
 
 # Revolve profile guidance.
 
@@ -4105,3 +4130,6 @@ lighting	Light	Luz
 	Vertical Guide	Guía vertical
 	Horizontal Guide	Guía horizontal
 	Move Guide to Layer	Mover guía a capa
+@msg	invalid native panel set	Conjunto nativo de paneles no válido
+@msg	missing panel layout	Falta la distribución de paneles
+@msg	unsupported native docking operation	Operación nativa de anclaje no admitida
