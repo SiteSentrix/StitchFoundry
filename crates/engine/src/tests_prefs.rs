@@ -513,6 +513,61 @@ fn align_and_distribute_follow_transform_pattern_tiles() {
     }
 }
 
+/// General › Transform Pattern Tiles (#394) applies to art moved or duplicated with its artboard
+/// as it does to the transforms: off, the tiles of a pattern-filled square stay in place; on, they
+/// move with the square or its copy, and `patterns: false` keeps them in place for one call.
+#[test]
+fn art_moved_with_its_artboard_follows_transform_pattern_tiles() {
+    use vectorcraft_color::Paint;
+    let mut s = new_doc();
+    let plain = square(&mut s, 500.0, 0.0);
+    s.execute("select.set", &json!({"ids": [plain.0]})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    let filled = square(&mut s, 1100.0, 100.0);
+    s.execute("paint.setFill", &json!({"ids": [filled.0], "swatch": "Dots"})).unwrap();
+    let tiles = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        Paint::Pattern { xf, .. } => xf.as_coeffs(),
+        p => panic!("not a pattern: {p:?}"),
+    };
+    // Artboard 1 starts at x 1000 and holds the square; artboard 0 holds no art, and `plain` is on
+    // no artboard. Duplicate Artboard puts the copy 20 pt right of the last artboard, artboard 1, so
+    // the art's copy is 420 pt right of the square. Rearranged in a row, artboard 1 moves to x 420,
+    // 20 pt right of artboard 0, and `artboard.setProps` puts it at x 1030. `moved` and `ids` name
+    // the art moved or its copies.
+    for (cmd, p, key, d) in [
+        ("artboard.move", json!({"index": 1, "dx": 30, "dy": 0, "moveArt": true}), Some("moved"), [30.0, 0.0]),
+        ("artboard.move", json!({"indices": [0, 1], "dx": 30, "dy": 0, "moveArt": true}), Some("moved"), [30.0, 0.0]),
+        ("artboard.move", json!({"index": 1, "dx": 0, "dy": 500, "moveArt": true, "copy": true}), Some("moved"), [0.0, 500.0]),
+        ("artboard.duplicate", json!({"index": 1, "art": true}), Some("ids"), [420.0, 0.0]),
+        ("artboard.rearrange", json!({"layout": "row"}), None, [-580.0, 0.0]),
+        ("artboard.setProps", json!({"index": 1, "x": 1030, "moveArt": true}), None, [30.0, 0.0]),
+    ] {
+        let run = |s: &mut Session, p: &Value| {
+            let r = s.execute(cmd, p).unwrap();
+            let ids = key.and_then(|k| r[k].as_array().cloned()).unwrap_or_else(|| vec![json!(filled.0)]);
+            assert_eq!(ids.len(), 1, "{cmd}: the square alone goes with the artboard");
+            NodeId(ids[0].as_u64().unwrap())
+        };
+        let id = run(&mut s, &p);
+        assert_eq!(tiles(&s, id), [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], "{cmd}: off, the tiles stay");
+        assert_eq!(s.journal.last().unwrap().1["patterns"], json!(false), "{cmd}: the journal keeps the choice");
+        s.execute("edit.undo", &json!({})).unwrap();
+        set_pref(&mut s, "transformPatternTiles", json!(true));
+        let id = run(&mut s, &p);
+        assert_eq!(tiles(&s, id), [1.0, 0.0, 0.0, 1.0, d[0], d[1]], "{cmd}: on, they move with the square");
+        assert_eq!(s.journal.last().unwrap().1["patterns"], json!(true), "{cmd}: the journal keeps the choice");
+        s.execute("edit.undo", &json!({})).unwrap();
+        let mut p = p;
+        p["patterns"] = json!(false);
+        let id = run(&mut s, &p);
+        assert_eq!(tiles(&s, id), [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], "{cmd}: the param wins");
+        s.execute("edit.undo", &json!({})).unwrap();
+        set_pref(&mut s, "transformPatternTiles", json!(false));
+    }
+}
+
 /// General › Select Same Tint % (#394): off, Select › Same › Fill Color takes every tint of the
 /// swatch; on, only the same tint.
 #[test]

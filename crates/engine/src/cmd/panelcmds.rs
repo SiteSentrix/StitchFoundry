@@ -2,7 +2,7 @@
 //! Character/Paragraph attributes.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Composer, NodeKind};
+use vectorcraft_doc::{Composer, NodeKind, Scaling};
 use vectorcraft_geom::{Rect, Vec2};
 
 use super::*;
@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Artboard",
             ["Window", "Artboards"],
             None,
-            "{index?: n (default: the Artboard tool's artboard), art?: bool (default: the Artboard tool's moveArt option)} copy placed right of the last artboard, with copies of the art fully inside it when `art` (locked and hidden art only with prefs moveLockedWithArtboard) → {index, ids: the art's copies}",
+            "{index?: n (default: the Artboard tool's artboard), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} copy placed right of the last artboard, with copies of the art fully inside it when `art` (locked and hidden art only with prefs moveLockedWithArtboard) → {index, ids: the art's copies}",
             has_doc,
             artboard_duplicate
         ),
@@ -108,10 +108,10 @@ pub(crate) fn beside_artboards(d: &vectorcraft_doc::Document, rect: Rect) -> Vec
 fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let (i, art) = board_and_art(s, p);
     let art = artboard_art(s, i, art)?;
-    let scale_strokes = s.prefs.scale_strokes;
+    let sc = Scaling { patterns: super::object::transform_patterns(s, p, &art)?, ..Scaling::default() };
     let (index, ids) = s.edit("Duplicate Artboard", |d, _| {
         let dv = d.artboards.get(i).map(|a| beside_artboards(d, a.rect)).unwrap_or_default();
-        copy_artboard(d, i, dv, &art, scale_strokes)
+        copy_artboard(d, i, dv, &art, sc)
     })?;
     Ok(json!({"index": index, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
@@ -152,15 +152,9 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
 }
 
 /// Add a copy of artboard `i` moved by `dv`, with copies of its guides and of its `art` (each just
-/// above its original) moved along → (the copy's index, the art's copies). Duplicate Artboards and
-/// Alt-drag.
-pub(crate) fn copy_artboard(
-    d: &mut vectorcraft_doc::Document,
-    i: usize,
-    dv: Vec2,
-    art: &[NodeId],
-    scale_strokes: bool,
-) -> Result<(usize, Vec<NodeId>)> {
+/// above its original) moved along → (the copy's index, the art's copies). When `sc.patterns`, the
+/// pattern tiles of the art's copies move with them. Duplicate Artboards and Alt-drag.
+pub(crate) fn copy_artboard(d: &mut vectorcraft_doc::Document, i: usize, dv: Vec2, art: &[NodeId], sc: Scaling) -> Result<(usize, Vec<NodeId>)> {
     let src = d.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
     let index = push_artboard_copy(d, &src, src.rect + dv);
     // Its guides come along.
@@ -171,7 +165,7 @@ pub(crate) fn copy_artboard(
     for id in art {
         let (Some((parent, at, _)), Some(n)) = (d.position(*id), d.node(*id).cloned()) else { continue };
         let mut c = d.reid(&n);
-        c.transform(Affine::translate(dv), scale_strokes);
+        c.transform(Affine::translate(dv), sc);
         copies.push(d.insert(parent, at + 1, c)?);
     }
     Ok((index, copies))

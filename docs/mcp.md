@@ -1555,7 +1555,9 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,
   `object.move`, `object.rotate`, `object.scale`, `object.reflect`, `object.shear`, `object.transformEach`,
   `object.align`, `object.distribute`, `object.distributeSpacing`, the Selection and transform tools, the dialogs'
-  Transform Patterns): pattern fills and strokes move with the art.
+  Transform Patterns) and of the same param on the commands that move or duplicate art with an artboard (`artboard.move`
+  and the Artboard tool, `artboard.duplicate`, `artboard.rearrange`, `artboard.setProps`): pattern fills and strokes
+  move with the art.
 - `selectSameTintPercent` (off by default): `select.same.fillColor`, `strokeColor` and `fillAndStroke` take every tint
   of a global or spot swatch; on, only the same tint.
 
@@ -1834,7 +1836,8 @@ step (`edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` put it whe
 pastes only the art), in this document or another; the result's `artboard` is the new artboard's index.
 `artboard.duplicate {index?, art?}` (Window › Artboards › Duplicate Artboards, or a row dragged onto New Artboard)
 does the same in one step → `{index, ids}`, and `artboard.move {copy: true, moveArt: true}` is the Artboard tool's
-Alt-drag.
+Alt-drag. These two commands also move the pattern tiles of the copies when `patterns` is true (default: prefs
+`transformPatternTiles`); `edit.paste` leaves the tiles of a pasted artboard's art where they were.
 
 Scale Artwork with Artboard (#602): `artboard.setProps {index, x?, y?, width?, height?, scaleArt: true}` resizes an
 artboard and scales the art fully inside it, and its artboard guides, from the old rectangle onto the new one, each side
