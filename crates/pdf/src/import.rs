@@ -22,7 +22,7 @@ use vectorcraft_geom::{FillRule, PathData};
 use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
 use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, all_on, hides_forms, scan_page, tag_key};
-use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
+use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, gradient_shape, mesh_shading, shading_gradient};
 use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
@@ -774,7 +774,7 @@ fn fill_rule(r: hayro_interpret::FillRule) -> FillRule {
 }
 
 /// `p` with every subpath closed: how a fill reads it.
-fn closed_subpaths(p: &BezPath) -> BezPath {
+pub(crate) fn closed_subpaths(p: &BezPath) -> BezPath {
     let mut out = BezPath::new();
     let mut open = false;
     for el in p.elements() {
@@ -1062,6 +1062,9 @@ impl<'p> Builder<'p> {
                     // A rectangle around all of its art (a form's box) clips nothing.
                     grouped(f.children, f.child_groups, group).for_each(|(c, g)| self.emit(c, g));
                     None
+                } else if let Some(shape) = gradient_shape(&clip, &f.children) {
+                    // One path, so tools such as the Shape Builder see the shape, not its box (#1304).
+                    Some(shape)
                 } else {
                     let mut ch = vec![Arc::new(*clip)];
                     ch.extend(f.children);

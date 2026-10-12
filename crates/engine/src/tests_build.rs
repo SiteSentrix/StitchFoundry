@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{AppearanceItem, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect};
+use vectorcraft_testkit::pdf::{PdfPage, pdf};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use super::*;
@@ -170,6 +171,47 @@ fn shape_builder_tool_drives_the_command() {
     s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 50.0).with_mods(alt), v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0).with_mods(alt), v).unwrap();
     assert_eq!(layer_children(&s), 1);
+}
+
+/// The first and last stop colours of a gradient paint.
+fn gradient_ends(p: &Paint) -> Option<([f32; 3], [f32; 3])> {
+    let Paint::Gradient(g) = p else { return None };
+    Some((g.gradient.stops.first()?.color.to_rgb(), g.gradient.stops.last()?.color.to_rgb()))
+}
+
+#[test]
+fn shape_builder_cuts_gradient_shapes_from_a_pdf_along_their_outlines() {
+    // Two overlapping diamonds (x 100–300 and 200–400, y 40–160), each written as gradient-filled
+    // shapes are in a PDF or a PDF-compatible .ai: the diamond as a clip, then a shading (#1304).
+    let shading = |x0: u32, c0: &str, c1: &str| {
+        format!(
+            "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [{x0} 0 {} 0] /Extend [true true] /Function << /FunctionType 2 /Domain [0 1] /C0 [{c0}] /C1 [{c1}] /N 1 >> >>",
+            x0 + 200
+        )
+    };
+    let diamond = |x0: u32| format!("q {x0} 100 m {} 160 l {} 100 l {} 40 l h W n", x0 + 100, x0 + 200, x0 + 100);
+    let page = PdfPage {
+        resources: format!("/Shading << /Sh0 {} /Sh1 {} >>", shading(100, "1 0 0", "1 1 0"), shading(200, "0 0 1", "0 1 1")),
+        ..PdfPage::new(500.0, 200.0, &format!("{} /Sh0 sh Q {} /Sh1 sh Q", diamond(100), diamond(200)))
+    };
+    let bytes = pdf(&[page], None);
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "diamonds.pdf", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[250, 100]]})).unwrap();
+    let mut pieces: Vec<(f64, Rect, Paint)> =
+        ids(&r).into_iter().map(|i| (area(&s, i), node(&s, i).geometric_bounds().unwrap(), node(&s, i).appearance.fill_paint())).collect();
+    pieces.sort_by(|a, b| a.1.x0.total_cmp(&b.1.x0));
+    let near = |a: Rect, b: Rect| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|v| v.abs() < 0.01);
+    let [(left, lb, lp), (mid, mb, mp), (right, rb, rp)] = pieces.as_slice() else { panic!("three pieces: {pieces:?}") };
+    // What is left of each diamond, and the diamond where they overlap: not their bounding boxes.
+    assert!((left - 9000.0).abs() < 1.0 && (mid - 3000.0).abs() < 1.0 && (right - 9000.0).abs() < 1.0, "{pieces:?}");
+    assert!(near(*lb, Rect::new(100.0, 40.0, 250.0, 160.0)), "{lb:?}");
+    assert!(near(*mb, Rect::new(200.0, 70.0, 300.0, 130.0)), "{mb:?}");
+    assert!(near(*rb, Rect::new(250.0, 40.0, 400.0, 160.0)), "{rb:?}");
+    // Each keeps its gradient; the overlap takes the front diamond's.
+    let (first, second) = (Some(([1.0, 0.0, 0.0], [1.0, 1.0, 0.0])), Some(([0.0, 0.0, 1.0], [0.0, 1.0, 1.0])));
+    assert_eq!((gradient_ends(lp), gradient_ends(mp), gradient_ends(rp)), (first, second, second));
 }
 
 /// A red 100 × 100 square crossed by a stroke-only vertical line at x = 50, both selected.
