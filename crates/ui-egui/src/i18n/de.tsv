@@ -4507,3 +4507,12 @@ machine	Stop	Stopp
 	Blend into	Übergang zu
 	Make Blend	Übergang erstellen
 	Blend Colors	Farben überblenden
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	Kontur hinzufügen
+	Satin Outline	Satinkontur
+	Bean Outline	Dreifachstich-Kontur
+	Rectangle Border	Rechteckrahmen
+	Oval Border	Ovaler Rahmen
+	Rounded Border	Abgerundeter Rahmen
+	Motif Border	Motivrahmen

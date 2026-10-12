@@ -4551,3 +4551,12 @@ machine	Stop	Parada
 	Blend into	Fundir con
 	Make Blend	Crear fusión
 	Blend Colors	Fundir colores
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	Añadir contorno
+	Satin Outline	Contorno de satén
+	Bean Outline	Contorno de puntada triple
+	Rectangle Border	Marco rectangular
+	Oval Border	Marco ovalado
+	Rounded Border	Marco redondeado
+	Motif Border	Marco de motivos

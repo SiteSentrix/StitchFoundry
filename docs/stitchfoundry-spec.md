@@ -337,11 +337,11 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CO-04 | Sequence objects (move earlier/later, to start/end) | Done | | – |
 | CO-05 | Auto-sequence whole design (by colour, by object, closest path) | Done | Embroidery › Auto Sequence (`embroidery.autoSequence`): fewest colour changes, then the closest next object; objects that overlap keep their stacking order; reorders within each layer or group. Sort by Thread Color as before | 1 |
 | TR-01 | Position, align, distribute, scale, rotate, skew, mirror | Done | Stitch settings follow transforms | – |
-| PT-01 | Decorative borders (frames around designs) | Missing | Border generator: shape + stitch preset | 2 |
+| PT-01 | Decorative borders (frames around designs) | Done | Add Outline › rectangle, oval, rounded and motif borders, in satin, bean, run or a motif | – |
 | PT-02 | Stars and rings (stitched rings with satin/run/fill) | Partial | Star stamp; add ring object (annulus with satin) | 2 |
 | PT-03 | Basic shapes | Done | | – |
 | PT-04 | Add / remove holes; fill holes | Done | `embroidery.removeHoles {maxArea?}` and `embroidery.fillHoles` (a fill object per hole) | 1 |
-| PT-05 | Offsets and outlines (closed, open) | Partial | Offset Path; add "outline with stitch type" and open offsets | 2 |
+| PT-05 | Offsets and outlines (closed, open) | Partial | Add Outline: an outline following the shapes at a distance, in any stitch; offsets of open paths still missing | 2 |
 | PT-06 | Wreaths and arrays (mirror-merge) | Partial | VectorCraft Repeat exists; make Repeat objects stitchable | 2 |
 | RS-01 | Reshape objects and stitch angles | Done | Direct selection + Inclination tool | – |
 | RS-02 | Reshape stars and rings | Partial | With PT-02 | 2 |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 116 done,
-42 partial, 67 missing, 6 out of scope (counted 2026-10-12, after spacing profiles and blends). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 117 done,
+42 partial, 66 missing, 6 out of scope (counted 2026-10-12, after outlines and borders). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -719,7 +719,7 @@ sewn on a real machine yet; the owner has the VP3 test kit. Phase 2 started on 2
 tatami textures and split lines (PS-02…04, CS-05), then hand stitch, jagged edges and trapunto
 (SP-02, SP-03, SP-08), then motifs (MO-01, MO-03, MO-04), then offset, zigzag, E-stitch and stipple fills and laydown
 (CS-02, SP-05, SP-06, RE-06), then spacing profiles and colour blends (SP-09, SP-10, NEW-01,
-NEW-02).
+NEW-02), then outlines and borders (PT-01, PT-05).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

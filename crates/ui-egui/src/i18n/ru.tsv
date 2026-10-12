@@ -4549,3 +4549,12 @@ machine	Stop	Остановка
 	Blend into	Переход в
 	Make Blend	Создать переход
 	Blend Colors	Смешать цвета
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	Добавить контур
+	Satin Outline	Контур гладью
+	Bean Outline	Контур тройным стежком
+	Rectangle Border	Прямоугольная рамка
+	Oval Border	Овальная рамка
+	Rounded Border	Скруглённая рамка
+	Motif Border	Рамка из мотивов

@@ -4553,3 +4553,12 @@ machine	Stop	Arresto
 	Blend into	Sfumare verso
 	Make Blend	Crea sfumatura
 	Blend Colors	Sfuma colori
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	Aggiungi contorno
+	Satin Outline	Contorno a raso
+	Bean Outline	Contorno a punto triplo
+	Rectangle Border	Cornice rettangolare
+	Oval Border	Cornice ovale
+	Rounded Border	Cornice arrotondata
+	Motif Border	Cornice a motivi

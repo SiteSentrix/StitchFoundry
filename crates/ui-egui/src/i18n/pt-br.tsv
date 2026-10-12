@@ -3819,3 +3819,12 @@ machine	Trim	Corte de linha
 	Blend into	Mesclar com
 	Make Blend	Criar mescla
 	Blend Colors	Mesclar cores
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	Adicionar contorno
+	Satin Outline	Contorno de cetim
+	Bean Outline	Contorno de ponto triplo
+	Rectangle Border	Moldura retangular
+	Oval Border	Moldura oval
+	Rounded Border	Moldura arredondada
+	Motif Border	Moldura de motivos

@@ -109,6 +109,21 @@ fn embroidery_menu() -> Vec<Item> {
         c("Remove Holes", "embroidery.removeHoles"),
         c("Fill Holes", "embroidery.fillHoles"),
         c("Add Laydown", "embroidery.addLaydown"),
+        sub(
+            "Add Outline",
+            vec![
+                cp("Satin Outline", "embroidery.addOutline", json!({ "stitch": "satin" })),
+                cp("Bean Outline", "embroidery.addOutline", json!({ "stitch": "bean" })),
+                cp("Rectangle Border", "embroidery.addOutline", json!({ "shape": "rectangle", "offset": 4 })),
+                cp("Oval Border", "embroidery.addOutline", json!({ "shape": "oval", "offset": 2 })),
+                cp("Rounded Border", "embroidery.addOutline", json!({ "shape": "rounded", "offset": 4 })),
+                cp(
+                    "Motif Border",
+                    "embroidery.addOutline",
+                    json!({ "shape": "rounded", "offset": 4, "stitch": "motif", "motif": "scallop", "width": 3 }),
+                ),
+            ],
+        ),
         Sep,
         c("Sort by Thread Color", "embroidery.sortByColor"),
         c("Match Threads to Chart", "embroidery.matchThreads"),

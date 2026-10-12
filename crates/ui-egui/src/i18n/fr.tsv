@@ -4561,3 +4561,12 @@ machine	Stop	Arrêt
 	Blend into	Fondre vers
 	Make Blend	Créer le fondu
 	Blend Colors	Fondre les couleurs
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	Ajouter un contour
+	Satin Outline	Contour en satin
+	Bean Outline	Contour en point triple
+	Rectangle Border	Cadre rectangulaire
+	Oval Border	Cadre ovale
+	Rounded Border	Cadre arrondi
+	Motif Border	Cadre de motifs
