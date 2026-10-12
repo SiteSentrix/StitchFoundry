@@ -506,6 +506,19 @@ fn align_to_artboard_uses_the_artboard_named() {
     assert_eq!(x0(&s, c), boards[0].x0, "off every artboard: the first");
 }
 
+#[test]
+fn align_both_centers() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 20.0, 40.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.align", &json!({"horizontal": "center", "vertical": "center"})).unwrap();
+    let gb_a = s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap();
+    let gb_b = s.doc().unwrap().doc.node(b).unwrap().geometric_bounds().unwrap();
+    assert!((gb_a.center().x - gb_b.center().x).abs() < 1e-6);
+    assert!((gb_a.center().y - gb_b.center().y).abs() < 1e-6);
+}
+
 /// #541: with the Selection tool, a click on one object of the selection makes it the key object:
 /// aligning to the key moves the others to it, Distribute Spacing spaces them from it, and a click
 /// on the key again lets it go.
