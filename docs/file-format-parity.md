@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (DXF control-point SPLINE closure read, #1299 follow-up; `.ai` and PDF trim and bleed boxes as artboard and bleed, #1266) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (gradient-filled shapes import as paths, #1304; white constant alpha soft masks, #1286 in part; DXF control-point SPLINE closure read, #1299 follow-up; `.ai` and PDF trim and bleed boxes as artboard and bleed, #1266) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/mod.rs`). Illustrator's list comes from its public
@@ -82,6 +82,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | PDF and `.ai` import: a shape painted with a gradient opens as one path with the gradient (#1304). PDF and `.ai` export: the constant alpha soft mask of a CMYK page with transparency is white (#1286, in part) |
 | 2026-10-12 | minor | DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves stay open and curves retained; rational/non-rational import and export versions regression-tested; scores/hours unchanged |
 | 2026-10-12 | minor | A `.ai` opens on its trim boxes with its bleed boxes as the document's bleed; a PDF opened on its trim boxes too (#1266) |
 | 2026-10-11 | minor | An EPS keeps its own page and its stacked text strokes through its layers (#1102) |
