@@ -379,7 +379,7 @@ fn dataset_list(s: &mut Session, _p: &Value) -> Result<Value> {
 
 fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
     const C: &str = "dataset.select";
-    let (applied, skipped) = s.edit("Apply Data Set", |d, _| {
+    let (applied, skipped) = s.edit("Apply Data Set", |d, sel| {
         let ds = d.variables.dataset(name).cloned().ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
         // One object may be driven by several variables; walk them in definition order, so two
         // text variables on the same object land the later one's value and both are counted.
@@ -424,6 +424,8 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
             }
         }
         d.variables.active_dataset = Some(name.to_string());
+        // Every selected object left hidden or locked, such as one the row hid, is deselected.
+        sel.deselect_uneditable(d);
         Ok((applied, skipped))
     })?;
     Ok(json!({"name": name, "applied": applied, "skipped": skipped}))
@@ -569,7 +571,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Data Set",
             ["Window", "Variables"],
             None,
-            "{name} apply a dataset in one undo step → {applied, skipped}",
+            "{name} apply a dataset in one undo step, deselecting every selected object left hidden or locked (the key object too) → {applied, skipped}",
             has_doc,
             dataset_select
         ),

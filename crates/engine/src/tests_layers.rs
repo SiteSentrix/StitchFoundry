@@ -451,6 +451,29 @@ fn moves_are_validated() {
     assert_eq!(parent(&s, sub), None);
 }
 
+/// `node.move` into a hidden or locked layer deselects the object it moves, here the key object.
+/// Undo puts the object back and selects it again as the key object.
+#[test]
+fn node_move_into_a_hidden_or_locked_layer_deselects_the_object() {
+    for prop in ["visible", "locked"] {
+        let mut s = session();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let (a, b) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
+        let other = id(&run(&mut s, "layer.new", json!({})));
+        run(&mut s, "layer.setProps", json!({"ids": [other.0], prop: prop == "locked"}));
+        run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+        run(&mut s, "select.key", json!({"id": b.0}));
+        run(&mut s, "node.move", json!({"id": b.0, "parent": other.0, "index": 0}));
+        assert_eq!(parent(&s, b), Some(other), "{prop}");
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![a], None), "{prop}: b, the key object, is deselected");
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(parent(&s, b), Some(layer), "{prop}");
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![a, b], Some(b)), "{prop}: undo selects b again as the key object");
+    }
+}
+
 #[test]
 fn alt_drag_copies_rows_and_the_selected_art_moves_between_layers() {
     let mut s = session();
@@ -465,6 +488,33 @@ fn alt_drag_copies_rows_and_the_selected_art_moves_between_layers() {
     run(&mut s, "layer.move", json!({"ids": [a.0, g.0], "target": layer.0}));
     assert_eq!(children(&s, layer), vec![c, sub, a, g]);
     assert_eq!(s.doc().unwrap().selection.objects, vec![a, g], "it stays selected");
+}
+
+/// The selected art in rows dragged into a hidden layer or group is deselected, the key object
+/// included. Undo puts the rows back and selects the art again.
+#[test]
+fn rows_dragged_into_a_hidden_layer_or_group_deselect_their_art() {
+    let mut s = session();
+    let (layer, sub, a, g, b, c) = tree(&mut s);
+    let hidden = id(&run(&mut s, "layer.new", json!({"visible": false})));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "select.key", json!({"id": a.0}));
+    // The sublayer, holding a and the group of b, goes into the hidden layer.
+    run(&mut s, "layer.move", json!({"ids": [sub.0], "target": hidden.0}));
+    assert_eq!(parent(&s, sub), Some(hidden));
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!((sel.objects, sel.key), (vec![c], None), "a, the key object, and b are hidden");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(parent(&s, sub), Some(layer));
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!((sel.objects, sel.key), (vec![a, b, c], Some(a)), "undo selects them again");
+    // c goes into the group once the group is hidden.
+    run(&mut s, "object.setProps", json!({"ids": [g.0], "visible": false}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, c], "b is in the hidden group");
+    run(&mut s, "layer.move", json!({"ids": [c.0], "target": g.0, "place": "inside"}));
+    assert_eq!(parent(&s, c), Some(g));
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!((sel.objects, sel.key), (vec![a], None), "c is hidden, and a single selected object has no key object");
 }
 
 #[test]
@@ -524,6 +574,72 @@ fn collect_merge_flatten_and_reverse() {
     assert!(st.doc.node(l2).is_none() && st.doc.node(l3).is_none());
     assert_eq!(parent(&s, d), Some(layer));
     assert_eq!(undos(&s), before + 1);
+}
+
+/// Collect in New Layer puts the new layer beside the topmost row when that row is directly in a
+/// layer, and on top of the layer holding its group when it is in a group. When that row is in a
+/// hidden or locked layer, the selected art it collects from another layer is deselected, the key
+/// object included, and undo selects it again.
+#[test]
+fn collect_in_new_layer_inside_a_hidden_or_locked_layer_deselects_the_art_it_moves() {
+    for prop in ["visible", "locked"] {
+        let mut s = session();
+        let (x, z) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
+        let top = id(&run(&mut s, "layer.new", json!({})));
+        let y = rect(&mut s, 200.0);
+        run(&mut s, "layer.setProps", json!({"ids": [top.0], prop: prop == "locked"}));
+        run(&mut s, "select.set", json!({"ids": [x.0, z.0]}));
+        run(&mut s, "select.key", json!({"id": x.0}));
+        let col = id(&run(&mut s, "layer.collectInNew", json!({"ids": [x.0, y.0]})));
+        assert_eq!((parent(&s, col), children(&s, col)), (Some(top), vec![x, y]), "{prop}");
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![z], None), "{prop}: x, the key object, is deselected");
+        run(&mut s, "edit.undo", json!({}));
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![x, z], Some(x)), "{prop}: undo selects x again as the key object");
+    }
+}
+
+/// Merge Selected into a hidden or locked layer deselects the selected art it moves there, the key
+/// object included, and undo selects it again.
+#[test]
+fn merge_selected_into_a_hidden_or_locked_layer_deselects_the_art_it_moves() {
+    for prop in ["visible", "locked"] {
+        let mut s = session();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let (x, z) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
+        let into = id(&run(&mut s, "layer.new", json!({})));
+        run(&mut s, "layer.setProps", json!({"ids": [into.0], prop: prop == "locked"}));
+        run(&mut s, "select.set", json!({"ids": [x.0, z.0]}));
+        run(&mut s, "select.key", json!({"id": x.0}));
+        run(&mut s, "layer.merge", json!({"ids": [x.0, into.0]}));
+        assert_eq!((parent(&s, x), parent(&s, z)), (Some(into), Some(layer)), "{prop}");
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![z], None), "{prop}: x, the key object, is deselected");
+        run(&mut s, "edit.undo", json!({}));
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![x, z], Some(x)), "{prop}: undo selects x again as the key object");
+    }
+}
+
+/// Flatten Artwork into a locked layer deselects the selected art it moves there, the key object
+/// included, and undo selects it again.
+#[test]
+fn flatten_artwork_into_a_locked_layer_deselects_the_art_it_moves() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let (x, z) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
+    let into = id(&run(&mut s, "layer.new", json!({"locked": true})));
+    run(&mut s, "select.set", json!({"ids": [x.0, z.0]}));
+    run(&mut s, "select.key", json!({"id": x.0}));
+    run(&mut s, "layer.flatten", json!({"id": into.0}));
+    assert_eq!((parent(&s, x), parent(&s, z)), (Some(into), Some(into)));
+    assert!(s.doc().unwrap().doc.node(layer).is_none(), "Layer 1 was merged into the locked layer");
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!((sel.objects, sel.key), (vec![], None), "x and z are locked");
+    run(&mut s, "edit.undo", json!({}));
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!((sel.objects, sel.key), (vec![x, z], Some(x)), "undo selects them again with the key object");
 }
 
 #[test]

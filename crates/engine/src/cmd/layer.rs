@@ -89,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Collect in New Layer",
             ["Window", "Layers"],
             None,
-            "{ids?} move rows (default: the highlighted rows, else the selected objects) into a new layer where the topmost of them was (a sublayer when they are in a layer) → {id}",
+            "{ids?} move rows (default: the highlighted rows, else the selected objects) into a new layer where the topmost of them was (a sublayer when they are in a layer), deselecting every selected object left hidden or locked (the key object too) → {id}",
             has_doc,
             collect
         ),
@@ -107,7 +107,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Rows",
             [],
             None,
-            "{ids, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer or group (on top of its contents). Layers go only in layers or at the top level, objects in layers and groups; an object placed beside a top-level layer goes inside it. A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. One undo step → {ids}",
+            "{ids, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer or group (on top of its contents). Layers go only in layers or at the top level, objects in layers and groups; an object placed beside a top-level layer goes inside it. A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
             has_doc,
             move_rows
         ),
@@ -116,7 +116,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers)",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers), deselecting every selected object left hidden or locked (the key object too)",
             has_doc,
             move_node
         ),
@@ -589,6 +589,7 @@ fn collect(s: &mut Session, p: &Value) -> Result<Value> {
             d.move_node(*id, Some(lid), usize::MAX)?;
         }
         sel.prune(d);
+        sel.deselect_uneditable(d);
         Ok(lid)
     })?;
     let st = s.doc_mut()?;
@@ -713,6 +714,7 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             index += 1;
         }
         sel.prune(d);
+        sel.deselect_uneditable(d);
         Ok(out)
     })?;
     let st = s.doc_mut()?;
@@ -730,7 +732,11 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     if !accepts(d, parent, n) {
         return Err(bad(C, "layers go only at the top level or in layers, objects in layers and groups"));
     }
-    s.edit("Reorder", |d, _| Ok(d.move_node(id, parent, index)?))?;
+    s.edit("Reorder", |d, sel| {
+        d.move_node(id, parent, index)?;
+        sel.deselect_uneditable(d);
+        Ok(())
+    })?;
     ok()
 }
 

@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Merge Selected",
             ["Window", "Layers"],
             None,
-            "{ids?} (default: the highlighted rows) merge two or more rows into the layer listed (highlighted) last: the other layers' contents and the other rows move into it, keeping their stacking order, and the emptied layers go. One undo step → {id}",
+            "{ids?} (default: the highlighted rows) merge two or more rows into the layer listed (highlighted) last: the other layers' contents and the other rows move into it, keeping their stacking order, and the emptied layers go. Every selected object left hidden or locked, such as one merged into a hidden or locked layer, is deselected (the key object too). One undo step → {id}",
             has_doc,
             merge
         ),
@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flatten Artwork",
             ["Window", "Layers"],
             None,
-            "{id?} (default: the highlighted row's top-level layer, else the current one's) move the art of every other visible top-level layer into this one, keeping the stacking order; hidden layers and their art are deleted, template layers stay. One undo step → {id, discarded}",
+            "{id?} (default: the highlighted row's top-level layer, else the current one's) move the art of every other visible top-level layer into this one, keeping the stacking order; hidden layers and their art are deleted, template layers stay. Every selected object left hidden or locked, such as one flattened into a locked layer, is deselected (the key object too). One undo step → {id, discarded}",
             has_doc,
             flatten
         ),
@@ -288,6 +288,7 @@ fn merge(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Merge Selected", |d, sel| {
         merge_into(d, into, &others)?;
         sel.prune(d);
+        sel.deselect_uneditable(d);
         Ok(())
     })?;
     let st = s.doc_mut()?;
@@ -318,6 +319,7 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
         d.drop_guides_of_deleted_layers(sel);
         merge_into(d, into, &others)?;
         sel.prune(d);
+        sel.deselect_uneditable(d);
         Ok(())
     })?;
     let st = s.doc_mut()?;

@@ -752,6 +752,11 @@ that were already hidden or locked. The key object is cleared when it is one of 
 them again with the key object. When the call changes nothing, it records no undo step and still deselects them.
 Other `object.setProps` calls leave the selection unchanged.
 
+`layer.move`, `node.move`, `layer.merge`, `layer.flatten`, `layer.collectInNew`, `dataset.select`, `dataset.next`
+and `dataset.prev` also deselect every selected object that is hidden or locked after the call, such as objects
+moved into a hidden or locked layer or group, or objects that a data set hides. The key object is cleared when it
+is one of them, and `edit.undo` selects them again with the key object.
+
 These Select menu commands select only the objects that `select.all` selects and the objects inside them: every
 `select.same.*` and `select.object.*` command except `select.object.slices`, `select.nextAbove`, `select.nextBelow`
 and `select.recall`. They leave out hidden and locked objects with the objects inside them, the objects on hidden,
@@ -1142,7 +1147,7 @@ and `layerRows`, the rows highlighted in the panel.
   only in layers or at the top level and objects in layers and groups (an object placed beside a top-level layer goes
   inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
-  form with the same rules.
+  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
 - **Buttons**: `layer.new {name?, top?, …options}` (above the current layer at its level; `top` with Ctrl/Cmd),
   `layer.newSublayer {parent?, name?, …options}` (on top of the parent's contents), `layer.delete {ids?}` (rows with
   what they hold; the last layer stays), `layer.locate {id?}` (highlights the selected object's row; the panel opens
