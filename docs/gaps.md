@@ -125,8 +125,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G12 Preferences and panels that don't act yet
 
-- **Missing:** ~17 Preferences options stored but not acted on (#394: Highlight Alternate Glyphs, Open
-  Documents As Tabs, Real-time Drawing, hyphenation language, Appearance of Black, devices…), Properties panel per
+- **Missing:** ~16 Preferences options stored but not acted on (#394: Highlight Alternate Glyphs, Open
+  Documents As Tabs, Real-time Drawing, hyphenation language, Appearance of Black for output, devices…), Properties panel per
   context, context menus beyond the canvas, Layers panel row menus and Collect for Export, SVG Interactivity.
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.

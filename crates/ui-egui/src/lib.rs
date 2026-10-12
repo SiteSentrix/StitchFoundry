@@ -310,6 +310,9 @@ pub struct CacheKey {
     pub smooth_images: bool,
     /// Isolation mode's group or layer ([`vectorcraft_render::RenderOptions::isolated`]).
     pub isolated: Option<u64>,
+    /// Appearance of Black › On Screen › Display All Blacks as Rich Black
+    /// ([`vectorcraft_render::RenderOptions::rich_black`]).
+    pub rich_black: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]

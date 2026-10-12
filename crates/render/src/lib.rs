@@ -127,6 +127,9 @@ pub struct RenderOptions {
     /// (box-filtered from the full image, kept with the decoded images), so the full image needn't
     /// stay in memory or be sampled. Off, images always sample their full pixels (exports).
     pub image_mips: bool,
+    /// Appearance of Black's Rich Black: pure CMYK black (black ink alone at 100%) shows as RGB
+    /// black. Off, it shows through the CMYK profile, a dark grey, as other colours do.
+    pub rich_black: bool,
 }
 
 /// The opacity of the art around an isolated group or layer.
@@ -201,6 +204,7 @@ impl Default for RenderOptions {
             precise: false,
             supersample: false,
             image_mips: false,
+            rich_black: false,
         }
     }
 }
@@ -549,7 +553,8 @@ impl Renderer {
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
-        let frame = Frame { mt: threads > 0, doc, view, visible, px, opts, ink: Ink::Display };
+        let screen = if opts.rich_black { Ink::RichBlack } else { Ink::Display };
+        let frame = Frame { mt: threads > 0, doc, view, visible, px, opts, ink: screen };
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
@@ -564,7 +569,7 @@ impl Renderer {
             let stats = self.stats;
             let k = self.draw_frame(&Frame { ink: Ink::K, ..frame }, w, h);
             self.stats = stats;
-            if inks { ink::amounts(&cmy, &k) } else { ink::compose(&cmy, &k, opts.background) }
+            if inks { ink::amounts(&cmy, &k) } else { ink::compose(&cmy, &k, opts) }
         } else {
             self.draw_frame(&frame, w, h)
         };
