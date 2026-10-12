@@ -8,9 +8,12 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use sf_core::attr::{DocEmbroidery, FontDesign};
-use vectorcraft_doc::{Artboard, Document, Guide, LayerColor, Node, Unit};
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::text::{CharStyle, TextObject};
+use vectorcraft_doc::{Appearance, Artboard, Document, Guide, LayerColor, Node, Unit};
 use vectorcraft_embroidery::PT_PER_MM;
 use vectorcraft_embroidery::fonts::{EmbFont, Glyph};
+use vectorcraft_geom::path::PathData;
 use vectorcraft_geom::{Affine, Rect};
 
 use super::embroidery_lettering::{GLYPHS_FILE, add_font, describe, ensure_fonts, loaded, not_loaded, ranged, remember_folder};
@@ -64,6 +67,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{pair: \"A V\" (two glyphs, a space between), value: mm closer (negative: further apart; 0 removes it)} kerning for a pair of the font document's glyphs → {pairs}",
             has_doc,
             kern
+        ),
+        cmd!(
+            "embroidery.fontDoc.fromType",
+            "New Embroidery Font from Type",
+            [],
+            None,
+            "{family: an installed font family, style?: (Regular), name?: the font's name (the family's), chars?: the glyphs (A–Z, a–z, 0–9 and .,!?'-&), size?: mm, the capitals' height (25; 5–200)} the font creator from type: a font document whose glyphs are the family's outlines, each digitized as Convert Artwork would (satin where the strokes are thin enough, fill where they're wide) on its artboard at the family's own advance, to refine and save; opens a new document → {glyphs, family}",
+            always,
+            from_type
         ),
         cmd!(
             "embroidery.font.edit",
@@ -330,6 +342,93 @@ fn depth(font: &EmbFont, k: f64) -> f64 {
         .filter_map(|g| Some((g.art.geometric_bounds()?.y1 - g.baseline) * k / PT_PER_MM))
         .filter(|v| v.is_finite())
         .fold(0.0f64, f64::max)
+}
+
+/// Type `text` in `family` and `style` at `size` (points): its outline (points, its baseline at 0
+/// and its start at 0) and how far the next character would start.
+fn type_glyph(family: &str, style: &str, text: &str, size: f64) -> (PathData, f64) {
+    let st = CharStyle { font_family: family.to_string(), font_style: style.to_string(), size, ..CharStyle::default() };
+    let t = TextObject::point(vectorcraft_geom::Point::ZERO, text, st);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let mut path = PathData::new(Vec::new());
+    for g in &lay.glyphs {
+        path.subpaths.extend(PathData::from_bezpath(&g.outline).transformed(t.xf).subpaths);
+    }
+    let advance = vectorcraft_text::caret_position(&lay, text.len()).0.x;
+    (path, if advance.is_finite() { advance.max(0.0) } else { 0.0 })
+}
+
+fn from_type(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.fontDoc.fromType";
+    let db = vectorcraft_text::FontDb::global();
+    let want = str_param(p, "family").map(str::trim).filter(|f| !f.is_empty()).ok_or_else(|| bad(CMD, "missing `family`"))?;
+    let family =
+        db.families().into_iter().find(|f| f.eq_ignore_ascii_case(want)).ok_or_else(|| bad(CMD, format!("no font family `{want}` is installed")))?;
+    // a style the family has (the font database stands the nearest in for one it hasn't)
+    let styles = db.styles(&family);
+    let key = |s: &str| s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect::<String>();
+    let style = match str_param(p, "style").map(str::trim).filter(|s| !s.is_empty()) {
+        Some(want) => styles
+            .iter()
+            .find(|s| key(s) == key(want))
+            .cloned()
+            .ok_or_else(|| bad(CMD, format!("{family} has no {want} style: one of {}", styles.join(", "))))?,
+        // its regular, or the style nearest it
+        None => db.face(&family, "Regular").map_or_else(|| "Regular".to_string(), |f| f.style.clone()),
+    };
+    let mut f = FontDesign::default();
+    f.name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| family.clone(), |n| n.chars().take(100).collect());
+    f.size = ranged(p, "size", 5.0..=200.0, CMD, "`size` is 5 to 200 mm")?.unwrap_or(f.size);
+    // the type size whose capitals are `size` high, measured on the first capital it has
+    let cap = ["H", "I", "X", "E"]
+        .iter()
+        .find_map(|c| type_glyph(&family, &style, c, 100.0).0.bounds().map(|b| b.height()).filter(|h| *h > 1e-6))
+        .ok_or_else(|| bad(CMD, format!("{family} has no capitals to measure its size by")))?;
+    let points = f.size * PT_PER_MM * 100.0 / cap;
+    let mut names = glyph_names(p, CMD)?;
+    if names.is_empty() {
+        names = DEFAULT_CHARS.chars().map(String::from).collect();
+    }
+    let glyphs: Vec<(String, PathData, f64)> = names
+        .into_iter()
+        .map(|n| {
+            let (path, advance) = type_glyph(&family, &style, &n, points);
+            (n, path, advance)
+        })
+        .collect();
+    // room below the baseline for the deepest descender, a space as the family's
+    let deepest = glyphs.iter().filter_map(|(_, path, _)| path.bounds()).map(|b| b.y1).fold(0.0f64, f64::max) / PT_PER_MM;
+    f.descent = (deepest + 2.0).max(f.size * 0.2);
+    f.space = type_glyph(&family, &style, " ", points).1 / PT_PER_MM;
+    let widths: Vec<(String, f64)> = glyphs.iter().map(|(n, _, w)| (n.clone(), *w)).collect();
+    let (boards, guides) = glyph_boards(&widths, &f, 0.0, 1);
+    let mut doc = Document::new(100.0, 100.0);
+    doc.title = f.name.clone();
+    doc.units = Unit::Millimeters;
+    let paint = Paint::solid(Color::rgb8(0x1a, 0x3e, 0x8c));
+    let mut art = Vec::new();
+    for ((name, path, _), board) in glyphs.iter().zip(&boards) {
+        if path.is_empty() {
+            continue;
+        }
+        let path = path.transformed(Affine::translate((board.rect.x0, board.rect.y1 - f.descent * PT_PER_MM)));
+        let mut n = Node::path(doc.alloc_id(), path, Appearance::basic(paint.clone(), Paint::None, 0.0));
+        n.name = Some(name.clone());
+        // digitized as Convert Artwork does it: satin for thin strokes, fill for wide ones
+        n.embroidery = Some(Box::new(vectorcraft_embroidery::suggest(&n)));
+        art.push(Arc::new(n));
+    }
+    if let Some(layer) = doc.layers.first_mut()
+        && let Some(ch) = Arc::make_mut(layer).children_mut()
+    {
+        ch.extend(art);
+    }
+    doc.artboards = boards;
+    doc.guides = guides;
+    doc.embroidery = Some(Box::new(DocEmbroidery { font: Some(f), ..DocEmbroidery::default() }));
+    let count = doc.artboards.len();
+    s.add_document(doc, None);
+    Ok(json!({ "glyphs": count, "family": family }))
 }
 
 fn edit_font(s: &mut Session, p: &Value) -> Result<Value> {

@@ -621,6 +621,11 @@ glyphs and which still need art. **Save Embroidery Font…** writes the font fol
 glyphs.stitchfoundry, the glyphs in StitchFoundry's own format with their stitching) and loads it
 for lettering at once; the folder is remembered like any font folder.
 
+A font can also start from type: `embroidery.fontDoc.fromType {family, style, chars, size}` makes
+a font document from an installed TrueType or OpenType family, each glyph its outline at the
+family's own advance, digitized as Convert Artwork would (satin where the strokes are thin enough,
+fill where they're wide), ready to refine and save. Check the type's licence allows it.
+
 Any loaded font, Ink/Stitch's or one made here, opens as a font document to refine
 (`embroidery.font.edit {name}`): its glyphs on their artboards at their advances, its properties
 and kerning; saving it replaces the loaded font of that name (rename it with
