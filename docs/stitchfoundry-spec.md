@@ -263,7 +263,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BAS-12 | Stitch player (slow redraw) | Done | Stitch Sequence panel player | – |
 | BAS-13 | Travel tools: step through a design by stitch, object, colour, trim, function | Done | Stitch Sequence panel: Travel by (stitch, object, colour, trim, function) with back and next buttons; the object reached is selected | 1 |
 | BAS-14 | Colour-Object list (objects in sewing order, grouped by colour) | Done | Stitch Sequence panel: rows grouped by thread, drag to reorder, Shift/Ctrl multi-select, eye and lock per row, hidden objects listed to show again | 1 |
-| BAS-15 | Show repeats (preview tiled/repeated layouts) | Missing | Draw design copies for VectorCraft Repeat objects | 2 |
+| BAS-15 | Show repeats (preview tiled/repeated layouts) | Partial | Repeat objects are sewn and shown copy by copy; a view repeating the whole design without sewing it is missing | 2 |
 | BAS-16 | Design information (stitches, size, colours, time, thread, cost) | Partial | Panel stats; add cost estimate (OUT-*) | 6 |
 | BAS-17 | Print preview of designs | Partial | VectorCraft printing prints art; embroidery worksheets in RP-* | 6 |
 | BAS-18 | Thread palette, assign and edit thread colours | Done | Panel colour + chart picker | – |
@@ -342,10 +342,10 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | PT-03 | Basic shapes | Done | | – |
 | PT-04 | Add / remove holes; fill holes | Done | `embroidery.removeHoles {maxArea?}` and `embroidery.fillHoles` (a fill object per hole) | 1 |
 | PT-05 | Offsets and outlines (closed, open) | Partial | Add Outline: an outline following the shapes at a distance, in any stitch; offsets of open paths still missing | 2 |
-| PT-06 | Wreaths and arrays (mirror-merge) | Partial | VectorCraft Repeat exists; make Repeat objects stitchable | 2 |
+| PT-06 | Wreaths and arrays (mirror-merge) | Done | Repeat objects (radial, grid, mirror) sew every copy | – |
 | RS-01 | Reshape objects and stitch angles | Done | Direct selection + Inclination tool | – |
 | RS-02 | Reshape stars and rings | Partial | With PT-02 | 2 |
-| RS-03 | Envelopes on embroidery | Partial | Envelope works on art; make Envelope objects stitchable (expand on the fly) | 2 |
+| RS-03 | Envelopes on embroidery | Done | Stitched objects in an envelope are sewn bent through it (their inclination lines and beads aren't bent) | – |
 | RS-04 | Break apart branched objects | Done | Embroidery › Break Apart (`embroidery.breakApart`): a branch gives back its objects; a stitched path or compound path of separate parts becomes one object per part, holes staying with their part | 1 |
 | RS-05 | Knife (cut shapes) | Done | VectorCraft knife/scissors | – |
 | RS-06 | Automatic knife (split long shapes into sewable parts) | Missing | Split objects longer than a limit along their medial axis | 2 |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 117 done,
-42 partial, 66 missing, 6 out of scope (counted 2026-10-12, after outlines and borders). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 119 done,
+41 partial, 65 missing, 6 out of scope (counted 2026-10-12, after repeats and envelopes). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -719,7 +719,8 @@ sewn on a real machine yet; the owner has the VP3 test kit. Phase 2 started on 2
 tatami textures and split lines (PS-02…04, CS-05), then hand stitch, jagged edges and trapunto
 (SP-02, SP-03, SP-08), then motifs (MO-01, MO-03, MO-04), then offset, zigzag, E-stitch and stipple fills and laydown
 (CS-02, SP-05, SP-06, RE-06), then spacing profiles and colour blends (SP-09, SP-10, NEW-01,
-NEW-02), then outlines and borders (PT-01, PT-05).
+NEW-02), then outlines and borders (PT-01, PT-05), then repeats and envelopes sewn as they look (PT-06,
+RS-03, BAS-15).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

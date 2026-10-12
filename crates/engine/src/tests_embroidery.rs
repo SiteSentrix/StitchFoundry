@@ -1655,3 +1655,27 @@ fn outlines_and_borders_are_sewn_after_the_shapes() {
         assert!(s.execute("embroidery.addOutline", &bad).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn repeats_and_envelopes_are_sewn_as_they_look() {
+    let mut s = session();
+    let a = rect(&mut s, 200.0, 100.0, 40.0, 20.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let one = stitches(&s);
+    // A radial repeat of six: every copy is sewn, where it shows.
+    let rep = s.execute("object.repeat.radial", &json!({"ids": [a.0], "instances": 6, "radius": 80})).unwrap();
+    assert!(rep["id"].as_u64().is_some());
+    let six = stitches(&s);
+    assert!(six as f64 > 5.0 * one as f64, "{one} → {six}");
+    let plan = s.embroidery_plan().unwrap();
+    assert_eq!(plan.records_of(a).len(), 6, "selecting the source shows all six");
+    // The plan of an unchanged document is reused.
+    assert!(std::sync::Arc::ptr_eq(&plan, &s.embroidery_plan().unwrap()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(stitches(&s), one);
+    // An envelope bends the stitching with the art.
+    let before: Vec<sf_core::Point> = needles(&s, a);
+    s.execute("object.envelope.makeWithWarp", &json!({"ids": [a.0], "style": "arc", "bend": 50})).unwrap();
+    let after = needles(&s, a);
+    assert!(!after.is_empty() && after != before);
+}

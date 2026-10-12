@@ -111,6 +111,12 @@ framing them. `embroidery.addOutline` takes the shape (`offset`, `rectangle`, `o
 how far out (`offset`, mm), the stitch (`run`, `bean`, `satin`, `motif`), its `width` and `motif`.
 The outline is an ordinary path afterwards: reshape it or change its stitch type.
 
+**Repeats and envelopes:** stitched objects inside a repeat (Object › Repeat: radial, grid or
+mirror) are sewn once per copy, where each copy shows: wreaths, borders and arrays from one
+motif. Selecting the source object shows every copy's stitches. Stitched objects inside an
+envelope (Object › Envelope Distort) are sewn bent through it, like the art; their inclination
+lines and start and stop beads don't bend with them.
+
 **Laydown:** **Embroidery › Add Laydown** puts an open tatami (rows 2.5 mm apart, at 45°, no
 underlay, travel along its outline) under the selected stitched shapes and type, 1.5 mm beyond
 them, sewn first in the bottom one's thread. On towels, fleece and knits it flattens the pile so
