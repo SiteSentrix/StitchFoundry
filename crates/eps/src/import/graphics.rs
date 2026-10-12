@@ -26,6 +26,9 @@ const HAIRLINE: f64 = 0.25;
 const MAX_INKS: usize = 32;
 /// Most dashes `strokepath` makes of a path (more and it outlines the path undashed).
 const MAX_DASHES: f64 = 1e5;
+/// Most entries a dash pattern has: the most elements an array has in a typical PostScript
+/// implementation (PLRM 3rd ed., Table B.1).
+const MAX_DASH_ENTRIES: usize = 65_535;
 /// Most entries an indexed colour space's table has.
 const MAX_HIVAL: usize = 4095;
 /// Most elements the current path may have.
@@ -121,7 +124,8 @@ pub(crate) struct GState {
     pub cap: LineCap,
     pub join: LineJoin,
     pub miter: f64,
-    pub dash: Vec<f64>,
+    /// The dash pattern, shared by the states saved or copied from this one.
+    pub dash: Rc<[f64]>,
     pub dash_offset: f64,
     /// The current path, in document space.
     pub path: BezPath,
@@ -151,7 +155,7 @@ impl Default for GState {
             cap: LineCap::Butt,
             join: LineJoin::Miter,
             miter: 10.0,
-            dash: vec![],
+            dash: Rc::from([]),
             dash_offset: 0.0,
             path: BezPath::new(),
             cur: None,
@@ -564,16 +568,19 @@ impl Interp<'_> {
         Ok(())
     }
 
-    fn stroke_path(&mut self, bp: BezPath) {
+    fn stroke_path(&mut self, bp: BezPath) -> Res {
         if bp.elements().is_empty() || self.g.paint.is_none() || self.g.null {
-            return;
+            return Ok(());
         }
-        let st = self.stroke_layer();
+        let st = self.stroke_layer()?;
         self.out.stroke(bp, st, &self.g.clips);
+        Ok(())
     }
 
-    /// The stroke the graphics state draws, in document space.
-    fn stroke_layer(&self) -> StrokeLayer {
+    /// The stroke the graphics state draws, in document space. Each entry of the dash pattern it
+    /// copies counts as an operation.
+    fn stroke_layer(&mut self) -> Res<StrokeLayer> {
+        self.spend(self.g.dash.len() as u64)?;
         let k = self.scale();
         let w = self.g.width * k;
         let mut st = StrokeLayer::new(self.g.paint.clone(), if w > 0.0 && w.is_finite() { w } else { HAIRLINE });
@@ -584,7 +591,7 @@ impl Interp<'_> {
         let pattern: Vec<f64> = self.g.dash.iter().map(|d| d * k).collect();
         let dash = Dash { pattern, offset: self.g.dash_offset * k, align_corners: false };
         st.dash = dash.is_dashed().then_some(dash);
-        st
+        Ok(st)
     }
 
     /// The current path in user space, each element as its operator and points (quadratic
@@ -707,10 +714,7 @@ impl Interp<'_> {
             }
             let bp = self.take_path();
             match op {
-                Op::UStroke => {
-                    self.stroke_path(bp);
-                    Ok(())
-                }
+                Op::UStroke => self.stroke_path(bp),
                 _ => self.fill_path(bp, if op == Op::UEoFill { FillRule::EvenOdd } else { FillRule::NonZero }),
             }
         });
@@ -1201,7 +1205,7 @@ impl Interp<'_> {
             ExecForm => self.exec_form()?,
             StrokePath => {
                 let bp = self.take_path();
-                let mut st = self.stroke_layer();
+                let mut st = self.stroke_layer()?;
                 // A dash pattern far finer than the path would make countless pieces.
                 let period: f64 = st.dash.as_ref().map_or(0.0, |d| d.pattern.iter().sum());
                 let periods = if st.dash.is_some() && period > 0.0 { bp.perimeter(1e-3) / period } else { 0.0 };
@@ -1312,11 +1316,18 @@ impl Interp<'_> {
             SetDash => {
                 let offset = self.pop_num()?;
                 let items = self.pop_array()?;
+                if items.len() > MAX_DASH_ENTRIES {
+                    return ps_err("limitcheck", "");
+                }
+                // Each entry read counts as an operation.
+                self.spend(items.len() as u64)?;
                 let v: Option<Vec<f64>> = items.borrow().iter().map(|o| o.as_num().filter(|v| v.is_finite() && *v >= 0.0)).collect();
-                self.g.dash = v.ok_or(PsError::Ps("typecheck", String::new()))?;
+                self.g.dash = v.ok_or(PsError::Ps("typecheck", String::new()))?.into();
                 self.g.dash_offset = offset;
             }
             CurrentDash => {
+                // The array made counts against the memory budget.
+                self.alloc(self.g.dash.len() * std::mem::size_of::<Obj>())?;
                 let d = self.g.dash.iter().map(|v| Obj::Real(*v)).collect();
                 self.push(Obj::array(d))?;
                 self.push_num(self.g.dash_offset)?;
@@ -1651,7 +1662,7 @@ impl Interp<'_> {
             }
             Stroke => {
                 let bp = self.take_path();
-                self.stroke_path(bp);
+                self.stroke_path(bp)?;
             }
             RectFill => {
                 let bp = self.rects()?;
@@ -1667,7 +1678,7 @@ impl Interp<'_> {
                     let xf = self.xf();
                     bp.apply_affine(xf * m * xf.inverse());
                 }
-                self.stroke_path(bp);
+                self.stroke_path(bp)?;
             }
             ShFill => {
                 let d = self.pop_dict()?;

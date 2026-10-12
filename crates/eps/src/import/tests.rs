@@ -171,6 +171,41 @@ fn line_state_reaches_the_stroke() {
     assert!(stroke(&objects(&read("0 setlinewidth 0 0 moveto 9 9 lineto stroke").document)[0]).unwrap().width > 0.0);
 }
 
+/// `setdash` takes a dash pattern of up to 65,535 entries, the most elements an array has in a
+/// typical implementation (PLRM 3rd ed., Table B.1), and raises `limitcheck` for a longer one.
+#[test]
+fn dash_patterns_hold_at_most_65535_entries() {
+    let dash = |n: usize| format!("/a {n} array def 0 1 {} {{ a exch 1 put }} for a 0 setdash", n - 1);
+    check(&format!("{} currentdash pop length 65535 eq", dash(65535)));
+    let r = read(&format!("0 0 10 10 rectfill {}", dash(65536)));
+    assert_eq!(objects(&r.document).len(), 1, "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("limitcheck in `setdash`")), "{:?}", r.warnings);
+}
+
+/// Saved and copied graphics states share the dash pattern, and `setdash`, `currentdash` and
+/// each stroke count the entries they read or copy against the budgets. Under a pattern of
+/// 65,535 entries, 4,000,000 passes of `gsave grestore` and 2,000,000 passes of
+/// `gstate currentgstate setgstate` finish, and loops of `setdash`, `currentdash` and `strokepath`
+/// run out of a budget.
+#[test]
+fn work_on_the_longest_dash_pattern_ends_soon() {
+    let dash = "0 0 10 10 rectfill /a 65535 array def 0 1 65534 { a exch 1 put } for a 0 setdash";
+    for body in ["4000000 { gsave grestore } repeat", "2000000 { gstate currentgstate setgstate } repeat"] {
+        let r = read_soon(&format!("{dash} {body} 20 20 10 10 rectfill"));
+        assert_eq!(objects(&r.document).len(), 2, "{body}: {:?}", r.warnings);
+        assert!(r.warnings.is_empty(), "{body}: {:?}", r.warnings);
+    }
+    for (body, why) in [
+        ("{ a 0 setdash } loop", "runs too long"),
+        ("{ currentdash pop pop } loop", "uses too much memory"),
+        ("{ newpath 0 0 moveto 100 0 lineto strokepath } loop", "runs too long"),
+    ] {
+        let r = read_soon(&format!("{dash} {body}"));
+        assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
+        assert!(r.warnings.iter().any(|w| w.contains(why)), "{body}: {:?}", r.warnings);
+    }
+}
+
 #[test]
 fn procedures_bind_def_loops_and_dictionaries() {
     let r = read(
