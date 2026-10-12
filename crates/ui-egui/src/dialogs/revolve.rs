@@ -167,7 +167,7 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
 fn extrude_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     heading(ui, tl!("Object"));
     number(ui, d, "depth", tl!("Depth"), (0.0, 2000.0), "", 1, Some(unit));
-    number(ui, d, "twist", tl!("Twist"), (-360.0, 360.0), "°", 1, None);
+    number(ui, d, "twist", tl!("Twist"), (0.0, 360.0), "°", 1, None);
     number(ui, d, "taper", tl!("Taper"), (1.0, 100.0), "%", 1, None);
     choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
     ui.add_space(10.0);

@@ -161,7 +161,7 @@ impl Default for Bevel {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Extrude {
     pub depth: f64,
-    /// The turn of the back face against the front, about the shape's centre.
+    /// The turn of the back face against the front, about the shape's centre: 0° to 360°.
     pub twist: f64,
     /// The size of the back face, as a share (0.01..1) of the front's.
     pub taper: f64,
@@ -233,7 +233,7 @@ impl Extrude {
     fn sanitized(self) -> Self {
         Self {
             depth: finite(self.depth, 50.0, 0.0, 2000.0),
-            twist: finite(self.twist, 0.0, -360.0, 360.0),
+            twist: finite(self.twist, 0.0, 0.0, 360.0),
             taper: finite(self.taper, 1.0, 0.01, 1.0),
             bevel: self.bevel.map(|b| Bevel {
                 width: finite(b.width, 4.0, 0.0, 1000.0),

@@ -24,7 +24,7 @@ object is where the art was.
 | Option | What it does |
 |---|---|
 | Depth | 0–2,000 pt. At 0 the object is flat (the art turned like Rotate). |
-| Twist | −360° to 360°: the back face turned against the front, the walls following in slices. |
+| Twist | 0° to 360°: the back face turned against the front, the walls following in slices. |
 | Taper | 1–100 %: the back face's size against the front's. |
 | Cap | **Solid** closes the front and back; **Hollow** leaves them open, showing the insides of the walls. |
 | Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. |

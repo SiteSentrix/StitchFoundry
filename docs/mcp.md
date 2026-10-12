@@ -949,7 +949,7 @@ See [Revolve](revolve.md) for the scope and limitations.
 the other 3D types to a path or compound path, live like Revolve (the source stays editable; SVG/PDF exports and
 `effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included.
 
-`threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, -360..360, 0), `taper` (1..100%, 100),
+`threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
 and `bevelHeight` (points, default 4), `bevelRepeat` (1..32), `bevelSpace` (0..90%), `bevelInside`,
 `bevelBothSides`. `threeD.inflate`: `depth` (points, default 0), `volume` (0..100%, default 50), `bothSides`.

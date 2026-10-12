@@ -362,3 +362,14 @@ fn the_edge_index_looks_along_the_side_from_outside() {
     let (fast, slow) = (edges.distance(q), edge_distance(&rings, q));
     assert!((fast - slow).abs() < 1e-9, "{fast} against {slow}");
 }
+
+/// Twist runs 0° to 360°, as documented: beyond either end it holds at that end.
+#[test]
+fn twist_holds_between_0_and_360_degrees() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: -20.0, rotation_y: 30.0, ..front() };
+    let at = |twist: f64| extrude(&p, b, Extrude { twist, ..Extrude::default() }, v).unwrap();
+    assert_eq!(at(-45.0), at(0.0));
+    assert_eq!(at(500.0), at(360.0));
+    assert_ne!(at(45.0), at(0.0));
+}
