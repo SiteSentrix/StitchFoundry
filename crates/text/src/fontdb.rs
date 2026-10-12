@@ -389,6 +389,8 @@ fn modified(path: &Path) -> Option<std::time::SystemTime> {
 struct SysFallback {
     enabled: bool,
     misses: std::collections::HashSet<char>,
+    /// Counts the scans of the font folders: a search that a scan overtook doesn't record its miss.
+    scans: u64,
 }
 
 /// Fonts made for Thai, tried first (when installed) for Thai the font in use lacks: Windows
@@ -1734,6 +1736,12 @@ impl FontDb {
         *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
         *self.aliases.write().unwrap_or_else(|e| e.into_inner()) = aliases;
         *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
+        // A font installed since may cover the characters no font did: they are looked for again.
+        {
+            let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            sys.scans = sys.scans.wrapping_add(1);
+            sys.misses.clear();
+        }
         self.changed();
         n
     }
@@ -2034,6 +2042,9 @@ impl FontDb {
                 return false;
             }
         }
+        // The first scan done before its count is read, so the first miss is remembered too.
+        self.ensure_catalog();
+        let scans = self.sys.lock().unwrap_or_else(|e| e.into_inner()).scans;
         let covered = |db: &FontDb| db.read_faces().iter().any(|f| f.covers(c));
         for fam in SYSTEM_FALLBACKS {
             if !self.is_loaded(fam) && self.load_cataloged(fam) && covered(self) {
@@ -2055,7 +2066,10 @@ impl FontDb {
                 }
             }
         }
-        self.sys.lock().unwrap_or_else(|e| e.into_inner()).misses.insert(c);
+        let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+        if sys.scans == scans {
+            sys.misses.insert(c);
+        }
         false
     }
 

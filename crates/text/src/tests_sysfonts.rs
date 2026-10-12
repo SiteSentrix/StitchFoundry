@@ -120,6 +120,33 @@ fn fonts_without_outlines_the_engine_draws_are_left_out() {
     assert_eq!(db.load_system_fonts(), 1);
 }
 
+/// A character no font covered is looked for again once a rescan finds a font that has it (#992).
+#[test]
+fn rescanning_retries_characters_no_font_covered() {
+    // A private-use character none of the bundled fonts has.
+    const C: char = '\u{F0000}';
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-retry", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    assert!(db.face_covering(C).is_none());
+    // Source Sans 3 Regular renamed, its character map replaced by one holding only `C`.
+    let base = named(&[(3, EN, 1, "Retry Sans"), (3, EN, 2, "Regular"), (3, EN, 6, "RetrySans-Regular")]);
+    let font = skrifa::FontRef::new(&base).unwrap();
+    let mut builder = write_fonts::FontBuilder::new();
+    builder.add_raw(write_fonts::types::Tag::new(b"cmap"), crate::embed::cmap(&[(C as u32, 1)]).unwrap());
+    for r in font.table_directory.table_records() {
+        let tag = write_fonts::types::Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag()).unwrap().as_bytes());
+        }
+    }
+    std::fs::write(dir.join("Retry.ttf"), builder.build()).unwrap();
+    assert!(db.face_covering(C).is_none(), "the miss is remembered until the fonts are scanned again");
+    assert_eq!(db.load_system_fonts(), 1);
+    assert_eq!(db.face_covering(C).unwrap().family, "Retry Sans");
+}
+
 #[test]
 fn rescanning_finds_fonts_installed_since() {
     let dir = font_dir("rescan");
