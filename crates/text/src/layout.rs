@@ -156,6 +156,33 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
     layout_with(db, t, &opts)
 }
 
+/// Area type in a frame too short for its first line draws nothing (type that doesn't fit its frame
+/// isn't drawn). For importers whose source shows that line: the frame is made taller, from its
+/// top, by what the first line needs. Whether it was.
+pub fn fit_first_line(db: &FontDb, t: &mut TextObject) -> bool {
+    let TextKind::Area { frame } = &t.kind else { return false };
+    let Some(b) = frame.bounds().filter(|b| b.height() > 1e-6) else { return false };
+    if !layout(db, t).lines.is_empty() {
+        return false;
+    }
+    // The height of its first line: the line's as point type.
+    let point = TextObject { kind: TextKind::Point, ..t.clone() };
+    let Some(need) = layout(db, &point).lines.first().map(|l| l.ascent + l.descent) else { return false };
+    // (A little more than it, for the rounding of the layout.)
+    let by = (need + 0.05) / b.height();
+    if !(by.is_finite() && by > 1.0) {
+        return false;
+    }
+    let taller = frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)));
+    let short = std::mem::replace(&mut t.kind, TextKind::Area { frame: taller });
+    // Something else keeps the line out (a frame narrower than a letter): as the source has it.
+    if layout(db, t).lines.is_empty() {
+        t.kind = short;
+        return false;
+    }
+    true
+}
+
 /// The underline and strikethrough bars of `t` laid out as `layout` (#847): per run and line, a
 /// bar from the stretch's first glyph to its last one's advance, placed and sized by the font's
 /// own underline and strikeout metrics through the glyph's transform (so the size, baseline shift
