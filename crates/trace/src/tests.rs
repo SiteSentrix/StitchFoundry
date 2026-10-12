@@ -859,3 +859,88 @@ fn no_path_of_a_noisy_picture_leaves_the_picture() {
         }
     }
 }
+
+/// A deterministic value in `-1.0..1.0` for a pixel.
+fn jitter(x: u32, y: u32, salt: u32) -> f64 {
+    let mut v = x.wrapping_mul(0x9E37_79B1) ^ y.wrapping_mul(0x85EB_CA77) ^ salt.wrapping_mul(0xC2B2_AE3D);
+    v ^= v >> 15;
+    v = v.wrapping_mul(0x2C1B_3C6D);
+    v ^= v >> 12;
+    f64::from(v & 0xFFFF) / 32768.0 - 1.0
+}
+
+/// Three flat colours (a navy field, a yellow disc, a green bar) drawn anti-aliased, with `noise`
+/// levels of noise per channel.
+fn three_colour_art(noise: f64) -> Raster {
+    const NAVY: [f64; 3] = [20.0, 40.0, 90.0];
+    const YELLOW: [f64; 3] = [250.0, 200.0, 40.0];
+    const GREEN: [f64; 3] = [40.0, 160.0, 90.0];
+    Raster::from_fn(120, 120, |x, y| {
+        let mut sum = [0.0; 3];
+        for i in 0..16 {
+            let (sx, sy) = (f64::from(x) + (f64::from(i % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(i / 4) + 0.5) / 4.0);
+            let c = if Point::new(sx, sy).distance(Point::new(60.3, 45.6)) <= 30.0 {
+                YELLOW
+            } else if (20.4..100.7).contains(&sx) && (90.3..108.6).contains(&sy) {
+                GREEN
+            } else {
+                NAVY
+            };
+            for k in 0..3 {
+                sum[k] += c[k] / 16.0;
+            }
+        }
+        let c = |k: usize| (sum[k] + noise * jitter(x, y, k as u32)).round().clamp(0.0, 255.0) as u8;
+        [c(0), c(1), c(2), 255]
+    })
+}
+
+fn sixteen_colors() -> TraceParams {
+    preset("16 Colors").unwrap()
+}
+
+#[test]
+fn more_colours_than_flat_art_has_trace_its_own_colours() {
+    for noise in [0.0, 8.0] {
+        let res = trace(&three_colour_art(noise), &sixteen_colors());
+        assert_eq!(res.palette.len(), 3, "noise {noise}: {:?}", res.palette);
+        assert_eq!(res.paths.len(), 3, "noise {noise}");
+        for want in [[20, 40, 90], [250, 200, 40], [40, 160, 90]] {
+            assert!(res.palette.iter().any(|c| (0..3).all(|k| c[k].abs_diff(want[k]) <= 3)), "noise {noise}: no {want:?} in {:?}", res.palette);
+        }
+    }
+}
+
+#[test]
+fn a_blend_of_two_colours_is_no_sliver_of_a_third() {
+    // Halfway from navy to yellow lies an olive nearer to the green of the bar than to either.
+    let res = trace(&three_colour_art(0.0), &TraceParams { colors: 3, noise: 0, ..sixteen_colors() });
+    let green: Vec<&TracedPath> = res.paths.iter().filter(|p| p.color[1] > p.color[0] && p.color[1] > p.color[2]).collect();
+    assert_eq!(green.len(), 1, "the bar, and nothing around the disc");
+    let b = green[0].path.bounds().unwrap();
+    assert!(b.y0 > 89.0 && b.y1 < 110.0, "{b:?}");
+}
+
+#[test]
+fn hairlines_keep_their_colour_in_color_mode() {
+    // Black lines one pixel wide on white: every black pixel is on an edge, none is a blend.
+    let img = Raster::from_fn(80, 80, |x, y| if x % 10 == 4 || y % 10 == 4 { BLACK } else { WHITE });
+    let q = quantize(&img, &TraceParams { mode: Mode::Color, colors: 6, ..TraceParams::default() });
+    let black = q.palette.iter().position(|c| *c == [0, 0, 0]).unwrap() as u16;
+    assert_eq!(q.palette.len(), 2);
+    assert!(q.palette.contains(&[255, 255, 255]));
+    assert_eq!(q.labels.iter().filter(|&&l| l == black).count(), 8 * 80 * 2 - 64);
+}
+
+#[test]
+fn the_bands_of_a_gradient_stay_apart() {
+    let img = Raster::from_fn(256, 64, |x, y| [x as u8, (x / 2 + y) as u8, 200 - (x / 2) as u8, 255]);
+    let q = quantize(&img, &sixteen_colors());
+    assert_eq!(q.palette.len(), 16);
+    // With noise as strong as the bands are apart, the bands still follow the gradient.
+    let noisy = Raster::from_fn(256, 64, |x, y| {
+        let c = |v: u32, k: u32| (f64::from(v) + 6.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
+        [c(x, 0), c(x / 2 + y, 1), c(200 - x / 2, 2), 255]
+    });
+    assert!(quantize(&noisy, &sixteen_colors()).palette.len() >= 12);
+}
