@@ -1,6 +1,6 @@
 //! Selection state (objects and, for direct selection, anchors and segments; ruler guides).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -165,9 +165,17 @@ impl Selection {
     /// around them (and so the key object when it is one): hidden or locked art can't stay
     /// selected.
     pub fn deselect_uneditable(&mut self, doc: &Document) {
-        let out: Vec<NodeId> = self.objects.iter().copied().filter(|o| !doc.is_editable(*o)).collect();
-        for o in out {
-            self.remove(o);
+        let uneditable: HashSet<NodeId> = self.objects.iter().copied().filter(|o| !doc.is_editable(*o)).collect();
+        if uneditable.is_empty() {
+            return;
+        }
+        self.target = None;
+        self.slices.clear();
+        self.objects.retain(|o| !uneditable.contains(o));
+        self.anchors.retain(|id, _| !uneditable.contains(id));
+        self.segments.retain(|id, _| !uneditable.contains(id));
+        if self.key.is_some_and(|k| uneditable.contains(&k)) {
+            self.key = None;
         }
     }
     /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected

@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use super::*;
+use crate::Node;
 
 #[test]
 fn basic_ops() {
@@ -126,4 +129,91 @@ fn a_key_object_needs_two_or_more_selected_objects() {
     s.key = Some(ids[3]);
     s.prune(&d);
     assert_eq!(s.key, Some(ids[3]), "another object outside the group");
+}
+
+fn below(r: &mut u64, n: u64) -> u64 {
+    *r ^= *r << 13;
+    *r ^= *r >> 7;
+    *r ^= *r << 17;
+    *r % n.max(1)
+}
+
+fn random_group(d: &mut Document, r: &mut u64, depth: u64, ids: &mut Vec<NodeId>) -> Arc<Node> {
+    let id = d.alloc_id();
+    ids.push(id);
+    let count = if depth == 0 { 0 } else { 1 + below(r, 4) };
+    let children = (0..count)
+        .map(|_| {
+            let depth = below(r, depth);
+            random_group(d, r, depth, ids)
+        })
+        .collect();
+    let mut group = Node::group(id, children);
+    group.locked = below(r, 6) == 0;
+    group.visible = below(r, 6) != 0;
+    Arc::new(group)
+}
+
+fn random_document(r: &mut u64) -> (Document, Vec<NodeId>) {
+    let mut d = Document::new(100.0, 100.0);
+    let mut ids = vec![];
+    for _ in 0..3 {
+        let mut layer = Node::layer(d.alloc_id(), "L", crate::LayerColor::Preset(0));
+        let children = (0..1 + below(r, 4)).map(|_| random_group(&mut d, r, 3, &mut ids)).collect();
+        if let Some(c) = layer.children_mut() {
+            *c = children;
+        }
+        layer.locked = below(r, 6) == 0;
+        layer.visible = below(r, 6) != 0;
+        d.layers.push(Arc::new(layer));
+    }
+    (d, ids)
+}
+
+fn random_selection(r: &mut u64, ids: &[NodeId]) -> Selection {
+    let mut s = Selection::default();
+    let missing = (below(r, 2) == 0).then_some(NodeId(u64::MAX));
+    s.set(ids.iter().copied().filter(|_| below(r, 2) == 0).chain(missing));
+    let k = below(r, s.objects.len() as u64) as usize;
+    s.objects.rotate_left(k);
+    for &o in &s.objects {
+        match below(r, 3) {
+            0 => {
+                s.anchors.insert(o, BTreeSet::from([(0, 0)]));
+            }
+            1 => {
+                s.anchors.insert(o, BTreeSet::from([(0, 1)]));
+                s.segments.insert(o, BTreeSet::from([(0, 0)]));
+            }
+            _ => {}
+        }
+    }
+    s.key = s.objects.get(below(r, s.objects.len() as u64) as usize).copied();
+    s.target = ids.get(below(r, ids.len() as u64) as usize).copied().filter(|_| below(r, 2) == 0);
+    s.slices = ids.iter().copied().take(below(r, 3) as usize).collect();
+    s.guides = vec![1, 0];
+    s
+}
+
+#[test]
+fn deselect_uneditable_matches_removing_one_at_a_time() {
+    let (mut unchanged, mut partial) = (0, 0);
+    for seed in 1..400u64 {
+        let mut r = seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1;
+        let (d, mut ids) = random_document(&mut r);
+        if seed % 4 == 0 {
+            ids.retain(|id| d.is_editable(*id));
+        }
+        let s = random_selection(&mut r, &ids);
+        let mut expected = s.clone();
+        for o in s.objects.iter().copied().filter(|o| !d.is_editable(*o)) {
+            expected.remove(o);
+        }
+        let mut actual = s.clone();
+        actual.deselect_uneditable(&d);
+        assert_eq!(actual, expected, "seed {seed}");
+        unchanged += usize::from(actual == s);
+        partial += usize::from(!actual.objects.is_empty() && actual.objects.len() < s.objects.len());
+    }
+    assert!(unchanged > 10 && partial > 100, "{unchanged} {partial}");
 }
