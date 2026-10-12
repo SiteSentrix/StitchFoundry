@@ -3041,6 +3041,25 @@ fn lettering_aligns_and_follows_arcs() {
     assert!(s.execute("embroidery.lettering.edit", &json!({"arc": 1e9})).is_err());
     assert!(s.execute("embroidery.lettering.edit", &json!({"align": "middle"})).is_err());
     assert!(s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "arc": "x"})).is_err());
+    // round a spiral: winding in, the glyphs closer to its centre each
+    let sp = set(&mut s, json!({"text": "AAAAAAAAAAAA", "arc": 40, "spiral": 15}));
+    let centre = vectorcraft_geom::Point::new(300.0, 300.0 + 40.0 * 72.0 / 25.4);
+    let d: Vec<f64> = sp.iter().map(|b| b.center().distance(centre)).collect();
+    assert!(d.windows(2).all(|w| w[1] < w[0]), "{d:?}");
+    let spiral = |s: &Session| {
+        let st = s.doc().unwrap();
+        match st.doc.node(st.selection.objects[0]).unwrap().embroidery.as_deref().map(|e| &e.stitch) {
+            Some(sf_core::attr::StitchType::Lettering(l)) => l.spiral,
+            _ => f64::NAN,
+        }
+    };
+    assert_eq!(spiral(&s), 15.0);
+    // straightened: no spiral; a spiral needs an arc; out of range
+    s.execute("embroidery.lettering.edit", &json!({"arc": 0})).unwrap();
+    assert_eq!(spiral(&s), 0.0);
+    assert!(s.execute("embroidery.lettering.edit", &json!({"spiral": 10})).is_err());
+    assert!(s.execute("embroidery.lettering.edit", &json!({"arc": 40, "spiral": 5000})).is_err());
+    assert!(s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "spiral": 10})).is_err());
 }
 
 #[test]

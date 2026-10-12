@@ -78,7 +78,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Lettering",
             [],
             None,
-            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight), puff?: bool (3D puff: the glyphs' satin sewn over foam, see embroidery.puff), order?: left|right|centre (the letters sewn left to right, right to left or from the middle out, as for caps; left), lines?: down|up (the lines sewn from the first down or the last up; down), join?: closest|baseline (each letter started where closest to the last, or at its baseline's start and stopped at its end, the thread running on along the baseline; closest), trim?: auto|letter|word|line (the thread cut after each letter, word or line; auto: where the jumps need it)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
+            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight), spiral?: mm (with `arc`: its radius shrinks this much a turn, the line winding in; negative, out; 0), puff?: bool (3D puff: the glyphs' satin sewn over foam, see embroidery.puff), order?: left|right|centre (the letters sewn left to right, right to left or from the middle out, as for caps; left), lines?: down|up (the lines sewn from the first down or the last up; down), join?: closest|baseline (each letter started where closest to the last, or at its baseline's start and stopped at its end, the thread running on along the baseline; closest), trim?: auto|letter|word|line (the thread cut after each letter, word or line; auto: where the jumps need it)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
             has_doc,
             lettering
         ),
@@ -87,7 +87,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Lettering",
             [],
             None,
-            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm, puff?: bool, order?, lines?, join?, trim?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
+            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm, spiral?: mm, puff?: bool, order?, lines?, join?, trim?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
             has_selection,
             edit_lettering
         ),
@@ -430,6 +430,7 @@ fn glyphs_indexed(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<(us
         }
     }
     let r = spec.arc * vectorcraft_embroidery::PT_PER_MM;
+    let turn = spec.spiral * vectorcraft_embroidery::PT_PER_MM;
     let mut out = Vec::new();
     let origin = vectorcraft_geom::Point::new(0.0, 0.0);
     for (index, g) in placed.iter().enumerate() {
@@ -446,7 +447,7 @@ fn glyphs_indexed(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<(us
         let along = (g.x + g.advance * 0.5 - width * spec.align.share()) * u;
         let down = g.line as f64 * i.leading * spec.leading * u;
         let m = frame
-            * place(r, along, down)
+            * place(r, turn, along, down)
             * adjust
             * Affine::translate((-g.advance * 0.5 * u, 0.0))
             * Affine::scale(k)
@@ -474,8 +475,8 @@ fn glyphs_indexed(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<(us
             puff_all(&mut grp, spec.puff, &mut (0, 0));
         }
         // its baseline's start and end
-        let start = frame * place(r, along, down) * adjust * Affine::translate((-g.advance * 0.5 * u, 0.0)) * origin;
-        let end = frame * place(r, along, down) * adjust * Affine::translate((g.advance * 0.5 * u, 0.0)) * origin;
+        let start = frame * place(r, turn, along, down) * adjust * Affine::translate((-g.advance * 0.5 * u, 0.0)) * origin;
+        let end = frame * place(r, turn, along, down) * adjust * Affine::translate((g.advance * 0.5 * u, 0.0)) * origin;
         out.push(SetGlyph { index, line: g.line, word: g.word, along, start, end, art: grp });
     }
     sewn(out, &spec.sew)
@@ -777,13 +778,34 @@ fn sew_params(p: &Value, cmd: &str, sew: &mut LetterSewing) -> Result<()> {
 /// Where a glyph's baseline middle goes, `along` a line `down` from the first (points):
 /// straight, or round a circle of radius `r` (points; positive, the lines arched over its top,
 /// negative, along its bottom) whose edge the first line's baseline meets at the origin, the
-/// glyph upright to it. A line the circle's centre doesn't reach is straight.
-fn place(r: f64, along: f64, down: f64) -> Affine {
+/// glyph upright to it. A line the circle's centre doesn't reach is straight. With `turn`
+/// (points), the radius shrinks that much a turn along the line (grows, negative), `along`
+/// measured along the spiral; it stops winding a point from the centre.
+fn place(r: f64, turn: f64, along: f64, down: f64) -> Affine {
     let rl = r - down;
-    if r != 0.0 && rl * r > 0.0 && rl.abs() > 1e-3 {
-        let th = along / rl;
-        if th.is_finite() {
-            return Affine::translate((rl * th.sin(), r - rl * th.cos())) * Affine::rotate(th);
+    if r != 0.0 && rl * r > 0.0 && rl.abs() > 1e-3 && along.is_finite() && turn.is_finite() {
+        let (a, side) = (rl.abs(), r.signum());
+        // the radius shrinks `c` a radian turned
+        let c = turn / std::f64::consts::TAU;
+        // the angle turned to go `along` the curve, stepped half a point at a time
+        let mut t = along / a;
+        if c != 0.0 {
+            let n = (along.abs() / 0.5).ceil().clamp(1.0, 20_000.0);
+            let ds = along / n;
+            t = 0.0;
+            for _ in 0..n as usize {
+                let rho = a - c * t;
+                if rho <= 1.0 {
+                    break;
+                }
+                t += ds / (rho * rho + c * c).sqrt();
+            }
+        }
+        let rho = (a - c * t).max(1.0);
+        // the baseline's direction: the spiral's tangent (round a circle, the angle turned)
+        let dir = (side * (c * t.cos() + rho * t.sin())).atan2(rho * t.cos() - c * t.sin());
+        if t.is_finite() && dir.is_finite() {
+            return Affine::translate((rho * t.sin(), r - side * rho * t.cos())) * Affine::rotate(dir);
         }
     }
     Affine::translate((along, down))
@@ -799,6 +821,19 @@ fn arc_param(p: &Value, cmd: &str) -> Result<Option<f64>> {
             .map(Some)
             .ok_or_else(|| bad(cmd, "`arc` is 0 (straight) or a radius of 1 to 10000 mm (negative: along a circle's bottom)")),
     }
+}
+
+/// `spiral`, when given: −1000 to 1000 mm a turn.
+fn spiral_param(p: &Value, cmd: &str) -> Result<Option<f64>> {
+    ranged(p, "spiral", -1000.0..=1000.0, cmd, "`spiral` is -1000 to 1000 mm a turn")
+}
+
+/// A spiral winds round an arc: refused without one.
+fn spiral_needs_arc(spec: &Lettering, cmd: &str) -> Result<()> {
+    if spec.spiral != 0.0 && spec.arc == 0.0 {
+        return Err(bad(cmd, "a `spiral` winds round an `arc`: give the radius it starts at"));
+    }
+    Ok(())
 }
 
 /// `align`, when given.
@@ -829,12 +864,14 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         size,
         leading,
         arc: arc_param(p, SET)?.unwrap_or(0.0),
+        spiral: spiral_param(p, SET)?.unwrap_or(0.0),
         align: align_param(p, SET)?.unwrap_or_default(),
         sew,
         letters: Vec::new(),
         puff,
         frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
     };
+    spiral_needs_arc(&spec, SET)?;
     // scaled from the size the font was digitized at; outside what it sews well at, a warning
     warnings.extend(size_warnings(&font, size));
     let parent = s.doc()?.insertion_parent();
@@ -876,6 +913,14 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(v) = arc_param(p, EDIT)? {
         spec.arc = v;
     }
+    if let Some(v) = spiral_param(p, EDIT)? {
+        spec.spiral = v;
+    }
+    // straightened: no spiral either
+    if spec.arc == 0.0 && p.get("spiral").is_none_or(Value::is_null) {
+        spec.spiral = 0.0;
+    }
+    spiral_needs_arc(&spec, EDIT)?;
     if let Some(v) = align_param(p, EDIT)? {
         spec.align = v;
     }
@@ -1138,9 +1183,9 @@ mod tests {
         let r = 100.0;
         let centre = vectorcraft_geom::Point::new(0.0, r);
         // arched over a circle: the origin on its top, the glyphs round it, their tops outward
-        assert!(at(place(r, 0.0, 0.0)).distance(vectorcraft_geom::Point::new(0.0, 0.0)) < 1e-9);
+        assert!(at(place(r, 0.0, 0.0, 0.0)).distance(vectorcraft_geom::Point::new(0.0, 0.0)) < 1e-9);
         for along in [-80.0, 30.0, 150.0] {
-            let m = place(r, along, 0.0);
+            let m = place(r, 0.0, along, 0.0);
             let p = at(m);
             assert!((p.distance(centre) - r).abs() < 1e-9, "{p:?}");
             let up = m * vectorcraft_geom::Point::new(0.0, -1.0) - p;
@@ -1148,16 +1193,55 @@ mod tests {
             assert!((up - out).hypot() < 1e-9, "{up:?} {out:?}");
         }
         // mirrored either side of the top
-        let (a, b) = (at(place(r, -40.0, 0.0)), at(place(r, 40.0, 0.0)));
+        let (a, b) = (at(place(r, 0.0, -40.0, 0.0)), at(place(r, 0.0, 40.0, 0.0)));
         assert!((a.x + b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9 && a.y > 0.0);
         // a second line 20 down: a circle 20 smaller
-        assert!((at(place(r, 50.0, 20.0)).distance(centre) - 80.0).abs() < 1e-9);
+        assert!((at(place(r, 0.0, 50.0, 20.0)).distance(centre) - 80.0).abs() < 1e-9);
         // along a circle's bottom: the ends rise, tops inward
         let c = vectorcraft_geom::Point::new(0.0, -r);
-        let p = at(place(-r, 40.0, 0.0));
+        let p = at(place(-r, 0.0, 40.0, 0.0));
         assert!((p.distance(c) - r).abs() < 1e-9 && p.y < 0.0, "{p:?}");
         // a line past the centre, and a straight baseline, stay straight
-        assert_eq!(at(place(r, 5.0, 150.0)), vectorcraft_geom::Point::new(5.0, 150.0));
-        assert_eq!(at(place(0.0, 5.0, 7.0)), vectorcraft_geom::Point::new(5.0, 7.0));
+        assert_eq!(at(place(r, 0.0, 5.0, 150.0)), vectorcraft_geom::Point::new(5.0, 150.0));
+        assert_eq!(at(place(0.0, 0.0, 5.0, 7.0)), vectorcraft_geom::Point::new(5.0, 7.0));
+    }
+
+    #[test]
+    fn glyphs_go_round_spirals_along_them() {
+        let at = |m: Affine| m * vectorcraft_geom::Point::new(0.0, 0.0);
+        let (r, turn) = (100.0, 30.0);
+        let centre = vectorcraft_geom::Point::new(0.0, r);
+        // the start on the circle's top, then winding in by `turn` a turn
+        assert!(at(place(r, turn, 0.0, 0.0)).distance(vectorcraft_geom::Point::new(0.0, 0.0)) < 1e-9);
+        let mut last = r;
+        let mut prev = at(place(r, turn, 0.0, 0.0));
+        let mut walked = 0.0;
+        for k in 1..=200 {
+            let along = f64::from(k) * 5.0;
+            let m = place(r, turn, along, 0.0);
+            let p = at(m);
+            let d = p.distance(centre);
+            assert!(d < last + 1e-9, "{k}: {d} after {last}");
+            last = d;
+            walked += p.distance(prev);
+            prev = p;
+            // upright to it: the glyph's up nearly away from the centre, its baseline along the curve
+            let up = m * vectorcraft_geom::Point::new(0.0, -1.0) - p;
+            let out = (p - centre) / d;
+            assert!((up.x * out.x + up.y * out.y) > 0.99, "{k}: {up:?} {out:?}");
+        }
+        // `along` is the length along the spiral (the chords a little shorter)
+        assert!(walked < 1000.5 && walked > 999.0, "{walked}");
+        // a full turn in: 30 closer (to a step's precision)
+        let one = 2.0 * std::f64::consts::PI * (r - turn / 2.0);
+        assert!((at(place(r, turn, one, 0.0)).distance(centre) - (r - turn)).abs() < 0.5);
+        // negative: winding out
+        assert!(at(place(r, -turn, 300.0, 0.0)).distance(centre) > r + 10.0);
+        // it stops winding near the centre rather than through it
+        let p = at(place(r, turn, 1e6, 0.0));
+        assert!(p.x.is_finite() && p.distance(centre) >= 1.0 - 1e-9);
+        // round a circle's bottom too
+        let c = vectorcraft_geom::Point::new(0.0, -r);
+        assert!(at(place(-r, turn, 200.0, 0.0)).distance(c) < r - 5.0);
     }
 }

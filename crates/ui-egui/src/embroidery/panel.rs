@@ -206,6 +206,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.lettering_font = l.font.clone();
             app.embroidery.lettering_size = l.size;
             app.embroidery.lettering_arc = l.arc;
+            app.embroidery.lettering_spiral = l.spiral;
             app.embroidery.lettering_sew = l.sew;
             app.embroidery.lettering_puff = l.puff.is_some();
         }
@@ -294,6 +295,13 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.embroidery.lettering_arc = v.clamp(1.0, 10000.0).copysign(app.embroidery.lettering_arc);
     }
+    // round the circle, winding in (or out) a turn at a time
+    if app.embroidery.lettering_arc != 0.0
+        && let Some(v) = num(ui, tl!("Spiral"), "let-spiral", app.embroidery.lettering_spiral, " mm", 0).map(|v| v.clamp(-1000.0, 1000.0))
+    {
+        app.embroidery.lettering_spiral = v;
+    }
+    let spiral = if app.embroidery.lettering_arc != 0.0 { app.embroidery.lettering_spiral } else { 0.0 };
     // the order the letters are sewn in, how they join, where the thread is cut
     use vectorcraft_embroidery::sf_core::attr::{LetterJoin, LetterOrder, LetterTrim};
     let sew = &mut app.embroidery.lettering_sew;
@@ -324,7 +332,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sew = serde_json::to_value(app.embroidery.lettering_sew).unwrap_or_default();
     let arc = app.embroidery.lettering_arc;
     let text = app.embroidery.lettering_text.clone();
-    let mut params = json!({ "text": text, "font": name, "size": size, "arc": arc,
+    let mut params = json!({ "text": text, "font": name, "size": size, "arc": arc, "spiral": spiral,
         "order": sew["order"], "lines": if sew["up"].as_bool() == Some(true) { "up" } else { "down" },
         "join": sew["join"], "trim": sew["trim"], "puff": app.embroidery.lettering_puff });
     let (label, cmd) = match &selected {

@@ -233,6 +233,7 @@ fn monogram(s: &mut Session, p: &Value) -> Result<Value> {
             size: *h,
             leading: 1.0,
             arc: 0.0,
+            spiral: 0.0,
             align: LetterAlign::Centre,
             sew: LetterSewing::default(),
             letters: Vec::new(),
