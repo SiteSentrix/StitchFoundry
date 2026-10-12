@@ -100,6 +100,18 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
     if op == PathfinderOp::Unite {
         return unite();
     }
+    // Open paths are cutting edges for Divide; the filled-only operations keep their
+    // implicit closure. Reuse Shape Builder's bounded planar map and its fallback.
+    if op == PathfinderOp::Divide && shapes.iter().flat_map(|s| &s.path.subpaths).any(|sp| !sp.closed && sp.anchors.len() >= 2) {
+        return crate::shape_builder(shapes, false)
+            .regions
+            .into_iter()
+            .filter_map(|r| {
+                let key = shapes.get(r.top()?)?.key;
+                Some(Shape::new(r.path, FillRule::NonZero, key))
+            })
+            .collect();
+    }
     let Some(arr) = arrangement(shapes) else { return Vec::new() };
     let p = &arr.tidy;
     match op {
@@ -563,5 +575,75 @@ mod tests {
         fn batched_regions_match_one_mask_at_a_time(v in prop::collection::vec(arb_shape(), 1..8)) {
             same_as_one_mask_at_a_time(&v);
         }
+    }
+
+    #[test]
+    fn divide_open_paths_cut_faces_without_taking_the_cutters_paint() {
+        let line = |a: (f64, f64), b: (f64, f64)| shapes::line(Point::from(a), Point::from(b));
+        let mut cases = vec![
+            ("horizontal", vec![line((-10.0, 50.0), (110.0, 50.0))], 2),
+            ("reverse", vec![line((110.0, 50.0), (-10.0, 50.0))], 2),
+            ("vertical", vec![line((50.0, -10.0), (50.0, 110.0))], 2),
+            ("diagonal", vec![line((-10.0, -10.0), (110.0, 110.0))], 2),
+            ("crossed", vec![line((-10.0, 50.0), (110.0, 50.0)), line((50.0, -10.0), (50.0, 110.0))], 4),
+            ("outside", vec![line((-10.0, 150.0), (110.0, 150.0))], 1),
+            ("dangling", vec![line((-10.0, 50.0), (50.0, 50.0))], 1),
+            ("boundary", vec![line((-10.0, 0.0), (110.0, 0.0))], 1),
+            ("tangent", vec![line((-10.0, 10.0), (10.0, -10.0))], 1),
+        ];
+        let mut curve = BezPath::new();
+        curve.move_to((-10.0, 50.0));
+        curve.curve_to((30.0, 15.0), (70.0, 85.0), (110.0, 50.0));
+        cases.push(("curved", vec![PathData::from_bezpath(&curve)], 2));
+        let mut bent = BezPath::new();
+        bent.move_to((-10.0, 25.0));
+        bent.line_to((50.0, 75.0));
+        bent.line_to((110.0, 25.0));
+        cases.push(("bent", vec![PathData::from_bezpath(&bent)], 2));
+        for (label, cutters, count) in cases {
+            let mut inputs = vec![Shape::new(rect(0.0, 0.0, 100.0, 100.0), FillRule::NonZero, 7)];
+            inputs.extend(cutters.into_iter().map(|p| Shape::new(p, FillRule::NonZero, 99)));
+            let divided = pathfinder(PathfinderOp::Divide, &inputs);
+            assert_eq!(divided.len(), count, "{label}");
+            assert!(divided.iter().all(|s| s.key == 7 && s.path.subpaths.iter().all(|sp| sp.closed)), "{label}");
+            let total: f64 = divided.iter().map(|s| crate::area(&s.path, s.rule)).sum();
+            assert!((total - 10000.0).abs() < 0.01, "{label}: area {total}");
+            for p in [Point::new(20.0, 31.0), Point::new(79.0, 37.0), Point::new(81.0, 68.0), Point::new(17.0, 85.0)] {
+                assert_eq!(divided.iter().filter(|s| s.path.to_bezpath().winding(p) != 0).count(), 1, "{label}: {p:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn divide_open_paths_preserve_frontmost_fills_and_holes() {
+        let cutter = || Shape::new(shapes::line(Point::new(-10.0, 50.0), Point::new(160.0, 50.0)), FillRule::NonZero, 99);
+        let inputs = [
+            Shape::new(rect(0.0, 0.0, 100.0, 100.0), FillRule::NonZero, 7),
+            Shape::new(rect(50.0, 0.0, 150.0, 100.0), FillRule::NonZero, 8),
+            cutter(),
+        ];
+        let faces = pathfinder(PathfinderOp::Divide, &inputs);
+        assert_eq!(faces.len(), 6);
+        assert_eq!(faces.iter().filter(|s| s.key == 7).count(), 2);
+        assert_eq!(faces.iter().filter(|s| s.key == 8).count(), 4);
+        let total: f64 = faces.iter().map(|s| crate::area(&s.path, s.rule)).sum();
+        assert!((total - 15000.0).abs() < 1e-6);
+        let mut ring = rect(0.0, 0.0, 100.0, 100.0);
+        ring.subpaths.extend(rect(30.0, 30.0, 70.0, 70.0).subpaths);
+        let faces = pathfinder(PathfinderOp::Divide, &[Shape::new(ring, FillRule::EvenOdd, 7), cutter()]);
+        assert_eq!(faces.len(), 2);
+        assert!(faces.iter().all(|s| s.key == 7 && s.path.to_bezpath().winding(Point::new(50.0, 40.0)) == 0));
+        let total: f64 = faces.iter().map(|s| crate::area(&s.path, s.rule)).sum();
+        assert!((total - 8400.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn divide_open_paths_retains_the_existing_segment_cap() {
+        let mut inputs = vec![Shape::new(rect(0.0, 0.0, 100.0, 100.0), FillRule::NonZero, 7)];
+        inputs.extend((0..4093).map(|_| Shape::new(shapes::line(Point::new(-10.0, 50.0), Point::new(110.0, 50.0)), FillRule::NonZero, 99)));
+        let faces = pathfinder(PathfinderOp::Divide, &inputs);
+        assert_eq!(faces.len(), 1, "4097 segments fall back to filled areas");
+        assert_eq!(faces[0].key, 7);
+        assert!((crate::area(&faces[0].path, faces[0].rule) - 10000.0).abs() < 1e-6);
     }
 }

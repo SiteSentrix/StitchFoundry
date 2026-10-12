@@ -584,3 +584,89 @@ fn commands_reject_bad_input() {
         let _ = s.execute(c, &p);
     }
 }
+
+#[test]
+fn divide_cutting_lines_keep_appearance_unrelated_art_and_one_undo() {
+    for (line_has_fill, curved) in [(false, false), (true, false), (false, true)] {
+        let mut s = session();
+        let base = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        let cutter =
+            NodeId(s.execute("path.create", &json!({"anchors": [{"x": -10, "y": 50}, {"x": 110, "y": 50}]})).unwrap()["id"].as_u64().unwrap());
+        let kept = rect(&mut s, 200.0, 0.0, 30.0, 30.0);
+        s.edit("divide fixture", |d, sel| {
+            let n = d.node_mut(base).unwrap();
+            n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.7)), Paint::solid(Color::BLACK), 3.0).into();
+            n.opacity = 0.65;
+            n.blend = vectorcraft_color::BlendMode::Multiply;
+            let n = d.node_mut(cutter).unwrap();
+            n.appearance =
+                Appearance::basic(if line_has_fill { Paint::solid(Color::BLACK) } else { Paint::None }, Paint::solid(Color::rgb(0.8, 0.2, 0.1)), 2.0)
+                    .into();
+            if curved {
+                let mut bp = vectorcraft_geom::BezPath::new();
+                bp.move_to((-10.0, 50.0));
+                bp.curve_to((30.0, 15.0), (70.0, 85.0), (110.0, 50.0));
+                n.kind = NodeKind::Path { path: PathData::from_bezpath(&bp), rule: FillRule::NonZero, live: None, clipping: false, guide: false };
+            }
+            sel.set([cutter, base]);
+            Ok(())
+        })
+        .unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let selected = s.doc().unwrap().selection.clone();
+        let undo_len = s.doc().unwrap().history.undo.len();
+        let result = ids(&s.execute("object.pathfinder.divide", &json!({})).unwrap())[0];
+        let group = node(&s, result);
+        let pieces = group.children().unwrap();
+        assert_eq!(pieces.len(), 2, "line fill {line_has_fill}, curved {curved}");
+        let source = before.node(base).unwrap();
+        assert!(pieces.iter().all(|n| n.appearance == source.appearance && n.opacity == source.opacity && n.blend == source.blend));
+        let total: f64 = pieces.iter().map(|n| area_of(&s, n.id)).sum();
+        assert!((total - 10000.0).abs() < 0.01);
+        assert_eq!(node(&s, kept), *before.node(kept).unwrap());
+        assert!(s.doc().unwrap().doc.node(base).is_none() && s.doc().unwrap().doc.node(cutter).is_none());
+        assert_eq!(s.doc().unwrap().selection.objects, vec![result]);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo_len + 1);
+        let after = s.doc().unwrap().doc.clone();
+        let result_selection = s.doc().unwrap().selection.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert_eq!(s.doc().unwrap().selection, selected);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, after);
+        assert_eq!(s.doc().unwrap().selection, result_selection);
+    }
+}
+
+#[test]
+fn divide_keeps_implicitly_closed_filled_paths_including_zero_signed_area() {
+    for anchors in [
+        json!([{"x": 10, "y": 10}, {"x": 50, "y": 90}, {"x": 90, "y": 10}]),
+        json!([{"x": 0, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}, {"x": 100, "y": 0}]),
+    ] {
+        let mut s = session();
+        let filled = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        let cutter =
+            NodeId(s.execute("path.create", &json!({"anchors": [{"x": -10, "y": 150}, {"x": 110, "y": 150}]})).unwrap()["id"].as_u64().unwrap());
+        s.edit("open fill fixture", |d, sel| {
+            let mut appearance = Appearance::basic(Paint::solid(Color::rgb(0.1, 0.7, 0.2)), Paint::None, 0.0);
+            // An empty top fill must not hide the nonempty fill below it.
+            appearance.items.insert(0, vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::None)));
+            d.node_mut(filled).unwrap().appearance = appearance.into();
+            d.node_mut(cutter).unwrap().appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0).into();
+            sel.set([cutter, filled]);
+            Ok(())
+        })
+        .unwrap();
+        let source = node(&s, filled);
+        assert!(source.path_data().unwrap().subpaths.iter().all(|sp| !sp.closed));
+        let expected = area_of(&s, filled);
+        assert!(expected > 3000.0);
+        let result = ids(&s.execute("object.pathfinder.divide", &json!({})).unwrap())[0];
+        let group = node(&s, result);
+        let pieces = group.children().unwrap();
+        let actual: f64 = pieces.iter().map(|n| area_of(&s, n.id)).sum();
+        assert!((actual - expected).abs() < 0.01, "{actual} != {expected}");
+        assert!(pieces.iter().all(|n| n.appearance == source.appearance));
+    }
+}
