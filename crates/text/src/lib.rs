@@ -14,6 +14,7 @@ pub mod craft_fonts;
 pub mod edit;
 pub mod embed;
 mod features;
+mod fontconfig;
 mod fontdb;
 pub mod hyphen;
 mod layout;
