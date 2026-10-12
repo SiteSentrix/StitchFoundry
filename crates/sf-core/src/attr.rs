@@ -520,6 +520,9 @@ pub struct FontDesign {
     /// "upper" or "lower": text set in that case; empty: as typed.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub letter_case: String,
+    /// The glyph characters the font lacks show (empty: none).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub default_glyph: String,
     /// How far the font scales and still sews well, × `size` (0: not said).
     pub min_scale: f64,
     pub max_scale: f64,
@@ -541,6 +544,7 @@ impl Default for FontDesign {
             leading: 1.4,
             space: 8.0,
             letter_case: String::new(),
+            default_glyph: String::new(),
             min_scale: 0.5,
             max_scale: 2.0,
             kerning: BTreeMap::new(),

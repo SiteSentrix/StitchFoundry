@@ -2391,6 +2391,56 @@ fn embroidery_fonts_are_made_in_font_documents() {
 }
 
 #[test]
+fn embroidery_fonts_open_to_edit_and_merge() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let boxes = |s: &Session, id: NodeId| -> Vec<vectorcraft_geom::Rect> {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap()).collect()
+    };
+    // "%" isn't in the font: its default glyph, "?", stands in
+    let set = |s: &mut Session| {
+        NodeId(s.execute("embroidery.lettering", &json!({"text": "AB%", "font": "Test Script", "at": [100, 300]})).unwrap()["id"].as_u64().unwrap())
+    };
+    let id = set(&mut s);
+    let before = boxes(&s, id);
+    // opened as a font document: a glyph a artboard, with its art, its properties and kerning
+    let r = s.execute("embroidery.font.edit", &json!({"name": "test script"})).unwrap();
+    assert_eq!(r["glyphs"].as_u64(), Some(3));
+    let info = s.execute("embroidery.fontDoc.info", &json!({})).unwrap();
+    assert_eq!(info["missing"].as_u64(), Some(0), "{info}");
+    assert_eq!(info["glyphs"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect::<Vec<_>>(), ["?", "A", "B"]);
+    assert_eq!(
+        (info["font"]["size"].as_f64(), info["font"]["letter_case"].as_str(), info["font"]["default_glyph"].as_str()),
+        (Some(10.0), Some("upper"), Some("?"))
+    );
+    assert!((info["font"]["kerning"]["A B"].as_f64().unwrap() - 4.0).abs() < 1e-9, "{info}");
+    assert!((info["glyphs"][1]["width"].as_f64().unwrap() - 40.0).abs() < 1e-6, "{info}");
+    // saved again as it was: lettering in it sets the same
+    s.execute("embroidery.fontDoc.save", &json!({})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let id = set(&mut s);
+    let after = boxes(&s, id);
+    assert_eq!(after.len(), before.len());
+    for (a, b) in before.iter().zip(&after) {
+        assert!(
+            (a.x0 - b.x0).abs() < 0.01 && (a.y0 - b.y0).abs() < 0.01 && (a.x1 - b.x1).abs() < 0.01 && (a.y1 - b.y1).abs() < 0.01,
+            "{before:?} {after:?}"
+        );
+    }
+    // merged into a new font twice the size: A and B added, as tall as its capitals
+    s.execute("embroidery.fontDoc.new", &json!({"name": "Big", "chars": "C", "size": 20})).unwrap();
+    let r = s.execute("embroidery.fontDoc.merge", &json!({"font": "Test Script", "chars": "AB"})).unwrap();
+    assert_eq!(r["added"].as_u64(), Some(2));
+    let info = s.execute("embroidery.fontDoc.info", &json!({})).unwrap();
+    assert_eq!(info["glyphs"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect::<Vec<_>>(), ["C", "A", "B"]);
+    assert!((info["glyphs"][1]["width"].as_f64().unwrap() - 80.0).abs() < 1e-6 && info["glyphs"][1]["done"] == true, "{info}");
+    // again: nothing new to add; an unknown font
+    assert!(s.execute("embroidery.fontDoc.merge", &json!({"font": "Test Script", "chars": "AB"})).is_err());
+    assert!(s.execute("embroidery.fontDoc.merge", &json!({"font": "Nope"})).is_err());
+    assert!(s.execute("embroidery.font.edit", &json!({"name": "Nope"})).is_err());
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
