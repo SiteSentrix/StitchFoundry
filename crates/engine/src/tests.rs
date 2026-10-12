@@ -1520,6 +1520,28 @@ fn inspect_lists_everything() {
 /// `document.node {summary: true}` answers the `document.inspect` shape for one node:
 /// the same fields the full-tree summary carries, without serializing the whole tree.
 #[test]
+/// A compound path reports the paint that lives on it, and any node reports a blend other than Normal.
+#[test]
+fn inspect_reports_compound_paint_and_blend() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 40.0, 40.0);
+    let b = rect(&mut s, 10.0, 10.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.setProps", &json!({"id": c, "blend": "Multiply"})).unwrap();
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let node = &v["layers"][0]["children"][0];
+    assert_eq!(node["id"], c);
+    assert_eq!(node["kind"], "Compound Path");
+    assert!(node["fill"].as_str().is_some_and(|f| f != "None"), "compound paint: {node}");
+    assert!(node.get("stroke").is_some() && node.get("strokeWidth").is_some(), "{node}");
+    assert_eq!(node["blend"], "Multiply");
+    let plain = rect(&mut s, 80.0, 0.0, 10.0, 10.0);
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let plain = v["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == plain.0).unwrap();
+    assert!(plain.get("blend").is_none(), "Normal is omitted: {plain}");
+}
+
 fn document_node_summary_matches_inspect() {
     let mut s = session();
     let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0).0;

@@ -1,6 +1,7 @@
 //! Agent-friendly document summaries and view-models for panels.
 
 use serde_json::{Value, json};
+use vectorcraft_color::BlendMode;
 use vectorcraft_doc::{ArrowAlign, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, WidthProfile};
 
 use crate::Session;
@@ -40,6 +41,9 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
     if n.opacity < 1.0 {
         v["opacity"] = json!(n.opacity);
     }
+    if n.blend != BlendMode::Normal {
+        v["blend"] = json!(n.blend.label());
+    }
     // The angle of its rotated bounding box (counter-clockwise degrees).
     if n.bbox_angle != 0.0 {
         v["rotation"] = json!(n.bbox_angle);
@@ -58,7 +62,8 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
             v["objectStroke"] = json!(n.appearance.stroke_paint().label());
             v["objectStrokeWidth"] = json!(n.appearance.stroke_width());
         }
-    } else if !n.is_container() {
+    } else if !n.is_container() || matches!(n.kind, NodeKind::Compound { .. }) {
+        // A compound path is a container, but its fill and stroke live on it, not on its members.
         v["fill"] = json!(n.appearance.fill_paint().label());
         v["stroke"] = json!(n.appearance.stroke_paint().label());
         v["strokeWidth"] = json!(n.appearance.stroke_width());
