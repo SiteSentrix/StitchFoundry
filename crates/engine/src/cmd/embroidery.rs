@@ -857,7 +857,7 @@ fn convert_art(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The machine formats, by extension (what `embroidery.export` and File › Open take).
-pub const MACHINE_EXTS: &[&str] = &["dst", "exp", "jef", "pes", "pec", "vp3", "xxx", "u01"];
+pub const MACHINE_EXTS: &[&str] = &["dst", "exp", "jef", "pes", "pec", "vp3", "xxx", "u01", "pcs", "tap"];
 
 fn export_machine_file(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.export";

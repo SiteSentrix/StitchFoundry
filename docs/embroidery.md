@@ -587,9 +587,14 @@ one line.
 | Pfaff | .vp3 | RGB with names | yes | yes |
 | Singer | .xxx | RGB | yes | yes |
 | Barudan | .u01 | no (needle numbers) | yes | yes |
+| Pfaff (older machines; experimental) | .pcs | RGB, 16 at most | yes | yes |
+| Happy | .tap | no (DST records) | yes | yes |
 
 - Opening or placing a machine file turns each thread into a path of **Manual** stitches (one
   subpath per run between trims), which you can edit, move, scale and recolour.
+- PCS is **experimental**: its layout comes from public descriptions of the format, and no
+  machine has sewn one yet. It holds 16 colours at most, positions in 1/6 mm, and no trim (a
+  trim is written as a move to where the needle is). TAP is DST's records without the header.
 - Long stitches and jumps are split to the format's limit. Trims are written natively where the
   format has them; DST uses the common three-jump convention.
 - VP3 writes each move as one long record that ends where the next stitch starts. Programs

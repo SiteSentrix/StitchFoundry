@@ -13,6 +13,12 @@ use sf_formats::{Format, FormatError, WriteOptions, detect, normalize, prepare, 
 /// 0.1 mm resolution: positions within half a unit on each axis (0.071 mm), well inside 0.11 mm.
 const TOL: f64 = 0.11;
 
+/// The tolerance for `format`: PCS stores 1/6 mm, and a long move split between rounded ends
+/// rounds its steps again (about one unit across).
+fn tol(format: Format) -> f64 {
+    if format == Format::Pcs { 0.18 } else { TOL }
+}
+
 #[test]
 fn uncentred_files_give_the_original_design_back() {
     for format in Format::ALL {
@@ -23,12 +29,16 @@ fn uncentred_files_give_the_original_design_back() {
 
         // Same colour blocks, same stitches in each (long stitches may be split).
         assert_eq!(back.color_blocks().len(), original.color_blocks().len(), "{what}: colour blocks");
-        assert_same_stitches(&original, Point::ZERO, &back, TOL, true, what);
+        assert_same_stitches(&original, Point::ZERO, &back, tol(format), true, what);
         // Commands in order: trims, stops (where supported), colour changes, end.
         assert_eq!(commands(&back), commands(&original), "{what}: commands");
         // Every jump of the original lands where it did.
         for s in original.stitches.iter().filter(|s| s.cmd == Cmd::Jump) {
-            assert!(back.stitches.iter().any(|b| b.cmd == Cmd::Jump && b.pos().distance(s.pos()) <= TOL), "{what}: jump to {:?} lost", s.pos());
+            assert!(
+                back.stitches.iter().any(|b| b.cmd == Cmd::Jump && b.pos().distance(s.pos()) <= tol(format)),
+                "{what}: jump to {:?} lost",
+                s.pos()
+            );
         }
         // Colours.
         assert_eq!(back.threads.len(), original.threads.len(), "{what}: one thread per block");
@@ -112,6 +122,8 @@ fn long_moves_are_split_within_each_formats_limit() {
         (Format::Vp3, 12.7, 3276.7),
         (Format::Xxx, 12.4, 12.4),
         (Format::U01, 12.7, 12.7),
+        (Format::Pcs, 12.0, 12.0),
+        (Format::Tap, 12.1, 12.1),
     ];
     for (format, max_stitch, max_jump) in limits {
         let back = read(format, &write(format, &p, &options(false)).unwrap()).unwrap();
@@ -122,7 +134,7 @@ fn long_moves_are_split_within_each_formats_limit() {
             assert!(d.x.abs() <= max + 1e-9 && d.y.abs() <= max + 1e-9, "{format}: {d:?} > {max}");
             prev = s.pos();
         }
-        assert_same_stitches(&p, Point::ZERO, &back, TOL, true, format.name());
+        assert_same_stitches(&p, Point::ZERO, &back, tol(format), true, format.name());
     }
 }
 
@@ -244,6 +256,8 @@ fn random_designs_round_trip_through_every_format() {
                     assert_eq!(original.stitch_count(), 0, "{what}");
                     continue;
                 }
+                // PCS holds 16 colours at most
+                Err(FormatError::Invalid(m)) if format == Format::Pcs && m.contains("16 colours") => continue,
                 Err(e) => panic!("{what}: {e}"),
             };
             written += 1;
@@ -255,7 +269,7 @@ fn random_designs_round_trip_through_every_format() {
             assert_eq!(back.name, expected.name, "{what}: name");
             // The stitches are the original ones (moved by the centring, split where too long).
             let shift = if center { Point::ZERO - original.bounds().center() } else { Point::ZERO };
-            assert_same_stitches(&original, shift, &back, TOL, false, &what);
+            assert_same_stitches(&original, shift, &back, tol(format), false, &what);
         }
     }
     assert!(written > 2000, "{written}");

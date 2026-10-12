@@ -591,6 +591,8 @@ pub const FORMATS: &[Format] = &[
     reader("vp3", "Pfaff VP3", &["vp3"], "application/x-vp3", false),
     reader("xxx", "Singer XXX", &["xxx"], "application/x-xxx", false),
     reader("u01", "Barudan U01", &["u01"], "application/x-u01", false),
+    reader("pcs", "Pfaff PCS", &["pcs"], "application/x-pcs", false),
+    reader("tap", "Happy TAP", &["tap"], "application/x-tap", false),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -629,6 +631,8 @@ pub const OPEN_EXTS: &[&str] = &[
     "vp3",
     "xxx",
     "u01",
+    "pcs",
+    "tap",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the desktop packaging doesn't associate with VectorCraft: Photoshop
@@ -687,6 +691,8 @@ pub const PLACE_EXTS: &[&str] = &[
     "vp3",
     "xxx",
     "u01",
+    "pcs",
+    "tap",
     "txt",
 ];
 
