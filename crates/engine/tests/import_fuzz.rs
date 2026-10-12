@@ -1741,6 +1741,7 @@ fn editing_text() -> String {
         "U".into(),
         "0 Xw".into(),
         "1 0 0 0 1 0 Bg".into(),
+        "Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n1 0 0 1 0 0 Xm\n0 0 0 0 0 0 Bm\n1 0 0 1 5 5 Bm\n0 BB".into(),
         "0 1 w 2 J 0 j 4 M [3 2]0 d 1 D".into(),
         "0 0 0 1 (Black global) 0.4 0 Xk".into(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p".into(),
