@@ -459,7 +459,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | LT-10 | Letter sequencing (left-right, centre-out) and join methods (closest, baseline) | Done | Embroidery-font lettering sews its letters left to right, right to left or centre out and its lines down or up, joined where closest or along the baseline, trimmed after each letter, word or line (`order`, `lines`, `join`, `trim`; Sew order, Join, Trims in the panel) | – |
 | LT-11 | Auto kerning and letter spacing | Done | Font kerning, tracking | – |
 | LT-12 | Lettering underlay | Done | Auto underlay | – |
-| LT-13 | Recommended minimum/maximum height per font shown while typing | Partial | Embroidery fonts give their sizes (`embroidery.fonts`: minSize, maxSize) and lettering outside them comes with a warning; not yet shown while typing | 3 |
+| LT-13 | Recommended minimum/maximum height per font shown while typing | Done | Embroidery fonts give their sizes (`embroidery.fonts`: minSize, maxSize); the lettering section shows them by the size, marked as a warning while the size typed is outside them, and lettering set outside them comes with a warning | – |
 | LT-14 | Small-text optimisation (short stitches, lighter pull compensation, special underlay) | Partial | Thickness-based; add small-text profile | 3 |
 | TM-01 | Team names: many names under one design, CSV import/export | Done | Embroidery panel › Team Names: names typed or read from a CSV column (`embroidery.teamNames.read`), set in the selected embroidery-font lettering; VectorCraft Variables datasets still drive type | – |
 | TM-02 | Team-name templates; output per name (files, multi-head) | Partial | One machine file per name, named after it (`embroidery.teamNames.export`); any design with its lettering is the template; multi-head layouts and a names worksheet still to come | 2 |
@@ -552,8 +552,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 
-**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 150 done,
-31 partial, 45 missing, 6 out of scope (counted 2026-10-12, after the font editor). Most of what is missing is breadth (more stitch
+**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 151 done,
+30 partial, 45 missing, 6 out of scope (counted 2026-10-12, after the font editor). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

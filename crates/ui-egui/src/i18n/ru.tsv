@@ -4735,3 +4735,4 @@ machine	Stop	Остановка
 	After each letter	После каждой буквы
 	After each word	После каждого слова
 	After each line	После каждой строки
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	Вне размеров, для которых сделан шрифт: стежки могут получиться слишком плотными или длинными

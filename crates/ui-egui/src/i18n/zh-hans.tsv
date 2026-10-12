@@ -4321,3 +4321,4 @@ machine	Stop	停止
 	After each letter	每个字母后
 	After each word	每个单词后
 	After each line	每行后
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	超出字体设计的尺寸范围：针迹可能过密或过长
