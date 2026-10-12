@@ -523,6 +523,7 @@ fn structured_junk() {
         ("embroidery.clickStitch", json!({"at": [1e300, -1e300], "tolerance": -1})),
         ("embroidery.send", json!({"folder": "\u{0}/nowhere", "format": "zzz", "name": "../../x"})),
         ("embroidery.worksheet", json!({"kind": 5, "notes": [1]})),
+        ("embroidery.outlineAround", json!({"ids": [u64::MAX], "gap": f64::NAN})),
         ("embroidery.fontDoc.fromType", json!({"family": "Source Sans 3", "chars": "\u{0}\u{fffd}x", "size": 5})),
         ("embroidery.fontDoc.merge", json!({"font": "x", "chars": "abc"})),
         ("embroidery.fontDoc.kern", json!({"pair": "A b", "value": 1e300})),

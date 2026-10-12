@@ -343,6 +343,15 @@ tool's *Stitch as* setting says (in the Embroidery panel while the tool is chose
 The same is `embroidery.clickStitch {at, as?, tolerance?, minHole?, id?}`. Each click is one undo
 step; the image stays under the stitches.
 
+## Outlines round art
+
+**Embroidery › Outline Around** (`embroidery.outlineAround {gap?, width?, kind?, color?}`)
+draws one outline round the selected stitched art as it sews (lettering, shapes and lines
+together; pieces closer than about four times the gap share one outline), its holes left out:
+bubble lettering, a sticker or patch border. It is `gap` (2 mm)
+from the art, a satin `width` (3 mm) wide, or a single or triple run (`kind: run|triple`), in
+`color` (near black), and is sewn after everything else; it is an ordinary path to change after.
+
 ## Worksheets
 
 **Embroidery › Worksheet** (`embroidery.worksheet {kind?, customer?, notes?}`) makes a worksheet

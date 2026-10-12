@@ -243,6 +243,49 @@ fn partial_cover_leaves_out_edges_sewn_over_later() {
 }
 
 #[test]
+fn an_outline_goes_round_the_art_as_it_sews() {
+    use sf_core::attr::StitchType;
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // two squares 5 mm apart: one outline round both, 2 mm off
+    let a = rect(&mut s, 100.0, 100.0, 30.0, 30.0);
+    let b = rect(&mut s, 130.0 + 5.0 * PT, 100.0, 30.0, 30.0);
+    for id in [a, b] {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("embroidery.outlineAround", &json!({"gap": 2, "kind": "run"})).unwrap();
+    assert_eq!(r["pieces"].as_u64(), Some(1));
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    let n = st.doc.node(id).unwrap();
+    assert!(matches!(n.embroidery.as_deref().map(|e| &e.stitch), Some(StitchType::Run(_))));
+    let o = n.geometric_bounds().unwrap();
+    let art = st.doc.node(a).unwrap().geometric_bounds().unwrap();
+    assert!((art.x0 - o.x0 - 2.0 * PT).abs() < 0.5 && (art.y0 - o.y0 - 2.0 * PT).abs() < 0.5, "{o:?} {art:?}");
+    assert_eq!(st.selection.objects, vec![id]);
+    // satin: its inner edge 2 mm off, the path half its width further
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = s.execute("embroidery.outlineAround", &json!({"width": 4, "color": "#ff0000"})).unwrap();
+    let st = s.doc().unwrap();
+    let n = st.doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap();
+    let e = n.embroidery.as_deref().unwrap();
+    assert!(matches!(e.stitch, StitchType::Satin(_)) && e.width == Some(4.0) && e.thread.as_ref().unwrap().color == Rgb::new(255, 0, 0));
+    let o = n.geometric_bounds().unwrap();
+    assert!((art.x0 - o.x0 - 4.0 * PT).abs() < 0.5, "{o:?}");
+    // nothing stitched selected; values out of range
+    let plain = rect(&mut s, 300.0, 300.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [plain.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "none"})).unwrap();
+    assert!(s.execute("embroidery.outlineAround", &json!({})).is_err());
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for bad in [json!({"gap": -1}), json!({"width": 50}), json!({"kind": "zigzag"}), json!({"color": "red"})] {
+        assert!(s.execute("embroidery.outlineAround", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn worksheets_show_the_design_and_its_figures() {
     let mut s = session();
     assert!(s.execute("embroidery.worksheet", &json!({})).is_err());

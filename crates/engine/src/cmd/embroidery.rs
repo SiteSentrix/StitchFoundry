@@ -206,6 +206,15 @@ pub fn specs() -> Vec<CommandSpec> {
             auto_digitize
         ),
         cmd!(
+            "embroidery.outlineAround",
+            "Outline Around",
+            ["Embroidery"],
+            None,
+            "{ids?, gap?: mm between the art and the outline (2; 0–50), width?: mm (satin 3, 0.5–10), kind?: satin|run|triple (satin), color?: \"#rrggbb\" (#1a1a1a)} bubble lettering, sticker and patch borders: one outline round the selected stitched art as it sews (lettering, shapes, lines), its holes left out, `gap` from it; a new path sewn after everything else, selected → {id, pieces}",
+            has_selection,
+            outline_around
+        ),
+        cmd!(
             "embroidery.worksheet",
             "Worksheet",
             ["Embroidery"],
@@ -1602,6 +1611,89 @@ fn sort_by_color(s: &mut Session, _p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "moved": moved }))
+}
+
+fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.outlineAround";
+    let gap = super::embroidery_lettering::ranged(p, "gap", 0.0..=50.0, CMD, "`gap` is 0 to 50 mm")?.unwrap_or(2.0);
+    let kind = str_param(p, "kind").unwrap_or("satin");
+    let width = super::embroidery_lettering::ranged(p, "width", 0.5..=10.0, CMD, "`width` is 0.5 to 10 mm")?.unwrap_or(3.0);
+    let stitch = match kind {
+        "satin" => StitchType::Satin(SatinParams::default()),
+        "run" => StitchType::Run(RunParams::default()),
+        "triple" => StitchType::Run(RunParams { kind: RunKind::Triple, ..RunParams::default() }),
+        _ => return Err(bad(CMD, "`kind` is satin, run or triple")),
+    };
+    let color = match str_param(p, "color") {
+        Some(c) => Rgb::from_hex(c).ok_or_else(|| bad(CMD, "`color` is #rrggbb"))?,
+        None => Rgb::new(0x1a, 0x1a, 0x1a),
+    };
+    let ids = super::edit::roots_of(&s.doc()?.doc, targets(s, p)?);
+    // the selected art and everything in it
+    let mut inside = std::collections::HashSet::new();
+    {
+        let d = &s.doc()?.doc;
+        let mut stack: Vec<NodeId> = ids.clone();
+        while let Some(id) = stack.pop() {
+            if inside.insert(id)
+                && let Some(kids) = d.node(id).and_then(|n| n.children())
+            {
+                stack.extend(kids.iter().map(|k| k.id));
+            }
+        }
+    }
+    let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
+    let polys: Vec<sf_core::geom::Polygon> = plan
+        .design
+        .objects
+        .iter()
+        .zip(&plan.nodes)
+        .filter(|(_, n)| inside.contains(*n))
+        .flat_map(|(o, _)| sf_core::engine::object_polygons(o))
+        .filter(|p| p.outer.len() >= 3)
+        .collect();
+    if polys.is_empty() {
+        return Err(bad(CMD, "select stitched art to outline"));
+    }
+    // a satin outline's inner edge `gap` from the art; a run `gap` from it
+    let reach = gap + if kind == "satin" { width / 2.0 } else { 0.0 };
+    // grown further and back again, so pieces close together (letters) share one outline
+    let close = gap.max(1.0);
+    let wide = sf_core::geom::poly::offset(&sf_core::geom::poly::union(&polys), reach + close);
+    let grown = sf_core::geom::poly::offset(&wide, -close);
+    let subpaths: Vec<vectorcraft_geom::path::SubPath> = grown
+        .iter()
+        .filter(|g| g.outer.len() >= 3)
+        .map(|g| {
+            let pts: Vec<kurbo::Point> = g.outer.iter().map(|q| kurbo::Point::new(q.x * PT_PER_MM, q.y * PT_PER_MM)).collect();
+            vectorcraft_geom::path::SubPath::polyline(&pts, true)
+        })
+        .collect();
+    if subpaths.is_empty() {
+        return Err(bad(CMD, "the art is too small to outline"));
+    }
+    let pieces = subpaths.len();
+    let path = vectorcraft_geom::path::PathData::new(subpaths);
+    let parent = s.doc()?.insertion_parent();
+    let id = s.edit("Outline Around", |d, sel| {
+        let mut n = vectorcraft_doc::Node::path(
+            d.alloc_id(),
+            path,
+            Appearance::basic(Paint::None, Paint::solid(Color::rgb8(color.r, color.g, color.b)), 1.0),
+        );
+        n.name = Some("Outline".into());
+        let mut e = Embroidery::new(stitch);
+        e.thread = Some(Thread::new(color, ""));
+        if kind == "satin" {
+            e.width = Some(width);
+        }
+        n.embroidery = Some(Box::new(e));
+        let id = n.id;
+        d.insert(parent, usize::MAX, n)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0, "pieces": pieces }))
 }
 
 /// A4 portrait (points).
