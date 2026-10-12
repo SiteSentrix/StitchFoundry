@@ -41,6 +41,42 @@ fn lum(p: [u8; 4]) -> u32 {
 const WHITE: u32 = 765;
 
 #[test]
+fn revolve_caps_cover_the_opening_and_match_export_and_visible_only_expansion() {
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 30 L70 70").unwrap());
+    let mut n = Node::path(NodeId(0), path, Appearance::basic(Paint::solid(Color::rgb(0.9, 0.2, 0.1)), Paint::None, 0.0));
+    for (angle, opacity) in [(360.0, 1.0), (90.0, 1.0), (360.0, 0.5)] {
+        n.opacity = opacity;
+        n.appearance.effects = vec![fx(
+            "threeD.revolve",
+            json!({"offset":20,"rotationX":-35,"lightAzimuth":0,
+            "angle":angle,"segments":32,"capEnds":false,"expandVisibleOnly":true}),
+        )];
+        let open = render(&doc_with(Document::new(100.0, 100.0), n.clone()));
+        n.appearance.effects[0].params["capEnds"] = json!(true);
+        let d = doc_with(Document::new(100.0, 100.0), n.clone());
+        let live = render(&d);
+        assert_ne!(live.pixels, open.pixels, "caps change the opening: {angle}, {opacity}");
+        if angle == 360.0 && opacity == 1.0 {
+            let pixel = (34 * 100 + 50) * 4;
+            assert!(live.pixels[pixel] as u16 > open.pixels[pixel] as u16 + 30, "the lit cap covers the visible interior");
+        }
+        assert_eq!(live.pixels, render(&vectorcraft_effects::bake_document(&d).unwrap()).pixels);
+        let mut expanded = d.clone();
+        let id = expanded.layers[0].children().unwrap()[0].id;
+        let source = expanded.node(id).unwrap().clone();
+        let mut stroke = |_: &mut Document, _: &vectorcraft_geom::PathData, _: vectorcraft_geom::FillRule, _: &vectorcraft_doc::StrokeLayer| None;
+        let art = vectorcraft_effects::expand_leaf(&mut expanded, &source, &mut stroke).unwrap();
+        *expanded.node_mut(id).unwrap() = art;
+        let flat = render(&expanded);
+        let difference: u64 = live.pixels.iter().zip(&flat.pixels).map(|(a, b)| a.abs_diff(*b) as u64).sum();
+        assert!(difference as f64 / (live.pixels.len() as f64) < 1.0, "visible-only expansion preserves cap appearance");
+        if opacity < 1.0 {
+            assert_eq!(live.pixels, flat.pixels);
+        }
+    }
+}
+
+#[test]
 fn revolve_canvas_matches_baked_art_and_shades_its_surface() {
     let mut bp = vectorcraft_geom::BezPath::new();
     bp.move_to((50.0, 15.0));
@@ -100,6 +136,95 @@ fn solid_effects_canvas_matches_baked_art_and_shades_their_faces() {
 }
 
 #[test]
+fn smooth_revolve_reduces_banding_without_changing_radial_resolution() {
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 20 L70 80").unwrap());
+    let mut n = Node::path(NodeId(0), path, Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
+    n.appearance
+        .effects
+        .push(fx("threeD.revolve", json!({"offset":30,"segments":16,"lightAzimuth":0,"lightElevation":0,"ambient":10,"lightIntensity":80})));
+    let d = doc_with(Document::new(100.0, 100.0), n);
+    let smooth = render(&d);
+    let levels = |r: &Rendered| (14..66).map(|x| r.pixels[(50 * 100 + x) * 4 + 2]).collect::<std::collections::BTreeSet<_>>().len();
+    // More colour levels than radial facets proves interpolation inside the faces.
+    assert!(levels(&smooth) > 16, "default rendering interpolates lighting: {} blue levels", levels(&smooth));
+    let jump = |r: &Rendered| (15..66).map(|x| r.pixels[(50 * 100 + x) * 4 + 2].abs_diff(r.pixels[(50 * 100 + x - 1) * 4 + 2])).max().unwrap();
+    assert!(jump(&smooth) < 20, "default lighting has no abrupt changes between face colours");
+    assert_eq!(smooth.pixels, render(&vectorcraft_effects::bake_document(&d).unwrap()).pixels);
+    assert_eq!(smooth.pixels, render_threads(&d, 4).pixels);
+}
+
+#[test]
+fn revolve_rim_has_no_spikes_at_high_zoom_and_keeps_seams_covered() {
+    use vectorcraft_doc::AppearanceItem;
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 30 L70 70").unwrap());
+    let mut n = Node::path(NodeId(0), path, Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
+    n.appearance.effects.push(fx("threeD.revolve", json!({"offset":20,"rotationX":-18,"segments":24,"capEnds":true})));
+    let d = doc_with(Document::new(100.0, 100.0), n);
+    let baked = vectorcraft_effects::bake_document(&d).unwrap();
+    let mut fills = baked.clone();
+    fn remove_edges(n: &mut Node) {
+        n.appearance.items.retain(|i| matches!(i, AppearanceItem::Fill(_)));
+        for child in n.children_mut().into_iter().flatten() {
+            remove_edges(Arc::make_mut(child));
+        }
+    }
+    for layer in &mut fills.layers {
+        remove_edges(Arc::make_mut(layer));
+    }
+    let bounds = fills.layers[0].geometric_bounds().unwrap();
+    let zoom = 24.0;
+    let xf = Affine::translate((600.0 - 50.0 * zoom, 50.0 - bounds.y0 * zoom)) * Affine::scale(zoom);
+    let draw =
+        |doc: &Document| Renderer::new().render(doc, 1200, 400, xf, &RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() });
+    let reference = draw(&fills);
+    let live = draw(&d);
+    // The seam stroke may extend half its width, plus antialiasing, past the fill
+    // silhouette. Miter spikes previously reached several times that distance.
+    let reach = (0.375 * zoom) as u32 + 2;
+    let top = |img: &Rendered| (0..1200).map(|x| (0..400).find(|y| lum(img.pixel(x, *y)) < 600).unwrap_or(400)).collect::<Vec<_>>();
+    let fill_top = top(&reference);
+    for (x, y) in top(&live).into_iter().enumerate().filter(|(_, y)| *y < 400) {
+        let near = *fill_top[x.saturating_sub(reach as usize)..=(x + reach as usize).min(1199)].iter().min().unwrap();
+        assert!(y + reach >= near, "rim spike at x {x}: ink starts at {y}, nearest fill at {near}");
+    }
+    assert!((200..1000).all(|x| lum(live.pixel(x, 200)) < 600), "seam coverage leaves no white gaps across the cap");
+    assert_eq!(live.pixels, draw(&baked).pixels, "live and exported geometry agree at high zoom");
+}
+
+#[test]
+fn continuous_revolve_caps_keep_one_colour_along_the_curved_rim_at_high_zoom() {
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 30 L70 70").unwrap());
+    for rotation in [-18.0f64, 18.0] {
+        for shade in [false, true] {
+            let mut n = Node::path(NodeId(0), path.clone(), Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
+            n.appearance.effects.push(fx("threeD.revolve", json!({"offset":20,"rotationX":rotation,"segments":8,"capEnds":true,"shade":shade})));
+            let d = doc_with(Document::new(100.0, 100.0), n);
+            let center_y = 50.0 + if rotation < 0.0 { -20.0 } else { 20.0 } * rotation.to_radians().cos();
+            let zoom = 24.0;
+            let xf = Affine::translate((600.0 - 50.0 * zoom, 220.0 - center_y * zoom)) * Affine::scale(zoom);
+            let draw = |doc: &Document| {
+                Renderer::new().render(doc, 1200, 440, xf, &RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() })
+            };
+            let live = draw(&d);
+            let color = live.pixel(600, 220);
+            assert!(lum(color) < 600, "the visible cap is filled");
+            // Sample 0.15 pt inside the projected ellipse. A triangle fan with
+            // seam strokes lets body colours intrude here between mesh corners.
+            for step in 1..80 {
+                let theta = std::f64::consts::PI * step as f64 / 80.0;
+                let p = xf * Point::new(50.0 + 19.85 * theta.cos(), center_y + 19.85 * rotation.to_radians().abs().sin() * theta.sin());
+                let pixel = live.pixel(p.x.round() as u32, p.y.round() as u32);
+                assert!(
+                    pixel.iter().zip(color).all(|(a, b)| a.abs_diff(b) <= 1),
+                    "cap rim is continuous: rotation {rotation}, shade {shade}, theta {theta}, {pixel:?} vs {color:?}"
+                );
+            }
+            assert_eq!(live.pixels, draw(&vectorcraft_effects::bake_document(&d).unwrap()).pixels);
+        }
+    }
+}
+
+#[test]
 fn revolve_visible_surface_expansion_preserves_the_view_and_transparent_art() {
     let mut bp = vectorcraft_geom::BezPath::new();
     bp.move_to((50.0, 15.0));
@@ -109,13 +234,19 @@ fn revolve_visible_surface_expansion_preserves_the_view_and_transparent_art() {
         vectorcraft_geom::PathData::from_bezpath(&bp),
         Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0),
     );
-    for (angle, rotation, perspective, opacity) in
-        [(360.0, 0.0, 0.0, 1.0), (360.0, -35.0, 55.0, 1.0), (150.0, -28.0, 40.0, 1.0), (360.0, -35.0, 55.0, 0.5)]
-    {
+    for (angle, rotation, perspective, opacity, shade) in [
+        (360.0, 0.0, 0.0, 1.0, false),
+        (360.0, -35.0, 55.0, 1.0, false),
+        (150.0, -28.0, 40.0, 1.0, false),
+        (360.0, -35.0, 55.0, 0.5, false),
+        (360.0, -35.0, 55.0, 1.0, true),
+        (150.0, -28.0, 40.0, 1.0, true),
+        (360.0, -35.0, 55.0, 0.5, true),
+    ] {
         n.opacity = opacity;
         n.appearance.effects = vec![fx(
             "threeD.revolve",
-            json!({"angle":angle,"rotationX":rotation,"rotationY":25,"perspective":perspective,"segments":32,"expandVisibleOnly":true}),
+            json!({"angle":angle,"rotationX":rotation,"rotationY":25,"perspective":perspective,"segments":32,"expandVisibleOnly":true,"shade":shade}),
         )];
         let d = doc_with(Document::new(100.0, 100.0), n.clone());
         let live = render(&d);

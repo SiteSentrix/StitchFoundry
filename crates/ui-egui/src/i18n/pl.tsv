@@ -4651,3 +4651,6 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+
+# Revolve cap description
+	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju pozostają otwarte.

@@ -91,7 +91,8 @@ fn values_labels_sliders_and_reset_dots_change_the_live_effect_in_one_undo_step(
     h.settle();
     assert!(!h.rect("Advanced").is_negative(), "Advanced is visible without scrolling in a normal window");
     let panel = h.ctx.memory(|m| m.area_rect(Id::new(("dialog", "effect")).with("revolve"))).unwrap();
-    assert!(panel.width() < 420.0 && panel.height() < 540.0, "compact controls: {panel:?}");
+    // Cap adds one 28-point row to the shared dialog's previous 540-point bound.
+    assert!(panel.width() < 420.0 && panel.height() < 570.0, "compact controls with Cap: {panel:?}");
     let label = h.rect("Rotation X");
     h.drag(pos2(label.left() + LABEL_W + 6.0 + VALUE_W / 2.0, label.center().y), vec2(40.0, 0.0));
     assert!(h.value("rotationX") > 0.0, "the value itself drags");
@@ -164,6 +165,54 @@ fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
     h.click(h.rect("Rotation").center());
     assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("__gizmo"), "rotation");
     assert!(!h.rect("Rotation X").is_negative());
+}
+
+#[test]
+fn automatic_smooth_shading_previews_saves_and_respects_cancel_and_one_step_undo() {
+    for confirm in [false, true] {
+        let mut h = Harness::new(vec2(1280.0, 900.0));
+        let before = h.app.session.doc().unwrap().doc.clone();
+        h.settle();
+        h.click(h.rect("Lighting").center());
+        assert!(!h.texts.iter().any(|(text, _)| text == "Smooth shading"));
+        assert!(!h.app.ui.dialog.as_ref().unwrap().fields.contains_key("smoothShading"));
+        let art = |h: &Harness| {
+            let state = h.app.session.doc().unwrap();
+            vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap()
+        };
+        let gradients = |n: &vectorcraft_doc::Node| {
+            let mut count = 0;
+            n.walk(&mut |face| {
+                count += face.appearance.items.iter().filter(|item| {
+                    matches!(item, vectorcraft_doc::AppearanceItem::Fill(fill) if matches!(fill.paint, vectorcraft_doc::color::Paint::Gradient(_)))
+                }).count();
+            });
+            count
+        };
+        assert!(gradients(&art(&h)) > 0, "default rendering uses vector gradients");
+        h.click(h.rect("Shading").center());
+        assert_eq!(gradients(&art(&h)), 0, "Shading still controls all lighting");
+        h.click(h.response(("revolve-reset", "shade")).center());
+        assert!(gradients(&art(&h)) > 0);
+        h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
+        h.settle();
+        assert_eq!(h.app.session.doc().unwrap().doc, before);
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+        h.settle();
+        if confirm {
+            dialogs::confirm(&mut h.app).unwrap();
+            let state = h.app.session.doc().unwrap();
+            let node = state.doc.node(state.selection.objects[0]).unwrap();
+            let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
+            assert!(!node.appearance.effects[0].params.as_object().unwrap().contains_key("smoothShading"));
+            assert_eq!(vectorcraft_effects::revolve_art(loaded.node(node.id).unwrap()), vectorcraft_effects::revolve_art(node));
+            h.app.run("edit.undo", json!({})).unwrap();
+        } else {
+            dialogs::cancel(&mut h.app);
+        }
+        assert_eq!(h.app.session.doc().unwrap().doc, before);
+    }
 }
 
 #[test]
@@ -256,4 +305,44 @@ fn extrude_bevel_options_enable_with_a_bevel_shape() {
     h.settle();
     assert!(h.ctx.read_response(Id::new(("revolve-reset", "bevelWidth"))).unwrap().enabled());
     assert_eq!(h.response(("revolve-reset", "bevelWidth")), width);
+}
+
+#[test]
+fn cap_checkbox_previews_resets_and_respects_cancel_and_one_step_undo() {
+    for confirm in [false, true] {
+        let mut h = Harness::new(vec2(1280.0, 1000.0));
+        let before = h.app.session.doc().unwrap().doc.clone();
+        let dialog = h.app.ui.dialog.as_mut().unwrap();
+        dialog.fields.insert("offset".into(), json!(20));
+        dialog.fields.insert("rotationX".into(), json!(-35));
+        h.settle();
+        let art = |h: &Harness| {
+            let state = h.app.session.doc().unwrap();
+            vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap()
+        };
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("capEnds"), "Cap starts on");
+        let capped = art(&h);
+        h.click(h.rect("Cap").center());
+        assert!(!h.app.ui.dialog.as_ref().unwrap().bool("capEnds"));
+        assert_ne!(art(&h), capped);
+        h.click(h.response(("revolve-reset", "capEnds")).center());
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("capEnds"));
+        assert_eq!(art(&h), capped);
+        h.click(h.rect("Cap").center());
+        h.click(h.response("revolve-reset-all").center());
+        assert!(h.app.ui.dialog.as_ref().unwrap().bool("capEnds"));
+        h.click(h.rect("Cap").center());
+        if confirm {
+            dialogs::confirm(&mut h.app).unwrap();
+            let state = h.app.session.doc().unwrap();
+            assert_eq!(state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["capEnds"], json!(false));
+            let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
+            assert_eq!(loaded.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["capEnds"], json!(false));
+            h.app.run("edit.undo", json!({})).unwrap();
+        } else {
+            dialogs::cancel(&mut h.app);
+        }
+        assert_eq!(h.app.session.doc().unwrap().doc, before);
+        assert!(!h.app.session.in_interaction());
+    }
 }
