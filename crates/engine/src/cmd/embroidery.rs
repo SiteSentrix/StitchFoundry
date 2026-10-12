@@ -92,7 +92,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stitch Type",
             [],
             None,
-            "{type: run|bean|backstitch|stemstitch|blanket|zigzag|motif|satin|fill|satinfill|contour|spiral|radial|cross|meander|motiffill|applique|manual|none, ids?} give the selection (or ids; groups: their paths) a stitch type, keeping thread and inclination lines → {ids}",
+            "{type: run|bean|backstitch|stemstitch|blanket|zigzag|motif|satin|fill|satinfill|contour|spiral|radial|cross|meander|motiffill|applique|manual|redwork|none, ids?} give the selection (or ids; groups: their paths) a stitch type, keeping thread and inclination lines; a redwork group takes only redwork or none (its art's own stitching back) → {ids}",
             has_selection,
             set_type
         ),
@@ -343,17 +343,35 @@ fn sf_point(p: Point) -> sf_core::Point {
     sf_core::Point::new(p.x, p.y)
 }
 
-/// The stitched paths among the targets (groups and layers expand to their contents).
+/// The stitched paths among the targets (groups and layers expand to their contents); art in a
+/// redwork group stands for the group, which is stitched as a whole.
 pub(crate) fn stitched_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let ids = targets(s, p)?;
     let d = &s.doc()?.doc;
     let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for id in leaf_targets(s, &ids)? {
         if d.node(id).is_some_and(stitchable) {
-            out.push(id);
+            let id = redwork_owner(d, id).unwrap_or(id);
+            if seen.insert(id) {
+                out.push(id);
+            }
         }
     }
     Ok(out)
+}
+
+/// The outermost redwork group `id` is in, if any.
+pub(crate) fn redwork_owner(d: &Document, id: NodeId) -> Option<NodeId> {
+    let mut owner = None;
+    let mut at = d.parent_of(id);
+    while let Some(p) = at {
+        if d.node(p).is_some_and(vectorcraft_embroidery::sews_whole) {
+            owner = Some(p);
+        }
+        at = d.parent_of(p);
+    }
+    owner
 }
 
 pub(crate) fn ids_json(ids: &[NodeId]) -> Value {
@@ -383,6 +401,10 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Stitch Type", |d, _| {
         for id in &ids {
             let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+            // a redwork group stays redwork (or, with none, gives its art back its own stitching)
+            if vectorcraft_embroidery::sews_whole(n) && !matches!(st, None | Some(StitchType::Redwork(_))) {
+                continue;
+            }
             match (&st, n.embroidery.as_deref_mut()) {
                 (None, _) => n.embroidery = None,
                 // a stitched object takes the type's stitch parameters and keeps the rest
@@ -1314,7 +1336,7 @@ fn apply_fabric(s: &mut Session, p: &Value) -> Result<Value> {
                         a.cover_spacing = fabric.satin_spacing;
                         a.pull_comp = fabric.pull_comp;
                     }
-                    StitchType::Run(_) | StitchType::Manual | StitchType::Branch => {}
+                    StitchType::Run(_) | StitchType::Manual | StitchType::Branch | StitchType::Redwork(_) => {}
                 }
             }
         }

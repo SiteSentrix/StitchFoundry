@@ -36,6 +36,7 @@ const TYPES: &[(&str, &str)] = &[
     ("Backstitch", "backstitch"),
     ("Stem Stitch", "stemstitch"),
     ("Blanket", "blanket"),
+    ("Redwork", "redwork"),
     ("Satin", "satin"),
     ("Tatami Fill", "fill"),
     ("Satin Fill", "satinfill"),
@@ -57,19 +58,31 @@ fn type_index(e: Option<&Embroidery>) -> usize {
     TYPES.iter().position(|t| t.1 == key).unwrap_or(0)
 }
 
-/// The first selected object that can be stitched (groups: their first path), its id
-/// and embroidery record.
+/// The first selected object that can be stitched (groups: their first path; art in a redwork
+/// group: the group), its id and embroidery record.
 fn first_stitchable(app: &VectorcraftApp) -> Option<(u64, Option<Embroidery>, bool)> {
     let st = app.session.active()?;
     let d = &st.doc;
     fn find(d: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId) -> Option<vectorcraft_doc::NodeId> {
         let n = d.node(id)?;
-        if vectorcraft_embroidery::stitchable(n) {
+        if vectorcraft_embroidery::stitchable(n) || vectorcraft_embroidery::sews_whole(n) {
             return Some(id);
         }
         n.children()?.iter().find_map(|c| find(d, c.id))
     }
-    st.selection.objects.iter().find_map(|id| find(d, *id)).and_then(|id| {
+    // the outermost redwork group holding `id`, else `id`
+    let owner = |id: vectorcraft_doc::NodeId| {
+        let mut out = id;
+        let mut at = d.parent_of(id);
+        while let Some(p) = at {
+            if d.node(p).is_some_and(vectorcraft_embroidery::sews_whole) {
+                out = p;
+            }
+            at = d.parent_of(p);
+        }
+        out
+    };
+    st.selection.objects.iter().find_map(|id| find(d, *id)).map(owner).and_then(|id| {
         let n = d.node(id)?;
         Some((id.0, n.embroidery.as_deref().cloned(), vectorcraft_embroidery::is_line_art(n)))
     })
@@ -639,6 +652,21 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             ui.label(tl!("Each anchor point is a needle penetration."));
         }
         StitchType::Branch => {}
+        StitchType::Redwork(r) => {
+            // redwork lines are sewn in one of the outline stitches
+            let kinds = [RunKind::Single, RunKind::Triple, RunKind::Back, RunKind::Stem];
+            let names = [tl!("Single"), tl!("Triple"), tl!("Backstitch"), tl!("Stem stitch")];
+            let cur = kinds.iter().position(|k| *k == r.kind).unwrap_or(0);
+            if let Some(i) = pick(ui, tl!("Run style"), "rwkind", cur, &names)
+                && let Some(k) = kinds.get(i)
+            {
+                set(app, target, json!({ "kind": k }));
+            }
+            if let Some(v) = num(ui, tl!("Stitch length"), "rwlen", r.stitch_length, " mm", 2) {
+                set(app, target, json!({ "stitch_length": v }));
+            }
+            ui.label(tl!("Sewn as one line that ends where it starts; the way between lines is retraced along them."));
+        }
     }
     ui.add_space(4.0);
     ui.horizontal(|ui| {

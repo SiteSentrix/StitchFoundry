@@ -1617,6 +1617,58 @@ fn a_drawn_path_becomes_one_of_the_designs_motifs() {
 }
 
 #[test]
+fn redwork_sews_line_art_as_one_line_back_to_its_start() {
+    use sf_core::attr::StitchType;
+    use sf_core::model::RunKind;
+    let mut s = session();
+    let path = |s: &mut Session, d: &str| NodeId(s.execute("path.create", &json!({ "d": d })).unwrap()["id"].as_u64().unwrap());
+    // A window: a square and a cross in it, drawn as three paths; one is stitched as a fill.
+    let square = path(&mut s, "M 100 100 L 200 100 L 200 200 L 100 200 Z");
+    let bar = path(&mut s, "M 150 100 L 150 200");
+    let rail = path(&mut s, "M 100 150 L 200 150");
+    s.execute("select.set", &json!({"ids": [bar.0]})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#b03a2a"})).unwrap();
+    s.execute("select.set", &json!({"ids": [square.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("select.set", &json!({"ids": [square.0, bar.0, rail.0]})).unwrap();
+    let before = stitches(&s);
+    let g = NodeId(s.execute("embroidery.redwork", &json!({"kind": "bean"})).unwrap()["id"].as_u64().unwrap());
+    let StitchType::Redwork(r) = emb(&s, g).stitch else { panic!("{:?}", emb(&s, g).stitch) };
+    assert_eq!(r.kind, RunKind::Triple);
+    assert_eq!(emb(&s, g).thread.map(|t| t.color), Some(Rgb::new(0xb0, 0x3a, 0x2a)), "the first line's thread");
+    // One object: its art's own stitching (the fill) is left out; it starts and ends at one point.
+    let plan = s.embroidery_plan().unwrap();
+    assert_eq!(plan.nodes.iter().filter(|n| **n == g).count(), 1);
+    assert!(!plan.nodes.contains(&square), "the fill isn't sewn");
+    let pts = needles(&s, g);
+    assert!(pts.len() > 100 && pts.first().unwrap().distance(*pts.last().unwrap()) < 1e-6, "{}", pts.len());
+    assert_ne!(stitches(&s), before);
+    // The panel's rows act on the group; Set Type keeps it redwork unless asked for none.
+    s.execute("embroidery.setParams", &json!({"params": {"kind": "Back", "stitchLength": 2.0}})).unwrap();
+    let StitchType::Redwork(r) = emb(&s, g).stitch else { panic!() };
+    assert_eq!((r.kind, r.stitch_length), (RunKind::Back, 2.0));
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    assert!(matches!(emb(&s, g).stitch, StitchType::Redwork(_)));
+    // Break Apart gives the paths back, stitched as before.
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("embroidery.breakApart", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(g).is_none());
+    assert!(matches!(emb(&s, square).stitch, StitchType::Fill(_)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(matches!(emb(&s, g).stitch, StitchType::Redwork(_)));
+    // A path can be redwork on its own: its subpaths (here touching) sewn as one line.
+    let star = path(&mut s, "M 300 100 L 340 180 L 260 180 Z M 300 180 L 300 260");
+    s.execute("select.set", &json!({"ids": [star.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "redwork"})).unwrap();
+    let pts = needles(&s, star);
+    assert!(pts.first().unwrap().distance(*pts.last().unwrap()) < 1e-6);
+    // Bad asks.
+    assert!(s.execute("embroidery.redwork", &json!({"kind": "satin"})).is_err());
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    assert!(s.execute("embroidery.redwork", &json!({})).is_err());
+}
+
+#[test]
 fn sculpture_runs_and_cross_styles_are_stitch_parameters() {
     use sf_core::attr::StitchType;
     use sf_core::model::{CrossStyle, RunKind};

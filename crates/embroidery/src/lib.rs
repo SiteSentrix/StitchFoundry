@@ -107,7 +107,7 @@ pub fn stitched_nodes(doc: &Document) -> Vec<Arc<Node>> {
         if n.embroidery.is_some() {
             out.push(n.clone());
             // a stitched group or compound is one object: don't descend
-            if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
+            if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) || sews_whole(n) {
                 return;
             }
         }
@@ -122,6 +122,12 @@ pub fn stitched_nodes(doc: &Document) -> Vec<Arc<Node>> {
         walk(l, true, &mut out);
     }
     out
+}
+
+/// Whether a group is sewn as one object made of all its art (redwork), its members' own
+/// stitching left out.
+pub fn sews_whole(n: &Node) -> bool {
+    n.embroidery.as_deref().is_some_and(|e| matches!(e.stitch, sf_core::attr::StitchType::Redwork(_)))
 }
 
 /// Most instances of one repeat that are sewn.
@@ -169,7 +175,7 @@ fn sewing_order(doc: &Document, cache: &mut LiveCache) -> Vec<Arc<Node>> {
         }
         if n.embroidery.is_some() {
             out.push(n.clone());
-            if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
+            if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) || sews_whole(n) {
                 return;
             }
         }

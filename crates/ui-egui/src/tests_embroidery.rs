@@ -112,6 +112,20 @@ fn the_panel_shows_sculpture_runs_and_cross_styles() {
 }
 
 #[test]
+fn the_panel_edits_a_redwork_group_as_one() {
+    let mut app = app();
+    let a = app.run("path.create", json!({"d": "M 20 20 L 120 20 L 120 120 Z"})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("path.create", json!({"d": "M 70 20 L 70 120"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("embroidery.redwork", json!({})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    for want in ["Redwork", "Run style", "Stitch length", "Sewn as one line that ends where it starts; the way between lines is retraced along them."]
+    {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
+}
+
+#[test]
 fn stitch_list_shows_every_record() {
     let mut app = app();
     assert!(painted_text(&mut app, crate::embroidery::stitch_list::show).iter().any(|t| t.contains("Nothing stitched yet")));

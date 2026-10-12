@@ -421,7 +421,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SP-10 | Colour blending / multi-blend (several layered fills with graded density) | Done | Make Blend: stacked tatami layers, 2 to 6 colours, each fading into the next | – |
 | SP-11 | Chenille-type patterns on regular machines (square, coil) | Missing | Pattern generators | 4 |
 | SP-12 | Cross-stitch fills (X stitches on a grid) | Done | Cross fill: X stitches on a square grid of any cell size and angle, as full, half, upright or double crosses | – |
-| SP-13 | Redwork (outlines grouped into one path, entry = exit) | Missing | Group outlines, route as one tour (2026 feature) | 2 |
+| SP-13 | Redwork (outlines grouped into one path, entry = exit) | Done | Embroidery › Redwork: line art becomes a redwork group sewn as one tour (entry = exit) over the lines' graph: odd junctions paired along the shortest ways, an Euler tour, each line sewn once in single, triple, back or stem stitch and the retraced ways as a single run; ends within 0.3 mm meet; Break Apart restores (public description: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Release/rn-28-notes/rn-28-notes-5.htm) | – |
 | SP-14 | Buttonholes (preset types, single or a string) | Missing | Satin bartacks + sides; docker for spacing (2026 feature) | 2 |
 
 ### 6.10 Multi-decoration
@@ -524,7 +524,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 |---|---|---|---|---|
 | NEW-01 | Multi Blend (stacked layers of fills with graded spacing in one object) | Partial | Make Blend makes the layers as separate objects (one per thread), not one object | 2 |
 | NEW-02 | Custom accordion profiles | Partial | Profiles from points through `embroidery.setParams`; presets in the panel, no curve editor yet | 2 |
-| NEW-03 | Redwork | Missing | SP-13 | 2 |
+| NEW-03 | Redwork | Done | SP-13 | – |
 | NEW-04 | Buttonholes | Missing | SP-14 | 2 |
 | NEW-05 | Grids, guides, snapping to objects | Done | VectorCraft | – |
 | NEW-06 | Continue digitizing | Done | ST-11 | 1 |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 121 done,
-41 partial, 63 missing, 6 out of scope (counted 2026-10-12, after sculpture runs and cross styles). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 123 done,
+41 partial, 61 missing, 6 out of scope (counted 2026-10-12, after redwork). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -584,7 +584,9 @@ in place.
   candidates, solves an open travelling-salesman path (nearest neighbour + 2-opt) under the
   constraint that paint order between overlapping objects is kept, and emits travel runs
   through later-covered areas.
-- Also used by Redwork (SP-13: entry = exit, tour of outlines with doubled travel).
+- Redwork (SP-13: entry = exit, tour of outlines with doubled travel) is its own group type:
+  built (phase 2) as `StitchType::Redwork`; the planner sews the group's lines as one object
+  routed in sf-core (`engine/redwork.rs`).
 - Built (phase 1): a branch is a group with the stitch type `Branch`. The planner orders its
   objects greedily (same thread first, then the nearest, overlapping objects in paint order;
   no 2-opt yet), aims each object's exit (when it has no stop bead) at its point under the
