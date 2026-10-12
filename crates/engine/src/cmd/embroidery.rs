@@ -219,7 +219,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Worksheet",
             ["Embroidery"],
             None,
-            "{kind?: production|approval (production), customer?: text, notes?: text} a worksheet for the design as a new A4 document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; opens a new document → {kind, colors, scale}",
+            "{kind?: production|approval|pattern (production), page?: a4|letter (a4), customer?: text, notes?: text} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
             has_doc,
             worksheet
         ),
@@ -1783,10 +1783,17 @@ fn stitch_runs(pattern: &sf_core::Pattern) -> Vec<Vec<Vec<sf_core::Point>>> {
 
 fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.worksheet";
-    let approval = match str_param(p, "kind").unwrap_or("production") {
-        "production" => false,
-        "approval" => true,
-        _ => return Err(bad(CMD, "`kind` is production or approval")),
+    let kind = str_param(p, "kind").unwrap_or("production");
+    let (approval, full) = match kind {
+        "production" => (false, false),
+        "approval" => (true, false),
+        "pattern" => (false, true),
+        _ => return Err(bad(CMD, "`kind` is production, approval or pattern")),
+    };
+    let (pw, ph) = match str_param(p, "page").unwrap_or("a4") {
+        "a4" | "A4" => SHEET,
+        "letter" | "Letter" => (612.0, 792.0),
+        _ => return Err(bad(CMD, "`page` is a4 or letter")),
     };
     let field = |key: &str| str_param(p, key).map(|t| t.trim().chars().take(2000).collect::<String>()).unwrap_or_default();
     let (customer, notes) = (field("customer"), field("notes"));
@@ -1799,10 +1806,16 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let black = Color::rgb8(0x1a, 0x1a, 0x1a);
     let grey = Color::rgb8(0x66, 0x66, 0x66);
-    let mut doc = Document::new(SHEET.0, SHEET.1);
+    let mut doc = Document::new(pw, ph);
     doc.title = format!("{title} worksheet");
     // heading
-    let heading = if approval { "Approval sheet" } else { "Production worksheet" };
+    let heading = if approval {
+        "Approval sheet"
+    } else if full {
+        "Pattern"
+    } else {
+        "Production worksheet"
+    };
     sheet_text(&mut doc, 40.0, 56.0, heading, 20.0, black)?;
     sheet_text(&mut doc, 40.0, 78.0, &title, 13.0, black)?;
     let t = sf_formats::Timestamp::now();
@@ -1813,7 +1826,8 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     sheet_text(&mut doc, 40.0, 96.0, &sub, 9.0, grey)?;
     // the design, life size when it fits the box, in its thread colours
     let b = pattern.bounds();
-    let (bw, bh) = (515.0, 380.0);
+    // the box the design is drawn in: most of the page for a pattern
+    let (bw, bh) = if full { (pw - 80.0, ph - 170.0) } else { (pw - 80.0, 380.0) };
     let fit = (bw / b.width().max(1e-6)).min(bh / b.height().max(1e-6));
     let k = fit.min(PT_PER_MM);
     if !(k.is_finite() && k > 0.0) {
@@ -1835,8 +1849,20 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
         n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(c.r, c.g, c.b)), 0.5);
         doc.insert(layer, usize::MAX, n).map_err(|e| EngineError::Other(e.to_string()))?;
     }
-    // the figures
+    // the figures (a pattern: one line under the design)
     let shown = (k / PT_PER_MM * 100.0).round();
+    if full {
+        let line = format!(
+            "{:.1} × {:.1} mm (shown at {shown} %)   {} stitches   {} colours",
+            stats.width_mm,
+            stats.height_mm,
+            stats.stitches,
+            stats.colors.len()
+        );
+        sheet_text(&mut doc, 40.0, ph - 40.0, &line, 9.0, grey)?;
+        s.add_document(doc, None);
+        return Ok(json!({ "kind": kind, "colors": stats.colors.len(), "scale": shown }));
+    }
     let mut y = 512.0;
     let st = &cfg.settings;
     let lines = [
@@ -1864,7 +1890,7 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     y += 8.0;
     sheet_text(&mut doc, 40.0, y, "Colours in sewing order", 11.0, black)?;
     y += 16.0;
-    let room = ((SHEET.1 - 90.0 - y) / 15.0).max(1.0) as usize;
+    let room = ((ph - 90.0 - y) / 15.0).max(1.0) as usize;
     for (i, c) in stats.colors.iter().enumerate().take(room) {
         let rgb = c.thread.color;
         let corners = [(40.0, y - 9.0), (50.0, y - 9.0), (50.0, y + 1.0), (40.0, y + 1.0)].map(|(x, y)| kurbo::Point::new(x, y)).to_vec();
@@ -1888,10 +1914,10 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
         sheet_text(&mut doc, 40.0, y + 8.0, &format!("Notes: {notes}"), 9.0, black)?;
     }
     if approval {
-        sheet_text(&mut doc, 40.0, SHEET.1 - 40.0, "Approved by: ______________________________   Date: ______________", 10.0, black)?;
+        sheet_text(&mut doc, 40.0, ph - 40.0, "Approved by: ______________________________   Date: ______________", 10.0, black)?;
     }
     s.add_document(doc, None);
-    Ok(json!({ "kind": if approval { "approval" } else { "production" }, "colors": stats.colors.len(), "scale": shown }))
+    Ok(json!({ "kind": kind, "colors": stats.colors.len(), "scale": shown }))
 }
 
 fn info(s: &mut Session, _p: &Value) -> Result<Value> {
