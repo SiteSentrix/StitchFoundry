@@ -702,13 +702,17 @@ impl<'a> Reader<'a> {
             "*U" => self.close(what, |k| matches!(k, Kind::Compound))?,
             _ => self.close(what, |k| matches!(k, Kind::Clip))?,
         };
-        let Frame { kind, children: mut kids, gs, clips, hidden: opened_hidden, .. } = f;
+        let Frame { kind, children: kids, gs, clips, hidden: opened_hidden, .. } = f;
         // A compound path of clipping paths clips its clipping group.
         let clipping = matches!(kind, Kind::Compound) && !clips.is_empty();
         let node = match kind {
             Kind::Compound => {
-                let Some(first) = kids.first() else { return Ok(()) };
-                let (appearance, opacity, blend, rule) = (first.appearance.clone(), first.opacity, first.blend, path_rule(first));
+                // A group in a compound path (`*u u … U *U`) only holds its paths.
+                let mut kids = ungrouped(kids);
+                // The compound path's paint is its last path's (a gradient's instance wraps only
+                // that one); the last painted one, should the last have none.
+                let Some(shown) = kids.iter().rev().find(|k| !k.appearance.items.is_empty()).or(kids.last()) else { return Ok(()) };
+                let (appearance, opacity, blend, rule) = (shown.appearance.clone(), shown.opacity, shown.blend, path_rule(shown));
                 for k in &mut kids {
                     k.opacity = 1.0;
                     k.blend = BlendMode::Normal;
@@ -1716,6 +1720,18 @@ fn close(bp: &mut BezPath) {
 }
 
 /// The fill rule of a path or compound node.
+/// `kids` with the members of each plain group among them in the group's place, at any depth.
+fn ungrouped(kids: Vec<Node>) -> Vec<Node> {
+    let mut out = Vec::with_capacity(kids.len());
+    for k in kids {
+        match k.kind {
+            NodeKind::Group { children, clip: false } => out.extend(ungrouped(children.into_iter().map(Arc::unwrap_or_clone).collect())),
+            _ => out.push(k),
+        }
+    }
+    out
+}
+
 fn path_rule(n: &Node) -> FillRule {
     match &n.kind {
         NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } => *rule,

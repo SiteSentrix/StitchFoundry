@@ -244,6 +244,25 @@ fn compound_paths_and_clipping() {
     assert!(*clip && matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
 }
 
+/// #1410: a compound path shows its last path's paint, and paths grouped in it stay its paths.
+#[test]
+fn compound_path_takes_its_last_paths_paint() {
+    let paths = format!("0 g\n{}f\n{RED}{}f\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(10.0, 10.0, 20.0, 20.0));
+    let bodies = [
+        format!("0 Ae\n*u\n{paths}*U\n"),
+        // The paths in a group.
+        format!("0 Ae\n*u\n0 Ae\nu\n{paths}U\n*U\n"),
+        // The last path unpainted.
+        format!("*u\n{paths}{}n\n*U\n", rect_path(1.0, 1.0, 2.0, 2.0)),
+    ];
+    for body in bodies {
+        let a = art(&read_ok(&layer(&body)).doc);
+        let NodeKind::Compound { children, .. } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+        assert!(children.len() >= 2 && children.iter().all(|c| matches!(c.kind, NodeKind::Path { .. })), "{body}");
+        assert_eq!(fill(&a[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "{body}");
+    }
+}
+
 #[test]
 fn transparency_of_objects_and_groups() {
     let art_ = format!(
