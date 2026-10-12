@@ -274,7 +274,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 labeled(ui, sp.label, |ui| {
                     let mut x = v.as_f64().unwrap_or(min);
                     let new = if sp.key == "uiScaling" {
-                        ui.add(egui::Slider::new(&mut x, min..=max).step_by(0.05).text(tl!("Smaller ↔ Larger"))).changed().then_some(x)
+                        widgets::slider(ui, egui::Slider::new(&mut x, min..=max).step_by(0.05).text(tl!("Smaller ↔ Larger"))).changed().then_some(x)
                     } else {
                         widgets::range_field(ui, sp.key, x, min..=max, &format!(" {unit}"), 3, 110.0)
                     };
@@ -297,7 +297,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 labeled(ui, sp.label, |ui| {
                     let mut x = v.as_i64().unwrap_or(min);
                     let new = if sp.key == "anchorSize" {
-                        ui.add(egui::Slider::new(&mut x, min..=max).show_value(false).text(tl!("Size"))).changed().then_some(x)
+                        widgets::slider(ui, egui::Slider::new(&mut x, min..=max).show_value(false).text(tl!("Size"))).changed().then_some(x)
                     } else {
                         widgets::range_field(ui, sp.key, x as f64, min as f64..=max as f64, "", 0, 110.0).map(|x| x as i64)
                     };
