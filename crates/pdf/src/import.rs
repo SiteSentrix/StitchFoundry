@@ -21,13 +21,18 @@ use vectorcraft_geom::{FillRule, PathData};
 
 use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
-use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, all_on, hides_forms, scan_page, tag_key};
+use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, TextOverprint, all_on, hides_forms, scan_page, tag_key};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, gradient_shape, mesh_shading, shading_gradient};
 use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
 /// The name of the paths text imports as.
 const TEXT_OUTLINES: &str = "<Text Outlines>";
+/// A page whose overprint (ISO 32000-1 §8.6.7) is left out rather than given to the wrong objects.
+const OVERPRINT_UNREAD: &str = "the overprint of a page's objects couldn't be read: they knock out";
+/// The document overprints as overprint mode 1 does.
+const OVERPRINT_ZERO_MODE: &str =
+    "overprint in the mode where a process colour's zero tints knock out (/OPM 0) is imported as overprint, where they don't";
 /// The deepest soft masks, patterns and type 3 glyphs are read within each other.
 const MAX_NESTED: u32 = 8;
 /// A tiling pattern read this many times with the same art is taken to always draw it.
@@ -666,6 +671,7 @@ struct GlyphRun {
     opacity: f32,
     stroke: Option<StrokeProps>,
     scale: f64,
+    overprint: bool,
 }
 
 /// How often a tiling pattern was read, and the art (as its paints) each reading drew with the
@@ -734,6 +740,8 @@ struct Builder<'p> {
     scan: Scan,
     tag_at: usize,
     group_at: usize,
+    /// The fills and strokes of paths drawn so far ([`Scan::paints`]).
+    paint_at: usize,
     aligned: bool,
     /// Whether optional content groups become layers.
     route: bool,
@@ -880,6 +888,7 @@ impl<'p> Builder<'p> {
             scan: Scan::default(),
             tag_at: 0,
             group_at: 0,
+            paint_at: 0,
             aligned: true,
             route,
             unsure: false,
@@ -930,12 +939,49 @@ impl<'p> Builder<'p> {
         self.masked.clear();
         self.marked.clear();
         self.pending = false;
-        (self.scan, self.tag_at, self.group_at, self.aligned) = (scan, 0, 0, true);
+        (self.scan, self.tag_at, self.group_at, self.aligned, self.paint_at) = (scan, 0, 0, true, 0);
+        if self.scan.overprints && self.scan.cut {
+            self.scan.overprints = false;
+            self.warn(OVERPRINT_UNREAD);
+        }
+        if self.scan.overprints && self.scan.zero_mode {
+            self.warn(OVERPRINT_ZERO_MODE);
+        }
+    }
+
+    /// Whether the path the interpreter draws now (a fill or a stroke, each counted) overprints.
+    fn path_overprint(&mut self) -> bool {
+        if self.nested > 0 || !self.scan.overprints {
+            return false;
+        }
+        self.paint_at += 1;
+        self.scan.paints.get(self.paint_at - 1).copied().unwrap_or(false)
+    }
+
+    /// Whether the glyph the interpreter draws now (its fill, or its `stroke`) overprints.
+    fn glyph_overprint(&mut self, stroke: bool) -> bool {
+        if self.nested > 0 || !self.scan.overprints {
+            return false;
+        }
+        match self.scan.texts.get(self.paint_at) {
+            Some(TextOverprint::All { fill, stroke: s }) => *if stroke { s } else { fill },
+            Some(TextOverprint::Mixed) => {
+                self.warn("some text is set to overprint in a way that can't be read: it knocks out");
+                false
+            }
+            _ => false,
+        }
     }
 
     /// The page's art, split by optional content group (in the order they first paint).
     fn end_page(&mut self) -> Vec<(Option<usize>, Vec<Arc<Node>>)> {
-        let children = self.close_frames();
+        let mut children = self.close_frames();
+        // The interpreter drew another number of paths than the file was read to paint: which
+        // of them overprint can't be trusted.
+        if self.scan.overprints && self.paint_at != self.scan.paints.len() {
+            children.iter_mut().for_each(vectorcraft_doc::overprint::clear_overprints);
+            self.warn(OVERPRINT_UNREAD);
+        }
         let groups = std::mem::take(&mut self.root_groups);
         let mut parts: Vec<(Option<usize>, Vec<Arc<Node>>)> = vec![];
         // Thousands of groups: find each one's part by index.
@@ -1137,10 +1183,14 @@ impl<'p> Builder<'p> {
         match &run.stroke {
             None => {
                 let mut f = FillLayer::new(run.paint);
-                f.opacity = run.opacity;
+                (f.opacity, f.overprint) = (run.opacity, run.overprint);
                 ap.items.push(AppearanceItem::Fill(f));
             }
-            Some(p) => ap.items.push(AppearanceItem::Stroke(stroke_layer(run.paint, run.opacity, p, run.scale))),
+            Some(p) => {
+                let mut st = stroke_layer(run.paint, run.opacity, p, run.scale);
+                st.overprint = run.overprint;
+                ap.items.push(AppearanceItem::Stroke(st));
+            }
         }
         let id = self.id();
         let mut n = Node::path(id, PathData::from_bezpath(&run.path), ap);
@@ -1398,6 +1448,7 @@ impl<'p> Builder<'p> {
         scale: f64,
         paint: &hayro_interpret::Paint<'_>,
         stroke: Option<&StrokeProps>,
+        overprint: bool,
     ) -> bool {
         if self.text_as != TextAs::Text || self.nested > 0 {
             return false;
@@ -1489,6 +1540,8 @@ impl<'p> Builder<'p> {
             version,
             size: at.size,
             h_scale: at.h_scale,
+            overprint_fill: stroke.is_none() && overprint,
+            overprint_stroke: stroke.is_some() && overprint,
             fill: stroke.is_none().then_some(paint),
             stroke,
         };
@@ -1500,7 +1553,7 @@ impl<'p> Builder<'p> {
         // A stroke over the glyph just filled (fill and stroke rendering).
         if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
             && look.fill.is_none()
-            && line.stroke_last(key, at, s.clone())
+            && line.stroke_last(key, at, s.clone(), overprint)
         {
             return true;
         }
@@ -1566,6 +1619,7 @@ impl<'a> Device<'a> for Builder<'_> {
         self.flush_glyphs();
         self.flush_text();
         self.pending = false;
+        let overprint = self.path_overprint();
         let mut bp = path.clone();
         bp.apply_affine(transform);
         if bp.elements().is_empty() {
@@ -1605,7 +1659,7 @@ impl<'a> Device<'a> for Builder<'_> {
         match draw_mode {
             PathDrawMode::Fill(rule) => {
                 let mut f = FillLayer::new(paint);
-                f.opacity = opacity;
+                (f.opacity, f.overprint) = (opacity, overprint);
                 let mut n = Node::path(self.id(), pd, Appearance { items: vec![AppearanceItem::Fill(f)], ..Default::default() });
                 if let NodeKind::Path { rule: r, .. } = &mut n.kind {
                     *r = fill_rule(*rule);
@@ -1615,7 +1669,8 @@ impl<'a> Device<'a> for Builder<'_> {
                 self.push_node(n);
             }
             PathDrawMode::Stroke(props) => {
-                let st = stroke_layer(paint, opacity, props, mean_scale(transform));
+                let mut st = stroke_layer(paint, opacity, props, mean_scale(transform));
+                st.overprint = overprint;
                 // Fill-then-stroke of the same path (the `B` operator, or a fill and a stroke of
                 // the outline as Illustrator writes an object) becomes one object: a path with a
                 // fill and a live stroke.
@@ -1699,7 +1754,8 @@ impl<'a> Device<'a> for Builder<'_> {
         match glyph {
             Glyph::Outline(o) => {
                 let scale = mean_scale(transform);
-                if self.type_glyph(o, transform * glyph_transform, scale, paint, stroke.as_ref()) {
+                let overprint = self.glyph_overprint(stroke.is_some());
+                if self.type_glyph(o, transform * glyph_transform, scale, paint, stroke.as_ref(), overprint) {
                     return;
                 }
                 self.flush_text();
@@ -1709,12 +1765,13 @@ impl<'a> Device<'a> for Builder<'_> {
                 let same = self.glyphs.as_ref().is_some_and(|r| {
                     r.paint == paint
                         && r.opacity == opacity
+                        && r.overprint == overprint
                         && r.stroke.as_ref().map(|s| s.line_width) == stroke.as_ref().map(|s| s.line_width)
                         && (r.scale - scale).abs() < 1e-9
                 });
                 if !same {
                     self.flush_glyphs();
-                    self.glyphs = Some(GlyphRun { path: BezPath::new(), paint, opacity, stroke, scale });
+                    self.glyphs = Some(GlyphRun { path: BezPath::new(), paint, opacity, stroke, scale, overprint });
                 }
                 if let Some(r) = &mut self.glyphs {
                     r.path.extend(bp.iter());

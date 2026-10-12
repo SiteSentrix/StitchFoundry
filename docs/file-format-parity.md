@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (`.ai` editing data: gradients with middle stops, #1390; type of objects with an appearance, hidden layers and later artboards, #1391; area type in a frame too short for the fallback font, #1392; `.ai` editing data: placed (linked) files read, #1264; gradient-filled shapes import as paths, #1304; white constant alpha soft masks, #1286 in part; DXF control-point SPLINE closure read, #1299 follow-up; `.ai` and PDF trim and bleed boxes as artboard and bleed, #1266) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (PDF and `.ai` import keep overprint, #1388; `.ai` editing data: gradients with middle stops, #1390; type of objects with an appearance, hidden layers and later artboards, #1391; area type in a frame too short for the fallback font, #1392; `.ai` editing data: placed (linked) files read, #1264; gradient-filled shapes import as paths, #1304; white constant alpha soft masks, #1286 in part; DXF control-point SPLINE closure read, #1299 follow-up; `.ai` and PDF trim and bleed boxes as artboard and bleed, #1266) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/mod.rs`). Illustrator's list comes from its public
@@ -56,7 +56,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | VectorCraft `.vectorcraft` / `.vctemplate` | — | yes | yes | lossless JSON, versioned, save down to v1; property-tested round trips (`format/tests/prop_format.rs`) |
 | Illustrator `.ai` | open, save | yes (PDF-compatible + editing-data structure) | PDF-compatible only | see above; no real-file corpus |
 | Illustrator template `.ait` | open, save | yes | no (save as `.vctemplate`) | |
-| PDF | open, place, save | yes (layers, masks, editable text, security; Crop To › Trim takes the bleed box as the document's bleed) | yes (presets, PDF/X-1a/3/4, layers, marks and bleed, ICC, fast web view, 1.3+) | fuzzed import; PDF text placement issues in some files (#722) |
+| PDF | open, place, save | yes (layers, masks, editable text, security, overprint; Crop To › Trim takes the bleed box as the document's bleed) | yes (presets, PDF/X-1a/3/4, layers, marks and bleed, ICC, fast web view, 1.3+) | fuzzed import; PDF text placement issues in some files (#722) |
 | EPS | open, place, save | yes (own PostScript L3 interpreter, Illustrator EPS editing data structure) | yes (L2/L3, TIFF previews) | CID-keyed CJK type and CCITTFax images not read; #505 |
 | PostScript `.ps` | open | no | via Print to PostScript | |
 | SVG / SVGZ | open, place, save | yes | yes (SVG Options, Preserve Editing, symbols, filters, rich text) | strongest format; tests in `crates/svg/tests` |
@@ -83,6 +83,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | PDF and `.ai` import, and placed PDFs, keep overprint: the graphics state's `/OP` and `/op` (ISO 32000-1 §8.6.7) become the overprint of fills, strokes and type, so a spot colour set to overprint still does after export; `/OPM 0` is reported in a note (#1388); scores unchanged |
 | 2026-10-12 | minor | `.ai` editing data: a gradient with middle stops runs its whole ramp (#1390); type of objects with an appearance, of hidden layers and on later artboards goes to its own text object (#1391); area type in a frame too short for the fallback font shows its first line (#1392); scores unchanged |
 | 2026-10-12 | minor | `.ai` editing data: placed (linked) files come in as linked images showing the preview the file keeps, so a file with them opens through its layers, with its guides (#1264); scores unchanged |
 | 2026-10-12 | minor | PDF and `.ai` import: a shape painted with a gradient opens as one path with the gradient (#1304). PDF and `.ai` export: the constant alpha soft mask of a CMYK page with transparency is white (#1286, in part) |

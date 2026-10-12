@@ -237,6 +237,8 @@ mod tests_import_lines;
 #[cfg(test)]
 mod tests_import_options;
 #[cfg(test)]
+mod tests_import_overprint;
+#[cfg(test)]
 mod tests_layers;
 #[cfg(test)]
 mod tests_live_text;
