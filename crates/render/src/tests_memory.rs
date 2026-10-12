@@ -1,5 +1,5 @@
-//! What renderers keep between frames: decoded images shared by all of them, image mips, and
-//! caches swept by every kind of render.
+//! What renderers keep between frames: decoded images shared by all of them, image mips, symbol
+//! art placed for instances and inline graphics, and caches swept by every kind of render.
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
@@ -172,6 +172,309 @@ fn swept_type_entries_give_back_their_bytes() {
         r.render(&empty, 10, 10, Affine::IDENTITY, &RenderOptions::default());
     }
     assert_eq!((r.texts.len(), r.texts.bytes()), (0, 0));
+}
+
+/// A symbol's art inside the 20 × 20 square around the origin: a group of a square filled blue
+/// with a 2 pt black stroke and a black line.
+fn symbol_art(d: &mut Document) -> Node {
+    use vectorcraft_doc::Appearance;
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(-8.0, -8.0, 8.0, 8.0));
+    let square = Node::path(d.alloc_id(), square, Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::solid(Color::BLACK), 2.0));
+    let line = vectorcraft_geom::shapes::line((-8.0, 4.0).into(), (8.0, 4.0).into());
+    let line = Node::path(d.alloc_id(), line, Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.5));
+    Node::group(d.alloc_id(), vec![Arc::new(square), Arc::new(line)])
+}
+
+/// Three instances of symbol `S` ([`symbol_art`]): two in a row, the second stained red, and a
+/// third turned and scaled by 1.5.
+fn symbol_doc() -> Document {
+    let mut d = Document::new(200.0, 100.0);
+    let art = symbol_art(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    let l = d.layers[0].id;
+    let xfs = [
+        Affine::translate((30.0, 30.0)),
+        Affine::translate((80.0, 30.0)),
+        Affine::translate((140.0, 60.0)) * Affine::rotate(0.5) * Affine::scale(1.5),
+    ];
+    for (i, xf) in xfs.into_iter().enumerate() {
+        let mut inst = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf });
+        if i == 1 {
+            inst.appearance.set_fill(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+        }
+        d.insert(Some(l), i, inst).unwrap();
+    }
+    d
+}
+
+/// The addresses of the nodes `r` keeps geometry for that are not the own nodes of any version
+/// of the document drawn (`docs`): the symbol art it placed for instances and inline graphics.
+fn placed_copies(r: &Renderer, docs: &[&Document]) -> std::collections::BTreeSet<usize> {
+    let mut own = std::collections::HashSet::new();
+    for d in docs {
+        d.walk(|n| {
+            own.insert(n as *const Node as usize);
+        });
+    }
+    r.geom.values().map(|e| Arc::as_ptr(&e.node) as usize).filter(|p| !own.contains(p)).collect()
+}
+
+/// A second frame of an unchanged document draws the symbol art placed for its instances in the
+/// first: it copies no art, and the geometry kept for the art's paths is used again. The renderer
+/// holds the symbol's art itself only weakly.
+#[test]
+fn symbol_instances_keep_their_placed_art_between_frames() {
+    let d = symbol_doc();
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    let first = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let placed = placed_copies(&r, &[&d]);
+    assert_eq!(placed.len(), 6, "the square and the line of three instances");
+    assert!(r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels == first);
+    assert_eq!(placed_copies(&r, &[&d]), placed, "the second frame draws the art the first placed");
+    assert_eq!(Arc::strong_count(&d.symbols[0].art), 1, "only the document holds the symbol's art");
+}
+
+/// Moving an instance places its art again, and editing a symbol's art places the art of its
+/// instances again: the other instances keep theirs, and each frame draws what a new renderer
+/// draws.
+#[test]
+fn editing_an_instance_or_a_symbol_places_only_its_art_again() {
+    let mut d = symbol_doc();
+    // Symbol `T` is a green square, and one instance of it stands below the others.
+    let green = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0);
+    let square = Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(-5.0, -5.0, 5.0, 5.0)), green);
+    let t = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "T".into(), art: Arc::new(t) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "T".into(), xf: Affine::translate((30.0, 80.0)) })).unwrap();
+    let opts = RenderOptions::default();
+    let frame = |r: &mut Renderer, d: &Document| r.render(d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let mut r = Renderer::new();
+    frame(&mut r, &d);
+    let before = placed_copies(&r, &[&d]);
+    assert_eq!(before.len(), 7);
+    // The first instance of `S` moves 5 pt right.
+    let unmoved = d.clone();
+    let first = d.layers[0].children().unwrap()[1].id;
+    if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(first).map(|n| &mut n.kind) {
+        *xf = Affine::translate((5.0, 0.0)) * *xf;
+    }
+    assert!(frame(&mut r, &d) == frame(&mut Renderer::new(), &d));
+    let moved = placed_copies(&r, &[&unmoved, &d]);
+    assert!(before.is_subset(&moved) && moved.len() == before.len() + 2, "{} copies, then {}", before.len(), moved.len());
+    // `S`'s square is repainted red: its instances show it, and `T`'s instance keeps its art.
+    let mut art = (*d.symbols[0].art).clone();
+    if let Some(square) = art.children_mut().and_then(|c| c.first_mut()) {
+        Arc::make_mut(square).appearance.set_fill(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    }
+    d.symbols[0].art = Arc::new(art);
+    let red = frame(&mut r, &d);
+    assert!(red == frame(&mut Renderer::new(), &d));
+    let img = Rendered { width: 200, height: 100, pixels: red };
+    assert_eq!(img.pixel(140, 60), [255, 0, 0, 255], "the turned instance's square");
+    let edited = placed_copies(&r, &[&unmoved, &d]);
+    assert!(moved.is_subset(&edited) && edited.len() == moved.len() + 6, "{} copies, then {}", moved.len(), edited.len());
+}
+
+/// Draws `d` (200 × 100 points, on white), applies `edit` and draws it again with the same
+/// renderer: the frame changed, a new renderer draws the same, and only the document holds the
+/// symbols' art.
+fn edit_draws_as_new(mut d: Document, edit: impl FnOnce(&mut Document)) {
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let before = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    edit(&mut d);
+    let after = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    assert!(after != before, "the edit changes the frame");
+    assert!(after == Renderer::new().render(&d, 200, 100, Affine::IDENTITY, &opts).pixels, "a new renderer draws the same");
+    assert!(d.symbols.iter().all(|s| Arc::strong_count(&s.art) == 1), "only the document holds the symbols' art");
+}
+
+/// `d` with symbol `Holder` (a group of `members`) shown by one instance at (100, 50).
+fn holder_doc(mut d: Document, members: Vec<Node>) -> Document {
+    let holder = Node::group(d.alloc_id(), members.into_iter().map(Arc::new).collect());
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Holder".into(), art: Arc::new(holder) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Holder".into(), xf: Affine::translate((100.0, 50.0)) })).unwrap();
+    d
+}
+
+/// Symbol art that shows another symbol (type with an inline graphic of it, an instance of it with
+/// a Transform effect) is placed again in every frame: when that symbol's art changes, the next
+/// frame draws what a new renderer draws.
+#[test]
+fn art_showing_another_symbol_draws_its_edits() {
+    use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
+    let mut d = Document::new(200.0, 100.0);
+    let art = symbol_art(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    let style = CharStyle { size: 24.0, ..Default::default() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(-60.0, 10.0), "A", style.clone());
+    t.runs.push(TextRun::inline(InlineArt::new("S"), style.clone()));
+    t.runs.push(TextRun::new("B", style));
+    let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let mut moved = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((40.0, 0.0)) });
+    moved.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 4.0}),
+        visible: true,
+    });
+    let d = holder_doc(d, vec![text, moved]);
+    // `S` becomes a wide red bar: the inline graphic grows, and the type after it moves.
+    edit_draws_as_new(d, |d| {
+        let bar = vectorcraft_geom::shapes::rectangle(Rect::new(-20.0, -4.0, 20.0, 4.0));
+        let red = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+        d.symbols[0].art = Arc::new(Node::path(d.alloc_id(), bar, red));
+    });
+}
+
+/// Symbol art with raster effects is placed again in every frame: when a pattern under a blur or
+/// the document's raster resolution under De-Interlace changes, the next frame draws what a new
+/// renderer draws.
+#[test]
+fn art_with_raster_effects_draws_pattern_and_resolution_edits() {
+    use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+    let effect = |id: &str, params: serde_json::Value| vectorcraft_doc::Effect { id: id.into(), params, visible: true };
+    let mut d = Document::new(200.0, 100.0);
+    d.raster_effects_ppi = 72.0;
+    // Pattern `Checks` is a red 10 × 10 square in a 20 × 20 tile.
+    let tile = |c: Color| {
+        let square = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+        vec![Arc::new(Node::path(NodeId(900), square, vectorcraft_doc::Appearance::basic(Paint::solid(c), Paint::None, 0.0)))]
+    };
+    let mut def = PatternDef::new("Checks", tile(Color::rgb(1.0, 0.0, 0.0)));
+    def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(def);
+    let band = vectorcraft_geom::shapes::rectangle(Rect::new(-90.0, -45.0, -20.0, -25.0));
+    let mut blurred = Node::path(d.alloc_id(), band, vectorcraft_doc::Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0));
+    blurred.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 2.0})));
+    // The path holds ten bars, 1 pt high and 2 pt apart.
+    let mut bars = vectorcraft_geom::shapes::rectangle(Rect::new(20.0, -40.0, 90.0, -39.0));
+    for k in 1..10 {
+        let y = -40.0 + 2.0 * k as f64;
+        bars.subpaths.extend(vectorcraft_geom::shapes::rectangle(Rect::new(20.0, y, 90.0, y + 1.0)).subpaths);
+    }
+    let mut striped = Node::path(d.alloc_id(), bars, vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    striped.appearance.effects.push(effect("video.deinterlace", serde_json::json!({})));
+    let d = holder_doc(d, vec![blurred, striped]);
+    edit_draws_as_new(d, |d| {
+        if let Some(def) = d.pattern_mut("Checks") {
+            def.art = tile(Color::rgb(0.0, 0.0, 1.0));
+        }
+        d.raster_effects_ppi = 24.0;
+    });
+}
+
+/// Symbol art with a live object (an envelope that distorts a pattern fill) is placed again in
+/// every frame: when the pattern's tile type changes, the next frame draws what a new renderer
+/// draws.
+#[test]
+fn art_with_live_objects_draws_pattern_layout_edits() {
+    use vectorcraft_doc::live::EnvelopeOptions;
+    use vectorcraft_doc::pattern::{PatternDef, TileType, pattern_paint};
+    let mut d = Document::new(200.0, 100.0);
+    // Pattern `Checks` is a red 10 × 10 square in a 20 × 20 tile.
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let red = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut def = PatternDef::new("Checks", vec![Arc::new(Node::path(NodeId(900), square, red))]);
+    def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(def);
+    let band = vectorcraft_geom::shapes::rectangle(Rect::new(-80.0, -40.0, 80.0, 40.0));
+    let filled = Node::path(d.alloc_id(), band, vectorcraft_doc::Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0));
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let options = EnvelopeOptions { distort_appearance: true, distort_pattern_fills: true, ..Default::default() };
+    let envelope = Node::new(
+        d.alloc_id(),
+        NodeKind::Envelope {
+            content: vec![Arc::new(filled)],
+            kind: Box::new(kind),
+            fidelity: 50.0,
+            editing: false,
+            options,
+            frame: Box::new(Affine::IDENTITY),
+        },
+    );
+    let d = holder_doc(d, vec![envelope]);
+    edit_draws_as_new(d, |d| {
+        if let Some(def) = d.pattern_mut("Checks") {
+            def.tile_type = TileType::BrickByRow { offset: 0.5 };
+        }
+    });
+}
+
+/// Symbol instances draw what groups of their art, stained and placed, draw: in every frame, when
+/// two instances placed alike are stained differently, when the art is a single path, and with a
+/// cache too small for all of the art. Art no longer drawn leaves the cache after a few frames.
+#[test]
+fn symbol_instances_draw_as_groups_of_their_placed_art() {
+    let mut d = symbol_doc();
+    let l = d.layers[0].id;
+    // An instance placed like the first one lies over it, stained green.
+    let mut over = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((30.0, 30.0)) });
+    over.appearance.set_fill(Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+    d.insert(Some(l), 1, over).unwrap();
+    // Symbol `U` is a single path, a circle with a black stroke.
+    let circle = vectorcraft_geom::shapes::ellipse(Rect::new(-6.0, -6.0, 6.0, 6.0));
+    let ap = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.8, 0.0)), Paint::solid(Color::BLACK), 1.0);
+    let circle = Node::path(d.alloc_id(), circle, ap);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "U".into(), art: Arc::new(circle) });
+    let id = d.alloc_id();
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "U".into(), xf: Affine::translate((175.0, 25.0)) })).unwrap();
+    // `groups` holds the same art in place of the instances: groups, and the circle as a path.
+    let mut groups = d.clone();
+    let placed = d.layers[0].children().unwrap().iter().map(|c| match &c.kind {
+        NodeKind::SymbolInstance { symbol, xf } => {
+            let sym = d.symbols.iter().find(|s| s.name == *symbol).unwrap();
+            let mut art = instance_art(&sym.art, c);
+            art.transform(*xf, false);
+            Arc::new(art)
+        }
+        _ => c.clone(),
+    });
+    *groups.children_mut(Some(l)).unwrap() = placed.collect();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let want = Renderer::new().render(&groups, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let mut r = Renderer::new();
+    r.placed_arts = FrameCache::new(lru::PLACED_ART_BUDGET, 0);
+    for frame in 0..3 {
+        assert!(r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels == want, "frame {frame}");
+    }
+    // A cache that holds half the bytes of that art keeps what fits and places the rest every frame.
+    let all = r.placed_arts.bytes();
+    let mut small = Renderer::new();
+    small.placed_arts = FrameCache::new(all / 2, 0);
+    for frame in 0..3 {
+        assert!(small.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels == want, "frame {frame} over the budget");
+        assert!(!small.placed_arts.is_empty() && small.placed_arts.bytes() <= all / 2, "{} of {all} bytes", small.placed_arts.bytes());
+    }
+    let empty = Document::new(10.0, 10.0);
+    for _ in 0..5 {
+        r.render(&empty, 10, 10, Affine::IDENTITY, &opts);
+    }
+    assert_eq!((r.placed_arts.len(), r.placed_arts.bytes()), (0, 0));
+}
+
+/// Inline graphics in type draw the art placed for them in an earlier frame, as instances do.
+#[test]
+fn inline_graphics_keep_their_placed_art_between_frames() {
+    use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
+    let mut d = Document::new(200.0, 100.0);
+    let art = symbol_art(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    let style = CharStyle { size: 24.0, ..Default::default() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), "A", style.clone());
+    t.runs.push(TextRun::inline(InlineArt::new("S"), style.clone()));
+    t.runs.push(TextRun::new("B", style));
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    let first = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let placed = placed_copies(&r, &[&d]);
+    assert_eq!(placed.len(), 2, "the square and the line of the inline graphic");
+    assert!(r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels == first);
+    assert_eq!(placed_copies(&r, &[&d]), placed, "the second frame draws the art the first placed");
 }
 
 /// Each run draws exactly the outlines it drew when kept as a path of its own: its glyphs and
