@@ -81,6 +81,9 @@ pub(crate) struct Look {
     pub h_scale: f64,
     pub fill: Option<Paint>,
     pub stroke: Option<(Paint, f64)>,
+    /// The fill, the stroke overprints.
+    pub overprint_fill: bool,
+    pub overprint_stroke: bool,
 }
 
 impl Look {
@@ -91,7 +94,8 @@ impl Look {
             && (self.size - other.size).abs() <= self.size * 0.01
             && (self.h_scale - other.h_scale).abs() < 0.5
             && self.fill == other.fill
-            && (other.stroke.is_none() || self.stroke == other.stroke)
+            && self.overprint_fill == other.overprint_fill
+            && (other.stroke.is_none() || (self.stroke == other.stroke && self.overprint_stroke == other.overprint_stroke))
     }
 
     fn style(&self) -> CharStyle {
@@ -105,6 +109,8 @@ impl Look {
             fill: self.fill.clone().unwrap_or(Paint::None),
             stroke,
             stroke_width,
+            overprint_fill: self.overprint_fill,
+            overprint_stroke: self.overprint_stroke,
             ..CharStyle::default()
         }
     }
@@ -301,12 +307,13 @@ impl TextLine {
     }
 
     /// A stroke (`stroke`: paint and width) over the glyph just drawn at `at` in `font` (fill
-    /// and stroke rendering): the run is stroked. `false`: it isn't that glyph.
-    pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: (Paint, f64)) -> bool {
+    /// and stroke rendering), which `overprint`s or not: the run is stroked. `false`: it isn't
+    /// that glyph.
+    pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: (Paint, f64), overprint: bool) -> bool {
         let Some((look, _)) = self.runs.last_mut().filter(|(l, _)| l.font == font && (at.origin - self.last).hypot() < self.at.size * 1e-3) else {
             return false;
         };
-        look.stroke = Some(stroke);
+        (look.stroke, look.overprint_stroke) = (Some(stroke), overprint);
         true
     }
 
