@@ -9,6 +9,42 @@ use vectorcraft_doc::Unit;
 
 use crate::widgets;
 
+/// #1457: a focused field follows its value when that changes from outside (the slider beside
+/// it), so the arrow keys step from the value shown and losing focus doesn't put the old one back.
+#[test]
+fn a_focused_field_follows_a_value_changed_from_outside() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut time = 0.0;
+    let mut frame = |value: f64, events: Vec<Event>| {
+        time += 0.05;
+        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 200.0)));
+        let mut got = (None, Rect::NOTHING);
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect, focused: true, ..Default::default() }, |ui| {
+            got.0 = widgets::range_field(ui, "f", value, 0.0..=1000.0, "%", 2, 80.0);
+            got.1 = ui.min_rect();
+        });
+        out.textures_delta.clear();
+        got
+    };
+    let key = |key| Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    // Click into the field showing 100 %.
+    let at = frame(100.0, vec![]).1.center();
+    frame(100.0, vec![Event::PointerMoved(at), button(at, true)]);
+    frame(100.0, vec![button(at, false)]);
+    assert_eq!(frame(100.0, vec![]).0, None);
+    // The value changes under the focused field (a slider dragged to 142): ↓ steps from 142, not
+    // from the 100 the field held when it took the focus.
+    frame(142.0, vec![]);
+    assert_eq!(frame(142.0, vec![key(Key::ArrowDown)]).0, Some(141.0));
+    // And changed again, losing focus leaves the value alone.
+    frame(50.0, vec![]);
+    let away = at + vec2(0.0, 150.0);
+    frame(50.0, vec![Event::PointerMoved(away), button(away, true)]);
+    assert_eq!(frame(50.0, vec![button(away, false)]).0, None);
+}
+
 /// Headless frames of one field: its rect and id as last drawn.
 struct Field {
     ctx: egui::Context,
