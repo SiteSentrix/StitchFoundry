@@ -383,6 +383,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         m.get_temp::<bool>(focus_id).unwrap_or(false)
     });
+    // Not in the frame of a click (the one on the menu item that opened it): egui takes the focus
+    // from a field the click missed, so the field takes it a frame later (#1367).
+    let clicked = ctx.input(|i| i.pointer.any_click());
+    if focus_first && clicked {
+        ctx.request_repaint();
+    }
+    let focus_first = focus_first && !clicked;
     let spec = spec(&d.kind);
     if let Some(window) = spec.window {
         return window(app, ctx);

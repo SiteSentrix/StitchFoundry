@@ -525,6 +525,47 @@ fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     assert_eq!(node.appearance.effects.last().map(|e| e.params["scaleH"].clone()), Some(json!(50.0)));
 }
 
+/// #1367: a dialog opened by a click (its menu item) is drawn in the frame of that click, where egui
+/// takes the focus from a field the click missed: its first field still has the focus, each time it
+/// opens.
+#[test]
+fn a_dialog_opened_by_a_click_focuses_its_first_field_each_time_it_opens() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    // A click away from the dialog, as on a menu item.
+    let click = || {
+        let (pos, button, modifiers) = (egui::pos2(5.0, 5.0), egui::PointerButton::Primary, egui::Modifiers::NONE);
+        let press = |pressed| egui::Event::PointerButton { pos, button, pressed, modifiers };
+        vec![egui::Event::PointerMoved(pos), press(true), press(false)]
+    };
+    type Open = fn(&mut VectorcraftApp);
+    let opens: [(&str, Open); 2] = [
+        ("Convert to Shape", |app| drop(app.run("effect.dialog", json!({"effect": "convertToShape.rectangle"})))),
+        ("Rasterize", |app| crate::menus::invoke(app, "object.rasterize", json!({}))),
+    ];
+    for (name, open) in opens {
+        for turn in 1..=3 {
+            open(&mut app);
+            assert!(app.ui.dialog.is_some(), "{name}");
+            frame(&mut app, click());
+            frame(&mut app, vec![]);
+            frame(&mut app, vec![]);
+            assert!(ctx.memory(|m| m.focused()).is_some(), "{name}, turn {turn}");
+            cancel(&mut app);
+            // A frame without the dialog, as between two uses of it.
+            frame(&mut app, vec![]);
+            assert!(ctx.memory(|m| m.focused()).is_none(), "{name}, turn {turn}");
+        }
+    }
+}
+
 /// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
 /// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
 #[test]
