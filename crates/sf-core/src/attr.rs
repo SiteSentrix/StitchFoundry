@@ -177,6 +177,10 @@ pub struct Lettering {
     /// negative, along its bottom; 0, straight.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub arc: f64,
+    /// With an arc, the circle's radius shrinks this much a turn along the line (mm; negative,
+    /// grows): the baseline an Archimedean spiral winding in (out).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub spiral: f64,
     /// Where the lines sit on the origin: their start, middle or end.
     #[serde(default, skip_serializing_if = "is_left")]
     pub align: LetterAlign,
@@ -384,6 +388,7 @@ impl Lettering {
         self.frame = Affine([a / k, b / k, c / k, d / k, e, g]);
         self.size *= k;
         self.arc *= k;
+        self.spiral *= k;
         for l in &mut self.letters {
             l.dx *= k;
             l.dy *= k;
@@ -795,6 +800,7 @@ mod tests {
             size: 10.0,
             leading: 1.0,
             arc: 30.0,
+            spiral: 5.0,
             align: LetterAlign::Centre,
             sew: LetterSewing::default(),
             letters: vec![LetterAdjust { dy: 2.0, ..LetterAdjust::none(1) }],
@@ -803,7 +809,7 @@ mod tests {
         };
         // turned a quarter about the origin, then doubled
         l.transform(&Affine::rotate(std::f64::consts::FRAC_PI_2).then(&Affine::scale(2.0, 2.0)));
-        assert!((l.size - 20.0).abs() < 1e-9 && (l.arc - 60.0).abs() < 1e-9, "{l:?}");
+        assert!((l.size - 20.0).abs() < 1e-9 && (l.arc - 60.0).abs() < 1e-9 && (l.spiral - 10.0).abs() < 1e-9, "{l:?}");
         // a letter moved: as far again
         assert!((l.letters[0].dy - 4.0).abs() < 1e-9, "{l:?}");
         let o = l.frame.apply(Point::new(0.0, 0.0));
