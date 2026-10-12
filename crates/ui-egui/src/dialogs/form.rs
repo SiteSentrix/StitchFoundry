@@ -61,6 +61,16 @@ fn lengths(kind: &str) -> &'static [&'static str] {
     }
 }
 
+/// The fields of the form dialogs ([`grid`]) that are angles or percentages, with what follows the
+/// number: fields that ↑/↓ step by one (Shift: ten) and that do math, as the distances do.
+fn suffix(kind: &str, key: &str) -> Option<&'static str> {
+    match (kind, key) {
+        ("rotate" | "shear", "angle") => Some("°"),
+        ("scale", "sx" | "sy") => Some("%"),
+        _ => None,
+    }
+}
+
 /// The fields of the form dialogs ([`grid`]) that come first, in this order (the others follow by
 /// name).
 fn order(kind: &str) -> &'static [&'static str] {
@@ -193,6 +203,12 @@ pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
             let options = choices(&d.kind, &k);
             if lengths.contains(&k.as_str()) {
                 length_field(ui, d, &k, &humanized(&k), unit);
+            } else if let Some(suffix) = suffix(&d.kind, &k) {
+                row_label(ui, &humanized(&k));
+                if let Some(v) = crate::widgets::plain_field(ui, ("dlg-num", &k), d.f64(&k, 0.0), suffix, 3, FIELD_W) {
+                    d.fields.insert(k, json!(v));
+                }
+                ui.end_row();
             } else if let Some(ends) = skew_ends(&d.kind, &k) {
                 let max = vectorcraft_geom::shapes::GRID_SKEW_MAX;
                 row_label(ui, tl!("Skew:"));

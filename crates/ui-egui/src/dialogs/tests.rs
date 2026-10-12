@@ -54,7 +54,7 @@ fn kinds_map_to_their_dialogs() {
         assert_eq!(DialogKind::of(kind), Some(want), "{kind}");
     }
     assert_eq!(DialogKind::of("nope"), None);
-    assert!(spec("effect").preview && spec("recolor").preview && !spec("move").preview);
+    assert!(spec("effect").preview && spec("recolor").preview && !spec("rectangle").preview);
     assert!(spec("preferences").window.is_some() && spec("rectangle").window.is_none());
 }
 
