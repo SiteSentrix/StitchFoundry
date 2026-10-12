@@ -186,6 +186,9 @@ pub struct Lettering {
     /// Letters moved, scaled or turned from their places, kept when it is set again.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub letters: Vec<LetterAdjust>,
+    /// 3D puff: its glyphs' satin sewn over foam.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub puff: Option<crate::model::Puff>,
     /// From the lettering's own space (points: the first line's baseline runs from (0, 0) along
     /// x, the lines follow down y) to the document. It follows the lettering as it moves, turns
     /// and slants; a scale goes into `size`.
@@ -795,6 +798,7 @@ mod tests {
             align: LetterAlign::Centre,
             sew: LetterSewing::default(),
             letters: vec![LetterAdjust { dy: 2.0, ..LetterAdjust::none(1) }],
+            puff: None,
             frame: at,
         };
         // turned a quarter about the origin, then doubled

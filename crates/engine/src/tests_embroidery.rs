@@ -2644,6 +2644,56 @@ fn letters_move_scale_and_turn_one_at_a_time() {
 }
 
 #[test]
+fn puff_sews_satin_over_foam_lettering_too() {
+    use sf_core::attr::StitchType;
+    let mut s = session();
+    // a satin line and a fill: the satin turns puff, the fill is passed by
+    let line = s.execute("path.create", &json!({"d": "M 100 100 L 200 100"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [line]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    let sq = rect(&mut s, 300.0, 100.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [sq.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("select.set", &json!({"ids": [line, sq.0]})).unwrap();
+    let r = s.execute("embroidery.puff", &json!({})).unwrap();
+    assert_eq!((r["satin"].as_u64(), r["other"].as_u64(), r["on"].as_bool()), (Some(1), Some(1), Some(true)));
+    let satin = |s: &Session| match s.doc().unwrap().doc.node(NodeId(line)).unwrap().embroidery.as_deref().map(|e| e.stitch.clone()) {
+        Some(StitchType::Satin(p)) => p,
+        other => panic!("{other:?}"),
+    };
+    let p = satin(&s);
+    assert!(p.puff.is_some() && (p.spacing - 0.16).abs() < 1e-9 && !p.underlay.center_run && !p.underlay.auto);
+    // again: all puff already, so off
+    assert_eq!(s.execute("embroidery.puff", &json!({})).unwrap()["on"].as_bool(), Some(false));
+    assert!(satin(&s).puff.is_none());
+    // lettering: its glyphs' satin, kept when it is set again
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let id = NodeId(s.execute("embroidery.lettering", &json!({"text": "AB", "font": "Test Script", "puff": true})).unwrap()["id"].as_u64().unwrap());
+    fn puffs(n: &vectorcraft_doc::Node, out: &mut Vec<bool>) {
+        if let Some(c) = n.children().filter(|_| matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. })) {
+            c.iter().for_each(|k| puffs(k, out));
+        } else if let Some(StitchType::Satin(p)) = n.embroidery.as_deref().map(|e| &e.stitch) {
+            out.push(p.puff.is_some());
+        }
+    }
+    let look = |s: &Session| {
+        let mut v = Vec::new();
+        puffs(s.doc().unwrap().doc.node(id).unwrap(), &mut v);
+        v
+    };
+    assert!(!look(&s).is_empty() && look(&s).iter().all(|p| *p), "{:?}", look(&s));
+    s.execute("embroidery.lettering.edit", &json!({"text": "AAB"})).unwrap();
+    assert!(look(&s).iter().all(|p| *p));
+    // off from the command, on the lettering itself
+    s.execute("embroidery.puff", &json!({"ids": [id.0], "on": false})).unwrap();
+    assert!(look(&s).iter().all(|p| !*p));
+    s.execute("embroidery.lettering.edit", &json!({"text": "AB"})).unwrap();
+    assert!(look(&s).iter().all(|p| !*p));
+    assert!(s.execute("embroidery.puff", &json!({"cap": 9})).is_err());
+    assert!(s.execute("embroidery.lettering.edit", &json!({"puff": "yes"})).is_err());
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

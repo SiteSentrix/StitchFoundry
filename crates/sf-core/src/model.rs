@@ -805,6 +805,68 @@ pub struct SatinParams {
     /// as wide as the column where it sits.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub motif_column: Option<Box<MotifColumn>>,
+    /// 3D puff: sewn over foam, its ends capped (see [`Puff`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub puff: Option<Puff>,
+}
+
+/// 3D puff: satin sewn over foam, dense enough to cut it along the column's sides, with caps
+/// across the column's ends that reach past them so the foam is cut and covered there too (public
+/// descriptions of the practice: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar
+/// and https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Puff {
+    /// How far the end caps reach past a column's ends (mm).
+    pub cap: f64,
+}
+
+impl Default for Puff {
+    fn default() -> Self {
+        Puff { cap: 0.5 }
+    }
+}
+
+impl Puff {
+    /// Satin spacing over foam (mm).
+    pub const SPACING: f64 = 0.16;
+    /// How far the sides are pushed out (mm): the foam pushes the thread, it doesn't pull in.
+    pub const PUSH: f64 = 0.35;
+    /// The narrowest and widest columns that puff well (mm).
+    pub const WIDTHS: (f64, f64) = (3.0, 7.0);
+
+    /// `params` set for sewing over foam: dense, without underlay (it would flatten the foam),
+    /// auto split or short stitches (both cut the foam inside the column), pushed out at the
+    /// sides, its ends capped.
+    pub fn apply(self, params: &mut SatinParams) {
+        params.spacing = Puff::SPACING;
+        params.auto_spacing = false;
+        params.split_length = 0.0;
+        params.short_stitches = false;
+        params.pull_comp = Puff::PUSH;
+        params.pull_comp_2 = None;
+        params.tatami = false;
+        params.jagged = None;
+        params.motif_column = None;
+        params.underlay.auto = false;
+        params.underlay.center_run = false;
+        params.underlay.edge_run = false;
+        params.underlay.zigzag = false;
+        params.underlay.double_zigzag = false;
+        params.puff = Some(Puff { cap: self.cap.clamp(0.0, 3.0) });
+    }
+
+    /// `params` back to plain satin: what [`Puff::apply`] set, as satin has it by default.
+    pub fn remove(params: &mut SatinParams) {
+        let d = SatinParams::default();
+        params.spacing = d.spacing;
+        params.auto_spacing = d.auto_spacing;
+        params.split_length = d.split_length;
+        params.short_stitches = d.short_stitches;
+        params.pull_comp = d.pull_comp;
+        params.underlay = d.underlay;
+        params.puff = None;
+    }
 }
 
 /// A satin column sewn as motifs: along its middle, each motif as wide as the column where it
@@ -934,6 +996,7 @@ impl Default for SatinParams {
             jagged: None,
             underlay: SatinUnderlay::default(),
             motif_column: None,
+            puff: None,
         }
     }
 }

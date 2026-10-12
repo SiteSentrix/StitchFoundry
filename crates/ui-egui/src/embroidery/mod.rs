@@ -178,6 +178,8 @@ pub struct EmbroideryUi {
     pub lettering_sew: vectorcraft_embroidery::sf_core::attr::LetterSewing,
     /// The letter of the selected lettering to move, scale or turn (from 0).
     pub letter_index: usize,
+    /// The lettering to set is 3D puff.
+    pub lettering_puff: bool,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -264,6 +266,7 @@ impl Default for EmbroideryUi {
             font_assign: String::new(),
             lettering_sew: vectorcraft_embroidery::sf_core::attr::LetterSewing::default(),
             letter_index: 0,
+            lettering_puff: false,
             prompt: prompt::PromptState::default(),
         }
     }
