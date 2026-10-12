@@ -205,6 +205,161 @@ fn unite_with_group() {
     assert!((area_of(&s, r[0]) - (100.0 + 100.0 + 200.0 - 25.0 - 25.0)).abs() < 1.0);
 }
 
+fn name_sources(s: &mut Session, a: NodeId, b: NodeId, names: [Option<&str>; 2]) {
+    s.edit("Name sources", |d, _| {
+        for (id, name) in [(a, names[0]), (b, names[1])] {
+            d.node_mut(id).unwrap().name = name.map(str::to_owned);
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+fn named_nodes<'a>(n: &'a vectorcraft_doc::Node, name: &str, out: &mut Vec<&'a vectorcraft_doc::Node>) {
+    if n.name.as_deref() == Some(name) {
+        out.push(n);
+    }
+    if let Some(children) = n.children() {
+        for c in children {
+            named_nodes(c, name, out);
+        }
+    }
+}
+
+fn check_svg_name(s: &Session, id: NodeId, name: &str) {
+    let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    assert_eq!(svg.matches(&format!("id=\"{name}\"")).count(), 1, "{svg}");
+    let imported = vectorcraft_svg::import(&svg).unwrap();
+    let mut matches = vec![];
+    for layer in &imported.layers {
+        named_nodes(layer, name, &mut matches);
+    }
+    assert_eq!(matches.len(), 1, "{name}: {svg}");
+    assert!(close(matches[0].geometric_bounds().unwrap(), bounds(s, id), 1e-2));
+    assert_eq!(matches[0].appearance.fill_paint(), node(s, id).appearance.fill_paint());
+}
+
+#[test]
+fn pathfinder_shape_names_follow_paint_order_without_changing_output_or_undo() {
+    for op in ["minusFront", "minusBack", "unite", "intersect", "exclude"] {
+        let mut s = session();
+        let (a, b) = two_rects(&mut s);
+        let untouched = rect(&mut s, 300.0, 300.0, 30.0, 20.0);
+        name_sources(&mut s, a, b, [Some("base-plate"), Some("blade")]);
+        s.edit("Source opacity and blend", |d, _| {
+            d.node_mut(a).unwrap().opacity = 0.4;
+            d.node_mut(b).unwrap().opacity = 0.8;
+            d.node_mut(b).unwrap().blend = vectorcraft_color::BlendMode::Multiply;
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [b.0, a.0]})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let undo_len = s.doc().unwrap().history.undo.len();
+        let cmd = format!("object.pathfinder.{op}");
+        let id = ids(&s.execute(&cmd, &json!({})).unwrap())[0];
+        let expected = if op == "minusBack" { "blade" } else { "base-plate" };
+        let mut result = node(&s, id);
+        assert_eq!(result.name.as_deref(), Some(expected), "{op}");
+        assert_eq!(node(&s, untouched), *before.node(untouched).unwrap());
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo_len + 1);
+        check_svg_name(&s, id, expected);
+        let after = s.doc().unwrap().doc.clone();
+        let after_selection = s.doc().unwrap().selection.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *before);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *after);
+        assert_eq!(s.doc().unwrap().selection, after_selection);
+        s.execute("edit.undo", &json!({})).unwrap();
+        name_sources(&mut s, a, b, [None, None]);
+        let bare_id = ids(&s.execute(&cmd, &json!({})).unwrap())[0];
+        result.name = None;
+        assert_eq!(result, node(&s, bare_id), "names must not change geometry or appearance: {op}");
+    }
+}
+
+#[test]
+fn pathfinder_shape_names_do_not_borrow_a_cutters_name_for_an_unnamed_source() {
+    for names in [[None, Some("blade")], [Some("base-plate"), None], [None, None]] {
+        for op in ["minusFront", "minusBack", "unite", "intersect", "exclude"] {
+            let mut s = session();
+            let (a, b) = two_rects(&mut s);
+            name_sources(&mut s, a, b, names);
+            s.execute("select.set", &json!({"ids": [b.0, a.0]})).unwrap();
+            let expected = match op {
+                "minusFront" => names[0],
+                "minusBack" => names[1],
+                _ => names[0].or(names[1]),
+            };
+            let id = ids(&s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap())[0];
+            assert_eq!(node(&s, id).name.as_deref(), expected, "{op}: {names:?}");
+        }
+    }
+}
+
+#[test]
+fn pathfinder_shape_names_keep_group_and_compound_identity_once() {
+    for (compound, count, root_name) in
+        [(false, 1, Some("root-identity")), (false, 2, Some("root-identity")), (true, 2, Some("root-identity")), (false, 2, None)]
+    {
+        let mut s = session();
+        let a = rect(&mut s, 0.0, 0.0, 40.0, 100.0);
+        let mut children = vec![a.0];
+        if count == 2 {
+            children.push(rect(&mut s, 60.0, 0.0, 40.0, 100.0).0);
+        }
+        s.execute("select.set", &json!({"ids": children})).unwrap();
+        let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.edit("Name grouped source", |d, _| {
+            d.node_mut(a).unwrap().name = Some("leaf-identity".into());
+            let appearance = d.node(a).unwrap().appearance.clone();
+            let n = d.node_mut(group).unwrap();
+            n.name = root_name.map(str::to_owned);
+            if compound {
+                n.kind = NodeKind::Compound { children: n.children().unwrap().to_vec(), rule: FillRule::NonZero };
+                n.appearance = appearance;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let cutter = rect(&mut s, 35.0, -10.0, 30.0, 120.0);
+        name_sources(&mut s, group, cutter, [root_name, Some("blade")]);
+        s.execute("select.set", &json!({"ids": [cutter.0, group.0]})).unwrap();
+        let id = ids(&s.execute("object.pathfinder.minusFront", &json!({})).unwrap())[0];
+        let n = node(&s, id);
+        let expected = root_name.unwrap_or("leaf-identity");
+        assert_eq!(n.name.as_deref(), Some(expected));
+        assert!((area_of(&s, id) - 3500.0 * f64::from(count)).abs() < 1.0);
+        assert!(n.children().is_none_or(|children| children.iter().all(|c| c.name.is_none())));
+        check_svg_name(&s, id, expected);
+    }
+}
+
+#[test]
+fn pathfinder_fragment_names_do_not_change_style_merging() {
+    for op in ["divide", "trim", "merge", "crop", "outline"] {
+        let mut s = session();
+        let (a, b) = two_rects(&mut s);
+        set_fill(&mut s, a, Color::rgb(0.0, 0.0, 1.0));
+        name_sources(&mut s, a, b, [Some("base-plate"), Some("blade")]);
+        let cmd = format!("object.pathfinder.{op}");
+        let id = ids(&s.execute(&cmd, &json!({})).unwrap())[0];
+        let result = node(&s, id);
+        assert!(result.name.is_none());
+        assert!(result.children().unwrap().iter().all(|c| c.name.is_none()));
+        if op == "merge" {
+            assert_eq!(result.children().unwrap().len(), 1);
+        }
+        s.execute("edit.undo", &json!({})).unwrap();
+        name_sources(&mut s, a, b, [None, None]);
+        let bare_id = ids(&s.execute(&cmd, &json!({})).unwrap())[0];
+        assert_eq!(result, node(&s, bare_id), "{op}");
+    }
+}
+
 #[test]
 fn offset_rect_grows_bounds() {
     let mut s = session();
