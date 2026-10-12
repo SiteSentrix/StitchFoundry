@@ -22,6 +22,11 @@
 //! cached shadows, glows and filtered content at its new place instead of running the effects
 //! again ([`Renderer::move_shadow`], [`Renderer::move_pixel_content`]).
 //!
+//! A cached raster is made again when something its content reads from outside the object
+//! changes ([`Inputs`]): the pattern definitions, symbols, images and brushes it uses, the
+//! document's raster resolution, color mode and substitution highlights, the knockout its object
+//! inherits, the color settings and fonts, and the options and layer settings it is drawn with.
+//!
 //! The same applies to one fill or stroke's own raster effects (around that item alone) and to
 //! type, images, symbol instances and live objects ([`Renderer::draw_object_fx`]): their art is
 //! drawn offscreen in the filter layers, reshaped first by their geometry effects. Groups and
@@ -29,9 +34,11 @@
 //! ([`effects::evaluate_container`]: their fills and strokes painting the members, their geometry
 //! effects reshaping them), so their raster effects apply to the composite (one combined shadow).
 
-use std::sync::Arc;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::{Arc, Weak};
 
-use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeId, NodeKind};
+use vectorcraft_color::cms::Cms;
+use vectorcraft_doc::{AppearanceItem, Document, Effect, Node, NodeId, NodeKind};
 use vectorcraft_effects::pixel::{Channels, PixelFx};
 use vectorcraft_effects::{self as effects, GeomContext, RasterFx};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathEl, Point, Rect, Shape, Size, Vec2};
@@ -236,6 +243,9 @@ pub(crate) struct PixelEntry {
     k: f64,
     image: std::sync::Arc<vello_cpu::Pixmap>,
     made: Made,
+    /// What the content read when the raster was made, with the channels the effects ran on and,
+    /// under De-Interlace, the raster resolution.
+    inputs: Inputs,
     /// Made for the object before it moved ([`Renderer::move_pixel_content`]), or made over
     /// rasters made before their objects moved: only a frame rendered while interacting draws
     /// it.
@@ -278,6 +288,8 @@ pub(crate) struct ShadowEntry {
     rel: (f64, f64),
     image: std::sync::Arc<vello_cpu::Pixmap>,
     made: Made,
+    /// What the silhouette read when the raster was made.
+    inputs: Inputs,
     /// Made for the object before it moved ([`Renderer::move_shadow`]), or made over rasters
     /// made before their objects moved: only a frame rendered while interacting draws it.
     moved: bool,
@@ -390,6 +402,111 @@ impl Drawn {
     }
 }
 
+/// What an object's content reads from outside its own nodes, in it or in the opacity masks of the
+/// objects in it ([`Reads::of`]): which parts of [`Inputs`] can change what its rasters show.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Reads {
+    /// Pattern paints: the pattern definitions.
+    patterns: bool,
+    /// Symbol instances and type with inline graphics: the symbols' art. Symbol art can hold
+    /// anything, so content that shows a symbol reads everything else too.
+    symbols: bool,
+    /// Images and placed documents: their pixels and files, and the options and the layer's Dim
+    /// Images they are drawn with.
+    images: bool,
+    /// Brushed strokes: the brush library.
+    brushes: bool,
+    /// Type: the fonts, whether overprinting shows ([`crate::proof::overprints`]) and Document
+    /// Setup's substitution highlights.
+    text: bool,
+}
+
+impl Reads {
+    /// What the content of `n` reads.
+    pub(crate) fn of(n: &Node) -> Self {
+        let mut reads = Self::default();
+        reads.add(n);
+        if reads.symbols {
+            return Self { patterns: true, symbols: true, images: true, brushes: true, text: true };
+        }
+        reads
+    }
+
+    fn add(&mut self, n: &Node) {
+        let pattern = |p: &vectorcraft_color::Paint| matches!(p, vectorcraft_color::Paint::Pattern { .. });
+        n.walk(&mut |c| {
+            for item in &c.appearance.items {
+                self.patterns |= pattern(item.paint());
+                self.brushes |= matches!(item, AppearanceItem::Stroke(s) if s.brush.is_some());
+            }
+            match &c.kind {
+                NodeKind::SymbolInstance { .. } => self.symbols = true,
+                NodeKind::Image(_) | NodeKind::PlacedDocument(_) => self.images = true,
+                NodeKind::Text(t) => {
+                    self.text = true;
+                    self.symbols |= t.runs.iter().any(|r| r.inline.is_some());
+                    self.patterns |= t.runs.iter().any(|r| pattern(&r.style.fill) || pattern(&r.style.stroke));
+                }
+                _ => {}
+            }
+            if let Some(m) = c.extras().mask.as_deref() {
+                self.add(&m.art);
+            }
+        });
+    }
+}
+
+/// What a cached shadow, glow or filtered raster was drawn from besides its object, its effects
+/// and the view's zoom and rotation ([`Renderer::raster_inputs`]). A raster is drawn from only
+/// while its inputs equal the frame's.
+#[derive(Clone)]
+pub(crate) struct Inputs {
+    /// What the content reads.
+    reads: Reads,
+    /// A hash of the inputs as found when the raster was made: those every raster reads, those
+    /// `reads` names, and what the effects read themselves ([`Inputs::with`]).
+    key: u64,
+    /// The document's resources and the color settings `key` was found with: holding them keeps
+    /// the addresses they hashed for their values ([`DocInputs`]).
+    _doc: Arc<DocInputs>,
+}
+
+impl PartialEq for Inputs {
+    fn eq(&self, other: &Self) -> bool {
+        (self.reads, self.key) == (other.reads, other.key)
+    }
+}
+
+impl Inputs {
+    /// These inputs with `extra`, something the effects read themselves.
+    fn with(mut self, extra: impl Hash) -> Self {
+        let mut h = DefaultHasher::new();
+        (self.key, extra).hash(&mut h);
+        self.key = h.finish();
+        self
+    }
+}
+
+/// What raster contents read from the document by name or key, and the color settings, as a frame
+/// finds them ([`Renderer::doc_inputs`]): hashes of the patterns' tilings
+/// ([`crate::pattern::hash_tiling`]), of the symbols' names and art and of the images' keys and
+/// pixels, and the address of the color settings. Art, pixels and previews are hashed by the
+/// addresses of their shared values, and names, keys, tiles, tile types and overlaps are hashed by
+/// value.
+pub(crate) struct DocInputs {
+    patterns: u64,
+    symbols: u64,
+    images: u64,
+    cms: usize,
+    /// Weak references to the values whose addresses the hashes hold: a weak reference keeps the
+    /// allocation, not the value, so no other value gets one of those addresses while these
+    /// inputs are kept.
+    _held: Held,
+}
+
+/// The pattern and symbol art, the image pixels and the color settings, held weakly.
+type Held = (Vec<Weak<Node>>, Vec<Weak<Vec<u8>>>, Weak<Cms>);
+
 /// Most bytes the shadow and filtered-content rasters of one renderer hold together, with what each
 /// was made from ([`Made`]): the least recently drawn go beyond it.
 pub(crate) const FX_RASTER_BUDGET: usize = 512 << 20;
@@ -411,9 +528,10 @@ pub(crate) struct FxGeom {
 impl Renderer {
     /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) from a cached raster:
     /// the silhouette is rendered once into a small crop, blurred and tinted on the CPU, and reused
-    /// while the object and the zoom/rotation are unchanged (pans only move it), and while
-    /// interacting after the object only moved ([`Self::move_shadow`]). Returns false when the
-    /// effect isn't a shadow/glow or the raster would be too large (caller falls back).
+    /// while the object, the zoom/rotation and what the silhouette reads ([`Inputs`]) are unchanged
+    /// (pans only move it), and while interacting after the object only moved
+    /// ([`Self::move_shadow`]). Returns false when the effect isn't a shadow/glow or the raster
+    /// would be too large (caller falls back).
     #[allow(clippy::too_many_arguments)]
     fn draw_shadow_cached(
         &mut self,
@@ -435,9 +553,12 @@ impl Renderer {
         let key = (n as *const Node as usize, i, f.ink);
         let stamp = self.stamp;
         let interacting = f.opts.interacting;
-        let exact = |e: &ShadowEntry| e.linear == linear && e.node.is(n) && (interacting || !e.moved);
+        // What the silhouette reads: as the raster kept for `n` found it, else found now.
+        let reads = self.shadows.get(&key).filter(|e| e.node.is(n)).map_or_else(|| Reads::of(n), |e| e.inputs.reads);
+        let inputs = self.raster_inputs(f, n, reads);
+        let exact = |e: &ShadowEntry| e.linear == linear && e.node.is(n) && e.inputs == inputs && (interacting || !e.moved);
         if interacting && !self.shadows.get(&key).is_some_and(exact) {
-            self.move_shadow(f, n, key, fx, reach + Vec2::new(dx, dy), owner, paint);
+            self.move_shadow(f, n, key, fx, reach + Vec2::new(dx, dy), owner, &inputs, paint);
         }
         let hit = self.shadows.get_mut(&key).filter(|e| exact(e));
         let (image, x, y) = match hit {
@@ -483,7 +604,8 @@ impl Renderer {
                 let anchor = reach.origin();
                 let p = f.view * anchor;
                 let node = Drawn::of(n, owner);
-                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel: (x0 - p.x, y0 - p.y), image: image.clone(), made, moved, stamp });
+                let rel = (x0 - p.x, y0 - p.y);
+                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel, image: image.clone(), made, inputs, moved, stamp });
                 self.trim_fx_rasters(FX_RASTER_BUDGET);
                 (image, x0, y0)
             }
@@ -502,12 +624,12 @@ impl Renderer {
     }
 
     /// While interacting, give `n` (shadow-cache key `key`) the shadow or glow raster an earlier
-    /// frame made for its object (the same id, effect slot and ink, at this zoom and rotation) when
-    /// only the silhouette's place changed after that frame: made by the same effect `fx` from a
-    /// silhouette whose bounds have the size of `reach` (the content's bounds moved by the
-    /// shadow's offset), and whose alpha is the alpha of `n`'s silhouette drawn into a raster
-    /// placed as that one was against its anchor. The raster is kept as `n`'s, marked moved, and
-    /// is drawn at the nearest whole pixel.
+    /// frame made for its object (the same id, effect slot and ink, at this zoom and rotation, with
+    /// the same `inputs`) when only the silhouette's place changed after that frame: made by the
+    /// same effect `fx` from a silhouette whose bounds have the size of `reach` (the content's
+    /// bounds moved by the shadow's offset), and whose alpha is the alpha of `n`'s silhouette drawn
+    /// into a raster placed as that one was against its anchor. The raster is kept as `n`'s, marked
+    /// moved, and is drawn at the nearest whole pixel.
     #[allow(clippy::too_many_arguments)]
     fn move_shadow(
         &mut self,
@@ -517,6 +639,7 @@ impl Renderer {
         fx: &RasterFx,
         reach: Rect,
         owner: Option<&Arc<Node>>,
+        inputs: &Inputs,
         paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
     ) {
         let (dx, dy) = match fx {
@@ -525,7 +648,12 @@ impl Renderer {
         };
         let (linear, stamp, size) = (linear_key(f.view), self.stamp, reach.size());
         let fits = |k: &(usize, usize, Ink), e: &ShadowEntry| {
-            (k.1, k.2) == (key.1, key.2) && e.stamp < stamp && e.linear == linear && e.node.id() == n.id && e.made.fits(&[fx], size, None, None)
+            (k.1, k.2) == (key.1, key.2)
+                && e.stamp < stamp
+                && e.linear == linear
+                && e.node.id() == n.id
+                && e.inputs == *inputs
+                && e.made.fits(&[fx], size, None, None)
         };
         let Some((old, rel, w, h)) = self.shadows.iter().find(|(k, e)| fits(k, e)).map(|(k, e)| (*k, e.rel, e.image.width(), e.image.height()))
         else {
@@ -791,9 +919,9 @@ impl Renderer {
     /// Photoshop-style filters) in stack order on its pixels: rendered offscreen over all it can
     /// reach, filtered on the CPU and drawn back. The raster holds at most [`PIXEL_BUDGET`] pixels:
     /// larger content is cropped to the view when every effect only looks nearby, else rendered
-    /// at a lower resolution. A whole raster at full resolution is cached while the object and the
-    /// zoom stay the same (panning only moves it), and while interacting after the content only
-    /// moved ([`Self::move_pixel_content`]).
+    /// at a lower resolution. A whole raster at full resolution is cached while the object, the
+    /// zoom and what the content reads ([`Inputs`]) stay the same (panning only moves it), and
+    /// while interacting after the content only moved ([`Self::move_pixel_content`]).
     fn pixel_content(
         &mut self,
         ctx: &mut RenderContext,
@@ -835,13 +963,23 @@ impl Renderer {
             Ink::Display | Ink::RichBlack if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
             Ink::Display | Ink::RichBlack => effects::pixel::Channels::Rgb,
         };
+        // De-Interlace's field lines: the rows of the document's raster grid (1 to 2400 ppi).
+        let ppi = Some(f.doc.raster_effects_ppi).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0);
+        // What the content reads (as the raster kept for it found it, else found now), with the
+        // channels the effects run on and, under De-Interlace, the resolution.
+        let inputs = key.map(|key| {
+            let reads = self.pixel_fx.get(&key).filter(|e| e.node.is(content.node)).map_or_else(|| Reads::of(content.node), |e| e.inputs.reads);
+            let interlaced = chain.iter().any(|fx| matches!(fx, RasterFx::Pixel(PixelFx::DeInterlace { .. })));
+            self.raster_inputs(f, content.node, reads).with((std::mem::discriminant(&channels), interlaced.then_some(ppi.to_bits())))
+        });
         let interacting = f.opts.interacting;
-        let exact = |e: &PixelEntry| e.linear == linear && e.node.is(content.node) && (interacting || !e.moved);
+        let exact = |e: &PixelEntry| e.linear == linear && e.node.is(content.node) && Some(&e.inputs) == inputs.as_ref() && (interacting || !e.moved);
         if interacting
             && let Some(key) = key
+            && let Some(inputs) = &inputs
             && !self.pixel_fx.get(&key).is_some_and(exact)
         {
-            self.move_pixel_content(f, content, key, &chain, channels, paint);
+            self.move_pixel_content(f, content, key, &chain, channels, inputs, paint);
         }
         if let Some(e) = key.and_then(|key| self.pixel_fx.get_mut(&key)).filter(|e| exact(e)) {
             e.stamp = stamp;
@@ -872,8 +1010,6 @@ impl Renderer {
             channels: Some(channels),
             outline: feather_outline(&chain, content, content.reach.origin()),
         });
-        // De-Interlace's field lines: the rows of the document's raster grid (1 to 2400 ppi).
-        let ppi = Some(f.doc.raster_effects_ppi).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0);
         let (center, extent) = (content.reach.center(), 0.5 * content.reach.width().hypot(content.reach.height()));
         let space = effects::PixelSpace { to_doc, px, center, channels, line: 72.0 / ppi, extent };
         let (wz, hz) = (wu as usize, hu as usize);
@@ -891,26 +1027,27 @@ impl Renderer {
             }
         }
         let image = std::sync::Arc::new(pm);
-        if let Some((key, made)) = key.zip(made) {
+        if let Some(((key, made), inputs)) = key.zip(made).zip(inputs) {
             let anchor = content.reach.origin();
             let p = f.view * anchor;
             let rel = (x0 - p.x, y0 - p.y);
             let owner = content.owner.cloned().or_else(|| self.fx_owner.clone().filter(|o| std::ptr::eq(&**o, content.node)));
             let node = Drawn::of(content.node, owner.as_ref());
-            self.pixel_fx.insert(key, PixelEntry { node, linear, anchor, rel, k, image: image.clone(), made, moved, stamp });
+            self.pixel_fx.insert(key, PixelEntry { node, linear, anchor, rel, k, image: image.clone(), made, inputs, moved, stamp });
             self.trim_fx_rasters(FX_RASTER_BUDGET);
         }
         draw_scaled(ctx, image, (x0, y0), k);
     }
 
     /// While interacting, give `content` (cache key `key`) the filtered raster an earlier frame
-    /// made at full size for its object (the same id, slot and ink, at this zoom and rotation)
-    /// when only the content's place changed after that frame: made by the same effects `chain`,
-    /// told of the same `channels`, from content whose bounds have the same size (and the same
-    /// Feather outline against its anchor), and whose pixels are the pixels of `content` drawn
-    /// into a raster placed as that one was against its anchor. The raster is kept as
-    /// `content`'s, marked moved, and is drawn at the nearest whole pixel. Content under
+    /// made at full size for its object (the same id, slot and ink, at this zoom and rotation, with
+    /// the same `inputs`) when only the content's place changed after that frame: made by the same
+    /// effects `chain`, told of the same `channels`, from content whose bounds have the same size
+    /// (and the same Feather outline against its anchor), and whose pixels are the pixels of
+    /// `content` drawn into a raster placed as that one was against its anchor. The raster is kept
+    /// as `content`'s, marked moved, and is drawn at the nearest whole pixel. Content under
     /// De-Interlace takes none.
+    #[allow(clippy::too_many_arguments)]
     fn move_pixel_content(
         &mut self,
         f: &Frame,
@@ -918,6 +1055,7 @@ impl Renderer {
         key: (usize, usize, Ink),
         chain: &[&RasterFx],
         channels: Channels,
+        inputs: &Inputs,
         paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
     ) {
         if chain.iter().any(|fx| matches!(fx, RasterFx::Pixel(PixelFx::DeInterlace { .. }))) {
@@ -931,6 +1069,7 @@ impl Renderer {
                 && e.linear == linear
                 && e.k >= 1.0
                 && e.node.id() == content.node.id
+                && e.inputs == *inputs
                 && e.made.fits(chain, content.reach.size(), Some(channels), outline.as_ref())
         };
         let Some((old, rel, w, h)) = self.pixel_fx.iter().find(|(k, e)| fits(k, e)).map(|(k, e)| (*k, e.rel, e.image.width(), e.image.height()))
@@ -955,6 +1094,79 @@ impl Renderer {
             (e.node, e.anchor, e.moved) = (Drawn::of(content.node, owner.as_ref()), anchor, true);
             self.pixel_fx.insert(key, e);
         }
+    }
+
+    /// The inputs a raster of `n`'s content, which reads `reads`, is drawn with in frame `f`: the
+    /// color settings, the edge smoothing, the knockout `n` inherits and, while `n` holds the
+    /// isolated group, isolation mode; the pattern definitions, symbols and brush library it
+    /// reads; for images and placed documents their pixels and files, the layer's Dim Images and
+    /// the options they are drawn with; for type the fonts, whether overprinting shows
+    /// ([`crate::proof::overprints`]) and Document Setup's substitution highlights.
+    pub(crate) fn raster_inputs(&mut self, f: &Frame, n: &Node, reads: Reads) -> Inputs {
+        let doc = self.doc_inputs(f.doc);
+        let mut h = DefaultHasher::new();
+        (doc.cms, f.opts.anti_alias.threshold(), self.knockout).hash(&mut h);
+        if let Some((isolated, path)) = self.isolation_path(f)
+            && n.id != isolated
+            && path.contains(&n.id)
+        {
+            isolated.hash(&mut h);
+        }
+        if reads.patterns {
+            doc.patterns.hash(&mut h);
+        }
+        if reads.symbols {
+            doc.symbols.hash(&mut h);
+        }
+        if reads.images {
+            let o = f.opts;
+            (doc.images, self.dim_images.map(f32::to_bits), o.smooth_images, o.image_mips, o.trace_views, o.progressive_placed).hash(&mut h);
+        }
+        if reads.brushes {
+            self.brushes.library_key(f.doc, self.stamp).hash(&mut h);
+        }
+        if reads.text {
+            let setup = &f.doc.setup;
+            let highlights = f.opts.highlight_substitutions.then_some((setup.highlight_substituted_fonts, setup.highlight_substituted_glyphs));
+            (vectorcraft_text::FontDb::global().generation(), crate::proof::overprints(f.opts), highlights).hash(&mut h);
+        }
+        Inputs { reads, key: h.finish(), _doc: doc }
+    }
+
+    /// [`DocInputs`] for document `doc`: found once a frame (and again for another document drawn
+    /// in it, such as a placed document's own), and kept while they stay the same.
+    fn doc_inputs(&mut self, doc: &Document) -> Arc<DocInputs> {
+        let at = (self.stamp, std::ptr::from_ref(doc) as usize);
+        if let Some((seen, d)) = &self.doc_inputs
+            && *seen == at
+        {
+            return d.clone();
+        }
+        let cms = vectorcraft_color::cms::active();
+        let hash = |each: &mut dyn FnMut(&mut DefaultHasher)| {
+            let mut h = DefaultHasher::new();
+            each(&mut h);
+            h.finish()
+        };
+        let address = |a: &Arc<Node>| Arc::as_ptr(a) as usize;
+        let patterns = hash(&mut |h| doc.patterns.iter().for_each(|p| crate::pattern::hash_tiling(p, h)));
+        let symbols = hash(&mut |h| doc.symbols.iter().for_each(|s| (&s.name, address(&s.art)).hash(h)));
+        let images = hash(&mut |h| {
+            for (key, blob) in &doc.images {
+                (key, Arc::as_ptr(&blob.bytes) as usize, blob.proxy.as_ref().map(|p| Arc::as_ptr(p) as usize)).hash(h);
+            }
+        });
+        let found = (patterns, symbols, images, Arc::as_ptr(&cms) as usize);
+        let d = match &self.doc_inputs {
+            Some((_, d)) if (d.patterns, d.symbols, d.images, d.cms) == found => d.clone(),
+            _ => {
+                let art = doc.patterns.iter().flat_map(|p| &p.art).chain(doc.symbols.iter().map(|s| &s.art)).map(Arc::downgrade).collect();
+                let pixels = doc.images.values().flat_map(|b| std::iter::once(&b.bytes).chain(&b.proxy)).map(Arc::downgrade).collect();
+                Arc::new(DocInputs { patterns, symbols, images, cms: found.3, _held: (art, pixels, Arc::downgrade(&cms)) })
+            }
+        };
+        self.doc_inputs = Some((at, d.clone()));
+        d
     }
 
     /// Drop the least recently drawn shadow and filtered-content rasters beyond `budget` bytes

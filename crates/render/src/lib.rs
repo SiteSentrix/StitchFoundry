@@ -415,6 +415,9 @@ pub struct Renderer {
     /// Objects' content run through Photoshop-style effects, per object and content slot (see
     /// `fx`): kept only while drawn.
     pixel_fx: PtrMap<(usize, usize, Ink), fx::PixelEntry>,
+    /// What the contents of those rasters read from the document, and the color settings, as last
+    /// found for a frame (`stamp`) and document (address) (see [`Self::doc_inputs`]).
+    doc_inputs: Option<((u64, usize), Arc<fx::DocInputs>)>,
     /// Whether the group being drawn is a knockout group (what its neutral children inherit).
     knockout: bool,
     /// Address of the knockout-group element being drawn as its knockout shape: at full object
@@ -531,6 +534,7 @@ impl Renderer {
             brushes: Default::default(),
             shadows: PtrMap::default(),
             pixel_fx: PtrMap::default(),
+            doc_inputs: None,
             live: live::LiveCache::default(),
             knockout: false,
             shape_of: 0,
