@@ -146,7 +146,7 @@ fn to_csv(g: &GraphSpec) -> String {
             }
             out.push(',');
         }
-        out.push_str(&r.iter().map(|v| v.map(fmt_value).unwrap_or_default()).collect::<Vec<_>>().join(","));
+        out.push_str(&r.iter().map(|v| v.map(|v| v.to_string()).unwrap_or_default()).collect::<Vec<_>>().join(","));
         out.push('\n');
     }
     out
@@ -2336,6 +2336,15 @@ mod tests {
         assert!(s.is_empty() && c.is_empty());
         assert_eq!(r.len(), 2);
         assert_eq!(super::nice_axis(0.0, 7.0, 0), (0.0, 8.0, 2.0));
+    }
+
+    #[test]
+    fn numeric_csv_cells_round_trip_without_rounding_or_saturation() {
+        let mut g = GraphSpec::default();
+        g.set_cells(vec![vec![Some(1.2345), Some(-1.2345)], vec![Some(1e-6), Some(-1e-6)], vec![Some(1e20), Some(-1e20)], vec![Some(0.0), None]]);
+        let csv = super::to_csv(&g);
+        let (_, _, cells) = super::parse_csv(&csv);
+        assert_eq!(cells, g.cells(), "{csv}");
     }
 
     #[test]
