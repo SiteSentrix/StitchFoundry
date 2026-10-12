@@ -464,10 +464,9 @@ impl Builder<'_> {
         for i in 0..n {
             let j = (i + 1) % n;
             let quad = vec![a[i], a[j], b[j], b[i]];
-            let mut normal = quad[1].sub(quad[0]).cross(quad[2].sub(quad[0]));
-            if normal.dot(normal) < 1e-18 {
-                normal = quad[2].sub(quad[0]).cross(quad[3].sub(quad[0]));
-            }
+            // A twist bends the strip between two slices into a saddle: its normal is the whole
+            // quad's average (Newell's), not one corner's triangle, which leans far to one side.
+            let mut normal = newell(std::slice::from_ref(&quad));
             if normal.dot(normal) < 1e-18 {
                 continue;
             }
