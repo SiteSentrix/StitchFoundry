@@ -4573,3 +4573,7 @@ machine	Stop	停止
 	Double cross	ダブルクロス
 	Redwork	レッドワーク
 	Sewn as one line that ends where it starts; the way between lines is retraced along them.	始点で終わる一本の線として縫います。線と線の間は縫った線をなぞって移動します。
+	Add Buttonholes	ボタンホールを追加
+	Straight Buttonhole	直線ボタンホール
+	Rounded Buttonhole	丸型ボタンホール
+	Keyhole Buttonhole	鳩目ボタンホール

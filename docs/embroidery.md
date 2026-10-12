@@ -456,6 +456,14 @@ Where nothing covers the way, the thread is trimmed as usual. **Break Apart** tu
 back into separate objects; on a stitched path or compound path made of separate parts it
 makes one object per part, each with the same stitching (a hole stays with its part).
 
+**Embroidery › Add Buttonholes** places a straight, rounded or keyhole buttonhole (15 mm slit,
+4 mm wide) in the middle of the artboard: satin columns bordering a slit that is cut open after
+sewing (0.6 mm is left open for the cut). Each buttonhole is a group of ordinary stitched paths,
+sewn in order: a run round it to hold the fabric, one side, the far end (a bartack, a satin end
+rounded round the slit, or a keyhole eye), the other side and a bartack at the near end. Move,
+turn and resize it like any art. `embroidery.addButtonholes` places a string of them too
+(`count`, evenly spaced from `at` to `to`), with the slit `length`, the `width` and an `angle`.
+
 **Embroidery › Redwork** sews the selected line art (paths, compound paths and type) the way
 hand redwork is sewn: as one line that starts and ends at the same point, so there is one tie-in
 and one tie-off. Every line is sewn once in the run style (*Single*, *Triple*, *Backstitch* or
@@ -527,6 +535,7 @@ tool list for all parameters):
 | `embroidery.style.new {name?}` / `apply {name}` / `redefine {name}` / `unlink` / `rename {name, to}` / `duplicate` / `delete` / `list` | embroidery styles |
 | `embroidery.fabric.save {name, from?, …}`, `embroidery.fabric.delete {name}` | fabrics made for the design |
 | `embroidery.branch {ids?}`, `embroidery.breakApart {ids?}` | sew objects as one path; separate a branch, a redwork group or a many-part object |
+| `embroidery.addButtonholes {style?, length?, width?, angle?, at?, to?, count?}` | straight, rounded or keyhole buttonholes: one, or a string evenly spaced from `at` to `to` |
 | `embroidery.redwork {ids?, kind?}` | sew line art as redwork: one line ending where it starts, the way between lines retraced along them (`kind`: `run`, `bean`, `backstitch`, `stemstitch`) |
 | `embroidery.reverse`, `embroidery.removeHoles {maxArea?}`, `embroidery.fillHoles` | sewing direction and holes |
 | `select.same.thread`, `select.same.stitchType` | select like objects |
