@@ -381,7 +381,9 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
     {
-        s.edit(if fill { "Fill Color" } else { "Stroke Color" }, |d, _| {
+        // When the type comes out as it was, the document and its undo history stay as they are.
+        let before = s.doc()?.doc.clone();
+        super::overprint::edit_counted(s, if fill { "Fill Color" } else { "Stroke Color" }, |d| {
             let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
             let (xf, lb) = (t.xf, t.local_bounds());
             vectorcraft_text::edit::style_range(&mut t.runs, a, b, |st| {
@@ -395,7 +397,7 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
                 }
             });
             super::typecmd::refresh_bounds(t);
-            Ok(())
+            Ok(super::appearance::count_changed(d, &before, &[id]))
         })?;
         if bool_or(p, "focus", true) {
             s.fill_active = fill;
@@ -454,8 +456,8 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
             Ok(())
         },
         |d, changed| {
-            super::graph::capture_series_paints(d, changed, fill);
-            super::graph::capture_label_styles(d, changed, &|st| {
+            let series = super::graph::capture_series_paints(d, changed, fill);
+            let labels = super::graph::capture_label_styles(d, changed, &|st| {
                 if fill {
                     st.fill = paint.clone();
                 } else {
@@ -465,7 +467,7 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
                     st.stroke = paint.clone();
                 }
             });
-            Ok(())
+            Ok(series || labels)
         },
     )?;
     // Rejected edits leave the next shape's appearance and active proxy untouched.
@@ -515,7 +517,9 @@ pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = paint_targets(s, p)?;
     if !ids.is_empty() {
-        s.edit("Swap Fill and Stroke", |d, _| {
+        // When every object comes out as it was, the document and its undo history stay as they are.
+        let before = s.doc()?.doc.clone();
+        super::overprint::edit_counted(s, "Swap Fill and Stroke", |d| {
             for id in &ids {
                 let Some(n) = d.node_mut(*id) else { continue };
                 if let NodeKind::Text(t) = &mut n.kind {
@@ -532,7 +536,7 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
                 restore_unpainted_stroke(&mut n.appearance, None, &f);
                 n.appearance.set_stroke(f);
             }
-            Ok(())
+            Ok(super::appearance::count_changed(d, &before, &ids))
         })?;
     }
     if s.paint.stroke.is_none() && !s.paint.fill.is_none() && s.paint.stroke_width == 0.0 {
@@ -545,7 +549,9 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = paint_targets(s, p)?;
     if !ids.is_empty() {
-        s.edit("Default Fill and Stroke", |d, _| {
+        // When every object comes out as it was, the document and its undo history stay as they are.
+        let before = s.doc()?.doc.clone();
+        super::overprint::edit_counted(s, "Default Fill and Stroke", |d| {
             for id in &ids {
                 let Some(n) = d.node_mut(*id) else { continue };
                 match &mut n.kind {
@@ -558,7 +564,7 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                     _ => n.appearance = Appearance::default_art().into(),
                 }
             }
-            Ok(())
+            Ok(super::appearance::count_changed(d, &before, &ids))
         })?;
     }
     super::newart::reset(s);

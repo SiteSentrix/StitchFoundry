@@ -60,6 +60,8 @@ fn picking_up_without_weight_keeps_the_target_weight() {
     assert_eq!(s.paint.stroke_width, weight, "new art keeps its weight too");
     // Applying no transparency (one call) keeps the target's opacity; undo is one step per copy.
     s.execute("transparency.set", &json!({"opacity": 100, "ids": [dst.0]})).unwrap();
+    // A green fill, which the copy turns red again.
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [dst.0]})).unwrap();
     let undo = s.doc().unwrap().history.undo.len();
     s.execute("appearance.copyFrom", &json!({"source": src.0, "apply": {"appearance": {"transparency": false}}})).unwrap();
     assert_eq!((node(&s, dst).opacity, s.doc().unwrap().history.undo.len()), (1.0, undo + 1));
