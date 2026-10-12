@@ -163,6 +163,7 @@ Layers panel.
 | Contextual task bar | done | |
 | Control bar with Transform and Stroke popovers | done | |
 | Attributes fill-rule controls with a compound member selected | done | Edits the compound's rule; direction still edits only the member; rendered-hole and Undo/Redo regression tests (#1197) |
+| Pathfinder Divide: an open cutting line splits a filled path | done | #1307; straight, crossed, bent and curved cutters, holes and frontmost appearance regression-tested; native automation: independent piece movement, one Undo/Redo, saved-document round trip and window capture; existing bounded-map fallback remains |
 | Canvas context menu | done | Layers rows, panels and type have none (gap) |
 | Blend panel (30.7) | missing | Blend Options dialog exists |
 | SVG Interactivity, Retype, Comments, Version History panels | missing | the last two are cloud features (out of scope) |
@@ -195,6 +196,7 @@ re-measure of the panels added since.
 | 2026-10-12 | minor | Adding paint to an unpainted zero-width stroke restores the 1 pt default (#1253); scores unchanged |
 | 2026-10-12 | minor | macOS native save sheets gain a localised Format menu (#866); filename regression tests and an actual SVG save, PDF selection and cancellation verified; scores unchanged (estimated) |
 | 2026-10-12 | minor | Attributes: directly selected compound members read and change the compound fill rule; path direction stays member-local (#1197); score unchanged |
+| 2026-10-12 | minor | Pathfinder Divide: open cutting lines split filled paths with one Undo (#1307); scores and hours unchanged |
 | 2026-10-12 | minor | Numeric entry: click-to-focus selection waits for release so text drags keep their start (#1326, in part); keyboard focus, double-click, arrows and wheel preserved; scores and hours unchanged; short movements below the click threshold remain open |
 | 2026-10-11 | minor | A marquee inside a filled shape no longer selects it: only touching its path does (#1103); score unchanged (estimated) |
 | 2026-10-11 | minor | Live Corners: corners between curved sides round too, the curve trimmed to what the cut leaves (#1144); score unchanged (estimated) |

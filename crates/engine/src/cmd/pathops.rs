@@ -313,9 +313,16 @@ fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
         // Build the stack (back → front) with a style per entry.
         let mut styles: Vec<Style> = vec![];
         let mut shapes: Vec<po::Shape> = vec![];
-        let mut push = |path: PathData, rule: FillRule, st: Style| {
+        let mut push = |mut path: PathData, rule: FillRule, st: Style| {
             if path.is_empty() {
                 return;
+            }
+            if op == PathfinderOp::Divide && st.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if !f.paint.is_none())) {
+                // Filled open contours keep their implicit closing edge. A zero-area line
+                // stays a cutter; normalised area also catches zero-signed-area self crossings.
+                for sub in path.subpaths.iter_mut().filter(|sp| !sp.closed) {
+                    sub.closed = po::encloses_area(sub) || po::area(&PathData::single(sub.clone()), rule) > 0.0;
+                }
             }
             let key = match styles.iter().position(|x| *x == st) {
                 Some(k) => k,
