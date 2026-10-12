@@ -159,7 +159,10 @@ fn text_from_another_app_pastes_as_point_text_and_svg_text_as_art() {
     run(&mut app, "edit.paste", json!({}));
     assert_eq!(pasted(&app).len(), 2);
     assert!(pasted(&app).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
-    // Text that can't be pasted pastes nothing (not the stale internal clipboard).
+    // Blank text beside a picture is the picture. Text alone that can't be pasted adds nothing.
+    copy_elsewhere(&board, vec![(TEXT, b"  \r\n".to_vec()), (PNG, blue_png())]);
+    run(&mut app, "edit.paste", json!({}));
+    assert!(matches!(pasted(&app)[0].kind, NodeKind::Image(_)), "blank text yields the picture");
     let before = count(&app);
     copy_elsewhere(&board, vec![(TEXT, b"  \r\n".to_vec())]);
     assert!(app.run("edit.paste", json!({})).is_err());

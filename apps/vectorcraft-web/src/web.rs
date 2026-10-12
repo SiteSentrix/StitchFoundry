@@ -205,7 +205,8 @@ fn track_paste(pasted: &Rc<RefCell<Pasted>>) {
         let Some(data) = e.clipboard_data() else { return };
         let Some(files) = data.files().filter(|f| f.length() > 0) else { return };
         // Text is egui's, but for the address a browser's Copy Image puts next to the picture.
-        if data.get_data("text").is_ok_and(|t| !t.is_empty() && !is_address(&t)) {
+        // Blank text is not a caption. A picture pasted with it is still the picture.
+        if data.get_data("text").is_ok_and(|t| !t.trim().is_empty() && !is_address(&t)) {
             return;
         }
         e.prevent_default();
