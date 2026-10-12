@@ -634,6 +634,60 @@ fn split_into_grid_cells() {
     assert!(s.execute("object.path.splitIntoGrid", &json!({"rows": 0})).is_err());
 }
 
+/// Split Into Grid's documented options: a gutter for the rows and one for the columns, the size
+/// of each row and column or of the whole grid, and guides along the row and column edges. Several
+/// selected paths give one grid over them all, painted as the topmost one, where it was.
+#[test]
+fn split_into_grid_options() {
+    let grid = |p: Value| {
+        let mut s = session();
+        rect(&mut s, 10.0, 20.0, 110.0, 50.0);
+        let r = s.execute("object.path.splitIntoGrid", &p).unwrap();
+        let cells: Vec<Rect> = ids(&r).iter().map(|id| bounds(&s, *id)).collect();
+        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
+        assert_eq!(r["guides"], guides.len());
+        (cells, guides)
+    };
+    // A gutter each way; the grid keeps the path's size.
+    let (cells, guides) = grid(json!({"rows": 2, "columns": 3, "rowGutter": 10, "columnGutter": 4}));
+    assert!(close(cells[0], Rect::new(10.0, 20.0, 44.0, 40.0), 1e-9) && close(cells[5], Rect::new(86.0, 50.0, 120.0, 70.0), 1e-9), "{cells:?}");
+    assert!(guides.is_empty());
+    // The whole grid's size, from the path's top left corner.
+    let (cells, _) = grid(json!({"rows": 1, "columns": 2, "gutter": 0, "totalWidth": 60, "totalHeight": "1 in"}));
+    assert!(close(cells[1], Rect::new(40.0, 20.0, 70.0, 92.0), 1e-9), "{cells:?}");
+    // The size of each row and column makes the total, whatever total is given.
+    let (cells, guides) = grid(json!({"rows": 2, "columns": 2, "gutter": 5, "width": 20, "height": 10, "totalWidth": 500, "addGuides": true}));
+    assert!(close(cells[3], Rect::new(35.0, 35.0, 55.0, 45.0), 1e-9), "{cells:?}");
+    let edges = |vertical, at: [f64; 4]| at.map(|pos| (vertical, pos));
+    assert_eq!(guides, [edges(true, [10.0, 30.0, 35.0, 55.0]), edges(false, [20.0, 30.0, 35.0, 45.0])].concat());
+    // Without a gutter the rows share their edges: one guide for each.
+    let (_, guides) = grid(json!({"rows": 2, "columns": 1, "gutter": 0, "addGuides": true}));
+    assert_eq!(guides, [(true, 10.0), (true, 120.0), (false, 20.0), (false, 45.0), (false, 70.0)]);
+
+    let mut s = session();
+    let back = rect(&mut s, 0.0, 0.0, 40.0, 40.0);
+    let kept = rect(&mut s, 300.0, 300.0, 10.0, 10.0);
+    let front = rect(&mut s, 60.0, 20.0, 40.0, 40.0);
+    set_fill(&mut s, front, Color::rgb(0.1, 0.6, 0.3));
+    s.execute("select.set", &json!({"ids": [front.0, back.0]})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = ids(&s.execute("object.path.splitIntoGrid", &json!({"rows": 1, "columns": 2, "gutter": 20, "addGuides": true})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(0.0, 0.0, 40.0, 60.0), 1e-9) && close(bounds(&s, r[1]), Rect::new(60.0, 0.0, 100.0, 60.0), 1e-9));
+    let st = s.doc().unwrap();
+    assert!(r.iter().all(|id| node(&s, *id).appearance == node(&s, r[0]).appearance) && st.doc.node(back).is_none() && st.doc.node(front).is_none());
+    assert_eq!(st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>(), [kept, r[0], r[1]], "above the path left alone");
+    assert_eq!(st.selection.objects, r);
+    assert!(st.doc.guides.iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
+    assert_eq!(st.history.undo.len(), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.guides.is_empty());
+    // A grid with no room for its gutters is refused and changes nothing.
+    assert!(s.execute("object.path.splitIntoGrid", &json!({"columns": 4, "gutter": 50})).is_err());
+    assert!(s.execute("object.path.splitIntoGrid", &json!({"width": -5})).is_err());
+    assert!(s.doc().unwrap().doc.node(back).is_some());
+}
+
 #[test]
 fn clean_up_removes_junk() {
     let mut s = session();

@@ -52,7 +52,7 @@ mod new_document;
 pub mod new_swatch;
 pub mod office_export;
 pub mod package;
-mod path_ops;
+pub(crate) mod path_ops;
 pub mod pdf_presets;
 pub mod perspective_grid;
 pub mod perspective_options;
