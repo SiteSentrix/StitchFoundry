@@ -51,6 +51,15 @@ pub fn specs() -> Vec<CommandSpec> {
             add_glyphs
         ),
         cmd!(
+            "embroidery.fontDoc.assign",
+            "Assign to Glyph",
+            [],
+            None,
+            "{glyph: a character (or a glyph name of up to 8), ids?: the art (default: the selection)} designs on keys: the art becomes the glyph's, moved onto its artboard (made below the others if the font hasn't the glyph): its bottom on the baseline, its left a margin in, the artboard widened to hold it with a margin either side; art already there stays → {glyph, width}",
+            has_doc,
+            assign
+        ),
+        cmd!(
             "embroidery.fontDoc.setProps",
             "Font Properties",
             [],
@@ -179,7 +188,7 @@ fn glyph_boards(glyphs: &[(String, f64)], f: &FontDesign, top: f64, next: u32) -
             (x, y) = (0.0, y + height + GAP * pt);
         }
         let w = w.clamp(1.0, 10_000.0);
-        let id = next + i as u32;
+        let id = next.saturating_add(i as u32);
         let rect = Rect::new(x, y, x + w, y + height);
         let base = rect.y1 - f.descent * pt;
         for pos in [base, base - f.size * pt] {
@@ -228,7 +237,7 @@ fn add_glyphs(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(CMD, format!("{MAX_DOC_GLYPHS} glyphs at most")));
     }
     let top = d.artboards.iter().map(|a| a.rect.y1).fold(0.0f64, f64::max) + GAP * PT_PER_MM;
-    let next = d.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1;
+    let next = d.artboards.iter().map(|a| a.id).max().unwrap_or(0).saturating_add(1);
     let (boards, guides) = glyph_boards(&usual_widths(names, &f), &f, top, next);
     let added = boards.len();
     s.edit("Add Glyphs", |d, _| {
@@ -237,6 +246,63 @@ fn add_glyphs(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "added": added }))
+}
+
+fn assign(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.fontDoc.assign";
+    let f = design(s, CMD)?;
+    let glyph = str_param(p, "glyph")
+        .map(str::trim)
+        .filter(|g| !g.is_empty() && g.chars().count() <= MAX_NAME)
+        .ok_or_else(|| bad(CMD, "`glyph` is a character, or a glyph name of up to 8"))?
+        .to_string();
+    let ids = super::edit::roots_of(&s.doc()?.doc, targets(s, p)?);
+    let d = &s.doc()?.doc;
+    let bounds = ids
+        .iter()
+        .filter_map(|id| d.node(*id)?.geometric_bounds())
+        .reduce(|a, b| a.union(b))
+        .ok_or_else(|| bad(CMD, "select the art for the glyph"))?;
+    let pt = PT_PER_MM;
+    let margin = f.size * 0.1 * pt;
+    let width = bounds.width() + margin * 2.0;
+    if !width.is_finite() || width > 10_000.0 {
+        return Err(bad(CMD, "the art is too wide for a glyph"));
+    }
+    // the glyph's artboard, widened to hold the art; else a new one below the others
+    let (board, guides) = match d.artboards.iter().find(|a| a.name == glyph) {
+        Some(a) => {
+            let mut a = a.clone();
+            a.rect.x1 = a.rect.x0 + a.rect.width().max(width);
+            (a, Vec::new())
+        }
+        None => {
+            if d.artboards.len() >= MAX_DOC_GLYPHS {
+                return Err(bad(CMD, format!("{MAX_DOC_GLYPHS} glyphs at most")));
+            }
+            let top = d.artboards.iter().map(|a| a.rect.y1).fold(0.0f64, f64::max) + GAP * pt;
+            let next = d.artboards.iter().map(|a| a.id).max().unwrap_or(0).saturating_add(1);
+            let (mut boards, guides) = glyph_boards(&[(glyph.clone(), width)], &f, top, next);
+            (boards.pop().ok_or_else(|| bad(CMD, "no artboard for the glyph"))?, guides)
+        }
+    };
+    let base = board.rect.y1 - f.descent * pt;
+    let m = Affine::translate((board.rect.x0 + margin - bounds.x0, base - bounds.y1));
+    let out = json!({ "glyph": glyph, "width": board.rect.width() / pt });
+    s.edit("Assign to Glyph", |d, _| {
+        for id in &ids {
+            d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.transform(m, true);
+        }
+        match d.artboards.iter_mut().find(|a| a.id == board.id) {
+            Some(a) => *a = board.clone(),
+            None => {
+                d.artboards.push(board.clone());
+                d.guides.extend(guides.iter().cloned());
+            }
+        }
+        Ok(())
+    })?;
+    Ok(out)
 }
 
 fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
@@ -498,7 +564,7 @@ fn merge_font(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(CMD, format!("{MAX_DOC_GLYPHS} glyphs at most")));
     }
     let top = d.artboards.iter().map(|a| a.rect.y1).fold(0.0f64, f64::max) + GAP * PT_PER_MM;
-    let next = d.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1;
+    let next = d.artboards.iter().map(|a| a.id).max().unwrap_or(0).saturating_add(1);
     let widths: Vec<(String, f64)> = glyphs.iter().map(|(n, _, w)| (n.clone(), *w)).collect();
     let (boards, guides) = glyph_boards(&widths, &f, top, next);
     let parent = s.doc()?.insertion_parent();

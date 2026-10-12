@@ -4734,3 +4734,6 @@ machine	Stop	Arrêt
 	Type family	Famille de police
 	New Font from Type	Nouvelle police depuis une police
 	Edit Font	Modifier la police
+	Assign to Glyph	Attribuer au glyphe
+	Selection to glyph	Sélection vers glyphe
+	The selected art becomes the glyph, moved onto its artboard	L’illustration sélectionnée devient le glyphe, déplacée sur son plan de travail
