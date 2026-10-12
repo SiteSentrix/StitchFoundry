@@ -4086,3 +4086,17 @@ machine	Stop	停止
 @msg	select an image to redraw	请选择要重绘的图像
 @msg	the image couldn't be read	无法读取图像
 @msg	The image is too large to send: crop it, or place a smaller copy.	图像过大，无法发送：请裁剪图像，或置入较小的副本。
+
+# Embroidery (StitchFoundry): fill textures and split lines
+	Set Split Lines	设置分割线
+	Carve Split Lines	刻入分割线
+	Clear Split Lines	清除分割线
+	Split lines:	分割线：
+	Texture size	纹理大小
+	Texture angle	纹理角度
+	Diamonds	菱形
+	Waves	波浪
+	Herringbone	人字纹
+	Bricks	砖块
+	Circles	圆圈
+	Scales	鳞片

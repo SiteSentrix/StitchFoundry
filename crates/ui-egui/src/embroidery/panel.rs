@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_embroidery::sf_core::attr::{Embroidery, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
-    Corners, CoverKind, FillKind, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH, TackdownKind, TieStyle,
+    Corners, CoverKind, FillKind, FillParams, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH, TackdownKind, TexturePattern, TieStyle,
 };
 use vectorcraft_embroidery::sf_core::threads::{Rgb, charts};
 
@@ -496,6 +496,9 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             {
                 set(app, target, json!({ "random": v }));
             }
+            if f.kind == FillKind::Tatami {
+                texture_rows(app, ui, target, f, e);
+            }
             if f.kind == FillKind::Satin
                 && let Some(v) = num(ui, tl!("Auto split"), "fsplit", f.split_length, " mm", 1)
             {
@@ -596,6 +599,53 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
         && let Some(v) = num(ui, tl!("Overlap"), "uover", e.cut_overlap(), " mm", 2)
     {
         set(app, target, json!({ "underlying_overlap": v.clamp(0.0, 10.0) }));
+    }
+}
+
+/// A texture pattern's name in the UI language.
+fn texture_name(p: TexturePattern) -> &'static str {
+    match p {
+        TexturePattern::Diamonds => tl!("Diamonds"),
+        TexturePattern::Waves => tl!("Waves"),
+        TexturePattern::Herringbone => tl!("Herringbone"),
+        TexturePattern::Bricks => tl!("Bricks"),
+        TexturePattern::Circles => tl!("Circles"),
+        TexturePattern::Scales => tl!("Scales"),
+    }
+}
+
+/// Tatami textures: programmed splits (a pattern over the fill), and the split lines carved
+/// into the fill.
+fn texture_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, f: &FillParams, e: &Embroidery) {
+    let mut names = vec![tl!("None")];
+    names.extend(TexturePattern::ALL.iter().map(|p| texture_name(*p)));
+    let cur = f.texture.and_then(|t| TexturePattern::ALL.iter().position(|p| *p == t.pattern)).map_or(0, |i| i + 1);
+    if let Some(i) = pick(ui, tl!("Texture"), "texture", cur, &names) {
+        let v = match (i.checked_sub(1).and_then(|k| TexturePattern::ALL.get(k)), f.texture) {
+            // another pattern keeps the size and turn already set
+            (Some(p), Some(t)) => json!({ "pattern": p, "size": t.size, "angle": t.angle }),
+            (Some(p), None) => json!({ "pattern": p, "size": p.default_size(f.stitch_length), "angle": 0.0 }),
+            (None, _) => Value::Null,
+        };
+        set(app, target, json!({ "texture": v }));
+    }
+    if let Some(t) = f.texture {
+        if let Some(v) = num(ui, tl!("Texture size"), "tsize", t.size, " mm", 1) {
+            set(app, target, json!({ "texture": { "size": v.clamp(1.0, 100.0) } }));
+        }
+        if let Some(v) = num(ui, tl!("Texture angle"), "tangle", t.angle, "°", 1) {
+            set(app, target, json!({ "texture": { "angle": v } }));
+        }
+    }
+    if let Target::Selection(id) = target
+        && !e.splits.is_empty()
+    {
+        ui.horizontal(|ui| {
+            ui.label(format!("{} {}", tl!("Split lines:"), e.splits.len()));
+            if button(ui, tl!("Clear Split Lines")).clicked() {
+                app.run("embroidery.clearSplits", json!({ "ids": [id] })).ok();
+            }
+        });
     }
 }
 

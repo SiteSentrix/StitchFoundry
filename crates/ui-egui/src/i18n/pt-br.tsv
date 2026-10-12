@@ -3764,3 +3764,17 @@ machine	Trim	Corte de linha
 @msg	select an image to redraw	selecione uma imagem para redesenhar
 @msg	the image couldn't be read	não foi possível ler a imagem
 @msg	The image is too large to send: crop it, or place a smaller copy.	A imagem é grande demais para enviar: recorte-a ou coloque uma cópia menor.
+
+# Embroidery (StitchFoundry): fill textures and split lines
+	Set Split Lines	Definir linhas de divisão
+	Carve Split Lines	Gravar linhas de divisão
+	Clear Split Lines	Limpar linhas de divisão
+	Split lines:	Linhas de divisão:
+	Texture size	Tamanho da textura
+	Texture angle	Ângulo da textura
+	Diamonds	Losangos
+	Waves	Ondas
+	Herringbone	Espinha de peixe
+	Bricks	Tijolos
+	Circles	Círculos
+	Scales	Escamas

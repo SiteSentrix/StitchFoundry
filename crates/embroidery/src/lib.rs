@@ -165,6 +165,24 @@ pub fn regions_mm(node: &Node) -> Vec<sf_core::geom::Polygon> {
     }
 }
 
+/// A node's paths (type: its glyphs' outlines) as polylines in millimetres, each closed one
+/// ending where it starts.
+pub fn outlines_mm(node: &Node) -> Vec<Vec<sf_core::Point>> {
+    let Some((lines, _)) = convert::node_lines(node) else { return Vec::new() };
+    lines
+        .into_iter()
+        .map(|l| {
+            let mut pts = l.pts;
+            if l.closed
+                && let Some(&first) = pts.first()
+            {
+                pts.push(first);
+            }
+            pts
+        })
+        .collect()
+}
+
 /// Whether a node's geometry is all open paths (a stroke rather than an area).
 pub fn is_open(node: &Node) -> bool {
     convert::node_lines(node).is_some_and(|(lines, _)| !lines.is_empty() && lines.iter().all(|l| !l.closed))

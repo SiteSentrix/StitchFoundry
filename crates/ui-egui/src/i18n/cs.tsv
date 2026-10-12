@@ -4529,3 +4529,17 @@ machine	Stop	Zastavení
 @msg	select an image to redraw	vyberte obraz k překreslení
 @msg	the image couldn't be read	obraz nelze přečíst
 @msg	The image is too large to send: crop it, or place a smaller copy.	Obraz je příliš velký na odeslání: ořízněte ho nebo umístěte menší kopii.
+
+# Embroidery (StitchFoundry): fill textures and split lines
+	Set Split Lines	Nastavit dělicí čáry
+	Carve Split Lines	Vtlačit dělicí čáry
+	Clear Split Lines	Vymazat dělicí čáry
+	Split lines:	Dělicí čáry:
+	Texture size	Velikost textury
+	Texture angle	Úhel textury
+	Diamonds	Kosočtverce
+	Waves	Vlny
+	Herringbone	Rybí kost
+	Bricks	Cihly
+	Circles	Kruhy
+	Scales	Šupiny

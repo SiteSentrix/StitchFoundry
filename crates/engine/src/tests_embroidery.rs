@@ -1396,3 +1396,115 @@ fn place_art_can_land_on_an_images_frame() {
         assert!(s.execute("embroidery.placeArt", &json!({"svg": svg, "frame": bad})).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn a_texture_is_a_tatami_stitch_parameter() {
+    use sf_core::model::TexturePattern;
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 150.0, 100.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let plain = needles(&s, a);
+    s.execute("embroidery.setParams", &json!({"params": {"texture": {"pattern": "waves"}}})).unwrap();
+    let t = fill_params(&s, a).texture.unwrap();
+    assert_eq!((t.pattern, t.size, t.angle), (TexturePattern::Waves, 6.0, 0.0));
+    let waves = needles(&s, a);
+    assert_ne!(waves, plain);
+    // a change of size keeps the pattern
+    s.execute("embroidery.setParams", &json!({"params": {"texture": {"size": 9}}})).unwrap();
+    let t = fill_params(&s, a).texture.unwrap();
+    assert_eq!((t.pattern, t.size), (TexturePattern::Waves, 9.0));
+    assert!(s.execute("embroidery.setParams", &json!({"params": {"texture": {"pattern": "plaid"}}})).is_err());
+    s.execute("embroidery.setParams", &json!({"params": {"texture": null}})).unwrap();
+    assert!(fill_params(&s, a).texture.is_none());
+    assert_eq!(needles(&s, a), plain);
+}
+
+/// How many of `pts` (mm) lie on the ellipse round `c` (pt) with radii `r` (pt).
+fn on_ellipse(pts: &[sf_core::Point], c: (f64, f64), r: (f64, f64)) -> usize {
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    pts.iter()
+        .filter(|p| {
+            let (dx, dy) = ((p.x - c.0 * MM) / (r.0 * MM), (p.y - c.1 * MM) / (r.1 * MM));
+            ((dx * dx + dy * dy).sqrt() - 1.0).abs() * r.1.min(r.0) * MM < 0.05
+        })
+        .count()
+}
+
+#[test]
+fn carving_presses_a_shapes_outline_into_the_fill_below() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let plain = needles(&s, a);
+    let stamp = NodeId(s.execute("shape.ellipse", &json!({"x": 60, "y": 40, "width": 90, "height": 80})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, stamp.0]})).unwrap();
+    let r = s.execute("embroidery.carveSplits", &json!({})).unwrap();
+    assert_eq!((r["ids"].clone(), r["lines"].as_u64()), (json!([a.0]), Some(1)));
+    assert!(s.doc().unwrap().doc.node(stamp).is_none(), "the stamp is used up");
+    let lines = emb(&s, a).splits;
+    assert_eq!(lines.len(), 1);
+    let (first, last) = (lines[0][0], *lines[0].last().unwrap());
+    assert!(first.distance(last) < 1e-9, "a closed outline");
+    // The rows have needle points along the outline now.
+    let carved = needles(&s, a);
+    let (before, after) = (on_ellipse(&plain, (105.0, 80.0), (45.0, 40.0)), on_ellipse(&carved, (105.0, 80.0), (45.0, 40.0)));
+    assert!(after > before + 100, "{before} → {after}");
+    // The lines move with the fill.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert!((emb(&s, a).splits[0][0].x - first.x - 10.0).abs() < 1e-6);
+    // Undo brings back the stamp; Clear Split Lines takes the lines out.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(stamp).is_some() && emb(&s, a).splits.is_empty());
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("embroidery.clearSplits", &json!({"ids": [a.0]})).unwrap();
+    assert!(emb(&s, a).splits.is_empty());
+    assert_eq!(needles(&s, a), plain);
+    assert!(s.execute("embroidery.clearSplits", &json!({"ids": [a.0]})).is_err(), "nothing to clear");
+}
+
+#[test]
+fn a_repeated_line_carves_flexi_splits_across_the_fill() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let wave = NodeId(s.execute("path.create", &json!({"d": "M 0 50 C 60 20 120 80 230 50"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, wave.0]})).unwrap();
+    assert!(s.execute("embroidery.carveSplits", &json!({"repeat": 0.1})).is_err());
+    let r = s.execute("embroidery.carveSplits", &json!({"repeat": 5, "keep": true})).unwrap();
+    // 150 pt (53 mm) of fill, a copy every 5 mm, and the copies reaching in from beyond it.
+    let n = r["lines"].as_u64().unwrap();
+    assert!((10..=20).contains(&n), "{n}");
+    assert_eq!(emb(&s, a).splits.len() as u64, n);
+    assert!(s.doc().unwrap().doc.node(wave).is_some(), "kept");
+    // Fills alone: the front-most carves the others.
+    let b = rect(&mut s, 50.0, 50.0, 60.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("embroidery.carveSplits", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]));
+    assert!(s.doc().unwrap().doc.node(b).is_none());
+    // Nothing to carve with, or nothing to carve into.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert!(s.execute("embroidery.carveSplits", &json!({})).is_err());
+    s.execute("select.set", &json!({"ids": [wave.0]})).unwrap();
+    assert!(s.execute("embroidery.carveSplits", &json!({})).is_err());
+}
+
+#[test]
+fn split_lines_set_by_an_agent_are_checked() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let plain = needles(&s, a);
+    for bad in [json!([[[0, 0]]]), json!([[["x", 0], [1, 1]]]), json!([[[0, 0], [null, 1]]]), json!("lines"), json!([[0, 0, 1, 1]])] {
+        assert!(s.execute("embroidery.setSplits", &json!({"id": a.0, "splits": bad})).is_err(), "{bad}");
+    }
+    let r = s.execute("embroidery.setSplits", &json!({"id": a.0, "splits": [[[100, 0], [110, 300]], [[0, 80], [80, 20], [300, 90]]]})).unwrap();
+    assert_eq!(r["splits"], 2);
+    assert_ne!(needles(&s, a), plain);
+    // Only tatami fills take them.
+    s.execute("embroidery.set", &json!({"type": "satinfill"})).unwrap();
+    assert!(s.execute("embroidery.setSplits", &json!({"id": a.0, "splits": [[[100, 0], [110, 300]]]})).is_err());
+}

@@ -31,8 +31,13 @@ fn check_design_lists_findings_in_the_panel() {
 
 /// Every piece of text one headless frame of `show` paints.
 fn painted_text(app: &mut VectorcraftApp, show: fn(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<String> {
+    painted_text_in(app, show, 600.0)
+}
+
+/// [`painted_text`] on a screen `height` points high.
+fn painted_text_in(app: &mut VectorcraftApp, show: fn(&mut VectorcraftApp, &mut egui::Ui), height: f32) -> Vec<String> {
     let ctx = egui::Context::default();
-    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(420.0, 600.0))), ..Default::default() };
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(420.0, height))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| show(app, ui));
     out.textures_delta.clear();
     fn walk(s: &egui::Shape, into: &mut Vec<String>) {
@@ -45,6 +50,25 @@ fn painted_text(app: &mut VectorcraftApp, show: fn(&mut VectorcraftApp, &mut egu
     let mut texts = Vec::new();
     out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
     texts
+}
+
+#[test]
+fn the_panel_shows_a_fills_texture_and_split_lines() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap();
+    app.run("embroidery.set", json!({"type": "fill"})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(texts.iter().any(|t| t == "Texture") && !texts.iter().any(|t| t == "Texture size"), "{texts:?}");
+    app.run("embroidery.setParams", json!({"params": {"texture": {"pattern": "scales"}}})).unwrap();
+    app.run("embroidery.setSplits", json!({"id": id, "splits": [[[50, 0], [60, 200]]]})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    for want in ["Scales", "Texture size", "Texture angle", "Split lines: 1", "Clear Split Lines"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
+    // Satin fills have neither.
+    app.run("embroidery.set", json!({"type": "satinfill"})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(!texts.iter().any(|t| t == "Texture" || t == "Split lines: 1"), "{texts:?}");
 }
 
 #[test]

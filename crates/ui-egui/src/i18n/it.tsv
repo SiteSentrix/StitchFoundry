@@ -4504,3 +4504,17 @@ machine	Stop	Arresto
 @msg	select an image to redraw	seleziona un'immagine da ridisegnare
 @msg	the image couldn't be read	impossibile leggere l'immagine
 @msg	The image is too large to send: crop it, or place a smaller copy.	L'immagine è troppo grande per essere inviata: ritagliala o inserisci una copia più piccola.
+
+# Embroidery (StitchFoundry): fill textures and split lines
+	Set Split Lines	Imposta linee di divisione
+	Carve Split Lines	Imprimi linee di divisione
+	Clear Split Lines	Cancella linee di divisione
+	Split lines:	Linee di divisione:
+	Texture size	Dimensione texture
+	Texture angle	Angolo texture
+	Diamonds	Rombi
+	Waves	Onde
+	Herringbone	Spina di pesce
+	Bricks	Mattoni
+	Circles	Cerchi
+	Scales	Squame

@@ -4500,3 +4500,17 @@ machine	Stop	Остановка
 @msg	select an image to redraw	выделите изображение для перерисовки
 @msg	the image couldn't be read	не удалось прочитать изображение
 @msg	The image is too large to send: crop it, or place a smaller copy.	Изображение слишком большое для отправки: обрежьте его или поместите уменьшенную копию.
+
+# Embroidery (StitchFoundry): fill textures and split lines
+	Set Split Lines	Задать линии разделения
+	Carve Split Lines	Выдавить линии разделения
+	Clear Split Lines	Очистить линии разделения
+	Split lines:	Линии разделения:
+	Texture size	Размер текстуры
+	Texture angle	Угол текстуры
+	Diamonds	Ромбы
+	Waves	Волны
+	Herringbone	Ёлочка
+	Bricks	Кирпичи
+	Circles	Круги
+	Scales	Чешуя
