@@ -7,7 +7,8 @@ use serde_json::{Value, json};
 use vectorcraft_embroidery::sf_core::attr::{Embroidery, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
-    Corners, CoverKind, FillKind, FillParams, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH, TackdownKind, TexturePattern, TieStyle,
+    Corners, CoverKind, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH, TackdownKind, TexturePattern,
+    TieStyle,
 };
 use vectorcraft_embroidery::sf_core::threads::{Rgb, charts};
 
@@ -337,7 +338,16 @@ fn current_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroidery, open: bool) {
     match &e.stitch {
         StitchType::Run(r) => {
-            let kinds = [tl!("Single"), tl!("Triple"), tl!("Blanket"), tl!("Zigzag"), tl!("Motif"), tl!("Backstitch"), tl!("Stem stitch")];
+            let kinds = [
+                tl!("Single"),
+                tl!("Triple"),
+                tl!("Blanket"),
+                tl!("Zigzag"),
+                tl!("Motif"),
+                tl!("Backstitch"),
+                tl!("Stem stitch"),
+                tl!("Hand stitch"),
+            ];
             let cur = RunKind::ALL.iter().position(|k| *k == r.kind).unwrap_or(0);
             if let Some(i) = pick(ui, tl!("Run style"), "runkind", cur, &kinds)
                 && let Some(k) = RunKind::ALL.get(i)
@@ -352,8 +362,10 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             {
                 set(app, target, json!({ "width": v }));
             }
-            if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif)
-                && let Some(v) = num(ui, tl!("Spacing"), "rs", r.spacing, " mm", 2)
+            // a hand stitch's spacing is the gap between its stitches
+            let spacing = if r.kind == RunKind::Hand { tl!("Gap") } else { tl!("Spacing") };
+            if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif | RunKind::Hand)
+                && let Some(v) = num(ui, spacing, "rs", r.spacing, " mm", 2)
             {
                 set(app, target, json!({ "spacing": v }));
             }
@@ -439,6 +451,19 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             if let Some(v) = check(ui, tl!("Short stitches on curves"), s.short_stitches) {
                 set(app, target, json!({ "short_stitches": v }));
             }
+            // Jagged edges: stitches end short of the edge at random (fur, grass, feathers).
+            let sides = [tl!("None"), tl!("Both sides"), tl!("Side 1"), tl!("Side 2")];
+            let cur = s.jagged.and_then(|j| JaggedSides::ALL.iter().position(|x| *x == j.sides)).map_or(0, |i| i + 1);
+            if let Some(i) = pick(ui, tl!("Jagged edges"), "jagged", cur, &sides) {
+                let depth = s.jagged.unwrap_or_default().depth;
+                let v = i.checked_sub(1).and_then(|k| JaggedSides::ALL.get(k)).map_or(Value::Null, |side| json!({ "sides": side, "depth": depth }));
+                set(app, target, json!({ "jagged": v }));
+            }
+            if let Some(j) = s.jagged
+                && let Some(v) = num(ui, tl!("Jag depth"), "jagdepth", j.depth, " mm", 1)
+            {
+                set(app, target, json!({ "jagged": { "depth": v.clamp(0.0, 20.0) } }));
+            }
             let u = &s.underlay;
             if let Some(v) = check(ui, tl!("Automatic underlay"), u.auto) {
                 set(app, target, json!({ "underlay": { "auto": v } }));
@@ -498,6 +523,9 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             }
             if f.kind == FillKind::Tatami {
                 texture_rows(app, ui, target, f, e);
+                if let Some(v) = check(ui, tl!("Trapunto (travel along the outline)"), f.trapunto) {
+                    set(app, target, json!({ "trapunto": v }));
+                }
             }
             if f.kind == FillKind::Satin
                 && let Some(v) = num(ui, tl!("Auto split"), "fsplit", f.split_length, " mm", 1)

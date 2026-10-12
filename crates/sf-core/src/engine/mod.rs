@@ -159,6 +159,7 @@ fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<P
                 random: params.random,
                 texture: if satin { None } else { params.texture },
                 splits: if satin { Vec::new() } else { job.splits.to_vec() },
+                trapunto: params.trapunto,
             };
             fill::scan_fill_all(std::slice::from_ref(piece), &cfg, out, here, exit, trim);
         }

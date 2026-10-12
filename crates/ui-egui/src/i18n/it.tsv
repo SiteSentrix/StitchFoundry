@@ -4518,3 +4518,13 @@ machine	Stop	Arresto
 	Bricks	Mattoni
 	Circles	Cerchi
 	Scales	Squame
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	Punto a mano
+	Gap	Spazio
+	Jagged edges	Bordi frastagliati
+	Both sides	Entrambi i lati
+	Side 1	Lato 1
+	Side 2	Lato 2
+	Jag depth	Profondità della frastagliatura
+	Trapunto (travel along the outline)	Trapunto (spostamenti lungo il contorno)

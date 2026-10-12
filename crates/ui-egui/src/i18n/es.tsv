@@ -4516,3 +4516,13 @@ machine	Stop	Parada
 	Bricks	Ladrillos
 	Circles	Círculos
 	Scales	Escamas
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	Puntada a mano
+	Gap	Separación
+	Jagged edges	Bordes irregulares
+	Both sides	Ambos lados
+	Side 1	Lado 1
+	Side 2	Lado 2
+	Jag depth	Profundidad de las irregularidades
+	Trapunto (travel along the outline)	Trapunto (desplazamientos por el contorno)
