@@ -4669,6 +4669,7 @@ dependencies = [
  "image",
  "kurbo 0.13.1",
  "ruzstd",
+ "serde_json",
  "vectorcraft-brush",
  "vectorcraft-color",
  "vectorcraft-doc",

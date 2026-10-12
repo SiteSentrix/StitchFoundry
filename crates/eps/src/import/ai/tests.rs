@@ -238,6 +238,12 @@ fn compound_paths_and_clipping() {
     // The clipping path goes first.
     assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
     assert!(matches!(children[1].kind, NodeKind::Path { clipping: false, .. }));
+    // A clipping path with a fill paints it too, under the art it clips; without one, nothing.
+    let filled = format!("0 Ae\nq\n{RED}{}f\n0 0 1 0 0 0 1 Xa\n{}W\nf\nQ\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(5.0, 5.0, 25.0, 25.0));
+    let doc = read_ok(&layer(&filled)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
+    let kinds: Vec<_> = children.iter().map(|c| (matches!(c.kind, NodeKind::Path { clipping: true, .. }), fill(c).color())).collect();
+    assert_eq!(kinds, [(true, None), (false, Some(Color::rgb(0.0, 0.0, 1.0))), (false, Some(Color::rgb(1.0, 0.0, 0.0)))]);
     // A clipping path in a layer clips the layer.
     let doc = read_ok(&layer(&format!("{}f\n{}W\nn\n", rect_path(0.0, 0.0, 9.0, 9.0), rect_path(0.0, 0.0, 5.0, 5.0)))).doc;
     let NodeKind::Layer { clip, children, .. } = &doc.layers[0].kind else { panic!() };
@@ -261,6 +267,20 @@ fn compound_path_takes_its_last_paths_paint() {
         assert!(children.len() >= 2 && children.iter().all(|c| matches!(c.kind, NodeKind::Path { .. })), "{body}");
         assert_eq!(fill(&a[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "{body}");
     }
+}
+
+#[test]
+fn a_group_whose_state_has_no_transparency_takes_the_current_one() {
+    // GUARDS: a group's own state block keeps the last `Xy`, as the PDF part draws it; a drawn look's group stays opaque.
+    let art_ = format!(
+        "{RED}0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n0 0 Xd\n6 () XW\n0 1 0 0 0 Xy\n0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n9 () XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(20.0, 0.0, 30.0, 10.0)
+    );
+    let doc = read_ok(&layer(&art_)).doc;
+    let a = art(&doc);
+    assert_eq!((a[0].opacity, a[0].children().unwrap()[0].opacity), (0.5, 0.5));
+    assert_eq!((a[1].opacity, a[1].children().unwrap()[0].opacity), (1.0, 0.5));
 }
 
 #[test]
@@ -333,6 +353,27 @@ fn gradients() {
 }
 
 #[test]
+fn a_compound_path_holding_its_drawn_look_paints_its_paths_apart() {
+    // GUARDS: made one compound path, the look's paths take a single fill and the inner one punches a hole.
+    let art_ = format!(
+        "0 Ae\n*u\n0 Ae\nu\n{RED}{}f\n0 0 0 0 0 0 1 Xa\n{}f\nU\n9 () XW\n*U\n",
+        rect_path(0.0, 0.0, 20.0, 20.0),
+        rect_path(5.0, 5.0, 15.0, 15.0)
+    );
+    let a = art(&read_ok(&layer(&art_)).doc);
+    fn leaves(n: &Node, out: &mut Vec<Paint>) {
+        match n.children() {
+            Some(children) if !matches!(n.kind, NodeKind::Compound { .. }) => children.iter().for_each(|c| leaves(c, out)),
+            _ => out.push(fill(n)),
+        }
+    }
+    let mut painted = vec![];
+    a.iter().for_each(|n| leaves(n, &mut painted));
+    let fills: Vec<_> = painted.iter().map(Paint::color).collect();
+    assert_eq!(fills, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{a:#?}");
+}
+
+#[test]
 fn gradients_through_a_skewed_matrix() {
     // GUARDS: a sheared `Xm` leaves the matrix's columns oblique. A linear ramp runs along the
     // normal to its isolines, not along its first column; a radial's ellipse is the one the unit
@@ -367,6 +408,12 @@ fn stops_sharing_a_ramp_point_keep_their_order() {
     let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
     let colors: Vec<_> = g.gradient.stops.iter().map(|s| s.color).collect();
     assert_eq!(colors, [Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0), Color::rgb(1.0, 0.0, 0.0)]);
+}
+
+#[test]
+fn per_anchor_data_reads() {
+    let art_ = format!("{RED}{}f\n(00800080) Xt 0 XD\n%_(00004000) Xt 1 XD\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    assert_eq!(art(&read_ok(&layer(&art_)).doc).len(), 1);
 }
 
 #[test]
@@ -805,6 +852,28 @@ fn artboards_after_what_stops_the_reading() {
 }
 
 #[test]
+fn a_compound_clipping_path_with_a_fill_paints_once_under_its_clip() {
+    // GUARDS: the painted copies of a compound's clipping subpaths went into the compound itself,
+    // doubling each subpath, so under even-odd the clip cancelled to nothing.
+    let art_ = format!(
+        "0 Ae\nq\n{RED}{}f\n1 XR\n*u\n0 0 0 0 0 0 1 Xa\n{}W\nf\n{}W\nf\n*U\nQ\n",
+        rect_path(0.0, 0.0, 100.0, 100.0),
+        rect_path(10.0, 10.0, 40.0, 40.0),
+        rect_path(50.0, 10.0, 80.0, 40.0),
+    );
+    let doc = read_ok(&layer(&art_)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
+    assert_eq!(children.len(), 3, "{children:#?}");
+    let NodeKind::Compound { children: clip, rule } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    assert_eq!(*rule, vectorcraft_geom::FillRule::EvenOdd);
+    assert_eq!(clip.len(), 2);
+    assert!(clip.iter().all(|c| matches!(c.kind, NodeKind::Path { clipping: true, .. })));
+    let NodeKind::Compound { children: painted, .. } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert_eq!((painted.len(), fill(&children[1]).color()), (2, Some(Color::rgb(0.0, 0.0, 1.0))));
+    assert_eq!(fill(&children[2]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+}
+
+#[test]
 fn a_radial_gradient_without_xm_is_its_bm_circle_else_its_bg_circle() {
     // GUARDS: files write `Bg` as the unit circle and place the radial with `Bm`; reading `Bg` alone collapses it.
     let defs =
@@ -821,11 +890,62 @@ fn a_radial_gradient_without_xm_is_its_bm_circle_else_its_bg_circle() {
 }
 
 /// Two art styles: `Blue`, a blue fill and a drop shadow; `Lit`, the object's gradient and an outer glow.
+const ART_STYLES: &str = "%AI9_BeginArtStyles\n\
+    /KnownStyle :\n(Blue) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+    /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+    /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+    /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+    /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n3 /Real (horz) ,\n4 /Real (vert) ,\n; /Dict ;\n /Part ,\n;\n\
+    /KnownStyle :\n(Lit) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+    /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+    /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n1 (G) 0 0 0 1 1 0 0 1 0 0 Bg\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+    /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+    /BasicFilter :\n(Adobe Outer Glow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n0.5 /Real (opac) ,\n2 /Real (blur) ,\n; /Dict ;\n /Part ,\n;\n\
+    %AI9_EndArtStyles\n";
+
+#[test]
+fn an_object_with_a_style_this_reads_comes_in_as_itself() {
+    let defs =
+        "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!(
+        "0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_1 (G) 0 0 0 1 1 0 0 1 0 0 Bg\n%_10 0 0 10 5 5 Xm\n%_{hidden_rect}f\n%_0 BB\n1 (Lit) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0)
+    );
+    let r = read_ok(&format!("{ART_STYLES}{defs}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    assert!(matches!(fill(&a[0]), Paint::Gradient(g) if g.swatch.as_deref() == Some("G")));
+    let effects: Vec<_> = a[0].appearance.effects.iter().map(|e| (e.id.as_str(), e.params["opacity"].as_f64())).collect();
+    assert_eq!(effects, [("stylize.outerGlow", Some(50.0))]);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
 #[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.
     let r = read_ok(&format!("%%BeginProlog\n%\n%%EndProlog\n{}", layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)))));
     assert_eq!(art(&r.doc).len(), 1);
+}
+
+#[test]
+fn a_styled_object_inside_a_drawn_look_survives_it() {
+    // GUARDS: an adopted styled object was read on `%_` lines; while its id stayed among those, the
+    // enclosing look's strip removed it.
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!(
+        "0 Ae\nu\n0 Ae\nu\n{RED}{}f\nU\n%_{hidden_rect}f\n1 (Blue) XW\nU\n%_0 Ae\n%_u\n%_{hidden_rect}f\n%_U\n1 (Outer) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0)
+    );
+    let r = read_ok(&format!("{ART_STYLES}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let inner = a[0].children().unwrap();
+    assert_eq!(inner.len(), 1, "{inner:#?}");
+    assert_eq!(fill(&inner[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let shadow = &inner[0].appearance.effects[0];
+    assert_eq!((shadow.id.as_str(), shadow.params["x"].as_f64(), shadow.params["y"].as_f64()), ("stylize.dropShadow", Some(3.0), Some(4.0)));
 }
 
 #[test]

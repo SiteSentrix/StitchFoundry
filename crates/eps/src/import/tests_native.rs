@@ -113,7 +113,7 @@ fn sublayers_groups_compounds_clip_groups_and_hidden_objects_come_in() {
         square(20, 10),
         square(30, 10),
         "*U".into(),
-        // A clipping group: its objects, then its clip path.
+        // A clipping group: its objects, then its clip path (filled, so it paints too).
         "q".into(),
         square(40, 10),
         "50 10 m 60 10 L 60 20 L 50 20 L h W f".into(),
@@ -128,11 +128,12 @@ fn sublayers_groups_compounds_clip_groups_and_hidden_objects_come_in() {
     .join("\n");
     let sub = layer("Inner", true, &square(80, 10));
     let art = native(&layer("Outer", true, &format!("{body}\n{sub}")));
-    // The page has what shows: the clip group's square is outside its clip path.
-    let page = [10, 20, 30, 80].map(|x| page_square(x, 10)).join("\n");
+    // The page has what shows: the clip group's square is outside its clip path, which paints.
+    let clip_fill = "0 0 1 0 setcmykcolor 50 10 moveto 60 10 lineto 60 20 lineto 50 20 lineto closepath fill";
+    let page = [10, 20, 30, 80].map(|x| page_square(x, 10)).join("\n") + "\n" + clip_fill;
     let r = import(&eps(&page, &art)).unwrap();
     let outer = &r.document.layers[0];
-    assert_eq!(kinds(outer), ["group[1]", "compound[2]", "clip[2]", "group[1]", "other"]);
+    assert_eq!(kinds(outer), ["group[1]", "compound[2]", "clip[3]", "group[1]", "other"]);
     let children = outer.children().unwrap();
     assert!(children[0].visible && !children[3].visible, "the hidden object is hidden, not left out");
     // The clip path comes first in its group.
