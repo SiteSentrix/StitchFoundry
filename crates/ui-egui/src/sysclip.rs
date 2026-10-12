@@ -92,7 +92,9 @@ impl VectorcraftApp {
                 let Some(f) = cb.read(&PASTE_ORDER) else { return Ok(()) };
                 // Text that only names a picture (its address, or its image markup) goes with a
                 // browser's copied picture: the picture.
-                let f = if f.mime == TEXT && names_a_picture(&String::from_utf8_lossy(&f.data)) { cb.read(&[BITMAP]).unwrap_or(f) } else { f };
+                let text = String::from_utf8_lossy(&f.data);
+                // Blank text is what some hosts put beside a copied picture. It is not the paste.
+                let f = if f.mime == TEXT && (text.trim().is_empty() || names_a_picture(&text)) { cb.read(&[BITMAP]).unwrap_or(f) } else { f };
                 import_command(&f, center)
             }
             // Text only: SVG markup is art, other text is left alone.
