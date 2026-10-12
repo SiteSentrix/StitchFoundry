@@ -288,6 +288,51 @@ fn shadings_become_gradients() {
     assert_eq!(offsets, vec![0.0, 0.25, 1.0]);
 }
 
+/// Tiling patterns and spot inks are found again through a hash of what tells them apart, so a
+/// program that makes 200,000 patterns and 200,001 inks reads within [`read_soon`]'s 20 seconds.
+/// Patterns are named Pattern 1, Pattern 2 and so on in the order they are made. A pattern made
+/// again from its prototype is the same pattern, and so is an uncolored pattern set again in a
+/// color it was set in before.
+#[test]
+fn many_tiling_patterns_and_spot_inks_read_in_linear_time() {
+    let r = read(
+        "/pp { pop 0 0 1 1 rectfill } def \
+         /a << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep 2 /YStep 2 /PaintProc /pp load >> def \
+         /b << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep 3 /YStep 2 /PaintProc /pp load >> def \
+         /u << /PatternType 1 /PaintType 2 /TilingType 1 /BBox [0 0 1 1] /XStep 2 /YStep 2 /PaintProc /pp load >> matrix makepattern def \
+         a matrix makepattern setpattern 0 0 10 10 rectfill b matrix makepattern setpattern 10 0 10 10 rectfill \
+         a [2 0 0 2 0 0] makepattern setpattern 20 0 10 10 rectfill /DeviceRGB setcolorspace \
+         1 0 0 u setpattern 30 0 10 10 rectfill 0 0 1 u setpattern 40 0 10 10 rectfill 1 0 0 u setpattern 50 0 10 10 rectfill",
+    );
+    let d = &r.document;
+    let names: Vec<&str> = d.patterns.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["Pattern 1", "Pattern 2", "Pattern 3", "Pattern 4"]);
+    let fills: Vec<String> = objects(d)
+        .iter()
+        .map(|o| match fill(o) {
+            Some(Paint::Pattern { pattern, .. }) => pattern.clone(),
+            p => panic!("{p:?}"),
+        })
+        .collect();
+    assert_eq!(fills, ["Pattern 1", "Pattern 2", "Pattern 1", "Pattern 3", "Pattern 4", "Pattern 3"]);
+    assert!(names.iter().all(|n| d.swatch(n).is_some_and(|s| matches!(s.paint, Paint::Pattern { .. }))));
+    // 100,000 patterns whose cells differ, an uncolored pattern in 100,000 tints of an ink that is
+    // white at every tint (only the tint tells those patterns apart), and 200,000 more inks.
+    let r = read_soon(
+        "0 1 99999 { /i exch def << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep i 2 add /YStep 1 \
+         /PaintProc { pop 0 0 1 1 rectfill } >> matrix makepattern setpattern } for \
+         [/Separation (Spot) /DeviceGray { pop 1 }] setcolorspace \
+         /p << /PatternType 1 /PaintType 2 /TilingType 1 /BBox [0 0 1 1] /XStep 2 /YStep 2 /PaintProc { pop 0 0 1 1 rectfill } >> \
+         matrix makepattern def 0 1 99999 { 100000 div p setpattern } for \
+         0 1 199999 { /i exch def [/Separation i 8 string cvs /DeviceGray {}] setcolorspace } for 0 0 1 1 rectfill",
+    );
+    let d = &r.document;
+    assert_eq!(d.patterns.len(), 200_000);
+    assert!(d.patterns.iter().enumerate().all(|(i, p)| p.name == format!("Pattern {}", i + 1)));
+    assert_eq!(d.swatches.iter().filter(|s| matches!(s.paint, Paint::Pattern { .. })).count(), 200_000);
+    assert_eq!(d.swatches.iter().filter(|s| s.spot).count(), 200_001);
+}
+
 #[test]
 fn images_and_image_masks() {
     // 2 × 2 RGB from hex data in the file, through a procedure.

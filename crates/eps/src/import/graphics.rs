@@ -1,6 +1,8 @@
 //! The graphics state and the operators that draw: coordinates, paths, colours, painting,
 //! clipping and shadings. Painted paths become document objects as they are drawn ([`Out`]).
 
+use std::collections::{HashMap, HashSet};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -195,19 +197,45 @@ pub(crate) struct Out {
     pub rgb: usize,
     /// Spot inks used: name and colour at full tint.
     pub spots: Vec<(String, Color)>,
+    /// The color at full tint of each spot ink in [`Self::spots`], by name.
+    spot_colors: HashMap<Rc<str>, Color>,
     /// Rectangles painted with a shading (`shfill`): a clipping group of one is the clip path
     /// filled with it.
-    pub shadings: Vec<NodeId>,
+    pub shadings: HashSet<NodeId>,
     /// Tiling patterns made into pattern swatches: the pattern's `PaintProc` (a pattern made
     /// again with `makepattern` shares it) and cell, the colour an uncoloured one painted in, and
-    /// the swatch's name.
-    tilings: Vec<(Shared<Obj>, Rect, Option<Paint>, String)>,
+    /// the swatch's name. Each list holds the patterns of one [`tiling_hash`]; a pattern whose
+    /// cell has a NaN corner is left out.
+    tilings: HashMap<u64, Vec<Tiling>>,
     /// How deep art drawn apart (a pattern's cell, a Type 3 glyph) is nested.
     pub apart: u32,
 }
 
 fn sane(r: Rect) -> bool {
     [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= LIMIT)
+}
+
+/// A tiling pattern made into a pattern swatch, as [`Out::tilings`] lists it.
+type Tiling = (Shared<Obj>, Rect, Option<Paint>, String);
+
+/// A hash of what tells tiling patterns apart in [`Out::tilings`]. Patterns that compare equal
+/// hash alike: each number goes in by its bits, and −0 goes in as 0.
+fn tiling_hash(proc: &Shared<Obj>, tile: Rect, under: Option<&Paint>) -> u64 {
+    let mut h = DefaultHasher::new();
+    proc.hash(&mut h);
+    [tile.x0, tile.y0, tile.x1, tile.y1].map(|v| (v + 0.0).to_bits()).hash(&mut h);
+    if let Some(Paint::Solid { color, swatch, tint }) = under {
+        let c = match *color {
+            Color::Rgb { r, g, b } => [r, g, b, 0.0],
+            Color::Cmyk { c, m, y, k } => [c, m, y, k],
+            Color::Gray { k } => [k, 0.0, 0.0, 0.0],
+            Color::Lab { l, a, b } => [l, a, b, 0.0],
+        };
+        c.map(|v| (v + 0.0).to_bits()).hash(&mut h);
+        swatch.hash(&mut h);
+        (tint + 0.0).to_bits().hash(&mut h);
+    }
+    h.finish()
 }
 
 impl Out {
@@ -226,8 +254,9 @@ impl Out {
             cmyk: 0,
             rgb: 0,
             spots: vec![],
-            shadings: vec![],
-            tilings: vec![],
+            spot_colors: HashMap::new(),
+            shadings: HashSet::new(),
+            tilings: HashMap::new(),
             apart: 0,
         }
     }
@@ -891,11 +920,14 @@ impl Interp<'_> {
                         Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(t), swatch: Some(REGISTRATION.into()), tint: t }
                     }
                     [one] => {
-                        let full = match self.out.spots.iter().find(|(n, _)| **n == **one) {
-                            Some((_, c)) => *c,
+                        let full = match self.out.spot_colors.get(one) {
+                            Some(c) => *c,
                             None => {
                                 let c = self.tint_color(alt, tint, &[1.0])?;
                                 self.out.spots.push((one.to_string(), c));
+                                // The tint transform may have listed this ink already: the color
+                                // listed first stays.
+                                self.out.spot_colors.entry(one.clone()).or_insert(c);
                                 c
                             }
                         };
@@ -986,7 +1018,9 @@ impl Interp<'_> {
         let xf = m * Affine::translate(tile.origin().to_vec2());
         let proc = get("PaintProc").ok_or(PsError::Ps("undefined", "PaintProc".into()))?;
         let key = proc.items().cloned().ok_or(PsError::Ps("typecheck", "PaintProc".into()))?;
-        if let Some((.., name)) = self.out.tilings.iter().find(|(p, t, u, _)| p.same(&key) && *t == tile && *u == under) {
+        let hash = tiling_hash(&key, tile, under.as_ref());
+        let made = self.out.tilings.get(&hash).and_then(|list| list.iter().find(|(p, t, u, _)| p.same(&key) && *t == tile && *u == under));
+        if let Some((.., name)) = made {
             return Ok(Paint::Pattern { pattern: name.clone(), xf });
         }
         if self.out.apart >= MAX_APART {
@@ -1004,12 +1038,16 @@ impl Interp<'_> {
         if art.is_empty() {
             return Ok(Paint::None);
         }
-        let name =
-            (self.out.doc.patterns.len() + 1..).map(|i| format!("Pattern {i}")).find(|n| self.out.doc.pattern(n).is_none()).unwrap_or_default();
+        // The document gets its patterns only here, so the n made so far are Pattern 1 to
+        // Pattern n.
+        let name = format!("Pattern {}", self.out.doc.patterns.len() + 1);
         let mut def = PatternDef::new(&name, art);
         def.tile = tile;
         self.out.doc.patterns.push(def);
-        self.out.tilings.push((key, tile, under, name.clone()));
+        // A cell with a NaN corner equals no cell, so the lookup above could never find it.
+        if !tile.is_nan() {
+            self.out.tilings.entry(hash).or_insert_with(|| Vec::with_capacity(1)).push((key, tile, under, name.clone()));
+        }
         Ok(Paint::Pattern { pattern: name, xf })
     }
 
@@ -1697,7 +1735,7 @@ impl Interp<'_> {
                     self.out.fill(area.to_path(0.1), FillRule::NonZero, paint, self.g.overprint, &clips);
                     if let Some((_, n)) = self.out.drawn.last() {
                         let id = n.id;
-                        self.out.shadings.push(id);
+                        self.out.shadings.insert(id);
                     }
                 }
             }
@@ -1756,7 +1794,7 @@ fn linear_points(f: &Obj, depth: u32, visits: &mut usize) -> Option<Vec<f64>> {
 
 /// The clip path a clipping group of one shading rectangle (`shfill` through a clip) can be
 /// filled with instead.
-pub(crate) fn collapse(nodes: &mut [Arc<Node>], shadings: &[NodeId]) {
+pub(crate) fn collapse(nodes: &mut [Arc<Node>], shadings: &HashSet<NodeId>) {
     for n in nodes.iter_mut() {
         let NodeKind::Group { children, clip: true } = &n.kind else {
             if let Some(c) = Arc::make_mut(n).children_mut() {

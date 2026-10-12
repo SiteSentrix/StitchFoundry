@@ -54,10 +54,11 @@ mod tests_images;
 #[cfg(test)]
 mod tests_native;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use vectorcraft_color::Paint;
-use vectorcraft_color::swatch::Swatch;
+use vectorcraft_color::swatch::{REGISTRATION, Swatch};
 use vectorcraft_doc::{ColorMode, Document, LayerColor, Node};
 use vectorcraft_geom::{Affine, Rect};
 
@@ -253,14 +254,16 @@ fn finish_with(out: Out, layers: Vec<Arc<Node>>) -> Imported {
         let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
         (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
     }
+    // `taken` holds the names `Document::swatch` finds: each swatch's name, and Registration.
+    let mut taken: HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).chain([REGISTRATION.to_string()]).collect();
     for (name, color) in out.spots {
-        if doc.swatch(&name).is_none() {
+        if taken.insert(name.clone()) {
             doc.swatches.push(Swatch { name, paint: Paint::solid(color), global: true, spot: true });
         }
     }
     // Tiling patterns are pattern swatches.
     for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
-        if doc.swatch(&name).is_none() {
+        if taken.insert(name.clone()) {
             doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
         }
     }
