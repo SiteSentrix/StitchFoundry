@@ -1038,10 +1038,36 @@ pub enum TexturePattern {
     Stars,
     Hearts,
     Leaves,
+    Stripes,
+    Slants,
+    Pinstripes,
+    Lattice,
+    Arches,
+    Rings,
+    Dots,
+    Spirals,
+    Pyramids,
+    Ripples,
+    GreekKey,
+    Crosses,
+    Quatrefoils,
+    Flowers,
+    Trefoils,
+    Moons,
+    Arrows,
+    NestedDiamonds,
+    Argyle,
+    Wicker,
+    Feathers,
+    Paisley,
+    Swirls,
+    Snowflakes,
+    Bubbles,
+    Sunbursts,
 }
 
 impl TexturePattern {
-    pub const ALL: [TexturePattern; 14] = [
+    pub const ALL: [TexturePattern; 40] = [
         TexturePattern::Diamonds,
         TexturePattern::Waves,
         TexturePattern::Herringbone,
@@ -1056,6 +1082,32 @@ impl TexturePattern {
         TexturePattern::Stars,
         TexturePattern::Hearts,
         TexturePattern::Leaves,
+        TexturePattern::Stripes,
+        TexturePattern::Slants,
+        TexturePattern::Pinstripes,
+        TexturePattern::Lattice,
+        TexturePattern::Arches,
+        TexturePattern::Rings,
+        TexturePattern::Dots,
+        TexturePattern::Spirals,
+        TexturePattern::Pyramids,
+        TexturePattern::Ripples,
+        TexturePattern::GreekKey,
+        TexturePattern::Crosses,
+        TexturePattern::Quatrefoils,
+        TexturePattern::Flowers,
+        TexturePattern::Trefoils,
+        TexturePattern::Moons,
+        TexturePattern::Arrows,
+        TexturePattern::NestedDiamonds,
+        TexturePattern::Argyle,
+        TexturePattern::Wicker,
+        TexturePattern::Feathers,
+        TexturePattern::Paisley,
+        TexturePattern::Swirls,
+        TexturePattern::Snowflakes,
+        TexturePattern::Bubbles,
+        TexturePattern::Sunbursts,
     ];
 
     /// The pattern's id in params and files.
@@ -1075,6 +1127,32 @@ impl TexturePattern {
             TexturePattern::Stars => "stars",
             TexturePattern::Hearts => "hearts",
             TexturePattern::Leaves => "leaves",
+            TexturePattern::Stripes => "stripes",
+            TexturePattern::Slants => "slants",
+            TexturePattern::Pinstripes => "pinstripes",
+            TexturePattern::Lattice => "lattice",
+            TexturePattern::Arches => "arches",
+            TexturePattern::Rings => "rings",
+            TexturePattern::Dots => "dots",
+            TexturePattern::Spirals => "spirals",
+            TexturePattern::Pyramids => "pyramids",
+            TexturePattern::Ripples => "ripples",
+            TexturePattern::GreekKey => "greekkey",
+            TexturePattern::Crosses => "crosses",
+            TexturePattern::Quatrefoils => "quatrefoils",
+            TexturePattern::Flowers => "flowers",
+            TexturePattern::Trefoils => "trefoils",
+            TexturePattern::Moons => "moons",
+            TexturePattern::Arrows => "arrows",
+            TexturePattern::NestedDiamonds => "nesteddiamonds",
+            TexturePattern::Argyle => "argyle",
+            TexturePattern::Wicker => "wicker",
+            TexturePattern::Feathers => "feathers",
+            TexturePattern::Paisley => "paisley",
+            TexturePattern::Swirls => "swirls",
+            TexturePattern::Snowflakes => "snowflakes",
+            TexturePattern::Bubbles => "bubbles",
+            TexturePattern::Sunbursts => "sunbursts",
         }
     }
 
@@ -1088,6 +1166,24 @@ impl TexturePattern {
             TexturePattern::Scales | TexturePattern::Hexagons => (l * 2.5).clamp(4.0, 14.0),
             // pictures need a few rows to read
             TexturePattern::Stars | TexturePattern::Hearts | TexturePattern::Leaves => (l * 3.0).clamp(6.0, 18.0),
+            TexturePattern::Rings
+            | TexturePattern::Dots
+            | TexturePattern::Spirals
+            | TexturePattern::GreekKey
+            | TexturePattern::Crosses
+            | TexturePattern::Quatrefoils
+            | TexturePattern::Flowers
+            | TexturePattern::Trefoils
+            | TexturePattern::Moons
+            | TexturePattern::Arrows
+            | TexturePattern::NestedDiamonds
+            | TexturePattern::Argyle
+            | TexturePattern::Feathers
+            | TexturePattern::Paisley
+            | TexturePattern::Swirls
+            | TexturePattern::Snowflakes
+            | TexturePattern::Bubbles
+            | TexturePattern::Sunbursts => (l * 3.0).clamp(6.0, 18.0),
             _ => (l * 1.5).clamp(3.0, 12.0),
         }
     }

@@ -388,7 +388,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | PS-01 | Tatami offsets (texture by row offset patterns) | Done | | – |
-| PS-02 | Program splits (needle-point patterns inside fills) | Partial | Tatami *Texture*: 14 patterns generated in code (diamonds, waves, herringbone, bricks, circles, scales, hexagons, chevrons, zigzag, ogee, basket weave, stars, hearts, leaves) with tile size and turn; §7.3 wants 40+ | 2 |
+| PS-02 | Program splits (needle-point patterns inside fills) | Done | Tatami *Texture*: 40 patterns generated in code (diamonds, waves, herringbone, bricks, circles, scales, hexagons, chevrons, zigzag, ogee, basket weave, stars, hearts, leaves, stripes, slants, pinstripes, lattice, arches, rings, dots, spirals, pyramids, ripples, Greek key, crosses, quatrefoils, flowers, trefoils, moons, arrows, nested diamonds, argyle, wicker, feathers, paisley, swirls, snowflakes, bubbles, sunbursts) with tile size and turn | – |
 | PS-03 | User-defined splits (draw split lines) | Done | Paths drawn over a tatami fill carved in as split lines (Embroidery › Carve Split Lines, `embroidery.setSplits`), shown dashed on the fill | – |
 | PS-04 | Carving stamps (embossed patterns pressed into fills) | Done | Any closed shape's outline pressed in (Carve Split Lines), and a library of 16 stamps drawn in code (Embroidery › Carve Stamp: star, heart, flower, leaf, spiral, sun, moon, snowflake, paw print, swirl, shell, butterfly, clover, feather, rings, diamond) | – |
 | CS-01 | Contour fill/outline | Done | | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 133 done,
-36 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the repeat preview). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 134 done,
+35 partial, 56 missing, 6 out of scope (counted 2026-10-12, after 40 textures). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -726,8 +726,8 @@ RS-03, BAS-15), then the design's own motifs (MO-06), sculpture runs and cross-s
 SP-12), redwork (SP-13), buttonholes (SP-14), rings and outlines round lines (PT-02, RS-02, PT-05),
 more textures and paired motif fills (PS-02, MO-04), graded motif columns (MO-05), string stitching
 (SP-04), the automatic knife (RS-06), 3D motif fills (MO-04) and flow lines, the liquid effect
-(CS-07), a library of carving stamps (PS-04) and a repeat preview (BAS-15). Left in phase 2: more
-textures and a motif placement tool (MO-01).
+(CS-07), a library of carving stamps (PS-04), a repeat preview (BAS-15) and 40 textures (PS-02).
+Left in phase 2: a motif placement tool (MO-01).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.
