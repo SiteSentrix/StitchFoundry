@@ -1596,6 +1596,59 @@ fn inspect_reports_compound_paint_and_blend() {
     assert!(plain.get("blend").is_none(), "Normal is omitted: {plain}");
 }
 
+/// A compound path made of a group (outlined type is one) takes the paint of the backmost path in
+/// it, not the group's own (none): it drew nothing. A compound path in the group gives the paint
+/// that painted its paths.
+#[test]
+fn compound_of_a_group_takes_its_backmost_paths_paint() {
+    let paint = |s: &Session, id: u64| (*s.doc().unwrap().doc.node(NodeId(id)).unwrap().appearance).clone();
+    let made = |s: &mut Session, cmd: &str| s.execute(cmd, &json!({})).unwrap()["id"].as_u64().unwrap();
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 40.0, 40.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let b = rect(&mut s, 10.0, 10.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    let red = paint(&s, a.0);
+    assert_ne!(red, paint(&s, b.0));
+    assert_ne!(red, Default::default());
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    made(&mut s, "object.group");
+    let c = made(&mut s, "object.compoundPath.make");
+    assert_eq!(paint(&s, c), red, "the backmost path's paint");
+    // Grouped again and joined with a path in front: the paint the compound path gave its paths.
+    let g = made(&mut s, "object.group");
+    let front = rect(&mut s, 20.0, 20.0, 5.0, 5.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("select.set", &json!({"ids": [g, front.0]})).unwrap();
+    let c = made(&mut s, "object.compoundPath.make");
+    assert_eq!(paint(&s, c), red);
+    assert_eq!(s.doc().unwrap().doc.node(NodeId(c)).unwrap().children().unwrap().len(), 3);
+}
+/// Compound paths joined into one keep their own holes: each one's paths turn together, so the
+/// counters of outlined letters stay open (they filled in when every path was turned alone).
+#[test]
+fn joined_compound_paths_keep_their_holes() {
+    let made = |s: &mut Session, cmd: &str| s.execute(cmd, &json!({})).unwrap()["id"].as_u64().unwrap();
+    let mut s = session();
+    let mut rings = vec![];
+    for x in [0.0, 100.0, 200.0] {
+        let (outer, inner) = (rect(&mut s, x, 0.0, 40.0, 40.0), rect(&mut s, x + 10.0, 10.0, 10.0, 10.0));
+        s.execute("select.set", &json!({"ids": [outer.0, inner.0]})).unwrap();
+        rings.push(made(&mut s, "object.compoundPath.make"));
+    }
+    s.execute("select.set", &json!({"ids": rings})).unwrap();
+    made(&mut s, "object.group");
+    let c = made(&mut s, "object.compoundPath.make");
+    let d = &s.doc().unwrap().doc;
+    let turns: Vec<f64> =
+        d.node(NodeId(c)).unwrap().children().unwrap().iter().map(|p| p.path_data().unwrap().subpaths[0].signed_area().signum()).collect();
+    assert_eq!(turns.len(), 6);
+    for ring in turns.chunks(2) {
+        assert_eq!(ring[0], -ring[1], "a hole runs against its outline: {turns:?}");
+    }
+    // The rings in front run against the backmost one (#1197).
+    assert_eq!((turns[2], turns[4]), (-turns[0], -turns[0]), "{turns:?}");
+}
 /// `document.node {summary: true}` answers the `document.inspect` shape for one node:
 /// the same fields the full-tree summary carries, without serializing the whole tree.
 #[test]
