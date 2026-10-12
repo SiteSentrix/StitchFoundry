@@ -211,6 +211,7 @@ fn push_segment(segs: &mut Vec<(Point, Point)>, a: Point, b: Point) {
 fn tile(pattern: TexturePattern) -> (f64, Vec<Vec<Point>>) {
     let p = Point::new;
     let curve = |n: usize, f: &dyn Fn(f64) -> Point| (0..=n).map(|k| f(k as f64 / n as f64)).collect::<Vec<_>>();
+    let ring = |cx: f64, cy: f64, r: f64| curve(24, &|t: f64| p(cx + r * (TAU * t).cos(), cy + r * (TAU * t).sin()));
     match pattern {
         TexturePattern::Diamonds => (1.0, vec![vec![p(0.0, 0.0), p(1.0, 1.0)], vec![p(1.0, 0.0), p(0.0, 1.0)]]),
         TexturePattern::Waves => (1.0, vec![curve(16, &|t| p(0.5 + 0.2 * (TAU * t).sin(), t))]),
@@ -277,6 +278,133 @@ fn tile(pattern: TexturePattern) -> (f64, Vec<Vec<Point>>) {
                 |side: f64| curve(12, &move |t| p(0.15 + 0.7 * t + side * 0.16 * (PI * t).sin(), 0.85 - 0.7 * t + side * 0.16 * (PI * t).sin()));
             (1.0, vec![edge(1.0), edge(-1.0), vec![p(0.15, 0.85), p(0.85, 0.15)]])
         }
+        // Lines across the rows: straight, slanting, in close pairs, and a slant through them.
+        TexturePattern::Stripes => (1.0, vec![vec![p(0.5, 0.0), p(0.5, 1.0)]]),
+        TexturePattern::Slants => (1.0, vec![vec![p(0.0, 0.0), p(1.0, 1.0)]]),
+        TexturePattern::Pinstripes => (1.0, vec![vec![p(0.42, 0.0), p(0.42, 1.0)], vec![p(0.58, 0.0), p(0.58, 1.0)]]),
+        TexturePattern::Lattice => (1.0, vec![vec![p(0.0, 0.0), p(0.0, 1.0)], vec![p(0.0, 0.0), p(1.0, 1.0)]]),
+        // Rows of round arches, each standing on the tops of the row below.
+        TexturePattern::Arches => (0.5, vec![curve(16, &|t| p(0.5 - 0.5 * (PI * t).cos(), 0.5 - 0.5 * (PI * t).sin()))]),
+        TexturePattern::Rings => (1.0, vec![ring(0.5, 0.5, 0.4), ring(0.5, 0.5, 0.2)]),
+        TexturePattern::Dots => (1.0, vec![ring(0.5, 0.5, 0.14)]),
+        TexturePattern::Spirals => (
+            1.0,
+            vec![curve(48, &|t| {
+                let (a, r) = (2.0 * TAU * t, 0.04 + 0.38 * t);
+                p(0.5 + r * a.cos(), 0.5 + r * a.sin())
+            })],
+        ),
+        // Peaks one inside the next.
+        TexturePattern::Pyramids => (1.0, vec![vec![p(0.0, 1.0), p(0.5, 0.0), p(1.0, 1.0)], vec![p(0.25, 1.0), p(0.5, 0.5), p(0.75, 1.0)]]),
+        // Two waves side by side running across the rows.
+        TexturePattern::Ripples => {
+            (1.0, vec![curve(16, &|t| p(0.3 + 0.12 * (TAU * t).sin(), t)), curve(16, &|t| p(0.7 + 0.12 * (TAU * t).sin(), t))])
+        }
+        // A key winding in on itself (its runs along the rows leave no needle points, its
+        // uprights show).
+        TexturePattern::GreekKey => {
+            (1.0, vec![vec![p(0.1, 1.0), p(0.1, 0.1), p(0.9, 0.1), p(0.9, 0.9), p(0.3, 0.9), p(0.3, 0.3), p(0.7, 0.3), p(0.7, 0.7), p(0.5, 0.7)]])
+        }
+        TexturePattern::Crosses => (1.0, vec![vec![p(0.3, 0.3), p(0.7, 0.7)], vec![p(0.7, 0.3), p(0.3, 0.7)]]),
+        TexturePattern::Quatrefoils => (1.0, vec![ring(0.3, 0.5, 0.2), ring(0.7, 0.5, 0.2), ring(0.5, 0.3, 0.2), ring(0.5, 0.7, 0.2)]),
+        // Five round petals.
+        TexturePattern::Flowers => (
+            1.0,
+            vec![curve(60, &|t| {
+                let a = TAU * t - PI / 2.0;
+                let r = 0.38 * (0.6 + 0.4 * (5.0 * (a + PI / 2.0)).cos());
+                p(0.5 + r * a.cos(), 0.5 + r * a.sin())
+            })],
+        ),
+        TexturePattern::Trefoils => {
+            (1.0, [-90.0f64, 30.0, 150.0].iter().map(|d| d.to_radians()).map(|a| ring(0.5 + 0.18 * a.cos(), 0.52 + 0.18 * a.sin(), 0.17)).collect())
+        }
+        // A crescent: the outer circle's left side, then back round a circle bitten out of it.
+        TexturePattern::Moons => {
+            let mut moon = curve(24, &|t| {
+                let a = PI / 3.0 + t * 4.0 * PI / 3.0;
+                p(0.5 + 0.38 * a.cos(), 0.5 + 0.38 * a.sin())
+            });
+            let (cx, r) = (0.152, (0.038f64 * 0.038 + 0.329 * 0.329).sqrt());
+            let end = (-0.329f64).atan2(0.038);
+            moon.extend(curve(24, &|t| {
+                let a = end + t * (-2.0 * end - TAU);
+                p(0.5 + cx + r * a.cos(), 0.5 + r * a.sin())
+            }));
+            (1.0, vec![moon])
+        }
+        TexturePattern::Arrows => (1.0, vec![vec![p(0.5, 0.9), p(0.5, 0.15)], vec![p(0.3, 0.35), p(0.5, 0.15), p(0.7, 0.35)]]),
+        TexturePattern::NestedDiamonds => (
+            1.0,
+            vec![
+                vec![p(0.5, 0.0), p(1.0, 0.5), p(0.5, 1.0), p(0.0, 0.5), p(0.5, 0.0)],
+                vec![p(0.5, 0.25), p(0.75, 0.5), p(0.5, 0.75), p(0.25, 0.5), p(0.5, 0.25)],
+            ],
+        ),
+        // Diamonds with lines running across them corner to corner.
+        TexturePattern::Argyle => (
+            1.0,
+            vec![
+                vec![p(0.5, 0.0), p(1.0, 0.5), p(0.5, 1.0), p(0.0, 0.5), p(0.5, 0.0)],
+                vec![p(0.0, 0.0), p(1.0, 1.0)],
+                vec![p(1.0, 0.0), p(0.0, 1.0)],
+            ],
+        ),
+        // Short slanting strands, the slant turning from block to block.
+        TexturePattern::Wicker => (
+            1.0,
+            [0.05, 0.15, 0.25]
+                .iter()
+                .map(|&x| vec![p(x, 0.0), p(x + 0.2, 0.5)])
+                .chain([0.55, 0.65, 0.75].iter().map(|&x| vec![p(x + 0.2, 0.5), p(x, 1.0)]))
+                .collect(),
+        ),
+        // A quill with barbs either side.
+        TexturePattern::Feathers => (
+            1.0,
+            std::iter::once(vec![p(0.5, 1.0), p(0.5, 0.0)])
+                .chain([0.35, 0.6, 0.85].iter().flat_map(|&y| [vec![p(0.5, y), p(0.2, y - 0.2)], vec![p(0.5, y), p(0.8, y - 0.2)]]))
+                .collect(),
+        ),
+        // A teardrop leaning over at its tip, with an eye.
+        TexturePattern::Paisley => (
+            1.0,
+            vec![
+                curve(40, &|t| {
+                    let a = TAU * t;
+                    p(0.5 + 0.28 * a.sin() * (a / 2.0).sin() + 0.12 * (a.cos() + 1.0) * 0.5, 0.5 + 0.4 * a.cos())
+                }),
+                ring(0.5, 0.36, 0.08),
+            ],
+        ),
+        // Two curls joined in an S.
+        TexturePattern::Swirls => {
+            let left: Vec<Point> = curve(36, &|t| {
+                let a = 3.0 * PI * t;
+                let r = 0.03 + 0.17 * t;
+                p(-0.2 + r * (a + PI).cos(), r * (a + PI).sin())
+            });
+            let mut s: Vec<Point> = left.iter().map(|q| p(0.5 + q.x, 0.5 + q.y)).collect();
+            s.extend(left.iter().rev().skip(1).map(|q| p(0.5 - q.x, 0.5 - q.y)));
+            (1.0, vec![s])
+        }
+        TexturePattern::Snowflakes => (
+            1.0,
+            [90.0f64, 30.0, 150.0]
+                .iter()
+                .map(|d| d.to_radians())
+                .map(|a| vec![p(0.5 - 0.4 * a.cos(), 0.5 - 0.4 * a.sin()), p(0.5 + 0.4 * a.cos(), 0.5 + 0.4 * a.sin())])
+                .collect(),
+        ),
+        TexturePattern::Bubbles => (1.0, vec![ring(0.3, 0.3, 0.18), ring(0.72, 0.45, 0.12), ring(0.4, 0.76, 0.1)]),
+        // Rays out from the middle, none along the rows.
+        TexturePattern::Sunbursts => (
+            1.0,
+            (0..12)
+                .map(|k| (15.0 + 30.0 * f64::from(k)).to_radians())
+                .map(|a| vec![p(0.5 + 0.1 * a.cos(), 0.5 + 0.1 * a.sin()), p(0.5 + 0.42 * a.cos(), 0.5 + 0.42 * a.sin())])
+                .collect(),
+        ),
     }
 }
 
