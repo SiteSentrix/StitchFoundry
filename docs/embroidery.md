@@ -320,6 +320,13 @@ Free (freehand), Line, Circle, Square, Rounded, Triangle, Diamond, Hexagon, Star
 
 Stroke ends snap to anchors and guides while Snap to Point or Smart Guides is on.
 
+## Appliqué covers
+
+An appliqué's cover stitch is satin, blanket, an open zigzag or a triple run (or none, for raw
+edges), *Cover width* wide. **Partial cover** (`partial: true`) leaves the cover out wherever an
+object sewn later lies over the patch's edge: that object holds the fabric there, and the cover
+under it would only add bulk.
+
 ## Click to stitch
 
 The **Click-to-Stitch tool** (in the Embroidery tools) turns a region of a placed image into a

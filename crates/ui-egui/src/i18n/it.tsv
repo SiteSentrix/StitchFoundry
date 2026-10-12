@@ -4764,3 +4764,5 @@ machine	Stop	Arresto
 	Send	Invia
 	Sent:	Inviato:
 	Forget Folder	Dimentica cartella
+	Triple run	Punto triplo
+	Partial cover	Copertura parziale

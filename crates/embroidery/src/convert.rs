@@ -290,7 +290,7 @@ pub(crate) fn convert(node: &Node, e: &Embroidery) -> Vec<ObjectKind> {
         StitchType::Applique(params) => {
             let Some((lines, rule)) = node_lines(node) else { return out };
             for region in regions(&lines, rule) {
-                out.push(ObjectKind::Applique(AppliqueObject { shape: Shape::from_polygon(&region), params: params.clone() }));
+                out.push(ObjectKind::Applique(AppliqueObject { shape: Shape::from_polygon(&region), params: params.clone(), covered: Vec::new() }));
             }
         }
     }

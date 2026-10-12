@@ -225,6 +225,24 @@ fn designs_go_to_the_machine_folder() {
 }
 
 #[test]
+fn partial_cover_leaves_out_edges_sewn_over_later() {
+    let mut s = session();
+    let patch = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [patch.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "applique"})).unwrap();
+    let whole = stitches(&s);
+    // a fill sewn later over the patch's right edge
+    let over = rect(&mut s, 170.0, 80.0, 60.0, 140.0);
+    s.execute("select.set", &json!({"ids": [over.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let with_fill = stitches(&s);
+    s.execute("select.set", &json!({"ids": [patch.0]})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"partial": true}})).unwrap();
+    let partial = stitches(&s);
+    assert!(partial < with_fill && partial > with_fill - whole, "{whole} {with_fill} {partial}");
+}
+
+#[test]
 fn auto_digitize_traces_an_image_into_satin_and_fill() {
     let mut s = session();
     // A white logo: a blue disc, a long red bar and a speck.

@@ -1481,6 +1481,10 @@ pub enum CoverKind {
     #[default]
     Satin,
     Blanket,
+    /// An open zigzag over the edge.
+    Zigzag,
+    /// A triple run along the edge.
+    Triple,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1503,6 +1507,9 @@ pub struct AppliqueParams {
     pub pull_comp: f64,
     /// Colour of the appliqué fabric (display only).
     pub fabric_color: Rgb,
+    /// Partial cover: the cover leaves out the edges objects sewn later lie over (they hold
+    /// the fabric's edge there).
+    pub partial: bool,
 }
 
 impl Default for AppliqueParams {
@@ -1518,6 +1525,7 @@ impl Default for AppliqueParams {
             cover_spacing: 0.45,
             pull_comp: 0.2,
             fabric_color: Rgb::new(0xe9, 0xd8, 0xa6),
+            partial: false,
         }
     }
 }
@@ -1527,6 +1535,10 @@ pub struct AppliqueObject {
     pub shape: Shape,
     #[serde(default)]
     pub params: AppliqueParams,
+    /// With partial cover: the outlines of what is sewn later (mm), whose edges the cover leaves
+    /// out; set when the design is planned.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub covered: Vec<Vec<Point>>,
 }
 
 // ---------------------------------------------------------------------------
