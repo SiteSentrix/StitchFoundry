@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (3D and Materials: Extrude & Bevel, Inflate and Rotate added, ~8% → ~25%; G2: Film Grain added; Photoshop effects 29/57; 28 filters remain) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -85,7 +85,7 @@ not an accuracy guarantee for arbitrary artwork. Tests: `pixel::tests::film_grai
 | Item | Ours |
 |---|---|
 | Revolve | initial: live, editable profile, rotation and light gizmos, flat shading, SVG/PDF output, Expand Appearance ([revolve.md](revolve.md), #846) |
-| Extrude & Bevel, Inflate, Rotate | initial: live, depth, twist, taper, solid or hollow caps, five original bevel shapes, Inflate volume and both sides, Rotate of every fill and stroke, Position presets, rotation and light gizmos, SVG/PDF output, Expand Appearance ([three-d.md](three-d.md)) |
+| Extrude & Bevel, Inflate, Rotate | initial: live, depth, twist, taper, solid or hollow caps, five original bevel shapes, Inflate volume, both sides, twist, taper and cap, Rotate of every fill and stroke, Position presets, rotation and light gizmos, SVG/PDF output, Expand Appearance ([three-d.md](three-d.md)) |
 | Materials panel, lighting, ray-traced render | one directional light with flat shading only; no materials, several lights, light colour, shadows or ray tracing |
 | 3D (Classic): Extrude & Bevel, Revolve, Rotate | none |
 | Turntable (30.0 beta) | none |
@@ -99,6 +99,7 @@ Revolve caps, 3D Classic, Turntable, 3D export) is 25–45 h.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | Inflate takes Twist, Taper and Cap ([three-d.md](three-d.md)); 3D stays ~25%, 25–45 h: materials, lights and shadows are the bulk of what remains |
 | 2026-10-12 | minor | Extrude & Bevel, Inflate and Rotate (initial, [three-d.md](three-d.md)); 3D ~8% → ~25%, 45–75 → 25–45 h |
 | 2026-10-12 | minor | G2: Artistic › Film Grain added with live controls and raster exports; measured Photoshop filters 29/57, 28 remaining (23–39 h). |
 | 2026-10-11 | minor | PDF cap warnings identify original objects after appearance splitting and report the lowest achieved ppi; cap/rendering and scores unchanged |

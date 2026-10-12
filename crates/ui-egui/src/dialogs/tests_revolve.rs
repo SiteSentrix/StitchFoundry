@@ -213,7 +213,7 @@ fn the_other_3d_effects_show_their_options_and_position_presets() {
     let square = "M100 100 L200 100 L200 200 L100 200 Z";
     for (effect, own) in [
         (EXTRUDE, &["Depth", "Twist", "Taper", "Cap", "Bevel", "Bevel Shape", "Space", "Bevel Inside", "Bevel both sides"][..]),
-        (INFLATE, &["Depth", "Volume", "Both sides"][..]),
+        (INFLATE, &["Depth", "Twist", "Taper", "Cap", "Volume", "Both sides"][..]),
         (ROTATE, &[][..]),
     ] {
         let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));

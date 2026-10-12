@@ -90,7 +90,14 @@ pub fn extrude_options(p: &Value) -> Extrude {
 }
 
 pub fn inflate_options(p: &Value) -> Inflate {
-    Inflate { depth: num(p, "depth", 0.0), volume: num(p, "volume", 50.0), both_sides: flag(p, "bothSides", false) }
+    Inflate {
+        depth: num(p, "depth", 0.0),
+        volume: num(p, "volume", 50.0),
+        both_sides: flag(p, "bothSides", false),
+        twist: num(p, "twist", 0.0),
+        taper: num(p, "taper", 100.0) / 100.0,
+        cap: flag(p, "cap", true),
+    }
 }
 
 /// The shape a solid is made from: a path's or a compound path's outline.

@@ -120,6 +120,32 @@ fn export_and_expand_bake_faces_with_their_own_ids() {
     }
 }
 
+/// A twisted, tapered, hollow Inflate (both sides) exports and expands like the others: faces with
+/// their own ids, no 3D effect left on them.
+#[test]
+fn a_twisted_tapered_hollow_inflate_exports_and_expands() {
+    let mut d = Document::new(400.0, 400.0);
+    let mut n = square_node();
+    n.id = d.alloc_id();
+    let params = json!({"twist": 120, "taper": 50, "cap": false, "bothSides": true, "rotationX": -20, "rotationY": 35});
+    n.appearance.effects.push(fx(INFLATE, params));
+    let art = solid_art(&n).unwrap();
+    assert_eq!(crate::bake_appearance(&n), Some(art.clone()));
+    assert!(faces(&art).len() > 20, "{} faces", faces(&art).len());
+    let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
+    let expanded = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();
+    let mut ids = std::collections::HashSet::new();
+    fn visit(n: &Node, ids: &mut std::collections::HashSet<NodeId>) {
+        assert!(ids.insert(n.id), "{:?} twice", n.id);
+        assert!(!has_solid(n));
+        for c in n.children().into_iter().flatten() {
+            visit(c, ids);
+        }
+    }
+    visit(&expanded, &mut ids);
+    assert!(ids.len() > 20, "{} nodes", ids.len());
+}
+
 #[test]
 fn effects_before_it_shape_the_solid_and_effects_after_it_bend_the_result() {
     let mut n = square_node();
@@ -155,4 +181,13 @@ fn parameters_are_validated_and_lengths_scale_with_the_object() {
     let b = o.bevel.unwrap();
     assert_eq!((b.shape, b.space, b.repeat), (BevelShape::Step, 0.3, 32));
     assert!(extrude_options(&json!({})).bevel.is_none());
+}
+
+#[test]
+fn inflate_reads_twist_taper_and_cap() {
+    let o = inflate_options(&json!({"twist": 90, "taper": 40, "cap": false}));
+    assert_eq!((o.twist, o.taper, o.cap), (90.0, 0.4, false));
+    let d = inflate_options(&json!({}));
+    assert_eq!((d.twist, d.taper, d.cap), (0.0, 1.0, true));
+    assert_eq!(crate::default_params(INFLATE).unwrap()["cap"], json!(true));
 }

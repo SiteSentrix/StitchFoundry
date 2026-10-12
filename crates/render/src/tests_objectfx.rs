@@ -65,13 +65,15 @@ fn revolve_canvas_matches_baked_art_and_shades_its_surface() {
     assert_eq!(live.pixels, render_threads(&d, 4).pixels);
 }
 
-/// Extrude & Bevel, Inflate and Rotate draw on the canvas exactly as they export, filling more
-/// than the flat square with faces of differing shades (Rotate: one shade, narrower).
+/// Extrude & Bevel, Inflate (also twisted, tapered and hollow) and Rotate draw on the canvas exactly
+/// as they export, filling more than the flat square with faces of differing shades (Rotate: one
+/// shade, narrower).
 #[test]
 fn solid_effects_canvas_matches_baked_art_and_shades_their_faces() {
     for (effect, params) in [
         ("threeD.extrude", json!({"depth": 30, "bevel": "rounded"})),
         ("threeD.inflate", json!({"depth": 10})),
+        ("threeD.inflate", json!({"depth": 10, "twist": 90, "taper": 60, "cap": false, "rotationX": -20, "rotationY": 35})),
         ("threeD.rotate", json!({"rotationX": 0, "rotationY": 55, "rotationZ": 0})),
     ] {
         let mut n = Node::path(
