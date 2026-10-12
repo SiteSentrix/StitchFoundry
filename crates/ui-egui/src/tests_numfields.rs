@@ -398,6 +398,23 @@ fn a_new_numeric_click_selects_all_on_release_without_moving_its_press_caret() {
 }
 
 #[test]
+/// Focus that arrives while the button is still down, without a press event on that frame,
+/// keeps the caret until release.
+#[test]
+fn focus_a_frame_after_the_press_does_not_select_all_until_release() {
+    let mut f = Field::new();
+    let draw = |ui: &mut egui::Ui| numeric_fixture(ui, 0);
+    f.frame(vec![], &draw);
+    let at = f.text_point(field_text(0), 2, 7.0);
+    f.frame(vec![Event::PointerMoved(at), pointer_button(at, true)], &draw);
+    let pressed = f.selection();
+    f.frame(vec![Event::PointerMoved(at)], &draw);
+    assert_eq!(f.selection(), pressed, "holding the button does not select the whole field");
+    assert!(pressed.is_some_and(|(a, b)| a == b));
+    f.frame(vec![pointer_button(at, false)], &draw);
+    assert_eq!(f.selection(), Some((0, field_text(0).len())));
+}
+
 fn keyboard_focus_keeps_selecting_the_entire_numeric_field() {
     for mode in 0..4 {
         let mut f = Field::new();

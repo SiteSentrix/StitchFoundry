@@ -314,11 +314,19 @@ fn select_all(ui: &Ui, id: egui::Id, text: &str) {
 /// double-click. A pointer press keeps its caret so dragging selects from the pressed position.
 fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
     let pending = resp.id.with("select-all-on-focus-click");
-    let (pressed, released) =
-        ui.input(|i| (i.pointer.button_pressed(egui::PointerButton::Primary), i.pointer.button_released(egui::PointerButton::Primary)));
+    let (pressed, released, down) = ui.input(|i| {
+        (
+            i.pointer.button_pressed(egui::PointerButton::Primary),
+            i.pointer.button_released(egui::PointerButton::Primary),
+            i.pointer.button_down(egui::PointerButton::Primary),
+        )
+    });
+    // Focus can arrive the frame after the press, when `button_pressed` is already false
+    // and the button is still down. Defer select-all until release so a drag keeps its caret.
+    let defer = pressed || (down && resp.hovered());
     if resp.gained_focus() {
         ui.data_mut(|d| {
-            if pressed {
+            if defer {
                 d.insert_temp(pending, true);
             } else {
                 d.remove_temp::<bool>(pending);
@@ -328,6 +336,9 @@ fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
     let clicked_focus = released && ui.data_mut(|d| d.remove_temp::<bool>(pending)).unwrap_or(false) && resp.clicked_by(egui::PointerButton::Primary);
     if resp.lost_focus() {
         ui.data_mut(|d| d.remove_temp::<bool>(pending));
+    }
+    if resp.gained_focus() && defer {
+        return;
     }
     if !(resp.gained_focus() && !pressed || resp.double_clicked() || clicked_focus) {
         return;
