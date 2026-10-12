@@ -4284,3 +4284,27 @@ machine	Stop	停止
 	Edit Embroidery Font	编辑刺绣字体
 	Merge Embroidery Font	合并刺绣字体
 	New Embroidery Font from Type	从字体新建刺绣字体
+	Font Creator	字体创建
+	Capitals' height	大写高度
+	Line spacing	行距
+	Space width	空格宽度
+	As typed	按输入
+	Capitals	大写
+	Small letters	小写
+	Letter case	大小写
+	Sews well from	适合绣制的最小值
+	Sews well up to	适合绣制的最大值
+	Still to digitize	尚待数字化
+	Show this glyph	显示此字形
+	Not digitized yet: show its artboard	尚未数字化：显示其画板
+	Glyphs to add	要添加的字形
+	Kerning (mm closer)	字距（缩近 mm）
+	Pair	字对
+	Kern	字距调整
+	Merge glyphs from	从以下字体合并字形
+	Test text	测试文字
+	Try in a New Document	在新文档中试用
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	制作刺绣字体：每个待数字化的字形一个画板的文档。
+	Type family	字体系列
+	New Font from Type	从字体新建
+	Edit Font	编辑字体

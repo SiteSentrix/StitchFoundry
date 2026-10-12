@@ -4710,3 +4710,27 @@ machine	Stop	Arrêt
 	Edit Embroidery Font	Modifier la police de broderie
 	Merge Embroidery Font	Fusionner une police de broderie
 	New Embroidery Font from Type	Nouvelle police de broderie depuis une police
+	Font Creator	Créateur de polices
+	Capitals' height	Hauteur des capitales
+	Line spacing	Interligne
+	Space width	Largeur de l’espace
+	As typed	Comme saisi
+	Capitals	Capitales
+	Small letters	Minuscules
+	Letter case	Casse
+	Sews well from	Se brode bien dès
+	Sews well up to	Se brode bien jusqu’à
+	Still to digitize	Reste à numériser
+	Show this glyph	Afficher ce glyphe
+	Not digitized yet: show its artboard	Pas encore numérisé : afficher son plan de travail
+	Glyphs to add	Glyphes à ajouter
+	Kerning (mm closer)	Crénage (mm plus serré)
+	Pair	Paire
+	Kern	Créner
+	Merge glyphs from	Fusionner les glyphes de
+	Test text	Texte d’essai
+	Try in a New Document	Essayer dans un nouveau document
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Créez une police de broderie : un document avec un plan de travail par glyphe à numériser.
+	Type family	Famille de police
+	New Font from Type	Nouvelle police depuis une police
+	Edit Font	Modifier la police

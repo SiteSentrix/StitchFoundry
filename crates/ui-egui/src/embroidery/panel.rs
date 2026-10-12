@@ -4,7 +4,7 @@
 
 use egui::{Color32, Ui};
 use serde_json::{Value, json};
-use vectorcraft_embroidery::sf_core::attr::{Embroidery, Lettering, StitchType};
+use vectorcraft_embroidery::sf_core::attr::{Embroidery, FontDesign, Lettering, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
     Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, MotifColumn, MotifWarp, RunKind, SatinParams,
@@ -153,6 +153,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     digitize_row(app, ui);
+    font_rows(app, ui);
     lettering_rows(app, ui);
     team_name_rows(app, ui);
     monogram_rows(app, ui);
@@ -299,6 +300,201 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
             Err(e) => app.status(e),
+        }
+    }
+}
+
+/// The font creator: starting an embroidery font, and a font document's properties, glyphs,
+/// kerning, trying and saving it. Open by itself in a font document.
+fn font_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let open = font_design(app).is_some();
+    egui::CollapsingHeader::new(tl!("Font Creator")).id_salt("emb-font-creator").default_open(open).show(ui, |ui| font_body(app, ui));
+}
+
+/// The font the active document is being made into.
+fn font_design(app: &VectorcraftApp) -> Option<FontDesign> {
+    app.session.active()?.doc.embroidery.as_deref()?.font.clone()
+}
+
+/// Runs a font document command, its error in the status bar.
+fn font_cmd(app: &mut VectorcraftApp, id: &str, params: Value) {
+    if let Err(e) = app.run(id, params) {
+        app.status(e);
+    }
+}
+
+/// The Font Creator section's rows.
+pub(crate) fn font_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some(f) = font_design(app) else {
+        font_start_rows(app, ui);
+        return;
+    };
+    let t = Tokens::get(ui.ctx());
+    // its name: typed, then set when the field is left
+    let mut name = if app.embroidery.font_name_editing { app.embroidery.font_name.clone() } else { f.name.clone() };
+    let mut left = false;
+    label_row(ui, tl!("Name"), LABEL_W, |ui| {
+        let r = ui.add(egui::TextEdit::singleline(&mut name).desired_width(FIELD_W + 40.0));
+        app.embroidery.font_name_editing = r.has_focus();
+        left = r.lost_focus();
+    });
+    app.embroidery.font_name = name.clone();
+    if left && !name.trim().is_empty() && name.trim() != f.name {
+        font_cmd(app, "embroidery.fontDoc.setProps", json!({ "name": name.trim() }));
+    }
+    ui.label(egui::RichText::new(format!("{}: {:.1} mm", tl!("Capitals' height"), f.size)).color(t.text_dim));
+    if let Some(v) = num(ui, tl!("Line spacing"), "font-leading", f.leading, "×", 2) {
+        font_cmd(app, "embroidery.fontDoc.setProps", json!({ "leading": v.clamp(0.5, 5.0) }));
+    }
+    if let Some(v) = num(ui, tl!("Space width"), "font-space", f.space, " mm", 1) {
+        font_cmd(app, "embroidery.fontDoc.setProps", json!({ "space": v.clamp(0.0, 200.0) }));
+    }
+    let cases = [tl!("As typed"), tl!("Capitals"), tl!("Small letters")];
+    let cur = match f.letter_case.as_str() {
+        "upper" => 1,
+        "lower" => 2,
+        _ => 0,
+    };
+    if let Some(i) = pick(ui, tl!("Letter case"), "font-case", cur, &cases) {
+        let case = ["none", "upper", "lower"].get(i).copied().unwrap_or("none");
+        font_cmd(app, "embroidery.fontDoc.setProps", json!({ "letterCase": case }));
+    }
+    // the sizes it sews well at, in millimetres
+    if let Some(v) = num(ui, tl!("Sews well from"), "font-min", f.min_scale * f.size, " mm", 1) {
+        font_cmd(app, "embroidery.fontDoc.setProps", json!({ "minScale": (v / f.size).clamp(0.0, 10.0) }));
+    }
+    if let Some(v) = num(ui, tl!("Sews well up to"), "font-max", f.max_scale * f.size, " mm", 1) {
+        font_cmd(app, "embroidery.fontDoc.setProps", json!({ "maxScale": (v / f.size).clamp(0.0, 10.0) }));
+    }
+    // the glyphs: those still without art dim; a click shows a glyph's artboard
+    let info = app.run("embroidery.fontDoc.info", json!({})).unwrap_or(Value::Null);
+    let glyphs: Vec<(String, bool)> = info["glyphs"]
+        .as_array()
+        .map(|a| a.iter().map(|g| (g["name"].as_str().unwrap_or_default().to_string(), g["done"].as_bool().unwrap_or(false))).collect())
+        .unwrap_or_default();
+    let missing = glyphs.iter().filter(|g| !g.1).count();
+    ui.add_space(4.0);
+    ui.label(format!("{}: {} · {}: {missing}", tl!("Glyphs"), glyphs.len(), tl!("Still to digitize")));
+    ui.horizontal_wrapped(|ui| {
+        for (g, done) in &glyphs {
+            let text = egui::RichText::new(g.as_str()).monospace();
+            let text = if *done { text } else { text.color(t.text_dim) };
+            let tip = if *done { tl!("Show this glyph") } else { tl!("Not digitized yet: show its artboard") };
+            if ui.add(egui::Button::new(text).min_size(egui::vec2(22.0, 20.0))).on_hover_text(tip).clicked()
+                && let Some(i) = app.session.active().and_then(|st| st.doc.artboards.iter().position(|a| &a.name == g))
+            {
+                if let Some(v) = app.view_mut() {
+                    v.artboard = i;
+                }
+                crate::canvas::fit(app, "view.fitArtboard");
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.add(egui::TextEdit::singleline(&mut app.embroidery.font_add).desired_width(110.0).hint_text(tl!("Glyphs to add")));
+        if button(ui, tl!("Add")).clicked() && !app.embroidery.font_add.trim().is_empty() {
+            let chars = std::mem::take(&mut app.embroidery.font_add);
+            font_cmd(app, "embroidery.fontDoc.addGlyphs", json!({ "chars": chars }));
+        }
+    });
+    // kerning: each pair how much closer, 0 to take it out; a pair to add
+    ui.add_space(4.0);
+    ui.label(tl!("Kerning (mm closer)"));
+    for (pair, v) in &f.kerning {
+        if let Some(nv) = num(ui, pair, &format!("kern-{pair}"), *v, " mm", 1) {
+            font_cmd(app, "embroidery.fontDoc.kern", json!({ "pair": pair, "value": nv }));
+        }
+    }
+    ui.horizontal(|ui| {
+        ui.label(tl!("Pair"));
+        ui.add(egui::TextEdit::singleline(&mut app.embroidery.kern_pair).desired_width(60.0));
+        if button(ui, tl!("Kern")).clicked() {
+            // two glyphs, typed together or apart
+            let p = app.embroidery.kern_pair.trim().to_string();
+            let pair = if p.contains(' ') { p } else { p.chars().map(String::from).collect::<Vec<_>>().join(" ") };
+            font_cmd(app, "embroidery.fontDoc.kern", json!({ "pair": pair, "value": 1.0 }));
+        }
+    });
+    // another font's glyphs this one hasn't yet
+    let others: Vec<String> = app.session.embroidery_fonts.iter().map(|x| x.info.name.clone()).filter(|n| !n.eq_ignore_ascii_case(&f.name)).collect();
+    if !others.is_empty() {
+        let names: Vec<&str> = others.iter().map(String::as_str).collect();
+        let cur = names.iter().position(|n| *n == app.embroidery.font_other).unwrap_or(0);
+        ui.horizontal(|ui| {
+            if let Some(i) = pick_names(ui, tl!("Merge glyphs from"), "font-merge", cur, &names)
+                && let Some(n) = names.get(i)
+            {
+                app.embroidery.font_other = n.to_string();
+            }
+        });
+        if button(ui, tl!("Merge")).clicked()
+            && let Some(other) = names.get(cur)
+        {
+            let other = other.to_string();
+            font_cmd(app, "embroidery.fontDoc.merge", json!({ "font": other }));
+        }
+    }
+    // try it: the font loaded for this session, the text set in a new document
+    ui.add_space(4.0);
+    ui.add(egui::TextEdit::singleline(&mut app.embroidery.font_test).hint_text(tl!("Test text")));
+    if button(ui, tl!("Try in a New Document")).clicked() {
+        let text = if app.embroidery.font_test.trim().is_empty() { "ABC abc".to_string() } else { app.embroidery.font_test.clone() };
+        match app.run("embroidery.fontDoc.save", json!({})) {
+            Ok(r) => {
+                let font = r["name"].as_str().unwrap_or_default().to_string();
+                if app.run("file.new", json!({ "width": 800, "height": 400 })).is_ok() {
+                    font_cmd(app, "embroidery.lettering", json!({ "text": text, "font": font, "align": "centre" }));
+                }
+            }
+            Err(e) => app.status(e),
+        }
+    }
+    if app.services.pick_folder.is_some() && button(ui, tl!("Save Embroidery Font…")).clicked() {
+        crate::picks::button(app, |app| {
+            let Some(dir) = crate::picks::folder(app) else { return };
+            font_cmd(app, "embroidery.fontDoc.save", json!({ "folder": dir }));
+        });
+    }
+}
+
+/// Starting a font: from nothing, from type, or from a loaded font.
+fn font_start_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    ui.label(tl!("Make an embroidery font: a document with an artboard for each glyph to digitize."));
+    if button(ui, tl!("New Embroidery Font")).clicked() {
+        font_cmd(app, "embroidery.fontDoc.new", json!({}));
+    }
+    ui.add_space(4.0);
+    let families = vectorcraft_text::FontDb::global().family_list();
+    let names: Vec<&str> = families.iter().map(String::as_str).collect();
+    if !names.is_empty() {
+        let cur = names.iter().position(|n| *n == app.embroidery.font_family).unwrap_or(0);
+        if let Some(i) = pick_names(ui, tl!("Type family"), "font-family", cur, &names)
+            && let Some(n) = names.get(i)
+        {
+            app.embroidery.font_family = n.to_string();
+        }
+        if button(ui, tl!("New Font from Type")).clicked()
+            && let Some(family) = names.get(cur)
+        {
+            let family = family.to_string();
+            font_cmd(app, "embroidery.fontDoc.fromType", json!({ "family": family }));
+        }
+    }
+    let loaded: Vec<String> = app.session.embroidery_fonts.iter().map(|x| x.info.name.clone()).collect();
+    if !loaded.is_empty() {
+        ui.add_space(4.0);
+        let names: Vec<&str> = loaded.iter().map(String::as_str).collect();
+        let cur = names.iter().position(|n| *n == app.embroidery.font_other).unwrap_or(0);
+        if let Some(i) = pick_names(ui, tl!("Font"), "font-edit", cur, &names)
+            && let Some(n) = names.get(i)
+        {
+            app.embroidery.font_other = n.to_string();
+        }
+        if button(ui, tl!("Edit Font")).clicked()
+            && let Some(name) = names.get(cur)
+        {
+            let name = name.to_string();
+            font_cmd(app, "embroidery.font.edit", json!({ "name": name }));
         }
     }
 }

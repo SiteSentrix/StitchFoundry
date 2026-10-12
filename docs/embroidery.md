@@ -633,6 +633,12 @@ and kerning; saving it replaces the loaded font of that name (rename it with
 fonts: another font's glyphs this one hasn't yet come in below the others, scaled so their
 capitals are as tall.
 
+The Embroidery panel's **Font Creator** section does all this: *New Embroidery Font*, *New Font
+from Type* (pick the family) or *Edit Font* (a loaded one) to start; in a font document, the font's
+name, line spacing, space, letter case and the sizes it sews well at, its glyphs (those still to
+digitize dim; click one to go to its artboard), glyphs to add, kerning pairs, merging another
+font's glyphs, *Try in a New Document* and *Save Embroidery Font…*.
+
 ## Monograms
 
 The Embroidery panel's **Monogram** section sets one to three initials in the lettering font:
