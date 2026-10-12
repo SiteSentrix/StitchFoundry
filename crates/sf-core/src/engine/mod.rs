@@ -565,7 +565,8 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
         // Omit last stitch: one needle point less at the object's end
         let st = if obj.omit_last { Arc::new(without_last_stitch(&st)) } else { st };
         let Some(first) = st.iter().find(|s| s.cmd == Cmd::Stitch).map(Stitch::pos) else { continue };
-        if current_color != Some(obj.color) {
+        // a new colour, or the same one as a block of its own
+        if current_color != Some(obj.color) || (obj.own_block && current_color.is_some()) {
             if current_color.is_some() {
                 em.cut();
                 em.p.color_change();
@@ -728,6 +729,26 @@ mod tests {
         // a hoop with no room: none
         d.settings.basting = Some(Basting { hoop: true, margin: 45.0, ..Basting::default() });
         assert_eq!(build(&d).pattern.stitch_count(), plain.pattern.stitch_count());
+    }
+
+    #[test]
+    fn an_object_can_start_a_colour_block_of_its_own() {
+        let mut d = demo();
+        // all one colour: one block
+        for o in &mut d.objects {
+            o.color = 0;
+        }
+        assert_eq!(build(&d).pattern.color_blocks().len(), 1);
+        // the second its own: three blocks of the same thread, two changes
+        d.objects[1].own_block = true;
+        let p = build(&d).pattern;
+        assert_eq!(p.color_blocks().len(), 3);
+        assert_eq!(p.stitches.iter().filter(|s| s.cmd == Cmd::ColorChange).count(), 2);
+        assert!(p.threads.iter().all(|t| t.color == p.threads[0].color));
+        // first in the design: nothing before it to split from
+        d.objects[1].own_block = false;
+        d.objects[0].own_block = true;
+        assert_eq!(build(&d).pattern.color_blocks().len(), 1);
     }
 
     #[test]

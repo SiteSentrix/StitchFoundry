@@ -1403,6 +1403,9 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
         if let Some(v) = check(ui, tl!("Stop after"), e.stop_after) {
             set(app, target, json!({ "stop_after": v }));
         }
+        if let Some(v) = check(ui, tl!("Own colour block"), e.own_block) {
+            set(app, target, json!({ "own_block": v }));
+        }
         if let Some(v) = check(ui, tl!("Omit last stitch"), e.omit_last) {
             set(app, target, json!({ "omit_last": v }));
         }

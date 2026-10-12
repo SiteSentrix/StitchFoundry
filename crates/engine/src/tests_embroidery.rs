@@ -353,6 +353,27 @@ fn monograms_stack_wear_ornaments_and_ring_borders() {
 }
 
 #[test]
+fn an_object_in_the_same_colour_can_be_a_block_of_its_own() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 30.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    let b = rect(&mut s, 60.0 * PT, 20.0 * PT, 30.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    let blocks = |s: &Session| s.embroidery_plan().unwrap().pattern().color_blocks().len();
+    assert_eq!(blocks(&s), 1);
+    s.execute("embroidery.setParams", &json!({"ids": [b.0], "params": {"ownBlock": true}})).unwrap();
+    assert_eq!(blocks(&s), 2);
+    // kept in the file: two colours of the same thread
+    let r = s.execute("embroidery.export", &json!({"format": "dst"})).unwrap();
+    assert_eq!(r["colors"].as_u64(), Some(2));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(blocks(&s), 1);
+}
+
+#[test]
 fn colorways_rethread_the_design_everywhere() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
