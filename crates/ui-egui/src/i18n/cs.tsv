@@ -3576,6 +3576,7 @@ effect	Regular	Pravidelný
 @msg	its page has text, and its layers have no text objects to put it in	jeho stránka obsahuje text, ale vrstvy nemají žádné textové objekty, kam by ho bylo možné umístit
 @msg	its type is to come in as outlines, which only its page has	jeho text se má načíst jako křivky, které má jen jeho stránka
 @msg	the art on them differs from the page's in {_1}% of it	kresba na nich se od stránky liší v {_1} % plochy
+@msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	kresba na nich se od stránky liší v {_1} % plochy: přesto pocházejí z jeho dat pro úpravy
 @msg	`to` must be "corner" or "smooth"	`to` musí být "corner" nebo "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	soubory BMP jsou RGB nebo ve stupních šedi: colorModel rgb nebo gray
 @msg	Blend colors: select at least three objects with filled colours	Prolnout barvy: vyberte alespoň tři objekty s barevnou výplní
