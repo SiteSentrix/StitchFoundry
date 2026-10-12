@@ -4137,3 +4137,8 @@ machine	Stop	停止
 @msg	the machine file didn't encode	無法編碼繡花機檔案
 	Worksheet	工作單
 	Outline Around	外圍輪廓
+	Stacked	直排
+	Oval	橢圓
+	Octagon	八邊形
+	Shield	盾形
+	Ornament	裝飾

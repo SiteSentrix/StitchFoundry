@@ -22,7 +22,12 @@ const BIG: f64 = 1.6;
 const MARGIN: f64 = 3.0;
 const BORDER_WIDTH: f64 = 2.5;
 /// The borders there are.
-pub const BORDERS: [&str; 5] = ["none", "circle", "diamond", "square", "scallop"];
+pub const BORDERS: [&str; 9] = ["none", "circle", "diamond", "square", "scallop", "oval", "octagon", "heart", "shield"];
+/// The ornaments either side of the letters.
+pub const ORNAMENTS: [&str; 5] = ["none", "hearts", "stars", "dots", "swirls"];
+/// Rings of a border at most, and how far apart (mm).
+const MAX_RINGS: u64 = 4;
+const RING_GAP: f64 = 3.0;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
@@ -30,7 +35,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Monogram",
         [],
         None,
-        "{letters: 1 to 3 characters, font: a loaded embroidery font, size?: mm (the letters' height, the middle one of three larger in a classic monogram; default: the font's own), style?: classic|line (classic: the middle of three letters larger, each centred on the monogram's middle; line: all one size on one baseline), border?: none|circle|diamond|square|scallop (none), at?: [x, y] (its middle; default: the first artboard's centre)} a monogram: each letter lettering in the font (set again with embroidery.lettering.edit), round them a satin border (a scalloped one a scallop motif run), in a group → {id, letters, warnings}",
+        "{letters: 1 to 3 characters, font: a loaded embroidery font, size?: mm (the letters' height, the middle one of three larger in a classic monogram; default: the font's own), style?: classic|line|stacked (classic: the middle of three letters larger, each centred on the monogram's middle; line: all one size on one baseline; stacked: one above the other), border?: none|circle|diamond|square|scallop|oval|octagon|heart|shield (none), rings?: 1–4 borders, 3 mm apart (1), ornament?: none|hearts|stars|dots|swirls (none: either side of the letters, mirrored), at?: [x, y] (its middle; default: the first artboard's centre)} a monogram: each letter lettering in the font (set again with embroidery.lettering.edit), round them and the ornaments a satin border (a scalloped one a scallop motif run), in a group → {id, letters, warnings}",
         has_doc,
         monogram
     )]
@@ -51,6 +56,50 @@ fn border_points(kind: &str, b: Rect, margin: f64) -> Vec<Point> {
             let r = hw.max(hh);
             vec![Point::new(c.x - r, c.y - r), Point::new(c.x + r, c.y - r), Point::new(c.x + r, c.y + r), Point::new(c.x - r, c.y + r)]
         }
+        // an ellipse through the corners of the box grown by half again
+        "oval" => (0..96)
+            .map(|k| {
+                let a = f64::from(k) / 96.0 * std::f64::consts::TAU;
+                Point::new(c.x + hw * std::f64::consts::SQRT_2 * a.cos(), c.y + hh * std::f64::consts::SQRT_2 * a.sin())
+            })
+            .collect(),
+        "octagon" => {
+            // its sides clear of the box's corners
+            let r = hw.hypot(hh) / (std::f64::consts::PI / 8.0).cos();
+            (0..8)
+                .map(|k| {
+                    let a = (f64::from(k) + 0.5) / 8.0 * std::f64::consts::TAU;
+                    Point::new(c.x + r * a.cos(), c.y + r * a.sin())
+                })
+                .collect()
+        }
+        // the heart curve x = 16 sin³t, y = 13 cos t − 5 cos 2t − 2 cos 3t − cos 4t, round the box
+        "heart" => {
+            let k = hw.max(hh) * 1.9 / 16.0;
+            (0..120)
+                .map(|i| {
+                    let t = f64::from(i) / 120.0 * std::f64::consts::TAU;
+                    let x = 16.0 * t.sin().powi(3);
+                    let y = 13.0 * t.cos() - 5.0 * (2.0 * t).cos() - 2.0 * (3.0 * t).cos() - (4.0 * t).cos();
+                    Point::new(c.x + x * k, c.y - y * k + hh * 0.35)
+                })
+                .collect()
+        }
+        // flat top, straight sides, curving in to a point below
+        "shield" => {
+            let (w, top, side) = (hw * 1.25, c.y - hh * 1.35, c.y + hh * 0.35);
+            let mut pts = vec![Point::new(c.x - w, top), Point::new(c.x + w, top), Point::new(c.x + w, side)];
+            for i in 1..=12 {
+                let t = f64::from(i) / 12.0;
+                pts.push(Point::new(c.x + w * (1.0 - t) * (1.0 - t * 0.2), side + hh * 1.6 * (t * std::f64::consts::FRAC_PI_2).sin()));
+            }
+            for i in (1..12).rev() {
+                let t = f64::from(i) / 12.0;
+                pts.push(Point::new(c.x - w * (1.0 - t) * (1.0 - t * 0.2), side + hh * 1.6 * (t * std::f64::consts::FRAC_PI_2).sin()));
+            }
+            pts.push(Point::new(c.x - w, side));
+            pts
+        }
         _ => {
             let r = hw.hypot(hh);
             (0..96)
@@ -59,6 +108,57 @@ fn border_points(kind: &str, b: Rect, margin: f64) -> Vec<Point> {
                     Point::new(c.x + r * a.cos(), c.y + r * a.sin())
                 })
                 .collect()
+        }
+    }
+}
+
+/// An ornament `size` points across centred on `c`, `mirror`ed for the right side: its outlines
+/// (closed shapes sewn as satin) or, for swirls, one open line (a triple run).
+fn ornament(kind: &str, c: Point, size: f64, mirror: bool) -> (Vec<Vec<Point>>, bool) {
+    let r = size / 2.0;
+    let turn = |i: u32, n: u32| f64::from(i) / f64::from(n) * std::f64::consts::TAU;
+    match kind {
+        "hearts" => {
+            let k = r / 16.0;
+            let pts = (0..72)
+                .map(|i| {
+                    let t = turn(i, 72);
+                    let y = 13.0 * t.cos() - 5.0 * (2.0 * t).cos() - 2.0 * (3.0 * t).cos() - (4.0 * t).cos();
+                    Point::new(c.x + 16.0 * t.sin().powi(3) * k, c.y - y * k)
+                })
+                .collect();
+            (vec![pts], true)
+        }
+        "stars" => {
+            let pts = (0..10)
+                .map(|i| {
+                    let a = turn(i, 10) - std::f64::consts::FRAC_PI_2;
+                    let rr = if i % 2 == 0 { r } else { r * 0.45 };
+                    Point::new(c.x + rr * a.cos(), c.y + rr * a.sin())
+                })
+                .collect();
+            (vec![pts], true)
+        }
+        "dots" => {
+            // three dots in a column
+            let d = r * 0.35;
+            let dots = [-1.0, 0.0, 1.0]
+                .iter()
+                .map(|k| (0..24).map(|i| Point::new(c.x + d * turn(i, 24).cos(), c.y + k * r * 0.8 + d * turn(i, 24).sin())).collect())
+                .collect();
+            (dots, true)
+        }
+        _ => {
+            // a spiral of two turns, opening away from the letters
+            let side = if mirror { 1.0 } else { -1.0 };
+            let pts = (0..=96)
+                .map(|i| {
+                    let t = f64::from(i) / 96.0 * 4.0 * std::f64::consts::PI;
+                    let rr = r * t / (4.0 * std::f64::consts::PI);
+                    Point::new(c.x + side * rr * t.cos(), c.y + rr * t.sin())
+                })
+                .collect();
+            (vec![pts], false)
         }
     }
 }
@@ -72,10 +172,21 @@ fn monogram(s: &mut Session, p: &Value) -> Result<Value> {
     let mut warnings = ensure_fonts(s);
     let font = loaded(s, name).ok_or_else(|| not_loaded(CMD, name))?;
     let size = ranged(p, "size", 1.0..=300.0, CMD, "`size` is 1 to 300 mm")?.unwrap_or_else(|| own_size(&font));
-    let classic = match str_param(p, "style") {
-        None | Some("classic") => true,
-        Some("line") => false,
-        Some(o) => return Err(bad(CMD, format!("unknown style `{o}`: classic or line"))),
+    let (classic, stacked) = match str_param(p, "style") {
+        None | Some("classic") => (true, false),
+        Some("line") => (false, false),
+        Some("stacked") => (false, true),
+        Some(o) => return Err(bad(CMD, format!("unknown style `{o}`: classic, line or stacked"))),
+    };
+    let ornament_kind = match str_param(p, "ornament") {
+        None => "none",
+        Some(o) => {
+            ORNAMENTS.iter().copied().find(|k| *k == o).ok_or_else(|| bad(CMD, format!("unknown ornament `{o}`: one of {}", ORNAMENTS.join(", "))))?
+        }
+    };
+    let rings = match p.get("rings") {
+        None | Some(Value::Null) => 1,
+        Some(v) => v.as_u64().filter(|r| (1..=MAX_RINGS).contains(r)).ok_or_else(|| bad(CMD, "`rings` is 1 to 4"))?,
     };
     let border = match str_param(p, "border") {
         None => "none",
@@ -100,9 +211,22 @@ fn monogram(s: &mut Session, p: &Value) -> Result<Value> {
     // left to right, centred on `at`: classic letters each centred on it up and down, a line on
     // one baseline
     let mut x = at.x - total / 2.0;
+    // stacked: one above the other, centred on `at`
+    let column = sizes.iter().map(|h| h * PT_PER_MM).sum::<f64>() + gap * (letters.len() - 1) as f64;
+    let mut y = at.y - column / 2.0;
     let mut specs = Vec::new();
     for ((c, h), w) in letters.iter().zip(&sizes).zip(&widths) {
-        let base = if classic { at.y + h * PT_PER_MM / 2.0 } else { at.y + tallest / 2.0 };
+        let base = if stacked {
+            y += h * PT_PER_MM;
+            let b = y;
+            y += gap;
+            x = at.x - w / 2.0;
+            b
+        } else if classic {
+            at.y + h * PT_PER_MM / 2.0
+        } else {
+            at.y + tallest / 2.0
+        };
         specs.push(Lettering {
             text: c.to_string(),
             font: font.info.name.clone(),
@@ -142,10 +266,31 @@ fn monogram(s: &mut Session, p: &Value) -> Result<Value> {
             parts.push(Arc::new(g));
         }
         let count = parts.len();
-        // the border round them all
+        // the ornaments either side, mirrored
+        let letters_box = parts.iter().filter_map(|n| n.geometric_bounds()).reduce(|a, b| a.union(b));
+        if let Some(b) = letters_box.filter(|_| ornament_kind != "none") {
+            let o = size * 0.6 * PT_PER_MM;
+            let cy = b.center().y;
+            for (mirror, cx) in [(false, b.x0 - MARGIN * PT_PER_MM - o / 2.0), (true, b.x1 + MARGIN * PT_PER_MM + o / 2.0)] {
+                let (lines, closed) = ornament(ornament_kind, Point::new(cx, cy), o, mirror);
+                let subs: Vec<SubPath> = lines.iter().filter(|l| l.len() >= 2).map(|l| SubPath::polyline(l, closed)).collect();
+                let look =
+                    if closed { Appearance::basic(paint.clone(), Paint::None, 0.0) } else { Appearance::basic(Paint::None, paint.clone(), 1.0) };
+                let mut n = Node::path(d.alloc_id(), PathData::new(subs), look);
+                n.name = Some("Ornament".into());
+                n.embroidery = Some(Box::new(if closed {
+                    Embroidery::new(StitchType::Satin(SatinParams::default()))
+                } else {
+                    Embroidery::new(StitchType::Run(RunParams { kind: RunKind::Triple, ..RunParams::default() }))
+                }));
+                parts.push(Arc::new(n));
+            }
+        }
+        // the border round them all, in rings
         let bounds = parts.iter().filter_map(|n| n.geometric_bounds()).reduce(|a, b| a.union(b));
-        if let Some(b) = bounds.filter(|_| border != "none") {
-            let pts = border_points(border, b, MARGIN * PT_PER_MM);
+        for ring in 0..rings {
+            let Some(b) = bounds.filter(|_| border != "none") else { break };
+            let pts = border_points(border, b, (MARGIN + RING_GAP * ring as f64) * PT_PER_MM);
             let mut e = if border == "scallop" {
                 Embroidery::new(StitchType::Run(RunParams {
                     kind: RunKind::Motif,
@@ -161,7 +306,7 @@ fn monogram(s: &mut Session, p: &Value) -> Result<Value> {
                 e.width = Some(BORDER_WIDTH);
             }
             let mut n = Node::path(d.alloc_id(), PathData::single(SubPath::polyline(&pts, true)), Appearance::basic(Paint::None, paint.clone(), 1.0));
-            n.name = Some("Border".into());
+            n.name = Some(if ring == 0 { "Border".into() } else { format!("Border {}", ring + 1) });
             n.embroidery = Some(Box::new(e));
             parts.push(Arc::new(n));
         }

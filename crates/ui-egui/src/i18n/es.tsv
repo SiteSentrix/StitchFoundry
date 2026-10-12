@@ -4769,3 +4769,8 @@ machine	Stop	Parada
 @msg	the machine file didn't encode	no se pudo codificar el archivo de la máquina
 	Worksheet	Hoja de trabajo
 	Outline Around	Contorno alrededor
+	Stacked	Apilado
+	Oval	Óvalo
+	Octagon	Octógono
+	Shield	Escudo
+	Ornament	Adorno

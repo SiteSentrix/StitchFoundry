@@ -703,13 +703,24 @@ pub(crate) fn monogram_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     ui.label(format!("{}: {font}", tl!("Font")));
     ui.add(egui::TextEdit::singleline(&mut app.embroidery.monogram_letters).char_limit(3).hint_text(tl!("Initials")));
-    let styles = [tl!("Classic"), tl!("In a line")];
+    let styles = [tl!("Classic"), tl!("In a line"), tl!("Stacked")];
     if let Some(i) = pick(ui, tl!("Style"), "mono-style", app.embroidery.monogram_style, &styles) {
-        app.embroidery.monogram_style = i.min(1);
+        app.embroidery.monogram_style = i.min(2);
     }
-    let borders = [tl!("None"), tl!("Circle"), tl!("Diamond"), tl!("Square"), tl!("Scallops")];
+    let borders =
+        [tl!("None"), tl!("Circle"), tl!("Diamond"), tl!("Square"), tl!("Scallops"), tl!("Oval"), tl!("Octagon"), tl!("Heart"), tl!("Shield")];
     if let Some(i) = pick(ui, tl!("Border"), "mono-border", app.embroidery.monogram_border, &borders) {
-        app.embroidery.monogram_border = i.min(4);
+        app.embroidery.monogram_border = i.min(borders.len() - 1);
+    }
+    if app.embroidery.monogram_border > 0 {
+        let rings = ["1", "2", "3", "4"];
+        if let Some(i) = pick(ui, tl!("Rings"), "mono-rings", app.embroidery.monogram_rings.saturating_sub(1), &rings) {
+            app.embroidery.monogram_rings = i + 1;
+        }
+    }
+    let ornaments = [tl!("None"), tl!("Hearts"), tl!("Stars"), tl!("Dots"), tl!("Swirls")];
+    if let Some(i) = pick(ui, tl!("Ornament"), "mono-orn", app.embroidery.monogram_ornament, &ornaments) {
+        app.embroidery.monogram_ornament = i.min(ornaments.len() - 1);
     }
     let size = if app.embroidery.monogram_size > 0.0 { app.embroidery.monogram_size } else { own.max(1.0) };
     if let Some(v) = num(ui, tl!("Size"), "mono-size", size, " mm", 1) {
@@ -717,9 +728,11 @@ pub(crate) fn monogram_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let letters = app.embroidery.monogram_letters.trim().to_string();
     if button(ui, tl!("Place Monogram")).clicked() && !letters.is_empty() {
-        let style = ["classic", "line"].get(app.embroidery.monogram_style).copied().unwrap_or("classic");
+        let style = ["classic", "line", "stacked"].get(app.embroidery.monogram_style).copied().unwrap_or("classic");
         let border = vectorcraft_engine::cmd::embroidery_monogram::BORDERS.get(app.embroidery.monogram_border).copied().unwrap_or("none");
-        let params = json!({ "letters": letters, "font": font, "size": size, "style": style, "border": border });
+        let ornament = vectorcraft_engine::cmd::embroidery_monogram::ORNAMENTS.get(app.embroidery.monogram_ornament).copied().unwrap_or("none");
+        let params = json!({ "letters": letters, "font": font, "size": size, "style": style, "border": border,
+            "rings": app.embroidery.monogram_rings.clamp(1, 4), "ornament": ornament });
         match app.run("embroidery.monogram", params) {
             Ok(r) => {
                 if let Some(w) = r["warnings"].as_array().and_then(|w| w.first()).and_then(Value::as_str) {

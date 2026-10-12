@@ -4796,3 +4796,8 @@ machine	Stop	Zastavení
 @msg	the machine file didn't encode	strojový soubor se nepodařilo zakódovat
 	Worksheet	Pracovní list
 	Outline Around	Obrys kolem
+	Stacked	Pod sebou
+	Oval	Ovál
+	Octagon	Osmiúhelník
+	Shield	Štít
+	Ornament	Ornament

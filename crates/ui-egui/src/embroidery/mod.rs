@@ -162,6 +162,8 @@ pub struct EmbroideryUi {
     pub monogram_style: usize,
     pub monogram_border: usize,
     pub monogram_size: f64,
+    pub monogram_ornament: usize,
+    pub monogram_rings: usize,
     /// The Font Creator section: the font name as typed (and whether it is being typed), glyphs
     /// to add, a kerning pair to add, text to try the font with, and the type family and loaded
     /// font picked to start from or merge.
@@ -259,6 +261,8 @@ impl Default for EmbroideryUi {
             monogram_style: 0,
             monogram_border: 1,
             monogram_size: 0.0,
+            monogram_ornament: 0,
+            monogram_rings: 1,
             font_name: String::new(),
             font_name_editing: false,
             font_add: String::new(),

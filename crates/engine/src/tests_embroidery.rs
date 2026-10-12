@@ -304,6 +304,55 @@ fn an_outline_goes_round_the_art_as_it_sews() {
 }
 
 #[test]
+fn monograms_stack_wear_ornaments_and_ring_borders() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let kids = |s: &Session, id: NodeId| -> Vec<(String, vectorcraft_geom::Rect)> {
+        s.doc()
+            .unwrap()
+            .doc
+            .node(id)
+            .unwrap()
+            .children()
+            .unwrap()
+            .iter()
+            .map(|n| (n.name.clone().unwrap_or_default(), n.geometric_bounds().unwrap()))
+            .collect()
+    };
+    // stacked: one above the other, centred on the same line
+    let r = s.execute("embroidery.monogram", &json!({"letters": "AB", "font": "Test Script", "style": "stacked", "at": [300, 300]})).unwrap();
+    let k = kids(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert!((k[0].1.center().x - k[1].1.center().x).abs() < 30.0 && k[0].1.y1 < k[1].1.y1, "{k:?}");
+    // ornaments either side, three oval rings round it all
+    let r = s
+        .execute(
+            "embroidery.monogram",
+            &json!({"letters": "AB", "font": "Test Script", "border": "oval", "rings": 3, "ornament": "hearts", "at": [300, 300]}),
+        )
+        .unwrap();
+    let k = kids(&s, NodeId(r["id"].as_u64().unwrap()));
+    let names: Vec<&str> = k.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names.iter().filter(|n| **n == "Ornament").count(), 2, "{names:?}");
+    assert_eq!(names.iter().filter(|n| n.starts_with("Border")).count(), 3, "{names:?}");
+    let ornaments: Vec<_> = k.iter().filter(|(n, _)| n == "Ornament").map(|(_, b)| *b).collect();
+    let letters = k[0].1.union(k[1].1);
+    assert!(ornaments[0].x1 < letters.x0 && ornaments[1].x0 > letters.x1, "{ornaments:?} {letters:?}");
+    // every border kind and ornament makes a monogram
+    for border in ["octagon", "heart", "shield"] {
+        assert!(s.execute("embroidery.monogram", &json!({"letters": "A", "font": "Test Script", "border": border})).is_ok(), "{border}");
+    }
+    for ornament in ["stars", "dots", "swirls"] {
+        assert!(s.execute("embroidery.monogram", &json!({"letters": "A", "font": "Test Script", "ornament": ornament})).is_ok(), "{ornament}");
+    }
+    // what it doesn't know
+    for bad in [json!({"rings": 5}), json!({"ornament": "skulls"}), json!({"style": "spiral"})] {
+        let mut p = json!({"letters": "A", "font": "Test Script"});
+        p.as_object_mut().unwrap().extend(bad.as_object().unwrap().clone());
+        assert!(s.execute("embroidery.monogram", &p).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn worksheets_show_the_design_and_its_figures() {
     let mut s = session();
     assert!(s.execute("embroidery.worksheet", &json!({})).is_err());

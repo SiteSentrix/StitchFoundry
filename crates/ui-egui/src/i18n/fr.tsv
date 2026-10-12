@@ -4779,3 +4779,8 @@ machine	Stop	Arrêt
 @msg	the machine file didn't encode	le fichier machine n’a pas pu être encodé
 	Worksheet	Fiche de travail
 	Outline Around	Contour autour
+	Stacked	Empilé
+	Oval	Ovale
+	Octagon	Octogone
+	Shield	Écusson
+	Ornament	Ornement
