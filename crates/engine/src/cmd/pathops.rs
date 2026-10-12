@@ -643,34 +643,44 @@ fn path_ids(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
     out
 }
 
+/// Replace each path under the selection ([`path_ids`]) by what `f` makes of it: → (their ids, how
+/// many anchors they have before and after). A path that `f` would empty or returns unchanged is
+/// left as it is, with its live shape and its direct-selected anchors; a replaced path loses both.
 fn edit_paths(s: &mut Session, label: &str, f: impl Fn(&PathData) -> PathData) -> Result<(Vec<NodeId>, usize, usize)> {
     let roots = selected_roots(s)?;
-    s.edit(label, |d, sel| {
-        let ids = path_ids(d, &roots);
-        if ids.is_empty() {
-            return Err(EngineError::Other(format!("{label}: select paths")));
+    let d = &s.doc()?.doc;
+    let ids = path_ids(d, &roots);
+    if ids.is_empty() {
+        return Err(EngineError::Other(format!("{label}: select paths")));
+    }
+    let (mut before, mut after, mut changed) = (0, 0, vec![]);
+    for id in &ids {
+        let Some(NodeKind::Path { path, .. }) = d.node(*id).map(|n| &n.kind) else { continue };
+        before += path.anchor_count();
+        let np = f(path);
+        if (np.is_empty() && !path.is_empty()) || np == *path {
+            after += path.anchor_count();
+            continue;
         }
-        let (mut before, mut after) = (0, 0);
-        for id in &ids {
-            if let Some(NodeKind::Path { path, live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) {
-                before += path.anchor_count();
-                let np = f(path);
-                if np.is_empty() && !path.is_empty() {
-                    after += path.anchor_count();
-                    continue;
-                }
-                after += np.anchor_count();
-                if *path != np {
+        after += np.anchor_count();
+        changed.push((*id, np));
+    }
+    // When no path changes, the document and its undo history stay as they are.
+    if !changed.is_empty() {
+        s.edit(label, |d, sel| {
+            for (id, np) in changed {
+                if let Some(NodeKind::Path { path, live, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
                     // Refit and subdivision change what the old component indexes refer to.
                     // Keep the object selected whole so its new points remain editable.
-                    sel.anchors.remove(id);
+                    sel.anchors.remove(&id);
+                    *path = np;
+                    *live = None;
                 }
-                *path = np;
-                *live = None;
             }
-        }
-        Ok((ids, before, after))
-    })
+            Ok(())
+        })?;
+    }
+    Ok((ids, before, after))
 }
 
 fn simplify(s: &mut Session, p: &Value) -> Result<Value> {

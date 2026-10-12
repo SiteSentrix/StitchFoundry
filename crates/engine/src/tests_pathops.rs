@@ -279,6 +279,82 @@ fn simplify_dense_polyline() {
     assert!(close(bounds(&s, id), Rect::new(0.0, 60.0, 300.0, 140.0), 2.0));
 }
 
+/// How many steps there are to undo and to redo, and whether the document has unsaved changes.
+fn history(s: &Session) -> (usize, usize, bool) {
+    let st = s.doc().unwrap();
+    (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+}
+
+/// Select `ids` with a move of them left to redo, and mark the document saved.
+fn select_with_a_step_to_redo(s: &mut Session, ids: &[NodeId]) {
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+}
+
+/// Simplify that leaves every path as it is records no undo step: a rectangle, a star and a line,
+/// whose sides are straight segments between corners, and a path with one anchor. The step to redo
+/// stays, the document stays unmodified, the rectangle and the line stay live shapes, and the reply
+/// counts the anchors. With a path it simplifies selected too, Simplify is one undo step that
+/// changes only that path, and the others stay as they are, live shapes included.
+#[test]
+fn simplify_that_changes_no_path_records_no_undo_step() {
+    let mut s = session();
+    let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 60.0);
+    let star = id(s.execute("shape.star", &json!({"cx": 300, "cy": 100, "radius1": 60, "radius2": 30})).unwrap());
+    let line = id(s.execute("shape.line", &json!({"x1": 0, "y1": 200, "x2": 100, "y2": 240})).unwrap());
+    let point = id(s.execute("path.create", &json!({"anchors": [{"x": 5, "y": 300}]})).unwrap());
+    let ids = [r, star, line, point];
+    let paths = |s: &Session| ids.map(|i| path_of(s, i).0);
+    let is_live = |s: &Session, i| matches!(node(s, i).kind, NodeKind::Path { live: Some(_), .. });
+    let was = paths(&s);
+    select_with_a_step_to_redo(&mut s, &ids);
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+    for p in [json!({}), json!({"tolerance": 5, "straightLines": true})] {
+        let out = s.execute("object.path.simplify", &p).unwrap();
+        assert_eq!(out, json!({"ids": ids.map(|i| i.0), "before": 17, "after": 17}), "{p}");
+        assert_eq!(history(&s), before, "{p}");
+        assert_eq!(paths(&s), was, "{p}");
+        assert!(is_live(&s, r) && is_live(&s, line), "{p}");
+        assert_eq!(s.journal.last().unwrap(), &("object.path.simplify".to_string(), p));
+    }
+    // The 101 anchors of a sine wave become a few.
+    let anchors: Vec<Value> = (0..=100)
+        .map(|i| {
+            let x = i as f64 * 3.0;
+            json!({"x": x, "y": 400.0 + 40.0 * (x / 50.0).sin()})
+        })
+        .collect();
+    let wave = id(s.execute("path.create", &json!({"anchors": anchors})).unwrap());
+    s.execute("select.set", &json!({"ids": [r.0, star.0, line.0, point.0, wave.0]})).unwrap();
+    let undo = history(&s).0;
+    s.execute("object.path.simplify", &json!({})).unwrap();
+    assert_eq!(history(&s), (undo + 1, 0, true));
+    assert!(path_of(&s, wave).0.anchor_count() < 25);
+    assert_eq!(paths(&s), was);
+    assert!(is_live(&s, r) && is_live(&s, line), "the paths Simplify leaves as they are stay live shapes");
+}
+
+/// The Simplify dialog previews Simplify in an interaction, and OK commits the preview. When the
+/// preview changes no path, OK records no undo step: the step to redo stays, the document stays
+/// unmodified and the rectangle stays a live shape.
+#[test]
+fn simplify_preview_that_changes_no_path_commits_no_undo_step() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 60.0);
+    select_with_a_step_to_redo(&mut s, &[r]);
+    let before = history(&s);
+    s.begin_interaction("Simplify").unwrap();
+    let out = s.preview("object.path.simplify", &json!({"tolerance": 1.0})).unwrap();
+    assert_eq!(out, json!({"ids": [r.0], "before": 4, "after": 4}));
+    s.commit_interaction().unwrap();
+    assert_eq!(history(&s), before);
+    assert!(matches!(node(&s, r).kind, NodeKind::Path { live: Some(_), .. }));
+}
+
 #[test]
 fn simplify_refreshes_changed_path_selection_and_undo() {
     let mut s = session();
@@ -369,6 +445,28 @@ fn add_anchor_points_doubles() {
     s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
     assert_eq!(path_of(&s, a).0.anchor_count(), 8);
     assert!(close(bounds(&s, a), Rect::new(0.0, 0.0, 10.0, 10.0), 1e-9));
+}
+
+/// Add Anchor Points with only paths of one anchor selected records no undo step. With a rectangle
+/// selected too, it is one undo step that adds four anchors to the rectangle and leaves the
+/// one-anchor path as it is.
+#[test]
+fn add_anchor_points_with_no_segment_records_no_undo_step() {
+    let mut s = session();
+    let point = NodeId(s.execute("path.create", &json!({"anchors": [{"x": 5, "y": 5}]})).unwrap()["id"].as_u64().unwrap());
+    let a = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let was = path_of(&s, point).0;
+    select_with_a_step_to_redo(&mut s, &[point]);
+    let before = history(&s);
+    let out = s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+    assert_eq!(out, json!({"ids": [point.0], "before": 1, "after": 1}));
+    assert_eq!(history(&s), before);
+    assert_eq!(s.journal.last().unwrap().0, "object.path.addAnchorPoints");
+    s.execute("select.set", &json!({"ids": [point.0, a.0]})).unwrap();
+    let out = s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+    assert_eq!(out, json!({"ids": [point.0, a.0], "before": 5, "after": 9}));
+    assert_eq!(history(&s), (before.0 + 1, 0, true));
+    assert_eq!(path_of(&s, point).0, was);
 }
 
 #[test]
