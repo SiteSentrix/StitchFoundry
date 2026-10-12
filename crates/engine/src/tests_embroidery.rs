@@ -2286,6 +2286,49 @@ fn team_names_write_one_machine_file_per_name() {
 }
 
 #[test]
+fn monograms_set_their_letters_inside_a_border() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let r = s.execute("embroidery.monogram", &json!({"letters": "ABA", "font": "Test Script", "at": [300, 300], "border": "circle"})).unwrap();
+    assert_eq!(r["letters"].as_u64(), Some(3));
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let parts = s.doc().unwrap().doc.node(id).unwrap().children().unwrap().clone();
+    assert_eq!(parts.len(), 4);
+    // three lettering groups, the middle one larger, each set again as lettering can be
+    let size = |n: &vectorcraft_doc::Node| match &n.embroidery.as_deref().unwrap().stitch {
+        sf_core::attr::StitchType::Lettering(l) => l.size,
+        other => panic!("{other:?}"),
+    };
+    assert!((size(&parts[0]) - 10.0).abs() < 1e-9 && (size(&parts[1]) - 16.0).abs() < 1e-9 && (size(&parts[2]) - 10.0).abs() < 1e-9);
+    // left to right, each centred on the monogram's middle; the border round them all
+    let b: Vec<vectorcraft_geom::Rect> = parts.iter().map(|n| n.geometric_bounds().unwrap()).collect();
+    assert!(b[0].x1 < b[1].x0 && b[1].x1 < b[2].x0, "{b:?}");
+    assert!(b[..3].iter().all(|r| (r.center().y - 300.0).abs() < 0.5), "{b:?}");
+    assert!(b[3].x0 < b[0].x0 && b[3].x1 > b[2].x1 && b[3].y0 < b[1].y0 && b[3].y1 > b[1].y1, "{b:?}");
+    assert!(matches!(parts[3].embroidery.as_deref().unwrap().stitch, sf_core::attr::StitchType::Satin(_)));
+    assert!(stitches(&s) > 200);
+    // in a line, one size on one baseline, a scalloped border
+    let r =
+        s.execute("embroidery.monogram", &json!({"letters": "AB", "font": "Test Script", "style": "line", "border": "scallop", "size": 12})).unwrap();
+    let parts = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().children().unwrap().clone();
+    let b: Vec<vectorcraft_geom::Rect> = parts.iter().map(|n| n.geometric_bounds().unwrap()).collect();
+    assert!((b[0].y1 - b[1].y1).abs() < 0.01 && (size(&parts[0]) - 12.0).abs() < 1e-9 && (size(&parts[1]) - 12.0).abs() < 1e-9);
+    let sf_core::attr::StitchType::Run(run) = &parts[2].embroidery.as_deref().unwrap().stitch else { panic!() };
+    assert_eq!(run.kind, sf_core::model::RunKind::Motif);
+    // bad requests
+    for bad in [
+        json!({"letters": "", "font": "Test Script"}),
+        json!({"letters": "ABCD", "font": "Test Script"}),
+        json!({"letters": "A", "font": "Nope"}),
+        json!({"letters": "A", "font": "Test Script", "border": "star"}),
+        json!({"letters": "A", "font": "Test Script", "style": "fancy"}),
+        json!({"letters": "A", "font": "Test Script", "size": 0}),
+    ] {
+        assert!(s.execute("embroidery.monogram", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
