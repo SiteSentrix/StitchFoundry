@@ -218,22 +218,24 @@ const MAX_MOTIF_ROWS: f64 = 4000.0;
 const MAX_ROW_MOTIFS: f64 = 20_000.0;
 
 /// Motif fill: rows `spacing` apart across the shape (turned by `angle`), each a motif run of
-/// motifs `motif_size` wide and long, kept half a motif inside the outline and lined up from row
-/// to row, each row shifted by the row offset (a fraction of a motif). Rows are sewn back and
-/// forth; parts of a row are joined by travel or trims.
+/// motifs `motif_size` long and as wide (a custom motif: as wide as its drawn proportions make
+/// it), kept half a motif inside the outline and lined up from row to row, each row shifted by
+/// the row offset (a fraction of a motif). Rows are sewn back and forth, the motifs the same way
+/// up on every row; parts of a row are joined by travel or trims.
 pub(crate) fn motif_fill(polygon: &Polygon, params: &FillParams, angle: f64, out: &mut Out, trim: f64) {
     let size = if params.motif_size.is_finite() { params.motif_size.clamp(1.0, 50.0) } else { 4.0 };
+    let across = size * params.custom_motif.as_ref().map_or(1.0, |m| m.aspect());
     let step = params.stitch_length.max(0.5);
     let offset = if params.offset.is_finite() { params.offset } else { 0.0 };
     let (fwd, inv) = (Affine::rotate(angle.to_radians()), Affine::rotate(-angle.to_radians()));
     let mut p = polygon.clone();
     p.transform(&fwd);
     // The motif centred across its row, and rows far enough inside for it to stay in.
-    let raw = super::run::motif_shape(params.motif);
+    let raw = super::run::motif_points(params.motif, params.custom_motif.as_ref());
     let (lo, hi) = raw.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &(_, c)| (lo.min(c), hi.max(c)));
     let mid = (lo + hi) * 0.5;
-    let shape: Vec<(f64, f64)> = raw.iter().map(|&(a, c)| (a, c - mid)).collect();
-    let inner = poly::offset(std::slice::from_ref(&p), -size * ((hi - lo) * 0.5).max(0.05));
+    let shape: Vec<(f64, f64)> = raw.iter().map(|&(a, c)| (a, (c - mid) * across / size)).collect();
+    let inner = poly::offset(std::slice::from_ref(&p), -across * ((hi - lo) * 0.5).max(0.05));
     let bb = p.bbox();
     let motifs = bb.width() / size;
     if inner.is_empty() || bb.is_empty() || motifs.is_nan() || motifs >= MAX_ROW_MOTIFS {
@@ -282,7 +284,7 @@ fn motif_row((xa, xb): (f64, f64), y: f64, size: f64, shift: f64, shape: &[(f64,
     if k1 >= k0 {
         for k in (k0 as i64)..=(k1 as i64) {
             let x0 = shift + k as f64 * size;
-            pts.extend(shape.iter().map(|&(a, c)| Point::new(x0 + a * size, y - c * size)));
+            pts.extend(shape.iter().map(|&(a, c)| Point::new(x0 + a * size, y + c * size)));
         }
     }
     pts.push(Point::new(xb, y));
@@ -498,6 +500,30 @@ mod tests {
             motif_fill(&square(10.0), &params, 0.0, &mut out, 1e9);
             assert!(out.finish().iter().all(|s| s.pos().is_finite()));
         }
+    }
+
+    #[test]
+    fn motif_fills_sew_custom_motifs_the_way_up_and_as_high_as_they_were_drawn() {
+        use crate::model::{CustomMotif, FillKind};
+        // On a row, a peak drawn upward points up (−y), as it does along a left-to-right run.
+        let peak = [(0.0, 0.0), (0.5, -1.0), (1.0, 0.0)];
+        let row = motif_row((0.0, 20.0), 10.0, 4.0, 0.0, &peak, 10.0);
+        assert!(row.iter().all(|p| p.y <= 10.0 + 1e-9) && row.iter().any(|p| p.y < 6.0 + 1e-9), "{row:?}");
+        // A custom motif half as high as it is long: rows of it 4 mm long and 2 mm high.
+        let poly = Polygon::from_ring(vec![Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(40.0, 30.0), Point::new(0.0, 30.0)]);
+        let custom = CustomMotif { name: "Peak".into(), points: vec![[0.0, 0.0], [0.5, -1.0], [1.0, 0.0]], aspect: 0.5 };
+        let params =
+            FillParams { kind: FillKind::Motif, motif_size: 4.0, spacing: 5.0, stitch_length: 2.0, custom_motif: Some(custom), ..Default::default() };
+        let mut out = Out::new();
+        motif_fill(&poly, &params, 0.0, &mut out, 1e9);
+        let pts: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+        assert!(pts.len() > 100 && pts.iter().all(|p| poly.contains(*p) || poly.distance_to_boundary(*p) < 0.05), "{}", pts.len());
+        // Each row is 2 mm high: rows 5 mm apart leave 3 mm bands with no stitches (away from the
+        // row ends, where travel joins the rows).
+        let mut ys: Vec<f64> = pts.iter().filter(|p| (8.0..=32.0).contains(&p.x)).map(|p| p.y).collect();
+        ys.sort_by(f64::total_cmp);
+        let widest_gap = ys.windows(2).map(|w| w[1] - w[0]).fold(0.0, f64::max);
+        assert!((2.9..=3.1).contains(&widest_gap), "{widest_gap}");
     }
 
     #[test]

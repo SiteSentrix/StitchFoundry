@@ -16,7 +16,7 @@ use crate::direction::Guide;
 use crate::fabrics::Fabric;
 use crate::geom::{Affine, Point};
 use crate::hoops::Hoop;
-use crate::model::{AppliqueParams, DesignSettings, FillKind, FillParams, RunKind, RunParams, SatinParams, transform_angle};
+use crate::model::{AppliqueParams, CustomMotif, DesignSettings, FillKind, FillParams, RunKind, RunParams, SatinParams, transform_angle};
 use crate::pattern::Stitch;
 use crate::threads::Thread;
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,8 @@ fn is_constant(p: &WidthProfile) -> bool {
 }
 
 /// How an object is stitched.
+// One per stitched object, cloned with it; boxing the fill parameters buys nothing.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum StitchType {
@@ -381,6 +383,9 @@ pub struct DocEmbroidery {
     /// What Check Design flags.
     #[serde(skip_serializing_if = "CheckLimits::is_default")]
     pub checks: CheckLimits,
+    /// Motifs made from lines drawn in the design (Make Motif).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub motifs: Vec<CustomMotif>,
 }
 
 /// The limits Check Design measures the design against.
@@ -428,6 +433,11 @@ impl DocEmbroidery {
         self.styles.iter().find(|s| s.name == name)
     }
 
+    /// One of the design's motifs, by name.
+    pub fn motif(&self, name: &str) -> Option<&CustomMotif> {
+        self.motifs.iter().find(|m| m.name == name)
+    }
+
     /// A fabric by name: one made for the design, else a built-in one.
     pub fn fabric(&self, name: &str) -> Option<Fabric> {
         self.fabrics.iter().find(|f| f.name == name).cloned().or_else(|| crate::fabrics::find(name))
@@ -455,6 +465,7 @@ impl Default for DocEmbroidery {
             styles: Vec::new(),
             fabrics: Vec::new(),
             checks: CheckLimits::default(),
+            motifs: Vec::new(),
         }
     }
 }

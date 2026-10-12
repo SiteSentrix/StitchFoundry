@@ -593,6 +593,35 @@ impl Motif {
     }
 }
 
+/// Most points a custom motif keeps.
+pub const MAX_MOTIF_POINTS: usize = 2000;
+
+/// A motif made from a line drawn in the design (Make Motif). Its points lie in a repeat one long
+/// (along the run) and one wide (across it), from `(0, 0)` to `(1, 0)` like the built-in motifs;
+/// across is positive to the right of the run, down on screen for a left-to-right line, so the
+/// motif sews the way it was drawn.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomMotif {
+    pub name: String,
+    pub points: Vec<[f64; 2]>,
+    /// The drawn motif's height over its length, which motif fills and Apply Motif keep.
+    pub aspect: f64,
+}
+
+impl Default for CustomMotif {
+    fn default() -> Self {
+        CustomMotif { name: String::new(), points: Vec::new(), aspect: 1.0 }
+    }
+}
+
+impl CustomMotif {
+    /// The height over the length to sew it at: [`CustomMotif::aspect`] when it is sensible.
+    pub fn aspect(&self) -> f64 {
+        if self.aspect.is_finite() { self.aspect.clamp(0.05, 20.0) } else { 1.0 }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RunParams {
@@ -614,6 +643,9 @@ pub struct RunParams {
     /// to it from `width`, their repeats with them. `None` = all the same size.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_end: Option<f64>,
+    /// A motif made from a drawn line, sewn instead of `motif`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_motif: Option<CustomMotif>,
 }
 
 /// Most passes a run can be sewn.
@@ -621,7 +653,17 @@ pub const MAX_PASSES: u32 = 9;
 
 impl Default for RunParams {
     fn default() -> Self {
-        RunParams { kind: RunKind::Single, stitch_length: 2.5, width: 2.0, spacing: 2.0, flip: false, motif: Motif::Wave, passes: 1, width_end: None }
+        RunParams {
+            kind: RunKind::Single,
+            stitch_length: 2.5,
+            width: 2.0,
+            spacing: 2.0,
+            flip: false,
+            motif: Motif::Wave,
+            passes: 1,
+            width_end: None,
+            custom_motif: None,
+        }
     }
 }
 
@@ -1000,6 +1042,10 @@ pub struct FillParams {
     /// Motif fills: the motif on the rows, and its size (mm, across the row and along it).
     pub motif: Motif,
     pub motif_size: f64,
+    /// Motif fills: a motif made from a drawn line, sewn instead of `motif` (as long as
+    /// `motif_size`, and as high as its drawn proportions make it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_motif: Option<CustomMotif>,
     /// Contour fills: how many rings in from the outline (an offset fill); 0 = all the way in.
     #[serde(skip_serializing_if = "is_zero")]
     pub rings: u32,
@@ -1034,6 +1080,7 @@ impl Default for FillParams {
             trapunto: false,
             motif: Motif::Wave,
             motif_size: 4.0,
+            custom_motif: None,
             rings: 0,
             spacing_profile: Vec::new(),
         }

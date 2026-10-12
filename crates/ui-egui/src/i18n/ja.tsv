@@ -4556,3 +4556,8 @@ machine	Stop	停止
 	Oval Border	楕円の枠
 	Rounded Border	角丸の枠
 	Motif Border	モチーフの枠
+	Make Motif	モチーフを作成
+	Apply Motif	モチーフを適用
+	Embroidery Motifs	刺繍モチーフ
+	Delete Motif	モチーフを削除
+	Remove the motif from the design; what sews it keeps it.	デザインからモチーフを削除します。このモチーフで縫うオブジェクトはそのまま保持します。

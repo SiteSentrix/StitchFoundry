@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Add Outline",
         ["Embroidery"],
         None,
-        "{ids?, shape?: offset|rectangle|oval|rounded (offset: following the shapes), offset?: mm out from them (1; may be negative for offset), stitch?: run|bean|satin|motif (satin), width?: mm (satin or motif, 2.5), motif?: wave|scallop|… (wave)} a stitched outline or border round the selected stitched shapes and type, sewn after them in the top one's thread → {id}",
+        "{ids?, shape?: offset|rectangle|oval|rounded (offset: following the shapes), offset?: mm out from them (1; may be negative for offset), stitch?: run|bean|satin|motif (satin), width?: mm (satin or motif, 2.5), motif?: wave|scallop|… or one of the design's motifs (wave)} a stitched outline or border round the selected stitched shapes and type, sewn after them in the top one's thread → {id}",
         has_selection,
         add_outline
     )]
@@ -43,17 +43,17 @@ fn add_outline(s: &mut Session, p: &Value) -> Result<Value> {
         None => 2.5,
         Some(v) => v.as_f64().filter(|v| (0.5..=12.0).contains(v)).ok_or_else(|| bad(CMD, "`width` is 0.5 to 12 mm"))?,
     };
-    let motif = match str_param(p, "motif") {
-        None => Motif::Wave,
-        Some(name) => {
-            Motif::ALL.into_iter().find(|m| m.label().eq_ignore_ascii_case(name)).ok_or_else(|| bad(CMD, format!("unknown motif `{name}`")))?
-        }
+    let (motif, custom_motif) = match str_param(p, "motif") {
+        None => (Motif::Wave, None),
+        Some(name) => super::embroidery_motifs::motif_by_name(s, name, CMD)?,
     };
+    // A design's motif keeps its drawn proportions.
+    let spacing = custom_motif.as_ref().map_or(width * 1.5, |m| (width / m.aspect()).clamp(0.5, 100.0));
     let stitch = match str_param(p, "stitch").unwrap_or("satin") {
         "run" => StitchType::Run(RunParams::default()),
         "bean" => StitchType::Run(RunParams { kind: RunKind::Triple, ..RunParams::default() }),
         "motif" => {
-            StitchType::Run(RunParams { kind: RunKind::Motif, motif, width, spacing: width * 1.5, stitch_length: 1.5, ..RunParams::default() })
+            StitchType::Run(RunParams { kind: RunKind::Motif, motif, width, spacing, stitch_length: 1.5, custom_motif, ..RunParams::default() })
         }
         "satin" => StitchType::Satin(SatinParams::default()),
         other => return Err(bad(CMD, format!("`stitch` is run, bean, satin or motif, not `{other}`"))),

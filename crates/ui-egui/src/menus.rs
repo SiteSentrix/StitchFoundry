@@ -103,6 +103,7 @@ fn embroidery_menu() -> Vec<Item> {
                 .map(|m| cp(m, "embroidery.placeMotif", json!({ "motif": m.to_lowercase() })))
                 .collect(),
         ),
+        c("Make Motif", "embroidery.motif.make"),
         c("Reverse Stitch Direction", "embroidery.reverse"),
         c("Make Properties Current", "embroidery.makeCurrent"),
         Sep,

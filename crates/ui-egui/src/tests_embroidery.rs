@@ -72,6 +72,28 @@ fn the_panel_shows_a_fills_texture_and_split_lines() {
 }
 
 #[test]
+fn the_panel_offers_the_designs_own_motifs() {
+    let mut app = app();
+    let peak = app.run("path.create", json!({"d": "M 20 200 L 50 150 L 80 200"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [peak]})).unwrap();
+    app.run("embroidery.motif.make", json!({"name": "Peak"})).unwrap();
+    let line = app.run("path.create", json!({"d": "M 20 100 L 300 100"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [line]})).unwrap();
+    app.run("embroidery.set", json!({"type": "motif"})).unwrap();
+    // A built-in motif shows, and no Delete Motif.
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(texts.iter().any(|t| t == "Wave") && !texts.iter().any(|t| t == "Delete Motif"), "{texts:?}");
+    // Sewing the design's motif: its name shows, with Delete Motif.
+    app.run("embroidery.motif.apply", json!({"name": "Peak"})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(texts.iter().any(|t| t == "Peak") && texts.iter().any(|t| t == "Delete Motif"), "{texts:?}");
+    // Deleted from the design, the run still shows the motif it sews, without the button.
+    app.run("embroidery.motif.delete", json!({"name": "Peak"})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(texts.iter().any(|t| t == "Peak") && !texts.iter().any(|t| t == "Delete Motif"), "{texts:?}");
+}
+
+#[test]
 fn stitch_list_shows_every_record() {
     let mut app = app();
     assert!(painted_text(&mut app, crate::embroidery::stitch_list::show).iter().any(|t| t.contains("Nothing stitched yet")));

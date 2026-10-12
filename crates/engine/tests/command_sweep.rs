@@ -415,6 +415,33 @@ fn structured_junk() {
         ("embroidery.setSplits", json!({"id": 2, "splits": [[[0, 0]], "x", null]})),
         ("embroidery.carveSplits", json!({"repeat": -1, "keep": "yes"})),
         ("embroidery.clearSplits", json!({"ids": [u64::MAX]})),
+        // The design's motifs: made from whatever is selected, with absurd names and points.
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.motif.make", "params": {"name": "  "}},
+                {"command": "embroidery.motif.make", "params": {"name": "M"}},
+                {"command": "embroidery.motif.apply", "params": {"name": "M"}},
+                {"command": "embroidery.placeMotif", "params": {"motif": "m", "size": 500, "angle": 1e308}},
+                {"command": "embroidery.addOutline", "params": {"stitch": "motif", "motif": "M", "width": 0.5}},
+                {"command": "embroidery.motif.make", "params": {"name": "M"}},
+                {"command": "embroidery.motif.delete", "params": {"name": "M"}},
+            ]}),
+        ),
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.set", "params": {"type": "motif"}},
+                {"command": "embroidery.setParams", "params": {"params": {"spacing": 5, "width": 1e308, "customMotif": {"name": "x", "points": [[0, 0], [1e308, -1e308], [-1e308, 1e308], [1, 0]], "aspect": 1e308}}}},
+                {"command": "embroidery.setParams", "params": {"params": {"customMotif": {"points": [[0.5, 0.5]], "aspect": -1}}}},
+                {"command": "embroidery.set", "params": {"type": "motiffill"}},
+                {"command": "embroidery.setParams", "params": {"params": {"motifSize": 1, "spacing": 0.5, "customMotif": {"name": "y", "points": [[0, 0], [0.5, -2], [1, 0]], "aspect": 20}}}},
+                {"command": "embroidery.setParams", "params": {"params": {"customMotif": {"points": "x"}}}},
+            ]}),
+        ),
+        ("embroidery.motif.apply", json!({"name": null, "ids": [u64::MAX]})),
+        ("embroidery.motif.delete", json!({"name": ["x"]})),
+        ("embroidery.motif.make", json!({"ids": [u64::MAX], "name": 5})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {

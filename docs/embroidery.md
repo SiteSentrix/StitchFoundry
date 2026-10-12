@@ -46,7 +46,7 @@ the control channel, the CLI and the MCP server.
 | Bean run | triple run (each stitch three times) | stitch length, passes |
 | Backstitch | hand-sewn look: each stitch goes forward two steps and back one | stitch length, passes |
 | Stem stitch | rope-like outline: backstitch with slanted stitches | stitch length, width, side, passes |
-| Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path (wave, scallop, diamond, cross, feather, heart, star, leaf, loop), motifs growing or shrinking along it when graded | stitch length, width, width at end, spacing, flip side |
+| Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path (wave, scallop, diamond, cross, feather, heart, star, leaf, loop, zigzag, E-stitch, or one drawn for the design), motifs growing or shrinking along it when graded | stitch length, width, width at end, spacing, flip side |
 | Hand stitch | a run that looks sewn by hand: thick stitches (each sewn three times) with short thin ones between them, lengths varying a little | stitch length, gap, passes |
 | Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), jagged edges, underlay (incl. double zigzag) |
 | Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, spacing profile, colour blends, texture, split lines, trapunto, underlay |
@@ -93,6 +93,19 @@ whichever end sewing starts from (the closest join). A **motif fill** sews rows 
 the row offset shifts each row along by that fraction of a motif (0.5 for a brick layout).
 **Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
 sewn in a single run: move, scale and reshape it like any art.
+
+**Your own motifs:** draw a motif as a path, left to right the way it should sew along a
+left-to-right line, select it and choose **Embroidery › Make Motif**. An open path runs from its
+first point to its last, so the motif starts and ends on the line between them; a closed shape
+(or a path ending near where it starts) lies on the middle of its height and is sewn once round
+from its left side, then on round to its right side. The motif keeps the drawn proportions and
+belongs to the design (it is saved with it): the *Motif* list of motif runs and motif fills
+offers it after the built-in motifs. Choosing it makes a run as high as the drawing's proportions
+make it for its spacing, and spaces a motif fill's rows so the motifs don't overlap; Place Motif
+and Motif Border take it too. Making a motif again under the same name (`embroidery.motif.make
+{name}`) changes it in everything that sews it. *Delete Motif* takes it out of the design; objects
+sewing it keep their copy. All motifs, built-in or drawn, sew the same way up along runs, in
+motif fills and when placed: upright along a line drawn left to right (*Flip* turns them over).
 
 **Spacing profiles and colour blends** (tatami): *Spacing profile* sets how the rows space out
 across the shape (in the direction the rows stack): **Even**, **Accordion** (dense, sparse,
@@ -470,7 +483,8 @@ tool list for all parameters):
 | `embroidery.autoDirection` / `addGuide` / `moveGuide` / `removeGuide` / `clearGuides` / `setBeads` | stitch direction and start/stop |
 | `embroidery.setParams {params: {texture: {pattern, size?, angle?} \| null}}` | a tatami fill's texture (programmed splits): `diamonds`, `waves`, `herringbone`, `bricks`, `circles`, `scales` |
 | `embroidery.carveSplits {ids?, repeat?, keep?}`, `embroidery.setSplits {id, splits}`, `embroidery.clearSplits {ids?}` | split lines in tatami fills: carved from other art (a stamp's outline, lines, lines repeated across the fill), set from points, cleared |
-| `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif as a path sewn in a single run |
+| `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif (built-in or the design's) as a path sewn in a single run |
+| `embroidery.motif.make {name?, ids?}`, `embroidery.motif.apply {name, ids?}`, `embroidery.motif.list`, `embroidery.motif.delete {name}` | the design's own motifs: made from the selected path, sewn by the selected runs and fills (paths not stitched yet become motif runs or fills), listed with how many objects sew each, removed |
 | `embroidery.addLaydown {ids?, margin?, spacing?, angle?}` | an open fill sewn first under the selected shapes and type (pile fabrics) |
 | `embroidery.makeBlend {colors, ids?, spacing?}` | a tatami fill as stacked layers blending 2 to 6 thread colours across its rows |
 | `embroidery.addOutline {ids?, shape?, offset?, stitch?, width?, motif?}` | a stitched outline or border round the selected shapes and type |

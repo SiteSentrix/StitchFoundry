@@ -51,9 +51,16 @@ pub fn object_stitches(obj: &EmbObject, settings: &DesignSettings, entry_hint: O
 }
 
 /// A motif's line, in a repeat one long and one wide: from `(0, 0)` to `(1, 0)`, along the run
-/// and across it (positive to the left).
-pub fn motif_line(m: crate::model::Motif) -> Vec<(f64, f64)> {
-    run::motif_shape(m)
+/// and across it (positive to the right of the run: down on screen for a left-to-right line).
+/// With a custom motif, its line (`m` when it has none to sew).
+pub fn motif_line(m: crate::model::Motif, custom: Option<&crate::model::CustomMotif>) -> Vec<(f64, f64)> {
+    run::motif_points(m, custom)
+}
+
+/// A motif made from a line drawn in the design (mm, y down), sewn as it was drawn along a
+/// left-to-right run; none when the line is too small or too detailed to make one.
+pub fn make_motif(name: &str, line: &[Point]) -> Option<crate::model::CustomMotif> {
+    run::motif_from_line(name, line)
 }
 
 /// Number of boustrophedon sections and rows a straight fill of `polygon` at

@@ -1528,6 +1528,83 @@ fn a_motif_is_placed_as_a_stitched_run() {
 }
 
 #[test]
+fn a_drawn_path_becomes_one_of_the_designs_motifs() {
+    use sf_core::attr::StitchType;
+    use sf_core::model::{FillKind, RunKind};
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let path = |s: &mut Session, d: String| NodeId(s.execute("path.create", &json!({ "d": d })).unwrap()["id"].as_u64().unwrap());
+    let mut s = session();
+    // A peak drawn upward, 20 mm long and 10 mm high.
+    let (w, h) = (20.0 / MM, 10.0 / MM);
+    let peak = path(&mut s, format!("M 100 300 L {} {} L {} 300", 100.0 + w / 2.0, 300.0 - h, 100.0 + w));
+    s.execute("select.set", &json!({"ids": [peak.0]})).unwrap();
+    let r = s.execute("embroidery.motif.make", &json!({})).unwrap();
+    assert_eq!((r["name"].as_str(), r["points"].as_u64(), r["updated"].as_u64()), (Some("Motif 1"), Some(3), Some(0)));
+    let list = s.execute("embroidery.motif.list", &json!({})).unwrap();
+    assert_eq!((list["motifs"][0]["name"].as_str(), list["motifs"][0]["uses"].as_u64()), (Some("Motif 1"), Some(0)));
+    assert!((list["motifs"][0]["aspect"].as_f64().unwrap() - 0.5).abs() < 1e-6, "{list}");
+    // A line sews it, as high as its proportions make it for the repeat, its peaks up as drawn.
+    let line = path(&mut s, "M 20 100 L 300 100".into());
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("embroidery.motif.apply", &json!({"name": "Motif 1"})).unwrap();
+    let StitchType::Run(r) = emb(&s, line).stitch else { panic!() };
+    assert_eq!((r.kind, r.custom_motif.as_ref().map(|m| m.name.as_str())), (RunKind::Motif, Some("Motif 1")));
+    assert!((r.width - r.spacing * 0.5).abs() < 1e-9, "{} {}", r.width, r.spacing);
+    let pts = needles(&s, line);
+    let y0 = 100.0 * MM;
+    assert!(pts.iter().all(|p| p.y <= y0 + 1e-6) && pts.iter().any(|p| p.y < y0 - r.width * 0.99), "{pts:?}");
+    // A shape becomes a motif fill of it, rows far enough apart; a satin can't sew it.
+    let a = rect(&mut s, 10.0, 150.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.motif.apply", &json!({"name": "Motif 1"})).unwrap();
+    let f = fill_params(&s, a);
+    assert_eq!((f.kind, f.custom_motif.as_ref().map(|m| m.points.len())), (FillKind::Motif, Some(3)));
+    assert!((f.spacing - f.motif_size * 0.5 * 1.25).abs() < 1e-9, "{}", f.spacing);
+    rect(&mut s, 400.0, 150.0, 20.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    assert!(s.execute("embroidery.motif.apply", &json!({"name": "Motif 1"})).is_err());
+    // Place Motif and borders take its name (any case) too.
+    let placed = NodeId(s.execute("embroidery.placeMotif", &json!({"motif": "motif 1", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().doc.node(placed).unwrap().name.as_deref(), Some("Motif 1"));
+    let placed_pts = needles(&s, placed);
+    let (lo, hi) = placed_pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.y), hi.max(p.y)));
+    assert!((hi - lo - 10.0).abs() < 0.3, "as high as drawn: {lo}..{hi}");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let border =
+        NodeId(s.execute("embroidery.addOutline", &json!({"stitch": "motif", "motif": "Motif 1", "width": 2.0})).unwrap()["id"].as_u64().unwrap());
+    let StitchType::Run(b) = emb(&s, border).stitch else { panic!() };
+    assert!(b.custom_motif.is_some() && (b.spacing - 4.0).abs() < 1e-9, "{}", b.spacing);
+    // Remade under its name from another drawing, it changes in everything sewing it.
+    let dip = path(&mut s, format!("M 100 400 L {} {} L {} 400", 100.0 + w / 2.0, 400.0 + h / 2.0, 100.0 + w));
+    s.execute("select.set", &json!({"ids": [dip.0]})).unwrap();
+    let r = s.execute("embroidery.motif.make", &json!({"name": "Motif 1"})).unwrap();
+    assert_eq!(r["updated"].as_u64(), Some(3), "{r}");
+    let StitchType::Run(r) = emb(&s, line).stitch else { panic!() };
+    let dipped = r.custom_motif.unwrap().points;
+    assert!(dipped.len() == 3 && (dipped[1][0] - 0.5).abs() < 1e-9 && (dipped[1][1] - 1.0).abs() < 1e-9, "{dipped:?}");
+    assert_eq!(s.execute("embroidery.motif.list", &json!({})).unwrap()["motifs"].as_array().map(Vec::len), Some(1));
+    // Deleted, it leaves the design but not what sews it; undo brings it back.
+    s.execute("embroidery.motif.delete", &json!({"name": "Motif 1"})).unwrap();
+    assert_eq!(s.execute("embroidery.motif.list", &json!({})).unwrap()["motifs"], json!([]));
+    assert!(fill_params(&s, a).custom_motif.is_some());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("embroidery.motif.list", &json!({})).unwrap()["motifs"][0]["uses"].as_u64(), Some(3));
+    // Bad asks change nothing.
+    for (cmd, p) in [
+        ("embroidery.motif.apply", json!({"name": "Dragon"})),
+        ("embroidery.motif.apply", json!({})),
+        ("embroidery.motif.delete", json!({"name": "Dragon"})),
+        ("embroidery.motif.make", json!({"ids": [a.0 + 1000]})),
+        ("embroidery.placeMotif", json!({"motif": "Dragon"})),
+    ] {
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+    }
+    let dot = path(&mut s, "M 10 10 L 10.1 10".into());
+    s.execute("select.set", &json!({"ids": [dot.0]})).unwrap();
+    assert!(s.execute("embroidery.motif.make", &json!({})).is_err(), "too small");
+}
+
+#[test]
 fn motif_fills_and_graded_motif_runs_are_stitch_parameters() {
     let mut s = session();
     let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
