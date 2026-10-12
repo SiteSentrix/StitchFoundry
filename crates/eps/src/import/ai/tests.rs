@@ -459,6 +459,20 @@ fn text_objects_are_slots_named_after_their_story() {
     let r = read_ok(&layer(&format!("/AI11Text :\n0 /StoryIndex ,\n;\n{}{}", commented(0), commented(1))));
     let stories: Vec<_> = art(&r.doc).iter().map(|n| slot_of(n.name.as_deref())).collect();
     assert_eq!(stories, [Some(Some(0)), Some(Some(1))]);
+    // A text object with an appearance: its drawn look (a group whose type is a story of the
+    // undo-free text document, which counts its own), then the object on `%_` lines, which is
+    // the type.
+    let look = "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nU\n0 0 Xd\n6 () XW\n";
+    let own: String = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n7 /StoryIndex ,\n;\n".lines().map(|l| format!("%_{l}\n")).collect();
+    let plain = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n";
+    let r = read_ok(&layer(&format!("{look}{own}1 (Style) XW\n{plain}")));
+    let stories: Vec<_> = art(&r.doc).iter().map(|n| slot_of(n.name.as_deref())).collect();
+    assert_eq!(stories, [Some(Some(7)), Some(Some(0))], "the look's story 0 isn't the text document's");
+    // What else the look draws stays, under the type.
+    let look = look.replace("U\n", &format!("{RED}{}f\nU\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read_ok(&layer(&format!("{look}{own}1 (Style) XW\n")));
+    let a = art(&r.doc);
+    assert_eq!((a.len(), a[0].children().map(Vec::len), slot_of(a[1].name.as_deref())), (2, Some(1), Some(Some(7))));
 }
 
 #[test]
