@@ -133,6 +133,26 @@ impl crate::Document {
     }
 }
 
+/// The character style a graph's labels keep through regeneration once formatted (Format the text in graphs): the
+/// value axis numbers, the category labels (category axis, radar spokes, pie names) and the legend labels (beside or
+/// across the top, or in pie wedges). `None` draws the default 9 pt black.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LabelStyles {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub values: Option<crate::CharStyle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub categories: Option<crate::CharStyle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub legend: Option<crate::CharStyle>,
+}
+
+impl LabelStyles {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// Graph Type › Position for pie graphs with several pies: the same size (Even), sized by their totals (Ratio), or
 /// stacked one on another, sized by their totals (Stacked).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -293,6 +313,9 @@ pub struct GraphSpec {
     pub right_axis_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub right_axis_max: Option<f64>,
+    /// The labels' character styles, kept from formatting them.
+    #[serde(skip_serializing_if = "LabelStyles::is_default")]
+    pub label_styles: LabelStyles,
     /// Graph Type › First Row in Front (each series' first category drawn over the next when columns overlap) and
     /// First Column in Front (the first series drawn over the others); Draw Filled Lines (lines as filled bands).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -422,6 +445,7 @@ impl Default for GraphSpec {
             right_axis_min: None,
             right_axis_max: None,
             series_markers: vec![],
+            label_styles: LabelStyles::default(),
             first_row_in_front: false,
             first_column_in_front: false,
             filled_lines: false,

@@ -452,6 +452,16 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
         },
         |d, changed| {
             super::graph::capture_series_paints(d, changed, fill);
+            super::graph::capture_label_styles(d, changed, &|st| {
+                if fill {
+                    st.fill = paint.clone();
+                } else {
+                    if !paint.is_none() {
+                        run_stroke_weight(st);
+                    }
+                    st.stroke = paint.clone();
+                }
+            });
             Ok(())
         },
     )?;
