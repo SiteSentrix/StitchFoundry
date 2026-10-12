@@ -4536,3 +4536,13 @@ machine	Stop	Arrêt
 	Side 2	Côté 2
 	Jag depth	Profondeur des irrégularités
 	Trapunto (travel along the outline)	Trapunto (déplacements le long du contour)
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	Placer un motif
+	Leaf	Feuille
+	Loop	Boucle
+	Motif Fill	Remplissage de motifs
+	Motif size	Taille du motif
+	Graded	Progressif
+	Width at end	Largeur à la fin
+	Row spacing	Espacement des rangs

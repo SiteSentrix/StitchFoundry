@@ -46,12 +46,13 @@ the control channel, the CLI and the MCP server.
 | Bean run | triple run (each stitch three times) | stitch length, passes |
 | Backstitch | hand-sewn look: each stitch goes forward two steps and back one | stitch length, passes |
 | Stem stitch | rope-like outline: backstitch with slanted stitches | stitch length, width, side, passes |
-| Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path | stitch length, width, spacing, flip side |
+| Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path (wave, scallop, diamond, cross, feather, heart, star, leaf, loop), motifs growing or shrinking along it when graded | stitch length, width, width at end, spacing, flip side |
 | Hand stitch | a run that looks sewn by hand: thick stitches (each sewn three times) with short thin ones between them, lengths varying a little | stitch length, gap, passes |
 | Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), jagged edges, underlay (incl. double zigzag) |
 | Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, texture, split lines, trapunto, underlay |
 | Satin fill | satin rows across the shape | density, pull compensation |
 | Contour / Spiral / Radial / Cross / Meander fill | rows following the outline, a spiral, rays from the centre, crossed rows, or a random maze-like path | spacing, stitch length |
+| Motif fill | rows of motifs across the shape, kept inside it, each row shifted by the row offset | motif, motif size, row spacing, stitch length, row offset, angle |
 | Appliqué | placement run, stop, tack-down, stop, cover satin | cover width and density |
 | Manual | a stitch at every anchor point | none |
 
@@ -82,6 +83,14 @@ over itself.
 
 **Passes:** any run style can be sewn up to 9 times over the same needle points; 2 passes is a
 backtrack, which ends where it started.
+
+**Motifs:** a motif run repeats one of nine motifs along its line. With *Graded* on, the motifs
+grow or shrink from *Width* at the start to *Width at end*, their repeats keeping their
+proportions. Motifs, blanket prongs and their grading follow the line the way it was drawn,
+whichever end sewing starts from (the closest join). A **motif fill** sews rows of motifs across a shape, half a motif inside its outline;
+the row offset shifts each row along by that fraction of a motif (0.5 for a brick layout).
+**Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
+sewn in a single run: move, scale and reshape it like any art.
 
 **Hand stitch** (a run style): stitches about *Stitch length* long, each sewn forward, back and
 forward again so it lies thick, joined by single stitches about *Gap* long that hardly show; each
@@ -430,6 +439,7 @@ tool list for all parameters):
 | `embroidery.autoDirection` / `addGuide` / `moveGuide` / `removeGuide` / `clearGuides` / `setBeads` | stitch direction and start/stop |
 | `embroidery.setParams {params: {texture: {pattern, size?, angle?} \| null}}` | a tatami fill's texture (programmed splits): `diamonds`, `waves`, `herringbone`, `bricks`, `circles`, `scales` |
 | `embroidery.carveSplits {ids?, repeat?, keep?}`, `embroidery.setSplits {id, splits}`, `embroidery.clearSplits {ids?}` | split lines in tatami fills: carved from other art (a stamp's outline, lines, lines repeated across the fill), set from points, cleared |
+| `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif as a path sewn in a single run |
 | `embroidery.draw {brush, points \| stamp, …}` | a brush stroke, as the widget draws it |
 | `embroidery.column {points: [[x, y, curve?]…], id?}` | a Column A/B satin column from points on its two sides in turn; with `id`, continue that column |
 | `embroidery.autoDigitize {colors, …}` | trace a selected image into stitches |

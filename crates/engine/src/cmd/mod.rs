@@ -24,6 +24,7 @@ pub mod embroidery_art;
 pub mod embroidery_edit;
 pub mod embroidery_input;
 pub mod embroidery_machines;
+pub mod embroidery_motifs;
 pub mod embroidery_props;
 pub mod embroidery_sequence;
 pub mod embroidery_splits;
@@ -231,6 +232,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_machines::specs());
         v.extend(embroidery_art::specs());
         v.extend(embroidery_splits::specs());
+        v.extend(embroidery_motifs::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
         v.extend(pathops::specs());

@@ -44,6 +44,7 @@ const TYPES: &[(&str, &str)] = &[
     ("Radial Fill", "radial"),
     ("Cross Fill", "cross"),
     ("Meander Fill", "meander"),
+    ("Motif Fill", "motiffill"),
     ("Appliqué", "applique"),
     ("Manual Stitches", "manual"),
 ];
@@ -379,12 +380,17 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 set(app, target, json!({ "passes": v.round().clamp(1.0, f64::from(MAX_PASSES)) as u32 }));
             }
             if r.kind == RunKind::Motif {
-                let motifs = [tl!("Wave"), tl!("Scallop"), tl!("Diamond"), tl!("Cross"), tl!("Feather")];
-                let cur = Motif::ALL.iter().position(|m| *m == r.motif).unwrap_or(0);
-                if let Some(i) = pick(ui, tl!("Motif"), "motif", cur, &motifs)
-                    && let Some(m) = Motif::ALL.get(i)
-                {
+                if let Some(m) = pick_motif(ui, r.motif) {
                     set(app, target, json!({ "motif": m }));
+                }
+                // Graded: the motifs grow or shrink to another width along the line.
+                if let Some(v) = check(ui, tl!("Graded"), r.width_end.is_some()) {
+                    set(app, target, json!({ "width_end": if v { json!(r.width * 2.0) } else { Value::Null } }));
+                }
+                if let Some(w) = r.width_end
+                    && let Some(v) = num(ui, tl!("Width at end"), "rwend", w, " mm", 2)
+                {
+                    set(app, target, json!({ "width_end": v.clamp(0.5, 50.0) }));
                 }
             }
         }
@@ -498,7 +504,11 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             {
                 set(app, target, json!({ "kind": k }));
             }
-            let (spacing_label, decimals) = if f.kind == FillKind::Meander { (tl!("Path spacing"), 1) } else { (tl!("Density"), 2) };
+            let (spacing_label, decimals) = match f.kind {
+                FillKind::Meander => (tl!("Path spacing"), 1),
+                FillKind::Motif => (tl!("Row spacing"), 1),
+                _ => (tl!("Density"), 2),
+            };
             if let Some(v) = num(ui, spacing_label, "fd", f.spacing, " mm", decimals) {
                 set(app, target, json!({ "spacing": v }));
             }
@@ -506,6 +516,17 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 let label = if f.kind == FillKind::Cross { tl!("Cell size") } else { tl!("Stitch length") };
                 if let Some(v) = num(ui, label, "fl", f.stitch_length, " mm", 2) {
                     set(app, target, json!({ "stitch_length": v }));
+                }
+            }
+            if f.kind == FillKind::Motif {
+                if let Some(m) = pick_motif(ui, f.motif) {
+                    set(app, target, json!({ "motif": m }));
+                }
+                if let Some(v) = num(ui, tl!("Motif size"), "fms", f.motif_size, " mm", 1) {
+                    set(app, target, json!({ "motif_size": v.clamp(1.0, 50.0) }));
+                }
+                if let Some(v) = num(ui, tl!("Row offset"), "fmo", f.offset, "", 2) {
+                    set(app, target, json!({ "offset": v }));
                 }
             }
             if f.kind == FillKind::Tatami {
@@ -535,15 +556,18 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             if let Some(v) = num(ui, tl!("Pull compensation"), "fpc", f.pull_comp, " mm", 2) {
                 set(app, target, json!({ "pull_comp": v }));
             }
+            // cross, meander and motif fills are sewn without underlay
             let u = &f.underlay;
-            ui.horizontal(|ui| {
-                if let Some(v) = check(ui, tl!("Edge run underlay"), u.edge_run) {
-                    set(app, target, json!({ "underlay": { "edge_run": v } }));
-                }
-                if let Some(v) = check(ui, tl!("Tatami underlay"), u.tatami) {
-                    set(app, target, json!({ "underlay": { "tatami": v } }));
-                }
-            });
+            if !matches!(f.kind, FillKind::Cross | FillKind::Meander | FillKind::Motif) {
+                ui.horizontal(|ui| {
+                    if let Some(v) = check(ui, tl!("Edge run underlay"), u.edge_run) {
+                        set(app, target, json!({ "underlay": { "edge_run": v } }));
+                    }
+                    if let Some(v) = check(ui, tl!("Tatami underlay"), u.tatami) {
+                        set(app, target, json!({ "underlay": { "tatami": v } }));
+                    }
+                });
+            }
             if matches!(f.kind, FillKind::Tatami | FillKind::Satin | FillKind::Cross)
                 && let Target::Selection(id) = target
             {
@@ -628,6 +652,13 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
     {
         set(app, target, json!({ "underlying_overlap": v.clamp(0.0, 10.0) }));
     }
+}
+
+/// The motif dropdown: the motif picked, if it changed.
+fn pick_motif(ui: &mut Ui, current: Motif) -> Option<Motif> {
+    let names = [tl!("Wave"), tl!("Scallop"), tl!("Diamond"), tl!("Cross"), tl!("Feather"), tl!("Heart"), tl!("Star"), tl!("Leaf"), tl!("Loop")];
+    let cur = Motif::ALL.iter().position(|m| *m == current).unwrap_or(0);
+    pick(ui, tl!("Motif"), "motif", cur, &names).and_then(|i| Motif::ALL.get(i).copied())
 }
 
 /// A texture pattern's name in the UI language.

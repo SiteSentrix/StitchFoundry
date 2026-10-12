@@ -81,6 +81,7 @@ impl StitchType {
             "radial" => StitchType::Fill(FillParams { kind: FillKind::Radial, spacing: 0.8, ..FillParams::default() }),
             "cross" => StitchType::Fill(FillParams { kind: FillKind::Cross, stitch_length: 2.5, ..FillParams::default() }),
             "meander" => StitchType::Fill(FillParams { kind: FillKind::Meander, spacing: 2.0, stitch_length: 2.5, ..FillParams::default() }),
+            "motiffill" => StitchType::Fill(FillParams { kind: FillKind::Motif, spacing: 5.0, stitch_length: 2.0, ..FillParams::default() }),
             "applique" => StitchType::Applique(AppliqueParams::default()),
             "manual" => StitchType::Manual,
             _ => return None,
@@ -100,7 +101,7 @@ impl StitchType {
 
     /// The stitch type menu entry (the `embroidery.set` type) this is: `run`, `bean`,
     /// `blanket`, `backstitch`, `stemstitch`, `satin`, `fill`, `satinfill`, `contour`,
-    /// `spiral`, `radial`, `cross`, `meander`, `applique`, `manual` or `branch`. Zigzag
+    /// `spiral`, `radial`, `cross`, `meander`, `motiffill`, `applique`, `manual` or `branch`. Zigzag
     /// and motif runs are runs (styles of the Run entry).
     pub fn type_name(&self) -> &'static str {
         match self {
@@ -120,6 +121,7 @@ impl StitchType {
                 FillKind::Radial => "radial",
                 FillKind::Cross => "cross",
                 FillKind::Meander => "meander",
+                FillKind::Motif => "motiffill",
             },
             StitchType::Applique(_) => "applique",
             StitchType::Manual => "manual",

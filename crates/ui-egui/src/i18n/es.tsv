@@ -4526,3 +4526,13 @@ machine	Stop	Parada
 	Side 2	Lado 2
 	Jag depth	Profundidad de las irregularidades
 	Trapunto (travel along the outline)	Trapunto (desplazamientos por el contorno)
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	Colocar motivo
+	Leaf	Hoja
+	Loop	Lazo
+	Motif Fill	Relleno de motivos
+	Motif size	Tamaño del motivo
+	Graded	Graduado
+	Width at end	Ancho al final
+	Row spacing	Espaciado entre filas

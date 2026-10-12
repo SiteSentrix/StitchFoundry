@@ -4482,3 +4482,13 @@ machine	Stop	Stopp
 	Side 2	Seite 2
 	Jag depth	Zackentiefe
 	Trapunto (travel along the outline)	Trapunto (Verbindungsstiche entlang der Kontur)
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	Motiv platzieren
+	Leaf	Blatt
+	Loop	Schlaufe
+	Motif Fill	Motivfüllung
+	Motif size	Motivgröße
+	Graded	Abgestuft
+	Width at end	Breite am Ende
+	Row spacing	Reihenabstand

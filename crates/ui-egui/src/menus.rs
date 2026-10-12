@@ -85,6 +85,7 @@ fn embroidery_menu() -> Vec<Item> {
                 ty("Radial Fill", "radial"),
                 ty("Cross Fill", "cross"),
                 ty("Meander Fill", "meander"),
+                ty("Motif Fill", "motiffill"),
                 ty("Appliqué", "applique"),
                 ty("Manual Stitches", "manual"),
                 Sep,
@@ -95,6 +96,13 @@ fn embroidery_menu() -> Vec<Item> {
         c("Clear Inclination Lines", "embroidery.clearGuides"),
         c("Carve Split Lines", "embroidery.carveSplits"),
         c("Clear Split Lines", "embroidery.clearSplits"),
+        sub(
+            "Place Motif",
+            ["Wave", "Scallop", "Diamond", "Cross", "Feather", "Heart", "Star", "Leaf", "Loop"]
+                .into_iter()
+                .map(|m| cp(m, "embroidery.placeMotif", json!({ "motif": m.to_lowercase() })))
+                .collect(),
+        ),
         c("Reverse Stitch Direction", "embroidery.reverse"),
         c("Make Properties Current", "embroidery.makeCurrent"),
         Sep,

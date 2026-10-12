@@ -551,10 +551,15 @@ pub enum Motif {
     Diamond,
     Cross,
     Feather,
+    Heart,
+    Star,
+    Leaf,
+    Loop,
 }
 
 impl Motif {
-    pub const ALL: [Motif; 5] = [Motif::Wave, Motif::Scallop, Motif::Diamond, Motif::Cross, Motif::Feather];
+    pub const ALL: [Motif; 9] =
+        [Motif::Wave, Motif::Scallop, Motif::Diamond, Motif::Cross, Motif::Feather, Motif::Heart, Motif::Star, Motif::Leaf, Motif::Loop];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -563,6 +568,10 @@ impl Motif {
             Motif::Diamond => "Diamond",
             Motif::Cross => "Cross",
             Motif::Feather => "Feather",
+            Motif::Heart => "Heart",
+            Motif::Star => "Star",
+            Motif::Leaf => "Leaf",
+            Motif::Loop => "Loop",
         }
     }
 }
@@ -584,6 +593,10 @@ pub struct RunParams {
     /// Times the line is sewn, alternating direction over the same needle points:
     /// 1 = once, 2 = backtrack (ends back at the start), 3 or more = repeats.
     pub passes: u32,
+    /// Graded motif runs: the motifs' width at the end of the line (mm); they grow or shrink
+    /// to it from `width`, their repeats with them. `None` = all the same size.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width_end: Option<f64>,
 }
 
 /// Most passes a run can be sewn.
@@ -591,7 +604,7 @@ pub const MAX_PASSES: u32 = 9;
 
 impl Default for RunParams {
     fn default() -> Self {
-        RunParams { kind: RunKind::Single, stitch_length: 2.5, width: 2.0, spacing: 2.0, flip: false, motif: Motif::Wave, passes: 1 }
+        RunParams { kind: RunKind::Single, stitch_length: 2.5, width: 2.0, spacing: 2.0, flip: false, motif: Motif::Wave, passes: 1, width_end: None }
     }
 }
 
@@ -812,11 +825,21 @@ pub enum FillKind {
     Cross,
     /// A continuous quilting-style meander that wanders through the shape.
     Meander,
+    /// Rows of motifs (a motif run on each row) across the shape.
+    Motif,
 }
 
 impl FillKind {
-    pub const ALL: [FillKind; 7] =
-        [FillKind::Tatami, FillKind::Satin, FillKind::Contour, FillKind::Spiral, FillKind::Radial, FillKind::Cross, FillKind::Meander];
+    pub const ALL: [FillKind; 8] = [
+        FillKind::Tatami,
+        FillKind::Satin,
+        FillKind::Contour,
+        FillKind::Spiral,
+        FillKind::Radial,
+        FillKind::Cross,
+        FillKind::Meander,
+        FillKind::Motif,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -827,6 +850,7 @@ impl FillKind {
             FillKind::Radial => "Radial Fill",
             FillKind::Cross => "Cross Fill",
             FillKind::Meander => "Meander Fill",
+            FillKind::Motif => "Motif Fill",
         }
     }
 }
@@ -956,6 +980,9 @@ pub struct FillParams {
     /// fill shows no travel stitches across it.
     #[serde(skip_serializing_if = "is_false")]
     pub trapunto: bool,
+    /// Motif fills: the motif on the rows, and its size (mm, across the row and along it).
+    pub motif: Motif,
+    pub motif_size: f64,
 }
 
 impl Default for FillParams {
@@ -975,6 +1002,8 @@ impl Default for FillParams {
             satin_column: None,
             texture: None,
             trapunto: false,
+            motif: Motif::Wave,
+            motif_size: 4.0,
         }
     }
 }

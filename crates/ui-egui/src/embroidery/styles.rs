@@ -68,6 +68,7 @@ fn type_label(ty: &str) -> &'static str {
         "radial" => tl!("Radial Fill"),
         "cross" => tl!("Cross Fill"),
         "meander" => tl!("Meander Fill"),
+        "motiffill" => tl!("Motif Fill"),
         "applique" => tl!("Appliqué"),
         _ => "",
     }

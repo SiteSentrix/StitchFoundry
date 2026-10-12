@@ -398,10 +398,10 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CS-05 | Flexi-splits (split lines following a curve) | Partial | A drawn curve repeated across the fill (`embroidery.carveSplits` `repeat`); split lines that follow the shape by themselves still missing | 2 |
 | CS-06 | Florentine effect (stitches follow a drawn curve) | Done | Turning fill along inclination lines | – |
 | CS-07 | Liquid effect (curved fill between two guide curves) | Partial | Turning fill with two guides; add explicit two-curve mode | 2 |
-| MO-01 | Single motifs (place one stitched motif) | Missing | Motif library + placement tool | 2 |
-| MO-02 | Motif runs | Done | 5 built-in motifs | – |
-| MO-03 | Graded motif runs (motif size varies along the line) | Missing | Size ramp on motif runs | 2 |
-| MO-04 | Motif fills, paired motif fills, 3D motif fills | Missing | Motif tiled on a grid inside the shape | 2 |
+| MO-01 | Single motifs (place one stitched motif) | Partial | Embroidery › Place Motif puts one motif on the artboard as a run you move and reshape; no placement tool yet | 2 |
+| MO-02 | Motif runs | Done | 9 built-in motifs | – |
+| MO-03 | Graded motif runs (motif size varies along the line) | Done | Motif runs grow or shrink to *Width at end* | – |
+| MO-04 | Motif fills, paired motif fills, 3D motif fills | Partial | Motif fill: rows of any motif inside the shape, row offset; paired and 3D motif fills still missing | 2 |
 | MO-05 | Graded motif columns | Missing | Motif sized to column width | 2 |
 | MO-06 | Motif sets and custom motifs (make a motif from an object) | Missing | Motif library in document + prefs | 2 |
 
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 109 done,
-42 partial, 74 missing, 6 out of scope (counted 2026-10-12, after the run and satin effects). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 110 done,
+44 partial, 71 missing, 6 out of scope (counted 2026-10-12, after motifs). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -717,7 +717,7 @@ and target dir each) calendar time drops by roughly half.
 own and edited standard ones, MF-02 and MF-03, came last). Phase 0 is still open: nothing has been
 sewn on a real machine yet; the owner has the VP3 test kit. Phase 2 started on 2026-10-12 with
 tatami textures and split lines (PS-02…04, CS-05), then hand stitch, jagged edges and trapunto
-(SP-02, SP-03, SP-08).
+(SP-02, SP-03, SP-08), then motifs (MO-01, MO-03, MO-04).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

@@ -92,7 +92,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stitch Type",
             [],
             None,
-            "{type: run|bean|backstitch|stemstitch|blanket|zigzag|motif|satin|fill|satinfill|contour|spiral|radial|cross|meander|applique|manual|none, ids?} give the selection (or ids; groups: their paths) a stitch type, keeping thread and inclination lines → {ids}",
+            "{type: run|bean|backstitch|stemstitch|blanket|zigzag|motif|satin|fill|satinfill|contour|spiral|radial|cross|meander|motiffill|applique|manual|none, ids?} give the selection (or ids; groups: their paths) a stitch type, keeping thread and inclination lines → {ids}",
             has_selection,
             set_type
         ),

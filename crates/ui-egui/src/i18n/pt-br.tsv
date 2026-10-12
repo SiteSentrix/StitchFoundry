@@ -3788,3 +3788,18 @@ machine	Trim	Corte de linha
 	Side 2	Lado 2
 	Jag depth	Profundidade das irregularidades
 	Trapunto (travel along the outline)	Trapunto (deslocamentos pelo contorno)
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	Inserir motivo
+	Wave	Onda
+	Scallop	Festonê
+	Cross	Cruz
+	Feather	Pena
+	Heart	Coração
+	Leaf	Folha
+	Loop	Laço
+	Motif Fill	Preenchimento de motivos
+	Motif size	Tamanho do motivo
+	Graded	Graduado
+	Width at end	Largura no final
+	Row spacing	Espaçamento entre fileiras

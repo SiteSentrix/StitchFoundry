@@ -43,7 +43,7 @@ fn stitch_type_params_and_undo() {
 
 #[test]
 fn every_type_and_brush_stitches() {
-    for t in ["run", "bean", "satin", "fill", "satinfill", "contour", "spiral", "radial", "cross", "meander", "applique", "manual"] {
+    for t in ["run", "bean", "satin", "fill", "satinfill", "contour", "spiral", "radial", "cross", "meander", "motiffill", "applique", "manual"] {
         let mut s = session();
         rect(&mut s, 10.0, 10.0, 80.0, 40.0);
         s.execute("embroidery.set", &json!({"type": t})).unwrap();
@@ -1507,4 +1507,42 @@ fn split_lines_set_by_an_agent_are_checked() {
     // Only tatami fills take them.
     s.execute("embroidery.set", &json!({"type": "satinfill"})).unwrap();
     assert!(s.execute("embroidery.setSplits", &json!({"id": a.0, "splits": [[[100, 0], [110, 300]]]})).is_err());
+}
+
+#[test]
+fn a_motif_is_placed_as_a_stitched_run() {
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let mut s = session();
+    let r = s.execute("embroidery.placeMotif", &json!({"motif": "heart", "size": 20, "at": [200, 150]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    assert!(matches!(emb(&s, id).stitch, sf_core::attr::StitchType::Run(_)));
+    let pts = needles(&s, id);
+    assert!(pts.len() > 20, "{}", pts.len());
+    // 20 mm long, centred on (200, 150) pt.
+    let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.x), hi.max(p.x)));
+    assert!((hi - lo - 20.0).abs() < 0.5 && ((lo + hi) * 0.5 - 200.0 * MM).abs() < 0.5, "{lo}..{hi}");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    for bad in [json!({"motif": "dragon"}), json!({"motif": "star", "size": 0}), json!({"motif": "star", "at": ["x", 0]}), json!({})] {
+        assert!(s.execute("embroidery.placeMotif", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn motif_fills_and_graded_motif_runs_are_stitch_parameters() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "motiffill"})).unwrap();
+    let waves = needles(&s, a);
+    assert!(waves.len() > 300, "{}", waves.len());
+    s.execute("embroidery.setParams", &json!({"params": {"motif": "Heart", "motifSize": 6}})).unwrap();
+    let f = fill_params(&s, a);
+    assert_eq!((f.kind, f.motif, f.motif_size), (sf_core::model::FillKind::Motif, sf_core::model::Motif::Heart, 6.0));
+    assert_ne!(needles(&s, a), waves);
+    // a motif run that grows along its line
+    let line = NodeId(s.execute("path.create", &json!({"d": "M 20 250 L 300 250"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "motif"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"widthEnd": 8}})).unwrap();
+    let sf_core::attr::StitchType::Run(r) = emb(&s, line).stitch else { panic!() };
+    assert_eq!(r.width_end, Some(8.0));
 }

@@ -50,6 +50,12 @@ pub fn object_stitches(obj: &EmbObject, settings: &DesignSettings, entry_hint: O
     }
 }
 
+/// A motif's line, in a repeat one long and one wide: from `(0, 0)` to `(1, 0)`, along the run
+/// and across it (positive to the left).
+pub fn motif_line(m: crate::model::Motif) -> Vec<(f64, f64)> {
+    run::motif_shape(m)
+}
+
 /// Number of boustrophedon sections and rows a straight fill of `polygon` at
 /// `angle` degrees would use (used to choose stitch angles automatically).
 pub fn fill_statistics(polygon: &Polygon, angle: f64, spacing: f64) -> Option<(usize, usize)> {
@@ -115,7 +121,7 @@ fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<P
     let params = job.params;
     let angle = params.angle + job.extra_angle;
     let u = &params.underlay;
-    if !matches!(params.kind, FillKind::Cross | FillKind::Meander) && (u.edge_run || u.tatami) {
+    if !matches!(params.kind, FillKind::Cross | FillKind::Meander | FillKind::Motif) && (u.edge_run || u.tatami) {
         let inset = poly::offset(std::slice::from_ref(piece), -u.inset.max(0.0));
         if u.edge_run {
             for p in &inset {
@@ -168,6 +174,7 @@ fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<P
         FillKind::Radial => special::radial(piece, params.center, params.spacing.max(0.1), params.split_length, out, trim),
         FillKind::Cross => special::cross(piece, params.stitch_length, angle, out, trim),
         FillKind::Meander => special::meander(piece, params.spacing.max(0.8), params.stitch_length.max(0.5), params.random, out, here, trim),
+        FillKind::Motif => special::motif_fill(piece, params, angle, out, trim),
     }
 }
 
