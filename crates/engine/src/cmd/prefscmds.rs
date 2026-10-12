@@ -8,7 +8,7 @@ use serde_json::{Map, Value, json};
 use super::*;
 use crate::Prefs;
 use crate::units::Measure;
-use vectorcraft_doc::Unit;
+use vectorcraft_doc::{GridPrefs, Unit};
 
 /// What kind of value a preference holds.
 #[derive(Clone, Copy, Debug)]
@@ -503,6 +503,11 @@ impl Prefs {
             *self = p;
         }
     }
+
+    /// The document grid Guides & Grid › Gridline every and Subdivisions set.
+    pub fn grid(&self) -> GridPrefs {
+        GridPrefs { spacing: self.gridline_every, subdivisions: self.grid_subdivisions }
+    }
 }
 
 impl Session {
@@ -547,8 +552,7 @@ impl Session {
             }
             if grid_changed {
                 let d = std::sync::Arc::make_mut(&mut st.doc);
-                d.grid.spacing = self.prefs.gridline_every;
-                d.grid.subdivisions = self.prefs.grid_subdivisions;
+                d.grid = self.prefs.grid();
                 st.revision += 1;
             }
             // Hyphenation exceptions change every text object's line breaks.

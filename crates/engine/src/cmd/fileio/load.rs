@@ -9,7 +9,7 @@ use vectorcraft_geom::Affine;
 use super::super::*;
 use super::pdfimport::LoadOptions;
 use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
-use crate::EngineError;
+use crate::{EngineError, Prefs};
 
 /// A file read into a document, with its format and non-fatal import notes.
 pub struct Loaded {
@@ -24,6 +24,18 @@ pub struct Loaded {
     /// Only a stand-in picture of the file (an Affinity document whose native data couldn't be
     /// read): Open shows it with its warning; Place, templates and libraries refuse it.
     pub preview_only: bool,
+}
+
+impl Loaded {
+    /// The file with the grid of Preferences › Guides & Grid, unless it is a native document (also
+    /// one that an SVG, PDF, `.ai` or EPS file carries, `restored`), which keeps the grid it was
+    /// saved with.
+    pub(crate) fn with_grid_prefs(mut self, prefs: &Prefs) -> Self {
+        if !self.restored && !matches!(self.format.id, "vectorcraft" | "template") {
+            self.doc.grid = prefs.grid();
+        }
+        self
+    }
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
@@ -289,7 +301,7 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 
 /// Make a loaded file the new active document; `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded;
+    let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded.with_grid_prefs(&s.prefs);
     // What reading the file left out of the document, if anything.
     let losses: Vec<String> = warnings.iter().filter(|w| is_loss(w)).cloned().collect();
     let source_path = path.clone().filter(|_| !losses.is_empty());

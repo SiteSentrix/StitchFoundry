@@ -1593,6 +1593,12 @@ default: on, a click away from a panel popped out of the icon column puts it awa
 default: View › Actual Size / `view.actualSize` is one document point per screen point; on, one document inch fills
 96 screen points, an inch at the system's reference density whatever the display scaling).
 
+`gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid
+draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets the grid of every open document.
+`file.new` gives a new document that grid, and `document.open`, `file.newFromTemplate` and `file.revert` give it to
+every document they read except a native file and the native document that an SVG, PDF, `.ai` or EPS file carries
+(`restored: true`), which keep the grid they were saved with.
+
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
 default view) and to the mouse; they change what the tools show and how far a target pulls, and only Construction
 Guides change where a snapped point lands:
