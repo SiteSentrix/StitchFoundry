@@ -374,7 +374,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SQ-05 | Reduce bunching (short stitches at inner curves) | Done | | – |
 | SQ-06 | Split long stitches | Done | Auto split | – |
 | SQ-07 | Preserve long stitches (keep long satin as is) | Done | Preserve long stitches: frame moves in steps, one needle drop | 1 |
-| SQ-08 | Fractional / accordion spacing control | Partial | Gradient end spacing; see SP-10 | 2 |
+| SQ-08 | Fractional / accordion spacing control | Done | Gradient end spacing (SP-10) and spacing profiles: even, accordion, fade out and in, or any points (SP-09) | – |
 | SQ-09 | Design checks (density hot spots, tiny objects, long jumps, gaps) | Done | `embroidery.check`: dense spots (thread layers over 2 × 2 mm), long stitches, tiny objects, small lettering, no stitches, hoop; Check Design in the panel | 1 |
 | CN-01 | Automatic connectors (jump vs trim by length) | Done | | – |
 | CN-02 | Manual tie-offs and trims | Done | Trim after; per-object tie-in/tie-off on/off; design tie style (single, double, triangle) and tie length | 1 |
@@ -535,7 +535,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-11 | Lettering min/max height display | Missing | LT-13 | 3 |
 | NEW-12 | Background exports with history | Missing | Exports run off the UI thread, Exports panel | 6 |
 | NEW-13 | Keyboard design collections | Missing | KDC-01 | 3 |
-| NEW-14 | Laydown stitch | Missing | RE-06 | 2 |
+| NEW-14 | Laydown stitch | Done | RE-06 | – |
 | NEW-15 | Magnetic hoop presets | Partial | Add more hoop presets (data only) | 6 |
 | NEW-16 | AI text to embroidery: a prompt becomes flat-colour art drawn to digitize well, then a design | Partial | Embroidery › Design from Prompt (desktop): Claude draws flat-colour SVG with the user's own Anthropic API key (`sf_core::ai`), and `embroidery.placeArt` places it, gives its shapes stitch types with underlying fills cut (0.4 mm overlap), matches the chart's threads and brings same-coloured shapes together where the stacking allows (`embroidery.autoSequence {ids}`), in one undo step. Left: StitchFoundry accounts and credits (§11), the web app | A |
 | NEW-17 | AI image or logo to embroidery: the upload is redrawn as clean flat art, then digitized | Partial | Embroidery › Redraw Image with Claude (desktop): the selected image goes to Claude with the user's own key (no larger than the model looks at), its redrawing lands on the image (`embroidery.placeArt {frame}`) and is digitized as NEW-16's. Left: accounts and credits (§11), the web app, AD-03 and AD-04 for redrawings that need click-to-stitch or outlines | A |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 140 done,
-29 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 142 done,
+28 partial, 55 missing, 6 out of scope (counted 2026-10-12, after phase 2). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -706,14 +706,14 @@ and target dir each) calendar time drops by roughly half.
 |---|---|---|
 | **0. Ground truth** | Push repo, CI on GitHub; owner test-sews the sample files on their machine(s); fix what the sew-out shows | 0.5 + sewing time |
 | **1. Digitizing core parity** | MF-01…03 machine profiles; SE-01…04 stitch editing + Stitch List; ST-03, ST-05, ST-09, ST-11; OP-02…04 presets, fabrics, styles; CO-03, CO-05; RE-01…05; SQ-01, SQ-04, SQ-07, SQ-09; CN-02, CN-03, CN-06 branching; RS-04; PT-04; BAS-13, BAS-14; SYS-02…08 | 5–7 |
-| **2. Stitch effects library** | PS-02…04; CS-02, CS-05, CS-07; MO-01…06; SP-02…14 (incl. Multi Blend, accordion profiles, redwork, buttonholes); ST-02; RE-06 laydown; PT-01, PT-02, PT-05, PT-06; RS-02, RS-03, RS-06; BAS-15 | 5–7 |
+| **2. Stitch effects library** (done 2026-10-12) | PS-02…04; CS-02, CS-05, CS-07; MO-01…06; SP-02…14 (incl. Multi Blend, accordion profiles, redwork, buttonholes); ST-02; RE-06 laydown; PT-01, PT-02, PT-05, PT-06; RS-02, RS-03, RS-06; BAS-15 | 5–7 |
 | **3. Lettering suite** | LT-03, LT-05, LT-08…10, LT-13, LT-14; font recipes and editor (CL-02…04); team names (TM-01, TM-02); monograms (TM-03); KDC-01 | 6–8 |
 | **4. Multi-decoration** | Sequins (SQN-*), beads (BD-01), bling (BL-01), appliqué completion (AP-02…05), cording/boring (MD-02, MD-03), virtual decoration (MD-01), chenille-type patterns (SP-11), multi-decoration outputs (MDO-01) | 5–7 |
 | **5. Auto and photo digitizing** | AD-03, AD-04, BM-02, BM-03, PH-01…03, SE-06 | 3–5 |
 | **6. Production and management** | Colorways and visualizer (CW-*); worksheets, barcodes, images (RP-*); batch output (OUT-02); cost (OUT-05); hooping and multi-hooping (HO-*, MH-*); more formats (MF-04, MFL-02); hot folders (OUT-03); design library (DM-*); templates and clipart; kiosk (KI-01); background exports | 6–8 |
 | **R. Release readiness** | Rebrand done 2026-10-11: StitchFoundry by SiteSentrix, an original icon, app id `com.sitesentrix.stitchfoundry`, its own preferences folder (reads VectorCraft's once), the ArtCraft name, logos and links removed, presets and profiles renamed with their old names still accepted; the repository is public at github.com/SiteSentrix/StitchFoundry, and CI (`.github/workflows/ci.yml`) runs `cargo xtask ci` on every push to main and every pull request; the Brother and Janome thread palettes are credited to pyembroidery (MIT) in `NOTICE`. The programs are `stitchfoundry` and `stitchfoundry-cli`, and the packages, installers and release files are named `stitchfoundry` too, so both apps install side by side (the Cargo packages keep VectorCraft's names). Designs save as `.stitchfoundry` (VectorCraft documents inside; `.vectorcraft` and `.drawcraft` still open), and macOS knows the type. Left: the web build's file names; VectorCraft's packaging and platform workflows, which only run in its repository; the maintainer address in the Linux packages; signed installers; website and download page; a community space | 2–3, plus the owner's Apple and Windows developer accounts |
 | **A. AI service** | The cloud AI features ([§11](#11-open-source-and-ai-features)): accounts, credits and billing behind a small cloud backend; text to embroidery (NEW-16) first, then image or logo to embroidery (NEW-17, pulling in AD-03 and AD-04), the assistant panel (NEW-07) and product mockups (NEW-18); bring-your-own-key for every AI feature. Landed 2026-10-11 with your own Anthropic API key (desktop): text to embroidery (Embroidery › Design from Prompt) and image or logo to embroidery (Redraw Image with Claude), so the cloud side comes next | 8–12, plus the owner's payment, AI provider and hosting accounts |
-| **7. Hardening and extras** | Real-machine tuning from sew-outs, performance at 100k+ stitches, web app embroidery pass, translation review, chenille machines and cross-stitch designer (CH-01, CH-03), assistant panel (NEW-07), Ink/Stitch-inspired extras (BEY-05) | 5–10, spread over the calendar |
+| **7. Hardening and extras** | Real-machine tuning from sew-outs, performance at 100k+ stitches, web app embroidery pass, translation review, chenille machines and cross-stitch designer (CH-01, CH-03), assistant panel (NEW-07), Ink/Stitch-inspired extras (BEY-05), Multi Blend as one object (NEW-01) | 5–10, spread over the calendar |
 
 **Status (October 2026):** phase 1 is complete, every item in its row (machine profiles of your
 own and edited standard ones, MF-02 and MF-03, came last). Phase 0 is still open: nothing has been
@@ -726,10 +726,11 @@ RS-03, BAS-15), then the design's own motifs (MO-06), sculpture runs and cross-s
 SP-12), redwork (SP-13), buttonholes (SP-14), rings and outlines round lines (PT-02, RS-02, PT-05),
 more textures and paired motif fills (PS-02, MO-04), graded motif columns (MO-05), string stitching
 (SP-04), the automatic knife (RS-06), 3D motif fills (MO-04) and flow lines, the liquid effect
-(CS-07), a library of carving stamps (PS-04), a repeat preview (BAS-15), 40 textures (PS-02) and the
-Motif tool (MO-01): every phase 2 row is done but flexi splits that follow the shape by themselves
-(CS-05), motif sets shared across designs (MO-06) and the rest of buttonholes and string art
-(SP-14, NEW-04).
+(CS-07), a library of carving stamps (PS-04), a repeat preview (BAS-15), 40 textures (PS-02), the
+Motif tool (MO-01), split lines that follow the shape (CS-05), My Motifs across designs (MO-06),
+buttonholes from the Embroidery panel (SP-14, NEW-04) and a curve editor for spacing profiles
+(NEW-02). Phase 2 is complete but for one refinement moved to phase 7: a Multi Blend kept as one
+object (NEW-01; Make Blend makes one object per thread).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.
