@@ -362,20 +362,25 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 tl!("Stem stitch"),
                 tl!("Hand stitch"),
                 tl!("Sculpture run"),
+                tl!("String stitch"),
             ];
             let cur = RunKind::ALL.iter().position(|k| *k == r.kind).unwrap_or(0);
             if let Some(i) = pick(ui, tl!("Run style"), "runkind", cur, &kinds)
                 && let Some(k) = RunKind::ALL.get(i)
             {
-                set(app, target, json!({ "kind": k }));
+                // string stitching starts with long strings close together
+                let params = if *k == RunKind::String { json!({ "kind": k, "width": 8.0, "spacing": 1.0 }) } else { json!({ "kind": k }) };
+                set(app, target, params);
             }
             // a sculpture run's stitch length is its triple stitches'
             let length = if r.kind == RunKind::Sculpture { tl!("Triple stitch length") } else { tl!("Stitch length") };
             if let Some(v) = num(ui, length, "len", r.stitch_length, " mm", 2) {
                 set(app, target, json!({ "stitch_length": v }));
             }
-            if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif | RunKind::Stem)
-                && let Some(v) = num(ui, tl!("Width"), "rw", r.width, " mm", 2)
+            // a string stitch's width is how much of the line each string spans
+            let width = if r.kind == RunKind::String { tl!("Chord length") } else { tl!("Width") };
+            if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif | RunKind::Stem | RunKind::String)
+                && let Some(v) = num(ui, width, "rw", r.width, " mm", 2)
             {
                 set(app, target, json!({ "width": v }));
             }
@@ -386,7 +391,7 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 RunKind::Sculpture => tl!("Single stitch length"),
                 _ => tl!("Spacing"),
             };
-            if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif | RunKind::Hand | RunKind::Sculpture)
+            if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif | RunKind::Hand | RunKind::Sculpture | RunKind::String)
                 && let Some(v) = num(ui, spacing, "rs", r.spacing, " mm", 2)
             {
                 set(app, target, json!({ "spacing": v }));

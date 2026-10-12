@@ -6,9 +6,11 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use sf_core::attr::{Embroidery, StitchType};
+use sf_core::geom::{Polygon, poly};
 use sf_core::model::{RunKind, RunParams};
 use sf_core::sequence::{Item, sequence};
 use vectorcraft_doc::{Node, NodeId, NodeKind};
+use vectorcraft_embroidery::PT_PER_MM;
 use vectorcraft_embroidery::parts;
 use vectorcraft_geom::path::{PathData, SubPath};
 
@@ -35,6 +37,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?, kind?: run|bean|backstitch|stemstitch (run)} sew the selected line art (paths, compound paths and type, whatever their own stitching) as redwork: one line that starts and ends at the same point, every line sewn once in the run style and the way between them retraced along lines already sewn as a single run; lines ending within 0.3 mm of another meet it. They become a redwork group in the first thread given to them, else the first line's stroke colour (Break Apart gives them back) → {id}",
             has_selection,
             redwork
+        ),
+        cmd!(
+            "embroidery.knife",
+            "Automatic Knife",
+            [],
+            None,
+            "{ids?, overlap?: mm (0.3)} cut the selected stitched shapes round their holes and where they branch (at sharp inside corners) into simpler pieces, each its own object with the same stitching and its own automatic direction (a single angle or turning), overlapping by `overlap` along the cuts; each shape's pieces become a branch group sewn as one path → {ids}",
+            has_selection,
+            knife
         ),
         cmd!(
             "embroidery.breakApart",
@@ -138,6 +149,89 @@ fn branch(s: &mut Session, _p: &Value) -> Result<Value> {
         Ok(gid)
     })?;
     Ok(json!({ "id": gid.0 }))
+}
+
+fn knife(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.knife";
+    let overlap = match p.get("overlap") {
+        None | Some(Value::Null) => 0.3,
+        Some(v) => v.as_f64().filter(|v| (0.0..=3.0).contains(v)).ok_or_else(|| bad(CMD, "`overlap` is 0 to 3 mm"))?,
+    };
+    // What each selected shape is cut into (mm).
+    let mut plans: Vec<(NodeId, Vec<Polygon>)> = Vec::new();
+    {
+        let d = &s.doc()?.doc;
+        for id in super::embroidery::stitched_targets(s, p)? {
+            let Some(n) = d.node(id) else { continue };
+            let area = n.embroidery.as_deref().is_some_and(|e| {
+                matches!(e.stitch, StitchType::Fill(_)) || (matches!(e.stitch, StitchType::Satin(_)) && !vectorcraft_embroidery::is_line_art(n))
+            });
+            if !area || !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+                continue;
+            }
+            let mut pieces = Vec::new();
+            for region in vectorcraft_embroidery::regions_mm(n) {
+                let cut: Vec<Polygon> = poly::split_holes(&region).iter().flat_map(poly::split_branches).collect();
+                for piece in &cut {
+                    // overlaps along the cuts: each piece grown, but only into the shape
+                    if overlap > 0.0 && cut.len() > 1 {
+                        pieces.extend(poly::intersection(&poly::offset(std::slice::from_ref(piece), overlap), std::slice::from_ref(&region)));
+                    } else {
+                        pieces.push(piece.clone());
+                    }
+                }
+            }
+            if pieces.len() >= 2 {
+                plans.push((id, pieces));
+            }
+        }
+    }
+    if plans.is_empty() {
+        return Err(bad(CMD, "select stitched shapes with holes or branches to cut (lines and simple shapes have nothing to cut)"));
+    }
+    let groups = s.edit("Automatic Knife", |d, sel| {
+        let mut groups = Vec::new();
+        for (id, pieces) in &plans {
+            let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
+            let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
+            let mut children = Vec::new();
+            for piece in pieces {
+                let pid = d.alloc_id();
+                let subs: Vec<SubPath> = piece
+                    .rings()
+                    .filter(|r| r.len() >= 3)
+                    .map(|r| SubPath::polyline(&r.iter().map(|q| Point::new(q.x * PT_PER_MM, q.y * PT_PER_MM)).collect::<Vec<_>>(), true))
+                    .collect();
+                let mut c = Node::path(pid, PathData::new(subs), n.appearance.clone());
+                if let NodeKind::Path { rule, .. } = &mut c.kind {
+                    *rule = vectorcraft_geom::FillRule::EvenOdd;
+                }
+                c.name = n.name.clone();
+                c.opacity = n.opacity;
+                c.embroidery = n.embroidery.clone().map(|mut e| {
+                    // each piece finds its own direction; where sewing starts and stops belonged
+                    // to the whole
+                    e.guides.clear();
+                    e.auto_direction = true;
+                    e.entry = None;
+                    e.exit = None;
+                    e.frozen = None;
+                    e
+                });
+                children.push(Arc::new(c));
+            }
+            d.remove(*id)?;
+            let gid = d.alloc_id();
+            let mut g = Node::group(gid, children);
+            g.name = n.name.clone();
+            g.embroidery = Some(Box::new(Embroidery::new(StitchType::Branch)));
+            d.insert(par, idx, g)?;
+            groups.push(gid);
+        }
+        sel.set(groups.iter().copied());
+        Ok(groups)
+    })?;
+    Ok(ids_json(&groups))
 }
 
 /// How many stitched objects `n` is or holds (a branch group counts its members).

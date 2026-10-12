@@ -148,6 +148,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("Branch", "embroidery.branch"),
         c("Redwork", "embroidery.redwork"),
         c("Break Apart", "embroidery.breakApart"),
+        c("Automatic Knife", "embroidery.knife"),
         c("Check Design", "ui.embroideryCheck"),
         Sep,
         c("Freeze Stitches", "embroidery.freeze"),
