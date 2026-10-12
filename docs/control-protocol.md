@@ -617,6 +617,13 @@ while the spooler runs on a worker. `ui.inspect` lists it under `background`; co
 appears in `ui.status`. Quit waits for submissions. PDF/PostScript export and the browser's print
 dialog retain their existing command results.
 
+Agents still get `{printers: [{name, default}], service, setup}` from `print.printers`;
+discovery failure yields an empty list. Print replies preserve `pages`, `bytes`, `format` and
+`warnings` alongside the pending fields above. Validation/start failures use the existing control
+reply `{ok: false, error: "…"}`; later spooler failures appear in `ui.inspect` → `ui.status`, with
+no second reply or structured backend error object. Headless MCP keeps its engine-only `file.print`
+result (`path` or `dataBase64`, plus the same print metadata); no spooler fields are added there.
+
 Print presets: in the `print` dialog, `preset` names the print preset whose settings were loaded last; setting it
 (`ui.dialog.set {field: "preset", value: "Posters"}`) loads that preset's settings, and the list reads `[Custom]` once
 they differ. Save Preset… shows a name field (`__savePresetAs`): while it shows, `ui.dialog.confirm` saves the dialog's
