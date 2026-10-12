@@ -532,7 +532,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-08 | Contour fill robustness on tiny objects | Done | Falls back cleanly | – |
 | NEW-09 | Twin-sided pull compensation | Done | RE-05 | 1 |
 | NEW-10 | Batch output, barcode formats | Missing | OUT-02, RP-02 | 6 |
-| NEW-11 | Lettering min/max height display | Missing | LT-13 | 3 |
+| NEW-11 | Lettering min/max height display | Done | LT-13 | – |
 | NEW-12 | Background exports with history | Missing | Exports run off the UI thread, Exports panel | 6 |
 | NEW-13 | Keyboard design collections | Done | KDC-01 | – |
 | NEW-14 | Laydown stitch | Done | RE-06 | – |
@@ -540,6 +540,23 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-16 | AI text to embroidery: a prompt becomes flat-colour art drawn to digitize well, then a design | Partial | Embroidery › Design from Prompt (desktop): Claude draws flat-colour SVG with the user's own Anthropic API key (`sf_core::ai`), and `embroidery.placeArt` places it, gives its shapes stitch types with underlying fills cut (0.4 mm overlap), matches the chart's threads and brings same-coloured shapes together where the stacking allows (`embroidery.autoSequence {ids}`), in one undo step. Left: StitchFoundry accounts and credits (§11), the web app | A |
 | NEW-17 | AI image or logo to embroidery: the upload is redrawn as clean flat art, then digitized | Partial | Embroidery › Redraw Image with Claude (desktop): the selected image goes to Claude with the user's own key (no larger than the model looks at), its redrawing lands on the image (`embroidery.placeArt {frame}`) and is digitized as NEW-16's. Left: accounts and credits (§11), the web app, AD-03 and AD-04 for redrawings that need click-to-stitch or outlines | A |
 | NEW-18 | AI product mockups: the design shown on a shirt, cap or bag | Missing | §11; MD-01 | A |
+| NEW-19 | Puff fill for wide areas, and the puff sewing order (a flat outline first, a stop to lay the foam) | Missing | Puff satin and lettering are done (BEY-07); add a puff fill and a command that orders puff last with a stop before it | 3 |
+| NEW-20 | A library of ready-digitized embroidery fonts, marked puff, small or appliqué where they suit | Missing | Digitized by the project from OFL typefaces with the font creator, kept in craft-fonts (never in this repo); font-list badges | 3 |
+| NEW-21 | Bubble (outline) text, and circle and spiral baselines | Missing | Extends LT-03 and the lettering commands | 3 |
+| NEW-22 | Appliqué lettering (each letter a patch: placement, tack-down, cover) | Missing | Lettering whose glyph outlines become appliqué (AP-*) | 4 |
+| NEW-23 | Auto basting (a basting run round the design or the hoop, first) | Missing | A design-level option written into the machine file | 6 |
+| NEW-24 | Scatter copies (copies of a motif strewn over an area) | Missing | Random or even spread with a minimum gap | 7 |
+| NEW-25 | Placement aids: work areas, neckline placement, basting and printed placement marks | Missing | With HO-* and the worksheet (RP-01) | 6 |
+| NEW-26 | Design notes kept with the design and printed on worksheets | Missing | Free text in the design properties | 6 |
+| NEW-27 | Echo and background quilting round objects | Missing | Offset runs or a stipple behind the design (CS-*, SP-*) | 7 |
+| NEW-28 | Embossed pattern that follows a turning satin | Missing | Pattern stretched along the turning direction (PS-*) | 7 |
+| NEW-29 | Appliqué cover choice (satin, blanket, zigzag or one's own) and printed mirrored cutting templates | Missing | With AP-02…05 and MDO-01 cutting files | 4 |
+| NEW-30 | Catalogue print of a design folder (thumbnail sheets, lists) | Missing | With DM-01 and RP-* | 6 |
+| NEW-31 | Fabric presets that recommend a stabiliser | Missing | Data on the fabrics (OP-04) | 6 |
+| NEW-32 | Help in place: F1 on a tool opens its help, a hints panel with short tips | Missing | Docs sections linked from tools | 7 |
+| NEW-33 | True-size zoom (calibrate the screen so 100 % is life size) | Missing | A preference with a ruler to match | 7 |
+| NEW-34 | A simple workspace and a start screen by experience (beginner, digitizer, business) | Missing | Panels shown by level (KI-01) | 7 |
+| NEW-35 | Send to machine: hot folder, USB stick or network share, with a connection check | Missing | Generic, not tied to one brand (HW-01, OUT-03) | 6 |
 
 ### 6.15 Beyond the reference
 
@@ -553,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 233 rows (grouping the roughly 300 features the reference lists): 153 done,
-29 partial, 45 missing, 6 out of scope (counted 2026-10-12, after the font editor). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 154 done,
+29 partial, 61 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -709,13 +726,13 @@ and target dir each) calendar time drops by roughly half.
 | **0. Ground truth** | Push repo, CI on GitHub; owner test-sews the sample files on their machine(s); fix what the sew-out shows | 0.5 + sewing time |
 | **1. Digitizing core parity** | MF-01…03 machine profiles; SE-01…04 stitch editing + Stitch List; ST-03, ST-05, ST-09, ST-11; OP-02…04 presets, fabrics, styles; CO-03, CO-05; RE-01…05; SQ-01, SQ-04, SQ-07, SQ-09; CN-02, CN-03, CN-06 branching; RS-04; PT-04; BAS-13, BAS-14; SYS-02…08 | 5–7 |
 | **2. Stitch effects library** (done 2026-10-12) | PS-02…04; CS-02, CS-05, CS-07; MO-01…06; SP-02…14 (incl. Multi Blend, accordion profiles, redwork, buttonholes); ST-02; RE-06 laydown; PT-01, PT-02, PT-05, PT-06; RS-02, RS-03, RS-06; BAS-15 | 5–7 |
-| **3. Lettering suite** | LT-03, LT-05, LT-08…10, LT-13, LT-14; font recipes and editor (CL-02…04); team names (TM-01, TM-02); monograms (TM-03); KDC-01 | 6–8 |
-| **4. Multi-decoration** | Sequins (SQN-*), beads (BD-01), bling (BL-01), appliqué completion (AP-02…05), cording/boring (MD-02, MD-03), virtual decoration (MD-01), chenille-type patterns (SP-11), multi-decoration outputs (MDO-01) | 5–7 |
+| **3. Lettering suite** | LT-03, LT-05, LT-08…10, LT-13, LT-14; font recipes and editor (CL-02…04); team names (TM-01, TM-02); monograms (TM-03); KDC-01; puff (BEY-07, NEW-19); a font library (NEW-20); bubble and spiral text (NEW-21) | 6–8 |
+| **4. Multi-decoration** | Sequins (SQN-*), beads (BD-01), bling (BL-01), appliqué completion (AP-02…05), cording/boring (MD-02, MD-03), virtual decoration (MD-01), chenille-type patterns (SP-11), multi-decoration outputs (MDO-01); appliqué lettering and cover choice (NEW-22, NEW-29) | 5–7 |
 | **5. Auto and photo digitizing** | AD-03, AD-04, BM-02, BM-03, PH-01…03, SE-06 | 3–5 |
-| **6. Production and management** | Colorways and visualizer (CW-*); worksheets, barcodes, images (RP-*); batch output (OUT-02); cost (OUT-05); hooping and multi-hooping (HO-*, MH-*); more formats (MF-04, MFL-02); hot folders (OUT-03); design library (DM-*); templates and clipart; kiosk (KI-01); background exports | 6–8 |
+| **6. Production and management** | Colorways and visualizer (CW-*); worksheets, barcodes, images (RP-*); batch output (OUT-02); cost (OUT-05); hooping and multi-hooping (HO-*, MH-*); more formats (MF-04, MFL-02); hot folders (OUT-03); design library (DM-*); templates and clipart; kiosk (KI-01); background exports; auto basting, placement aids, design notes, catalogue print, stabiliser advice, send to machine (NEW-23, NEW-25, NEW-26, NEW-30, NEW-31, NEW-35) | 6–8 |
 | **R. Release readiness** | Rebrand done 2026-10-11: StitchFoundry by SiteSentrix, an original icon, app id `com.sitesentrix.stitchfoundry`, its own preferences folder (reads VectorCraft's once), the ArtCraft name, logos and links removed, presets and profiles renamed with their old names still accepted; the repository is public at github.com/SiteSentrix/StitchFoundry, and CI (`.github/workflows/ci.yml`) runs `cargo xtask ci` on every push to main and every pull request; the Brother and Janome thread palettes are credited to pyembroidery (MIT) in `NOTICE`. The programs are `stitchfoundry` and `stitchfoundry-cli`, and the packages, installers and release files are named `stitchfoundry` too, so both apps install side by side (the Cargo packages keep VectorCraft's names). Designs save as `.stitchfoundry` (VectorCraft documents inside; `.vectorcraft` and `.drawcraft` still open), and macOS knows the type. Left: the web build's file names; VectorCraft's packaging and platform workflows, which only run in its repository; the maintainer address in the Linux packages; signed installers; website and download page; a community space | 2–3, plus the owner's Apple and Windows developer accounts |
 | **A. AI service** | The cloud AI features ([§11](#11-open-source-and-ai-features)): accounts, credits and billing behind a small cloud backend; text to embroidery (NEW-16) first, then image or logo to embroidery (NEW-17, pulling in AD-03 and AD-04), the assistant panel (NEW-07) and product mockups (NEW-18); bring-your-own-key for every AI feature. Landed 2026-10-11 with your own Anthropic API key (desktop): text to embroidery (Embroidery › Design from Prompt) and image or logo to embroidery (Redraw Image with Claude), so the cloud side comes next | 8–12, plus the owner's payment, AI provider and hosting accounts |
-| **7. Hardening and extras** | Real-machine tuning from sew-outs, performance at 100k+ stitches, web app embroidery pass, translation review, chenille machines and cross-stitch designer (CH-01, CH-03), assistant panel (NEW-07), Ink/Stitch-inspired extras (BEY-05), Multi Blend as one object (NEW-01) | 5–10, spread over the calendar |
+| **7. Hardening and extras** | Real-machine tuning from sew-outs, performance at 100k+ stitches, web app embroidery pass, translation review, chenille machines and cross-stitch designer (CH-01, CH-03), assistant panel (NEW-07), Ink/Stitch-inspired extras (BEY-05), Multi Blend as one object (NEW-01); scatter copies, echo quilting, embossed turning satin, help in place, true-size zoom, a simple workspace (NEW-24, NEW-27, NEW-28, NEW-32…34) | 5–10, spread over the calendar |
 
 **Status (October 2026):** phase 1 is complete, every item in its row (machine profiles of your
 own and edited standard ones, MF-02 and MF-03, came last). Phase 0 is still open: nothing has been
@@ -895,6 +912,10 @@ Behaviour references (public documentation only, read for feature scope, not cop
 - Top new features of EmbroideryStudio 2025:
   https://wilcom.com/resources/blog/top-10-new-features-of-wilcom-embroiderystudio-2025
 - Lettering overview: https://wilcom.com/explore/lettering
+- Hatch Embroidery (feature scope for NEW-19…35): the feature comparison table
+  https://hatch.embroideryhelp.net/v3/en/OnlineHelp/New_Release/prodiff_table/Feature_Comparison_Table.htm
+  and https://hatchembroidery.com/faq/whats-new-hatch-4
+- Chroma by Ricoma (feature scope for NEW-19…35): https://ricoma.com/chroma
 - Florentine effect: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Decorative/curves/curves-10.htm
 - Embroidery Legacy digitizing widget and Ink/Stitch documentation (feature references for
   BEY-01, BEY-02).
