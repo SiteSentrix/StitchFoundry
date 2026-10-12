@@ -4729,3 +4729,13 @@ machine	Stop	Arresto
 	Assign to Glyph	Assegna a glifo
 	Selection to glyph	Selezione come glifo
 	The selected art becomes the glyph, moved onto its artboard	La grafica selezionata diventa il glifo, spostata sulla sua tavola
+	Sew order	Ordine di cucitura
+	Left to right	Da sinistra a destra
+	Right to left	Da destra a sinistra
+	Centre out	Dal centro
+	Closest	La più vicina
+	Along the baseline	Lungo la linea di base
+	Where needed	Dove serve
+	After each letter	Dopo ogni lettera
+	After each word	Dopo ogni parola
+	After each line	Dopo ogni riga

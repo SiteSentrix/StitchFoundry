@@ -199,6 +199,10 @@ fn the_panel_sets_lettering_in_a_loaded_font() {
     for want in ["Panel Font", "Forget Font", "Sews well at 5.0–20.0 mm", "Place Lettering", "Baseline", "Straight"] {
         assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
     }
+    // how it is sewn: its order, joins and trims
+    for want in ["Sew order", "Left to right", "Join", "Closest", "Trims", "Where needed"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
     let r = app.run("embroidery.lettering", json!({"text": "AA", "font": "Panel Font", "size": 10})).unwrap();
     assert_eq!(r["glyphs"].as_u64(), Some(2));
     // the new lettering is selected: the section shows what it says, to change it

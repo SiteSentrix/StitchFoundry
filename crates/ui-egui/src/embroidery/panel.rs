@@ -205,6 +205,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.lettering_font = l.font.clone();
             app.embroidery.lettering_size = l.size;
             app.embroidery.lettering_arc = l.arc;
+            app.embroidery.lettering_sew = l.sew;
         }
         None => app.embroidery.lettering_for = None,
         _ => {}
@@ -283,14 +284,47 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.embroidery.lettering_arc = v.clamp(1.0, 10000.0).copysign(app.embroidery.lettering_arc);
     }
+    // the order the letters are sewn in, how they join, where the thread is cut
+    use vectorcraft_embroidery::sf_core::attr::{LetterJoin, LetterOrder, LetterTrim};
+    let sew = &mut app.embroidery.lettering_sew;
+    let orders = [LetterOrder::Left, LetterOrder::Right, LetterOrder::Centre];
+    let cur = orders.iter().position(|o| *o == sew.order).unwrap_or(0);
+    if let Some(i) = pick(ui, tl!("Sew order"), "let-order", cur, &[tl!("Left to right"), tl!("Right to left"), tl!("Centre out")])
+        && let Some(o) = orders.get(i)
+    {
+        sew.order = *o;
+    }
+    let joins = [LetterJoin::Closest, LetterJoin::Baseline];
+    let cur = joins.iter().position(|j| *j == sew.join).unwrap_or(0);
+    if let Some(i) = pick(ui, tl!("Join"), "let-join", cur, &[tl!("Closest"), tl!("Along the baseline")])
+        && let Some(j) = joins.get(i)
+    {
+        sew.join = *j;
+    }
+    let trims = [LetterTrim::Auto, LetterTrim::Letter, LetterTrim::Word, LetterTrim::Line];
+    let cur = trims.iter().position(|t| *t == sew.trim).unwrap_or(0);
+    if let Some(i) =
+        pick(ui, tl!("Trims"), "let-trim", cur, &[tl!("Where needed"), tl!("After each letter"), tl!("After each word"), tl!("After each line")])
+        && let Some(t) = trims.get(i)
+    {
+        sew.trim = *t;
+    }
+    let sew = serde_json::to_value(app.embroidery.lettering_sew).unwrap_or_default();
     let arc = app.embroidery.lettering_arc;
     let text = app.embroidery.lettering_text.clone();
-    let (label, cmd, params) = match &selected {
+    let mut params = json!({ "text": text, "font": name, "size": size, "arc": arc,
+        "order": sew["order"], "lines": if sew["up"].as_bool() == Some(true) { "up" } else { "down" },
+        "join": sew["join"], "trim": sew["trim"] });
+    let (label, cmd) = match &selected {
         Some((id, _)) => {
-            (tl!("Update Lettering"), "embroidery.lettering.edit", json!({ "id": id, "text": text, "font": name, "size": size, "arc": arc }))
+            params["id"] = json!(id);
+            (tl!("Update Lettering"), "embroidery.lettering.edit")
         }
         // new lettering is centred on the artboard
-        None => (tl!("Place Lettering"), "embroidery.lettering", json!({ "text": text, "font": name, "size": size, "arc": arc, "align": "centre" })),
+        None => {
+            params["align"] = json!("centre");
+            (tl!("Place Lettering"), "embroidery.lettering")
+        }
     };
     if button(ui, label).clicked() && !text.trim().is_empty() {
         match app.run(cmd, params) {

@@ -515,6 +515,8 @@ fn structured_junk() {
         ("embroidery.fontDoc.save", json!({"folder": ""})),
         ("embroidery.font.edit", json!({"name": ""})),
         ("embroidery.fontDoc.assign", json!({"glyph": "x", "ids": [u64::MAX]})),
+        ("embroidery.lettering", json!({"text": "A", "font": "x", "order": [1], "join": {}, "trim": "never"})),
+        ("embroidery.lettering.edit", json!({"order": "centre", "lines": 1})),
         ("embroidery.fontDoc.fromType", json!({"family": "Source Sans 3", "chars": "\u{0}\u{fffd}x", "size": 5})),
         ("embroidery.fontDoc.merge", json!({"font": "x", "chars": "abc"})),
         ("embroidery.fontDoc.kern", json!({"pair": "A b", "value": 1e300})),

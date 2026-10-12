@@ -4754,3 +4754,13 @@ machine	Stop	Zastavení
 	Assign to Glyph	Přiřadit glyfu
 	Selection to glyph	Výběr jako glyf
 	The selected art becomes the glyph, moved onto its artboard	Vybraná kresba se stane glyfem a přesune se na jeho kreslicí plátno
+	Sew order	Pořadí šití
+	Left to right	Zleva doprava
+	Right to left	Zprava doleva
+	Centre out	Od středu
+	Closest	Nejbližší
+	Along the baseline	Po účaří
+	Where needed	Kde je třeba
+	After each letter	Po každém písmenu
+	After each word	Po každém slově
+	After each line	Po každém řádku

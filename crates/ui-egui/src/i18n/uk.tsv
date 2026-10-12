@@ -4709,3 +4709,13 @@ machine	Stop	Зупинка
 	Assign to Glyph	Призначити гліфу
 	Selection to glyph	Виділення в гліф
 	The selected art becomes the glyph, moved onto its artboard	Виділений об’єкт стає гліфом і переміщується на його монтажну область
+	Sew order	Порядок вишивання
+	Left to right	Зліва направо
+	Right to left	Справа наліво
+	Centre out	Від центру
+	Closest	Найкоротше
+	Along the baseline	Уздовж базової лінії
+	Where needed	Де потрібно
+	After each letter	Після кожної літери
+	After each word	Після кожного слова
+	After each line	Після кожного рядка

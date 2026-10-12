@@ -4683,3 +4683,13 @@ machine	Stop	Stopp
 	Assign to Glyph	Glyphe zuweisen
 	Selection to glyph	Auswahl als Glyphe
 	The selected art becomes the glyph, moved onto its artboard	Die ausgewählte Grafik wird zur Glyphe und auf ihre Zeichenfläche verschoben
+	Sew order	Nähreihenfolge
+	Left to right	Von links nach rechts
+	Right to left	Von rechts nach links
+	Centre out	Von der Mitte aus
+	Closest	Kürzeste
+	Along the baseline	Entlang der Grundlinie
+	Where needed	Wo nötig
+	After each letter	Nach jedem Buchstaben
+	After each word	Nach jedem Wort
+	After each line	Nach jeder Zeile

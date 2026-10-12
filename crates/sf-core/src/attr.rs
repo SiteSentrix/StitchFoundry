@@ -180,6 +180,9 @@ pub struct Lettering {
     /// Where the lines sit on the origin: their start, middle or end.
     #[serde(default, skip_serializing_if = "is_left")]
     pub align: LetterAlign,
+    /// The order its letters are sewn in, how they join and where the thread is cut.
+    #[serde(default, skip_serializing_if = "LetterSewing::is_plain")]
+    pub sew: LetterSewing,
     /// From the lettering's own space (points: the first line's baseline runs from (0, 0) along
     /// x, the lines follow down y) to the document. It follows the lettering as it moves, turns
     /// and slants; a scale goes into `size`.
@@ -227,6 +230,107 @@ impl LetterAlign {
             "right" => Some(LetterAlign::Right),
             _ => None,
         }
+    }
+}
+
+/// The order lettering's letters are sewn in along each line (public documentation of the
+/// practice: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-15.htm).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LetterOrder {
+    /// Left to right.
+    #[default]
+    Left,
+    /// Right to left.
+    Right,
+    /// From the middle letter out: back to the first, then on from the middle to the last (on
+    /// caps, the middle held best).
+    #[serde(alias = "center")]
+    Centre,
+}
+
+impl LetterOrder {
+    /// `left`, `right` or `centre` (or `center`).
+    pub fn from_name(name: &str) -> Option<LetterOrder> {
+        match name.to_ascii_lowercase().as_str() {
+            "left" => Some(LetterOrder::Left),
+            "right" => Some(LetterOrder::Right),
+            "centre" | "center" => Some(LetterOrder::Centre),
+            _ => None,
+        }
+    }
+}
+
+/// How one letter joins the next (public documentation of the practice:
+/// https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-16.htm).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LetterJoin {
+    /// Each letter starts where it is closest to where the last one stopped.
+    #[default]
+    Closest,
+    /// Each letter starts at its baseline's start and stops at its end, so the thread runs on
+    /// along the baseline (hidden in a towel's pile).
+    Baseline,
+}
+
+impl LetterJoin {
+    /// `closest` or `baseline`.
+    pub fn from_name(name: &str) -> Option<LetterJoin> {
+        match name.to_ascii_lowercase().as_str() {
+            "closest" => Some(LetterJoin::Closest),
+            "baseline" => Some(LetterJoin::Baseline),
+            _ => None,
+        }
+    }
+}
+
+/// Where lettering's thread is cut.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LetterTrim {
+    /// Where the machine's jumps need it.
+    #[default]
+    Auto,
+    /// After each letter.
+    Letter,
+    /// After each word.
+    Word,
+    /// After each line.
+    Line,
+}
+
+impl LetterTrim {
+    /// `auto`, `letter`, `word` or `line`.
+    pub fn from_name(name: &str) -> Option<LetterTrim> {
+        match name.to_ascii_lowercase().as_str() {
+            "auto" => Some(LetterTrim::Auto),
+            "letter" => Some(LetterTrim::Letter),
+            "word" => Some(LetterTrim::Word),
+            "line" => Some(LetterTrim::Line),
+            _ => None,
+        }
+    }
+}
+
+/// How lettering is sewn: its letters' order, their joins, its trims.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LetterSewing {
+    #[serde(default)]
+    pub order: LetterOrder,
+    /// The lines from the last up (else from the first down).
+    #[serde(default)]
+    pub up: bool,
+    #[serde(default)]
+    pub join: LetterJoin,
+    #[serde(default)]
+    pub trim: LetterTrim,
+}
+
+impl LetterSewing {
+    /// As lettering is sewn when nothing is said.
+    pub fn is_plain(&self) -> bool {
+        *self == LetterSewing::default()
     }
 }
 
@@ -644,7 +748,16 @@ mod tests {
     #[test]
     fn lettering_follows_its_group_its_scale_going_into_its_size() {
         let at = Affine::translate(Point::new(100.0, 50.0));
-        let mut l = Lettering { text: "Hi".into(), font: "F".into(), size: 10.0, leading: 1.0, arc: 30.0, align: LetterAlign::Centre, frame: at };
+        let mut l = Lettering {
+            text: "Hi".into(),
+            font: "F".into(),
+            size: 10.0,
+            leading: 1.0,
+            arc: 30.0,
+            align: LetterAlign::Centre,
+            sew: LetterSewing::default(),
+            frame: at,
+        };
         // turned a quarter about the origin, then doubled
         l.transform(&Affine::rotate(std::f64::consts::FRAC_PI_2).then(&Affine::scale(2.0, 2.0)));
         assert!((l.size - 20.0).abs() < 1e-9 && (l.arc - 60.0).abs() < 1e-9, "{l:?}");
@@ -656,6 +769,12 @@ mod tests {
         let mut e = Embroidery::new(StitchType::Lettering(Box::new(l.clone())));
         let back: Embroidery = serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
         assert_eq!(back, e);
+        // sewn as nothing says: not written; said: kept
+        assert!(!serde_json::to_string(&e).unwrap().contains("sew"));
+        let mut c = l.clone();
+        c.sew = LetterSewing { order: LetterOrder::Centre, up: true, join: LetterJoin::Baseline, trim: LetterTrim::Word };
+        let back: Lettering = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert_eq!(back.sew, c.sew);
         e.transform(&Affine::translate(Point::new(5.0, 0.0)));
         let StitchType::Lettering(m) = &e.stitch else { panic!() };
         assert!((m.frame.apply(Point::new(0.0, 0.0)).x + 95.0).abs() < 1e-9 && m.size == l.size);

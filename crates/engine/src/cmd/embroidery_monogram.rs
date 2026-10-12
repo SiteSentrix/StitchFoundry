@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use sf_core::attr::{Embroidery, LetterAlign, Lettering, StitchType};
+use sf_core::attr::{Embroidery, LetterAlign, LetterSewing, Lettering, StitchType};
 use sf_core::model::{Motif, RunKind, RunParams, SatinParams};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Node};
@@ -110,6 +110,7 @@ fn monogram(s: &mut Session, p: &Value) -> Result<Value> {
             leading: 1.0,
             arc: 0.0,
             align: LetterAlign::Centre,
+            sew: LetterSewing::default(),
             frame: sf_core::Affine::translate(sf_core::Point::new(x + w / 2.0, base)),
         });
         x += w + gap;

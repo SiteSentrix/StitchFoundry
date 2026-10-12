@@ -4737,3 +4737,13 @@ machine	Stop	Arrêt
 	Assign to Glyph	Attribuer au glyphe
 	Selection to glyph	Sélection vers glyphe
 	The selected art becomes the glyph, moved onto its artboard	L’illustration sélectionnée devient le glyphe, déplacée sur son plan de travail
+	Sew order	Ordre de couture
+	Left to right	De gauche à droite
+	Right to left	De droite à gauche
+	Centre out	Depuis le centre
+	Closest	La plus proche
+	Along the baseline	Le long de la ligne de base
+	Where needed	Si nécessaire
+	After each letter	Après chaque lettre
+	After each word	Après chaque mot
+	After each line	Après chaque ligne

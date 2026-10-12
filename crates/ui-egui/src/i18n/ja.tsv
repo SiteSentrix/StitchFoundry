@@ -4723,3 +4723,13 @@ machine	Stop	停止
 	Assign to Glyph	グリフに割り当て
 	Selection to glyph	選択をグリフに
 	The selected art becomes the glyph, moved onto its artboard	選択したアートがグリフになり、そのアートボードに移動します
+	Sew order	縫い順
+	Left to right	左から右
+	Right to left	右から左
+	Centre out	中央から外へ
+	Closest	最短
+	Along the baseline	ベースラインに沿って
+	Where needed	必要な所のみ
+	After each letter	文字ごと
+	After each word	単語ごと
+	After each line	行ごと
