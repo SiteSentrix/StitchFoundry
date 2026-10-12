@@ -290,6 +290,42 @@ fn artboard_tool_moves_with_art_creates_and_deletes() {
 }
 
 #[test]
+fn artboard_drag_keeps_a_flush_background_with_roundoff_and_multiple_texts() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    let (x, y) = (-35.23064566724116, -107.85371637852609);
+    s.execute("artboard.setProps", &json!({"index": 0, "x": x, "y": y})).unwrap();
+    // The background's top is 2.84e-14 pt above the artboard's top.
+    let background = rect(&mut s, x, -107.85371637852612, 600.0, 400.0);
+    let mut ids = vec![background];
+    for i in 0..3 {
+        let text = s.execute("text.create", &json!({"x": x + 100.0, "y": y + 80.0 + f64::from(i) * 60.0, "text": "Test", "size": 12})).unwrap();
+        ids.push(NodeId(text["id"].as_u64().unwrap()));
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    let before: Vec<Rect> = ids.iter().map(|id| bounds(&s, *id)).collect();
+    let board = s.doc().unwrap().doc.artboards[0].rect;
+    let history = undo_len(&s);
+    gesture(&mut s, "artboard", &[(x + 300.0, y + 200.0), (x + 400.0, y + 240.0), (x + 400.0, y + 240.0)], Mods::default());
+    let moved_board = s.doc().unwrap().doc.artboards[0].rect;
+    let delta = moved_board.origin() - board.origin();
+    assert!(delta.hypot() > 1.0, "the artboard actually moved");
+    for (id, was) in ids.iter().zip(&before) {
+        assert!(close(bounds(&s, *id), *was + delta), "{id:?} must move with the artboard");
+    }
+    assert_eq!(undo_len(&s), history + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect, board);
+    for (id, was) in ids.iter().zip(&before) {
+        assert!(close(bounds(&s, *id), *was), "Undo restores {id:?}");
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    for (id, was) in ids.iter().zip(&before) {
+        assert!(close(bounds(&s, *id), *was + delta), "Redo moves {id:?}");
+    }
+}
+
+#[test]
 fn artboard_resize_via_handle_and_move_command() {
     let mut s = session();
     gesture(&mut s, "artboard", &[(800.0, 300.0), (850.0, 300.0), (900.0, 300.0), (900.0, 300.0)], Mods::default());
