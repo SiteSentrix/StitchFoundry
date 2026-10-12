@@ -405,6 +405,38 @@ mod tests {
         assert_eq!((app.session.tool_options()["active"].clone(), selected(&app, 2)), (json!(0), 0));
     }
 
+    /// Choosing the Artboard tool starts it on the active artboard, the one the panel highlights:
+    /// Artboard Options shows that artboard, the pointer moving over another artboard leaves it
+    /// active, and Delete removes it. Shift+O while the tool is in use keeps the artboards it has
+    /// selected.
+    #[test]
+    fn choosing_the_artboard_tool_starts_it_on_the_active_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        for x in [400, 800] {
+            app.session.execute("artboard.new", &json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
+        }
+        select(&mut app, 1);
+        app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+        assert_eq!(app.session.tool_options()["active"], json!(1));
+        app.run("tool.options", json!({"tool": "artboard"})).unwrap();
+        assert_eq!(app.ui.dialog.take().unwrap().str("name"), "Artboard 2");
+        let view = app.view_info();
+        crate::canvas::dispatch(&mut app, &vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Move, 100.0, 75.0), view);
+        assert_eq!(selected(&app, 3), 1, "the pointer over Artboard 1 leaves Artboard 2 active");
+        let r = app.session.tool_key(vectorcraft_tools::ToolKey::Delete, Default::default(), view);
+        crate::canvas::apply_requests(&mut app, r);
+        let names: Vec<String> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+        assert_eq!(names, ["Artboard 1", "Artboard 3"], "Delete removes Artboard 2");
+        // Shift+O while the tool is in use keeps the artboards it has selected.
+        app.session.set_tool_option("selected", &json!([0, 1]));
+        let ctx = egui::Context::default();
+        let shift_o = vec![egui::Event::ModifiersChanged(egui::Modifiers::SHIFT), egui::Event::Text("O".into())];
+        let mut out = ctx.run_ui(egui::RawInput { events: shift_o, ..Default::default() }, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        assert_eq!((app.session.tool_id(), picked(&app, 2)), ("artboard", vec![0, 1]));
+    }
+
     /// A row dragged onto New Artboard duplicates its artboard with its art (#446), outlining the
     /// button while it is held over it, and the copy becomes the active artboard.
     #[test]

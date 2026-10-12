@@ -666,8 +666,16 @@ impl VectorcraftApp {
     /// Select a tool (also used by the toolbar and shortcuts).
     pub fn select_tool(&mut self, id: &str) {
         let v = self.view_info();
+        let before = self.session.tool_id();
         if let Err(e) = self.session.select_tool(id, v) {
             self.ui.status = e.to_string();
+        }
+        // A newly chosen Artboard tool starts on the active artboard (the view's).
+        if before != "artboard"
+            && self.session.tool_id() == "artboard"
+            && let Some(n) = self.session.active().map(|d| d.doc.artboards.len())
+        {
+            panels::artboards::select(self, panels::artboards::selected(self, n));
         }
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
