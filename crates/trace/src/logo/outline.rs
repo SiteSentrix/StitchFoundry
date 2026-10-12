@@ -14,11 +14,15 @@ pub(crate) struct Style {
     pub corner_win: f64,
     pub tol: f64,
     pub snap: bool,
+    /// With `snap`: parts of circles become true arcs too.
+    pub arcs: bool,
     pub line_tol: f64,
     pub circle_tol: f64,
     pub restore: Option<RestoreParams>,
     /// An outline whose fit strays farther than this from the raw contour is fitted plainly.
     pub max_dev: f64,
+    /// Spacing of the points of the fit that this check looks at.
+    pub check_step: f64,
 }
 
 impl Default for Style {
@@ -30,10 +34,12 @@ impl Default for Style {
             corner_win: 0.7,
             tol: 0.12,
             snap: true,
+            arcs: true,
             line_tol: 0.22,
             circle_tol: 0.25,
             restore: Some(RestoreParams::default()),
             max_dev: 1.4,
+            check_step: 0.03,
         }
     }
 }
@@ -161,6 +167,7 @@ fn styled_fit(p: &[Point], st: &Style, stats: &mut Stats) -> Option<Vec<Cubic>> 
             }
         }
         if st.snap
+            && st.arcs
             && sm.len() > 12
             && len > 1.0
             && let Some(c) = circle_fit(&sm)
@@ -198,10 +205,18 @@ pub(crate) fn fit_outline(p: &[Point], st: &Style, stats: &mut Stats) -> Option<
     }
     let mut local = Stats::default();
     // The reference is the raw outline, densified so the check never depends on how sparse it is.
-    let reference = resample_closed(p, 0.1).map_or_else(|| p.to_vec(), |(d, _)| d);
-    let fitted = styled_fit(p, st, &mut local).filter(|s| sane(s)).filter(|s| {
-        let samples = sample_cubics(s, 0.03);
-        all_within(&samples, &reference, st.max_dev) && all_within(&reference, &samples, st.max_dev)
+    let reference = resample_closed(p, st.check_step / 0.3).map_or_else(|| p.to_vec(), |(d, _)| d);
+    let checked = |st: &Style, local: &mut Stats| {
+        styled_fit(p, st, local).filter(|s| sane(s)).filter(|s| {
+            let samples = sample_cubics(s, st.check_step);
+            all_within(&samples, &reference, st.max_dev) && all_within(&reference, &samples, st.max_dev)
+        })
+    };
+    // A fit that strays is tried again without the clever parts before the plain fit, which
+    // nothing checks.
+    let fitted = checked(st, &mut local).or_else(|| {
+        local = Stats::default();
+        checked(&Style { snap: false, restore: None, ..*st }, &mut local)
     });
     match fitted {
         Some(segs) => {
