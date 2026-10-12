@@ -443,9 +443,10 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|(bp, rule)| (PathData::from_bezpath(&bp), rule));
     let tmp = isolated_doc(&st.doc, nodes);
     let (png, w, h) = render_png(&tmp, region, scale, &raster.render_options(RasterFormat::Png), look.color_model)?;
-    let top = *roots.last().ok_or_else(|| bad(C, "nothing selected"))?;
+    if roots.is_empty() {
+        return Err(bad(C, "nothing selected"));
+    }
     let id = s.edit("Rasterize", |d, sel| {
-        let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let key = unique_key(d, "raster");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         let id = d.alloc_id();
@@ -455,11 +456,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some((path, rule)) = clip {
             node = super::rasterfx::clip_group(d, path, rule, node);
         }
-        let id = node.id;
-        d.insert(par, idx + 1, node)?;
-        for r in &roots {
-            d.remove(*r)?;
-        }
+        let id = d.wrap(&roots, |_| node)?;
         sel.set([id]);
         Ok(id)
     })?;
@@ -829,7 +826,7 @@ fn convert_to_shape(s: &mut Session, _: &Value) -> Result<Value> {
 fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let n = s.edit("Convert to Artboards", |d, sel| {
-        let mut n = 0;
+        let mut converted = vec![];
         for id in &roots {
             let Some(b) = d.node(*id).and_then(|n| n.geometric_bounds()) else { continue };
             if b.width() <= 0.0 || b.height() <= 0.0 {
@@ -843,14 +840,14 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
                 show_center_mark: false,
                 show_cross_hairs: false,
             });
-            d.remove(*id)?;
-            n += 1;
+            converted.push(*id);
         }
-        if n == 0 {
+        if converted.is_empty() {
             return Err(EngineError::Other("Convert to Artboards: selection has no area".into()));
         }
+        d.remove_many(&converted)?;
         sel.clear();
-        Ok(n)
+        Ok(converted.len())
     })?;
     Ok(json!({ "artboards": n }))
 }

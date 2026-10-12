@@ -13,6 +13,7 @@ use vectorcraft_color::BlendMode;
 use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask, Selection};
 
 use super::maskedit::{begin, finish, mask_group, mask_parts, show_editing};
+use super::pathops::{Beside, separate};
 use super::*;
 use crate::EngineError;
 
@@ -189,6 +190,9 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
         // Several objects are grouped so they share one mask.
         let target = if let [one] = art {
             *one
+        } else if separate(d, art) {
+            let gid = d.alloc_id();
+            d.wrap(art, |children| Node::group(gid, children))?
         } else {
             let last = art[art.len() - 1];
             let (par, idx, _) = d.position(last).ok_or(EngineError::NoNode(last))?;
@@ -223,16 +227,16 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         // Leave mask editing first: its art goes back into the mask, which is released below.
         finish(d, sel);
         let mut out = vec![];
+        let mut released = Beside::above(d, &ids);
         for id in &ids {
             let Some(m) = d.node_mut(*id).and_then(|n| n.extras_mut().mask.take()) else { continue };
-            let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
             out.push(*id);
-            for (k, part) in mask_parts(&m.art).iter().enumerate() {
-                // Fresh ids: copies of a masked object share the ids inside their mask art.
-                let art = d.reid(part);
-                out.push(d.insert(par, idx + 1 + k, art)?);
-            }
+            // Fresh ids: copies of a masked object share the ids inside their mask art.
+            let parts: Vec<Node> = mask_parts(&m.art).iter().map(|part| d.reid(part)).collect();
+            out.extend(parts.iter().map(|p| p.id));
+            released.put(d, *id, parts)?;
         }
+        released.finish(d)?;
         sel.set(out);
         Ok(())
     })?;

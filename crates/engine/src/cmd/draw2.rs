@@ -13,6 +13,7 @@ use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, Cap, Join, SimplifyOptions};
 
 use super::create::{add_look, add_node};
+use super::pathops::{Beside, remove_each};
 use super::*;
 use crate::EngineError;
 
@@ -310,20 +311,25 @@ fn sibling_with(d: &mut Document, id: NodeId, pd: PathData) -> Result<Node> {
 }
 
 /// Replace path or compound path `id` with `pieces` (first keeps the id, the rest go right above
-/// it; none removes it). Returns ids.
-pub(super) fn replace_with_pieces(d: &mut Document, id: NodeId, pieces: Vec<PathData>) -> Result<Vec<NodeId>> {
+/// it; none removes it). `cut` removes the path or puts the other pieces above it. Returns ids.
+pub(super) fn replace_with_pieces(d: &mut Document, cut: &mut Beside, id: NodeId, pieces: Vec<PathData>) -> Result<Vec<NodeId>> {
     let mut it = pieces.into_iter();
     let Some(first) = it.next() else {
-        d.remove(id)?;
+        cut.put(d, id, vec![])?;
         return Ok(vec![]);
     };
-    let (parent, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
     let mut ids = vec![id];
-    for (k, pd) in it.enumerate() {
+    let mut above = vec![];
+    for pd in it {
         let n = sibling_with(d, id, pd)?;
-        ids.push(d.insert(parent, idx + 1 + k, n)?);
+        ids.push(n.id);
+        above.push(n);
     }
     set_geometry(d, id, first)?;
+    if !above.is_empty() {
+        let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+        cut.put(d, id, [n].into_iter().chain(above).collect())?;
+    }
     Ok(ids)
 }
 
@@ -733,7 +739,10 @@ fn remove_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         if ai >= sp.anchors.len() {
             return Err(EngineError::Other("no such anchor".into()));
         }
-        remove_anchors_of(d, sel, id, [(si, ai)])
+        let mut emptied = Beside::replacing(d, &[id]);
+        let removed = remove_anchors_of(d, sel, &mut emptied, id, [(si, ai)])?;
+        emptied.finish(d)?;
+        Ok(removed)
     })?;
     Ok(json!({ "removedObject": removed }))
 }
@@ -752,18 +761,26 @@ fn remove_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     }
     let removed = s.edit("Remove Anchor Points", |d, sel| {
         let mut removed = 0;
+        let mut emptied = Beside::replacing(d, &jobs.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, anchors) in jobs {
-            removed += usize::from(remove_anchors_of(d, sel, id, anchors)?);
+            removed += usize::from(remove_anchors_of(d, sel, &mut emptied, id, anchors)?);
         }
+        emptied.finish(d)?;
         Ok(removed)
     })?;
     Ok(json!({ "removedObjects": removed }))
 }
 
 /// Remove `anchors` (subpath, anchor) of path `id` without opening it, refitting the curve round
-/// each one; a subpath left with one anchor goes, and the path with its last subpath. True when
-/// the path went.
-fn remove_anchors_of(d: &mut Document, sel: &mut Selection, id: NodeId, anchors: impl IntoIterator<Item = (usize, usize)>) -> Result<bool> {
+/// each one. A subpath left with one anchor is removed, and a path left with no subpath is removed
+/// through `emptied`. True when the path went.
+fn remove_anchors_of(
+    d: &mut Document,
+    sel: &mut Selection,
+    emptied: &mut Beside,
+    id: NodeId,
+    anchors: impl IntoIterator<Item = (usize, usize)>,
+) -> Result<bool> {
     let mut anchors: Vec<(usize, usize)> = anchors.into_iter().collect();
     // The last first, so the indexes still to come stay valid.
     anchors.sort_unstable_by(|a, b| b.cmp(a));
@@ -777,7 +794,7 @@ fn remove_anchors_of(d: &mut Document, sel: &mut Selection, id: NodeId, anchors:
     path.subpaths.retain(|sp| sp.anchors.len() >= 2);
     let gone = path.is_empty();
     if gone {
-        d.remove(id)?;
+        emptied.put(d, id, vec![])?;
         sel.remove(id);
     } else {
         sel.anchors.remove(&id);
@@ -920,9 +937,11 @@ fn knife(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let ids = s.edit("Knife", |d, sel| {
         let mut all = vec![];
+        let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
-            all.extend(replace_with_pieces(d, id, pieces)?);
+            all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
         }
+        cut.finish(d)?;
         sel.set(all.iter().copied());
         Ok(all)
     })?;
@@ -960,9 +979,11 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
     }
     let ids = s.edit(label, |d, sel| {
         let mut all = vec![];
+        let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
-            all.extend(replace_with_pieces(d, id, pieces)?);
+            all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
         }
+        cut.finish(d)?;
         sel.set(all.iter().copied());
         Ok(all)
     })?;
@@ -1256,9 +1277,7 @@ fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     let others: Vec<NodeId> = rest.iter().map(|m| m.0).collect();
     s.edit("Blob Brush", |d, sel| {
         *path_mut(d, keep)? = merged;
-        for id in others {
-            d.remove(id)?;
-        }
+        remove_each(d, &others)?;
         sel.set([keep]);
         Ok(())
     })?;

@@ -152,6 +152,30 @@ fn release_while_editing_leaves_editing_first() {
     assert!(mask(&s, obj).is_some() && doc(&s).mask_edit.is_some());
 }
 
+/// Releasing the masks of a group and of an object inside it puts each mask's art directly above
+/// its object, as releasing one mask at a time does.
+#[test]
+fn release_of_a_masked_group_and_a_masked_object_inside_it_keeps_order_and_ids() {
+    let mut s = session();
+    let (a, m1) = (rect(&mut s, 0.0, 100.0), rect(&mut s, 0.0, 50.0));
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [a.0, m1.0]})).unwrap();
+    let b = rect(&mut s, 150.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let m2 = rect(&mut s, 0.0, 300.0);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [group.0, m2.0]})).unwrap();
+    let before = doc(&s).clone();
+    let n = before.peek_next_id();
+    s.execute("transparency.releaseOpacityMask", &json!({"ids": [group.0, a.0]})).unwrap();
+    let ids = |n: &vectorcraft_doc::Node| n.children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>();
+    assert_eq!(ids(&doc(&s).layers[0]), [group, NodeId(n)]);
+    assert_eq!(ids(doc(&s).node(group).unwrap()), [a, NodeId(n + 1), b]);
+    assert!(mask(&s, group).is_none() && mask(&s, a).is_none());
+    assert_eq!(s.doc().unwrap().selection.objects, [group, NodeId(n), a, NodeId(n + 1)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(*doc(&s) == before, "Undo gives back the document");
+}
+
 #[test]
 fn one_object_gets_an_empty_mask_drawn_in_editing_mode() {
     let mut s = session();

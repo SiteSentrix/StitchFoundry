@@ -26,7 +26,7 @@ use vectorcraft_trace as tr;
 
 use super::edit::selected_roots;
 use super::paint::paint_from;
-use super::pathops::shape_node;
+use super::pathops::{Beside, shape_node};
 use super::*;
 
 /// Name of an Image Trace group.
@@ -341,19 +341,16 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
 /// Remove the roots and insert `nodes` where the front-most root was. Returns the new ids.
 /// (Roots go first: the new nodes may reuse their ids, e.g. Live Paint sources.)
 fn replace_roots(d: &mut Document, roots: &[NodeId], nodes: Vec<Node>) -> Result<Vec<NodeId>> {
-    let top = *roots.last().ok_or_else(|| EngineError::Other("nothing selected".into()))?;
-    let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
-    let before = roots.iter().filter(|r| **r != top && d.position(**r).is_some_and(|(p, i, _)| p == par && i < idx)).count();
-    for r in roots {
+    let Some((&top, rest)) = roots.split_last() else { return Err(EngineError::Other("nothing selected".into())) };
+    let ids = nodes.iter().map(|n| n.id).collect();
+    let mut replaced = Beside::replacing(d, roots);
+    for r in rest {
         if d.node(*r).is_some() {
-            d.remove(*r)?;
+            replaced.put(d, *r, vec![])?;
         }
     }
-    let at = idx - before;
-    let mut ids = vec![];
-    for (k, n) in nodes.into_iter().enumerate() {
-        ids.push(d.insert(par, at + k, n)?);
-    }
+    replaced.put(d, top, nodes)?;
+    replaced.finish(d)?;
     Ok(ids)
 }
 
@@ -508,14 +505,14 @@ fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
                 Arc::make_mut(e).appearance = app.into();
             }
         }
+        let mut merged = Beside::replacing(d, &roots);
         for r in roots.iter().filter(|r| **r != target) {
             if d.node(*r).is_some() {
-                d.remove(*r)?;
+                merged.put(d, *r, vec![])?;
             }
         }
-        let (par, idx, _) = d.position(target).ok_or(EngineError::NoNode(target))?;
-        d.remove(target)?;
-        d.insert(par, idx, g)?;
+        merged.put(d, target, vec![g])?;
+        merged.finish(d)?;
         sel.set([target]);
         Ok((target, nf, ne))
     })?;
@@ -536,11 +533,14 @@ fn lp_release(s: &mut Session, p: &Value) -> Result<Value> {
     let targets = live_targets(s, p)?;
     let ids = s.edit("Release Live Paint", |d, sel| {
         let mut out = vec![];
+        let mut released = Beside::replacing(d, &targets);
         for g in &targets {
             let n = d.node(*g).cloned().ok_or(EngineError::NoNode(*g))?;
             let srcs: Vec<Node> = source_nodes(&n).iter().map(|c| (**c).clone()).collect();
-            out.extend(replace_roots(d, &[*g], srcs)?);
+            out.extend(srcs.iter().map(|c| c.id));
+            released.put(d, *g, srcs)?;
         }
+        released.finish(d)?;
         sel.set(out.iter().copied());
         Ok(out)
     })?;
@@ -836,12 +836,15 @@ fn trace_release(s: &mut Session, p: &Value) -> Result<Value> {
     let targets = trace_targets(s, p)?;
     let ids = s.edit("Release Image Trace", |d, sel| {
         let mut out = vec![];
+        let mut released = Beside::replacing(d, &targets);
         for g in &targets {
             let n = d.node(*g).cloned().ok_or(EngineError::NoNode(*g))?;
             let mut img = (**n.children().and_then(|c| c.first()).ok_or(EngineError::NoNode(*g))?).clone();
             img.visible = true;
-            out.extend(replace_roots(d, &[*g], vec![img])?);
+            out.push(img.id);
+            released.put(d, *g, vec![img])?;
         }
+        released.finish(d)?;
         sel.set(out.iter().copied());
         Ok(out)
     })?;

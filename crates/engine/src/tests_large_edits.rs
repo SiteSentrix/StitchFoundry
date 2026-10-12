@@ -124,6 +124,17 @@ fn delete_selection_of_100000_rows_finishes_within_20_s() {
 }
 
 #[test]
+fn clean_up_of_100000_unpainted_paths_finishes_within_20_s() {
+    let s = session(100_000, |d, k| Node::path(d.alloc_id(), shapes::rectangle(square_at(k)), Appearance::default()));
+    let before = s.doc().unwrap().doc.clone();
+    let (mut s, r) = run_soon(s, "object.path.cleanUp", json!({}));
+    assert_eq!(r["removed"], json!(100_000));
+    assert!(layer(&s, 0).is_empty());
+    assert!(selected(&s, &[]));
+    undo_gives_back(&mut s, &before);
+}
+
+#[test]
 fn group_of_50000_objects_finishes_within_20_s() {
     let s = session(50_000, square);
     let (before, ids) = (s.doc().unwrap().doc.clone(), layer(&s, 0));
@@ -192,6 +203,21 @@ fn transform_each_with_copy_of_50000_objects_finishes_within_20_s() {
     assert!(layer(&s, 0) == in_turn(&ids, &copies), "each copy directly above its object");
     assert!(selected(&s, &copies));
     assert_eq!(bounds(&s, copies[1]), square_at(1) + vectorcraft_geom::Vec2::new(5.0, 0.0));
+    undo_gives_back(&mut s, &before);
+}
+
+#[test]
+fn offset_path_of_50000_objects_finishes_within_20_s() {
+    let s = session(50_000, square);
+    let (before, ids, first) = (s.doc().unwrap().doc.clone(), layer(&s, 0), s.doc().unwrap().doc.peek_next_id());
+    let (mut s, r) = run_soon(s, "object.path.offsetPath", json!({"offset": 1}));
+    // Each offset path goes directly above its square and takes the next id, in the squares' order.
+    let offsets = ids_from(first, ids.len());
+    assert!(ids_in(&r) == offsets);
+    assert!(layer(&s, 0) == in_turn(&ids, &offsets), "each offset path directly above its square");
+    assert!(selected(&s, &offsets));
+    let grown = bounds(&s, offsets[1]);
+    assert!((grown.width() - 12.0).abs() < 1e-6 && (grown.x0 - 19.0).abs() < 1e-6, "{grown:?}");
     undo_gives_back(&mut s, &before);
 }
 
@@ -299,6 +325,22 @@ fn release_to_layers_of_100000_objects_finishes_within_20_s() {
         assert!(matches!(n.kind, NodeKind::Layer { color: LayerColor::Preset(c), .. } if usize::from(c) == (k + 1) % LAYER_COLORS.len()));
     }
     assert!(selected(&s, &ids));
+    undo_gives_back(&mut s, &before);
+}
+
+#[test]
+fn outline_stroke_of_25000_objects_finishes_within_20_s() {
+    let s = session(25_000, square);
+    let (before, first) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().doc.peek_next_id());
+    let (mut s, r) = run_soon(s, "object.path.outlineStroke", json!({}));
+    // Each square, filled and stroked, becomes a group of its fill and the outline of its stroke,
+    // where the square was, and the groups take new ids in the squares' order.
+    let groups = ids_in(&r);
+    assert_eq!(groups.len(), 25_000);
+    assert!(layer(&s, 0) == groups, "each group where its square was");
+    assert!(groups[0].0 >= first && groups.windows(2).all(|w| w[0] < w[1]));
+    assert!(groups.iter().all(|g| children(&s, *g).len() == 2));
+    assert!(selected(&s, &groups));
     undo_gives_back(&mut s, &before);
 }
 
@@ -538,6 +580,53 @@ fn artboard_copies_and_cut_keep_order_and_ids() {
 
     assert_eq!(s.execute("artboard.cut", &json!({"index": 0, "art": true})).unwrap()["copied"], 6);
     assert_eq!(layers(&s), [json!([]), json!([off])]);
+    undo_gives_back(&mut s, &before);
+}
+
+/// After Offset Path, Outline Stroke, Unite and Clean Up of objects in two layers and inside a
+/// group, the layers hold the objects and the new ones in the order, and with the ids, that each
+/// check lists, and Undo gives back the document.
+#[test]
+fn path_commands_across_layers_and_inside_a_group_keep_order_and_ids() {
+    let (mut s, [a, b, c, d, e, f, g, h, group]) = two_layers();
+    let before = s.doc().unwrap().doc.clone();
+    let n = before.peek_next_id();
+
+    let r = s.execute("object.path.offsetPath", &json!({"offset": 1})).unwrap();
+    assert_eq!(r["ids"], json!([n, n + 1, n + 2, n + 3, n + 4]));
+    assert_eq!(layers(&s), [json!([a, n, b, c, n + 1, [group, d, e, n + 2, f]]), json!([g, n + 3, h, n + 4])]);
+    assert!(selected(&s, &ids_from(n, 5)));
+    undo_gives_back(&mut s, &before);
+
+    // Each object becomes a group of its fill and the outline of its stroke, where it was.
+    let r = s.execute("object.path.outlineStroke", &json!({})).unwrap();
+    let [a2, c2, e2, g2, h2] = <[NodeId; 5]>::try_from(ids_in(&r)).unwrap();
+    assert!(n <= a2.0 && a2 < c2 && c2 < e2 && e2 < g2 && g2 < h2);
+    assert_eq!(layer(&s, 0), [a2, NodeId(b), c2, NodeId(group)]);
+    assert_eq!(children(&s, NodeId(group)), [NodeId(d), e2, NodeId(f)]);
+    assert_eq!(layer(&s, 1), [g2, h2]);
+    assert!(selected(&s, &[a2, c2, e2, g2, h2]));
+    undo_gives_back(&mut s, &before);
+
+    // The result goes where the topmost object, h, was.
+    let r = s.execute("object.pathfinder.unite", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([n]));
+    assert_eq!(layers(&s)[0], json!([b, [group, d, f]]));
+    assert_eq!(layer(&s, 1), [NodeId(n)]);
+    assert!(selected(&s, &[NodeId(n)]));
+    undo_gives_back(&mut s, &before);
+
+    s.edit("Paint nothing", |d, _| {
+        for id in [a, e, h] {
+            d.node_mut(NodeId(id)).unwrap().appearance = Appearance::default().into();
+        }
+        Ok(())
+    })
+    .unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], json!(3));
+    assert_eq!(layers(&s), [json!([b, c, [group, d, f]]), json!([g])]);
     undo_gives_back(&mut s, &before);
 }
 
