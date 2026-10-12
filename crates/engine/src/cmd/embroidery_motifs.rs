@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place Motif",
             [],
             None,
-            "{motif: wave|scallop|diamond|cross|feather|heart|star|leaf|loop|zigzag|e-stitch or the name of one of the design's motifs, size?: mm (its length, 10), at?: [x, y] (its centre; default: the first artboard's centre), angle?: degrees} one motif as a path sewn in a single run, ready to move, scale and reshape → {id}",
+            "{motif: wave|scallop|diamond|cross|feather|heart|star|leaf|loop|zigzag|e-stitch or the name of one of the design's motifs or My Motifs, size?: mm (its length, 10), at?: [x, y] (its centre; default: the first artboard's centre), angle?: degrees} one motif as a path sewn in a single run, ready to move, scale and reshape → {id}",
             has_doc,
             place_motif
         ),
@@ -56,6 +56,25 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!(query "embroidery.motif.list", "Embroidery Motifs", [], None, "{} the design's motifs → {motifs: [{name, points, aspect, uses}]}", has_doc, motif_list),
         cmd!(
+            "embroidery.motif.keep",
+            "Keep Motif",
+            [],
+            None,
+            "{name} keep one of the design's motifs in My Motifs, for any design: Apply Motif, Place Motif and the motif lists find it by name (a kept motif of the same name is replaced) → {name, kept}",
+            has_doc,
+            motif_keep
+        ),
+        cmd!(query "embroidery.motif.library", "My Motifs", [], None, "{} the motifs kept for any design → {motifs: [{name, points, aspect}]}", always, motif_library),
+        cmd!(
+            "embroidery.motif.forget",
+            "Forget Motif",
+            [],
+            None,
+            "{name} take a motif out of My Motifs; designs using it keep it → {name}",
+            always,
+            motif_forget
+        ),
+        cmd!(
             "embroidery.motif.delete",
             "Delete Motif",
             [],
@@ -78,8 +97,47 @@ pub(crate) fn motif_by_name(s: &Session, name: &str, cmd: &str) -> Result<(Motif
         return Ok((m, None));
     }
     let cfg = config(s)?;
-    let custom = cfg.motif(name).or_else(|| cfg.motifs.iter().find(|m| m.name.eq_ignore_ascii_case(name)));
+    let custom = cfg.motif(name).or_else(|| cfg.motifs.iter().find(|m| m.name.eq_ignore_ascii_case(name))).or_else(|| kept(s, name));
     custom.map(|c| (Motif::default(), Some(c.clone()))).ok_or_else(|| bad(cmd, format!("unknown motif `{name}`")))
+}
+
+/// One of My Motifs by name (any case).
+fn kept<'a>(s: &'a Session, name: &str) -> Option<&'a CustomMotif> {
+    s.prefs.embroidery_motifs.iter().find(|m| m.name.eq_ignore_ascii_case(name))
+}
+
+/// Most motifs My Motifs keeps.
+const MAX_KEPT: usize = 500;
+
+fn motif_keep(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.motif.keep";
+    let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(CMD, "missing `name`"))?;
+    let motif = config(s)?.motif(name).cloned().ok_or_else(|| bad(CMD, format!("the design has no motif named `{name}`")))?;
+    let lib = &mut s.prefs.embroidery_motifs;
+    lib.retain(|m| !m.name.eq_ignore_ascii_case(&motif.name));
+    if lib.len() >= MAX_KEPT {
+        return Err(bad(CMD, format!("My Motifs keeps {MAX_KEPT} motifs at most: forget one first")));
+    }
+    lib.push(motif.clone());
+    Ok(json!({ "name": motif.name, "kept": lib.len() }))
+}
+
+fn motif_library(s: &mut Session, _: &Value) -> Result<Value> {
+    let motifs: Vec<Value> =
+        s.prefs.embroidery_motifs.iter().map(|m| json!({ "name": m.name, "points": m.points.len(), "aspect": m.aspect() })).collect();
+    Ok(json!({ "motifs": motifs }))
+}
+
+fn motif_forget(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.motif.forget";
+    let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(CMD, "missing `name`"))?;
+    let lib = &mut s.prefs.embroidery_motifs;
+    let before = lib.len();
+    lib.retain(|m| !m.name.eq_ignore_ascii_case(name));
+    if lib.len() == before {
+        return Err(bad(CMD, format!("My Motifs has no motif named `{name}`")));
+    }
+    Ok(json!({ "name": name }))
 }
 
 /// The custom motif an object sews, if any.
@@ -169,7 +227,10 @@ fn with_motif(mut e: Embroidery, motif: &CustomMotif) -> Option<Embroidery> {
 fn motif_apply(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.motif.apply";
     let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(CMD, "missing `name`"))?;
-    let motif = config(s)?.motif(name).cloned().ok_or_else(|| bad(CMD, format!("the design has no motif named `{name}`")))?;
+    let ours = config(s)?.motif(name).cloned();
+    let joins = ours.is_none();
+    let motif =
+        ours.or_else(|| kept(s, name).cloned()).ok_or_else(|| bad(CMD, format!("the design has no motif named `{name}`, nor has My Motifs")))?;
     let mut updated = Vec::new();
     {
         let d = &s.doc()?.doc;
@@ -191,6 +252,10 @@ fn motif_apply(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Apply Motif", |d, _| {
         for (id, e) in &updated {
             d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery = Some(Box::new(e.clone()));
+        }
+        // one of My Motifs becomes one of the design's
+        if joins {
+            d.embroidery.get_or_insert_with(Box::default).motifs.push(motif.clone());
         }
         Ok(())
     })?;

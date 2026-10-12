@@ -643,6 +643,10 @@ pub struct Prefs {
     /// not a Preferences dialog field: resetting the preferences keeps it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub embroidery_machines: Vec<sf_core::machines::MachineProfile>,
+    /// My Motifs: motifs kept from designs for any design (`embroidery.motif.keep`). A local
+    /// library, not a Preferences dialog field: resetting the preferences keeps it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub embroidery_motifs: Vec<sf_core::model::CustomMotif>,
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/StitchFoundry Templates`).
     pub templates_folder: String,
@@ -820,6 +824,7 @@ impl Default for Prefs {
             recent_new_docs: vec![],
             pdf_presets: vec![],
             embroidery_machines: vec![],
+            embroidery_motifs: vec![],
             templates_folder: String::new(),
             append_converted: true,
             use_compression: false,

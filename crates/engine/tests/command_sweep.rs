@@ -499,6 +499,8 @@ fn structured_junk() {
         ("embroidery.carveStamp", json!({"stamp": null, "size": "x"})),
         ("embroidery.contourSplits", json!({"spacing": 0.5})),
         ("embroidery.contourSplits", json!({"spacing": "x", "ids": [u64::MAX]})),
+        ("embroidery.motif.keep", json!({"name": "nope"})),
+        ("embroidery.motif.forget", json!({"name": ""})),
         ("embroidery.knife", json!({"overlap": 3})),
         ("embroidery.knife", json!({"overlap": -1, "ids": [u64::MAX]})),
         (

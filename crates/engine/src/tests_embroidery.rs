@@ -2076,6 +2076,33 @@ fn the_motif_tool_places_motifs_where_you_click_and_drag() {
 }
 
 #[test]
+fn my_motifs_carry_motifs_from_design_to_design() {
+    let mut s = session();
+    let peak = NodeId(s.execute("path.create", &json!({"d": "M 0 0 L 10 -10 L 20 0"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [peak.0]})).unwrap();
+    s.execute("embroidery.motif.make", &json!({"name": "Peak"})).unwrap();
+    let r = s.execute("embroidery.motif.keep", &json!({"name": "Peak"})).unwrap();
+    assert_eq!(r["kept"].as_u64(), Some(1));
+    assert!(s.execute("embroidery.motif.keep", &json!({"name": "Nope"})).is_err());
+    // a new design: the kept motif applies, and joins it
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let line = NodeId(s.execute("path.create", &json!({"d": "M 20 100 L 300 100"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("embroidery.motif.apply", &json!({"name": "peak"})).unwrap();
+    let sf_core::attr::StitchType::Run(r) = emb(&s, line).stitch else { panic!() };
+    assert_eq!(r.custom_motif.map(|m| m.name), Some("Peak".to_string()));
+    assert_eq!(s.execute("embroidery.motif.list", &json!({})).unwrap()["motifs"].as_array().unwrap().len(), 1);
+    // Place Motif finds it too
+    assert!(s.execute("embroidery.placeMotif", &json!({"motif": "Peak"})).is_ok());
+    // listed, then forgotten; the design keeps its copy
+    assert_eq!(s.execute("embroidery.motif.library", &json!({})).unwrap()["motifs"][0]["name"], "Peak");
+    s.execute("embroidery.motif.forget", &json!({"name": "PEAK"})).unwrap();
+    assert!(s.prefs.embroidery_motifs.is_empty());
+    assert!(s.execute("embroidery.motif.forget", &json!({"name": "Peak"})).is_err());
+    assert_eq!(s.execute("embroidery.motif.list", &json!({})).unwrap()["motifs"].as_array().unwrap().len(), 1);
+}
+
+#[test]
 fn a_laydown_is_sewn_first_under_the_selected_shapes() {
     const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
     let mut s = session();
