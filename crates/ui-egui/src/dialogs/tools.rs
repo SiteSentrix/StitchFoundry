@@ -25,11 +25,13 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             "command",
             json!({"__command": "graph.create", "__label": "Graph", "type": p.get("type").cloned().unwrap_or(json!("column")), "x": x, "y": y, "width": 200, "height": 150}),
         ),
-        // After drawing a graph: Graph Data (CSV: header row of series, then category, values…).
-        "graphData" => match app.session.execute("graph.setData", &json!({})) {
-            Ok(v) => Dialog::new("command", json!({"__command": "graph.setData", "__label": "Graph Data", "csv": v["csv"]})),
-            Err(_) => return,
-        },
+        "graphData" => {
+            // After drawing a graph: Graph Data, its worksheet.
+            if let Err(e) = super::graph_data::open(app) {
+                app.status(e);
+            }
+            return;
+        }
         // A Flare tool click: the Flare Tool Options, with the tool's values; OK draws a flare there.
         "flare" => {
             super::flare_options::open(app, Some(vectorcraft_geom::Point::new(x, y)));

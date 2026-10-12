@@ -2990,6 +2990,11 @@
 	Delete Design	デザインを削除
 	Paste Design	デザインをペースト
 	Select Unused	未使用を選択
+	Import Data…	データを読み込み…
+	Transpose	行と列を入れ替え
+	Switch x/y	X/Y を入れ替え
+	Number of Decimals:	小数点以下の桁数:
+	Column Width:	列の幅:
 	No Legend	凡例なし
 	Standard Legend	標準の凡例
 	Legends in Wedges	くさび形内に凡例
