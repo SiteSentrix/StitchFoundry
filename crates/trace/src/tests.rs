@@ -387,6 +387,28 @@ fn an_image_too_large_to_trace_is_refused_before_decoding() {
     assert!(matches!(Raster::decode(&png_header(64, 64)), Err(TraceError::Decode(_))), "a small header goes on to decoding");
 }
 
+/// An image over the tracer's size is scaled down to fit rather than refused; only one too large
+/// to decode at all is refused, from its header.
+#[test]
+fn decode_to_fit_scales_an_oversized_image_down() {
+    // Within the limit: decoded as it is.
+    let img = disc(32, 16.0, 16.0, 10.0);
+    assert_eq!(Raster::decode_to_fit(&img.encode_png()).unwrap(), img);
+    // 8958 × 8958 (a 300 ppi scan, 80 megapixels) fits in the limit with its aspect kept.
+    let (w, h) = crate::fit_size(8958, 8958, MAX_PIXELS);
+    assert_eq!(w, h);
+    assert!(u64::from(w) * u64::from(h) <= MAX_PIXELS && w > 8000, "{w}");
+    let (w, h) = crate::fit_size(40_000, 3000, MAX_PIXELS);
+    assert!(u64::from(w) * u64::from(h) <= MAX_PIXELS && (f64::from(w) / f64::from(h) - 40.0 / 3.0).abs() < 0.01, "{w} × {h}");
+    assert_eq!(crate::fit_size(100_000, 1, 10), (10, 1));
+    assert_eq!(crate::fit_size(640, 480, MAX_PIXELS), (640, 480));
+    // Past the decoding limit: refused before decoding.
+    let err = Raster::decode_to_fit(&png_header(30_000, 30_000)).unwrap_err();
+    assert!(matches!(err, TraceError::TooLarge { width: 30_000, height: 30_000, max: 192 }), "{err}");
+    // Between the two limits the header is accepted and decoding goes on (this one has no pixels).
+    assert!(matches!(Raster::decode_to_fit(&png_header(9000, 9000)), Err(TraceError::Decode(_))));
+}
+
 /// Four flat colours with anti-aliased (blended) edges between the quadrants.
 fn flat_quads() -> Raster {
     const C: [[u8; 3]; 4] = [[220, 30, 30], [30, 200, 40], [30, 40, 210], [240, 220, 20]];
