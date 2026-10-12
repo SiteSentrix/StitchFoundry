@@ -607,6 +607,20 @@ lettering round a circle (*Radius*): **Arch** over its top, **Valley** along its
 upright to it (`arc`: the radius in mm, negative along the bottom); lettering placed from the panel
 is centred on the artboard (`align`: left, centre or right on `at`).
 
+## Making embroidery fonts
+
+**Embroidery › Embroidery Fonts › New Embroidery Font** starts the font creator: a new document
+with one artboard per glyph (A–Z, a–z, 0–9 and `.,!?'-&`; `embroidery.fontDoc.new {name, chars,
+size, descent}` takes others, ligatures such as "fi" too), each named after its glyph and as wide
+as its advance, with guides at the baseline and the capitals' height (25 mm unless you say). Digitize
+each glyph on its artboard with the usual tools; resize an artboard to change how far the next glyph
+starts. `embroidery.fontDoc.setProps` sets the font's name, line spacing, space width, letter case,
+the sizes it sews well at, description and licence; `embroidery.fontDoc.kern {pair, value}` sets a
+pair's kerning; `embroidery.fontDoc.addGlyphs` adds glyphs; `embroidery.fontDoc.info` lists the
+glyphs and which still need art. **Save Embroidery Font…** writes the font folder (font.json and
+glyphs.stitchfoundry, the glyphs in StitchFoundry's own format with their stitching) and loads it
+for lettering at once; the folder is remembered like any font folder.
+
 ## Monograms
 
 The Embroidery panel's **Monogram** section sets one to three initials in the lettering font:

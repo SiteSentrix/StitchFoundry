@@ -497,6 +497,57 @@ pub struct DocEmbroidery {
     /// Motifs made from lines drawn in the design (Make Motif).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub motifs: Vec<CustomMotif>,
+    /// A font document: the embroidery font the design is being made into.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font: Option<FontDesign>,
+}
+
+/// An embroidery font being made: a document whose artboards, each named after its glyph, hold
+/// the glyphs' art. An artboard's width is its glyph's advance; its baseline sits `descent` up
+/// from its bottom and its capitals reach `size` above that.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FontDesign {
+    pub name: String,
+    /// The capitals' height as digitized (mm).
+    pub size: f64,
+    /// Room below the baseline on each glyph's artboard (mm).
+    pub descent: f64,
+    /// Lines apart, × `size`.
+    pub leading: f64,
+    /// A space's width (mm).
+    pub space: f64,
+    /// "upper" or "lower": text set in that case; empty: as typed.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub letter_case: String,
+    /// How far the font scales and still sews well, × `size` (0: not said).
+    pub min_scale: f64,
+    pub max_scale: f64,
+    /// How much closer a pair of glyphs ("A V") sits (mm).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub kerning: BTreeMap<String, f64>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub license: String,
+}
+
+impl Default for FontDesign {
+    fn default() -> Self {
+        FontDesign {
+            name: "My Font".into(),
+            size: 25.0,
+            descent: 10.0,
+            leading: 1.4,
+            space: 8.0,
+            letter_case: String::new(),
+            min_scale: 0.5,
+            max_scale: 2.0,
+            kerning: BTreeMap::new(),
+            description: String::new(),
+            license: String::new(),
+        }
+    }
 }
 
 /// The limits Check Design measures the design against.
@@ -577,6 +628,7 @@ impl Default for DocEmbroidery {
             fabrics: Vec::new(),
             checks: CheckLimits::default(),
             motifs: Vec::new(),
+            font: None,
         }
     }
 }
