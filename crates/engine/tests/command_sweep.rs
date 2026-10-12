@@ -452,6 +452,12 @@ fn structured_junk() {
                 {"command": "embroidery.setParams", "params": {"params": {"stitchLength": 1e-308}}},
             ]}),
         ),
+        (
+            "embroidery.addButtonholes",
+            json!({"at": [1e308, -1e308], "to": [-1e308, 1e308], "count": 50, "angle": 3600, "length": 80, "width": 12, "style": "keyhole"}),
+        ),
+        ("embroidery.addButtonholes", json!({"count": 2, "style": "rounded", "length": 3, "width": 1.5})),
+        ("embroidery.addButtonholes", json!({"count": 1.5, "style": null, "at": [0]})),
         ("embroidery.redwork", json!({"kind": "satin"})),
         ("embroidery.redwork", json!({"ids": [u64::MAX], "kind": null})),
         ("embroidery.motif.apply", json!({"name": null, "ids": [u64::MAX]})),

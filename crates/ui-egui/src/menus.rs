@@ -125,6 +125,14 @@ fn embroidery_menu() -> Vec<Item> {
                 ),
             ],
         ),
+        sub(
+            "Add Buttonholes",
+            vec![
+                cp("Straight Buttonhole", "embroidery.addButtonholes", json!({ "style": "straight" })),
+                cp("Rounded Buttonhole", "embroidery.addButtonholes", json!({ "style": "rounded" })),
+                cp("Keyhole Buttonhole", "embroidery.addButtonholes", json!({ "style": "keyhole" })),
+            ],
+        ),
         Sep,
         c("Sort by Thread Color", "embroidery.sortByColor"),
         c("Match Threads to Chart", "embroidery.matchThreads"),

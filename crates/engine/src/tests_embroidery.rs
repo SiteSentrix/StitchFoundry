@@ -1669,6 +1669,53 @@ fn redwork_sews_line_art_as_one_line_back_to_its_start() {
 }
 
 #[test]
+fn buttonholes_are_satin_columns_round_an_open_slit() {
+    use sf_core::attr::StitchType;
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let mut s = session();
+    let children =
+        |s: &Session, g: NodeId| -> Vec<NodeId> { s.doc().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|c| c.id).collect() };
+    let r = s.execute("embroidery.addButtonholes", &json!({"at": [200, 200], "length": 15, "width": 4})).unwrap();
+    let g = NodeId(r["id"].as_u64().unwrap());
+    // A run holding the fabric, a side, a bartack, the other side and a bartack, in that order.
+    let kids = children(&s, g);
+    let names: Vec<String> = kids.iter().map(|k| s.doc().unwrap().doc.node(*k).unwrap().name.clone().unwrap()).collect();
+    assert_eq!(names, ["Holding run", "Side", "Bartack", "Side", "Bartack"]);
+    assert!(matches!(emb(&s, kids[0]).stitch, StitchType::Run(_)));
+    assert!(kids[1..].iter().all(|k| matches!(emb(&s, *k).stitch, StitchType::Satin(_))));
+    // The slit stays open; the buttonhole is 15 mm plus its bartacks long and 4 mm wide.
+    let (cx, cy) = (200.0 * MM, 200.0 * MM);
+    let pts: Vec<sf_core::Point> = kids.iter().flat_map(|k| needles(&s, *k)).collect();
+    assert!(pts.len() > 100, "{}", pts.len());
+    assert!(!pts.iter().any(|p| (p.x - cx).abs() < 7.0 && (p.y - cy).abs() < 0.15), "a needle point in the slit");
+    let (w, h) = pts.iter().fold((0.0f64, 0.0f64), |(w, h), p| (w.max((p.x - cx).abs()), h.max((p.y - cy).abs())));
+    assert!((8.5..=10.0).contains(&w) && (1.9..=2.2).contains(&h), "{w} {h}");
+    // A string of three, evenly spaced and turned upright; rounded and keyhole ends.
+    let r =
+        s.execute("embroidery.addButtonholes", &json!({"at": [100, 100], "to": [100, 300], "count": 3, "angle": 90, "style": "rounded"})).unwrap();
+    let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 3);
+    assert_eq!(children(&s, NodeId(r["id"].as_u64().unwrap())).len(), 3);
+    let centre = |s: &Session, id: u64| {
+        let pts: Vec<sf_core::Point> = children(s, NodeId(id)).iter().flat_map(|k| needles(s, *k)).collect();
+        let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.y), hi.max(p.y)));
+        let xs = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.x), hi.max(p.x)));
+        ((lo + hi) * 0.5, hi - lo, xs.1 - xs.0)
+    };
+    let (y1, long, across) = centre(&s, ids[1]);
+    assert!((y1 - 200.0 * MM).abs() < 2.0 && long > across * 2.0, "{y1} {long} {across}");
+    assert_eq!(children(&s, NodeId(ids[0])).len(), 3, "a run, the sides round the end and a bartack");
+    let k = NodeId(s.execute("embroidery.addButtonholes", &json!({"style": "keyhole", "at": [400, 100]})).unwrap()["id"].as_u64().unwrap());
+    let eye: Vec<sf_core::Point> = children(&s, k).iter().flat_map(|c| needles(&s, *c)).collect();
+    let tall = eye.iter().fold(0.0f64, |m, p| m.max((p.y - 100.0 * MM).abs()));
+    assert!(tall > 2.2, "the eye is wider than the sides: {tall}");
+    // Bad asks.
+    for bad in [json!({"style": "oval"}), json!({"length": 1}), json!({"count": 0}), json!({"count": 51}), json!({"at": "x"}), json!({"width": -2})] {
+        assert!(s.execute("embroidery.addButtonholes", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn sculpture_runs_and_cross_styles_are_stitch_parameters() {
     use sf_core::attr::StitchType;
     use sf_core::model::{CrossStyle, RunKind};
