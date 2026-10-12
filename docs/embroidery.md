@@ -343,6 +343,19 @@ tool's *Stitch as* setting says (in the Embroidery panel while the tool is chose
 The same is `embroidery.clickStitch {at, as?, tolerance?, minHole?, id?}`. Each click is one undo
 step; the image stays under the stitches.
 
+## Worksheets
+
+**Embroidery › Worksheet** (`embroidery.worksheet {kind?, customer?, notes?}`) makes a worksheet
+for the design as a new A4 document, to print (File › Print) or export as PDF:
+
+- the design drawn in its thread colours, life size when it fits (else scaled, the scale said);
+- its size, stitches, colours, colour changes, trims, thread (top and bobbin) and sewing time at
+  the machine's speed, and its hoop, fabric and machine;
+- its colours in sewing order: a swatch, the thread's code, name and brand, stitches and length;
+- the notes given; an **approval sheet** (`kind: approval`) adds the customer and a line to sign.
+
+The worksheet's text is in English for now.
+
 ## Send to machine
 
 **Embroidery › Send to Machine** (`embroidery.send`) writes the design's machine file (in its

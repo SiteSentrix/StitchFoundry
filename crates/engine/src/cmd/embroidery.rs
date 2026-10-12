@@ -206,6 +206,15 @@ pub fn specs() -> Vec<CommandSpec> {
             auto_digitize
         ),
         cmd!(
+            "embroidery.worksheet",
+            "Worksheet",
+            ["Embroidery"],
+            None,
+            "{kind?: production|approval (production), customer?: text, notes?: text} a worksheet for the design as a new A4 document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; opens a new document → {kind, colors, scale}",
+            has_doc,
+            worksheet
+        ),
+        cmd!(
             "embroidery.send",
             "Send to Machine",
             ["Embroidery"],
@@ -1593,6 +1602,175 @@ fn sort_by_color(s: &mut Session, _p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "moved": moved }))
+}
+
+/// A4 portrait (points).
+const SHEET: (f64, f64) = (595.0, 842.0);
+
+/// A line of `text` at `(x, y)` (its baseline; points), `size` points high, in `color`.
+fn sheet_text(doc: &mut Document, x: f64, y: f64, text: &str, size: f64, color: Color) -> Result<()> {
+    let style = vectorcraft_doc::text::CharStyle {
+        font_family: vectorcraft_text::FALLBACK_FAMILY.to_string(),
+        font_style: "Regular".into(),
+        size,
+        ..vectorcraft_doc::text::CharStyle::default()
+    };
+    let t = vectorcraft_doc::text::TextObject::point(kurbo::Point::new(x, y), text, style);
+    let mut n = vectorcraft_doc::Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    n.appearance = Appearance::basic(Paint::solid(color), Paint::None, 0.0);
+    let layer = doc.layers.first().map(|l| l.id);
+    doc.insert(layer, usize::MAX, n).map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok(())
+}
+
+/// The stitches of `pattern` as runs per colour block (millimetres), broken at jumps, trims and stops.
+fn stitch_runs(pattern: &sf_core::Pattern) -> Vec<Vec<Vec<sf_core::Point>>> {
+    let mut blocks: Vec<Vec<Vec<sf_core::Point>>> = vec![Vec::new()];
+    let (mut run, mut at) = (Vec::<sf_core::Point>::new(), sf_core::Point::ZERO);
+    let flush = |run: &mut Vec<sf_core::Point>, blocks: &mut Vec<Vec<Vec<sf_core::Point>>>| {
+        let r = std::mem::take(run);
+        if r.len() >= 2
+            && let Some(b) = blocks.last_mut()
+        {
+            b.push(r);
+        }
+    };
+    for st in &pattern.stitches {
+        let p = st.pos();
+        match st.cmd {
+            sf_core::Cmd::Stitch => {
+                if run.is_empty() {
+                    run.push(at);
+                }
+                run.push(p);
+                at = p;
+            }
+            sf_core::Cmd::Jump => {
+                flush(&mut run, &mut blocks);
+                at = p;
+            }
+            sf_core::Cmd::ColorChange => {
+                flush(&mut run, &mut blocks);
+                blocks.push(Vec::new());
+            }
+            _ => flush(&mut run, &mut blocks),
+        }
+    }
+    flush(&mut run, &mut blocks);
+    blocks
+}
+
+fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.worksheet";
+    let approval = match str_param(p, "kind").unwrap_or("production") {
+        "production" => false,
+        "approval" => true,
+        _ => return Err(bad(CMD, "`kind` is production or approval")),
+    };
+    let field = |key: &str| str_param(p, key).map(|t| t.trim().chars().take(2000).collect::<String>()).unwrap_or_default();
+    let (customer, notes) = (field("customer"), field("notes"));
+    let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
+    let stats = plan.stats.clone().ok_or_else(|| bad(CMD, "nothing is stitched yet: give objects a stitch type first"))?;
+    let pattern = plan.pattern().clone();
+    let (title, cfg) = {
+        let d = &s.doc()?.doc;
+        (super::fileio::file_stem(&d.title), d.embroidery.as_deref().cloned().unwrap_or_default())
+    };
+    let black = Color::rgb8(0x1a, 0x1a, 0x1a);
+    let grey = Color::rgb8(0x66, 0x66, 0x66);
+    let mut doc = Document::new(SHEET.0, SHEET.1);
+    doc.title = format!("{title} worksheet");
+    // heading
+    let heading = if approval { "Approval sheet" } else { "Production worksheet" };
+    sheet_text(&mut doc, 40.0, 56.0, heading, 20.0, black)?;
+    sheet_text(&mut doc, 40.0, 78.0, &title, 13.0, black)?;
+    let t = sf_formats::Timestamp::now();
+    let mut sub = format!("{:04}-{:02}-{:02}", t.year, t.month, t.day);
+    if approval && !customer.is_empty() {
+        sub = format!("{sub}   Customer: {customer}");
+    }
+    sheet_text(&mut doc, 40.0, 96.0, &sub, 9.0, grey)?;
+    // the design, life size when it fits the box, in its thread colours
+    let b = pattern.bounds();
+    let (bw, bh) = (515.0, 380.0);
+    let fit = (bw / b.width().max(1e-6)).min(bh / b.height().max(1e-6));
+    let k = fit.min(PT_PER_MM);
+    if !(k.is_finite() && k > 0.0) {
+        return Err(bad(CMD, "the design has no size"));
+    }
+    let (ox, oy) = (40.0 + (bw - b.width() * k) / 2.0, 110.0 + (bh - b.height() * k) / 2.0);
+    let layer = doc.layers.first().map(|l| l.id);
+    for (i, runs) in stitch_runs(&pattern).iter().enumerate().filter(|(_, r)| !r.is_empty()) {
+        use vectorcraft_geom::path::{Anchor, AnchorKind, PathData, SubPath};
+        let to_pt = |q: &sf_core::Point| kurbo::Point::new(ox + (q.x - b.min.x) * k, oy + (q.y - b.min.y) * k);
+        let subpaths = runs
+            .iter()
+            .map(|r| SubPath::new(r.iter().map(to_pt).map(|p| Anchor { p, h_in: p, h_out: p, kind: AnchorKind::Corner }).collect(), false))
+            .collect();
+        let c = pattern.thread(i).color;
+        let kind =
+            NodeKind::Path { path: PathData { subpaths }, rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: false, guide: false };
+        let mut n = vectorcraft_doc::Node::new(doc.alloc_id(), kind);
+        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(c.r, c.g, c.b)), 0.5);
+        doc.insert(layer, usize::MAX, n).map_err(|e| EngineError::Other(e.to_string()))?;
+    }
+    // the figures
+    let shown = (k / PT_PER_MM * 100.0).round();
+    let mut y = 512.0;
+    let st = &cfg.settings;
+    let lines = [
+        format!("Size: {:.1} × {:.1} mm (shown at {shown} %)", stats.width_mm, stats.height_mm),
+        format!("Stitches: {}   Colours: {}   Colour changes: {}   Trims: {}", stats.stitches, stats.colors.len(), stats.color_changes, stats.trims),
+        format!(
+            "Thread: {:.1} m top, {:.1} m bobbin   Sewing time: {} at {} stitches a minute",
+            stats.thread_m,
+            stats.bobbin_m,
+            stats.time_string(),
+            st.machine_speed.round()
+        ),
+        format!(
+            "Hoop: {}   Fabric: {}   Machine: {}",
+            cfg.hoop.as_ref().map_or("none", |h| h.name.as_str()),
+            if cfg.fabric.is_empty() { "none" } else { cfg.fabric.as_str() },
+            if cfg.machine.is_empty() { "none" } else { cfg.machine.as_str() }
+        ),
+    ];
+    for l in &lines {
+        sheet_text(&mut doc, 40.0, y, l, 10.0, black)?;
+        y += 15.0;
+    }
+    // the colours in sewing order
+    y += 8.0;
+    sheet_text(&mut doc, 40.0, y, "Colours in sewing order", 11.0, black)?;
+    y += 16.0;
+    let room = ((SHEET.1 - 90.0 - y) / 15.0).max(1.0) as usize;
+    for (i, c) in stats.colors.iter().enumerate().take(room) {
+        let rgb = c.thread.color;
+        let corners = [(40.0, y - 9.0), (50.0, y - 9.0), (50.0, y + 1.0), (40.0, y + 1.0)].map(|(x, y)| kurbo::Point::new(x, y)).to_vec();
+        let square = vectorcraft_geom::path::PathData::new(vec![vectorcraft_geom::path::SubPath::polyline(&corners, true)]);
+        let swatch = vectorcraft_doc::Node::path(
+            doc.alloc_id(),
+            square,
+            Appearance::basic(Paint::solid(Color::rgb8(rgb.r, rgb.g, rgb.b)), Paint::solid(grey), 0.5),
+        );
+        doc.insert(layer, usize::MAX, swatch).map_err(|e| EngineError::Other(e.to_string()))?;
+        let name = c.thread.label();
+        let brand = if c.thread.chart.is_empty() { String::new() } else { format!(" ({})", c.thread.chart) };
+        sheet_text(&mut doc, 58.0, y, &format!("{}. {name}{brand}   {} stitches, {:.1} m", i + 1, c.stitches, c.thread_m), 9.0, black)?;
+        y += 15.0;
+    }
+    if stats.colors.len() > room {
+        sheet_text(&mut doc, 58.0, y, &format!("… and {} more", stats.colors.len() - room), 9.0, grey)?;
+        y += 15.0;
+    }
+    if !notes.is_empty() {
+        sheet_text(&mut doc, 40.0, y + 8.0, &format!("Notes: {notes}"), 9.0, black)?;
+    }
+    if approval {
+        sheet_text(&mut doc, 40.0, SHEET.1 - 40.0, "Approved by: ______________________________   Date: ______________", 10.0, black)?;
+    }
+    s.add_document(doc, None);
+    Ok(json!({ "kind": if approval { "approval" } else { "production" }, "colors": stats.colors.len(), "scale": shown }))
 }
 
 fn info(s: &mut Session, _p: &Value) -> Result<Value> {
