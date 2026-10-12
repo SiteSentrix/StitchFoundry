@@ -309,13 +309,33 @@ fn select_all(ui: &Ui, id: egui::Id, text: &str) {
     st.store(ui.ctx(), id);
 }
 
-/// Numeric fields take the whole text, unit included, when they gain focus or are double-clicked
-/// (egui would select one word): typing a number or an expression replaces it.
+/// Numeric fields select the whole text on keyboard focus, a completed focus click or a
+/// double-click. A pointer press keeps its caret so dragging selects from the pressed position.
 fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
-    if !(resp.gained_focus() || resp.double_clicked()) {
+    let pending = resp.id.with("select-all-on-focus-click");
+    let (pressed, released) =
+        ui.input(|i| (i.pointer.button_pressed(egui::PointerButton::Primary), i.pointer.button_released(egui::PointerButton::Primary)));
+    if resp.gained_focus() {
+        ui.data_mut(|d| {
+            if pressed {
+                d.insert_temp(pending, true);
+            } else {
+                d.remove_temp::<bool>(pending);
+            }
+        });
+    }
+    let clicked_focus = released && ui.data_mut(|d| d.remove_temp::<bool>(pending)).unwrap_or(false) && resp.clicked_by(egui::PointerButton::Primary);
+    if resp.lost_focus() {
+        ui.data_mut(|d| d.remove_temp::<bool>(pending));
+    }
+    if !(resp.gained_focus() && !pressed || resp.double_clicked() || clicked_focus) {
         return;
     }
-    if egui::TextEdit::load_state(ui.ctx(), resp.id).is_some() {
+    if let Some(st) = egui::TextEdit::load_state(ui.ctx(), resp.id) {
+        // Preserve a text selection if the focus click already produced one.
+        if clicked_focus && !resp.double_clicked() && st.cursor.char_range().is_some_and(|r| !r.as_sorted_char_range().is_empty()) {
+            return;
+        }
         select_all(ui, resp.id, text);
         ui.ctx().request_repaint();
     }
