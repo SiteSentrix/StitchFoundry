@@ -623,7 +623,7 @@ pub fn object_polygons(obj: &EmbObject) -> Vec<Polygon> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geom::{Column, Contour, Node, NodeKind, Rung};
+    use crate::geom::{BBox, Column, Contour, Node, NodeKind, Rung};
     use crate::model::*;
 
     fn demo() -> Design {
