@@ -85,16 +85,6 @@ impl Session {
     }
 }
 
-#[cfg(test)]
-mod wrap_tests {
-    #[test]
-    fn notes_wrap_between_words_and_at_line_breaks() {
-        assert_eq!(super::wrap_text("left chest, 9 cm wide\nwhite thread", 12), ["left chest,", "9 cm wide", "white thread"]);
-        assert_eq!(super::wrap_text("abcdefghij xy", 4), ["abcd", "efgh", "ij", "xy"]);
-        assert_eq!(super::wrap_text("", 10), Vec::<String>::new());
-    }
-}
-
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -2310,4 +2300,14 @@ fn plan(s: &mut Session, p: &Value) -> Result<Value> {
         "stitches": stitches,
         "nodes": plan.nodes.iter().map(|n| n.0).collect::<Vec<_>>(),
     }))
+}
+
+#[cfg(test)]
+mod wrap_tests {
+    #[test]
+    fn notes_wrap_between_words_and_at_line_breaks() {
+        assert_eq!(super::wrap_text("left chest, 9 cm wide\nwhite thread", 12), ["left chest,", "9 cm wide", "white thread"]);
+        assert_eq!(super::wrap_text("abcdefghij xy", 4), ["abcd", "efgh", "ij", "xy"]);
+        assert_eq!(super::wrap_text("", 10), Vec::<String>::new());
+    }
 }
