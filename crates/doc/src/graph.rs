@@ -265,9 +265,9 @@ pub struct GraphSpec {
     /// in a version that doesn't know blanks. Cells past the end of a short row are blank too.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub blanks: Vec<[usize; 2]>,
-    /// Column/bar width as a % of the available category width (90).
+    /// Column/bar width as a % of the available category width (90); past 100 the columns overlap.
     pub column_width: f64,
-    /// Cluster width as a % (80).
+    /// Cluster width as a % (80); past 100 the clusters overlap.
     pub cluster_width: f64,
     /// Legend on the right (Graph Type options: Add Legend Across Top = false).
     pub legend: bool,
@@ -293,6 +293,14 @@ pub struct GraphSpec {
     pub right_axis_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub right_axis_max: Option<f64>,
+    /// Graph Type › First Row in Front (each series' first category drawn over the next when columns overlap) and
+    /// First Column in Front (the first series drawn over the others); Draw Filled Lines (lines as filled bands).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub first_row_in_front: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub first_column_in_front: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub filled_lines: bool,
     /// Graph Type › Add Drop Shadow (behind columns, bars, lines and pie wedges) and Add Legend Across Top (the
     /// legend in rows above the plot instead of a column on its right).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -414,6 +422,9 @@ impl Default for GraphSpec {
             right_axis_min: None,
             right_axis_max: None,
             series_markers: vec![],
+            first_row_in_front: false,
+            first_column_in_front: false,
+            filled_lines: false,
             drop_shadow: false,
             legend_across_top: false,
             pie_legend_in_wedges: false,

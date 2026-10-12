@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers, dropShadow?: bool (Add Drop Shadow: a translucent black shadow down and right of the columns, bars, lines and pie wedges), legendAcrossTop?: bool (Add Legend Across Top: the legend in rows above the plot), pieLegend?: none|standard|wedges (Legends in Wedges: the series labels inside their wedges), piePosition?: ratio|even|stacked (several pies sized by their totals, at one size (the default), or stacked), pieSort?: all|first|none (wedges largest first in each pie, in the first pie's order, or in data order (the default)); the query lists the pie options for pie graphs} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
+            "{id?, type?, seriesIndexes?: [index], columnWidth?: % (1–1000; past 100 columns overlap), clusterWidth?: % (1–1000), legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers, firstRowInFront?: bool, firstColumnInFront?: bool (which overlapping columns are drawn on top: the first category over the next within each series, the first series over the others), filledLines?: bool (Draw Filled Lines: connecting lines as 3 pt bands filled with the series colour), dropShadow?: bool (Add Drop Shadow: a translucent black shadow down and right of the columns, bars, lines and pie wedges), legendAcrossTop?: bool (Add Legend Across Top: the legend in rows above the plot), pieLegend?: none|standard|wedges (Legends in Wedges: the series labels inside their wedges), piePosition?: ratio|even|stacked (several pies sized by their totals, at one size (the default), or stacked), pieSort?: all|first|none (wedges largest first in each pie, in the first pie's order, or in data order (the default)); the query lists the pie options for pie graphs} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
             has_selection,
             set_type
         ),
@@ -323,6 +323,24 @@ impl Gen<'_> {
         g.name = Some(name.into());
         Arc::new(g)
     }
+    /// A series' line joining its data points (Connect Data Points): a 1 pt stroke in the series colour, or with Draw
+    /// Filled Lines a band FILLED_LINE_WIDTH wide filled with it and outlined in black.
+    fn data_line(&mut self, g: &GraphSpec, s: usize, pd: PathData, filled: bool) -> Arc<Node> {
+        let band = if filled {
+            vectorcraft_pathops::outline_stroke(&pd, FILLED_LINE_WIDTH, vectorcraft_pathops::Cap::Butt, vectorcraft_pathops::Join::Miter, 4.0)
+        } else {
+            PathData::default()
+        };
+        // A run the outline can't be made for (its points all in one place) stays a thin line.
+        if !band.is_empty() {
+            // The band takes the series' colour, set as a fill or, on a thin line, as its stroke; a thin black outline.
+            let slot = g.series_paints.get(s);
+            let fill = slot.and_then(|p| p.fill.clone().or_else(|| p.stroke.clone())).unwrap_or_else(|| default_series_paint(s));
+            return self.path(band, fill, Paint::solid(Color::BLACK), 0.25);
+        }
+        let (fill, stroke, w) = series_marks(g, s, false, default_series_paint(s), 1.0);
+        self.path(pd, fill, stroke, w)
+    }
     /// A data point's marker filling `cell`: the series' marker design, else the default square in the series' paint.
     fn marker(&mut self, design: Option<&Arc<Node>>, cell: Rect, (fill, stroke, w): (Paint, Paint, f64)) -> Arc<Node> {
         match design.and_then(|a| fit_design(self.d, a, cell)) {
@@ -343,6 +361,9 @@ impl Gen<'_> {
 /// Add Drop Shadow: how far the shadow sits down and right of its mark, and how dark it is.
 const SHADOW_OFFSET: f64 = 2.0;
 const SHADOW_OPACITY: f32 = 0.35;
+/// Draw Filled Lines: how wide a filled line is.
+const FILLED_LINE_WIDTH: f64 = 3.0;
+const FILLED_LINE_BUDGET: usize = 20_000;
 /// Most marks a graph draws shadows for (each is a copy).
 const SHADOW_BUDGET: usize = 200_000;
 
@@ -468,6 +489,10 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     // Labels drawn over the series: a pie's Legends in Wedges (in the Legend group) and stacked pies' names.
     let mut wedge_labels = vec![];
     let mut on_top = vec![];
+    // Draw Filled Lines, up to FILLED_LINE_BUDGET data points (the outlines are rebuilt on every change).
+    let filled = g.filled_lines && g.rows.len().saturating_mul(nser) <= FILLED_LINE_BUDGET;
+    // Where columns and bars reach (past the plot when their widths are over 100%), so the legend keeps clear.
+    let mut bars_reach: Option<Rect> = None;
     // Add Drop Shadow: the columns, bars, lines and wedges to cast one.
     let mut shadowed: Vec<(usize, Arc<Node>)> = vec![];
     match g.kind {
@@ -600,8 +625,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             for (s, items) in series.iter_mut().enumerate() {
                 let pts: Vec<Point> = (0..ncat).map(|c| at(c, val(c, s))).collect();
                 if g.connect_points && pts.len() > 1 {
-                    let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
-                    let n = b.path(polyline(&pts, true), fill, stroke, w);
+                    let n = b.data_line(g, s, polyline(&pts, true), filled);
                     shadowed.push((s, n.clone()));
                     items.push(n);
                 }
@@ -842,8 +866,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                         .collect();
                     if g.connect_points {
                         for run in runs(&pts) {
-                            let (fill, stroke, w) = mark(si, false, default_series_paint(si), 1.0);
-                            let n = b.path(polyline(&run, false), fill, stroke, w);
+                            let n = b.data_line(g, si, polyline(&run, false), filled);
                             shadowed.push((si, n.clone()));
                             series[si].push(n);
                         }
@@ -867,19 +890,24 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             let stack_axes: Vec<usize> = (0..2).filter(|a| stacks.iter().any(|s| axis(*s) == *a)).collect();
             let own_width = columns.is_empty() && stack_axes.len() < 2;
             let slots = columns.len() + stack_axes.len();
-            let cluster = cat_w * (g.cluster_width / 100.0).clamp(0.01, 1.0);
+            // Widths past 100% make the columns (or clusters) overlap.
+            let cluster = cat_w * (g.cluster_width / 100.0).clamp(0.01, 10.0);
             let slot = cluster / slots.max(1) as f64;
-            let bar = slot * (g.column_width / 100.0).clamp(0.01, 1.0);
+            let bar = slot * (g.column_width / 100.0).clamp(0.01, 10.0);
             let bar_rect = |a: f64, w: f64, v0: f64, v1: f64| {
                 if horizontal { Rect::new(v0.min(v1), a, v0.max(v1), a + w) } else { Rect::new(a, v0.min(v1), a + w, v0.max(v1)) }
             };
-            for c in 0..ncat {
+            // First Row in Front: the first category drawn last, over the next.
+            let cats: Vec<usize> = if g.first_row_in_front { (0..ncat).rev().collect() } else { (0..ncat).collect() };
+            for c in cats {
                 let c0 = cat_start(c) + (cat_w - cluster) / 2.0;
                 for (i, &s) in columns.iter().enumerate() {
                     let Some(v) = cell(c, s) else { continue };
                     let a = c0 + slot * i as f64 + (slot - bar) / 2.0;
                     let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                    let n = b.path(shapes::rectangle(bar_rect(a, bar, zero(axis(s)), vpos(axis(s), v))), fill, stroke, w);
+                    let rect = bar_rect(a, bar, zero(axis(s)), vpos(axis(s), v));
+                    bars_reach = Some(bars_reach.map_or(rect, |r| r.union(rect)));
+                    let n = b.path(shapes::rectangle(rect), fill, stroke, w);
                     shadowed.push((s, n.clone()));
                     if let Some(items) = series.get_mut(s) {
                         items.push(n);
@@ -887,7 +915,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 }
                 let place = |ax: usize| {
                     if own_width {
-                        let w = (cat_w * (g.column_width / 100.0).clamp(0.01, 1.0) * (g.cluster_width / 100.0).clamp(0.01, 1.0) * 1.2).min(cat_w);
+                        // Up to the category's width, or past it when the widths are set past 100%.
+                        let (col, clus) = ((g.column_width / 100.0).clamp(0.01, 10.0), (g.cluster_width / 100.0).clamp(0.01, 10.0));
+                        let w = (cat_w * col * clus * 1.2).min(cat_w * (col * clus).max(1.0));
                         (cat_start(c) + (cat_w - w) / 2.0, w)
                     } else {
                         let i = columns.len() + stack_axes.iter().position(|a| *a == ax).unwrap_or(0);
@@ -904,7 +934,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     let (v0, v1) = (vpos(ax, *base), vpos(ax, *base + v));
                     *base += v;
                     let (fill, stroke, sw) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
-                    let n = b.path(shapes::rectangle(bar_rect(a, w, v0, v1)), fill, stroke, sw);
+                    let rect = bar_rect(a, w, v0, v1);
+                    bars_reach = Some(bars_reach.map_or(rect, |r| r.union(rect)));
+                    let n = b.path(shapes::rectangle(rect), fill, stroke, sw);
                     // A segment of 0 has no area to shade.
                     if v != 0.0 {
                         shadowed.push((s, n.clone()));
@@ -936,8 +968,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     (0..ncat).map(|c| cell(c, s).map(|v| Point::new(mid(c, g.edge_to_edge && label_edges), vpos(axis(s), v)))).collect();
                 if g.connect_points {
                     for run in runs(&pts) {
-                        let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
-                        let n = b.path(polyline(&run, false), fill, stroke, w);
+                        let n = b.data_line(g, s, polyline(&run, false), filled);
                         shadowed.push((s, n.clone()));
                         if let Some(items) = series.get_mut(s) {
                             items.push(n);
@@ -984,6 +1015,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         let height = |row: &[(usize, String, f64)]| LABEL_SIZE * 1.8 * row.iter().map(|(_, l, _)| l.split('|').count()).max().unwrap_or(1) as f64;
         // Above the plot and anything drawn over it (radar and stacked-pie labels).
         let top = b.out.iter().chain(on_top.iter()).filter_map(|n| n.geometric_bounds()).map(|bb| bb.y0).fold(r.y0, f64::min);
+        let top = bars_reach.map_or(top, |b| top.min(b.y0));
         let mut y = top - 8.0 - rows.iter().map(|row| height(row)).sum::<f64>();
         for row in &rows {
             let mut x = r.x0;
@@ -1000,7 +1032,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             y += height(row);
         }
     } else if legend_on {
-        let x = right_edge + 14.0;
+        let x = bars_reach.map_or(right_edge, |b| right_edge.max(b.x1)) + 14.0;
         // Each row as tall as its label's lines (a `|` in a label starts a new line).
         let mut y = r.y0;
         for (s, items) in series.iter_mut().enumerate().take(legend_series) {
@@ -1032,6 +1064,10 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         shadowed.clear();
     }
     let mut series: Vec<(usize, Vec<Arc<Node>>)> = series.into_iter().enumerate().collect();
+    // First Column in Front: the first series drawn last in its layer, over the others.
+    if g.first_column_in_front {
+        series.reverse();
+    }
     series.sort_by_key(|(s, _)| depth(*s));
     let mut layer = None;
     for (s, items) in series {
@@ -1570,6 +1606,9 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         "rightSuffix",
         "dropShadow",
         "legendAcrossTop",
+        "firstRowInFront",
+        "firstColumnInFront",
+        "filledLines",
         "pieLegend",
         "piePosition",
         "pieSort",
@@ -1595,7 +1634,20 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             "categoryTickMarks": spec.category_tick_marks.clamp(1, MAX_TICK_MARKS), "ticksBetweenLabels": spec.ticks_between_labels,
             "prefix": one_line(&spec.prefix), "suffix": one_line(&spec.suffix), "rightPrefix": one_line(&spec.right_prefix),
             "rightSuffix": one_line(&spec.right_suffix), "dropShadow": spec.drop_shadow, "legendAcrossTop": spec.legend_across_top,
+            "firstRowInFront": spec.first_row_in_front, "firstColumnInFront": spec.first_column_in_front, "filledLines": spec.filled_lines,
         });
+        // Only the options this graph's types use: overlap order for columns and bars, filled lines for lines.
+        let kinds: Vec<GraphKind> = (0..count.max(1)).map(|i| spec.series_kind(i)).collect();
+        let has = |ks: &[GraphKind]| kinds.iter().any(|k| ks.contains(k));
+        if let Some(o) = fields.as_object_mut() {
+            if !has(&[GraphKind::Column, GraphKind::StackedColumn, GraphKind::Bar, GraphKind::StackedBar]) {
+                o.remove("firstRowInFront");
+                o.remove("firstColumnInFront");
+            }
+            if !has(&[GraphKind::Line, GraphKind::Scatter, GraphKind::Radar]) {
+                o.remove("filledLines");
+            }
+        }
         // Pie graphs: Legend, Position and Sort (their Legend stands for the legend checkbox).
         if let Some(o) = fields.as_object_mut().filter(|_| spec.kind == GraphKind::Pie) {
             o.remove("legend");
@@ -1690,9 +1742,12 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         spec.right_axis_max = v.as_f64();
     }
     spec.column_width = f64_or(p, "columnWidth", spec.column_width).clamp(1.0, 1000.0);
-    spec.cluster_width = f64_or(p, "clusterWidth", spec.cluster_width).clamp(1.0, 100.0);
+    spec.cluster_width = f64_or(p, "clusterWidth", spec.cluster_width).clamp(1.0, 1000.0);
     spec.legend = bool_or(p, "legend", spec.legend);
     spec.drop_shadow = bool_or(p, "dropShadow", spec.drop_shadow);
+    spec.first_row_in_front = bool_or(p, "firstRowInFront", spec.first_row_in_front);
+    spec.first_column_in_front = bool_or(p, "firstColumnInFront", spec.first_column_in_front);
+    spec.filled_lines = bool_or(p, "filledLines", spec.filled_lines);
     spec.legend_across_top = bool_or(p, "legendAcrossTop", spec.legend_across_top);
     // After `legend`, which the Graph Type dialog sends too.
     if let Some(v) = str_param(p, "pieLegend") {
@@ -3485,5 +3540,107 @@ mod tests {
         let texts: Vec<_> = group(&n, "Legend").children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
         let last_row = texts.iter().map(|b| b.y0).fold(f64::MIN, f64::max);
         assert!(texts.iter().filter(|b| b.y0 < last_row - 1e-6).all(|b| b.x1 <= 400.0 + 1e-6), "{texts:?}");
+    }
+
+    #[test]
+    fn widths_past_100_overlap_and_the_first_row_or_column_goes_in_front() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"columnWidth": 250, "clusterWidth": 300})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.column_width, g.cluster_width), (250.0, 300.0));
+        let (a, b) = (marks(&s, id, 0), marks(&s, id, 1));
+        assert!(a[0].x1 > b[0].x0, "the columns of a cluster overlap: {:?} {:?}", a[0], b[0]);
+        assert!(b[0].x1 > a[1].x0, "and so do the clusters: {:?} {:?}", b[0], a[1]);
+        assert_eq!(s.execute("graph.setType", &json!({"clusterWidth": 5000})).map(|_| spec(&s, id).cluster_width).unwrap(), 1000.0);
+        let order =
+            |s: &Session| -> Vec<u32> { s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().filter_map(|c| c.series_index).collect() };
+        assert_eq!(order(&s), [0, 1]);
+        s.execute("graph.setType", &json!({"firstColumnInFront": true})).unwrap();
+        assert_eq!(order(&s), [1, 0], "the first series drawn last, on top");
+        // First Row in Front: each series' first category drawn last.
+        let xs = |s: &Session| marks(s, id, 0).iter().map(|b| b.x0).collect::<Vec<_>>();
+        let before = xs(&s);
+        assert!(before.windows(2).all(|w| w[0] < w[1]));
+        s.execute("graph.setType", &json!({"firstRowInFront": true})).unwrap();
+        let after = xs(&s);
+        assert!(after.windows(2).all(|w| w[0] > w[1]), "{after:?}");
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!((v["firstRowInFront"].clone(), v["firstColumnInFront"].clone()), (json!(true), json!(true)));
+    }
+
+    #[test]
+    fn filled_lines_are_bands_in_the_series_colour() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "line", ",a\nQ1,2\nQ2,2\nQ3,2");
+        let thin = marks(&s, id, 0)[0];
+        assert!(thin.height() < 1e-6, "a flat 1 pt line");
+        s.execute("graph.setType", &json!({"filledLines": true})).unwrap();
+        let parts = series_parts(&s, id, 0);
+        let band = parts[0].geometric_bounds().unwrap();
+        assert!((band.height() - 3.0).abs() < 1e-6 && (band.width() - thin.width()).abs() < 1e-6, "{band:?}");
+        assert_eq!(parts[0].appearance.fill_paint().color().unwrap().to_hex(), "#000000", "the first series' colour");
+        assert_eq!(parts[0].appearance.stroke_width(), 0.25);
+        // A series colour set with Group Selection fills the band.
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 0).id;
+        s.execute("paint.setFill", &json!({"ids": [grp.0], "color": "#ff0000"})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[2], [3], [2]]})).unwrap();
+        assert_eq!(series_parts(&s, id, 0)[0].appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
+        let path = vectorcraft_testkit::temp_dir("graph-filled").join("filled.vectorcraft");
+        s.execute("graph.setType", &json!({"firstRowInFront": true, "firstColumnInFront": true})).unwrap();
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let g = spec(&s, id);
+        assert!(g.filled_lines && g.first_row_in_front && g.first_column_in_front);
+        let v = serde_json::to_value(GraphSpec::default()).unwrap();
+        for k in ["filledLines", "firstRowInFront", "firstColumnInFront"] {
+            assert!(v.get(k).is_none(), "{k}");
+        }
+    }
+
+    #[test]
+    fn filled_lines_keep_the_line_colour_and_fall_back_to_thin_lines() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "line", ",a\nQ1,2\nQ2,3\nQ3,2");
+        // A colour given to the thin line (its stroke) fills the band.
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 0).id;
+        s.execute("paint.setStroke", &json!({"ids": [grp.0], "color": "#00ff00"})).unwrap();
+        s.execute("graph.setType", &json!({"id": id.0, "filledLines": true})).unwrap();
+        let band = &series_parts(&s, id, 0)[0];
+        assert_eq!(band.appearance.fill_paint().color().unwrap().to_hex(), "#00ff00");
+        // A radar series of zeros has every point at the centre: no band to make, so a thin line.
+        let radar = make(&mut s, "radar", ",a\nQ1,0\nQ2,0\nQ3,0");
+        s.execute("graph.setType", &json!({"id": radar.0, "filledLines": true})).unwrap();
+        let line = &series_parts(&s, radar, 0)[0];
+        assert!(line.appearance.fill_paint().is_none(), "a stroked line");
+        // Past the budget, thin lines.
+        let rows: Vec<Vec<f64>> = (0..8_000).map(|i| vec![(i % 7) as f64, 1.0, 2.0]).collect();
+        let big = NodeId(
+            s.execute("graph.create", &json!({"type": "line", "x": 0, "y": 0, "width": 300, "height": 200, "rows": rows})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        s.execute("graph.setType", &json!({"id": big.0, "filledLines": true, "markPoints": false})).unwrap();
+        assert!(series_parts(&s, big, 0)[0].appearance.fill_paint().is_none());
+    }
+
+    #[test]
+    fn overlapping_columns_keep_clear_of_the_legend_and_options_follow_the_graph_type() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"columnWidth": 1000, "clusterWidth": 1000})).unwrap();
+        let reach = (0..2).flat_map(|i| marks(&s, id, i)).map(|b| b.x1).fold(f64::MIN, f64::max);
+        assert!(reach > 400.0, "past the plot: {reach}");
+        let swatch = series_parts(&s, id, 0).last().unwrap().geometric_bounds().unwrap();
+        assert!(swatch.x0 >= reach + 14.0 - 1e-6, "{swatch:?} after {reach}");
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert!(v.get("firstRowInFront").is_some() && v.get("filledLines").is_none());
+        let line = graph(&mut s, "line");
+        let v = s.execute("graph.setType", &json!({"id": line.0})).unwrap();
+        assert!(v.get("firstRowInFront").is_none() && v.get("filledLines").is_some());
     }
 }
