@@ -1738,6 +1738,7 @@ fn editing_text() -> String {
         "1 Xw".into(),
         "u".into(),
         "/AI11Text :\n0 /FreeUndo ,\n;".into(),
+        "/AI11Text :\n1 /FreeUndo ,\n;\n1 (Style) XW".into(),
         "U".into(),
         "0 Xw".into(),
         "1 0 0 0 1 0 Bg".into(),

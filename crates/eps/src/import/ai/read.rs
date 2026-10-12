@@ -1023,6 +1023,12 @@ impl<'a> Reader<'a> {
         if self.pattern.is_some() {
             self.unreadable("type in a pattern");
         }
+        // `1 /FreeUndo`: the type in the drawn look of a text object that has an appearance. Its
+        // story is one of another text document (`/AI11UndoFreeTextDocument`), which counts its
+        // stories on its own; the object itself follows the look, on `%_` lines, and is the type.
+        if o.nums("FreeUndo").first() == Some(&1.0) {
+            return Ok(());
+        }
         let index = |key: &str| o.nums(key).first().copied().filter(|v| (0.0..f64::from(u32::MAX)).contains(v)).map(|v| v as u32);
         let (story, frame) = (index("StoryIndex"), index("FrameIndex").unwrap_or(0));
         let gs = self.gs.clone();
@@ -1288,9 +1294,20 @@ impl<'a> Reader<'a> {
         if !self.hidden_ids.contains(&object.id) || self.hidden_ids.contains(&look.id) || !matches!(look.kind, NodeKind::Group { clip: false, .. }) {
             return;
         }
+        let is_text = slot_of(object.name.as_deref()).is_some();
         let Some(object) = f.children.pop() else { return };
         let Some(look) = f.children.last_mut() else { return };
         strip(look, &self.hidden_ids);
+        if is_text {
+            // A text object stays the type it is: over what else its look draws, or in place of a
+            // look that was only its type.
+            if look.children().is_some_and(|c| c.is_empty()) {
+                *look = object;
+            } else {
+                f.children.push(object);
+            }
+            return;
+        }
         look.name = object.name.clone().or(look.name.take());
         look.visible = object.visible;
         look.locked = object.locked;
