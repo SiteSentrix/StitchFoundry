@@ -113,6 +113,13 @@ pub fn backends(default: Backends, env_set: bool) -> Backends {
     if cfg!(windows) && !env_set { Backends::DX12 | Backends::GL } else { default }
 }
 
+/// The largest texture side to ask the device for, which bounds the window's surface: the
+/// adapter's own limit when it is above eframe's `default` (8192 px), so a window larger than
+/// that keeps its surface (#1459). Never below `default`, which is what was asked for before.
+pub fn surface_limit(default: u32, adapter: u32) -> u32 {
+    default.max(adapter)
+}
+
 /// One adapter, as [`adapter_order`] sees it.
 #[derive(Clone, Debug)]
 pub struct Candidate {
@@ -545,6 +552,14 @@ mod tests {
 
     fn gpu(name: &str, backend: Backend, device_type: DeviceType) -> Candidate {
         Candidate { key: format!("{backend:?}:{name}"), name: name.into(), backend, device_type, pci: (0, 0), presents: true }
+    }
+
+    /// #1459: a 9048 px wide window (two display scales' ratio past 8192) fits an adapter that
+    /// takes 16384 px textures; an adapter with less than eframe asks for changes nothing.
+    #[test]
+    fn the_surface_may_be_as_large_as_the_adapter_allows() {
+        assert_eq!(surface_limit(8192, 16384), 16384);
+        assert_eq!(surface_limit(8192, 4096), 8192);
     }
 
     fn names(c: &[Candidate], order: &[usize]) -> Vec<String> {
