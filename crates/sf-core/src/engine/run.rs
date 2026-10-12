@@ -426,6 +426,70 @@ pub(crate) fn motif_from_line(name: &str, line: &[Point]) -> Option<CustomMotif>
 
 /// Most points of a drawn line Make Motif looks at.
 const MAX_MOTIF_LINE: usize = 20_000;
+/// Motifs along a satin column (a graded motif column) given as pairs of rail points along it:
+/// each as wide as the column where it starts (a tenth less, so it stays inside) and `length`
+/// times as long, its across direction following the column's rungs, upright along a column
+/// running left to right as on a run; no stitch longer than `step`.
+pub(crate) fn motif_column(pairs: &[(Point, Point)], shape: &[(f64, f64)], length: f64, step: f64) -> Vec<Point> {
+    let mids: Vec<Point> = pairs.iter().map(|(a, b)| a.midpoint(*b)).collect();
+    let cum = polyline::cumulative_lengths(&mids);
+    let total = cum.last().copied().unwrap_or(0.0);
+    if mids.len() < 2 || !(total.is_finite() && total > 1e-6) {
+        return Vec::new();
+    }
+    let length = if length.is_finite() { length.clamp(0.2, 10.0) } else { 1.5 };
+    let step = if step.is_finite() { step.clamp(0.3, 12.0) } else { 1.5 };
+    // The motif centred across, a range of one.
+    let (lo, hi) = shape.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &(_, c)| (lo.min(c), hi.max(c)));
+    let (mid, range) = ((lo + hi) * 0.5, (hi - lo).max(1e-6));
+    // The column at arc length `s` along its middle: the middle point, the width, and the unit
+    // across it along the rung, turned to the right of the way along.
+    let at = |s: f64| -> (Point, f64, Point) {
+        let s = s.clamp(0.0, total);
+        let i = cum.partition_point(|&c| c < s).clamp(1, cum.len() - 1);
+        let (Some(&(a0, b0)), Some(&(a1, b1)), Some(&s0), Some(&s1)) = (pairs.get(i - 1), pairs.get(i), cum.get(i - 1), cum.get(i)) else {
+            return (Point::ZERO, 0.0, Point::ZERO);
+        };
+        let t = if s1 > s0 { (s - s0) / (s1 - s0) } else { 0.0 };
+        let (a, b) = (a0.lerp(a1, t), b0.lerp(b1, t));
+        let w = a.distance(b);
+        let d = a1.midpoint(b1) - a0.midpoint(b0);
+        let along = if d.length() > 1e-12 { d * (1.0 / d.length()) } else { Point::new(1.0, 0.0) };
+        let rung = if w > 1e-9 { (b - a) * (1.0 / w) } else { along.perp() };
+        let u = if rung.dot(along.perp()) < 0.0 { rung * -1.0 } else { rung };
+        (a.midpoint(b), w, u)
+    };
+    // Each repeat as long as `length` times the width where it starts, then all scaled to fit.
+    let mut sizes = Vec::new();
+    let mut s = 0.0;
+    while s < total && sizes.len() < MAX_MOTIFS {
+        let r = (at(s).1 * length).max(0.5);
+        sizes.push(r);
+        s += r;
+    }
+    let k = total / sizes.iter().sum::<f64>().max(1e-9);
+    let mut out: Vec<Point> = Vec::new();
+    let mut s0 = 0.0;
+    'repeats: for r in sizes {
+        let r = r * k;
+        for &(a, c) in shape {
+            let (p, w, u) = at(s0 + a * r);
+            let q = p + u * ((c - mid) / range * w * 0.9);
+            if let Some(&last) = out.last() {
+                let parts = ((last.distance(q) / step).ceil() as usize).clamp(1, 10_000);
+                out.extend((1..=parts).map(|j| last.lerp(q, j as f64 / parts as f64)));
+            } else {
+                out.push(q);
+            }
+            if out.len() > MAX_MOTIF_STITCHES {
+                break 'repeats;
+            }
+        }
+        s0 += r;
+    }
+    polyline::dedup(&out, 1e-6)
+}
+
 /// Most motif repeats along one line.
 const MAX_MOTIFS: usize = 50_000;
 /// Most needle points one motif run makes.

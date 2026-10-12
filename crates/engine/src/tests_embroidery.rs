@@ -1762,6 +1762,25 @@ fn outlines_go_round_lines_and_rings_are_placed() {
 }
 
 #[test]
+fn a_tapered_satin_line_sews_graded_motifs() {
+    use sf_core::attr::StitchType;
+    let mut s = session();
+    let line = NodeId(s.execute("path.create", &json!({"d": "M 100 100 C 200 60 300 140 400 100"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"width": 8.0, "profile": "Tapered"}})).unwrap();
+    let satin = needles(&s, line);
+    s.execute("embroidery.setParams", &json!({"params": {"motifColumn": {"motif": "Heart", "length": 1.2}}})).unwrap();
+    let StitchType::Satin(p) = emb(&s, line).stitch else { panic!() };
+    let m = p.motif_column.unwrap();
+    assert_eq!((m.motif, m.length), (sf_core::model::Motif::Heart, 1.2));
+    let motifs = needles(&s, line);
+    assert!(motifs.len() > 50 && motifs != satin);
+    s.execute("embroidery.setParams", &json!({"params": {"motifColumn": null}})).unwrap();
+    assert_eq!(needles(&s, line), satin);
+}
+
+#[test]
 fn sculpture_runs_and_cross_styles_are_stitch_parameters() {
     use sf_core::attr::StitchType;
     use sf_core::model::{CrossStyle, RunKind};

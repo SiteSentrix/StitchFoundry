@@ -402,7 +402,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | MO-02 | Motif runs | Done | 11 built-in motifs, and the design's own | – |
 | MO-03 | Graded motif runs (motif size varies along the line) | Done | Motif runs grow or shrink to *Width at end* | – |
 | MO-04 | Motif fills, paired motif fills, 3D motif fills | Partial | Motif fill: rows of any motif inside the shape, row offset; paired motif fills (a second motif in turn along the rows); 3D motif fills still missing | 2 |
-| MO-05 | Graded motif columns | Missing | Motif sized to column width | 2 |
+| MO-05 | Graded motif columns | Done | Satin columns and lines sewn as motifs (*Sew as: Motifs*): each as wide as the column where it sits, its length a multiple of that width, turning with the rungs; tapered lines grade them | – |
 | MO-06 | Motif sets and custom motifs (make a motif from an object) | Partial | Embroidery › Make Motif turns a drawn path into a motif kept with the design: motif runs, motif fills, borders and Place Motif sew it, upright as drawn; remaking it by name updates what sews it. No motif sets shared across designs (preferences) yet | 2 |
 
 ### 6.9 Specialty stitching
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 126 done,
-40 partial, 59 missing, 6 out of scope (counted 2026-10-12, after rings and outlines round lines). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 127 done,
+40 partial, 58 missing, 6 out of scope (counted 2026-10-12, after graded motif columns). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -722,7 +722,12 @@ tatami textures and split lines (PS-02…04, CS-05), then hand stitch, jagged ed
 (SP-02, SP-03, SP-08), then motifs (MO-01, MO-03, MO-04), then offset, zigzag, E-stitch and stipple fills and laydown
 (CS-02, SP-05, SP-06, RE-06), then spacing profiles and colour blends (SP-09, SP-10, NEW-01,
 NEW-02), then outlines and borders (PT-01, PT-05), then repeats and envelopes sewn as they look (PT-06,
-RS-03, BAS-15).
+RS-03, BAS-15), then the design's own motifs (MO-06), sculpture runs and cross-stitch styles (ST-02,
+SP-12), redwork (SP-13), buttonholes (SP-14), rings and outlines round lines (PT-02, RS-02, PT-05),
+more textures and paired motif fills (PS-02, MO-04) and graded motif columns (MO-05). Left in phase
+2: the automatic knife (RS-06), string stitching (SP-04), a stamp library (PS-04), more textures, a
+motif placement tool (MO-01), 3D motif fills (MO-04), the two-curve liquid fill (CS-07) and a repeat
+preview (BAS-15).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

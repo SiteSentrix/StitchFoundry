@@ -98,6 +98,12 @@ row (`motif_pair`), each in the same place on every row.
 **Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
 sewn in a single run: move, scale and reshape it like any art.
 
+**Motif columns:** a satin column or satin line can be sewn as motifs instead of satin (*Sew
+as: Motifs*, `motif_column`): along its middle, each motif as wide as the column where it sits (a
+tenth less, so it stays inside) and *Motif length* times as long, turning with the column's
+rungs. On a tapered or calligraphic line the motifs grow and shrink with it (a graded motif
+column). Motifs stand upright along a column drawn left to right, as on a motif run.
+
 **Rings:** **Embroidery › Place Ring** places a 20 mm ring, 3 mm wide, in the middle of the
 artboard: a **Satin Ring** (a satin border round a circle), a **Filled Ring** (a fill between two
 circles) or a **Bean Ring** (a bean run round a circle). It is an ordinary circle afterwards:

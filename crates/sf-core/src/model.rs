@@ -791,6 +791,32 @@ pub struct SatinParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jagged: Option<Jagged>,
     pub underlay: SatinUnderlay,
+    /// Sew the column as motifs instead of satin (a graded motif column): along its middle, each
+    /// as wide as the column where it sits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motif_column: Option<Box<MotifColumn>>,
+}
+
+/// A satin column sewn as motifs: along its middle, each motif as wide as the column where it
+/// starts (a tenth less, so it stays inside) and `length` times as long, upright along a column
+/// drawn left to right.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MotifColumn {
+    pub motif: Motif,
+    /// A motif made from a drawn line, sewn instead of `motif`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_motif: Option<CustomMotif>,
+    /// A motif's length over its width.
+    pub length: f64,
+    /// Longest stitch (mm).
+    pub stitch_length: f64,
+}
+
+impl Default for MotifColumn {
+    fn default() -> Self {
+        MotifColumn { motif: Motif::Leaf, custom_motif: None, length: 1.5, stitch_length: 1.5 }
+    }
 }
 
 /// The side of a satin column whose stitches end short at random (jagged edges).
@@ -897,6 +923,7 @@ impl Default for SatinParams {
             tatami: false,
             jagged: None,
             underlay: SatinUnderlay::default(),
+            motif_column: None,
         }
     }
 }

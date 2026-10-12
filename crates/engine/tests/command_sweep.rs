@@ -462,6 +462,15 @@ fn structured_junk() {
         ("embroidery.placeRing", json!({"diameter": 2, "width": 1, "stitch": "satin"})),
         ("embroidery.placeRing", json!({"diameter": "x", "width": null})),
         ("embroidery.addOutline", json!({"stitch": "motif", "offset": -20, "width": 12})),
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.set", "params": {"type": "satin"}},
+                {"command": "embroidery.setParams", "params": {"params": {"motifColumn": {"motif": "Heart", "length": 1e308, "stitchLength": -1e308}}}},
+                {"command": "embroidery.setParams", "params": {"params": {"motifColumn": {"length": 1e-308, "customMotif": {"points": [[0, 0], [1e308, 1e308]]}}}}},
+                {"command": "embroidery.setParams", "params": {"params": {"motifColumn": "x"}}},
+            ]}),
+        ),
         ("embroidery.redwork", json!({"kind": "satin"})),
         ("embroidery.redwork", json!({"ids": [u64::MAX], "kind": null})),
         ("embroidery.motif.apply", json!({"name": null, "ids": [u64::MAX]})),
