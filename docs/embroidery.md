@@ -367,7 +367,9 @@ for the design as a new A4 document, to print (File › Print) or export as PDF:
 - its size, stitches, colours, colour changes, trims, thread (top and bobbin) and sewing time at
   the machine's speed, and its hoop, fabric and machine;
 - its colours in sewing order: a swatch, the thread's code, name and brand, stitches and length;
-- the notes given; an **approval sheet** (`kind: approval`) adds the customer and a line to sign.
+- the notes given, else the design's own **Design notes** (set in the panel's Design section,
+  or `embroidery.settings {notes}`, and kept with the design), wrapped to the page; an
+  **approval sheet** (`kind: approval`) adds the customer and a line to sign.
 - a **pattern** (`kind: pattern`) is the design over the whole page with one line of figures;
 - on A4 or US Letter paper (`page: a4|letter`); a logo or anything else can be added to the sheet
   like to any document (File › Place).

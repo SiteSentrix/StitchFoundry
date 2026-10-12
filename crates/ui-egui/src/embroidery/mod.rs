@@ -154,6 +154,8 @@ pub struct EmbroideryUi {
     pub lettering_arc: f64,
     /// mm the arc's radius shrinks a turn (0: a circle).
     pub lettering_spiral: f64,
+    /// The design notes as typed, while the field has the focus.
+    pub notes_draft: Option<String>,
     /// Whether the section has asked for the fonts (loading the remembered folders) yet.
     pub fonts_listed: bool,
     /// The Team Names section's names, one a line.
@@ -258,6 +260,7 @@ impl Default for EmbroideryUi {
             lettering_for: None,
             lettering_arc: 0.0,
             lettering_spiral: 0.0,
+            notes_draft: None,
             fonts_listed: false,
             team_names: String::new(),
             monogram_letters: String::new(),

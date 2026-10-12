@@ -650,6 +650,9 @@ pub struct DocEmbroidery {
     /// A font document: the embroidery font the design is being made into.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<FontDesign>,
+    /// Notes kept with the design (placement, garment, customer wishes), printed on worksheets.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub notes: String,
 }
 
 /// An embroidery font being made: a document whose artboards, each named after its glyph, hold
@@ -783,6 +786,7 @@ impl Default for DocEmbroidery {
             checks: CheckLimits::default(),
             motifs: Vec::new(),
             font: None,
+            notes: String::new(),
         }
     }
 }
