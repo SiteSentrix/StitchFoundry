@@ -410,13 +410,13 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | SP-01 | Freehand embroidery | Done | Brush tool | – |
-| SP-02 | Hand-stitch effect (random spacing and thickness) | Missing | Randomised run/satin parameters | 2 |
-| SP-03 | Jagged edges (random satin length) | Missing | Satin edge jitter | 2 |
+| SP-02 | Hand-stitch effect (random spacing and thickness) | Done | *Hand stitch* run style: thick (triple) stitches and thin gaps, lengths varied at random | – |
+| SP-03 | Jagged edges (random satin length) | Done | Satin *Jagged edges* on side 1, side 2 or both, up to a depth | – |
 | SP-04 | String stitching (long free-hanging threads) | Missing | Run with long stitches and anchors | 2 |
 | SP-05 | Zigzag and E-stitch borders/fills | Partial | Zigzag and blanket runs; add zigzag/E-stitch fills | 2 |
 | SP-06 | Stippling (random meandering run fill) | Partial | Meander fill; add stipple with stitch length and spacing controls | 2 |
 | SP-07 | Maze-like fills | Done | Meander | – |
-| SP-08 | Trapunto (open fill with raised outline effect) | Missing | Fill flag: travel along outline instead of inside, open spacing | 2 |
+| SP-08 | Trapunto (open fill with raised outline effect) | Done | Tatami *Trapunto*: travel keeps to the outline (with an open density) | – |
 | SP-09 | Accordion spacing with custom profiles | Partial | Linear gradient spacing; add profile curves (2026 feature) | 2 |
 | SP-10 | Colour blending / multi-blend (several layered fills with graded density) | Missing | §7.4 | 2 |
 | SP-11 | Chenille-type patterns on regular machines (square, coil) | Missing | Pattern generators | 4 |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 106 done,
-42 partial, 77 missing, 6 out of scope (counted 2026-10-12, after fill textures and split lines). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 109 done,
+42 partial, 74 missing, 6 out of scope (counted 2026-10-12, after the run and satin effects). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -716,7 +716,8 @@ and target dir each) calendar time drops by roughly half.
 **Status (October 2026):** phase 1 is complete, every item in its row (machine profiles of your
 own and edited standard ones, MF-02 and MF-03, came last). Phase 0 is still open: nothing has been
 sewn on a real machine yet; the owner has the VP3 test kit. Phase 2 started on 2026-10-12 with
-tatami textures and split lines (PS-02…04, CS-05).
+tatami textures and split lines (PS-02…04, CS-05), then hand stitch, jagged edges and trapunto
+(SP-02, SP-03, SP-08).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

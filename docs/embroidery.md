@@ -47,8 +47,9 @@ the control channel, the CLI and the MCP server.
 | Backstitch | hand-sewn look: each stitch goes forward two steps and back one | stitch length, passes |
 | Stem stitch | rope-like outline: backstitch with slanted stitches | stitch length, width, side, passes |
 | Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path | stitch length, width, spacing, flip side |
-| Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), underlay (incl. double zigzag) |
-| Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, texture, split lines, underlay |
+| Hand stitch | a run that looks sewn by hand: thick stitches (each sewn three times) with short thin ones between them, lengths varying a little | stitch length, gap, passes |
+| Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), jagged edges, underlay (incl. double zigzag) |
+| Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, texture, split lines, trapunto, underlay |
 | Satin fill | satin rows across the shape | density, pull compensation |
 | Contour / Spiral / Radial / Cross / Meander fill | rows following the outline, a spiral, rays from the centre, crossed rows, or a random maze-like path | spacing, stitch length |
 | Appliqué | placement run, stop, tack-down, stop, cover satin | cover width and density |
@@ -81,6 +82,19 @@ over itself.
 
 **Passes:** any run style can be sewn up to 9 times over the same needle points; 2 passes is a
 backtrack, which ends where it started.
+
+**Hand stitch** (a run style): stitches about *Stitch length* long, each sewn forward, back and
+forward again so it lies thick, joined by single stitches about *Gap* long that hardly show; each
+length varies a little at random (the same way every time), so the line looks sewn by hand. It
+starts and ends with a thick stitch.
+
+**Jagged edges** (satin): the stitches on one side (*Side 1* is the first rail), the other or
+both end short of the edge by a random amount up to *Jag depth*, for fur, grass and feathers. A
+stitch always keeps at least a fifth of the column's width; the underlay isn't jagged.
+
+**Trapunto** (tatami): travel between the parts of the fill keeps to its outline instead of
+running along its rows, crossing the fill only where nothing else reaches (round a hole). Use it
+with an open density (2 mm and more), where travel along the rows would show between them.
 
 **Satin details:** *pull compensation* can differ per side (side 1 is the first rail), for a
 column lying on fabric on one side and on other stitching on the other. *Preserve long stitches*

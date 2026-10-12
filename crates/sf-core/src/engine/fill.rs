@@ -23,6 +23,9 @@ const COVERED_RING_COST: f64 = 6.0;
 const COVERED_SPAN_COST: f64 = 1.6;
 /// Penalty for a straight hop when the graph offers no route.
 const NO_ROUTE_COST: f64 = 25.0;
+/// Cost multiplier for travelling along a row with trapunto on: travel keeps to the outline,
+/// crossing the fill only where nothing else reaches.
+const TRAPUNTO_SPAN_COST: f64 = 50.0;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ScanConfig {
@@ -49,6 +52,8 @@ pub(crate) struct ScanConfig {
     pub texture: Option<Texture>,
     /// Split lines (tatami; design space, mm): each row has a needle point where it crosses one.
     pub splits: Vec<Vec<Point>>,
+    /// Trapunto: travel keeps to the outline instead of running along the rows.
+    pub trapunto: bool,
 }
 
 impl Default for ScanConfig {
@@ -65,6 +70,7 @@ impl Default for ScanConfig {
             random: 0.0,
             texture: None,
             splits: Vec::new(),
+            trapunto: false,
         }
     }
 }
@@ -286,7 +292,7 @@ impl Ord for Item {
     }
 }
 
-fn dijkstra(g: &Graph, src: usize, sewn: &[bool]) -> (Vec<f64>, Vec<usize>) {
+fn dijkstra(g: &Graph, src: usize, sewn: &[bool], trapunto: bool) -> (Vec<f64>, Vec<usize>) {
     let n = g.pts.len();
     let mut dist = vec![f64::INFINITY; n];
     let mut prev = vec![usize::MAX; n];
@@ -301,14 +307,16 @@ fn dijkstra(g: &Graph, src: usize, sewn: &[bool]) -> (Vec<f64>, Vec<usize>) {
         for e in &g.adj[u] {
             let w = match e.kind {
                 EdgeKind::Ring(a, b) => {
-                    if covered(a) && covered(b) {
+                    if covered(a) && covered(b) && !trapunto {
                         COVERED_RING_COST
                     } else {
                         1.0
                     }
                 }
                 EdgeKind::Span(s) => {
-                    if sewn[s] {
+                    if trapunto {
+                        TRAPUNTO_SPAN_COST
+                    } else if sewn[s] {
                         COVERED_SPAN_COST
                     } else {
                         1.0
@@ -723,7 +731,7 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
                 first
             }
             Some(node) => {
-                let (dist, prev) = dijkstra(&plan.graph, node, &sewn);
+                let (dist, prev) = dijkstra(&plan.graph, node, &sewn, cfg.trapunto);
                 let here = plan.graph.pts[node];
                 let cost = |e: Entry, dist: &[f64], from: Point| {
                     let n = plan.entry_node(e);
@@ -764,7 +772,7 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
                             sewn[s] = true;
                         }
                         let exit_node = plan.exit_node(e);
-                        let (d2, _) = dijkstra(&plan.graph, exit_node, &sewn);
+                        let (d2, _) = dijkstra(&plan.graph, exit_node, &sewn, cfg.trapunto);
                         let from = plan.graph.pts[exit_node];
                         let c2 = (0..plan.sections.len())
                             .filter(|&s| !done[s] && s != e.section)
@@ -819,7 +827,7 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
     // Finish near the requested exit point.
     if let (Some(node), Some(ex)) = (cur, exit) {
         let ex_rs = fwd.apply(ex);
-        let (_, prev) = dijkstra(&plan.graph, node, &sewn);
+        let (_, prev) = dijkstra(&plan.graph, node, &sewn, cfg.trapunto);
         let target = (0..plan.graph.pts.len()).min_by(|&a, &b| plan.graph.pts[a].distance(ex_rs).total_cmp(&plan.graph.pts[b].distance(ex_rs)));
         if let Some(t) = target
             && let Some(path) = path_to(&prev, node, t)
@@ -946,6 +954,28 @@ mod tests {
                 let plain = max_stitch(&scan_fill(&poly, &ScanConfig { angle, ..Default::default() }, None, None));
                 assert!(max_stitch(&pts) <= plain.max(4.0 * 1.35) + 1e-6, "{pattern:?} at {angle}°: {}", max_stitch(&pts));
             }
+        }
+    }
+
+    #[test]
+    fn trapunto_travels_along_the_outline() {
+        // A square ring, every row sewn. From the left end of the band below the hole to its
+        // right end, plain travel runs along a row (on top of the stitching, where it hardly
+        // shows); trapunto goes round the outline instead.
+        let ring = Polygon { outer: rect(0.0, 0.0, 30.0, 30.0), holes: vec![rect(10.0, 10.0, 20.0, 20.0)] };
+        let rings: Vec<Vec<Point>> = ring.rings().cloned().collect();
+        let plan = plan(&rings, &ScanConfig { row_spacing: 2.0, ..Default::default() }).unwrap();
+        let near =
+            |p: Point| (0..plan.graph.pts.len()).min_by(|&a, &b| plan.graph.pts[a].distance(p).total_cmp(&plan.graph.pts[b].distance(p))).unwrap();
+        let (from, to) = (near(Point::new(0.0, 25.0)), near(Point::new(30.0, 25.0)));
+        let sewn = vec![true; plan.spans.len()];
+        for (trapunto, along_rows) in [(false, true), (true, false)] {
+            let (_, prev) = dijkstra(&plan.graph, from, &sewn, trapunto);
+            let path = path_to(&prev, from, to).unwrap();
+            let kinds: Vec<EdgeKind> = path.windows(2).filter_map(|w| plan.graph.adj[w[0]].iter().find(|e| e.to == w[1]).map(|e| e.kind)).collect();
+            assert_eq!(kinds.len() + 1, path.len());
+            let rows = kinds.iter().any(|k| matches!(k, EdgeKind::Span(_)));
+            assert_eq!(rows, along_rows, "trapunto {trapunto}: {kinds:?}");
         }
     }
 

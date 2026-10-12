@@ -4512,3 +4512,13 @@ machine	Stop	停止
 	Bricks	レンガ
 	Circles	円
 	Scales	うろこ
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	手縫い風ステッチ
+	Gap	すき間
+	Jagged edges	ギザギザの縁
+	Both sides	両側
+	Side 1	サイド 1
+	Side 2	サイド 2
+	Jag depth	ギザギザの深さ
+	Trapunto (travel along the outline)	トラプント (輪郭に沿って移動)

@@ -4498,3 +4498,13 @@ machine	Stop	Зупинка
 	Bricks	Цеглини
 	Circles	Кола
 	Scales	Луска
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	Ручний стібок
+	Gap	Проміжок
+	Jagged edges	Рвані краї
+	Both sides	Обидві сторони
+	Side 1	Сторона 1
+	Side 2	Сторона 2
+	Jag depth	Глибина зубців
+	Trapunto (travel along the outline)	Трапунто (переходи вздовж контуру)

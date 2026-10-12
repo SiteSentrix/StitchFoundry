@@ -4472,3 +4472,13 @@ machine	Stop	Stopp
 	Bricks	Ziegel
 	Circles	Kreise
 	Scales	Schuppen
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	Handstich
+	Gap	Lücke
+	Jagged edges	Gezackte Kanten
+	Both sides	Beide Seiten
+	Side 1	Seite 1
+	Side 2	Seite 2
+	Jag depth	Zackentiefe
+	Trapunto (travel along the outline)	Trapunto (Verbindungsstiche entlang der Kontur)

@@ -406,6 +406,7 @@ impl ObjectKind {
                 RunKind::Motif => "Motif Run",
                 RunKind::Back => "Backstitch",
                 RunKind::Stem => "Stem Stitch",
+                RunKind::Hand => "Hand Stitch",
             },
             ObjectKind::Satin(_) => "Satin Column",
             ObjectKind::Fill(f) => f.params.kind.label(),
@@ -519,10 +520,14 @@ pub enum RunKind {
     /// Rope-like hand-embroidery outline: like backstitch, with the stitches
     /// slanted across the line.
     Stem,
+    /// Hand-sewn running stitch: thick stitches (each sewn three times) with short thin ones
+    /// between them, lengths varying a little, like a running stitch sewn by hand.
+    Hand,
 }
 
 impl RunKind {
-    pub const ALL: [RunKind; 7] = [RunKind::Single, RunKind::Triple, RunKind::Blanket, RunKind::Zigzag, RunKind::Motif, RunKind::Back, RunKind::Stem];
+    pub const ALL: [RunKind; 8] =
+        [RunKind::Single, RunKind::Triple, RunKind::Blanket, RunKind::Zigzag, RunKind::Motif, RunKind::Back, RunKind::Stem, RunKind::Hand];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -533,6 +538,7 @@ impl RunKind {
             RunKind::Motif => "Motif run",
             RunKind::Back => "Backstitch",
             RunKind::Stem => "Stem stitch",
+            RunKind::Hand => "Hand stitch",
         }
     }
 }
@@ -569,7 +575,8 @@ pub struct RunParams {
     pub stitch_length: f64,
     /// Blanket prong length / zigzag width / motif width (mm).
     pub width: f64,
-    /// Distance between blanket prongs / zigzag peaks / motif repeats (mm).
+    /// Distance between blanket prongs / zigzag peaks / motif repeats, or the gap between
+    /// hand stitches (mm).
     pub spacing: f64,
     /// Put blanket prongs / motifs / stem slants on the other side of the line.
     pub flip: bool,
@@ -663,7 +670,52 @@ pub struct SatinParams {
     /// ([`TATAMI_LENGTH`] when that is 0), shifted a quarter from row to row.
     #[serde(skip_serializing_if = "is_false")]
     pub tatami: bool,
+    /// Jagged edges: stitches end short of the edge by a random amount (fur, grass, feathers).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jagged: Option<Jagged>,
     pub underlay: SatinUnderlay,
+}
+
+/// The side of a satin column whose stitches end short at random (jagged edges).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum JaggedSides {
+    /// Both sides.
+    #[default]
+    Both,
+    /// Side 1 (the first rail).
+    First,
+    /// Side 2 (the second rail).
+    Second,
+}
+
+impl JaggedSides {
+    pub const ALL: [JaggedSides; 3] = [JaggedSides::Both, JaggedSides::First, JaggedSides::Second];
+
+    /// Whether the side of the first rail (`first`) or the other one is jagged.
+    pub fn covers(self, first: bool) -> bool {
+        match self {
+            JaggedSides::Both => true,
+            JaggedSides::First => first,
+            JaggedSides::Second => !first,
+        }
+    }
+}
+
+/// Jagged edges of a satin column: each stitch on a jagged side ends short of the edge by a
+/// random amount up to `depth`, so the edge looks ragged.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Jagged {
+    pub sides: JaggedSides,
+    /// Most a stitch ends short of the edge (mm).
+    pub depth: f64,
+}
+
+impl Default for Jagged {
+    fn default() -> Self {
+        Jagged { sides: JaggedSides::Both, depth: 1.5 }
+    }
 }
 
 /// The stitch length of a tatami border when none is set (mm).
@@ -726,6 +778,7 @@ impl Default for SatinParams {
             preserve_long: false,
             corners: Corners::Auto,
             tatami: false,
+            jagged: None,
             underlay: SatinUnderlay::default(),
         }
     }
@@ -899,6 +952,10 @@ pub struct FillParams {
     /// Programmed splits (tatami): the needle points follow a pattern, a texture in the fill.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub texture: Option<Texture>,
+    /// Trapunto (tatami): travel between parts of the fill keeps to its outline, so an open
+    /// fill shows no travel stitches across it.
+    #[serde(skip_serializing_if = "is_false")]
+    pub trapunto: bool,
 }
 
 impl Default for FillParams {
@@ -917,6 +974,7 @@ impl Default for FillParams {
             underlay: FillUnderlay::default(),
             satin_column: None,
             texture: None,
+            trapunto: false,
         }
     }
 }

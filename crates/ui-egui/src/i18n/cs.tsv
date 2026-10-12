@@ -4543,3 +4543,13 @@ machine	Stop	Zastavení
 	Bricks	Cihly
 	Circles	Kruhy
 	Scales	Šupiny
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	Ruční steh
+	Gap	Mezera
+	Jagged edges	Zubaté okraje
+	Both sides	Obě strany
+	Side 1	Strana 1
+	Side 2	Strana 2
+	Jag depth	Hloubka zubů
+	Trapunto (travel along the outline)	Trapunto (přejezdy podél obrysu)

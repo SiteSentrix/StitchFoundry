@@ -4514,3 +4514,13 @@ machine	Stop	Остановка
 	Bricks	Кирпичи
 	Circles	Круги
 	Scales	Чешуя
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	Ручной стежок
+	Gap	Промежуток
+	Jagged edges	Рваные края
+	Both sides	Обе стороны
+	Side 1	Сторона 1
+	Side 2	Сторона 2
+	Jag depth	Глубина зубцов
+	Trapunto (travel along the outline)	Трапунто (переходы по контуру)

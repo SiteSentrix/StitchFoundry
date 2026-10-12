@@ -3778,3 +3778,13 @@ machine	Trim	Corte de linha
 	Bricks	Tijolos
 	Circles	Círculos
 	Scales	Escamas
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	Ponto à mão
+	Gap	Espaço
+	Jagged edges	Bordas irregulares
+	Both sides	Ambos os lados
+	Side 1	Lado 1
+	Side 2	Lado 2
+	Jag depth	Profundidade das irregularidades
+	Trapunto (travel along the outline)	Trapunto (deslocamentos pelo contorno)

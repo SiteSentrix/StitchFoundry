@@ -3884,3 +3884,13 @@ machine	Stop	停止
 	Bricks	磚塊
 	Circles	圓圈
 	Scales	鱗片
+
+# Embroidery (StitchFoundry): run and satin effects
+	Hand stitch	手縫針跡
+	Gap	間隙
+	Jagged edges	鋸齒邊緣
+	Both sides	兩側
+	Side 1	第 1 側
+	Side 2	第 2 側
+	Jag depth	鋸齒深度
+	Trapunto (travel along the outline)	凸紋繡（沿輪廓走線）

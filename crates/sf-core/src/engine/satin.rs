@@ -3,7 +3,7 @@
 
 use super::out::Out;
 use crate::geom::{Column, FLATTEN_TOLERANCE, Point, Rung, polyline};
-use crate::model::{SatinParams, TATAMI_LENGTH};
+use crate::model::{JaggedSides, SatinParams, TATAMI_LENGTH};
 use crate::pattern::Stitch;
 
 /// Fine samples along the column: pairs of corresponding rail points spaced
@@ -120,6 +120,17 @@ pub(crate) fn zigzag_points(pairs: &[(Point, Point)], params: &SatinParams, pull
                 p = p.lerp(other, (0.35 * width).min(width * 0.45) / width.max(1e-9));
             }
         }
+        // Jagged edges: the stitch ends short of the edge by a random amount, always leaving a
+        // fifth of the column's width between the two ends of a stitch.
+        if let Some(jag) = params.jagged.filter(|g| g.sides.covers(on_a)) {
+            let other = if on_a { b } else { a };
+            let width = p.distance(other);
+            let depth = if jag.depth.is_finite() { jag.depth.clamp(0.0, 20.0) } else { 0.0 };
+            let most = if jag.sides == JaggedSides::Both { 0.4 } else { 0.8 };
+            if width > 1e-9 {
+                p = p.lerp(other, (unit(j as u64) * depth).min(width * most) / width);
+            }
+        }
         pts.push(p);
     }
     // Auto split long stitches.
@@ -134,6 +145,15 @@ pub(crate) fn zigzag_points(pairs: &[(Point, Point)], params: &SatinParams, pull
         }
     }
     out
+}
+
+/// A number in `[0, 1)` that looks random, the same every time for the same `k`.
+fn unit(k: u64) -> f64 {
+    let mut h = k.wrapping_add(0x9e37_79b9_7f4a_7c15).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    h ^= h >> 31;
+    h = h.wrapping_mul(0x94d0_49bb_1331_11eb);
+    h ^= h >> 29;
+    (h >> 11) as f64 / (1u64 << 53) as f64
 }
 
 /// Pairs inset towards the column centre by `inset` (never past the centre).
@@ -276,7 +296,7 @@ pub(crate) fn stitch_pairs(fine: &[(Point, Point)], params: &SatinParams, width:
                 if *pass == Pass::ZigzagBack {
                     ins.iter_mut().for_each(|(a, b)| std::mem::swap(a, b));
                 }
-                let zz_params = SatinParams { spacing: u.zigzag_spacing.max(0.5), ..params.clone() };
+                let zz_params = SatinParams { spacing: u.zigzag_spacing.max(0.5), jagged: None, ..params.clone() };
                 let coarse = resample_pairs(&ins, zz_params.spacing * 0.5);
                 let pts = zigzag_points(&coarse, &zz_params, (0.0, 0.0), false);
                 if let Some(&p0) = pts.first() {
@@ -363,6 +383,41 @@ mod tests {
             Rung::new(Point::new(0.0, 0.0), Point::new(0.0, width), NodeKind::Corner),
             Rung::new(Point::new(len, 0.0), Point::new(len, width), NodeKind::Corner),
         ])
+    }
+
+    #[test]
+    fn jagged_edges_end_stitches_short_of_the_edge_at_random() {
+        use crate::model::{Jagged, JaggedSides};
+        let bare = SatinUnderlay { auto: false, center_run: false, ..Default::default() };
+        let base =
+            SatinParams { pull_comp: 0.0, auto_spacing: false, split_length: 0.0, short_stitches: false, underlay: bare, ..Default::default() };
+        // The rails are y = 0 (side 1) and y = 6 (side 2): how far each needle point lies in from them.
+        let depths = |params: &SatinParams| {
+            let st = generate(&straight(6.0, 30.0), params, None, None, 12.0);
+            let pts: Vec<Point> = st.iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+            let side1: Vec<f64> = pts.iter().filter(|p| p.y < 3.0).map(|p| p.y).collect();
+            let side2: Vec<f64> = pts.iter().filter(|p| p.y >= 3.0).map(|p| 6.0 - p.y).collect();
+            (side1, side2)
+        };
+        let (a, b) = depths(&base);
+        assert!(a.iter().chain(&b).all(|d| d.abs() < 1e-9), "plain satin reaches both edges");
+        let jag = |sides| SatinParams { jagged: Some(Jagged { sides, depth: 2.0 }), ..base.clone() };
+        let (a, b) = depths(&jag(JaggedSides::First));
+        assert!(b.iter().all(|d| d.abs() < 1e-9), "side 2 stays clean");
+        assert!(a.iter().all(|d| (-1e-9..=2.0 + 1e-9).contains(d)), "{a:?}");
+        let spread = a.iter().fold(0.0f64, |m, d| m.max(*d)) - a.iter().fold(f64::INFINITY, |m, d| m.min(*d));
+        assert!(spread > 1.5, "the stitches end at different depths: {a:?}");
+        let (a, b) = depths(&jag(JaggedSides::Both));
+        assert!(a.iter().any(|d| *d > 0.5) && b.iter().any(|d| *d > 0.5));
+        // The same column is jagged the same way every time.
+        assert_eq!(depths(&jag(JaggedSides::Both)), (a, b));
+        // A narrow column's stitches still span at least a fifth of its width.
+        for sides in JaggedSides::ALL {
+            let deep = SatinParams { jagged: Some(Jagged { sides, depth: 50.0 }), ..base.clone() };
+            let st = generate(&straight(2.0, 20.0), &deep, None, None, 12.0);
+            let pts: Vec<Point> = st.iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+            assert!(pts.windows(2).all(|w| (w[0].y - w[1].y).abs() >= 0.4 - 1e-9), "{sides:?}: {pts:?}");
+        }
     }
 
     #[test]

@@ -59,6 +59,7 @@ pub(crate) fn generate(path: &Contour, params: &RunParams, hint: Option<Point>, 
         RunKind::Motif => motif(&pts, params.motif, params.width, params.spacing, step, params.flip),
         RunKind::Back => backstitch(&pts, step, 0.0),
         RunKind::Stem => backstitch(&pts, step, (params.width * 0.5).clamp(0.2, 3.0) * if params.flip { -1.0 } else { 1.0 }),
+        RunKind::Hand => hand(&pts, step, params.spacing),
     };
     let mut out = Out::new();
     out.stitches(repeat_passes(&once, passes));
@@ -74,6 +75,47 @@ fn repeat_passes(once: &[Point], passes: u32) -> Vec<Point> {
             out.extend(once.iter().rev().skip(1));
         } else {
             out.extend(once.iter().skip(1));
+        }
+    }
+    out
+}
+
+/// Most stitches a hand stitch run is cut into.
+const MAX_HAND_STITCHES: usize = 100_000;
+
+/// Hand stitch: stitches about `step` long, each sewn three times (forward, back and forward)
+/// so it lies thick, joined by single stitches about `gap` long that hardly show, every length
+/// varied a little at random (the same way each time), like a running stitch sewn by hand.
+/// The line starts and ends with a thick stitch.
+pub(crate) fn hand(pts: &[Point], step: f64, gap: f64) -> Vec<Point> {
+    let total = polyline::length(pts);
+    let Some(&first) = pts.first() else { return Vec::new() };
+    if !(total.is_finite() && total > 1e-6) {
+        return pts.to_vec();
+    }
+    let step = step.clamp(0.5, 12.0);
+    let gap = if gap.is_finite() { gap.clamp(0.3, 2.0 * step) } else { step * 0.5 };
+    // n thick stitches and n − 1 gaps, scaled to the line's length.
+    let n = ((total + gap) / (step + gap)).round().clamp(1.0, MAX_HAND_STITCHES as f64) as usize;
+    let mut rng = super::special::Rng::new(total.to_bits() ^ first.x.to_bits().rotate_left(17) ^ first.y.to_bits().rotate_left(41));
+    let lens: Vec<f64> = (0..2 * n - 1)
+        .map(|i| {
+            let base = if i % 2 == 0 { step } else { gap };
+            base * (0.8 + 0.4 * rng.unit())
+        })
+        .collect();
+    let k = total / lens.iter().sum::<f64>();
+    let mut out = Vec::with_capacity(4 * n);
+    out.push(first);
+    let mut s = 0.0;
+    for (i, len) in lens.iter().enumerate() {
+        let from = s;
+        s = (s + len * k).min(total);
+        let to = polyline::point_at(pts, s);
+        if i % 2 == 0 {
+            out.extend([to, polyline::point_at(pts, from), to]);
+        } else {
+            out.push(to);
         }
     }
     out
@@ -219,6 +261,40 @@ mod tests {
 
     fn line() -> Contour {
         Contour::from_points(&[Point::new(0.0, 0.0), Point::new(20.0, 0.0)], false)
+    }
+
+    #[test]
+    fn hand_stitches_are_thick_dashes_joined_by_short_single_stitches() {
+        let p = RunParams { kind: RunKind::Hand, stitch_length: 3.0, spacing: 1.0, ..Default::default() };
+        let pts: Vec<Point> = generate(&line(), &p, None, None).iter().map(|s| s.pos()).collect();
+        // first, then (to, back, to) for each thick stitch and one point per gap
+        assert_eq!((pts.len() - 1) % 4, 3, "{pts:?}");
+        assert_eq!(pts.first(), Some(&Point::new(0.0, 0.0)));
+        assert!(pts.last().unwrap().distance(Point::new(20.0, 0.0)) < 1e-9, "ends on the line's end");
+        let mut thick = Vec::new();
+        let mut gaps = Vec::new();
+        let mut i = 0;
+        while i + 3 < pts.len() {
+            let (a, b) = (pts[i], pts[i + 1]);
+            assert!(pts[i + 2].distance(a) < 1e-9 && pts[i + 3].distance(b) < 1e-9, "sewn forward, back and forward");
+            thick.push(a.distance(b));
+            if let Some(g) = pts.get(i + 4) {
+                gaps.push(b.distance(*g));
+            }
+            i += 4;
+        }
+        assert_eq!(thick.len(), 5, "20 mm of 3 mm stitches and 1 mm gaps: {thick:?}");
+        assert!(thick.iter().all(|l| (2.0..=4.2).contains(l)) && gaps.iter().all(|g| (0.6..=1.4).contains(g)), "{thick:?} {gaps:?}");
+        assert!(thick.windows(2).any(|w| (w[0] - w[1]).abs() > 0.05), "the lengths vary: {thick:?}");
+        // Short lines are one thick stitch; the same line comes out the same.
+        let short = Contour::from_points(&[Point::new(0.0, 0.0), Point::new(1.0, 0.0)], false);
+        assert_eq!(generate(&short, &p, None, None).len(), 4);
+        assert_eq!(generate(&line(), &p, None, None), generate(&line(), &p, None, None));
+        for (len, gap) in [(f64::NAN, f64::NAN), (1e308, -1.0), (0.0, 1e308)] {
+            let p = RunParams { kind: RunKind::Hand, stitch_length: len, spacing: gap, ..Default::default() };
+            let st = generate(&line(), &p, None, None);
+            assert!(st.len() >= 4 && st.iter().all(|s| s.pos().is_finite()), "{len} {gap}");
+        }
     }
 
     #[test]
