@@ -366,6 +366,14 @@ Use Preview Bounds: the Align panel flyout's Use Preview Bounds item shows and t
 preference (`prefs.set`); while it is on, the bounding box and the Transform panel, Properties and Control bar
 fields measure visual bounds.
 
+Align To: the Align panel's Align To choice is saved with the preferences, and `ui.inspect` reports it as
+`ui.align_to` (`"selection"` or `"artboard"`; Align to Key Object stores no choice). The align buttons of the Align
+panel, the Control bar and the Properties panel run `object.align` with `to: "artboard"` when one object is selected,
+else with `"key"` while the selection has a key object, else with that choice. The Object → Align items send the same
+`to` while every selected object is selected whole. With direct-selected anchor points or segments they send no `to`,
+and the points align to their own bounds. `object.align` from `engine.execute` or `ui.menu.invoke` without `to` keeps
+the engine's default: the key object while there is one, else the selection.
+
 Width Point Edit: double-clicking a width point with the Width tool, or `ui.widthPointEdit {id, index}`, opens the
 `widthPoint` dialog (fields `id`, `index`, `t`, `side1` and `side2`: the left and right widths in points, `linked`,
 `adjustAdjoining`). `ui.dialog.confirm` runs `stroke.widthPoint.set` with them; `ui.dialog.set {field: "discard",
