@@ -632,7 +632,7 @@ fn slider_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, suffix:
     widgets::label_row(ui, label, LABEL_W, |ui| {
         let mut v = d.f64(key, 0.0).round().clamp(0.0, 100.0) as u8;
         ui.spacing_mut().slider_width = FIELD_W - 60.0;
-        if ui.add(egui::Slider::new(&mut v, 0..=100).suffix(suffix)).changed() {
+        if widgets::slider(ui, egui::Slider::new(&mut v, 0..=100).suffix(suffix)).changed() {
             d.fields.insert(key.into(), json!(v));
         }
     });

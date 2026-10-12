@@ -895,7 +895,7 @@ pub fn opacity_blend(
         icons::paint(ui, "chevron-right", r.shrink2(vec2(3.0, 7.0)), if enabled { t.icon } else { t.text_disabled });
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             let mut o = opacity.unwrap_or(1.0) * 100.0;
-            let r = ui.add(egui::Slider::new(&mut o, 0.0..=100.0).show_value(false));
+            let r = slider(ui, egui::Slider::new(&mut o, 0.0..=100.0).show_value(false));
             let phase = if r.drag_stopped() || (r.changed() && !r.dragged()) {
                 Live::Released
             } else if r.changed() {
@@ -988,6 +988,19 @@ pub fn icon_button_enabled(ui: &mut Ui, icon: &str, tip: &str, selected: bool, e
     let pad = (size * 0.2).round();
     icons::paint(ui, icon, rect.shrink(pad), t.text_disabled);
     if tip.is_empty() { resp } else { resp.on_hover_text(tl!(tip)) }
+}
+
+/// A slider whose rail shows, filled up to the handle: the theme's widget fill matches the panel
+/// and dialog background, which leaves only the handle visible (#1483).
+pub fn slider(ui: &mut Ui, slider: egui::Slider<'_>) -> Response {
+    let t = Tokens::get(ui.ctx());
+    ui.scope(|ui| {
+        let v = ui.visuals_mut();
+        v.widgets.inactive.bg_fill = t.input_border;
+        v.selection.bg_fill = t.accent;
+        ui.add(slider.trailing_fill(true))
+    })
+    .inner
 }
 
 /// Regular-weight panel sub-header ("Shape Modes:", "Align Objects:").
