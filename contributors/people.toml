@@ -86,3 +86,6 @@ sync_github_name = false
 real_name = "Aaron Guo"
 display_name = "Aaron Guo"
 sync_github_name = false
+
+[people.Nael-Nathanael]
+sync_github_name = true
