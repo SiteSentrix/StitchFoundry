@@ -374,6 +374,18 @@ for the design as a new A4 document, to print (File › Print) or export as PDF:
 
 The worksheet's text is in English for now.
 
+## Multi-hooping
+
+A design larger than the hoop is sewn in several hoopings: `embroidery.multiHoop {hoop?, width?,
+height?, overlap?, dir?, format?, marks?}` lays a grid of hoopings over it that overlap by
+`overlap` (10 mm), puts each object, whole, in the first hooping that holds it, and writes each
+hooping as a machine file of its own (`name-1`, `name-2`…, each centred on the hoop) into `dir`.
+Each hooping first sews **registration crosses** in the overlaps it shares with its neighbours,
+in a colour of its own: re-hoop the fabric so the next hooping's crosses land on the ones already
+sewn, then sew on. Without `dir` it only plans (which object goes where). Objects aren't split
+across hoopings yet: one larger than a hooping is refused (choose a larger hoop or a wider
+overlap).
+
 ## Send to machine
 
 **Embroidery › Send to Machine** (`embroidery.send`) writes the design's machine file (in its

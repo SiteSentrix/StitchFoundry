@@ -496,8 +496,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | HO-01 | Hoop selection, manual and automatic (smallest that fits) | Partial | Manual; auto selection exists in `sf-core::hoops::smallest_fitting`, add UI | 6 |
 | HO-02 | Auto start and end (start/finish at centre or a corner) | Missing | Design-level start/end points | 6 |
 | HO-03 | Hoop positioning (auto centre vs fixed), rotate hoop, custom hoops | Partial | Centred; add fixed position, rotation, custom hoops | 6 |
-| MH-01 | Multi-hooping, automatic and manual (split designs over several hoopings) | Missing | §7.10 | 6 |
-| MH-02 | Registration marks, multi-position hoops, printing per hooping | Missing | §7.10 | 6 |
+| MH-01 | Multi-hooping, automatic and manual (split designs over several hoopings) | Partial | `embroidery.multiHoop`: an automatic grid of overlapping hoopings, each object whole in the first that holds it, a machine file per hooping; splitting objects across hoopings, manual hoopings and a panel still to come | 6 |
+| MH-02 | Registration marks, multi-position hoops, printing per hooping | Partial | Registration crosses in each overlap, sewn first in a colour of their own; multi-position hoops and printing per hooping still to come | 6 |
 | RP-01 | Production worksheets and approval sheets (PDF/print, customisable) | Partial | Embroidery › Worksheet (`embroidery.worksheet`): a production or approval sheet as an A4 document (design drawing, figures, colour table, notes, sign-off), printed or exported as PDF with the usual commands; text in English, layout fixed (customisable layouts, barcodes RP-02 still to come) | 6 |
 | RP-02 | Barcodes on worksheets (Code 39, Code 128) | Missing | §7.11 | 6 |
 | RP-03 | Print colorways, colour blocks | Missing | §7.11 | 6 |
@@ -571,7 +571,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
 **Tally:** 250 rows (grouping the roughly 300 features the reference lists): 159 done,
-31 partial, 54 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+33 partial, 52 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

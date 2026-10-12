@@ -353,6 +353,38 @@ fn monograms_stack_wear_ornaments_and_ring_borders() {
 }
 
 #[test]
+fn big_designs_split_into_hoopings_with_registration_marks() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // three 60 mm squares across 300 mm: too wide for a 130 × 180 hoop
+    for i in 0..3 {
+        rect(&mut s, (20.0 + 120.0 * f64::from(i)) * PT, 20.0 * PT, 60.0 * PT, 60.0 * PT);
+        s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    }
+    let dir = std::env::temp_dir().join(format!("sf-multihoop-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let r = s.execute("embroidery.multiHoop", &json!({"hoop": "Brother 130 × 180 (5×7)", "dir": dir.to_string_lossy()})).unwrap();
+    assert_eq!((r["columns"].as_u64(), r["rows"].as_u64()), (Some(3), Some(1)), "{r}");
+    let hoopings = r["hoopings"].as_array().unwrap();
+    assert_eq!(hoopings.len(), 3, "{r}");
+    assert!(hoopings.iter().all(|h| h["objects"].as_u64() == Some(1)), "{r}");
+    // each file fits the hoop, centred on it, and starts with the registration crosses
+    for h in hoopings {
+        let bytes = std::fs::read(h["file"].as_str().unwrap()).unwrap();
+        let (_, p) = sf_formats::read_any(&bytes, Some("dst")).unwrap();
+        let b = p.bounds();
+        assert!(b.min.x >= -65.1 && b.max.x <= 65.1 && b.min.y >= -90.1 && b.max.y <= 90.1, "{b:?}");
+        assert!(p.color_blocks().len() >= 2, "the marks are a colour of their own");
+    }
+    // the plan only, without marks; a hoop too small for an object
+    let r = s.execute("embroidery.multiHoop", &json!({"width": 130, "height": 180, "marks": false})).unwrap();
+    assert!(r["files"].as_array().unwrap().is_empty());
+    assert!(s.execute("embroidery.multiHoop", &json!({"width": 40, "height": 40, "overlap": 5})).is_err());
+    assert!(s.execute("embroidery.multiHoop", &json!({"width": 130, "height": 180, "overlap": 80})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn worksheets_show_the_design_and_its_figures() {
     let mut s = session();
     assert!(s.execute("embroidery.worksheet", &json!({})).is_err());
