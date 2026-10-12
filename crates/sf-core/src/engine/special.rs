@@ -270,12 +270,21 @@ pub(crate) fn motif_fill(polygon: &Polygon, params: &FillParams, angle: f64, out
     let (fwd, inv) = (Affine::rotate(angle.to_radians()), Affine::rotate(-angle.to_radians()));
     let mut p = polygon.clone();
     p.transform(&fwd);
-    // The motif centred across its row, and rows far enough inside for it to stay in.
-    let raw = super::run::motif_points(params.motif, params.custom_motif.as_ref());
-    let (lo, hi) = raw.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &(_, c)| (lo.min(c), hi.max(c)));
-    let mid = (lo + hi) * 0.5;
-    let shape: Vec<(f64, f64)> = raw.iter().map(|&(a, c)| (a, (c - mid) * across / size)).collect();
-    let inner = poly::offset(std::slice::from_ref(&p), -across * ((hi - lo) * 0.5).max(0.05));
+    // The motifs (a paired fill: two in turn) each centred across its row, and rows far enough
+    // inside for them to stay in.
+    let mut raws = vec![super::run::motif_points(params.motif, params.custom_motif.as_ref())];
+    raws.extend(params.motif_pair.map(super::run::motif_shape));
+    let mut reach: f64 = 0.05;
+    let shapes: Vec<Vec<(f64, f64)>> = raws
+        .iter()
+        .map(|raw| {
+            let (lo, hi) = raw.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &(_, c)| (lo.min(c), hi.max(c)));
+            let mid = (lo + hi) * 0.5;
+            reach = reach.max((hi - lo) * 0.5);
+            raw.iter().map(|&(a, c)| (a, (c - mid) * across / size)).collect()
+        })
+        .collect();
+    let inner = poly::offset(std::slice::from_ref(&p), -across * reach);
     let bb = p.bbox();
     let motifs = bb.width() / size;
     if inner.is_empty() || bb.is_empty() || motifs.is_nan() || motifs >= MAX_ROW_MOTIFS {
@@ -302,7 +311,7 @@ pub(crate) fn motif_fill(polygon: &Polygon, params: &FillParams, angle: f64, out
         }
         let shift = (r as f64 * offset).rem_euclid(1.0) * size;
         for (xa, xb) in spans {
-            let mut row = motif_row((xa, xb), y, size, shift, &shape, step);
+            let mut row = motif_row((xa, xb), y, size, shift, &shapes, step);
             if back {
                 row.reverse();
             }
@@ -316,15 +325,16 @@ pub(crate) fn motif_fill(polygon: &Polygon, params: &FillParams, angle: f64, out
 }
 
 /// One row of a motif fill from `xa` to `xb` at height `y`: motifs `size` long on a grid from
-/// `shift`, with a straight run before the first whole motif and after the last; no stitch
-/// longer than `step`.
-fn motif_row((xa, xb): (f64, f64), y: f64, size: f64, shift: f64, shape: &[(f64, f64)], step: f64) -> Vec<Point> {
+/// `shift` (the `shapes` in turn, the same one at the same place on every row), with a straight
+/// run before the first whole motif and after the last; no stitch longer than `step`.
+fn motif_row((xa, xb): (f64, f64), y: f64, size: f64, shift: f64, shapes: &[Vec<(f64, f64)>], step: f64) -> Vec<Point> {
     let (k0, k1) = (((xa - shift) / size).ceil(), ((xb - shift) / size).floor() - 1.0);
     let mut pts = vec![Point::new(xa, y)];
     if k1 >= k0 {
         for k in (k0 as i64)..=(k1 as i64) {
             let x0 = shift + k as f64 * size;
-            pts.extend(shape.iter().map(|&(a, c)| Point::new(x0 + a * size, y + c * size)));
+            let shape = usize::try_from(k.rem_euclid(shapes.len().max(1) as i64)).ok().and_then(|i| shapes.get(i));
+            pts.extend(shape.into_iter().flatten().map(|&(a, c)| Point::new(x0 + a * size, y + c * size)));
         }
     }
     pts.push(Point::new(xb, y));
@@ -543,11 +553,41 @@ mod tests {
     }
 
     #[test]
+    fn paired_motif_fills_sew_two_motifs_in_turn() {
+        use crate::model::{FillKind, Motif};
+        // On a row, a peak up and a dip down in turn, each in its place on the grid.
+        let (up, down) = (vec![(0.0, 0.0), (0.5, -1.0), (1.0, 0.0)], vec![(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)]);
+        let row = motif_row((0.0, 16.0), 10.0, 4.0, 0.0, &[up, down], 1.0);
+        let at = |x: f64| row.iter().find(|p| (p.x - x).abs() < 1e-9).map(|p| p.y);
+        assert_eq!((at(2.0), at(6.0), at(10.0)), (Some(6.0), Some(14.0), Some(6.0)), "{row:?}");
+        // A fill paired with a second motif sews differently from one of the first alone, and
+        // stays inside its shape.
+        let poly = Polygon::from_ring(vec![Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(40.0, 30.0), Point::new(0.0, 30.0)]);
+        let sew = |pair: Option<Motif>| {
+            let params = FillParams {
+                kind: FillKind::Motif,
+                motif: Motif::Wave,
+                motif_pair: pair,
+                motif_size: 4.0,
+                spacing: 5.0,
+                stitch_length: 2.0,
+                ..Default::default()
+            };
+            let mut out = Out::new();
+            motif_fill(&poly, &params, 0.0, &mut out, 1e9);
+            out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect::<Vec<Point>>()
+        };
+        let (single, paired) = (sew(None), sew(Some(Motif::Star)));
+        assert_ne!(single, paired);
+        assert!(paired.len() > 150 && paired.iter().all(|p| poly.contains(*p) || poly.distance_to_boundary(*p) < 0.05));
+    }
+
+    #[test]
     fn motif_fills_sew_custom_motifs_the_way_up_and_as_high_as_they_were_drawn() {
         use crate::model::{CustomMotif, FillKind};
         // On a row, a peak drawn upward points up (−y), as it does along a left-to-right run.
         let peak = [(0.0, 0.0), (0.5, -1.0), (1.0, 0.0)];
-        let row = motif_row((0.0, 20.0), 10.0, 4.0, 0.0, &peak, 10.0);
+        let row = motif_row((0.0, 20.0), 10.0, 4.0, 0.0, &[peak.to_vec()], 10.0);
         assert!(row.iter().all(|p| p.y <= 10.0 + 1e-9) && row.iter().any(|p| p.y < 6.0 + 1e-9), "{row:?}");
         // A custom motif half as high as it is long: rows of it 4 mm long and 2 mm high.
         let poly = Polygon::from_ring(vec![Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(40.0, 30.0), Point::new(0.0, 30.0)]);

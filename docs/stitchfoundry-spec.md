@@ -388,7 +388,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | PS-01 | Tatami offsets (texture by row offset patterns) | Done | | – |
-| PS-02 | Program splits (needle-point patterns inside fills) | Partial | Tatami *Texture*: 6 patterns generated in code (diamonds, waves, herringbone, bricks, circles, scales) with tile size and turn; §7.3 wants 40+ | 2 |
+| PS-02 | Program splits (needle-point patterns inside fills) | Partial | Tatami *Texture*: 14 patterns generated in code (diamonds, waves, herringbone, bricks, circles, scales, hexagons, chevrons, zigzag, ogee, basket weave, stars, hearts, leaves) with tile size and turn; §7.3 wants 40+ | 2 |
 | PS-03 | User-defined splits (draw split lines) | Done | Paths drawn over a tatami fill carved in as split lines (Embroidery › Carve Split Lines, `embroidery.setSplits`), shown dashed on the fill | – |
 | PS-04 | Carving stamps (embossed patterns pressed into fills) | Partial | Any closed shape's outline pressed in (Carve Split Lines); no stamp library yet | 2 |
 | CS-01 | Contour fill/outline | Done | | – |
@@ -401,7 +401,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | MO-01 | Single motifs (place one stitched motif) | Partial | Embroidery › Place Motif puts one motif on the artboard as a run you move and reshape; no placement tool yet | 2 |
 | MO-02 | Motif runs | Done | 11 built-in motifs, and the design's own | – |
 | MO-03 | Graded motif runs (motif size varies along the line) | Done | Motif runs grow or shrink to *Width at end* | – |
-| MO-04 | Motif fills, paired motif fills, 3D motif fills | Partial | Motif fill: rows of any motif inside the shape, row offset; paired and 3D motif fills still missing | 2 |
+| MO-04 | Motif fills, paired motif fills, 3D motif fills | Partial | Motif fill: rows of any motif inside the shape, row offset; paired motif fills (a second motif in turn along the rows); 3D motif fills still missing | 2 |
 | MO-05 | Graded motif columns | Missing | Motif sized to column width | 2 |
 | MO-06 | Motif sets and custom motifs (make a motif from an object) | Partial | Embroidery › Make Motif turns a drawn path into a motif kept with the design: motif runs, motif fills, borders and Place Motif sew it, upright as drawn; remaking it by name updates what sews it. No motif sets shared across designs (preferences) yet | 2 |
 

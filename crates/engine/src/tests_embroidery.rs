@@ -1807,6 +1807,16 @@ fn motif_fills_and_graded_motif_runs_are_stitch_parameters() {
     s.execute("embroidery.setParams", &json!({"params": {"widthEnd": 8}})).unwrap();
     let sf_core::attr::StitchType::Run(r) = emb(&s, line).stitch else { panic!() };
     assert_eq!(r.width_end, Some(8.0));
+    // a paired motif fill, and every texture by its name
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"motifPair": "Star"}})).unwrap();
+    assert_eq!(fill_params(&s, a).motif_pair, Some(sf_core::model::Motif::Star));
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    for pattern in sf_core::model::TexturePattern::ALL {
+        s.execute("embroidery.setParams", &json!({"params": {"texture": {"pattern": pattern.id()}}})).unwrap();
+        assert_eq!(fill_params(&s, a).texture.map(|t| t.pattern), Some(pattern));
+        assert!(needles(&s, a).len() > 100, "{pattern:?}");
+    }
 }
 
 #[test]

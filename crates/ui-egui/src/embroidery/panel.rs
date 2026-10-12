@@ -563,6 +563,14 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             }
             if f.kind == FillKind::Motif {
                 motif_rows(app, ui, target, f.motif, f.custom_motif.as_ref());
+                // a paired motif fill: a second motif in turn with the first along the rows
+                let mut pairs = vec![tl!("None")];
+                pairs.extend(Motif::ALL.iter().map(|m| motif_name(*m)));
+                let cur = f.motif_pair.and_then(|m| Motif::ALL.iter().position(|x| *x == m)).map_or(0, |i| i + 1);
+                if let Some(i) = pick(ui, tl!("Paired with"), "fpair", cur, &pairs) {
+                    let v = i.checked_sub(1).and_then(|k| Motif::ALL.get(k)).map_or(Value::Null, |m| json!(m));
+                    set(app, target, json!({ "motif_pair": v }));
+                }
                 if let Some(v) = num(ui, tl!("Motif size"), "fms", f.motif_size, " mm", 1) {
                     set(app, target, json!({ "motif_size": v.clamp(1.0, 50.0) }));
                 }
@@ -770,6 +778,23 @@ fn motif_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, current: Mo
     }
 }
 
+/// A built-in motif's name in the UI language.
+fn motif_name(m: Motif) -> &'static str {
+    match m {
+        Motif::Wave => tl!("Wave"),
+        Motif::Scallop => tl!("Scallop"),
+        Motif::Diamond => tl!("Diamond"),
+        Motif::Cross => tl!("Cross"),
+        Motif::Feather => tl!("Feather"),
+        Motif::Heart => tl!("Heart"),
+        Motif::Star => tl!("Star"),
+        Motif::Leaf => tl!("Leaf"),
+        Motif::Loop => tl!("Loop"),
+        Motif::Zigzag => tl!("Zigzag"),
+        Motif::EStitch => tl!("E-stitch"),
+    }
+}
+
 /// A motif picked from the motif dropdown.
 enum MotifChoice {
     BuiltIn(Motif),
@@ -780,19 +805,7 @@ enum MotifChoice {
 /// The motif dropdown over the built-in motifs and the design's (`library`): the motif picked,
 /// if it changed.
 fn pick_motif(ui: &mut Ui, library: &[String], current: Motif, custom: Option<&CustomMotif>) -> Option<MotifChoice> {
-    let mut names = vec![
-        tl!("Wave"),
-        tl!("Scallop"),
-        tl!("Diamond"),
-        tl!("Cross"),
-        tl!("Feather"),
-        tl!("Heart"),
-        tl!("Star"),
-        tl!("Leaf"),
-        tl!("Loop"),
-        tl!("Zigzag"),
-        tl!("E-stitch"),
-    ];
+    let mut names: Vec<&str> = Motif::ALL.iter().map(|m| motif_name(*m)).collect();
     let builtin = names.len();
     names.extend(library.iter().map(String::as_str));
     if let Some(c) = custom
@@ -836,6 +849,14 @@ fn texture_name(p: TexturePattern) -> &'static str {
         TexturePattern::Bricks => tl!("Bricks"),
         TexturePattern::Circles => tl!("Circles"),
         TexturePattern::Scales => tl!("Scales"),
+        TexturePattern::Hexagons => tl!("Hexagons"),
+        TexturePattern::Chevrons => tl!("Chevrons"),
+        TexturePattern::Zigzag => tl!("Zigzag"),
+        TexturePattern::Ogee => tl!("Ogee"),
+        TexturePattern::BasketWeave => tl!("Basket weave"),
+        TexturePattern::Stars => tl!("Stars"),
+        TexturePattern::Hearts => tl!("Hearts"),
+        TexturePattern::Leaves => tl!("Leaves"),
     }
 }
 

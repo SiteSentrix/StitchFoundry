@@ -93,6 +93,8 @@ grow or shrink from *Width* at the start to *Width at end*, their repeats keepin
 proportions. Motifs, blanket prongs and their grading follow the line the way it was drawn,
 whichever end sewing starts from (the closest join). A **motif fill** sews rows of motifs across a shape, half a motif inside its outline;
 the row offset shifts each row along by that fraction of a motif (0.5 for a brick layout).
+*Paired with* makes a paired motif fill: a second motif sewn in turn with the first along every
+row (`motif_pair`), each in the same place on every row.
 **Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
 sewn in a single run: move, scale and reshape it like any art.
 
@@ -234,7 +236,8 @@ the fill: an embossed texture without another thread.
 
 - **Texture** (Embroidery panel, tatami fills): a pattern tiled over the fill, with a needle point
   wherever a row crosses one of its lines (programmed splits). **Diamonds**, **Waves**,
-  **Herringbone**, **Bricks**, **Circles** and **Scales**; *Texture size* is the width of one
+  **Herringbone**, **Bricks**, **Circles**, **Scales**, **Hexagons**, **Chevrons**, **Zigzag**,
+  **Ogee**, **Basket weave**, **Stars**, **Hearts** and **Leaves**; *Texture size* is the width of one
   pattern tile (to start with, a size that suits the stitch length), *Texture angle* turns the
   pattern against the stitch rows. Between the pattern's lines the stitches run straight to the
   next line, broken up only where the gap is longer than a long stitch, so the pattern reads
