@@ -614,3 +614,160 @@ fn the_clipping_mask_button_acts_on_the_highlighted_group() {
     assert_eq!(run(&mut s, "layer.clippingMask.toggle", json!({}))["clip"], true);
     assert!(node(&s, g).clips());
 }
+
+/// #785: explicit malformed layer targets must never become the current-layer default.
+#[test]
+fn layer_delete_rejects_invalid_explicit_targets() {
+    let mut unexpected = vec![];
+    for params in [json!({"id": "1"}), json!({"ids": [1, "2"]}), json!({"id": "$1.id"})] {
+        let mut s = session();
+        run(&mut s, "layer.new", json!({}));
+        run(&mut s, "layer.new", json!({}));
+        let before = layer_target_snapshot(&s);
+        let result = s.execute("layer.delete", &params);
+        if result.is_ok() {
+            let names: Vec<_> = s.doc().unwrap().doc.layers.iter().map(|l| l.display_name()).collect();
+            unexpected.push(format!("{params}: {result:?}; remaining layers {names:?}"));
+        } else {
+            assert_eq!(layer_target_snapshot(&s), before, "{params}");
+        }
+    }
+    assert!(unexpected.is_empty(), "malformed requests succeeded: {}", unexpected.join("; "));
+}
+
+fn layer_target_snapshot(s: &Session) -> Value {
+    let st = s.doc().unwrap();
+    let history =
+        |entries: &[HistoryEntry]| entries.iter().map(|e| json!({"label": e.label, "doc": e.doc, "selection": e.selection})).collect::<Vec<_>>();
+    json!({"doc": st.doc, "selection": st.selection, "revision": st.revision, "activeLayer": st.active_layer,
+        "rows": st.layer_rows, "undo": history(&st.history.undo), "redo": history(&st.history.redo)})
+}
+
+fn layer_target_fixture() -> (Session, Vec<NodeId>) {
+    let mut s = session();
+    let first = s.doc().unwrap().doc.layers[0].id;
+    rect(&mut s, 0.0);
+    let second = id(&run(&mut s, "layer.new", json!({})));
+    rect(&mut s, 40.0);
+    let third = id(&run(&mut s, "layer.new", json!({})));
+    rect(&mut s, 80.0);
+    run(&mut s, "layer.highlight", json!({"ids": [first.0, second.0]}));
+    (s, vec![first, second, third])
+}
+
+fn malformed_layer_targets(first: NodeId, second: NodeId) -> Vec<Value> {
+    let mut params = vec![];
+    for bad in [json!("1"), json!("$1.id"), json!(1.0), json!(1.5), json!(-1), Value::Null, json!(true), json!({}), json!([])] {
+        params.push(json!({"id": bad}));
+        params.push(json!({"ids": [first.0, bad]}));
+    }
+    for bad in [Value::Null, json!("1"), json!(1), json!(false), json!({})] {
+        params.push(json!({"ids": bad, "id": first.0}));
+    }
+    for missing in [0, u64::MAX] {
+        params.push(json!({"id": missing}));
+        params.push(json!({"ids": [first.0, second.0, missing]}));
+    }
+    params
+}
+
+fn assert_layer_target_error(s: &mut Session, command: &str, params: Value) {
+    let before = layer_target_snapshot(s);
+    let error = s.execute(command, &params).unwrap_err();
+    assert!(error.to_string().contains(command), "{command} {params}: {error}");
+    assert_eq!(layer_target_snapshot(s), before, "{command} {params}: rejected targets must leave all state unchanged");
+}
+
+/// #785: shared row commands reject malformed or unknown targets before any partial edits.
+#[test]
+fn layer_target_validation_keeps_document_selection_revision_and_history_unchanged() {
+    let (_, rows) = layer_target_fixture();
+    for command in [
+        "layer.delete",
+        "layer.duplicate",
+        "layer.setProps",
+        "layer.template",
+        "layer.merge",
+        "layer.reverse",
+        "layer.hideOthers",
+        "layer.outlineOthers",
+        "layer.lockOthers",
+    ] {
+        for mut params in malformed_layer_targets(rows[0], rows[1]) {
+            let (mut s, _) = layer_target_fixture();
+            if command == "layer.setProps" {
+                params["name"] = json!("Changed");
+            }
+            assert_layer_target_error(&mut s, command, params);
+        }
+    }
+}
+
+/// These commands have their own selectors, not the shared row-default parser.
+#[test]
+fn layer_collect_and_flatten_validate_their_own_explicit_targets() {
+    let (_, rows) = layer_target_fixture();
+    for params in malformed_layer_targets(rows[0], rows[1]) {
+        let command = if params.get("ids").is_some() { "layer.collectInNew" } else { "layer.flatten" };
+        let (mut s, _) = layer_target_fixture();
+        assert_layer_target_error(&mut s, command, params);
+    }
+}
+
+/// Truncation limits work, not validation: a malformed or unknown tail cannot be ignored.
+#[test]
+fn layer_target_arrays_are_fully_validated_before_the_row_limit() {
+    // The existing panel row limit is 100,000; exercise the public command beyond it.
+    const ROW_LIMIT: usize = 100_000;
+    for tail in [json!("$1.id"), json!(u64::MAX)] {
+        let (mut s, rows) = layer_target_fixture();
+        let mut values = vec![json!(rows[0].0); ROW_LIMIT + 1];
+        *values.last_mut().unwrap() = tail;
+        assert_layer_target_error(&mut s, "layer.delete", json!({"ids": values}));
+    }
+    let (mut s, rows) = layer_target_fixture();
+    let mut values = vec![json!(rows[0].0); ROW_LIMIT + 1];
+    *values.last_mut().unwrap() = json!(rows[1].0);
+    run(&mut s, "layer.setProps", json!({"ids": values, "name": "Within limit"}));
+    assert_eq!(node(&s, rows[0]).name.as_deref(), Some("Within limit"));
+    assert_ne!(node(&s, rows[1]).name.as_deref(), Some("Within limit"), "the valid tail remains beyond the work cap");
+}
+
+#[test]
+fn layer_target_defaults_and_valid_explicit_precedence_are_preserved() {
+    let (mut s, rows) = layer_target_fixture();
+    run(&mut s, "layer.setProps", json!({"name": "Highlighted"}));
+    assert_eq!(node(&s, rows[0]).name.as_deref(), Some("Highlighted"));
+    assert_eq!(node(&s, rows[1]).name.as_deref(), Some("Highlighted"));
+    run(&mut s, "layer.setProps", json!({"id": rows[2].0, "name": "Single"}));
+    assert_eq!(node(&s, rows[2]).name.as_deref(), Some("Single"));
+    let before = undos(&s);
+    run(&mut s, "layer.setProps", json!({"ids": [rows[1].0, rows[0].0, rows[1].0], "id": "$1.id", "name": "Explicit"}));
+    assert_eq!(node(&s, rows[0]).name.as_deref(), Some("Explicit"));
+    assert_eq!(node(&s, rows[1]).name.as_deref(), Some("Explicit"));
+    assert_eq!(node(&s, rows[2]).name.as_deref(), Some("Single"));
+    assert_eq!(undos(&s), before + 1, "duplicates remain one edit");
+    assert_layer_target_error(&mut s, "layer.setProps", json!({"ids": [], "id": rows[2].0, "name": "Must not fall back"}));
+    run(&mut s, "layer.setCurrent", json!({"id": rows[2].0}));
+    run(&mut s, "layer.highlight", json!({"ids": []}));
+    run(&mut s, "layer.setProps", json!({"name": "Current"}));
+    assert_eq!(node(&s, rows[2]).name.as_deref(), Some("Current"));
+    let before = undos(&s);
+    run(&mut s, "layer.delete", json!({}));
+    assert!(s.doc().unwrap().doc.node(rows[2]).is_none());
+    assert_eq!(undos(&s), before + 1);
+}
+
+#[test]
+fn layer_collect_and_flatten_keep_valid_and_omitted_target_behavior() {
+    let (mut s, rows) = layer_target_fixture();
+    let r = run(&mut s, "layer.flatten", json!({"id": rows[2].0}));
+    assert_eq!(r["id"], json!(rows[2].0));
+    assert_eq!(s.doc().unwrap().doc.layers.len(), 1);
+    let (mut s, _) = layer_target_fixture();
+    let selected = s.doc().unwrap().selection.objects.clone();
+    s.doc_mut().unwrap().layer_rows.clear();
+    let r = run(&mut s, "layer.collectInNew", json!({}));
+    let collected = id(&r);
+    assert!(selected.iter().all(|id| parent(&s, *id) == Some(collected)));
+}
