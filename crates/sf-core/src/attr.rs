@@ -453,6 +453,10 @@ pub struct Embroidery {
     /// thread by hand on a single-needle machine).
     #[serde(default, skip_serializing_if = "is_false")]
     pub stop_after: bool,
+    /// Start a colour block of its own, a colour change before it even in the colour sewn just
+    /// before (split colour blocks: the same colour sewn as two, a stop between).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub own_block: bool,
     /// Leave out the last needle point (Omit last stitch): one stitch less where the
     /// object's last stitch would sew back over its edge or into the next object.
     #[serde(default, skip_serializing_if = "is_false")]
@@ -491,6 +495,7 @@ impl Embroidery {
             remove_underlying: false,
             underlying_overlap: None,
             stop_after: false,
+            own_block: false,
             omit_last: false,
             frozen: None,
             style: None,

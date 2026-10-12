@@ -322,7 +322,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | OP-05 | Design templates (properties + layout) | Partial | VectorCraft templates | 6 |
 | CW-01 | Colorways (several thread schemes per design) | Done | `DocEmbroidery.colorways` (a thread per slot: the design's colours in first-use order) and the active one, used by the preview, machine files and worksheets; `embroidery.colorway.*` and the Design section | 0 |
 | CW-02 | Name design elements | Done | Layers/object names | – |
-| CW-03 | Split colour blocks (same colour, separate stops) | Missing | Per-object "own colour block" flag | 6 |
+| CW-03 | Split colour blocks (same colour, separate stops) | Done | *Own colour block* (`ownBlock`): a colour change before the object even in the same colour, kept in machine files | 0 |
 | CW-04 | Backgrounds (fabric colour, garment image) | Partial | Fabric colour; add background image | 6 |
 | CW-05 | Product visualizer (design on a garment mockup) | Missing | Place design on product images (user-supplied or ours) | 6 |
 | CW-06 | Change colour schemes (recolour design) | Partial | VectorCraft Recolor Artwork recolours art; make it recolour threads too | 6 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 164 done,
-33 partial, 47 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 165 done,
+33 partial, 46 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

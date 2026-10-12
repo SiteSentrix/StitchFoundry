@@ -401,6 +401,9 @@ pub struct EmbObject {
     /// Stop the machine after this object.
     #[serde(default, skip_serializing_if = "is_false")]
     pub stop_after: bool,
+    /// Start a colour block of its own, even in the colour sewn just before.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub own_block: bool,
     /// Leave out the object's last needle point.
     #[serde(default, skip_serializing_if = "is_false")]
     pub omit_last: bool,
@@ -427,6 +430,7 @@ impl EmbObject {
             tie_in: None,
             tie_off: None,
             stop_after: false,
+            own_block: false,
             omit_last: false,
             branch: None,
         }

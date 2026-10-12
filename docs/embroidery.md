@@ -581,7 +581,11 @@ frozen. Use it to sew part of an object in another colour, or to put something b
 **Machine functions:** a trim or a stop can be put after any stitch, and any stitch made a jump
 (the frame moves there without sewing), with `embroidery.function.insert`; `embroidery.function.clear`
 takes them out again. **Stop after** in the panel stops the machine after an object without
-freezing it (to place appliqué fabric, or change thread on a single-needle machine).
+freezing it (to place appliqué fabric, or change thread on a single-needle machine). **Own colour
+block** gives an object a colour block of its own: a colour change before it even when the object
+before is in the same colour (split colour blocks: say, a dark red sewn as two blocks so a
+multi-needle machine can take it from two needles, or so it stops there; `ownBlock` in
+`embroidery.setParams`).
 
 The **Stitch List** panel (Window or Embroidery menu) lists every record of the design in sewing
 order: number, function (stitch, jump, trim, colour change, stop), position, length and the object
