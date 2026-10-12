@@ -4248,3 +4248,4 @@ lighting	Light	Свет
 @msg	unknown parameter `{key}`; the command takes no parameters	неизвестный параметр `{key}`; у команды нет параметров
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
+@msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки

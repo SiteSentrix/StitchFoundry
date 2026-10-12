@@ -4246,3 +4246,4 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; the command takes no parameters	`{key}` は不明なパラメーターです。このコマンドにパラメーターはありません
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
+@msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません

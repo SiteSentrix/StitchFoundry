@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Links",
             [],
             None,
-            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first} every image object and placed document in the layers, as the Links panel lists them → {links: [{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels)}], missing, modified, embedded}",
+            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first} every image object and placed document in the layers, as the Links panel lists them → {links: [{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image too large to draw, document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels)}], missing, modified, embedded}",
             has_doc,
             list
         ),
@@ -1011,7 +1011,14 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let (link, mut row) = match &n.kind {
             NodeKind::Image(im) => {
-                (im.link.as_ref(), json!({ "format": format_label(&st.doc, im), "pixelWidth": im.width, "pixelHeight": im.height }))
+                let mut row = json!({ "format": format_label(&st.doc, im), "pixelWidth": im.width, "pixelHeight": im.height });
+                // Only an image that could be past the decode allowance (at 16 bytes a pixel, the
+                // most a decoder gives) has its header read for this.
+                let large = im.width as u64 * im.height as u64 > fileio::MAX_RASTER_ALLOC / 16;
+                if let Some(note) = st.doc.images.get(&im.key).filter(|_| large).and_then(|b| fileio::too_large_note(&b.bytes)) {
+                    row["note"] = json!(note);
+                }
+                (im.link.as_ref(), row)
             }
             NodeKind::PlacedDocument(p) => (Some(&p.link), document_row(p)),
             _ => continue,

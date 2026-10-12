@@ -192,7 +192,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     let title = file_name(name);
     let mut converted = false;
     let mut preview_only = false;
-    let (mut doc, warnings, restored) = match format.id {
+    let (mut doc, mut warnings, restored) = match format.id {
         // EPS and PostScript .ai: the document our EPS files carry, else the PostScript read.
         _ if format.id == "eps" || vectorcraft_pdf::is_postscript(bytes) => {
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
@@ -263,6 +263,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
         doc.title = title;
     }
+    warnings.extend(doc.images.values().filter_map(|b| too_large_note(&b.bytes)));
     Ok(Loaded { doc, format, warnings, restored, converted, preview_only })
 }
 
@@ -393,6 +394,17 @@ pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
 /// is ~475 MB as RGBA, past the decoder's 512 MB default once it is converted. The web app keeps
 /// that default: wasm32 has 4 GB to address and aborts when an allocation fails.
 pub(crate) const MAX_RASTER_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else { 2 << 30 };
+
+/// What to say of encoded image `bytes` that need more than [`MAX_RASTER_ALLOC`] to decode (its
+/// header says so; the pixels aren't read): the renderer, which has the same allowance, draws
+/// nothing for them, so Open, Place and the Links panel say it (#1479). `None` for images that
+/// decode, and for bytes that aren't an image.
+pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
+    use image::ImageDecoder as _;
+    let d = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?;
+    let (w, h) = d.dimensions();
+    (d.total_bytes() > MAX_RASTER_ALLOC).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
+}
 
 /// Decode an image's header (and, for formats stored as PNG, its pixels). CMYK TIFFs are kept as
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]); CMYK TIFFs with an alpha channel, which

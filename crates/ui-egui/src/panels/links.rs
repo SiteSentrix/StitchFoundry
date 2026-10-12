@@ -219,11 +219,16 @@ fn badge(ui: &Ui, r: egui::Rect, status: &str) {
 
 fn status_tip(r: &Value) -> String {
     let path = r["found"].as_str().or(r["path"].as_str()).unwrap_or_default();
-    match r["status"].as_str().unwrap_or_default() {
+    let tip = match r["status"].as_str().unwrap_or_default() {
         "missing" => crate::i18n::fmt(tl!("Missing: {path}"), &[("path", path)]),
         "modified" => crate::i18n::fmt(tl!("Modified since it was read: {path}"), &[("path", path)]),
         "embedded" => tl!("Embedded").into(),
         _ => path.to_string(),
+    };
+    // An image too large to draw (`links.list`'s note).
+    match r["note"].as_str() {
+        Some(note) => format!("{tip}\n{}", crate::i18n::msg(note)),
+        None => tip,
     }
 }
 
