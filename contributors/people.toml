@@ -85,3 +85,8 @@ sync_github_name = false
 [people.sanyamsingh001]
 display_name = "sanyamsingh001"
 sync_github_name = false
+
+[people.aguo890]
+real_name = "Aaron Guo"
+display_name = "Aaron Guo"
+sync_github_name = false
