@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::json;
 use vectorcraft_doc::shaper::{FILL_PREFIX, SOURCES, STROKE_PREFIX};
-use vectorcraft_doc::{LiveShape, Node, NodeKind};
+use vectorcraft_doc::{LiveShape, Node};
 use vectorcraft_geom::{Point, Shape as _};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
@@ -134,7 +134,7 @@ fn shaper_erases_only_protruding_stroke_pieces_keeps_fill_and_original_line() {
     assert!(stroke(&s, g, 225.0, 150.0));
     assert_eq!(fill(&s, g, 150.0, 130.0).as_deref(), Some("#ffff00"));
     assert_eq!(node(&s, line), &original_line);
-    assert!(matches!(node(&s, circle).kind, NodeKind::Path { live: Some(LiveShape::Ellipse { .. }), .. }));
+    assert!(matches!(node(&s, circle).live_shape(), Some(LiveShape::Ellipse { .. })));
     let g = scribble(&mut s, &[[210.0, 140.0], [220.0, 160.0], [230.0, 140.0], [240.0, 160.0]]);
     assert!(!stroke(&s, g, 225.0, 150.0));
     assert!(stroke(&s, g, 150.0, 150.0));
@@ -152,7 +152,7 @@ fn shaper_source_move_resize_native_roundtrip_and_release_preserve_live_art() {
     assert_eq!(node(&s, a).geometric_bounds().unwrap().x0, 20.0);
     s.execute("select.set", &json!({"ids":[a.0]})).unwrap();
     s.execute("object.setBounds", &json!({"width":120.0,"height":110.0,"reference":0})).unwrap();
-    assert!(matches!(node(&s, a).kind, NodeKind::Path { live: Some(LiveShape::Rectangle { .. }), .. }));
+    assert!(matches!(node(&s, a).live_shape(), Some(LiveShape::Rectangle { .. })));
     let doc = &s.doc().unwrap().doc;
     let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
     assert_eq!(back.layers, doc.layers);
@@ -175,7 +175,7 @@ fn shaper_face_paint_survives_source_edits_and_expand_discards_only_sources() {
     s.execute("object.move", &json!({"ids":[a.0],"dx":5,"dy":0})).unwrap();
     assert_eq!(fill(&s, g, 75.0, 50.0).as_deref(), Some("#00ff00"));
     s.execute("shaper.expand", &json!({"id":g.0})).unwrap();
-    assert!(node(&s, g).shaper.is_none());
+    assert!(node(&s, g).extras().shaper.is_none());
     assert!(s.doc().unwrap().doc.node(a).is_none());
     assert_eq!(fill(&s, g, 75.0, 50.0).as_deref(), Some("#00ff00"));
 }
@@ -211,7 +211,7 @@ fn shaper_lines_keep_free_angles_with_or_without_shift() {
             s.pointer(&PointerEvent::new(kind, x, y).with_mods(Mods { shift, ..Default::default() }), v).unwrap();
         }
         let n = node(&s, s.doc().unwrap().selection.objects[0]);
-        assert!(matches!(n.kind,NodeKind::Path{live:Some(LiveShape::Line{a,b}),..} if a==Point::new(30.0,40.0) && b==Point::new(230.0,100.0)));
+        assert!(matches!(n.live_shape(), Some(LiveShape::Line { a, b }) if *a == Point::new(30.0, 40.0) && *b == Point::new(230.0, 100.0)));
     }
 }
 
@@ -258,7 +258,7 @@ fn shaper_tool_trims_both_diagonal_ends_and_only_construction_can_pick_them() {
         }
     }
     let g = s.doc().unwrap().selection.objects[0];
-    assert!(node(&s, g).shaper.is_some());
+    assert!(node(&s, g).extras().shaper.is_some());
     assert_eq!(node(&s, line), &original);
     assert!(stroke(&s, g, 150.0, 150.0));
     assert_eq!(fill(&s, g, 150.0, 130.0).as_deref(), Some("#ffff00"));

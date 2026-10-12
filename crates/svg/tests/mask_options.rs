@@ -19,7 +19,7 @@ fn masked(clip: bool, invert: bool) -> Document {
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 90.0)), white);
     let mut m = OpacityMask::new(art, clip);
     m.invert = invert;
-    n.mask = Some(Box::new(m));
+    n.extras_mut().mask = Some(Box::new(m));
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
     d
@@ -27,7 +27,7 @@ fn masked(clip: bool, invert: bool) -> Document {
 
 fn masks(d: &Document) -> Vec<OpacityMask> {
     let mut v = vec![];
-    d.walk(|n| v.extend(n.mask.as_deref().cloned()));
+    d.walk(|n| v.extend(n.extras().mask.as_deref().cloned()));
     v
 }
 

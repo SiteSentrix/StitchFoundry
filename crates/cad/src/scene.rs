@@ -349,7 +349,7 @@ impl<'a> Scene<'a> {
         if n.blend != vectorcraft_color::BlendMode::Normal {
             self.warn("blending modes are left out");
         }
-        if n.mask.as_ref().is_some_and(|m| !m.disabled) {
+        if n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {
             self.warn("opacity masks are left out");
         }
         let raster = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id));

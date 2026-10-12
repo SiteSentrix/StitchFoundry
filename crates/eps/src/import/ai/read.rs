@@ -1054,7 +1054,7 @@ impl<'a> Reader<'a> {
                 true
             });
         }
-        if let Some(m) = &mut n.mask {
+        if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
             self.reid(Arc::make_mut(&mut m.art));
         }
         if let Some(children) = n.children_mut() {
@@ -1437,7 +1437,7 @@ impl<'a> Reader<'a> {
         self.doc.images.entry(key.clone()).or_insert(blob);
         let gs = self.gs.clone();
         let im = ImageObject { key, width: w as u32, height: h as u32, xf, link: None, placement: Default::default() };
-        let mut node = self.new_node(NodeKind::Image(im), &gs);
+        let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
         self.add(node, false)
@@ -1528,7 +1528,8 @@ impl<'a> Reader<'a> {
         }
         if self.color_model.unwrap_or(self.cmyk_colors > self.rgb_colors) {
             doc.color_mode = ColorMode::Cmyk;
-            (doc.swatches, doc.swatch_groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+            let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+            (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
         }
         for n in &self.spots {
             if doc.swatch(&n.name).is_none() {

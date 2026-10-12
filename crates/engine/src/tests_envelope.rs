@@ -40,7 +40,7 @@ fn enveloped(s: &mut Session, cmd: &str, params: Value) -> (NodeId, NodeId) {
 
 fn kind(s: &Session, id: NodeId) -> EnvelopeKind {
     match node(s, id).kind {
-        NodeKind::Envelope { kind, .. } => kind,
+        NodeKind::Envelope { kind, .. } => *kind,
         k => panic!("{k:?}"),
     }
 }
@@ -130,7 +130,7 @@ fn release_gives_back_the_warp_shape_as_a_mesh_and_keeps_the_transparency() {
     s.execute("transparency.set", &json!({"opacity": 40, "blend": "multiply"})).unwrap();
     let mask = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Default::default());
     s.edit("mask", |d, _| {
-        d.node_mut(e).unwrap().mask = Some(Box::new(OpacityMask::new(mask, true)));
+        d.node_mut(e).unwrap().extras_mut().mask = Some(Box::new(OpacityMask::new(mask, true)));
         Ok(())
     })
     .unwrap();
@@ -139,7 +139,7 @@ fn release_gives_back_the_warp_shape_as_a_mesh_and_keeps_the_transparency() {
     assert_eq!(ids.len(), 2);
     assert_eq!(ids[0], a);
     let content = node(&s, a);
-    assert_eq!((content.opacity, content.blend, content.mask.is_some()), (0.4, BlendMode::Multiply, true), "the content keeps the look");
+    assert_eq!((content.opacity, content.blend, content.extras().mask.is_some()), (0.4, BlendMode::Multiply, true), "the content keeps the look");
     let NodeKind::Mesh(m) = node(&s, ids[1]).kind else { panic!("the warp's shape comes back as a mesh") };
     // The mesh follows the arc: its outline reaches below the content's bottom edge at the sides.
     let b = m.outline().bounds().unwrap();
@@ -172,14 +172,14 @@ fn expand_keeps_name_transparency_knockout_and_mask() {
     s.edit("name and mask", |d, _| {
         let n = d.node_mut(e).unwrap();
         n.name = Some("Banner".into());
-        n.mask = Some(Box::new(OpacityMask::new(mask, true)));
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(mask, true)));
         Ok(())
     })
     .unwrap();
     s.execute("object.envelope.expand", &json!({})).unwrap();
     let g = node(&s, e);
     assert!(matches!(g.kind, NodeKind::Group { .. }));
-    assert_eq!((g.name.as_deref(), g.opacity, g.isolate, g.knockout, g.mask.is_some()), (Some("Banner"), 0.7, true, Knockout::On, true));
+    assert_eq!((g.name.as_deref(), g.opacity, g.isolate, g.knockout, g.extras().mask.is_some()), (Some("Banner"), 0.7, true, Knockout::On, true));
 }
 
 #[test]

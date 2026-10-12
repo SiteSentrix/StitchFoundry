@@ -144,7 +144,7 @@ fn masks_in_symbols_move_with_the_art_when_linked() {
         let shape = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 60.0)), fill(Color::WHITE));
         let mut mask = vectorcraft_doc::OpacityMask::new(shape, true);
         mask.linked = linked;
-        art.mask = Some(Box::new(mask));
+        art.extras_mut().mask = Some(Box::new(mask));
         d.symbols.push(Symbol { name: "Half".into(), art: Arc::new(art) });
         instance(&mut d, "Half", Affine::translate((10.0, 10.0)));
         instance(&mut d, "Half", Affine::translate((15.0, 50.0)));
@@ -222,7 +222,7 @@ fn data_of(d: &Document, name: &str) -> Vec<(String, String)> {
     let mut found = vec![];
     d.walk(|n| {
         if n.name.as_deref() == Some(name) {
-            found = n.attrs.as_deref().map(|a| a.data.clone()).unwrap_or_default();
+            found = n.extras().attrs.as_deref().map(|a| a.data.clone()).unwrap_or_default();
         }
     });
     found

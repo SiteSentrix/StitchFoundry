@@ -356,7 +356,7 @@ impl Reuse {
     fn scan(&mut self, doc: &Document, n: &Node, depth: u32) {
         let pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
         let text_patterns = matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| pattern(&r.style.fill) || pattern(&r.style.stroke)));
-        let unlinked_mask = n.mask.as_ref().is_some_and(|m| !m.linked);
+        let unlinked_mask = n.extras().mask.as_ref().is_some_and(|m| !m.linked);
         if depth > MAX_SYMBOL_NEST || text_patterns || unlinked_mask || vectorcraft_doc::pattern::uses_pattern(n, None) {
             *self = Self::NONE;
             return;
@@ -387,7 +387,7 @@ impl Reuse {
             }
             _ => {}
         }
-        if let Some(m) = &n.mask {
+        if let Some(m) = &n.extras().mask {
             self.scan(doc, &m.art, depth);
         }
         for c in n.children().into_iter().flatten() {
@@ -412,7 +412,7 @@ impl Reuse {
 /// and the art of unlinked opacity masks.
 fn pin_to_page(n: &mut Node, m: Affine) {
     vectorcraft_doc::pattern::transform_pattern_paints(n, m);
-    if let Some(mask) = n.mask.as_deref_mut() {
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
         let linked = mask.linked;
         let art = std::sync::Arc::make_mut(&mut mask.art);
         if !linked {
@@ -600,7 +600,7 @@ impl Writer<'_> {
             out.push_str(&format!(" {}=\"sublayer\"", crate::import::SUBLAYER));
         }
         let mut keys = HashSet::new();
-        for (k, v) in n.attrs.as_deref().map_or(&[][..], |a| a.data.as_slice()) {
+        for (k, v) in n.extras().attrs.as_deref().map_or(&[][..], |a| a.data.as_slice()) {
             // Ours (`name`, `vc-…`) are written by the export itself.
             if k == "name" || k.starts_with("vc-") {
                 continue;
@@ -1155,7 +1155,7 @@ impl Writer<'_> {
         if self.tiny() {
             self.warn(TINY_MASKS);
             let mut bare = n.clone();
-            bare.mask = None;
+            bare.extras_mut().mask = None;
             return self.node_body(&bare);
         }
         let mid = self.fresh_id("mask");
@@ -1189,7 +1189,7 @@ impl Writer<'_> {
         self.line(&format!("<g mask=\"url(#{mid})\">"));
         self.depth += 1;
         let mut bare = n.clone();
-        bare.mask = None;
+        bare.extras_mut().mask = None;
         self.node_body(&bare);
         self.depth -= 1;
         self.line("</g>");
@@ -1263,7 +1263,13 @@ impl Writer<'_> {
                 f
             }
         };
-        let shape = if c.knockout_shape { c.clone() } else { Node { opacity: 1.0, mask: None, ..c.clone() } };
+        let shape = if c.knockout_shape {
+            c.clone()
+        } else {
+            let mut s = c.clone().with_mask(None);
+            s.opacity = 1.0;
+            s
+        };
         let anonymous = std::mem::replace(&mut self.anonymous, true);
         let art = self.detached(3, |w| w.node(&shape));
         self.anonymous = anonymous;
@@ -1303,7 +1309,7 @@ impl Writer<'_> {
         if has_raster(&n.appearance.effects) {
             return self.filtered(n);
         }
-        if let Some(m) = n.mask.as_deref()
+        if let Some(m) = n.extras().mask.as_deref()
             && !m.disabled
         {
             return self.masked(n, m);
@@ -1720,7 +1726,8 @@ impl Writer<'_> {
         };
         glyphs(self, below);
         // The group carries the id and the object's transparency.
-        let bare = Node { opacity: 1.0, blend: BlendMode::Normal, isolate: false, ..n.clone() };
+        let mut bare = n.clone();
+        (bare.opacity, bare.blend, bare.isolate) = (1.0, BlendMode::Normal, false);
         let anonymous = std::mem::replace(&mut self.anonymous, true);
         chars(self, &bare);
         for ig in &lay.inlines {

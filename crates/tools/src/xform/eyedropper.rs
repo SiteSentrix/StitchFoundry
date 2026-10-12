@@ -213,7 +213,7 @@ mod tests {
             link: None,
             placement: Default::default(),
         };
-        d.insert(Some(l), 0, Node::new(id, NodeKind::Image(im))).unwrap();
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
         let (s, p) = (Selection::default(), paint());
         let mut cx = cx(&d, &s, &p);
         let click = PointerEvent::new(PointerKind::Down, 15.0, 5.0);

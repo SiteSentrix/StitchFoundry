@@ -111,7 +111,7 @@ pub(crate) fn shown_paths(cx: &ToolContext) -> Vec<NodeId> {
             NodeKind::Path { guide: false, .. } => v.push(n.id),
             // A Shape Builder group's first child is its shaper, not art.
             NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
-                for c in children.iter().skip(usize::from(n.shaper.is_some())) {
+                for c in children.iter().skip(usize::from(n.extras().shaper.is_some())) {
                     inside(c, v);
                 }
             }

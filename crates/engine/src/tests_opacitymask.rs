@@ -35,7 +35,7 @@ fn doc(s: &Session) -> &Document {
 }
 
 fn mask(s: &Session, id: NodeId) -> Option<&vectorcraft_doc::OpacityMask> {
-    doc(s).node(id).and_then(|n| n.mask.as_deref())
+    doc(s).node(id).and_then(|n| n.extras().mask.as_deref())
 }
 
 fn has_edit_layer(d: &Document) -> bool {
@@ -272,7 +272,7 @@ fn saving_while_editing_writes_no_editing_layer() {
     assert!(back.mask_edit.is_none() && !has_edit_layer(&back));
     assert_eq!(back.layers.len(), 1);
     // The edit made while editing is in the saved mask.
-    assert_eq!(back.node(obj).unwrap().mask.as_ref().unwrap().art.geometric_bounds().unwrap().x0, 50.0);
+    assert_eq!(back.node(obj).unwrap().extras().mask.as_ref().unwrap().art.geometric_bounds().unwrap().x0, 50.0);
     // Still editing in the session.
     assert!(doc(&s).mask_edit.is_some() && has_edit_layer(doc(&s)));
     // A file saved mid-edit by an older version (editing record and layer written) opens clean.

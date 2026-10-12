@@ -22,6 +22,7 @@ pub use shared::Shared;
 pub mod links;
 pub mod live;
 pub mod marks;
+mod mem;
 pub mod metadata;
 pub mod node;
 pub mod orient;
@@ -60,6 +61,12 @@ pub(crate) mod skip {
     pub fn is_one(v: &f32) -> bool {
         *v == 1.0
     }
+    pub fn is_empty_vec<T>(v: &[T]) -> bool {
+        v.is_empty()
+    }
+    pub fn is_empty_map(v: &serde_json::Map<String, serde_json::Value>) -> bool {
+        v.is_empty()
+    }
 }
 
 pub use appearance::StrokeGradientMode;
@@ -79,8 +86,8 @@ pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, Gradient
 pub use metadata::{CopyrightStatus, DocMetadata};
 pub use node::Knockout;
 pub use node::Scaling;
+pub use node::{Extras, ExtrasMut, ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeExtras, NodeId, NodeKind, OpacityMask};
 pub use node::{ImageMap, ObjectAttributes};
-pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
 pub use orient::OrientedBox;
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use perspective::PerspectiveAttachment;
@@ -549,18 +556,21 @@ pub struct Document {
     pub artboards: Vec<Artboard>,
     /// Top-level layers, bottom first.
     pub layers: Vec<Arc<Node>>,
+    // The document-wide resources below are [`Shared`]: an edit copies the document (copy-on-write)
+    // and the undo history keeps every version, so what an edit doesn't change stays one copy.
+    // Reads, writes and the saved form are those of the value itself.
     #[serde(default)]
-    pub swatches: Vec<Swatch>,
+    pub swatches: Shared<Vec<Swatch>>,
     #[serde(default)]
-    pub swatch_groups: Vec<SwatchGroup>,
+    pub swatch_groups: Shared<Vec<SwatchGroup>>,
     #[serde(default)]
-    pub graphic_styles: Vec<GraphicStyle>,
+    pub graphic_styles: Shared<Vec<GraphicStyle>>,
     /// Character styles (besides the built-in [Normal Character Style], which may be redefined here).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub char_styles: Vec<TextStyleDef>,
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
+    pub char_styles: Shared<Vec<TextStyleDef>>,
     /// Paragraph styles (besides the built-in [Normal Paragraph Style]).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub para_styles: Vec<TextStyleDef>,
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
+    pub para_styles: Shared<Vec<TextStyleDef>>,
     /// Threaded text: area-type frames one story flows through, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text_threads: Vec<Vec<NodeId>>,
@@ -575,11 +585,11 @@ pub struct Document {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub views: Vec<SavedView>,
     /// Select → Save Selection… (at most [`SavedSelection::MAX`]); saved with the document.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub saved_selections: Vec<SavedSelection>,
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
+    pub saved_selections: Shared<Vec<SavedSelection>>,
     /// Variables (data merge): named values bound to objects, applied per dataset.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
-    pub variables: Variables,
+    pub variables: Shared<Variables>,
     #[serde(default)]
     pub grid: GridPrefs,
     #[serde(default = "ppi72")]
@@ -598,8 +608,8 @@ pub struct Document {
     pub mask_edit: Option<MaskEdit>,
     next_id: u64,
     /// Foreign data preserved on round-trip.
-    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
-    pub unknown: serde_json::Map<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "skip::is_empty_map")]
+    pub unknown: Shared<serde_json::Map<String, serde_json::Value>>,
     /// Transparency panel → Page Isolated Blending: the page is an isolated transparency group,
     /// so top-level blend modes don't blend with what lies under the page.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -705,18 +715,18 @@ impl Document {
                 show_cross_hairs: false,
             }],
             layers: vec![],
-            swatches,
-            swatch_groups,
-            graphic_styles: default_graphic_styles(),
-            char_styles: vec![],
-            para_styles: vec![],
+            swatches: swatches.into(),
+            swatch_groups: swatch_groups.into(),
+            graphic_styles: default_graphic_styles().into(),
+            char_styles: Default::default(),
+            para_styles: Default::default(),
             text_threads: vec![],
             symbols: vec![],
             graph_designs: vec![],
             guides: vec![],
             views: vec![],
-            saved_selections: vec![],
-            variables: Variables::default(),
+            saved_selections: Default::default(),
+            variables: Default::default(),
             grid: GridPrefs::default(),
             raster_effects_ppi: 72.0,
             images: BTreeMap::new(),
@@ -773,6 +783,26 @@ impl Document {
     /// Find a node anywhere in the tree.
     pub fn node(&self, id: NodeId) -> Option<&Node> {
         self.index_path(id).and_then(|p| self.node_at(&p))
+    }
+
+    /// [`Document::node`] without building the lookup cache when there is none: for a look at a
+    /// document kept in the undo history ([`Document::drop_lookup_cache`]).
+    pub fn node_uncached(&self, id: NodeId) -> Option<&Node> {
+        match self.index.is_built() {
+            true => self.node(id),
+            false => self.walk_index_path(id).and_then(|p| self.node_at(&p)),
+        }
+    }
+
+    /// Let go of the lookup cache ([`id_index`]), as a document kept in the undo history does: a
+    /// table per step would add up. Lookups still work; the first one builds the cache again.
+    pub fn drop_lookup_cache(&self) {
+        self.index.clear();
+    }
+
+    /// Whether the lookup cache ([`id_index`]) is built (see [`Document::drop_lookup_cache`]).
+    pub fn has_lookup_cache(&self) -> bool {
+        self.index.is_built()
     }
 
     /// Index path from the top-level layer list to `id` (e.g. `[0, 3, 1]`): the first place in
@@ -1249,7 +1279,7 @@ impl Document {
             let objects = s.objects.into_iter().filter(|id| ids.contains(id) && seen.insert(*id)).collect();
             kept.push(SavedSelection { name, objects });
         }
-        self.saved_selections = kept;
+        self.saved_selections = kept.into();
     }
 
     /// Leave opacity-mask editing: drop the temporary editing layer, a working copy of art the

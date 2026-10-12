@@ -514,7 +514,7 @@ fn move_params(d: &Document, names: &[String], target: Option<&str>, after: bool
         Some(t) => {
             let (group, list) = match d.swatch_group_of(t) {
                 Some(g) => (Some(d.swatch_groups[g].name.as_str()), &d.swatch_groups[g].swatches),
-                None => (None, &d.swatches),
+                None => (None, &*d.swatches),
             };
             (group, list.iter().position(|w| w.name == t).map(|i| i + usize::from(after)))
         }
@@ -1415,7 +1415,7 @@ mod tests {
         let d = &app.session.active().unwrap().doc;
         let list = match group {
             Some(g) => &d.swatch_groups.iter().find(|x| x.name == g).unwrap().swatches,
-            None => &d.swatches,
+            None => &*d.swatches,
         };
         list.iter().map(|w| w.name.clone()).collect()
     }

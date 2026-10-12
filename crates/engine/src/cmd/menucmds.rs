@@ -180,6 +180,7 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
         if h.len() > from {
             h.truncate(from + 1);
             h[from].label = label.to_string();
+            st.history.recost_last(&st.doc);
         }
     }
 }
@@ -448,7 +449,8 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         let id = d.alloc_id();
         let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-        let mut node = Node::new(id, NodeKind::Image(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() }));
+        let mut node =
+            Node::new(id, NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() })));
         if let Some((path, rule)) = clip {
             node = super::rasterfx::clip_group(d, path, rule, node);
         }
@@ -561,7 +563,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
     if p.get("trim").and_then(Value::as_bool) == Some(true) {
-        return trim_image(s, id, im.clone());
+        return trim_image(s, id, (**im).clone());
     }
     let ib = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
     let rect = match p.get("rect").and_then(Value::as_array) {
@@ -602,14 +604,14 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         if let Some(n) = d.node_mut(id) {
-            n.kind = NodeKind::Image(ImageObject {
+            n.kind = NodeKind::Image(Box::new(ImageObject {
                 key,
                 width: w,
                 height: h,
                 xf: Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale),
                 link: None,
                 placement: Default::default(),
-            });
+            }));
         }
         Ok(())
     })?;
@@ -645,14 +647,14 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         if let Some(n) = d.node_mut(id) {
-            n.kind = NodeKind::Image(ImageObject {
+            n.kind = NodeKind::Image(Box::new(ImageObject {
                 key,
                 width: cw,
                 height: ch,
                 xf: im.xf * Affine::translate((f64::from(x0), f64::from(y0))),
                 link: None,
                 placement: Default::default(),
-            });
+            }));
         }
         Ok(())
     })?;
@@ -798,7 +800,7 @@ fn convert_to_shape(s: &mut Session, _: &Value) -> Result<Value> {
             }
             if let Some(l) = detect_shape(path) {
                 *path = l.to_path();
-                *live = Some(l);
+                *live = Some(Box::new(l));
                 n += 1;
             }
         }

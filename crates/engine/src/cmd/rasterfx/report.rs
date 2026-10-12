@@ -85,14 +85,14 @@ mod tests {
     fn image(ppi: f64) -> Node {
         Node::new(
             NodeId(999),
-            NodeKind::Image(ImageObject {
+            NodeKind::Image(Box::new(ImageObject {
                 key: "effect".into(),
                 width: 8000,
                 height: 8000,
                 xf: Affine::scale(72.0 / ppi),
                 link: None,
                 placement: Default::default(),
-            }),
+            })),
         )
     }
 

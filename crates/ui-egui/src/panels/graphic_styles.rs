@@ -935,7 +935,7 @@ mod tests {
         frame_with(&ctx, release(pos2(60.0, 116.0)), |ui| show(&mut app, ui));
         let d = app.session.active().unwrap().doc.clone();
         assert_eq!(d.graphic_styles.len(), n0.len() + 2);
-        assert_eq!(d.node(rect).unwrap().graphic_style, d.graphic_styles.last().map(|g| g.id));
+        assert_eq!(d.node(rect).unwrap().extras().graphic_style, d.graphic_styles.last().map(|g| g.id));
     }
 
     #[test]

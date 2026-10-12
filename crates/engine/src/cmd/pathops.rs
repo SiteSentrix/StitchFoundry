@@ -558,7 +558,7 @@ pub(crate) fn styled_copy(d: &mut Document, l: &Node, items: Vec<AppearanceItem>
     f.opacity = 1.0;
     f.blend = BlendMode::Normal;
     f.name = None;
-    f.mask = None;
+    f.extras_mut().mask = None;
     if let NodeKind::Path { live, .. } = &mut f.kind {
         *live = None;
     }
@@ -575,7 +575,7 @@ pub(crate) fn assemble(d: &mut Document, l: &Node, mut parts: Vec<Node>) -> Opti
     };
     let mut root = with_transparency(d, root, l.opacity, l.blend);
     root.name = l.name.clone();
-    root.mask = l.mask.clone();
+    root.extras_mut().mask = l.extras().mask.clone();
     root.appearance.effects = l.appearance.effects.clone();
     Some(root)
 }

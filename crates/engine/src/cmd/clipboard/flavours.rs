@@ -315,7 +315,7 @@ fn import_image(s: &mut Session, p: &Value) -> Result<Value> {
     let (w, h) = (img.width, img.height);
     let image =
         ImageObject { key: img.key.clone(), width: w, height: h, xf: Affine::scale_non_uniform(sx, sy), link: None, placement: Default::default() };
-    let mut clip = Clipboard { nodes: vec![Node::new(NodeId(1), NodeKind::Image(image))], ..Default::default() };
+    let mut clip = Clipboard { nodes: vec![Node::new(NodeId(1), NodeKind::Image(Box::new(image)))], ..Default::default() };
     clip.images.insert(img.key, img.blob);
     let count = s.load_clipboard(clip, p)?;
     Ok(json!({ "count": count, "width": w as f64 * sx, "height": h as f64 * sy, "pixelWidth": w, "pixelHeight": h }))

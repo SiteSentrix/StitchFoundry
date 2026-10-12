@@ -540,7 +540,8 @@ fn can_be_key(cx: &ToolContext, id: NodeId) -> bool {
 /// Is `n` area type (text in a frame) whose frame the tools reshape? Type in perspective isn't:
 /// it transforms whole.
 pub(crate) fn is_area_type(n: &vectorcraft_doc::Node) -> bool {
-    n.perspective.is_none() && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }))
+    n.extras().perspective.is_none()
+        && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }))
 }
 
 /// The resize cursor for handle `h` of a box turned by `angle` (counter-clockwise degrees): the

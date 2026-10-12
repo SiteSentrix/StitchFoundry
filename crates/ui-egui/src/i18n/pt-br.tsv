@@ -3672,3 +3672,6 @@ axis	Both	Ambos
 	Film Grain…	Granulação de filme…
 	Grain	Grão
 	Highlight Area	Área de realces
+@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	o arquivo compactado se expande para mais do que o VectorCraft lê ({_1} MB de documento, {_2} MB por imagem)
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	o documento é grande demais para ser salvo compactado ({0}): salve-o com Usar Compressão desativado
+@msg	the file stopped being read (please report this bug)	a leitura do arquivo foi interrompida (informe este erro)

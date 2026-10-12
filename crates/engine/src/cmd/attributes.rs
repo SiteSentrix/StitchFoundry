@@ -82,7 +82,7 @@ fn fill_rule_owner(d: &Document, id: NodeId) -> Option<&Node> {
 /// The Attributes panel's values of `info.ids` beyond overprinting.
 pub(super) fn fill_info(d: &Document, info: &mut AttributesInfo) {
     let nodes: Vec<&Node> = info.ids.iter().filter_map(|id| d.node(*id)).collect();
-    let attrs = || nodes.iter().map(|n| n.attrs.as_deref().cloned().unwrap_or_default());
+    let attrs = || nodes.iter().map(|n| n.extras().attrs.as_deref().cloned().unwrap_or_default());
     info.show_center = same(nodes.iter().map(|n| n.shows_center()));
     info.image_map = same(attrs().map(|a| a.image_map));
     info.url = same(attrs().map(|a| a.url));
@@ -126,7 +126,7 @@ impl Edits {
 
     /// `n`'s attributes with the edits applied (Show Center kept only where it isn't the default).
     fn apply(&self, n: &Node) -> ObjectAttributes {
-        let mut a = n.attrs.as_deref().cloned().unwrap_or_default();
+        let mut a = n.extras().attrs.as_deref().cloned().unwrap_or_default();
         if let Some(v) = self.show_center {
             a.show_center = (v != n.shows_center_by_default()).then_some(v);
         }
@@ -158,7 +158,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
             for id in &ids {
                 let Some(n) = d.node(*id) else { continue };
                 let new = edits.apply(n);
-                if new != n.attrs.as_deref().cloned().unwrap_or_default()
+                if new != n.extras().attrs.as_deref().cloned().unwrap_or_default()
                     && let Some(n) = d.node_mut(*id)
                 {
                     n.edit_attrs(|a| *a = new);

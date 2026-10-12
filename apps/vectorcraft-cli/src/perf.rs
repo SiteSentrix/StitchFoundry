@@ -207,6 +207,31 @@ fn deep(n: usize) -> Result<(), String> {
         }),
     ));
     note("after typing");
+    // Four embedded 24 MP photos drawn at fit page by three renderers, as the app's canvas, render
+    // worker and a panel each draw them.
+    {
+        let art = synthetic(3000)?;
+        let mut d = Document::new(1600.0, 1200.0);
+        let l = d.layers.first().map(|l| l.id);
+        for i in 0..4u32 {
+            let photo = Renderer::new().render(&art, 6000, 4000, Affine::scale(3.75 + f64::from(i) * 0.1), &opts).to_png()?;
+            let key = format!("photo {i}");
+            d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", photo));
+            let xf = Affine::translate((f64::from(i % 2) * 800.0, f64::from(i / 2) * 600.0)) * Affine::scale(800.0 / 6000.0);
+            let image = vectorcraft_doc::ImageObject { key, width: 6000, height: 4000, xf, link: None, placement: Default::default() };
+            let id = d.alloc_id();
+            d.insert(l, usize::MAX, Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(image)))).map_err(|e| e.to_string())?;
+        }
+        note("4 embedded 24 MP photos");
+        let mut renderers = [Renderer::new(), Renderer::new(), Renderer::new()];
+        let ms = median_ms(1, || {
+            for r in &mut renderers {
+                r.render(&d, 2880, 1800, Affine::scale(1.6), &opts);
+            }
+        });
+        rows.push(("render 4 embedded 24 MP photos with 3 renderers (cold)".into(), ms));
+        note("after rendering the photos with 3 renderers");
+    }
     // Output hashes, to compare builds: the SVG export and a save → open → save round trip.
     let fnv = |b: &[u8]| b.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &x| (h ^ u64::from(x)).wrapping_mul(0x100_0000_01b3));
     let doc = synthetic(n)?;

@@ -1093,7 +1093,7 @@ fn raster_node(d: &mut Document, r: Raster) -> Node {
     d.images.insert(key.clone(), ImageBlob::new("image/png", r.png));
     let image = Node::new(
         d.alloc_id(),
-        NodeKind::Image(ImageObject { key, width: r.width, height: r.height, xf: r.xf, link: None, placement: Default::default() }),
+        NodeKind::Image(Box::new(ImageObject { key, width: r.width, height: r.height, xf: r.xf, link: None, placement: Default::default() })),
     );
     let Some(path) = r.clip else { return image };
     super::rasterfx::clip_group(d, path, FillRule::NonZero, image)
@@ -1224,7 +1224,7 @@ fn carry(from: &Node, mut to: Node) -> Node {
     to.blend = from.blend;
     to.isolate = from.isolate;
     to.knockout_shape = from.knockout_shape;
-    to.mask = from.mask.clone();
+    to.extras_mut().mask = from.extras().mask.clone();
     to.appearance.effects = from.appearance.effects.clone();
     to
 }
@@ -1258,7 +1258,7 @@ fn has_effects(n: &Node) -> bool {
 }
 
 fn masked(n: &Node) -> bool {
-    n.mask.as_ref().is_some_and(|m| !m.disabled)
+    n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
 }
 
 /// Where `n` can paint: its visual bounds grown by its effects (and a margin for antialiasing).

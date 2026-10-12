@@ -104,8 +104,11 @@ impl GraphDesign {
     /// graph of its own (that its commands would then edit).
     pub fn plain_art(art: &crate::Node) -> crate::Node {
         let mut n = art.clone();
-        n.graph = None;
-        n.series_index = None;
+        {
+            let mut e = n.extras_mut();
+            e.graph = None;
+            e.series_index = None;
+        }
         if let Some(ch) = n.children_mut() {
             let old = std::mem::take(ch);
             *ch = old.iter().map(|c| std::sync::Arc::new(Self::plain_art(c))).collect();

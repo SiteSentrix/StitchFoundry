@@ -683,7 +683,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
     let node = s.doc()?.doc.node(id);
-    if area_text(node).is_none() || node.is_some_and(|n| n.perspective.is_some()) {
+    if area_text(node).is_none() || node.is_some_and(|n| n.extras().perspective.is_some()) {
         return Err(bad(C, "not area type (text in a frame) outside perspective"));
     }
     s.edit("Reshape Type Area", |doc, _| {

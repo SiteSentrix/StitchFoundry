@@ -105,7 +105,7 @@ impl NewArt {
             return;
         }
         (n.opacity, n.blend) = (self.opacity, self.blend);
-        n.graphic_style = self.style.as_deref().and_then(|name| d.graphic_style_index(name)).map(|i| d.graphic_style_id(i));
+        n.extras_mut().graphic_style = self.style.as_deref().and_then(|name| d.graphic_style_index(name)).map(|i| d.graphic_style_id(i));
     }
 }
 

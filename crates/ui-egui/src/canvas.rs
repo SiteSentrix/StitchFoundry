@@ -305,6 +305,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             smooth_images,
             // Isolation mode: the art around the isolated group or layer is dimmed (#833).
             isolated: key.isolated.map(vectorcraft_doc::NodeId),
+            // Images far smaller on screen than they are sample their mip levels (#1244).
+            image_mips: true,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
@@ -1227,7 +1229,7 @@ fn node_outline(n: &Node) -> BezPath {
         NodeKind::Path { path, .. } => bp.extend(path.to_bezpath()),
         // Area type shows its frame: the type area Direct Selection reshapes; type on a path its
         // path, which the selection tools' brackets sit on.
-        NodeKind::Text(t) if c.perspective.is_none() && !matches!(t.kind, vectorcraft_doc::TextKind::Point) => {
+        NodeKind::Text(t) if c.extras().perspective.is_none() && !matches!(t.kind, vectorcraft_doc::TextKind::Point) => {
             if let Some(path) = t.area_frame().or_else(|| t.type_path()) {
                 bp.extend(path.to_bezpath());
             }
@@ -1276,7 +1278,7 @@ fn too_many_anchors<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> bool {
             }
         }
         !matches!(n.kind, NodeKind::Envelope { .. })
-            && n.children().into_iter().flatten().skip(usize::from(n.shaper.is_some())).any(|c| over(c, left))
+            && n.children().into_iter().flatten().skip(usize::from(n.extras().shaper.is_some())).any(|c| over(c, left))
     }
     let mut left = OVERLAY_MAX_ANCHORS;
     nodes.into_iter().any(|n| over(n, &mut left))
@@ -1289,7 +1291,7 @@ fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
     if matches!(n.kind, NodeKind::Envelope { .. }) {
         return;
     }
-    for c in n.children().into_iter().flatten().skip(usize::from(n.shaper.is_some())) {
+    for c in n.children().into_iter().flatten().skip(usize::from(n.extras().shaper.is_some())) {
         walk_drawn(c, f);
     }
 }
@@ -2205,7 +2207,7 @@ mod tests {
         }
         let st = s.active().unwrap();
         let g = st.doc.node(st.selection.objects[0]).unwrap();
-        assert!(g.shaper.is_some());
+        assert!(g.extras().shaper.is_some());
         let bounds = node_outline(g).bounding_box();
         assert!((bounds.x0 - 100.0).abs() < 0.01 && (bounds.x1 - 200.0).abs() < 0.01, "{bounds:?}");
         assert_eq!(node_outline(st.doc.node(line).unwrap()).bounding_box().x0, 50.0, "an isolated original still shows its full outline");
@@ -3644,9 +3646,9 @@ mod tests {
         let st = app.session.active().unwrap();
         let g = st.doc.graphic_style(&name).unwrap();
         // `graphicStyle.apply` with the hit object's id: linked, the selection left alone.
-        assert_eq!(st.doc.node(b).unwrap().graphic_style, Some(g.id));
+        assert_eq!(st.doc.node(b).unwrap().extras().graphic_style, Some(g.id));
         assert_eq!(st.doc.node(b).unwrap().appearance, g.appearance);
-        assert_eq!(st.doc.node(a).unwrap().graphic_style, None);
+        assert_eq!(st.doc.node(a).unwrap().extras().graphic_style, None);
         assert_eq!(st.selection.objects, [a]);
     }
 

@@ -142,8 +142,8 @@ impl Clipboard {
         d.patterns = self.patterns.clone();
         d.swatches.extend(self.swatches.iter().cloned());
         d.graphic_styles.extend(self.graphic_styles.iter().cloned());
-        d.char_styles = self.char_styles.clone();
-        d.para_styles = self.para_styles.clone();
+        d.char_styles = self.char_styles.clone().into();
+        d.para_styles = self.para_styles.clone().into();
         if !self.brushes.is_empty() {
             let mut lib = vectorcraft_brush::library(&d);
             for b in &self.brushes {

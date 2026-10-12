@@ -426,7 +426,8 @@ fn convert_rectangle_path_to_live_shape() {
     );
     sel(&mut s, &[p]);
     assert_eq!(s.execute("object.shape.convertToShape", &json!({})).unwrap()["converted"], 1);
-    let NodeKind::Path { live: Some(LiveShape::Rectangle { w, h, .. }), path, .. } = &node(&s, p).kind else { panic!() };
+    let n = node(&s, p);
+    let (Some(LiveShape::Rectangle { w, h, .. }), NodeKind::Path { path, .. }) = (n.live_shape(), &n.kind) else { panic!() };
     assert!(close(*w, 40.0) && close(*h, 20.0));
     assert_eq!(path.bounds(), Some(Rect::new(0.0, 0.0, 40.0, 20.0)));
 }
@@ -448,7 +449,7 @@ fn convert_rotated_rectangle_and_ellipse() {
     assert_eq!(s.execute("object.shape.convertToShape", &json!({})).unwrap()["converted"], 2);
     let b = bounds(&s, p);
     assert!(close(b.x0, 0.0) && close(b.x1, 100.0) && close(b.y1, 100.0), "{b:?}");
-    assert!(matches!(node(&s, e).kind, NodeKind::Path { live: Some(LiveShape::Ellipse { .. }), .. }));
+    assert!(matches!(node(&s, e).live_shape(), Some(LiveShape::Ellipse { .. })));
 }
 
 #[test]

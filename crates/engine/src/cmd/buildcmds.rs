@@ -553,7 +553,7 @@ fn lp_expand(s: &mut Session, p: &Value) -> Result<Value> {
         for g in &targets {
             let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
             n.name = None;
-            n.trace = None;
+            n.extras_mut().trace = None;
             if let Some(ch) = n.children_mut() {
                 ch.retain(|c| match c.name.as_deref() {
                     Some(SOURCES_NAME) => false,
@@ -790,7 +790,7 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
         if !expand {
             // Tracing again keeps the object's view unless another is asked for.
             let view = view.unwrap_or_else(|| src.trace_view());
-            g.trace = Some(Box::new(json!({ "preset": preset_label, "params": params_json, "view": view.id() })));
+            g.extras_mut().trace = Some(Box::new(json!({ "preset": preset_label, "params": params_json, "view": view.id() })));
         }
         let (par, idx, _) = d.position(target).ok_or(EngineError::NoNode(target))?;
         d.remove(target)?;
@@ -821,10 +821,10 @@ fn trace_set_view(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Image Trace View", |d, _| {
         for g in &targets {
             let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
-            if let Some(t) = n.trace.as_deref_mut().and_then(Value::as_object_mut) {
+            if let Some(t) = n.extras_if_any().and_then(|e| e.trace.as_deref_mut()).and_then(Value::as_object_mut) {
                 t.insert("view".into(), json!(view.id()));
             } else {
-                n.trace = Some(Box::new(json!({ "preset": "Custom", "view": view.id() })));
+                n.extras_mut().trace = Some(Box::new(json!({ "preset": "Custom", "view": view.id() })));
             }
         }
         Ok(())
@@ -854,7 +854,7 @@ fn trace_expand(s: &mut Session, p: &Value) -> Result<Value> {
         for g in &targets {
             let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
             n.name = None;
-            n.trace = None;
+            n.extras_mut().trace = None;
             if let Some(ch) = n.children_mut() {
                 ch.retain(|c| !matches!(c.kind, NodeKind::Image(_)));
             }

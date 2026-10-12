@@ -195,7 +195,7 @@ fn only_leaf(n: &Node) -> Option<&Node> {
         NodeKind::Group { children, clip } => {
             let rest = if *clip { children.get(1..)? } else { children.as_slice() };
             match rest {
-                [one] if n.opacity >= 0.999 && n.mask.is_none() => only_leaf(one),
+                [one] if n.opacity >= 0.999 && n.extras().mask.is_none() => only_leaf(one),
                 _ => None,
             }
         }

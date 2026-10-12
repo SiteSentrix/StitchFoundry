@@ -402,9 +402,9 @@ fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, format!("two saved selections would be named `{}`", x.name)));
         }
     }
-    if after != before {
+    if *before != after {
         s.edit("Edit Selection", |d, _| {
-            d.saved_selections = after;
+            d.saved_selections = after.into();
             Ok(())
         })?;
     }

@@ -336,7 +336,8 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     // A file painted mostly in CMYK opens as a CMYK document (with CMYK default swatches).
     if b.colors.cmyk_document() {
         doc.color_mode = ColorMode::Cmyk;
-        (doc.swatches, doc.swatch_groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
     }
     doc.swatches.extend(b.colors.swatches());
     // Tiling patterns are pattern swatches.
@@ -1015,17 +1016,17 @@ impl<'p> Builder<'p> {
             MaskSpec::Mask(m) => {
                 let m = self.fresh_mask(m.clone());
                 let node = match <[Arc<Node>; 1]>::try_from(art) {
-                    Ok([one]) if one.mask.is_none() => {
-                        fold_stop_opacity(&one, &m).unwrap_or_else(|| Node { mask: Some(Box::new(m)), ..Arc::unwrap_or_clone(one) })
+                    Ok([one]) if one.extras().mask.is_none() => {
+                        fold_stop_opacity(&one, &m).unwrap_or_else(|| Arc::unwrap_or_clone(one).with_mask(Some(Box::new(m))))
                     }
                     Ok([one]) => {
                         let mut g = Node::group(self.id(), vec![one]);
-                        g.mask = Some(Box::new(m));
+                        g.extras_mut().mask = Some(Box::new(m));
                         g
                     }
                     Err(all) => {
                         let mut g = Node::group(self.id(), all);
-                        g.mask = Some(Box::new(m));
+                        g.extras_mut().mask = Some(Box::new(m));
                         g
                     }
                 };
@@ -1088,7 +1089,7 @@ impl<'p> Builder<'p> {
                     && !only.is_container()
                     && !isolate
                     && !knockout
-                    && (mask.is_none() || only.mask.is_none())
+                    && (mask.is_none() || only.extras().mask.is_none())
                 {
                     // A single object in a group: fold opacity, blend and mask into the object.
                     let mut only = (**only).clone();
@@ -1098,7 +1099,7 @@ impl<'p> Builder<'p> {
                     }
                     if let Some(m) = mask {
                         let m = self.fresh_mask(m);
-                        only = fold_stop_opacity(&only, &m).unwrap_or(Node { mask: Some(Box::new(m)), ..only });
+                        only = fold_stop_opacity(&only, &m).unwrap_or_else(|| only.with_mask(Some(Box::new(m))));
                     }
                     Some(only)
                 } else {
@@ -1107,7 +1108,7 @@ impl<'p> Builder<'p> {
                     if knockout {
                         g.knockout = Knockout::On;
                     }
-                    g.mask = mask.map(|m| Box::new(self.fresh_mask(m)));
+                    g.extras_mut().mask = mask.map(|m| Box::new(self.fresh_mask(m)));
                     Some(g)
                 }
             }
@@ -1288,7 +1289,10 @@ impl<'p> Builder<'p> {
             (k, a.width, a.height)
         };
         let xf = transform * Affine::scale_non_uniform(f64::from(w) / f64::from(mw.max(1)), f64::from(h) / f64::from(mh.max(1)));
-        let art = Node::new(self.id(), NodeKind::Image(ImageObject { key: k, width: mw, height: mh, xf, link: None, placement: Default::default() }));
+        let art = Node::new(
+            self.id(),
+            NodeKind::Image(Box::new(ImageObject { key: k, width: mw, height: mh, xf, link: None, placement: Default::default() })),
+        );
         Some(OpacityMask::new(art, true))
     }
 
@@ -1307,8 +1311,9 @@ impl<'p> Builder<'p> {
             (k, w, h)
         };
         let id = self.id();
-        let mut n = Node::new(id, NodeKind::Image(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default() }));
-        n.mask = mask.map(Box::new);
+        let mut n =
+            Node::new(id, NodeKind::Image(Box::new(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default() })));
+        n.extras_mut().mask = mask.map(Box::new);
         self.push_node(n);
     }
 

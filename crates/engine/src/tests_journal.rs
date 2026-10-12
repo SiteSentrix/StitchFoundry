@@ -41,7 +41,7 @@ fn replay_reproduces_the_created_date_of_an_earlier_run() {
     s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
     // As if the original run happened long ago: a replay now must still land on its date.
-    s.journal[0].1["created"] = json!(1_234_567_890);
+    s.journal.get_mut(0).unwrap().1["created"] = json!(1_234_567_890);
     let mut r = Session::new();
     for (id, p) in &s.journal {
         r.execute(id, p).unwrap();
@@ -63,7 +63,7 @@ fn recorded_actions_leave_out_replay_only_values() {
     // …while values resolved from the preferences stay recorded.
     let scale = steps.iter().find(|(id, _)| id == "object.scale").unwrap();
     assert!(scale.1.get("strokes").is_some(), "{scale:?}");
-    assert_eq!(s.journal_for_action(1), s.journal[1..].to_vec());
+    assert_eq!(s.journal_for_action(1), s.journal.since(1).to_vec());
 }
 
 /// The artboard the app passes to Paste in Place, in Front and in Back, to Align to Artboard, to
@@ -87,7 +87,7 @@ fn recorded_actions_leave_out_the_artboard_the_app_passes() {
     for (id, p) in &steps {
         s.execute(id, p).unwrap();
     }
-    assert!(s.journal[start..].iter().all(|(_, p)| p["artboard"] == json!(1)), "the journal keeps it: {:?}", &s.journal[start..]);
+    assert!(s.journal.since(start).iter().all(|(_, p)| p["artboard"] == json!(1)), "the journal keeps it: {:?}", s.journal.since(start));
     let action = s.journal_for_action(start);
     assert_eq!(action.len(), steps.len());
     for ((id, mut p), (step, recorded)) in steps.into_iter().zip(action) {

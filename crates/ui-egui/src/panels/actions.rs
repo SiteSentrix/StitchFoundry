@@ -98,6 +98,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             && let Some((set, name, start)) = app.ui.recording.take()
         {
             let steps = app.session.journal_for_action(start);
+            app.session.journal.hold(None);
             if let Some(s) = app.ui.action_sets.get_mut(set) {
                 s.actions.push(Action { name, steps });
             }
@@ -110,7 +111,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 app.ui.action_sets.push(ActionSet { name: "Set 1".into(), actions: vec![] });
             }
             let set = selected.map(|s| s.0).unwrap_or(0);
-            app.ui.recording = Some((set, format!("Action {n}"), app.session.journal.len()));
+            let start = app.session.journal.len();
+            // Keep every step from here on until recording stops, however long it runs.
+            app.session.journal.hold(Some(start));
+            app.ui.recording = Some((set, format!("Action {n}"), start));
         }
         if widgets::icon_button(ui, "dc-actions", tl!("Play Current Selection"), false, 24.0).clicked()
             && let Some(s) = selected

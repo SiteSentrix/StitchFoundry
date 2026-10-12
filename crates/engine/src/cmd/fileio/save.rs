@@ -6,6 +6,7 @@
 //! the caller's writer (the file system here; a save panel or a browser download in the apps) and
 //! makes the file the document's own (path, format, options, saved state) for Save and Save As.
 
+use std::io::Write as _;
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
@@ -14,7 +15,6 @@ use vectorcraft_doc::Document;
 use super::super::*;
 use super::{
     ArtboardPick, Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, with_compression_pref, write_encoded,
-    write_file,
 };
 use crate::{DocState, Prefs};
 
@@ -300,6 +300,31 @@ pub struct SaveJob {
     boards: Vec<usize>,
 }
 
+/// Writes the file at a path with what the filler it is given writes into it
+/// ([`SaveJob::write_streamed`]).
+pub type StreamWrite<'a> = &'a mut dyn FnMut(&str, &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> Result<()>;
+
+/// Bytes gathered before a streamed save writes them to the file.
+const STREAM_BUFFER: usize = 256 << 10;
+
+/// A writer that counts the bytes written through it.
+struct Counted<W> {
+    inner: W,
+    n: u64,
+}
+
+impl<W: std::io::Write> std::io::Write for Counted<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.inner.write(buf)?;
+        self.n += n as u64;
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 /// The artboards a native or `.ai` save also writes to files of their own: with
 /// `separateArtboards`, those `range` names (default all).
 fn separate_boards(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<usize>> {
@@ -443,6 +468,16 @@ impl SaveJob {
         &self.snapshot
     }
 
+    /// The document the job writes (the snapshot, as the file keeps it).
+    pub(crate) fn doc(&self) -> &Arc<Document> {
+        &self.doc
+    }
+
+    /// Encode `doc` (the job's document, changed) as the job encodes its own: one file.
+    pub(crate) fn encode_doc(&self, doc: &Document) -> Result<Encoded> {
+        self.encode_one(doc)
+    }
+
     /// Encode the file → it (and, with `separateArtboards`, a file per artboard after it), with
     /// the warnings (what the format loses first, then the encoder's own notes: PDF options not
     /// applied yet…).
@@ -500,6 +535,53 @@ impl SaveJob {
         Ok(out)
     }
 
+    /// Is the file written as it is encoded by [`SaveJob::write_streamed`]? A native file (or
+    /// template) to a path, without a file per artboard.
+    pub fn streams(&self) -> bool {
+        self.plan.path.is_some() && matches!(self.plan.format.id, "vectorcraft" | "template") && self.boards.is_empty()
+    }
+
+    /// [`SaveJob::write`] through `stream`, which writes the file at a path with what the filler
+    /// it is given writes (atomically, as [`vectorcraft_format::write_atomic_with`]). A native
+    /// file goes into it as it is encoded ([`SaveJob::streams`]), never held whole in memory;
+    /// other files are encoded first, then written into it.
+    pub fn write_streamed(&self, stream: StreamWrite) -> Result<Value> {
+        let (Some(path), true) = (&self.plan.path, self.streams()) else {
+            return self.write(|p, b| stream(p, &mut |w| w.write_all(b)));
+        };
+        let (cmd, f) = (self.plan.mode.command(), self.plan.format);
+        let doc = self.doc.without_edit_modes();
+        let doc = match f.id {
+            // A native file flagged so opening it starts a new untitled document (as
+            // `encode_all` writes it).
+            "template" => {
+                let mut d = doc.into_owned();
+                d.template = true;
+                std::borrow::Cow::Owned(d)
+            }
+            _ => doc,
+        };
+        // The encoder's failure, kept apart from the writer's (which `stream` reports).
+        let mut failed = None;
+        let mut written = 0u64;
+        let mut fill = |w: &mut dyn std::io::Write| {
+            let mut out = Counted { inner: std::io::BufWriter::with_capacity(STREAM_BUFFER, w), n: 0 };
+            let r = super::native::encode_to(cmd, f, &doc, &self.params, &mut out);
+            written = out.n;
+            match r {
+                Ok(()) => out.inner.flush(),
+                Err(e) => {
+                    failed = Some(e);
+                    Err(std::io::Error::other("the file couldn't be encoded"))
+                }
+            }
+        };
+        let r = stream(path, &mut fill);
+        r.map_err(|e| failed.take().unwrap_or(e))?;
+        let warnings: Vec<String> = fidelity_warning(f).into_iter().collect();
+        Ok(json!({ "path": path, "bytes": written, "format": f.id, "warnings": warnings }))
+    }
+
     /// Once written: Save and Save As (except to a template) make the file `st`'s own: path,
     /// title, format, options, and the snapshot as the saved state (edits made since the job was
     /// made keep the document modified).
@@ -543,10 +625,14 @@ pub fn save_with(s: &mut Session, plan: SavePlan, write: impl FnMut(&str, &[u8])
     Ok(out)
 }
 
-/// A save command: plan, then write with the file system.
+/// A save command: plan, then write with the file system (a native file as it is encoded).
 fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> {
     let plan = save_plan(s, mode, p)?;
-    save_with(s, plan, write_file)
+    let job = save_job(s, plan)?;
+    let uid = s.doc()?.uid;
+    let out = job.write_streamed(&mut super::write_file_with)?;
+    job.complete(s, uid);
+    Ok(out)
 }
 
 fn can_revert(s: &Session) -> std::result::Result<(), String> {

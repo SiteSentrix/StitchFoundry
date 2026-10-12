@@ -592,7 +592,10 @@ fn add_image(s: &mut Session, r: &vectorcraft_trace::Raster, xf: Affine) -> Node
         d.insert(
             l,
             0,
-            Node::new(id, NodeKind::Image(ImageObject { key: "img1".into(), width: w, height: h, xf, link: None, placement: Default::default() })),
+            Node::new(
+                id,
+                NodeKind::Image(Box::new(ImageObject { key: "img1".into(), width: w, height: h, xf, link: None, placement: Default::default() })),
+            ),
         )?;
         sel.set([id]);
         Ok(id)
@@ -687,7 +690,7 @@ fn image_trace_palettes_and_swatch_libraries() {
     let doc = crate::cmd::swatchlib::library_colors(&s, "document").unwrap();
     let got = fills(&s, &r["id"]);
     assert!(!got.is_empty() && got.iter().all(|c| doc.contains(c)), "{got:?}");
-    let t = node(&s, NodeId(r["id"].as_u64().unwrap())).trace.unwrap();
+    let t = node(&s, NodeId(r["id"].as_u64().unwrap())).extras().trace.clone().unwrap();
     assert_eq!((t["params"]["palette"].as_str(), t["params"]["library"].as_str()), (Some("documentLibrary"), Some("document")));
     assert!(t["params"].get("swatches").is_none(), "looked up again at every trace");
     // A swatch library by id: the web-safe colours.
@@ -733,7 +736,7 @@ fn image_trace_create_strokes_makes_stroked_centre_lines() {
     assert!(!sp.closed);
     let (a, b) = (sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p);
     assert!((a.y - 201.0).abs() < 1.5 && (b.y - 201.0).abs() < 1.5 && (a.x - b.x).abs() > 140.0, "{a:?} … {b:?}");
-    let t = node(&s, g).trace.unwrap();
+    let t = node(&s, g).extras().trace.clone().unwrap();
     assert_eq!((t["params"]["strokes"].as_bool(), t["params"]["strokeWidth"].as_f64()), (Some(true), Some(5.0)));
     // Expand keeps the stroked line.
     s.execute("imageTrace.expand", &json!({})).unwrap();
@@ -777,7 +780,7 @@ fn image_trace_flat_logo_preset_makes_a_true_circle() {
     assert!(r["anchors"].as_u64().unwrap() <= 6, "a circle is four anchors: {r}");
     let g = NodeId(r["id"].as_u64().unwrap());
     let n = node(&s, g);
-    let t = n.trace.clone().expect("settings stored");
+    let t = n.extras().trace.clone().expect("settings stored");
     assert_eq!((t["preset"].as_str(), t["params"]["mode"].as_str()), (Some("Flat Logo"), Some("logo")));
     let paths = traced_paths(&n);
     let (p, rule) = outline(&paths[0]);
@@ -811,7 +814,7 @@ fn image_trace_object_remembers_its_settings() {
     image_doc(&mut s);
     let r = s.execute("imageTrace.make", &json!({"preset": "6 Colors"})).unwrap();
     let g = NodeId(r["id"].as_u64().unwrap());
-    let t = node(&s, g).trace.clone().expect("settings stored");
+    let t = node(&s, g).extras().trace.clone().expect("settings stored");
     assert_eq!(t["preset"], "6 Colors");
     assert_eq!(t["params"]["colors"], 6);
     // Changing a parameter makes it Custom; the settings survive save/open.
@@ -819,13 +822,13 @@ fn image_trace_object_remembers_its_settings() {
     let g = NodeId(r["id"].as_u64().unwrap());
     let d = s.doc().unwrap().doc.clone();
     let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
-    let t = back.node(g).unwrap().trace.clone().unwrap();
+    let t = back.node(g).unwrap().extras().trace.clone().unwrap();
     assert_eq!((t["preset"].as_str(), t["params"]["colors"].as_u64()), (Some("Custom"), Some(9)));
     // Expanded traces are plain groups.
     s.execute("imageTrace.expand", &json!({})).unwrap();
     let st = s.doc().unwrap();
     let id = st.selection.in_paint_order(&st.doc)[0];
-    assert!(st.doc.node(id).unwrap().trace.is_none());
+    assert!(st.doc.node(id).unwrap().extras().trace.is_none());
 }
 
 /// A black disc (r = 30 px) on light blue, 100 × 100 px, placed at 2× from (50, 50): traced in
@@ -852,7 +855,7 @@ fn render_doc(s: &Session, trace_views: bool) -> vectorcraft_render::Rendered {
 fn image_trace_view_is_stored_kept_and_validated() {
     let mut s = session();
     let g = disc_on_blue(&mut s);
-    assert_eq!(node(&s, g).trace.unwrap()["view"], "tracingResult");
+    assert_eq!(node(&s, g).extras().trace.clone().unwrap()["view"], "tracingResult");
     let r = s.execute("imageTrace.setView", &json!({"view": "outlinesWithSourceImage"})).unwrap();
     assert_eq!((ids(&r), r["view"].as_str()), (vec![g], Some("outlinesWithSourceImage")));
     assert_eq!(node(&s, g).trace_view(), vectorcraft_doc::TraceView::OutlinesWithSource);

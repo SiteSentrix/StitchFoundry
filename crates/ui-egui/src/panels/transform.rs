@@ -179,10 +179,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Live shape properties (a path with live corners is no shape).
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
-        && !matches!(live, vectorcraft_doc::LiveShape::Path { .. })
+        && !matches!(**live, vectorcraft_doc::LiveShape::Path { .. })
     {
         widgets::divider(ui);
-        match live {
+        match &**live {
             vectorcraft_doc::LiveShape::Rectangle { .. } => {
                 widgets::subheader(ui, tl!("Rectangle Properties:"));
                 corner_radius_row(app, ui, &n, "xfp-radius");

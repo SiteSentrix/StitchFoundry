@@ -981,7 +981,7 @@ fn live_shape_properties_already_set_record_no_undo_step() {
         let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
         let NodeKind::Path { path, live: Some(live), .. } = &mut d.node_mut(r).unwrap().kind else { panic!("not a live rectangle") };
         let xf = Affine::scale_non_uniform(2.0, 1.0);
-        *live = vectorcraft_doc::LiveShape::Rectangle { w: 50.0, h: 60.0, radii: [10.0; 4], kinds: Default::default(), xf };
+        **live = vectorcraft_doc::LiveShape::Rectangle { w: 50.0, h: 60.0, radii: [10.0; 4], kinds: Default::default(), xf };
         *path = live.to_path();
     }
     let shown = vectorcraft_doc::LiveCorners::of(s.doc().unwrap().doc.node(r).unwrap()).unwrap().radius(0);
@@ -1762,8 +1762,8 @@ fn graph_tool_drag_creates_a_graph_and_asks_for_data() {
     let st = s.doc().unwrap();
     assert_eq!(st.history.undo.len(), undo_before + 1);
     let g = st.doc.node(st.selection.objects[0]).unwrap();
-    assert_eq!(g.graph.as_ref().unwrap().kind, vectorcraft_doc::GraphKind::Pie);
-    assert_eq!(g.graph.as_ref().unwrap().rect, vectorcraft_geom::Rect::new(100.0, 100.0, 300.0, 250.0));
+    assert_eq!(g.extras().graph.as_ref().unwrap().kind, vectorcraft_doc::GraphKind::Pie);
+    assert_eq!(g.extras().graph.as_ref().unwrap().rect, vectorcraft_geom::Rect::new(100.0, 100.0, 300.0, 250.0));
 }
 
 #[test]
@@ -1857,17 +1857,13 @@ fn shaper_turns_rough_strokes_into_live_shapes_and_scribbles_punch_fills() {
     stroke(&mut s, &rect);
     let id = s.doc().unwrap().selection.objects[0];
     let n = s.doc().unwrap().doc.node(id).unwrap().clone();
-    assert!(
-        matches!(n.kind, vectorcraft_doc::NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Rectangle { .. }), .. }),
-        "{:?}",
-        n.kind_label()
-    );
+    assert!(matches!(n.live_shape(), Some(vectorcraft_doc::LiveShape::Rectangle { .. })), "{:?}", n.kind_label());
     // A zig-zag inside it clears its fill while retaining the editable original and stroke.
     let zig: Vec<(f64, f64)> = (0..30).map(|i| (150.0 + (i % 2) as f64 * 80.0, 120.0 + i as f64 * 2.0)).collect();
     stroke(&mut s, &zig);
     assert_eq!(s.doc().unwrap().doc.node(id).unwrap(), &n);
     let group = s.doc().unwrap().doc.node(s.doc().unwrap().selection.objects[0]).unwrap();
-    assert!(group.shaper.is_some());
+    assert!(group.extras().shaper.is_some());
     assert!(group.children().unwrap().iter().skip(1).all(|n| n.appearance.fill_paint().is_none()));
     assert!(group.children().unwrap().iter().skip(1).any(|n| !n.appearance.stroke_paint().is_none()));
 }
@@ -1889,10 +1885,7 @@ fn shaper_square_started_mid_edge_closes_on_pointer_release_and_undoes_once() {
         s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
     }
     let id = *s.doc().unwrap().selection.objects.first().expect("recognized square");
-    assert!(matches!(
-        s.doc().unwrap().doc.node(id).unwrap().kind,
-        vectorcraft_doc::NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Rectangle { .. }), .. }
-    ));
+    assert!(matches!(s.doc().unwrap().doc.node(id).unwrap().live_shape(), Some(vectorcraft_doc::LiveShape::Rectangle { .. })));
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(s.doc().unwrap().doc.node(id).is_none());
@@ -1928,7 +1921,7 @@ fn shaper_creates_upright_or_inverted_live_triangles_with_one_undo_step() {
         s.pointer(&PointerEvent::new(PointerKind::Up, pts[0].x, pts[0].y), v).unwrap();
         let id = *s.doc().unwrap().selection.objects.first().expect("recognized triangle");
         let node = s.doc().unwrap().doc.node(id).unwrap().clone();
-        let vectorcraft_doc::NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Polygon { sides: 3, xf, .. }), .. } = &node.kind else {
+        let Some(vectorcraft_doc::LiveShape::Polygon { sides: 3, xf, .. }) = node.live_shape() else {
             panic!("expected live triangle, got {:?}", node.kind_label());
         };
         let [a, b, c, d, _, _] = xf.as_coeffs();

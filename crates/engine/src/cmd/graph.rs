@@ -389,7 +389,7 @@ impl Gen<'_> {
     fn series(&mut self, name: &str, index: usize, children: Vec<Arc<Node>>) -> Arc<Node> {
         let mut g = Node::group(self.d.alloc_id(), children);
         g.name = Some(name.into());
-        g.series_index = u32::try_from(index).ok();
+        g.extras_mut().series_index = u32::try_from(index).ok();
         Arc::new(g)
     }
 }
@@ -1146,7 +1146,7 @@ fn children_bounds(children: &[Arc<Node>]) -> Option<Rect> {
 /// generation, which is recorded in the spec's `placed` bounds).
 fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> Result<()> {
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
-    if let (Some(placed), Some(now)) = (n.graph.as_ref().and_then(|g| g.placed), n.children().and_then(|c| children_bounds(c)))
+    if let (Some(placed), Some(now)) = (n.extras().graph.as_ref().and_then(|g| g.placed), n.children().and_then(|c| children_bounds(c)))
         && placed.width() > 1e-9
         && placed.height() > 1e-9
         && (placed.x0 - now.x0).abs() + (placed.y0 - now.y0).abs() + (placed.x1 - now.x1).abs() + (placed.y1 - now.y1).abs() > 1e-6
@@ -1162,7 +1162,7 @@ fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> Result<()> {
     if let Some(ch) = n.children_mut() {
         *ch = children;
     }
-    n.graph = Some(Box::new(spec));
+    n.extras_mut().graph = Some(Box::new(spec));
     Ok(())
 }
 
@@ -1199,7 +1199,7 @@ fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
     for id in start {
         let mut cur = Some(id);
         while let Some(c) = cur {
-            if st.doc.node(c).is_some_and(|n| n.graph.is_some()) {
+            if st.doc.node(c).is_some_and(|n| n.extras().graph.is_some()) {
                 return Ok(c);
             }
             cur = st.doc.parent_of(c);
@@ -1209,7 +1209,7 @@ fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
 }
 
 fn spec_of(s: &Session, id: NodeId) -> Result<GraphSpec> {
-    s.doc()?.doc.node(id).and_then(|n| n.graph.as_deref().cloned()).ok_or(EngineError::NoNode(id))
+    s.doc()?.doc.node(id).and_then(|n| n.extras().graph.as_deref().cloned()).ok_or(EngineError::NoNode(id))
 }
 
 /// Where a node inside a graph's generated series art belongs: the graph, the series group and
@@ -1227,10 +1227,10 @@ struct SeriesRef {
 fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
     let mut out = HashMap::new();
     doc.walk(|n| {
-        let Some(spec) = n.graph.as_deref() else { return };
+        let Some(spec) = n.extras().graph.as_deref() else { return };
         let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
         for group in n.children().into_iter().flatten() {
-            let Some(index) = group.series_index.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count) else { continue };
+            let Some(index) = group.extras().series_index.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count) else { continue };
             let r = SeriesRef { graph: n.id, group: group.id, index };
             group.walk(&mut |m| {
                 out.insert(m.id, r);
@@ -1288,7 +1288,7 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
         .collect();
     let mut changed = false;
     for (graph, index, paint, width) in captures {
-        let Some(spec) = doc.node_mut(graph).and_then(|n| n.graph.as_deref_mut()) else { continue };
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let was = spec.series_paints.clone();
         // `index` is below the graph's series count (`series_members`).
         if spec.series_paints.len() <= index {
@@ -1342,9 +1342,9 @@ fn switch_xy(g: &mut GraphSpec) {
 fn graph_labels(doc: &Document) -> HashMap<NodeId, (NodeId, Role)> {
     let mut out = HashMap::new();
     doc.walk(|n| {
-        let Some(g) = n.graph.as_deref() else { return };
+        let Some(g) = n.extras().graph.as_deref() else { return };
         for c in n.children().into_iter().flatten() {
-            match (&c.kind, c.name.as_deref(), c.series_index) {
+            match (&c.kind, c.name.as_deref(), c.extras().series_index) {
                 (NodeKind::Text(_), _, _) if g.kind == GraphKind::Pie => {
                     out.insert(c.id, (n.id, Role::Category));
                 }
@@ -1389,7 +1389,7 @@ pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &
     kinds.dedup();
     let mut changed = false;
     for (graph, role) in kinds {
-        let Some(spec) = doc.node_mut(graph).and_then(|n| n.graph.as_deref_mut()) else { continue };
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let mut style = label_style(&spec.label_styles, role);
         change(&mut style);
         let slot = match role {
@@ -1470,7 +1470,7 @@ fn reselect_series(d: &Document, sel: &mut vectorcraft_doc::Selection, id: NodeI
         .and_then(Node::children)
         .into_iter()
         .flatten()
-        .filter(|c| c.series_index.is_some_and(|i| indexes.contains(&i)))
+        .filter(|c| c.extras().series_index.is_some_and(|i| indexes.contains(&i)))
         .map(|c| c.id)
         .collect();
     sel.set(groups);
@@ -1485,12 +1485,12 @@ fn design_names(d: &Document) -> Vec<String> {
 fn refresh_graphs_using(d: &mut Document, name: &str) -> Result<()> {
     let mut ids = vec![];
     d.walk(|n| {
-        if n.graph.as_deref().is_some_and(|g| g.series_markers.iter().flatten().any(|m| m == name)) {
+        if n.extras().graph.as_deref().is_some_and(|g| g.series_markers.iter().flatten().any(|m| m == name)) {
             ids.push(n.id);
         }
     });
     for id in ids {
-        if let Some(spec) = d.node(id).and_then(|n| n.graph.as_deref().cloned()) {
+        if let Some(spec) = d.node(id).and_then(|n| n.extras().graph.as_deref().cloned()) {
             regenerate(d, id, spec)?;
         }
     }
@@ -1501,7 +1501,7 @@ fn refresh_graphs_using(d: &mut Document, name: &str) -> Result<()> {
 fn unused_designs(d: &Document) -> Vec<String> {
     let mut used = std::collections::HashSet::new();
     d.walk(|n| {
-        if let Some(g) = n.graph.as_deref() {
+        if let Some(g) = n.extras().graph.as_deref() {
             used.extend(g.series_markers.iter().flatten().cloned());
         }
     });
@@ -1576,12 +1576,12 @@ fn design(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let mut graphs = vec![];
             d.walk(|n| {
-                if n.graph.as_deref().is_some_and(|g| g.series_markers.iter().flatten().any(|m| *m == old)) {
+                if n.extras().graph.as_deref().is_some_and(|g| g.series_markers.iter().flatten().any(|m| *m == old)) {
                     graphs.push(n.id);
                 }
             });
             for id in graphs {
-                if let Some(g) = d.node_mut(id).and_then(|n| n.graph.as_deref_mut()) {
+                if let Some(g) = d.node_mut(id).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) {
                     for m in g.series_markers.iter_mut().flatten().filter(|m| **m == old) {
                         *m = new.clone();
                     }
@@ -1921,7 +1921,7 @@ mod tests {
 
     /// The generated group stored for series `index`, not a sibling that happens to share its name.
     fn series(n: &vectorcraft_doc::Node, index: u32) -> &vectorcraft_doc::Node {
-        n.children().unwrap().iter().find(|c| c.series_index == Some(index)).unwrap_or_else(|| panic!("no series {index}"))
+        n.children().unwrap().iter().find(|c| c.extras().series_index == Some(index)).unwrap_or_else(|| panic!("no series {index}"))
     }
 
     #[test]
@@ -1931,7 +1931,7 @@ mod tests {
         for ty in ["column", "stackedColumn", "bar", "stackedBar", "line", "area", "scatter", "pie", "radar"] {
             let id = graph(&mut s, ty);
             let n = s.doc().unwrap().doc.node(id).unwrap().clone();
-            assert!(n.graph.is_some(), "{ty}");
+            assert!(n.extras().graph.is_some(), "{ty}");
             if ty != "scatter" {
                 assert!(!group(&n, "2024").children().unwrap().is_empty(), "{ty}");
                 assert!(!group(&n, "2025").children().unwrap().is_empty(), "{ty}");
@@ -1966,7 +1966,7 @@ mod tests {
         assert!((s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0 - x0).abs() < 1.0);
         // Type change keeps the data; undo restores the columns.
         s.execute("graph.setType", &json!({"type": "pie"})).unwrap();
-        assert_eq!(s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().kind, vectorcraft_doc::GraphKind::Pie);
+        assert_eq!(s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_ref().unwrap().kind, vectorcraft_doc::GraphKind::Pie);
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["type"], json!("column"));
         // Selecting a bar inside still targets the graph.
@@ -2068,7 +2068,7 @@ mod tests {
             let id = graph(&mut s, ty.id());
             let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
             s.execute("paint.setFill", &json!({"ids": [series_id.0], "color": "#ff0000"})).unwrap();
-            let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone();
+            let spec = s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().clone();
             let restored: GraphSpec = serde_json::from_value(serde_json::to_value(&spec).unwrap()).unwrap();
             assert_eq!(spec, restored);
             let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
@@ -2077,7 +2077,7 @@ mod tests {
             assert!(selected_group.children().unwrap().iter().all(|n| n.appearance.fill_paint() == red), "{ty:?}");
             s.execute("graph.setData", &json!({"rows": [[2, 3], [4, 5]]})).unwrap();
             s.execute("graph.setType", &json!({"type": "line"})).unwrap();
-            let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap();
+            let spec = s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap();
             assert_eq!(spec.series_paints.first().and_then(|p| p.fill.clone()), Some(red.clone()), "{ty:?}");
             let series = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap();
             assert!(series.iter().any(|n| n.appearance.fill_paint() == red), "{ty:?}");
@@ -2092,18 +2092,28 @@ mod tests {
         let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
         s.execute("paint.setFill", &json!({"ids": [series_id.0], "color": "#e8573f"})).unwrap();
         assert_eq!(
-            s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(),
+            s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_ref().unwrap().series_paints[0]
+                .fill
+                .as_ref()
+                .and_then(Paint::color)
+                .unwrap()
+                .to_hex(),
             "#e8573f"
         );
         s.execute("edit.undo", &json!({})).unwrap();
-        assert!(s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints.is_empty());
+        assert!(s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_ref().unwrap().series_paints.is_empty());
         assert_eq!(
             group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0].appearance.fill_paint().color(),
             Some(super::default_series_color(0))
         );
         s.execute("edit.redo", &json!({})).unwrap();
         assert_eq!(
-            s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(),
+            s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_ref().unwrap().series_paints[0]
+                .fill
+                .as_ref()
+                .and_then(Paint::color)
+                .unwrap()
+                .to_hex(),
             "#e8573f"
         );
     }
@@ -2123,7 +2133,7 @@ mod tests {
             s.execute("paint.setFill", &fill).unwrap();
             // The graph keeps nothing, as after a command that paints only the art.
             s.edit("Forget", |d, _| {
-                let g = d.node_mut(id).unwrap().graph.as_deref_mut().unwrap();
+                let g = d.node_mut(id).unwrap().extras_if_any().unwrap().graph.as_deref_mut().unwrap();
                 g.series_paints.clear();
                 g.label_styles = vectorcraft_doc::LabelStyles::default();
                 Ok(())
@@ -2152,7 +2162,7 @@ mod tests {
         s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
         let node = s.doc().unwrap().doc.node(id).unwrap();
         let green = vectorcraft_color::Color::rgb(18.0 / 255.0, 171.0 / 255.0, 52.0 / 255.0);
-        assert_eq!(node.graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color), Some(green));
+        assert_eq!(node.extras().graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color), Some(green));
         assert!(group(node, "2024").children().unwrap().iter().all(|n| n.appearance.fill_paint().color() == Some(green)));
     }
 
@@ -2165,14 +2175,14 @@ mod tests {
         let id = graph(&mut s, "column");
         let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
         s.edit("Junk", |d, _| {
-            d.node_mut(series_id).unwrap().series_index = Some(u32::MAX);
+            d.node_mut(series_id).unwrap().extras_mut().series_index = Some(u32::MAX);
             Ok(())
         })
         .unwrap();
         let bar = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0].id;
         s.execute("paint.setFill", &json!({"ids": [bar.0, series_id.0], "color": "#12ab34"})).unwrap();
         let node = s.doc().unwrap().doc.node(id).unwrap();
-        assert!(node.graph.as_ref().unwrap().series_paints.is_empty());
+        assert!(node.extras().graph.as_ref().unwrap().series_paints.is_empty());
         assert_eq!(group(node, "2024").children().unwrap()[0].appearance.fill_paint().color().map(|c| c.to_hex()), Some("#12ab34".into()));
     }
 
@@ -2185,10 +2195,10 @@ mod tests {
         s.execute("paint.setStroke", &json!({"ids": [series_id.0], "color": "#3751c8"})).unwrap();
         let blue = vectorcraft_color::Color::rgb(55.0 / 255.0, 81.0 / 255.0, 200.0 / 255.0);
         assert_eq!(
-            s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].stroke.as_ref().and_then(Paint::color),
+            s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_ref().unwrap().series_paints[0].stroke.as_ref().and_then(Paint::color),
             Some(blue)
         );
-        assert!(s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].fill.is_none());
+        assert!(s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_ref().unwrap().series_paints[0].fill.is_none());
         s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
         assert!(
             group(s.doc().unwrap().doc.node(id).unwrap(), "2024")
@@ -2212,7 +2222,7 @@ mod tests {
         let path = dir.join("palette.vectorcraft");
         s.execute("document.save", &json!({"path": path})).unwrap();
         s.execute("document.open", &json!({"path": path})).unwrap();
-        let paints = &s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints;
+        let paints = &s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_ref().unwrap().series_paints;
         assert_eq!(paints.iter().map(|p| p.fill.as_ref().and_then(Paint::color).unwrap().to_hex()).collect::<Vec<_>>(), vec!["#ff0000", "#008080"]);
         s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
         s.execute("graph.setData", &json!({"id": id.0, "rows": [[3, 4, 5]]})).unwrap();
@@ -2241,7 +2251,7 @@ mod tests {
         let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
         s.execute("paint.setStroke", &json!({"ids": [series_id.0], "color": "#0000ff"})).unwrap();
         s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
-        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone();
+        let spec = s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().clone();
         let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
         assert_eq!(spec.series_paints[0].stroke, Some(blue.clone()));
         assert!(spec.series_paints[0].fill.is_none());
@@ -2253,7 +2263,7 @@ mod tests {
         let marker = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[1].id;
         s.execute("paint.setFill", &json!({"ids": [marker.0], "color": "#ff0000"})).unwrap();
         s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
-        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone();
+        let spec = s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().clone();
         assert!(spec.series_paints[0].stroke.is_none());
         let series = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap();
         assert_eq!(series[0].appearance.stroke_paint().color(), Some(super::default_series_color(0)));
@@ -2272,7 +2282,7 @@ mod tests {
         )
         .unwrap();
         s.execute("graph.setData", &json!({"rows": [[2, 3], [4, 5]]})).unwrap();
-        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone();
+        let spec = s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().clone();
         assert!(matches!(spec.series_paints[0].fill, Some(Paint::Gradient(_))));
         let bar = &group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0];
         assert!(matches!(bar.appearance.fill_paint(), Paint::Gradient(_)));
@@ -2288,15 +2298,15 @@ mod tests {
             let n = s.doc().unwrap().doc.node(id).unwrap();
             let legend = series(n, 0);
             assert_eq!(legend.name.as_deref(), Some("Legend"));
-            assert!(n.children().unwrap().iter().any(|c| c.name.as_deref() == Some("Legend") && c.series_index.is_none()));
-            assert!(n.children().unwrap().iter().any(|c| c.name.as_deref() == Some("Axes") && c.series_index.is_none()));
+            assert!(n.children().unwrap().iter().any(|c| c.name.as_deref() == Some("Legend") && c.extras().series_index.is_none()));
+            assert!(n.children().unwrap().iter().any(|c| c.name.as_deref() == Some("Axes") && c.extras().series_index.is_none()));
             legend.id
         };
         s.execute("paint.setFill", &json!({"ids": [legend_id.0], "color": "#ff0000"})).unwrap();
         s.execute("graph.setData", &json!({"csv": csv})).unwrap();
         let n = s.doc().unwrap().doc.node(id).unwrap();
-        assert_eq!(n.graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(), "#ff0000");
-        assert!(n.graph.as_ref().unwrap().series_paints.get(1).is_none_or(|p| p.fill.is_none()));
+        assert_eq!(n.extras().graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(), "#ff0000");
+        assert!(n.extras().graph.as_ref().unwrap().series_paints.get(1).is_none_or(|p| p.fill.is_none()));
         assert_eq!(series(n, 0).children().unwrap()[0].appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
         assert_eq!(series(n, 1).name.as_deref(), Some("Axes"));
         assert_ne!(series(n, 1).children().unwrap()[0].appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
@@ -2311,8 +2321,8 @@ mod tests {
         s.execute("paint.setFill", &json!({"ids": [keep.0], "color": "#00ff00"})).unwrap();
         s.execute("graph.setData", &json!({"id": id.0, "rows": [[8, 0], [1, 0]]})).unwrap();
         let n = s.doc().unwrap().doc.node(id).unwrap();
-        assert_eq!(group(n, "Keep").series_index, Some(0));
-        assert_eq!(n.graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(), "#00ff00");
+        assert_eq!(group(n, "Keep").extras().series_index, Some(0));
+        assert_eq!(n.extras().graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(), "#00ff00");
         assert!(n.children().unwrap().iter().all(|c| c.name.as_deref() != Some("Drop")));
     }
 
@@ -2395,7 +2405,7 @@ mod tests {
         let r =
             s.execute("graph.create", &json!({"type": "column", "x": 0, "y": 0, "width": 300, "height": 200, "csv": ",a\nQ1,1\nQ2\nQ3,3"})).unwrap();
         let id = NodeId(r["id"].as_u64().unwrap());
-        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.clone().unwrap();
+        let spec = s.doc().unwrap().doc.node(id).unwrap().extras().graph.clone().unwrap();
         assert_eq!(spec.categories, vec!["Q1", "Q2", "Q3"]);
         assert_eq!(spec.cells(), vec![vec![Some(1.0)], vec![None], vec![Some(3.0)]]);
     }
@@ -2423,7 +2433,7 @@ mod tests {
         // A data window round trip keeps the blanks.
         let csv = s.execute("graph.setData", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
         assert_eq!(csv.lines().nth(2), Some(",2"), "{csv}");
-        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.clone().unwrap();
+        let spec = s.doc().unwrap().doc.node(id).unwrap().extras().graph.clone().unwrap();
         assert_eq!(spec.cells()[1], vec![None, Some(2.0)]);
         // In the file a blank is a 0 placeholder plus its place in `blanks`, so a version without blanks reads
         // numbers (as zeros); a graph without blanks writes no `blanks` at all.
@@ -2434,7 +2444,7 @@ mod tests {
     }
 
     fn spec(s: &Session, id: NodeId) -> GraphSpec {
-        s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone()
+        s.doc().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().clone()
     }
 
     /// Bounds of a series' marks, without its legend swatch (the last child).
@@ -2462,12 +2472,12 @@ mod tests {
         assert!((line[1].center().x - cols[0].center().x).abs() < 1e-6);
         // The line series is drawn after (in front of) the column series.
         let n = s.doc().unwrap().doc.node(id).unwrap().clone();
-        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.series_index).collect();
+        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.extras().series_index).collect();
         assert_eq!(order, [0, 1]);
         s.execute("graph.setType", &json!({"seriesIndexes": [0], "type": "line"})).unwrap();
         s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "column"})).unwrap();
         let n = s.doc().unwrap().doc.node(id).unwrap().clone();
-        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.series_index).collect();
+        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.extras().series_index).collect();
         assert_eq!(order, [1, 0]);
         // Back to the graph's own type: nothing is stored for that series.
         assert_eq!(spec(&s, id).series_kinds, [Some(GraphKind::Line)]);
@@ -2562,7 +2572,7 @@ mod tests {
         assert!((area.x0 - cols[0].center().x).abs() < 1e-6 && (area.x1 - cols[2].center().x).abs() < 1e-6, "{area:?}");
         // The area is drawn behind the columns.
         let n = s.doc().unwrap().doc.node(id).unwrap().clone();
-        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.series_index).collect();
+        let order: Vec<u32> = n.children().unwrap().iter().filter_map(|c| c.extras().series_index).collect();
         assert_eq!(order, [0, 1]);
         // An area graph alone still spans the plot.
         s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "area"})).unwrap();
@@ -3173,7 +3183,7 @@ mod tests {
         let dot = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
         d.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Dot".into(), art: std::sync::Arc::new(dot) });
         let art = super::generate(&mut d, &g);
-        let s0 = art.iter().find(|n| n.series_index == Some(0)).unwrap();
+        let s0 = art.iter().find(|n| n.extras().series_index == Some(0)).unwrap();
         assert!(s0.children().unwrap().iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
     }
 
@@ -3188,13 +3198,13 @@ mod tests {
         s.execute("graph.design", &json!({"new": "Chart"})).unwrap();
         let art = s.doc().unwrap().doc.graph_designs[1].art.clone();
         let mut graphs = 0;
-        art.walk(&mut |n| graphs += usize::from(n.graph.is_some() || n.series_index.is_some()));
+        art.walk(&mut |n| graphs += usize::from(n.extras().graph.is_some() || n.extras().series_index.is_some()));
         assert_eq!(graphs, 0, "no graph inside a design");
         // The graph drawn with itself as a marker, then the design it used deleted: still one graph to edit.
         s.execute("graph.marker", &json!({"id": id.0, "seriesIndexes": [1], "design": "Chart"})).unwrap();
         s.execute("graph.design", &json!({"delete": "Pill"})).unwrap();
         let mut found = 0;
-        s.doc().unwrap().doc.walk(|n| found += usize::from(n.graph.is_some()));
+        s.doc().unwrap().doc.walk(|n| found += usize::from(n.extras().graph.is_some()));
         assert_eq!(found, 1);
         // A deleted design reads as none in the query, so the dialog opens on the default marker.
         s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
@@ -3226,7 +3236,7 @@ mod tests {
         g.series_markers = vec![Some("Big".into())];
         let mut d = (*s.doc().unwrap().doc).clone();
         let art = super::generate(&mut d, &g);
-        let s0 = art.iter().find(|n| n.series_index == Some(0)).unwrap();
+        let s0 = art.iter().find(|n| n.extras().series_index == Some(0)).unwrap();
         assert!(s0.children().unwrap().iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
         // Too many objects for one design.
         let ids: Vec<u64> = (0..2001)
@@ -3241,7 +3251,7 @@ mod tests {
         let mut d = vectorcraft_doc::Document::new(100.0, 100.0);
         let art = |d: &mut vectorcraft_doc::Document| std::sync::Arc::new(vectorcraft_doc::Node::group(d.alloc_id(), vec![]));
         let mut graphy = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
-        graphy.graph = Some(Box::new(GraphSpec::default()));
+        graphy.extras_mut().graph = Some(Box::new(GraphSpec::default()));
         for name in ["  A\u{7}  ", "A", "", "   ", &"x".repeat(100)] {
             let a = art(&mut d);
             d.graph_designs.push(vectorcraft_doc::GraphDesign { name: name.into(), art: a });
@@ -3250,7 +3260,7 @@ mod tests {
         d.tidy_graph_designs();
         let names: Vec<_> = d.graph_designs.iter().map(|x| x.name.clone()).collect();
         assert_eq!(names, ["A".to_string(), "x".repeat(64), "G".to_string()]);
-        assert!(d.graph_designs[2].art.graph.is_none());
+        assert!(d.graph_designs[2].art.extras().graph.is_none());
     }
 
     #[test]
@@ -3511,7 +3521,7 @@ mod tests {
         assert!(min > 1.0, "the ring keeps clear of the centre: {near:?}");
         // The names are drawn over the pies: after every series group.
         let kids = n.children().unwrap();
-        let last_series = kids.iter().rposition(|c| c.series_index.is_some()).unwrap();
+        let last_series = kids.iter().rposition(|c| c.extras().series_index.is_some()).unwrap();
         let names: Vec<usize> = kids.iter().enumerate().filter(|(_, c)| matches!(c.kind, NodeKind::Text(_))).map(|(i, _)| i).collect();
         assert_eq!(names.len(), 2, "of two equal pies, one has no ring and no name");
         assert!(names.iter().all(|i| *i > last_series), "{names:?} after {last_series}");
@@ -3576,7 +3586,7 @@ mod tests {
         let n = s.doc().unwrap().doc.node(id).unwrap().clone();
         let kids = n.children().unwrap();
         let at = kids.iter().position(|c| c.name.as_deref() == Some("Drop Shadow")).unwrap();
-        assert!(kids.iter().position(|c| c.series_index.is_some()).unwrap() > at, "behind the series");
+        assert!(kids.iter().position(|c| c.extras().series_index.is_some()).unwrap() > at, "behind the series");
         let shadow = &kids[at];
         assert!((shadow.opacity - 0.35).abs() < 1e-6);
         let copies: Vec<_> = shadow.children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
@@ -3639,8 +3649,12 @@ mod tests {
         s.execute("graph.setType", &json!({"seriesIndexes": [0], "type": "area"})).unwrap();
         s.execute("graph.setType", &json!({"seriesIndexes": [2], "type": "line", "dropShadow": true})).unwrap();
         let n = s.doc().unwrap().doc.node(id).unwrap().clone();
-        let order: Vec<String> =
-            n.children().unwrap().iter().map(|c| c.series_index.map_or_else(|| c.name.clone().unwrap_or_default(), |i| format!("s{i}"))).collect();
+        let order: Vec<String> = n
+            .children()
+            .unwrap()
+            .iter()
+            .map(|c| c.extras().series_index.map_or_else(|| c.name.clone().unwrap_or_default(), |i| format!("s{i}")))
+            .collect();
         // Areas cast none; the columns' shadows sit between the area and the columns, the line's between the columns
         // and the line.
         let at = |k: &str| order.iter().position(|o| o == k).unwrap();
@@ -3702,8 +3716,9 @@ mod tests {
         assert!(a[0].x1 > b[0].x0, "the columns of a cluster overlap: {:?} {:?}", a[0], b[0]);
         assert!(b[0].x1 > a[1].x0, "and so do the clusters: {:?} {:?}", b[0], a[1]);
         assert_eq!(s.execute("graph.setType", &json!({"clusterWidth": 5000})).map(|_| spec(&s, id).cluster_width).unwrap(), 1000.0);
-        let order =
-            |s: &Session| -> Vec<u32> { s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().filter_map(|c| c.series_index).collect() };
+        let order = |s: &Session| -> Vec<u32> {
+            s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().filter_map(|c| c.extras().series_index).collect()
+        };
         assert_eq!(order(&s), [0, 1]);
         s.execute("graph.setType", &json!({"firstColumnInFront": true})).unwrap();
         assert_eq!(order(&s), [1, 0], "the first series drawn last, on top");

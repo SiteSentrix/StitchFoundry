@@ -72,8 +72,8 @@ fn masked(smask: &str, mask: &str) -> Vec<u8> {
 }
 
 fn the_mask(d: &Document) -> (Node, OpacityMask) {
-    let n = all(d).into_iter().find(|n| n.mask.is_some()).expect("a masked object");
-    let m = n.mask.as_deref().unwrap().clone();
+    let n = all(d).into_iter().find(|n| n.extras().mask.is_some()).expect("a masked object");
+    let m = n.extras().mask.as_deref().unwrap().clone();
     (n, m)
 }
 
@@ -121,7 +121,7 @@ fn opacity_masks_round_trip_through_pdf() {
         let mut d = Document::new(100.0, 100.0);
         let mut n = rect(Rect::new(10.0, 10.0, 90.0, 90.0), Color::rgb(1.0, 0.0, 0.0));
         let art = rect(Rect::new(10.0, 10.0, 50.0, 90.0), Color::gray(0.25));
-        n.mask = Some(Box::new(OpacityMask { invert, ..OpacityMask::new(art, clip) }));
+        n.extras_mut().mask = Some(Box::new(OpacityMask { invert, ..OpacityMask::new(art, clip) }));
         add(&mut d, n);
         let back = roundtrip(&d);
         let (n, m) = the_mask(&back);
@@ -152,14 +152,14 @@ fn isolated_and_non_isolated_groups_round_trip() {
     let back = roundtrip(&half_group(true));
     let groups: Vec<Node> = all(&back).into_iter().filter(|n| matches!(n.kind, NodeKind::Group { clip: false, .. })).collect();
     let [g] = groups.as_slice() else { panic!("one group: {groups:?}") };
-    assert!(g.isolate && g.mask.is_none());
+    assert!(g.isolate && g.extras().mask.is_none());
     assert!((g.opacity - 0.5).abs() < 0.01, "{}", g.opacity);
     assert_eq!(g.children().unwrap()[0].blend, BlendMode::Multiply);
     // Not isolated: its 50% (a constant alpha mask in the file) is opacity again, here on the
     // only object inside, which blends with the backdrop as before.
     let back = roundtrip(&half_group(false));
     let nodes = all(&back);
-    assert!(nodes.iter().all(|n| !n.isolate && n.mask.is_none()));
+    assert!(nodes.iter().all(|n| !n.isolate && n.extras().mask.is_none()));
     let m = nodes.iter().find(|n| n.blend == BlendMode::Multiply).unwrap();
     let opacity: f32 =
         nodes.iter().filter(|n| n.children().is_some_and(|c| c.iter().any(|c| c.id == m.id))).map(|g| g.opacity).product::<f32>() * m.opacity;
@@ -320,7 +320,7 @@ fn gradient_stop_opacity_round_trips() {
     add(&mut d, n);
     let back = roundtrip(&d);
     let nodes = all(&back);
-    assert!(nodes.iter().all(|n| n.mask.is_none()), "the opacity is in the stops, not a mask");
+    assert!(nodes.iter().all(|n| n.extras().mask.is_none()), "the opacity is in the stops, not a mask");
     let g = nodes.iter().find_map(|n| match n.appearance.fill().map(|f| &f.paint) {
         Some(Paint::Gradient(g)) => Some(g.gradient.clone()),
         _ => None,
@@ -358,7 +358,7 @@ fn appearance_items_are_untouched_for_plain_art() {
     let d = open(&one_page("q 1 0 0 rg 10 10 30 30 re f Q 0 0 1 RG 2 w 50 50 30 30 re S", "", &[]));
     let nodes = all(&d);
     assert_eq!(nodes.iter().filter(|n| n.path_data().is_some()).count(), 2);
-    assert!(nodes.iter().all(|n| n.mask.is_none() && !matches!(n.kind, NodeKind::Group { .. })));
+    assert!(nodes.iter().all(|n| n.extras().mask.is_none() && !matches!(n.kind, NodeKind::Group { .. })));
     assert!(matches!(nodes.iter().find(|n| n.appearance.stroke().is_some()).unwrap().appearance.items[0], AppearanceItem::Stroke(_)));
 }
 

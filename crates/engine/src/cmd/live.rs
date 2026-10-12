@@ -535,7 +535,7 @@ fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
                 extend_spine(&mut spec, old, old_spec, &children);
             }
             n.id = id;
-            n.kind = NodeKind::Blend { children, spec };
+            n.kind = NodeKind::Blend { children, spec: Box::new(spec) };
             n
         })
     })?;
@@ -563,7 +563,7 @@ fn blend_release(s: &mut Session, _: &Value) -> Result<Value> {
                 || n.opacity < 1.0
                 || n.blend != vectorcraft_color::BlendMode::Normal
                 || n.isolate
-                || n.mask.is_some()
+                || n.extras().mask.is_some()
                 || !n.appearance.items.is_empty()
                 || !n.appearance.effects.is_empty()
             {
@@ -714,7 +714,7 @@ fn edit_blends(s: &mut Session, label: &str, f: impl Fn(&mut Vec<Arc<Node>>, &mu
 fn selected_spec(s: &Session) -> Option<(NodeId, BlendSpec, Vec<NodeId>)> {
     let b = *selected_of(s, is_blend).first()?;
     match &s.doc().ok()?.doc.node(b)?.kind {
-        NodeKind::Blend { spec, children } => Some((b, spec.clone(), children.iter().map(|c| c.id).collect())),
+        NodeKind::Blend { spec, children } => Some((b, (**spec).clone(), children.iter().map(|c| c.id).collect())),
         _ => None,
     }
 }
@@ -952,7 +952,7 @@ fn envelope_defaults(s: &Session) -> (EnvelopeOptions, f64) {
 }
 
 fn envelope(id: NodeId, content: Vec<Arc<Node>>, kind: EnvelopeKind, (options, fidelity): (EnvelopeOptions, f64)) -> Node {
-    Node::new(id, NodeKind::Envelope { content, kind, fidelity, editing: false, options, frame: Affine::IDENTITY })
+    Node::new(id, NodeKind::Envelope { content, kind: Box::new(kind), fidelity, editing: false, options, frame: Box::new(Affine::IDENTITY) })
 }
 
 /// `rows` and `cols` (or `columns`), 1..50 each, defaulting to `default`.
@@ -1048,7 +1048,7 @@ fn set_kinds(s: &mut Session, label: &str, kinds: Vec<(NodeId, EnvelopeKind)>) -
     s.edit(label, |d, _| {
         for (e, k) in kinds {
             if let Some(NodeKind::Envelope { kind, .. }) = d.node_mut(e).map(|n| &mut n.kind) {
-                *kind = k;
+                **kind = k;
             }
         }
         Ok(())
@@ -1110,7 +1110,7 @@ fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
         let (options, fidelity) = envelope_defaults(s);
         return Ok(envelope_options_json(json!({ "id": null }), &options, fidelity));
     };
-    let v = match kind {
+    let v = match &**kind {
         EnvelopeKind::Warp { style, bend, h, v, horizontal } => {
             json!({"type": "warp", "style": style, "bend": bend, "h": h, "v": v, "horizontal": horizontal})
         }
@@ -1154,7 +1154,7 @@ fn carry_transparency(d: &mut Document, env: &Node, mut nodes: Vec<Node>) -> Vec
         n.isolate = env.isolate;
         n.knockout = env.knockout;
         n.knockout_shape = env.knockout_shape;
-        n.mask = env.mask.clone();
+        n.extras_mut().mask = env.extras().mask.clone();
     };
     if let [one] = nodes.as_mut_slice()
         && one.has_default_transparency()
@@ -1205,8 +1205,8 @@ fn env_options(s: &mut Session, p: &Value) -> Result<Value> {
     let mut updates = vec![];
     for e in &envs {
         if let Some(NodeKind::Envelope { kind, options, fidelity, .. }) = doc.node(*e).map(|n| &n.kind) {
-            let kind = match kind {
-                EnvelopeKind::Warp { .. } => warp_kind(p, C, Some(kind))?,
+            let kind = match &**kind {
+                k @ EnvelopeKind::Warp { .. } => warp_kind(p, C, Some(k))?,
                 k => k.clone(),
             };
             updates.push((*e, kind, options_param(p, C, *options)?, fid.unwrap_or(*fidelity)));
@@ -1215,7 +1215,7 @@ fn env_options(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Envelope Options", |d, _| {
         for (e, k, o, f) in updates {
             if let Some(NodeKind::Envelope { kind, options, fidelity, .. }) = d.node_mut(e).map(|n| &mut n.kind) {
-                (*kind, *options, *fidelity) = (k, o, f);
+                (**kind, *options, *fidelity) = (k, o, f);
             }
         }
         Ok(())
@@ -1300,7 +1300,10 @@ fn env_set_mesh_point(s: &mut Session, p: &Value) -> Result<Value> {
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let handle = handle_param(p, C)?;
     s.edit("Move Envelope Point", |d, _| {
-        let Some(NodeKind::Envelope { kind: EnvelopeKind::Mesh { rows, cols, points, handles }, .. }) = d.node_mut(id).map(|n| &mut n.kind) else {
+        let Some(NodeKind::Envelope { kind, .. }) = d.node_mut(id).map(|n| &mut n.kind) else {
+            return Err(bad(C, "not a mesh envelope point"));
+        };
+        let EnvelopeKind::Mesh { rows, cols, points, handles } = &mut **kind else {
             return Err(bad(C, "not a mesh envelope point"));
         };
         let at = *points.get(index).ok_or_else(|| bad(C, "not a mesh envelope point"))?;
@@ -1384,7 +1387,10 @@ fn with_mesh<T>(s: &mut Session, p: &Value, cmd: &str, label: &str, envelopes: b
     let c = cmd.to_string();
     s.edit(label, move |d, _| match d.node_mut(id).map(|n| &mut n.kind) {
         Some(NodeKind::Mesh(m)) => f(m),
-        Some(NodeKind::Envelope { kind: EnvelopeKind::Mesh { rows, cols, points, handles }, .. }) if envelopes => {
+        Some(NodeKind::Envelope { kind, .. }) if envelopes && matches!(**kind, EnvelopeKind::Mesh { .. }) => {
+            let EnvelopeKind::Mesh { rows, cols, points, handles } = &mut **kind else {
+                return Err(bad(&c, "not a gradient mesh or mesh envelope"));
+            };
             let mut m = live::envelope_grid(*rows, *cols, points, handles).ok_or_else(|| bad(&c, "the envelope's mesh is malformed"))?;
             let r = f(&mut m)?;
             (*rows, *cols) = (m.rows, m.cols);

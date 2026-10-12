@@ -56,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn source_group(n: &Node) -> Option<&Node> {
-    n.shaper.as_ref()?;
+    n.extras().shaper.as_ref()?;
     n.children()?.first().map(AsRef::as_ref).filter(|g| g.name.as_deref() == Some(SOURCES))
 }
 fn sources(n: &Node) -> Vec<Arc<Node>> {
@@ -376,7 +376,7 @@ fn generated(d: &mut Document, src: &[Arc<Node>], spec: &ShaperSpec, map: &Build
 pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
     let mut ids = vec![];
     d.walk(|n| {
-        if n.shaper.is_some() {
+        if n.extras().shaper.is_some() {
             ids.push(n.id)
         }
     });
@@ -399,7 +399,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
             continue;
         }
         let map = map_of(&src)?;
-        let mut spec = current.shaper.as_deref().cloned().unwrap_or_default();
+        let mut spec = current.extras().shaper.as_deref().cloned().unwrap_or_default();
         let previous = sources(old);
         if previous.iter().map(|s| s.id).ne(src.iter().map(|s| s.id)) {
             // Source insertion, deletion or reordering updates the index-based recipes.
@@ -489,7 +489,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
             children.push(n);
         }
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-        n.shaper = Some(Box::new(spec));
+        n.extras_mut().shaper = Some(Box::new(spec));
         if let Some(ch) = n.children_mut() {
             *ch = children;
         }
@@ -509,7 +509,7 @@ fn candidates(s: &Session, p: &Value, points: &[Point], tolerance: f64) -> Resul
             st.doc.is_editable(*id)
                 && st.doc.node(*id).is_some_and(|n| {
                     !matches!(n.kind, NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. })
-                        && (n.shaper.is_some() || b::node_outline(n).is_some())
+                        && (n.extras().shaper.is_some() || b::node_outline(n).is_some())
                 })
         })
         .collect();
@@ -578,7 +578,7 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
     let mut next_merge = 1u64;
     for id in &roots {
         let n = s.doc()?.doc.node(*id).ok_or(EngineError::NoNode(*id))?;
-        if let Some(previous) = n.shaper.as_deref() {
+        if let Some(previous) = n.extras().shaper.as_deref() {
             let offset = src.len();
             let merge_offset = next_merge;
             for mut e in previous.faces.clone() {
@@ -669,7 +669,7 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
         let id = d.alloc_id();
         let mut group = Node::group(id, children);
         group.name = Some("Shaper Group".into());
-        group.shaper = Some(Box::new(spec));
+        group.extras_mut().shaper = Some(Box::new(spec));
         for id in &roots {
             d.remove(*id)?;
         }
@@ -684,7 +684,7 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
 fn group_at(d: &Document, point: Point, construction: bool) -> Option<NodeId> {
     let mut groups = vec![];
     d.walk(|n| {
-        if n.shaper.is_some()
+        if n.extras().shaper.is_some()
             && d.is_editable(n.id)
             && (if construction { source_group(n).and_then(Node::geometric_bounds) } else { n.geometric_bounds() })
                 .is_some_and(|b| b.inflate(6.0, 6.0).contains(point))
@@ -733,7 +733,7 @@ fn target(s: &Session, p: &Value) -> Result<NodeId> {
     let id = id_param(p, "id")
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
         .ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
-    s.doc()?.doc.node(id).filter(|n| n.shaper.is_some()).ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
+    s.doc()?.doc.node(id).filter(|n| n.extras().shaper.is_some()).ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
     Ok(id)
 }
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
@@ -756,7 +756,7 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
     let id = target(s, p)?;
     s.edit("Expand Shaper Group", |d, sel| {
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-        n.shaper = None;
+        n.extras_mut().shaper = None;
         n.name = None;
         if let Some(children) = n.children_mut()
             && children.first().is_some_and(|c| c.name.as_deref() == Some(SOURCES))

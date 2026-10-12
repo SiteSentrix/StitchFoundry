@@ -283,8 +283,26 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 
 /// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
+    open_read(s, read_for_open(name, bytes, p)?, path)
+}
+
+/// A file read for `document.open` but not opened yet ([`read_for_open`], [`open_read`]).
+pub struct ReadFile {
+    loaded: Loaded,
+    opts: LoadOptions,
+}
+
+/// The first half of [`open_bytes_with`]: read and decode the file, which needs no session (an
+/// app may do it on another thread) → what [`open_read`] opens.
+pub fn read_for_open(name: &str, bytes: &[u8], p: &Value) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    open_loaded(s, load_with(name, bytes, &opts)?, path, &opts, false)
+    Ok(ReadFile { loaded: load_with(name, bytes, &opts)?, opts })
+}
+
+/// The second half of [`open_bytes_with`]: open a file [`read_for_open`] read as the new active
+/// document (`path`: where it was read from) → `document.open`'s result.
+pub fn open_read(s: &mut Session, file: ReadFile, path: Option<String>) -> Result<Value> {
+    open_loaded(s, file.loaded, path, &file.opts, false)
 }
 
 /// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
@@ -430,7 +448,8 @@ pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     let layer = d.layers[0].id;
     let id = d.alloc_id();
     let xf = Affine::scale_non_uniform(sx, sy);
-    let mut n = Node::new(id, NodeKind::Image(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default() }));
+    let mut n =
+        Node::new(id, NodeKind::Image(Box::new(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default() })));
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
