@@ -149,7 +149,13 @@ impl Raster {
         if pixels > MAX_SOURCE_PIXELS {
             return Err(TraceError::TooLarge { width: w, height: h, max: MAX_SOURCE_PIXELS >> 20 });
         }
-        let img = image::load_from_memory(bytes).map_err(decode_err)?.to_rgba8();
+        // Decoded within the allocation the source limit needs; the web keeps file import's 512 MB.
+        // A deeper image (16 bits a channel) that needs more fails with a decode error.
+        let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| TraceError::Decode(e.to_string()))?;
+        let mut limits = image::Limits::default();
+        limits.max_alloc = Some(if cfg!(target_arch = "wasm32") { 512 << 20 } else { MAX_SOURCE_PIXELS * 4 });
+        reader.limits(limits);
+        let img = reader.decode().map_err(decode_err)?.into_rgba8();
         let (w, h) = img.dimensions();
         let (nw, nh) = fit_size(w, h, MAX_PIXELS);
         // Box-filtered: every source pixel counts, so thin lines and anti-aliased edges survive.
