@@ -1423,6 +1423,45 @@ fn direct_selection_moves_one_anchor() {
     assert_eq!(p.subpaths[0].anchors[1].p, vectorcraft_geom::Point::new(200.0, 100.0));
 }
 
+/// Follow-up to #1254: toggling or adding anchors of a path selected as a whole starts from all
+/// its anchors, so toggling one deselects it alone and adding one keeps them all.
+#[test]
+fn select_anchors_toggle_and_add_start_from_a_whole_path() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let picked = |s: &Session| s.doc().unwrap().selection.partial(a).map(|set| set.iter().copied().collect::<Vec<_>>());
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "toggle"})).unwrap();
+    assert_eq!(picked(&s), Some(vec![(0, 1), (0, 2), (0, 3)]));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    assert!(picked(&s).is_none_or(|v| v.len() == 4), "{:?}", picked(&s));
+    assert!(s.doc().unwrap().selection.contains(a));
+}
+
+/// Follow-up to #1254: Shift-clicking an anchor of a path selected as a whole (with the Selection
+/// tool) deselects that anchor and keeps the others, as in Illustrator.
+#[test]
+fn direct_selection_shift_click_deselects_one_anchor_of_a_whole_path() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let v = ViewInfo::default();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 150.0, 150.0), v).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert!(s.doc().unwrap().selection.partial(a).is_none(), "selected whole");
+    s.select_tool("directSelection", v).unwrap();
+    let shift = vectorcraft_tools::Mods { shift: true, ..Default::default() };
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 100.0, 100.0).with_mods(shift), v).unwrap();
+    }
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!(sel.partial(a).map(|set| set.iter().copied().collect::<Vec<_>>()), Some(vec![(0, 1), (0, 2), (0, 3)]));
+}
+
 /// Dragging a curved segment with Direct Selection bends it (its anchors stay), and dragging a
 /// straight one moves its two anchors, not the whole path; each is one undo step.
 #[test]

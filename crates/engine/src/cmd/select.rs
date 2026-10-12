@@ -340,12 +340,17 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
         Some("toggle") => "toggle",
         Some(m) => return Err(bad(C, format!("unknown mode {m:?}"))),
     };
-    s.select(|_, sel| {
+    s.select(|d, sel| {
         if mode == "set" {
             sel.clear();
         }
+        // A path selected as a whole has every anchor selected: toggle and add start from them all.
+        let whole = sel.contains(id) && sel.partial(id).is_none();
         sel.add(id);
         let e = sel.anchors.entry(id).or_default();
+        if whole && let Some(path) = d.node(id).and_then(|n| n.path_data()) {
+            e.extend(path.anchors().map(|(s, i, _)| (s, i)));
+        }
         for r in refs {
             if mode == "toggle" && e.contains(&r) {
                 e.remove(&r);
