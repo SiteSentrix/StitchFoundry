@@ -10,10 +10,10 @@ use serde_json::{Map, Value, json};
 use sf_core::attr::{DocEmbroidery, FontDesign};
 use vectorcraft_doc::{Artboard, Document, Guide, LayerColor, Node, Unit};
 use vectorcraft_embroidery::PT_PER_MM;
-use vectorcraft_embroidery::fonts::EmbFont;
+use vectorcraft_embroidery::fonts::{EmbFont, Glyph};
 use vectorcraft_geom::{Affine, Rect};
 
-use super::embroidery_lettering::{GLYPHS_FILE, add_font, describe, ensure_fonts, ranged, remember_folder};
+use super::embroidery_lettering::{GLYPHS_FILE, add_font, describe, ensure_fonts, loaded, not_loaded, ranged, remember_folder};
 use super::*;
 
 const NEW: &str = "embroidery.fontDoc.new";
@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Font Properties",
             [],
             None,
-            "{name?, leading?: × the size (0.5–5), space?: mm (0–200), letterCase?: upper|lower|none, minScale?, maxScale?: × the size it sews well down and up to (0–10; 0: not said), description?, license?} the font document's font properties → {font}",
+            "{name?, leading?: × the size (0.5–5), space?: mm (0–200), letterCase?: upper|lower|none, defaultGlyph?: the glyph characters the font lacks show (\"\": none), minScale?, maxScale?: × the size it sews well down and up to (0–10; 0: not said), description?, license?} the font document's font properties → {font}",
             has_doc,
             set_props
         ),
@@ -64,6 +64,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{pair: \"A V\" (two glyphs, a space between), value: mm closer (negative: further apart; 0 removes it)} kerning for a pair of the font document's glyphs → {pairs}",
             has_doc,
             kern
+        ),
+        cmd!(
+            "embroidery.font.edit",
+            "Edit Embroidery Font",
+            [],
+            None,
+            "{name: a loaded embroidery font (Ink/Stitch's or one made here)} open the font as a font document to refine its glyphs, add missing ones and change its properties and kerning; saving it (embroidery.fontDoc.save) replaces the loaded font of that name; opens a new document → {glyphs}",
+            always,
+            edit_font
+        ),
+        cmd!(
+            "embroidery.fontDoc.merge",
+            "Merge Embroidery Font",
+            [],
+            None,
+            "{font: a loaded embroidery font, chars?: only these glyphs} merge fonts: the font's glyphs the font document hasn't yet are added below the others, scaled to its size (their capitals the same height), with their advances → {added}",
+            has_doc,
+            merge_font
         ),
         cmd!(
             query "embroidery.fontDoc.info",
@@ -132,18 +150,23 @@ fn glyph_names(p: &Value, cmd: &str) -> Result<Vec<String>> {
     Ok(out)
 }
 
-/// The artboards (and their guides) of `names`, laid out in rows below `top` (points), ids from
-/// `next`.
-fn glyph_boards(names: &[String], f: &FontDesign, top: f64, next: u32) -> (Vec<Artboard>, Vec<Guide>) {
+/// New glyphs `names` at their usual widths (points).
+fn usual_widths(names: Vec<String>, f: &FontDesign) -> Vec<(String, f64)> {
+    names.into_iter().map(|n| (advance(&n, f.size) * PT_PER_MM, n)).map(|(w, n)| (n, w)).collect()
+}
+
+/// The artboards (and their guides) of `glyphs` (names and widths, points), laid out in rows
+/// below `top` (points), ids from `next`.
+fn glyph_boards(glyphs: &[(String, f64)], f: &FontDesign, top: f64, next: u32) -> (Vec<Artboard>, Vec<Guide>) {
     let pt = PT_PER_MM;
     let height = (f.size * 1.4 + f.descent) * pt;
     let (mut boards, mut guides) = (Vec::new(), Vec::new());
     let (mut x, mut y) = (0.0, top);
-    for (i, name) in names.iter().enumerate() {
+    for (i, (name, w)) in glyphs.iter().enumerate() {
         if i > 0 && i % PER_ROW == 0 {
             (x, y) = (0.0, y + height + GAP * pt);
         }
-        let w = advance(name, f.size) * pt;
+        let w = w.clamp(1.0, 10_000.0);
         let id = next + i as u32;
         let rect = Rect::new(x, y, x + w, y + height);
         let base = rect.y1 - f.descent * pt;
@@ -168,7 +191,7 @@ fn new_font(s: &mut Session, p: &Value) -> Result<Value> {
     if names.is_empty() {
         names = DEFAULT_CHARS.chars().map(String::from).collect();
     }
-    let (boards, guides) = glyph_boards(&names, &f, 0.0, 1);
+    let (boards, guides) = glyph_boards(&usual_widths(names, &f), &f, 0.0, 1);
     let mut doc = Document::new(100.0, 100.0);
     doc.title = f.name.clone();
     doc.units = Unit::Millimeters;
@@ -194,7 +217,7 @@ fn add_glyphs(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let top = d.artboards.iter().map(|a| a.rect.y1).fold(0.0f64, f64::max) + GAP * PT_PER_MM;
     let next = d.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1;
-    let (boards, guides) = glyph_boards(&names, &f, top, next);
+    let (boards, guides) = glyph_boards(&usual_widths(names, &f), &f, top, next);
     let added = boards.len();
     s.edit("Add Glyphs", |d, _| {
         d.artboards.extend(boards);
@@ -222,6 +245,9 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
         Some("upper" | "lower") => f.letter_case = str_param(p, "letterCase").unwrap_or_default().to_string(),
         Some("none" | "") => f.letter_case.clear(),
         Some(o) => return Err(bad(CMD, format!("unknown letterCase `{o}`: upper, lower or none"))),
+    }
+    if let Some(v) = str_param(p, "defaultGlyph") {
+        f.default_glyph = v.trim().chars().take(MAX_NAME).collect();
     }
     if let Some(v) = str_param(p, "description") {
         f.description = v.chars().take(2000).collect();
@@ -261,6 +287,134 @@ fn kern(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "pairs": pairs }))
+}
+
+/// The glyphs of `font` (all, or those in `only`; by name), with their widths here (points, at
+/// `k` times the font's size).
+fn font_glyphs<'a>(font: &'a EmbFont, only: Option<&[String]>, k: f64) -> Vec<(String, &'a Glyph, f64)> {
+    let mut out: Vec<(String, &Glyph, f64)> = font
+        .glyphs
+        .iter()
+        .filter(|(n, _)| only.is_none_or(|o| o.contains(n)))
+        .map(|(n, g)| (n.clone(), g, font.advance_of(n).unwrap_or(0.0) * g.unit * k))
+        .collect();
+    // in character order, ligatures after
+    out.sort_by(|a, b| (a.0.chars().count(), a.0.as_str()).cmp(&(b.0.chars().count(), b.0.as_str())));
+    out.truncate(MAX_DOC_GLYPHS);
+    out
+}
+
+/// The art of glyph `g`, `k` times its size, placed on artboard `board` of a font document whose
+/// baseline is `descent` (mm) up from its bottom, made visible (font glyph layers are hidden).
+fn glyph_nodes(d: &mut Document, g: &Glyph, k: f64, board: Rect, descent: f64) -> Vec<Arc<Node>> {
+    let m = Affine::translate((board.x0, board.y1 - descent * PT_PER_MM)) * Affine::scale(k) * Affine::translate((0.0, -g.baseline));
+    g.art
+        .children()
+        .map(|c| {
+            c.iter()
+                .map(|n| {
+                    let mut n = d.reid(n);
+                    n.visible = true;
+                    n.transform(m, true);
+                    Arc::new(n)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// How far below the baseline `font`'s glyphs reach (mm), at `k` times its size.
+fn depth(font: &EmbFont, k: f64) -> f64 {
+    font.glyphs
+        .values()
+        .filter_map(|g| Some((g.art.geometric_bounds()?.y1 - g.baseline) * k / PT_PER_MM))
+        .filter(|v| v.is_finite())
+        .fold(0.0f64, f64::max)
+}
+
+fn edit_font(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.font.edit";
+    let name = str_param(p, "name").ok_or_else(|| bad(CMD, "missing `name`"))?;
+    let _ = ensure_fonts(s);
+    let font = loaded(s, name).ok_or_else(|| not_loaded(CMD, name))?;
+    let i = &font.info;
+    let unit = font.glyphs.values().next().map_or(1.0, |g| g.unit);
+    let size = if i.size > 0.0 { i.size } else { 20.0 };
+    // the font's properties, its font units in millimetres
+    let mm = |v: f64| v * unit / PT_PER_MM;
+    let f = FontDesign {
+        name: i.name.clone(),
+        size,
+        descent: depth(&font, 1.0).max(size * 0.4) + 2.0,
+        leading: if i.leading > 0.0 { mm(i.leading) / size } else { 1.4 },
+        space: i.horiz_adv_x_space.map_or(size * 0.3, mm),
+        letter_case: i.letter_case.clone(),
+        default_glyph: i.default_glyph.clone(),
+        min_scale: i.min_scale,
+        max_scale: i.max_scale,
+        kerning: i.kerning_pairs.iter().map(|(k, v)| (k.split_whitespace().collect::<Vec<_>>().join(" "), mm(*v))).collect(),
+        description: i.description.clone(),
+        license: i.font_license.clone(),
+    };
+    let glyphs = font_glyphs(&font, None, 1.0);
+    let widths: Vec<(String, f64)> = glyphs.iter().map(|(n, _, w)| (n.clone(), *w)).collect();
+    let (boards, guides) = glyph_boards(&widths, &f, 0.0, 1);
+    let mut doc = Document::new(100.0, 100.0);
+    doc.title = f.name.clone();
+    doc.units = Unit::Millimeters;
+    let mut art = Vec::new();
+    for ((_, g, _), board) in glyphs.iter().zip(&boards) {
+        art.extend(glyph_nodes(&mut doc, g, 1.0, board.rect, f.descent));
+    }
+    if let Some(layer) = doc.layers.first_mut()
+        && let Some(ch) = Arc::make_mut(layer).children_mut()
+    {
+        ch.extend(art);
+    }
+    doc.artboards = boards;
+    doc.guides = guides;
+    doc.embroidery = Some(Box::new(DocEmbroidery { font: Some(f), ..DocEmbroidery::default() }));
+    let count = doc.artboards.len();
+    s.add_document(doc, None);
+    Ok(json!({ "glyphs": count }))
+}
+
+fn merge_font(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.fontDoc.merge";
+    let f = design(s, CMD)?;
+    let name = str_param(p, "font").ok_or_else(|| bad(CMD, "missing `font`"))?;
+    let _ = ensure_fonts(s);
+    let font = loaded(s, name).ok_or_else(|| not_loaded(CMD, name))?;
+    let only = glyph_names(p, CMD)?;
+    let d = &s.doc()?.doc;
+    let have: Vec<String> = d.artboards.iter().map(|a| a.name.clone()).collect();
+    // their capitals as tall as this font's
+    let k = f.size / if font.info.size > 0.0 { font.info.size } else { f.size };
+    let glyphs: Vec<(String, &Glyph, f64)> =
+        font_glyphs(&font, (!only.is_empty()).then_some(only.as_slice()), k).into_iter().filter(|(n, _, _)| !have.contains(n)).collect();
+    if glyphs.is_empty() {
+        return Err(bad(CMD, format!("{} has no glyphs this font hasn't already", font.info.name)));
+    }
+    if have.len() + glyphs.len() > MAX_DOC_GLYPHS {
+        return Err(bad(CMD, format!("{MAX_DOC_GLYPHS} glyphs at most")));
+    }
+    let top = d.artboards.iter().map(|a| a.rect.y1).fold(0.0f64, f64::max) + GAP * PT_PER_MM;
+    let next = d.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1;
+    let widths: Vec<(String, f64)> = glyphs.iter().map(|(n, _, w)| (n.clone(), *w)).collect();
+    let (boards, guides) = glyph_boards(&widths, &f, top, next);
+    let parent = s.doc()?.insertion_parent();
+    let added = boards.len();
+    s.edit("Merge Embroidery Font", |d, _| {
+        for ((_, g, _), board) in glyphs.iter().zip(&boards) {
+            for n in glyph_nodes(d, g, k, board.rect, f.descent) {
+                d.insert(parent, usize::MAX, (*n).clone())?;
+            }
+        }
+        d.artboards.extend(boards.iter().cloned());
+        d.guides.extend(guides.iter().cloned());
+        Ok(())
+    })?;
+    Ok(json!({ "added": added }))
 }
 
 /// The art on each glyph's artboard: the top-level objects of the visible layers whose middle is
@@ -333,6 +487,7 @@ fn font_files(d: &Document, f: &FontDesign) -> Result<(String, Document, Vec<Str
         "min_scale": f.min_scale,
         "max_scale": f.max_scale,
         "letter_case": f.letter_case,
+        "default_glyph": f.default_glyph,
         "horiz_adv_x_space": f.space * pt,
         "horiz_adv_x": advances,
         "kerning_pairs": kerning,

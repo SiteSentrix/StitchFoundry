@@ -4693,3 +4693,5 @@ machine	Stop	停止
 	Kern Glyph Pair	グリフペアのカーニング
 	Font Info	フォント情報
 	Save Embroidery Font	刺繍フォントを保存
+	Edit Embroidery Font	刺繍フォントを編集
+	Merge Embroidery Font	刺繍フォントを統合

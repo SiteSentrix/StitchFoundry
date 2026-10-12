@@ -4281,3 +4281,5 @@ machine	Stop	停止
 	Kern Glyph Pair	字形对字距
 	Font Info	字体信息
 	Save Embroidery Font	保存刺绣字体
+	Edit Embroidery Font	编辑刺绣字体
+	Merge Embroidery Font	合并刺绣字体
