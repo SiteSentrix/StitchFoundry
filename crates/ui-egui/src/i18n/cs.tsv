@@ -61,6 +61,8 @@
 	Export Selection…	Exportovat výběr…
 	Package…	Sbalit…
 	Scripts	Skripty
+	Check Script…	Zkontrolovat skript…
+	Check Script	Zkontrolovat skript
 	Other Script…	Jiný skript…
 	Document Setup…	Nastavení dokumentu…
 	Document Color Mode	Barevný režim dokumentu
@@ -2476,6 +2478,56 @@ lighting	Light	Světlo
 	Selected Swatches Only	Pouze vybrané položky vzorníku
 	Selected Swatches Only (0)	Pouze vybrané položky vzorníku (0)
 	User Defined Libraries	Uživatelské knihovny
+	Copy Report	Kopírovat zprávu
+	VectorCraft read this script without running it.	VectorCraft tento skript přečetl, aniž by ho spustil.
+	Needs nothing beyond plain JavaScript	Nepotřebuje nic kromě běžného JavaScriptu
+	Needs the script language's own objects or directives	Potřebuje vlastní objekty nebo direktivy skriptovacího jazyka
+	Needs the document model	Potřebuje model dokumentu
+	Needs files	Potřebuje soubory
+	Needs menu commands	Potřebuje příkazy nabídky
+	Needs dialogs	Potřebuje dialogová okna
+	Needs features only the reference app has	Potřebuje funkce, které má jen referenční aplikace
+	Outside the document	Mimo dokument
+	Writes, moves or deletes files	Zapisuje, přesouvá nebo maže soubory
+	Opens files in other apps	Otevírá soubory v jiných aplikacích
+	Opens network connections	Otevírá síťová připojení
+	Loads native code	Načítá nativní kód
+	Sends messages to other apps	Posílá zprávy jiným aplikacím
+	Reads or sets environment variables	Čte nebo nastavuje proměnné prostředí
+	Runs code the checker can't read	Spouští kód, který kontrola nedokáže přečíst
+	Changes the reference app's preferences	Mění předvolby referenční aplikace
+	Menu commands	Příkazy nabídky
+	Names the script builds as it runs: {count}	Názvy, které skript sestaví až za běhu: {count}
+	Document model	Model dokumentu
+	Object types: {names}	Typy objektů: {names}
+	Directives	Direktivy
+	Includes	Vložené soubory
+	Checked	Zkontrolováno
+	Not followed: outside the script's folder	Přeskočeno: mimo složku skriptu
+	Includes itself	Vkládá sám sebe
+	Not read	Nenačteno
+	Not read: a limit was reached	Nenačteno: byl dosažen limit
+	Compiled or not text	Kompilovaný nebo netextový soubor
+	Problems	Problémy
+	String not closed	Neuzavřený řetězec
+	Comment not closed	Neuzavřený komentář
+	Regular expression not closed	Neuzavřený regulární výraz
+	Template literal not closed	Neuzavřený šablonový literál
+	XML literal not closed	Neuzavřený literál XML
+	Bracket never closed	Neuzavřená závorka
+	Closing bracket with no opening one	Uzavírací závorka bez otevírací
+	Syntax newer than ES3	Syntaxe novější než ES3
+	Unknown directive	Neznámá direktiva
+	Not valid UTF-8: unreadable bytes were replaced	Neplatné UTF-8: nečitelné bajty byly nahrazeny
+	Mixed line endings	Smíšené konce řádků
+	Nesting too deep to follow	Vnoření je příliš hluboké na sledování
+	line {line}	řádek {line}
+	lines {lines}	řádky {lines}
+	{file}, line {line}	{file}, řádek {line}
+	Compiled script: ask its author for the .jsx file	Kompilovaný skript: požádejte jeho autora o soubor .jsx
+	Too large to check	Příliš velký na kontrolu
+	Not a script for the reference app	Nejde o skript pro referenční aplikaci
+	Some lists were cut short at their limit.	Některé seznamy byly zkráceny na svůj limit.
 	Line Segment Tool Options	Možnosti nástroje Úsečka
 	Alt:	Alt:
 	Divide Horizontally Into	Rozdělit vodorovně na
@@ -3705,6 +3757,7 @@ imageTrace	Outline	Obrys
 @msg	Convert to Artboards: selection has no area	Převést na pracovní plochy: výběr nemá žádnou plochu
 @msg	Convert to Shape: no rectangles or ellipses selected	Převést na tvar: nejsou vybrány žádné obdélníky ani elipsy
 @msg	Copied the CSS of {rules} object(s)	Zkopírováno CSS objektů: {rules}
+@msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
 @msg	Couldn't copy to the system clipboard: {e}	Nelze kopírovat do systémové schránky: {e}
 @msg	Couldn't open {name}: {e}	{name} nelze otevřít: {e}
@@ -4195,6 +4248,7 @@ imageTrace	Outline	Obrys
 @msg	{name}: no such recovery entry	{name}: taková položka obnovení neexistuje
 @msg	{path} can't be found: relink it first	{path} nelze najít: nejprve jej znovu propojte
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: zde není souborový systém (k otevření předejte dataBase64; vynecháním cesty dataBase64 získáte)
+@msg	{path}: not a file	{path}: nejde o soubor
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} nelze umístit: {e}

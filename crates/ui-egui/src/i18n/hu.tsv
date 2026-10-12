@@ -531,6 +531,59 @@
 	Character Styles	Karakterstílusok
 	Character:	Karakter:
 	Check Links	Csatolások ellenőrzése
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Szkript ellenőrzése
+	Check Script…	Szkript ellenőrzése…
+	Copy Report	Jelentés másolása
+	VectorCraft read this script without running it.	A VectorCraft futtatás nélkül olvasta be ezt a szkriptet.
+	Needs nothing beyond plain JavaScript	Csak egyszerű JavaScript kell hozzá
+	Needs the script language's own objects or directives	A szkriptnyelv saját objektumai vagy direktívái kellenek hozzá
+	Needs the document model	A dokumentummodell kell hozzá
+	Needs files	Fájlok kellenek hozzá
+	Needs menu commands	Menüparancsok kellenek hozzá
+	Needs dialogs	Párbeszédablakok kellenek hozzá
+	Needs features only the reference app has	Olyan funkciók kellenek hozzá, amelyek csak a referenciaalkalmazásban vannak
+	Outside the document	A dokumentumon kívül
+	Writes, moves or deletes files	Fájlokat ír, áthelyez vagy töröl
+	Opens files in other apps	Fájlokat nyit meg más alkalmazásokban
+	Opens network connections	Hálózati kapcsolatokat nyit
+	Loads native code	Natív kódot tölt be
+	Sends messages to other apps	Üzeneteket küld más alkalmazásoknak
+	Reads or sets environment variables	Környezeti változókat olvas vagy állít be
+	Runs code the checker can't read	Olyan kódot futtat, amelyet az ellenőrzés nem tud beolvasni
+	Changes the reference app's preferences	Módosítja a referenciaalkalmazás beállításait
+	Menu commands	Menüparancsok
+	Names the script builds as it runs: {count}	A szkript által futás közben előállított nevek: {count}
+	Document model	Dokumentummodell
+	Object types: {names}	Objektumtípusok: {names}
+	Directives	Direktívák
+	Includes	Beillesztett fájlok
+	Checked	Ellenőrizve
+	Not followed: outside the script's folder	Kihagyva: a szkript mappáján kívül esik
+	Includes itself	Önmagát illeszti be
+	Not read	Nincs beolvasva
+	Not read: a limit was reached	Nincs beolvasva: korlát elérve
+	Compiled or not text	Lefordított vagy nem szöveg
+	Problems	Problémák
+	String not closed	Lezáratlan karakterlánc
+	Comment not closed	Lezáratlan megjegyzés
+	Regular expression not closed	Lezáratlan reguláris kifejezés
+	Template literal not closed	Lezáratlan sablonliterál
+	XML literal not closed	Lezáratlan XML-literál
+	Bracket never closed	Nyitva maradt zárójel
+	Closing bracket with no opening one	Záró zárójel nyitó pár nélkül
+	Syntax newer than ES3	Az ES3-nál újabb szintaxis
+	Unknown directive	Ismeretlen direktíva
+	Not valid UTF-8: unreadable bytes were replaced	Érvénytelen UTF-8: az olvashatatlan bájtok lecserélve
+	Mixed line endings	Vegyes sorvégek
+	Nesting too deep to follow	Túl mély egymásba ágyazás
+	line {line}	sor: {line}
+	lines {lines}	sorok: {lines}
+	{file}, line {line}	{file}, sor: {line}
+	Compiled script: ask its author for the .jsx file	Lefordított szkript: kérd el a szerzőjétől a .jsx fájlt
+	Too large to check	Túl nagy az ellenőrzéshez
+	Not a script for the reference app	Nem a referenciaalkalmazáshoz írt szkript
+	Some lists were cut short at their limit.	Egyes listák a korlátjuknál megszakadtak.
 	Check Spelling…	Helyesírás-ellenőrzés…
 	Chevron	Csúcsos nyíl
 	Choose a folder	Válassz mappát
@@ -4093,6 +4146,7 @@ imageTrace	Outline	Körvonal
 @msg	Convert to Artboards: selection has no area	Átalakítás rajztáblákká: a kijelölésnek nincs területe
 @msg	Convert to Shape: no rectangles or ellipses selected	Átalakítás alakzattá: nincs kijelölt téglalap vagy ellipszis
 @msg	Copied the CSS of {rules} object(s)	CSS másolva, objektumok: {rules}
+@msg	Copied the script report	Szkriptjelentés másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Nem sikerült a rendszer vágólapjára másolni: {e}
@@ -4598,6 +4652,7 @@ imageTrace	Outline	Körvonal
 @msg	{path} can't be found: relink it first	nem található: {path}; előbb csatold újra
 @msg	{path} is not a folder	nem mappa: {path}
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: itt nincs fájlrendszer (megnyitáshoz add meg a dataBase64-et; az útvonal elhagyásával dataBase64-et kapsz)
+@msg	{path}: not a file	{path}: nem fájl
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	az eszköz nincs többeszközös eszköztár-csoportban: {tool}

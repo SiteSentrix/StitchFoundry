@@ -370,6 +370,59 @@
 	Character Style Options	Options de style de caractère
 	Character Styles	Styles de caractère
 	Check Links	Vérifier les liens
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Vérifier le script
+	Check Script…	Vérifier le script…
+	Copy Report	Copier le rapport
+	VectorCraft read this script without running it.	VectorCraft a lu ce script sans l’exécuter.
+	Needs nothing beyond plain JavaScript	Ne demande que du JavaScript simple
+	Needs the script language's own objects or directives	Demande les objets ou directives propres au langage du script
+	Needs the document model	Demande le modèle de document
+	Needs files	Demande des fichiers
+	Needs menu commands	Demande des commandes de menu
+	Needs dialogs	Demande des boîtes de dialogue
+	Needs features only the reference app has	Demande des fonctions que seule l’application de référence possède
+	Outside the document	Hors du document
+	Writes, moves or deletes files	Écrit, déplace ou supprime des fichiers
+	Opens files in other apps	Ouvre des fichiers dans d’autres applications
+	Opens network connections	Ouvre des connexions réseau
+	Loads native code	Charge du code natif
+	Sends messages to other apps	Envoie des messages à d’autres applications
+	Reads or sets environment variables	Lit ou définit des variables d’environnement
+	Runs code the checker can't read	Exécute du code que la vérification ne peut pas lire
+	Changes the reference app's preferences	Modifie les préférences de l’application de référence
+	Menu commands	Commandes de menu
+	Names the script builds as it runs: {count}	Noms construits par le script à l’exécution ({count})
+	Document model	Modèle de document
+	Object types: {names}	Types d’objets ({names})
+	Directives	Directives
+	Includes	Fichiers inclus
+	Checked	Vérifié
+	Not followed: outside the script's folder	Ignoré (hors du dossier du script)
+	Includes itself	S’inclut lui-même
+	Not read	Non lu
+	Not read: a limit was reached	Non lu (limite atteinte)
+	Compiled or not text	Compilé ou pas du texte
+	Problems	Problèmes
+	String not closed	Chaîne non fermée
+	Comment not closed	Commentaire non fermé
+	Regular expression not closed	Expression régulière non fermée
+	Template literal not closed	Littéral de gabarit non fermé
+	XML literal not closed	Littéral XML non fermé
+	Bracket never closed	Délimiteur jamais fermé
+	Closing bracket with no opening one	Délimiteur fermant sans ouvrant
+	Syntax newer than ES3	Syntaxe plus récente qu’ES3
+	Unknown directive	Directive inconnue
+	Not valid UTF-8: unreadable bytes were replaced	UTF-8 non valide (octets illisibles remplacés)
+	Mixed line endings	Fins de ligne mélangées
+	Nesting too deep to follow	Imbrication trop profonde pour être suivie
+	line {line}	ligne {line}
+	lines {lines}	lignes {lines}
+	{file}, line {line}	{file}, ligne {line}
+	Compiled script: ask its author for the .jsx file	Script compilé. Demandez le fichier .jsx à son auteur
+	Too large to check	Trop volumineux pour être vérifié
+	Not a script for the reference app	Ce n’est pas un script pour l’application de référence
+	Some lists were cut short at their limit.	Certaines listes ont été tronquées à leur limite.
 	Check Spelling…	Vérifier l’orthographe…
 	Choose a folder	Choisissez un dossier
 	Choose…	Choisir…
@@ -3403,6 +3456,7 @@ axis	Both	Les deux
 @msg	Convert to Artboards: selection has no area	Convertir en plans de travail : la sélection n’a pas de surface
 @msg	Convert to Shape: no rectangles or ellipses selected	Convertir en forme : aucun rectangle ni aucune ellipse sélectionné
 @msg	Copied the CSS of {rules} object(s)	CSS de {rules} objet(s) copié
+@msg	Copied the script report	Rapport du script copié
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
@@ -3894,6 +3948,7 @@ axis	Both	Les deux
 @msg	{name}: no such recovery entry	{name} : entrée de récupération inexistante
 @msg	{path} can't be found: relink it first	{path} est introuvable : rétablissez d’abord le lien
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path} : aucun système de fichiers ici (transmettez dataBase64 pour ouvrir ; omettez le chemin pour obtenir dataBase64)
+@msg	{path}: not a file	{path} n’est pas un fichier
 @msg	{path}: {e}	{path} : {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Impossible d’importer {name} : {e}

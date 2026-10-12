@@ -141,8 +141,9 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
     }
 }
 
-/// Swatch libraries and color books, graphic style libraries, Libraries panel files, presets and
-/// plug-ins open as File → Open opens them, dropped with or without a position, on the canvas too.
+/// Swatch libraries and color books, graphic style libraries, Libraries panel files, presets,
+/// plug-ins and scripts open as File → Open opens them, dropped with or without a position, on the
+/// canvas too.
 #[test]
 fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
     let mut app = app();
@@ -150,7 +151,7 @@ fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
     let rect = laid_out(&mut app, &ctx);
     let on_canvas = rect.center() + vec2(60.0, -40.0);
     let libraries = ["a.vcswatches", "a.gpl", "a.ase", "a.acb", "a.vcstyles", "a.vclibrary"];
-    let presets_and_plugins = ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.wasm"];
+    let presets_and_plugins = ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.wasm", "a.jsx", "a.jsxinc", "a.jsxbin"];
     for name in libraries.into_iter().chain(presets_and_plugins) {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
         assert_eq!(app.drop_target(name, Some(on_canvas), true), DropTarget::Open, "{name} on the canvas");
@@ -173,6 +174,24 @@ fn a_dropped_swatch_library_opens_in_the_library_panel() {
     assert_eq!((lib["name"].as_str(), names), (Some("Dropped"), vec!["Red", "Sky"]));
     assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
     assert_eq!(app.ui.recent_files.first(), Some(&gpl), "added to Open Recent Files as File → Open adds it");
+}
+
+/// A script dropped on the window while a document is open shows its check, as File → Open shows
+/// it, and the document is left as it was.
+#[test]
+fn a_dropped_script_shows_its_check() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    laid_out(&mut app, &ctx);
+    let path = temp_file("dropped.jsx", b"#target acme\napp.executeMenuCommand('acmecopyall');\n");
+    frame(&mut app, &ctx, vec![], &[&path], false);
+    let d = app.ui.dialog.as_ref().expect("the check is shown");
+    assert_eq!(d.kind, crate::dialogs::script_check::KIND, "{}", app.ui.status);
+    assert_eq!(
+        (d.fields["report"]["name"].as_str(), d.fields["report"]["needs"].clone()),
+        (Some("dropped.jsx"), json!(["language", "menuCommands"]))
+    );
+    assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 0), "neither opened as a document nor placed");
 }
 
 /// A Libraries panel file dropped on the window while a document is open is added to the

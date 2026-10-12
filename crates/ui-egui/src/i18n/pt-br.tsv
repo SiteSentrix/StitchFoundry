@@ -349,6 +349,59 @@
 	Character Style Options	Opções de Estilo de Caractere
 	Character Styles	Estilos de Caractere
 	Check Links	Verificar Links
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Verificar Script
+	Check Script…	Verificar Script…
+	Copy Report	Copiar Relatório
+	VectorCraft read this script without running it.	O VectorCraft leu este script sem executá-lo.
+	Needs nothing beyond plain JavaScript	Precisa apenas de JavaScript simples
+	Needs the script language's own objects or directives	Precisa de objetos ou diretivas próprios da linguagem do script
+	Needs the document model	Precisa do modelo de documento
+	Needs files	Precisa de arquivos
+	Needs menu commands	Precisa de comandos de menu
+	Needs dialogs	Precisa de caixas de diálogo
+	Needs features only the reference app has	Precisa de recursos que só o aplicativo de referência tem
+	Outside the document	Fora do documento
+	Writes, moves or deletes files	Grava, move ou exclui arquivos
+	Opens files in other apps	Abre arquivos em outros aplicativos
+	Opens network connections	Abre conexões de rede
+	Loads native code	Carrega código nativo
+	Sends messages to other apps	Envia mensagens a outros aplicativos
+	Reads or sets environment variables	Lê ou define variáveis de ambiente
+	Runs code the checker can't read	Executa código que a verificação não consegue ler
+	Changes the reference app's preferences	Altera as preferências do aplicativo de referência
+	Menu commands	Comandos de menu
+	Names the script builds as it runs: {count}	Nomes que o script monta durante a execução: {count}
+	Document model	Modelo de documento
+	Object types: {names}	Tipos de objeto: {names}
+	Directives	Diretivas
+	Includes	Arquivos incluídos
+	Checked	Verificado
+	Not followed: outside the script's folder	Ignorado: fora da pasta do script
+	Includes itself	Inclui a si mesmo
+	Not read	Não lido
+	Not read: a limit was reached	Não lido: um limite foi atingido
+	Compiled or not text	Compilado ou não é texto
+	Problems	Problemas
+	String not closed	String não fechada
+	Comment not closed	Comentário não fechado
+	Regular expression not closed	Expressão regular não fechada
+	Template literal not closed	Literal de modelo não fechado
+	XML literal not closed	Literal XML não fechado
+	Bracket never closed	Delimitador não fechado
+	Closing bracket with no opening one	Delimitador de fechamento sem abertura
+	Syntax newer than ES3	Sintaxe mais recente que ES3
+	Unknown directive	Diretiva desconhecida
+	Not valid UTF-8: unreadable bytes were replaced	UTF-8 inválido: bytes ilegíveis foram substituídos
+	Mixed line endings	Quebras de linha misturadas
+	Nesting too deep to follow	Aninhamento profundo demais para seguir
+	line {line}	linha {line}
+	lines {lines}	linhas {lines}
+	{file}, line {line}	{file}, linha {line}
+	Compiled script: ask its author for the .jsx file	Script compilado: peça o arquivo .jsx ao autor
+	Too large to check	Grande demais para verificar
+	Not a script for the reference app	Não é um script para o aplicativo de referência
+	Some lists were cut short at their limit.	Algumas listas foram cortadas no limite.
 	Check Spelling…	Verificar Ortografia…
 	Choose a folder	Escolher uma pasta
 	Choose…	Escolher…

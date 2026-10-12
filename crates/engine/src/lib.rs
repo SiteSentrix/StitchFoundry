@@ -1917,6 +1917,8 @@ mod tests_saveoptions;
 #[cfg(test)]
 mod tests_scalestrokes;
 #[cfg(test)]
+mod tests_scripts;
+#[cfg(test)]
 mod tests_shaper;
 #[cfg(test)]
 mod tests_slices;

@@ -65,7 +65,8 @@ the suite) keep the agent to the folders you give it:
 
 - Every file a command reads must lie inside the **read root**: `open_file`, `file.place`, relinking and
   updating links, the images an SVG links to, swatch library, graphic style library and colour-profile loads, plug-ins,
-  `file.newFromTemplate`, preset imports, the folders `text.findFontFiles` and `links.findFiles` search.
+  `file.newFromTemplate`, preset imports, the folders `text.findFontFiles` and `links.findFiles` search, the
+  scripts `script.check` reads and the files they include.
 - Every file a command writes must lie inside the **write root**: `save_file`, `export`, the save and
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
   library and preset saves to a path, the copies `links.relink {copy}` makes.
@@ -702,6 +703,76 @@ reference that names no value fails the step, so a command never runs with one l
 
 ```sh
 vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd text.create --params '{"x":10,"y":60,"text":"plain and bold words","size":30}'   --cmd text.setRangeStyle --params '{"id":"$1.id","start":10,"end":14,"style":"Bold"}'
+```
+
+## Checking scripts written for the reference app
+
+`script.check {path? | data? | dataBase64?, name?, includes?}` reads a script written for the reference app
+(`.jsx`, `.jsxinc`, `.js`, or a compiled `.jsxbin`) and reports what it uses. The check does not run any of the
+script, and it does not change the document or the preferences. The reply's `kind` is `script`, `compiled` (a
+`.jsxbin` file, or text that starts with `@JSXBIN@`, which the check doesn't read), `module` (a file with a
+top-level `import` or `export`, such as a React `.jsx` file), `notText` (a NUL byte, or more than one byte in ten a
+control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script, the reply holds these lists:
+
+- `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects
+  and directives, such as `$`, `alert`, `UnitValue` and `#target`), `dom` (the reference app's document model),
+  `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the reference app has: palettes,
+  `#targetengine`, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading,
+  reflection, actions and `selectTool`).
+- `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
+  and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
+  `locale`. A directive is read where it starts a line, written `#name` or `//@name`.
+- `features` lists the platform features the script uses by id (such as `file.write`, `scriptui.dialog`,
+  `menuCommand` or `e4x`), each with a count and its lines.
+- `dom.members` lists the document-model member chains as the script writes them
+  (`app.activeDocument.layers[].name`, with `[]` for an index and `()` for a call); a variable assigned from a chain
+  is replaced by that chain, and a name written with `\u` escapes is read as the name it spells. `dom.types` lists
+  the type names the script compares with `.typename` or creates with `new`, apart from the language's, the platform's
+  and the script's own functions.
+- `menuCommands.strings` lists the string literals the script passes to `executeMenuCommand`
+  (`app.executeMenuCommand('…')`), each with a count and its lines, and `menuCommands.dynamic` counts the calls
+  whose argument isn't a string literal.
+- `outside` lists what the script does outside the document: `filesWritten` (with the open modes used),
+  `filesOpened` (files opened in other apps), `network`, `nativeCode`, `otherApps` (messages to other apps),
+  `environment` (environment variables), `unseenCode` (`eval`, `new Function` and `$.evalFile`) and
+  `preferences` (the reference app's preferences changed).
+- `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
+  template literals and XML literals that aren't closed, brackets that don't match, syntax newer than ES3 and
+  unknown directives) and notes on its text (bytes that aren't valid UTF-8, mixed line endings, and nesting deeper
+  than the check follows: more than 4,096 open brackets, or XML literals and the code in their braces nested more
+  than 4,096 levels deep).
+
+Each entry of `targets`, `directives`, `includes` and `problems` has the `line` it is on (a problem with the whole
+text has none) and, when it is in an included file, that file's path as `file`. `features`, `menuCommands.strings`
+and `outside` count the script and its included files together and list up to 20 of the script's own lines.
+
+With a path and `includes: true`, the check also reads the files the `#include` lines name, and the files their own
+`#include` lines name. When the script or one of these files assigns a member chain or a File object to a variable,
+the check treats the variable as holding it in every file. The check looks for a name in the folder of the file that
+holds the `#include` line, then in each
+folder that the last `#includepath` line before it names, taken from that same folder. It reads only files inside
+the script's folder: it doesn't follow an absolute name, a name, folder or link that leads out of the script's
+folder, a name or folder longer than 4,096 bytes, a file outside the automation read root, or the `JSINCLUDE`
+environment variable, and it reads each file once. An include's `status` is `checked`, `missing`, `notFollowed`,
+`cycle` (the file it names includes the file the line is in, directly or through other files), `notRead` (includes
+weren't read: no `includes`, no path, or the web app), `limit` (one of the limits below was reached) or `unreadable`
+(a compiled file, or not text), and its `path` is the file found, relative to the script's folder. The check reads
+at most 8 MiB of a file and 32 MiB in all, follows 64 included files to a depth of 16 and looks up at most 1,024
+paths for them, keeps 1,000 entries in each list, follows at most 1,000 variables that hold member chains and 1,000
+that hold File objects (`truncated` is true when an entry or a variable was left out), and cuts the text it echoes
+from the script to 120 characters.
+
+File › Scripts › Check Script… picks a `.jsx`, `.jsxinc` or `.jsxbin` file and shows its report, and File › Open and
+drag-and-drop show the report for those files too; the web app checks the script without its included files. Over
+the control channel, `ui.checkScript {path? | data? | dataBase64?, name?}` does the same, and with a path it checks
+the included files too.
+
+```json
+{"name":"run_command","arguments":{"command":"script.check","params":{"path":"/Users/me/Scripts/Tidy Layers.jsx","includes":true}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.check --params '{"path": "Tidy Layers.jsx"}'
 ```
 
 ## Transparency and opacity masks

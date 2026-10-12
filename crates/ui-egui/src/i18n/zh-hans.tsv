@@ -330,6 +330,59 @@
 	Character Style Options	字符样式选项
 	Character Styles	字符样式
 	Check Links	检查链接
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	检查脚本
+	Check Script…	检查脚本…
+	Copy Report	复制报告
+	VectorCraft read this script without running it.	VectorCraft 读取了此脚本，但没有运行它。
+	Needs nothing beyond plain JavaScript	只需要普通的 JavaScript
+	Needs the script language's own objects or directives	需要脚本语言自身的对象或指令
+	Needs the document model	需要文档模型
+	Needs files	需要文件
+	Needs menu commands	需要菜单命令
+	Needs dialogs	需要对话框
+	Needs features only the reference app has	需要只有参考应用才有的功能
+	Outside the document	文档之外
+	Writes, moves or deletes files	写入、移动或删除文件
+	Opens files in other apps	在其他应用中打开文件
+	Opens network connections	打开网络连接
+	Loads native code	加载本机代码
+	Sends messages to other apps	向其他应用发送消息
+	Reads or sets environment variables	读取或设置环境变量
+	Runs code the checker can't read	运行检查无法读取的代码
+	Changes the reference app's preferences	更改参考应用的首选项
+	Menu commands	菜单命令
+	Names the script builds as it runs: {count}	脚本在运行时组成的名称：{count}
+	Document model	文档模型
+	Object types: {names}	对象类型：{names}
+	Directives	指令
+	Includes	包含的文件
+	Checked	已检查
+	Not followed: outside the script's folder	已跳过：在脚本文件夹之外
+	Includes itself	包含自身
+	Not read	未读取
+	Not read: a limit was reached	未读取：已达到上限
+	Compiled or not text	已编译或不是文本
+	Problems	问题
+	String not closed	字符串未闭合
+	Comment not closed	注释未闭合
+	Regular expression not closed	正则表达式未闭合
+	Template literal not closed	模板字面量未闭合
+	XML literal not closed	XML 字面量未闭合
+	Bracket never closed	括号未闭合
+	Closing bracket with no opening one	闭合括号没有对应的左括号
+	Syntax newer than ES3	比 ES3 更新的语法
+	Unknown directive	未知指令
+	Not valid UTF-8: unreadable bytes were replaced	不是有效的 UTF-8：无法读取的字节已被替换
+	Mixed line endings	换行符混用
+	Nesting too deep to follow	嵌套过深，无法跟踪
+	line {line}	第 {line} 行
+	lines {lines}	第 {lines} 行
+	{file}, line {line}	{file}，第 {line} 行
+	Compiled script: ask its author for the .jsx file	已编译的脚本：请向作者索取 .jsx 文件
+	Too large to check	太大，无法检查
+	Not a script for the reference app	不是参考应用的脚本
+	Some lists were cut short at their limit.	部分列表已在上限处截断。
 	Check Spelling…	检查拼写…
 	Choose a folder	选择文件夹
 	Choose…	选择…

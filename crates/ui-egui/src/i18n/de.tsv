@@ -351,6 +351,59 @@
 	Character Style Options	Zeichenformatoptionen
 	Character Styles	Zeichenformate
 	Check Links	Verknüpfungen prüfen
+# Check Script (File › Scripts) and the report it shows on a script written for the reference app.
+	Check Script	Skript prüfen
+	Check Script…	Skript prüfen…
+	Copy Report	Bericht kopieren
+	VectorCraft read this script without running it.	VectorCraft hat dieses Skript gelesen, ohne es auszuführen.
+	Needs nothing beyond plain JavaScript	Braucht nur einfaches JavaScript
+	Needs the script language's own objects or directives	Braucht eigene Objekte oder Direktiven der Skriptsprache
+	Needs the document model	Braucht das Dokumentmodell
+	Needs files	Braucht Dateien
+	Needs menu commands	Braucht Menübefehle
+	Needs dialogs	Braucht Dialogfelder
+	Needs features only the reference app has	Braucht Funktionen, die nur die Referenzanwendung hat
+	Outside the document	Außerhalb des Dokuments
+	Writes, moves or deletes files	Schreibt, verschiebt oder löscht Dateien
+	Opens files in other apps	Öffnet Dateien in anderen Apps
+	Opens network connections	Öffnet Netzwerkverbindungen
+	Loads native code	Lädt nativen Code
+	Sends messages to other apps	Sendet Nachrichten an andere Apps
+	Reads or sets environment variables	Liest oder setzt Umgebungsvariablen
+	Runs code the checker can't read	Führt Code aus, den die Prüfung nicht lesen kann
+	Changes the reference app's preferences	Ändert die Voreinstellungen der Referenzanwendung
+	Menu commands	Menübefehle
+	Names the script builds as it runs: {count}	Namen, die das Skript bei der Ausführung bildet: {count}
+	Document model	Dokumentmodell
+	Object types: {names}	Objekttypen: {names}
+	Directives	Direktiven
+	Includes	Eingebundene Dateien
+	Checked	Geprüft
+	Not followed: outside the script's folder	Übersprungen: außerhalb des Skriptordners
+	Includes itself	Bindet sich selbst ein
+	Not read	Nicht gelesen
+	Not read: a limit was reached	Nicht gelesen: ein Grenzwert wurde erreicht
+	Compiled or not text	Kompiliert oder kein Text
+	Problems	Probleme
+	String not closed	Zeichenkette nicht geschlossen
+	Comment not closed	Kommentar nicht geschlossen
+	Regular expression not closed	Regulärer Ausdruck nicht geschlossen
+	Template literal not closed	Template-Literal nicht geschlossen
+	XML literal not closed	XML-Literal nicht geschlossen
+	Bracket never closed	Klammer nie geschlossen
+	Closing bracket with no opening one	Schließende Klammer ohne öffnende
+	Syntax newer than ES3	Neuere Syntax als ES3
+	Unknown directive	Unbekannte Direktive
+	Not valid UTF-8: unreadable bytes were replaced	Kein gültiges UTF-8: unlesbare Bytes wurden ersetzt
+	Mixed line endings	Gemischte Zeilenenden
+	Nesting too deep to follow	Verschachtelung zu tief zum Verfolgen
+	line {line}	Zeile {line}
+	lines {lines}	Zeilen {lines}
+	{file}, line {line}	{file}, Zeile {line}
+	Compiled script: ask its author for the .jsx file	Kompiliertes Skript: Bitten Sie den Autor um die .jsx-Datei
+	Too large to check	Zu groß zum Prüfen
+	Not a script for the reference app	Kein Skript für die Referenzanwendung
+	Some lists were cut short at their limit.	Einige Listen wurden an ihrem Grenzwert abgeschnitten.
 	Check Spelling…	Rechtschreibprüfung…
 	Choose a folder	Ordner wählen
 	Choose…	Wählen…
@@ -3306,6 +3359,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Convert to Artboards: selection has no area	In Zeichenflächen umwandeln: Die Auswahl hat keine Fläche
 @msg	Convert to Shape: no rectangles or ellipses selected	In Form umwandeln: keine Rechtecke oder Ellipsen ausgewählt
 @msg	Copied the CSS of {rules} object(s)	CSS von {rules} Objekt(en) kopiert
+@msg	Copied the script report	Skriptbericht kopiert
 @msg	Corners edits the corners of a path	„Ecken“ bearbeitet die Ecken eines Pfads
 @msg	Couldn't copy to the system clipboard: {e}	In die Systemzwischenablage konnte nicht kopiert werden: {e}
 @msg	Couldn't open {name}: {e}	{name} konnte nicht geöffnet werden: {e}
@@ -3797,6 +3851,7 @@ theme	Appearance	Erscheinungsbild
 @msg	{name}: no such recovery entry	{name}: kein solcher Wiederherstellungseintrag
 @msg	{path} can't be found: relink it first	{path} wurde nicht gefunden: Verknüpfen Sie die Datei zuerst neu
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: Hier gibt es kein Dateisystem (übergeben Sie dataBase64 zum Öffnen; lassen Sie den Pfad weg, um dataBase64 zu erhalten)
+@msg	{path}: not a file	{path}: keine Datei
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} konnte nicht platziert werden: {e}

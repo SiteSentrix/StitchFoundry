@@ -64,6 +64,8 @@
 	Export Selection…	Eksportuj zaznaczenie…
 	Package…	Spakuj…
 	Scripts	Skrypty
+	Check Script…	Sprawdź skrypt…
+	Check Script	Sprawdź skrypt
 	Other Script…	Inny skrypt…
 	Document Setup…	Ustawienia dokumentu…
 	Document Color Mode	Tryb koloru dokumentu
@@ -2391,6 +2393,56 @@ lighting	Light	Światło
 	Saved to User Defined: {}	Zapisano w zdefiniowanych przez użytkownika: {}
 	Selected Swatches Only	Tylko zaznaczone próbki
 	User Defined Libraries	Biblioteki zdefiniowane przez użytkownika
+	Copy Report	Kopiuj raport
+	VectorCraft read this script without running it.	VectorCraft odczytał ten skrypt, nie uruchamiając go.
+	Needs nothing beyond plain JavaScript	Wymaga tylko zwykłego JavaScriptu
+	Needs the script language's own objects or directives	Wymaga własnych obiektów lub dyrektyw języka skryptowego
+	Needs the document model	Wymaga modelu dokumentu
+	Needs files	Wymaga plików
+	Needs menu commands	Wymaga poleceń menu
+	Needs dialogs	Wymaga okien dialogowych
+	Needs features only the reference app has	Wymaga funkcji, które ma tylko aplikacja referencyjna
+	Outside the document	Poza dokumentem
+	Writes, moves or deletes files	Zapisuje, przenosi lub usuwa pliki
+	Opens files in other apps	Otwiera pliki w innych aplikacjach
+	Opens network connections	Otwiera połączenia sieciowe
+	Loads native code	Wczytuje kod natywny
+	Sends messages to other apps	Wysyła komunikaty do innych aplikacji
+	Reads or sets environment variables	Odczytuje lub ustawia zmienne środowiskowe
+	Runs code the checker can't read	Uruchamia kod, którego nie da się odczytać podczas sprawdzania
+	Changes the reference app's preferences	Zmienia preferencje aplikacji referencyjnej
+	Menu commands	Polecenia menu
+	Names the script builds as it runs: {count}	Nazwy tworzone przez skrypt w trakcie działania: {count}
+	Document model	Model dokumentu
+	Object types: {names}	Typy obiektów: {names}
+	Directives	Dyrektywy
+	Includes	Dołączone pliki
+	Checked	Sprawdzono
+	Not followed: outside the script's folder	Pominięto: poza folderem skryptu
+	Includes itself	Dołącza samego siebie
+	Not read	Nie odczytano
+	Not read: a limit was reached	Nie odczytano: osiągnięto limit
+	Compiled or not text	Plik skompilowany lub nietekstowy
+	Problems	Problemy
+	String not closed	Niezamknięty ciąg znaków
+	Comment not closed	Niezamknięty komentarz
+	Regular expression not closed	Niezamknięte wyrażenie regularne
+	Template literal not closed	Niezamknięty literał szablonowy
+	XML literal not closed	Niezamknięty literał XML
+	Bracket never closed	Niezamknięty nawias
+	Closing bracket with no opening one	Nawias zamykający bez otwierającego
+	Syntax newer than ES3	Składnia nowsza niż ES3
+	Unknown directive	Nieznana dyrektywa
+	Not valid UTF-8: unreadable bytes were replaced	Nieprawidłowe kodowanie UTF-8: nieczytelne bajty zostały zastąpione
+	Mixed line endings	Mieszane znaki końca wiersza
+	Nesting too deep to follow	Zagnieżdżenie zbyt głębokie, aby je śledzić
+	line {line}	wiersz {line}
+	lines {lines}	wiersze {lines}
+	{file}, line {line}	{file}, wiersz {line}
+	Compiled script: ask its author for the .jsx file	Skompilowany skrypt: poproś autora o plik .jsx
+	Too large to check	Zbyt duży, aby go sprawdzić
+	Not a script for the reference app	To nie jest skrypt dla aplikacji referencyjnej
+	Some lists were cut short at their limit.	Niektóre listy zostały obcięte po osiągnięciu limitu.
 	Line Segment Tool Options	Opcje narzędzia Odcinek
 	Alt:	Alt:
 	Divide Horizontally Into	Podziel poziomo na
@@ -3571,6 +3623,7 @@ imageTrace	Outline	Kontur
 @msg	Convert to Artboards: selection has no area	Konwertuj na obszary kompozycji: zaznaczenie nie ma powierzchni
 @msg	Convert to Shape: no rectangles or ellipses selected	Konwertuj na kształt: nie zaznaczono prostokątów ani elips
 @msg	Copied the CSS of {rules} object(s)	Skopiowano CSS obiektów: {rules}
+@msg	Copied the script report	Skopiowano raport skryptu
 @msg	Corners edits the corners of a path	Narożniki edytuje narożniki ścieżki
 @msg	Couldn't copy to the system clipboard: {e}	Nie udało się skopiować do schowka systemowego: {e}
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}
@@ -4061,6 +4114,7 @@ imageTrace	Outline	Kontur
 @msg	{name}: no such recovery entry	{name}: brak takiego wpisu odzyskiwania
 @msg	{path} can't be found: relink it first	nie można znaleźć {path}: najpierw połącz go ponownie
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: brak systemu plików (przekaż dataBase64, aby otworzyć; pomiń ścieżkę, aby otrzymać dataBase64)
+@msg	{path}: not a file	{path}: nie jest plikiem
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Nie udało się umieścić {name}: {e}
