@@ -412,6 +412,29 @@ fn smooth_tool_reduces_jagged_path() {
     assert_eq!(p.subpaths[0].anchors[0].p, Point::new(100.0, 200.0));
 }
 
+/// #1512: a short drag over a small bump smooths the stretch of path under it. The long straight
+/// sides next to the bump stay straight lines from their far ends, which keep their place.
+#[test]
+fn a_short_smooth_drag_leaves_the_rest_of_long_segments_alone() {
+    let mut s = session();
+    let anchors: Vec<_> =
+        [(50.0, 200.0), (190.0, 200.0), (200.0, 192.0), (210.0, 200.0), (350.0, 200.0)].map(|(x, y)| json!({"x": x, "y": y})).to_vec();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let before = path(&s, id);
+    drag(&mut s, "smooth", &[(195.0, 194.0), (205.0, 194.0)], Mods::default());
+    let p = path(&s, id);
+    assert_ne!(p, before, "the bump is smoothed");
+    let a = &p.subpaths[0].anchors;
+    let (first, second, last) = (a[0], a[1], a[a.len() - 1]);
+    assert!(first.p == Point::new(50.0, 200.0) && !first.has_out() && !second.has_in(), "the left side is a line still: {first:?} {second:?}");
+    assert!(last.p == Point::new(350.0, 200.0) && !last.has_in() && !a[a.len() - 2].has_out(), "and the right one: {last:?}");
+    // Every other anchor is within the tool's reach of the drag (12 px either way).
+    for x in &a[1..a.len() - 1] {
+        assert!((182.0..=218.0).contains(&x.p.x) && (190.0..=201.0).contains(&x.p.y), "{x:?}");
+    }
+}
+
 #[test]
 fn join_tool_joins_two_lines() {
     let mut s = session();
