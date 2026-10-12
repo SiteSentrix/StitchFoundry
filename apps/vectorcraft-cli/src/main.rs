@@ -7,7 +7,7 @@
 //! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
-//! vectorcraft-cli perf [--paths 50000]
+//! vectorcraft-cli perf [--paths 50000] [--deep]
 //! ```
 // Denied, not forbidden: the font listers shared with the desktop app allow it for their
 // DirectWrite (Windows) and CoreText (macOS) calls, and nothing else may.
@@ -104,9 +104,11 @@ USAGE:
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
       (warm), multithreaded and single-threaded.
 
-  vectorcraft-cli perf [--paths N]
-      Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder) on a
-      synthetic N-path document (default 50000). Exits non-zero if a budget is exceeded.
+  vectorcraft-cli perf [--paths N] [--deep]
+      Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder, handle
+      and segment drags) on a synthetic N-path document (default 50000). Exits non-zero if a
+      budget is exceeded, unless the report says the machine is busy. --deep also times work with
+      no budget yet and prints memory use (the working set on Windows).
 ";
 
 /// The usage text plus the formats `document.open` reads and `document.export` writes.

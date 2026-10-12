@@ -4580,6 +4580,7 @@ dependencies = [
  "vectorcraft-testkit",
  "vectorcraft-text",
  "windows",
+ "winsafe",
 ]
 
 [[package]]
