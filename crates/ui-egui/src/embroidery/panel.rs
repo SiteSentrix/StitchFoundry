@@ -1995,6 +1995,19 @@ fn machine_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
             app.run("embroidery.settings", json!({ "basting": { "margin": v.clamp(0.0, 50.0) } })).ok();
         }
     }
+    // notes kept with the design, set when the field is left
+    let saved = info["notes"].as_str().unwrap_or_default().to_string();
+    let mut text = app.embroidery.notes_draft.clone().unwrap_or_else(|| saved.clone());
+    ui.label(tl!("Design notes"));
+    let r = ui.add(egui::TextEdit::multiline(&mut text).desired_rows(2).hint_text(tl!("Printed on worksheets")));
+    if r.lost_focus() {
+        app.embroidery.notes_draft = None;
+        if text.trim() != saved {
+            app.run("embroidery.settings", json!({ "notes": text })).ok();
+        }
+    } else if r.has_focus() {
+        app.embroidery.notes_draft = Some(text);
+    }
 }
 
 /// Keeping the design's machine settings in its machine's profile or a new one of the user's;

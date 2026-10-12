@@ -85,6 +85,16 @@ impl Session {
     }
 }
 
+#[cfg(test)]
+mod wrap_tests {
+    #[test]
+    fn notes_wrap_between_words_and_at_line_breaks() {
+        assert_eq!(super::wrap_text("left chest, 9 cm wide\nwhite thread", 12), ["left chest,", "9 cm wide", "white thread"]);
+        assert_eq!(super::wrap_text("abcdefghij xy", 4), ["abcd", "efgh", "ij", "xy"]);
+        assert_eq!(super::wrap_text("", 10), Vec::<String>::new());
+    }
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -219,7 +229,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Worksheet",
             ["Embroidery"],
             None,
-            "{kind?: production|approval|pattern (production), page?: a4|letter (a4), customer?: text, notes?: text} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
+            "{kind?: production|approval|pattern (production), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given)} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
             has_doc,
             worksheet
         ),
@@ -273,7 +283,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Settings",
             [],
             None,
-            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null, fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, basting?: bool | {hoop?: bool (round the hoop's field, else the design), margin?: mm (5; 0–50: out from the design, in from the hoop's edge), length?: mm (6; 2–12)} | null (a basting run sewn first, in the first thread), checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags)} → the settings",
+            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null, fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, notes?: text (kept with the design, printed on its worksheets; 2000 characters at most), basting?: bool | {hoop?: bool (round the hoop's field, else the design), margin?: mm (5; 0–50: out from the design, in from the hoop's edge), length?: mm (6; 2–12)} | null (a basting run sewn first, in the first thread), checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags)} → the settings",
             has_doc,
             settings
         ),
@@ -1729,6 +1739,15 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
         st.tie_off = v;
         changed = true;
     }
+    if let Some(v) = p.get("notes") {
+        let t = match v {
+            Value::Null => "",
+            Value::String(t) => t.as_str(),
+            _ => return Err(bad(CMD, "notes is text")),
+        };
+        cfg.notes = t.trim().chars().take(2000).collect();
+        changed = true;
+    }
     if let Some(v) = p.get("basting") {
         st.basting = match v {
             Value::Null | Value::Bool(false) => None,
@@ -1983,6 +2002,37 @@ fn sheet_text(doc: &mut Document, x: f64, y: f64, text: &str, size: f64, color: 
     Ok(())
 }
 
+/// `text` in lines of at most `width` characters, broken between words (a longer word cut) and
+/// at its own line breaks.
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut out = Vec::new();
+    for para in text.lines() {
+        let mut line = String::new();
+        for word in para.split_whitespace() {
+            let mut word: Vec<char> = word.chars().collect();
+            while word.len() > width {
+                if !line.is_empty() {
+                    out.push(std::mem::take(&mut line));
+                }
+                let rest = word.split_off(width);
+                out.push(word.into_iter().collect());
+                word = rest;
+            }
+            let n = line.chars().count();
+            if n > 0 && n + 1 + word.len() > width {
+                out.push(std::mem::take(&mut line));
+            }
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.extend(word);
+        }
+        out.push(line);
+    }
+    out
+}
+
 /// The stitches of `pattern` as runs per colour block (millimetres), broken at jumps, trims and stops.
 fn stitch_runs(pattern: &sf_core::Pattern) -> Vec<Vec<Vec<sf_core::Point>>> {
     let mut blocks: Vec<Vec<Vec<sf_core::Point>>> = vec![Vec::new()];
@@ -2043,6 +2093,8 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
         let d = &s.doc()?.doc;
         (super::fileio::file_stem(&d.title), d.embroidery.as_deref().cloned().unwrap_or_default())
     };
+    // the design's own notes unless others are given
+    let notes = if notes.is_empty() { cfg.notes.trim().chars().take(2000).collect() } else { notes };
     let black = Color::rgb8(0x1a, 0x1a, 0x1a);
     let grey = Color::rgb8(0x66, 0x66, 0x66);
     let mut doc = Document::new(pw, ph);
@@ -2150,7 +2202,12 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
         y += 15.0;
     }
     if !notes.is_empty() {
-        sheet_text(&mut doc, 40.0, y + 8.0, &format!("Notes: {notes}"), 9.0, black)?;
+        // wrapped to the page, eight lines at most
+        let width = ((pw - 80.0) / 4.8).max(20.0) as usize;
+        let lines = wrap_text(&format!("Notes: {notes}"), width);
+        for (i, line) in lines.iter().take(8).enumerate() {
+            sheet_text(&mut doc, 40.0, y + 8.0 + 12.0 * i as f64, line, 9.0, black)?;
+        }
     }
     if approval {
         sheet_text(&mut doc, 40.0, ph - 40.0, "Approved by: ______________________________   Date: ______________", 10.0, black)?;
@@ -2194,7 +2251,7 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
     });
     let Some(st) = &plan.stats else {
         return Ok(
-            json!({"objects": 0, "stitches": 0, "fabrics": fabrics, "fabricDetails": details, "hoops": hoops, "charts": charts, "machines": machines, "hoop": cfg.hoop.map(|h| h.name), "fabric": cfg.fabric, "machine": cfg.machine, "machineFormat": machine_format, "settings": settings}),
+            json!({"objects": 0, "stitches": 0, "fabrics": fabrics, "fabricDetails": details, "hoops": hoops, "charts": charts, "machines": machines, "hoop": cfg.hoop.map(|h| h.name), "fabric": cfg.fabric, "machine": cfg.machine, "machineFormat": machine_format, "settings": settings, "notes": cfg.notes}),
         );
     };
     Ok(json!({
@@ -2223,6 +2280,7 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         "machineFormat": machine_format,
         "machines": machines,
         "settings": settings,
+        "notes": cfg.notes,
     }))
 }
 

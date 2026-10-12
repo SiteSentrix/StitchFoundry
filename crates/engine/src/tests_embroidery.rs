@@ -445,6 +445,25 @@ fn worksheets_show_the_design_and_its_figures() {
     let st = s.doc().unwrap();
     assert_eq!((st.doc.artboards[0].rect.width(), st.doc.artboards[0].rect.height()), (612.0, 792.0));
     assert!(s.execute("embroidery.worksheet", &json!({"page": "a3"})).is_err());
+    // the design's own notes, kept with it and printed when none are given, wrapped
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let long = format!("Left chest, 9 cm below the collar. {}", "Use white bobbin thread. ".repeat(6));
+    s.execute("embroidery.settings", &json!({"notes": long})).unwrap();
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["notes"].as_str(), Some(long.trim()));
+    s.execute("embroidery.worksheet", &json!({})).unwrap();
+    let mut texts = Vec::new();
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    let notes: Vec<&String> = texts.iter().filter(|t| t.contains("bobbin") || t.starts_with("Notes: ")).collect();
+    assert!(notes.len() >= 2 && notes[0].starts_with("Notes: Left chest"), "{texts:?}");
+    assert!(notes.iter().all(|t| t.chars().count() <= 110), "{notes:?}");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("embroidery.settings", &json!({"notes": null})).unwrap();
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["notes"].as_str(), Some(""));
+    assert!(s.execute("embroidery.settings", &json!({"notes": 5})).is_err());
 }
 
 #[test]
