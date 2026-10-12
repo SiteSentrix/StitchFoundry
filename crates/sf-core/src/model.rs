@@ -993,16 +993,32 @@ pub enum TexturePattern {
     Bricks,
     Circles,
     Scales,
+    Hexagons,
+    Chevrons,
+    Zigzag,
+    Ogee,
+    BasketWeave,
+    Stars,
+    Hearts,
+    Leaves,
 }
 
 impl TexturePattern {
-    pub const ALL: [TexturePattern; 6] = [
+    pub const ALL: [TexturePattern; 14] = [
         TexturePattern::Diamonds,
         TexturePattern::Waves,
         TexturePattern::Herringbone,
         TexturePattern::Bricks,
         TexturePattern::Circles,
         TexturePattern::Scales,
+        TexturePattern::Hexagons,
+        TexturePattern::Chevrons,
+        TexturePattern::Zigzag,
+        TexturePattern::Ogee,
+        TexturePattern::BasketWeave,
+        TexturePattern::Stars,
+        TexturePattern::Hearts,
+        TexturePattern::Leaves,
     ];
 
     /// The pattern's id in params and files.
@@ -1014,6 +1030,14 @@ impl TexturePattern {
             TexturePattern::Bricks => "bricks",
             TexturePattern::Circles => "circles",
             TexturePattern::Scales => "scales",
+            TexturePattern::Hexagons => "hexagons",
+            TexturePattern::Chevrons => "chevrons",
+            TexturePattern::Zigzag => "zigzag",
+            TexturePattern::Ogee => "ogee",
+            TexturePattern::BasketWeave => "basketweave",
+            TexturePattern::Stars => "stars",
+            TexturePattern::Hearts => "hearts",
+            TexturePattern::Leaves => "leaves",
         }
     }
 
@@ -1024,7 +1048,9 @@ impl TexturePattern {
         let l = if stitch_length.is_finite() { stitch_length } else { 4.0 };
         match self {
             TexturePattern::Bricks => (l * 1.3).clamp(3.0, 12.0),
-            TexturePattern::Scales => (l * 2.5).clamp(4.0, 14.0),
+            TexturePattern::Scales | TexturePattern::Hexagons => (l * 2.5).clamp(4.0, 14.0),
+            // pictures need a few rows to read
+            TexturePattern::Stars | TexturePattern::Hearts | TexturePattern::Leaves => (l * 3.0).clamp(6.0, 18.0),
             _ => (l * 1.5).clamp(3.0, 12.0),
         }
     }
@@ -1116,6 +1142,10 @@ pub struct FillParams {
     /// Cross fills: how each cell is sewn.
     #[serde(skip_serializing_if = "CrossStyle::is_full")]
     pub cross: CrossStyle,
+    /// Motif fills: a second motif sewn in turn with the first along every row (a paired motif
+    /// fill).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motif_pair: Option<Motif>,
     /// Contour fills: how many rings in from the outline (an offset fill); 0 = all the way in.
     #[serde(skip_serializing_if = "is_zero")]
     pub rings: u32,
@@ -1152,6 +1182,7 @@ impl Default for FillParams {
             motif_size: 4.0,
             custom_motif: None,
             cross: CrossStyle::Full,
+            motif_pair: None,
             rings: 0,
             spacing_profile: Vec::new(),
         }

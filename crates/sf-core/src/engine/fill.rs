@@ -223,6 +223,60 @@ fn tile(pattern: TexturePattern) -> (f64, Vec<Vec<Point>>) {
             let arc = |cx: f64, cy: f64| curve(12, &|t: f64| p(cx + 0.5 * (PI * t).cos(), cy + 0.5 * (PI * t).sin()));
             (1.0, vec![arc(0.5, 0.0), arc(0.0, 0.5)])
         }
+        // A honeycomb of hexagons standing on a point, every other row half a cell along: the
+        // edges of two cells, each edge once.
+        TexturePattern::Hexagons => {
+            let s = 1.0 / 3.0_f64.sqrt();
+            (
+                3.0 * s,
+                vec![
+                    vec![p(0.0, 0.5 * s), p(0.5, 0.0), p(1.0, 0.5 * s), p(1.0, 1.5 * s), p(0.5, 2.0 * s), p(0.0, 1.5 * s)],
+                    vec![p(0.5, 2.0 * s), p(0.5, 3.0 * s)],
+                ],
+            )
+        }
+        // Rows of Vs, one inside the next.
+        TexturePattern::Chevrons => (0.5, vec![vec![p(0.0, 0.0), p(0.5, 0.5), p(1.0, 0.0)]]),
+        TexturePattern::Zigzag => (1.0, vec![vec![p(0.5, 0.0), p(0.8, 0.25), p(0.5, 0.5), p(0.8, 0.75), p(0.5, 1.0)]]),
+        // Two waves in opposite phase meeting, the onion shapes of an ogee lattice.
+        TexturePattern::Ogee => (1.0, vec![curve(16, &|t| p(0.25 + 0.25 * (TAU * t).sin(), t)), curve(16, &|t| p(0.75 - 0.25 * (TAU * t).sin(), t))]),
+        // Blocks of three short lines, every other block a row down: a woven look.
+        TexturePattern::BasketWeave => (
+            1.0,
+            [0.125, 0.25, 0.375]
+                .iter()
+                .map(|&x| vec![p(x, 0.0), p(x, 0.5)])
+                .chain([0.625, 0.75, 0.875].iter().map(|&x| vec![p(x, 0.5), p(x, 1.0)]))
+                .collect(),
+        ),
+        // A five-pointed star, one point up.
+        TexturePattern::Stars => (
+            1.0,
+            vec![
+                (0..=10)
+                    .map(|k| {
+                        let a = -PI / 2.0 + f64::from(k) * PI / 5.0;
+                        let r = if k % 2 == 0 { 0.42 } else { 0.17 };
+                        p(0.5 + r * a.cos(), 0.52 + r * a.sin())
+                    })
+                    .collect(),
+            ],
+        ),
+        // A heart standing on its point.
+        TexturePattern::Hearts => (
+            1.0,
+            vec![curve(32, &|t| {
+                let a = TAU * t;
+                let (x, y) = (16.0 * a.sin().powi(3), 13.0 * a.cos() - 5.0 * (2.0 * a).cos() - 2.0 * (3.0 * a).cos() - (4.0 * a).cos());
+                p(0.5 + x * 0.022, 0.46 - y * 0.022)
+            })],
+        ),
+        // A leaf lying corner to corner, with its midrib.
+        TexturePattern::Leaves => {
+            let edge =
+                |side: f64| curve(12, &move |t| p(0.15 + 0.7 * t + side * 0.16 * (PI * t).sin(), 0.85 - 0.7 * t + side * 0.16 * (PI * t).sin()));
+            (1.0, vec![edge(1.0), edge(-1.0), vec![p(0.15, 0.85), p(0.85, 0.15)]])
+        }
     }
 }
 
