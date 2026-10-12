@@ -4514,3 +4514,15 @@ mark-style	Japanese	Japońskie
 @msg	The 3D surface is too complex; simplify the shape	Powierzchnia 3D jest zbyt złożona; uprość kształt
 	Add Guides	Dodaj linie pomocnicze
 	Total:	Razem:
+# Strings added to the app after the catalog was written (translated by the maintainers; not reviewed by a native speaker).
+	Even	Równe
+	Legends in Wedges	Legendy w wycinkach
+	No Legend	Bez legendy
+	Ratio	Proporcjonalne
+	Select two or more objects, or a group	Zaznacz co najmniej dwa obiekty lub grupę
+	Stacked	Nałożone
+	Standard Legend	Legenda standardowa
+	Transform Objects	Przekształć obiekty
+@msg	unknown parameter `{key}`; did you mean `{near}`?	nieznany parametr `{key}`; czy chodziło o `{near}`?
+@msg	unknown parameter `{key}`; the command takes no parameters	nieznany parametr `{key}`; polecenie nie przyjmuje parametrów
+@msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
