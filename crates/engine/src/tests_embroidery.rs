@@ -2441,6 +2441,40 @@ fn embroidery_fonts_open_to_edit_and_merge() {
 }
 
 #[test]
+fn embroidery_fonts_start_from_type() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // the family bundled with the app: H, i and g at capitals 20 mm high
+    let r = s.execute("embroidery.fontDoc.fromType", &json!({"family": "source sans 3", "chars": "Hig ", "size": 20})).unwrap();
+    assert_eq!((r["glyphs"].as_u64(), r["family"].as_str()), (Some(3), Some("Source Sans 3")));
+    let info = s.execute("embroidery.fontDoc.info", &json!({})).unwrap();
+    assert_eq!(info["missing"].as_u64(), Some(0), "{info}");
+    let st = s.doc().unwrap();
+    let (h_board, descent) = (st.doc.artboards[0].rect, info["font"]["descent"].as_f64().unwrap());
+    // H: on the baseline, as tall as the capitals, stitched; g reaches below the baseline
+    let art: Vec<(String, vectorcraft_geom::Rect, bool)> = st.doc.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .map(|n| (n.name.clone().unwrap(), n.geometric_bounds().unwrap(), n.embroidery.is_some()))
+        .collect();
+    let base = h_board.y1 - descent * PT;
+    let h = &art.iter().find(|a| a.0 == "H").unwrap().1;
+    assert!((h.y1 - base).abs() < 0.5 && (h.height() - 20.0 * PT).abs() < 0.5, "{h:?}");
+    let g = &art.iter().find(|a| a.0 == "g").unwrap().1;
+    assert!(art.iter().all(|a| a.2) && g.y1 > base + 1.0, "{art:?}");
+    // the H artboard as wide as the family's own advance, wider than the i's
+    let widths: Vec<f64> = info["glyphs"].as_array().unwrap().iter().map(|g| g["width"].as_f64().unwrap()).collect();
+    assert!(widths[0] > widths[1] && widths[1] > 1.0, "{widths:?}");
+    // saved: lettering in it
+    s.execute("embroidery.fontDoc.save", &json!({})).unwrap();
+    assert!(s.execute("embroidery.lettering", &json!({"text": "Hig", "font": "Source Sans 3"})).is_ok());
+    // a family or style there isn't
+    assert!(s.execute("embroidery.fontDoc.fromType", &json!({"family": "No Such Family"})).is_err());
+    assert!(s.execute("embroidery.fontDoc.fromType", &json!({"family": "Source Sans 3", "style": "Hairline Oblique"})).is_err());
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

@@ -357,7 +357,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 |---|---|---|---|---|
 | SE-01 | Stitch edit: select, move, insert, delete individual stitches | Done | Stitch Edit tool: pick (click, Shift, marquee), drag to move, Alt-click to insert, Delete; the first edit freezes the object (`Embroidery.frozen`, host coordinates, follows transforms); Regenerate Stitches; `embroidery.stitches.edit` | 1 |
 | SE-02 | Split an object's stitches | Done | Split Here (panel, one stitch picked with the Stitch Edit tool) or `embroidery.stitches.split {id, at}`: the object keeps the stitches before, a copy sewn right after it the rest, both frozen | 1 |
-| SE-03 | Insert/edit/clear machine functions (trim, stop, colour change, jump) at stitches | Done | `embroidery.function.insert {kind: trim|stop|jump}` and `.clear` at single stitches (freezes); Stop after per object without freezing. Colour changes inside an object are not supported | 1 |
+| SE-03 | Insert/edit/clear machine functions (trim, stop, colour change, jump) at stitches | Done | `embroidery.function.insert {kind: trim\|stop\|jump}` and `.clear` at single stitches (freezes); Stop after per object without freezing. Colour changes inside an object are not supported | 1 |
 | SE-04 | Stitch list (table of stitches with coordinates and functions) | Done | Stitch List panel: every record with function, position, length and object; click plays to it and selects the object; follows the player | 1 |
 | SE-05 | Manual stitches | Done | | – |
 | SE-06 | Convert selected stitches to objects (recognise runs/satin/fill from stitch data) | Missing | Heuristic classifier on imported stitches | 5 |
@@ -466,7 +466,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | TM-03 | Monograms: templates, letter styles, ornaments, borders | Partial | Embroidery panel › Monogram (`embroidery.monogram`): one to three initials in an embroidery font, classic (the middle one larger) or in a line, a satin circle, diamond or square or a scalloped border; ornaments and more layouts still to come | 2 |
 | CL-01 | Convert TrueType/OpenType fonts | Done | Live from glyph outlines | – |
 | CL-02 | User-refined letters (save edited glyphs) | Done | Any loaded embroidery font opens as a font document (`embroidery.font.edit`): refine its glyphs, add missing ones, change its properties and kerning, save it back | – |
-| CL-03 | Create custom embroidery fonts (from art or fonts) | Partial | The font creator: a font document, one artboard per glyph with baseline and cap-height guides, digitized with the usual tools and saved as a font folder lettering loads (`embroidery.fontDoc.*`); fonts in Ink/Stitch's format load too; starting from TrueType outlines and a Font Editor panel still to come | 3 |
+| CL-03 | Create custom embroidery fonts (from art or fonts) | Done | The font creator: a font document, one artboard per glyph with baseline and cap-height guides, digitized with the usual tools or started from a TrueType/OpenType family's outlines (`embroidery.fontDoc.fromType`), saved as a font folder lettering loads (`embroidery.fontDoc.*`); fonts in Ink/Stitch's format load and edit too | – |
 | CL-04 | Merge fonts | Done | `embroidery.fontDoc.merge`: another font's glyphs added to a font document, scaled to its capitals' height | – |
 | KDC-01 | Keyboard design collections (map designs to keys, type with them) | Missing | Design-per-character sets usable as fonts (2025 feature) | 3 |
 | KI-01 | Lettering kiosk (simplified mode for counter staff) | Missing | Locked-down "kiosk" workspace with templates | 6 |
@@ -552,8 +552,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 
-**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 146 done,
-32 partial, 48 missing, 6 out of scope (counted 2026-10-12, after the font editor). Most of what is missing is breadth (more stitch
+**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 147 done,
+31 partial, 48 missing, 6 out of scope (counted 2026-10-12, after the font editor). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
