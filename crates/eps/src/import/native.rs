@@ -1082,7 +1082,8 @@ pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
 
 /// The `.ai` `visible` (read as its PDF part) read through its editing copy (`private`, the joined
 /// `AIPrivateData` streams) instead, as [`layered`] reads an EPS: with the layers and objects of the
-/// file, its artboards, and the art that lies outside them, which its PDF part doesn't have.
+/// file, its artboards (with the PDF part's bleed), and the art that lies outside them, which its
+/// PDF part doesn't have.
 /// `warnings` are the notes of reading the PDF part; the notes returned are those, and the layers'.
 /// `outlined`: the PDF part's type was read as outlines (a file whose type shows then comes in as
 /// its PDF part).
@@ -1092,7 +1093,8 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
         return (visible, warnings);
     }
     match build(&data, Some(&visible), Page::Artboard, outlined) {
-        Ok((done, notes)) => {
+        Ok((mut done, notes)) => {
+            done.setup.bleed = visible.setup.bleed;
             let mut all = warnings;
             all.extend(notes.into_iter().filter(|n| !all.contains(n)).collect::<Vec<_>>());
             (done, all)

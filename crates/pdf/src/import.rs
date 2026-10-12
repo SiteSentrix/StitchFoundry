@@ -200,6 +200,13 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let (mut order, mut known) = (vec![], HashSet::new());
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
+        // Artboards on the trim boxes have the bleed boxes round them as the document's bleed
+        // (the widest of the pages' on each side), so the art there shows and prints as bleed.
+        if opts.crop == CropTo::Trim {
+            for (side, b) in doc.setup.bleed.iter_mut().zip(crate::pages::bleed(page)) {
+                *side = side.max(b);
+            }
+        }
         // The chosen box sits at (x, 0); the page draws round it.
         let (init, frame) = crate::pages::frame(page, opts.crop);
         let mut ab = Rect::new(x, 0.0, x + frame.width(), frame.height());

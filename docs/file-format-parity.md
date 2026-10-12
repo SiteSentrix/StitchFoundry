@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (EPS page and stacked text strokes through the layers, #1102) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (`.ai` and PDF trim and bleed boxes as artboard and bleed, #1266) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/mod.rs`). Illustrator's list comes from its public
@@ -32,6 +32,8 @@ private editing data. VectorCraft:
   Level 3 interpreter. A `.ai` in PostScript form (versions 3 to 8, and what Rhino and other CAD apps
   write) is its own editing data: it opens through the layers its program has, compared with its page
   when the program runs, from the layers alone when it names its prolog without including it (#1027).
+  A PDF-compatible `.ai` opens on its PDF part's trim boxes (its artboards), the bleed boxes round them
+  becoming the document's bleed, so art in the bleed shows outside the artboard, within the bleed guide (#1266).
 - **Writes** a PDF-compatible `.ai` (Save As › `ai`): Illustrator opens it as plain art. It never writes
   Illustrator's private editing data, which is undocumented.
 - **Known failures in users' files:** layer structure flattened or multiplied (#951: 109 layers instead of
@@ -53,7 +55,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | VectorCraft `.vectorcraft` / `.vctemplate` | — | yes | yes | lossless JSON, versioned, save down to v1; property-tested round trips (`format/tests/prop_format.rs`) |
 | Illustrator `.ai` | open, save | yes (PDF-compatible + editing-data structure) | PDF-compatible only | see above; no real-file corpus |
 | Illustrator template `.ait` | open, save | yes | no (save as `.vctemplate`) | |
-| PDF | open, place, save | yes (layers, masks, editable text, security) | yes (presets, PDF/X-1a/3/4, layers, marks and bleed, ICC, fast web view, 1.3+) | fuzzed import; PDF text placement issues in some files (#722) |
+| PDF | open, place, save | yes (layers, masks, editable text, security; Crop To › Trim takes the bleed box as the document's bleed) | yes (presets, PDF/X-1a/3/4, layers, marks and bleed, ICC, fast web view, 1.3+) | fuzzed import; PDF text placement issues in some files (#722) |
 | EPS | open, place, save | yes (own PostScript L3 interpreter, Illustrator EPS editing data structure) | yes (L2/L3, TIFF previews) | CID-keyed CJK type and CCITTFax images not read; #505 |
 | PostScript `.ps` | open | no | via Print to PostScript | |
 | SVG / SVGZ | open, place, save | yes | yes (SVG Options, Preserve Editing, symbols, filters, rich text) | strongest format; tests in `crates/svg/tests` |
@@ -80,6 +82,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | A `.ai` opens on its trim boxes with its bleed boxes as the document's bleed; a PDF opened on its trim boxes too (#1266) |
 | 2026-10-11 | minor | An EPS keeps its own page and its stacked text strokes through its layers (#1102) |
 | 2026-10-11 | minor | A `.ai` read as its PDF part keeps its artboard layout from the editing data (#1068) |
 | 2026-10-11 | minor | Spot colours defined in Lab keep their Lab values, from the editing data and from a PDF part whose ink alternate is an ICC Lab profile (#1032) |
