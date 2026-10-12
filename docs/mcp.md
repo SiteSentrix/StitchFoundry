@@ -750,12 +750,23 @@ that were already hidden or locked. The key object is cleared when it is one of 
 them again with the key object. When the call changes nothing, it records no undo step and still deselects them.
 Other `object.setProps` calls leave the selection unchanged.
 
+These Select menu commands select only the objects that `select.all` selects and the objects inside them: every
+`select.same.*` and `select.object.*` command except `select.object.slices`, `select.nextAbove`, `select.nextBelow`
+and `select.recall`. They leave out hidden and locked objects with the objects inside them, the objects on hidden,
+locked or template layers and sublayers and, in isolation mode, everything outside the isolated group or layer. When
+the isolated group or layer, or a group or layer it is in, is hidden, locked or a template layer, they also leave out
+everything in it, and `select.all`, `select.allOnArtboard` and `select.inverse` select nothing.
+`select.nextAbove` and `select.nextBelow` select the nearest such object above or below the first selected object
+among the objects beside it in its group or layer, passing over hidden and locked objects and sublayers. When there
+is no such object, the selection stays as it is.
+
 ## Saved selections
 
 Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default
 the first free "Selection N"; an existing name is replaced with the current selection; at most 25 per document,
 names up to 255 characters) → `{name}`, one undo step. `select.savedList` lists the names in menu order, and
-`select.recall {name}` selects those objects again (ones deleted since are left out) → `{count}`. Edit Selection…
+`select.recall {name}` selects those objects again, except the ones deleted since and the ones hidden, locked or
+outside the isolated group or layer (see Object selection) → `{count}`. Edit Selection…
 renames and deletes: `select.editSaved {name, newName?, delete?}`, or several at once as
 `{edits: [{name, newName?, delete?}…]}` in one undo step, where every `name` is the name before the edit and the
 names must stay unique. In the desktop app the saved selections are listed at the bottom of the Select menu

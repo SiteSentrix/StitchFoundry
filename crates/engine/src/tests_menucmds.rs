@@ -680,6 +680,21 @@ fn select_direction_handles_selects_all_anchors() {
 }
 
 #[test]
+fn direction_handles_leave_out_hidden_and_locked_paths() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let hidden = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let locked = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, hidden, locked]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.setProps", &json!({"ids": [hidden.0], "visible": false})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [locked.0], "locked": true})).unwrap();
+    sel(&mut s, &[g]);
+    assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4);
+    assert_eq!(selected(&s), vec![a]);
+}
+
+#[test]
 fn select_point_and_area_text() {
     let mut s = session();
     let p = text(&mut s, "point");
@@ -690,6 +705,214 @@ fn select_point_and_area_text() {
     s.execute("select.object.areaText", &json!({})).unwrap();
     assert_eq!(selected(&s), vec![a]);
     assert_eq!(s.execute("select.object.brushStrokes", &json!({})).unwrap()["count"], 0);
+}
+
+/// Select › Object and Select › Same leave out hidden and locked objects, and the objects in hidden
+/// or locked groups and sublayers, as Select All does.
+#[test]
+fn select_menu_commands_leave_out_hidden_and_locked_art() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let shown = text(&mut s, "shown");
+    let hidden = text(&mut s, "hidden");
+    let locked = text(&mut s, "locked");
+    let in_hidden_group = text(&mut s, "in a hidden group");
+    let in_locked_group = text(&mut s, "in a locked group");
+    let open = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 10, "y2": 10})).unwrap());
+    let hidden_open = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 20, "x2": 10, "y2": 30})).unwrap());
+    sel(&mut s, &[in_hidden_group]);
+    let hidden_group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    sel(&mut s, &[in_locked_group]);
+    let locked_group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let hidden_sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap());
+    let in_hidden_sub = text(&mut s, "in a hidden sublayer");
+    let locked_sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap());
+    let in_locked_sub = text(&mut s, "in a locked sublayer");
+    assert_eq!(s.doc().unwrap().doc.parent_of(in_hidden_sub), Some(hidden_sub));
+    assert_eq!(s.doc().unwrap().doc.parent_of(in_locked_sub), Some(locked_sub));
+    s.execute("object.setProps", &json!({"ids": [hidden.0, hidden_open.0, hidden_group.0], "visible": false})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [locked.0, locked_group.0], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [hidden_sub.0], "visible": false})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [locked_sub.0], "locked": true})).unwrap();
+    assert_eq!(s.execute("select.object.textObjects", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![shown]);
+    assert_eq!(s.execute("select.object.pointText", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![shown]);
+    assert_eq!(s.execute("select.same.fontSize", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![shown]);
+    s.execute("select.object.openPaths", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![open]);
+}
+
+/// Next Object Above and Below pass over the hidden and locked objects and the sublayers beside the
+/// selected object.
+#[test]
+fn next_object_above_and_below_pass_over_what_cant_be_selected() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let hidden = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let locked = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": layer.0})).unwrap();
+    let b = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    let order: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(order, vec![a, hidden, locked, sub, b]);
+    s.execute("object.setProps", &json!({"ids": [hidden.0], "visible": false})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [locked.0], "locked": true})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("select.nextAbove", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("select.nextBelow", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a]);
+    // Nothing that can be selected below it: the selection stays.
+    s.execute("select.nextBelow", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a]);
+}
+
+/// In isolation mode Select › Same and Select › Object select only objects in the isolated group.
+#[test]
+fn select_menu_commands_stay_inside_the_isolated_group() {
+    let mut s = session();
+    let outside = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let _text_outside = text(&mut s, "outside");
+    let a = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let text_inside = text(&mut s, "inside");
+    for id in [outside, a, b] {
+        fill(&mut s, id, "#ff0000");
+    }
+    sel(&mut s, &[a, b, text_inside]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("select.same.fillColor", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b]);
+    s.execute("select.object.textObjects", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![text_inside]);
+    s.execute("select.object.pointText", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![text_inside]);
+    s.execute("select.same.fontSize", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![text_inside]);
+    // All on Same Layers takes the objects of the isolated group.
+    sel(&mut s, &[a]);
+    s.execute("select.object.allOnSameLayers", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b, text_inside]);
+}
+
+/// In isolation mode a recalled selection leaves out the objects outside the isolated group, and
+/// Next Object Above selects nothing outside it.
+#[test]
+fn recalled_selections_and_next_object_stay_inside_the_isolated_group() {
+    let mut s = session();
+    let outside = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let _above_outside = rect(&mut s, 0.0, 20.0, 10.0, 10.0);
+    let a = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[outside, a]);
+    s.execute("select.save", &json!({"name": "Both"})).unwrap();
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.recall", &json!({"name": "Both"})).unwrap();
+    assert_eq!(selected(&s), vec![a]);
+    // An object outside the group (selected by id) has no neighbor in it: the selection stays.
+    sel(&mut s, &[outside]);
+    s.execute("select.nextAbove", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![outside]);
+}
+
+/// In isolation mode Open Paths and All on Same Layers select nothing when the isolated group, or
+/// the layer it is on, is hidden or locked.
+#[test]
+fn select_menu_commands_leave_out_an_isolated_group_hidden_or_locked_since() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let a = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 10, "y2": 10})).unwrap());
+    let b = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 20, "x2": 10, "y2": 30})).unwrap());
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.object.openPaths", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b]);
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "visible": false})).unwrap();
+    s.execute("select.object.openPaths", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![]);
+    sel(&mut s, &[a]);
+    s.execute("select.object.allOnSameLayers", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![]);
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "visible": true})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [g.0], "locked": true})).unwrap();
+    s.execute("select.object.openPaths", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![]);
+}
+
+/// The selection after command `c` runs with nothing selected.
+fn select_from_none(s: &mut Session, c: &str) -> Vec<NodeId> {
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute(c, &json!({})).unwrap();
+    selected(s)
+}
+
+/// In isolation mode Select All, All on Active Artboard and Inverse select nothing while the
+/// isolated group is hidden or locked, or the layer it is on is hidden or a template.
+#[test]
+fn select_all_leaves_out_an_isolated_group_hidden_or_locked_since() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let commands = ["select.all", "select.allOnArtboard", "select.inverse"];
+    for c in commands {
+        assert_eq!(select_from_none(&mut s, c), vec![a, b], "{c}");
+    }
+    let changes = [
+        ("object.setProps", json!({"ids": [g.0], "visible": false}), json!({"ids": [g.0], "visible": true})),
+        ("object.setProps", json!({"ids": [g.0], "locked": true}), json!({"ids": [g.0], "locked": false})),
+        ("layer.setProps", json!({"ids": [layer.0], "visible": false}), json!({"ids": [layer.0], "visible": true})),
+        // A template layer that has been unlocked again.
+        ("layer.setProps", json!({"ids": [layer.0], "template": true, "locked": false}), json!({"ids": [layer.0], "template": false})),
+    ];
+    for (cmd, on, off) in changes {
+        s.execute(cmd, &on).unwrap();
+        for c in commands {
+            assert_eq!(select_from_none(&mut s, c), vec![], "{c} after {cmd} {on}");
+        }
+        s.execute(cmd, &off).unwrap();
+        for c in commands {
+            assert_eq!(select_from_none(&mut s, c), vec![a, b], "{c} after {cmd} {off}");
+        }
+    }
+}
+
+/// Pattern editing and opacity mask editing isolate a new layer: Select All, All on Active
+/// Artboard and Inverse select the art on it.
+#[test]
+fn select_all_in_pattern_and_mask_editing_selects_the_art_being_edited() {
+    let mut s = session();
+    let commands = ["select.all", "select.allOnArtboard", "select.inverse"];
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let tile = selected(&s);
+    assert_eq!(tile.len(), 1);
+    for c in commands {
+        assert_eq!(select_from_none(&mut s, c), tile, "{c} in pattern editing");
+    }
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    let obj = rect(&mut s, 0.0, 0.0, 200.0, 200.0);
+    let m = rect(&mut s, 0.0, 0.0, 100.0, 200.0);
+    sel(&mut s, &[obj, m]);
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    s.execute("transparency.editOpacityMask", &json!({})).unwrap();
+    let mask = selected(&s);
+    assert_eq!(mask.len(), 1);
+    for c in commands {
+        assert_eq!(select_from_none(&mut s, c), mask, "{c} in opacity mask editing");
+    }
 }
 
 #[test]
@@ -754,6 +977,30 @@ fn saved_selections_live_in_the_document() {
     sel(&mut s, &[a]);
     s.execute("edit.clear", &json!({})).unwrap();
     assert_eq!(s.execute("select.recall", &json!({"name": "Pair"})).unwrap()["count"], 1);
+}
+
+/// A recall leaves out the objects hidden or locked since the save, themselves or through their
+/// group or sublayer.
+#[test]
+fn recalled_selections_leave_out_objects_hidden_or_locked_since() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let hidden = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let locked = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let in_group = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[in_group]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": layer.0})).unwrap());
+    let in_sub = rect(&mut s, 80.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, hidden, locked, in_group, in_sub]);
+    s.execute("select.save", &json!({"name": "All"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [hidden.0, g.0], "visible": false})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [locked.0], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [sub.0], "locked": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.recall", &json!({"name": "All"})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![a]);
 }
 
 #[test]
