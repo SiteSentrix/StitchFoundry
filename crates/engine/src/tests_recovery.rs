@@ -574,3 +574,63 @@ fn copies_from_before_images_were_kept_apart_still_restore() {
     assert_eq!(images_of(&s), images);
     assert_eq!(s.doc().unwrap().title(), "Untitled-1 [Recovered]");
 }
+
+/// A store whose app dies right after writing a copy's document entry: later writes fail, so the
+/// copy's details stay as the last interval left them.
+struct DiesAfterDocument {
+    inner: Arc<MemoryStore>,
+    dead: std::sync::atomic::AtomicBool,
+}
+
+impl RecoveryStore for DiesAfterDocument {
+    fn list(&self) -> std::result::Result<Vec<String>, String> {
+        self.inner.list()
+    }
+    fn read(&self, name: &str) -> std::result::Result<Vec<u8>, String> {
+        self.inner.read(name)
+    }
+    fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
+        if self.dead.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err("the app is gone".into());
+        }
+        self.inner.write(name, bytes)?;
+        if name.ends_with(".vectorcraft") {
+            self.dead.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(())
+    }
+    fn remove(&self, name: &str) -> std::result::Result<(), String> {
+        self.inner.remove(name)
+    }
+    fn location(&self) -> String {
+        self.inner.location()
+    }
+    fn lock(&self, area: &str) -> std::result::Result<crate::cmd::recovery::Lock, String> {
+        self.inner.lock(area)
+    }
+    fn now(&self) -> Option<i64> {
+        self.inner.now()
+    }
+}
+
+/// A crash between writing a copy's document and its details restores the new document with
+/// every image, the one placed since the last copy too (and the first copy likewise).
+#[test]
+fn a_crash_between_a_copys_document_and_its_details_keeps_every_image() {
+    for first in [true, false] {
+        let store = Arc::new(MemoryStore::default());
+        let mut s = session_in(&store);
+        if !first {
+            place_png(&mut s, "red.png", crate::tests_links::RED);
+            s.execute("file.recovery.save", &json!({})).unwrap();
+        }
+        place_png(&mut s, "blue.png", crate::tests_links::BLUE);
+        let images = images_of(&s);
+        s.recovery.set_store(Arc::new(DiesAfterDocument { inner: store.clone(), dead: Default::default() }));
+        assert!(s.execute("file.recovery.save", &json!({})).is_err(), "the details weren't written");
+        drop(s);
+        let mut s = relaunch(&store);
+        assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1, "first copy: {first}");
+        assert_eq!(images_of(&s), images, "first copy: {first}");
+    }
+}

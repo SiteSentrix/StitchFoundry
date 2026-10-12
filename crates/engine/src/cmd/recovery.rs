@@ -654,8 +654,20 @@ impl RecoveryJob {
                 image_bytes += data.len();
             }
         }
+        let meta_name = format!("{}{META_EXT}", self.file);
+        // The details name the images, so a crash between writing the document and its details
+        // would pair the new document with the old copy's images: when the new document has
+        // images the old details don't name, they name both until the new document is in.
+        let old = read_meta(store, &self.file).images;
+        if meta.images.iter().any(|(k, r)| old.get(k).is_none_or(|o| o.blob != r.blob)) {
+            let mut both = meta.clone();
+            for (k, r) in old {
+                both.images.entry(k).or_insert(r);
+            }
+            store.write(&meta_name, &serde_json::to_vec_pretty(&both).map_err(|e| e.to_string())?)?;
+        }
         store.write(&format!("{}{DOC_EXT}", self.file), bytes)?;
-        store.write(&format!("{}{META_EXT}", self.file), &meta_bytes)?;
+        store.write(&meta_name, &meta_bytes)?;
         // Images this copy no longer shows, nor any other.
         sweep(store, area);
         Ok(json!({ "file": self.file, "title": self.title, "bytes": bytes.len(), "imageBytes": image_bytes }))
