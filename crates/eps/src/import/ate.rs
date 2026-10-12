@@ -34,7 +34,7 @@ const MAX_DEPTH: usize = 64;
 /// Most values read.
 const MAX_VALUES: usize = 4_000_000;
 /// The centre of the app's canvas, in the units of its text document.
-const CANVAS_CENTRE: f64 = 8191.5;
+pub(super) const CANVAS_CENTRE: f64 = 8191.5;
 
 /// A value of the text document.
 #[derive(Debug, Clone, PartialEq)]

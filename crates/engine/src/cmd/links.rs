@@ -529,15 +529,19 @@ impl Resolved {
 
 /// The linked files of document `d`, just read from `doc_path`: those found unchanged are read
 /// again (their images had the preview), modified ones are read again when `update`, links found
-/// away from their path take the new path. Nothing here is an undo step.
+/// away from their path take the new path. A link nothing is known of whose image shows a preview
+/// (a file another app wrote kept only that) was never read: its file is read now, into the
+/// image's bounds, which isn't a change to report. Nothing here is an undo step.
 pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool) -> Resolved {
     let mut out = Resolved::default();
     for g in groups(d, None) {
         let row = rows(std::iter::once(&g));
+        let unread = g.document.is_none() && g.link.hash.is_none() && g.link.size.is_none() && previewing(d, &g.key);
         match probe(&g, folder(doc_path)) {
             (Status::Missing, _) => out.missing.extend(row),
-            (Status::Modified, Some(mut f)) if update => {
-                match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, false)) {
+            (Status::Modified, Some(mut f)) if update || unread => {
+                match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, unread)) {
+                    Ok(()) if unread => {}
                     Ok(()) => out.updated.extend(row),
                     Err(_) => out.missing.extend(row),
                 }

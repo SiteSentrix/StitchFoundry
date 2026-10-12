@@ -15,6 +15,12 @@
 //!   app wrote) the bounding box.
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
 //!   and the samples after `XI`.
+//! - Placed (linked) files, as written in files users sent: `%AI5_BeginPlace`, `[matrix] llx lly urx
+//!   ury … (path)` and the operator `` ` ``, the file's preview between `%AI26_BeginPlacedObjectPreview`
+//!   and its end (`w h rowBytes 32 n `, then rows of premultiplied ARGB, the top one first), `~`. The
+//!   box is as large as the file has pixels; the matrix takes them into art space from the canvas
+//!   (y down, its centre the template box's), where they start at the point of art space's origin,
+//!   the first row the top one. Each is a linked image showing the preview until its file is found.
 //! - Art with an appearance the format can't write as plain art (several fills or strokes,
 //!   effects, brushes) comes first as that look, drawn (a group), then the object itself on `%_`
 //!   lines and `1 (style) XW`: the drawn look is kept, named after the object.
@@ -25,8 +31,8 @@
 //!   taking the pattern's space to art space (the other operands are what it is made of).
 //!
 //! Sections the reader doesn't need (brushes, symbols, styles, swatches, filters) are skipped;
-//! type, symbols, fills with a pattern it can't read, placed files, legacy type and operators it
-//! doesn't know are errors.
+//! type, symbols, fills with a pattern it can't read, placed files without a preview, legacy type
+//! and operators it doesn't know are errors.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
@@ -38,10 +44,11 @@ use vectorcraft_color::swatch::Swatch;
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
-    Node, NodeId, NodeKind, PatternDef, StrokeLayer,
+    LinkInfo, Node, NodeId, NodeKind, PatternDef, StrokeLayer,
 };
 use vectorcraft_geom::{FillRule, PathData};
 
+use super::super::ate::CANVAS_CENTRE;
 use super::lex::{Lexer, Tok};
 use super::obj::{self, Obj, V};
 use super::paint::{self, GradientDef, Instance, Named};
@@ -234,6 +241,22 @@ struct Raster {
     space: Option<String>,
 }
 
+/// A placed file's operands, from `` ` `` and its preview, until `~`.
+#[derive(Debug, Default)]
+struct Place {
+    /// The canvas, where the file's pixels are → art space.
+    matrix: Option<Affine>,
+    /// The file's box (`llx lly urx ury`): its size is the file's, in pixels.
+    bounds: Option<Rect>,
+    path: String,
+    /// The preview as a PNG, and its size in pixels.
+    preview: Option<(Vec<u8>, u32, u32)>,
+}
+
+/// What the open result says of placed files: they show the preview the file keeps of them.
+const LINKED_PREVIEWS: &str =
+    "linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel";
+
 struct Reader<'a> {
     lex: Lexer<'a>,
     stack: Vec<V>,
@@ -256,6 +279,8 @@ struct Reader<'a> {
     pending_stroke: Option<Paint>,
     spots: Vec<Named>,
     raster: Option<Raster>,
+    /// The placed file being read (`%AI5_BeginPlace` … `~`).
+    place: Option<Place>,
     /// The last object read is the last child of the innermost frame, and nothing started since.
     after_object: bool,
     nodes: usize,
@@ -393,6 +418,7 @@ impl<'a> Reader<'a> {
             pending_stroke: None,
             spots: Vec::new(),
             raster: None,
+            place: None,
             foreign_data: None,
             after_object: false,
             nodes: 0,
@@ -436,6 +462,11 @@ impl<'a> Reader<'a> {
                 }
                 Tok::Comment(c) => self.comment(c)?,
                 Tok::Data(d) => self.image(d)?,
+                Tok::Preview(d) => {
+                    if let Some(p) = self.place.as_mut() {
+                        p.preview = preview_png(d);
+                    }
+                }
             }
         }
         if self.frames.iter().any(|f| matches!(f.kind, Kind::Layer(_))) {
@@ -495,7 +526,12 @@ impl<'a> Reader<'a> {
         } else if line.starts_with("AI5_EndRaster") {
             self.raster = None;
         } else if line.starts_with("AI5_BeginPlace") {
-            self.unreadable("placed files");
+            self.place = Some(Place::default());
+        } else if line.starts_with("AI5_EndPlace") {
+            // One that `~` didn't end isn't read.
+            if self.place.take().is_some() {
+                self.unreadable("placed files");
+            }
         } else if self.frames.is_empty()
             && let Some(v) = line.strip_prefix("%HiResBoundingBox:")
         {
@@ -901,6 +937,18 @@ impl<'a> Reader<'a> {
                     r.space = vals.iter().rev().find_map(V::text);
                 }
             }
+            // Placed files.
+            "`" if self.place.is_some() => {
+                let matrix = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None });
+                let path = vals.iter().rev().find_map(V::text).unwrap_or_default();
+                if let Some(p) = self.place.as_mut() {
+                    p.matrix = matrix.and_then(|m| <[f64; 6]>::try_from(m).ok()).map(Affine::new);
+                    p.bounds =
+                        Self::nums(&vals).get(..4).and_then(|b| <[f64; 4]>::try_from(b).ok()).map(|[x0, y0, x1, y1]| Rect::new(x0, y0, x1, y1));
+                    p.path = path;
+                }
+            }
+            "~" if self.place.is_some() => self.end_place(hidden)?,
             // Type in the legacy format.
             "To" | "TO" | "Tp" | "TP" | "Tx" | "TX" | "Tj" | "Tk" => self.unreadable("type in the legacy format"),
             _ if IGNORED.contains(&w) => {}
@@ -1435,12 +1483,44 @@ impl<'a> Reader<'a> {
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
+        self.add_image(ImageObject { key, width: w as u32, height: h as u32, xf, link: None, placement: Default::default() }, false)
+    }
+
+    /// Add an image object with the state's transparency.
+    fn add_image(&mut self, im: ImageObject, hidden: bool) -> Result<(), String> {
         let gs = self.gs.clone();
-        let im = ImageObject { key, width: w as u32, height: h as u32, xf, link: None, placement: Default::default() };
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
-        self.add(node, false)
+        self.add(node, hidden)
+    }
+
+    /// `~`: the placed file read since `%AI5_BeginPlace` becomes a linked image in its place that
+    /// shows the preview the data keeps of it, as a linked image whose file is missing does. One
+    /// without a preview, a path or a matrix isn't read.
+    fn end_place(&mut self, hidden: bool) -> Result<(), String> {
+        let Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)) }) = self.place.take().filter(|p| !p.path.is_empty())
+        else {
+            self.unreadable("placed files");
+            return Ok(());
+        };
+        // The file's pixels (y down) start at the canvas point of art space's origin (the box's own
+        // corner when the file doesn't say where the canvas is); the preview's are spread over them.
+        let centre = self.template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
+        let origin = centre.map_or(b.origin(), |(x, y)| Point::new(CANVAS_CENTRE - x, CANVAS_CENTRE + y));
+        let over_file = Affine::translate(origin.to_vec2()) * Affine::scale_non_uniform(b.width() / f64::from(w), b.height() / f64::from(h));
+        let xf = self.space() * m * over_file;
+        if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            self.unreadable("placed files");
+            return Ok(());
+        }
+        // The preview is all the document has of the file: what a missing link shows.
+        let bytes = Arc::new(png);
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let key = blob.content_key();
+        self.doc.images.entry(key.clone()).or_insert(blob);
+        self.warn(LINKED_PREVIEWS);
+        self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default() }, hidden)
     }
 
     // ---- the document ----------------------------------------------------------------------
@@ -1634,6 +1714,38 @@ fn find_entry<'o>(o: &'o Obj, key: &str, depth: usize) -> Option<&'o Obj> {
         return None;
     }
     o.obj(key).or_else(|| o.entries.iter().flat_map(|(_, v)| v.iter()).filter_map(V::obj).find_map(|c| find_entry(c, key, depth + 1)))
+}
+
+/// A placed file's preview as a PNG, with its size: `w h rowBytes 32 n ` (each number followed by
+/// a space), then `h` rows of `rowBytes` bytes, premultiplied ARGB. `None` when it isn't that, is
+/// larger than [`MAX_PIXELS`] or is cut short.
+fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
+    let mut rest = data.trim_ascii_start();
+    let mut head = [0usize; 5];
+    for v in &mut head {
+        let n = rest.iter().position(|b| *b == b' ')?;
+        *v = std::str::from_utf8(rest.get(..n)?).ok()?.parse().ok()?;
+        rest = rest.get(n + 1..)?;
+    }
+    let [w, h, row, bits, _] = head;
+    let (width, height) = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
+    if w == 0 || h == 0 || u64::from(width) * u64::from(height) > MAX_PIXELS || bits != 32 || row < w * 4 {
+        return None;
+    }
+    // Every row is there before anything is allocated for them.
+    if rest.len() < (h - 1).checked_mul(row)?.checked_add(w * 4)? {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(w * h * 4);
+    for line in rest.chunks(row).take(h) {
+        for &[a, r, g, b] in line.get(..w * 4)?.as_chunks::<4>().0 {
+            let straight = |c: u8| if a == 0 { 0 } else { (u32::from(c) * 255 / u32::from(a)).min(255) as u8 };
+            rgba.extend_from_slice(&[straight(r), straight(g), straight(b), a]);
+        }
+    }
+    let mut png = vec![];
+    image::RgbaImage::from_raw(width, height, rgba)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    Some((png, width, height))
 }
 
 fn sane(r: Rect) -> bool {

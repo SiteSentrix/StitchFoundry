@@ -3029,6 +3029,7 @@
 	Update Changed Links	更新已變更的連結
 	{count} linked image(s) changed on disk. Show the new versions?	有 {count} 個連結影像已在磁碟上變更。要顯示新版本嗎？
 @msg	Updated {_1} linked file(s) changed on disk	已更新 {_1} 個在磁碟上變更的連結檔案
+@msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	連結的圖片在找到其檔案之前顯示檔案中儲存的低解析度預覽：請在「連結」面板中重新連結
 	Update Modified Links	更新已修改的連結
 	Updated {} image(s)	已更新 {} 張影像
 	UPPERCASE	全部大寫
