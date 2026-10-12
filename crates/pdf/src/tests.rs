@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Artboard, CharStyle, Dash, Document, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeId, NodeKind, TextObject,
 };
@@ -266,6 +266,79 @@ fn objects_outside_artboard_are_culled() {
     add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK));
     add(&mut d, rect_node(Rect::new(500.0, 500.0, 550.0, 550.0), Color::BLACK));
     assert_eq!(leaves(&roundtrip(&d)).len(), 1);
+}
+
+/// A line from (10, `y`) to (90, `y`).
+fn line(y: f64) -> PathData {
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((10.0, y));
+    bp.line_to((90.0, y));
+    PathData::from_bezpath(&bp)
+}
+
+/// Art that the PDF would hold a value beyond a billion points for is left out: a path that far,
+/// a gradient placed that far, a stroke so wide that its group's box reaches that far, and an
+/// image placed that far. Each would be written with -2,147,483,648, which the PDF writer panics
+/// on in builds with overflow checks.
+#[test]
+fn art_reaching_beyond_a_billion_points_is_left_out() {
+    let far = -2_147_483_649.0;
+    let shaded = |kind, start, end| {
+        let mut n = rect_node(Rect::new(60.0, 10.0, 90.0, 50.0), Color::BLACK);
+        let geom = GradientGeom { start, end, aspect: 1.0, focal: None };
+        let g = GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient { kind, ..Gradient::default() }) };
+        n.appearance.set_fill(Paint::Gradient(Box::new(g)));
+        n
+    };
+    let mut wide = Node::path(NodeId(0), line(0.0), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4_294_967_296.0));
+    wide.opacity = 0.5;
+    let image = ImageObject {
+        key: "img1".into(),
+        width: 4,
+        height: 2,
+        xf: Affine::new([5.5e8, 0.0, 0.0, 10.0, far, 60.0]),
+        link: None,
+        placement: Default::default(),
+    };
+    for (what, n) in [
+        ("path", rect_node(Rect::new(far, 60.0, 90.0, 90.0), Color::BLACK)),
+        ("linear gradient", shaded(GradientKind::Linear, Point::new(far, 0.0), Point::new(90.0, 0.0))),
+        ("radial gradient", shaded(GradientKind::Radial, Point::new(far, 30.0), Point::new(far + 100.0, 30.0))),
+        ("stroke", wide),
+        ("image", Node::new(NodeId(0), NodeKind::Image(Box::new(image)))),
+    ] {
+        let mut d = doc(100.0, 100.0);
+        d.images.insert("img1".into(), ImageBlob::new("image/png", tiny_png()));
+        add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK));
+        add(&mut d, n);
+        assert_eq!(leaves(&roundtrip(&d)).len(), 1, "{what}");
+    }
+}
+
+/// A dash offset beyond a billion points is written as its remainder after whole periods of the
+/// pattern: -2,147,483,649 (-2,147,483,648 as an f32, which the PDF writer panics on in builds
+/// with overflow checks) is 1 in a pattern of 5 and 5.
+#[test]
+fn dash_offsets_beyond_a_billion_points_wrap_into_their_pattern() {
+    let mut d = doc(100.0, 100.0);
+    let mut n = Node::path(NodeId(0), line(50.0), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0));
+    n.appearance.stroke_mut().unwrap().dash = Some(Dash { pattern: vec![5.0, 5.0], offset: -2_147_483_649.0, align_corners: false });
+    add(&mut d, n);
+    assert!(uncompressed(&d).contains("[5 5]1 d"));
+}
+
+/// The page of an artboard beyond a billion points is left blank: what is on it would be placed
+/// through -2,147,483,648, which the PDF writer panics on in builds with overflow checks.
+#[test]
+fn artboards_beyond_a_billion_points_export_blank_pages() {
+    let mut d = doc(100.0, 100.0);
+    d.artboards[0].rect = Rect::new(2_147_483_649.0, 0.0, 2_147_483_749.0, 100.0);
+    let mut n = rect_node(Rect::new(2_147_483_659.0, 10.0, 2_147_483_699.0, 50.0), Color::BLACK);
+    n.opacity = 0.5;
+    add(&mut d, n);
+    let bytes = export(&d, &PdfOptions::default()).unwrap();
+    assert_eq!(page_count(&bytes), 1);
+    assert!(leaves(&import(&bytes).unwrap()).is_empty());
 }
 
 #[test]

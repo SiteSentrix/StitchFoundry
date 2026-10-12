@@ -485,6 +485,15 @@ fn mutate_text(src: &str, cut: usize, edits: &[(usize, char)]) -> String {
     chars.into_iter().collect()
 }
 
+/// Type shifted two billion points down exports to PDF: an input of
+/// `svg_hostile_markup_never_panics`, cut down to its type.
+#[test]
+fn svg_type_shifted_two_billion_points_exports_to_pdf() {
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><text baseline-shift="-2147483649">f</text></svg>"#;
+    let d = vectorcraft_svg::import(svg).unwrap();
+    assert!(vectorcraft_engine::export_pdf(&d, &vectorcraft_pdf::PdfOptions::default()).is_ok());
+}
+
 proptest! {
     #![proptest_config(config())]
 

@@ -110,6 +110,58 @@ fn real_text_lands_within_half_a_point_of_the_outlines() {
     }
 }
 
+/// A run shifted two billion points off its baseline is left out, as real text or outlines, and
+/// the rest of the type is written. On a page 50 points high, the page's y flip puts the shifted
+/// run's baseline at -2,147,483,648, which the PDF writer panics on in builds with overflow checks.
+#[test]
+fn a_run_shifted_two_billion_points_is_left_out() {
+    let mut t = TextObject::point(Point::new(5.0, 40.0), "", style(12.0));
+    t.runs = vec![
+        TextRun { text: "in".into(), style: style(12.0), inline: None },
+        TextRun { text: "out".into(), style: CharStyle { baseline_shift: -2_147_483_649.0, ..style(12.0) }, inline: None },
+    ];
+    let mut d = doc(vec![t]);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 50.0, 50.0);
+    assert_eq!(texts(&import_as(&pdf(&d, false).bytes, TextAs::Text)), ["in"]);
+    let b = ink(&import_as(&pdf(&d, true).bytes, TextAs::Outlines));
+    assert!(b.y0 > 0.0 && b.y1 < 50.0, "{b:?}");
+}
+
+/// An overprinting run is written, or left out, as the same run is without overprint: the form
+/// marked to overprint the run holds the type's transform. For type moved 2,147,483,689 points down
+/// with its run shifted back onto a page 50 points high, a form placed through that transform would
+/// sit at y = -2,147,483,648, which the PDF writer panics on in builds with overflow checks. For
+/// type scaled 3 times, a form without that transform would hold a run shifted 500,000,000 points
+/// up, and the export would write the run 1,500,000,000 points up.
+#[test]
+fn overprinting_runs_are_written_or_left_out_as_other_runs_are() {
+    let moved = |overprint_fill| {
+        let back = CharStyle { baseline_shift: 2_147_483_649.0, overprint_fill, ..style(12.0) };
+        TextObject::point(Point::new(5.0, 2_147_483_689.0), "moved", back)
+    };
+    let scaled = |overprint_fill| {
+        let mut t = TextObject::point(Point::new(5.0, 40.0), "", style(12.0));
+        t.xf *= Affine::scale(3.0);
+        let up = CharStyle { baseline_shift: 500_000_000.0, overprint_fill, ..style(12.0) };
+        t.runs = vec![TextRun { text: "in".into(), style: style(12.0), inline: None }, TextRun { text: "out".into(), style: up, inline: None }];
+        t
+    };
+    let written = |mut t: TextObject| {
+        // The export culls type by the laid-out bounds that the engine keeps in `cached_bounds`.
+        t.cached_bounds = Some(vectorcraft_text::layout(FontDb::global(), &t).bounds);
+        let mut d = doc(vec![t]);
+        d.artboards[0].rect = Rect::new(0.0, 0.0, 50.0, 50.0);
+        pdf(&d, false).bytes
+    };
+    let text_of = |bytes: &[u8]| texts(&import_as(bytes, TextAs::Text));
+    let (on, off) = (written(moved(true)), written(moved(false)));
+    assert!(String::from_utf8_lossy(&on).contains("/VCop gs"), "an overprinting form");
+    assert_eq!(text_of(&on), ["moved"]);
+    assert_eq!(text_of(&off), ["moved"]);
+    assert_eq!(text_of(&written(scaled(true))), ["in"]);
+    assert_eq!(text_of(&written(scaled(false))), ["in"]);
+}
+
 /// A named instance of a variable font is real text in that instance: its embedded subset draws
 /// the instance's glyphs where the outlines would be, not the default instance's (#296).
 #[test]
