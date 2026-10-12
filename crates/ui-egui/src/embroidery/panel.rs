@@ -153,10 +153,44 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     digitize_row(app, ui);
+    buttonhole_rows(app, ui);
     ui.add_space(6.0);
     object_section(app, ui);
     ui.add_space(6.0);
     design_section(app, ui, &t);
+}
+
+/// Buttonholes: one, or a row of them evenly spaced, in the middle of the first artboard.
+fn buttonhole_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    egui::CollapsingHeader::new(tl!("Buttonholes")).id_salt("emb-buttonholes").show(ui, |ui| {
+        let mut b = app.embroidery.buttonholes;
+        let styles = [tl!("Straight"), tl!("Rounded"), tl!("Keyhole")];
+        if let Some(i) = pick(ui, tl!("Style"), "bh-style", b.style, &styles) {
+            b.style = i.min(2);
+        }
+        if let Some(v) = num(ui, tl!("Length"), "bh-length", b.length, " mm", 1) {
+            b.length = v.clamp(3.0, 80.0);
+        }
+        if let Some(v) = num(ui, tl!("Width"), "bh-width", b.width, " mm", 1) {
+            b.width = v.clamp(1.5, 12.0);
+        }
+        if let Some(v) = num(ui, tl!("Count"), "bh-count", f64::from(b.count), "", 0) {
+            b.count = v.round().clamp(1.0, 50.0) as u32;
+        }
+        if b.count > 1
+            && let Some(v) = num(ui, tl!("Spacing"), "bh-spacing", b.spacing, " mm", 1)
+        {
+            b.spacing = v.clamp(1.0, 500.0);
+        }
+        if let Some(v) = num(ui, tl!("Angle"), "bh-angle", b.angle, "°", 0) {
+            b.angle = v.clamp(-360.0, 360.0);
+        }
+        app.embroidery.buttonholes = b;
+        if button(ui, tl!("Add Buttonholes")).clicked() {
+            let centre = app.session.active().and_then(|st| st.doc.artboards.first().map(|a| a.rect.center()));
+            app.run("embroidery.addButtonholes", b.params(centre.unwrap_or_default())).ok();
+        }
+    });
 }
 
 /// Whether the selection holds an image (Auto-Digitize traces it).

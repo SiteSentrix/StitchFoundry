@@ -515,7 +515,9 @@ sewing (0.6 mm is left open for the cut). Each buttonhole is a group of ordinary
 sewn in order: a run round it to hold the fabric, one side, the far end (a bartack, a satin end
 rounded round the slit, or a keyhole eye), the other side and a bartack at the near end. Move,
 turn and resize it like any art. `embroidery.addButtonholes` places a string of them too
-(`count`, evenly spaced from `at` to `to`), with the slit `length`, the `width` and an `angle`.
+(`count`, evenly spaced from `at` to `to`), with the slit `length`, the `width` and an `angle`. The Embroidery panel's **Buttonholes** section adds one or a row
+of them in the middle of the artboard: style, length, width, how many, how far apart (middle to
+middle) and an angle, the row running square to the slits.
 
 **Embroidery › Automatic Knife** cuts the selected stitched shapes round their holes and where
 they branch (at sharp inside corners, like the arms of a T) into simpler pieces, each its own

@@ -422,7 +422,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SP-11 | Chenille-type patterns on regular machines (square, coil) | Missing | Pattern generators | 4 |
 | SP-12 | Cross-stitch fills (X stitches on a grid) | Done | Cross fill: X stitches on a square grid of any cell size and angle, as full, half, upright or double crosses | – |
 | SP-13 | Redwork (outlines grouped into one path, entry = exit) | Done | Embroidery › Redwork: line art becomes a redwork group sewn as one tour (entry = exit) over the lines' graph: odd junctions paired along the shortest ways, an Euler tour, each line sewn once in single, triple, back or stem stitch and the retraced ways as a single run; ends within 0.3 mm meet; Break Apart restores (public description: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Release/rn-28-notes/rn-28-notes-5.htm) | – |
-| SP-14 | Buttonholes (preset types, single or a string) | Partial | Add Buttonholes: straight, rounded and keyhole buttonholes (a holding run, satin sides, bartacks, a rounded end or an eye round an open slit), one or an evenly spaced string (`count`, `at`, `to`), each a group of satin paths; in the app one at a time, no docker for the count and spacing yet | 2 |
+| SP-14 | Buttonholes (preset types, single or a string) | Done | Add Buttonholes: straight, rounded and keyhole buttonholes (a holding run, satin sides, bartacks, a rounded end or an eye round an open slit), one or an evenly spaced string (`count`, `at`, `to`), each a group of satin paths; the Embroidery panel's Buttonholes section sets the style, size, count, spacing and angle | – |
 
 ### 6.10 Multi-decoration
 
@@ -525,7 +525,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-01 | Multi Blend (stacked layers of fills with graded spacing in one object) | Partial | Make Blend makes the layers as separate objects (one per thread), not one object | 2 |
 | NEW-02 | Custom accordion profiles | Partial | Profiles from points through `embroidery.setParams`; presets in the panel, no curve editor yet | 2 |
 | NEW-03 | Redwork | Done | SP-13 | – |
-| NEW-04 | Buttonholes | Partial | SP-14 | 2 |
+| NEW-04 | Buttonholes | Done | SP-14 | – |
 | NEW-05 | Grids, guides, snapping to objects | Done | VectorCraft | – |
 | NEW-06 | Continue digitizing | Done | ST-11 | 1 |
 | NEW-07 | In-app assistant for embroidery questions | Partial | Agents can already drive the app over MCP; add an "Ask" panel that calls Claude, paid by AI credits or the user's own key | A |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 137 done,
-32 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 139 done,
+30 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
