@@ -1595,6 +1595,14 @@ fn inspect_reports_a_compound_paths_paint_and_blend_modes() {
     assert!(group["blend"] == "Multiply" && group.get("fill").is_none(), "{group}");
 }
 
+#[test]
+fn isolating_an_object_that_doesnt_exist_says_so() {
+    let mut s = session();
+    let e = s.execute("object.isolate", &json!({"id": 999_999})).unwrap_err();
+    assert_eq!(e.to_string(), EngineError::NoNode(NodeId(999_999)).to_string());
+    assert!(!e.to_string().contains("type"), "{e}");
+}
+
 /// `depth` and `childLimit` slice a summary read; a level that shows fewer children
 /// than it has reports `childCount`, and invalid values are rejected, not reinterpreted.
 #[test]
