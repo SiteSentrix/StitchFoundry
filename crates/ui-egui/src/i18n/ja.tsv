@@ -4720,3 +4720,6 @@ machine	Stop	停止
 	Type family	書体ファミリー
 	New Font from Type	フォントから新規作成
 	Edit Font	フォントを編集
+	Assign to Glyph	グリフに割り当て
+	Selection to glyph	選択をグリフに
+	The selected art becomes the glyph, moved onto its artboard	選択したアートがグリフになり、そのアートボードに移動します

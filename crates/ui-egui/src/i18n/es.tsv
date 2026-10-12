@@ -4724,3 +4724,6 @@ machine	Stop	Parada
 	Type family	Familia tipográfica
 	New Font from Type	Nueva fuente desde texto
 	Edit Font	Editar fuente
+	Assign to Glyph	Asignar a glifo
+	Selection to glyph	Selección como glifo
+	The selected art becomes the glyph, moved onto its artboard	El arte seleccionado pasa a ser el glifo y se mueve a su mesa de trabajo

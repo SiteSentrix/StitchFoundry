@@ -4092,3 +4092,6 @@ machine	Stop	停止
 	Type family	字型系列
 	New Font from Type	從字型新增
 	Edit Font	編輯字型
+	Assign to Glyph	指定為字形
+	Selection to glyph	所選內容作為字形
+	The selected art becomes the glyph, moved onto its artboard	所選圖稿成為該字形，並移到其工作區域上

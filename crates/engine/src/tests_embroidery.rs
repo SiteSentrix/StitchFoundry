@@ -2475,6 +2475,52 @@ fn embroidery_fonts_start_from_type() {
 }
 
 #[test]
+fn designs_become_glyphs_to_type_with() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    s.execute("embroidery.fontDoc.new", &json!({"name": "Keys", "chars": "a", "size": 20})).unwrap();
+    // a design off the artboards: a stitched square
+    let sq = rect(&mut s, 1000.0, 1000.0, 60.0, 40.0);
+    s.execute("select.set", &json!({"ids": [sq.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let r = s.execute("embroidery.fontDoc.assign", &json!({"glyph": "★"})).unwrap();
+    assert_eq!(r["glyph"].as_str(), Some("★"));
+    // a new artboard for it, the square on its baseline a margin (2 mm) in, the board a margin wider either side
+    let (board, b) = {
+        let st = s.doc().unwrap();
+        (st.doc.artboards.iter().find(|a| a.name == "★").unwrap().rect, st.doc.node(sq).unwrap().geometric_bounds().unwrap())
+    };
+    let base = board.y1 - 8.0 * PT;
+    assert!((b.y1 - base).abs() < 0.01 && (b.x0 - (board.x0 + 2.0 * PT)).abs() < 0.01, "{board:?} {b:?}");
+    assert!((board.width() - (60.0 + 4.0 * PT)).abs() < 0.01, "{board:?}");
+    // a wide design onto a glyph's artboard: it widens for it; one undo step puts it back
+    let wide = rect(&mut s, 1000.0, 1200.0, 200.0, 30.0);
+    s.execute("select.set", &json!({"ids": [wide.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.fontDoc.assign", &json!({"glyph": "a"})).unwrap();
+    let a_width = |s: &Session| s.doc().unwrap().doc.artboards.iter().find(|a| a.name == "a").unwrap().rect.width();
+    assert!((a_width(&s) - (200.0 + 4.0 * PT)).abs() < 0.01);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!((a_width(&s) - 12.0 * PT).abs() < 0.01, "{}", a_width(&s));
+    // typed: the designs as glyphs
+    s.execute("embroidery.fontDoc.save", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    let r = s.execute("embroidery.lettering", &json!({"text": "★★", "font": "Keys", "at": [50, 300]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let kids: Vec<vectorcraft_geom::Rect> =
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap()).collect();
+    assert_eq!(kids.len(), 2);
+    assert!(kids.iter().all(|k| (k.width() - 60.0).abs() < 0.5 && (k.y1 - 300.0).abs() < 0.5), "{kids:?}");
+    // no glyph, nothing selected, a name too long
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    assert!(s.execute("embroidery.fontDoc.assign", &json!({"glyph": "b"})).is_err());
+    s.execute("select.set", &json!({"ids": [sq.0]})).unwrap();
+    assert!(s.execute("embroidery.fontDoc.assign", &json!({})).is_err());
+    assert!(s.execute("embroidery.fontDoc.assign", &json!({"glyph": "abcdefghi"})).is_err());
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

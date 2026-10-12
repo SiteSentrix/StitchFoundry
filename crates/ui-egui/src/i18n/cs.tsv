@@ -4751,3 +4751,6 @@ machine	Stop	Zastavení
 	Type family	Rodina písma
 	New Font from Type	Nové písmo z písma
 	Edit Font	Upravit písmo
+	Assign to Glyph	Přiřadit glyfu
+	Selection to glyph	Výběr jako glyf
+	The selected art becomes the glyph, moved onto its artboard	Vybraná kresba se stane glyfem a přesune se na jeho kreslicí plátno

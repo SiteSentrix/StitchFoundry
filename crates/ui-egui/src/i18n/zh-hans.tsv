@@ -4308,3 +4308,6 @@ machine	Stop	停止
 	Type family	字体系列
 	New Font from Type	从字体新建
 	Edit Font	编辑字体
+	Assign to Glyph	指定为字形
+	Selection to glyph	所选内容作为字形
+	The selected art becomes the glyph, moved onto its artboard	所选图稿成为该字形，并移到其画板上
