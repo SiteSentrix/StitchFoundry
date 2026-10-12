@@ -89,6 +89,8 @@ pub struct Placed {
     pub glyph: String,
     pub x: f64,
     pub line: usize,
+    /// How far the next glyph starts along (font units).
+    pub advance: f64,
 }
 
 impl EmbFont {
@@ -168,16 +170,18 @@ impl EmbFont {
                     if let Some(p) = &prev {
                         x -= self.kerning(p, &name);
                     }
-                    out.push(Placed { glyph: name.clone(), x, line });
-                    x += self.advance(&name, g);
+                    let advance = self.advance(&name, g);
+                    out.push(Placed { glyph: name.clone(), x, line, advance });
+                    x += advance;
                     prev = Some(name);
                     i += n;
                 }
                 None => {
                     match self.glyphs.get(&self.info.default_glyph).filter(|_| !c.is_whitespace()) {
                         Some(g) => {
-                            out.push(Placed { glyph: self.info.default_glyph.clone(), x, line });
-                            x += self.advance(&self.info.default_glyph, g);
+                            let advance = self.advance(&self.info.default_glyph, g);
+                            out.push(Placed { glyph: self.info.default_glyph.clone(), x, line, advance });
+                            x += advance;
                         }
                         None => x += self.space(),
                     }

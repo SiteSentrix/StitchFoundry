@@ -449,7 +449,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 |---|---|---|---|---|
 | LT-01 | Create lettering on the canvas | Done | VectorCraft Type tool + stitch type | – |
 | LT-02 | Format text (font, size, spacing, case) | Done | VectorCraft Character/Paragraph | – |
-| LT-03 | Baselines: straight, arc, circle, vertical, free line, any shape | Partial | Point/area/path type; add arc and circle baselines with radius handles, vertical stacking | 3 |
+| LT-03 | Baselines: straight, arc, circle, vertical, free line, any shape | Partial | Point/area/path type; embroidery-font lettering straight or round a circle, arched or along its bottom, aligned left, centre or right (`arc`, `align`); vertical stacking and free baselines still to come | 3 |
 | LT-04 | Edit text, scale, transform | Done | Restitches live | – |
 | LT-05 | Adjust individual letters (position, size, rotation, stitch settings) | Partial | Kerning/baseline shift; add per-letter transforms and stitch overrides | 3 |
 | LT-06 | Break apart lettering | Done | Create Outlines, then stitch | – |

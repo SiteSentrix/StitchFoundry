@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use sf_core::attr::{Embroidery, Lettering, StitchType};
+use sf_core::attr::{Embroidery, LetterAlign, Lettering, StitchType};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_embroidery::fonts::{EmbFont, MAX_TEXT};
 use vectorcraft_geom::Affine;
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Lettering",
             [],
             None,
-            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (the start of the first line's baseline; default: the first artboard's centre), leading?: × the font's line height (1)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
+            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
             has_doc,
             lettering
         ),
@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Lettering",
             [],
             None,
-            "{id?, text?, font?, size?: mm, leading?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
+            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
             has_selection,
             edit_lettering
         ),
@@ -257,13 +257,30 @@ fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<Arc<Node>> 
     let i = &font.info;
     let k = spec.size / own_size(font);
     let frame = Affine::new(spec.frame.0);
+    let placed = font.layout(&spec.text);
+    // each line's width (font units), to align it
+    let mut widths: Vec<f64> = Vec::new();
+    for g in &placed {
+        if widths.len() <= g.line {
+            widths.resize(g.line + 1, 0.0);
+        }
+        if let Some(w) = widths.get_mut(g.line) {
+            *w = w.max(g.x + g.advance);
+        }
+    }
+    let r = spec.arc * vectorcraft_embroidery::PT_PER_MM;
     let mut out = Vec::new();
-    for g in font.layout(&spec.text) {
+    for g in &placed {
         let Some(glyph) = font.glyphs.get(&g.glyph) else { continue };
-        let u = glyph.unit;
-        // the glyph's art from its page to its place: its baseline on the line, its origin at x
+        let u = glyph.unit * k;
+        let width = widths.get(g.line).copied().unwrap_or(0.0);
+        // the glyph's art from its page to its place: the middle of its baseline along the line
+        // (from the origin, by the alignment), down to its line, round the arc
+        let along = (g.x + g.advance * 0.5 - width * spec.align.share()) * u;
+        let down = g.line as f64 * i.leading * spec.leading * u;
         let m = frame
-            * Affine::translate((g.x * u * k, g.line as f64 * i.leading * spec.leading * u * k))
+            * place(r, along, down)
+            * Affine::translate((-g.advance * 0.5 * u, 0.0))
             * Affine::scale(k)
             * Affine::translate((0.0, -glyph.baseline));
         let children: Vec<Arc<Node>> = glyph
@@ -290,6 +307,41 @@ fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<Arc<Node>> 
     out
 }
 
+/// Where a glyph's baseline middle goes, `along` a line `down` from the first (points):
+/// straight, or round a circle of radius `r` (points; positive, the lines arched over its top,
+/// negative, along its bottom) whose edge the first line's baseline meets at the origin, the
+/// glyph upright to it. A line the circle's centre doesn't reach is straight.
+fn place(r: f64, along: f64, down: f64) -> Affine {
+    let rl = r - down;
+    if r != 0.0 && rl * r > 0.0 && rl.abs() > 1e-3 {
+        let th = along / rl;
+        if th.is_finite() {
+            return Affine::translate((rl * th.sin(), r - rl * th.cos())) * Affine::rotate(th);
+        }
+    }
+    Affine::translate((along, down))
+}
+
+/// `arc`, when given: 0 (straight) or a radius of 1 to 10000 mm either way.
+fn arc_param(p: &Value, cmd: &str) -> Result<Option<f64>> {
+    match p.get("arc") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_f64()
+            .filter(|a| *a == 0.0 || (1.0..=10000.0).contains(&a.abs()))
+            .map(Some)
+            .ok_or_else(|| bad(cmd, "`arc` is 0 (straight) or a radius of 1 to 10000 mm (negative: along a circle's bottom)")),
+    }
+}
+
+/// `align`, when given.
+fn align_param(p: &Value, cmd: &str) -> Result<Option<LetterAlign>> {
+    match p.get("align") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_str().and_then(LetterAlign::from_name).map(Some).ok_or_else(|| bad(cmd, "`align` is left, centre or right")),
+    }
+}
+
 fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
     let text = text_param(p, SET)?.ok_or_else(|| bad(SET, "missing `text`"))?;
     let name = str_param(p, "font").ok_or_else(|| bad(SET, "missing `font`"))?;
@@ -305,6 +357,8 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         font: font.info.name.clone(),
         size,
         leading,
+        arc: arc_param(p, SET)?.unwrap_or(0.0),
+        align: align_param(p, SET)?.unwrap_or_default(),
         frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
     };
     // scaled from the size the font was digitized at; outside what it sews well at, a warning
@@ -344,6 +398,12 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(v) = ranged(p, "leading", 0.2..=5.0, EDIT, "`leading` is 0.2 to 5")? {
         spec.leading = v;
     }
+    if let Some(v) = arc_param(p, EDIT)? {
+        spec.arc = v;
+    }
+    if let Some(v) = align_param(p, EDIT)? {
+        spec.align = v;
+    }
     let warnings = size_warnings(&font, spec.size);
     let count = s.edit("Edit Lettering", |d, sel| {
         let glyphs = glyphs(d, &font, &spec);
@@ -362,4 +422,38 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(count)
     })?;
     Ok(json!({ "id": id.0, "glyphs": count, "warnings": warnings }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn glyphs_go_round_arcs_upright_to_them() {
+        let at = |m: Affine| m * vectorcraft_geom::Point::new(0.0, 0.0);
+        let r = 100.0;
+        let centre = vectorcraft_geom::Point::new(0.0, r);
+        // arched over a circle: the origin on its top, the glyphs round it, their tops outward
+        assert!(at(place(r, 0.0, 0.0)).distance(vectorcraft_geom::Point::new(0.0, 0.0)) < 1e-9);
+        for along in [-80.0, 30.0, 150.0] {
+            let m = place(r, along, 0.0);
+            let p = at(m);
+            assert!((p.distance(centre) - r).abs() < 1e-9, "{p:?}");
+            let up = m * vectorcraft_geom::Point::new(0.0, -1.0) - p;
+            let out = (p - centre) / r;
+            assert!((up - out).hypot() < 1e-9, "{up:?} {out:?}");
+        }
+        // mirrored either side of the top
+        let (a, b) = (at(place(r, -40.0, 0.0)), at(place(r, 40.0, 0.0)));
+        assert!((a.x + b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9 && a.y > 0.0);
+        // a second line 20 down: a circle 20 smaller
+        assert!((at(place(r, 50.0, 20.0)).distance(centre) - 80.0).abs() < 1e-9);
+        // along a circle's bottom: the ends rise, tops inward
+        let c = vectorcraft_geom::Point::new(0.0, -r);
+        let p = at(place(-r, 40.0, 0.0));
+        assert!((p.distance(c) - r).abs() < 1e-9 && p.y < 0.0, "{p:?}");
+        // a line past the centre, and a straight baseline, stay straight
+        assert_eq!(at(place(r, 5.0, 150.0)), vectorcraft_geom::Point::new(5.0, 150.0));
+        assert_eq!(at(place(0.0, 5.0, 7.0)), vectorcraft_geom::Point::new(5.0, 7.0));
+    }
 }

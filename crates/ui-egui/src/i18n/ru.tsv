@@ -4665,3 +4665,5 @@ machine	Stop	Остановка
 	Edit Lettering	Изменить надпись
 	Update Lettering	Обновить надпись
 	Load this lettering's font to change it:	Загрузите шрифт этой надписи, чтобы изменить её:
+	Arch	Дуга сверху
+	Valley	Дуга снизу
