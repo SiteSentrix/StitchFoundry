@@ -3,8 +3,8 @@
 //! Guides, or with them off View › Snap to Point, snap it),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's or polygon's corner widget to round its corners (Alt-click cycles their kind,
-//! double-click opens the Corners dialog), double-click to enter isolation mode (Double Click To
-//! Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
+//! double-click opens the Corners dialog), double-click a group or an object to enter isolation
+//! mode (Double Click To Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
 //! click or drag a ruler guide ([`crate::rulerguide`]), drag the brackets of type on a path
 //! ([`crate::pathtype`]), double-click the type widget to convert point type to area type and back
 //! ([`crate::typewidget`]).
@@ -260,11 +260,18 @@ impl Tool for SelectionTool {
                 }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     let top = h.top_object(cx.isolation);
-                    if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. })) {
-                        return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
-                    }
                     if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
                         return vec![Action::SwitchTool("type".into())];
+                    }
+                    // A group, a compound path or a single path, image, mesh or placed file, not
+                    // the one already isolated. Blends, envelopes, repeats and symbol instances
+                    // aren't: they have editing modes of their own.
+                    use vectorcraft_doc::NodeKind as K;
+                    let isolates = cx.doc.node(top).is_some_and(|n| {
+                        matches!(n.kind, K::Group { .. } | K::Compound { .. } | K::Path { .. } | K::Image(_) | K::Mesh(_) | K::PlacedDocument(_))
+                    });
+                    if cx.double_click_isolate && isolates && cx.isolation != Some(top) {
+                        return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
                     }
                 } else if cx.isolation.is_some() {
                     return vec![Action::Exec("object.exitIsolation".into(), json!({}))];

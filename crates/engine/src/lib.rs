@@ -483,6 +483,12 @@ impl DocState {
         {
             return Some(i);
         }
+        // A single object isolated: new art goes beside it, in its group or layer.
+        if let Some(p) = self.isolation.filter(|i| self.doc.node(*i).is_some_and(|n| !n.is_container())).and_then(|i| self.doc.parent_of(i))
+            && self.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
+        {
+            return Some(p);
+        }
         // A sublayer takes new art only while it and the layers around it are shown and unlocked.
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()) && self.doc.is_editable(*l)).or_else(|| self.doc.default_layer())
     }

@@ -74,7 +74,7 @@ tools, never checked side by side) isn't captured row by row.
 | Cut path at selected anchors, Remove Anchor Points, Delete removes segments | done | #1278: segment Delete preserves neighboring edges and endpoint anchors; a second Delete removes the remainder; explicit anchor Delete retains its behavior |
 | Live Corners widgets (radius readout, Alt-click cycles kind, double-click the Corners dialog) | done | a Direct Selection click on a widget selects its corner (#1239); a press-and-drag on a widget of a path selected whole still rounds every corner (#908), and adding widgets to the selection by Shift-click (#1232) is missing |
 | Corners between curved sides (#1144), Relative rounding | partial | Relative rounding missing |
-| Isolation mode by double-click, breadcrumbs, Esc to exit | done | |
+| Isolation mode by double-click (groups and single objects), breadcrumbs, Esc to exit | done | Single paths, compound paths, images, meshes and placed files isolate too ([helpx: Isolate objects](https://helpx.adobe.com/africa/illustrator/desktop/manage-objects/select-objects/isolate-objects.html)) |
 | "Magnetic" moves of selected anchors with a modifier (#955 request) | missing | not an Illustrator feature as documented; under discussion |
 
 ## Smart guides and snapping
@@ -205,6 +205,7 @@ re-measure of the panels added since.
 | 2026-10-12 | minor | Attributes: directly selected compound members read and change the compound fill rule; path direction stays member-local (#1197); score unchanged |
 | 2026-10-12 | minor | Pathfinder Divide: open cutting lines split filled paths with one Undo (#1307); scores and hours unchanged |
 | 2026-10-12 | minor | Numeric entry: click-to-focus selection waits for release so text drags keep their start (#1326, in part); keyboard focus, double-click, arrows and wheel preserved; scores and hours unchanged; short movements below the click threshold remain open |
+| 2026-10-12 | minor | Double Click To Isolate: the Selection tool also isolates a single path, compound path, image, mesh or placed file; only it is hit, marqueed and selected inside; scores and hours unchanged |
 | 2026-10-11 | minor | A marquee inside a filled shape no longer selects it: only touching its path does (#1103); score unchanged (estimated) |
 | 2026-10-11 | minor | Live Corners: corners between curved sides round too, the curve trimmed to what the cut leaves (#1144); score unchanged (estimated) |
 | 2026-10-11 | minor | Artboards: Shift-click selects several, which move, copy and delete together (#1139); score unchanged (estimated) |
