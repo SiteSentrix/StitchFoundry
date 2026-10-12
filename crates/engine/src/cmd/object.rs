@@ -719,48 +719,59 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let Some(backmost) = ids.first().copied() else { return Err(EngineError::Other("nothing selected".into())) };
     let id = s.edit("Make Compound Path", |d, sel| {
-        let appearance = d.node(backmost).ok_or(EngineError::NoNode(backmost))?.appearance.clone();
-        let mut paths: Vec<Arc<Node>> = vec![];
+        d.node(backmost).ok_or(EngineError::NoNode(backmost))?;
+        let mut units: Vec<Vec<Arc<Node>>> = vec![];
+        let mut appearance = None;
         for id in &ids {
-            let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
-            match &n.kind {
-                NodeKind::Path { .. } => paths.push(Arc::new(n)),
-                NodeKind::Compound { children, .. } => paths.extend(children.iter().cloned()),
-                NodeKind::Group { .. } => {
-                    n.walk(&mut |c| {
-                        if matches!(c.kind, NodeKind::Path { .. }) {
-                            paths.push(Arc::new(c.clone()))
-                        }
-                    });
-                }
-                _ => return Err(EngineError::Other("compound paths can only contain paths".into())),
+            let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
+            if !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Group { .. }) {
+                return Err(EngineError::Other("compound paths can only contain paths".into()));
             }
+            compound_members(n, &mut appearance, &mut units);
         }
         let cid = d.alloc_id();
         let mut c = Node::new(cid, NodeKind::Compound { children: vec![], rule: FillRule::NonZero });
-        c.appearance = appearance;
+        c.appearance = appearance.unwrap_or_default();
         let ch = c.children_mut().ok_or(EngineError::NoNode(cid))?;
         // The paths in front run against the backmost one, so where they overlap it they cut holes
-        // under the non-zero fill rule (#1197).
+        // under the non-zero fill rule (#1197). A compound path's paths turn together, by its
+        // first: its own holes (a letter's counters) stay holes.
         let direction = |n: &Node| n.path_data().and_then(|pd| pd.subpaths.first()).map_or(0.0, |sp| sp.signed_area().signum());
-        let back = paths.first().map_or(0.0, |p| direction(p));
-        for (i, mut p) in paths.into_iter().enumerate() {
-            let pn = Arc::make_mut(&mut p);
-            pn.appearance = Appearance::default().into();
-            let flip = i > 0 && back != 0.0 && direction(pn) == back;
-            if let NodeKind::Path { path, live, .. } = &mut pn.kind {
-                *live = None;
-                if flip {
-                    path.reverse();
+        let first = |unit: &[Arc<Node>]| unit.first().map_or(0.0, |p| direction(p));
+        let back = units.first().map_or(0.0, |u| first(u));
+        for (i, unit) in units.into_iter().enumerate() {
+            let flip = i > 0 && back != 0.0 && first(&unit) == back;
+            for mut p in unit {
+                let pn = Arc::make_mut(&mut p);
+                pn.appearance = Appearance::default().into();
+                if let NodeKind::Path { path, live, .. } = &mut pn.kind {
+                    *live = None;
+                    if flip {
+                        path.reverse();
+                    }
                 }
+                ch.push(p);
             }
-            ch.push(p);
         }
         d.wrap(&ids, |_| c)?;
         sel.set([cid]);
         Ok(cid)
     })?;
     Ok(json!({ "id": id.0 }))
+}
+
+/// The paths in `n` (a path, a compound path, or a group searched in depth) onto `out`, in paint
+/// order: each path alone, a compound path's paths together. Into `paint` goes the appearance of
+/// the backmost found so far: the path's own, or its compound path's, which is what painted it. A
+/// group has no paint of its own to give: a group of outlined type made a compound path that drew
+/// nothing.
+fn compound_members(n: &Node, paint: &mut Option<vectorcraft_doc::Shared<Appearance>>, out: &mut Vec<Vec<Arc<Node>>>) {
+    match (&n.kind, n.children()) {
+        (NodeKind::Path { .. }, _) => out.push(vec![Arc::new(n.clone())]),
+        (NodeKind::Compound { .. }, Some(paths)) if !paths.is_empty() => out.push(paths.clone()),
+        (_, children) => return children.into_iter().flatten().for_each(|c| compound_members(c, paint, out)),
+    }
+    paint.get_or_insert_with(|| n.appearance.clone());
 }
 
 /// Is `n` a compound path to release: a compound path, or a path of several subpaths (an SVG `d`
