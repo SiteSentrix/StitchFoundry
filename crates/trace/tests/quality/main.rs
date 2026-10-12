@@ -7,7 +7,7 @@
 //!
 //! `TRACE_QUALITY_MP` (default `1,4,16`) sets the megapixel sizes of the cost table.
 //!
-//! A yardstick: `TRACE_QUALITY_IMAGES=dir` also writes the one-colour drawings there as PNG files, and
+//! A yardstick: `TRACE_QUALITY_IMAGES=dir` also writes the drawings there as PNG files, and
 //! `TRACE_QUALITY_YARDSTICK=dir` measures the SVG files of the same names found there (what another
 //! tracer made of those PNG files, run by hand as a black box) the same way.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -88,14 +88,21 @@ struct Run {
     metrics: Option<Metrics>,
 }
 
-/// Every (size, variant) an input is traced at: clean at three sizes, degraded at the middle one.
-const DRAWINGS: [(u32, Variant); 6] =
-    [(128, Variant::Clean), (256, Variant::Clean), (512, Variant::Clean), (256, Variant::Blur), (256, Variant::Noise), (256, Variant::Scan)];
+/// Every (size, variant) an input is traced at: clean at three sizes, the others at the middle one.
+const DRAWINGS: [(u32, Variant); 7] = [
+    (128, Variant::Clean),
+    (256, Variant::Clean),
+    (512, Variant::Clean),
+    (256, Variant::Hard),
+    (256, Variant::Blur),
+    (256, Variant::Noise),
+    (256, Variant::Scan),
+];
 
 type Drawing<'a> = (&'a Input, u32, Variant, Raster);
 
 fn draw_all(inputs: &[Input]) -> Vec<Drawing<'_>> {
-    inputs.iter().flat_map(|input| DRAWINGS.map(|(size, variant)| (input, size, variant, variant.apply(&input.draw(size))))).collect()
+    inputs.iter().flat_map(|input| DRAWINGS.map(|(size, variant)| (input, size, variant, input.draw(size, variant)))).collect()
 }
 
 /// The file name (without extension) of a drawing given to or made by another tracer.
@@ -165,12 +172,12 @@ fn stat(runs: &[&Metrics], field: impl Fn(&Metrics) -> f64, max: bool, digits: u
     if x.is_finite() { format!("{:.digits$}", x + 0.0) } else { "all".into() }
 }
 
-const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
+const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
 
 fn row(runs: &[&Run]) -> String {
     let m: Vec<&Metrics> = runs.iter().filter_map(|r| r.metrics.as_ref()).collect();
     if m.is_empty() {
-        return format!("| refused |{}", " |".repeat(15));
+        return format!("| refused |{}", " |".repeat(16));
     }
     let cells = [
         stat(&m, |m| m.delta, false, 2),
@@ -189,6 +196,7 @@ fn row(runs: &[&Run]) -> String {
         stat(&m, |m| m.gap, false, 1),
         stat(&m, |m| m.overlap, false, 1),
         stat(&m, |m| m.specks, false, 1),
+        stat(&m, |m| m.outside, true, 1),
     ];
     format!("| {} |", cells.join(" | "))
 }
@@ -217,7 +225,7 @@ fn report() -> String {
     let drawn = draw_all(&inputs);
     let one_colour = |d: &&Drawing| matches!(d.0.class, Class::Shape | Class::Poly | Class::Lines);
     if let Ok(dir) = std::env::var("TRACE_QUALITY_IMAGES") {
-        for (input, size, variant, img) in drawn.iter().filter(one_colour) {
+        for (input, size, variant, img) in &drawn {
             std::fs::write(format!("{dir}/{}.png", stem(input, *size, *variant)), img.encode_png()).unwrap();
         }
     }
@@ -225,7 +233,7 @@ fn report() -> String {
     let pick = |preset: usize, f: &dyn Fn(&Run) -> bool| runs.iter().filter(|r| r.preset == preset && f(r)).collect::<Vec<_>>();
     let mut md = String::new();
 
-    md += "## 1. Each preset on the inputs it is meant for\n\nAll sizes and variants (clean, blurred, noisy, scanned) of those inputs.\n\n| preset | inputs ";
+    md += "## 1. Each preset on the inputs it is meant for\n\nAll sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs.\n\n| preset | inputs ";
     md += HEADER.replacen("\n|", "\n|:--|:--|", 1).as_str();
     for (pi, (name, _)) in presets.iter().enumerate() {
         let on: Vec<&str> = inputs.iter().filter(|i| target(name, i)).map(|i| i.name).collect();
@@ -281,7 +289,7 @@ fn report() -> String {
     md += "\n## 5. Cost\n\nOne trace at a time on this machine (all cores); memory is the peak allocated above the image itself. A trace of more than 2,000,000 anchors is refused, as in the app.\n\n| preset | image | megapixels | result |\n|:--|:--|--:|:--|\n";
     for size in sizes {
         let n = size as usize;
-        let images = [("photo-like", photo.draw(size)), ("four-colour badge", raster::render(&badge.scaled(size), badge.bg, n, n))];
+        let images = [("photo-like", photo.draw(size, Variant::Clean)), ("four-colour badge", raster::render(&badge.scaled(size), badge.bg, n, n))];
         for (name, params) in &presets {
             for (image, img) in &images {
                 let _ = writeln!(md, "| {name} | {image} | {:.0} | {} |", f64::from(size).powi(2) / f64::from(1 << 20), cost(img, params));
@@ -311,12 +319,12 @@ fn harness_measures_a_disc() {
 
     let inputs = inputs();
     let circle = &inputs[0];
-    let src = circle.draw(128);
+    let src = circle.draw(128, Variant::Clean);
     assert_eq!(measure::fidelity(&src, &src), (0.0, 0.0));
     let params = vectorcraft_trace::preset("Black and White Logo").unwrap();
     let res = trace_within(&src, &params, MAX_ANCHORS).unwrap();
     let m = measure(circle, Variant::Clean, 128, &src, &params, &res);
     assert_eq!(m.paths, 1.0);
-    assert!(m.geo_mean < 0.6 && m.geo_max < 2.0 && m.miss_max < 2.0, "{m:?}");
-    assert!(m.delta < 1.5 && m.gap.is_nan(), "{m:?}");
+    assert!(m.geo_mean < 0.06 && m.geo_max < 0.3 && m.miss_max < 0.3, "{m:?}");
+    assert!(m.delta < 0.2 && m.kinks == 0.0 && m.gap.is_nan(), "{m:?}");
 }

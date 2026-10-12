@@ -39,28 +39,23 @@ impl Class {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Variant {
     Clean,
+    /// One hard sample per pixel: no anti-aliasing (a GIF, a 1-bit scan).
+    Hard,
     Blur,
     Noise,
     Scan,
 }
 
-pub const VARIANTS: [Variant; 4] = [Variant::Clean, Variant::Blur, Variant::Noise, Variant::Scan];
+pub const VARIANTS: [Variant; 5] = [Variant::Clean, Variant::Hard, Variant::Blur, Variant::Noise, Variant::Scan];
 
 impl Variant {
     pub fn name(self) -> &'static str {
         match self {
             Variant::Clean => "clean",
+            Variant::Hard => "aliased",
             Variant::Blur => "blurred",
             Variant::Noise => "noisy",
             Variant::Scan => "scanned",
-        }
-    }
-    pub fn apply(self, img: &Raster) -> Raster {
-        match self {
-            Variant::Clean => img.clone(),
-            Variant::Blur => raster::blur(img),
-            Variant::Noise => raster::noisy(img),
-            Variant::Scan => raster::scanned(img),
         }
     }
     /// The colour a flat `c` of the clean image has in this variant (noise and shading aside).
@@ -247,15 +242,25 @@ pub fn inputs() -> Vec<Input> {
 }
 
 impl Input {
-    /// The input drawn `size` pixels square, anti-aliased.
-    pub fn draw(&self, size: u32) -> Raster {
+    /// The input drawn `size` pixels square as `variant`.
+    pub fn draw(&self, size: u32, variant: Variant) -> Raster {
+        // Art is drawn anti-aliased from 6 × 6 samples per pixel; the aliased variant takes one.
+        let img = self.draw_sampled(size, if variant == Variant::Hard { 1 } else { 6 });
+        match variant {
+            Variant::Clean | Variant::Hard => img,
+            Variant::Blur => raster::blur(&img),
+            Variant::Noise => raster::noisy(&img),
+            Variant::Scan => raster::scanned(&img),
+        }
+    }
+    fn draw_sampled(&self, size: u32, samples: usize) -> Raster {
         let n = size as usize;
         match self.tone {
             Some(f) => Raster::from_fn(size, size, |x, y| {
                 let c = f((f64::from(x) + 0.5) / f64::from(size), (f64::from(y) + 0.5) / f64::from(size), x, y);
                 [c[0].round().clamp(0.0, 255.0) as u8, c[1].round().clamp(0.0, 255.0) as u8, c[2].round().clamp(0.0, 255.0) as u8, 255]
             }),
-            None => raster::render_truth(&self.scaled(size), self.bg, n, n),
+            None => raster::render_truth(&self.scaled(size), self.bg, n, n, samples),
         }
     }
     /// The art in the pixel coordinates of a `size`-pixel drawing.
