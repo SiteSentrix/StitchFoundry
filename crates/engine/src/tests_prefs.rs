@@ -243,9 +243,13 @@ fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
         s.cursor(vectorcraft_geom::Point::new(300.0, 300.0), Mods::default(), ViewInfo::default())
     };
     assert_eq!(cursor(&mut s, "pen"), Cursor::Pen);
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
     assert_eq!(cursor(&mut s, "pen"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Crosshair);
     assert_eq!(cursor(&mut s, "selection"), Cursor::Arrow);
+    s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
 }
 
 // ---------- #394, second batch ----------
