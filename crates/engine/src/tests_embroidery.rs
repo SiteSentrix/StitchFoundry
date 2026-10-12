@@ -330,6 +330,13 @@ fn worksheets_show_the_design_and_its_figures() {
     assert!(texts.iter().any(|t| t.contains("Customer: Lee")), "{texts:?}");
     assert!(lines >= 2, "the stitches drawn in two colours: {lines}");
     assert!(s.execute("embroidery.worksheet", &json!({"kind": "invoice"})).is_err());
+    // a pattern on Letter paper: the design over the page
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let r = s.execute("embroidery.worksheet", &json!({"kind": "pattern", "page": "letter"})).unwrap();
+    assert_eq!(r["kind"].as_str(), Some("pattern"));
+    let st = s.doc().unwrap();
+    assert_eq!((st.doc.artboards[0].rect.width(), st.doc.artboards[0].rect.height()), (612.0, 792.0));
+    assert!(s.execute("embroidery.worksheet", &json!({"page": "a3"})).is_err());
 }
 
 #[test]
