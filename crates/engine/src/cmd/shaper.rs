@@ -1,6 +1,7 @@
 //! Shaper compositions are groups of generated fills/strokes with transparent, editable source
 //! art retained underneath. Recipes select topology regions; source edits re-evaluate them in
 //! the same undo transaction. Rendering and exporters only see ordinary groups and paths.
+use super::pathops::Beside;
 use super::*;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc};
@@ -380,7 +381,10 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
             ids.push(n.id)
         }
     });
-    for id in ids {
+    // Groups whose source art is all gone are removed through `emptied`, which is made when the
+    // first one is found.
+    let mut emptied: Option<Beside> = None;
+    for &id in &ids {
         let Some(current) = d.node(id).cloned() else { continue };
         let Some(old) = before.node(id) else { continue };
         let src = sources(&current);
@@ -395,7 +399,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
             continue;
         }
         if src.is_empty() {
-            d.remove(id)?;
+            emptied.get_or_insert_with(|| Beside::replacing(d, &ids)).put(d, id, vec![])?;
             continue;
         }
         let map = map_of(&src)?;
@@ -494,7 +498,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
             *ch = children;
         }
     }
-    Ok(())
+    emptied.map_or(Ok(()), |e| e.finish(d))
 }
 
 fn candidates(s: &Session, p: &Value, points: &[Point], tolerance: f64) -> Result<Vec<NodeId>> {
@@ -670,9 +674,7 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
         let mut group = Node::group(id, children);
         group.name = Some("Shaper Group".into());
         group.extras_mut().shaper = Some(Box::new(spec));
-        for id in &roots {
-            d.remove(*id)?;
-        }
+        d.remove_many(&roots)?;
         d.insert(parent, index.saturating_sub(earlier), group)?;
         sel.set([id]);
         Ok(id)

@@ -7,6 +7,7 @@ use vectorcraft_doc::{NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath, Vec2};
 
 use super::create::anchor_from_json;
+use super::pathops::Beside;
 use super::*;
 use crate::EngineError;
 
@@ -466,6 +467,7 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     let segments = st.selection.segments.clone();
     s.edit("Clear", |d, selection| {
         let mut survivors = vec![];
+        let mut emptied = Beside::replacing(d, &sel.keys().copied().collect::<Vec<_>>());
         for (id, set) in &sel {
             let remove_node = {
                 let path = path_mut(d, *id)?;
@@ -499,11 +501,12 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
                 path.subpaths.is_empty()
             };
             if remove_node {
-                d.remove(*id)?;
+                emptied.put(d, *id, vec![])?;
             } else if segments.contains_key(id) {
                 survivors.push(*id);
             }
         }
+        emptied.finish(d)?;
         // Another Delete removes the remaining path after a segment cut. Anchor Delete keeps
         // its existing deselection behavior.
         selection.set(survivors);
@@ -625,11 +628,12 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     }
     let ids = s.edit("Cut Path", |d, sel| {
         let (mut all, mut picked) = (vec![], vec![]);
+        let mut cut = Beside::replacing(d, &cuts.iter().map(|(id, ..)| *id).collect::<Vec<_>>());
         for (id, subs, starts) in cuts {
             // A path of one subpath becomes one path per piece (the first keeps the id); the
             // pieces of a compound shape stay subpaths of it.
             if d.node(id).and_then(|n| n.path_data()).is_some_and(|pd| pd.subpaths.len() == 1) {
-                let ids = super::draw2::replace_with_pieces(d, id, subs.into_iter().map(PathData::single).collect())?;
+                let ids = super::draw2::replace_with_pieces(d, &mut cut, id, subs.into_iter().map(PathData::single).collect())?;
                 picked.extend(ids.iter().zip(&starts).filter(|(_, s)| **s).map(|(id, _)| (*id, (0, 0))));
                 all.extend(ids);
             } else {
@@ -638,6 +642,7 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
                 all.push(id);
             }
         }
+        cut.finish(d)?;
         // Each cut leaves one of its two coincident anchors selected, so a drag pulls the ends apart.
         sel.clear();
         for (id, a) in picked {

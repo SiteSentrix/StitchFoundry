@@ -398,6 +398,25 @@ fn new_symbol_replaces_selection_with_instance_of_same_bounds() {
     assert_eq!(s.doc().unwrap().doc.symbols.len(), 1);
 }
 
+/// New Symbol given `ids` that list an object and then the group that holds it puts the instance
+/// where the group was and removes both, as removing one object at a time does.
+#[test]
+fn new_symbol_of_an_object_and_the_group_that_holds_it_keeps_order_and_ids() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0, 10.0));
+    select(&mut s, &[a, b]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let c = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    let before = s.doc().unwrap().doc.clone();
+    let r = s.execute("symbol.new", &json!({"name": "Pair", "ids": [a.0, group.0]})).unwrap();
+    let inst = NodeId(r["id"].as_u64().unwrap());
+    let ids = |n: &Node| n.children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>();
+    assert_eq!(ids(&s.doc().unwrap().doc.layers[0]), [inst, c]);
+    assert_eq!(s.doc().unwrap().selection.objects, [inst]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(*s.doc().unwrap().doc == *before, "Undo gives back the document");
+}
+
 #[test]
 fn place_and_break_link_round_trip_geometry() {
     let mut s = session();

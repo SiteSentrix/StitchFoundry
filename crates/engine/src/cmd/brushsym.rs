@@ -15,6 +15,7 @@ use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Node, NodeId, NodeKin
 use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::edit::selected_roots;
+use super::pathops::{remove_each, separate};
 use super::*;
 use crate::EngineError;
 
@@ -569,6 +570,10 @@ fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
 /// Replace the root nodes `ids` with one instance of `name` (art already stored). Returns the id.
 fn replace_with_instance(d: &mut Document, ids: &[NodeId], name: &str, xf: Affine) -> Result<NodeId> {
     let top = *ids.last().ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    if separate(d, ids) {
+        let id = d.alloc_id();
+        return Ok(d.wrap(ids, |_| Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf }))?);
+    }
     let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
     let id = d.alloc_id();
     d.insert(par, idx + 1, Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf }))?;
@@ -742,9 +747,7 @@ fn symbol_delete(s: &mut Session, p: &Value) -> Result<Value> {
         if expand {
             break_links(d, &inst)?;
         } else {
-            for i in inst {
-                d.remove(i)?;
-            }
+            remove_each(d, &inst)?;
         }
         d.symbols.retain(|x| x.name != name);
         set_natural_size(d, &name, None);
@@ -871,12 +874,7 @@ fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
             .collect();
         let n = doomed.len();
         if n > 0 {
-            s.edit("Symbol Sprayer", |d, _| {
-                for id in &doomed {
-                    d.remove(*id)?;
-                }
-                Ok(())
-            })?;
+            s.edit("Symbol Sprayer", |d, _| remove_each(d, &doomed))?;
         }
         return Ok(json!({ "count": n }));
     }

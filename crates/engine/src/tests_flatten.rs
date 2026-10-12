@@ -310,6 +310,23 @@ fn flatten_is_one_undo_step() {
     assert!(!exists(&s, a));
 }
 
+/// Flattening a document for export in which two objects have the same id (a damaged file)
+/// removes both objects and puts one group in their place.
+#[test]
+fn flattening_objects_that_share_an_id_removes_both() {
+    let _settings = settings_lock();
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 100.0, "#ff0000");
+    let b = rect(&mut s, 60.0, 60.0, 100.0, 100.0, "#0000ff");
+    run(&mut s, "transparency.set", json!({"ids": [a, b], "opacity": 50}));
+    let mut doc = (*s.doc().unwrap().doc).clone();
+    doc.node_mut(NodeId(b)).unwrap().id = NodeId(a);
+    let flat = crate::cmd::flatten::flatten_document(&doc, &crate::cmd::FlattenOptions::default()).unwrap().unwrap();
+    let art = flat.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "one group where the two objects were");
+    assert!(matches!(art[0].kind, NodeKind::Group { .. }) && art[0].id != NodeId(a));
+}
+
 #[test]
 fn objects_without_transparency_stay_unless_outlined() {
     let _settings = settings_lock();

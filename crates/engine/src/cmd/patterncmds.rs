@@ -18,6 +18,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::Rect;
 
 use super::edit::selected_roots;
+use super::pathops::Beside;
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -633,15 +634,12 @@ fn make_repeat(s: &mut Session, p: &Value, label: &str, make: impl Fn(Vec<Arc<No
         return Ok(json!({ "id": r.0 }));
     }
     let roots = roots(s, p)?;
-    let Some(&top) = roots.last() else { return Err(EngineError::Other("select the art to repeat".into())) };
+    if roots.is_empty() {
+        return Err(EngineError::Other("select the art to repeat".into()));
+    }
     let id = s.edit(label, |d, sel| {
-        let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
-        let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| d.node(*id).cloned()).map(Arc::new).collect();
         let id = d.alloc_id();
-        d.insert(par, idx + 1, Node::new(id, NodeKind::Repeat(make(nodes))))?;
-        for r in &roots {
-            d.remove(*r)?;
-        }
+        d.wrap(&roots, |nodes| Node::new(id, NodeKind::Repeat(make(nodes))))?;
         sel.set([id]);
         Ok(id)
     })?;
@@ -682,15 +680,14 @@ fn repeat_release(s: &mut Session, _: &Value) -> Result<Value> {
     let reps = selected_repeats(s);
     let ids = s.edit("Release Repeat", |d, sel| {
         let mut out = vec![];
+        let mut released = Beside::replacing(d, &reps);
         for r in &reps {
             let Some(n) = d.node(*r).cloned() else { continue };
-            let (par, idx, _) = d.position(*r).ok_or(EngineError::NoNode(*r))?;
-            d.remove(*r)?;
-            for (k, c) in n.children().into_iter().flatten().enumerate() {
-                out.push(c.id);
-                d.insert(par, idx + k, (**c).clone())?;
-            }
+            let art: Vec<Node> = n.children().into_iter().flatten().map(|c| (**c).clone()).collect();
+            out.extend(art.iter().map(|c| c.id));
+            released.put(d, *r, art)?;
         }
+        released.finish(d)?;
         sel.set(out.iter().copied());
         Ok(out)
     })?;

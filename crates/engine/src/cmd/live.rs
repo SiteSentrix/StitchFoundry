@@ -18,6 +18,7 @@ use vectorcraft_geom::{Affine, PathData, Point, Vec2};
 
 use super::edit::selected_roots;
 use super::expand::gradient_sampler;
+use super::pathops::Beside;
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -360,14 +361,11 @@ fn has_mesh(s: &Session) -> std::result::Result<(), String> {
 
 /// Wrap `roots` (paint order) into a new node built by `make`, placed where the topmost root was.
 fn wrap(d: &mut Document, sel: &mut Selection, roots: &[NodeId], make: impl FnOnce(NodeId, Vec<Arc<Node>>) -> Node) -> Result<NodeId> {
-    let top = *roots.last().ok_or_else(|| EngineError::Other("nothing to wrap".into()))?;
-    let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
-    let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| d.node(*id).cloned()).map(Arc::new).collect();
-    let id = d.alloc_id();
-    d.insert(par, idx + 1, make(id, nodes))?;
-    for r in roots {
-        d.remove(*r)?;
+    if roots.is_empty() {
+        return Err(EngineError::Other("nothing to wrap".into()));
     }
+    let id = d.alloc_id();
+    d.wrap(roots, |nodes| make(id, nodes))?;
     sel.set([id]);
     Ok(id)
 }
@@ -546,6 +544,7 @@ fn blend_release(s: &mut Session, _: &Value) -> Result<Value> {
     let blends = selected_of(s, is_blend);
     let (ids, spines, groups) = s.edit("Release Blend", |d, sel| {
         let (mut keys, mut spines, mut groups) = (vec![], vec![], vec![]);
+        let mut released = Beside::replacing(d, &blends);
         for b in &blends {
             let Some(n) = d.node(*b).cloned() else { continue };
             let NodeKind::Blend { children, spec } = &n.kind else { continue };
@@ -572,8 +571,9 @@ fn blend_release(s: &mut Session, _: &Value) -> Result<Value> {
                 groups.push(g.id);
                 nodes = vec![g];
             }
-            replace_with(d, *b, nodes)?;
+            released.put(d, *b, nodes)?;
         }
+        released.finish(d)?;
         if groups.is_empty() {
             sel.set(spines.iter().chain(&keys).copied());
         } else {
@@ -1171,6 +1171,7 @@ fn env_release(s: &mut Session, _: &Value) -> Result<Value> {
     let envs = selected_of(s, is_envelope);
     let ids = s.edit("Release Envelope", |d, sel| {
         let mut out = vec![];
+        let mut released = Beside::replacing(d, &envs);
         for e in &envs {
             let Some(n) = d.node(*e).cloned() else { continue };
             let NodeKind::Envelope { content, kind, .. } = &n.kind else { continue };
@@ -1179,8 +1180,10 @@ fn env_release(s: &mut Session, _: &Value) -> Result<Value> {
                 shape.id = d.alloc_id();
                 nodes.push(shape);
             }
-            out.extend(replace_with(d, *e, nodes)?);
+            out.extend(nodes.iter().map(|c| c.id));
+            released.put(d, *e, nodes)?;
         }
+        released.finish(d)?;
         sel.set(out.iter().copied());
         Ok(out)
     })?;

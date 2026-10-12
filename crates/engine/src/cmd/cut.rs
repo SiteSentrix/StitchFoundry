@@ -14,7 +14,7 @@ use vectorcraft_pathops::BoolOp;
 
 use super::draw2::{components, erase_outline, ids_json, replace_with_pieces};
 use super::edit::selected_roots;
-use super::pathops::node_path;
+use super::pathops::{Beside, node_path};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -163,10 +163,12 @@ fn apply(s: &mut Session, label: &str, plan: Plan) -> Result<Value> {
     }
     let (ids, removed) = s.edit(label, |d: &mut Document, sel| {
         let (mut all, mut removed) = (vec![], 0);
+        let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
             removed += pieces.is_empty() as usize;
-            all.extend(replace_with_pieces(d, id, pieces)?);
+            all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
         }
+        cut.finish(d)?;
         sel.set(all.iter().copied());
         Ok((all, removed))
     })?;
