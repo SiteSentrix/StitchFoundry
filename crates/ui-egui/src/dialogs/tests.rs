@@ -379,6 +379,42 @@ fn a_form_dialog_is_as_wide_as_its_fields_not_the_window() {
     assert!(narrow.width() <= 360.0, "{:.0} wide in a 360-point window", narrow.width());
 }
 
+/// Object › Path › Split Into Grid opens on a grid the size of the selection, shows its rows and
+/// columns side by side (number, size, gutter, total), previews on the canvas and, on OK, splits
+/// the path and adds the guides as one undo step.
+#[test]
+fn split_into_grid_opens_at_the_selections_size_and_previews() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 112, "height": 62})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    crate::menus::invoke(&mut app, "object.path.splitIntoGrid", json!({}));
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!((d.f64("totalWidth", 0.0), d.f64("totalHeight", 0.0), d.bool("addGuides")), (112.0, 62.0, false));
+    d.fields.extend([
+        ("columns".to_string(), json!(3)),
+        ("columnGutter".to_string(), json!(8)),
+        ("addGuides".into(), json!(true)),
+        ("preview".into(), json!(true)),
+    ]);
+    frame(&mut app, Default::default());
+    // The preview: 2 × 3 cells and the guides along their edges, not yet an undo step.
+    assert_eq!((objects(&app), app.session.doc().unwrap().doc.guides.len()), (6, 10));
+    assert!(app.session.in_interaction());
+    confirm(&mut app).unwrap();
+    let st = app.session.doc().unwrap();
+    assert_eq!((objects(&app), st.doc.guides.len(), st.history.undo.len()), (6, 10, undo + 1));
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    // Cancel rolls a preview back.
+    app.run("select.all", json!({})).unwrap();
+    crate::menus::invoke(&mut app, "object.path.splitIntoGrid", json!({}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+    frame(&mut app, Default::default());
+    assert_eq!(objects(&app), 4, "one grid over the six cells");
+    cancel(&mut app);
+    assert_eq!(objects(&app), 6);
+}
+
 #[test]
 fn menu_parameter_dialogs_are_compact() {
     // #292: Object › Path › Simplify (and its neighbours) spanned the whole window.

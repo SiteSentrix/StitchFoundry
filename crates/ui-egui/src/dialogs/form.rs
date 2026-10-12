@@ -23,7 +23,7 @@ pub(super) fn field_w(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str,
 }
 
 /// The label cell of a grid row.
-fn row_label(ui: &mut egui::Ui, label: &str) {
+pub(super) fn row_label(ui: &mut egui::Ui, label: &str) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(tl!(label)).color(t.text_dim));
 }
@@ -56,7 +56,6 @@ fn lengths(kind: &str) -> &'static [&'static str] {
         "lineSegment" => &["length"],
         "offsetPath" => &["offset"],
         "simplify" => &["tolerance"],
-        "splitIntoGrid" => &["gutter"],
         _ => &[],
     }
 }
@@ -76,7 +75,6 @@ fn suffix(kind: &str, key: &str) -> Option<&'static str> {
 fn order(kind: &str) -> &'static [&'static str] {
     match kind {
         "offsetPath" => &["offset", "joins", "miterLimit"],
-        "splitIntoGrid" => &["rows", "columns", "gutter"],
         "rectangularGrid" => &["width", "height", "rows", "rowSkew", "columns", "columnSkew"],
         "polarGrid" => &["width", "height", "concentric", "concentricSkew", "radial", "radialSkew"],
         "artboardOptions" => &["name", "width", "height"],
@@ -431,7 +429,7 @@ pub(super) fn humanize(k: &str) -> String {
 }
 
 /// [`humanize`] translated where it is painted: the ":" stays outside the translated text.
-fn humanized(k: &str) -> String {
+pub(super) fn humanized(k: &str) -> String {
     let h = humanize(k);
     match h.strip_suffix(':') {
         Some(base) => format!("{}:", tl!(base)),

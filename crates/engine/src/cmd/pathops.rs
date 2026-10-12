@@ -149,7 +149,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Split Into Grid…",
             ["Object", "Path"],
             None,
-            "{rows?: 2, columns?: 2, gutter?: pt (12)} → {ids}",
+            "{rows?: 2, columns?: 2, gutter?: pt (12; rowGutter?, columnGutter?: one of the two), totalHeight?, totalWidth?: pt (the grid's size; the selected paths' when left out), height?, width?: pt (each row's and column's size, which then sets the total), addGuides?: false (ruler guides along the row and column edges)} one grid of rectangles over the selected paths replaces them, painted as the topmost one → {ids, guides: count}",
             has_selection,
             split_into_grid
         ),
@@ -717,40 +717,65 @@ fn add_anchor_points(s: &mut Session, _: &Value) -> Result<Value> {
 
 // ---------- Split Into Grid ----------
 
+/// One direction of the grid: the (gutter, total size) of `n` rows or columns. A `size` for each
+/// makes the total; otherwise it is `total`, or `extent` (the selection's) when neither is given.
+fn grid_axis(p: &Value, n: f64, [size, gutter, total]: [&str; 3], extent: f64) -> (f64, f64) {
+    let gutter = len_param(p, gutter).or_else(|| len_param(p, "gutter")).unwrap_or(12.0).max(0.0);
+    let total = match len_param(p, size) {
+        Some(size) => n * size + (n - 1.0) * gutter,
+        None => len_param(p, total).unwrap_or(extent),
+    };
+    (gutter, total)
+}
+
 fn split_into_grid(s: &mut Session, p: &Value) -> Result<Value> {
     let rows = num_param(p, "rows").unwrap_or(2.0).round();
     let cols = num_param(p, "columns").unwrap_or(2.0).round();
     if !(1.0..=500.0).contains(&rows) || !(1.0..=500.0).contains(&cols) {
         return Err(bad("object.path.splitIntoGrid", "rows and columns must be 1..500"));
     }
-    let gutter = len_param(p, "gutter").unwrap_or(12.0).max(0.0);
+    let too_small = || EngineError::Other("Split Into Grid: select paths large enough for the grid".into());
+    // The selected paths, back to front: one grid over them all replaces them, where the topmost
+    // one was and painted as it is.
+    let d = &s.doc()?.doc;
     let roots = selected_roots(s)?;
+    let paths: Vec<&Node> =
+        roots.iter().filter_map(|id| d.node(*id)).filter(|n| matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })).collect();
+    let Some((top, below)) = paths.split_last().map(|(top, below)| (Node::clone(top), below.iter().map(|n| n.id).collect::<Vec<_>>())) else {
+        return Err(too_small());
+    };
+    let Some(b) = paths.iter().filter_map(|n| n.geometric_bounds()).reduce(|a, b| a.union(b)) else { return Err(too_small()) };
+    let (row_gutter, height) = grid_axis(p, rows, ["height", "rowGutter", "totalHeight"], b.height());
+    let (col_gutter, width) = grid_axis(p, cols, ["width", "columnGutter", "totalWidth"], b.width());
+    let (rows, cols) = (rows as usize, cols as usize);
+    let cells = po::split_into_grid(vectorcraft_geom::Rect::new(b.x0, b.y0, b.x0 + width, b.y0 + height), rows, cols, (row_gutter, col_gutter));
+    if cells.is_empty() {
+        return Err(too_small());
+    }
+    let mut edges: Vec<(bool, f64)> = Vec::new();
+    if bool_or(p, "addGuides", false) {
+        // Row-major cells: the first row has the column edges, each row's first cell the row edges.
+        let bounds = cells.iter().filter_map(PathData::bounds);
+        edges.extend(bounds.clone().take(cols).flat_map(|c| [(true, c.x0), (true, c.x1)]));
+        edges.extend(bounds.step_by(cols).flat_map(|c| [(false, c.y0), (false, c.y1)]));
+        // Without a gutter, neighbours share an edge.
+        edges.dedup_by(|a, b| a.0 == b.0 && (a.1 - b.1).abs() < 1e-9);
+    }
     let ids = s.edit("Split Into Grid", |d, sel| {
-        let mut out = vec![];
-        for id in &roots {
-            let Some(n) = d.node(*id).cloned() else { continue };
-            if !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
-                continue;
-            }
-            let Some(b) = n.geometric_bounds() else { continue };
-            let cells = po::split_into_grid(b, rows as usize, cols as usize, gutter);
-            if cells.is_empty() {
-                continue;
-            }
-            let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
-            d.remove(*id)?;
-            for (k, c) in cells.into_iter().enumerate() {
-                let node = shape_node(d, c, Some(&n));
-                out.push(d.insert(par, idx + k, node)?);
-            }
+        d.remove_many(&below)?;
+        let (par, idx, _) = d.position(top.id).ok_or(EngineError::NoNode(top.id))?;
+        let layer = d.layer_containing(top.id);
+        d.remove(top.id)?;
+        let mut out = Vec::with_capacity(cells.len());
+        for (k, c) in cells.into_iter().enumerate() {
+            let node = shape_node(d, c, Some(&top));
+            out.push(d.insert(par, idx + k, node)?);
         }
-        if out.is_empty() {
-            return Err(EngineError::Other("Split Into Grid: select paths large enough for the grid".into()));
-        }
+        d.guides.extend(edges.iter().map(|&(vertical, pos)| vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) }));
         sel.set(out.iter().copied());
         Ok(out)
     })?;
-    Ok(ids_json(&ids))
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "guides": edges.len() }))
 }
 
 // ---------- Clean Up ----------
