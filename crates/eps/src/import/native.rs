@@ -475,6 +475,7 @@ fn plan(
     let mut content: Vec<Content> = infos.iter().map(|_| Content::Empty).collect();
     // Where the made type that doesn't show lies, by slot.
     let mut hidden_at: Vec<(usize, Rect)> = vec![];
+    let mut taller = 0;
     if let Some(t) = template {
         for (k, info) in infos.iter().enumerate() {
             let Some(Some(story)) = stories.get(k) else { continue };
@@ -499,10 +500,20 @@ fn plan(
             if let (false, Some(r)) = (info.shown, region) {
                 hidden_at.push((k, r));
             }
+            if let NodeKind::Text(text) = &mut node.kind
+                && story.fit_first_line(text)
+            {
+                taller += 1;
+            }
             if let Some(c) = content.get_mut(k) {
                 *c = Content::Made(Box::new(node), region.filter(|_| info.shown), false, vec![]);
             }
         }
+    }
+    if taller > 0 {
+        warn.push(format!(
+            "area type in frames too short for a line of the font it shows in got taller frames ({taller}): their type wouldn't show otherwise"
+        ));
     }
     // The file's text document is trusted where it agrees with the page about something (its lines
     // start where the page's type does, or the page has type where it lays type out), or where the
