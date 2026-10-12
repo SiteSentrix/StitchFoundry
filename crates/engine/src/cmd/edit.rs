@@ -384,9 +384,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return ok();
     }
     s.edit("Clear", |d, sel| {
-        for id in &ids {
-            d.remove(*id)?;
-        }
+        d.remove_many(&ids)?;
         if with_guides {
             let gone = sel.guides.clone();
             d.retain_guides(sel, |i, _| !gone.contains(&i));
@@ -560,16 +558,35 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
-/// Duplicate `roots` directly above each original, transform the copies, select them.
+/// Duplicate `roots` directly above each original, transform the copies, select them. The copies
+/// take new ids in the order of `roots`. Roots listed twice, or inside another root, are copied one
+/// at a time: each copy is made from the document as the copies before it left it.
 pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selection, roots: &[NodeId], xf: Affine) -> Result<Vec<NodeId>> {
-    let mut out = vec![];
-    for id in roots {
-        let Some((par, idx, _)) = d.position(*id) else { continue };
-        let Some(n) = d.node(*id).cloned() else { continue };
-        let mut c = d.reid(&n);
-        c.transform(xf, true);
-        out.push(d.insert(par, idx + 1, c)?);
-    }
+    let paths = d.index_paths(roots.iter().copied());
+    let mut found: Vec<_> = roots.iter().filter_map(|id| paths.get(id)).collect();
+    found.sort_unstable();
+    let out = if found.windows(2).all(|w| !w[1].starts_with(w[0])) {
+        let mut copies = Vec::with_capacity(roots.len());
+        for id in roots {
+            let Some(n) = paths.get(id).and_then(|p| d.node_at(p)).cloned() else { continue };
+            let mut c = d.reid(&n);
+            c.transform(xf, true);
+            copies.push((*id, vec![c]));
+        }
+        let out: Vec<NodeId> = copies.iter().flat_map(|(_, c)| c.iter().map(|n| n.id)).collect();
+        d.insert_beside(copies, false)?;
+        out
+    } else {
+        let mut out = vec![];
+        for id in roots {
+            let Some((par, idx, _)) = d.position(*id) else { continue };
+            let Some(n) = d.node(*id).cloned() else { continue };
+            let mut c = d.reid(&n);
+            c.transform(xf, true);
+            out.push(d.insert(par, idx + 1, c)?);
+        }
+        out
+    };
     sel.set(out.iter().copied());
     Ok(out)
 }
