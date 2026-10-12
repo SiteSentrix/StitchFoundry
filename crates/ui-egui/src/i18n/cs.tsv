@@ -4696,3 +4696,6 @@ machine	Stop	Zastavení
 	Load this lettering's font to change it:	Načtěte písmo tohoto nápisu, abyste jej mohli změnit:
 	Arch	Oblouk nahoře
 	Valley	Oblouk dole
+	Forget Font	Zapomenout písmo
+	Unload the font and stop loading its folder	Uvolnit písmo a přestat načítat jeho složku
+	Forget Embroidery Font	Zapomenout vyšívací písmo

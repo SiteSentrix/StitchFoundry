@@ -4665,3 +4665,6 @@ machine	Stop	停止
 	Load this lettering's font to change it:	この文字を変更するにはフォントを読み込んでください：
 	Arch	上向きの円弧
 	Valley	下向きの円弧
+	Forget Font	フォントを削除
+	Unload the font and stop loading its folder	フォントを解放し、そのフォルダーを今後読み込まない
+	Forget Embroidery Font	刺繍フォントを削除

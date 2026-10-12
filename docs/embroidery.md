@@ -591,7 +591,9 @@ set text with them (`embroidery.lettering {text, font, size, at}`): each glyph's
 its settings say, placed with the font's advances and kerning, lines its leading apart, ligatures
 first, in the font's letter case, characters it lacks shown as its default glyph. `size` is the
 capitals' height in mm; outside the sizes the font says it sews well at, the lettering comes with
-a warning. Fonts stay loaded until StitchFoundry quits; the lettering itself is stitched art, a
+a warning. Font folders loaded are remembered: later sessions load them again the first time
+lettering needs a font (*Forget Font* in the panel, or `embroidery.font.forget {name}`, unloads one
+and forgets its folder; a folder that has gone is skipped with a warning). The lettering itself is stitched art, a
 group per glyph, saved with the design. The lettering's group remembers what it says, in what font,
 how big and where: `embroidery.lettering.edit {text?, font?, size?, leading?}` sets it again where
 it is now, moved, turned and scaled as it is (scaling it changes its size), as long as its font is

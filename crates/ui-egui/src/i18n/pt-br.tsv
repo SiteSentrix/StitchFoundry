@@ -3938,3 +3938,6 @@ machine	Trim	Corte de linha
 	Load this lettering's font to change it:	Carregue a fonte deste letreiro para alterá-lo:
 	Arch	Arco superior
 	Valley	Arco inferior
+	Forget Font	Esquecer fonte
+	Unload the font and stop loading its folder	Descarregar a fonte e parar de carregar sua pasta
+	Forget Embroidery Font	Esquecer fonte de bordado

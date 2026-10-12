@@ -510,6 +510,8 @@ fn structured_junk() {
         ("embroidery.lettering.edit", json!({"text": "AAAA", "size": 500, "leading": 5, "font": "x"})),
         ("embroidery.lettering.edit", json!({"ids": [u64::MAX], "size": "x"})),
         ("embroidery.lettering.edit", json!({"arc": -1, "align": "right"})),
+        ("embroidery.font.forget", json!({"name": ""})),
+        ("embroidery.font.forget", json!({"name": "Nope"})),
         ("embroidery.lettering", json!({"text": "A\nB\nC", "font": "x", "arc": 1, "leading": 5, "align": "centre"})),
         ("embroidery.knife", json!({"overlap": 3})),
         ("embroidery.knife", json!({"overlap": -1, "ids": [u64::MAX]})),

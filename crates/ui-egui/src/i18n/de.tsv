@@ -4625,3 +4625,6 @@ machine	Stop	Stopp
 	Load this lettering's font to change it:	Laden Sie die Stickschrift dieser Schrift, um sie zu ändern:
 	Arch	Bogen oben
 	Valley	Bogen unten
+	Forget Font	Schrift vergessen
+	Unload the font and stop loading its folder	Die Schrift entladen und ihren Ordner nicht mehr laden
+	Forget Embroidery Font	Stickschrift vergessen

@@ -647,6 +647,11 @@ pub struct Prefs {
     /// library, not a Preferences dialog field: resetting the preferences keeps it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub embroidery_motifs: Vec<sf_core::model::CustomMotif>,
+    /// The embroidery font folders loaded (`embroidery.font.load`), loaded again in later
+    /// sessions the first time lettering needs a font. A local library, not a Preferences dialog
+    /// field: resetting the preferences keeps it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub embroidery_font_dirs: Vec<String>,
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/StitchFoundry Templates`).
     pub templates_folder: String,
@@ -825,6 +830,7 @@ impl Default for Prefs {
             pdf_presets: vec![],
             embroidery_machines: vec![],
             embroidery_motifs: vec![],
+            embroidery_font_dirs: vec![],
             templates_folder: String::new(),
             append_converted: true,
             use_compression: false,
@@ -941,6 +947,8 @@ pub struct Session {
     pub link_scan: Option<link_watch::LinkScan>,
     /// The embroidery fonts loaded for lettering (`embroidery.font.load`); not saved.
     pub embroidery_fonts: Vec<Arc<vectorcraft_embroidery::fonts::EmbFont>>,
+    /// Whether the font folders remembered from earlier sessions have been loaded.
+    pub embroidery_fonts_ready: bool,
 }
 
 impl Default for Session {
@@ -999,6 +1007,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             embroidery_fonts: Vec::new(),
+            embroidery_fonts_ready: false,
         }
     }
 

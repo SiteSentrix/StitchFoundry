@@ -186,6 +186,13 @@ fn selected_lettering(app: &VectorcraftApp) -> Option<(u64, Lettering)> {
 
 /// The Embroidery Lettering section's rows: new lettering, or the selected lettering to change.
 pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    // the font folders remembered from earlier sessions, loaded the first time
+    if !std::mem::replace(&mut app.embroidery.fonts_listed, true)
+        && let Ok(r) = app.run("embroidery.fonts", json!({}))
+        && let Some(w) = r["warnings"].as_array().and_then(|w| w.first()).and_then(Value::as_str)
+    {
+        app.status(w);
+    }
     // a lettering selected: what it says fills the rows
     let selected = selected_lettering(app);
     match &selected {
@@ -241,6 +248,10 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.embroidery.lettering_font = name.to_string();
     }
     let Some((name, lo, hi, own)) = fonts.get(cur).cloned() else { return };
+    if button(ui, tl!("Forget Font")).on_hover_text(tl!("Unload the font and stop loading its folder")).clicked() {
+        app.run("embroidery.font.forget", json!({ "name": name })).ok();
+        return;
+    }
     ui.add(egui::TextEdit::multiline(&mut app.embroidery.lettering_text).desired_rows(2).hint_text(tl!("Text")));
     let size = if app.embroidery.lettering_size > 0.0 { app.embroidery.lettering_size } else { own.max(1.0) };
     if let Some(v) = num(ui, tl!("Size"), "let-size", size, " mm", 1) {

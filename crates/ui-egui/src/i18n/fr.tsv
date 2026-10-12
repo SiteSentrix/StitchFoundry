@@ -4679,3 +4679,6 @@ machine	Stop	Arrêt
 	Load this lettering's font to change it:	Chargez la police de ce lettrage pour le modifier :
 	Arch	Arc en haut
 	Valley	Arc en bas
+	Forget Font	Oublier la police
+	Unload the font and stop loading its folder	Décharger la police et ne plus charger son dossier
+	Forget Embroidery Font	Oublier la police de broderie
