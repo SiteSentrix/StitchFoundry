@@ -76,3 +76,12 @@ fn soft_mask_groups_keep_screen_luminance() {
     // The page's group blends in CMYK; the mask's group measures luminance in RGB.
     assert!(t.contains("/CS/DeviceCMYK") && t.contains("/S/Luminosity") && t.contains("/CS/DeviceRGB"), "{t}");
 }
+
+#[test]
+fn constant_alpha_masks_are_white() {
+    // #1286: a black cover hides the whole page in readers that take the mask's luminosity.
+    for grouped in [true, false] {
+        let t = text(&doc(ColorMode::Cmyk, grouped));
+        assert!(t.contains("/S/Alpha") && t.contains("111rg") && !t.contains("000rg"), "grouped {grouped}: {t}");
+    }
+}

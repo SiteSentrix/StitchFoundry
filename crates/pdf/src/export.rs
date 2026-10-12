@@ -605,10 +605,11 @@ fn cover(s: &mut Surface, page: Rect, level: u8, opacity: f32) {
 
 /// An alpha mask of constant `alpha` over the page. A group drawn through it is a transparency
 /// group of that opacity that, unlike the writer's opacity groups, is not isolated.
+/// The cover is white, so a reader that takes every soft mask as a luminosity mask shows the same.
 fn constant_mask(s: &mut Surface, page: Rect, alpha: f32) -> krilla::mask::Mask {
     let mut sb = s.stream_builder();
     let mut ms = sb.surface();
-    cover(&mut ms, page, 0, alpha);
+    cover(&mut ms, page, 255, alpha);
     ms.finish();
     krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Alpha)
 }
