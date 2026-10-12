@@ -178,6 +178,9 @@ pub struct DesignSettings {
     pub trim_seconds: f64,
     /// Seconds per colour change, for time estimates.
     pub color_change_seconds: f64,
+    /// A basting run sewn before everything else (none: not sewn).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub basting: Option<Basting>,
 }
 
 impl Default for DesignSettings {
@@ -194,8 +197,82 @@ impl Default for DesignSettings {
             machine_speed: 800.0,
             trim_seconds: 6.0,
             color_change_seconds: 20.0,
+            basting: None,
         }
     }
+}
+
+/// A basting run: long running stitches sewn first, in the first thread and without ties, to
+/// hold the fabric to the stabiliser; picked out after. It goes round the design `margin` out
+/// from it, or round the hoop's field `margin` in from its edge (the hoop centred on the design).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Basting {
+    /// Round the hoop rather than the design (the design when there is no hoop).
+    pub hoop: bool,
+    /// mm out from the design, or in from the hoop's edge.
+    pub margin: f64,
+    /// Stitch length (mm).
+    pub length: f64,
+}
+
+impl Default for Basting {
+    fn default() -> Self {
+        Basting { hoop: false, margin: 5.0, length: 6.0 }
+    }
+}
+
+impl Basting {
+    /// The run round a design whose outlines span `bbox` (mm): its needle points, closed (the
+    /// last on the first). None when there is nothing to go round or the hoop leaves no room.
+    pub fn stitches(&self, bbox: BBox, hoop: Option<&Hoop>) -> Option<Vec<Stitch>> {
+        if bbox.is_empty() || ![self.margin, self.length].iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        let c = Point::new((bbox.min.x + bbox.max.x) / 2.0, (bbox.min.y + bbox.max.y) / 2.0);
+        let ring: Vec<Point> = match hoop.filter(|_| self.hoop) {
+            Some(h) => {
+                let (hw, hh) = (h.width / 2.0 - self.margin, h.height / 2.0 - self.margin);
+                if !(hw > 1.0 && hh > 1.0) {
+                    return None;
+                }
+                match h.shape {
+                    crate::hoops::HoopShape::Rect => corners(c, hw, hh),
+                    crate::hoops::HoopShape::Oval => (0..=48)
+                        .map(|k| {
+                            let a = std::f64::consts::TAU * f64::from(k) / 48.0;
+                            Point::new(c.x + hw * a.cos(), c.y + hh * a.sin())
+                        })
+                        .collect(),
+                }
+            }
+            None => corners(c, bbox.width() / 2.0 + self.margin.max(0.0), bbox.height() / 2.0 + self.margin.max(0.0)),
+        };
+        let step = self.length.clamp(1.0, 12.0);
+        let mut out = Vec::new();
+        for w in ring.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            if out.is_empty() {
+                out.push(Stitch::at(a, crate::pattern::Cmd::Stitch));
+            }
+            let n = (a.distance(b) / step).ceil().clamp(1.0, 10_000.0) as usize;
+            for k in 1..=n {
+                out.push(Stitch::at(a.lerp(b, k as f64 / n as f64), crate::pattern::Cmd::Stitch));
+            }
+        }
+        (out.len() > 1).then_some(out)
+    }
+}
+
+/// A rectangle's corners round `c`, closed.
+fn corners(c: Point, hw: f64, hh: f64) -> Vec<Point> {
+    vec![
+        Point::new(c.x - hw, c.y - hh),
+        Point::new(c.x + hw, c.y - hh),
+        Point::new(c.x + hw, c.y + hh),
+        Point::new(c.x - hw, c.y + hh),
+        Point::new(c.x - hw, c.y - hh),
+    ]
 }
 
 /// How tie-ins and tie-offs lock the thread: small stitches sewn in place where a
