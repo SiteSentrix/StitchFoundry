@@ -53,7 +53,7 @@ pub struct Revolve {
     pub rotation_x: f64,
     pub rotation_y: f64,
     pub rotation_z: f64,
-    /// Perspective strength, 0 for orthographic projection, up to 1.
+    /// Perspective, 0° (none) to 160°: see [`eye_distance`].
     pub perspective: f64,
     /// Radial subdivisions for a full turn, clamped to 8..128.
     pub segments: usize,
@@ -82,6 +82,33 @@ impl Default for Revolve {
             shade: true,
         }
     }
+}
+
+/// The widest documented Perspective.
+pub const MAX_PERSPECTIVE: f64 = 160.0;
+
+/// How far the eye is from the centre of an object of half size `size`, for a Perspective of
+/// `angle` degrees: from where a sphere of √3 × `size` about the centre (the box around the object
+/// fits inside it) fills that angle of the view. 0° is no perspective (`None`, the eye infinitely
+/// far); at 160° the eye is just outside the sphere, so never inside the object.
+fn eye_distance(angle: f64, size: f64) -> Option<f64> {
+    let angle = finite(angle, 0.0, 0.0, MAX_PERSPECTIVE);
+    (angle > 0.0).then(|| 3f64.sqrt() * size / (angle / 2.0).to_radians().sin())
+}
+
+/// The scale of a view-space point `z` in front of the object's centre plane, for an eye at
+/// `eye`: 1 without perspective. Parts reaching past the eye's sphere (a wide outward bevel at a
+/// wide angle) are held just in front of the eye rather than turned inside out.
+fn perspective_scale(eye: Option<f64>, z: f64) -> f64 {
+    eye.map_or(1.0, |e| e / (e - z).max(e * 1e-3))
+}
+
+/// The Perspective angle that shows exactly what the earlier 0–1 perspective strength did (files
+/// from before the angle). The strength put the eye at 4 × the object's half size / strength, so
+/// sin(angle / 2) = √3 × strength / 4: full strength is about 51°.
+pub fn perspective_from_strength(strength: f64) -> f64 {
+    let s = finite(strength, 0.0, 0.0, 1.0);
+    2.0 * (3f64.sqrt() * s / 4.0).asin().to_degrees()
 }
 
 fn finite(v: f64, fallback: f64, min: f64, max: f64) -> f64 {
@@ -127,10 +154,10 @@ impl Revolve {
         };
         let center_y = bounds.center().y;
         let radius = (bounds.x0 - axis).abs().max((bounds.x1 - axis).abs());
-        let distance = 4.0 * radius.max(bounds.height().abs()).max(1.0);
+        let eye = eye_distance(o.perspective, radius.max(bounds.height().abs()).max(1.0));
         [bounds.y0, bounds.y1].map(|y| {
             let v = o.rotate(V3(0.0, y - center_y, 0.0));
-            let factor = distance / (distance - v.2 * o.perspective);
+            let factor = perspective_scale(eye, v.2);
             Point::new(axis + v.0 * factor, center_y + v.1 * factor)
         })
     }
@@ -180,7 +207,7 @@ impl Revolve {
             rotation_x: finite(self.rotation_x, 0.0, -360.0, 360.0),
             rotation_y: finite(self.rotation_y, 0.0, -360.0, 360.0),
             rotation_z: finite(self.rotation_z, 0.0, -360.0, 360.0),
-            perspective: finite(self.perspective, 0.0, 0.0, 1.0),
+            perspective: finite(self.perspective, 0.0, 0.0, MAX_PERSPECTIVE),
             segments: self.segments.clamp(8, 128),
             light_azimuth: finite(self.light_azimuth, -45.0, -360.0, 360.0),
             light_elevation: finite(self.light_elevation, 45.0, -90.0, 90.0),
@@ -234,7 +261,7 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
     };
     let center_y = (bounds.y0 + bounds.y1) * 0.5;
     let radius = (bounds.x0 - axis).abs().max((bounds.x1 - axis).abs());
-    let distance = 4.0 * radius.max(bounds.height().abs()).max(1.0);
+    let eye = eye_distance(o.perspective, radius.max(bounds.height().abs()).max(1.0));
     let steps = ((o.segments as f64 * o.angle / 360.0).ceil() as usize).max(1);
     let sweep = o.angle.to_radians();
     let [lx, ly, lz] = o.light_direction();
@@ -293,7 +320,7 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
                 let points: Vec<_> = vertices
                     .iter()
                     .map(|v| {
-                        let factor = distance / (distance - v.2 * o.perspective);
+                        let factor = perspective_scale(eye, v.2);
                         Point::new(axis + v.0 * factor, center_y + v.1 * factor)
                     })
                     .collect();
@@ -405,11 +432,43 @@ mod tests {
         for o in [
             Revolve { edge: Edge::Right, offset: 20.0, ..Default::default() },
             Revolve { angle: 120.0, ..Default::default() },
-            Revolve { rotation_z: 60.0, perspective: 0.8, ..Default::default() },
+            Revolve { rotation_z: 60.0, perspective: 40.0, ..Default::default() },
         ] {
             assert_ne!(base, revolve(&p, b, o).unwrap());
         }
         assert!(revolve(&p, b, Revolve { angle: 0.0, ..Default::default() }).unwrap().is_empty());
+    }
+    /// The angle that stands for an earlier perspective strength puts the eye where that strength
+    /// did (4 × the half size / strength), so files from before the angle look as they did.
+    #[test]
+    fn the_angle_for_an_earlier_strength_puts_the_eye_where_it_was() {
+        for strength in [0.05, 0.3, 0.6, 1.0] {
+            for size in [1.0, 37.5, 900.0] {
+                let eye = eye_distance(perspective_from_strength(strength), size).unwrap();
+                assert!((eye - 4.0 * size / strength).abs() < 1e-9 * eye, "{strength} {size}: {eye}");
+            }
+        }
+        assert_eq!(perspective_from_strength(0.0), 0.0);
+        assert!((perspective_from_strength(1.0) - 51.318).abs() < 1e-3, "{}", perspective_from_strength(1.0));
+    }
+
+    /// 0° to 160°: none at 0°, beyond either end held there, and at 160° the eye is still outside
+    /// the sphere the object's box fits in.
+    #[test]
+    fn perspective_runs_0_to_160_degrees_with_the_eye_outside_the_object() {
+        assert_eq!(eye_distance(0.0, 50.0), None);
+        assert_eq!(eye_distance(-20.0, 50.0), None);
+        assert_eq!(eye_distance(f64::NAN, 50.0), None);
+        assert_eq!(eye_distance(500.0, 50.0), eye_distance(160.0, 50.0));
+        let widest = eye_distance(160.0, 50.0).unwrap();
+        assert!(widest > 3f64.sqrt() * 50.0 && widest < 1.02 * 3f64.sqrt() * 50.0, "{widest}");
+        // Wider is closer.
+        let eyes: Vec<f64> = [10.0, 45.0, 90.0, 160.0].iter().map(|a| eye_distance(*a, 50.0).unwrap()).collect();
+        assert!(eyes.windows(2).all(|w| w[0] > w[1]), "{eyes:?}");
+        let (p, b) = cylinder();
+        let wide = revolve(&p, b, Revolve { rotation_x: -30.0, perspective: 160.0, ..Default::default() }).unwrap();
+        assert!(wide.iter().flat_map(|f| &f.points).all(|q| q.x.is_finite() && q.y.is_finite()));
+        assert_eq!(wide, revolve(&p, b, Revolve { rotation_x: -30.0, perspective: 400.0, ..Default::default() }).unwrap());
     }
     #[test]
     fn malformed_and_degenerate_inputs_are_bounded() {

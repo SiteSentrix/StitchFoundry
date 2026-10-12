@@ -61,7 +61,7 @@ pub fn view_options(p: &Value) -> View {
         rotation_x: num(p, "rotationX", ROTATION_PRESETS[6].1[0]),
         rotation_y: num(p, "rotationY", ROTATION_PRESETS[6].1[1]),
         rotation_z: num(p, "rotationZ", ROTATION_PRESETS[6].1[2]),
-        perspective: num(p, "perspective", 0.0) / 100.0,
+        perspective: num(p, "perspectiveAngle", 0.0),
         light_azimuth: num(p, "lightAzimuth", -45.0),
         light_elevation: num(p, "lightElevation", 45.0),
         light_intensity: num(p, "lightIntensity", 80.0) / 100.0,

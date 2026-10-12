@@ -95,7 +95,7 @@ fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     for (key, name) in [("rotationX", tl!("Rotation X")), ("rotationY", tl!("Rotation Y")), ("rotationZ", tl!("Rotation Z"))] {
         number(ui, d, key, name, (-360.0, 360.0), "°", 1, None);
     }
-    number(ui, d, "perspective", tl!("Perspective"), (0.0, 100.0), "%", 1, None);
+    number(ui, d, "perspectiveAngle", tl!("Perspective"), (0.0, 160.0), "°", 1, None);
     ui.add_space(6.0);
     egui::CollapsingHeader::new(tl!("Advanced")).id_salt("revolve-advanced").show(ui, |ui| {
         number(ui, d, "segments", tl!("Segments"), (8.0, 128.0), "", 0, None);
@@ -231,7 +231,7 @@ fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     for (key, name) in [("rotationX", tl!("Rotation X")), ("rotationY", tl!("Rotation Y")), ("rotationZ", tl!("Rotation Z"))] {
         number(ui, d, key, name, (-180.0, 180.0), "°", 2, None);
     }
-    number(ui, d, "perspective", tl!("Perspective"), (0.0, 100.0), "%", 1, None);
+    number(ui, d, "perspectiveAngle", tl!("Perspective"), (0.0, 160.0), "°", 1, None);
 }
 
 /// A dropdown of `options` (value, label) for `key`, with its reset dot.

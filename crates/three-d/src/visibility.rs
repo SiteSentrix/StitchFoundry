@@ -290,7 +290,7 @@ mod tests {
                     rotation_x: -32.0,
                     rotation_y: 24.0,
                     rotation_z: 19.0,
-                    perspective: 0.7,
+                    perspective: crate::perspective_from_strength(0.7),
                     ..Default::default()
                 };
                 let faces = revolve(&path, path.bounds().unwrap(), options).unwrap();

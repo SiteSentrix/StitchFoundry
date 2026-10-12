@@ -200,29 +200,29 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             REVOLVE,
             "Revolve…",
             &["Effect", "3D and Materials"],
-            "{angle: degrees (0..360, 360), offset: pt (0..100000, 0), edge: left|right, rotationX: degrees (0), rotationY: degrees (0), rotationZ: degrees (0), perspective: % (0..100, 0), segments: integer (8..128, 64), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25), expandVisibleOnly: bool (true, trim covered opaque solid surfaces only on Expand Appearance)}. Open paths create uncapped surfaces; intersecting profiles use approximate painter visibility.",
-            json!({"angle":360.0,"offset":0.0,"edge":"left","rotationX":0.0,"rotationY":0.0,"rotationZ":0.0,"perspective":0.0,"segments":64,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0,"expandVisibleOnly":true}),
+            "{angle: degrees (0..360, 360), offset: pt (0..100000, 0), edge: left|right, rotationX: degrees (0), rotationY: degrees (0), rotationZ: degrees (0), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), segments: integer (8..128, 64), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25), expandVisibleOnly: bool (true, trim covered opaque solid surfaces only on Expand Appearance)}. Open paths create uncapped surfaces; intersecting profiles use approximate painter visibility.",
+            json!({"angle":360.0,"offset":0.0,"edge":"left","rotationX":0.0,"rotationY":0.0,"rotationZ":0.0,"perspectiveAngle":0.0,"segments":64,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0,"expandVisibleOnly":true}),
         ),
         g(
             EXTRUDE,
             "Extrude & Bevel…",
             &["Effect", "3D and Materials"],
-            "{depth: pt (0..2000, 50), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none), bevelWidth: pt (0..1000, 4), bevelHeight: pt (0..1000, 4), bevelRepeat: integer (1..32, 1), bevelSpace: % (0..90, 0; flat between repeats), bevelInside: bool (false: added around the shape; true: carved into it), bevelBothSides: bool (false), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspective: % (0..100, 0), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25)}. The front face is the art, extruded backwards about the centre of its bounds; painted with the top fill (else the top stroke).",
-            json!({"depth":50.0,"twist":0.0,"taper":100.0,"cap":true,"bevel":"none","bevelWidth":4.0,"bevelHeight":4.0,"bevelRepeat":1,"bevelSpace":0.0,"bevelInside":false,"bevelBothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspective":0.0,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0}),
+            "{depth: pt (0..2000, 50), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none), bevelWidth: pt (0..1000, 4), bevelHeight: pt (0..1000, 4), bevelRepeat: integer (1..32, 1), bevelSpace: % (0..90, 0; flat between repeats), bevelInside: bool (false: added around the shape; true: carved into it), bevelBothSides: bool (false), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25)}. The front face is the art, extruded backwards about the centre of its bounds; painted with the top fill (else the top stroke).",
+            json!({"depth":50.0,"twist":0.0,"taper":100.0,"cap":true,"bevel":"none","bevelWidth":4.0,"bevelHeight":4.0,"bevelRepeat":1,"bevelSpace":0.0,"bevelInside":false,"bevelBothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0}),
         ),
         g(
             INFLATE,
             "Inflate…",
             &["Effect", "3D and Materials"],
-            "{depth: pt (0..2000, 0; flat depth between front and back), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: no back, a shell open behind), volume: % (0..100, 50; 50 rounds the edge like a half sphere), bothSides: bool (false: flat back), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspective: % (0..100, 0), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25)}. Painted with the top fill (else the top stroke).",
-            json!({"depth":0.0,"twist":0.0,"taper":100.0,"cap":true,"volume":50.0,"bothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspective":0.0,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0}),
+            "{depth: pt (0..2000, 0; flat depth between front and back), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: no back, a shell open behind), volume: % (0..100, 50; 50 rounds the edge like a half sphere), bothSides: bool (false: flat back), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25)}. Painted with the top fill (else the top stroke).",
+            json!({"depth":0.0,"twist":0.0,"taper":100.0,"cap":true,"volume":50.0,"bothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0}),
         ),
         g(
             ROTATE,
             "Rotate…",
             &["Effect", "3D and Materials"],
-            "{rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspective: % (0..100, 0), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25)}. Turns the flat art in 3D about the centre of its bounds; every fill and stroke keeps its paint, shaded as one plane.",
-            json!({"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspective":0.0,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0}),
+            "{rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25)}. Turns the flat art in 3D about the centre of its bounds; every fill and stroke keeps its paint, shaded as one plane.",
+            json!({"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0}),
         ),
         g(
             "convertToShape.rectangle",
@@ -642,19 +642,45 @@ pub fn default_params(id: &str) -> Option<Value> {
     }
 }
 
-/// `params` layered over the defaults of `id` (unknown keys are kept).
+/// `params` layered over the defaults of `id` (unknown keys are kept), with the 3D effects'
+/// earlier `perspective` read as `perspectiveAngle` (see [`upgrade_params`]).
 pub fn merged_params(id: &str, params: &Value) -> Value {
     let mut out = match catalog_index().get(id).map(|e| &e.defaults) {
         Some(Value::Object(m)) => m.clone(),
         Some(_) => Map::new(),
         None => vectorcraft_plugins::effect::installed(id).map(|p| p.manifest().defaults()).unwrap_or_default(),
     };
-    if let Value::Object(p) = params {
-        for (k, v) in p {
-            out.insert(k.clone(), v.clone());
-        }
+    // Upgraded before the defaults are under it: a default angle is no angle given.
+    if let Value::Object(p) = upgrade_params(id, params) {
+        out.extend(p);
     }
     Value::Object(out)
+}
+
+/// `params` for effect `id` in their current form: the 3D effects took Perspective as a 0–100 %
+/// strength, `perspective`, before the documented 0°–160° angle, `perspectiveAngle`. A strength
+/// (from a file or a script of then) becomes the angle that shows exactly the same view, unless an
+/// angle is given too, which wins.
+pub fn upgrade_params(id: &str, params: &Value) -> Value {
+    match params {
+        Value::Object(m) => {
+            let mut m = m.clone();
+            upgrade_perspective(id, &mut m);
+            Value::Object(m)
+        }
+        other => other.clone(),
+    }
+}
+
+fn upgrade_perspective(id: &str, m: &mut Map<String, Value>) {
+    if !is_three_d(id) {
+        return;
+    }
+    let Some(strength) = m.remove("perspective") else { return };
+    if !m.contains_key("perspectiveAngle") {
+        let angle = vectorcraft_three_d::perspective_from_strength(strength.as_f64().unwrap_or(0.0) / 100.0);
+        m.insert("perspectiveAngle".into(), json!(angle));
+    }
 }
 
 /// A new effect record with default parameters (overridden by `params`).

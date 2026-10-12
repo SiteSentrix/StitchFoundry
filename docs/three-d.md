@@ -8,7 +8,7 @@ Select a path or compound path, then choose **Effect › 3D and Materials › Ex
 **Rotate…**. The options dialog opens beside the artboard with tabs:
 
 - **Object** (Extrude & Bevel and Inflate): the shape's own options, below.
-- **Rotation**: a **Presets** menu, **Rotation X/Y/Z** (−180° to 180°) and **Perspective**. The rotation rings
+- **Rotation**: a **Presets** menu, **Rotation X/Y/Z** (−180° to 180°) and **Perspective** (0° to 160°, below). The rotation rings
   on the artboard turn the object about the centre of its bounds; Shift snaps to 15°.
 - **Lighting**: **Shading**, the light's **Direction** and **Elevation** (or drag the light on the artboard),
   **Intensity** and **Ambient**, as for Revolve.
@@ -66,12 +66,27 @@ of an isometric view (each visible axis foreshortened equally). These are our ow
 each view; the dialog shows a preset's name when the angles match it and **Custom** otherwise. The new effects
 open at Off-Axis Front.
 
+## Perspective
+
+**Perspective** runs 0° to 160°, as the public panel options give it ("how close or far the object appears"),
+for Revolve too. The documentation doesn't say how the angle places the eye; our reading: the eye stands where a
+sphere about the object's centre fills that angle of the view, the sphere's radius √3 times the object's size
+(for Extrude & Bevel, Inflate and Rotate half its largest side, depth included; for Revolve the larger of its
+radius and its height, the sizes the earlier strength used), so the object fits inside it. 0° is no
+perspective; wider angles bring the eye nearer, and at 160° it is just outside that sphere, so never inside the
+object. Default 0°, as before.
+
+Effects saved before the angle (and scripts) give `perspective` as a 0–100 % strength. It is read as the angle
+that shows exactly the same view: the strength put the eye at 4 × that size / strength, so
+sin(angle / 2) = √3 × strength / 4, and 100 % is about 51.3°. An angle given as well wins; the dialog shows and
+saves the angle.
+
 ## Parameters (`effect.apply`, `effect.setParams`)
 
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
 `ogee`), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
 `threeD.inflate`: `depth`, `volume` (%), `bothSides`. All three take the view and lighting parameters Revolve
-uses: `rotationX`, `rotationY`, `rotationZ`, `perspective` (%), `shade`, `lightAzimuth`, `lightElevation`,
+uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shade`, `lightAzimuth`, `lightElevation`,
 `lightIntensity` (%), `ambient` (%). Lengths are points and scale with the object (Scale Strokes & Effects).
 Commands validate the shape and the parameters before the document changes.
 
@@ -85,7 +100,6 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 - **Materials** (base, Adobe Substance and graphics), **several lights**, light colour and softness, **shadows**
   and **ray-traced rendering** are not built: shading is one directional light, flat per face, painted with the
   object's top fill (else its top stroke) for Extrude & Bevel and Inflate.
-- **Perspective** is a 0–100 % strength, as Revolve's, not a 0–160° lens angle.
 - The bevel shapes and their names are our own; custom bevel paths are not supported.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, the rest drawn back to
   front. Concave solids seen at steep angles can overlap wrongly; open (hollow) solids show both sides.

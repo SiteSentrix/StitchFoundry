@@ -29,7 +29,7 @@ pub fn revolve_options(p: &Value) -> Revolve {
         rotation_x: num(p, "rotationX", 0.0),
         rotation_y: num(p, "rotationY", 0.0),
         rotation_z: num(p, "rotationZ", 0.0),
-        perspective: num(p, "perspective", 0.0) / 100.0,
+        perspective: num(p, "perspectiveAngle", 0.0),
         segments: num(p, "segments", 64.0).clamp(8.0, 128.0) as usize,
         light_azimuth: num(p, "lightAzimuth", -45.0),
         light_elevation: num(p, "lightElevation", 45.0),
