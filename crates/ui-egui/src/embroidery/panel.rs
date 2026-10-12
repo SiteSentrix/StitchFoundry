@@ -1332,11 +1332,15 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             if let Some(v) = check(ui, tl!("Stop to trim fabric"), a.trim_stop) {
                 set(app, target, json!({ "trim_stop": v }));
             }
-            let cover = [tl!("None"), tl!("Satin"), tl!("Blanket")];
-            let cur = [CoverKind::None, CoverKind::Satin, CoverKind::Blanket].iter().position(|k| *k == a.cover).unwrap_or(1);
+            let covers = [CoverKind::None, CoverKind::Satin, CoverKind::Blanket, CoverKind::Zigzag, CoverKind::Triple];
+            let cover = [tl!("None"), tl!("Satin"), tl!("Blanket"), tl!("Zigzag"), tl!("Triple run")];
+            let cur = covers.iter().position(|k| *k == a.cover).unwrap_or(1);
             if let Some(i) = pick(ui, tl!("Cover stitch"), "cover", cur, &cover) {
-                let k = [CoverKind::None, CoverKind::Satin, CoverKind::Blanket].get(i).copied().unwrap_or_default();
+                let k = covers.get(i).copied().unwrap_or_default();
                 set(app, target, json!({ "cover": k }));
+            }
+            if let Some(v) = check(ui, tl!("Partial cover"), a.partial) {
+                set(app, target, json!({ "partial": v }));
             }
             if let Some(v) = num(ui, tl!("Cover width"), "cw", a.cover_width, " mm", 2) {
                 set(app, target, json!({ "cover_width": v }));

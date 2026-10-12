@@ -431,6 +431,7 @@ impl Planner {
         }
         self.nodes = fresh;
         cut_underlying(&mut design.objects, &mut node_ids, cuts);
+        cover_partial_applique(&mut design.objects);
         order_branches(&mut design.objects, &mut node_ids);
         design.next_id = design.objects.iter().map(|o| o.id).max().unwrap_or(0) + 1;
         let built = build_cached(&design, &mut self.cache);
@@ -490,6 +491,20 @@ const MIN_PIECE: f64 = 1.0;
 
 /// What objects cover, less `overlap` round the edge: the part the fills sewn before
 /// them leave out when they remove the stitching below them.
+/// Each appliqué with partial cover learns the outlines of what is sewn after it.
+fn cover_partial_applique(objects: &mut [EmbObject]) {
+    for i in 0..objects.len() {
+        let partial = matches!(objects.get(i).map(|o| &o.kind), Some(ObjectKind::Applique(a)) if a.params.partial);
+        if !partial {
+            continue;
+        }
+        let later = cover_of(objects.get(i + 1..).unwrap_or_default(), 0.0);
+        if let Some(ObjectKind::Applique(a)) = objects.get_mut(i).map(|o| &mut o.kind) {
+            a.covered = later.into_iter().map(|p| p.outer).collect();
+        }
+    }
+}
+
 fn cover_of(objects: &[EmbObject], overlap: f64) -> Vec<Polygon> {
     let polys: Vec<Polygon> = objects.iter().flat_map(object_polygons).filter(|p| p.outer.len() >= 3).collect();
     if polys.is_empty() {

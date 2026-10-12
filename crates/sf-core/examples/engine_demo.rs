@@ -69,7 +69,14 @@ fn main() {
         d.add(ObjectKind::Fill(FillObject::new(Shape::ellipse(c, 10.0, 8.0), params)), 5 + i);
     }
     // Appliqué.
-    d.add(ObjectKind::Applique(AppliqueObject { shape: Shape::ellipse(Point::new(-35.0, 45.0), 14.0, 10.0), params: AppliqueParams::default() }), 8);
+    d.add(
+        ObjectKind::Applique(AppliqueObject {
+            shape: Shape::ellipse(Point::new(-35.0, 45.0), 14.0, 10.0),
+            params: AppliqueParams::default(),
+            covered: Vec::new(),
+        }),
+        8,
+    );
     let built = sf_core::engine::build(&d);
     let stats = sf_core::stats::pattern_stats(&built.pattern, &d.settings);
     eprintln!(
