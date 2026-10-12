@@ -352,6 +352,12 @@ bubble lettering, a sticker or patch border. It is `gap` (2 mm)
 from the art, a satin `width` (3 mm) wide, or a single or triple run (`kind: run|triple`), in
 `color` (near black), and is sewn after everything else; it is an ordinary path to change after.
 
+Two more kinds, after Ink/Stitch's knockdown fill (https://inkstitch.org/docs/fill-tools/):
+**knockdown** (`kind: knockdown`) fills that area with light tatami (1.2 mm rows at 45°) sewn
+first, under the design, to press a towel's or fleece's pile flat; **emboss** (`kind: emboss`)
+fills a rectangle or circle (`shape`) reaching `extend` (5 mm) beyond the design with light
+tatami, leaving the design's area out, so the design stands up from a stitched background.
+
 ## Worksheets
 
 **Embroidery › Worksheet** (`embroidery.worksheet {kind?, customer?, notes?}`) makes a worksheet

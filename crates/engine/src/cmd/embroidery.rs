@@ -210,7 +210,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Around",
             ["Embroidery"],
             None,
-            "{ids?, gap?: mm between the art and the outline (2; 0–50), width?: mm (satin 3, 0.5–10), kind?: satin|run|triple (satin), color?: \"#rrggbb\" (#1a1a1a)} bubble lettering, sticker and patch borders: one outline round the selected stitched art as it sews (lettering, shapes, lines), its holes left out, `gap` from it; a new path sewn after everything else, selected → {id, pieces}",
+            "{ids?, gap?: mm between the art and the outline (2; 0–50), width?: mm (satin 3, 0.5–10), kind?: satin|run|triple|knockdown|emboss (satin), shape?: rectangle|circle (emboss; rectangle), extend?: mm the emboss shape reaches beyond (5; 0–200), color?: \"#rrggbb\" (#1a1a1a)} bubble lettering, sticker and patch borders: one outline round the selected stitched art as it sews (lettering, shapes, lines), its holes left out, `gap` from it, sewn after everything else; knockdown: a light tatami fill of that area sewn first, under the art (towels, fleece); emboss: a rectangle or circle round it filled with light tatami but for the art's area, sewn first; a new path, selected → {id, pieces}",
             has_selection,
             outline_around
         ),
@@ -1622,8 +1622,17 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
         "satin" => StitchType::Satin(SatinParams::default()),
         "run" => StitchType::Run(RunParams::default()),
         "triple" => StitchType::Run(RunParams { kind: RunKind::Triple, ..RunParams::default() }),
-        _ => return Err(bad(CMD, "`kind` is satin, run or triple")),
+        // light tatami: knockdown stitches press a towel's or fleece's pile flat under the design
+        "knockdown" | "emboss" => StitchType::Fill(FillParams { spacing: 1.2, angle: 45.0, ..FillParams::default() }),
+        _ => return Err(bad(CMD, "`kind` is satin, run, triple, knockdown or emboss")),
     };
+    let filled = matches!(kind, "knockdown" | "emboss");
+    let circle = match str_param(p, "shape").unwrap_or("rectangle") {
+        "rectangle" => false,
+        "circle" => true,
+        _ => return Err(bad(CMD, "`shape` is rectangle or circle")),
+    };
+    let extend = super::embroidery_lettering::ranged(p, "extend", 0.0..=200.0, CMD, "`extend` is 0 to 200 mm")?.unwrap_or(5.0);
     let color = match str_param(p, "color") {
         Some(c) => Rgb::from_hex(c).ok_or_else(|| bad(CMD, "`color` is #rrggbb"))?,
         None => Rgb::new(0x1a, 0x1a, 0x1a),
@@ -1657,31 +1666,50 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // a satin outline's inner edge `gap` from the art; a run `gap` from it
     let reach = gap + if kind == "satin" { width / 2.0 } else { 0.0 };
+    let to_pt = |q: &sf_core::Point| kurbo::Point::new(q.x * PT_PER_MM, q.y * PT_PER_MM);
     // grown further and back again, so pieces close together (letters) share one outline
     let close = gap.max(1.0);
     let wide = sf_core::geom::poly::offset(&sf_core::geom::poly::union(&polys), reach + close);
     let grown = sf_core::geom::poly::offset(&wide, -close);
-    let subpaths: Vec<vectorcraft_geom::path::SubPath> = grown
+    let mut subpaths: Vec<vectorcraft_geom::path::SubPath> = grown
         .iter()
         .filter(|g| g.outer.len() >= 3)
-        .map(|g| {
-            let pts: Vec<kurbo::Point> = g.outer.iter().map(|q| kurbo::Point::new(q.x * PT_PER_MM, q.y * PT_PER_MM)).collect();
-            vectorcraft_geom::path::SubPath::polyline(&pts, true)
-        })
+        .map(|g| vectorcraft_geom::path::SubPath::polyline(&g.outer.iter().map(to_pt).collect::<Vec<_>>(), true))
         .collect();
     if subpaths.is_empty() {
         return Err(bad(CMD, "the art is too small to outline"));
     }
     let pieces = subpaths.len();
+    // emboss: a rectangle or circle round it all, `extend` beyond, the art's outline left out
+    if kind == "emboss" {
+        let Some(b) = grown.iter().map(sf_core::geom::Polygon::bbox).reduce(sf_core::BBox::union) else {
+            return Err(bad(CMD, "the art is too small to outline"));
+        };
+        let c = sf_core::Point::new((b.min.x + b.max.x) / 2.0, (b.min.y + b.max.y) / 2.0);
+        let ring: Vec<sf_core::Point> = if circle {
+            let r = (b.width().hypot(b.height())) / 2.0 + extend;
+            (0..96).map(|i| f64::from(i) * std::f64::consts::TAU / 96.0).map(|a| sf_core::Point::new(c.x + r * a.cos(), c.y + r * a.sin())).collect()
+        } else {
+            let (x0, y0, x1, y1) = (b.min.x - extend, b.min.y - extend, b.max.x + extend, b.max.y + extend);
+            vec![sf_core::Point::new(x0, y0), sf_core::Point::new(x1, y0), sf_core::Point::new(x1, y1), sf_core::Point::new(x0, y1)]
+        };
+        subpaths.insert(0, vectorcraft_geom::path::SubPath::polyline(&ring.iter().map(to_pt).collect::<Vec<_>>(), true));
+    }
     let path = vectorcraft_geom::path::PathData::new(subpaths);
     let parent = s.doc()?.insertion_parent();
     let id = s.edit("Outline Around", |d, sel| {
-        let mut n = vectorcraft_doc::Node::path(
-            d.alloc_id(),
-            path,
-            Appearance::basic(Paint::None, Paint::solid(Color::rgb8(color.r, color.g, color.b)), 1.0),
-        );
-        n.name = Some("Outline".into());
+        let paint = Paint::solid(Color::rgb8(color.r, color.g, color.b));
+        let look = if filled { Appearance::basic(paint, Paint::None, 0.0) } else { Appearance::basic(Paint::None, paint, 1.0) };
+        let mut n = vectorcraft_doc::Node::path(d.alloc_id(), path, look);
+        if let NodeKind::Path { rule, .. } = &mut n.kind {
+            // the art's outline is a hole in an emboss shape
+            *rule = vectorcraft_geom::FillRule::EvenOdd;
+        }
+        n.name = Some(match kind {
+            "knockdown" => "Knockdown".into(),
+            "emboss" => "Emboss".into(),
+            _ => "Outline".into(),
+        });
         let mut e = Embroidery::new(stitch);
         e.thread = Some(Thread::new(color, ""));
         if kind == "satin" {
@@ -1689,7 +1717,8 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
         }
         n.embroidery = Some(Box::new(e));
         let id = n.id;
-        d.insert(parent, usize::MAX, n)?;
+        // knockdown and emboss stitches go down first, under the design
+        d.insert(parent, if filled { 0 } else { usize::MAX }, n)?;
         sel.set([id]);
         Ok(id)
     })?;
