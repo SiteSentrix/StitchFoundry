@@ -4194,3 +4194,377 @@ lighting	Light	Luz
 @msg	the file stopped being read (please report this bug)	se dejó de leer el archivo (informe de este error)
 	Concentric Dividers:	Divisiones concéntricas:
 	Radial Dividers:	Divisiones radiales:
+
+# Rows other catalogs already had: document and print presets, keyboard-shortcut editor, print and
+# PDF options, arrowheads, harmony rules, Save for Web, graphic styles and file filters.
+@id	pathfinder.add	Unir
+	3 x 3 Average	Promedio de 3 x 3
+	5 x 5 Average	Promedio de 5 x 5
+	PDF File	Archivo PDF
+	1 Color Job	Trabajo a 1 color
+	2 Color Job	Trabajo a 2 colores
+	3 Color Job	Trabajo a 3 colores
+	CMYK profile in effect	Perfil CMYK en vigor
+	CMYK Equivalents	Equivalentes CMYK
+effect	Soft	Suave
+effect	Horizontal	Horizontal
+effect	Vertical	Vertical
+theme	Appearance	Apariencia
+effect	Points	Puntos
+effect	Regular	Regular
+	Phone 393×852	Teléfono 393×852
+	Phone 430×932	Teléfono 430×932
+	Phone 360×800	Teléfono 360×800
+	Phone 412×915	Teléfono 412×915
+	Phone 375×667	Teléfono 375×667
+	Tablet 768×1024	Tableta 768×1024
+	Tablet 820×1180	Tableta 820×1180
+	Tablet 834×1194	Tableta 834×1194
+	Tablet 1024×1366	Tableta 1024×1366
+	Tablet 800×1280	Tableta 800×1280
+	Watch 184×224	Reloj 184×224
+	Watch 198×242	Reloj 198×242
+	Web 1600×900	Web 1600×900
+	Web 1440×900	Web 1440×900
+	Web 1366×768	Web 1366×768
+	Web 1280×800	Web 1280×800
+	Web 1024×768	Web 1024×768
+	Legal	Legal
+	Tabloid	Tabloide
+	A3	A3
+	A4	A4
+	A5	A5
+	B4	B4
+	B5	B5
+	HDTV 1080p	HDTV 1080p
+	HDTV 720p	HDTV 720p
+	4K UHD	4K UHD
+	8K UHD	8K UHD
+	2K Cinema	Cine 2K
+	4K Cinema	Cine 4K
+	Greeting Card	Tarjeta de felicitación
+	Square 8 × 8 in	Cuadrado de 8 × 8 pulgadas
+	Poster 18 × 24 in	Póster de 18 × 24 pulgadas
+	Poster 24 × 36 in	Póster de 24 × 36 pulgadas
+	Logo 1000×1000	Logotipo 1000×1000
+	Business Card 3.5 × 2 in	Tarjeta de presentación de 3.5 × 2 pulgadas
+	Business Card 85 × 55 mm	Tarjeta de presentación de 85 × 55 mm
+	Letterhead Letter	Membrete Carta
+	Letterhead A4	Membrete A4
+	Envelope DL	Sobre DL
+	Envelope #10	Sobre #10
+	Social Portrait Post 1080×1350	Publicación vertical para redes 1080×1350
+	Social Landscape Post 1200×630	Publicación horizontal para redes 1200×630
+	Social Story 1080×1920	Historia para redes 1080×1920
+	Social Tall Post 1000×1500	Publicación alta para redes 1000×1500
+	Profile Cover 1500×500	Portada de perfil 1500×500
+	Page Cover 1640×624	Portada de página 1640×624
+	Video Banner 2560×1440	Banner de video 2560×1440
+	Video Thumbnail 1280×720	Miniatura de video 1280×720
+	Keyboard Shortcuts	Métodos abreviados de teclado
+	Set:	Conjunto:
+	Reset to Defaults	Restablecer valores predeterminados
+	Tool	Herramienta
+	Command	Comando
+	Shortcut	Método abreviado
+	Menu Commands	Comandos de menú
+	Press keys…	Presiona las teclas…
+	Use Default	Usar predeterminado
+	Go to Conflict	Ir al conflicto
+	Remove the shortcut	Quitar el método abreviado
+	Click, then press the new shortcut (Esc cancels)	Haz clic y presiona el nuevo método abreviado (Esc cancela)
+	All shortcuts reset to defaults.	Se restablecieron todos los métodos abreviados a los valores predeterminados.
+	Imported. Press OK to keep the imported set.	Importado. Presiona Aceptar para conservar el conjunto importado.
+	⚠ {chord} was already used by {names} — it has been removed there.	Atención: {chord} ya estaba en uso por {names}; se quitó de allí.
+	VectorCraft Defaults	Valores predeterminados de VectorCraft
+@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	{n} método abreviado está asignado más de una vez|{n} métodos abreviados están asignados más de una vez
+	Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).	«Simular» imprime las sobreimpresiones tal como las muestra la vista previa de sobreimpresión; las separaciones siempre las conservan. Un preajuste acopla la transparencia antes de imprimir (los archivos PostScript siempre la acoplan).
+	Preserve	Conservar
+	Simulate	Simular
+	Portrait (flipped)	Vertical (invertida)
+	Landscape (flipped)	Horizontal (invertida)
+	Visible & Printable Layers	Capas visibles e imprimibles
+	Visible Layers	Capas visibles
+	All Layers	Todas las capas
+	Do Not Scale	No escalar
+	Fit to Page	Ajustar a la página
+	Custom Scale	Escala personalizada
+	Tile Imageable Areas	Mosaico de áreas imprimibles
+	Composite	Compuesto
+	Separations	Separaciones
+	Up (right reading)	Arriba (lectura correcta)
+	Down (right reading)	Abajo (lectura correcta)
+	Positive	Positivo
+	Negative	Negativo
+	Subset	Subconjunto
+	Complete	Completa
+	[Custom]	[Personalizado]
+	[Default]	[Predeterminado]
+	No downsampling	Sin reducción de resolución
+	Subsample	Submuestreo
+	Bicubic	Bicúbica
+	Minimum	Mínima
+	Run Length	Compresión por longitud de secuencia
+	Roman	Romano
+	No conversion	Sin conversión
+	Convert to destination	Convertir al destino
+	Convert to destination (preserve numbers)	Convertir al destino (conservar valores)
+	Don't include profiles	No incluir perfiles
+	Include all profiles	Incluir todos los perfiles
+	Include destination profile	Incluir perfil de destino
+	Include tagged source profiles	Incluir perfiles de origen etiquetados
+	Low resolution (150 ppi)	Baja resolución (150 ppp)
+	High resolution	Alta resolución
+	Inserting, deleting and rotating pages	Insertar, eliminar y rotar páginas
+	Filling in form fields and signing	Rellenar campos de formulario y firmar
+	Commenting, filling in form fields and signing	Comentar, rellenar campos de formulario y firmar
+	Any except extracting pages	Cualquiera excepto extraer páginas
+	Bounding Box	Cuadro delimitador
+	Mobile	Móvil
+	Film & Video	Cine y video
+	Art & Illustration	Arte e ilustración
+	Branding	Identidad de marca
+	Social	Redes sociales
+	Triangle	Triángulo
+	Triangle (open)	Triángulo (abierto)
+	Circle (open)	Círculo (abierto)
+	Square (open)	Cuadrado (abierto)
+	Bar	Barra
+	Arrow	Flecha
+	Arrow (open)	Flecha (abierta)
+	Barbed	Con púas
+	Half Arrow (left)	Media flecha (izquierda)
+	Half Arrow (right)	Media flecha (derecha)
+	Concave	Cóncava
+	Double Bar	Doble barra
+	Feather	Emplumado
+	Dot on Bar	Punto sobre barra
+	Chevron	Galón
+	Double Arrow	Doble flecha
+	Cross	Cruz
+	Plus	Signo más
+	Hexagon	Hexágono
+	Hexagon (open)	Hexágono (abierto)
+	Tag	Etiqueta
+	Tag (open)	Etiqueta (abierta)
+	Half Circle	Semicírculo
+	Drop	Gota
+	Slash	Barra inclinada
+	Double Slash	Doble barra inclinada
+	Diamond (open)	Rombo (abierto)
+	Reverse Triangle	Triángulo invertido
+	Swallowtail	Cola de golondrina
+	Bracket	Corchete
+	Fork	Horquilla
+	Leaf	Hoja
+	Kite	Cometa
+	Triangle to Bar	Triángulo a barra
+	Oval	Óvalo
+	Complementary	Complementario
+	Complementary 2	Complementario 2
+	Split Complementary	Complementario dividido
+	Left Complement	Complemento izquierdo
+	Right Complement	Complemento derecho
+	Analogous	Análogo
+	Analogous 2	Análogo 2
+	Monochromatic	Monocromático
+	Shades	Sombras
+	Triad	Tríada
+	Triad 2	Tríada 2
+	Triad 3	Tríada 3
+	Tetrad	Tétrada
+	Tetrad 2	Tétrada 2
+	Tetrad 3	Tétrada 3
+	Compound	Compuesto
+	Compound 2	Compuesto 2
+	High Contrast	Alto contraste
+	High Contrast 2	Alto contraste 2
+	High Contrast 3	Alto contraste 3
+	Pentagram	Pentagrama
+	Perceptual	Perceptual
+	Relative Colorimetric	Colorimétrico relativo
+	Absolute Colorimetric	Colorimétrico absoluto
+	Exact	Exacto
+	Preserve Tints	Conservar matices
+	Scale Tints	Escalar matices
+	Linear	Lineal
+	Freeform	Libre
+	8 Colors	8 colores
+	16 Colors	16 colores
+	256 Colors	256 colores
+	True Colors	Colores verdaderos
+	Preserve Appearance	Conservar apariencia
+	Maximize Editability	Maximizar editabilidad
+	Clip Group	Grupo de recorte
+	Guide	Guía
+	Symbol	Símbolo
+	Envelope	Envolvente
+	Mesh	Malla
+	Placed Document	Documento colocado
+	Radial Repeat	Repetición radial
+	Grid Repeat	Repetición de cuadrícula
+	Mirror Repeat	Repetición reflejada
+	Auto Size	Tamaño automático
+	Shrink Text to Fit	Reducir texto para que quepa
+	Ascent	Ascendente
+	Cap Height	Altura de mayúsculas
+	x Height	Altura de la x
+	Justify	Justificar
+	First Baseline	Primera línea de base
+	Vertical Align	Alineación vertical
+	Save Selection	Guardar selección
+	Twirl	Molinete
+	Pucker	Fruncir
+	Bloat	Engordar
+	Scallop	Festonear
+	Wrinkle	Arrugar
+	Unknown	Desconocido
+	Copyrighted	Con copyright
+	Public Domain	Dominio público
+	None (Color Preview)	Ninguno (vista previa de color)
+	Rasterized Complex Regions	Regiones complejas rasterizadas
+	Transparent Objects	Objetos transparentes
+	All Affected Objects	Todos los objetos afectados
+	Expanded Patterns	Motivos expandidos
+	Outlined Strokes	Trazos contorneados
+	Outlined Text	Texto contorneado
+	All Rasterized Regions	Todas las regiones rasterizadas
+	High Resolution	Alta resolución
+	Medium Resolution	Resolución media
+	Low Resolution	Baja resolución
+	Copyright and Contact Info	Copyright e información de contacto
+	All Slices	Todos los sectores
+	Selected Slices	Sectores seleccionados
+	No Slices	Sin sectores
+	Images Only	Solo imágenes
+	HTML and Images	HTML e imágenes
+	Selective	Selectivo
+	Adaptive	Adaptativo
+	Black & White	Blanco y negro
+	No Dither	Sin tramado
+	Diffusion	Difusión
+	Unsorted	Sin ordenar
+	Sort by Hue	Ordenar por tono
+	Sort by Luminance	Ordenar por luminancia
+	Sort by Popularity	Ordenar por popularidad
+	Baseline (Standard)	Secuencial (estándar)
+	Baseline Optimized	Secuencial optimizado
+	Art Optimized	Optimizado para ilustración
+	Type Optimized	Optimizado para texto
+	Language Level 2	Nivel de lenguaje 2
+	Language Level 3	Nivel de lenguaje 3
+	TIFF (Black & White)	TIFF (blanco y negro)
+	TIFF (8-bit Color)	TIFF (color de 8 bits)
+	1 bit	1 bit
+	4 bit	4 bits
+	8 bit	8 bits
+	16 bit	16 bits
+	24 bit	24 bits
+	32 bit	32 bits
+	16 bits/pixel	16 bits/píxel
+	24 bits/pixel	24 bits/píxel
+	32 bits/pixel	32 bits/píxel
+	DWG (use DXF)	DWG (usa DXF)
+file-filter	All readable files	Todos los archivos legibles
+file-filter	All placeable files	Todos los archivos que se pueden colocar
+file-filter	Swatch libraries	Bibliotecas de muestras
+file-filter	Flattener presets	Preajustes del acoplador
+file-filter	PDF presets	Preajustes de PDF
+file-filter	Print presets	Preajustes de impresión
+file-filter	SVG Compressed	SVG comprimido
+file-filter	PDF-compatible .ai	.ai compatible con PDF
+file-filter	VectorCraft Template	Plantilla de VectorCraft
+file-filter	Templates	Plantillas
+diagnostics	render	renderizado
+diagnostics	ui	interfaz
+	Preset {number}	Preajuste {number}
+	PRs	PR
+	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, +{added} / −{deleted} líneas (Δ {delta}), +{binary_added} / −{binary_deleted} recursos binarios, {first} – {last}
+@plural	{n} PR|{n} PRs	{n} PR|{n} PR
+@plural	{n} commit|{n} commits	{n} commit|{n} commits
+gradient-kind	Radial	Radial
+mark-style	Japanese	Japonesas
+	2-Up	2 vistas
+	2up	2 vistas
+	3 Colors	3 colores
+	4-Up	4 vistas
+	4up	4 vistas
+	6 Colors	6 colores
+	A6	A6
+	Alt+Click	Alt+clic
+	Alt+Drag	Alt+arrastrar
+	Anchors	Anclas
+	Area Type	Texto de área
+	Basic	Básico
+	Black Outline	Contorno negro
+	Brown	Marrón
+	Convert to Global	Convertir en global
+	Cool	Fríos
+	CRLF (Windows)	CRLF (Windows)
+	Current Colors	Colores actuales
+	Default Graphic Style	Estilo gráfico predeterminado
+	Direct Selection	Selección directa
+	Distance:	Distancia:
+	GIF, 128 colours	GIF, 128 colores
+	Gray	Gris
+	Grey	Gris
+	Group Selection	Selección de grupos
+	Hand	Mano
+	Harmony Rules	Reglas de armonía
+	Heavy Ink	Tinta densa
+	High Fidelity Photo	Foto de alta fidelidad
+	Image Trace (Make and Expand)	Calco de imagen (crear y expandir)
+	Joins:	Uniones:
+	Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.	Mantiene el documento editable: VectorCraft vuelve a abrir el PDF sin perder nada. Para archivos que volverás a editar.
+	Lab Spot Colors	Tintas planas Lab
+	Lasso	Lazo
+	Length:	Longitud:
+	LF (macOS, Linux)	LF (macOS, Linux)
+	Line Art	Arte lineal
+	Low Fidelity Photo	Foto de baja fidelidad
+	Make Text Wrap	Crear ceñido de texto
+	Measure	Medición
+	Monochrome	Monocromo
+	Muted	Apagados
+	of	de
+	Orange	Naranja
+	Pattern Swatches	Muestras de motivo
+	PDF 1.7	PDF 1.7
+	Pen	Pluma
+	Pink	Rosa
+	Pixel	Píxel
+	Points:	Puntos:
+	Purple	Púrpura
+	Release Image Trace	Soltar calco de imagen
+	Release Text Wrap	Soltar ceñido de texto
+	RGB	RGB
+	Rotate View	Rotar vista
+	Scissors	Tijeras
+	Shades of Gray	Tonos de gris
+	Shear:	Inclinar:
+	Shift+Click	Shift+clic
+	Shift+Drag	Shift+arrastrar
+	Silhouettes	Siluetas
+	Sketched Art	Arte esbozado
+	Spectrum	Espectro
+	sRGB IEC61966-2.1	sRGB IEC61966-2.1
+	Sunshine	Soleado
+	SVG 1.1	SVG 1.1
+	Technical Drawing	Dibujo técnico
+	Text Displayed in Cell	Texto mostrado en la celda
+	Touch Type	Retocar texto
+	UTF-16 (Unicode)	UTF-16 (Unicode)
+	Variation	Variación
+	VectorCraft Default	Predeterminado de VectorCraft
+	VectorCraft Generic CMYK (SWOP-like)	CMYK genérico de VectorCraft (similar a SWOP)
+	VectorCraft Swatches (.vcswatches)	Muestras de VectorCraft (.vcswatches)
+	Vertical Area Type	Texto de área vertical
+	Vertical Type	Texto vertical
+	Vertical Type on a Path	Texto vertical en trazado
+	Vivid	Vivos
+	Warm	Cálidos
+	WebP	WebP
+	Working RGB	RGB de trabajo
+	X:	X:
+	Y:	Y:
+@id	file.close	Cerrar archivo
