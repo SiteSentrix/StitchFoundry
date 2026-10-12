@@ -397,7 +397,8 @@ const MAX_RASTER_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else
 /// Decode an image's header (and, for formats stored as PNG, its pixels). CMYK TIFFs are kept as
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]); CMYK TIFFs with an alpha channel, which
 /// the decoder can't read, become RGBA in the active colour settings' CMYK, as do CMYK Photoshop
-/// documents, whose merged image is read ([`psdread`]).
+/// documents, whose merged image is read ([`psdread`]). Grayscale TIFFs with an alpha channel or
+/// other extra channels, which the decoder can't read either, become RGBA too.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if psdread::is_psd(bytes) {
@@ -415,11 +416,11 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         let (width, height) = reader.into_dimensions().map_err(err)?;
         return stored(bytes.to_vec(), f.mime, (width, height), ppi);
     }
-    let cmyka = || {
+    let extra_samples = || {
         let cms = vectorcraft_color::cms::active();
-        vectorcraft_doc::cmyk::cmyka_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
+        vectorcraft_doc::cmyk::extra_samples_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
     };
-    let img = match (f.id == "tiff").then(cmyka).flatten() {
+    let img = match (f.id == "tiff").then(extra_samples).flatten() {
         Some(img) => img,
         None => reader.decode().map_err(err)?.to_rgba8(),
     };
