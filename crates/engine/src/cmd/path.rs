@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, NodeKind};
+use vectorcraft_doc::{NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath, Vec2};
 
 use super::create::anchor_from_json;
@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Anchors",
             [],
             None,
-            "{dx, dy} move direct-selected anchors (whole paths if fully selected)",
+            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} move direct-selected anchors (whole paths if fully selected)",
             has_selection,
             move_anchors
         ),
@@ -172,6 +172,10 @@ pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let sel = st.selection.clone();
     let scale_strokes = s.prefs.scale_strokes;
     let _ = scale_strokes;
+    // Objects selected whole (with no entry in `sel.anchors`) move as objects, and their pattern
+    // tiles move with them when `patterns` (default: General › Transform Pattern Tiles) is on.
+    let whole: Vec<NodeId> = sel.objects.iter().copied().filter(|id| !sel.anchors.contains_key(id)).collect();
+    let sc = Scaling { patterns: super::object::transform_patterns(s, p, &whole)?, ..Scaling::default() };
     s.edit("Move", |doc, _| {
         for id in &sel.objects {
             match sel.anchors.get(id) {
@@ -185,7 +189,7 @@ pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 None => {
                     if let Some(n) = doc.node_mut(*id) {
-                        n.transform(vectorcraft_geom::Affine::translate(d), false);
+                        n.transform(vectorcraft_geom::Affine::translate(d), sc);
                     }
                 }
             }

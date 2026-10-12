@@ -1592,7 +1592,8 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   `object.align`, `object.distribute`, `object.distributeSpacing`, the Selection and transform tools, the dialogs'
   Transform Patterns) and of the same param on the commands that move or duplicate art with an artboard (`artboard.move`
   and the Artboard tool, `artboard.duplicate`, `artboard.rearrange`, `artboard.setProps`): pattern fills and strokes
-  move with the art.
+  move with the art. `object.nudge` (the arrow keys) and `path.moveAnchors` (a Direct Selection drag of selected
+  anchors) take the same param, with the same default, for the objects they move whole.
 - `selectSameTintPercent` (off by default): `select.same.fillColor`, `strokeColor` and `fillAndStroke` take every tint
   of a global or spot swatch; on, only the same tint.
 

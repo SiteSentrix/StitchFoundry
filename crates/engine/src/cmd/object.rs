@@ -86,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Nudge",
             [],
             None,
-            "{dx: -1|0|1, dy: -1|0|1, big?: bool (×10), copy?: bool} arrow-key nudge by the keyboard increment (the selected anchors, else objects, else ruler guides)",
+            "{dx: -1|0|1, dy: -1|0|1, big?: bool (×10), copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} arrow-key nudge by the keyboard increment (the selected anchors, else objects, else ruler guides)",
             has_selection_or_guides,
             nudge
         ),
@@ -337,7 +337,7 @@ fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
-        return super::path::move_anchors(s, &json!({ "dx": dx, "dy": dy }));
+        return super::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns") }));
     }
     if s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
