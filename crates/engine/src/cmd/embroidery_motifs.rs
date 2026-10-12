@@ -28,6 +28,15 @@ pub fn specs() -> Vec<CommandSpec> {
             place_motif
         ),
         cmd!(
+            "embroidery.placeRing",
+            "Place Ring",
+            [],
+            None,
+            "{stitch?: satin|fill|bean (satin), diameter?: mm (outside, 20), width?: mm (the ring's, 3), at?: [x, y] (its centre; default: the first artboard's centre)} a stitched ring, ready to move, scale and reshape: a satin border round a circle, a fill between two circles, or a bean run round one → {id}",
+            has_doc,
+            place_ring
+        ),
+        cmd!(
             "embroidery.motif.make",
             "Make Motif",
             [],
@@ -212,6 +221,72 @@ fn motif_delete(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "name": name }))
+}
+
+fn place_ring(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.placeRing";
+    let stitch = str_param(p, "stitch").unwrap_or("satin");
+    if !matches!(stitch, "satin" | "fill" | "bean") {
+        return Err(bad(CMD, format!("`stitch` is satin, fill or bean, not `{stitch}`")));
+    }
+    let diameter = match p.get("diameter") {
+        None | Some(Value::Null) => 20.0,
+        Some(v) => v.as_f64().filter(|v| (2.0..=300.0).contains(v)).ok_or_else(|| bad(CMD, "`diameter` is 2 to 300 mm"))?,
+    };
+    let width = match p.get("width") {
+        None | Some(Value::Null) => 3.0_f64.min(diameter * 0.25),
+        Some(v) => v
+            .as_f64()
+            .filter(|v| *v >= 0.5 && *v <= (diameter * 0.5).min(30.0))
+            .ok_or_else(|| bad(CMD, "`width` is 0.5 mm to half the diameter (at most 30 mm)"))?,
+    };
+    let at = match p.get("at") {
+        None | Some(Value::Null) => s.doc()?.doc.artboards.first().map_or(Point::new(0.0, 0.0), |a| a.rect.center()),
+        Some(_) => point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(CMD, "`at` is [x, y]"))?,
+    };
+    let circle = |radius_mm: f64| {
+        let r = radius_mm * PT_PER_MM;
+        vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(at.x - r, at.y - r, at.x + r, at.y + r))
+    };
+    let outer = diameter * 0.5;
+    let (path, embroidery) = match stitch {
+        "fill" => {
+            let mut subs = circle(outer).subpaths;
+            subs.extend(circle(outer - width).subpaths);
+            (PathData::new(subs), Embroidery::fill())
+        }
+        "bean" => (circle(outer - width * 0.5), Embroidery::new(StitchType::Run(RunParams { kind: RunKind::Triple, ..RunParams::default() }))),
+        _ => {
+            let mut e = Embroidery::satin();
+            e.width = Some(width);
+            (circle(outer - width * 0.5), e)
+        }
+    };
+    let paint = [&s.paint.stroke, &s.paint.fill]
+        .into_iter()
+        .find(|p| matches!(p, Paint::Solid { .. }))
+        .cloned()
+        .unwrap_or_else(|| Paint::solid(Color::rgb8(0x1a, 0x3e, 0x8c)));
+    // a filled ring shows its paint as a fill, the others as a stroke as wide as they sew
+    let appearance = match stitch {
+        "fill" => Appearance::basic(paint, Paint::None, 0.0),
+        "bean" => Appearance::basic(Paint::None, paint, 1.0),
+        _ => Appearance::basic(Paint::None, paint, width * PT_PER_MM),
+    };
+    let parent = s.doc()?.insertion_parent();
+    let id = s.edit("Place Ring", |d, sel| {
+        let id = d.alloc_id();
+        let mut n = Node::path(id, path.clone(), appearance.clone());
+        if let vectorcraft_doc::NodeKind::Path { rule, .. } = &mut n.kind {
+            *rule = vectorcraft_geom::FillRule::EvenOdd;
+        }
+        n.name = Some("Ring".to_string());
+        n.embroidery = Some(Box::new(embroidery.clone()));
+        d.insert(parent, usize::MAX, n)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0 }))
 }
 
 fn place_motif(s: &mut Session, p: &Value) -> Result<Value> {

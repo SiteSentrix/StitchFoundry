@@ -8,7 +8,8 @@ use i_overlay::float::clip::FloatClip;
 use i_overlay::float::simplify::SimplifyShape;
 use i_overlay::float::single::SingleFloatOverlay;
 use i_overlay::mesh::float::outline::offset::OutlineOffset;
-use i_overlay::mesh::float::style::{LineJoin, OutlineStyle};
+use i_overlay::mesh::float::stroke::offset::StrokeOffset;
+use i_overlay::mesh::float::style::{LineCap, LineJoin, OutlineStyle, StrokeStyle};
 use i_overlay::string::clip::ClipRule;
 
 /// A polygon with holes. Rings are stored without repeating the first point.
@@ -200,6 +201,23 @@ pub fn offset(polys: &[Polygon], delta: f64) -> Vec<Polygon> {
     }
     let style = OutlineStyle::new(delta).line_join(LineJoin::Miter(0.4));
     from_shapes(shapes.outline(&style))
+}
+
+/// The area lines `width` wide cover, with round ends and joins (closed lines go round), as
+/// polygons.
+pub fn stroke(lines: &[(Vec<Point>, bool)], width: f64) -> Vec<Polygon> {
+    if !(width.is_finite() && width > 1e-6) {
+        return Vec::new();
+    }
+    let style = StrokeStyle::new(width).line_join(LineJoin::Round(0.25)).start_cap(LineCap::Round(0.25)).end_cap(LineCap::Round(0.25));
+    let mut out = Vec::new();
+    for (pts, closed) in lines {
+        let path: Vec<[f64; 2]> = pts.iter().filter(|p| p.x.is_finite() && p.y.is_finite()).map(|p| [p.x, p.y]).collect();
+        if path.len() >= 2 {
+            out.extend(from_shapes(path.stroke(style.clone(), *closed)));
+        }
+    }
+    union(&out)
 }
 
 /// Union of all polygons (non-zero fill), also fixing self-intersections.
@@ -422,6 +440,23 @@ pub fn split_branches(region: &Polygon) -> Vec<Polygon> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stroke_covers_a_band_round_its_line() {
+        // A 10 mm line 2 mm wide: a 10 × 2 band with round ends.
+        let line = (vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false);
+        let band = stroke(std::slice::from_ref(&line), 2.0);
+        let area: f64 = band.iter().map(Polygon::area).sum();
+        assert!((area - (20.0 + std::f64::consts::PI)).abs() < 0.2, "{area}");
+        assert!(band.iter().any(|p| p.contains(Point::new(-0.9, 0.0))) && !band.iter().any(|p| p.contains(Point::new(5.0, 1.1))));
+        // A closed square line goes round, leaving its middle open.
+        let square = (vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0), Point::new(0.0, 0.0)], true);
+        let ring = stroke(&[square], 1.0);
+        assert!(ring.iter().any(|p| p.contains(Point::new(0.0, 5.0))) && !ring.iter().any(|p| p.contains(Point::new(5.0, 5.0))));
+        // Nothing to stroke.
+        assert!(stroke(std::slice::from_ref(&line), 0.0).is_empty() && stroke(&[line], f64::NAN).is_empty());
+        assert!(stroke(&[(vec![Point::new(f64::NAN, 0.0)], false)], 1.0).is_empty());
+    }
 
     #[test]
     fn split_branches_cuts_a_t_into_columns() {

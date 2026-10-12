@@ -1716,6 +1716,52 @@ fn buttonholes_are_satin_columns_round_an_open_slit() {
 }
 
 #[test]
+fn outlines_go_round_lines_and_rings_are_placed() {
+    use sf_core::attr::StitchType;
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let mut s = session();
+    // A satin line 3 mm wide: its outline goes round the band it covers, 1 mm beyond its edge.
+    let line = NodeId(s.execute("path.create", &json!({"d": "M 100 100 L 300 100"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"width": 3.0}})).unwrap();
+    let outline = NodeId(s.execute("embroidery.addOutline", &json!({"stitch": "run"})).unwrap()["id"].as_u64().unwrap());
+    let pts = needles(&s, outline);
+    let y0 = 100.0 * MM;
+    let reach = pts.iter().fold(0.0f64, |m, p| m.max((p.y - y0).abs()));
+    let nearest = pts.iter().filter(|p| p.x > 110.0 * MM && p.x < 290.0 * MM).fold(f64::INFINITY, |m, p| m.min((p.y - y0).abs()));
+    assert!((2.4..=2.7).contains(&nearest) && reach < 2.7, "{nearest} {reach}");
+    // A run's outline goes round it too (as if 1 mm wide).
+    let run = NodeId(s.execute("path.create", &json!({"d": "M 100 300 L 300 300"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [run.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "run"})).unwrap();
+    assert!(s.execute("embroidery.addOutline", &json!({"stitch": "run"})).is_ok());
+    // Rings: satin round a circle, a fill between two, a bean run round one.
+    let ring = |s: &mut Session, p: Value| NodeId(s.execute("embroidery.placeRing", &p).unwrap()["id"].as_u64().unwrap());
+    let c = (400.0 * MM, 300.0 * MM);
+    let radii = |s: &Session, id: NodeId| {
+        needles(s, id).iter().fold((f64::INFINITY, 0.0f64), |(lo, hi), p| {
+            let r = ((p.x - c.0).powi(2) + (p.y - c.1).powi(2)).sqrt();
+            (lo.min(r), hi.max(r))
+        })
+    };
+    let satin = ring(&mut s, json!({"at": [400, 300], "diameter": 30, "width": 4}));
+    assert!(matches!(emb(&s, satin).stitch, StitchType::Satin(_)));
+    let (lo, hi) = radii(&s, satin);
+    assert!(lo > 10.5 && hi < 15.4, "{lo} {hi}");
+    let fill = ring(&mut s, json!({"at": [400, 300], "diameter": 30, "width": 6, "stitch": "fill"}));
+    assert!(matches!(emb(&s, fill).stitch, StitchType::Fill(_)));
+    let (lo, hi) = radii(&s, fill);
+    assert!(lo > 8.5 && hi < 15.5, "{lo} {hi}");
+    let bean = ring(&mut s, json!({"at": [400, 300], "diameter": 30, "width": 2, "stitch": "bean"}));
+    let (lo, hi) = radii(&s, bean);
+    assert!((lo - 14.0).abs() < 0.3 && (hi - 14.0).abs() < 0.3, "{lo} {hi}");
+    for bad in [json!({"stitch": "motif"}), json!({"diameter": 1}), json!({"diameter": 20, "width": 11}), json!({"at": [0]})] {
+        assert!(s.execute("embroidery.placeRing", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn sculpture_runs_and_cross_styles_are_stitch_parameters() {
     use sf_core::attr::StitchType;
     use sf_core::model::{CrossStyle, RunKind};

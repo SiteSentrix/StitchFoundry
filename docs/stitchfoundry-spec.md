@@ -338,13 +338,13 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CO-05 | Auto-sequence whole design (by colour, by object, closest path) | Done | Embroidery › Auto Sequence (`embroidery.autoSequence`): fewest colour changes, then the closest next object; objects that overlap keep their stacking order; reorders within each layer or group. Sort by Thread Color as before | 1 |
 | TR-01 | Position, align, distribute, scale, rotate, skew, mirror | Done | Stitch settings follow transforms | – |
 | PT-01 | Decorative borders (frames around designs) | Done | Add Outline › rectangle, oval, rounded and motif borders, in satin, bean, run or a motif | – |
-| PT-02 | Stars and rings (stitched rings with satin/run/fill) | Partial | Star stamp; add ring object (annulus with satin) | 2 |
+| PT-02 | Stars and rings (stitched rings with satin/run/fill) | Done | Star stamp; Embroidery › Place Ring: a satin, filled or bean ring of any diameter and width | – |
 | PT-03 | Basic shapes | Done | | – |
 | PT-04 | Add / remove holes; fill holes | Done | `embroidery.removeHoles {maxArea?}` and `embroidery.fillHoles` (a fill object per hole) | 1 |
-| PT-05 | Offsets and outlines (closed, open) | Partial | Add Outline: an outline following the shapes at a distance, in any stitch; offsets of open paths still missing | 2 |
+| PT-05 | Offsets and outlines (closed, open) | Done | Add Outline: an outline following shapes at a distance, in any stitch, and round open lines (the band their stitches cover) | – |
 | PT-06 | Wreaths and arrays (mirror-merge) | Done | Repeat objects (radial, grid, mirror) sew every copy | – |
 | RS-01 | Reshape objects and stitch angles | Done | Direct selection + Inclination tool | – |
-| RS-02 | Reshape stars and rings | Partial | With PT-02 | 2 |
+| RS-02 | Reshape stars and rings | Done | Stars and rings are ordinary paths: scale, reshape and edit their points | – |
 | RS-03 | Envelopes on embroidery | Done | Stitched objects in an envelope are sewn bent through it (their inclination lines and beads aren't bent) | – |
 | RS-04 | Break apart branched objects | Done | Embroidery › Break Apart (`embroidery.breakApart`): a branch gives back its objects; a stitched path or compound path of separate parts becomes one object per part, holes staying with their part | 1 |
 | RS-05 | Knife (cut shapes) | Done | VectorCraft knife/scissors | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 123 done,
-43 partial, 59 missing, 6 out of scope (counted 2026-10-12, after buttonholes). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 126 done,
+40 partial, 59 missing, 6 out of scope (counted 2026-10-12, after rings and outlines round lines). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
