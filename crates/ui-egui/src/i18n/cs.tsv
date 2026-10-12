@@ -4502,3 +4502,10 @@ mark-style	Japanese	Japonské
 @msg	the file stopped being read (please report this bug)	čtení souboru se přerušilo (nahlaste prosím tuto chybu)
 	Concentric Dividers:	Soustředné dělicí čáry:
 	Radial Dividers:	Radiální dělicí čáry:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Zkosení:
+	Inside	Uvnitř
+	Outside	Vně
+	Use Outside Rectangle As Frame	Použít vnější obdélník jako rámeček
+	Create Compound Path From Ellipses	Vytvořit složenou cestu z elips
+	Fill Grid	Vyplnit mřížku

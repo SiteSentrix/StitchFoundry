@@ -4162,3 +4162,10 @@ lighting	Light	광원
 @msg	the file stopped being read (please report this bug)	파일 읽기가 중단되었습니다(이 버그를 신고해 주세요)
 	Concentric Dividers:	동심원 구분선:
 	Radial Dividers:	방사형 구분선:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	기울임:
+	Inside	안쪽
+	Outside	바깥쪽
+	Use Outside Rectangle As Frame	바깥쪽 사각형을 프레임으로 사용
+	Create Compound Path From Ellipses	원에서 컴파운드 패스 만들기
+	Fill Grid	격자 칠하기

@@ -4206,3 +4206,10 @@ lighting	Light	Lumière
 @msg	the file stopped being read (please report this bug)	la lecture du fichier s’est interrompue (veuillez signaler ce bogue)
 	Concentric Dividers:	Divisions concentriques :
 	Radial Dividers:	Divisions radiales :
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Inclinaison :
+	Inside	Intérieur
+	Outside	Extérieur
+	Use Outside Rectangle As Frame	Utiliser le rectangle extérieur comme cadre
+	Create Compound Path From Ellipses	Créer un tracé transparent à partir des ellipses
+	Fill Grid	Remplir la grille

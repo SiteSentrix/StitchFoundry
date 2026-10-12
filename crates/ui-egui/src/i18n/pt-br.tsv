@@ -3679,3 +3679,10 @@ axis	Both	Ambos
 @msg	the file stopped being read (please report this bug)	a leitura do arquivo foi interrompida (informe este erro)
 	Concentric Dividers:	Divisórias concêntricas:
 	Radial Dividers:	Divisórias radiais:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Inclinação:
+	Inside	Dentro
+	Outside	Fora
+	Use Outside Rectangle As Frame	Usar Retângulo Externo como Moldura
+	Create Compound Path From Ellipses	Criar Caminho Composto a partir das Elipses
+	Fill Grid	Preencher Grade

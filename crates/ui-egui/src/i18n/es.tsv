@@ -4196,6 +4196,13 @@ lighting	Light	Luz
 @msg	the file stopped being read (please report this bug)	se dejó de leer el archivo (informe de este error)
 	Concentric Dividers:	Divisiones concéntricas:
 	Radial Dividers:	Divisiones radiales:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Sesgo:
+	Inside	Dentro
+	Outside	Fuera
+	Use Outside Rectangle As Frame	Usar rectángulo exterior como marco
+	Create Compound Path From Ellipses	Crear trazado compuesto a partir de elipses
+	Fill Grid	Rellenar cuadrícula
 
 # Rows other catalogs already had: document and print presets, keyboard-shortcut editor, print and
 # PDF options, arrowheads, harmony rules, Save for Web, graphic styles and file filters.
