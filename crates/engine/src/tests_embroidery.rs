@@ -2213,6 +2213,40 @@ fn embroidery_fonts_set_lettering_from_their_glyphs() {
 }
 
 #[test]
+fn embroidery_font_folders_are_remembered() {
+    let dir = std::env::temp_dir().join(format!("sf-font-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("font.json"), TEST_FONT_JSON).unwrap();
+    std::fs::write(dir.join("ltr.svg"), TEST_FONT_SVG).unwrap();
+    let path = dir.to_string_lossy().to_string();
+    let mut s = session();
+    let r = s.execute("embroidery.font.load", &json!({"path": path})).unwrap();
+    assert_eq!((r["name"].as_str(), r["folder"].as_str()), (Some("Test Script"), Some(path.as_str())));
+    assert_eq!((s.prefs.embroidery_font_dirs.len(), s.prefs.embroidery_font_dirs.first()), (1, Some(&path)));
+    // loaded again: remembered once
+    s.execute("embroidery.font.load", &json!({"path": path})).unwrap();
+    assert_eq!(s.prefs.embroidery_font_dirs.len(), 1);
+    // a later session loads it again when lettering needs it
+    let mut later = session();
+    later.prefs.embroidery_font_dirs = s.prefs.embroidery_font_dirs.clone();
+    assert!(later.embroidery_fonts.is_empty());
+    later.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script"})).unwrap();
+    let r = later.execute("embroidery.fonts", &json!({})).unwrap();
+    assert_eq!(r["fonts"][0]["folder"].as_str(), Some(path.as_str()));
+    // forgotten: unloaded and not remembered
+    later.execute("embroidery.font.forget", &json!({"name": "test script"})).unwrap();
+    assert!(later.embroidery_fonts.is_empty() && later.prefs.embroidery_font_dirs.is_empty());
+    assert!(later.execute("embroidery.font.forget", &json!({"name": "Test Script"})).is_err());
+    // a folder gone: skipped with a warning, still remembered
+    let mut gone = session();
+    gone.prefs.embroidery_font_dirs = vec!["/nonexistent/sf-font".into()];
+    let r = gone.execute("embroidery.fonts", &json!({})).unwrap();
+    assert!(r["fonts"].as_array().unwrap().is_empty() && r["warnings"].to_string().contains("nonexistent"), "{r}");
+    assert_eq!(gone.prefs.embroidery_font_dirs.len(), 1);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

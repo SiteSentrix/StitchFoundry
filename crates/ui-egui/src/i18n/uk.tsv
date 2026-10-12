@@ -4651,3 +4651,6 @@ machine	Stop	Зупинка
 	Load this lettering's font to change it:	Завантажте шрифт цього напису, щоб змінити його:
 	Arch	Дуга зверху
 	Valley	Дуга знизу
+	Forget Font	Забути шрифт
+	Unload the font and stop loading its folder	Вивантажити шрифт і більше не завантажувати його теку
+	Forget Embroidery Font	Забути шрифт для вишивки

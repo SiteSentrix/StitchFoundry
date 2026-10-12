@@ -4671,3 +4671,6 @@ machine	Stop	Arresto
 	Load this lettering's font to change it:	Carica il font di questa scritta per modificarla:
 	Arch	Arco in alto
 	Valley	Arco in basso
+	Forget Font	Dimentica font
+	Unload the font and stop loading its folder	Scarica il font e non caricare più la sua cartella
+	Forget Embroidery Font	Dimentica font da ricamo

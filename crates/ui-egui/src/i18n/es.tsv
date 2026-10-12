@@ -4669,3 +4669,6 @@ machine	Stop	Parada
 	Load this lettering's font to change it:	Cargue la fuente de esta rotulación para cambiarla:
 	Arch	Arco superior
 	Valley	Arco inferior
+	Forget Font	Olvidar fuente
+	Unload the font and stop loading its folder	Descargar la fuente y dejar de cargar su carpeta
+	Forget Embroidery Font	Olvidar fuente de bordado

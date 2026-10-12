@@ -4037,3 +4037,6 @@ machine	Stop	停止
 	Load this lettering's font to change it:	載入此文字的字型以變更它：
 	Arch	上弧
 	Valley	下弧
+	Forget Font	移除字型
+	Unload the font and stop loading its folder	卸載字型並不再載入其資料夾
+	Forget Embroidery Font	移除刺繡字型

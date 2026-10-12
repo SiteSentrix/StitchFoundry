@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Embroidery Font",
             [],
             None,
-            "{path?: a font folder in Ink/Stitch's format (font.json, and ltr.svg or an ltr folder of SVGs), json?, svg?: the files' text instead} load an embroidery font for lettering; its glyphs sew the way their Ink/Stitch settings say. It stays loaded until StitchFoundry quits; loading a font of the same name again replaces it → {name, glyphs, size, minSize, maxSize, license}",
+            "{path?: a font folder in Ink/Stitch's format (font.json, and ltr.svg or an ltr folder of SVGs), json?, svg?: the files' text instead} load an embroidery font for lettering; its glyphs sew the way their Ink/Stitch settings say. A folder is remembered: later sessions load it again the first time lettering needs a font (embroidery.font.forget forgets it); loading a font of the same name again replaces it → {name, glyphs, size, minSize, maxSize, license, folder}",
             always,
             load_font
         ),
@@ -39,9 +39,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Fonts",
             [],
             None,
-            "{} the loaded embroidery fonts → {fonts: [{name, glyphs, size, minSize, maxSize, license, description}]}",
+            "{} the embroidery fonts, those of the folders remembered from earlier sessions too (loaded now, if they weren't) → {fonts: [{name, glyphs, size, minSize, maxSize, license, description, folder}], warnings: the folders that failed to load}",
             always,
             list_fonts
+        ),
+        cmd!(
+            "embroidery.font.forget",
+            "Forget Embroidery Font",
+            [],
+            None,
+            "{name} unload an embroidery font and forget its folder, so later sessions don't load it; lettering set in it stays as it is → {name}",
+            always,
+            forget_font
         ),
         cmd!(
             "embroidery.lettering",
@@ -76,6 +85,7 @@ fn describe(f: &EmbFont) -> Value {
         "maxSize": size(i.max_scale),
         "license": i.font_license,
         "description": i.description,
+        "folder": f.folder,
     })
 }
 
@@ -158,31 +168,98 @@ fn read_folder(dir: &str) -> Result<(String, Vec<String>)> {
     Err(bad(LOAD, format!("{dir}: no file system here (pass json and svg)")))
 }
 
-fn load_font(s: &mut Session, p: &Value) -> Result<Value> {
-    let (json, svgs) = match (str_param(p, "json"), str_param(p, "svg"), str_param(p, "path")) {
-        (Some(j), Some(v), _) => {
-            if j.len() > MAX_JSON || v.len() > MAX_SVG {
-                return Err(bad(LOAD, "the font is too big"));
-            }
-            (j.to_string(), vec![v.to_string()])
-        }
-        (_, _, Some(path)) => read_folder(path)?,
-        _ => return Err(bad(LOAD, "give the font's folder (`path`), or its `json` and `svg`")),
-    };
+/// A font from its files' text.
+fn font_from(json: &str, svgs: &[String]) -> Result<EmbFont> {
     let art = svgs.iter().map(|svg| glyph_art(svg)).collect::<Result<Vec<_>>>()?;
-    let font = EmbFont::new(&json, art).map_err(|e| bad(LOAD, e))?;
-    let out = describe(&font);
+    EmbFont::new(json, art).map_err(|e| bad(LOAD, e))
+}
+
+/// Adds `font` to the loaded fonts, in place of one of the same name.
+fn add_font(s: &mut Session, font: EmbFont) {
     let fonts = &mut s.embroidery_fonts;
     fonts.retain(|f| !f.info.name.eq_ignore_ascii_case(&font.info.name));
     if fonts.len() >= MAX_FONTS {
         fonts.remove(0);
     }
     fonts.push(Arc::new(font));
+}
+
+/// Loads the font folders remembered from earlier sessions, the first time a font is needed.
+/// → What failed to load (a folder moved or gone stays remembered: a drive may be away).
+fn ensure_fonts(s: &mut Session) -> Vec<String> {
+    if std::mem::replace(&mut s.embroidery_fonts_ready, true) {
+        return Vec::new();
+    }
+    let mut warnings = Vec::new();
+    for dir in s.prefs.embroidery_font_dirs.clone() {
+        // one loaded already this session stays as it is
+        if s.embroidery_fonts.iter().any(|f| f.folder.as_deref() == Some(dir.as_str())) {
+            continue;
+        }
+        match read_folder(&dir).and_then(|(json, svgs)| font_from(&json, &svgs)) {
+            Ok(mut font) => {
+                font.folder = Some(dir);
+                add_font(s, font);
+            }
+            Err(e) => warnings.push(format!("the embroidery font in {dir} didn't load: {e}")),
+        }
+    }
+    warnings
+}
+
+fn load_font(s: &mut Session, p: &Value) -> Result<Value> {
+    let (json, svgs, folder) = match (str_param(p, "json"), str_param(p, "svg"), str_param(p, "path")) {
+        (Some(j), Some(v), _) => {
+            if j.len() > MAX_JSON || v.len() > MAX_SVG {
+                return Err(bad(LOAD, "the font is too big"));
+            }
+            (j.to_string(), vec![v.to_string()], None)
+        }
+        (_, _, Some(path)) => {
+            let (json, svgs) = read_folder(path)?;
+            (json, svgs, Some(path.to_string()))
+        }
+        _ => return Err(bad(LOAD, "give the font's folder (`path`), or its `json` and `svg`")),
+    };
+    // the remembered folders first, so this one replaces a font of the same name among them
+    let _ = ensure_fonts(s);
+    let mut font = font_from(&json, &svgs)?;
+    font.folder = folder.clone();
+    let out = describe(&font);
+    add_font(s, font);
+    // remembered for later sessions
+    if let Some(dir) = folder {
+        let dirs = &mut s.prefs.embroidery_font_dirs;
+        if !dirs.contains(&dir) {
+            if dirs.len() >= MAX_FONTS {
+                dirs.remove(0);
+            }
+            dirs.push(dir);
+        }
+    }
     Ok(out)
 }
 
 fn list_fonts(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "fonts": s.embroidery_fonts.iter().map(|f| describe(f)).collect::<Vec<_>>() }))
+    let warnings = ensure_fonts(s);
+    Ok(json!({ "fonts": s.embroidery_fonts.iter().map(|f| describe(f)).collect::<Vec<_>>(), "warnings": warnings }))
+}
+
+fn forget_font(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.font.forget";
+    let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(CMD, "missing `name`"))?;
+    // a font of a remembered folder is known by name once loaded; what fails says so when listed
+    let _ = ensure_fonts(s);
+    let i = s
+        .embroidery_fonts
+        .iter()
+        .position(|f| f.info.name.eq_ignore_ascii_case(name))
+        .ok_or_else(|| bad(CMD, format!("no embroidery font `{name}` is loaded")))?;
+    let font = s.embroidery_fonts.remove(i);
+    if let Some(dir) = &font.folder {
+        s.prefs.embroidery_font_dirs.retain(|d| d != dir);
+    }
+    Ok(json!({ "name": font.info.name }))
 }
 
 /// The size (mm) `font` was digitized at.
@@ -345,6 +422,7 @@ fn align_param(p: &Value, cmd: &str) -> Result<Option<LetterAlign>> {
 fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
     let text = text_param(p, SET)?.ok_or_else(|| bad(SET, "missing `text`"))?;
     let name = str_param(p, "font").ok_or_else(|| bad(SET, "missing `font`"))?;
+    let mut warnings = ensure_fonts(s);
     let font = loaded(s, name).ok_or_else(|| not_loaded(SET, name))?;
     let size = ranged(p, "size", 1.0..=500.0, SET, "`size` is 1 to 500 mm")?.unwrap_or_else(|| own_size(&font));
     let leading = ranged(p, "leading", 0.2..=5.0, SET, "`leading` is 0.2 to 5")?.unwrap_or(1.0);
@@ -362,7 +440,7 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
     };
     // scaled from the size the font was digitized at; outside what it sews well at, a warning
-    let warnings = size_warnings(&font, size);
+    warnings.extend(size_warnings(&font, size));
     let parent = s.doc()?.insertion_parent();
     let (id, count) = s.edit("Embroidery Lettering", |d, sel| {
         let glyphs = glyphs(d, &font, &spec);
@@ -390,6 +468,7 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(f) = str_param(p, "font") {
         spec.font = f.to_string();
     }
+    let mut warnings = ensure_fonts(s);
     let font = loaded(s, &spec.font).ok_or_else(|| not_loaded(EDIT, &spec.font))?;
     spec.font = font.info.name.clone();
     if let Some(v) = ranged(p, "size", 1.0..=500.0, EDIT, "`size` is 1 to 500 mm")? {
@@ -404,7 +483,7 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(v) = align_param(p, EDIT)? {
         spec.align = v;
     }
-    let warnings = size_warnings(&font, spec.size);
+    warnings.extend(size_warnings(&font, spec.size));
     let count = s.edit("Edit Lettering", |d, sel| {
         let glyphs = glyphs(d, &font, &spec);
         if glyphs.is_empty() {

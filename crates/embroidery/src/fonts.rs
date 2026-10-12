@@ -81,6 +81,8 @@ impl Glyph {
 pub struct EmbFont {
     pub info: FontInfo,
     pub glyphs: HashMap<String, Glyph>,
+    /// The folder it was read from (none: given as text).
+    pub folder: Option<String>,
 }
 
 /// One glyph of set text: its name, how far along its line it starts and which line (font units).
@@ -114,7 +116,7 @@ impl EmbFont {
         if glyphs.is_empty() {
             return Err(format!("{}: no glyph layers (GlyphLayer-…) in its art", info.name));
         }
-        Ok(EmbFont { info, glyphs })
+        Ok(EmbFont { info, glyphs, folder: None })
     }
 
     /// The text as the font sets it: in its letter case.
