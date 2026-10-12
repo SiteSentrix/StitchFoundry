@@ -398,7 +398,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CS-05 | Flexi-splits (split lines following a curve) | Partial | A drawn curve repeated across the fill (`embroidery.carveSplits` `repeat`); split lines that follow the shape by themselves still missing | 2 |
 | CS-06 | Florentine effect (stitches follow a drawn curve) | Done | Turning fill along inclination lines; tatami rows that copy a drawn line (Embroidery › Fill Along Lines, one line) | – |
 | CS-07 | Liquid effect (curved fill between two guide curves) | Done | Embroidery › Fill Along Lines with two lines: tatami rows changing shape evenly from one line to the other (public description: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Decorative/curves/curves-11.htm) | – |
-| MO-01 | Single motifs (place one stitched motif) | Partial | Embroidery › Place Motif puts one motif on the artboard as a run you move and reshape; no placement tool yet | 2 |
+| MO-01 | Single motifs (place one stitched motif) | Done | Embroidery › Place Motif puts one motif on the artboard as a run you move and reshape; the Motif tool places one where you click, or as long as you drag and turned your way | – |
 | MO-02 | Motif runs | Done | 11 built-in motifs, and the design's own | – |
 | MO-03 | Graded motif runs (motif size varies along the line) | Done | Motif runs grow or shrink to *Width at end* | – |
 | MO-04 | Motif fills, paired motif fills, 3D motif fills | Done | Motif fill: rows of any motif inside the shape, row offset; paired motif fills (a second motif in turn along the rows); 3D motif fills (*3D effect*: globe out, globe in, perspective, with a strength and a direction; public description: https://docs.wilcom.com/embroiderystudio/27/en/OnlineHelp/Decorative/motifs/motifs-14.htm and motifs-15.htm) | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 134 done,
-35 partial, 56 missing, 6 out of scope (counted 2026-10-12, after 40 textures). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 135 done,
+34 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -726,8 +726,10 @@ RS-03, BAS-15), then the design's own motifs (MO-06), sculpture runs and cross-s
 SP-12), redwork (SP-13), buttonholes (SP-14), rings and outlines round lines (PT-02, RS-02, PT-05),
 more textures and paired motif fills (PS-02, MO-04), graded motif columns (MO-05), string stitching
 (SP-04), the automatic knife (RS-06), 3D motif fills (MO-04) and flow lines, the liquid effect
-(CS-07), a library of carving stamps (PS-04), a repeat preview (BAS-15) and 40 textures (PS-02).
-Left in phase 2: a motif placement tool (MO-01).
+(CS-07), a library of carving stamps (PS-04), a repeat preview (BAS-15), 40 textures (PS-02) and the
+Motif tool (MO-01): every phase 2 row is done but flexi splits that follow the shape by themselves
+(CS-05), motif sets shared across designs (MO-06) and the rest of buttonholes and string art
+(SP-14, NEW-04).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

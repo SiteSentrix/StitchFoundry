@@ -191,6 +191,9 @@ fn auto_digitize_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The Motif tool's id.
+const MOTIF_TOOL: &str = "embroideryMotif";
+
 /// Freehand digitizing: the radial widget and the embroidery brush.
 fn digitize_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let open = app.embroidery.widget.open;
@@ -207,6 +210,24 @@ fn digitize_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             .clicked()
     {
         app.run("ui.designFromPrompt", json!({})).ok();
+    }
+    // the Motif tool: the motif a click or a drag places
+    if app.session.tool_id() == MOTIF_TOOL {
+        let library: Vec<String> = app
+            .session
+            .active()
+            .and_then(|st| st.doc.embroidery.as_deref().map(|c| c.motifs.iter().map(|m| m.name.clone()).collect()))
+            .unwrap_or_default();
+        let chosen = app.session.tool_options_of(MOTIF_TOOL)["motif"].as_str().unwrap_or("Wave").to_string();
+        let built = Motif::ALL.into_iter().find(|m| m.label().eq_ignore_ascii_case(&chosen));
+        let custom = built.is_none().then(|| CustomMotif { name: chosen.clone(), ..CustomMotif::default() });
+        if let Some(choice) = pick_motif(ui, &library, built.unwrap_or_default(), custom.as_ref()) {
+            let name = match choice {
+                MotifChoice::BuiltIn(m) => m.label().to_string(),
+                MotifChoice::Design(name) => name,
+            };
+            app.run("tool.setOption", json!({ "tool": MOTIF_TOOL, "values": { "motif": name } })).ok();
+        }
     }
     if !open {
         return;

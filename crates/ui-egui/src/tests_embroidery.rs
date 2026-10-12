@@ -155,6 +155,15 @@ fn the_design_can_be_shown_repeated() {
 }
 
 #[test]
+fn the_panel_picks_the_motif_tools_motif() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "embroideryMotif"})).unwrap();
+    app.run("tool.setOption", json!({"tool": "embroideryMotif", "values": {"motif": "Star"}})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(texts.iter().any(|t| t == "Motif") && texts.iter().any(|t| t == "Star"), "{texts:?}");
+}
+
+#[test]
 fn the_panel_edits_a_redwork_group_as_one() {
     let mut app = app();
     let a = app.run("path.create", json!({"d": "M 20 20 L 120 20 L 120 120 Z"})).unwrap()["id"].as_u64().unwrap();

@@ -28,6 +28,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         "embroideryBrush" => Some(Box::new(BrushTool::default())),
         "embroideryStitches" => Some(Box::new(StitchTool::default())),
         "embroideryColumn" => Some(Box::new(ColumnTool::default())),
+        "embroideryMotif" => Some(Box::new(MotifTool::default())),
         _ => None,
     }
 }
@@ -696,6 +697,95 @@ impl Tool for BrushTool {
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         if std::mem::take(&mut self.drawing) { vec![Action::Cancel] } else { vec![] }
+    }
+}
+
+/// Motif tool: click to place one motif, 10 mm long, or drag across the canvas for one as long
+/// as the drag and turned its way (`embroidery.placeMotif`). Which motif is the tool's own
+/// setting (`motif`: a built-in motif's name or one of the design's motifs).
+pub struct MotifTool {
+    pub motif: String,
+    from: Option<Point>,
+}
+
+impl Default for MotifTool {
+    fn default() -> Self {
+        MotifTool { motif: "Wave".into(), from: None }
+    }
+}
+
+/// Points in a millimetre.
+const PT_PER_MM: f64 = 72.0 / 25.4;
+
+impl MotifTool {
+    /// What a press at `a` released at `b` places: a click, the motif at its own size; a drag,
+    /// one from `a` to `b`.
+    fn params(&self, cx: &ToolContext, a: Point, b: Point) -> Value {
+        let d = b - a;
+        if d.hypot() < cx.tol(3.0) {
+            return json!({ "motif": self.motif, "at": [a.x, a.y] });
+        }
+        let size = (d.hypot() / PT_PER_MM).clamp(1.0, 500.0);
+        json!({ "motif": self.motif, "at": [(a.x + b.x) * 0.5, (a.y + b.y) * 0.5], "size": size, "angle": d.y.atan2(d.x).to_degrees() })
+    }
+}
+
+impl Tool for MotifTool {
+    fn id(&self) -> &'static str {
+        "embroideryMotif"
+    }
+
+    fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        match ev.kind {
+            PointerKind::Down => {
+                let (p, _) = crate::guides::snap_draw(cx, ev.pos, &[]);
+                self.from = Some(p);
+                vec![Action::Begin("Place Motif".into()), Action::Preview("embroidery.placeMotif".into(), self.params(cx, p, p))]
+            }
+            PointerKind::Drag => match self.from {
+                Some(a) => vec![Action::Preview("embroidery.placeMotif".into(), self.params(cx, a, ev.pos))],
+                None => vec![],
+            },
+            PointerKind::Up => match self.from.take() {
+                Some(a) => {
+                    let (b, _) = crate::guides::snap_draw(cx, ev.pos, &[]);
+                    vec![Action::Preview("embroidery.placeMotif".into(), self.params(cx, a, b)), Action::Commit]
+                }
+                None => vec![],
+            },
+            _ => vec![],
+        }
+    }
+
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape && self.from.take().is_some() {
+            return vec![Action::Cancel];
+        }
+        vec![]
+    }
+
+    fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
+        Cursor::Crosshair
+    }
+
+    fn options(&self) -> Value {
+        json!({ "motif": self.motif })
+    }
+
+    fn set_option(&mut self, key: &str, value: &Value) {
+        if key == "motif"
+            && let Some(v) = value.as_str().filter(|v| !v.trim().is_empty() && v.len() <= 200)
+        {
+            self.motif = v.to_string();
+        }
+    }
+
+    fn busy(&self) -> bool {
+        self.from.is_some()
+    }
+
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if self.from.take().is_some() { vec![Action::Cancel] } else { vec![] }
     }
 }
 
