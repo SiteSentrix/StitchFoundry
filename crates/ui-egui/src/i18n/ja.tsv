@@ -4241,3 +4241,4 @@ lighting	Light	ライト
 @msg	{label} requires a shape with at least two anchors	{label} には 2 つ以上のアンカーポイントを持つシェイプが必要です
 @msg	The shape is too complex for a 3D effect	シェイプが複雑すぎるため 3D 効果を適用できません
 @msg	The 3D surface is too complex; simplify the shape	3D サーフェスが複雑すぎます。シェイプを単純化してください
+	Transform Objects	オブジェクトの変形

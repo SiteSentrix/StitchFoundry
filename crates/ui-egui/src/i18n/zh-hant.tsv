@@ -3619,3 +3619,4 @@ lighting	Light	光源
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有兩個錨點的形狀
 @msg	The shape is too complex for a 3D effect	形狀過於複雜，無法套用 3D 效果
 @msg	The 3D surface is too complex; simplify the shape	3D 表面過於複雜；請簡化形狀
+	Transform Objects	變形物件

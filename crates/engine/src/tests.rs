@@ -712,7 +712,10 @@ fn a_transform_that_moves_nothing_records_no_undo_step() {
         assert_eq!(history(&s), before, "{id} {p}");
         assert_eq!(s.journal.last().unwrap(), &(id.to_string(), p));
     }
-    assert_eq!(s.doc().unwrap().last_transform, Some((Affine::IDENTITY, json!({"copy": false, "typeAreas": false, "patterns": false}))));
+    assert_eq!(
+        s.doc().unwrap().last_transform,
+        Some((Affine::IDENTITY, json!({"copy": false, "typeAreas": false, "patterns": false, "objects": true})))
+    );
     // A Nudge of 0 with an anchor of the rectangle direct-selected keeps it a live shape.
     let is_live = |s: &Session| matches!(s.doc().unwrap().doc.node(a).unwrap().kind, NodeKind::Path { live: Some(_), .. });
     assert!(is_live(&s), "a rectangle is a live shape");

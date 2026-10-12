@@ -44,7 +44,7 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         "rotate" | "reflect" | "scale" | "shear" | "artboardOptions" => {
             let mut base = match kind {
                 "rotate" => json!({"angle": 0}),
-                "reflect" => json!({"axis": "vertical"}),
+                "reflect" => json!({"axis": "vertical", "angle": 90}),
                 "scale" => json!({"sx": 100, "sy": 100, "uniform": true}),
                 "shear" => json!({"angle": 0, "axis": "horizontal"}),
                 _ => json!({}),
