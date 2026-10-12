@@ -4699,3 +4699,13 @@ machine	Stop	Zastavení
 	Forget Font	Zapomenout písmo
 	Unload the font and stop loading its folder	Uvolnit písmo a přestat načítat jeho složku
 	Forget Embroidery Font	Zapomenout vyšívací písmo
+	Team Names	Jména týmu
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Vyberte nápis ve vyšívacím písmu: pro každé jméno se zapíše strojový soubor s nápisem změněným na toto jméno.
+	One name a line	Jedno jméno na řádek
+	Import Names…	Importovat jména…
+	The first column of a CSV table, or a text file of one name a line	První sloupec tabulky CSV nebo textový soubor s jedním jménem na řádek
+	Names	Jména
+	Export One File per Name…	Exportovat soubor pro každé jméno…
+	Team name files written	Zapsané soubory se jmény
+	Export Team Names	Exportovat jména týmu
+	Read Team Names	Načíst jména týmu

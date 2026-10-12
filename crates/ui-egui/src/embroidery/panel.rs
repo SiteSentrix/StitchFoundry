@@ -154,6 +154,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     digitize_row(app, ui);
     lettering_rows(app, ui);
+    team_name_rows(app, ui);
     buttonhole_rows(app, ui);
     ui.add_space(6.0);
     object_section(app, ui);
@@ -298,6 +299,46 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             Err(e) => app.status(e),
         }
+    }
+}
+
+/// Team names: one machine file per name, the selected lettering set to it.
+fn team_name_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    egui::CollapsingHeader::new(tl!("Team Names")).id_salt("emb-team-names").show(ui, |ui| team_names_body(app, ui));
+}
+
+/// The Team Names section's rows.
+pub(crate) fn team_names_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if selected_lettering(app).is_none() {
+        ui.label(tl!("Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it."));
+        return;
+    }
+    ui.add(egui::TextEdit::multiline(&mut app.embroidery.team_names).desired_rows(4).hint_text(tl!("One name a line")));
+    if app.services.pick_open.is_some()
+        && button(ui, tl!("Import Names…")).on_hover_text(tl!("The first column of a CSV table, or a text file of one name a line")).clicked()
+    {
+        crate::picks::button(app, |app| {
+            let pick = crate::FilePick { filters: vec![("CSV", &["csv", "txt"])], ..Default::default() };
+            let Some(path) = crate::picks::open(app, &pick) else { return };
+            match app.run("embroidery.teamNames.read", json!({ "path": path })) {
+                Ok(r) => {
+                    let names: Vec<&str> = r["names"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+                    app.embroidery.team_names = names.join("\n");
+                }
+                Err(e) => app.status(e),
+            }
+        });
+    }
+    let names: Vec<String> = app.embroidery.team_names.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
+    ui.label(format!("{}: {}", tl!("Names"), names.len()));
+    if app.services.pick_folder.is_some() && !names.is_empty() && button(ui, tl!("Export One File per Name…")).clicked() {
+        crate::picks::button(app, move |app| {
+            let Some(dir) = crate::picks::folder(app) else { return };
+            match app.run("embroidery.teamNames.export", json!({ "names": names.clone(), "dir": dir })) {
+                Ok(r) => app.status(format!("{}: {}", tl!("Team name files written"), r["count"].as_u64().unwrap_or(0))),
+                Err(e) => app.status(e),
+            }
+        });
     }
 }
 

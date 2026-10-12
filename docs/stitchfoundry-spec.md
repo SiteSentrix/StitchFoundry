@@ -461,8 +461,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | LT-12 | Lettering underlay | Done | Auto underlay | – |
 | LT-13 | Recommended minimum/maximum height per font shown while typing | Partial | Embroidery fonts give their sizes (`embroidery.fonts`: minSize, maxSize) and lettering outside them comes with a warning; not yet shown while typing | 3 |
 | LT-14 | Small-text optimisation (short stitches, lighter pull compensation, special underlay) | Partial | Thickness-based; add small-text profile | 3 |
-| TM-01 | Team names: many names under one design, CSV import/export | Missing | §7.7, built on VectorCraft variables | 3 |
-| TM-02 | Team-name templates; output per name (files, multi-head) | Missing | §7.7 | 3 |
+| TM-01 | Team names: many names under one design, CSV import/export | Done | Embroidery panel › Team Names: names typed or read from a CSV column (`embroidery.teamNames.read`), set in the selected embroidery-font lettering; VectorCraft Variables datasets still drive type | – |
+| TM-02 | Team-name templates; output per name (files, multi-head) | Partial | One machine file per name, named after it (`embroidery.teamNames.export`); any design with its lettering is the template; multi-head layouts and a names worksheet still to come | 2 |
 | TM-03 | Monograms: templates, letter styles, ornaments, borders | Missing | §7.7; our own templates | 3 |
 | CL-01 | Convert TrueType/OpenType fonts | Done | Live from glyph outlines | – |
 | CL-02 | User-refined letters (save edited glyphs) | Missing | Recipe overrides per glyph | 3 |
@@ -552,8 +552,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 
-**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 143 done,
-30 partial, 53 missing, 6 out of scope (counted 2026-10-12, after phase 2). Most of what is missing is breadth (more stitch
+**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 144 done,
+31 partial, 51 missing, 6 out of scope (counted 2026-10-12, after team names). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

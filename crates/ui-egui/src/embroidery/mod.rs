@@ -154,6 +154,8 @@ pub struct EmbroideryUi {
     pub lettering_arc: f64,
     /// Whether the section has asked for the fonts (loading the remembered folders) yet.
     pub fonts_listed: bool,
+    /// The Team Names section's names, one a line.
+    pub team_names: String,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -225,6 +227,7 @@ impl Default for EmbroideryUi {
             lettering_for: None,
             lettering_arc: 0.0,
             fonts_listed: false,
+            team_names: String::new(),
             prompt: prompt::PromptState::default(),
         }
     }

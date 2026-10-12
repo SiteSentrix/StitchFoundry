@@ -4674,3 +4674,13 @@ machine	Stop	Arresto
 	Forget Font	Dimentica font
 	Unload the font and stop loading its folder	Scarica il font e non caricare più la sua cartella
 	Forget Embroidery Font	Dimentica font da ricamo
+	Team Names	Nomi della squadra
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Seleziona una scritta in un font da ricamo: viene scritto un file macchina per ogni nome, con la scritta impostata su quel nome.
+	One name a line	Un nome per riga
+	Import Names…	Importa nomi…
+	The first column of a CSV table, or a text file of one name a line	La prima colonna di una tabella CSV, o un file di testo con un nome per riga
+	Names	Nomi
+	Export One File per Name…	Esporta un file per nome…
+	Team name files written	File dei nomi scritti
+	Export Team Names	Esporta nomi della squadra
+	Read Team Names	Leggi nomi della squadra

@@ -4672,3 +4672,13 @@ machine	Stop	Parada
 	Forget Font	Olvidar fuente
 	Unload the font and stop loading its folder	Descargar la fuente y dejar de cargar su carpeta
 	Forget Embroidery Font	Olvidar fuente de bordado
+	Team Names	Nombres de equipo
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Seleccione una rotulación en una fuente de bordado: se escribe un archivo de máquina por cada nombre, con la rotulación cambiada a ese nombre.
+	One name a line	Un nombre por línea
+	Import Names…	Importar nombres…
+	The first column of a CSV table, or a text file of one name a line	La primera columna de una tabla CSV, o un archivo de texto con un nombre por línea
+	Names	Nombres
+	Export One File per Name…	Exportar un archivo por nombre…
+	Team name files written	Archivos de nombres escritos
+	Export Team Names	Exportar nombres de equipo
+	Read Team Names	Leer nombres de equipo

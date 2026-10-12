@@ -4628,3 +4628,13 @@ machine	Stop	Stopp
 	Forget Font	Schrift vergessen
 	Unload the font and stop loading its folder	Die Schrift entladen und ihren Ordner nicht mehr laden
 	Forget Embroidery Font	Stickschrift vergessen
+	Team Names	Teamnamen
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Wählen Sie eine Schrift in einer Stickschrift: Für jeden Namen wird eine Maschinendatei geschrieben, mit der Schrift auf diesen Namen gesetzt.
+	One name a line	Ein Name pro Zeile
+	Import Names…	Namen importieren…
+	The first column of a CSV table, or a text file of one name a line	Die erste Spalte einer CSV-Tabelle oder eine Textdatei mit einem Namen pro Zeile
+	Names	Namen
+	Export One File per Name…	Eine Datei pro Name exportieren…
+	Team name files written	Teamnamen-Dateien geschrieben
+	Export Team Names	Teamnamen exportieren
+	Read Team Names	Teamnamen lesen
