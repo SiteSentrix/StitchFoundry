@@ -2647,7 +2647,7 @@ fn letters_move_scale_and_turn_one_at_a_time() {
 fn puff_sews_satin_over_foam_lettering_too() {
     use sf_core::attr::StitchType;
     let mut s = session();
-    // a satin line and a fill: the satin turns puff, the fill is passed by
+    // a satin line and a fill: both puff, the fill as satin across it
     let line = s.execute("path.create", &json!({"d": "M 100 100 L 200 100"})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [line]})).unwrap();
     s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
@@ -2656,7 +2656,7 @@ fn puff_sews_satin_over_foam_lettering_too() {
     s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
     s.execute("select.set", &json!({"ids": [line, sq.0]})).unwrap();
     let r = s.execute("embroidery.puff", &json!({})).unwrap();
-    assert_eq!((r["satin"].as_u64(), r["other"].as_u64(), r["on"].as_bool()), (Some(1), Some(1), Some(true)));
+    assert_eq!((r["satin"].as_u64(), r["other"].as_u64(), r["on"].as_bool()), (Some(2), Some(0), Some(true)));
     let satin = |s: &Session| match s.doc().unwrap().doc.node(NodeId(line)).unwrap().embroidery.as_deref().map(|e| e.stitch.clone()) {
         Some(StitchType::Satin(p)) => p,
         other => panic!("{other:?}"),
@@ -2691,6 +2691,36 @@ fn puff_sews_satin_over_foam_lettering_too() {
     assert!(look(&s).iter().all(|p| !*p));
     assert!(s.execute("embroidery.puff", &json!({"cap": 9})).is_err());
     assert!(s.execute("embroidery.lettering.edit", &json!({"puff": "yes"})).is_err());
+}
+
+#[test]
+fn puff_fills_and_puff_sewn_last() {
+    use sf_core::attr::StitchType;
+    let mut s = session();
+    let ids: Vec<NodeId> = (0..3).map(|i| rect(&mut s, 100.0 + 100.0 * i as f64, 100.0, 40.0, 30.0)).collect();
+    for id in &ids {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    }
+    assert!(s.execute("embroidery.puff.last", &json!({})).is_err());
+    // the first filled shape made puff: satin across it; plain again, it fills again
+    s.execute("embroidery.puff", &json!({"ids": [ids[0].0]})).unwrap();
+    let kind = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().embroidery.as_deref().map(|e| e.stitch.clone());
+    assert!(matches!(kind(&s, ids[0]), Some(StitchType::Satin(p)) if p.puff.is_some_and(|q| q.fill)));
+    s.execute("embroidery.puff", &json!({"ids": [ids[0].0]})).unwrap();
+    assert!(matches!(kind(&s, ids[0]), Some(StitchType::Fill(_))));
+    s.execute("embroidery.puff", &json!({"ids": [ids[0].0]})).unwrap();
+    // sewn last, with a stop after the shape sewn before it
+    let r = s.execute("embroidery.puff.last", &json!({})).unwrap();
+    assert_eq!((r["puff"].as_u64(), r["stop"].as_bool()), (Some(1), Some(true)));
+    let st = s.doc().unwrap();
+    let order: Vec<NodeId> = st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(order, [ids[1], ids[2], ids[0]]);
+    let stops: Vec<bool> = ids.iter().map(|id| st.doc.node(*id).unwrap().embroidery.as_deref().unwrap().stop_after).collect();
+    assert_eq!(stops, [false, false, true]);
+    // one undo step
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap()[0].id, ids[0]);
 }
 
 #[test]

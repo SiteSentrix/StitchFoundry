@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use sf_core::attr::{Embroidery, LetterAdjust, LetterAlign, LetterJoin, LetterOrder, LetterSewing, LetterTrim, Lettering, StitchType};
-use sf_core::model::Puff;
+use sf_core::model::{FillParams, Puff, SatinParams};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_embroidery::fonts::{EmbFont, MAX_TEXT};
 use vectorcraft_geom::Affine;
@@ -96,9 +96,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "3D Puff",
             ["Embroidery"],
             None,
-            "{ids?, on?: bool (default: on, or off when all the satin chosen is puff already), cap?: mm the end caps reach past a column's ends (0.5; 0–3)} 3D puff: the selected objects' satin (lettering's too, kept when it is set again) sewn over foam: dense (0.16 mm), no underlay, auto split or short stitches, the sides pushed out 0.35 mm, a cap across each end that cuts and covers the foam. Columns 3 to 7 mm wide puff best; sew the puff in a colour of its own so the machine stops to lay the foam → {satin: pieces set, other: pieces that aren't satin (left as they are), on}",
+            "{ids?, on?: bool (default: on, or off when all the satin chosen is puff already), cap?: mm the end caps reach past a column's ends (0.5; 0–3)} 3D puff: the selected objects' satin (lettering's too, kept when it is set again) sewn over foam, a filled shape as satin across it (plain again, it fills again): dense (0.16 mm), no underlay, auto split or short stitches, the sides pushed out 0.35 mm, a cap across each end that cuts and covers the foam. Columns 3 to 7 mm wide puff best; sew the puff in a colour of its own so the machine stops to lay the foam → {satin: pieces set, other: pieces that aren't satin (left as they are), on}",
             has_selection,
             puff
+        ),
+        cmd!(
+            "embroidery.puff.last",
+            "Sew Puff Last",
+            ["Embroidery"],
+            None,
+            "{} the 3D puff sewn last, the way it is laid: in each layer (and plain group), the objects that are all puff moved after the others, in the order they were in, and a stop after the last piece sewn before the first of them, so the foam is laid over what is already sewn (none when the design starts with puff) → {puff: objects moved last, stop}",
+            has_doc,
+            puff_last
         ),
         cmd!(
             "embroidery.lettering.letter",
@@ -570,17 +579,104 @@ fn puff_all(n: &mut Node, puff: Option<Puff>, counts: &mut (usize, usize)) {
         }
         return;
     }
-    match n.embroidery.as_deref_mut().map(|e| &mut e.stitch) {
-        Some(StitchType::Satin(params)) => {
-            match puff {
-                Some(p) => p.apply(params),
-                None => Puff::remove(params),
-            }
-            counts.0 += 1;
+    let Some(e) = n.embroidery.as_deref_mut() else { return };
+    // satin made puff or plain again; a fill made puff becomes satin across it, and fills again
+    let next = match (&mut e.stitch, puff) {
+        (StitchType::Satin(params), Some(p)) => {
+            Puff { fill: params.puff.is_some_and(|q| q.fill), ..p }.apply(params);
+            None
         }
-        Some(_) => counts.1 += 1,
-        None => {}
+        (StitchType::Satin(params), None) if params.puff.is_some_and(|q| q.fill) => Some(StitchType::Fill(FillParams::default())),
+        (StitchType::Satin(params), None) => {
+            Puff::remove(params);
+            None
+        }
+        (StitchType::Fill(_), Some(p)) => {
+            let mut params = SatinParams::default();
+            Puff { fill: true, ..p }.apply(&mut params);
+            Some(StitchType::Satin(params))
+        }
+        _ => {
+            counts.1 += 1;
+            return;
+        }
+    };
+    counts.0 += 1;
+    if let Some(st) = next {
+        e.stitch = st;
     }
+}
+
+/// Whether all the stitched art in `n` is puff (and there is some).
+fn is_puff(n: &Node) -> bool {
+    fn walk(n: &Node, all: &mut bool, any: &mut bool) {
+        if let NodeKind::Group { children, .. } = &n.kind {
+            children.iter().for_each(|c| walk(c, all, any));
+            return;
+        }
+        match n.embroidery.as_deref().map(|e| &e.stitch) {
+            Some(StitchType::Satin(p)) if p.puff.is_some() => *any = true,
+            Some(_) => *all = false,
+            None => {}
+        }
+    }
+    let (mut all, mut any) = (true, false);
+    walk(n, &mut all, &mut any);
+    all && any
+}
+
+/// In `children` and the plain layers and groups among them, the puff objects moved after the
+/// others, in the order they were in → how many.
+fn puff_last_in(children: &mut Vec<Arc<Node>>) -> usize {
+    let mut moved = 0;
+    for c in children.iter_mut() {
+        if c.embroidery.is_none()
+            && !is_puff(c)
+            && c.children().is_some_and(|k| k.iter().any(|k| is_puff(k) || k.children().is_some()))
+            && let Some(kids) = Arc::make_mut(c).children_mut()
+        {
+            moved += puff_last_in(kids);
+        }
+    }
+    if children.iter().any(|c| is_puff(c)) {
+        let (puff, rest): (Vec<_>, Vec<_>) = std::mem::take(children).into_iter().partition(|c| is_puff(c));
+        moved += puff.len();
+        *children = rest;
+        children.extend(puff);
+    }
+    moved
+}
+
+fn puff_last(s: &mut Session, _: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.puff.last";
+    if !vectorcraft_embroidery::stitched_nodes(&s.doc()?.doc).iter().any(|n| is_puff(n)) {
+        return Err(bad(CMD, "nothing is 3D puff (Embroidery › 3D Puff)"));
+    }
+    let (moved, stop) = s.edit("Sew Puff Last", |d, _| {
+        let mut moved = 0;
+        for l in d.layers.iter_mut() {
+            if let Some(kids) = Arc::make_mut(l).children_mut() {
+                moved += puff_last_in(kids);
+            }
+        }
+        // a stop after the last piece sewn before the first puff, to lay the foam
+        let order = vectorcraft_embroidery::stitched_nodes(d);
+        let first = order.iter().position(|n| is_puff(n)).unwrap_or(0);
+        let before = order
+            .get(..first)
+            .unwrap_or_default()
+            .iter()
+            .rev()
+            .find(|n| !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
+            .map(|n| n.id);
+        if let Some(id) = before
+            && let Some(e) = d.node_mut(id).and_then(|n| n.embroidery.as_deref_mut())
+        {
+            e.stop_after = true;
+        }
+        Ok((moved, before.is_some()))
+    })?;
+    Ok(json!({ "puff": moved, "stop": stop }))
 }
 
 /// Whether all the satin in `n` is puff already (and there is some).
@@ -616,7 +712,7 @@ fn puff(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Some(v) => v.as_bool().ok_or_else(|| bad(CMD, "`on` is true or false"))?,
     };
-    let setting = on.then(|| Puff { cap: cap.unwrap_or(Puff::default().cap) });
+    let setting = on.then(|| Puff { cap: cap.unwrap_or(Puff::default().cap), ..Puff::default() });
     // lettering is set again from its font, puff or not
     let _ = ensure_fonts(s);
     let mut letterings = Vec::new();

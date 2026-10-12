@@ -540,7 +540,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-16 | AI text to embroidery: a prompt becomes flat-colour art drawn to digitize well, then a design | Partial | Embroidery › Design from Prompt (desktop): Claude draws flat-colour SVG with the user's own Anthropic API key (`sf_core::ai`), and `embroidery.placeArt` places it, gives its shapes stitch types with underlying fills cut (0.4 mm overlap), matches the chart's threads and brings same-coloured shapes together where the stacking allows (`embroidery.autoSequence {ids}`), in one undo step. Left: StitchFoundry accounts and credits (§11), the web app | A |
 | NEW-17 | AI image or logo to embroidery: the upload is redrawn as clean flat art, then digitized | Partial | Embroidery › Redraw Image with Claude (desktop): the selected image goes to Claude with the user's own key (no larger than the model looks at), its redrawing lands on the image (`embroidery.placeArt {frame}`) and is digitized as NEW-16's. Left: accounts and credits (§11), the web app, AD-03 and AD-04 for redrawings that need click-to-stitch or outlines | A |
 | NEW-18 | AI product mockups: the design shown on a shirt, cap or bag | Missing | §11; MD-01 | A |
-| NEW-19 | Puff fill for wide areas, and the puff sewing order (a flat outline first, a stop to lay the foam) | Missing | Puff satin and lettering are done (BEY-07); add a puff fill and a command that orders puff last with a stop before it | 3 |
+| NEW-19 | Puff fill for wide areas, and the puff sewing order (a flat outline first, a stop to lay the foam) | Done | A filled shape made puff is sewn as satin across it; Sew Puff Last (`embroidery.puff.last`) moves the puff after the rest with a stop before it | – |
 | NEW-20 | A library of ready-digitized embroidery fonts, marked puff, small or appliqué where they suit | Missing | Digitized by the project from OFL typefaces with the font creator, kept in craft-fonts (never in this repo); font-list badges | 3 |
 | NEW-21 | Bubble (outline) text, and circle and spiral baselines | Missing | Extends LT-03 and the lettering commands | 3 |
 | NEW-22 | Appliqué lettering (each letter a patch: placement, tack-down, cover) | Missing | Lettering whose glyph outlines become appliqué (AP-*) | 4 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 154 done,
-29 partial, 61 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 155 done,
+29 partial, 60 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

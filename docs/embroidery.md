@@ -640,7 +640,13 @@ rather than pulling it in), and a cap across each end of a column, its stitches 
 (`cap`) past the end so the foam is cut and covered there too. Chosen again on satin that is all
 puff already, it turns it back to plain satin. Lettering takes it too (`puff: true` on
 `embroidery.lettering` and `.edit`, *3D puff* in the lettering section): its glyphs' satin is puff,
-and stays so when the lettering is set again. Pieces that aren't satin are left as they are.
+and stays so when the lettering is set again. A filled shape made puff is sewn as satin across
+it over the foam (made plain again, it fills again); other pieces are left as they are.
+
+**Embroidery › Sew Puff Last** (`embroidery.puff.last`) orders a design the way puff is sewn:
+the flat parts first, then the puff. In each layer (and plain group), the objects that are all
+puff move after the others, in the order they were in, and the last piece sewn before the first
+of them gets a stop, so the machine pauses for the foam to be laid over what is already sewn.
 
 To sew it: give the puff its own thread colour so the machine stops before it, lay the foam
 (2–4 mm, in the thread's colour) over the area, sew, then tear the foam away and heat it to shrink

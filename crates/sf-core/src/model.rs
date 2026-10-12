@@ -819,11 +819,15 @@ pub struct SatinParams {
 pub struct Puff {
     /// How far the end caps reach past a column's ends (mm).
     pub cap: f64,
+    /// Made from a fill (a filled shape sewn as satin across it over the foam): plain again, it
+    /// fills again.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub fill: bool,
 }
 
 impl Default for Puff {
     fn default() -> Self {
-        Puff { cap: 0.5 }
+        Puff { cap: 0.5, fill: false }
     }
 }
 
@@ -853,7 +857,7 @@ impl Puff {
         params.underlay.edge_run = false;
         params.underlay.zigzag = false;
         params.underlay.double_zigzag = false;
-        params.puff = Some(Puff { cap: self.cap.clamp(0.0, 3.0) });
+        params.puff = Some(Puff { cap: self.cap.clamp(0.0, 3.0), ..self });
     }
 
     /// `params` back to plain satin: what [`Puff::apply`] set, as satin has it by default.
