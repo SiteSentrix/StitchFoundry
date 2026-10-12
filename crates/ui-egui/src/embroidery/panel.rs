@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 use vectorcraft_embroidery::sf_core::attr::{Embroidery, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
-    Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH,
-    TackdownKind, TexturePattern, TieStyle,
+    Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, MotifColumn, RunKind, SatinParams,
+    TATAMI_LENGTH, TackdownKind, TexturePattern, TieStyle,
 };
 use vectorcraft_embroidery::sf_core::threads::{Rgb, charts};
 
@@ -448,6 +448,24 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                     && let Some(c) = Corners::ALL.get(i)
                 {
                     set(app, target, json!({ "corners": c }));
+                }
+            }
+            // a motif column: motifs as wide as the column instead of satin
+            let column = s.motif_column.as_deref();
+            let sew_as = [tl!("Satin"), tl!("Motifs")];
+            if let Some(i) = pick(ui, tl!("Sew as"), "sewas", usize::from(column.is_some()), &sew_as) {
+                set(app, target, json!({ "motif_column": if i == 1 { json!(MotifColumn::default()) } else { Value::Null } }));
+            }
+            if let Some(m) = column {
+                let names: Vec<&str> = Motif::ALL.iter().map(|x| motif_name(*x)).collect();
+                let cur = Motif::ALL.iter().position(|x| *x == m.motif).unwrap_or(0);
+                if let Some(i) = pick(ui, tl!("Motif"), "colmotif", cur, &names)
+                    && let Some(x) = Motif::ALL.get(i)
+                {
+                    set(app, target, json!({ "motif_column": { "motif": x, "custom_motif": null } }));
+                }
+                if let Some(v) = num(ui, tl!("Motif length (× width)"), "collen", m.length, "", 2) {
+                    set(app, target, json!({ "motif_column": { "length": v.clamp(0.2, 10.0) } }));
                 }
             }
             if let Some(v) = num(ui, tl!("Density"), "sd", s.spacing, " mm", 2) {

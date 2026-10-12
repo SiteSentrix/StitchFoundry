@@ -104,6 +104,13 @@ fn the_panel_shows_sculpture_runs_and_cross_styles() {
     for want in ["Sculpture run", "Triple stitch length", "Single stitch length", "Triple stitches", "Single stitches"] {
         assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
     }
+    // a satin line sewn as motifs
+    app.run("embroidery.set", json!({"type": "satin"})).unwrap();
+    app.run("embroidery.setParams", json!({"params": {"motifColumn": {"motif": "Leaf"}}})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    for want in ["Sew as", "Motifs", "Leaf", "Motif length (× width)"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
     app.run("shape.rectangle", json!({"x": 20, "y": 150, "width": 100, "height": 100})).unwrap();
     app.run("embroidery.set", json!({"type": "cross"})).unwrap();
     app.run("embroidery.setParams", json!({"params": {"cross": "Upright"}})).unwrap();

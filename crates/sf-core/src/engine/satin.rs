@@ -239,6 +239,17 @@ pub(crate) fn generate(col: &Column, params: &SatinParams, hint: Option<Point>, 
         }
         _ => false,
     };
+    // A motif column: motifs laid out along the column as drawn, sewn backwards when it starts
+    // at the far end.
+    if let Some(m) = params.motif_column.as_deref() {
+        let pairs = sample_pairs(&col, |_| 0.25);
+        let shape = super::run::motif_points(m.motif, m.custom_motif.as_ref());
+        let mut pts = super::run::motif_column(&pairs, &shape, m.length, m.stitch_length.max(0.3));
+        if reverse {
+            pts.reverse();
+        }
+        return super::out::as_stitches(pts);
+    }
     if reverse {
         col.reverse();
     }
@@ -377,6 +388,35 @@ mod tests {
     use crate::geom::{Node, NodeKind};
     use crate::model::SatinUnderlay;
     use crate::pattern::Cmd;
+
+    #[test]
+    fn a_motif_column_sews_motifs_as_wide_as_the_column() {
+        use crate::model::{CustomMotif, Motif, MotifColumn};
+        // A column 2 mm wide at the left growing to 8 mm at the right, 40 mm long.
+        let col = Column::new(vec![
+            Rung::new(Point::new(0.0, -1.0), Point::new(0.0, 1.0), NodeKind::Corner),
+            Rung::new(Point::new(40.0, -4.0), Point::new(40.0, 4.0), NodeKind::Corner),
+        ]);
+        let sew = |m: MotifColumn, hint: Option<Point>| -> Vec<Point> {
+            let params = SatinParams { motif_column: Some(Box::new(m)), ..Default::default() };
+            generate(&col, &params, hint, None, 12.0).iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect()
+        };
+        let pts = sew(MotifColumn { motif: Motif::Diamond, length: 1.0, ..Default::default() }, None);
+        assert!(pts.len() > 40, "{}", pts.len());
+        // Inside the column, and graded: wider motifs where it is wider.
+        assert!(pts.iter().all(|p| p.y.abs() <= 1.0 + 3.0 * p.x / 40.0 + 1e-6), "a needle point outside the column");
+        let reach = |lo: f64, hi: f64| pts.iter().filter(|p| p.x >= lo && p.x <= hi).map(|p| p.y.abs()).fold(0.0, f64::max);
+        assert!(reach(0.0, 6.0) < 1.6 && reach(32.0, 40.0) > 2.8, "{} {}", reach(0.0, 6.0), reach(32.0, 40.0));
+        // From the far end, the same stitches backwards.
+        let back = sew(MotifColumn { motif: Motif::Diamond, length: 1.0, ..Default::default() }, Some(Point::new(45.0, 0.0)));
+        assert_eq!(back, pts.iter().rev().copied().collect::<Vec<_>>());
+        // A peak drawn upward stands up along a column running left to right, as on a run.
+        let peak = CustomMotif { name: "Peak".into(), points: vec![[0.0, 0.0], [0.5, -1.0], [1.0, 0.0]], aspect: 1.0 };
+        let pts = sew(MotifColumn { custom_motif: Some(peak), length: 1.0, ..Default::default() }, None);
+        let below = pts.iter().filter(|p| p.y > 0.0).count();
+        assert!(below * 2 > pts.len(), "the bases below the middle, the tips above");
+        assert!(pts.iter().any(|p| p.x > 30.0 && p.y < -2.8));
+    }
 
     fn straight(width: f64, len: f64) -> Column {
         Column::new(vec![
