@@ -242,8 +242,11 @@ fn fidelity_changes_anchor_count() {
 
 #[test]
 fn snap_curves_to_lines_straightens_near_lines() {
-    // A slightly jagged, almost straight edge.
-    let img = Raster::from_fn(200, 100, |x, y| if y as f64 > 30.0 + (x as f64 * 0.05) + if x % 37 < 2 { 1.0 } else { 0.0 } { BLACK } else { WHITE });
+    // A slightly jagged, almost straight edge. (Hard pixels place it to half a pixel only, and its
+    // ends sit on staircase treads: jags far along it would be more than "slightly" off the line.)
+    let img = Raster::from_fn(200, 100, |x, y| {
+        if y as f64 > 30.0 + (x as f64 * 0.05) + if (5..7).contains(&(x % 37)) && x < 120 { 1.0 } else { 0.0 } { BLACK } else { WHITE }
+    });
     let res = trace(&img, &TraceParams { snap_curves_to_lines: true, ..bw() });
     let sp = &res.paths[0].path.subpaths[0];
     let curves = (0..sp.segment_count()).filter(|&i| !sp.segment_is_line(i)).count();
@@ -726,6 +729,133 @@ fn more_noise_removal_never_gives_more_paths() {
             let n = trace(&img, &TraceParams { noise, ..TraceParams::default() }).paths.len();
             assert!(n <= last.1, "image {seed0}: Noise {noise} gives {n} paths, more than the {} of Noise {}", last.1, last.0);
             last = (noise, n);
+        }
+    }
+}
+
+/// A shape drawn anti-aliased: each pixel's ink is the share of its 8 × 8 samples that `inside` holds.
+fn soft(w: u32, h: u32, inside: impl Fn(f64, f64) -> bool) -> Raster {
+    Raster::from_fn(w, h, |x, y| {
+        let n = (0..64).filter(|i| inside(f64::from(x) + (f64::from(i % 8) + 0.5) / 8.0, f64::from(y) + (f64::from(i / 8) + 0.5) / 8.0)).count();
+        let v = (255.0 * (1.0 - n as f64 / 64.0)).round() as u8;
+        [v, v, v, 255]
+    })
+}
+
+/// Points along every curve of `p`.
+fn along(p: &vectorcraft_geom::PathData) -> Vec<Point> {
+    use vectorcraft_geom::ParamCurve;
+    p.subpaths
+        .iter()
+        .flat_map(|sp| (0..sp.segment_count()).flat_map(move |i| (0..16).map(move |k| sp.segment(i).eval(f64::from(k) / 16.0))))
+        .collect()
+}
+
+#[test]
+fn an_anti_aliased_disc_is_traced_to_a_fraction_of_a_pixel() {
+    let (c, r) = (Point::new(60.3, 59.6), 40.4);
+    let res = trace(&soft(120, 120, |x, y| Point::new(x, y).distance(c) <= r), &bw());
+    assert_eq!(res.paths.len(), 1);
+    let off = along(&res.paths[0].path).iter().map(|p| (p.distance(c) - r).abs()).fold(0.0, f64::max);
+    assert!(off < 0.12, "{off} px off the circle");
+    // Smooth all the way round, with a handful of anchors.
+    assert!(res.paths[0].path.anchor_count() <= 8, "{} anchors", res.paths[0].path.anchor_count());
+    assert!(res.paths[0].path.subpaths[0].anchors.iter().all(|a| a.kind == vectorcraft_geom::AnchorKind::Smooth));
+}
+
+#[test]
+fn an_anti_aliased_square_has_four_corners_and_straight_sides() {
+    // Edges between pixel rows and columns, turned a little so that none follows the grid.
+    let (c, half, turn) = (Point::new(50.3, 49.7), 30.2, 0.2f64);
+    let inside = |x: f64, y: f64| {
+        let (dx, dy) = (x - c.x, y - c.y);
+        (dx * turn.cos() + dy * turn.sin()).abs() <= half && (dy * turn.cos() - dx * turn.sin()).abs() <= half
+    };
+    let res = trace(&soft(100, 100, inside), &bw());
+    let sp = &res.paths[0].path.subpaths[0];
+    assert_eq!(sp.anchors.len(), 4, "{sp:?}");
+    assert!((0..4).all(|i| sp.segment_is_line(i)));
+    for a in &sp.anchors {
+        let (dx, dy) = (a.p.x - c.x, a.p.y - c.y);
+        let (u, v) = (dx * turn.cos() + dy * turn.sin(), dy * turn.cos() - dx * turn.sin());
+        assert!((u.abs() - half).abs() < 0.15 && (v.abs() - half).abs() < 0.15, "corner {:?} is off", a.p);
+    }
+}
+
+#[test]
+fn a_thin_anti_aliased_line_keeps_its_place_and_width() {
+    // 1.2 px wide, lying across two pixel rows.
+    let res = trace(&soft(60, 20, |x, y| (5.0..55.0).contains(&x) && (9.7..10.9).contains(&y)), &bw());
+    assert_eq!(res.paths.len(), 1);
+    let b = res.paths[0].path.bounds().unwrap();
+    assert!((b.y0 - 9.7).abs() < 0.1 && (b.y1 - 10.9).abs() < 0.1, "{b:?}");
+    assert!((b.x0 - 5.0).abs() < 0.1 && (b.x1 - 55.0).abs() < 0.1, "{b:?}");
+}
+
+#[test]
+fn touching_colours_get_the_same_edge() {
+    // Red left of a slanted edge, blue right of it: where the paths meet, each lies on the edge.
+    let edge = |y: f64| 30.3 + 0.2 * y;
+    let img = Raster::from_fn(60, 40, |x, y| {
+        let t = (edge(f64::from(y) + 0.5) - f64::from(x)).clamp(0.0, 1.0);
+        [(200.0 * t + 30.0 * (1.0 - t)) as u8, (40.0 * t + 90.0 * (1.0 - t)) as u8, (50.0 * t + 200.0 * (1.0 - t)) as u8, 255]
+    });
+    let res = trace(&img, &TraceParams { mode: Mode::Color, colors: 2, ..TraceParams::default() });
+    assert_eq!(res.paths.len(), 2);
+    for p in &res.paths {
+        let inner: Vec<Point> = along(&p.path).into_iter().filter(|q| q.x > 1.0 && q.x < 59.0 && q.y > 1.0 && q.y < 39.0).collect();
+        assert!(!inner.is_empty());
+        let off = inner.iter().map(|q| (q.x - edge(q.y)).abs()).fold(0.0, f64::max);
+        assert!(off < 0.12, "{off} px off the shared edge");
+    }
+}
+
+#[test]
+fn a_hard_edged_disc_is_still_round() {
+    let res = trace(&disc(120, 60.0, 60.0, 40.0), &bw());
+    let c = Point::new(60.0, 60.0);
+    let off = along(&res.paths[0].path).iter().map(|p| (p.distance(c) - 40.0).abs()).fold(0.0, f64::max);
+    assert!(off < 0.75, "{off} px off the circle");
+    assert!(res.paths[0].path.anchor_count() <= 12, "{} anchors", res.paths[0].path.anchor_count());
+}
+
+#[test]
+fn a_higher_threshold_widens_a_blurred_shape_smoothly() {
+    // A soft-edged disc: its luminance ramps over six pixels.
+    let img = Raster::from_fn(100, 100, |x, y| {
+        let d = Point::new(f64::from(x) + 0.5, f64::from(y) + 0.5).distance(Point::new(50.0, 50.0));
+        let v = (255.0 * ((d - 27.0) / 6.0).clamp(0.0, 1.0)) as u8;
+        [v, v, v, 255]
+    });
+    let radius = |threshold: u8| {
+        let res = trace(&img, &TraceParams { threshold, ..bw() });
+        let r: Vec<f64> = along(&res.paths[0].path).iter().map(|p| p.distance(Point::new(50.0, 50.0))).collect();
+        (r.iter().copied().fold(f64::MAX, f64::min), r.iter().copied().fold(0.0, f64::max))
+    };
+    let (low, high) = (radius(64), radius(192));
+    // Luminance 64 is 1.5 px into the ramp and 192 4.5 px.
+    assert!((low.0 - 28.5).abs() < 0.6 && (low.1 - 28.5).abs() < 0.6, "{low:?}");
+    assert!((high.0 - 31.5).abs() < 0.6 && (high.1 - 31.5).abs() < 0.6, "{high:?}");
+}
+
+#[test]
+fn no_path_of_a_noisy_picture_leaves_the_picture() {
+    // Texture and noise: thousands of small ragged regions, where a fit is most likely to stray.
+    let img = Raster::from_fn(160, 120, |x, y| {
+        let mut v = x.wrapping_mul(0x9E37_79B1) ^ y.wrapping_mul(0x85EB_CA77);
+        v ^= v >> 15;
+        v = v.wrapping_mul(0x2C1B_3C6D);
+        v ^= v >> 12;
+        let wave = 60.0 * ((f64::from(x) * 0.31).sin() * (f64::from(y) * 0.23).cos());
+        let c = |k: u32| (128.0 + wave + f64::from((v >> (8 * k)) & 63) + f64::from(x + 2 * y) * 0.2 * f64::from(k)).clamp(0.0, 255.0) as u8;
+        [c(0), c(1), c(2), 255]
+    });
+    for name in PRESET_NAMES {
+        let res = trace(&img, &preset(name).unwrap());
+        for p in &res.paths {
+            // A fit may bulge past the picture's border by its tolerance, never by more.
+            let Some(b) = p.path.bounds() else { continue };
+            assert!(b.x0 > -2.0 && b.y0 > -2.0 && b.x1 < 162.0 && b.y1 < 122.0, "{name}: a path reaches {b:?}");
         }
     }
 }

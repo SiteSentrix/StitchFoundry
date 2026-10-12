@@ -98,14 +98,13 @@ pub fn render(scene: &[(BezPath, [u8; 3])], bg: [u8; 3], w: usize, h: usize) -> 
 /// Draws ground-truth art: each pixel is the average of `K × K` hard samples of the top-most
 /// shape, so abutting shapes blend with each other on their shared edge and never with the
 /// background behind them (which painting them one after another would let through).
-pub fn render_truth(scene: &[(BezPath, [u8; 3])], bg: [u8; 3], w: usize, h: usize) -> Raster {
-    const K: usize = 6;
-    let (bw, bh) = (w * K, h * K);
+pub fn render_truth(scene: &[(BezPath, [u8; 3])], bg: [u8; 3], w: usize, h: usize, k: usize) -> Raster {
+    let (bw, bh) = (w * k, h * k);
     let mut top = vec![bg; bw * bh];
     let mut cov = vec![0.0f32; bw * bh];
     for (path, color) in scene {
         let mut big = path.clone();
-        big.apply_affine(kurbo::Affine::scale(K as f64));
+        big.apply_affine(kurbo::Affine::scale(k as f64));
         let (r0, r1) = coverage_into(&big, bw, bh, &mut cov);
         for i in r0 * bw..r1 * bw {
             if cov[i] >= 0.5 {
@@ -118,7 +117,7 @@ pub fn render_truth(scene: &[(BezPath, [u8; 3])], bg: [u8; 3], w: usize, h: usiz
     for y in 0..bh {
         for x in 0..bw {
             for ch in 0..3 {
-                buf[(y / K) * w + x / K][ch] += f32::from(top[y * bw + x][ch]) / (K * K) as f32;
+                buf[(y / k) * w + x / k][ch] += f32::from(top[y * bw + x][ch]) / (k * k) as f32;
             }
         }
     }

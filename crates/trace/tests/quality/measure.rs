@@ -187,6 +187,8 @@ pub struct Metrics {
     pub overlap: f64,
     /// Paths under 6 px of area.
     pub specks: f64,
+    /// How far (px) the trace reaches outside the image: a stray curve.
+    pub outside: f64,
 }
 
 /// Measure `res`, the trace of `src` (`input` drawn `size` px square as `variant`) with `params`.
@@ -280,5 +282,11 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
         gap,
         overlap,
         specks: art.iter().filter(|(_, p)| p.area().abs() < 6.0).count() as f64,
+        outside: shapes
+            .iter()
+            .map(|(p, _)| p.bounding_box())
+            .filter(|b| b.width() > 0.0 || b.height() > 0.0)
+            .map(|b| (-b.x0).max(-b.y0).max(b.x1 - f64::from(size)).max(b.y1 - f64::from(size)).max(0.0))
+            .fold(0.0, f64::max),
     }
 }
