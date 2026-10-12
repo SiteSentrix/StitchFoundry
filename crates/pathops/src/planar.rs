@@ -525,10 +525,13 @@ pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
     let top = sweep.ok()?.ok()?;
     let tidy = Tidy::keeping(DEFAULT_PRECISION, inputs.iter().map(|p| &p.0));
 
-    // The planar graph: vertices are the sweep's points, edges its segments. Points closer than
-    // the sweep's tolerance are one vertex (it can put a corner that lies on another path's edge
-    // a rounding error away from where it cuts that edge).
+    // The planar graph: vertices are the sweep's points, edges its segments. Points within two
+    // of the sweep's tolerance are one vertex: it can put a corner that lies on another path's
+    // edge a rounding error away from where it cuts that edge, and the two ends meeting at a
+    // crossing each lie within `eps` of it, so up to twice that apart (two vertices there leave a
+    // stub that runs out to the next point and back as one piece).
     let positions = top.compute_positions();
+    let merge = 2.0 * eps;
     let cell = 4.0 * eps;
     let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
     let mut points: Vec<Point> = Vec::new();
@@ -539,7 +542,7 @@ pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
             .filter_map(|k| grid.get(&k))
             .flatten()
             .copied()
-            .find_map(|v| points.get(v).filter(|q| q.distance(p) <= eps).map(|&q| (v, q)));
+            .find_map(|v| points.get(v).filter(|q| q.distance(p) <= merge).map(|&q| (v, q)));
         near.unwrap_or_else(|| {
             points.push(p);
             grid.entry((cx, cy)).or_default().push(points.len() - 1);
@@ -1224,6 +1227,22 @@ mod tests {
         assert_eq!(cut.subpaths.len(), 2);
         assert!(cut.subpaths.iter().all(|sp| !sp.closed));
         assert!((cut.length() - 160.0).abs() < 1e-6, "{}", cut.length());
+    }
+
+    #[test]
+    fn a_crossing_the_sweep_rounds_two_ways_is_one_vertex() {
+        // The sweep put the ends meeting where the first two lines cross about 1.2e-6 apart: two
+        // vertices left a stub out to (60,60) and back as one piece, whose ends nearly meet, so
+        // cutting it out took the whole second line.
+        let shapes = vec![line((0.0, 0.0), (80.0, 70.0), 0), line((70.0, 0.0), (60.0, 60.0), 1), line((70.0, 60.0), (30.0, 0.0), 2)];
+        let arr = shape_builder(&shapes, true);
+        for e in arr.edges.iter().chain(&arr.lines) {
+            let (s, piece) = (&shapes[e.key as usize], &e.path.subpaths[0]);
+            let len = e.path.length();
+            assert!(len > 0.05, "a speck piece {piece:?}");
+            let lost = s.path.length() - cut_out(&s.path, piece, false, 0.05).map_or(0.0, |c| c.length());
+            assert!((lost - len).abs() <= 0.05 + 1e-3 * len, "lost {lost} for a piece {len} long");
+        }
     }
 
     fn arb_segment() -> impl Strategy<Value = Shape> {

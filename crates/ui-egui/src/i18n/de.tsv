@@ -4446,3 +4446,15 @@ machine	Stop	Stopp
 @msg	the artwork has nothing to place	die Grafik enthält nichts zum Platzieren
 @msg	the artwork can't be read: {e}	die Grafik kann nicht gelesen werden: {e}
 @msg	The AI won't copy someone else's logo or character: {e}	Die KI kopiert keine fremden Logos oder Figuren: {e}
+
+# Embroidery (StitchFoundry): Redraw Image with Claude
+	Redraw Image with Claude…	Bild mit Claude neu zeichnen…
+	Redraw Image with Claude	Bild mit Claude neu zeichnen
+	What to change (optional):	Gewünschte Änderungen (optional):
+	Only redraw artwork you own or have permission to use.	Zeichnen Sie nur Grafiken neu, die Ihnen gehören oder die Sie verwenden dürfen.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude zeichnet das Bild mit Ihrem eigenen Anthropic-API-Schlüssel als Grafik aus einfarbigen Flächen neu, abgerechnet über Ihr Anthropic-Konto; StitchFoundry digitalisiert sie anschließend. Prüfen Sie die Stiche vor dem Sticken.
+	Redraw with Claude…	Mit Claude neu zeichnen…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude zeichnet das Bild als saubere Grafik aus einfarbigen Flächen neu, die StitchFoundry anschließend digitalisiert
+@msg	select an image to redraw	wählen Sie ein Bild zum Neuzeichnen aus
+@msg	the image couldn't be read	das Bild konnte nicht gelesen werden
+@msg	The image is too large to send: crop it, or place a smaller copy.	Das Bild ist zu groß zum Senden: Beschneiden Sie es oder platzieren Sie eine kleinere Kopie.

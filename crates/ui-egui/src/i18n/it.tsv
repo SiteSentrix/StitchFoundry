@@ -4492,3 +4492,15 @@ machine	Stop	Arresto
 @msg	the artwork has nothing to place	la grafica non contiene nulla da inserire
 @msg	the artwork can't be read: {e}	impossibile leggere la grafica: {e}
 @msg	The AI won't copy someone else's logo or character: {e}	L'IA non copia loghi o personaggi altrui: {e}
+
+# Embroidery (StitchFoundry): Redraw Image with Claude
+	Redraw Image with Claude…	Ridisegna immagine con Claude…
+	Redraw Image with Claude	Ridisegna immagine con Claude
+	What to change (optional):	Cosa cambiare (facoltativo):
+	Only redraw artwork you own or have permission to use.	Ridisegna solo grafiche di tua proprietà o che hai il permesso di usare.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude ridisegna l'immagine come grafica a tinte piatte con la tua chiave API Anthropic personale, con addebito sul tuo account Anthropic; poi StitchFoundry la digitalizza. Controlla i punti prima di ricamare.
+	Redraw with Claude…	Ridisegna con Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude ridisegna l'immagine come grafica pulita a tinte piatte, poi StitchFoundry la digitalizza
+@msg	select an image to redraw	seleziona un'immagine da ridisegnare
+@msg	the image couldn't be read	impossibile leggere l'immagine
+@msg	The image is too large to send: crop it, or place a smaller copy.	L'immagine è troppo grande per essere inviata: ritagliala o inserisci una copia più piccola.

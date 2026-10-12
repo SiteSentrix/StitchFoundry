@@ -16,6 +16,7 @@ the control channel, the CLI and the MCP server.
 - [Lettering](#lettering)
 - [Auto-Digitize](#auto-digitize)
 - [Design from Prompt](#design-from-prompt)
+- [Redraw Image with Claude](#redraw-image-with-claude)
 - [Design settings: hoop, fabric, threads](#design-settings-hoop-fabric-threads)
 - [Stitch Sequence and the stitch player](#stitch-sequence-and-the-stitch-player)
 - [Machine files](#machine-files)
@@ -204,12 +205,34 @@ key it is kept in a file of its own, `anthropic-api-key`, next to StitchFoundry'
 readable by you alone: not in the settings themselves, which the control channel and MCP agents
 can read. Turn the option off and Generate to forget a kept key. Without a kept key, the `ANTHROPIC_API_KEY` environment variable is used.
 
-Only your description, the size and the colour count are sent, to `api.anthropic.com` over HTTPS,
-and only when you click Generate; nothing from your design leaves the computer. Certificates are
-checked against the system's trusted ones, and a proxy set in the usual environment variables
-(`HTTPS_PROXY`…) is used. Design from Prompt needs the desktop app: the web app can't send the
-request yet. Agents don't need it: an agent that draws can hand its own SVG to
-`embroidery.placeArt`, which does the rest.
+Only your description, the size and the colour count are sent (and, to redraw an image, the
+image: see below), to `api.anthropic.com` over HTTPS, and only when you click Generate; nothing
+else from your design leaves the computer. Certificates are checked against the system's trusted
+ones, and a proxy set in the usual environment variables (`HTTPS_PROXY`…) is used. Design from
+Prompt needs the desktop app: the web app can't send the request yet. Agents don't need it: an
+agent that draws can hand its own SVG to `embroidery.placeArt`, which does the rest.
+
+## Redraw Image with Claude
+
+Select a placed logo or image and choose **Embroidery › Redraw Image with Claude…** (or **Redraw
+with Claude…** in the Embroidery panel, next to Auto-Digitize). Claude redraws it as clean
+flat-colour art in the same dialog as Design from Prompt, with the same API key: it keeps the
+image's composition, shapes, lettering and colours, leaves out its background (unless it is part
+of the design, like a badge shape), merges shades into at most the thread colours asked for, and
+thickens or drops what is too fine to stitch. Write anything to change in the box ("leave out the
+tagline", "make the letters bolder"); it is optional. Only redraw artwork you own or have
+permission to use.
+
+The drawing lands on the image: its frame is the image's place, sized to the size asked about the
+image's centre (by default the image's own size, brought into the hoop, as Auto-Digitize does). It
+is then digitized as Design from Prompt's drawings are: stitch types, underlying fills cut, the
+chart's threads and same-coloured shapes together, in one undo step. The image stays underneath to
+compare with. Unlike Auto-Digitize, which traces the pixels, Claude draws the shapes anew, so
+blurry, small or photographed logos come out clean; check the lettering and the details against
+the image before you sew.
+
+The image is sent as a PNG (a JPEG when that would be too large), no larger than 1568 pixels on its
+longest side, which is as much as the model looks at.
 
 ## Design settings: hoop, fabric, threads
 
@@ -366,7 +389,7 @@ tool list for all parameters):
 | `embroidery.draw {brush, points \| stamp, …}` | a brush stroke, as the widget draws it |
 | `embroidery.column {points: [[x, y, curve?]…], id?}` | a Column A/B satin column from points on its two sides in turn; with `id`, continue that column |
 | `embroidery.autoDigitize {colors, …}` | trace a selected image into stitches |
-| `embroidery.placeArt {svg, size?, at?, name?, minArea?}` | place flat-colour SVG art and digitize it, as Design from Prompt does with Claude's drawing (its linked files are never read) |
+| `embroidery.placeArt {svg, size?, at?, frame?, name?, minArea?}` | place flat-colour SVG art and digitize it, as Design from Prompt does with Claude's drawing (its linked files are never read); `frame` fits the SVG's page into a rectangle, as Redraw Image does over the image |
 | `embroidery.settings {hoop, fabric, chart, machine, …}`, `embroidery.applyFabric {name}` | design settings |
 | `embroidery.machine.list`, `embroidery.machine.save {name, newName?, format?, fromDesign?, …}`, `embroidery.machine.delete {name}` | machine profiles: change the standard ones, make, rename and delete your own |
 | `embroidery.sortByColor` | sew each colour in one go |
@@ -427,10 +450,10 @@ round trips and robustness tests in the repository.
   plural form for every number.
 - Auto-Digitize works best on flat-colour logos; photos and gradients need tracing by hand
   first.
-- Design from Prompt works with your own Anthropic API key only (StitchFoundry accounts and AI
-  credits aren't built yet), and only in the desktop app. The drawing follows the description
-  loosely and can use more colours than asked (colours close enough to share a thread are merged),
-  and a drawing is billed even when it comes out unusable.
+- Design from Prompt and Redraw Image work with your own Anthropic API key only (StitchFoundry
+  accounts and AI credits aren't built yet), and only in the desktop app. The drawing follows the
+  description or the image loosely and can use more colours than asked (colours close enough to
+  share a thread are merged), and a drawing is billed even when it comes out unusable.
 - Branching orders objects closest-first rather than searching for the best tour, and only
   carries the thread across under objects of the branch sewn later.
 - Appliqué is one object (placement, tack-down, cover). Splitting an appliqué where pieces overlap

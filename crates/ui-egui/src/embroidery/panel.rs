@@ -167,6 +167,13 @@ fn auto_digitize_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
         let params = json!({ "colors": app.embroidery.digitize_colors, "removeBackground": app.embroidery.digitize_background });
         app.run("embroidery.autoDigitize", params).ok();
     }
+    if crate::embroidery::prompt::available(app)
+        && button(ui, tl!("Redraw with Claude…"))
+            .on_hover_text(tl!("Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it"))
+            .clicked()
+    {
+        app.run("ui.redrawImage", json!({ "colors": app.embroidery.digitize_colors })).ok();
+    }
 }
 
 /// Freehand digitizing: the radial widget and the embroidery brush.

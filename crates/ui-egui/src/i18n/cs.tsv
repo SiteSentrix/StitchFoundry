@@ -4517,3 +4517,15 @@ machine	Stop	Zastavení
 @msg	the artwork has nothing to place	kresba neobsahuje nic k umístění
 @msg	the artwork can't be read: {e}	kresbu nelze přečíst: {e}
 @msg	The AI won't copy someone else's logo or character: {e}	AI nekopíruje cizí loga ani postavy: {e}
+
+# Embroidery (StitchFoundry): Redraw Image with Claude
+	Redraw Image with Claude…	Překreslit obraz pomocí Claude…
+	Redraw Image with Claude	Překreslit obraz pomocí Claude
+	What to change (optional):	Co změnit (nepovinné):
+	Only redraw artwork you own or have permission to use.	Překreslujte jen kresby, které vlastníte nebo které máte svolení používat.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude obraz překreslí na kresbu z jednobarevných ploch pomocí vašeho vlastního klíče API Anthropic a zaplatíte ji ze svého účtu Anthropic; StitchFoundry ji pak digitalizuje. Před vyšíváním zkontrolujte stehy.
+	Redraw with Claude…	Překreslit pomocí Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude obraz překreslí na čistou kresbu z jednobarevných ploch, kterou pak StitchFoundry digitalizuje
+@msg	select an image to redraw	vyberte obraz k překreslení
+@msg	the image couldn't be read	obraz nelze přečíst
+@msg	The image is too large to send: crop it, or place a smaller copy.	Obraz je příliš velký na odeslání: ořízněte ho nebo umístěte menší kopii.

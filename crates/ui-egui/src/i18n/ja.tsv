@@ -4486,3 +4486,15 @@ machine	Stop	停止
 @msg	the artwork has nothing to place	アートワークに配置するものがありません
 @msg	the artwork can't be read: {e}	アートワークを読み込めません: {e}
 @msg	The AI won't copy someone else's logo or character: {e}	AI は他者のロゴやキャラクターをコピーしません: {e}
+
+# Embroidery (StitchFoundry): Redraw Image with Claude
+	Redraw Image with Claude…	Claude で画像を描き直す…
+	Redraw Image with Claude	Claude で画像を描き直す
+	What to change (optional):	変更したい点 (任意):
+	Only redraw artwork you own or have permission to use.	所有しているアートワーク、または使用許可を得ているアートワークだけを描き直してください。
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude がお持ちの Anthropic API キーで画像をフラットカラーのアートワークに描き直し、StitchFoundry がそれをデジタイズします。料金はお使いの Anthropic アカウントに請求されます。縫う前にステッチを確認してください。
+	Redraw with Claude…	Claude で描き直す…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude が画像をすっきりしたフラットカラーのアートワークに描き直し、StitchFoundry がそれをデジタイズします
+@msg	select an image to redraw	描き直す画像を選択してください
+@msg	the image couldn't be read	画像を読み込めませんでした
+@msg	The image is too large to send: crop it, or place a smaller copy.	画像が大きすぎて送信できません: 切り抜くか、小さいコピーを配置してください。
