@@ -944,3 +944,45 @@ fn the_bands_of_a_gradient_stay_apart() {
     });
     assert!(quantize(&noisy, &sixteen_colors()).palette.len() >= 12);
 }
+
+#[test]
+fn a_noisy_gradient_keeps_its_tones_without_specks() {
+    // Tones 0–255 across with noise larger than High Fidelity Photo's 64 steps are apart.
+    let img = Raster::from_fn(256, 96, |x, y| {
+        let c = |k: u32| (f64::from(x) + 5.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
+        [c(0), c(1), c(2), 255]
+    });
+    let params = preset("High Fidelity Photo").unwrap();
+    let res = trace(&img, &params);
+    // Smoothed first, the noise mixes fewer neighbouring tones into one (`quantize` alone works
+    // on the picture as it is), and leaves no specks.
+    let unsmoothed = quantize(&img, &params).palette.len();
+    assert!(res.palette.len() > unsmoothed && res.palette.len() >= 24, "{} colours, {unsmoothed} unsmoothed", res.palette.len());
+    assert!(res.paths.len() <= 2 * res.palette.len(), "{} paths of {} colours", res.paths.len(), res.palette.len());
+}
+
+#[test]
+fn stacked_layers_go_by_lightness_and_leave_ignored_white_alone() {
+    // Stripes: black, white, mid gray, light gray (the widest).
+    let img = Raster::from_fn(100, 20, |x, _| {
+        let v = match x {
+            0..20 => 0,
+            20..40 => 255,
+            40..60 => 120,
+            _ => 200,
+        };
+        [v, v, v, 255]
+    });
+    let params = TraceParams { mode: Mode::Grayscale, colors: 4, noise: 0, method: Method::Overlapping, ..TraceParams::default() };
+    let tones = |res: &TraceResult| res.paths.iter().map(|p| p.color[0]).collect::<Vec<u8>>();
+    // The largest colour is light, so the stack starts at the light end.
+    // (Each layer reaches under those above it: under the black stripe too, a part of its own.)
+    assert_eq!(tones(&trace(&img, &params)), [255, 200, 200, 120, 120, 0]);
+    // Without white, no layer reaches under where it was.
+    let res = trace(&img, &TraceParams { ignore_white: true, ..params });
+    assert_eq!(tones(&res), [200, 200, 120, 120, 0]);
+    for p in &res.paths {
+        let b = p.path.bounds().unwrap();
+        assert!(b.x1 <= 20.5 || b.x0 >= 39.5, "a {} layer covers the white stripe: {b:?}", p.color[0]);
+    }
+}

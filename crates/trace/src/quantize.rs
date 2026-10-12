@@ -305,6 +305,35 @@ fn settled(mut q: Quantized, img: &Raster, own: &[bool]) -> Quantized {
     if changed { compact(q.labels, q.palette) } else { q }
 }
 
+/// Whether `img` is continuous tone (a photo, a gradient) rather than flat art, however noisy
+/// or unevenly lit (a scan): whether eight colours leave much of it unsaid. Flat art is a few
+/// colours and what noise and lighting make of them, and eight colours come within a few levels
+/// of every pixel; a photo's tones spread all through its range, and eight colours stay far from
+/// most of them (more than 6 levels, and more than a tenth of how far a single colour stays).
+pub(crate) fn continuous_tone(img: &Raster) -> bool {
+    let hk = HistKey::new(img);
+    let mut bins = vec![Bin::default(); 1 << 15];
+    for p in img.rgba.as_chunks::<4>().0 {
+        if p[3] >= 128 {
+            bins[hk.key(p[0], p[1], p[2])].add(p);
+        }
+    }
+    let used: Vec<Used> = bins.iter().enumerate().filter(|(_, b)| b.n > 0).map(|(i, b)| (i, b.mean(), b.n as f64)).collect();
+    // The root-mean-square distance (levels) from the pixels to the nearest of `k` colours.
+    let unsaid = |k: usize| {
+        let colors = centers(&median_cut(&used, k, 0.0));
+        let (mut sum, mut n) = (0.0, 0.0);
+        for (_, c, weight) in &used {
+            let d2 = colors.iter().map(|m| (0..3).map(|ch| (m[ch] - c[ch]).powi(2)).sum::<f64>()).fold(f64::INFINITY, f64::min);
+            sum += d2 * weight;
+            n += weight;
+        }
+        if n > 0.0 { (sum / n).sqrt() } else { 0.0 }
+    };
+    let eight = unsaid(8);
+    eight > 6.0 && eight > 0.1 * unsaid(1)
+}
+
 /// Drop unused palette entries and merge duplicates.
 fn compact(mut labels: Vec<u16>, palette: Vec<[u8; 3]>) -> Quantized {
     let mut used = vec![false; palette.len()];
