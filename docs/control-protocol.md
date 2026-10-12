@@ -612,7 +612,17 @@ print queue (the web: the browser's print dialog), else, with `toFile` or no pri
 PDF. With `discard: true` it is Done: it only keeps the settings. Settings that can't print (a missing artboard, a
 range of no tiles) answer with an error and keep the dialog open. `file.print {settings?, printer?, toFile?, path?}`
 prints without the dialog; `print.printers` lists the printers and `print.printerSetup {printer?}` opens their system
-settings (Setup…).
+settings (Setup…). Desktop submission returns `{background: true, printed: false, printer, status}`
+while the spooler runs on a worker. `ui.inspect` lists it under `background`; completion or refusal
+appears in `ui.status`. Quit waits for submissions. PDF/PostScript export and the browser's print
+dialog retain their existing command results.
+
+Agents still get `{printers: [{name, default}], service, setup}` from `print.printers`;
+discovery failure yields an empty list. Print replies preserve `pages`, `bytes`, `format` and
+`warnings` alongside the pending fields above. Validation/start failures use the existing control
+reply `{ok: false, error: "…"}`; later spooler failures appear in `ui.inspect` → `ui.status`, with
+no second reply or structured backend error object. Headless MCP keeps its engine-only `file.print`
+result (`path` or `dataBase64`, plus the same print metadata); no spooler fields are added there.
 
 Print presets: in the `print` dialog, `preset` names the print preset whose settings were loaded last; setting it
 (`ui.dialog.set {field: "preset", value: "Posters"}`) loads that preset's settings, and the list reads `[Custom]` once
