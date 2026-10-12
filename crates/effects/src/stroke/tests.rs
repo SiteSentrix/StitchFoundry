@@ -37,6 +37,21 @@ fn near(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() <= tol
 }
 
+/// #1396: a stroke wider than the shape still covers the interior and reaches half the weight past it.
+/// A thinner stroke keeps the hole in the middle.
+#[test]
+fn a_stroke_wider_than_the_shape_covers_the_interior() {
+    let circle = kurbo::Circle::new(Point::new(0.0, 0.0), 5.0).to_path(0.1);
+    let st = stroke(40.0, |_| {});
+    let outline = line_outline(&circle, &st, 40.0, 0.25);
+    let b = outline.bounding_box();
+    assert!(b.x0 < -24.0 && b.x1 > 24.0, "half the weight past the radius: {b:?}");
+    assert!(kurbo::Shape::contains(&outline, Point::ZERO), "the middle of a fat stroke is painted");
+    let thin = line_outline(&circle, &stroke(4.0, |_| {}), 4.0, 0.25);
+    assert!(!kurbo::Shape::contains(&thin, Point::ZERO), "a narrow stroke stays a ring");
+    assert!(kurbo::Shape::contains(&thin, Point::new(5.0, 0.0)));
+}
+
 // ---------------------------------------------------------------- dashes and dots
 
 #[test]

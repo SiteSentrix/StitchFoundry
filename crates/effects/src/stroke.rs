@@ -19,7 +19,7 @@ mod width;
 
 use std::borrow::Cow;
 
-use kurbo::{BezPath, PathEl, PathSeg};
+use kurbo::{BezPath, ParamCurve, PathEl, PathSeg, Shape};
 use vectorcraft_doc::{LineCap, LineJoin, StrokeAlign, StrokeLayer};
 pub(crate) use vectorcraft_geom::bez::{kink, segments, subpaths, tangent, unit};
 
@@ -116,8 +116,69 @@ pub fn line_outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64) -> B
             out.extend(dot_outline(&d.dots, width, st.cap, tol).iter());
             out
         }
-        (None, None) => kurbo::stroke(line.iter(), &style(st, width), &kurbo::StrokeOpts::default(), tol),
+        (None, None) => {
+            let outline = kurbo::stroke(line.iter(), &style(st, width), &kurbo::StrokeOpts::default(), tol);
+            // A stroke wider than a closed shape comes back as a ring: the inner offset crossed
+            // the middle and left a hole (#1396). The outer contour is the stroke.
+            fill_crossed_stroke(line, outline)
+        }
     }
+}
+
+/// When `outline` does not cover `line`, drop contours that sit inside its largest one.
+fn fill_crossed_stroke(line: &BezPath, outline: BezPath) -> BezPath {
+    if !is_closed(line) || outline_covers(line, &outline) {
+        return outline;
+    }
+    let parts = closed_parts(&outline);
+    if parts.len() < 2 {
+        return outline;
+    }
+    let area = |p: &BezPath| {
+        let b = p.bounding_box();
+        b.width() * b.height()
+    };
+    let Some(outer) = parts.iter().max_by(|a, b| area(a).total_cmp(&area(b))) else {
+        return outline;
+    };
+    let ob = outer.bounding_box();
+    let outer_area = area(outer);
+    let mut out = BezPath::new();
+    for p in &parts {
+        let b = p.bounding_box();
+        let inside = b.x0 >= ob.x0 - 1e-6 && b.y0 >= ob.y0 - 1e-6 && b.x1 <= ob.x1 + 1e-6 && b.y1 <= ob.y1 + 1e-6;
+        if (area(p) - outer_area).abs() <= 1e-6 || !inside {
+            out.extend(p.elements().iter().copied());
+        }
+    }
+    out
+}
+
+fn closed_parts(bp: &BezPath) -> Vec<BezPath> {
+    let mut out = Vec::new();
+    let mut cur = BezPath::new();
+    for el in bp.elements() {
+        if matches!(el, PathEl::MoveTo(_)) && !cur.elements().is_empty() {
+            out.push(std::mem::take(&mut cur));
+        }
+        cur.push(*el);
+    }
+    if !cur.elements().is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// A point on each segment of `line` lies in `outline` (the stroke still covers its path).
+fn outline_covers(line: &BezPath, outline: &BezPath) -> bool {
+    let mut saw = false;
+    for seg in line.segments() {
+        saw = true;
+        if !outline.contains(seg.eval(0.5)) {
+            return false;
+        }
+    }
+    saw
 }
 
 /// Append `seg` to `out` (which must already have a current point at its start).
