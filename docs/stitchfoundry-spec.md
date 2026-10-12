@@ -465,9 +465,9 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | TM-02 | Team-name templates; output per name (files, multi-head) | Partial | One machine file per name, named after it (`embroidery.teamNames.export`); any design with its lettering is the template; multi-head layouts and a names worksheet still to come | 2 |
 | TM-03 | Monograms: templates, letter styles, ornaments, borders | Partial | Embroidery panel › Monogram (`embroidery.monogram`): one to three initials in an embroidery font, classic (the middle one larger) or in a line, a satin circle, diamond or square or a scalloped border; ornaments and more layouts still to come | 2 |
 | CL-01 | Convert TrueType/OpenType fonts | Done | Live from glyph outlines | – |
-| CL-02 | User-refined letters (save edited glyphs) | Missing | Recipe overrides per glyph | 3 |
+| CL-02 | User-refined letters (save edited glyphs) | Done | Any loaded embroidery font opens as a font document (`embroidery.font.edit`): refine its glyphs, add missing ones, change its properties and kerning, save it back | – |
 | CL-03 | Create custom embroidery fonts (from art or fonts) | Partial | The font creator: a font document, one artboard per glyph with baseline and cap-height guides, digitized with the usual tools and saved as a font folder lettering loads (`embroidery.fontDoc.*`); fonts in Ink/Stitch's format load too; starting from TrueType outlines and a Font Editor panel still to come | 3 |
-| CL-04 | Merge fonts | Missing | Recipe sets | 3 |
+| CL-04 | Merge fonts | Done | `embroidery.fontDoc.merge`: another font's glyphs added to a font document, scaled to its capitals' height | – |
 | KDC-01 | Keyboard design collections (map designs to keys, type with them) | Missing | Design-per-character sets usable as fonts (2025 feature) | 3 |
 | KI-01 | Lettering kiosk (simplified mode for counter staff) | Missing | Locked-down "kiosk" workspace with templates | 6 |
 
@@ -552,8 +552,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 
-**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 144 done,
-32 partial, 50 missing, 6 out of scope (counted 2026-10-12, after monograms). Most of what is missing is breadth (more stitch
+**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 146 done,
+32 partial, 48 missing, 6 out of scope (counted 2026-10-12, after the font editor). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

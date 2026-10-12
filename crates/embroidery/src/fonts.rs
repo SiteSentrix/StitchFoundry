@@ -137,6 +137,11 @@ impl EmbFont {
             .unwrap_or(self.info.leading / 3.0)
     }
 
+    /// How far glyph `name` moves the pen on (font units), when the font has it.
+    pub fn advance_of(&self, name: &str) -> Option<f64> {
+        self.glyphs.get(name).map(|g| self.advance(name, g))
+    }
+
     /// How far glyph `name` moves the pen on (font units).
     fn advance(&self, name: &str, g: &Glyph) -> f64 {
         self.info.horiz_adv_x.get(name).copied().or(self.info.horiz_adv_x_default).unwrap_or_else(|| g.width())

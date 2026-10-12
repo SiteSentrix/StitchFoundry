@@ -4065,3 +4065,5 @@ machine	Stop	停止
 	Kern Glyph Pair	字形對字距
 	Font Info	字型資訊
 	Save Embroidery Font	儲存刺繡字型
+	Edit Embroidery Font	編輯刺繡字型
+	Merge Embroidery Font	合併刺繡字型

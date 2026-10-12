@@ -621,6 +621,13 @@ glyphs and which still need art. **Save Embroidery Font…** writes the font fol
 glyphs.stitchfoundry, the glyphs in StitchFoundry's own format with their stitching) and loads it
 for lettering at once; the folder is remembered like any font folder.
 
+Any loaded font, Ink/Stitch's or one made here, opens as a font document to refine
+(`embroidery.font.edit {name}`): its glyphs on their artboards at their advances, its properties
+and kerning; saving it replaces the loaded font of that name (rename it with
+`embroidery.fontDoc.setProps` to keep both). `embroidery.fontDoc.merge {font, chars}` merges
+fonts: another font's glyphs this one hasn't yet come in below the others, scaled so their
+capitals are as tall.
+
 ## Monograms
 
 The Embroidery panel's **Monogram** section sets one to three initials in the lettering font:
