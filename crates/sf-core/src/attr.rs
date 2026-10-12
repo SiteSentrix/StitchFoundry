@@ -183,6 +183,9 @@ pub struct Lettering {
     /// The order its letters are sewn in, how they join and where the thread is cut.
     #[serde(default, skip_serializing_if = "LetterSewing::is_plain")]
     pub sew: LetterSewing,
+    /// Letters moved, scaled or turned from their places, kept when it is set again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub letters: Vec<LetterAdjust>,
     /// From the lettering's own space (points: the first line's baseline runs from (0, 0) along
     /// x, the lines follow down y) to the document. It follows the lettering as it moves, turns
     /// and slants; a scale goes into `size`.
@@ -313,6 +316,37 @@ impl LetterTrim {
     }
 }
 
+/// One letter of lettering moved, scaled or turned from its place.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LetterAdjust {
+    /// The letter: its place among the lettering's letters as the text sets them (from 0).
+    pub index: usize,
+    /// Moved along its line (mm).
+    #[serde(default)]
+    pub dx: f64,
+    /// Moved down from its line (mm).
+    #[serde(default)]
+    pub dy: f64,
+    /// Scaled about the middle of its baseline.
+    #[serde(default = "one")]
+    pub scale: f64,
+    /// Turned about the middle of its baseline (degrees, clockwise).
+    #[serde(default)]
+    pub angle: f64,
+}
+
+impl LetterAdjust {
+    /// Letter `index` where it is set.
+    pub fn none(index: usize) -> LetterAdjust {
+        LetterAdjust { index, dx: 0.0, dy: 0.0, scale: 1.0, angle: 0.0 }
+    }
+
+    /// Nothing changed.
+    pub fn is_plain(&self) -> bool {
+        *self == LetterAdjust::none(self.index)
+    }
+}
+
 /// How lettering is sewn: its letters' order, their joins, its trims.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LetterSewing {
@@ -347,6 +381,10 @@ impl Lettering {
         self.frame = Affine([a / k, b / k, c / k, d / k, e, g]);
         self.size *= k;
         self.arc *= k;
+        for l in &mut self.letters {
+            l.dx *= k;
+            l.dy *= k;
+        }
     }
 }
 
@@ -756,11 +794,14 @@ mod tests {
             arc: 30.0,
             align: LetterAlign::Centre,
             sew: LetterSewing::default(),
+            letters: vec![LetterAdjust { dy: 2.0, ..LetterAdjust::none(1) }],
             frame: at,
         };
         // turned a quarter about the origin, then doubled
         l.transform(&Affine::rotate(std::f64::consts::FRAC_PI_2).then(&Affine::scale(2.0, 2.0)));
         assert!((l.size - 20.0).abs() < 1e-9 && (l.arc - 60.0).abs() < 1e-9, "{l:?}");
+        // a letter moved: as far again
+        assert!((l.letters[0].dy - 4.0).abs() < 1e-9, "{l:?}");
         let o = l.frame.apply(Point::new(0.0, 0.0));
         let x = l.frame.apply(Point::new(1.0, 0.0));
         assert!((o.x + 100.0).abs() < 1e-9 && (o.y - 200.0).abs() < 1e-9, "{o:?}");

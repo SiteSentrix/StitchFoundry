@@ -4,7 +4,7 @@
 
 use egui::{Color32, Ui};
 use serde_json::{Value, json};
-use vectorcraft_embroidery::sf_core::attr::{Embroidery, FontDesign, Lettering, StitchType};
+use vectorcraft_embroidery::sf_core::attr::{Embroidery, FontDesign, LetterAdjust, Lettering, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
     Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, MotifColumn, MotifWarp, RunKind, SatinParams,
@@ -342,6 +342,47 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
             Err(e) => app.status(e),
+        }
+    }
+    if let Some((id, l)) = &selected {
+        letter_rows(app, ui, *id, l);
+    }
+}
+
+/// One letter of the selected lettering moved, scaled or turned.
+fn letter_rows(app: &mut VectorcraftApp, ui: &mut Ui, id: u64, l: &Lettering) {
+    let count = l.text.chars().filter(|c| !c.is_whitespace()).count().max(1);
+    ui.separator();
+    ui.label(tl!("One letter: moved, scaled or turned, kept when the lettering is set again"));
+    let index = app.embroidery.letter_index.min(count - 1);
+    if let Some(v) = num(ui, tl!("Letter"), "letter-index", (index + 1) as f64, "", 0)
+        && v.is_finite()
+    {
+        app.embroidery.letter_index = (v.round().max(1.0) as usize - 1).min(count - 1);
+    }
+    let index = app.embroidery.letter_index.min(count - 1);
+    let a = l.letters.iter().find(|a| a.index == index).copied().unwrap_or(LetterAdjust::none(index));
+    let mut change = None;
+    if let Some(v) = num(ui, tl!("Move along"), "letter-dx", a.dx, " mm", 1) {
+        change = Some(json!({ "dx": v }));
+    }
+    if let Some(v) = num(ui, tl!("Move down"), "letter-dy", a.dy, " mm", 1) {
+        change = Some(json!({ "dy": v }));
+    }
+    if let Some(v) = num(ui, tl!("Scale"), "letter-scale", a.scale * 100.0, " %", 0) {
+        change = Some(json!({ "scale": (v / 100.0).clamp(0.1, 10.0) }));
+    }
+    if let Some(v) = num(ui, tl!("Turn"), "letter-angle", a.angle, "°", 0) {
+        change = Some(json!({ "angle": v.clamp(-360.0, 360.0) }));
+    }
+    if !a.is_plain() && button(ui, tl!("Reset Letter")).clicked() {
+        change = Some(json!({ "reset": true }));
+    }
+    if let Some(mut p) = change {
+        p["id"] = json!(id);
+        p["index"] = json!(index);
+        if let Err(e) = app.run("embroidery.lettering.letter", p) {
+            app.status(e);
         }
     }
 }

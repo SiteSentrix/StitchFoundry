@@ -4734,3 +4734,8 @@ machine	Stop	停止
 	After each word	単語ごと
 	After each line	行ごと
 	Outside the sizes the font was made for: its stitches may come out too dense or too long	フォントが想定するサイズの範囲外です。ステッチが密すぎたり長すぎたりすることがあります
+	Adjust Letter	文字を調整
+	One letter: moved, scaled or turned, kept when the lettering is set again	1文字を移動・拡大縮小・回転（文字を組み直しても保持）
+	Move along	行方向に移動
+	Move down	下へ移動
+	Reset Letter	文字をリセット

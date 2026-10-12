@@ -607,6 +607,13 @@ lettering round a circle (*Radius*): **Arch** over its top, **Valley** along its
 upright to it (`arc`: the radius in mm, negative along the bottom); lettering placed from the panel
 is centred on the artboard (`align`: left, centre or right on `at`).
 
+One letter at a time: with a lettering selected, the section's *Letter* rows move a letter along
+its line or down from it, scale it or turn it about the middle of its baseline (*Reset Letter* puts
+it back); so does `embroidery.lettering.letter {index, dx?, dy?, scale?, angle?}`, or, with no
+`index`, the letter selected inside the lettering. The changes are kept when the lettering is set
+again (a letter is known by its place in the text) and move, scale and turn with it; a letter's
+stitching can be changed like any art's until it is set again.
+
 How lettering is sewn (*Sew order*, *Join* and *Trims* in the section; `order`, `lines`, `join`
 and `trim` on `embroidery.lettering` and `.edit`):
 

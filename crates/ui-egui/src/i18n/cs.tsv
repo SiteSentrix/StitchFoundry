@@ -4765,3 +4765,8 @@ machine	Stop	Zastavení
 	After each word	Po každém slově
 	After each line	Po každém řádku
 	Outside the sizes the font was made for: its stitches may come out too dense or too long	Mimo velikosti, pro které je písmo udělané: stehy mohou být příliš husté nebo dlouhé
+	Adjust Letter	Upravit písmeno
+	One letter: moved, scaled or turned, kept when the lettering is set again	Jedno písmeno: posunuté, zvětšené nebo otočené, zůstane i po novém vysázení
+	Move along	Posun podél
+	Move down	Posun dolů
+	Reset Letter	Obnovit písmeno

@@ -4740,3 +4740,8 @@ machine	Stop	Arresto
 	After each word	Dopo ogni parola
 	After each line	Dopo ogni riga
 	Outside the sizes the font was made for: its stitches may come out too dense or too long	Fuori dalle dimensioni per cui è fatto il font: i punti possono risultare troppo fitti o troppo lunghi
+	Adjust Letter	Regola lettera
+	One letter: moved, scaled or turned, kept when the lettering is set again	Una lettera: spostata, scalata o ruotata, mantenuta quando la scritta viene ricomposta
+	Move along	Sposta lungo
+	Move down	Sposta giù
+	Reset Letter	Ripristina lettera

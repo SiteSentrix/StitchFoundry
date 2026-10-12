@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use sf_core::attr::{Embroidery, LetterAlign, LetterJoin, LetterOrder, LetterSewing, LetterTrim, Lettering, StitchType};
+use sf_core::attr::{Embroidery, LetterAdjust, LetterAlign, LetterJoin, LetterOrder, LetterSewing, LetterTrim, Lettering, StitchType};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_embroidery::fonts::{EmbFont, MAX_TEXT};
 use vectorcraft_geom::Affine;
@@ -17,6 +17,7 @@ use super::*;
 const LOAD: &str = "embroidery.font.load";
 const SET: &str = "embroidery.lettering";
 const EDIT: &str = "embroidery.lettering.edit";
+const LETTER: &str = "embroidery.lettering.letter";
 /// Biggest font.json and glyph art read (bytes), most art files one font has, and most fonts
 /// loaded at once.
 const MAX_JSON: usize = 2 << 20;
@@ -88,6 +89,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm, order?, lines?, join?, trim?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
             has_selection,
             edit_lettering
+        ),
+        cmd!(
+            "embroidery.lettering.letter",
+            "Adjust Letter",
+            [],
+            None,
+            "{id?, index?: the letter's place among the lettering's letters as the text sets them (from 0; default: the letter selected inside the lettering), dx?: mm along its line, dy?: mm down from it, scale?: × (0.1–10), angle?: degrees clockwise (-360–360), reset?: true puts it back} one letter of the selected lettering moved, scaled or turned about the middle of its baseline; what isn't given stays as it was; kept when the lettering is set again, moved, scaled and turned with it → {id, index, letter: {dx, dy, scale, angle}, glyphs}",
+            has_selection,
+            adjust_letter
         ),
     ]
 }
@@ -380,7 +390,13 @@ pub(super) fn lettering_name(spec: &Lettering) -> String {
 /// The glyphs `spec` sets in `font`, placed by its frame: a group per glyph, its art sewn as the
 /// font says.
 pub(super) fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<Arc<Node>> {
+    glyphs_indexed(d, font, spec).into_iter().map(|g| g.1).collect()
+}
+
+/// [`glyphs`], each with its letter's place among those the text sets.
+fn glyphs_indexed(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<(usize, Arc<Node>)> {
     let i = &font.info;
+    let pt = vectorcraft_embroidery::PT_PER_MM;
     let k = spec.size / own_size(font);
     let frame = Affine::new(spec.frame.0);
     let placed = font.layout(&spec.text);
@@ -397,9 +413,14 @@ pub(super) fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<
     let r = spec.arc * vectorcraft_embroidery::PT_PER_MM;
     let mut out = Vec::new();
     let origin = vectorcraft_geom::Point::new(0.0, 0.0);
-    for g in &placed {
+    for (index, g) in placed.iter().enumerate() {
         let Some(glyph) = font.glyphs.get(&g.glyph) else { continue };
         let u = glyph.unit * k;
+        // the letter moved, scaled or turned about its baseline's middle
+        let adjust =
+            spec.letters.iter().find(|a| a.index == index).map_or(Affine::IDENTITY, |a| {
+                Affine::translate((a.dx * pt, a.dy * pt)) * Affine::rotate(a.angle.to_radians()) * Affine::scale(a.scale)
+            });
         let width = widths.get(g.line).copied().unwrap_or(0.0);
         // the glyph's art from its page to its place: the middle of its baseline along the line
         // (from the origin, by the alignment), down to its line, round the arc
@@ -407,6 +428,7 @@ pub(super) fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<
         let down = g.line as f64 * i.leading * spec.leading * u;
         let m = frame
             * place(r, along, down)
+            * adjust
             * Affine::translate((-g.advance * 0.5 * u, 0.0))
             * Affine::scale(k)
             * Affine::translate((0.0, -glyph.baseline));
@@ -430,9 +452,9 @@ pub(super) fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<
         let mut grp = Node::group(d.alloc_id(), children);
         grp.name = Some(g.glyph.clone());
         // its baseline's start and end
-        let start = frame * place(r, along - g.advance * 0.5 * u, down) * origin;
-        let end = frame * place(r, along + g.advance * 0.5 * u, down) * origin;
-        out.push(SetGlyph { line: g.line, word: g.word, along, start, end, art: grp });
+        let start = frame * place(r, along, down) * adjust * Affine::translate((-g.advance * 0.5 * u, 0.0)) * origin;
+        let end = frame * place(r, along, down) * adjust * Affine::translate((g.advance * 0.5 * u, 0.0)) * origin;
+        out.push(SetGlyph { index, line: g.line, word: g.word, along, start, end, art: grp });
     }
     sewn(out, &spec.sew)
 }
@@ -440,6 +462,7 @@ pub(super) fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<
 /// A glyph set: its line, word and place along the line (points), its baseline's start and end
 /// (document points) and its art.
 struct SetGlyph {
+    index: usize,
     line: usize,
     word: usize,
     along: f64,
@@ -451,7 +474,7 @@ struct SetGlyph {
 /// `glyphs` in the order `sew` says (the lines down or up, in each the letters left to right,
 /// right to left or from the middle out), joined along the baseline if it says so, the thread
 /// cut after the letters, words or lines it says.
-fn sewn(glyphs: Vec<SetGlyph>, sew: &LetterSewing) -> Vec<Arc<Node>> {
+fn sewn(glyphs: Vec<SetGlyph>, sew: &LetterSewing) -> Vec<(usize, Arc<Node>)> {
     let lines = glyphs.iter().map(|g| g.line + 1).max().unwrap_or(0);
     let mut line_order: Vec<usize> = (0..lines).collect();
     if sew.up {
@@ -503,7 +526,7 @@ fn sewn(glyphs: Vec<SetGlyph>, sew: &LetterSewing) -> Vec<Arc<Node>> {
             e.trim_after = true;
         }
     }
-    list.into_iter().map(|(g, _)| Arc::new(g.art)).collect()
+    list.into_iter().map(|(g, _)| (g.index, Arc::new(g.art))).collect()
 }
 
 /// Whether `n` is, or holds, art with stitches.
@@ -610,6 +633,7 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         arc: arc_param(p, SET)?.unwrap_or(0.0),
         align: align_param(p, SET)?.unwrap_or_default(),
         sew,
+        letters: Vec::new(),
         frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
     };
     // scaled from the size the font was digitized at; outside what it sews well at, a warning
@@ -658,23 +682,88 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
     }
     sew_params(p, EDIT, &mut spec.sew)?;
     warnings.extend(size_warnings(&font, spec.size));
-    let count = s.edit("Edit Lettering", |d, sel| {
-        let glyphs = glyphs(d, &font, &spec);
+    let count = set_again(s, id, &spec, &font, "Edit Lettering", EDIT)?;
+    Ok(json!({ "id": id.0, "glyphs": count, "warnings": warnings }))
+}
+
+/// Lettering `id` set again as `spec` says, selected → how many glyphs it has.
+fn set_again(s: &mut Session, id: NodeId, spec: &Lettering, font: &EmbFont, label: &'static str, cmd: &str) -> Result<usize> {
+    s.edit(label, |d, sel| {
+        let glyphs = glyphs(d, font, spec);
         if glyphs.is_empty() {
-            return Err(bad(EDIT, format!("{} has none of these characters", font.info.name)));
+            return Err(bad(cmd, format!("{} has none of these characters", font.info.name)));
         }
         let count = glyphs.len();
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
         let NodeKind::Group { children, .. } = &mut n.kind else { return Err(EngineError::NoNode(id)) };
         *children = glyphs;
-        n.name = Some(lettering_name(&spec));
+        n.name = Some(lettering_name(spec));
         if let Some(e) = n.embroidery.as_deref_mut() {
             e.stitch = StitchType::Lettering(Box::new(spec.clone()));
         }
         sel.set([id]);
         Ok(count)
-    })?;
-    Ok(json!({ "id": id.0, "glyphs": count, "warnings": warnings }))
+    })
+}
+
+fn adjust_letter(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = targets(s, p)?;
+    let (id, mut spec, pos) = {
+        let d = &s.doc()?.doc;
+        let (id, spec) = lettering_of(d, &ids).ok_or_else(|| bad(LETTER, "select lettering set in an embroidery font, or one of its letters"))?;
+        // a letter selected inside it: its glyph's place among the lettering's (sewing order)
+        let inside = ids.iter().find_map(|i| {
+            let mut at = *i;
+            loop {
+                let up = d.parent_of(at)?;
+                if up == id {
+                    return Some(at);
+                }
+                at = up;
+            }
+        });
+        let pos = inside.and_then(|c| d.node(id)?.children()?.iter().position(|n| n.id == c));
+        (id, spec, pos)
+    };
+    // remembered font folders loaded if they weren't; a folder that fails shows when the font is missing
+    let _ = ensure_fonts(s);
+    let font = loaded(s, &spec.font).ok_or_else(|| not_loaded(LETTER, &spec.font))?;
+    let count = font.layout(&spec.text).len();
+    let index = match p.get("index") {
+        None | Some(Value::Null) => {
+            let pos = pos.ok_or_else(|| bad(LETTER, "give `index`, or select one of the lettering's letters"))?;
+            let order = glyphs_indexed(&mut Document::new(10.0, 10.0), &font, &spec);
+            order.get(pos).map(|g| g.0).ok_or_else(|| bad(LETTER, "the letter selected isn't one the lettering sets"))?
+        }
+        Some(v) => v
+            .as_u64()
+            .and_then(|i| usize::try_from(i).ok())
+            .filter(|i| *i < count)
+            .ok_or_else(|| bad(LETTER, format!("`index` is a letter's place, 0 to {}", count.saturating_sub(1))))?,
+    };
+    let mut a = spec.letters.iter().find(|a| a.index == index).copied().unwrap_or_else(|| LetterAdjust::none(index));
+    if p.get("reset").and_then(Value::as_bool) == Some(true) {
+        a = LetterAdjust::none(index);
+    }
+    if let Some(v) = ranged(p, "dx", -1000.0..=1000.0, LETTER, "`dx` is -1000 to 1000 mm")? {
+        a.dx = v;
+    }
+    if let Some(v) = ranged(p, "dy", -1000.0..=1000.0, LETTER, "`dy` is -1000 to 1000 mm")? {
+        a.dy = v;
+    }
+    if let Some(v) = ranged(p, "scale", 0.1..=10.0, LETTER, "`scale` is 0.1 to 10")? {
+        a.scale = v;
+    }
+    if let Some(v) = ranged(p, "angle", -360.0..=360.0, LETTER, "`angle` is -360 to 360 degrees")? {
+        a.angle = v;
+    }
+    spec.letters.retain(|b| b.index != index);
+    if !a.is_plain() {
+        spec.letters.push(a);
+        spec.letters.sort_by_key(|b| b.index);
+    }
+    let glyphs = set_again(s, id, &spec, &font, "Adjust Letter", LETTER)?;
+    Ok(json!({ "id": id.0, "index": index, "letter": { "dx": a.dx, "dy": a.dy, "scale": a.scale, "angle": a.angle }, "glyphs": glyphs }))
 }
 
 /// Most names one team names export writes.

@@ -2594,6 +2594,56 @@ fn lettering_sews_in_order_joined_and_trimmed() {
 }
 
 #[test]
+fn letters_move_scale_and_turn_one_at_a_time() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let id =
+        NodeId(s.execute("embroidery.lettering", &json!({"text": "AAA", "font": "Test Script", "at": [100, 300]})).unwrap()["id"].as_u64().unwrap());
+    let boxes = |s: &Session| -> Vec<vectorcraft_geom::Rect> {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap()).collect()
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let b0 = boxes(&s);
+    // the middle letter up 5 mm: only it moves
+    let r = s.execute("embroidery.lettering.letter", &json!({"index": 1, "dy": -5})).unwrap();
+    assert_eq!((r["index"].as_u64(), r["letter"]["dy"].as_f64()), (Some(1), Some(-5.0)));
+    let b = boxes(&s);
+    assert!(near(b[1].y1, b0[1].y1 - 5.0 * PT) && near(b[1].x0, b0[1].x0) && b[0] == b0[0] && b[2] == b0[2], "{b:?}");
+    // twice the size about its baseline's middle, still up
+    s.execute("embroidery.lettering.letter", &json!({"index": 1, "scale": 2})).unwrap();
+    let b = boxes(&s);
+    assert!(near(b[1].height(), b0[1].height() * 2.0) && near(b[1].y1, b0[1].y1 - 5.0 * PT), "{b:?}");
+    // the first a quarter turn: as wide as it was tall
+    s.execute("embroidery.lettering.letter", &json!({"index": 0, "angle": 90})).unwrap();
+    let b = boxes(&s);
+    assert!(near(b[0].width(), b0[0].height()), "{b:?}");
+    // kept when set again with more text
+    s.execute("embroidery.lettering.edit", &json!({"text": "AAAA"})).unwrap();
+    let b = boxes(&s);
+    assert!(b.len() == 4 && near(b[1].height(), b0[1].height() * 2.0) && near(b[3].height(), b0[2].height()), "{b:?}");
+    // a letter selected inside the lettering, sewn right to left: the one it is
+    s.execute("embroidery.lettering.edit", &json!({"order": "right"})).unwrap();
+    let first_sewn = s.doc().unwrap().doc.node(id).unwrap().children().unwrap()[0].id;
+    s.execute("select.set", &json!({"ids": [first_sewn.0]})).unwrap();
+    assert_eq!(s.execute("embroidery.lettering.letter", &json!({"dx": 3})).unwrap()["index"].as_u64(), Some(3));
+    // put back; undone
+    s.execute("embroidery.lettering.letter", &json!({"id": id.0, "index": 1, "reset": true})).unwrap();
+    let st = s.doc().unwrap();
+    let Some(sf_core::attr::StitchType::Lettering(l)) = st.doc.node(id).unwrap().embroidery.as_deref().map(|e| &e.stitch) else { panic!() };
+    assert_eq!(l.letters.iter().map(|a| a.index).collect::<Vec<_>>(), [0, 3]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let Some(sf_core::attr::StitchType::Lettering(l)) = st.doc.node(id).unwrap().embroidery.as_deref().map(|e| &e.stitch) else { panic!() };
+    assert_eq!(l.letters.len(), 3);
+    // no letter that place, sizes out of range, the lettering itself with no index
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    for bad in [json!({"index": 9}), json!({"index": 0, "scale": 0}), json!({"index": 0, "angle": "x"}), json!({"dx": 1})] {
+        assert!(s.execute("embroidery.lettering.letter", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

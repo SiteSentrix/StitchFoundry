@@ -4736,3 +4736,8 @@ machine	Stop	Остановка
 	After each word	После каждого слова
 	After each line	После каждой строки
 	Outside the sizes the font was made for: its stitches may come out too dense or too long	Вне размеров, для которых сделан шрифт: стежки могут получиться слишком плотными или длинными
+	Adjust Letter	Настроить букву
+	One letter: moved, scaled or turned, kept when the lettering is set again	Одна буква: сдвинута, масштабирована или повёрнута, сохраняется при повторном наборе
+	Move along	Сдвиг вдоль
+	Move down	Сдвиг вниз
+	Reset Letter	Сбросить букву

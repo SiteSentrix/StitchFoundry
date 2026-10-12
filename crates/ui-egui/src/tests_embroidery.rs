@@ -203,11 +203,16 @@ fn the_panel_sets_lettering_in_a_loaded_font() {
     for want in ["Sew order", "Left to right", "Join", "Closest", "Trims", "Where needed"] {
         assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
     }
+    assert!(!texts.iter().any(|t| t == "Move along"), "{texts:?}");
     let r = app.run("embroidery.lettering", json!({"text": "AA", "font": "Panel Font", "size": 10})).unwrap();
     assert_eq!(r["glyphs"].as_u64(), Some(2));
     // the new lettering is selected: the section shows what it says, to change it
-    let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 900.0);
     assert!(texts.iter().any(|t| t == "Update Lettering") && !texts.iter().any(|t| t == "Place Lettering"), "{texts:?}");
+    // one letter of it to move, scale or turn
+    for want in ["Letter", "Move along", "Move down", "Scale", "Turn"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
     assert_eq!((app.embroidery.lettering_text.as_str(), app.embroidery.lettering_size), ("AA", 10.0));
     // a size typed outside what the font sews well at: warned of at once
     app.embroidery.lettering_size = 30.0;
