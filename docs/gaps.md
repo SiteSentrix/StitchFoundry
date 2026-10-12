@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G10: RPM runtime dependency metadata (#1275); estimates unchanged; G15: texture-effect distance searches optimized (#1257); idle-machine/platform drag QA still pending; estimate unchanged; G1: Curvature point display improved (#1236, in part); estimates unchanged; G4: full-name font matching (#1258); Windows font-service QA pending; estimate unchanged; G11: no-op anchor Align keeps history and saved state (#1180 follow-up); estimates unchanged; G1: dedicated Eyedropper cursor and precise-cursor checks (#1269); estimates unchanged; G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G2: Film Grain added; Photoshop effects 29/57; 28 filters remain; G10: RPM runtime dependency metadata (#1275); estimates unchanged; G15: texture-effect distance searches optimized (#1257); idle-machine/platform drag QA still pending; estimate unchanged; G1: Curvature point display improved (#1236, in part); estimates unchanged; G4: full-name font matching (#1258); Windows font-service QA pending; estimate unchanged; G11: no-op anchor Align keeps history and saved state (#1180 follow-up); estimates unchanged; G1: dedicated Eyedropper cursor and precise-cursor checks (#1269); estimates unchanged; G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -22,7 +22,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 5 | [G11 Correctness bugs in core tools](#g11-correctness-bugs-in-core-tools) | 8–15 | yes | [target-app-parity.md](target-app-parity.md) |
 | 6 | [G4 Advanced type](#g4-advanced-type) | 34–47 | core part | [type-parity.md](type-parity.md) |
 | 7 | [G12 Preferences and panels that don't act yet](#g12-preferences-and-panels-that-dont-act-yet) | 13–20 | yes | [ui-parity.md](ui-parity.md) |
-| 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 24–40 | no | [effects-parity.md](effects-parity.md) |
+| 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 23–39 | no | [effects-parity.md](effects-parity.md) |
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 15–25 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 8–16 | macOS pressure | [hardware-parity.md](hardware-parity.md) |
 | 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 17–28 | no | [target-app-parity.md](target-app-parity.md) |
@@ -127,12 +127,12 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G2 Photoshop-style raster effects and the Effect Gallery
 
-- **Missing:** 29 of 57 filters (all of Artistic and Sketch), the Effect Gallery dialog, Load
+- **Missing:** 28 of 57 filters (the remaining 14 Artistic filters and all of Sketch), the Effect Gallery dialog, Load
   Texture for Glass and Texturizer, Smart Blur's Edge Only and Overlay Edge. Measured in
   [effects-parity.md](effects-parity.md).
-- **Done:** the pixel-filter pipeline and 28 filters (Blur, Brush Strokes, Distort, Pixelate, Sharpen, Stylize,
-  Texture, Video), Brush Strokes on 2026-10-11.
-- **Estimate:** 24–40 h (measured 0.7–1.2 h per filter); parallelizes well.
+- **Done:** the pixel-filter pipeline and 29 filters (Artistic: Film Grain, Blur, Brush Strokes, Distort, Pixelate, Sharpen, Stylize,
+  Texture, Video), Brush Strokes on 2026-10-11 and Film Grain on 2026-10-12.
+- **Estimate:** 23–39 h (measured 0.7–1.2 h per filter); parallelizes well.
 
 ## G13 Illustrator 2026 (30.x) additions
 
@@ -219,6 +219,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | G2: Artistic › Film Grain added with live controls and raster exports; measured Photoshop filters 29/57, 28 remaining (23–39 h). |
 | 2026-10-12 | minor | G10: RPM required dependencies and glibc floor metadata checked (#1275); real-distro install/start-up QA remains; estimates unchanged |
 | 2026-10-12 | minor | G15: texture-effect distance searches optimized (#1257); idle-machine/platform drag QA still pending; estimate unchanged |
 | 2026-10-12 | minor | G1: Curvature point display improved; existing-path interpolation request remains open (#1236, in part); estimates unchanged |

@@ -139,6 +139,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         None if vectorcraft_effects::is_adjustment(&id) => adjust_fields(ui, d),
         None if id == TRANSFORM => transform_fields(ui, d, app.session.general_unit()),
         None if id == ZIG_ZAG => zig_zag_fields(ui, d, app.session.general_unit()),
+        None if id == "artistic.filmGrain" => film_grain_fields(ui, d),
         None => {
             let doc = vectorcraft_effects::effect_info(&id).map(|e| e.params).unwrap_or_default();
             let unit = app.session.general_unit();
@@ -158,6 +159,27 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let _ = app.session.cancel_interaction();
     }
     false
+}
+
+/// Film Grain's bounded, whole-number controls, in the same order as its parameter docs.
+pub(crate) const FILM_GRAIN_FIELDS: [(&str, &str, f64); 3] =
+    [("grain", "Grain", 20.0), ("highlightArea", "Highlight Area", 20.0), ("intensity", "Intensity", 10.0)];
+
+fn film_grain_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let before = d.fields.clone();
+    // Use one column wide enough for this language's longest label, keeping every rail aligned.
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let text = Tokens::get(ui.ctx()).text;
+    let label_w = FILM_GRAIN_FIELDS
+        .iter()
+        .map(|(_, label, _)| ui.painter().layout_no_wrap(tl!(label).to_string(), font.clone(), text).size().x)
+        .fold(form::SLIDER_LABEL, f32::max)
+        .ceil()
+        + 4.0;
+    for (key, label, max) in FILM_GRAIN_FIELDS {
+        form::slider_w(ui, d, (key, label, label_w), 0.0..=max, "", &grey_rail);
+    }
+    before != d.fields
 }
 
 /// The parameters of the effect dialogs that pick one of some values, as (label, value).

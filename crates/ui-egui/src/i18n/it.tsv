@@ -4176,3 +4176,6 @@ lighting	Light	Luce
 @msg	unsupported native docking operation	Operazione nativa di ancoraggio non supportata
 	Linux Display Server	Server di visualizzazione Linux
 	X11 (XWayland)	X11 (XWayland)
+	Artistic	Artistico
+	Film Grain…	Grana della pellicola…
+	Highlight Area	Area luci

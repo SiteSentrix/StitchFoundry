@@ -4172,3 +4172,6 @@ lighting	Light	Свет
 @msg	unsupported native docking operation	Неподдерживаемая собственная операция прикрепления
 	Linux Display Server	Дисплейный сервер Linux
 	X11 (XWayland)	X11 (XWayland)
+	Artistic	Художественные
+	Film Grain…	Зернистость плёнки…
+	Highlight Area	Область светов
