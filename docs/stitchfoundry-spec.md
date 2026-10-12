@@ -499,7 +499,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | MH-01 | Multi-hooping, automatic and manual (split designs over several hoopings) | Partial | `embroidery.multiHoop`: an automatic grid of overlapping hoopings, each object whole in the first that holds it, a machine file per hooping; splitting objects across hoopings, manual hoopings and a panel still to come | 6 |
 | MH-02 | Registration marks, multi-position hoops, printing per hooping | Partial | Registration crosses in each overlap, sewn first in a colour of their own; multi-position hoops and printing per hooping still to come | 6 |
 | RP-01 | Production worksheets and approval sheets (PDF/print, customisable) | Partial | Embroidery › Worksheet (`embroidery.worksheet`): a production or approval sheet as an A4 document (design drawing, figures, colour table, notes, sign-off), printed or exported as PDF with the usual commands; text in English, layout fixed (customisable layouts, barcodes RP-02 still to come) | 6 |
-| RP-02 | Barcodes on worksheets (Code 39, Code 128) | Missing | §7.11 | 6 |
+| RP-02 | Barcodes on worksheets (Code 39, Code 128) | Partial | `embroidery.worksheet {barcode, barcodeText}`: Code 128 (set B) or Code 39 of the job at the top right, from the public standards; still to confirm with a scanner | 6 |
 | RP-03 | Print colorways, colour blocks | Missing | §7.11 | 6 |
 | RP-04 | Output designs as images | Partial | Art exports; add rendered stitch image export (PNG/SVG of TrueView) | 6 |
 | MFL-01 | Native design file | Done | `.stitchfoundry` (the reference's EMB is proprietary: Out) | – |
@@ -571,7 +571,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
 **Tally:** 250 rows (grouping the roughly 300 features the reference lists): 163 done,
-32 partial, 49 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+33 partial, 48 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

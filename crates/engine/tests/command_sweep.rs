@@ -529,6 +529,7 @@ fn structured_junk() {
         ("embroidery.settings", json!({"notes": ["x"]})),
         ("embroidery.settings", json!({"cost": {"perThousand": f64::NAN, "heads": u64::MAX, "currency": 7}})),
         ("embroidery.cost", json!({"quantity": -1.5})),
+        ("embroidery.worksheet", json!({"barcode": "code39", "barcodeText": "\u{0}\u{7f}"})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "spiral": f64::INFINITY, "arc": 0})),
         ("embroidery.fontDoc.fromType", json!({"family": "Source Sans 3", "chars": "\u{0}\u{fffd}x", "size": 5})),
         ("embroidery.fontDoc.merge", json!({"font": "x", "chars": "abc"})),
