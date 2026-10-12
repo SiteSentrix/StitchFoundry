@@ -222,6 +222,8 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         let xf = Affine::translate((x - frame.x0, -frame.y0)) * init;
         let mut ctx = Context::new(xf, ab, &cache, pdf.xref(), settings.clone());
         b.page = ab;
+        // The first id of this page's art.
+        let first_id = b.next;
         let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts);
         if route {
             let mut seen = HashSet::new();
@@ -276,12 +278,20 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         // art clears the art before it.
         let mut art_right = f64::NEG_INFINITY;
         if ai && let Some(art) = parts.iter().flat_map(|(_, v)| v.iter()).filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b)) {
-            let dx = (clear - art.x0).max(0.0);
+            // Art at a coordinate that isn't a number (a damaged file) moves nothing.
+            let dx = Some((clear - art.x0).max(0.0)).filter(|dx| dx.is_finite()).unwrap_or(0.0);
             if dx > 0.0 {
                 let shift = Affine::translate((dx, 0.0));
                 for (_, v) in &mut parts {
                     for n in v.iter_mut() {
                         Arc::make_mut(n).transform(shift, false);
+                    }
+                }
+                // What the page's lines of type were is told where their glyphs are (the outlines
+                // stroked on them are looked for there), so that moves with them.
+                for facts in b.lines.iter_mut().filter(|(id, _)| id.0 >= first_id).map(|(_, facts)| facts) {
+                    for ink in &mut facts.ink {
+                        *ink = *ink + kurbo::Vec2::new(dx, 0.0);
                     }
                 }
                 ab = Rect::new(ab.x0 + dx, ab.y0, ab.x1 + dx, ab.y1);
