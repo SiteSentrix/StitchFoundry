@@ -595,3 +595,30 @@ fn a_fill_chosen_with_characters_selected_colours_only_them() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(obj(&s, id).runs.iter().all(|r| r.style.fill == before));
 }
+
+/// A fill or stroke that the characters selected with the Type tool have already records no undo
+/// step: the step to redo stays and the document stays unmodified.
+#[test]
+fn a_fill_the_selected_characters_have_records_no_undo_step() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    s.tool_text("Sample Text", v).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 6}));
+    s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    // A blue fill, undone, leaves a step to redo.
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let history = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+    };
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+    s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(history(&s), before);
+}

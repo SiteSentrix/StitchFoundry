@@ -1269,10 +1269,11 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
 /// Copy the paint just applied to generated series art into that series' fill or stroke. Called
 /// inside the same document edit, so the visible paint and future regeneration undo together.
 /// Gradients, patterns and swatch links are kept as [`Paint`], not reduced to a solid colour.
-pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bool) {
+/// Returns whether a series' captured fill or stroke changed.
+pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bool) -> bool {
     let members = series_members(doc);
     if members.is_empty() {
-        return;
+        return false;
     }
     let captures: Vec<_> = ids
         .iter()
@@ -1285,8 +1286,10 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
             Some((r.graph, r.index, paint, width))
         })
         .collect();
+    let mut changed = false;
     for (graph, index, paint, width) in captures {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.graph.as_deref_mut()) else { continue };
+        let was = spec.series_paints.clone();
         // `index` is below the graph's series count (`series_members`).
         if spec.series_paints.len() <= index {
             spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
@@ -1298,7 +1301,9 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
             slot.stroke = Some(paint);
             slot.stroke_width = width;
         }
+        changed |= spec.series_paints != was;
     }
+    changed
 }
 
 /// Graph Data › Transpose row/column: categories become series and series categories.
@@ -1370,18 +1375,19 @@ fn graph_labels(doc: &Document) -> HashMap<NodeId, (NodeId, Role)> {
 /// Keep a formatting change made to graph labels `ids` (Character or Appearance, on the whole graph or on labels
 /// picked with Group Selection) for every label of their kind: `change` is applied to the kind's kept style (or
 /// the default one), so the labels look the same when the graph is drawn again. Called inside the same edit, so
-/// they undo together.
-pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) {
+/// they undo together. Returns whether a kept style changed.
+pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) -> bool {
     if ids.is_empty() {
-        return;
+        return false;
     }
     let labels = graph_labels(doc);
     if labels.is_empty() {
-        return;
+        return false;
     }
     let mut kinds: Vec<(NodeId, Role)> = ids.iter().filter_map(|id| labels.get(id).copied()).collect();
     kinds.sort_by_key(|(g, r)| (g.0, *r as u8));
     kinds.dedup();
+    let mut changed = false;
     for (graph, role) in kinds {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.graph.as_deref_mut()) else { continue };
         let mut style = label_style(&spec.label_styles, role);
@@ -1391,8 +1397,10 @@ pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &
             Role::Category => &mut spec.label_styles.categories,
             Role::Legend => &mut spec.label_styles.legend,
         };
+        changed |= slot.as_ref() != Some(&style);
         *slot = Some(style);
     }
+    changed
 }
 
 fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
@@ -2098,6 +2106,40 @@ mod tests {
             s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(),
             "#e8573f"
         );
+    }
+
+    /// A fill that a series' marks or a value axis number have already is one undo step when the graph
+    /// keeps no fill for them (as after a command that paints only the art): the art stays as it was
+    /// and the graph keeps the fill. Given again, the fill records no undo step.
+    #[test]
+    fn a_fill_the_art_has_already_is_kept_by_the_graph_in_one_step() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+        let label = text_id(&s, id, "Axes", "4");
+        for target in [series_id, label] {
+            let fill = json!({"ids": [target.0], "color": "#e8573f"});
+            s.execute("paint.setFill", &fill).unwrap();
+            // The graph keeps nothing, as after a command that paints only the art.
+            s.edit("Forget", |d, _| {
+                let g = d.node_mut(id).unwrap().graph.as_deref_mut().unwrap();
+                g.series_paints.clear();
+                g.label_styles = vectorcraft_doc::LabelStyles::default();
+                Ok(())
+            })
+            .unwrap();
+            let art = s.doc().unwrap().doc.node(target).unwrap().clone();
+            let steps = s.doc().unwrap().history.undo.len();
+            s.execute("paint.setFill", &fill).unwrap();
+            assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "{target:?}");
+            assert_eq!(s.doc().unwrap().doc.node(target).unwrap(), &art, "the art is as it was");
+            let g = spec(&s, id);
+            let kept = if target == series_id { g.series_paints[0].fill.clone() } else { g.label_styles.values.map(|st| st.fill) };
+            assert_eq!(kept.and_then(|p| p.color()).map(|c| c.to_hex()), Some("#e8573f".into()), "{target:?}");
+            s.execute("paint.setFill", &fill).unwrap();
+            assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "nothing left to keep: {target:?}");
+        }
     }
 
     #[test]
