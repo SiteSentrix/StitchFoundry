@@ -280,16 +280,17 @@ fn step_value(ui: &Ui, resp: &Response, buf: &mut String, read: impl Fn(&str) ->
 }
 
 /// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
-/// first field drawn takes it ([`take_dialog_focus`]).
+/// first enabled field drawn takes it ([`take_dialog_focus`]).
 pub(crate) fn dialog_focus_flag() -> egui::Id {
     egui::Id::new("dialog-focus-first-field")
 }
 
-/// If field `id` (showing `text`) is the first field of a dialog that has just opened, give it the
-/// keyboard focus with all of `text` selected: typing replaces the value and Enter applies it.
+/// If field `id` (showing `text`) is the first enabled field of a dialog that has just opened, give
+/// it the keyboard focus with all of `text` selected: typing replaces the value and Enter applies it.
 pub(crate) fn take_dialog_focus(ui: &Ui, id: egui::Id, text: &str) {
-    // A new window's first frame only measures its contents: nothing can take focus yet.
-    if ui.is_sizing_pass() || ui.data_mut(|d| d.remove_temp::<bool>(dialog_focus_flag())).is_none() {
+    // A new window's first frame only measures its contents: nothing can take focus yet. Nor can a
+    // greyed-out field (egui drops its focus): the flag stays for the first field that is enabled.
+    if ui.is_sizing_pass() || !ui.is_enabled() || ui.data_mut(|d| d.remove_temp::<bool>(dialog_focus_flag())).is_none() {
         return;
     }
     focus_field(ui, id, text);
