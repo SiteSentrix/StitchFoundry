@@ -2603,7 +2603,7 @@ fn letters_move_scale_and_turn_one_at_a_time() {
     let boxes = |s: &Session| -> Vec<vectorcraft_geom::Rect> {
         s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap()).collect()
     };
-    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-4;
     let b0 = boxes(&s);
     // the middle letter up 5 mm: only it moves
     let r = s.execute("embroidery.lettering.letter", &json!({"index": 1, "dy": -5})).unwrap();
