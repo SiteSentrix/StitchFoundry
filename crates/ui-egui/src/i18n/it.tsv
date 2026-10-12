@@ -4601,3 +4601,6 @@ machine	Stop	Arresto
 	String stitch	Punto a filo teso
 	Chord length	Lunghezza della corda
 	Automatic Knife	Coltello automatico
+	3D effect	Effetto 3D
+	Globe out	Globo verso l’esterno
+	Globe in	Globo verso l’interno

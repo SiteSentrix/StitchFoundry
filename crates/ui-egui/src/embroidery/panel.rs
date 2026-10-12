@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 use vectorcraft_embroidery::sf_core::attr::{Embroidery, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
-    Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, MotifColumn, RunKind, SatinParams,
-    TATAMI_LENGTH, TackdownKind, TexturePattern, TieStyle,
+    Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, MotifColumn, MotifWarp, RunKind, SatinParams,
+    TATAMI_LENGTH, TackdownKind, TexturePattern, TieStyle, WarpKind,
 };
 use vectorcraft_embroidery::sf_core::threads::{Rgb, charts};
 
@@ -599,6 +599,26 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 }
                 if let Some(v) = num(ui, tl!("Row offset"), "fmo", f.offset, "", 2) {
                     set(app, target, json!({ "offset": v }));
+                }
+                // a 3D motif fill: sculpted as a dome or a bowl, or receding
+                let warps = [tl!("None"), tl!("Globe out"), tl!("Globe in"), tl!("Perspective")];
+                let cur = f.warp.and_then(|w| WarpKind::ALL.iter().position(|k| *k == w.kind)).map_or(0, |i| i + 1);
+                if let Some(i) = pick(ui, tl!("3D effect"), "fwarp", cur, &warps) {
+                    let v = i
+                        .checked_sub(1)
+                        .and_then(|k| WarpKind::ALL.get(k))
+                        .map_or(Value::Null, |k| json!(MotifWarp { kind: *k, ..f.warp.unwrap_or_default() }));
+                    set(app, target, json!({ "warp": v }));
+                }
+                if let Some(w) = f.warp {
+                    if let Some(v) = num(ui, tl!("Strength"), "fwamt", w.amount, "", 2) {
+                        set(app, target, json!({ "warp": { "amount": v.clamp(0.0, 0.8) } }));
+                    }
+                    if w.kind == WarpKind::Perspective
+                        && let Some(v) = num(ui, tl!("Direction"), "fwang", w.angle, "°", 0)
+                    {
+                        set(app, target, json!({ "warp": { "angle": v } }));
+                    }
                 }
             }
             if f.kind == FillKind::Tatami {

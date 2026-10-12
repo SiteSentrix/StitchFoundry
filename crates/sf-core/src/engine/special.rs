@@ -3,7 +3,7 @@
 use super::out::Out;
 use super::run::CORNER_ANGLE;
 use crate::geom::{Affine, Point, Polygon, poly, polyline};
-use crate::model::{CrossStyle, FillParams};
+use crate::model::{CrossStyle, FillParams, MotifWarp, WarpKind};
 
 /// Rings of the polygon offset inwards by `spacing/2 + k·spacing`, grouped by level
 /// (outermost first).
@@ -268,7 +268,10 @@ pub(crate) fn motif_fill(polygon: &Polygon, params: &FillParams, angle: f64, out
     let step = params.stitch_length.max(0.5);
     let offset = if params.offset.is_finite() { params.offset } else { 0.0 };
     let (fwd, inv) = (Affine::rotate(angle.to_radians()), Affine::rotate(-angle.to_radians()));
-    let mut p = polygon.clone();
+    // A 3D motif fill: motifs laid out plainly over the shape as it is before the warp, then
+    // moved by it.
+    let warp = params.warp.as_ref().and_then(|w| Warp::new(w, polygon));
+    let mut p = warp.as_ref().map_or_else(|| polygon.clone(), |w| w.invert_polygon(polygon));
     p.transform(&fwd);
     // The motifs (a paired fill: two in turn) each centred across its row, and rows far enough
     // inside for them to stay in.
@@ -316,11 +319,123 @@ pub(crate) fn motif_fill(polygon: &Polygon, params: &FillParams, angle: f64, out
                 row.reverse();
             }
             let row: Vec<Point> = row.into_iter().map(|q| inv.apply(q)).collect();
+            let row = match &warp {
+                Some(w) => super::out::mapped(&row, step, |q| w.apply(q)),
+                None => row,
+            };
             if let Some(&first) = row.first() {
                 out.connect(first, trim, 2.5);
                 out.stitches(row);
             }
         }
+    }
+}
+
+/// Strongest 3D motif fill warp.
+const MAX_WARP: f64 = 0.8;
+/// Most points the outline of a 3D motif fill is followed by through its warp.
+const MAX_WARP_POINTS: f64 = 50_000.0;
+
+/// A 3D motif fill's warp in the shape's own frame (mm): where a point of the motif fill laid
+/// out plainly lands (`apply`), and where a point of the shape comes from (`invert`), so the
+/// warped fill still fills the shape.
+struct Warp {
+    kind: WarpKind,
+    /// Globes: the strength; perspective: how fast the size falls off with depth (per mm).
+    k: f64,
+    /// Globes: the middle and the radius out to the farthest corner; perspective: the middle.
+    c: Point,
+    r: f64,
+    /// Perspective: the way the fill recedes, and the depth of its near edge from `c`.
+    dir: Point,
+    near: f64,
+}
+
+impl Warp {
+    fn new(w: &MotifWarp, polygon: &Polygon) -> Option<Warp> {
+        let k = if w.amount.is_finite() { w.amount.clamp(0.0, MAX_WARP) } else { 0.0 };
+        let bb = polygon.bbox();
+        if k < 1e-3 || polygon.is_empty() || bb.is_empty() {
+            return None;
+        }
+        let c = bb.center();
+        let r = polygon.outer.iter().map(|q| q.distance(c)).fold(0.0, f64::max);
+        let a = if w.angle.is_finite() { w.angle.rem_euclid(360.0).to_radians() } else { std::f64::consts::FRAC_PI_2 };
+        let dir = Point::new(a.cos(), -a.sin());
+        let (near, far) =
+            polygon.outer.iter().map(|q| (*q - c).dot(dir)).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)));
+        if !(r.is_finite() && r > 1e-6 && near.is_finite() && far - near > 1e-6) {
+            return None;
+        }
+        // perspective: the far side's motifs `1 - k` the size of the near side's
+        let k = if w.kind == WarpKind::Perspective { -(1.0 - k).ln() / (far - near) } else { k };
+        Some(Warp { kind: w.kind, k, c, r, dir, near })
+    }
+
+    /// A globe's profile: how far out (a fraction of the radius) a point `rho` out lands. It
+    /// rises from 0 to 1, faster in the middle for a dome and toward the edge for a bowl.
+    fn globe(&self, rho: f64) -> f64 {
+        let q = rho * std::f64::consts::FRAC_PI_2;
+        match self.kind {
+            WarpKind::GlobeIn => (1.0 - self.k) * rho + self.k * (1.0 - q.cos()),
+            _ => (1.0 - self.k) * rho + self.k * q.sin(),
+        }
+    }
+
+    /// Where a point of the plain layout lands.
+    fn apply(&self, p: Point) -> Point {
+        let d = p - self.c;
+        if self.kind == WarpKind::Perspective {
+            // a motif `depth` past the near edge is scaled by 1 / s
+            let (depth, side) = (d.dot(self.dir) - self.near, d.dot(self.dir.perp()));
+            let s = (1.0 + self.k * depth).max(1e-9);
+            return self.c + self.dir * (s.ln() / self.k + self.near) + self.dir.perp() * (side / s);
+        }
+        let rho = d.length() / self.r;
+        if !(rho > 1e-12 && rho < 1.0) {
+            return p;
+        }
+        self.c + d * (self.globe(rho) / rho)
+    }
+
+    /// Where a point of the shape comes from in the plain layout.
+    fn invert(&self, p: Point) -> Point {
+        let d = p - self.c;
+        if self.kind == WarpKind::Perspective {
+            let (depth, side) = (d.dot(self.dir) - self.near, d.dot(self.dir.perp()));
+            let e = (self.k * depth).min(50.0).exp();
+            return self.c + self.dir * ((e - 1.0) / self.k + self.near) + self.dir.perp() * (side * e);
+        }
+        let target = d.length() / self.r;
+        if !(target > 1e-12 && target < 1.0) {
+            return p;
+        }
+        // the profile rises steadily, so halving finds where it reaches `target`
+        let (mut lo, mut hi) = (0.0, 1.0);
+        for _ in 0..60 {
+            let m = (lo + hi) * 0.5;
+            if self.globe(m) < target {
+                lo = m;
+            } else {
+                hi = m;
+            }
+        }
+        self.c + d * ((lo + hi) * 0.5 / target)
+    }
+
+    /// The shape as it is before the warp, its outline followed closely enough to bend with it.
+    fn invert_polygon(&self, polygon: &Polygon) -> Polygon {
+        let perimeter: f64 = polygon.rings().map(|r| polyline::ring_length(r)).sum();
+        let seg = (perimeter / MAX_WARP_POINTS).max(0.25);
+        let ring = |r: &Vec<Point>| -> Vec<Point> {
+            let mut out = Vec::new();
+            for (&a, &b) in r.iter().zip(r.iter().cycle().skip(1)) {
+                let parts = ((a.distance(b) / seg).ceil() as usize).clamp(1, 10_000);
+                out.extend((0..parts).map(|j| self.invert(a.lerp(b, j as f64 / parts as f64))));
+            }
+            out
+        };
+        Polygon::new(ring(&polygon.outer), polygon.holes.iter().map(ring).collect())
     }
 }
 
@@ -580,6 +695,67 @@ mod tests {
         let (single, paired) = (sew(None), sew(Some(Motif::Star)));
         assert_ne!(single, paired);
         assert!(paired.len() > 150 && paired.iter().all(|p| poly.contains(*p) || poly.distance_to_boundary(*p) < 0.05));
+    }
+
+    #[test]
+    fn three_d_motif_fills_grow_and_shrink_their_motifs() {
+        use crate::model::{FillKind, Motif};
+        // A 60 mm square: stitches per area go with how many motifs fit there (long stitches, so
+        // only the motifs' own points count).
+        let poly = square(60.0);
+        let sew = |warp: Option<MotifWarp>| {
+            let params = FillParams {
+                kind: FillKind::Motif,
+                motif: Motif::Diamond,
+                motif_size: 4.0,
+                spacing: 4.0,
+                stitch_length: 20.0,
+                warp,
+                ..Default::default()
+            };
+            let mut out = Out::new();
+            motif_fill(&poly, &params, 0.0, &mut out, 1e9);
+            out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect::<Vec<Point>>()
+        };
+        let count =
+            |pts: &[Point], x: f64, y: f64| pts.iter().filter(|p| (x..x + 16.0).contains(&p.x) && (y..y + 16.0).contains(&p.y)).count() as f64;
+        // the middle against a box out toward a corner
+        let ratio = |pts: &[Point]| count(pts, 22.0, 22.0) / count(pts, 40.0, 40.0).max(1.0);
+        let plain = sew(None);
+        let flat = ratio(&plain);
+        assert!((0.7..1.4).contains(&flat), "{flat}");
+        let warp = |kind, amount| Some(MotifWarp { kind, amount, angle: 90.0 });
+        let (dome, bowl) = (sew(warp(WarpKind::GlobeOut, 0.8)), sew(warp(WarpKind::GlobeIn, 0.8)));
+        // a dome: big motifs in the middle, so fewer stitches there; a bowl: the other way round
+        assert!(ratio(&dome) < flat * 0.75 && ratio(&bowl) > flat * 1.5, "{} {} {flat}", ratio(&dome), ratio(&bowl));
+        // receding upward: smaller motifs at the top (low y) than at the bottom
+        let far = sew(warp(WarpKind::Perspective, 0.6));
+        let (top, bottom) = (count(&far, 22.0, 4.0), count(&far, 22.0, 40.0));
+        assert!(top > bottom * 1.5, "{top} {bottom}");
+        for pts in [&dome, &bowl, &far] {
+            assert!(pts.len() > 100 && pts.iter().all(|p| poly.contains(*p) || poly.distance_to_boundary(*p) < 0.05));
+        }
+        // stitches the warp stretches are split
+        let params = FillParams {
+            kind: FillKind::Motif,
+            motif_size: 4.0,
+            spacing: 4.0,
+            stitch_length: 2.0,
+            warp: warp(WarpKind::GlobeOut, 0.8),
+            ..Default::default()
+        };
+        let mut out = Out::new();
+        motif_fill(&poly, &params, 30.0, &mut out, 1e9);
+        let pts: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+        let longest = pts.windows(2).map(|w| w[0].distance(w[1])).fold(0.0, f64::max);
+        assert!(longest <= 2.5 + 1e-6, "{longest}");
+        // absurd values: bounded, finite
+        for (amount, angle) in [(f64::NAN, f64::NAN), (1e308, -1e308), (-1.0, 0.0), (0.8, 1e300)] {
+            for kind in WarpKind::ALL {
+                let pts = sew(Some(MotifWarp { kind, amount, angle }));
+                assert!(pts.len() < 400_000 && pts.iter().all(|p| p.is_finite()), "{kind:?} {amount} {angle}");
+            }
+        }
     }
 
     #[test]

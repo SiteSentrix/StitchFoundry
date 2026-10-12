@@ -4597,3 +4597,6 @@ machine	Stop	Остановка
 	String stitch	Струнный стежок
 	Chord length	Длина хорды
 	Automatic Knife	Автоматический нож
+	3D effect	3D-эффект
+	Globe out	Сфера наружу
+	Globe in	Сфера внутрь

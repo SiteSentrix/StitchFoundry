@@ -4599,3 +4599,6 @@ machine	Stop	Parada
 	String stitch	Puntada de hilo tensado
 	Chord length	Longitud de cuerda
 	Automatic Knife	Cuchilla automática
+	3D effect	Efecto 3D
+	Globe out	Globo hacia fuera
+	Globe in	Globo hacia dentro

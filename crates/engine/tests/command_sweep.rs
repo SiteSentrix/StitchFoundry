@@ -471,6 +471,17 @@ fn structured_junk() {
                 {"command": "embroidery.setParams", "params": {"params": {"motifColumn": "x"}}},
             ]}),
         ),
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.set", "params": {"type": "motiffill"}},
+                {"command": "embroidery.setParams", "params": {"params": {"warp": {"kind": "GlobeOut", "amount": 1e308, "angle": -1e308}}}},
+                {"command": "embroidery.setParams", "params": {"params": {"warp": {"kind": "Perspective", "amount": 0.8, "angle": 1e300}, "motifSize": 1, "spacing": 0.5}}},
+                {"command": "embroidery.setParams", "params": {"params": {"warp": {"kind": "GlobeIn", "amount": -1}, "motifSize": 50}}},
+                {"command": "embroidery.setParams", "params": {"params": {"warp": {"kind": "nope"}}}},
+                {"command": "embroidery.setParams", "params": {"params": {"warp": "x"}}},
+            ]}),
+        ),
         ("embroidery.knife", json!({"overlap": 3})),
         ("embroidery.knife", json!({"overlap": -1, "ids": [u64::MAX]})),
         (
