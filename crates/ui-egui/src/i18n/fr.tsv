@@ -4763,3 +4763,12 @@ machine	Stop	Arrêt
 	Centre line	Ligne médiane
 	Stitch as	Broder en
 	Click a region of an image to stitch it	Cliquez sur une zone d’une image pour la broder
+	Send to Machine	Envoyer à la machine
+	Machine Folders	Dossiers de la machine
+	Add Machine Folder…	Ajouter un dossier de machine…
+	A USB stick, the machine's folder or a network share the machine reads	Une clé USB, le dossier de la machine ou un partage réseau qu’elle lit
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Ajoutez le dossier que lit votre machine : une clé USB, son dossier ou un partage réseau.
+	Machine folder	Dossier de la machine
+	Send	Envoyer
+	Sent:	Envoyé :
+	Forget Folder	Oublier le dossier

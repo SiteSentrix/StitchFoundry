@@ -4753,3 +4753,12 @@ machine	Stop	Parada
 	Centre line	Línea central
 	Stitch as	Bordar como
 	Click a region of an image to stitch it	Haz clic en una zona de una imagen para bordarla
+	Send to Machine	Enviar a la máquina
+	Machine Folders	Carpetas de la máquina
+	Add Machine Folder…	Añadir carpeta de la máquina…
+	A USB stick, the machine's folder or a network share the machine reads	Una memoria USB, la carpeta de la máquina o una carpeta de red que la máquina lee
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Añade la carpeta que lee tu máquina: una memoria USB, su carpeta o una carpeta de red.
+	Machine folder	Carpeta de la máquina
+	Send	Enviar
+	Sent:	Enviado:
+	Forget Folder	Olvidar carpeta

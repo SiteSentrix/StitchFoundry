@@ -193,6 +193,38 @@ fn a_click_on_an_image_stitches_its_region() {
 }
 
 #[test]
+fn designs_go_to_the_machine_folder() {
+    let dir = std::env::temp_dir().join(format!("sf-send-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let folder = dir.to_string_lossy().to_string();
+    let mut s = session();
+    // no folder yet; nothing stitched yet
+    assert!(s.execute("embroidery.send", &json!({})).is_err());
+    assert!(s.execute("embroidery.send", &json!({"folder": folder})).is_err());
+    let sq = rect(&mut s, 100.0, 100.0, 60.0, 40.0);
+    s.execute("select.set", &json!({"ids": [sq.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let r = s.execute("embroidery.send", &json!({"folder": folder, "name": "Cap logo"})).unwrap();
+    let first = r["path"].as_str().unwrap().to_string();
+    assert!(first.ends_with("Cap logo.dst") && std::fs::metadata(&first).unwrap().len() > 100, "{first}");
+    // the folder remembered: sent there again, under a new name, or over the old one
+    let r = s.execute("embroidery.send", &json!({"name": "Cap logo"})).unwrap();
+    assert!(r["path"].as_str().unwrap().ends_with("Cap logo-2.dst"), "{r}");
+    let r = s.execute("embroidery.send", &json!({"name": "Cap logo", "replace": true, "format": "pes"})).unwrap();
+    assert!(r["path"].as_str().unwrap().ends_with("Cap logo.pes"), "{r}");
+    let t = s.execute("embroidery.send.targets", &json!({})).unwrap();
+    assert_eq!(t["targets"], json!([{"folder": folder, "ready": true}]));
+    // a folder that isn't there (a USB stick taken out): said so, nothing written
+    let gone = dir.join("gone").to_string_lossy().to_string();
+    s.execute("embroidery.send.targets", &json!({"add": gone})).unwrap();
+    assert!(s.execute("embroidery.send", &json!({})).is_err());
+    let t = s.execute("embroidery.send.targets", &json!({"forget": gone})).unwrap();
+    assert_eq!(t["targets"].as_array().unwrap().len(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn auto_digitize_traces_an_image_into_satin_and_fill() {
     let mut s = session();
     // A white logo: a blue disc, a long red bar and a speck.

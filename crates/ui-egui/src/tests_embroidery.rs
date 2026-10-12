@@ -157,6 +157,15 @@ fn the_design_can_be_shown_repeated() {
 #[test]
 fn the_panel_picks_the_motif_tools_motif() {
     let mut app = app();
+    // Send to Machine: a folder to add first, then the folder and Send
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::send_body, 600.0);
+    assert!(texts.iter().any(|t| t.starts_with("Add the folder your machine reads")), "{texts:?}");
+    app.session.prefs.embroidery_send_dirs = vec!["/media/usb".into()];
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::send_body, 600.0);
+    for want in ["Machine folder", "/media/usb", "Send", "Forget Folder"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
+    app.session.prefs.embroidery_send_dirs.clear();
     // the Click-to-Stitch tool's settings
     app.run("tool.select", json!({"tool": "embroideryClick"})).unwrap();
     let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);

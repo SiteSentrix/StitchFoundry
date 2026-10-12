@@ -4755,3 +4755,12 @@ machine	Stop	Arresto
 	Centre line	Linea centrale
 	Stitch as	Ricama come
 	Click a region of an image to stitch it	Fai clic su un’area di un’immagine per ricamarla
+	Send to Machine	Invia alla macchina
+	Machine Folders	Cartelle della macchina
+	Add Machine Folder…	Aggiungi cartella della macchina…
+	A USB stick, the machine's folder or a network share the machine reads	Una chiavetta USB, la cartella della macchina o una condivisione di rete che legge
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Aggiungi la cartella che la tua macchina legge: una chiavetta USB, la sua cartella o una condivisione di rete.
+	Machine folder	Cartella della macchina
+	Send	Invia
+	Sent:	Inviato:
+	Forget Folder	Dimentica cartella

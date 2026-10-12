@@ -4121,3 +4121,12 @@ machine	Stop	停止
 	Centre line	中心線
 	Stitch as	繡製為
 	Click a region of an image to stitch it	點擊影像中的區域即可繡製
+	Send to Machine	傳送到繡花機
+	Machine Folders	繡花機資料夾
+	Add Machine Folder…	新增繡花機資料夾…
+	A USB stick, the machine's folder or a network share the machine reads	繡花機讀取的 USB 隨身碟、機器資料夾或網路共用
+	Add the folder your machine reads: a USB stick, its folder or a network share.	新增繡花機讀取的資料夾：USB 隨身碟、機器資料夾或網路共用。
+	Machine folder	繡花機資料夾
+	Send	傳送
+	Sent:	已傳送：
+	Forget Folder	忘記資料夾
