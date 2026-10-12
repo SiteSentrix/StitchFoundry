@@ -83,6 +83,26 @@ fn paths_fill_and_stroke_in_document_space() {
     assert!(stroke(&o[2]).is_some());
 }
 
+/// Each `closepath` adds an element to the path, so on a path that holds `MAX_PATH` (1,048,576)
+/// elements it stops the reading with the same error as `lineto`, run from a procedure or from an
+/// encoded user path.
+#[test]
+fn closepath_stops_at_the_path_limit() {
+    for body in [
+        // A moveto and 1,100,000 closepaths.
+        "newpath 0 0 moveto 1100000 { closepath } repeat",
+        // An encoded user path: setbbox and moveto, then 4,750 pairs of a repeat count of 223 (the
+        // byte 255) and closepath (10), 1,059,250 closepaths.
+        "/s 9502 string def s 0 0 put s 1 1 put 2 2 9500 { dup s exch 255 put 1 add s exch 10 put } for \
+         newpath [ [0 0 10 10 0 0] s ] uappend",
+    ] {
+        // The square drawn before the error stays, and the one after it is left out.
+        let r = read(&format!("0 0 10 10 rectfill {body} 20 20 10 10 rectfill"));
+        assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
+        assert!(r.warnings[0].contains("a path has too many points"), "{body}: {:?}", r.warnings);
+    }
+}
+
 #[test]
 fn colours_in_every_model() {
     let r = read(
