@@ -50,6 +50,8 @@ fn a_stroke_wider_than_the_shape_covers_the_interior() {
     let thin = line_outline(&circle, &stroke(4.0, |_| {}), 4.0, 0.25);
     assert!(!kurbo::Shape::contains(&thin, Point::ZERO), "a narrow stroke stays a ring");
     assert!(kurbo::Shape::contains(&thin, Point::new(5.0, 0.0)));
+    let square = line_outline(&Rect::new(0.0, 0.0, 8.0, 8.0).to_path(0.1), &st, 40.0, 0.25);
+    assert!(kurbo::Shape::contains(&square, Point::new(4.0, 4.0)), "a fat stroke on a small rectangle covers it");
 }
 
 // ---------------------------------------------------------------- dashes and dots
