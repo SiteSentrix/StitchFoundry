@@ -457,7 +457,8 @@ fn worksheets_show_the_design_and_its_figures() {
             texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
         }
     });
-    let notes: Vec<&String> = texts.iter().filter(|t| t.contains("bobbin") || t.starts_with("Notes: ")).collect();
+    let at = texts.iter().position(|t| t.starts_with("Notes: ")).unwrap();
+    let notes: Vec<&String> = texts[at..].iter().filter(|t| t.contains("bobbin")).collect();
     assert!(notes.len() >= 2 && notes[0].starts_with("Notes: Left chest"), "{texts:?}");
     assert!(notes.iter().all(|t| t.chars().count() <= 110), "{notes:?}");
     s.execute("document.activate", &json!({"index": 0})).unwrap();
