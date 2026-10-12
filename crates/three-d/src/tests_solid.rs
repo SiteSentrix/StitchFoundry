@@ -373,3 +373,54 @@ fn twist_holds_between_0_and_360_degrees() {
     assert_eq!(at(500.0), at(360.0));
     assert_ne!(at(45.0), at(0.0));
 }
+
+/// A twisted extrusion shows every wall facing the viewer: a twist bends each strip between two
+/// slices into a saddle, and its normal from one corner's triangle leaned so far back that from
+/// 60° on every wall was dropped. Checked against each strip's average normal, oriented away from
+/// the square's axis.
+#[test]
+fn twisted_walls_face_the_way_they_turn() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let c = b.center();
+    for twist in [60.0, 120.0, 180.0, 300.0] {
+        for (x, y) in [(-20.0, 30.0), (0.0, 90.0), (30.0, -60.0), (-45.0, 150.0)] {
+            let v = View { rotation_x: x, rotation_y: y, ..front() };
+            let o = Extrude { twist, ..Extrude::default() };
+            let got = extrude(&p, b, o, v).unwrap();
+            // Expected: walls (and caps) whose outward normal faces the viewer.
+            let o = o.sanitized();
+            let camera = Camera::new(v, b, o.depth);
+            let ring = &rings(&p, b.width().max(b.height()), MAX_SOLID_POINTS).unwrap()[0];
+            let slices = ((twist / 6.0).ceil() as usize).clamp(8, 64);
+            let z = |t: f64| o.depth / 2.0 - o.depth * t;
+            let mut expected = 0;
+            for k in 0..slices {
+                let (t0, t1) = (k as f64 / slices as f64, (k + 1) as f64 / slices as f64);
+                let (r0, r1) = (section(ring, b, &o, t0), section(ring, b, &o, t1));
+                for i in 0..ring.len() {
+                    let j = (i + 1) % ring.len();
+                    let q = [camera.place(r0[i], z(t0)), camera.place(r0[j], z(t0)), camera.place(r1[j], z(t1)), camera.place(r1[i], z(t1))];
+                    let mut n = newell(&[q.to_vec()]).unit();
+                    let mid = r0[i].midpoint(r1[j]);
+                    let away = camera.rotate(V3(mid.x - c.x, mid.y - c.y, 0.0));
+                    if n.dot(away) < 0.0 {
+                        n = V3(-n.0, -n.1, -n.2);
+                    }
+                    let centre = V3((q[0].0 + q[2].0) / 2.0, (q[0].1 + q[2].1) / 2.0, (q[0].2 + q[2].2) / 2.0);
+                    // Kept as the builder keeps them: facing, or seen almost edge-on, with an area.
+                    let projected: Vec<Point> = q.iter().map(|v| camera.project(*v)).collect();
+                    if camera.facing(centre, n) > -0.02 && signed_area(&projected).abs() >= 1e-10 {
+                        expected += 1;
+                    }
+                }
+            }
+            for (n, t) in [(1.0, 0.0), (-1.0, 1.0)] {
+                let cap: Vec<Point> = section(ring, b, &o, t).iter().map(|p| camera.project(camera.place(*p, z(t)))).collect();
+                if camera.facing(V3::default(), camera.rotate(V3(0.0, 0.0, n))) > -0.02 && signed_area(&cap).abs() >= 1e-10 {
+                    expected += 1;
+                }
+            }
+            assert_eq!(got.len(), expected, "twist {twist}, view ({x}, {y})");
+        }
+    }
+}
