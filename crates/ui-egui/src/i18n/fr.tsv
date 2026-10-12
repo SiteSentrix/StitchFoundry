@@ -4655,7 +4655,7 @@ lighting	Light	Lumière
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	x Height	Hauteur d’x
 	▾ Default Actions	▾ Scripts par défaut
-	⚠ {chord} was already used by {names} — it has been removed there.	⚠ {chord} était déjà utilisé par {names} ; il en a été retiré.
+	⚠ {chord} was already used by {names} — it has been removed there.	Attention : {chord} était déjà utilisé par {names} ; il en a été retiré.
 @id	file.close	Fermer
 @id	pathfinder.add	Réunion
 @msg	give corners of the path: anchors between two straight sides	indiquez des angles du tracé : des points d’ancrage entre deux côtés droits
