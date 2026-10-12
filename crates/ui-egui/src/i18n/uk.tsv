@@ -4720,3 +4720,8 @@ machine	Stop	Зупинка
 	After each word	Після кожного слова
 	After each line	Після кожного рядка
 	Outside the sizes the font was made for: its stitches may come out too dense or too long	Поза розмірами, для яких зроблено шрифт: стібки можуть вийти надто щільними або довгими
+	Adjust Letter	Налаштувати літеру
+	One letter: moved, scaled or turned, kept when the lettering is set again	Одна літера: зсунута, масштабована або повернута, зберігається під час повторного набору
+	Move along	Зсув уздовж
+	Move down	Зсув униз
+	Reset Letter	Скинути літеру

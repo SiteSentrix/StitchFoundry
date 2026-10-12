@@ -111,6 +111,7 @@ fn monogram(s: &mut Session, p: &Value) -> Result<Value> {
             arc: 0.0,
             align: LetterAlign::Centre,
             sew: LetterSewing::default(),
+            letters: Vec::new(),
             frame: sf_core::Affine::translate(sf_core::Point::new(x + w / 2.0, base)),
         });
         x += w + gap;

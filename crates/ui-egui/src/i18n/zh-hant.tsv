@@ -4106,3 +4106,8 @@ machine	Stop	停止
 	After each word	每個單字後
 	After each line	每行後
 	Outside the sizes the font was made for: its stitches may come out too dense or too long	超出字型設計的尺寸範圍：針跡可能過密或過長
+	Adjust Letter	調整字母
+	One letter: moved, scaled or turned, kept when the lettering is set again	單個字母：移動、縮放或旋轉，重新排字時保留
+	Move along	沿行移動
+	Move down	向下移動
+	Reset Letter	重設字母

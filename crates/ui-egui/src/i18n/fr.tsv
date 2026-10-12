@@ -4748,3 +4748,8 @@ machine	Stop	Arrêt
 	After each word	Après chaque mot
 	After each line	Après chaque ligne
 	Outside the sizes the font was made for: its stitches may come out too dense or too long	Hors des tailles prévues pour la police : ses points peuvent être trop denses ou trop longs
+	Adjust Letter	Ajuster la lettre
+	One letter: moved, scaled or turned, kept when the lettering is set again	Une lettre : déplacée, mise à l’échelle ou pivotée, conservée quand le lettrage est recomposé
+	Move along	Déplacer le long
+	Move down	Déplacer vers le bas
+	Reset Letter	Rétablir la lettre
