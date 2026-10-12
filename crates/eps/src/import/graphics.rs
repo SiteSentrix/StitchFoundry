@@ -402,6 +402,13 @@ impl Interp<'_> {
         Ok(())
     }
 
+    /// Count `n` path elements an operator makes, reads or copies against the operation budget,
+    /// an operation each: making or reading an element takes up to about as long as an operation,
+    /// and copying one takes less (measured).
+    fn spend_elements(&mut self, n: usize) -> Res {
+        self.spend(n as u64)
+    }
+
     fn move_to(&mut self, p: Point) -> Res {
         self.grow()?;
         // Consecutive movetos: the last one counts.
@@ -424,10 +431,12 @@ impl Interp<'_> {
         Ok(())
     }
 
-    /// Path elements in user space appended (the first move a line when there is a current point).
+    /// Path elements in user space appended (the first move a line when there is a current point),
+    /// each counted against the operation budget.
     fn append_user(&mut self, els: impl Iterator<Item = PathEl>) -> Res {
         let xf = self.xf();
         for el in els {
+            self.spend_elements(1)?;
             match el {
                 PathEl::MoveTo(p) => {
                     let p = xf * p;
@@ -516,6 +525,8 @@ impl Interp<'_> {
         let nums: Vec<f64> = match self.stack.last() {
             Some(Obj::Array { .. }) => {
                 let items = self.pop_array()?;
+                // Five elements a rectangle, counted before the array is read.
+                self.spend_elements(items.len() / 4 * 5)?;
                 let v: Option<Vec<f64>> = items.borrow().iter().map(Obj::as_num).collect();
                 v.ok_or(PsError::Ps("typecheck", String::new()))?
             }
@@ -606,6 +617,7 @@ impl Interp<'_> {
         let curve = self.pop_proc()?;
         let line = self.pop_proc()?;
         let mv = self.pop_proc()?;
+        self.spend_elements(self.g.path.elements().len())?;
         for (op, pts) in self.user_elements()? {
             for p in pts {
                 self.push_num(p.x)?;
@@ -649,7 +661,12 @@ impl Interp<'_> {
             (Op::UCache, 0),
         ];
         let nums: Vec<f64> = match nums {
-            Obj::Array { items, .. } => items.borrow().iter().filter_map(Obj::as_num).collect(),
+            Obj::Array { items, .. } => {
+                // Each entry of the data array and each byte of the operator string counts as an
+                // element read.
+                self.spend_elements(items.len().saturating_add(ops.len()))?;
+                items.borrow().iter().filter_map(Obj::as_num).collect()
+            }
             _ => return ps_err("typecheck", "an encoded user path"),
         };
         let mut next = nums.into_iter();
@@ -665,6 +682,8 @@ impl Interp<'_> {
                     let v = next.next().ok_or(PsError::Ps("rangecheck", "a user path".into()))?;
                     self.push_num(v)?;
                 }
+                // Each operator run counts as an operation.
+                self.spend(1)?;
                 self.op(op)?;
             }
         }
@@ -752,9 +771,13 @@ impl Interp<'_> {
         }
     }
 
-    /// The area the clip leaves, in document space (the page without a clip).
-    fn clip_bounds(&self) -> Rect {
-        self.g.clips.iter().rev().find_map(|c| c.region.as_ref()).map_or(self.out.frame, |(p, _)| p.bounding_box())
+    /// The area the clip leaves, in document space (the page without a clip). The clip path read
+    /// counts against the operation budget.
+    fn clip_bounds(&mut self) -> Res<Rect> {
+        let (bounds, len) =
+            self.g.clips.iter().rev().find_map(|c| c.region.as_ref()).map_or((self.out.frame, 0), |(p, _)| (p.bounding_box(), p.elements().len()));
+        self.spend_elements(len)?;
+        Ok(bounds)
     }
 
     // ---------- colour ----------
@@ -1181,11 +1204,16 @@ impl Interp<'_> {
                 let mut st = self.stroke_layer();
                 // A dash pattern far finer than the path would make countless pieces.
                 let period: f64 = st.dash.as_ref().map_or(0.0, |d| d.pattern.iter().sum());
-                if st.dash.is_some() && !(period > 0.0 && bp.perimeter(1e-3) / period < MAX_DASHES) {
+                let periods = if st.dash.is_some() && period > 0.0 { bp.perimeter(1e-3) / period } else { 0.0 };
+                if st.dash.is_some() && !(period > 0.0 && periods < MAX_DASHES) {
                     st.dash = None;
                 }
                 let tol = (0.01 / self.scale().max(1e-9)).clamp(1e-4, 1.0);
                 let outline = vectorcraft_effects::stroke::line_outline(&bp, &st, st.width, tol);
+                // The path, each entry of the dash pattern in each period, and the outline count
+                // as elements.
+                let dashes = st.dash.as_ref().map_or(0.0, |d| periods * d.pattern.len() as f64) as usize;
+                self.spend_elements(bp.elements().len().saturating_add(dashes).saturating_add(outline.elements().len()))?;
                 if outline.elements().len() >= MAX_PATH {
                     return Err(PsError::Limit("a path has too many points"));
                 }
@@ -1245,13 +1273,20 @@ impl Interp<'_> {
                 self.push(Obj::Int(0))?;
                 self.push(Obj::Int(0))?;
             }
-            GStateNew => self.push(Obj::GState(Rc::new(self.g.clone())))?,
+            GStateNew => {
+                self.spend_elements(self.g.path.elements().len())?;
+                self.push(Obj::GState(Rc::new(self.g.clone())))?;
+            }
             CurrentGState => {
                 self.pop()?;
+                self.spend_elements(self.g.path.elements().len())?;
                 self.push(Obj::GState(Rc::new(self.g.clone())))?;
             }
             SetGState => match self.pop()? {
-                Obj::GState(g) => self.g = (*g).clone(),
+                Obj::GState(g) => {
+                    self.spend_elements(g.path.elements().len())?;
+                    self.g = (*g).clone();
+                }
                 _ => return ps_err("typecheck", ""),
             },
             SetLineWidth => self.g.width = self.pop_num()?.abs(),
@@ -1573,13 +1608,14 @@ impl Interp<'_> {
                 if xf.determinant().abs() < 1e-12 {
                     return ps_err("undefinedresult", "");
                 }
+                self.spend_elements(self.g.path.elements().len())?;
                 let b = xf.inverse().transform_rect_bbox(self.g.path.bounding_box());
                 for v in [b.x0, b.y0, b.x1, b.y1] {
                     self.push_num(v)?;
                 }
             }
             ClipPath => {
-                let b = self.clip_bounds();
+                let b = self.clip_bounds()?;
                 self.take_path();
                 self.g.path = b.to_path(0.1);
                 self.g.cur = Some(b.origin());
@@ -1600,6 +1636,7 @@ impl Interp<'_> {
                 }
             }
             Clip | EoClip => {
+                self.spend_elements(self.g.path.elements().len())?;
                 let bp = self.g.path.clone();
                 self.clip_with(bp, if op == EoClip { FillRule::EvenOdd } else { FillRule::NonZero });
             }
@@ -1643,7 +1680,7 @@ impl Interp<'_> {
                 }
                 let m = self.xf();
                 if let Some(g) = self.gradient(&d, m)? {
-                    let area = self.clip_bounds();
+                    let area = self.clip_bounds()?;
                     let paint = Paint::Gradient(Box::new(g));
                     let clips = self.g.clips.clone();
                     self.out.fill(area.to_path(0.1), FillRule::NonZero, paint, self.g.overprint, &clips);
