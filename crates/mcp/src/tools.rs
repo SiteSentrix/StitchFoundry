@@ -351,7 +351,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "add_text",
             "Add text",
-            "Create point type at (x, y) (the first baseline), area type when width/height are given, or type in/on an existing path (`path` id + `mode` area|onPath; `pathEffect` rainbow|skew|3dRibbon|stairStep|gravity). Returns the text object id.",
+            "Create point type at (x, y) (the first baseline), area type when width/height are given (`fit` autoHeight grows the frame to the text, shrinkText scales the text down to fit), or type in/on an existing path (`path` id + `mode` area|onPath; `pathEffect` rainbow|skew|3dRibbon|stairStep|gravity). Returns the text object id, with `overflow: true` when the text doesn't fit its frame or path (the lines past it aren't drawn: enlarge the frame, shrink the text or give `fit`).",
             obj(
                 json!({
                     "text": {"type": "string"},
@@ -359,6 +359,8 @@ pub fn tool_definitions() -> Vec<Value> {
                     "y": num("First baseline y (area type: top)"),
                     "width": num("Area type frame width"),
                     "height": num("Area type frame height"),
+                    "fit": {"type": "string", "enum": ["none", "autoHeight", "shrinkText"], "description": "Area type: keep the frame (none), fit its height to the text (autoHeight) or scale overflowing text down (shrinkText)"},
+                    "fitMinPercent": num("shrinkText: the smallest scale in percent, 10 to 100 (default 50)"),
                     "path": {"type": "integer", "description": "Existing path id to flow the text in (area) or along (onPath)"},
                     "mode": {"type": "string", "enum": ["area", "onPath"]},
                     "pathEffect": {"type": "string", "enum": ["rainbow", "skew", "3dRibbon", "stairStep", "gravity"]},
@@ -597,13 +599,27 @@ fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         }
         if let (Some(w), Some(h)) = (a.get("width"), a.get("height")) {
             p["area"] = json!({"width": w, "height": h});
+            for k in ["fit", "fitMinPercent"] {
+                if let Some(v) = a.get(k) {
+                    p["area"][k] = v.clone();
+                }
+            }
         }
         exec(b, "text.create", p)?
     };
     if let Some(e) = a.get("pathEffect").and_then(Value::as_str) {
         exec(b, "type.pathOptions", json!({"effect": e}))?;
     }
-    Ok(json!({"id": r.get("id")}))
+    let mut made = json!({"id": r.get("id")});
+    // A path effect is applied after the text is made: ask again how it fits then.
+    let overflow = match r.get("id").filter(|_| a.get("pathEffect").is_some()) {
+        Some(id) => exec(b, "document.node", json!({"id": id, "summary": true}))?.get("overflow").and_then(Value::as_bool) == Some(true),
+        None => r.get("overflow").is_some(),
+    };
+    if overflow {
+        made["overflow"] = json!(true);
+    }
+    Ok(made)
 }
 
 fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {

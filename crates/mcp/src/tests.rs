@@ -728,3 +728,19 @@ fn drawing_gestures_snap_to_smart_guides() {
     let events = json!([{"kind": "down", "x": 300, "y": 420}, {"kind": "up", "x": 300, "y": 420}, {"kind": "move", "x": 151.5, "y": 431}, {"kind": "down", "x": 151.5, "y": 431}, {"kind": "up", "x": 151.5, "y": 431}]);
     assert_eq!(bounds(&mut s, 6, events, "pen"), [150.0, 420.0, 150.0, 11.0]);
 }
+
+/// #1471: add_text says when the text doesn't fit its frame, and takes area type's `fit`.
+#[test]
+fn add_text_reports_overflow_and_takes_a_fit() {
+    let mut s = server();
+    let made = |r: &Value| serde_json::from_str::<Value>(&text_of(r)).unwrap();
+    let headline = json!({"text": "NEON DRIVE", "x": 0, "y": 20, "width": 400, "height": 60, "size": 60});
+    let low = made(&call(&mut s, 1, "add_text", headline.clone()));
+    assert_eq!(low["overflow"], true, "{low}");
+    let mut auto = headline;
+    auto["fit"] = json!("autoHeight");
+    let auto = made(&call(&mut s, 2, "add_text", auto));
+    assert!(auto["id"].is_u64() && auto.get("overflow").is_none(), "{auto}");
+    let point = made(&call(&mut s, 3, "add_text", json!({"text": "NEON DRIVE", "x": 0, "y": 300, "size": 60})));
+    assert!(point.get("overflow").is_none(), "{point}");
+}

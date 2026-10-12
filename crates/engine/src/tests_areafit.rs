@@ -240,3 +240,31 @@ fn auto_height_follows_the_leading_model_and_character_alignment() {
     };
     assert!(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow, "tight");
 }
+
+/// #1471: the commands that make type or change what it holds say which text no longer fits, so
+/// the call that pushed it out of its frame doesn't read as plain success.
+#[test]
+fn making_and_restyling_type_reports_its_overflow() {
+    let mut s = session();
+    // A headline in a frame lower than its line draws nothing.
+    let low = s.execute("text.create", &json!({"x": 0, "y": 20, "text": "NEON DRIVE", "size": 60, "area": {"width": 400, "height": 60}})).unwrap();
+    assert_eq!(low["overflow"], json!([low["id"]]), "{low}");
+    // One that fits says nothing, nor does point type.
+    let fits = s.execute("text.create", &json!({"x": 0, "y": 200, "text": "NEON DRIVE", "size": 60, "area": {"width": 400, "height": 90}})).unwrap();
+    assert!(fits.get("overflow").is_none(), "{fits}");
+    let point = s.execute("text.create", &json!({"x": 0, "y": 400, "text": "NEON DRIVE", "size": 60})).unwrap();
+    assert!(point.get("overflow").is_none(), "{point}");
+    // Growing the type pushes it out; of the two restyled, only the area type is named.
+    let ids = json!([fits["id"], point["id"]]);
+    let grown = s.execute("text.setStyle", &json!({"ids": ids, "size": 96})).unwrap();
+    assert_eq!((&grown["ids"], &grown["overflow"]), (&ids, &json!([fits["id"]])), "{grown}");
+    let back = s.execute("text.setStyle", &json!({"ids": ids, "size": 60})).unwrap();
+    assert!(back.get("overflow").is_none(), "{back}");
+    // More words than the frame holds.
+    let long = s.execute("text.setText", &json!({"id": fits["id"], "text": STORY})).unwrap();
+    assert_eq!(long["overflow"], json!([fits["id"]]), "{long}");
+    // Type flowed into a path too small for it.
+    let frame = s.execute("shape.rectangle", &json!({"x": 500, "y": 300, "width": 60, "height": 20})).unwrap();
+    let inside = s.execute("text.createInPath", &json!({"path": frame["id"], "mode": "area", "text": STORY, "size": 12, "fit": "none"})).unwrap();
+    assert_eq!(inside["overflow"], json!([inside["id"]]), "{inside}");
+}
