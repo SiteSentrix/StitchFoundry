@@ -1570,6 +1570,49 @@ fn carving_presses_a_shapes_outline_into_the_fill_below() {
 }
 
 #[test]
+fn stamps_from_the_library_press_into_fills() {
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let plain = needles(&s, a);
+    // the library
+    let list = s.execute("embroidery.stamps", &json!({})).unwrap();
+    assert_eq!(list["stamps"].as_array().unwrap().len(), sf_core::stamps::Stamp::ALL.len());
+    // a star in the middle, 60% as wide as the fill is high
+    let r = s.execute("embroidery.carveStamp", &json!({"stamp": "star"})).unwrap();
+    assert_eq!((r["ids"].clone(), r["lines"].as_u64()), (json!([a.0]), Some(1)));
+    let lines = emb(&s, a).splits;
+    let (lo, hi) = lines[0].iter().fold(((f64::INFINITY, f64::INFINITY), (f64::NEG_INFINITY, f64::NEG_INFINITY)), |(lo, hi), p| {
+        ((lo.0.min(p.x), lo.1.min(p.y)), (hi.0.max(p.x), hi.1.max(p.y)))
+    });
+    assert!(((hi.1 - lo.1) - 0.6 * 150.0 * 0.91).abs() < 2.0, "{lo:?} {hi:?}");
+    assert!((((lo.0 + hi.0) * 0.5) - 110.0).abs() < 1.0, "{lo:?} {hi:?}");
+    assert_ne!(needles(&s, a), plain);
+    // where asked, as big as asked, turned
+    s.execute("embroidery.carveStamp", &json!({"stamp": "leaf", "at": [60, 60], "size": 20, "angle": 30})).unwrap();
+    let lines = emb(&s, a).splits;
+    assert_eq!(lines.len(), 1 + sf_core::stamps::Stamp::Leaf.lines().len());
+    let far = lines[1..].iter().flatten().map(|p| p.distance(sf_core::Point::new(60.0, 60.0)) * MM).fold(0.0, f64::max);
+    assert!((9.0..=10.0 + 1e-6).contains(&far), "{far}");
+    // undo takes it out again
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(emb(&s, a).splits.len(), 1);
+    // bad stamps and sizes, and things that are not tatami fills
+    for bad in [
+        json!({}),
+        json!({"stamp": "nope"}),
+        json!({"stamp": "star", "size": 0.5}),
+        json!({"stamp": "star", "at": [1]}),
+        json!({"stamp": "star", "angle": "x"}),
+    ] {
+        assert!(s.execute("embroidery.carveStamp", &bad).is_err(), "{bad}");
+    }
+    s.execute("embroidery.set", &json!({"type": "satinfill"})).unwrap();
+    assert!(s.execute("embroidery.carveStamp", &json!({"stamp": "star"})).is_err());
+}
+
+#[test]
 fn a_repeated_line_carves_flexi_splits_across_the_fill() {
     let mut s = session();
     let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);

@@ -7,6 +7,7 @@
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use vectorcraft_embroidery::sf_core::stamps::Stamp;
 use vectorcraft_engine::cmd::fileio::SaveMode;
 
 use crate::VectorcraftApp;
@@ -95,6 +96,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("Auto Direction", "embroidery.autoDirection"),
         c("Clear Inclination Lines", "embroidery.clearGuides"),
         c("Carve Split Lines", "embroidery.carveSplits"),
+        sub("Carve Stamp", Stamp::ALL.into_iter().map(|s| cp(s.label(), "embroidery.carveStamp", json!({ "stamp": s.id() }))).collect()),
         c("Clear Split Lines", "embroidery.clearSplits"),
         c("Fill Along Lines", "embroidery.fillAlongLines"),
         c("Clear Flow Lines", "embroidery.clearFlowLines"),

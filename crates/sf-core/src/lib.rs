@@ -30,6 +30,7 @@ pub mod model;
 pub mod pattern;
 pub mod satin_line;
 pub mod sequence;
+pub mod stamps;
 pub mod stats;
 pub mod threads;
 pub mod travel;

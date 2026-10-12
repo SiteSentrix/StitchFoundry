@@ -1,12 +1,14 @@
 //! Split lines in tatami fills: each stitch row gets a needle point where it crosses one, so the
 //! lines show in the fill. Lines drawn by an agent (`embroidery.setSplits`), carved in from other
 //! art (`embroidery.carveSplits`: a closed path presses in its outline like a carving stamp, and a
-//! line repeated across the fill makes flexi splits) and cleared (`embroidery.clearSplits`).
+//! line repeated across the fill makes flexi splits), pressed in from the library of carving
+//! stamps (`embroidery.carveStamp`) and cleared (`embroidery.clearSplits`).
 //! Programmed splits, a pattern tiled over the fill, are the `texture` stitch parameter.
 
 use serde_json::{Value, json};
 use sf_core::attr::{Embroidery, StitchType};
 use sf_core::model::FillKind;
+use sf_core::stamps::Stamp;
 use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_embroidery::{PT_PER_MM, outlines_mm, regions_mm};
 
@@ -40,6 +42,16 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             carve_splits
         ),
+        cmd!(
+            "embroidery.carveStamp",
+            "Carve Stamp",
+            [],
+            None,
+            "{stamp: star|heart|flower|leaf|spiral|sun|moon|snowflake|paw|swirl|shell|butterfly|clover|feather|rings|diamond, ids?, at?: [x, y] (points; default: each fill's middle), size?: mm (the stamp's width and height, 2–500; default: 60% of the fill's smaller side), angle?: degrees} press a carving stamp from the library into the selected tatami fills as split lines, so it shows embossed in the stitching → {ids, lines}",
+            has_selection,
+            carve_stamp
+        ),
+        cmd!("embroidery.stamps", "Carving Stamps", [], None, "{} the carving stamps in the library → {stamps: [{id, name}]}", always, list_stamps),
         cmd!(
             "embroidery.clearSplits",
             "Clear Split Lines",
@@ -191,6 +203,63 @@ fn carve_splits(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "lines": added }))
+}
+
+fn carve_stamp(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.carveStamp";
+    let name = str_param(p, "stamp").ok_or_else(|| bad(CMD, "missing `stamp` (embroidery.stamps lists them)"))?;
+    let stamp = Stamp::from_id(name).ok_or_else(|| bad(CMD, format!("no stamp `{name}` (embroidery.stamps lists them)")))?;
+    let at = match p.get("at") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(CMD, "`at` is [x, y]"))?),
+    };
+    let size = match p.get("size") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_f64().filter(|v| (2.0..=500.0).contains(v)).ok_or_else(|| bad(CMD, "`size` is 2 to 500 mm"))?),
+    };
+    let angle = match p.get("angle") {
+        None | Some(Value::Null) => 0.0,
+        Some(v) => v.as_f64().filter(|v| v.is_finite() && v.abs() <= 3600.0).ok_or_else(|| bad(CMD, "`angle` is in degrees"))?,
+    };
+    let d = &s.doc()?.doc;
+    let fills: Vec<NodeId> = leaf_targets(s, &targets(s, p)?)?.into_iter().filter(|id| tatami(d, *id)).collect();
+    if fills.is_empty() {
+        return Err(bad(CMD, "select tatami fills to press the stamp into"));
+    }
+    let (sin, cos) = (-angle).to_radians().sin_cos();
+    let mut plans: Vec<(NodeId, Vec<Vec<sf_core::Point>>)> = Vec::new();
+    for id in &fills {
+        let Some(n) = d.node(*id) else { continue };
+        let bb = sf_core::geom::BBox::from_points(regions_mm(n).iter().flat_map(|r| r.outer.clone()));
+        if bb.is_empty() {
+            continue;
+        }
+        // in the middle of the fill, or where asked; a little smaller than it
+        let c = at.map_or(bb.center(), |q| sf_core::Point::new(q.x, q.y) * vectorcraft_embroidery::MM_PER_PT);
+        let k = size.unwrap_or((bb.width().min(bb.height()) * 0.6).clamp(2.0, 500.0));
+        let lines: Vec<Vec<sf_core::Point>> = stamp
+            .lines()
+            .into_iter()
+            .map(|l| l.into_iter().map(|q| (c + sf_core::Point::new(q.x * cos - q.y * sin, q.x * sin + q.y * cos) * k) * PT_PER_MM).collect())
+            .collect();
+        let have = n.embroidery.as_deref().map_or((0, 0), |e| (e.splits.len(), e.splits.iter().map(Vec::len).sum()));
+        check_size(CMD, have, &lines)?;
+        plans.push((*id, lines));
+    }
+    let added: usize = plans.iter().map(|(_, l)| l.len()).sum();
+    let ids: Vec<NodeId> = plans.iter().map(|(id, _)| *id).collect();
+    s.edit("Carve Stamp", |d, _| {
+        for (id, lines) in &plans {
+            let e = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery.as_deref_mut().ok_or(EngineError::NoNode(*id))?;
+            e.splits.extend(lines.iter().cloned());
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "lines": added }))
+}
+
+fn list_stamps(_: &mut Session, _: &Value) -> Result<Value> {
+    Ok(json!({ "stamps": Stamp::ALL.iter().map(|s| json!({ "id": s.id(), "name": s.label() })).collect::<Vec<_>>() }))
 }
 
 fn clear_splits(s: &mut Session, p: &Value) -> Result<Value> {
