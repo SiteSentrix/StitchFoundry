@@ -79,9 +79,9 @@ pub struct SelectionTool {
 /// Snapping for the selection moved as a whole, its targets gathered when the move begins: View →
 /// Snap to Grid lands its bounds on the grid (#740), taking over from the rest; otherwise Smart
 /// Guides line its bounds up with the other art, and with them off, View → Snap to Point lands the
-/// point it was grabbed by on an anchor or a ruler guide. Snap to Pixel puts its top-left on whole
-/// pixels. A copy (Alt, which can go down or up at any time during the drag) leaves the original
-/// behind, so it snaps to the original too.
+/// point it was grabbed by (an anchor pressed near, else the pressed point) on an anchor or a ruler
+/// guide. Snap to Pixel puts its top-left on whole pixels. A copy (Alt, which can go down or up at
+/// any time during the drag) leaves the original behind, so it snaps to the original too.
 pub(crate) struct MoveSnap {
     bounds: Option<Rect>,
     targets: Option<Targets>,
@@ -194,11 +194,13 @@ impl SelectionTool {
         cx.tol(3.0)
     }
 
-    /// With Smart Guides on, the anchor or the centre of an object near `p` (the one under the
-    /// pointer, else a selected one) and its label, "anchor" or "center", as Illustrator shows
-    /// them while hovering (#812). A press there grabs the object by that point.
+    /// The anchor of an object near `p` (the one under the pointer, else a selected one when a
+    /// press would keep the selection), or with Smart Guides on its centre, and its label,
+    /// "anchor" or "center", as Illustrator shows them while hovering with Smart Guides (#812). A
+    /// press there grabs the object by that point, so with Smart Guides or View → Snap to Point
+    /// that point is the one that snaps (#1274).
     fn hover_point(cx: &ToolContext, p: Point) -> Option<(Point, &'static str)> {
-        if !cx.smart_guides {
+        if !cx.smart_guides && !cx.snap_to_point {
             return None;
         }
         let reach = cx.tol(HOVER_REACH);
@@ -206,10 +208,15 @@ impl SelectionTool {
         let nearest = |points: &mut dyn Iterator<Item = Point>| {
             points.filter(|q| q.distance(p) <= reach).min_by(|a, b| a.distance(p).total_cmp(&b.distance(p)))
         };
-        under.into_iter().chain(cx.selection.objects.iter().copied()).find_map(|id| {
+        // A press on an unselected object selects it alone: the selected ones stay behind.
+        let selected = if under.is_none_or(|u| cx.selection.contains(u)) { &cx.selection.objects[..] } else { &[] };
+        under.into_iter().chain(selected.iter().copied()).find_map(|id| {
             let n = cx.doc.node(id)?;
             let anchor = n.path_data().and_then(|pd| nearest(&mut pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))));
             anchor.map(|q| (q, "anchor")).or_else(|| {
+                if !cx.smart_guides {
+                    return None;
+                }
                 let c = cx.doc.bounds_of(&[id], cx.preview_bounds)?.center();
                 (c.distance(p) <= reach).then_some((c, "center"))
             })
@@ -236,8 +243,9 @@ impl Tool for SelectionTool {
         }
         let p = ev.pos;
         let m = ev.mods;
-        // A press near the hovered centre or anchor grabs the object by it.
-        let grab = self.hover.take().map(|(q, _)| q).filter(|q| q.distance(p) <= cx.tol(HOVER_REACH)).unwrap_or(p);
+        // A press near a centre or an anchor grabs the object by it.
+        self.hover = None;
+        let grab = if matches!(ev.kind, PointerKind::Down) { Self::hover_point(cx, p).map_or(p, |(q, _)| q) } else { p };
         if matches!(ev.kind, PointerKind::Move) && matches!(self.state, State::Idle) {
             self.hover = Self::hover_point(cx, p);
         }
@@ -450,7 +458,7 @@ impl Tool for SelectionTool {
         }
         o.extend(self.guides.iter().cloned());
         o.extend(self.guide.overlays(cx));
-        if let (Some((q, label)), State::Idle) = (self.hover, &self.state) {
+        if let (Some((q, label)), State::Idle, true) = (self.hover, &self.state, cx.smart_guides) {
             let style = crate::guides::GuideStyle::of(cx);
             if style.labels {
                 o.push(Overlay::Label { p: q, text: label.into(), color: style.color });
@@ -494,6 +502,11 @@ impl Tool for SelectionTool {
         }
         if let Some(c) = self.guide.cursor(cx, p) {
             return c;
+        }
+        // View → Snap to Point: over an anchor a press would grab the object by, the arrow turns
+        // hollow.
+        if cx.snap_to_point && matches!(Self::hover_point(cx, p), Some((_, "anchor"))) {
+            return Cursor::ArrowHollow;
         }
         if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
             if cx.selection.contains(h.top_object(cx.isolation)) || m.alt {
