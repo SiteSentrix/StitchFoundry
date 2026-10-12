@@ -788,7 +788,9 @@ fn others_action(doc: &Document, n: &Node, eye: bool) -> (String, Value) {
         (false, true) => "layer.lockOthers",
         (false, false) => "layer.unlockAll",
     };
-    (cmd.into(), json!({ "ids": [n.id.0] }))
+    // Show All and Unlock All take no rows.
+    let params = if cmd.ends_with("Others") { json!({ "ids": [n.id.0] }) } else { json!({}) };
+    (cmd.into(), params)
 }
 
 /// The eye and lock columns of row `n` at `r`.

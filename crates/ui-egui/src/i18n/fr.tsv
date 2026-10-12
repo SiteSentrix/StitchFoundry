@@ -4256,3 +4256,6 @@ lighting	Light	Lumière
 @msg	The shape is too complex for a 3D effect	La forme est trop complexe pour un effet 3D
 @msg	The 3D surface is too complex; simplify the shape	La surface 3D est trop complexe ; simplifiez la forme
 	Transform Objects	Transformer les objets
+@msg	unknown parameter `{key}`; did you mean `{near}`?	paramètre inconnu `{key}` ; vouliez-vous dire `{near}` ?
+@msg	unknown parameter `{key}`; the command takes no parameters	paramètre inconnu `{key}` ; la commande n’a aucun paramètre
+@msg	unknown parameter `{key}`; the command takes: {keys}	paramètre inconnu `{key}` ; la commande accepte : {keys}

@@ -1066,6 +1066,21 @@ fn align_reflect_and_shear_param_errors_are_translated() {
     }
 }
 
+/// The errors for a parameter key a command doesn't take (#1442), whose text the scan above
+/// doesn't read, are translated whole in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn unknown_parameter_errors_are_translated() {
+    use serde_json::json;
+    for (cmd, p) in [("file.new", json!({"widht": 300})), ("select.all", json!({"zzz": 1})), ("shape.line", json!({"colour": "red"}))] {
+        let e = vectorcraft_engine::check_params(cmd, &p).unwrap_err();
+        let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{cmd} {p}: {e}") };
+        for code in COMPLETE_MESSAGES.iter().chain(&["pt-br"]) {
+            let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
+            assert!(!shown.contains("unknown parameter") && shown.contains(cmd), "{code}: {shown} ({msg})");
+        }
+    }
+}
+
 /// The parameter error of `select.key` for an id that isn't a selected top-level object, whose
 /// text [`message_literals`] doesn't read, is translated whole in each language of
 /// [`COMPLETE_MESSAGES`].

@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make Pixel Perfect",
             ["Object"],
             None,
-            "{ids?} snap each object's edges to the pixel grid (odd stroke weights on half pixels) and round stroke weights",
+            "{ids?|id?} snap each object's edges to the pixel grid (odd stroke weights on half pixels) and round stroke weights",
             has_selection,
             pixel_perfect
         ),

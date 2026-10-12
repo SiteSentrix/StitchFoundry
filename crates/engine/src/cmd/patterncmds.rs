@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform Patterns",
             [],
             None,
-            "{ids?, matrix: [a,b,c,d,e,f]} transform only the pattern placement of the objects' pattern paints (Transform Patterns)",
+            "{ids?|id?, matrix: [a,b,c,d,e,f]} transform only the pattern placement of the objects' pattern paints (Transform Patterns)",
             has_selection_or_ids,
             pattern_transform
         ),
