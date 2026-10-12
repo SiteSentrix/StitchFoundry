@@ -1,6 +1,8 @@
 # Control protocol
 
-`vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). One JSON request per line:
+`vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
+from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
+before it starts. One JSON request per line:
 `{"id": 1, "method": "ui.inspect", "params": {}}` → `{"id": 1, "ok": true, "result": {...}}` or `{"id":1,"ok":false,"error":"..."}`.
 
 Set `VECTORCRAFT_CONFIG_DIR` to a dedicated directory for an isolated native test profile. Preferences,
