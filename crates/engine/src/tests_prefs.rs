@@ -81,6 +81,73 @@ fn grid_prefs_apply_to_open_documents() {
     assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
 }
 
+/// Guides & Grid › Gridline every and Subdivisions (#394): set with no document open, as the
+/// desktop app restores them at launch, they give `file.new`'s document their grid.
+#[test]
+fn grid_prefs_apply_to_new_documents() {
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
+}
+
+/// An SVG file with no grid in it.
+const GRIDLESS_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="10" height="10"/></svg>"#;
+
+/// Gridline every and Subdivisions (#394): an SVG or a plain PDF opens with their grid, while a
+/// native file, and the native document a PDF saved with Preserve Editing carries, keep the grid
+/// they were saved with.
+#[test]
+fn grid_prefs_apply_to_opened_files_without_a_grid() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 18, "gridSubdivisions": 3}})).unwrap();
+    let native = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let mut pdf = |editing: bool| {
+        let v = s.execute("document.exportPdf", &json!({"preserveEditing": editing})).unwrap();
+        vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()
+    };
+    let (editable, plain) = (pdf(true), pdf(false));
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
+    let mut open = |name: &str, bytes: &[u8]| {
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap();
+        let g = &s.doc().unwrap().doc.grid;
+        (g.spacing, g.subdivisions, r["restored"].as_bool().unwrap())
+    };
+    assert_eq!(open("drawing.svg", GRIDLESS_SVG.as_bytes()), (36.0, 4, false));
+    assert_eq!(open("plain.pdf", &plain), (36.0, 4, false));
+    assert_eq!(open("saved.vectorcraft", &native), (18.0, 3, false));
+    assert_eq!(open("editable.pdf", &editable), (18.0, 3, true));
+}
+
+/// Gridline every and Subdivisions (#394): File › Revert reads the file again, and an SVG gets
+/// their grid while a native file gets the grid it was saved with.
+#[test]
+fn grid_prefs_apply_to_reverted_files_without_a_grid() {
+    let dir = std::env::temp_dir().join(format!("vc-grid-revert-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = |name: &str| dir.join(name).to_string_lossy().to_string();
+    let (svg, native) = (path("drawing.svg"), path("saved.vectorcraft"));
+    std::fs::write(&svg, GRIDLESS_SVG).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 18, "gridSubdivisions": 3}})).unwrap();
+    s.execute("document.save", &json!({"path": native})).unwrap();
+    // The preference changes while the file is open, which sets the open documents' grid.
+    let mut reverted = |file: &str, every: f64| {
+        s.execute("document.open", &json!({"path": file})).unwrap();
+        s.execute("prefs.set", &json!({"values": {"gridlineEvery": every, "gridSubdivisions": 4}})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 10, "height": 10})).unwrap();
+        s.execute("file.revert", &json!({})).unwrap();
+        let g = &s.doc().unwrap().doc.grid;
+        (g.spacing, g.subdivisions)
+    };
+    assert_eq!(reverted(&svg, 36.0), (36.0, 4));
+    assert_eq!(reverted(&native, 24.0), (18.0, 3));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn history_states_limit_undo_depth() {
     let mut s = Session::new();
