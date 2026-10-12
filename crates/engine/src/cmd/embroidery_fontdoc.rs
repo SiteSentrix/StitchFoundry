@@ -430,10 +430,18 @@ fn from_type(s: &mut Session, p: &Value) -> Result<Value> {
     let want = str_param(p, "family").map(str::trim).filter(|f| !f.is_empty()).ok_or_else(|| bad(CMD, "missing `family`"))?;
     let family =
         db.families().into_iter().find(|f| f.eq_ignore_ascii_case(want)).ok_or_else(|| bad(CMD, format!("no font family `{want}` is installed")))?;
-    let style = str_param(p, "style").map(str::trim).filter(|s| !s.is_empty()).unwrap_or("Regular").to_string();
-    if db.face(&family, &style).is_none() {
-        return Err(bad(CMD, format!("{family} has no {style} style: one of {}", db.styles(&family).join(", "))));
-    }
+    // a style the family has (the font database stands the nearest in for one it hasn't)
+    let styles = db.styles(&family);
+    let key = |s: &str| s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect::<String>();
+    let style = match str_param(p, "style").map(str::trim).filter(|s| !s.is_empty()) {
+        Some(want) => styles
+            .iter()
+            .find(|s| key(s) == key(want))
+            .cloned()
+            .ok_or_else(|| bad(CMD, format!("{family} has no {want} style: one of {}", styles.join(", "))))?,
+        // its regular, or the style nearest it
+        None => db.face(&family, "Regular").map_or_else(|| "Regular".to_string(), |f| f.style.clone()),
+    };
     let mut f = FontDesign::default();
     f.name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| family.clone(), |n| n.chars().take(100).collect());
     f.size = ranged(p, "size", 5.0..=200.0, CMD, "`size` is 5 to 200 mm")?.unwrap_or(f.size);
