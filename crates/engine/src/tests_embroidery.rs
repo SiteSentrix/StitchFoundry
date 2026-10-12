@@ -410,6 +410,10 @@ fn colorways_rethread_the_design_everywhere() {
         }
     });
     assert!(texts.iter().any(|t| t.contains("Colorway: Spring")), "{texts:?}");
+    // and every colorway's threads, the one in use marked
+    assert!(texts.iter().any(|t| t == "Colorways"), "{texts:?}");
+    assert!(texts.iter().any(|t| t.starts_with("Spring (in use): 1. Leaf, 2. ")), "{texts:?}");
+    assert!(texts.iter().any(|t| t.starts_with("The design's own: 1. ")), "{texts:?}");
     s.execute("document.activate", &json!({"index": 0})).unwrap();
     // a second, renamed; undo the rename
     s.execute("embroidery.colorway.add", &json!({"from": 0})).unwrap();

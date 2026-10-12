@@ -369,6 +369,8 @@ for the design as a new A4 document, to print (File › Print) or export as PDF:
 - its colours in sewing order: a swatch, the thread's code, name and brand, stitches and length;
 - a barcode of the job at the top right (`barcode: code128|code39|none`, Code 128 unless said):
   the design's name, or `barcodeText`, to scan at the machine or the counter;
+- the design's colorways, each with its threads colour by colour, the one in use marked
+  (`colorways: false` leaves them out);
 - the notes given, else the design's own **Design notes** (set in the panel's Design section,
   or `embroidery.settings {notes}`, and kept with the design), wrapped to the page; an
   **approval sheet** (`kind: approval`) adds the customer and a line to sign.
