@@ -27,7 +27,6 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Preserve font sizes while scaling a group | missing | Separate enhancement; scaling still scales text with the other artwork. |
 | OpenType panel, Glyphs panel, alternates | done | Highlight Alternate Glyphs preference unused (#394) |
 | Font menu: samples, live preview, filters, favourites; font matching by any name; Find Font | done | #339; script filter: Japanese, Latin, Thai |
-| Font menu: samples, live preview, filters, favourites; font matching by any name; Find Font | done | #339 |
 | Missing glyphs set in an installed font made for their script (Thai, Lao, Khmer, Myanmar first; then any font that has them) | done | Thai: Leelawadee UI, Tahoma, Thonburi, Sukhumvit Set, Noto Sans Thai, TLWG |
 | Full font-name matching (OpenType name ID 4) | done | #1258: loaded/cataloged faces and Missing Fonts searches; localized names and variable default faces; Windows font-service QA pending |
 | Variable fonts | partial | named instances as styles; axis sliders missing |
