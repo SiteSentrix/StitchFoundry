@@ -3580,6 +3580,7 @@ lighting	Light	光源
 	Use Outside Rectangle As Frame	使用外部矩形作為框架
 	Create Compound Path From Ellipses	從橢圓形建立複合路徑
 	Fill Grid	格線填色
+	Select two or more objects, or a group	請選取兩個或更多物件，或一個群組
 # 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
 	Back	背面
 	Both sides	雙面

@@ -343,10 +343,12 @@ fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
                 continue;
             }
             if shape_mode
+                && roots.len() > 1
                 && lv.len() > 1
                 && let Some(top) = lv.last()
             {
-                // A group acts as one shape (the union of its leaves) with its top leaf's style.
+                // Among other objects, a group acts as one shape (the union of its leaves) with
+                // its top leaf's style. Selected alone, its members are the shapes (#1450).
                 let parts: Vec<(PathData, FillRule)> = lv.iter().filter_map(node_path).collect();
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
                 let name = n.name.clone().or_else(|| lv.iter().find_map(|l| l.name.clone()));

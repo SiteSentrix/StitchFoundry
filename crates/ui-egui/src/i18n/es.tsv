@@ -4580,6 +4580,7 @@ mark-style	Japanese	Japonesas
 	X:	X:
 	Y:	Y:
 @id	file.close	Cerrar archivo
+	Select two or more objects, or a group	Seleccione dos o más objetos, o un grupo
 # 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
 	Back	Posterior
 	Both sides	Ambos lados

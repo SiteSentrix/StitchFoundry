@@ -4202,6 +4202,7 @@ lighting	Light	ライト
 	Use Outside Rectangle As Frame	外側の長方形をフレームとして使用
 	Create Compound Path From Ellipses	楕円形から複合パスを作成
 	Fill Grid	グリッドを塗りつぶす
+	Select two or more objects, or a group	2 つ以上のオブジェクト、またはグループを選択してください
 # 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
 	Back	背面
 	Both sides	両面
