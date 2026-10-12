@@ -205,40 +205,48 @@ fn type_asked_for_as_outlines_opens_a_file_whose_type_shows_from_its_pdf_part() 
 
 /// A `.ai` of a 200 × 100 pt artboard with a 10 mm bleed: its PDF part's page is the artboard
 /// (its trim box) grown by the bleed, and a red square reaches 20 pt into the bleed, on the page
-/// as in the editing data.
-fn bled_ai(bleed: f64) -> Vec<u8> {
+/// as in the editing data. `key`: `AIPrivateData`, or `AIPDFPrivateData` for a PDF saved with its
+/// editing data.
+fn bled_ai(bleed: f64, key: &str) -> Vec<u8> {
     let art = format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(-20.0, -20.0, 60.0, 50.0));
     let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &art));
     let (w, h) = (200.0 + 2.0 * bleed, 100.0 + 2.0 * bleed);
     let page = PdfPage {
         bleed: Some([0.0, 0.0, w, h]),
         trim: Some([bleed, bleed, 200.0 + bleed, 100.0 + bleed]),
-        entries: format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {} 0 R /NumBlock 1 >> >> >>", first_extra(1)),
+        entries: format!("/PieceInfo << /Illustrator << /Private << /{key}1 {} 0 R /NumBlock 1 >> >> >>", first_extra(1)),
         ..PdfPage::new(w, h, &format!("1 0 0 rg {0} {0} 80 70 re f", bleed - 20.0))
     };
     pdf_with(&[page], &[&format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len())], None)
 }
 
 #[test]
-fn an_ai_file_with_a_bleed_opens_on_its_artboard_with_the_bleed_round_it() {
+fn a_file_with_a_bleed_opens_on_its_artboard_with_the_bleed_round_it() {
+    // A `.ai`, and a PDF saved with its editing data (#1345), which has it under other keys.
+    for (name, key) in [("bled.ai", "AIPrivateData"), ("bled.pdf", "AIPDFPrivateData")] {
+        bled_file_opens_on_its_artboard(name, key);
+    }
+}
+
+fn bled_file_opens_on_its_artboard(name: &str, key: &str) {
     let bleed = 10.0 * 72.0 / 25.4;
-    let file = bled_ai(bleed);
+    let file = bled_ai(bleed, key);
     let mut s = Session::new();
     // From the editing data, and from the PDF part alone.
     for params in [json!({}), json!({"editingData": false})] {
-        let r = open(&mut s, "bled.ai", &file, params.clone()).unwrap();
+        let r = open(&mut s, name, &file, params.clone()).unwrap();
         let doc = &s.doc().unwrap().doc;
-        assert_eq!(doc.artboards.len(), 1, "{params}: {r}");
+        assert_eq!(doc.artboards.len(), 1, "{name} {params}: {r}");
         let ab = doc.artboards[0].rect;
-        assert!((ab.width() - 200.0).abs() < 0.01 && (ab.height() - 100.0).abs() < 0.01, "{params}: {ab:?} {r}");
-        assert!(doc.setup.bleed.iter().all(|b| (b - bleed).abs() < 0.01), "{params}: {:?}", doc.setup.bleed);
+        assert!((ab.width() - 200.0).abs() < 0.01 && (ab.height() - 100.0).abs() < 0.01, "{name} {params}: {ab:?} {r}");
+        assert!(doc.setup.bleed.iter().all(|b| (b - bleed).abs() < 0.01), "{name} {params}: {:?}", doc.setup.bleed);
         // The square reaches into the bleed, whole.
         let art = doc.art_bounds().unwrap();
         let want = [ab.x0 - 20.0, ab.y0 + 50.0, ab.x0 + 60.0, ab.y0 + 120.0];
-        assert!([art.x0, art.y0, art.x1, art.y1].iter().zip(want).all(|(a, b)| (a - b).abs() < 0.01), "{params}: {art:?}");
-        assert!(doc.setup.bleed_rect(ab).inflate(0.01, 0.01).contains_rect(art), "{params}: {art:?}");
+        assert!([art.x0, art.y0, art.x1, art.y1].iter().zip(want).all(|(a, b)| (a - b).abs() < 0.01), "{name} {params}: {art:?}");
+        assert!(doc.setup.bleed_rect(ab).inflate(0.01, 0.01).contains_rect(art), "{name} {params}: {art:?}");
     }
-    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Page 1"], "editingData: false reads the PDF part");
-    open(&mut s, "bled.ai", &file, json!({})).unwrap();
-    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "the editing data's layers are read");
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Page 1"], "{name}: editingData: false reads the PDF part");
+    open(&mut s, name, &file, json!({})).unwrap();
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{name}: the editing data's layers are read");
 }
