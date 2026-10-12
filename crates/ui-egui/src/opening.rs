@@ -74,6 +74,10 @@ pub fn poll(app: &mut VectorcraftApp) {
             Err(TryRecvError::Disconnected) => Err("the file stopped being read (please report this bug)".to_string()),
         };
         let p = app.opening.pending.remove(i);
+        // The status bar no longer says it is opening.
+        if app.ui.status == format!("{}…", p.label) {
+            app.ui.status.clear();
+        }
         finish(app, &p.path, r);
     }
 }
@@ -113,6 +117,7 @@ mod tests {
             std::thread::yield_now();
         }
         assert_eq!(app.session.documents().len(), before + 1);
+        assert!(!app.ui.status.starts_with("Opening"), "{}", app.ui.status);
         let st = app.session.doc().unwrap();
         assert_eq!((st.path.as_deref(), st.doc.artboards[0].rect.width()), (Some("/art/Poster.vectorcraft"), 120.0));
         assert_eq!(app.ui.recent_files.first().map(String::as_str), Some("/art/Poster.vectorcraft"));
