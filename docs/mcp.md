@@ -1656,7 +1656,7 @@ at 100%: `accurate` shows it through the CMYK profile, a dark grey, and `rich` s
 black tints and images show the same either way, and exports are unchanged. `antiAliasedBitmaps` (off by default;
 desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps; off, their pixels stay hard-edged.
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
-segment or an existing anchor.
+segment or an anchor of a selected path.
 
 `gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid
 draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets the grid of every open document.
@@ -1739,9 +1739,9 @@ Pen's second anchor at (150, 431), in line with the square's centre.
   Type → Font menus label a family by its native-language name when the font has one. `text.fontList` and
   `text.setStyle {font}` always use the English (canonical) family name; a document may still name a font by any of
   its aliases (`ヒラギノ角ゴシック` resolves to Hiragino Sans).
-- `hyphenationExceptions` (empty by default): Preferences › Hyphenation › Exceptions. A comma-separated list of words
-  (use a hyphen inside a word for a required break, e.g. `hap-pen`). `prefs.set` pushes the list into the hyphenator
-  and reflows open documents.
+- `hyphenationExceptions` (empty by default): Preferences › Hyphenation › Exceptions. A comma-separated list of words,
+  matched without regard to case: a word with no hyphens is never hyphenated (`typography`), and a word with hyphens
+  breaks only where they are (`hap-pen`). `prefs.set` pushes the list into the hyphenator and reflows open documents.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeSizeIncrement":4,"trackingIncrement":50}}}}
@@ -1750,9 +1750,10 @@ Pen's second anchor at (150, 431), in line with the square's centre.
 {"name":"run_command","arguments":{"command":"type.step","params":{"attribute":"tracking","by":-2}}}
 ```
 
-File Handling › `appendConverted` (on by default): when an opened non-native file is saved back as native, the
-suggested name gets " converted" before the extension; off, it keeps the stem. Agents that open then `save_file` see
-the same rule.
+File Handling › `appendConverted` (on by default): an older native file (the former `.drawcraft` extension or an
+older format version) opens titled `<name> [Converted]`, and Save doesn't write over it: `document.save` without a
+`path` answers with a suggested `.vectorcraft` name (the app asks for one). Off, it opens under its own name and Save
+writes over it.
 
 ## Width points
 
