@@ -540,6 +540,66 @@ fn transform_pattern_tiles_is_the_transforms_default() {
     assert_eq!(tiles(&s), [0.5, 0.0, 0.0, 0.5, 5.0, 0.0]);
 }
 
+/// A 50 pt square at (100, 100) with a 1 pt stroke, filled with a 20 pt pattern, selected.
+fn patterned_square(s: &mut Session) -> NodeId {
+    let tile = square(s, 0.0, 0.0);
+    s.execute("select.set", &json!({"ids": [tile.0]})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    let id = square(s, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"ids": [id.0], "swatch": "Dots"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    id
+}
+
+/// The tile transform of the pattern fill of `id`.
+fn pattern_tiles(s: &Session, id: NodeId) -> [f64; 6] {
+    match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Pattern { xf, .. } => xf.as_coeffs(),
+        p => panic!("not a pattern: {p:?}"),
+    }
+}
+
+/// Transform Again repeats the options of the transform it repeats, whatever the preferences say:
+/// a Move with Transform Patterns off while Transform Pattern Tiles is on, and a Scale with Scale
+/// Strokes & Effects on while its preference is off.
+#[test]
+fn transform_again_repeats_the_options_of_the_transform_it_repeats() {
+    let mut s = new_doc();
+    let id = patterned_square(&mut s);
+    set_pref(&mut s, "transformPatternTiles", json!(true));
+    s.execute("object.move", &json!({"dx": 10, "dy": 0, "patterns": false})).unwrap();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(top_left(&s, id), (120.0, 100.0), "the square moved twice");
+    assert_eq!(pattern_tiles(&s, id), [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], "the tiles stay");
+    assert_eq!(s.journal.last().unwrap().1, json!({"patterns": false}), "the journal keeps the choice");
+    s.execute("object.scale", &json!({"sx": 200, "strokes": true})).unwrap();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_width(), 4.0, "the 1 pt stroke scaled twice");
+}
+
+/// A recorded Transform Again plays back with the Transform Patterns its step records, whatever the
+/// transform it repeats used.
+#[test]
+fn a_recorded_transform_again_plays_back_with_its_transform_patterns() {
+    let mut s = new_doc();
+    let id = patterned_square(&mut s);
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    let start = s.journal.len();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    let action = s.journal_for_action(start);
+    assert_eq!(action, [("object.transformAgain".to_string(), json!({"patterns": false}))], "recorded with the preference off");
+    // With the preference on, a Move moves the tiles, and the recorded Transform Again leaves them.
+    set_pref(&mut s, "transformPatternTiles", json!(true));
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(pattern_tiles(&s, id), [1.0, 0.0, 0.0, 1.0, 10.0, 0.0]);
+    for (cmd, p) in &action {
+        s.execute(cmd, p).unwrap();
+    }
+    assert_eq!(top_left(&s, id), (140.0, 100.0), "the square moved");
+    assert_eq!(pattern_tiles(&s, id), [1.0, 0.0, 0.0, 1.0, 10.0, 0.0], "the tiles stay");
+}
+
 /// General › Transform Pattern Tiles (#394) applies to Align and Distribute as it does to the
 /// transforms: off, the tiles of a pattern-filled square stay in place when the square moves;
 /// on, they move with it, and `patterns: false` keeps them in place for one call.

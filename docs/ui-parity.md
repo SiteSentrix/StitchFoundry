@@ -108,7 +108,7 @@ tools, never checked side by side) isn't captured row by row.
 | Free Transform, Scale and Reflect along a rotated box | missing | |
 | Free Transform widget: constrain, free distort, perspective distort; the key-held variants | done | |
 | Transform tools: click sets the reference point (snaps to anchors/centres), Alt-click opens the dialog, Alt-release copies | done | |
-| Transform Again, Transform Each, Scale Strokes & Effects, Scale Corners | done | Transform Again after a type-area resize scales the type (gap) |
+| Transform Again, Transform Each, Scale Strokes & Effects, Scale Corners | done | |
 | Reference point locator (nine squares) in Control bar and Transform panel | done | |
 
 ## Nudging, numeric entry and precision
