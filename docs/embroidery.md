@@ -320,6 +320,22 @@ Free (freehand), Line, Circle, Square, Rounded, Triangle, Diamond, Hexagon, Star
 
 Stroke ends snap to anchors and guides while Snap to Point or Smart Guides is on.
 
+## Click to stitch
+
+The **Click-to-Stitch tool** (in the Embroidery tools) turns a region of a placed image into a
+stitched object with one click: the region is the pixels joined to the spot clicked whose colour
+is within *Tolerance* of it (a magic wand), and it becomes an object in its colour, stitched as the
+tool's *Stitch as* setting says (in the Embroidery panel while the tool is chosen):
+
+- **Fill**: tatami over the region, its holes left open (holes under 16 pixels are filled);
+- **Fill without holes**: tatami over the whole region;
+- **Satin**: satin across the region, turning with it;
+- **Outline**: a running stitch round its edge;
+- **Centre line**: running stitches along its middle, for lines and lettering drawn in the image.
+
+The same is `embroidery.clickStitch {at, as?, tolerance?, minHole?, id?}`. Each click is one undo
+step; the image stays under the stitches.
+
 ## Lettering
 
 Type objects are stitched straight from their glyph outlines, so there are no embroidery fonts

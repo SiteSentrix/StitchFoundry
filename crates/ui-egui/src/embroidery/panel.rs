@@ -752,6 +752,8 @@ fn auto_digitize_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The Motif tool's id.
 const MOTIF_TOOL: &str = "embroideryMotif";
+/// The Click-to-Stitch tool's id.
+const CLICK_TOOL: &str = "embroideryClick";
 
 /// Freehand digitizing: the radial widget and the embroidery brush.
 fn digitize_row(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -788,6 +790,23 @@ fn digitize_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             };
             app.run("tool.setOption", json!({ "tool": MOTIF_TOOL, "values": { "motif": name } })).ok();
         }
+    }
+    // the Click-to-Stitch tool: how a clicked region is stitched
+    if app.session.tool_id() == CLICK_TOOL {
+        let opts = app.session.tool_options_of(CLICK_TOOL);
+        let kinds = ["fill", "fillNoHoles", "satin", "outline", "centerline"];
+        let labels = [tl!("Fill"), tl!("Fill without holes"), tl!("Satin"), tl!("Outline"), tl!("Centre line")];
+        let cur = kinds.iter().position(|k| opts["as"].as_str() == Some(*k)).unwrap_or(0);
+        if let Some(i) = pick(ui, tl!("Stitch as"), "click-as", cur, &labels)
+            && let Some(k) = kinds.get(i)
+        {
+            app.run("tool.setOption", json!({ "tool": CLICK_TOOL, "values": { "as": k } })).ok();
+        }
+        let tol = opts["tolerance"].as_f64().unwrap_or(32.0);
+        if let Some(v) = num(ui, tl!("Tolerance"), "click-tol", tol, "", 0) {
+            app.run("tool.setOption", json!({ "tool": CLICK_TOOL, "values": { "tolerance": v.clamp(0.0, 255.0).round() as u64 } })).ok();
+        }
+        ui.label(tl!("Click a region of an image to stitch it"));
     }
     if !open {
         return;

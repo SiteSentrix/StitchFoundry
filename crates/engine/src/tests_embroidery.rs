@@ -132,6 +132,67 @@ fn convert_thread_beads_settings_info_and_sorting() {
 }
 
 #[test]
+fn a_click_on_an_image_stitches_its_region() {
+    use sf_core::attr::StitchType;
+    let mut s = session();
+    // a red ring and a blue bar on white
+    let r = vectorcraft_trace::Raster::from_fn(200, 120, |x, y| {
+        if (20..100).contains(&x) && (20..100).contains(&y) && !((50..70).contains(&x) && (50..70).contains(&y)) {
+            [210, 20, 20, 255]
+        } else if (120..190).contains(&x) && (56..64).contains(&y) {
+            [20, 20, 200, 255]
+        } else {
+            [255, 255, 255, 255]
+        }
+    });
+    let png = r.encode_png();
+    s.execute("file.place", &json!({"name": "art.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    let xf = {
+        let st = s.doc().unwrap();
+        let mut xf = None;
+        st.doc.walk(|n| {
+            if let NodeKind::Image(im) = &n.kind {
+                xf = Some(im.xf);
+            }
+        });
+        xf.unwrap()
+    };
+    let spot = |x: f64, y: f64| {
+        let p = xf * kurbo::Point::new(x, y);
+        json!([p.x, p.y])
+    };
+    // the ring as tatami, its hole kept
+    let res = s.execute("embroidery.clickStitch", &json!({"at": spot(25.5, 25.5)})).unwrap();
+    assert_eq!((res["as"].as_str(), res["pixels"].as_u64(), res["color"].as_str()), (Some("fill"), Some(80 * 80 - 400), Some("#d21414")));
+    let id = NodeId(res["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    let n = st.doc.node(id).unwrap();
+    assert!(matches!(n.embroidery.as_deref().map(|e| &e.stitch), Some(StitchType::Fill(_))));
+    let NodeKind::Path { path, .. } = &n.kind else { panic!() };
+    assert_eq!(path.subpaths.len(), 2);
+    assert_eq!(st.selection.objects, vec![id]);
+    // without the hole; the bar as a running centre line; satin
+    let res = s.execute("embroidery.clickStitch", &json!({"at": spot(25.5, 25.5), "as": "fillNoHoles"})).unwrap();
+    let NodeKind::Path { path, .. } = &s.doc().unwrap().doc.node(NodeId(res["id"].as_u64().unwrap())).unwrap().kind.clone() else { panic!() };
+    assert_eq!(path.subpaths.len(), 1);
+    let res = s.execute("embroidery.clickStitch", &json!({"at": spot(150.5, 60.5), "as": "centerline"})).unwrap();
+    let n = s.doc().unwrap().doc.node(NodeId(res["id"].as_u64().unwrap())).unwrap().clone();
+    assert!(matches!(n.embroidery.as_deref().map(|e| &e.stitch), Some(StitchType::Run(_))));
+    let NodeKind::Path { path, .. } = &n.kind else { panic!() };
+    assert_eq!(path.subpaths.len(), 1);
+    assert!(s.execute("embroidery.clickStitch", &json!({"at": spot(150.5, 60.5), "as": "satin"})).is_ok());
+    assert!(stitches(&s) > 500, "{}", stitches(&s));
+    // one undo step each
+    let before = s.doc().unwrap().doc.layers[0].children().unwrap().len();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), before - 1);
+    // off the image, a bad kind or tolerance
+    assert!(s.execute("embroidery.clickStitch", &json!({"at": spot(-50.0, -50.0)})).is_err());
+    assert!(s.execute("embroidery.clickStitch", &json!({"at": spot(25.5, 25.5), "as": "cross"})).is_err());
+    assert!(s.execute("embroidery.clickStitch", &json!({"at": spot(25.5, 25.5), "tolerance": 300})).is_err());
+}
+
+#[test]
 fn auto_digitize_traces_an_image_into_satin_and_fill() {
     let mut s = session();
     // A white logo: a blue disc, a long red bar and a speck.

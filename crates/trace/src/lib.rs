@@ -35,6 +35,7 @@ mod fit;
 mod logo;
 mod mosaic;
 mod quantize;
+pub mod region;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
