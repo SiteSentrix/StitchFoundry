@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Korean catalog added, complete under the tests; 12-language score 54% → 63%; Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (Czech: 128 strings added since the catalog was completed are translated, #1461; scores and estimates unchanged; Korean catalog added, complete under the tests; 12-language score 54% → 63%; Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -79,6 +79,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | Czech: 128 more strings translated (tool names, PDF and Image Trace presets, pie graph options and others added since the catalog was completed; #1461); the entry count in the table is the 2026-10-11 measurement; native review still pending; scores and estimates unchanged |
 | 2026-10-12 | minor | Korean (`ko`) catalog added, complete under the tests (menus, literals, messages); 12-language score 54% → 63%, hours 70–110 → 60–100 |
 | 2026-10-12 | minor | Hungarian (`hu`) catalog added, complete under the tests |
 | 2026-10-11 | minor | Czech render-site follow-up: file-dialog filters, diagnostics, preset numbering, contributor tooltips/plurals, gradient grammar and contextual printer mark styles; estimates unchanged |
