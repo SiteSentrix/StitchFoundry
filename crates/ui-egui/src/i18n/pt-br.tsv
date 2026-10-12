@@ -3941,3 +3941,13 @@ machine	Trim	Corte de linha
 	Forget Font	Esquecer fonte
 	Unload the font and stop loading its folder	Descarregar a fonte e parar de carregar sua pasta
 	Forget Embroidery Font	Esquecer fonte de bordado
+	Team Names	Nomes da equipe
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Selecione um letreiro em uma fonte de bordado: um arquivo de máquina é gravado para cada nome, com o letreiro trocado por esse nome.
+	One name a line	Um nome por linha
+	Import Names…	Importar nomes…
+	The first column of a CSV table, or a text file of one name a line	A primeira coluna de uma tabela CSV, ou um arquivo de texto com um nome por linha
+	Names	Nomes
+	Export One File per Name…	Exportar um arquivo por nome…
+	Team name files written	Arquivos de nomes gravados
+	Export Team Names	Exportar nomes da equipe
+	Read Team Names	Ler nomes da equipe

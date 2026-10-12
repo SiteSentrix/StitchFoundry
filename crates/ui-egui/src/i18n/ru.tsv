@@ -4670,3 +4670,13 @@ machine	Stop	Остановка
 	Forget Font	Забыть шрифт
 	Unload the font and stop loading its folder	Выгрузить шрифт и больше не загружать его папку
 	Forget Embroidery Font	Забыть шрифт для вышивки
+	Team Names	Имена команды
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Выберите надпись шрифтом для вышивки: для каждого имени записывается машинный файл, в котором надпись заменена этим именем.
+	One name a line	Одно имя в строке
+	Import Names…	Импорт имён…
+	The first column of a CSV table, or a text file of one name a line	Первый столбец таблицы CSV или текстовый файл с одним именем в строке
+	Names	Имена
+	Export One File per Name…	Экспорт файла для каждого имени…
+	Team name files written	Записано файлов с именами
+	Export Team Names	Экспорт имён команды
+	Read Team Names	Чтение имён команды

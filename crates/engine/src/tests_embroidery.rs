@@ -2247,6 +2247,45 @@ fn embroidery_font_folders_are_remembered() {
 }
 
 #[test]
+fn team_names_write_one_machine_file_per_name() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    // nothing to set the names in yet
+    assert!(s.execute("embroidery.teamNames.export", &json!({"names": ["A"], "dir": "/tmp/x"})).is_err());
+    let id = NodeId(s.execute("embroidery.lettering", &json!({"text": "AB", "font": "Test Script"})).unwrap()["id"].as_u64().unwrap());
+    let before = s.doc().unwrap().doc.clone();
+    let dir = std::env::temp_dir().join(format!("sf-team-names-{}", std::process::id()));
+    let path = dir.to_string_lossy().to_string();
+    let r = s.execute("embroidery.teamNames.export", &json!({"names": ["AB", "BA", "A/B", "ab", "A\nB"], "dir": path, "format": "dst"})).unwrap();
+    assert_eq!(r["count"].as_u64(), Some(5));
+    // named after the names: made safe, kept apart
+    let names: Vec<String> = r["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| std::path::Path::new(f.as_str().unwrap()).file_name().unwrap().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(names, ["AB.dst", "BA.dst", "A_B.dst", "ab 2.dst", "A_B 2.dst"]);
+    // machine files whose stitches differ by name; the design as it was, no undo step taken
+    let ab = std::fs::read(dir.join("AB.dst")).unwrap();
+    let ba = std::fs::read(dir.join("BA.dst")).unwrap();
+    assert!(ab.len() > 512 && ab.get(512..) != ba.get(512..));
+    assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc));
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().children().unwrap().len(), 2);
+    // names from a table: a column, its header left out, quoted commas kept
+    let r = s.execute("embroidery.teamNames.read", &json!({"csv": "Name,Number\n\"Smith, J\",7\nLee,9\n,4\n", "header": true})).unwrap();
+    assert_eq!(r["names"], json!(["Smith, J", "Lee"]));
+    let r = s.execute("embroidery.teamNames.read", &json!({"csv": "Name,Number\nLee,9\n", "header": true, "column": 1})).unwrap();
+    assert_eq!(r["names"], json!(["9"]));
+    // bad requests
+    assert!(s.execute("embroidery.teamNames.export", &json!({"names": [], "dir": path})).is_err());
+    assert!(s.execute("embroidery.teamNames.export", &json!({"names": ["A"]})).is_err());
+    assert!(s.execute("embroidery.teamNames.export", &json!({"names": ["A"], "dir": path, "format": "doc"})).is_err());
+    assert!(s.execute("embroidery.teamNames.read", &json!({})).is_err());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

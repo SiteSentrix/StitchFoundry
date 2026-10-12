@@ -607,6 +607,16 @@ lettering round a circle (*Radius*): **Arch** over its top, **Valley** along its
 upright to it (`arc`: the radius in mm, negative along the bottom); lettering placed from the panel
 is centred on the artboard (`align`: left, centre or right on `at`).
 
+## Team names
+
+One design, many names (a team's shirts): set the name in an embroidery font, select it, and in the
+Embroidery panel's **Team Names** section type the names, one a line (a line break in a name sets
+two lines), or *Import Names…* from a CSV table (its first column; `embroidery.teamNames.read
+{csv | path, column, header}` reads any column, commas or semicolons, quoted fields). *Export One
+File per Name…* writes a machine file for each into a folder: the design with the lettering set
+to that name, named after it (`embroidery.teamNames.export {names, dir, format, prefix}`). The
+design itself is left as it is.
+
 ## Commands
 
 Every feature is an engine command. A few of the main ones (see `document.commands` or the MCP

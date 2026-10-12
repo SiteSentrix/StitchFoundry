@@ -205,8 +205,14 @@ fn the_panel_sets_lettering_in_a_loaded_font() {
     let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
     assert!(texts.iter().any(|t| t == "Update Lettering") && !texts.iter().any(|t| t == "Place Lettering"), "{texts:?}");
     assert_eq!((app.embroidery.lettering_text.as_str(), app.embroidery.lettering_size), ("AA", 10.0));
+    // team names: for the selected lettering
+    app.embroidery.team_names = "Lee\n\nSmith\n".into();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::team_names_body, 600.0);
+    assert!(texts.iter().any(|t| t == "Names: 2"), "{texts:?}");
     // nothing selected: new lettering again
     app.run("select.none", json!({})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::team_names_body, 600.0);
+    assert!(texts.iter().any(|t| t.starts_with("Select lettering set in an embroidery font")), "{texts:?}");
     let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
     assert!(texts.iter().any(|t| t == "Place Lettering"), "{texts:?}");
     assert_eq!(app.embroidery.lettering_for, None);

@@ -3,6 +3,7 @@
 //! text set with them (`embroidery.lettering`): each glyph's digitized art placed along the lines,
 //! kerned and scaled, a group per glyph.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -42,6 +43,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} the embroidery fonts, those of the folders remembered from earlier sessions too (loaded now, if they weren't) → {fonts: [{name, glyphs, size, minSize, maxSize, license, description, folder}], warnings: the folders that failed to load}",
             always,
             list_fonts
+        ),
+        cmd!(
+            "embroidery.teamNames.export",
+            "Export Team Names",
+            [],
+            None,
+            "{names: [text, …] (1–500; a line break sets two lines), dir: the folder to write to (made if missing), id?: the lettering (default: the selected one), format?: dst|exp|jef|pes|pec|vp3|xxx|u01 (the design's machine, else dst), prefix?: what the file names start with} team names: one machine file per name, the design with the lettering set to that name, named after it (characters files can't have replaced, the same name twice kept apart). The design itself stays as it is → {files, count}",
+            has_selection,
+            team_names_export
+        ),
+        cmd!(
+            query "embroidery.teamNames.read",
+            "Read Team Names",
+            [],
+            None,
+            "{csv?: text, path?: a CSV or text file, column?: n (0: the first), header?: bool (the first row names the columns: left out)} the names in a column of a table (commas or semicolons, quoted fields), or one a line → {names}",
+            always,
+            team_names_read
         ),
         cmd!(
             "embroidery.font.forget",
@@ -503,9 +522,169 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "glyphs": count, "warnings": warnings }))
 }
 
+/// Most names one team names export writes.
+const MAX_NAMES: usize = 500;
+
+/// The rows of a CSV table (RFC 4180: quoted fields, `""` for a quote, line breaks inside
+/// quotes), separated by commas, or semicolons when the first line has more of those (as
+/// spreadsheets in many languages write them). At most [`MAX_NAMES`] + 1 rows.
+fn csv_rows(text: &str) -> Vec<Vec<String>> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let first = text.lines().next().unwrap_or("");
+    let sep = if first.matches(';').count() > first.matches(',').count() { ';' } else { ',' };
+    let (mut rows, mut row, mut field, mut quoted) = (Vec::new(), Vec::new(), String::new(), false);
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if quoted {
+            if c != '"' {
+                field.push(c);
+            } else if chars.peek() == Some(&'"') {
+                field.push('"');
+                chars.next();
+            } else {
+                quoted = false;
+            }
+        } else if c == '"' && field.is_empty() {
+            quoted = true;
+        } else if c == sep {
+            row.push(std::mem::take(&mut field));
+        } else if c == '\n' || c == '\r' {
+            if c == '\r' && chars.peek() == Some(&'\n') {
+                chars.next();
+            }
+            row.push(std::mem::take(&mut field));
+            rows.push(std::mem::take(&mut row));
+            if rows.len() > MAX_NAMES {
+                return rows;
+            }
+        } else {
+            field.push(c);
+        }
+    }
+    if !field.is_empty() || !row.is_empty() {
+        row.push(field);
+        rows.push(row);
+    }
+    rows
+}
+
+fn team_names_read(_: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.teamNames.read";
+    let text = match (str_param(p, "csv"), str_param(p, "path")) {
+        (Some(t), _) => t.to_string(),
+        (None, Some(path)) => {
+            let bytes = crate::cmd::fileio::read_file(path)?;
+            if bytes.len() > MAX_JSON {
+                return Err(bad(CMD, format!("the table is too big ({} MB at most)", MAX_JSON >> 20)));
+            }
+            String::from_utf8(bytes).map_err(|_| bad(CMD, "the table is not text (UTF-8)"))?
+        }
+        _ => return Err(bad(CMD, "give the table's text (`csv`) or its file (`path`)")),
+    };
+    let column = match p.get("column") {
+        None | Some(Value::Null) => 0,
+        Some(v) => v.as_u64().filter(|c| *c < 100).ok_or_else(|| bad(CMD, "`column` is 0 to 99"))? as usize,
+    };
+    let skip = usize::from(bool_or(p, "header", false));
+    let names: Vec<String> = csv_rows(&text)
+        .into_iter()
+        .skip(skip)
+        .filter_map(|row| row.into_iter().nth(column))
+        .map(|n| n.trim().chars().take(MAX_TEXT).collect::<String>())
+        .filter(|n| !n.is_empty())
+        .take(MAX_NAMES)
+        .collect();
+    Ok(json!({ "names": names }))
+}
+
+/// A name as a file name: no characters files can't have, not too long, not empty.
+fn safe_name(name: &str) -> String {
+    let s: String = name.chars().map(|c| if c.is_control() || "/\\:*?\"<>|".contains(c) { '_' } else { c }).take(60).collect();
+    let s = s.trim().trim_matches('.').trim();
+    if s.is_empty() { "name".to_string() } else { s.to_string() }
+}
+
+/// `base`, or `base 2`, `base 3`… when one is taken already (in any case), now taken.
+fn unique(taken: &mut HashSet<String>, base: &str) -> String {
+    let mut name = base.to_string();
+    let mut k = 2;
+    while !taken.insert(name.to_lowercase()) {
+        name = format!("{base} {k}");
+        k += 1;
+    }
+    name
+}
+
+fn team_names_export(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.teamNames.export";
+    let names: Vec<String> = p
+        .get("names")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).collect())
+        .unwrap_or_default();
+    if names.is_empty() || names.len() > MAX_NAMES {
+        return Err(bad(CMD, format!("`names` are 1 to {MAX_NAMES} names")));
+    }
+    if let Some(n) = names.iter().find(|n| n.chars().count() > MAX_TEXT) {
+        let start: String = n.chars().take(20).collect();
+        return Err(bad(CMD, format!("a name is {MAX_TEXT} characters at most: `{start}…`")));
+    }
+    let dir = str_param(p, "dir").filter(|d| !d.trim().is_empty()).ok_or_else(|| bad(CMD, "missing `dir`: the folder to write to"))?;
+    let prefix = str_param(p, "prefix").unwrap_or("");
+    let ids = targets(s, p)?;
+    let (id, spec) = lettering_of(&s.doc()?.doc, &ids).ok_or_else(|| bad(CMD, "select lettering set in an embroidery font"))?;
+    // its font: one of the remembered folders' (what fails to load says so when the fonts are listed)
+    let _ = ensure_fonts(s);
+    let font = loaded(s, &spec.font).ok_or_else(|| not_loaded(CMD, &spec.font))?;
+    // the format, as Export Machine File picks it
+    let machine = s.doc()?.doc.embroidery.as_deref().and_then(|e| e.machine_file_format(&s.prefs.embroidery_machines));
+    let key = str_param(p, "format").map(str::to_string).or(machine).unwrap_or_else(|| "dst".to_string());
+    let format = sf_formats::Format::from_extension(&key)
+        .ok_or_else(|| bad(CMD, format!("unknown format `{key}`: one of {}", super::embroidery::MACHINE_EXTS.join(", "))))?;
+    crate::cmd::fileio::create_dir(dir)?;
+    // a copy of the design, the lettering set to each name in turn
+    let mut doc = (*s.doc()?.doc).clone();
+    let planner = super::embroidery::EmbroideryState::default();
+    let mut taken = HashSet::new();
+    let mut files = Vec::new();
+    for name in &names {
+        let one = Lettering { text: name.clone(), ..spec.clone() };
+        let glyphs = glyphs(&mut doc, &font, &one);
+        if glyphs.is_empty() {
+            return Err(bad(CMD, format!("{} has none of the characters of `{name}`", font.info.name)));
+        }
+        let n = doc.node_mut(id).ok_or(EngineError::NoNode(id))?;
+        let NodeKind::Group { children, .. } = &mut n.kind else { return Err(EngineError::NoNode(id)) };
+        *children = glyphs;
+        let plan = planner.plan(&doc);
+        let opts = sf_formats::WriteOptions { name: name.replace(['\n', '\r'], " "), center: true, ..sf_formats::WriteOptions::default() };
+        let bytes =
+            sf_formats::write(format, plan.pattern(), &opts).map_err(|e| EngineError::Other(format!("{} export failed: {e}", format.name())))?;
+        let stem = unique(&mut taken, &format!("{prefix}{}", safe_name(name)));
+        let path = std::path::Path::new(dir).join(format!("{stem}.{}", format.extension())).to_string_lossy().to_string();
+        crate::cmd::fileio::write_file(&path, &bytes)?;
+        files.push(path);
+    }
+    Ok(json!({ "count": files.len(), "files": files }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn csv_tables_give_their_columns() {
+        assert_eq!(csv_rows("a,b\n\"Smith, J\",7\r\n\"say \"\"hi\"\"\",8"), vec![vec!["a", "b"], vec!["Smith, J", "7"], vec!["say \"hi\"", "8"]]);
+        assert_eq!(csv_rows("\u{feff}Name;No\nLee;9\n"), vec![vec!["Name", "No"], vec!["Lee", "9"]]);
+        assert_eq!(csv_rows("\"two\nlines\",x"), vec![vec!["two\nlines", "x"]]);
+        assert_eq!(csv_rows("one\ntwo"), vec![vec!["one"], vec!["two"]]);
+        assert!(csv_rows("").is_empty());
+        assert_eq!(csv_rows(&"x\n".repeat(10_000)).len(), MAX_NAMES + 1);
+        assert_eq!(safe_name(" A/B: c? "), "A_B_ c_");
+        assert_eq!(safe_name("..."), "name");
+        let mut taken = HashSet::new();
+        assert_eq!([unique(&mut taken, "Lee"), unique(&mut taken, "lee"), unique(&mut taken, "Lee")], ["Lee", "lee 2", "Lee 3"]);
+    }
 
     #[test]
     fn glyphs_go_round_arcs_upright_to_them() {

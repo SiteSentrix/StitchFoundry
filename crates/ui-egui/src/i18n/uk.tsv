@@ -4654,3 +4654,13 @@ machine	Stop	Зупинка
 	Forget Font	Забути шрифт
 	Unload the font and stop loading its folder	Вивантажити шрифт і більше не завантажувати його теку
 	Forget Embroidery Font	Забути шрифт для вишивки
+	Team Names	Імена команди
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Виберіть напис шрифтом для вишивки: для кожного імені записується машинний файл, у якому напис замінено цим іменем.
+	One name a line	Одне ім’я в рядку
+	Import Names…	Імпорт імен…
+	The first column of a CSV table, or a text file of one name a line	Перший стовпець таблиці CSV або текстовий файл з одним ім’ям у рядку
+	Names	Імена
+	Export One File per Name…	Експорт файлу для кожного імені…
+	Team name files written	Записано файлів з іменами
+	Export Team Names	Експорт імен команди
+	Read Team Names	Читання імен команди

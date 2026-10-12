@@ -4682,3 +4682,13 @@ machine	Stop	Arrêt
 	Forget Font	Oublier la police
 	Unload the font and stop loading its folder	Décharger la police et ne plus charger son dossier
 	Forget Embroidery Font	Oublier la police de broderie
+	Team Names	Noms d’équipe
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	Sélectionnez un lettrage dans une police de broderie : un fichier machine est écrit pour chaque nom, le lettrage remplacé par ce nom.
+	One name a line	Un nom par ligne
+	Import Names…	Importer des noms…
+	The first column of a CSV table, or a text file of one name a line	La première colonne d’un tableau CSV, ou un fichier texte avec un nom par ligne
+	Names	Noms
+	Export One File per Name…	Exporter un fichier par nom…
+	Team name files written	Fichiers de noms écrits
+	Export Team Names	Exporter les noms d’équipe
+	Read Team Names	Lire les noms d’équipe

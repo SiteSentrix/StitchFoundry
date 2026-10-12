@@ -4668,3 +4668,13 @@ machine	Stop	停止
 	Forget Font	フォントを削除
 	Unload the font and stop loading its folder	フォントを解放し、そのフォルダーを今後読み込まない
 	Forget Embroidery Font	刺繍フォントを削除
+	Team Names	チーム名
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	刺繍フォントの文字を選択してください。名前ごとに、その名前に置き換えたミシンファイルを書き出します。
+	One name a line	1 行に 1 名前
+	Import Names…	名前を読み込む…
+	The first column of a CSV table, or a text file of one name a line	CSV 表の 1 列目、または 1 行に 1 名前のテキストファイル
+	Names	名前
+	Export One File per Name…	名前ごとにファイルを書き出す…
+	Team name files written	書き出したチーム名ファイル
+	Export Team Names	チーム名を書き出す
+	Read Team Names	チーム名を読み込む

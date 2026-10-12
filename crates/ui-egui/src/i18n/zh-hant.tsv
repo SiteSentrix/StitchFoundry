@@ -4040,3 +4040,13 @@ machine	Stop	停止
 	Forget Font	移除字型
 	Unload the font and stop loading its folder	卸載字型並不再載入其資料夾
 	Forget Embroidery Font	移除刺繡字型
+	Team Names	隊名
+	Select lettering set in an embroidery font: a machine file is written for each name, the lettering set to it.	請選取用刺繡字型排的文字：為每個名字寫出一個機器檔案，文字換成該名字。
+	One name a line	每行一個名字
+	Import Names…	匯入名字…
+	The first column of a CSV table, or a text file of one name a line	CSV 表格的第一欄，或每行一個名字的文字檔
+	Names	名字
+	Export One File per Name…	依名字分別匯出檔案…
+	Team name files written	已寫出的名字檔案
+	Export Team Names	匯出隊名
+	Read Team Names	讀取隊名
