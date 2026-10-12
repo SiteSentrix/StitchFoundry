@@ -252,6 +252,11 @@ struct CornerClick {
 }
 
 impl CornerDrag {
+    /// The drag has left the click: the corner radius is changing.
+    pub fn adjusting(&self) -> bool {
+        self.began
+    }
+
     /// Start a drag when the press `ev` is on a widget of the selection (Direct Selection:
     /// `any_path`).
     pub fn hit(cx: &ToolContext, ev: &PointerEvent, any_path: bool) -> Option<Self> {
