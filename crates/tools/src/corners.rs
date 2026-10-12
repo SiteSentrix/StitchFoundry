@@ -238,6 +238,17 @@ pub struct CornerDrag {
     /// The pointer went past fully round: the dragged corner is at its largest radius.
     at_limit: bool,
     at: Point,
+    /// Direct Selection: what a click (no drag) on the pressed widget selects.
+    click: Option<CornerClick>,
+}
+
+/// Direct Selection: the drawn anchors of a widget's corner, which a click on the widget selects
+/// (Shift: toggles), as a click on the corner's anchor does.
+#[derive(Clone, Debug)]
+struct CornerClick {
+    id: NodeId,
+    anchors: Vec<(usize, usize)>,
+    shift: bool,
 }
 
 impl CornerDrag {
@@ -247,6 +258,14 @@ impl CornerDrag {
         let (widgets, p) = (CornerWidgets::for_tool(cx, any_path)?, ev.pos);
         let widget = widgets.hit(p, cx.tol(5.0))?;
         let radius = widgets.widget(widget.0, widget.1)?.radius;
+        let click = any_path
+            .then(|| {
+                let path = widgets.paths.get(widget.0)?;
+                let corner = path.widgets.get(widget.1)?.corner.index;
+                let lc = cx.doc.node(path.id).and_then(LiveCorners::of)?;
+                Some(CornerClick { id: path.id, anchors: lc.anchors_of(&[corner].into()).into_iter().collect(), shift: ev.mods.shift })
+            })
+            .flatten();
         let outlines = widgets
             .paths
             .iter()
@@ -257,7 +276,7 @@ impl CornerDrag {
                 Some(Outline { base: lc.base.into_owned(), radii, kinds, xf: w.xf })
             })
             .collect::<Option<Vec<_>>>()?;
-        Some(Self { widgets, widget, outlines, start: p, began: false, alt: ev.mods.alt, radius, at_limit: false, at: p })
+        Some(Self { widgets, widget, outlines, start: p, began: false, alt: ev.mods.alt, radius, at_limit: false, at: p, click })
     }
 
     /// The start radius (as drawn: no larger than fits) plus the pointer's travel along the
@@ -323,6 +342,11 @@ impl CornerDrag {
             vec![Action::Commit]
         } else if let Some(w) = self.widgets.widget(self.widget.0, self.widget.1).filter(|_| self.alt) {
             vec![Action::Exec("object.setLiveShape".into(), self.widgets.command("kind", json!(w.kind.next())))]
+        } else if let Some(c) = self.click {
+            // Direct Selection: the click selects the widget's corner, so the next drag on this
+            // widget rounds that corner alone (its widget is then the only one showing).
+            let mode = if c.shift { "toggle" } else { "set" };
+            vec![Action::Exec("select.anchors".into(), json!({"id": c.id.0, "anchors": c.anchors, "mode": mode}))]
         } else {
             vec![]
         }
@@ -529,6 +553,37 @@ mod tests {
         let mut t = crate::create("selection");
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 190.0, 110.0)).is_empty());
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 190.0, 110.0)).is_empty());
+    }
+
+    /// Direct Selection: a click on a widget (no drag) selects its corner, as a click on the
+    /// corner's anchor does, so the next drag on that widget rounds that corner alone; Shift
+    /// toggles the corner. The Selection tool's click still does nothing.
+    #[test]
+    fn a_click_on_a_widget_with_direct_selection_selects_its_corner() {
+        let (d, id) = live_rect(10.0, Affine::translate((100.0, 100.0)));
+        let s = selected(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let w = pts(&CornerWidgets::of(&d, &s, 1.0, true).unwrap())[2];
+        // The bottom-right corner of a rounded rectangle is drawn with two anchors.
+        let anchors: Vec<(usize, usize)> = LiveCorners::of(d.node(id).unwrap()).unwrap().anchors_of(&[2].into()).into_iter().collect();
+        assert_eq!(anchors.len(), 2);
+        let mut t = crate::create("directSelection");
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, w.x, w.y)).is_empty());
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, w.x, w.y));
+        assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": anchors, "mode": "set"}))]);
+        let shift = Mods { shift: true, ..Mods::default() };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, w.x, w.y).with_mods(shift));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, w.x, w.y).with_mods(shift));
+        assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": anchors, "mode": "toggle"}))]);
+        // With that corner selected, its widget alone shows, and a drag rounds it alone
+        // (`direct_selected_corners_show_their_widgets_alone_and_round_alone`).
+        let mut part = selected(id);
+        part.anchors.insert(id, anchors.iter().copied().collect());
+        assert_eq!(CornerWidgets::of(&d, &part, 1.0, true).unwrap().corners(), [2]);
+        let mut t = crate::create("selection");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, w.x, w.y));
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, w.x, w.y)).is_empty());
     }
 
     #[test]
