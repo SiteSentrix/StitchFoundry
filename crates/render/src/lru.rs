@@ -30,6 +30,8 @@ pub(crate) const TEXT_BUDGET: usize = 128 << 20;
 pub(crate) const CLIP_BUDGET: usize = 32 << 20;
 /// The art drawn for objects with effects that apply through it (`Renderer::fx_art`).
 pub(crate) const FX_ART_BUDGET: usize = 64 << 20;
+/// Symbol art placed for instances and inline graphics (`Renderer::placed_art`).
+pub(crate) const PLACED_ART_BUDGET: usize = 64 << 20;
 /// Brush art per brushed stroke (`Renderer::draw_brush`).
 pub(crate) const BRUSH_BUDGET: usize = 64 << 20;
 /// Evaluated blends, envelopes and repeats (`Renderer::live_expanded`).

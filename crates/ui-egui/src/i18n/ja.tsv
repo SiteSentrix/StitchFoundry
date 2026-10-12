@@ -3680,6 +3680,7 @@ theme	Appearance	外観
 @msg	an image VectorCraft can't read was left out	VectorCraft で読み込めない画像は除外されました
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
+@msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
 @msg	patterns nested too deeply are filled with mid-grey	入れ子が深すぎるパターンは中間のグレーで塗りつぶされています
@@ -4191,3 +4192,10 @@ lighting	Light	ライト
 @msg	the file stopped being read (please report this bug)	ファイルの読み込みが中断されました (このバグを報告してください)
 	Concentric Dividers:	同心円の分割線:
 	Radial Dividers:	放射状の分割線:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	歪み:
+	Inside	内側
+	Outside	外側
+	Use Outside Rectangle As Frame	外側の長方形をフレームとして使用
+	Create Compound Path From Ellipses	楕円形から複合パスを作成
+	Fill Grid	グリッドを塗りつぶす

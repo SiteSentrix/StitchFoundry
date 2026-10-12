@@ -281,6 +281,23 @@ fn gradients() {
     assert_eq!((geom.start, geom.end), (Point::new(100.0, 50.0), Point::new(150.0, 50.0)));
     // The gradient was the one object's.
     assert_eq!(fill(&a[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+    // A linear gradient with a stop in the middle: `Xm` places its whole ramp, a `Bm` each of its
+    // two parts. The object's own note of its gradient after it paints nothing.
+    let defs = "(L) 0 3 Bd\n%_1 0 50 100 Bs\n%_0.5 0 50 40 Bs\n%_0 0 50 0 Bs\nBD\n";
+    let art_ = format!(
+        "{RED}{}Bb\n1 (L) 0 0 -90 1 1 0 0 1 0 0 1 Bg\n0 -100 -100 0 150 100 Xm\n0 -9000 -100 0 150 9100 Bc\n0 -40 -100 0 150 100 Bm\n\
+         0 -60 -100 0 150 60 Bm\n0 -9000 -100 0 150 0 Bc\nf\n0 BB\n0 1 Xd\nBb\n2 (L) 0 0 -90 1 1 0 0 1 0 0 1 Bg\n0 BB\n6 () XW\n{}f\n",
+        rect_path(50.0, 0.0, 150.0, 100.0),
+        rect_path(0.0, 0.0, 10.0, 10.0),
+    );
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let a = art(&doc);
+    let Paint::Gradient(g) = fill(&a[0]) else { panic!("{:?}", fill(&a[0])) };
+    assert_eq!(g.gradient.stops.len(), 3);
+    // Art space has y up from the crop marks' bottom.
+    let geom = g.geom.unwrap();
+    assert!(geom.start.distance(Point::new(150.0, 0.0)) < 1e-9 && geom.end.distance(Point::new(150.0, 100.0)) < 1e-9, "{geom:?}");
+    assert_eq!(fill(&a[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "the note after the object isn't the next path's paint");
 }
 
 #[test]
@@ -459,6 +476,20 @@ fn text_objects_are_slots_named_after_their_story() {
     let r = read_ok(&layer(&format!("/AI11Text :\n0 /StoryIndex ,\n;\n{}{}", commented(0), commented(1))));
     let stories: Vec<_> = art(&r.doc).iter().map(|n| slot_of(n.name.as_deref())).collect();
     assert_eq!(stories, [Some(Some(0)), Some(Some(1))]);
+    // A text object with an appearance: its drawn look (a group whose type is a story of the
+    // undo-free text document, which counts its own), then the object on `%_` lines, which is
+    // the type.
+    let look = "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nU\n0 0 Xd\n6 () XW\n";
+    let own: String = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n7 /StoryIndex ,\n;\n".lines().map(|l| format!("%_{l}\n")).collect();
+    let plain = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n";
+    let r = read_ok(&layer(&format!("{look}{own}1 (Style) XW\n{plain}")));
+    let stories: Vec<_> = art(&r.doc).iter().map(|n| slot_of(n.name.as_deref())).collect();
+    assert_eq!(stories, [Some(Some(7)), Some(Some(0))], "the look's story 0 isn't the text document's");
+    // What else the look draws stays, under the type.
+    let look = look.replace("U\n", &format!("{RED}{}f\nU\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read_ok(&layer(&format!("{look}{own}1 (Style) XW\n")));
+    let a = art(&r.doc);
+    assert_eq!((a.len(), a[0].children().map(Vec::len), slot_of(a[1].name.as_deref())), (2, Some(1), Some(Some(7))));
 }
 
 #[test]

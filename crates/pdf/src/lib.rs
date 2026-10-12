@@ -163,6 +163,9 @@ pub struct ImportReport {
     pub warnings: Vec<String>,
     /// The native document the PDF carries (written with Preserve Editing), if any.
     pub native: Option<Editing>,
+    /// Every page shows only text, over an editor's private data: that data, where it reads,
+    /// is the file's art (a file saved without its PDF part shows a notice there instead).
+    pub only_text: bool,
 }
 
 /// Result of an export with non-fatal warnings (features approximated or dropped).
@@ -236,6 +239,8 @@ mod tests_import_layers;
 mod tests_import_lines;
 #[cfg(test)]
 mod tests_import_options;
+#[cfg(test)]
+mod tests_import_overprint;
 #[cfg(test)]
 mod tests_layers;
 #[cfg(test)]

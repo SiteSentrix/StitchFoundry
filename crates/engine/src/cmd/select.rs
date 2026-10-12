@@ -193,7 +193,8 @@ pub fn specs() -> Vec<CommandSpec> {
 fn selectable(d: &Document, iso: Option<NodeId>) -> Vec<NodeId> {
     match iso.and_then(|i| d.node(i)) {
         Some(c) if d.ancestry(c.id).is_some_and(|a| a.iter().all(|i| d.node(*i).is_some_and(|n| n.visible && !n.locked && !n.is_template()))) => {
-            c.layer_art(true)
+            // A single object isolated is all there is to select.
+            if c.is_container() { c.layer_art(true) } else { vec![c.id] }
         }
         Some(_) => vec![],
         None => d.selectable_art(),

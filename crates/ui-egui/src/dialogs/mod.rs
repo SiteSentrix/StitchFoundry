@@ -412,8 +412,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.set_max_width(spec.max_width.map_or(room, |w| w.min(room)));
         modal::heading(ui, &heading);
         ui.add_space(12.0);
-        // Just opened: its first field takes the keyboard focus, as in the reference app (type a
-        // value, press Enter). Only the body's fields can take it.
+        // Just opened: its first enabled field takes the keyboard focus, as in the reference app
+        // (type a value, press Enter). Only the body's fields can take it.
         if focus_first {
             ui.data_mut(|m| m.insert_temp(widgets::dialog_focus_flag(), true));
         }

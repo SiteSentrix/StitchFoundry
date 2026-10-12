@@ -237,6 +237,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let key = CacheKey {
         doc: st.uid as usize,
         revision: st.revision,
+        interacting: st.interaction.is_some(),
         zoom: v.zoom,
         cx: v.center.x,
         cy: v.center.y,
@@ -273,6 +274,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.canvas.key = Some(done.key);
         app.perf.render_ms = done.ms;
         app.canvas.last_ms = done.ms;
+        app.canvas.moved = done.moved > 0;
     }
     if app.canvas.key.as_ref() != Some(&key) || app.canvas.texture.is_none() {
         let (w, h, view) = match pixel {
@@ -307,13 +309,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             isolated: key.isolated.map(vectorcraft_doc::NodeId),
             // Images far smaller on screen than they are sample their mip levels (#1244).
             image_mips: true,
+            // During a drag or a dialog's preview, objects that only moved draw their raster
+            // effects from the cached rasters of an earlier frame (#1257).
+            interacting: key.interacting,
             rich_black: key.rich_black,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
         // A document switch renders synchronously so another document's frame is never shown.
+        // The first frame after an interaction, when the frame shown drew moved rasters, also goes
+        // to the worker.
         let same_doc = app.canvas.key.as_ref().is_some_and(|k| k.doc == key.doc);
-        let heavy = app.canvas.last_ms > 8.0 && app.canvas.texture.is_some() && same_doc;
+        let settling = app.canvas.moved && !key.interacting;
+        let heavy = (app.canvas.last_ms > 8.0 || settling) && app.canvas.texture.is_some() && same_doc;
         match (&mut app.canvas.worker, heavy) {
             (Some(worker), true) => worker.submit(crate::render_worker::Job { key: key.clone(), doc: doc.clone(), w, h, view, opts }),
             _ => {
@@ -323,6 +331,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.canvas.key = Some(key.clone());
                 app.perf.render_ms = now_ms() - t0;
                 app.canvas.last_ms = app.perf.render_ms;
+                app.canvas.moved = app.canvas.renderer.stats.moved > 0;
             }
         }
     }
@@ -2880,6 +2889,91 @@ mod tests {
         assert!(off.iter().filter(|&&a| a == 255).count() > 1000, "the disc is still painted");
         app.session.execute("prefs.set", &json!({"key": "antiAliasedArtwork", "value": true})).unwrap();
         assert!(partial(&alphas(&mut app).expect("re-rendered")) > 50, "smooth again");
+    }
+
+    /// A drag of an object with raster effects (#1257): the drag's frames render while
+    /// interacting and draw the object's drop shadow and filtered content from the rasters of the
+    /// frame before; the frame after the drag renders without `interacting`, on the render worker,
+    /// and draws what a fresh renderer draws.
+    #[test]
+    fn dragging_an_object_with_raster_effects_draws_its_rasters_moved() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        let id = app.run("shape.rectangle", json!({"x": 100, "y": 80, "width": 120, "height": 90})).unwrap()["id"].clone();
+        for effect in ["stylize.dropShadow", "texture.craquelure"] {
+            app.run("effect.apply", json!({"effect": effect, "ids": [id]})).unwrap();
+        }
+        let ctx = egui::Context::default();
+        // The art's raster uploaded by one frame, None when it was not re-rendered.
+        let upload = |app: &mut VectorcraftApp| -> Option<Vec<Color32>> {
+            let (_, mut delta) = frame_output(app, &ctx);
+            let art = app.canvas.texture.as_ref().unwrap().id();
+            let px = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+                let egui::ImageData::Color(img) = &d.image;
+                img.pixels.clone()
+            });
+            delta.clear();
+            px
+        };
+        upload(&mut app).expect("the first frame renders the art");
+        app.select_tool("selection");
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 160.0, 125.0), view).unwrap();
+        for step in [1.0, 2.0, 3.0] {
+            app.session.pointer(&PointerEvent::new(PointerKind::Drag, 160.0 + 7.3 * step, 125.0 + 2.1 * step), view).unwrap();
+            upload(&mut app).expect("each frame of the drag renders");
+            assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting), "step {step}");
+            assert_eq!(app.canvas.renderer.stats.moved, 2, "the shadow and the filtered content, step {step}");
+            assert!(app.canvas.moved);
+        }
+        // The frame after the drag runs the effects again: on the worker, while the canvas shows
+        // the drag's last frame.
+        app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 181.9, 131.3), view).unwrap();
+        assert!(upload(&mut app).is_none(), "not rendered on this thread");
+        assert!(app.canvas.worker.as_ref().and_then(|w| w.pending.as_ref()).is_some_and(|k| !k.interacting), "sent to the worker");
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let mut after = None;
+        while after.is_none() && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            after = upload(&mut app);
+        }
+        let after = after.expect("the worker's frame arrives");
+        assert!(app.canvas.key.as_ref().is_some_and(|k| !k.interacting));
+        assert!(!app.canvas.moved);
+        app.canvas.worker = None;
+        app.canvas.renderer = vectorcraft_render::Renderer::new();
+        app.canvas.key = None;
+        assert!(upload(&mut app) == Some(after), "the frame after the drag is what a fresh renderer draws");
+    }
+
+    /// The frame after an interaction renders without `interacting` also when the interaction
+    /// leaves the document as it was (#1257): here a drag back to where it started.
+    #[test]
+    fn a_drag_back_to_its_start_renders_again_after_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        let id = app.run("shape.rectangle", json!({"x": 100, "y": 80, "width": 120, "height": 90})).unwrap()["id"].clone();
+        app.run("effect.apply", json!({"effect": "texture.craquelure", "ids": [id]})).unwrap();
+        let ctx = egui::Context::default();
+        shapes(&mut app, &ctx);
+        app.select_tool("selection");
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 160.0, 125.0), view).unwrap();
+        for (x, y) in [(173.3, 129.1), (160.0, 125.0)] {
+            app.session.pointer(&PointerEvent::new(PointerKind::Drag, x, y), view).unwrap();
+            shapes(&mut app, &ctx);
+            assert_eq!(app.canvas.renderer.stats.moved, 1, "the filtered content at ({x}, {y})");
+        }
+        let revision = app.session.active().unwrap().revision;
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 160.0, 125.0), view).unwrap();
+        assert_eq!(app.session.active().unwrap().revision, revision, "the drag left the document as it was");
+        shapes(&mut app, &ctx);
+        assert!(app.canvas.key.as_ref().is_some_and(|k| !k.interacting), "rendered again");
+        assert_eq!(app.canvas.renderer.stats.moved, 0);
+        assert!(!app.canvas.moved);
     }
 
     /// File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview (#394): off, Pixel

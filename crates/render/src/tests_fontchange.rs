@@ -39,3 +39,25 @@ fn type_redraws_when_its_font_becomes_available() {
     assert_ne!(before, after, "drawn in the font that arrived");
     assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
 }
+
+/// Type with a geometry effect in a symbol's art redraws in a font that becomes available: the art
+/// kept for the instance is placed again when the fonts change.
+#[test]
+fn symbol_type_redraws_when_its_font_becomes_available() {
+    const FAMILY: &str = "Placed Serif 4";
+    let mut d = Document::new(300.0, 150.0);
+    let style = CharStyle { size: 60.0, font_family: FAMILY.into(), ..Default::default() };
+    let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(-140.0, 25.0), "Hamburg", style))));
+    t.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 0.0}), visible: true });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(t)]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 75.0)) })).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let before = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+    assert!(vectorcraft_text::FontDb::global().add_font(serif_as(FAMILY)) > 0);
+    let after = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+    assert_ne!(before, after, "drawn in the font that arrived");
+    assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
+}

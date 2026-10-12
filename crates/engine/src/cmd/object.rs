@@ -857,8 +857,10 @@ fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
         .ok_or_else(|| bad("object.isolate", "missing id"))?;
     let st = s.doc_mut()?;
-    if st.doc.node(id).is_none_or(|n| !n.is_container()) {
-        return Err(bad("object.isolate", "only groups and layers can be isolated"));
+    // Groups, layers and single objects (a path, a compound path, an image…); type isn't
+    // isolated: a double-click on it edits its text.
+    if st.doc.node(id).is_none_or(|n| matches!(n.kind, NodeKind::Text(_))) {
+        return Err(bad("object.isolate", "type objects can't be isolated"));
     }
     let isolation = st.doc.node(id).filter(|n| n.extras().shaper.is_some()).and_then(|n| n.children()).and_then(|c| c.first()).map_or(id, |n| n.id);
     st.isolation = Some(isolation);

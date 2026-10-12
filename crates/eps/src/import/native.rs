@@ -453,10 +453,11 @@ fn plan(
             Some(s.line_starts(t).into_iter().map(|(text, (x, y))| (text, to_doc * Point::new(x, y))).collect())
         })
         .collect();
-    // The page's objects that are where a shown slot's lines are, nearest first.
+    // The page's objects that are where a slot's lines are, nearest first. A slot that doesn't show
+    // has them too: a file's page may draw what its layers have hidden since.
     let mut pairs: Vec<(f64, usize, usize)> = vec![];
-    for (k, info) in infos.iter().enumerate() {
-        let Some(l) = lines.get(k).and_then(Option::as_ref).filter(|_| info.shown) else { continue };
+    for (k, _) in infos.iter().enumerate() {
+        let Some(l) = lines.get(k).and_then(Option::as_ref) else { continue };
         for (j, object) in shown.iter().enumerate() {
             if let Some(d) = object.iter().filter_map(|n| same_type(n, l)).min_by(f64::total_cmp) {
                 pairs.push((d, k, j));
@@ -472,6 +473,9 @@ fn plan(
     }
     // Type the text document makes, shown or not: the page's pieces of it aren't needed.
     let mut content: Vec<Content> = infos.iter().map(|_| Content::Empty).collect();
+    // Where the made type that doesn't show lies, by slot.
+    let mut hidden_at: Vec<(usize, Rect)> = vec![];
+    let mut taller = 0;
     if let Some(t) = template {
         for (k, info) in infos.iter().enumerate() {
             let Some(Some(story)) = stories.get(k) else { continue };
@@ -493,10 +497,23 @@ fn plan(
                     TextKind::Point => {}
                 }
             }
+            if let (false, Some(r)) = (info.shown, region) {
+                hidden_at.push((k, r));
+            }
+            if let NodeKind::Text(text) = &mut node.kind
+                && story.fit_first_line(text)
+            {
+                taller += 1;
+            }
             if let Some(c) = content.get_mut(k) {
                 *c = Content::Made(Box::new(node), region.filter(|_| info.shown), false, vec![]);
             }
         }
+    }
+    if taller > 0 {
+        warn.push(format!(
+            "area type in frames too short for a line of the font it shows in got taller frames ({taller}): their type wouldn't show otherwise"
+        ));
     }
     // The file's text document is trusted where it agrees with the page about something (its lines
     // start where the page's type does, or the page has type where it lays type out), or where the
@@ -506,9 +523,26 @@ fn plan(
     if !trusted {
         content.iter_mut().for_each(|c| *c = Content::Empty);
     }
+    // Is `object` the type of a text object that doesn't show, as the page draws it: in its frame,
+    // with its words? (A copied object's lines are where its original's are, so they don't say.)
+    let hidden_type = |object: &[Arc<Node>]| {
+        let Some(r) = extent(object) else { return false };
+        let words: Vec<String> =
+            object.iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(letters(&t.plain_text())) } else { None }).collect();
+        hidden_at.iter().any(|(k, place)| {
+            place.intersect(r).area() >= 0.5 * r.area().max(1e-9)
+                && lines
+                    .get(*k)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|l| !words.is_empty() && words.iter().all(|w| l.iter().any(|(text, _)| letters(text).contains(w.as_str()))))
+        })
+    };
     let mut spare: Vec<Vec<Arc<Node>>> = vec![];
     for (j, object) in shown.iter().enumerate() {
         match owner.get(j).copied().flatten().filter(|_| trusted) {
+            // The type of a text object the layers hide: the layers have it, hidden, so the page's
+            // isn't another text object's.
+            Some(k) if infos.get(k).is_some_and(|i| !i.shown) && matches!(content.get(k), Some(Content::Made(..))) => {}
             Some(k) => match content.get_mut(k) {
                 Some(Content::Made(_, _, seen, _)) => *seen = true,
                 Some(Content::Page(p)) => p.extend(object.iter().cloned()),
@@ -526,6 +560,7 @@ fn plan(
                     }
                 }
             }
+            None if trusted && hidden_type(object) => {}
             None => spare.push(object.clone()),
         }
     }
@@ -857,7 +892,22 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool) ->
                 text_objects(c, l.visible, &mut shown, &mut hidden);
             }
         }
+        // A `.ai` read as its PDF part has a page for each artboard, in a row: the type on each
+        // goes where the layers have that artboard.
+        let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
+        let same =
+            |(a, p): (&vectorcraft_doc::Artboard, &Rect)| (a.rect.width() - p.width()).abs() <= 0.5 && (a.rect.height() - p.height()).abs() <= 0.5;
+        let boards = (pages.len() == doc.artboards.len() && doc.artboards.iter().zip(&pages).all(same)).then_some(&doc.artboards);
         for object in shown.iter_mut().chain(hidden.iter_mut()) {
+            // The page with most of it, the first for what is on none.
+            let on = extent(object).and_then(|r| {
+                let inside = |p: &Rect| p.intersect(r).area().max(0.0);
+                pages.iter().enumerate().skip(1).filter(|(_, p)| inside(p) > inside(&page_rect)).max_by(|a, b| inside(a.1).total_cmp(&inside(b.1)))
+            });
+            let shift = match on.and_then(|(i, page)| Some((boards?.get(i)?, page))) {
+                Some((board, page)) => Affine::translate(board.rect.origin() - page.origin()),
+                None => shift,
+            };
             for n in object.iter_mut() {
                 Arc::make_mut(n).transform(shift, false);
             }

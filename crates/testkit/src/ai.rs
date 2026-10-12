@@ -104,7 +104,12 @@ pub fn eps(data: &[u8], page: &str) -> Vec<u8> {
 /// `private` (the private data streams' contents, such as `%AI12_CompressedData` and zlib data) in
 /// two streams.
 pub fn ai(private: &[u8], page: &str) -> Vec<u8> {
-    with_private(private, page, "AIPrivateData")
+    ai_with(private, page, "")
+}
+
+/// [`ai`] with more entries in the page dictionary (`/ArtBox [0 0 200 100]`).
+pub fn ai_with(private: &[u8], page: &str, entries: &str) -> Vec<u8> {
+    with_private(private, page, "AIPrivateData", entries)
 }
 
 /// A PDF saved with Illustrator's editing data: [`ai`]'s file with the two streams under
@@ -112,11 +117,12 @@ pub fn ai(private: &[u8], page: &str) -> Vec<u8> {
 /// #868, and nothing else of that file is used; ExifTool's PDF tag table lists them too
 /// (<https://exiftool.org/TagNames/PDF.html>).
 pub fn pdf(private: &[u8], page: &str) -> Vec<u8> {
-    with_private(private, page, "AIPDFPrivateData")
+    with_private(private, page, "AIPDFPrivateData", "")
 }
 
-/// The file of [`ai`] and [`pdf`], with `private` in the streams `{key}1` and `{key}2`.
-fn with_private(private: &[u8], page: &str, key: &str) -> Vec<u8> {
+/// The file of [`ai`] and [`pdf`], with `private` in the streams `{key}1` and `{key}2` and
+/// `entries` more in the page dictionary.
+fn with_private(private: &[u8], page: &str, key: &str, entries: &str) -> Vec<u8> {
     let (first, second) = private.split_at(private.len() / 2);
     let stream = |part: &[u8]| {
         let mut s = format!("<< /Length {} >>\nstream\n", part.len()).into_bytes();
@@ -128,7 +134,7 @@ fn with_private(private: &[u8], page: &str, key: &str) -> Vec<u8> {
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
         format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R \
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] {entries} /Contents 4 0 R \
              /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> \
              /PieceInfo << /{PIECE} << /Private << /{key}1 5 0 R /{key}2 6 0 R /NumBlock 2 >> >> >> >>"
         )

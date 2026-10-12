@@ -3928,6 +3928,7 @@ axis	Both	Обидві
 @msg	an image VectorCraft can't read was left out	зображення, яке VectorCraft не може прочитати, пропущено
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
+@msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в області в рамках, занизьких для рядка шрифту, яким він показується, отримав вищі рамки ({_1}): інакше його не було б видно
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	цей файл збережений без сумісності з PDF, і його дані редагування не вдається прочитати ({why})
 @msg	No fonts are missing in this document	У цьому документі немає відсутніх шрифтів
@@ -4177,3 +4178,10 @@ lighting	Light	Світло
 @msg	the file stopped being read (please report this bug)	читання файлу перервалося (будь ласка, повідомте про цю помилку)
 	Concentric Dividers:	Концентричні розділювачі:
 	Radial Dividers:	Радіальні розділювачі:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Скіс:
+	Inside	Усередині
+	Outside	Зовні
+	Use Outside Rectangle As Frame	Використовувати зовнішній прямокутник як рамку
+	Create Compound Path From Ellipses	Створити складений контур з еліпсів
+	Fill Grid	Залити сітку

@@ -127,6 +127,12 @@ pub struct RenderOptions {
     /// (box-filtered from the full image, kept with the decoded images), so the full image needn't
     /// stay in memory or be sampled. Off, images always sample their full pixels (exports).
     pub image_mips: bool,
+    /// Screen views while an interaction is in progress (a drag, a dialog's preview): an object
+    /// whose content only moved since an earlier frame draws its cached drop shadows, outer glows
+    /// and filtered content from the rasters made then, at the nearest whole pixel, without
+    /// running the effects again (see `fx`). Off, no raster made that way, or made over one, is
+    /// drawn: the effects run again.
+    pub interacting: bool,
     /// Appearance of Black's Rich Black: pure CMYK black (black ink alone at 100%) shows as RGB
     /// black. Off, it shows through the CMYK profile, a dark grey, as other colours do.
     pub rich_black: bool,
@@ -204,6 +210,7 @@ impl Default for RenderOptions {
             precise: false,
             supersample: false,
             image_mips: false,
+            interacting: false,
             rich_black: false,
         }
     }
@@ -352,6 +359,21 @@ struct GeomEntry {
 type ClipEntry = (Arc<Node>, Option<Arc<(BezPath, FillRule)>>);
 /// A clipping path (kept alive) and what it paints: its fills and its strokes ([`Node::clip_paint`]).
 type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>>);
+/// What symbol art placed by [`Renderer::placed_art`] is kept under: the art's address, the bits
+/// of the transform's coefficients, whether strokes scale with it, and the stain ([`stain_bits`]).
+type PlacedKey = (usize, [u64; 6], bool, [u32; 6]);
+
+/// Symbol art placed by [`Renderer::placed_art`].
+struct PlacedEntry {
+    /// The symbol's art, held weakly: the reference keeps the art's allocation, so no other art can
+    /// get its address while the entry exists, and does not keep the art's content.
+    art: std::sync::Weak<Node>,
+    /// The art placed, or `None` for art placed again in every frame ([`depends_on_document`]).
+    placed: Option<Arc<Node>>,
+    /// The font generation ([`vectorcraft_text::FontDb::generation`]) the art was placed in, when
+    /// it holds type: the art is placed again when the fonts change.
+    fonts: Option<u64>,
+}
 
 /// Reusable renderer (keeps the render context, geometry and glyph caches between frames; decoded
 /// images are shared by all renderers, see [`set_image_cache_budget`]).
@@ -400,6 +422,8 @@ pub struct Renderer {
     shape_of: usize,
     /// The art drawn for objects with effects that apply through it (see `fx::has_object_fx`).
     fx_arts: FrameCache<usize, (Arc<Node>, Arc<Node>)>,
+    /// Symbol art as instances and inline graphics draw it (see [`Self::placed_art`]).
+    placed_arts: FrameCache<PlacedKey, PlacedEntry>,
     /// Layers open around the drawing point in the current context: a non-isolated group can copy
     /// its backdrop only when there are none (see [`Self::group`]).
     nested: u32,
@@ -444,6 +468,9 @@ static MISSING_INLINE_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic:
 pub struct FrameStats {
     pub drawn: usize,
     pub culled: usize,
+    /// The drop shadows, outer glows and filtered contents the frame drew from rasters made before
+    /// their object moved, or made over such rasters ([`RenderOptions::interacting`]).
+    pub moved: usize,
     pub micros: u64,
 }
 
@@ -508,6 +535,7 @@ impl Renderer {
             knockout: false,
             shape_of: 0,
             fx_arts: FrameCache::new(lru::FX_ART_BUDGET, 256),
+            placed_arts: FrameCache::new(lru::PLACED_ART_BUDGET, 256),
             nested: 0,
             backdrop: None,
             blends: PtrMap::default(),
@@ -611,6 +639,7 @@ impl Renderer {
         self.clips.sweep(g);
         self.clip_paints.sweep(g);
         self.fx_arts.sweep(g);
+        self.placed_arts.sweep(g);
         self.brushes.entries.sweep(g);
         self.live.sweep(g);
     }
@@ -1136,8 +1165,7 @@ impl Renderer {
             NodeKind::Image(im) => self.draw_image(ctx, f, im),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
-                    let mut art = brush_fx::instance_art(&sym.art, n);
-                    art.transform(*xf, false);
+                    let art = self.placed_art(&sym.art, *xf, false, Some(n));
                     self.draw_node(ctx, f, &art, true);
                 }
             }
@@ -1471,12 +1499,44 @@ impl Renderer {
         for ig in &g.inlines {
             let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
             let Some(sym) = f.doc.symbols.iter().find(|s| s.name == art.symbol) else { continue };
-            let mut node = (*sym.art).clone();
             // Strokes scale with the art (it is sized to the type, as in the SVG `<use>`).
-            node.transform(t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true);
+            let node = self.placed_art(&sym.art, t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true, None);
             self.draw_node(ctx, f, &node, true);
         }
         self.inline_depth -= 1;
+    }
+
+    /// Symbol art `art` as an instance or an inline graphic draws it ([`place`]). Art that is a
+    /// group or a layer without an appearance of its own is kept between frames under the art's
+    /// `Arc`, `xf`, `scale_strokes` and the stain of instance `inst`: its members keep their `Arc`s
+    /// from frame to frame, and the caches keyed by a node's address (geometry, glyphs, live-effect
+    /// geometry) hit for them. Other art is placed again in every frame, and so is art that holds
+    /// symbol instances, type with inline graphics, images, placed documents, live blends,
+    /// envelopes or repeats, or raster effects ([`depends_on_document`]). Art that holds type is
+    /// placed again when the fonts change.
+    fn placed_art(&mut self, art: &Arc<Node>, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> Arc<Node> {
+        if !matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || fx::has_object_fx(art) {
+            return place(art, xf, scale_strokes, inst);
+        }
+        let stain = stain_bits(inst.and_then(vectorcraft_brush::stain));
+        let key = (Arc::as_ptr(art) as usize, xf.as_coeffs().map(f64::to_bits), scale_strokes, stain);
+        if let Some(e) = self.placed_arts.get(&key, self.stamp)
+            && std::ptr::eq(e.art.as_ptr(), Arc::as_ptr(art))
+            && e.fonts.is_none_or(|g| g == vectorcraft_text::FontDb::global().generation())
+        {
+            return match &e.placed {
+                Some(placed) => placed.clone(),
+                None => place(art, xf, scale_strokes, inst),
+            };
+        }
+        let placed = place(art, xf, scale_strokes, inst);
+        let kept = (!depends_on_document(art)).then(|| placed.clone());
+        let fonts = (kept.is_some() && holds_type(art)).then(|| vectorcraft_text::FontDb::global().generation());
+        // The bytes count the key and the entry, the art's allocation that the weak reference
+        // keeps, and the kept art.
+        let bytes = size_of::<(PlacedKey, PlacedEntry, Node)>() + kept.as_deref().map_or(0, lru::node_bytes);
+        self.placed_arts.insert(key, PlacedEntry { art: Arc::downgrade(art), placed: kept, fonts }, bytes, self.stamp);
+        placed
     }
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).
@@ -1842,6 +1902,61 @@ fn painted_items(n: &Node) -> usize {
         })
         .count()
         .max(if n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !matches!(f.paint, vectorcraft_color::Paint::Solid { .. } | vectorcraft_color::Paint::None)) || matches!(i, AppearanceItem::Stroke(s) if s.visible && !matches!(s.paint, vectorcraft_color::Paint::Solid { .. } | vectorcraft_color::Paint::None))) { 2 } else { 0 })
+}
+
+/// Symbol art `art` stained by instance `inst` ([`instance_art`]) and placed by `xf`, with
+/// strokes scaled by `xf` when `scale_strokes`.
+fn place(art: &Node, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> Arc<Node> {
+    let mut placed = match inst {
+        Some(i) => brush_fx::instance_art(art, i),
+        None => art.clone(),
+    };
+    placed.transform(xf, scale_strokes);
+    Arc::new(placed)
+}
+
+/// Does `n` hold, in it or in the opacity masks of the objects in it, a symbol instance, type
+/// with an inline graphic, an image, a placed document, a blend, an envelope, a repeat, or an
+/// object or a fill or stroke with a visible raster effect?
+fn depends_on_document(n: &Node) -> bool {
+    let raster = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible && effects::is_raster(&e.id));
+    let mut depends = false;
+    n.walk(&mut |c| {
+        depends |= match &c.kind {
+            NodeKind::SymbolInstance { .. }
+            | NodeKind::Image(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Repeat(_) => true,
+            NodeKind::Text(t) => t.runs.iter().any(|r| r.inline.is_some()),
+            _ => false,
+        } || raster(&c.appearance.effects)
+            || c.appearance.items.iter().any(|i| raster(i.effects()))
+            || c.extras().mask.as_ref().is_some_and(|m| depends_on_document(&m.art));
+    });
+    depends
+}
+
+/// Does `n` hold type, in it or in the opacity masks of the objects in it?
+fn holds_type(n: &Node) -> bool {
+    let mut holds = false;
+    n.walk(&mut |c| holds |= matches!(c.kind, NodeKind::Text(_)) || c.extras().mask.as_ref().is_some_and(|m| holds_type(&m.art)));
+    holds
+}
+
+/// A symbol instance's stain ([`vectorcraft_brush::stain`]) as bits for a cache key: its color
+/// model, the color's components and the amount (all 0 without a stain).
+fn stain_bits(stain: Option<(vectorcraft_color::Color, f32)>) -> [u32; 6] {
+    use vectorcraft_color::Color;
+    let Some((color, amount)) = stain else { return [0; 6] };
+    let (model, [p, q, r, s]) = match color {
+        Color::Rgb { r, g, b } => (1, [r, g, b, 0.0]),
+        Color::Cmyk { c, m, y, k } => (2, [c, m, y, k]),
+        Color::Gray { k } => (3, [k, 0.0, 0.0, 0.0]),
+        Color::Lab { l, a, b } => (4, [l, a, b, 0.0]),
+    };
+    [model, p.to_bits(), q.to_bits(), r.to_bits(), s.to_bits(), amount.to_bits()]
 }
 
 /// Preferred rasterizer thread count set by the app (Preferences → Performance); negative = automatic.

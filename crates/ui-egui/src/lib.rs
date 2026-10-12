@@ -267,6 +267,10 @@ pub struct CanvasCache {
     pub texture: Option<egui::TextureHandle>,
     pub key: Option<CacheKey>,
     pub last_ms: f64,
+    /// The frame shown drew raster effects from rasters made before their objects moved
+    /// ([`vectorcraft_render::FrameStats::moved`]): the next frame outside an interaction runs
+    /// them again, on the worker when there is one.
+    pub moved: bool,
     pub worker: Option<render_worker::Worker>,
     pub worker_started: bool,
     /// The slices as laid out for (document uid, revision): the canvas draws them every frame.
@@ -291,6 +295,8 @@ pub type PrintTilingCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_pdf::Til
 pub struct CacheKey {
     pub doc: usize,
     pub revision: u64,
+    /// An interaction is in progress ([`vectorcraft_render::RenderOptions::interacting`]).
+    pub interacting: bool,
     pub zoom: f64,
     pub cx: f64,
     pub cy: f64,
@@ -454,6 +460,7 @@ impl VectorcraftApp {
                 texture: None,
                 key: None,
                 last_ms: 0.0,
+                moved: false,
                 worker: None,
                 worker_started: false,
                 slices: None,
