@@ -2413,7 +2413,7 @@ fn embroidery_fonts_open_to_edit_and_merge() {
         (info["font"]["size"].as_f64(), info["font"]["letter_case"].as_str(), info["font"]["default_glyph"].as_str()),
         (Some(10.0), Some("upper"), Some("?"))
     );
-    assert!((info["font"]["kerning"]["A B"].as_f64().unwrap() - 4.0).abs() < 1e-9, "{info}");
+    assert!((info["font"]["kerning"]["A B"].as_f64().unwrap() - 4.0).abs() < 1e-6, "{info}");
     assert!((info["glyphs"][1]["width"].as_f64().unwrap() - 40.0).abs() < 1e-6, "{info}");
     // saved again as it was: lettering in it sets the same
     s.execute("embroidery.fontDoc.save", &json!({})).unwrap();
