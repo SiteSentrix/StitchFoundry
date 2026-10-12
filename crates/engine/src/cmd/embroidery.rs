@@ -233,6 +233,15 @@ pub fn specs() -> Vec<CommandSpec> {
             send_to_machine
         ),
         cmd!(
+            "embroidery.multiHoop",
+            "Multi-Hooping",
+            [],
+            None,
+            "{dir?: the folder to write to (without it: the plan only), hoop?: a standard hoop's name (default: the design's), width?, height?: mm (a hoop of this field instead), overlap?: mm the hoopings share (10; 0–100), format?: as Export Machine File, prefix?: what the file names start with, marks?: bool (true)} multi-hooping: a design larger than the hoop split into hoopings on a grid that overlap by `overlap`, each object sewn whole in the first hooping that holds it, each hooping a machine file of its own (centred on the hoop, `name-1`, `name-2`…) that first sews registration crosses in the overlaps it shares with its neighbours, as a colour of its own, to line the fabric up by → {hoopings: [{index, column, row, objects, stitches, file?}], columns, rows, files}",
+            has_doc,
+            multi_hoop
+        ),
+        cmd!(
             "embroidery.send.targets",
             "Machine Folders",
             [],
@@ -1080,6 +1089,214 @@ fn send_targets(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let targets: Vec<Value> = s.prefs.embroidery_send_dirs.iter().map(|d| json!({ "folder": d, "ready": folder_ready(d) })).collect();
     Ok(json!({ "targets": targets }))
+}
+
+/// A registration cross's arms (mm from its middle).
+const MARK_ARM: f64 = 3.0;
+
+/// The registration crosses of hooping `(col, row)` on a `cols` × `rows` grid of `cells`: two in
+/// each overlap it shares with a neighbour (mm).
+fn marks_of(cells: &[sf_core::BBox], cols: usize, rows: usize, col: usize, row: usize) -> Vec<sf_core::Point> {
+    let cell = |c: usize, r: usize| cells.get(r * cols + c).copied();
+    let Some(me) = cell(col, row) else { return Vec::new() };
+    let mut out = Vec::new();
+    let mut shared = |o: sf_core::BBox, across: bool| {
+        // the overlap strip between the two, a mark a quarter in from each end
+        let (x0, y0, x1, y1) = (me.min.x.max(o.min.x), me.min.y.max(o.min.y), me.max.x.min(o.max.x), me.max.y.min(o.max.y));
+        if across {
+            let x = (x0 + x1) / 2.0;
+            out.extend([sf_core::Point::new(x, y0 + (y1 - y0) / 4.0), sf_core::Point::new(x, y1 - (y1 - y0) / 4.0)]);
+        } else {
+            let y = (y0 + y1) / 2.0;
+            out.extend([sf_core::Point::new(x0 + (x1 - x0) / 4.0, y), sf_core::Point::new(x1 - (x1 - x0) / 4.0, y)]);
+        }
+    };
+    if col > 0
+        && let Some(o) = cell(col - 1, row)
+    {
+        shared(o, true);
+    }
+    if col + 1 < cols
+        && let Some(o) = cell(col + 1, row)
+    {
+        shared(o, true);
+    }
+    if row > 0
+        && let Some(o) = cell(col, row - 1)
+    {
+        shared(o, false);
+    }
+    if row + 1 < rows
+        && let Some(o) = cell(col, row + 1)
+    {
+        shared(o, false);
+    }
+    out
+}
+
+fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.multiHoop";
+    let cfg = s.doc()?.doc.embroidery.as_deref().cloned().unwrap_or_default();
+    // the hoop's field (mm)
+    let field = match (p.get("width").and_then(Value::as_f64), p.get("height").and_then(Value::as_f64)) {
+        (Some(w), Some(h)) if (20.0..=2000.0).contains(&w) && (20.0..=2000.0).contains(&h) => (w, h),
+        (Some(_), _) | (_, Some(_)) => return Err(bad(CMD, "`width` and `height` are 20 to 2000 mm, both given")),
+        _ => match str_param(p, "hoop") {
+            Some(name) => sf_core::hoops::standard_hoops()
+                .into_iter()
+                .find(|h| h.name.eq_ignore_ascii_case(name))
+                .map(|h| (h.width, h.height))
+                .ok_or_else(|| bad(CMD, format!("no hoop `{name}`")))?,
+            None => cfg
+                .hoop
+                .as_ref()
+                .map(|h| (h.width, h.height))
+                .ok_or_else(|| bad(CMD, "choose a hoop: the design has none (or give `hoop`, or `width` and `height`)"))?,
+        },
+    };
+    let overlap = super::embroidery_lettering::ranged(p, "overlap", 0.0..=100.0, CMD, "`overlap` is 0 to 100 mm")?.unwrap_or(10.0);
+    if overlap * 2.0 >= field.0.min(field.1) {
+        return Err(bad(CMD, "the overlap is too wide for the hoop"));
+    }
+    let marks = bool_or(p, "marks", true);
+    let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
+    if plan.built.pattern.stitch_count() == 0 {
+        return Err(bad(CMD, "nothing is stitched yet: give objects a stitch type first"));
+    }
+    // the grid of hoopings over the design, centred on it
+    let b = plan.built.pattern.bounds();
+    let (step_x, step_y) = (field.0 - overlap, field.1 - overlap);
+    let count = |len: f64, size: f64, step: f64| if len <= size { 1 } else { ((len - overlap) / step).ceil().max(1.0) as usize };
+    let (cols, rows) = (count(b.width(), field.0, step_x), count(b.height(), field.1, step_y));
+    if cols * rows > 64 {
+        return Err(bad(CMD, format!("{cols} × {rows} hoopings: more than 64; choose a larger hoop")));
+    }
+    let span = (cols as f64 * step_x + overlap, rows as f64 * step_y + overlap);
+    let c = sf_core::Point::new((b.min.x + b.max.x) / 2.0, (b.min.y + b.max.y) / 2.0);
+    let origin = sf_core::Point::new(c.x - span.0 / 2.0, c.y - span.1 / 2.0);
+    let cells: Vec<sf_core::BBox> = (0..rows)
+        .flat_map(|r| (0..cols).map(move |k| (k, r)))
+        .map(|(k, r)| {
+            let min = sf_core::Point::new(origin.x + k as f64 * step_x, origin.y + r as f64 * step_y);
+            sf_core::BBox::new(min, sf_core::Point::new(min.x + field.0, min.y + field.1))
+        })
+        .collect();
+    // each object whole in the first hooping that holds it
+    let pattern = &plan.built.pattern;
+    let mut assigned: Vec<Vec<usize>> = vec![Vec::new(); cells.len()];
+    for (k, span) in plan.built.spans.iter().enumerate() {
+        let pts: Vec<sf_core::Point> =
+            pattern.stitches.get(span.range.clone()).unwrap_or_default().iter().filter(|s| s.is_move()).map(|s| s.pos()).collect();
+        let Some(ob) = pts.iter().copied().map(|q| sf_core::BBox::new(q, q)).reduce(sf_core::BBox::union) else { continue };
+        let fits = |cell: &sf_core::BBox| {
+            ob.min.x >= cell.min.x - 1e-6 && ob.min.y >= cell.min.y - 1e-6 && ob.max.x <= cell.max.x + 1e-6 && ob.max.y <= cell.max.y + 1e-6
+        };
+        let Some(i) = cells.iter().position(fits) else {
+            return Err(bad(
+                CMD,
+                format!(
+                    "an object {:.0} × {:.0} mm doesn't fit in any hooping: choose a larger hoop or a wider overlap (objects aren't split yet)",
+                    ob.width(),
+                    ob.height()
+                ),
+            ));
+        };
+        if let Some(a) = assigned.get_mut(i) {
+            a.push(k);
+        }
+    }
+    // each hooping's pattern, centred on its hoop
+    let dir = str_param(p, "dir").filter(|d| !d.trim().is_empty());
+    let (format, stem) = {
+        let machine = cfg.machine_file_format(&s.prefs.embroidery_machines);
+        let key = str_param(p, "format").map(str::to_string).or(machine).unwrap_or_else(|| "dst".to_string());
+        let f = sf_formats::Format::from_extension(&key)
+            .ok_or_else(|| bad(CMD, format!("unknown format `{key}`: one of {}", MACHINE_EXTS.join(", "))))?;
+        let stem = format!(
+            "{}{}",
+            str_param(p, "prefix").unwrap_or(""),
+            super::embroidery_lettering::safe_name(&super::fileio::file_stem(&s.doc()?.doc.title))
+        );
+        (f, stem)
+    };
+    if let Some(d) = dir {
+        super::fileio::create_dir(d)?;
+    }
+    let mark_thread = Thread::new(Rgb::new(0xc0, 0xc0, 0xc0), "Registration");
+    let mut out = Vec::new();
+    let mut files = Vec::new();
+    let mut index = 0;
+    for (i, (cell, objs)) in cells.iter().zip(&assigned).enumerate() {
+        if objs.is_empty() {
+            continue;
+        }
+        index += 1;
+        let (col, row) = (i % cols, i / cols);
+        let centre = sf_core::Point::new((cell.min.x + cell.max.x) / 2.0, (cell.min.y + cell.max.y) / 2.0);
+        let local = |q: sf_core::Point| sf_core::Point::new(q.x - centre.x, q.y - centre.y);
+        let mut hp = sf_core::Pattern::new();
+        hp.threads.clear();
+        // registration crosses first, in a colour of their own
+        let crosses = if marks { marks_of(&cells, cols, rows, col, row) } else { Vec::new() };
+        for m in &crosses {
+            let m = local(*m);
+            hp.jump(sf_core::Point::new(m.x - MARK_ARM, m.y));
+            for k in 0..=6 {
+                hp.stitch(sf_core::Point::new(m.x - MARK_ARM + f64::from(k), m.y));
+            }
+            hp.jump(sf_core::Point::new(m.x, m.y - MARK_ARM));
+            for k in 0..=6 {
+                hp.stitch(sf_core::Point::new(m.x, m.y - MARK_ARM + f64::from(k)));
+            }
+            hp.trim();
+        }
+        if !crosses.is_empty() {
+            hp.threads.push(mark_thread.clone());
+        }
+        let mut colour: Option<usize> = None;
+        for k in objs {
+            let Some(span) = plan.built.spans.get(*k) else { continue };
+            let thread_ix = plan.design.objects.get(span.index).map_or(0, |o| o.color);
+            if colour != Some(thread_ix) {
+                if !hp.threads.is_empty() {
+                    hp.trim();
+                    hp.color_change();
+                }
+                hp.threads.push(plan.design.thread(thread_ix));
+                colour = Some(thread_ix);
+            }
+            let mut first = true;
+            for st in pattern.stitches.get(span.range.clone()).unwrap_or_default() {
+                let q = local(st.pos());
+                match st.cmd {
+                    sf_core::Cmd::Stitch if first => {
+                        hp.jump(q);
+                        hp.stitch(q);
+                        first = false;
+                    }
+                    sf_core::Cmd::Stitch => hp.stitch(q),
+                    sf_core::Cmd::Jump => hp.jump(q),
+                    sf_core::Cmd::Trim => hp.trim(),
+                    sf_core::Cmd::Stop => hp.stop(),
+                    sf_core::Cmd::ColorChange | sf_core::Cmd::End => {}
+                }
+            }
+            hp.trim();
+        }
+        hp.ensure_end();
+        let stitches = hp.stitch_count();
+        let mut entry = json!({ "index": index, "column": col + 1, "row": row + 1, "objects": objs.len(), "stitches": stitches });
+        if let Some(d) = dir {
+            let opts = sf_formats::WriteOptions { name: format!("{stem} {index}"), center: false, ..sf_formats::WriteOptions::default() };
+            let bytes = sf_formats::write(format, &hp, &opts).map_err(|e| EngineError::Other(format!("{} export failed: {e}", format.name())))?;
+            let path = std::path::Path::new(d).join(format!("{stem}-{index}.{}", format.extension())).to_string_lossy().to_string();
+            super::fileio::write_file(&path, &bytes)?;
+            entry["file"] = json!(path);
+            files.push(path);
+        }
+        out.push(entry);
+    }
+    Ok(json!({ "hoopings": out, "columns": cols, "rows": rows, "files": files }))
 }
 
 /// The ways click-to-stitch can stitch a region.
