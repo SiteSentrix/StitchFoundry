@@ -222,7 +222,12 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 .flatten()
                 .map(|e| (e.intact, move || Some(e.data)));
             restore_or_import(editing, || match super::pdfimport::import(bytes, opts) {
-                Ok((doc, warnings)) => Ok(through_editing_data(bytes, opts, doc, warnings)),
+                Ok(r) => {
+                    // Pages of text alone: the editing copy alone where it reads, as for a file
+                    // saved without its PDF part (#1387: else the page, which is the art).
+                    let alone = r.only_text.then(|| from_editing_data_alone(bytes, opts)).flatten().and_then(|read| read.ok());
+                    Ok(alone.unwrap_or_else(|| through_editing_data(bytes, opts, r.document, r.warnings)))
+                }
                 // Saved without its PDF part: the editing copy is all the file has.
                 Err(e) if e.to_string() == vectorcraft_pdf::PdfError::PlaceholderOnly.to_string() => {
                     from_editing_data_alone(bytes, opts).unwrap_or(Err(e))
