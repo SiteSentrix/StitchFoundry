@@ -734,7 +734,8 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
             .ok_or_else(|| bad(C, "select an image (or an Image Trace group)"))?
     };
     let blob = s.doc()?.doc.images.get(&img.key).ok_or_else(|| EngineError::Other(format!("image data `{}` is missing", img.key)))?;
-    let raster = tr::Raster::decode(&blob.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
+    // An image over the tracer's size is traced scaled down (the paths are scaled back below).
+    let raster = tr::Raster::decode_to_fit(&blob.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
     let library = trace_library(s, &mut params)?;
     let res = tr::trace_within(&raster, &params, MAX_TRACE_ANCHORS).map_err(|e| EngineError::Other(e.to_string()))?;
     // Pixel space of the decoded raster → the image object's pixel space → document.
