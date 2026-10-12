@@ -155,8 +155,8 @@ impl Corner {
         let (h_out, h_in) = match kind {
             // An arc tangent to both sides, turning by 180° less the angle between them there.
             CornerKind::Round => {
-                let h = radius * arc_handle(-cos);
-                (start - du * h, end - dv * h)
+                let (hu, hv) = self.round_handles(radius, (start, du), (end, dv));
+                (start - du * hu, end - dv * hv)
             }
             // An arc centred on the corner through both ends, spanning the angle.
             CornerKind::InvertedRound => {
@@ -166,6 +166,33 @@ impl Corner {
             CornerKind::Chamfer => (start, end),
         };
         Cut { tu, tv, start, h_out, h_in, end }
+    }
+}
+
+impl Corner {
+    /// The handle lengths of a round cut of `radius` between `start` and `end` (each a point and
+    /// the direction its side runs on in there). Between straight sides they are the arc's. A
+    /// curved side has turned by the time the cut meets it, so the arc's handles would reach past
+    /// where the tangents at the cut's ends cross and the cut would stick out of the corner
+    /// (#1512): there each handle is the share an arc takes of its tangent, up to that crossing
+    /// (a third of the way to the other end where the tangents don't cross between them).
+    fn round_handles(&self, radius: f64, (start, du): (Point, Vec2), (end, dv): (Point, Vec2)) -> (f64, f64) {
+        let cos = du.dot(dv);
+        let arc = arc_handle(-cos);
+        if self.side_u.straight() && self.side_v.straight() {
+            return (radius * arc, radius * arc);
+        }
+        // start − du·a = end − dv·b is where the tangents cross.
+        let (cross, w) = (du.cross(dv), start - end);
+        let (a, b) = (w.cross(dv) / cross, w.cross(du) / cross);
+        if cross.abs() > MIN_SINE && a > EPS && b > EPS && a.is_finite() && b.is_finite() {
+            // An arc's handle over its tangent's length, radius · tan(turn / 2).
+            let share = arc * (1.0 - cos) / cross.abs();
+            (a * share, b * share)
+        } else {
+            let third = start.distance(end) / 3.0;
+            (third, third)
+        }
     }
 }
 
@@ -398,6 +425,30 @@ mod tests {
                 (x.h_in - x.p, x.p - sp.anchors[(i + 1) % sp.anchors.len()].p)
             };
             assert!(into.normalize().cross(out.normalize()).abs() < 1e-6 && into.dot(out) > 0.0, "anchor {i}");
+        }
+    }
+
+    /// A round cut next to a curve stays inside its corner, however large (#1512): its handles
+    /// stop short of where the tangents at its ends cross, so it doesn't stick out past the sides.
+    #[test]
+    fn a_round_cut_next_to_a_curve_stays_inside_its_corner() {
+        // A square whose top side arches up, meeting the upright sides at an angle.
+        let mut sp =
+            SubPath::polyline(&[Point::new(100.0, 150.0), Point::new(300.0, 150.0), Point::new(300.0, 300.0), Point::new(100.0, 300.0)], true);
+        sp.anchors[0].h_out = Point::new(120.0, 20.0);
+        sp.anchors[1].h_in = Point::new(280.0, 20.0);
+        let path = PathData::single(sp);
+        let bounds = path.bounds().unwrap().inflate(1e-6, 1e-6);
+        for radius in [10.0, 60.0, 200.0, 1e6] {
+            let (cut, _) = cut_corners(&path, &[radius, radius], &[]);
+            let b = cut.bounds().unwrap();
+            assert!(bounds.union(b) == bounds, "radius {radius}: {b:?} is outside {bounds:?}");
+            // Each cut's handles end before its tangents cross: the cut turns one way only.
+            let a = &cut.subpaths[0].anchors;
+            for (from, to) in [(a[a.len() - 1], a[0]), (a[1], a[2])] {
+                let (t0, t1, chord) = (from.h_out - from.p, to.p - to.h_in, to.p - from.p);
+                assert!(t0.cross(chord) * chord.cross(t1) > 0.0 && t0.cross(t1) * t0.cross(chord) > 0.0, "radius {radius}: {from:?} {to:?}");
+            }
         }
     }
 
