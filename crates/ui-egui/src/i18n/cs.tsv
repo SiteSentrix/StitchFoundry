@@ -4553,3 +4553,13 @@ machine	Stop	Zastavení
 	Side 2	Strana 2
 	Jag depth	Hloubka zubů
 	Trapunto (travel along the outline)	Trapunto (přejezdy podél obrysu)
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	Vložit motiv
+	Leaf	List
+	Loop	Smyčka
+	Motif Fill	Výplň motivy
+	Motif size	Velikost motivu
+	Graded	Odstupňované
+	Width at end	Šířka na konci
+	Row spacing	Rozestup řad

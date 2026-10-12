@@ -3894,3 +3894,13 @@ machine	Stop	停止
 	Side 2	第 2 側
 	Jag depth	鋸齒深度
 	Trapunto (travel along the outline)	凸紋繡（沿輪廓走線）
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	放置圖案
+	Leaf	葉子
+	Loop	圈
+	Motif Fill	圖案填充
+	Motif size	圖案大小
+	Graded	漸變
+	Width at end	末端寬度
+	Row spacing	行距

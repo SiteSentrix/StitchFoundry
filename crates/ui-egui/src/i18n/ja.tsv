@@ -4522,3 +4522,13 @@ machine	Stop	停止
 	Side 2	サイド 2
 	Jag depth	ギザギザの深さ
 	Trapunto (travel along the outline)	トラプント (輪郭に沿って移動)
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	モチーフを配置
+	Leaf	葉
+	Loop	ループ
+	Motif Fill	モチーフ塗り
+	Motif size	モチーフのサイズ
+	Graded	段階的に変化
+	Width at end	終点の幅
+	Row spacing	列の間隔

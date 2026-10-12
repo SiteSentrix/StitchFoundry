@@ -4524,3 +4524,13 @@ machine	Stop	Остановка
 	Side 2	Сторона 2
 	Jag depth	Глубина зубцов
 	Trapunto (travel along the outline)	Трапунто (переходы по контуру)
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	Разместить мотив
+	Leaf	Лист
+	Loop	Петля
+	Motif Fill	Заливка мотивами
+	Motif size	Размер мотива
+	Graded	С градацией
+	Width at end	Ширина в конце
+	Row spacing	Расстояние между рядами

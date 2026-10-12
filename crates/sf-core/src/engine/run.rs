@@ -10,23 +10,23 @@ use crate::pattern::Stitch;
 /// must receive a needle penetration.
 pub(crate) const CORNER_ANGLE: f64 = 0.35;
 
-/// Prepares the path polyline: chooses the start nearest to `hint` (closed paths
-/// start there, open paths are reversed if their far end is closer). Without a
-/// hint, an open path ends near `exit`, or starts there when the stitching comes
-/// back to its start (`back_to_start`: an even number of passes).
-fn oriented_path(path: &Contour, hint: Option<Point>, exit: Option<Point>, back_to_start: bool) -> Vec<Point> {
+/// Prepares the path polyline and whether to sew it backwards: closed paths start
+/// nearest to `hint`; open paths keep their drawn direction and are sewn backwards
+/// if their far end is closer to it. Without a hint, an open path ends near `exit`,
+/// or starts there when the stitching comes back to its start (`back_to_start`: an
+/// even number of passes).
+fn oriented_path(path: &Contour, hint: Option<Point>, exit: Option<Point>, back_to_start: bool) -> (Vec<Point>, bool) {
     let pts = path.polyline(FLATTEN_TOLERANCE);
     if pts.len() < 2 {
-        return pts;
+        return (pts, false);
     }
     if path.closed {
         let ring = match hint {
             Some(h) => polyline::ring_starting_near(&pts, h),
             None => pts,
         };
-        polyline::closed(&ring)
+        (polyline::closed(&ring), false)
     } else {
-        let mut pts = pts;
         let (first, last) = (pts[0], pts[pts.len() - 1]);
         let reverse = match (hint, exit) {
             (Some(h), _) => h.distance(last) < h.distance(first),
@@ -34,16 +34,15 @@ fn oriented_path(path: &Contour, hint: Option<Point>, exit: Option<Point>, back_
             (None, Some(e)) => e.distance(first) < e.distance(last),
             _ => false,
         };
-        if reverse {
-            pts.reverse();
-        }
-        pts
+        (pts, reverse)
     }
 }
 
 pub(crate) fn generate(path: &Contour, params: &RunParams, hint: Option<Point>, exit: Option<Point>) -> Vec<Stitch> {
     let passes = params.passes.clamp(1, MAX_PASSES);
-    let pts = oriented_path(path, hint, exit, passes.is_multiple_of(2));
+    // Stitches are laid out along the path as drawn (so prongs, motifs and their grading stay
+    // on their side and in their order), then sewn backwards when it starts at the far end.
+    let (pts, backwards) = oriented_path(path, hint, exit, passes.is_multiple_of(2));
     if pts.is_empty() {
         return Vec::new();
     }
@@ -56,11 +55,15 @@ pub(crate) fn generate(path: &Contour, params: &RunParams, hint: Option<Point>, 
         RunKind::Triple => triple(&polyline::resample(&pts, step, CORNER_ANGLE)),
         RunKind::Blanket => blanket(&pts, step, params.width, params.spacing, params.flip),
         RunKind::Zigzag => zigzag(&pts, params.width, params.spacing),
-        RunKind::Motif => motif(&pts, params.motif, params.width, params.spacing, step, params.flip),
+        RunKind::Motif => motif(&pts, params.motif, (params.width, params.width_end), params.spacing, step, params.flip),
         RunKind::Back => backstitch(&pts, step, 0.0),
         RunKind::Stem => backstitch(&pts, step, (params.width * 0.5).clamp(0.2, 3.0) * if params.flip { -1.0 } else { 1.0 }),
         RunKind::Hand => hand(&pts, step, params.spacing),
     };
+    let mut once = once;
+    if backwards {
+        once.reverse();
+    }
     let mut out = Out::new();
     out.stitches(repeat_passes(&once, passes));
     out.finish()
@@ -206,7 +209,9 @@ pub(crate) fn zigzag(pts: &[Point], width: f64, spacing: f64) -> Vec<Point> {
 /// Control points of one motif repeat in (along, across) units, starting and
 /// ending on the line. `along` is a fraction of the repeat length, `across` a
 /// fraction of the motif width.
-fn motif_shape(m: Motif) -> Vec<(f64, f64)> {
+/// A motif's line in a repeat one long (along the run) and one wide (across it), from `(0, 0)`
+/// to `(1, 0)` so repeats join.
+pub(crate) fn motif_shape(m: Motif) -> Vec<(f64, f64)> {
     match m {
         Motif::Wave => (0..=8)
             .map(|i| {
@@ -223,20 +228,95 @@ fn motif_shape(m: Motif) -> Vec<(f64, f64)> {
         Motif::Diamond => vec![(0.0, 0.0), (0.5, 0.5), (1.0, 0.0), (0.5, -0.5), (0.0, 0.0), (1.0, 0.0)],
         Motif::Cross => vec![(0.0, 0.0), (0.0, -0.5), (1.0, 0.5), (1.0, -0.5), (0.0, 0.5), (0.0, 0.0), (1.0, 0.0)],
         Motif::Feather => vec![(0.0, 0.0), (0.3, 0.5), (0.5, 0.0), (0.8, -0.5), (1.0, 0.0)],
+        // A heart standing on its point, reached from the line and left back to it.
+        Motif::Heart => vec![
+            (0.0, 0.0),
+            (0.5, -0.45),
+            (0.15, 0.05),
+            (0.13, 0.25),
+            (0.22, 0.4),
+            (0.36, 0.43),
+            (0.5, 0.3),
+            (0.64, 0.43),
+            (0.78, 0.4),
+            (0.87, 0.25),
+            (0.85, 0.05),
+            (0.5, -0.45),
+            (1.0, 0.0),
+        ],
+        // A five-pointed star round the middle of the repeat.
+        Motif::Star => {
+            let mut v = vec![(0.0, 0.0)];
+            v.extend((0..=10).map(|k| {
+                let r = if k % 2 == 0 { 0.48 } else { 0.2 };
+                let a = std::f64::consts::FRAC_PI_2 + f64::from(k) * std::f64::consts::PI / 5.0;
+                (0.5 + r * a.cos(), r * a.sin())
+            }));
+            v.push((1.0, 0.0));
+            v
+        }
+        // A leaf: its upper edge, its lower edge back, then the vein.
+        Motif::Leaf => {
+            let edge = |side: f64| (0..=8).map(move |i| f64::from(i) / 8.0).map(move |t| (t, side * 0.4 * (t * std::f64::consts::PI).sin()));
+            let mut v: Vec<(f64, f64)> = edge(1.0).collect();
+            v.extend(edge(-1.0).collect::<Vec<_>>().into_iter().rev().skip(1));
+            v.push((1.0, 0.0));
+            v
+        }
+        // A loop like a handwritten l.
+        Motif::Loop => {
+            let mut v = vec![(0.0, 0.0)];
+            v.extend((0..=12).map(|i| {
+                let a = f64::from(i) / 12.0 * std::f64::consts::TAU;
+                (0.55 + 0.25 * a.sin(), 0.25 - 0.25 * a.cos())
+            }));
+            v.push((1.0, 0.0));
+            v
+        }
     }
 }
 
-/// Repeating decorative motif along the path.
-pub(crate) fn motif(pts: &[Point], m: Motif, width: f64, spacing: f64, step: f64, flip: bool) -> Vec<Point> {
+/// Most motif repeats along one line.
+const MAX_MOTIFS: usize = 50_000;
+
+/// Repeating decorative motif along the path, `widths.0` wide; with `widths.1`, the motifs
+/// grow or shrink to that width at the end (graded), their repeats `spacing` long at the start
+/// and keeping their proportions.
+pub(crate) fn motif(pts: &[Point], m: Motif, widths: (f64, Option<f64>), spacing: f64, step: f64, flip: bool) -> Vec<Point> {
     let len = polyline::length(pts);
+    let width = widths.0;
+    let end = widths.1.filter(|w| w.is_finite() && *w > 0.0 && width > 1e-9);
     let rep = spacing.max(0.5);
-    let n = ((len / rep).round() as usize).max(1);
-    let rep = len / n as f64;
+    // Where each repeat starts along the line, and its width.
+    let mut repeats: Vec<(f64, f64, f64)> = Vec::new();
+    match end {
+        None => {
+            let n = ((len / rep).round() as usize).clamp(1, MAX_MOTIFS);
+            let r = len / n as f64;
+            repeats.extend((0..n).map(|k| (k as f64 * r, r, width)));
+        }
+        Some(w1) => {
+            // Lay repeats out at their own sizes, then scale them all to fit the line.
+            let mut s = 0.0;
+            let mut sizes = Vec::new();
+            while s < len && sizes.len() < MAX_MOTIFS {
+                let w = width + (w1 - width) * (s / len).clamp(0.0, 1.0);
+                let r = (rep * w / width).max(0.5);
+                sizes.push((r, w));
+                s += r;
+            }
+            let k = len / sizes.iter().map(|x| x.0).sum::<f64>().max(1e-9);
+            let mut at = 0.0;
+            for (r, w) in sizes {
+                repeats.push((at, r * k, w));
+                at += r * k;
+            }
+        }
+    }
     let side = if flip { -1.0 } else { 1.0 };
     let shape = motif_shape(m);
     let mut out: Vec<Point> = Vec::new();
-    for k in 0..n {
-        let s0 = k as f64 * rep;
+    for (s0, rep, width) in repeats {
         for &(a, c) in &shape {
             let (p, nrm) = frame(pts, (s0 + a * rep).min(len));
             let q = p + nrm * (c * width * side);
@@ -261,6 +341,34 @@ mod tests {
 
     fn line() -> Contour {
         Contour::from_points(&[Point::new(0.0, 0.0), Point::new(20.0, 0.0)], false)
+    }
+
+    #[test]
+    fn every_motif_joins_its_repeats_and_graded_runs_change_size() {
+        for m in Motif::ALL {
+            let shape = motif_shape(m);
+            let near = |p: Option<&(f64, f64)>, q: (f64, f64)| p.is_some_and(|p| (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9);
+            assert!(near(shape.first(), (0.0, 0.0)) && near(shape.last(), (1.0, 0.0)), "{m:?}: {shape:?}");
+            assert!(shape.iter().all(|(a, c)| (-0.01..=1.01).contains(a) && c.abs() <= 1.0 + 1e-9), "{m:?}");
+        }
+        // Scallops 2 mm high at the start of a 100 mm line, 6 mm at its end.
+        let line = Contour::from_points(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false);
+        let p = RunParams { kind: RunKind::Motif, motif: Motif::Scallop, width: 2.0, width_end: Some(6.0), spacing: 4.0, ..Default::default() };
+        let pts: Vec<Point> = generate(&line, &p, None, None).iter().map(|s| s.pos()).collect();
+        let height = |lo: f64, hi: f64| pts.iter().filter(|q| q.x >= lo && q.x <= hi).map(|q| q.y.abs()).fold(0.0, f64::max);
+        assert!(height(0.0, 15.0) < 2.7 && height(85.0, 100.0) > 5.0, "{} {}", height(0.0, 15.0), height(85.0, 100.0));
+        assert!(pts.last().unwrap().distance(Point::new(100.0, 0.0)) < 1e-6, "ends on the line's end");
+        // Sewn from the far end (the closest join), the motifs still grow along the line as drawn.
+        let back: Vec<Point> = generate(&line, &p, Some(Point::new(101.0, 0.0)), None).iter().map(|s| s.pos()).collect();
+        assert!(back.first().unwrap().distance(Point::new(100.0, 0.0)) < 1e-6, "starts at the far end");
+        let rev: Vec<Point> = pts.iter().rev().copied().collect();
+        assert_eq!(back, rev);
+        // Without an end width every motif is the same; absurd ones change nothing.
+        let even = RunParams { width_end: None, ..p.clone() };
+        for w in [f64::NAN, -1.0, 0.0] {
+            let odd = RunParams { width_end: Some(w), ..p.clone() };
+            assert_eq!(generate(&line, &odd, None, None), generate(&line, &even, None, None), "{w}");
+        }
     }
 
     #[test]

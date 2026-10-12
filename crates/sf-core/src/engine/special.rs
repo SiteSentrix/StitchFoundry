@@ -1,8 +1,9 @@
-//! Special fills: contour, spiral, radial and cross stitch.
+//! Special fills: contour, spiral, radial, cross stitch, meander and motif fills.
 
 use super::out::Out;
 use super::run::CORNER_ANGLE;
 use crate::geom::{Affine, Point, Polygon, poly, polyline};
+use crate::model::FillParams;
 
 /// Rings of the polygon offset inwards by `spacing/2 + k·spacing`, grouped by level
 /// (outermost first).
@@ -210,6 +211,92 @@ pub(crate) fn cross(polygon: &Polygon, cell: f64, angle: f64, out: &mut Out, tri
     }
 }
 
+/// Most rows a motif fill sews (a larger shape gets rows further apart).
+const MAX_MOTIF_ROWS: f64 = 4000.0;
+/// Most motifs on one row.
+const MAX_ROW_MOTIFS: f64 = 20_000.0;
+
+/// Motif fill: rows `spacing` apart across the shape (turned by `angle`), each a motif run of
+/// motifs `motif_size` wide and long, kept half a motif inside the outline and lined up from row
+/// to row, each row shifted by the row offset (a fraction of a motif). Rows are sewn back and
+/// forth; parts of a row are joined by travel or trims.
+pub(crate) fn motif_fill(polygon: &Polygon, params: &FillParams, angle: f64, out: &mut Out, trim: f64) {
+    let size = if params.motif_size.is_finite() { params.motif_size.clamp(1.0, 50.0) } else { 4.0 };
+    let step = params.stitch_length.max(0.5);
+    let offset = if params.offset.is_finite() { params.offset } else { 0.0 };
+    let (fwd, inv) = (Affine::rotate(angle.to_radians()), Affine::rotate(-angle.to_radians()));
+    let mut p = polygon.clone();
+    p.transform(&fwd);
+    // The motif centred across its row, and rows far enough inside for it to stay in.
+    let raw = super::run::motif_shape(params.motif);
+    let (lo, hi) = raw.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &(_, c)| (lo.min(c), hi.max(c)));
+    let mid = (lo + hi) * 0.5;
+    let shape: Vec<(f64, f64)> = raw.iter().map(|&(a, c)| (a, c - mid)).collect();
+    let inner = poly::offset(std::slice::from_ref(&p), -size * ((hi - lo) * 0.5).max(0.05));
+    let bb = p.bbox();
+    let motifs = bb.width() / size;
+    if inner.is_empty() || bb.is_empty() || motifs.is_nan() || motifs >= MAX_ROW_MOTIFS {
+        return;
+    }
+    let spacing = params.spacing.max(0.5).max(bb.height() / MAX_MOTIF_ROWS);
+    let rows = (bb.height() / spacing).floor() as usize + 1;
+    let start = bb.min.y + (bb.height() - (rows - 1) as f64 * spacing) * 0.5;
+    for r in 0..rows {
+        let y = start + r as f64 * spacing;
+        let mut xs: Vec<f64> = Vec::new();
+        for ring in inner.iter().flat_map(|q| q.rings()) {
+            for (a, b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+                if (a.y <= y && b.y > y) || (b.y <= y && a.y > y) {
+                    xs.push(a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x));
+                }
+            }
+        }
+        xs.sort_by(f64::total_cmp);
+        let mut spans: Vec<(f64, f64)> = xs.chunks_exact(2).filter_map(|w| (w[1] - w[0] >= size).then_some((w[0], w[1]))).collect();
+        let back = r % 2 == 1;
+        if back {
+            spans.reverse();
+        }
+        let shift = (r as f64 * offset).rem_euclid(1.0) * size;
+        for (xa, xb) in spans {
+            let mut row = motif_row((xa, xb), y, size, shift, &shape, step);
+            if back {
+                row.reverse();
+            }
+            let row: Vec<Point> = row.into_iter().map(|q| inv.apply(q)).collect();
+            if let Some(&first) = row.first() {
+                out.connect(first, trim, 2.5);
+                out.stitches(row);
+            }
+        }
+    }
+}
+
+/// One row of a motif fill from `xa` to `xb` at height `y`: motifs `size` long on a grid from
+/// `shift`, with a straight run before the first whole motif and after the last; no stitch
+/// longer than `step`.
+fn motif_row((xa, xb): (f64, f64), y: f64, size: f64, shift: f64, shape: &[(f64, f64)], step: f64) -> Vec<Point> {
+    let (k0, k1) = (((xa - shift) / size).ceil(), ((xb - shift) / size).floor() - 1.0);
+    let mut pts = vec![Point::new(xa, y)];
+    if k1 >= k0 {
+        for k in (k0 as i64)..=(k1 as i64) {
+            let x0 = shift + k as f64 * size;
+            pts.extend(shape.iter().map(|&(a, c)| Point::new(x0 + a * size, y - c * size)));
+        }
+    }
+    pts.push(Point::new(xb, y));
+    let mut out: Vec<Point> = Vec::with_capacity(pts.len() * 2);
+    for q in polyline::dedup(&pts, 1e-6) {
+        if let Some(&last) = out.last() {
+            let parts = ((last.distance(q) / step).ceil() as usize).clamp(1, 10_000);
+            out.extend((1..=parts).map(|j| last.lerp(q, j as f64 / parts as f64)));
+        } else {
+            out.push(q);
+        }
+    }
+    out
+}
+
 /// Deterministic xorshift generator (no external RNG, same result everywhere).
 pub(crate) struct Rng(u64);
 
@@ -385,6 +472,31 @@ mod tests {
 
     fn square(s: f64) -> Polygon {
         Polygon::from_ring(vec![Point::new(0.0, 0.0), Point::new(s, 0.0), Point::new(s, s), Point::new(0.0, s)])
+    }
+
+    #[test]
+    fn motif_fills_lay_rows_of_motifs_inside_the_shape() {
+        use crate::model::{FillKind, Motif};
+        let poly = Polygon::from_ring(vec![Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(40.0, 30.0), Point::new(0.0, 30.0)]);
+        for m in Motif::ALL {
+            for angle in [0.0, 30.0] {
+                let params = FillParams { kind: FillKind::Motif, motif: m, motif_size: 4.0, spacing: 5.0, stitch_length: 2.0, ..Default::default() };
+                let mut out = Out::new();
+                motif_fill(&poly, &params, angle, &mut out, 1e9);
+                let pts: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+                assert!(pts.len() > 150, "{m:?} at {angle}°: {}", pts.len());
+                assert!(pts.iter().all(|p| poly.contains(*p) || poly.distance_to_boundary(*p) < 0.05), "{m:?} at {angle}° leaves the shape");
+                let longest = pts.windows(2).map(|w| w[0].distance(w[1])).fold(0.0, f64::max);
+                assert!(longest <= 2.5 + 1e-6, "{m:?} at {angle}°: {longest}");
+            }
+        }
+        // Nothing fits, or absurd values: nothing sewn, no panic.
+        for (size, spacing) in [(50.0, 5.0), (f64::NAN, f64::NAN), (1e308, -1.0), (4.0, 1e-308)] {
+            let params = FillParams { kind: FillKind::Motif, motif_size: size, spacing, ..Default::default() };
+            let mut out = Out::new();
+            motif_fill(&square(10.0), &params, 0.0, &mut out, 1e9);
+            assert!(out.finish().iter().all(|s| s.pos().is_finite()));
+        }
     }
 
     #[test]

@@ -4528,3 +4528,13 @@ machine	Stop	Arresto
 	Side 2	Lato 2
 	Jag depth	Profondità della frastagliatura
 	Trapunto (travel along the outline)	Trapunto (spostamenti lungo il contorno)
+
+# Embroidery (StitchFoundry): motifs
+	Place Motif	Inserisci motivo
+	Leaf	Foglia
+	Loop	Asola
+	Motif Fill	Riempimento a motivi
+	Motif size	Dimensione motivo
+	Graded	Graduato
+	Width at end	Larghezza alla fine
+	Row spacing	Spaziatura delle file
