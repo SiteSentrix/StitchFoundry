@@ -946,6 +946,61 @@ fn the_automatic_knife_cuts_shapes_into_pieces_that_turn_their_own_way() {
 }
 
 #[test]
+fn fills_sew_their_rows_along_flow_lines() {
+    let mut s = session();
+    let a = rect(&mut s, 50.0, 50.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let straight = needles(&s, a);
+    // two waves above and below the fill: its rows flow from one to the other
+    let top = NodeId(s.execute("path.create", &json!({"d": "M 30 40 C 100 0 200 80 270 40"})).unwrap()["id"].as_u64().unwrap());
+    let bottom = NodeId(s.execute("path.create", &json!({"d": "M 30 210 C 100 170 200 250 270 210"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, top.0, bottom.0]})).unwrap();
+    let r = s.execute("embroidery.fillAlongLines", &json!({})).unwrap();
+    assert_eq!((r["ids"].clone(), r["lines"].clone()), (json!([a.0]), json!(2)));
+    let st = s.doc().unwrap();
+    assert!(st.doc.node(top).is_none() && st.doc.node(bottom).is_none(), "the lines are used up");
+    assert_eq!(emb(&s, a).flow.len(), 2);
+    let flowing = needles(&s, a);
+    assert!(flowing.len() > 300 && flowing != straight);
+    // the rows bend: far fewer stitches run the one way the straight rows all do
+    let angles = |pts: &[sf_core::Point]| -> Vec<f64> {
+        pts.windows(2)
+            .filter(|w| w[0].distance(w[1]) > 2.0)
+            .map(|w| (w[1].y - w[0].y).atan2(w[1].x - w[0].x).to_degrees().rem_euclid(180.0))
+            .collect()
+    };
+    let (bent, flat) = (angles(&flowing), angles(&straight));
+    let near = |a: f64, d: f64| {
+        let x = (a - d).rem_euclid(180.0);
+        x.min(180.0 - x) < 2.0
+    };
+    let mode = (0..180).map(f64::from).max_by_key(|d| flat.iter().filter(|a| near(**a, *d)).count()).unwrap();
+    let share = |v: &[f64]| v.iter().filter(|a| near(**a, mode)).count() as f64 / v.len().max(1) as f64;
+    assert!(share(&bent) < share(&flat) * 0.5, "{} {} at {mode}°", share(&bent), share(&flat));
+    // they move with the fill
+    let before = emb(&s, a).flow[0][0];
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert!((emb(&s, a).flow[0][0].x - before.x - 10.0).abs() < 1e-6);
+    // cleared, the rows run straight again
+    s.execute("embroidery.clearFlowLines", &json!({})).unwrap();
+    assert!(emb(&s, a).flow.is_empty());
+    assert!(s.execute("embroidery.clearFlowLines", &json!({})).is_err());
+    // set by an agent; one line, or none
+    s.execute("embroidery.setFlowLines", &json!({"id": a.0, "lines": [[[40, 120], [150, 90], [280, 120]]]})).unwrap();
+    assert_eq!(emb(&s, a).flow.len(), 1);
+    assert!(needles(&s, a).len() > 300);
+    for bad in [json!([[[0, 0]]]), json!([[[0, 0], [1, 1]], [[0, 0], [1, 1]], [[0, 0], [1, 1]]]), json!([[[0, 0], ["x", 1]]]), json!("x")] {
+        assert!(s.execute("embroidery.setFlowLines", &json!({"id": a.0, "lines": bad})).is_err(), "{bad}");
+    }
+    s.execute("embroidery.setFlowLines", &json!({"id": a.0, "lines": []})).unwrap();
+    assert!(emb(&s, a).flow.is_empty());
+    // nothing to follow, or nothing to fill
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert!(s.execute("embroidery.fillAlongLines", &json!({})).is_err());
+}
+
+#[test]
 fn auto_sequence_groups_colours_and_keeps_overlaps_in_order() {
     let mut s = session();
     let stitched = |s: &mut Session, x: f64, y: f64, color: &str| {

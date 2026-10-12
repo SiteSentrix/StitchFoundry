@@ -4600,3 +4600,7 @@ machine	Stop	Остановка
 	3D effect	3D-эффект
 	Globe out	Сфера наружу
 	Globe in	Сфера внутрь
+	Fill Along Lines	Заливка вдоль линий
+	Clear Flow Lines	Очистить линии потока
+	Rows follow lines:	Ряды следуют линиям:
+	Set Flow Lines	Задать линии потока

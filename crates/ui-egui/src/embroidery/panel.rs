@@ -936,6 +936,17 @@ fn texture_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, f: &FillP
             }
         });
     }
+    // rows following flow lines (a Florentine or liquid effect)
+    if let Target::Selection(id) = target
+        && !e.flow.is_empty()
+    {
+        ui.horizontal(|ui| {
+            ui.label(format!("{} {}", tl!("Rows follow lines:"), e.flow.len()));
+            if button(ui, tl!("Clear Flow Lines")).clicked() {
+                app.run("embroidery.clearFlowLines", json!({ "ids": [id] })).ok();
+            }
+        });
+    }
 }
 
 /// Stitch direction: automatic, or inclination lines the user can edit.

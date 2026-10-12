@@ -96,6 +96,8 @@ fn embroidery_menu() -> Vec<Item> {
         c("Clear Inclination Lines", "embroidery.clearGuides"),
         c("Carve Split Lines", "embroidery.carveSplits"),
         c("Clear Split Lines", "embroidery.clearSplits"),
+        c("Fill Along Lines", "embroidery.fillAlongLines"),
+        c("Clear Flow Lines", "embroidery.clearFlowLines"),
         sub(
             "Place Motif",
             ["Wave", "Scallop", "Diamond", "Cross", "Feather", "Heart", "Star", "Leaf", "Loop", "Zigzag", "E-stitch"]

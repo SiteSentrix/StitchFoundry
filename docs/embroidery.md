@@ -268,6 +268,16 @@ the fill: an embossed texture without another thread.
 - Textures and split lines change only straight tatami rows: satin fills, turning fills (two
   inclination lines or more) and underlay ignore them, and a textured tatami shape doesn't turn
   along long thin shapes on its own.
+- **Flow lines** (Florentine and liquid effects): draw one or two lines across or beside a
+  tatami fill, select them with it and choose **Embroidery › Fill Along Lines**. With one line,
+  every row is a copy of it moved across the fill, so the stitches follow its curve; with two,
+  the rows change shape evenly from the first line to the second, so they can fan out, narrow
+  or swing round. Draw the two the same way round and keep them clear of each other; rows
+  crowd where the lines come together. The lines carry on straight past their ends, and a
+  pair that would stretch the shape out of all proportion leaves the rows straight. Textures
+  and split lines follow the rows; underlay stays straight. Flow lines show dashed on the
+  selected fill, move with it, and take precedence over inclination lines;
+  **Embroidery › Clear Flow Lines** (or the button in the panel) gives straight rows back.
 
 ## The digitizing widget and brush
 
@@ -545,6 +555,7 @@ tool list for all parameters):
 | `embroidery.autoDirection` / `addGuide` / `moveGuide` / `removeGuide` / `clearGuides` / `setBeads` | stitch direction and start/stop |
 | `embroidery.setParams {params: {texture: {pattern, size?, angle?} \| null}}` | a tatami fill's texture (programmed splits): `diamonds`, `waves`, `herringbone`, `bricks`, `circles`, `scales` |
 | `embroidery.carveSplits {ids?, repeat?, keep?}`, `embroidery.setSplits {id, splits}`, `embroidery.clearSplits {ids?}` | split lines in tatami fills: carved from other art (a stamp's outline, lines, lines repeated across the fill), set from points, cleared |
+| `embroidery.fillAlongLines {ids?, keep?}`, `embroidery.setFlowLines {id, lines}`, `embroidery.clearFlowLines {ids?}` | flow lines in tatami fills: rows copying one line or flowing from one to another, taken from other art, set from points, cleared |
 | `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif (built-in or the design's) as a path sewn in a single run |
 | `embroidery.motif.make {name?, ids?}`, `embroidery.motif.apply {name, ids?}`, `embroidery.motif.list`, `embroidery.motif.delete {name}` | the design's own motifs: made from the selected path, sewn by the selected runs and fills (paths not stitched yet become motif runs or fills), listed with how many objects sew each, removed |
 | `embroidery.addLaydown {ids?, margin?, spacing?, angle?}` | an open fill sewn first under the selected shapes and type (pile fabrics) |

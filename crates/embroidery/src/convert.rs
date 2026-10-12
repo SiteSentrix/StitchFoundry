@@ -175,6 +175,10 @@ fn splits_mm(e: &Embroidery) -> Vec<Vec<Point>> {
     e.splits.iter().map(|line| line.iter().map(|&p| p * MM_PER_PT).collect()).collect()
 }
 
+fn flow_mm(e: &Embroidery) -> Vec<Vec<Point>> {
+    e.flow.iter().map(|line| line.iter().map(|&p| p * MM_PER_PT).collect()).collect()
+}
+
 /// Whether a closed outline reads as a column (long and thin), so satin should
 /// turn along it rather than run straight across.
 fn column_like(ring: &[Point], guides: &[Guide]) -> bool {
@@ -311,7 +315,9 @@ fn fill_objects(region: Polygon, params: FillParams, e: &Embroidery, out: &mut V
 fn fill_object(region: Polygon, mut params: FillParams, e: &Embroidery) -> ObjectKind {
     let mut guides = guides_mm(e);
     let splits = splits_mm(e);
-    if guides.is_empty() && e.auto_direction {
+    let flow = if params.kind == FillKind::Tatami { flow_mm(e) } else { Vec::new() };
+    // flow lines lead the rows: nothing to choose
+    if guides.is_empty() && e.auto_direction && flow.is_empty() {
         let satin = params.kind == FillKind::Satin;
         // Textures and split lines show on straight rows: tatami with them doesn't turn.
         let textured = params.texture.is_some() || !splits.is_empty();
@@ -325,7 +331,7 @@ fn fill_object(region: Polygon, mut params: FillParams, e: &Embroidery) -> Objec
             _ => {}
         }
     }
-    ObjectKind::Fill(FillObject { shape: Shape::from_polygon(&region), params, guides, splits })
+    ObjectKind::Fill(FillObject { shape: Shape::from_polygon(&region), params, guides, splits, flow })
 }
 
 /// A satin column between two rails: rungs from the inclination lines when there

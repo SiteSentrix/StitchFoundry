@@ -446,6 +446,9 @@ impl ObjectKind {
                 for g in &mut f.guides {
                     g.transform(m);
                 }
+                for p in f.splits.iter_mut().chain(f.flow.iter_mut()).flatten() {
+                    *p = m.apply(*p);
+                }
             }
             ObjectKind::Applique(a) => a.shape.transform(m),
             ObjectKind::Lettering(l) => {
@@ -1283,11 +1286,16 @@ pub struct FillObject {
     /// lines show in the fill (drawn splits, carved stamps, flexi splits).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub splits: Vec<Vec<Point>>,
+    /// Flow lines (tatami): the rows follow them instead of running straight; one line, rows
+    /// copying it (a Florentine effect); two, rows changing shape from one to the other (a
+    /// liquid effect).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flow: Vec<Vec<Point>>,
 }
 
 impl FillObject {
     pub fn new(shape: Shape, params: FillParams) -> Self {
-        FillObject { shape, params, guides: Vec::new(), splits: Vec::new() }
+        FillObject { shape, params, guides: Vec::new(), splits: Vec::new(), flow: Vec::new() }
     }
 }
 

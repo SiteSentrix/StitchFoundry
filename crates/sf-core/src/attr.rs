@@ -176,6 +176,10 @@ pub struct Embroidery {
     /// splits).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub splits: Vec<Vec<Point>>,
+    /// Flow lines (host coordinates; tatami fills): the rows follow them, copying one line or
+    /// changing shape from the first line to the second.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flow: Vec<Vec<Point>>,
     /// Pick the stitch direction automatically while there are no guides.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub auto_direction: bool,
@@ -235,6 +239,7 @@ impl Embroidery {
             profile: WidthProfile::Constant,
             guides: Vec::new(),
             splits: Vec::new(),
+            flow: Vec::new(),
             auto_direction: true,
             entry: None,
             exit: None,
@@ -258,6 +263,7 @@ impl Embroidery {
         e.thread = None;
         e.guides.clear();
         e.splits.clear();
+        e.flow.clear();
         e.entry = None;
         e.exit = None;
         e.frozen = None;
@@ -280,6 +286,7 @@ impl Embroidery {
         e.thread = self.thread.take();
         e.guides = std::mem::take(&mut self.guides);
         e.splits = std::mem::take(&mut self.splits);
+        e.flow = std::mem::take(&mut self.flow);
         e.entry = self.entry;
         e.exit = self.exit;
         e.frozen = self.frozen.take();
@@ -329,7 +336,7 @@ impl Embroidery {
         for g in &mut self.guides {
             g.transform(m);
         }
-        for p in self.splits.iter_mut().flatten() {
+        for p in self.splits.iter_mut().chain(self.flow.iter_mut()).flatten() {
             *p = m.apply(*p);
         }
         for s in self.frozen.iter_mut().flatten() {
