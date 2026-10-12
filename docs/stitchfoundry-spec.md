@@ -459,14 +459,14 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | LT-10 | Letter sequencing (left-right, centre-out) and join methods (closest, baseline) | Missing | Option on lettering objects | 3 |
 | LT-11 | Auto kerning and letter spacing | Done | Font kerning, tracking | – |
 | LT-12 | Lettering underlay | Done | Auto underlay | – |
-| LT-13 | Recommended minimum/maximum height per font shown while typing | Missing | Per-recipe limits; warning in panel (2025 feature) | 3 |
+| LT-13 | Recommended minimum/maximum height per font shown while typing | Partial | Embroidery fonts give their sizes (`embroidery.fonts`: minSize, maxSize) and lettering outside them comes with a warning; not yet shown while typing | 3 |
 | LT-14 | Small-text optimisation (short stitches, lighter pull compensation, special underlay) | Partial | Thickness-based; add small-text profile | 3 |
 | TM-01 | Team names: many names under one design, CSV import/export | Missing | §7.7, built on VectorCraft variables | 3 |
 | TM-02 | Team-name templates; output per name (files, multi-head) | Missing | §7.7 | 3 |
 | TM-03 | Monograms: templates, letter styles, ornaments, borders | Missing | §7.7; our own templates | 3 |
 | CL-01 | Convert TrueType/OpenType fonts | Done | Live from glyph outlines | – |
 | CL-02 | User-refined letters (save edited glyphs) | Missing | Recipe overrides per glyph | 3 |
-| CL-03 | Create custom embroidery fonts (from art or fonts) | Missing | §7.8 font recipes + editor | 3 |
+| CL-03 | Create custom embroidery fonts (from art or fonts) | Partial | Embroidery fonts in Ink/Stitch's format (font folders users have: glyphs digitized as art, advances, kerning, leading) set lettering (`embroidery.lettering`); making fonts in the app (§7.8 recipes + editor) still to come | 3 |
 | CL-04 | Merge fonts | Missing | Recipe sets | 3 |
 | KDC-01 | Keyboard design collections (map designs to keys, type with them) | Missing | Design-per-character sets usable as fonts (2025 feature) | 3 |
 | KI-01 | Lettering kiosk (simplified mode for counter staff) | Missing | Locked-down "kiosk" workspace with templates | 6 |
@@ -553,7 +553,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 
 **Tally:** 232 rows (grouping the roughly 300 features the reference lists): 143 done,
-28 partial, 55 missing, 6 out of scope (counted 2026-10-12, after phase 2). Most of what is missing is breadth (more stitch
+30 partial, 53 missing, 6 out of scope (counted 2026-10-12, after phase 2). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

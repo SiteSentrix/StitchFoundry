@@ -4652,3 +4652,6 @@ machine	Stop	停止
 	Keyhole	鳩目
 	Count	個数
 	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	形全体の列：上ほど密になります。点をドラッグ、ダブルクリックで追加、右クリックで削除します。
+	Embroidery Lettering	刺繍文字
+	Load Embroidery Font	刺繍フォントを読み込む
+	Embroidery Fonts	刺繍フォント

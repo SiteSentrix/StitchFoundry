@@ -580,6 +580,20 @@ with a stroke sews the fill only. Commands (trims, stops) and the newer stitch t
 (ripple, tartan, gradient fills…) come in as their nearest StitchFoundry stitching. The mapping
 was written from Ink/Stitch's public documentation, not its code.
 
+## Embroidery fonts
+
+Lettering can use embroidery fonts in Ink/Stitch's font format: a folder with `font.json` and
+its glyphs' art (`ltr.svg`, or SVGs in an `ltr` folder), each glyph a layer named
+`GlyphLayer-<glyph>` digitized with Ink/Stitch settings. StitchFoundry ships none: load font
+folders you have (`embroidery.font.load {path}`; Ink/Stitch's own fonts are free to download
+from its font library, each under its own licence, most of them the SIL Open Font License), and
+set text with them (`embroidery.lettering {text, font, size, at}`): each glyph's art sewn the way
+its settings say, placed with the font's advances and kerning, lines its leading apart, ligatures
+first, in the font's letter case, characters it lacks shown as its default glyph. `size` is the
+capitals' height in mm; outside the sizes the font says it sews well at, the lettering comes with
+a warning. Fonts stay loaded until StitchFoundry quits; the lettering itself is ordinary stitched
+art, a group per glyph, saved with the design.
+
 ## Commands
 
 Every feature is an engine command. A few of the main ones (see `document.commands` or the MCP
