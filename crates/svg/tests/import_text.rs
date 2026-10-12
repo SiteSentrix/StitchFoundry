@@ -518,3 +518,68 @@ fn gradients_on_scaled_text_stay_in_place() {
     let (start, end) = (t.xf * geom.start, t.xf * geom.end);
     assert!(start.distance(Point::new(40.0, 0.0)) < 1e-6 && end.distance(Point::new(240.0, 0.0)) < 1e-6, "{start:?} {end:?}");
 }
+
+/// The start of a type-on-a-path object's path and a point a little way along it, in document
+/// space.
+fn path_start(t: &TextObject) -> (Point, Point) {
+    use vectorcraft_geom::kurbo::{ParamCurve, PathEl};
+    let TextKind::OnPath { path, .. } = &t.kind else { panic!("{:?}", t.kind) };
+    let mut bp = path.to_bezpath();
+    bp.apply_affine(t.xf);
+    let PathEl::MoveTo(p0) = bp.elements()[0] else { panic!("{bp:?}") };
+    let next = bp.segments().next().unwrap().eval(0.05);
+    (p0, next)
+}
+
+#[test]
+fn text_path_follows_basic_shapes_as_their_equivalent_paths() {
+    let (d, w) = import_with_report(&svg(r##"<circle id="c" cx="150" cy="150" r="100"/>
+        <ellipse id="e" cx="150" cy="150" rx="80" ry="40" transform="translate(10 0)"/>
+        <rect id="r" x="20" y="30" width="100" height="60" rx="10"/>
+        <rect id="s" x="20" y="30" width="100" height="60"/>
+        <line id="l" x1="10" y1="200" x2="210" y2="200"/>
+        <polyline id="pl" points="10,10 110,10 110,60"/>
+        <polygon id="pg" points="10 10, 60 10, 35 50"/>
+        <text font-size="10"><textPath xlink:href="#c">TEXT ON A CIRCLE</textPath></text>
+        <text font-size="10"><textPath href="#e">Ellipse</textPath></text>
+        <text font-size="10"><textPath href="#r">Rounded</textPath></text>
+        <text font-size="10"><textPath href="#s">Square</textPath></text>
+        <text font-size="10"><textPath href="#l">Line</textPath></text>
+        <text font-size="10"><textPath href="#pl">Polyline</textPath></text>
+        <text font-size="10"><textPath href="#pg">Polygon</textPath></text>"##))
+    .unwrap();
+    assert!(!w.iter().any(|w| w.contains("textPath")), "{w:?}");
+    let t = texts(&d);
+    assert_eq!(t.len(), 7);
+    assert!(t.iter().all(|t| matches!(t.kind, TextKind::OnPath { .. })), "{:?}", t.iter().map(|t| &t.kind).collect::<Vec<_>>());
+    let near = |a: Point, b: Point| (a - b).hypot() < 1e-6;
+    // Circle: starts at 3 o'clock and runs clockwise (down first, y pointing down), around the circle.
+    let (p0, next) = path_start(t[0]);
+    assert!(near(p0, Point::new(250.0, 150.0)) && next.y > p0.y && next.x < p0.x, "{p0:?} {next:?}");
+    let TextKind::OnPath { path, .. } = &t[0].kind else { panic!("not on a path") };
+    let b = t[0].xf.transform_rect_bbox(path.bounds().unwrap());
+    assert!(close(b.x0, 50.0, 1e-6) && close(b.y0, 50.0, 1e-6) && close(b.x1, 250.0, 1e-6) && close(b.y1, 250.0, 1e-6), "{b:?}");
+    assert!(path.is_closed());
+    // Ellipse, with the shape's own transform.
+    let (p0, next) = path_start(t[1]);
+    assert!(near(p0, Point::new(240.0, 150.0)) && next.y > p0.y, "{p0:?} {next:?}");
+    // Rounded rect: after the top-left corner, along the top edge to the right.
+    let (p0, next) = path_start(t[2]);
+    assert!(near(p0, Point::new(30.0, 30.0)) && next.x > p0.x && close(next.y, 30.0, 1e-9), "{p0:?} {next:?}");
+    let (p0, next) = path_start(t[3]);
+    assert!(near(p0, Point::new(20.0, 30.0)) && next.x > p0.x, "{p0:?} {next:?}");
+    // Line, polyline and polygon follow their points.
+    assert!(near(path_start(t[4]).0, Point::new(10.0, 200.0)));
+    assert!(near(path_start(t[5]).0, Point::new(10.0, 10.0)));
+    let TextKind::OnPath { path, .. } = &t[6].kind else { panic!("not on a path") };
+    assert!(path.is_closed() && near(path_start(t[6]).0, Point::new(10.0, 10.0)));
+    assert_eq!(t[0].plain_text(), "TEXT ON A CIRCLE");
+}
+
+#[test]
+fn text_path_to_an_empty_shape_still_falls_back_to_point_type() {
+    let (d, w) =
+        import_with_report(&svg(r##"<circle id="c" cx="5" cy="5" r="0"/><text x="5" y="10"><textPath href="#c">Zero</textPath></text>"##)).unwrap();
+    assert!(matches!(only_text(&d).kind, TextKind::Point));
+    assert!(w.iter().any(|w| w.contains("textPath")), "{w:?}");
+}
