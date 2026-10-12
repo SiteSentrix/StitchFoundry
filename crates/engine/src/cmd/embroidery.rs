@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Thread",
             [],
             None,
-            "{color: \"#rrggbb\" | null (use the paint colour), name?, code?, chart?, paint?: bool (default true: recolour the art to match), ids?} → {ids}",
+            "{color: \"#rrggbb\" | null (use the paint colour), name?, code?, chart?, paint?: bool (default true: recolour the art to match), ids?} → {ids}; art not stitched yet becomes a fill (shapes) or a run (open lines)",
             has_selection,
             set_thread
         ),
@@ -475,21 +475,32 @@ fn set_thread(s: &mut Session, p: &Value) -> Result<Value> {
             chart: str_param(p, "chart").unwrap_or_default().to_string(),
         }
     });
-    let fill = s.doc()?.doc.embroidery.as_deref().and_then(|c| c.current_for("fill").cloned()).unwrap_or_else(Embroidery::fill);
+    let new = new_stitching(&s.doc()?.doc);
     s.edit("Set Thread", |d, _| {
         for id in &ids {
-            put_thread(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, &fill, thread.clone(), color.filter(|_| repaint));
+            put_thread(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, &new, thread.clone(), color.filter(|_| repaint));
         }
         Ok(())
     })?;
     Ok(ids_json(&ids))
 }
 
-/// Gives a node its thread (unstitched art becomes `fill`), and paints its art `repaint`:
-/// the stroke of lines, runs and satin borders, else the fill.
-fn put_thread(n: &mut vectorcraft_doc::Node, fill: &Embroidery, thread: Option<Thread>, repaint: Option<Color>) {
+/// What unstitched art becomes when it gets a thread: shapes a fill, open lines a run (each with
+/// the properties made current for it).
+fn new_stitching(d: &Document) -> [Embroidery; 2] {
+    let cfg = d.embroidery.as_deref();
+    [
+        cfg.and_then(|c| c.current_for("fill").cloned()).unwrap_or_else(Embroidery::fill),
+        cfg.and_then(|c| c.current_for("run").cloned()).unwrap_or_else(Embroidery::run),
+    ]
+}
+
+/// Gives a node its thread (unstitched art becomes `new`: `[fill, run]` for shapes and open
+/// lines), and paints its art `repaint`: the stroke of lines, runs and satin borders, else the
+/// fill.
+fn put_thread(n: &mut vectorcraft_doc::Node, new: &[Embroidery; 2], thread: Option<Thread>, repaint: Option<Color>) {
     let (lines, border) = (is_open(n), is_line_art(n));
-    let e = n.embroidery.get_or_insert_with(|| Box::new(fill.clone()));
+    let e = n.embroidery.get_or_insert_with(|| Box::new(if lines { new[1].clone() } else { new[0].clone() }));
     e.thread = thread;
     let stroke_paint = lines || matches!(e.stitch, StitchType::Run(_) | StitchType::Manual) || (border && matches!(e.stitch, StitchType::Satin(_)));
     if let Some(c) = repaint {
@@ -528,11 +539,11 @@ fn match_threads(s: &mut Session, p: &Value) -> Result<Value> {
     if plans.is_empty() {
         return Err(bad(CMD, "nothing stitched to match"));
     }
-    let fill = cfg.current_for("fill").cloned().unwrap_or_else(Embroidery::fill);
+    let new = new_stitching(&s.doc()?.doc);
     s.edit("Match Threads to Chart", |d, _| {
         for (id, t) in &plans {
             let c = Color::rgb8(t.color.r, t.color.g, t.color.b);
-            put_thread(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, &fill, Some(t.clone()), repaint.then_some(c));
+            put_thread(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, &new, Some(t.clone()), repaint.then_some(c));
         }
         Ok(())
     })?;

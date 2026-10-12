@@ -1510,6 +1510,18 @@ fn split_lines_set_by_an_agent_are_checked() {
 }
 
 #[test]
+fn a_thread_makes_lines_runs_and_shapes_fills() {
+    use sf_core::attr::StitchType;
+    let mut s = session();
+    let line = NodeId(s.execute("path.create", &json!({"d": "M 20 100 C 100 50 200 150 300 100"})).unwrap()["id"].as_u64().unwrap());
+    let a = rect(&mut s, 10.0, 150.0, 200.0, 150.0);
+    s.execute("embroidery.setThread", &json!({"ids": [line.0, a.0], "color": "#b03a2a"})).unwrap();
+    assert!(matches!(emb(&s, line).stitch, StitchType::Run(_)), "{:?}", emb(&s, line).stitch);
+    assert!(matches!(emb(&s, a).stitch, StitchType::Fill(_)), "{:?}", emb(&s, a).stitch);
+    assert!(!needles(&s, line).is_empty());
+}
+
+#[test]
 fn a_motif_is_placed_as_a_stitched_run() {
     const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
     let mut s = session();
