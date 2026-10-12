@@ -1112,6 +1112,41 @@ impl CrossStyle {
     }
 }
 
+/// A 3D motif fill: its motifs sculpted to look curved (a dome or a bowl) or to recede.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MotifWarp {
+    pub kind: WarpKind,
+    /// How strong, 0 to 0.8: for a globe, how much the motifs shrink toward the edge (a dome)
+    /// or the middle (a bowl); for perspective, how much smaller they are on the far side.
+    pub amount: f64,
+    /// Perspective: the way the fill recedes, in degrees counter-clockwise on screen (90: up).
+    pub angle: f64,
+}
+
+impl Default for MotifWarp {
+    fn default() -> Self {
+        MotifWarp { kind: WarpKind::GlobeOut, amount: 0.5, angle: 90.0 }
+    }
+}
+
+/// How a 3D motif fill is sculpted.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WarpKind {
+    /// A dome (convex): motifs largest in the middle, smaller and closer together toward the
+    /// edge.
+    #[default]
+    GlobeOut,
+    /// A bowl (concave): motifs smallest in the middle, growing toward the edge.
+    GlobeIn,
+    /// Receding into the distance: motifs smaller and rows closer together toward the far side.
+    Perspective,
+}
+
+impl WarpKind {
+    pub const ALL: [WarpKind; 3] = [WarpKind::GlobeOut, WarpKind::GlobeIn, WarpKind::Perspective];
+}
+
 /// Programmed splits of a tatami fill (a texture).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -1180,6 +1215,9 @@ pub struct FillParams {
     /// fill).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub motif_pair: Option<Motif>,
+    /// Motif fills: sculpted to look three-dimensional (a 3D motif fill).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warp: Option<MotifWarp>,
     /// Contour fills: how many rings in from the outline (an offset fill); 0 = all the way in.
     #[serde(skip_serializing_if = "is_zero")]
     pub rings: u32,
@@ -1217,6 +1255,7 @@ impl Default for FillParams {
             custom_motif: None,
             cross: CrossStyle::Full,
             motif_pair: None,
+            warp: None,
             rings: 0,
             spacing_profile: Vec::new(),
         }

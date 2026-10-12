@@ -1889,6 +1889,30 @@ fn motif_fills_and_graded_motif_runs_are_stitch_parameters() {
 }
 
 #[test]
+fn three_d_motif_fills_are_a_stitch_parameter() {
+    use sf_core::model::WarpKind;
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "motiffill"})).unwrap();
+    let flat = needles(&s, a);
+    // a bowl, with the default strength
+    s.execute("embroidery.setParams", &json!({"params": {"warp": {"kind": "GlobeIn"}}})).unwrap();
+    let w = fill_params(&s, a).warp.unwrap();
+    assert_eq!((w.kind, w.amount, w.angle), (WarpKind::GlobeIn, 0.5, 90.0));
+    let bowl = needles(&s, a);
+    assert!(bowl.len() > 100 && bowl != flat);
+    // receding to the right
+    s.execute("embroidery.setParams", &json!({"params": {"warp": {"kind": "Perspective", "angle": 0}}})).unwrap();
+    let w = fill_params(&s, a).warp.unwrap();
+    assert_eq!((w.kind, w.angle), (WarpKind::Perspective, 0.0));
+    assert_ne!(needles(&s, a), bowl);
+    // flat again
+    s.execute("embroidery.setParams", &json!({"params": {"warp": null}})).unwrap();
+    assert!(fill_params(&s, a).warp.is_none());
+    assert_eq!(needles(&s, a), flat);
+}
+
+#[test]
 fn a_laydown_is_sewn_first_under_the_selected_shapes() {
     const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
     let mut s = session();

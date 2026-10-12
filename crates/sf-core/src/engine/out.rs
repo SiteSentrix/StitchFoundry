@@ -138,6 +138,23 @@ impl Out {
     }
 }
 
+/// A line moved point by point by `f` (a warp of the plane), the stitches it stretches split
+/// along the line before moving so none is longer than `step`.
+pub(crate) fn mapped(pts: &[Point], step: f64, f: impl Fn(Point) -> Point) -> Vec<Point> {
+    let mut out: Vec<Point> = Vec::with_capacity(pts.len());
+    let mut prev: Option<Point> = None;
+    for &q in pts {
+        let p = f(q);
+        if let (Some(a), Some(&last)) = (prev, out.last()) {
+            let parts = ((last.distance(p) / step).ceil() as usize).clamp(1, 64);
+            out.extend((1..parts).map(|j| f(a.lerp(q, j as f64 / parts as f64))));
+        }
+        out.push(p);
+        prev = Some(q);
+    }
+    out
+}
+
 /// Converts a list of points to stitch records.
 pub(crate) fn as_stitches(pts: impl IntoIterator<Item = Point>) -> Vec<Stitch> {
     let mut o = Out::new();

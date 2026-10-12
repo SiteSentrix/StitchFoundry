@@ -4595,3 +4595,6 @@ machine	Stop	停止
 	String stitch	ストリングステッチ
 	Chord length	弦の長さ
 	Automatic Knife	自動ナイフ
+	3D effect	3D効果
+	Globe out	球面（凸）
+	Globe in	球面（凹）

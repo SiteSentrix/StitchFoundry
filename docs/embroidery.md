@@ -95,7 +95,12 @@ proportions. Motifs, blanket prongs and their grading follow the line the way it
 whichever end sewing starts from (the closest join). A **motif fill** sews rows of motifs across a shape, half a motif inside its outline;
 the row offset shifts each row along by that fraction of a motif (0.5 for a brick layout).
 *Paired with* makes a paired motif fill: a second motif sewn in turn with the first along every
-row (`motif_pair`), each in the same place on every row.
+row (`motif_pair`), each in the same place on every row. *3D effect* sculpts a motif fill
+(`warp`): **Globe out** makes a dome, the motifs largest in the middle and smaller and closer
+together toward the edge; **Globe in** makes a bowl, the motifs smallest in the middle; and
+**Perspective** makes the fill recede, its motifs and rows smaller toward the far side, which
+*Direction* points to (90°: up). *Strength* (0 to 0.8) sets how much the motifs change; strong
+effects make small stitches where motifs shrink.
 **Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
 sewn in a single run: move, scale and reshape it like any art.
 

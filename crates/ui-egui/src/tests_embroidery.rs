@@ -118,6 +118,13 @@ fn the_panel_shows_sculpture_runs_and_cross_styles() {
         assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
     }
     app.run("shape.rectangle", json!({"x": 20, "y": 150, "width": 100, "height": 100})).unwrap();
+    // a 3D motif fill receding: its strength and direction
+    app.run("embroidery.set", json!({"type": "motiffill"})).unwrap();
+    app.run("embroidery.setParams", json!({"params": {"warp": {"kind": "Perspective"}}})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    for want in ["3D effect", "Perspective", "Strength", "Direction"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
     app.run("embroidery.set", json!({"type": "cross"})).unwrap();
     app.run("embroidery.setParams", json!({"params": {"cross": "Upright"}})).unwrap();
     let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
