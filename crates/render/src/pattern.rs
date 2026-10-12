@@ -38,7 +38,7 @@ struct TileEntry {
 
 struct PatternCache {
     /// Per ink ([`Ink`] as index), each within [`lru::PATTERN_BUDGET`], least recently used first out.
-    tiles: [FrameCache<String, TileEntry>; 3],
+    tiles: [FrameCache<String, TileEntry>; 4],
     renderer: Option<Box<Renderer>>,
     depth: u32,
 }

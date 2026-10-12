@@ -40,13 +40,16 @@ pub(crate) enum Ink {
     Cmy,
     /// The complemented K ink, as a grey.
     K,
+    /// Screen colours, with pure CMYK black as RGB black ([`RenderOptions::rich_black`]).
+    RichBlack,
 }
 
 impl Ink {
     /// The three values painted for colour `c`.
     pub(crate) fn rgb(self, c: &Color) -> [f32; 3] {
-        match self {
-            Ink::Display => c.to_rgb(),
+        match (self, *c) {
+            (Ink::RichBlack, Color::Cmyk { c, m, y, k }) if is_pure_black([c, m, y, k]) => [0.0; 3],
+            (Ink::Display | Ink::RichBlack, _) => c.to_rgb(),
             _ => self.plane(inks(c)),
         }
     }
@@ -65,7 +68,7 @@ impl Ink {
 
     fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
         match self {
-            Ink::Display => [r, g, b, a],
+            Ink::Display | Ink::RichBlack => [r, g, b, a],
             _ => {
                 let lab = lab::srgb_to_lab([r, g, b].map(|v| v as f32 / 255.0));
                 let [r, g, b] = self.plane(inks(&Color::Lab { l: lab.l, a: lab.a, b: lab.b })).map(q);
@@ -81,6 +84,11 @@ impl Ink {
 
 fn q(v: f32) -> u8 {
     (v.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+/// Black ink alone at 100%: what Appearance of Black calls pure CMYK black.
+fn is_pure_black([c, m, y, k]: [f32; 4]) -> bool {
+    c <= 0.0 && m <= 0.0 && y <= 0.0 && k >= 1.0
 }
 
 /// Whether `doc` is drawn by ink planes: a CMYK document that shows transparency, unless drawn
@@ -168,11 +176,12 @@ fn cached<T>(slot: &Cached<T>, build: impl FnOnce(&Cms) -> T) -> (Arc<T>, u64) {
 }
 
 /// The picture of a CMYK document from its ink planes (premultiplied RGBA8 drawn with
-/// [`Ink::Cmy`] and [`Ink::K`]): each pixel's inks shown through the working CMYK profile. Where
-/// only the frame's `background` shows it keeps its exact screen colour.
-pub(crate) fn compose(cmy: &[u8], k: &[u8], background: Option<[u8; 4]>) -> Vec<u8> {
+/// [`Ink::Cmy`] and [`Ink::K`]): each pixel's inks shown through the working CMYK profile (pure
+/// black as RGB black with [`RenderOptions::rich_black`]). Where only the `background` of `opts`
+/// shows it keeps its exact screen colour.
+pub(crate) fn compose(cmy: &[u8], k: &[u8], opts: &RenderOptions) -> Vec<u8> {
     let (lut, _) = cached(&DISPLAY, InkLut::build);
-    let bg = background.map(|b| (Ink::Cmy.fixed8(b), Ink::K.fixed8(b), b));
+    let bg = opts.background.map(|b| (Ink::Cmy.fixed8(b), Ink::K.fixed8(b), b));
     let mut out = Vec::with_capacity(cmy.len());
     // Runs of one colour convert once.
     let mut last: Option<([u8; 8], [u8; 4])> = None;
@@ -185,7 +194,8 @@ pub(crate) fn compose(cmy: &[u8], k: &[u8], background: Option<[u8; 4]>) -> Vec<
             _ => {
                 let un = |v: u8, a: u8| if a == 0 { 1.0 } else { (v as f32 / a as f32).min(1.0) };
                 let a = p[3];
-                let rgb = lut.apply(planes_cmyk([un(p[0], a), un(p[1], a), un(p[2], a)], un(q[0], q[3])));
+                let inks = planes_cmyk([un(p[0], a), un(p[1], a), un(p[2], a)], un(q[0], q[3]));
+                let rgb = if opts.rich_black && is_pure_black(inks) { [0.0; 3] } else { lut.apply(inks) };
                 let pm = |v: f32| (v.clamp(0.0, 1.0) * a as f32).round() as u8;
                 let v = [pm(rgb[0]), pm(rgb[1]), pm(rgb[2]), a];
                 last = Some((key, v));
@@ -245,7 +255,7 @@ pub(crate) fn cmyk_pixmap(blob: &ImageBlob, lut: &InkLut) -> Option<Pixmap> {
 /// Image pixels `pm` (cached as `key`, from `blob` when it is a document's image as it is) as
 /// painted with `ink`, cached with the images, and their key.
 pub(crate) fn ink_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, blob: Option<&ImageBlob>, touch: bool) -> (ImageKey, Arc<Pixmap>) {
-    if ink == Ink::Display {
+    if matches!(ink, Ink::Display | Ink::RichBlack) {
         return (key.clone(), pm.clone());
     }
     let (luts, generation) = cached(&SEPARATE, |cms| {

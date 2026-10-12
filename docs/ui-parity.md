@@ -167,7 +167,7 @@ Layers panel.
 | SVG Interactivity, Retype, Comments, Version History panels | missing | the last two are cloud features (out of scope) |
 | Workspaces (save, reset, switch) | done | |
 | macOS save sheet: choose the format from a menu | done | #866; `apps/vectorcraft/src/mac_save_format.rs`; current suffix selects the initial format, changing it updates the filename; native SVG save and cancel after changing to PDF checked |
-| Preferences: every option acts | partial | ~17 stored but unused (#394) |
+| Preferences: every option acts | partial | ~16 stored but unused (#394) |
 
 ## Look and feel
 
