@@ -986,3 +986,54 @@ fn stacked_layers_go_by_lightness_and_leave_ignored_white_alone() {
         assert!(b.x1 <= 20.5 || b.x0 >= 39.5, "a {} layer covers the white stripe: {b:?}", p.color[0]);
     }
 }
+
+/// The cubic pieces of a path: (from, handle, handle, to).
+fn pieces_of(p: &vectorcraft_geom::PathData) -> Vec<[Point; 4]> {
+    p.subpaths
+        .iter()
+        .flat_map(|sp| {
+            (0..sp.segment_count()).map(move |i| {
+                let c = sp.segment(i);
+                [c.p0, c.p1, c.p2, c.p3]
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn abutting_regions_share_one_curve_along_their_edge() {
+    // A disc of two halves on a field: three colours, two junctions where all three meet.
+    let color = |x: f64, y: f64| {
+        if Point::new(x, y).distance(Point::new(50.3, 49.6)) > 35.2 {
+            [255.0, 255.0, 255.0]
+        } else if x < 50.3 + 0.2 * (y - 50.0) {
+            [200.0, 40.0, 50.0]
+        } else {
+            [30.0, 90.0, 200.0]
+        }
+    };
+    let img = Raster::from_fn(100, 100, |x, y| {
+        let mut sum = [0.0f64; 3];
+        for i in 0..16 {
+            let c = color(f64::from(x) + (f64::from(i % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(i / 4) + 0.5) / 4.0);
+            for k in 0..3 {
+                sum[k] += c[k] / 16.0;
+            }
+        }
+        [sum[0].round() as u8, sum[1].round() as u8, sum[2].round() as u8, 255]
+    });
+    let res = trace(&img, &TraceParams { mode: Mode::Color, colors: 3, ..TraceParams::default() });
+    assert_eq!(res.paths.len(), 3);
+    let all: Vec<Vec<[Point; 4]>> = res.paths.iter().map(|p| pieces_of(&p.path)).collect();
+    // Every curve that is not on the image's border is another path's curve too, run the other way.
+    let inner = |c: &[Point; 4]| c.iter().all(|p| p.x > 0.5 && p.x < 99.5 && p.y > 0.5 && p.y < 99.5);
+    let mut shared = 0;
+    for (i, path) in all.iter().enumerate() {
+        for c in path.iter().filter(|c| inner(c)) {
+            let back = [c[3], c[2], c[1], c[0]];
+            assert!(all.iter().enumerate().any(|(j, other)| j != i && other.contains(&back)), "path {i} has an edge of its own: {c:?}");
+            shared += 1;
+        }
+    }
+    assert!(shared >= 12, "{shared} shared curves");
+}
