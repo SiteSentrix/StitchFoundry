@@ -168,35 +168,38 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let d = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
-    let st = s.doc()?;
-    let sel = st.selection.clone();
-    let scale_strokes = s.prefs.scale_strokes;
-    let _ = scale_strokes;
-    // Objects selected whole (with no entry in `sel.anchors`) move as objects, and their pattern
-    // tiles move with them when `patterns` (default: General › Transform Pattern Tiles) is on.
-    let whole: Vec<NodeId> = sel.objects.iter().copied().filter(|id| !sel.anchors.contains_key(id)).collect();
+    // Objects selected whole move as objects, and their pattern tiles move with them when
+    // `patterns` (default: General › Transform Pattern Tiles) is on.
+    let whole = s.doc()?.selection.whole();
     let sc = Scaling { patterns: super::object::transform_patterns(s, p, &whole)?, ..Scaling::default() };
-    s.edit("Move", |doc, _| {
+    transform_anchors(s, "Move", vectorcraft_geom::Affine::translate(d), sc)?;
+    ok()
+}
+
+/// Apply `xf` to the direct-selected anchors, their handles with them, and (with `sc`) to the
+/// objects selected whole (those with no entry in the selection's `anchors`).
+pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_geom::Affine, sc: Scaling) -> Result<()> {
+    let sel = s.doc()?.selection.clone();
+    s.edit(label, |doc, _| {
         for id in &sel.objects {
             match sel.anchors.get(id) {
                 Some(set) => {
                     let path = path_mut(doc, *id)?;
                     for &(si, ai) in set {
                         if let Some(a) = path.anchor_mut(si, ai) {
-                            a.translate(d);
+                            *a = a.transform(xf);
                         }
                     }
                 }
                 None => {
                     if let Some(n) = doc.node_mut(*id) {
-                        n.transform(vectorcraft_geom::Affine::translate(d), sc);
+                        n.transform(xf, sc);
                     }
                 }
             }
         }
         Ok(())
-    })?;
-    ok()
+    })
 }
 
 fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {

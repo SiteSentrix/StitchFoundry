@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Document, NodeId};
+use crate::{Document, NodeId, NodeKind};
 
 /// (subpath index, anchor index) inside a path.
 pub type AnchorRef = (usize, usize);
@@ -124,6 +124,25 @@ impl Selection {
     /// Are some (not all) anchors of `id` direct-selected?
     pub fn partial(&self, id: NodeId) -> Option<&BTreeSet<AnchorRef>> {
         self.anchors.get(&id)
+    }
+    /// The objects selected whole: those with no direct-selected anchors.
+    pub fn whole(&self) -> Vec<NodeId> {
+        self.objects.iter().copied().filter(|id| !self.anchors.contains_key(id)).collect()
+    }
+    /// With direct-selected anchors, what a transform of them measures from: the box around those
+    /// anchors and the objects selected whole (`visual`: with their strokes). `None` without any.
+    pub fn anchor_bounds(&self, doc: &Document, visual: bool) -> Option<vectorcraft_geom::Rect> {
+        if self.anchors.is_empty() {
+            return None;
+        }
+        let mut acc = doc.bounds_of(&self.whole(), visual);
+        for (id, set) in &self.anchors {
+            let Some(NodeKind::Path { path, .. }) = doc.node(*id).map(|n| &n.kind) else { continue };
+            for a in set.iter().filter_map(|&(si, ai)| path.subpaths.get(si)?.anchors.get(ai)) {
+                acc = vectorcraft_geom::union_opt(acc, Some(vectorcraft_geom::Rect::from_points(a.p, a.p)));
+            }
+        }
+        acc
     }
     /// Which direction handles belong to selected segments; both for an anchor selection.
     pub fn handle_sides(&self, id: NodeId, si: usize, ai: usize, sp: &vectorcraft_geom::SubPath) -> (bool, bool) {
