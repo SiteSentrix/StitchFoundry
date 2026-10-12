@@ -12,6 +12,7 @@
 //! dimmed copies of it at the neighbouring tile positions and the tile edge.
 
 use std::cell::RefCell;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use vectorcraft_doc::pattern::{Overlap, PatternDef, TileType};
@@ -55,6 +56,19 @@ thread_local! {
 
 fn same_art(a: &[Arc<Node>], b: &[Arc<Node>]) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(x, y)| Arc::ptr_eq(x, y))
+}
+
+/// Hash what pattern `def`'s tiling is drawn from, as the tile cache checks it: its name, the
+/// addresses of its art, its tile, tile type and overlap.
+pub(crate) fn hash_tiling(def: &PatternDef, h: &mut impl Hasher) {
+    def.name.hash(h);
+    def.art.iter().for_each(|a| (Arc::as_ptr(a) as usize).hash(h));
+    [def.tile.x0, def.tile.y0, def.tile.x1, def.tile.y1].map(f64::to_bits).hash(h);
+    std::mem::discriminant(&def.tile_type).hash(h);
+    if let TileType::BrickByRow { offset } | TileType::BrickByColumn { offset } = def.tile_type {
+        offset.to_bits().hash(h);
+    }
+    (def.overlap.right_in_front, def.overlap.bottom_in_front).hash(h);
 }
 
 /// Power-of-two raster scale for a pattern seen at device scale `s`, capped so the super-tile

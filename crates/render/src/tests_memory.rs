@@ -1,5 +1,6 @@
 //! What renderers keep between frames: decoded images shared by all of them, image mips, symbol
-//! art placed for instances and inline graphics, and caches swept by every kind of render.
+//! art placed for instances and inline graphics, raster effects made again when what they read
+//! changes, and caches swept by every kind of render.
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
@@ -280,15 +281,24 @@ fn editing_an_instance_or_a_symbol_places_only_its_art_again() {
 /// Draws `d` (200 × 100 points, on white), applies `edit` and draws it again with the same
 /// renderer: the frame changed, a new renderer draws the same, and only the document holds the
 /// symbols' art.
+#[track_caller]
 fn edit_draws_as_new(mut d: Document, edit: impl FnOnce(&mut Document)) {
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
-    let mut r = Renderer::new();
-    let before = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
-    edit(&mut d);
-    let after = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
-    assert!(after != before, "the edit changes the frame");
-    assert!(after == Renderer::new().render(&d, 200, 100, Affine::IDENTITY, &opts).pixels, "a new renderer draws the same");
+    let _warm = draws_as_new(&mut d, &opts, &opts, edit);
     assert!(d.symbols.iter().all(|s| Arc::strong_count(&s.art) == 1), "only the document holds the symbols' art");
+}
+
+/// Draws `d` (200 × 100 points) with `before`, applies `edit` and draws it with `after` and the
+/// same renderer, which it returns: the frame changed, and a new renderer draws the same.
+#[track_caller]
+fn draws_as_new(d: &mut Document, before: &RenderOptions, after: &RenderOptions, edit: impl FnOnce(&mut Document)) -> Renderer {
+    let mut r = Renderer::new();
+    let first = r.render(d, 200, 100, Affine::IDENTITY, before).pixels;
+    edit(d);
+    let second = r.render(d, 200, 100, Affine::IDENTITY, after).pixels;
+    assert!(second != first, "the edit changes the frame");
+    assert!(second == Renderer::new().render(d, 200, 100, Affine::IDENTITY, after).pixels, "a new renderer draws the same");
+    r
 }
 
 /// `d` with symbol `Holder` (a group of `members`) shown by one instance at (100, 50).
@@ -401,6 +411,237 @@ fn art_with_live_objects_draws_pattern_layout_edits() {
             def.tile_type = TileType::BrickByRow { offset: 0.5 };
         }
     });
+}
+
+fn effect(id: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
+    vectorcraft_doc::Effect { id: id.into(), params, visible: true }
+}
+
+/// A drop shadow 4 pt right and down, blurred 1 pt, at full opacity.
+fn drop_shadow() -> vectorcraft_doc::Effect {
+    effect("stylize.dropShadow", serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100}))
+}
+
+/// A path of `d` filled with `fill` (no stroke), with `effects`.
+fn filled(d: &mut Document, shape: vectorcraft_geom::PathData, fill: Paint, effects: Vec<vectorcraft_doc::Effect>) -> Node {
+    let mut n = Node::path(d.alloc_id(), shape, vectorcraft_doc::Appearance::basic(fill, Paint::None, 0.0));
+    n.appearance.effects = effects;
+    n
+}
+
+/// `d` with `art` added to its first layer, bottom first.
+fn with_art(mut d: Document, art: Vec<Node>) -> Document {
+    let l = d.layers[0].id;
+    for n in art {
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    d
+}
+
+/// Pattern `Checks`: a 10 × 10 square of `color` in a 20 × 20 tile.
+fn checks(color: Color) -> vectorcraft_doc::pattern::PatternDef {
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let art = Node::path(NodeId(900), square, vectorcraft_doc::Appearance::basic(Paint::solid(color), Paint::None, 0.0));
+    let mut def = vectorcraft_doc::pattern::PatternDef::new("Checks", vec![Arc::new(art)]);
+    def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    def
+}
+
+/// Raster effects on a document's own objects are made again when a pattern they paint with
+/// changes: its art (as Done Editing Pattern writes it) under a blur, and its tile type (as
+/// Pattern Options sets it) under a blur and a drop shadow.
+#[test]
+fn rasters_draw_pattern_edits() {
+    use vectorcraft_doc::pattern::{TileType, pattern_paint};
+    use vectorcraft_geom::shapes::rectangle;
+    let doc = || {
+        let mut d = Document::new(200.0, 100.0);
+        d.patterns.push(checks(Color::rgb(1.0, 0.0, 0.0)));
+        let blur = effect("blur.gaussian", serde_json::json!({"radius": 2.0}));
+        let blurred = filled(&mut d, rectangle(Rect::new(10.0, 10.0, 90.0, 90.0)), pattern_paint("Checks"), vec![blur]);
+        let shadowed = filled(&mut d, rectangle(Rect::new(110.0, 10.0, 180.0, 80.0)), pattern_paint("Checks"), vec![drop_shadow()]);
+        with_art(d, vec![blurred, shadowed])
+    };
+    edit_draws_as_new(doc(), |d| {
+        if let Some(def) = d.pattern_mut("Checks") {
+            def.art = checks(Color::rgb(0.0, 0.0, 1.0)).art;
+        }
+    });
+    edit_draws_as_new(doc(), |d| {
+        if let Some(def) = d.pattern_mut("Checks") {
+            def.tile_type = TileType::BrickByRow { offset: 0.5 };
+        }
+    });
+}
+
+/// Raster effects are made again when a symbol shown inside another symbol changes (a group's drop
+/// shadow around an instance of the other symbol), when a brush definition changes (a brushed
+/// stroke's drop shadow), and when an image's pixels change under the same key, as when a linked
+/// file is read again (a blur).
+#[test]
+fn rasters_draw_symbol_brush_and_image_edits() {
+    use vectorcraft_geom::shapes::{line, rectangle};
+    // A group of an instance of symbol `A`, whose art shows symbol `S`, and a green square.
+    let mut d = Document::new(200.0, 100.0);
+    let art = symbol_art(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    let shown = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::IDENTITY });
+    let a = Node::group(d.alloc_id(), vec![Arc::new(shown)]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "A".into(), art: Arc::new(a) });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "A".into(), xf: Affine::translate((50.0, 50.0)) });
+    let green = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(0.0, 0.8, 0.0)), Paint::None, 0.0);
+    let square = Node::path(d.alloc_id(), rectangle(Rect::new(120.0, 30.0, 160.0, 70.0)), green);
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(square)]);
+    group.appearance.effects.push(drop_shadow());
+    edit_draws_as_new(with_art(d, vec![group]), |d| {
+        let bar = rectangle(Rect::new(-20.0, -4.0, 20.0, 4.0));
+        let red = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+        let s = d.symbols.iter().position(|s| s.name == "S").unwrap();
+        d.symbols[s].art = Arc::new(Node::path(d.alloc_id(), bar, red));
+    });
+    // A line stroked with a calligraphic brush, with a drop shadow; the brush gets wider.
+    let mut d = Document::new(200.0, 100.0);
+    let mut stroke = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    let mut brushed = Node::path(d.alloc_id(), line((20.0, 50.0).into(), (180.0, 50.0).into()), stroke);
+    brushed.appearance.effects.push(drop_shadow());
+    edit_draws_as_new(with_art(d, vec![brushed]), |d| {
+        let mut lib = vectorcraft_brush::library(d);
+        if let vectorcraft_brush::BrushKind::Calligraphic(c) = &mut lib[0].kind {
+            c.size = 20.0;
+        }
+        vectorcraft_brush::store(d, &lib);
+    });
+    // A 16 × 16 image drawn 80 × 80, blurred.
+    edit_draws_as_new(blurred_image_doc("swapped", 104), |d| {
+        d.images.insert("swapped".into(), ImageBlob::new("image/png", png(16, 16, 105)));
+    });
+}
+
+/// A document showing a 16 × 16 image (`key`, pixels from `seed`) drawn 80 × 80 at (20, 10), under
+/// a 1 pt Gaussian Blur.
+fn blurred_image_doc(key: &str, seed: u8) -> Document {
+    let mut d = Document::new(200.0, 100.0);
+    d.images.insert(key.into(), ImageBlob::new("image/png", png(16, 16, seed)));
+    let xf = Affine::translate((20.0, 10.0)) * Affine::scale(5.0);
+    let im = ImageObject { key: key.into(), width: 16, height: 16, xf, link: None, placement: Default::default() };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    n.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 1.0})));
+    with_art(d, vec![n])
+}
+
+/// Type in a family no font has, 30 pt at (10, 60), with effect `fx`.
+fn missing_font_type(d: &mut Document, fx: vectorcraft_doc::Effect) -> Node {
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let style = CharStyle { size: 30.0, font_family: "No Such Family".into(), ..Default::default() };
+    let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 60.0), "Hamburg", style))));
+    t.appearance.effects.push(fx);
+    t
+}
+
+/// Raster effects are made again when a document or layer setting they read changes: the raster
+/// resolution under De-Interlace, Page Knockout Group around a blurred group of translucent
+/// objects, Document Setup's highlight of substituted fonts under a blur, and the layer's Dim
+/// Images under an image's blur.
+#[test]
+fn rasters_draw_document_and_layer_setting_edits() {
+    use vectorcraft_geom::shapes::rectangle;
+    // The path holds ten bars, 1 pt high and 2 pt apart.
+    let mut d = Document::new(200.0, 100.0);
+    d.raster_effects_ppi = 72.0;
+    let mut bars = rectangle(Rect::new(20.0, 20.0, 180.0, 21.0));
+    for k in 1..10 {
+        let y = 20.0 + 2.0 * k as f64;
+        bars.subpaths.extend(rectangle(Rect::new(20.0, y, 180.0, y + 1.0)).subpaths);
+    }
+    let striped = filled(&mut d, bars, Paint::solid(Color::BLACK), vec![effect("video.deinterlace", serde_json::json!({}))]);
+    edit_draws_as_new(with_art(d, vec![striped]), |d| d.raster_effects_ppi = 24.0);
+    // A blurred group of two overlapping squares at 50% opacity.
+    let mut d = Document::new(200.0, 100.0);
+    let mut squares = vec![];
+    for (x, color) in [(40.0, Color::rgb(1.0, 0.0, 0.0)), (80.0, Color::rgb(0.0, 0.0, 1.0))] {
+        let mut n = filled(&mut d, rectangle(Rect::new(x, 20.0, x + 60.0, 80.0)), Paint::solid(color), vec![]);
+        n.opacity = 0.5;
+        squares.push(Arc::new(n));
+    }
+    let mut group = Node::group(d.alloc_id(), squares);
+    group.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 1.0})));
+    edit_draws_as_new(with_art(d, vec![group]), |d| d.page_knockout = true);
+    // Blurred type in a missing family, with the substitution highlights on screen.
+    let mut d = Document::new(200.0, 100.0);
+    d.setup.highlight_substituted_fonts = false;
+    let blurred = missing_font_type(&mut d, effect("blur.gaussian", serde_json::json!({"radius": 1.0})));
+    let mut d = with_art(d, vec![blurred]);
+    let highlights = RenderOptions { background: Some([255, 255, 255, 255]), highlight_substitutions: true, ..Default::default() };
+    // The first lookup of the missing family catalogs the installed fonts, which changes the font
+    // generation: a frame drawn first does that.
+    Renderer::new().render(&d, 200, 100, Affine::IDENTITY, &highlights);
+    draws_as_new(&mut d, &highlights, &highlights, |d| d.setup.highlight_substituted_fonts = true);
+    // The layer of a blurred image dims its images to 50%.
+    edit_draws_as_new(blurred_image_doc("dimmed", 106), |d| {
+        if let NodeKind::Layer { dim_images, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+            *dim_images = Some(50);
+        }
+    });
+}
+
+/// Raster effects are made again when a view option their content is drawn with changes: Pixel
+/// Preview's hard-edged images under a blur, Anti-aliased Artwork off under a blur, Overprint
+/// Preview for overprinting characters in a blurred group, and isolation mode for a group inside a
+/// blurred group, entered and left.
+#[test]
+fn rasters_follow_the_view_options() {
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    use vectorcraft_geom::shapes::{ellipse, rectangle};
+    let on_white = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let unchanged = |_: &mut Document| {};
+    draws_as_new(&mut blurred_image_doc("pixels", 107), &on_white, &RenderOptions { smooth_images: false, ..on_white.clone() }, unchanged);
+    let mut d = Document::new(200.0, 100.0);
+    let blur = effect("blur.gaussian", serde_json::json!({"radius": 0.5}));
+    let oval = filled(&mut d, ellipse(Rect::new(30.0, 10.0, 170.0, 90.0)), Paint::solid(Color::BLACK), vec![blur]);
+    let hard = RenderOptions { anti_alias: AntiAlias::None, ..on_white.clone() };
+    draws_as_new(&mut with_art(d, vec![oval]), &on_white, &hard, unchanged);
+    // A blurred group of a red rectangle and cyan type whose characters overprint.
+    let mut d = Document::new(200.0, 100.0);
+    let red = filled(&mut d, rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vec![]);
+    let style = CharStyle { size: 50.0, fill: Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), overprint_fill: true, ..Default::default() };
+    let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Hamburg", style))));
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(red), Arc::new(text)]);
+    group.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 1.0})));
+    let overprints = RenderOptions { overprint_preview: true, ..on_white.clone() };
+    draws_as_new(&mut with_art(d, vec![group]), &on_white, &overprints, unchanged);
+    // A blurred group of a red square and a group holding a blue square: isolating the inner group
+    // dims the red square.
+    let mut d = Document::new(200.0, 100.0);
+    let red = filled(&mut d, rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vec![]);
+    let blue = filled(&mut d, rectangle(Rect::new(110.0, 20.0, 170.0, 80.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), vec![]);
+    let inner = Node::group(d.alloc_id(), vec![Arc::new(blue)]);
+    let isolated = RenderOptions { isolated: Some(inner.id), ..on_white.clone() };
+    let mut outer = Node::group(d.alloc_id(), vec![Arc::new(red), Arc::new(inner)]);
+    outer.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 1.0})));
+    let mut d = with_art(d, vec![outer]);
+    draws_as_new(&mut d, &on_white, &isolated, unchanged);
+    draws_as_new(&mut d, &isolated, &on_white, unchanged);
+}
+
+/// A thumbnail of an object under a filter that treats color channels apart (Color Halftone) is
+/// made again when the document's color mode changes: CMYK documents screen ink channels, RGB
+/// documents light ones.
+#[test]
+fn filtered_thumbnails_follow_the_color_mode() {
+    use vectorcraft_geom::shapes::rectangle;
+    let mut d = Document::new(200.0, 100.0);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let halftone = effect("pixelate.colorHalftone", serde_json::json!({"maxRadius": 4}));
+    let orange = filled(&mut d, rectangle(Rect::new(20.0, 20.0, 180.0, 80.0)), Paint::solid(Color::rgb(1.0, 0.5, 0.0)), vec![halftone]);
+    let id = orange.id;
+    let mut d = with_art(d, vec![orange]);
+    let mut r = Renderer::new();
+    let before = r.render_thumbnail(&d, id, 128).unwrap().pixels;
+    d.color_mode = vectorcraft_doc::ColorMode::Rgb;
+    let after = r.render_thumbnail(&d, id, 128).unwrap().pixels;
+    assert!(after != before, "the color mode changes the thumbnail");
+    assert!(after == Renderer::new().render_thumbnail(&d, id, 128).unwrap().pixels, "a new renderer draws the same");
 }
 
 /// Symbol instances draw what groups of their art, stained and placed, draw: in every frame, when

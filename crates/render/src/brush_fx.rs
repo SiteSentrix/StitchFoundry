@@ -6,6 +6,7 @@
 //! any of them regenerate the art and nothing else does.
 
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 use vectorcraft_brush::Brush;
@@ -27,6 +28,9 @@ pub(crate) struct Entry {
 pub(crate) struct BrushCache {
     /// The document value the library was parsed from (`None` = defaults).
     src: Option<Option<vectorcraft_brush::serde_json::Value>>,
+    /// A hash of that value (0 for the defaults), which rasters drawing brushed strokes record
+    /// ([`crate::fx::Inputs`]).
+    key: u64,
     /// (frame stamp, document address) the library was last validated for.
     checked: (u64, usize),
     lib: HashMap<String, Arc<Brush>>,
@@ -35,7 +39,7 @@ pub(crate) struct BrushCache {
 
 impl Default for BrushCache {
     fn default() -> Self {
-        Self { src: None, checked: (0, 0), lib: HashMap::new(), entries: FrameCache::new(lru::BRUSH_BUDGET, 512) }
+        Self { src: None, key: 0, checked: (0, 0), lib: HashMap::new(), entries: FrameCache::new(lru::BRUSH_BUDGET, 512) }
     }
 }
 
@@ -51,7 +55,18 @@ impl BrushCache {
             return;
         }
         self.src = Some(cur.cloned());
+        self.key = cur.map_or(0, |v| {
+            let mut h = DefaultHasher::new();
+            vectorcraft_brush::serde_json::to_string(v).unwrap_or_default().hash(&mut h);
+            h.finish()
+        });
         self.lib = vectorcraft_brush::library(doc).into_iter().map(|b| (b.name.clone(), Arc::new(b))).collect();
+    }
+
+    /// [`Self::key`] for the brush library `doc` holds (checked once a frame, `stamp`).
+    pub(crate) fn library_key(&mut self, doc: &Document, stamp: u64) -> u64 {
+        self.library(doc, stamp);
+        self.key
     }
 }
 
