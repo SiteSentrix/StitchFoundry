@@ -280,9 +280,27 @@ fn an_outline_goes_round_the_art_as_it_sews() {
     s.execute("embroidery.set", &json!({"type": "none"})).unwrap();
     assert!(s.execute("embroidery.outlineAround", &json!({})).is_err());
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
-    for bad in [json!({"gap": -1}), json!({"width": 50}), json!({"kind": "zigzag"}), json!({"color": "red"})] {
+    for bad in
+        [json!({"gap": -1}), json!({"width": 50}), json!({"kind": "zigzag"}), json!({"color": "red"}), json!({"kind": "emboss", "shape": "star"})]
+    {
         assert!(s.execute("embroidery.outlineAround", &bad).is_err(), "{bad}");
     }
+    // knockdown: a light fill of the area, sewn first, under the art
+    let r = s.execute("embroidery.outlineAround", &json!({"kind": "knockdown", "gap": 1})).unwrap();
+    let k = NodeId(r["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.layers[0].children().unwrap()[0].id, k);
+    let n = st.doc.node(k).unwrap();
+    assert!(matches!(n.embroidery.as_deref().map(|e| &e.stitch), Some(StitchType::Fill(f)) if f.spacing > 1.0));
+    assert!((art.x0 - n.geometric_bounds().unwrap().x0 - 1.0 * PT).abs() < 0.5);
+    // emboss: a circle round it, the art's area left out
+    let r = s.execute("embroidery.outlineAround", &json!({"kind": "emboss", "shape": "circle", "extend": 5})).unwrap();
+    let st = s.doc().unwrap();
+    let n = st.doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap();
+    let NodeKind::Path { path, .. } = &n.kind else { panic!() };
+    assert_eq!(path.subpaths.len(), 2);
+    let e = n.geometric_bounds().unwrap();
+    assert!(e.width() > art.width() + 10.0 * PT, "{e:?}");
 }
 
 #[test]
