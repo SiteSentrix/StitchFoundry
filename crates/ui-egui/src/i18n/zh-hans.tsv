@@ -4353,3 +4353,8 @@ machine	Stop	停止
 @msg	the machine file didn't encode	无法编码绣花机文件
 	Worksheet	工作单
 	Outline Around	外围轮廓
+	Stacked	竖排
+	Oval	椭圆
+	Octagon	八边形
+	Shield	盾形
+	Ornament	装饰

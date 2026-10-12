@@ -772,6 +772,11 @@ square, or a circle of scallops (`embroidery.monogram {letters, font, size, styl
 Each letter is lettering of its own, set again like any (`embroidery.lettering.edit`), and the
 whole monogram is one group.
 
+More monogram choices: the **stacked** style sets the letters one above the other; borders
+also come as an **oval**, **octagon**, **heart** or **shield**, and in up to four **rings** 3 mm
+apart (`rings`); an **ornament** either side of the letters, mirrored (hearts, stars, dots as
+satin, swirls as a triple run; `ornament`), is drawn in code and goes inside the border.
+
 ## Team names
 
 One design, many names (a team's shirts): set the name in an embroidery font, select it, and in the

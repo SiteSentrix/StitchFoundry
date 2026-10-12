@@ -4041,3 +4041,8 @@ machine	Trim	Corte de linha
 @msg	the machine file didn't encode	não foi possível codificar o arquivo da máquina
 	Worksheet	Folha de trabalho
 	Outline Around	Contorno ao redor
+	Stacked	Empilhado
+	Oval	Oval
+	Octagon	Octógono
+	Shield	Escudo
+	Ornament	Ornamento

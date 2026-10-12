@@ -4751,3 +4751,8 @@ machine	Stop	Зупинка
 @msg	the machine file didn't encode	не вдалося закодувати файл для машини
 	Worksheet	Робочий аркуш
 	Outline Around	Контур навколо
+	Stacked	Стовпчиком
+	Oval	Овал
+	Octagon	Восьмикутник
+	Shield	Щит
+	Ornament	Орнамент
