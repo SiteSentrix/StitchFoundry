@@ -176,6 +176,60 @@ fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
 }
 
 #[test]
+fn spline_closed_flags_follow_path_intent_across_versions_without_changing_geometry() {
+    let cases = [(true, true), (true, false), (false, false), (false, true)];
+    let make_doc = |keep_closure: bool| {
+        doc_with(|d| {
+            cases
+                .iter()
+                .map(|&(closed, returns)| {
+                    let start = Point::new(20.0, 20.0);
+                    let mut b = kurbo::BezPath::new();
+                    b.move_to(start);
+                    b.curve_to((80.0, 0.0), (80.0, 80.0), (20.0, 80.0));
+                    if returns {
+                        b.curve_to((0.0, 80.0), (0.0, 20.0), (20.0, 20.0));
+                    }
+                    if closed {
+                        if keep_closure {
+                            b.close_path();
+                        } else if !returns {
+                            // The open reference has the same final straight segment.
+                            b.line_to(start);
+                        }
+                    }
+                    path(d, PathData::from_bezpath(&b), Paint::None, Paint::solid(Color::rgb(0.0, 0.0, 0.0)), 2.0)
+                })
+                .collect()
+        })
+    };
+    let closed = make_doc(true);
+    let open = make_doc(false);
+    for version in DxfVersion::ALL {
+        let out = export(&closed, &DxfOptions { version, ..opts(&closed) }).unwrap();
+        let actual = entities(&out);
+        if version == DxfVersion::R12 {
+            let polys: Vec<_> = actual.iter().filter(|e| kind(e) == "POLYLINE").collect();
+            assert_eq!(polys.len(), cases.len());
+            for (poly, &(closed, _)) in polys.iter().zip(&cases) {
+                assert_eq!(get(poly, 70), Some(if closed { "1" } else { "0" }));
+            }
+            assert!(!actual.iter().any(|e| kind(e) == "SPLINE"));
+            continue;
+        }
+        let reference = entities(&export(&open, &DxfOptions { version, ..opts(&open) }).unwrap());
+        assert_eq!(actual.len(), cases.len());
+        for ((spline, reference), &(closed, _)) in actual.iter().zip(&reference).zip(&cases) {
+            assert_eq!(kind(spline), "SPLINE");
+            assert_eq!(get(spline, 70), Some(if closed { "9" } else { "8" }), "{version:?}");
+            let mut normalized = spline.clone();
+            normalized.iter_mut().filter(|p| p.0 == 70).for_each(|p| p.1 = "8".into());
+            assert_eq!(&normalized, reference, "all other entity properties, knots and controls: {version:?}");
+        }
+    }
+}
+
+#[test]
 fn colours_map_to_the_index_palette_or_true_colour() {
     let d = shapes_doc();
     let style = |o: &DxfOutput, i: usize| {
