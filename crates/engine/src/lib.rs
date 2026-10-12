@@ -217,6 +217,25 @@ pub struct Interaction {
     /// The perspective transform the previews make (`perspective.transform` params): Transform
     /// Again repeats it once the drag is committed.
     pub perspective_again: Option<Value>,
+    /// A transform with `copy` keeps the copies it made of the snapshot here ([`PreviewCopies`]).
+    pub(crate) copies: Option<Arc<PreviewCopies>>,
+}
+
+/// This holds the copies that a transform with `copy` made of an interaction's snapshot
+/// ([`cmd::object::apply_transform`]). A later transform with `copy` of the same objects, while
+/// the document is still that snapshot, starts from `doc` and transforms only the copies.
+#[derive(Debug)]
+pub(crate) struct PreviewCopies {
+    /// The copies were made from this snapshot.
+    pub(crate) from: Arc<Document>,
+    /// The transform copied these objects.
+    pub(crate) roots: Vec<NodeId>,
+    /// This is `from` with the copies added, untransformed.
+    pub(crate) doc: Arc<Document>,
+    /// This is the selection after copying, with the copies selected.
+    pub(crate) selection: Selection,
+    /// These are the copies' ids, in the order of `roots`.
+    pub(crate) ids: Vec<NodeId>,
 }
 
 /// An open undo group ([`Session::begin_undo_group`]): the edits made in it are one undo step.
@@ -1496,6 +1515,7 @@ impl Session {
             variables_highlight: st.variables_highlight.clone(),
             isolation: st.isolation,
             perspective_again: None,
+            copies: None,
         });
         Ok(())
     }

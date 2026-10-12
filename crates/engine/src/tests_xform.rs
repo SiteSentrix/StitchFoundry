@@ -73,6 +73,182 @@ fn rotate_tool_alt_release_copies() {
     assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
 }
 
+/// Returns a session with a group of two rectangles and a rectangle to its right, both selected.
+fn group_and_rect() -> Session {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 40.0, 40.0);
+    let b = rect(&mut s, 160.0, 100.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    rect(&mut s, 220.0, 100.0, 40.0, 40.0);
+    s.execute("select.all", &json!({})).unwrap();
+    s
+}
+
+/// Sends `kind` at `(x, y)` to the active tool, with Alt held when `alt` is set.
+fn drag_at(s: &mut Session, kind: PointerKind, (x, y): (f64, f64), alt: bool) {
+    let mods = Mods { alt, ..Mods::default() };
+    s.pointer(&PointerEvent::new(kind, x, y).with_mods(mods), ViewInfo::default()).unwrap();
+}
+
+/// Returns the command and params of the interaction's last preview.
+fn previewed(s: &Session) -> (String, Value) {
+    s.doc().unwrap().interaction.as_ref().and_then(|it| it.preview.clone()).unwrap()
+}
+
+/// Returns the document and the selected objects that `cmd` with `params` gives on a new
+/// [`group_and_rect`] session, after `first` when it is given.
+fn on_a_new_session(first: Option<(&str, &Value)>, cmd: &str, params: &Value) -> (Document, Vec<NodeId>) {
+    let mut t = group_and_rect();
+    if let Some((c, p)) = first {
+        t.execute(c, p).unwrap();
+    }
+    t.execute(cmd, params).unwrap();
+    let st = t.doc().unwrap();
+    (Document::clone(&st.doc), st.selection.objects.clone())
+}
+
+/// Returns true when the active document and its selected objects are `want`.
+fn shows(s: &Session, want: &(Document, Vec<NodeId>)) -> bool {
+    let st = s.doc().unwrap();
+    *st.doc == want.0 && st.selection.objects == want.1
+}
+
+/// An Alt-drag with the Selection tool or the Rotate tool copies the selection on its first move,
+/// and the moves after it transform those copies: the interaction keeps them, made once, until
+/// the drag ends. The Move dialog's Preview with Copy previews `object.move` with `copy` in the
+/// same way.
+#[test]
+fn an_alt_drag_copies_the_selection_once() {
+    let kept = |s: &Session| s.doc().unwrap().interaction.as_ref().and_then(|it| it.copies.clone());
+    for (tool, [press, moves @ ..]) in [
+        ("selection", [(120.0, 120.0), (140.0, 120.0), (160.0, 120.0), (180.0, 120.0)]),
+        ("rotate", [(300.0, 120.0), (300.0, 140.0), (300.0, 160.0), (300.0, 180.0)]),
+    ] {
+        let mut s = group_and_rect();
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        drag_at(&mut s, PointerKind::Down, press, true);
+        let mut first = None;
+        for at in moves {
+            drag_at(&mut s, PointerKind::Drag, at, true);
+            let k = kept(&s).unwrap_or_else(|| panic!("{tool}: the move to {at:?} keeps its copies"));
+            assert!(Arc::ptr_eq(first.get_or_insert_with(|| k.clone()), &k), "{tool}: the move to {at:?} transforms the first move's copies");
+        }
+        drag_at(&mut s, PointerKind::Up, moves[2], true);
+        assert!(s.doc().unwrap().interaction.is_none());
+        assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 4, "{tool}: the objects and their copies");
+    }
+    let mut s = group_and_rect();
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 10, "dy": 0, "copy": true})).unwrap();
+    let first = kept(&s).expect("the first preview keeps its copies");
+    s.preview("object.move", &json!({"dx": 20, "dy": 0, "copy": true})).unwrap();
+    assert!(kept(&s).is_some_and(|k| Arc::ptr_eq(&k, &first)), "the second preview transforms the first one's copies");
+}
+
+/// Each move of an Alt-drag with the Selection tool leaves the document and the selected copies
+/// that one `object.transform` with `copy` and that move's matrix gives, with the same ids on every
+/// move; the release keeps the last move as one undo step named Copy.
+#[test]
+fn each_move_of_an_alt_drag_gives_what_one_transform_with_copy_gives() {
+    let mut s = group_and_rect();
+    let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    drag_at(&mut s, PointerKind::Down, (120.0, 120.0), true);
+    let mut copies = None;
+    for x in [140.0, 160.0, 125.0, 190.0] {
+        drag_at(&mut s, PointerKind::Drag, (x, 120.0), true);
+        let (cmd, params) = previewed(&s);
+        assert!(params["copy"] == json!(true), "{params}");
+        assert!(shows(&s, &on_a_new_session(None, &cmd, &params)), "the move to {x}");
+        let ids = s.doc().unwrap().selection.objects.clone();
+        let first = copies.get_or_insert_with(|| ids.clone());
+        assert_eq!(*first, ids, "the copies keep their ids");
+    }
+    drag_at(&mut s, PointerKind::Up, (190.0, 120.0), true);
+    let (cmd, params) = s.journal.last().cloned().unwrap();
+    assert!(shows(&s, &on_a_new_session(None, &cmd, &params)));
+    assert_eq!(undo_len(&s), undo + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Copy"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(*s.doc().unwrap().doc == *before, "Undo gives back the document");
+}
+
+/// While Alt is released during a drag, the previews move the selected objects themselves; once Alt
+/// is pressed again, they copy the objects again, with the ids of the first copies. The release
+/// names the undo step for the last move.
+#[test]
+fn releasing_alt_during_a_drag_moves_the_objects_themselves() {
+    let mut s = group_and_rect();
+    let originals = s.doc().unwrap().selection.objects.clone();
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    drag_at(&mut s, PointerKind::Down, (120.0, 120.0), true);
+    drag_at(&mut s, PointerKind::Drag, (140.0, 120.0), true);
+    let copies = s.doc().unwrap().selection.objects.clone();
+    for (x, alt) in [(160.0, false), (180.0, true), (200.0, false)] {
+        drag_at(&mut s, PointerKind::Drag, (x, 120.0), alt);
+        let (cmd, params) = previewed(&s);
+        assert!(params["copy"] == json!(alt), "{params}");
+        assert!(shows(&s, &on_a_new_session(None, &cmd, &params)), "the move to {x}, Alt: {alt}");
+        let selected = if alt { &copies } else { &originals };
+        assert_eq!(&s.doc().unwrap().selection.objects, selected);
+    }
+    drag_at(&mut s, PointerKind::Up, (200.0, 120.0), false);
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2, "no copies");
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Move"));
+}
+
+/// A transform with `copy` of the objects selected when an Alt-drag started, run while the drag is
+/// open after its first move, copies the document as that move left it: the move's copies stay,
+/// and new copies go directly above the objects.
+#[test]
+fn a_copy_run_during_an_alt_drag_copies_the_document_as_the_move_left_it() {
+    let mut s = group_and_rect();
+    let ids: Vec<u64> = s.doc().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    drag_at(&mut s, PointerKind::Down, (120.0, 120.0), true);
+    drag_at(&mut s, PointerKind::Drag, (140.0, 120.0), true);
+    let (cmd, params) = previewed(&s);
+    let again = json!({"matrix": [1, 0, 0, 1, 0, 60], "copy": true, "ids": ids});
+    s.execute("object.transform", &again).unwrap();
+    assert!(shows(&s, &on_a_new_session(Some((&cmd, &params)), "object.transform", &again)));
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 6, "the objects and two copies of each");
+}
+
+/// A command that changes the drag's snapshot during an Alt-drag (showing the perspective grid)
+/// keeps its change in the moves after it, which copy the changed snapshot.
+#[test]
+fn a_grid_shown_during_an_alt_drag_stays_shown_in_the_moves_after_it() {
+    let mut s = group_and_rect();
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    drag_at(&mut s, PointerKind::Down, (120.0, 120.0), true);
+    drag_at(&mut s, PointerKind::Drag, (140.0, 120.0), true);
+    let show = json!({"visible": true});
+    s.execute("perspective.grid.show", &show).unwrap();
+    drag_at(&mut s, PointerKind::Drag, (160.0, 120.0), true);
+    let (cmd, params) = previewed(&s);
+    assert!(shows(&s, &on_a_new_session(Some(("perspective.grid.show", &show)), &cmd, &params)));
+}
+
+/// Canceling an Alt-drag after a few moves puts back the document and the selection it started
+/// from, with no undo step, and it ends the interaction, which held the copies.
+#[test]
+fn canceling_an_alt_drag_leaves_the_document_as_it_was() {
+    let mut s = group_and_rect();
+    let (before, selection, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone(), undo_len(&s));
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    drag_at(&mut s, PointerKind::Down, (120.0, 120.0), true);
+    for x in [140.0, 160.0, 180.0] {
+        drag_at(&mut s, PointerKind::Drag, (x, 120.0), true);
+    }
+    s.cancel_interaction().unwrap();
+    let st = s.doc().unwrap();
+    assert!(Arc::ptr_eq(&st.doc, &before), "the document it started from");
+    assert_eq!(st.selection, selection);
+    assert_eq!(undo_len(&s), undo);
+    assert!(s.doc().unwrap().interaction.is_none());
+}
+
 #[test]
 fn rotate_tool_alt_click_requests_dialog() {
     let mut s = session();

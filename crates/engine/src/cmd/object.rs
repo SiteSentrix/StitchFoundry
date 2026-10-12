@@ -269,7 +269,9 @@ pub(crate) fn transform_patterns(s: &mut Session, p: &Value, ids: &[NodeId]) -> 
 
 /// Apply `xf` to `ids` (`copy` param: duplicate first; `strokes`/`corners`: see [`scaling`];
 /// `patterns`: see [`transform_patterns`]; `typeAreas`: see [`resize_type_area`]). Outside an
-/// interaction, records `xf` and the options it used for Transform Again.
+/// interaction, records `xf` and the options it used for Transform Again. In an interaction whose
+/// document is still its snapshot, a transform with `copy` keeps its copies ([`preview_copies`]),
+/// and the next one that copies the same objects of the same snapshot transforms those copies.
 ///
 /// `anchors` (`ids` being the selection): with anchors selected with Direct Selection and no
 /// copy, only those anchors transform, their handles with them, and the objects selected whole.
@@ -291,8 +293,19 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     } else if none || (!copy && xf == Affine::IDENTITY) {
         if copy { vec![] } else { ids }
     } else {
+        let kept = if copy { preview_copies(s, &ids)? } else { None };
         s.edit(label, |d, sel| {
-            let targets = if copy { duplicate_in(d, sel, &ids, Affine::IDENTITY)? } else { ids.clone() };
+            let targets = match &kept {
+                // The document becomes the snapshot with the kept copies, untransformed, and the
+                // loop below transforms only the copies.
+                Some(k) => {
+                    *d = Document::clone(&k.doc);
+                    sel.clone_from(&k.selection);
+                    k.ids.clone()
+                }
+                None if copy => duplicate_in(d, sel, &ids, Affine::IDENTITY)?,
+                None => ids.clone(),
+            };
             // Transforms don't move nodes in the tree, so the paths found up front stay right.
             let paths = d.index_paths(targets.iter().copied());
             for id in &targets {
@@ -316,6 +329,33 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
         st.last_perspective = None;
     }
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Returns the copies of `roots` for a transform with `copy` in an interaction whose document is
+/// still its snapshot, as in a preview ([`Session::preview`] puts the snapshot back first). These
+/// are the copies the interaction keeps when they were made of that snapshot for the same `roots`;
+/// otherwise this copies `roots` with [`duplicate_in`] in a clone of the snapshot, untransformed,
+/// and the interaction keeps that clone. It returns `None` outside an interaction, and when the
+/// document is no longer the snapshot, as for a command run in a typing session or a script batch
+/// after an earlier edit there: the transform then copies the current document.
+fn preview_copies(s: &mut Session, roots: &[NodeId]) -> Result<Option<Arc<crate::PreviewCopies>>> {
+    let st = s.doc_mut()?;
+    let Some(it) = &mut st.interaction else { return Ok(None) };
+    if !Arc::ptr_eq(&st.doc, &it.doc) {
+        return Ok(None);
+    }
+    if let Some(k) = &it.copies
+        && Arc::ptr_eq(&k.from, &it.doc)
+        && k.roots == roots
+    {
+        return Ok(Some(k.clone()));
+    }
+    let mut doc = it.doc.clone();
+    let mut selection = st.selection.clone();
+    let ids = duplicate_in(Arc::make_mut(&mut doc), &mut selection, roots, Affine::IDENTITY)?;
+    let k = Arc::new(crate::PreviewCopies { from: it.doc.clone(), roots: roots.to_vec(), doc, selection, ids });
+    it.copies = Some(k.clone());
+    Ok(Some(k))
 }
 
 /// Area type resized by its bounding box: `xf` reshapes its frame (the type area) and the text
