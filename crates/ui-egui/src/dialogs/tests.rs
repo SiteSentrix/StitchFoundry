@@ -566,6 +566,37 @@ fn a_dialog_opened_by_a_click_focuses_its_first_field_each_time_it_opens() {
     }
 }
 
+/// A greyed-out field can't hold the keyboard focus, so it doesn't take a just-opened dialog's
+/// either: the focus waits for the first enabled field. Blend Options on Smooth Color shows its
+/// steps greyed out; choosing Specified Steps enables the field and it takes the focus (type a
+/// count, press Enter).
+#[test]
+fn a_dialogs_focus_skips_a_greyed_out_first_field() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    app.run("ui.blendOptions", json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("spacing".into(), json!("smooth"));
+    for _ in 0..3 {
+        frame(&mut app, vec![]);
+    }
+    assert!(ctx.memory(|m| m.focused()).is_none(), "nothing to type in yet");
+    app.ui.dialog.as_mut().unwrap().fields.insert("spacing".into(), json!("steps"));
+    frame(&mut app, vec![]);
+    assert!(ctx.memory(|m| m.focused()).is_some(), "the steps field takes the focus once it is enabled");
+    frame(&mut app, vec![egui::Event::Text("7".into())]);
+    frame(&mut app, vec![enter]);
+    assert!(app.ui.dialog.is_none());
+    let info = app.run("object.blend.info", json!({})).unwrap();
+    assert_eq!((info["spacing"].clone(), info["steps"].clone()), (json!("steps"), json!(7)), "{info}");
+}
+
 /// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
 /// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
 #[test]
