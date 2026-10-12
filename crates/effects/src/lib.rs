@@ -214,8 +214,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             INFLATE,
             "Inflate…",
             &["Effect", "3D and Materials"],
-            "{depth: pt (0..2000, 0; flat depth between front and back), volume: % (0..100, 50; 50 rounds the edge like a half sphere), bothSides: bool (false: flat back), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspective: % (0..100, 0), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25)}. Painted with the top fill (else the top stroke).",
-            json!({"depth":0.0,"volume":50.0,"bothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspective":0.0,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0}),
+            "{depth: pt (0..2000, 0; flat depth between front and back), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: no back, a shell open behind), volume: % (0..100, 50; 50 rounds the edge like a half sphere), bothSides: bool (false: flat back), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspective: % (0..100, 0), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25)}. Painted with the top fill (else the top stroke).",
+            json!({"depth":0.0,"twist":0.0,"taper":100.0,"cap":true,"volume":50.0,"bothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspective":0.0,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0}),
         ),
         g(
             ROTATE,

@@ -185,11 +185,17 @@ pub struct Inflate {
     pub volume: f64,
     /// Puff the back out too; otherwise it stays flat.
     pub both_sides: bool,
+    /// The turn of the back against the front, about the shape's centre: 0° to 360°.
+    pub twist: f64,
+    /// The size of the back, as a share (0.01..1) of the front's.
+    pub taper: f64,
+    /// A closed back (a solid) or none, so the inflated front is a shell open behind.
+    pub cap: bool,
 }
 
 impl Default for Inflate {
     fn default() -> Self {
-        Self { depth: 0.0, volume: 50.0, both_sides: false }
+        Self { depth: 0.0, volume: 50.0, both_sides: false, twist: 0.0, taper: 1.0, cap: true }
     }
 }
 
@@ -249,7 +255,13 @@ impl Extrude {
 
 impl Inflate {
     fn sanitized(self) -> Self {
-        Self { depth: finite(self.depth, 0.0, 0.0, 2000.0), volume: finite(self.volume, 50.0, 0.0, 100.0), ..self }
+        Self {
+            depth: finite(self.depth, 0.0, 0.0, 2000.0),
+            volume: finite(self.volume, 50.0, 0.0, 100.0),
+            twist: finite(self.twist, 0.0, 0.0, 360.0),
+            taper: finite(self.taper, 1.0, 0.01, 1.0),
+            ..self
+        }
     }
 }
 
@@ -516,15 +528,29 @@ fn outward(ring: &[Point], i: usize, z: f64) -> V3 {
 /// The cross-section of a side: each ring of the shape at depth fraction `t` (0 front, 1 back),
 /// turned by the twist and scaled by the taper about the centre of `bounds`.
 fn section(ring: &[Point], bounds: Rect, o: &Extrude, t: f64) -> Vec<Point> {
-    let c = bounds.center();
-    let (s, cos) = (o.twist * t).to_radians().sin_cos();
-    let k = 1.0 + (o.taper - 1.0) * t;
-    ring.iter()
-        .map(|p| {
-            let (x, y) = ((p.x - c.x) * k, (p.y - c.y) * k);
-            Point::new(c.x + x * cos - y * s, c.y + x * s + y * cos)
-        })
-        .collect()
+    let turn = Turn::new(bounds, o.twist, o.taper, t);
+    ring.iter().map(|p| turn.apply(*p)).collect()
+}
+
+/// The twist and taper at depth fraction `t` (0 front, 1 back): a turn by `twist · t` and a
+/// scale from 1 to `taper`, about the centre of the bounds.
+#[derive(Clone, Copy)]
+struct Turn {
+    centre: Point,
+    sin: f64,
+    cos: f64,
+    scale: f64,
+}
+
+impl Turn {
+    fn new(bounds: Rect, twist: f64, taper: f64, t: f64) -> Self {
+        let (sin, cos) = (twist * t).to_radians().sin_cos();
+        Self { centre: bounds.center(), sin, cos, scale: 1.0 + (taper - 1.0) * t }
+    }
+    fn apply(&self, p: Point) -> Point {
+        let (x, y) = ((p.x - self.centre.x) * self.scale, (p.y - self.centre.y) * self.scale);
+        Point::new(self.centre.x + x * self.cos - y * self.sin, self.centre.y + x * self.sin + y * self.cos)
+    }
 }
 
 /// One step of an extrusion's outline: how far it is inset (negative: outset) and its depth
@@ -996,8 +1022,11 @@ pub fn inflate(path: &PathData, bounds: Rect, options: Inflate, view: View) -> R
         height * (m.at(p).max(0.0) / m.peak).sqrt()
     };
     let camera = Camera::new(view, bounds, o.depth + 2.0 * height);
-    let mut b = Builder { camera: &camera, closed: true, facets: vec![] };
+    // Without its back cap the object is a shell open behind, its inside showing.
+    let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![] };
     let half = o.depth / 2.0;
+    // The back: turned and scaled by the twist and taper, its puff too.
+    let back_turn = Turn::new(bounds, o.twist, o.taper, 1.0);
     // The grid's cells, those the surface rises steeply across (near the outline) cut into
     // halves or quarters each way, so the steep rim is drawn in facets as fine as its curve.
     // Every corner sits on one fine lattice (a quarter cell), computed the same way wherever it
@@ -1118,16 +1147,18 @@ pub fn inflate(path: &PathData, bounds: Rect, options: Inflate, view: View) -> R
                     // Each piece lifted onto the surface. Its normal is the lifted piece's own average
                     // (Newell's), not the slope at one point: near the edge the surface turns
                     // vertical, and a point sample there misjudges which way a whole piece faces.
-                    let lifted = |sign: f64| -> Vec<Vec<V3>> {
-                        pieces.iter().zip(&lifts).map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(*q, sign * (half + h))).collect()).collect()
-                    };
-                    let front = lifted(1.0);
+                    let front: Vec<Vec<V3>> =
+                        pieces.iter().zip(&lifts).map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(*q, half + h)).collect()).collect();
                     let n = newell(&front);
                     b.face(front, n)?;
-                    if o.both_sides {
+                    if o.both_sides && o.cap {
                         // The back winds the same way round as the front, so its outward normal is
                         // reversed.
-                        let back = lifted(-1.0);
+                        let back: Vec<Vec<V3>> = pieces
+                            .iter()
+                            .zip(&lifts)
+                            .map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(back_turn.apply(*q), -half - h * back_turn.scale)).collect())
+                            .collect();
                         let n = newell(&back);
                         b.face(back, V3(-n.0, -n.1, -n.2))?;
                     }
@@ -1135,15 +1166,22 @@ pub fn inflate(path: &PathData, bounds: Rect, options: Inflate, view: View) -> R
             }
         }
     }
-    if !o.both_sides {
-        let back: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(*p, -half)).collect()).collect();
+    if !o.both_sides && o.cap {
+        let back: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(back_turn.apply(*p), -half)).collect()).collect();
         b.face(back, camera.rotate(V3(0.0, 0.0, -1.0)))?;
     }
     if o.depth > 0.0 {
+        // The sides, cut into slices that follow a twist or taper.
+        let slices = if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
         for ring in &rings {
-            let front: Vec<V3> = ring.iter().map(|p| camera.place(*p, half)).collect();
-            let back: Vec<V3> = ring.iter().map(|p| camera.place(*p, -half)).collect();
-            b.band(&front, &back, |i| outward(ring, i, 0.0))?;
+            let at = |k: usize| -> Vec<V3> {
+                let t = k as f64 / slices as f64;
+                let turn = Turn::new(bounds, o.twist, o.taper, t);
+                ring.iter().map(|p| camera.place(turn.apply(*p), half - o.depth * t)).collect()
+            };
+            for k in 0..slices {
+                b.band(&at(k), &at(k + 1), |i| outward(ring, i, 0.0))?;
+            }
         }
     }
     Ok(b.finish())

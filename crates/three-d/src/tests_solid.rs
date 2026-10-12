@@ -218,7 +218,10 @@ fn malformed_and_degenerate_input_is_bounded() {
     };
     let f = extrude(&p, b, wild, View { rotation_x: f64::NAN, perspective: 9.0, ..front() }).unwrap();
     assert!(f.iter().flat_map(|f| f.contours.iter().flatten()).all(|q| q.x.is_finite() && q.y.is_finite()));
-    assert!(inflate(&p, b, Inflate { depth: -5.0, volume: f64::NAN, both_sides: true }, front()).is_ok());
+    assert!(
+        inflate(&p, b, Inflate { depth: -5.0, volume: f64::NAN, both_sides: true, twist: f64::INFINITY, taper: f64::NAN, cap: true }, front())
+            .is_ok()
+    );
     assert!(extrude(&PathData::default(), b, Extrude::default(), front()).unwrap().is_empty());
     // A line has no area to extrude.
     let mut line = BezPath::new();
@@ -421,6 +424,54 @@ fn twisted_walls_face_the_way_they_turn() {
                 }
             }
             assert_eq!(got.len(), expected, "twist {twist}, view ({x}, {y})");
+        }
+    }
+}
+
+/// Inflate takes Twist, Taper and Cap like the other types: the back turned and scaled (its puff
+/// too), the sides following, and without a cap no back at all.
+#[test]
+fn inflate_twists_tapers_and_opens_its_back() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let side = View { rotation_y: 90.0, ..front() };
+    let o = Inflate { depth: 60.0, volume: 0.0, ..Inflate::default() };
+    // From the side, a flat (0 % volume) cushion is the extrusion: front 100 high, the back 50
+    // at a 50 % taper.
+    let tapered = inflate(&p, b, Inflate { taper: 0.5, ..o }, side).unwrap();
+    let e = extent(&tapered);
+    assert!(close(e.width(), 60.0, 1e-6) && close(e.height(), 100.0, 1e-6), "{e:?}");
+    let back: Vec<Point> = tapered.iter().flat_map(|f| f.contours.iter().flatten().copied()).filter(|q| close(q.x, e.x0, 1e-6)).collect();
+    let (lo, hi) = back.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| (lo.min(q.y), hi.max(q.y)));
+    assert!(close(hi - lo, 50.0, 1e-6), "back {}", hi - lo);
+    // From behind, a 45° twist shows the flat back as a diamond.
+    let behind = View { rotation_y: 180.0, ..front() };
+    let twisted = inflate(&p, b, Inflate { twist: 45.0, ..o }, behind).unwrap();
+    assert!(close(extent(&twisted).width(), 100.0 * 2f64.sqrt(), 1e-6), "{:?}", extent(&twisted));
+    // Hollow: no back; from behind the inside of the inflated front shows instead of a flat face.
+    let solid = inflate(&p, b, Inflate { volume: 50.0, ..o }, behind).unwrap();
+    assert_eq!(solid.len(), 1, "the flat back alone");
+    let hollow = inflate(&p, b, Inflate { volume: 50.0, cap: false, ..o }, behind).unwrap();
+    assert!(hollow.len() > 100 && hollow.iter().all(|f| f.contours.len() == 1 && f.contours[0].len() < 12));
+    // With both sides puffed, the back puff is scaled with the taper: lower and smaller.
+    let both = |taper: f64| extent(&inflate(&p, b, Inflate { both_sides: true, volume: 50.0, taper, depth: 0.0, ..o }, side).unwrap());
+    assert!(both(0.5).width() < both(1.0).width() && both(0.5).height() <= both(1.0).height() + 1e-6);
+    // Out of range values hold at the documented ends.
+    let at = |i: Inflate| inflate(&p, b, i, View { rotation_x: -20.0, rotation_y: 30.0, ..front() }).unwrap();
+    assert_eq!(at(Inflate { twist: -30.0, ..o }), at(o));
+    assert_eq!(at(Inflate { taper: 0.0, ..o }), at(Inflate { taper: 0.01, ..o }));
+}
+
+/// At 0 % volume an inflated shape is the extruded one: twisted and tapered, their outlines
+/// agree from every side (no wall goes missing in either).
+#[test]
+fn a_flat_twisted_inflate_matches_the_extrusion() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    for (x, y) in [(-20.0, 30.0), (0.0, 90.0), (30.0, -60.0), (-45.0, 150.0), (60.0, 200.0)] {
+        let v = View { rotation_x: x, rotation_y: y, ..front() };
+        let e = extent(&extrude(&p, b, Extrude { depth: 60.0, twist: 120.0, taper: 0.6, ..Extrude::default() }, v).unwrap());
+        let i = extent(&inflate(&p, b, Inflate { depth: 60.0, twist: 120.0, taper: 0.6, volume: 0.0, ..Inflate::default() }, v).unwrap());
+        for (a, c) in [(e.x0, i.x0), (e.y0, i.y0), (e.x1, i.x1), (e.y1, i.y1)] {
+            assert!(close(a, c, 1e-6), "view ({x}, {y}): extrusion {e:?}, inflate {i:?}");
         }
     }
 }
