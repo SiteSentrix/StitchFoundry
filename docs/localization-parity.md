@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Korean catalog added, complete under the tests; 12-language score 54% → 63%; Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -33,11 +33,11 @@ Chinese by `imachus`). None is recorded as reviewed by a native speaker; the cat
 | Indonesian | `id` | 0 | none | Latin | no | none | 5–8 |
 | Japanese | `ja` | 4,004 / 4,020 (99.6%) | all | CJK UI font as above; Japanese IME; vertical type partial; Japanese crop marks and composition settings | no | full | — (review) |
 | German | `de` | 3,952 / 4,020 (98%; tests hold menus, literals and messages complete) | all (602 of 604 message rows; landed 2026-10-10) | Latin | contributor-written, not reviewed | full | — (review) |
-| Korean | `ko` | 0 | none | Hangul needs a UI font in craft-fonts; the IME path exists | no | none | 6–10 |
+| Korean | `ko` | 4,151 rows: menus, `tl!` literals and messages complete (tests); one plural form | all | Hangul from an installed system font on the desktop (Apple SD Gothic Neo, Malgun Gothic, Noto Sans CJK KR…); the web build has no Korean UI font yet (craft-fonts); IME path exists | no (AI-drafted) | full | — (review; web font) |
 | Vietnamese | `vi` | 0 | none | Latin with stacked diacritics (precomposed forms render) | no | none | 5–8 |
 
-**12-language score: ~54%** (equal weights: 100 + 85 + 100 + 0 + 0 + 100 + 68 + 0 + 100 + 98 + 0 + 0, over 12).
-**To `full` for all twelve: ~70–110 h**, most of it Arabic (right-to-left interface) and Hindi (interface
+**12-language score: ~63%** (equal weights: 100 + 85 + 100 + 0 + 0 + 100 + 68 + 0 + 100 + 98 + 100 + 0, over 12).
+**To `full` for all twelve: ~60–100 h**, most of it Arabic (right-to-left interface) and Hindi (interface
 shaping). Each new Latin-script catalog is ~4,000 rows; the existing ones were written in a few agent hours each
 plus review. Native-speaker review is human work and isn't in the hours.
 
@@ -52,8 +52,8 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Hungarian | `hu` | 4,524 rows: menus, `tl!` literals and messages complete (tests); one plural form | full |
 | Czech | `cs` | 4,411 catalog entries, including 636 `@msg` rows (measured locally 2026-10-11); menu, literal and message coverage enforced by tests | catalog complete; render-site gaps reduced; native review pending |
 
-Twelve non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
-interface languages (including Korean, Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
+Thirteen non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
+interface languages (including Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
 editions with Arabic and Hebrew); it doesn't ship Hindi, Indonesian or Vietnamese.
 
 ## Czech render-site follow-up
@@ -79,6 +79,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | Korean (`ko`) catalog added, complete under the tests (menus, literals, messages); 12-language score 54% → 63%, hours 70–110 → 60–100 |
 | 2026-10-12 | minor | Hungarian (`hu`) catalog added, complete under the tests |
 | 2026-10-11 | minor | Czech render-site follow-up: file-dialog filters, diagnostics, preset numbering, contributor tooltips/plurals, gradient grammar and contextual printer mark styles; estimates unchanged |
 | 2026-10-10 | major | First per-language table, measured from the catalog row counts against the complete French catalog |

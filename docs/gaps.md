@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Czech render-site localization follow-up; scores and estimates unchanged; Document Setup: Edit Artboards closes the modal after applying valid settings; pointer-click regressions; scores and hours unchanged; Artboards: Escape exits editing; an active drag cancels first; shortcut-routing regression; scores and hours unchanged; G11: valid selection after Simplify and Add Anchor Points (#1272); estimates unchanged; G2: Film Grain added; Photoshop effects 29/57; 28 filters remain; G10: RPM runtime dependency metadata (#1275); estimates unchanged; G15: texture-effect distance searches optimized (#1257); idle-machine/platform drag QA still pending; estimate unchanged; G1: Curvature point display improved (#1236, in part); estimates unchanged; G4: full-name font matching (#1258); Windows font-service QA pending; estimate unchanged; G11: no-op anchor Align keeps history and saved state (#1180 follow-up); estimates unchanged; G1: dedicated Eyedropper cursor and precise-cursor checks (#1269); estimates unchanged; G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G16: Korean catalog added, 70–110 → 60–100 h; Czech render-site localization follow-up; scores and estimates unchanged; Document Setup: Edit Artboards closes the modal after applying valid settings; pointer-click regressions; scores and hours unchanged; Artboards: Escape exits editing; an active drag cancels first; shortcut-routing regression; scores and hours unchanged; G11: valid selection after Simplify and Add Anchor Points (#1272); estimates unchanged; G2: Film Grain added; Photoshop effects 29/57; 28 filters remain; G10: RPM runtime dependency metadata (#1275); estimates unchanged; G15: texture-effect distance searches optimized (#1257); idle-machine/platform drag QA still pending; estimate unchanged; G1: Curvature point display improved (#1236, in part); estimates unchanged; G4: full-name font matching (#1258); Windows font-service QA pending; estimate unchanged; G11: no-op anchor Align keeps history and saved state (#1180 follow-up); estimates unchanged; G1: dedicated Eyedropper cursor and precise-cursor checks (#1269); estimates unchanged; G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -30,7 +30,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 8–14 | no | [target-app-parity.md](target-app-parity.md) |
 | 15 | [G15 Performance budgets and a GPU renderer](#g15-performance-budgets-and-a-gpu-renderer) | 15–25 | budgets only | [hardware-parity.md](hardware-parity.md) |
-| 16 | [G16 Localization: the five missing key languages](#g16-localization-the-five-missing-key-languages) | 70–110 | no | [localization-parity.md](localization-parity.md) |
+| 16 | [G16 Localization: the four missing key languages](#g16-localization-the-four-missing-key-languages) | 60–100 | no | [localization-parity.md](localization-parity.md) |
 | 17 | [G17 Ecosystem: third-party plug-ins](#g17-ecosystem-third-party-plug-ins) | 20–45 | no | — |
 | 18 | [G18 Generative AI features](#g18-generative-ai-features) | 30–60 | no | — |
 | 19 | [G19 Accessibility](#g19-accessibility) | 15–25 | no | [ui-parity.md](ui-parity.md) |
@@ -192,14 +192,14 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   Crop and Outline landed in #1173.
 - **Estimate:** 15–25 h (the budget run and fixes block beta).
 
-## G16 Localization: the five missing key languages
+## G16 Localization: the four missing key languages
 
 - **Evidence:** Czech render-site bypasses reduced in file dialogs, diagnostics, preset names and contributor tooltips; gradient grammar and printer-mark context corrected (see [localization-parity.md](localization-parity.md)). Native review and the missing-language work remain; estimate unchanged.
 
-- **Missing:** Hindi, Arabic, Indonesian, Korean, Vietnamese catalogs; a right-to-left interface and interface
+- **Missing:** Hindi, Arabic, Indonesian, Vietnamese catalogs; a Korean UI font for the web build; a right-to-left interface and interface
   shaping for Arabic and Devanagari; messages for Simplified Chinese and Brazilian Portuguese; native review of
   every catalog. Measured in [localization-parity.md](localization-parity.md).
-- **Estimate:** 70–110 h plus human review.
+- **Estimate:** 60–100 h plus human review (Korean landed 2026-10-12).
 
 ## G17 Ecosystem: third-party plug-ins
 
@@ -226,6 +226,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | G16: Korean catalog added (complete under the tests); four key languages remain, 60–100 h |
 | 2026-10-11 | minor | Czech render-site follow-up: file-dialog filters, diagnostics, preset numbering, contributor tooltips/plurals, gradient grammar and contextual printer mark styles; estimates unchanged |
 | 2026-10-12 | minor | Document Setup: Edit Artboards closes the modal after applying valid settings; pointer-click regressions; scores and hours unchanged |
 | 2026-10-12 | minor | Artboards: Escape exits editing; an active drag cancels first; shortcut-routing regression; scores and hours unchanged |

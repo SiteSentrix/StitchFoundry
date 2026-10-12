@@ -29,6 +29,9 @@ fn tags_map_to_languages() {
     for tag in ["hu", "hu-HU", "hu_HU.UTF-8", "HU-hu"] {
         assert_eq!(lang_from_tag(tag), Some(hu()), "{tag}");
     }
+    for tag in ["ko", "ko-KR", "ko_KR.UTF-8", "KO-kr"] {
+        assert_eq!(lang_from_tag(tag), Some(ko()), "{tag}");
+    }
     // Traditional Chinese: by region, by script, and with a region after the script.
     assert_eq!(lang_from_tag("zh_TW.UTF-8"), Some(ZH()));
     assert_eq!(lang_from_tag("zh-TW"), Some(ZH()));
@@ -251,7 +254,7 @@ fn language_command_sets_the_preference() {
 
 /// Chinese and Japanese characters (CJK punctuation, kana, ideographs, full-width forms).
 fn is_cjk(c: char) -> bool {
-    matches!(c as u32, 0x3000..=0x9FFF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FFFF)
+    matches!(c as u32, 0x1100..=0x11FF | 0x3000..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FFFF)
 }
 
 /// The UI fonts draw every character the catalogs use, in every family the UI draws text with
@@ -446,7 +449,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 10] = ["cs", "de", "es", "fr", "hu", "it", "ja", "pt-br", "ru", "uk"];
+const KEEPS_MENU_NAMES: [&str; 11] = ["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pt-br", "ru", "uk"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -629,6 +632,34 @@ fn hungarian_reads_as_hungarian() {
     }
     let nested = "command `object.group` is not available right now: nothing selected";
     assert_eq!(message(hu(), nested), "a parancs jelenleg nem érhető el: `object.group`: nincs kijelölés");
+}
+
+fn ko() -> Lang {
+    Lang::from_code("ko").expect("ko registered")
+}
+
+/// Korean uses the vector-illustration vocabulary its users know, has no plural forms, and
+/// translates the reason inside a message too.
+#[test]
+fn korean_reads_as_korean() {
+    for (en, want) in [
+        ("Artboard Tool", "아트보드 도구"),
+        ("Swatches", "견본"),
+        ("Pathfinder", "패스파인더"),
+        ("Stroke", "선"),
+        ("Fill", "칠"),
+        ("Direct Selection Tool", "직접 선택 도구"),
+        ("Save As…", "다른 이름으로 저장…"),
+        ("Undo", "실행 취소"),
+        ("Close", "닫기"),
+    ] {
+        assert_eq!(tr(ko(), en), want);
+    }
+    for n in [0, 1, 3, 21] {
+        assert_eq!(trn(ko(), n, "{n} Layer", "{n} Layers"), format!("레이어 {n}개"));
+    }
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(ko(), nested), "명령 `object.group`은(는) 지금 사용할 수 없습니다: 선택된 항목이 없습니다");
 }
 
 fn uk() -> Lang {
@@ -1057,7 +1088,7 @@ fn select_key_param_error_is_translated() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "hu", "it", "ja", "ru", "uk"];
+const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "ru", "uk"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
