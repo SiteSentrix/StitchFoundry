@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (missing glyphs are looked for again after a font rescan, #1376; scores unchanged; Full-name font matching (#1258); Windows font-service QA pending; scores unchanged; Middle Eastern digit types: Character panel menu › Digits, `{digits}`; the font menu's script filter lists Thai fonts; Thai, Lao, Khmer and Myanmar lines break between words; the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (Fit Headline in a frame one line tall, #1444; frames and paths beyond a billion points hold no text, #1451; scores unchanged; missing glyphs are looked for again after a font rescan, #1376; scores unchanged; Full-name font matching (#1258); Windows font-service QA pending; scores unchanged; Middle Eastern digit types: Character panel menu › Digits, `{digits}`; the font menu's script filter lists Thai fonts; Thai, Lao, Khmer and Myanmar lines break between words; the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -20,7 +20,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 |---|---|---|
 | Point, area and type-on-a-path type; vertical variants | done / partial | vertical point, area and path type have initial support |
 | Area Type Options (rows, columns, inset, first baseline, Auto Size, Shrink Text to Fit) | done | |
-| Threaded text, Fit Headline, Text Wrap | done | |
+| Threaded text, Fit Headline, Text Wrap | done | Fit Headline sees wrapping in a frame one line tall (#1444) |
 | Type on a Path effects and options; brackets | done | #429 |
 | Character and Paragraph panels, styles with overrides | done | mixed-value display for differing paragraphs missing |
 | Character size and horizontal scale after object/group scaling | done | #1034: fields and setters compensate the stored affine; point size follows the transformed em-height axis, not the glyph ink bounds. Range edits, keyboard increments, leading and baseline shift use document points; rotation, reflection and shear remain editable. |
@@ -56,6 +56,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | Fit Headline no longer pushes the tracking to its ceiling and loses glyphs when the frame holds one line (#1445, fixes #1444); text frames, wrap shapes and type paths with coordinates beyond a billion points hold no text, and layout limits its search for room, instead of hanging (#1451); scores and hours unchanged |
 | 2026-10-12 | minor | A character no installed font had is looked for again after the fonts are rescanned, so installing a font fixes it without a restart (#1376, from #992); scores and hours unchanged |
 | 2026-10-12 | minor | Full-name font matching and Missing Fonts searches (#1258): synthetic static/variable font regressions; Windows font-service QA pending; scores and hours unchanged |
 | 2026-10-11 | minor | Middle Eastern: digit types done (Character panel menu › Digits: Default, Arabic, Hindi, Farsi; `text.setFormat` / `text.setRangeStyle {digits}`); Character Direction, kashidas, composers and the split caret still missing; scores unchanged at this rounding |
