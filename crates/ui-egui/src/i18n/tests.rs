@@ -1120,3 +1120,38 @@ fn as_template(s: &str) -> String {
     out.push_str(rest);
     out
 }
+
+/// Render-site labels keep English fallback, placeholders and Czech grammar independent of
+/// the plain language-name key. No global language changes: other UI tests may run alongside.
+#[test]
+fn czech_render_site_follow_up() {
+    for (source, expected) in [
+        ("All readable files", "Všechny čitelné soubory"),
+        ("All placeable files", "Všechny soubory pro umístění"),
+        ("SVG Compressed", "Komprimované SVG"),
+        ("PDF-compatible .ai", ".ai kompatibilní s PDF"),
+        ("VectorCraft Template", "Šablona VectorCraft"),
+    ] {
+        assert_eq!(tr_ctx(cs(), "file-filter", source), expected);
+        assert_eq!(tr_ctx(Lang::EN, "file-filter", source), source);
+    }
+    for source in ["SVG", "PNG", "VectorCraft", "unregistered filter"] {
+        assert_eq!(tr_ctx(cs(), "file-filter", source), source);
+    }
+    assert_eq!(tr_ctx(cs(), "diagnostics", "render"), "vykreslení");
+    assert_eq!(tr_ctx(cs(), "diagnostics", "ui"), "rozhraní");
+    assert_eq!(fmt(tr(cs(), "Preset {number}"), &[("number", "12")]), "Přednastavení 12");
+    assert_eq!(fmt(tr(Lang::EN, "Preset {number}"), &[("number", "12")]), "Preset 12");
+    for (kind, expected) in [("Linear", "Lineární přechod"), ("Radial", "Kruhový přechod"), ("Freeform", "Volný přechod")] {
+        assert_eq!(fmt(tr(cs(), "{kind} Gradient"), &[("kind", tr_ctx(cs(), "gradient-kind", kind))]), expected);
+        assert_eq!(fmt(tr(Lang::EN, "{kind} Gradient"), &[("kind", tr_ctx(Lang::EN, "gradient-kind", kind))]), format!("{kind} Gradient"));
+    }
+    assert_eq!(tr(cs(), "Japanese"), "Japonština");
+    assert_eq!(tr_ctx(cs(), "mark-style", "Japanese"), "Japonské");
+    assert_eq!(tr_ctx(Lang::EN, "mark-style", "Japanese"), "Japanese");
+    assert_eq!(tr(cs(), "PRs"), "PR");
+    for (n, expected) in [(0, "0 commitů"), (1, "1 commit"), (2, "2 commity"), (4, "4 commity"), (5, "5 commitů")] {
+        assert_eq!(trn(cs(), n, "{n} commit", "{n} commits"), expected);
+        assert_eq!(trn(cs(), n, "{n} PR", "{n} PRs"), format!("{n} PR"));
+    }
+}

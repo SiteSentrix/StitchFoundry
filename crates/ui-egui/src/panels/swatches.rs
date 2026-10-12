@@ -241,7 +241,10 @@ pub(crate) fn describe(paint: &Paint, global: bool, spot: bool) -> String {
             };
             crate::i18n::fmt(tl!("{kind}, {model}"), &[("kind", kind), ("model", color.model_name())])
         }
-        Paint::Gradient(g) => crate::i18n::fmt(tl!("{kind} Gradient"), &[("kind", tl!(g.gradient.kind.label()))]),
+        Paint::Gradient(g) => crate::i18n::fmt(
+            tl!("{kind} Gradient"),
+            &[("kind", crate::i18n::tr_ctx(crate::i18n::current(), "gradient-kind", g.gradient.kind.label()))],
+        ),
         Paint::Pattern { .. } => tl!("Pattern").into(),
         Paint::None => tl!("None").into(),
     }

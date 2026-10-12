@@ -307,10 +307,17 @@ dialog_settings!(rfd::FileDialog, rfd::AsyncFileDialog);
 fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
     let pick = match request {
         PickRequest::Open(pick) | PickRequest::Save(pick) => pick,
-        PickRequest::OpenMany => return fileio::place_filters().fold(d.title("Place"), |d, (name, exts)| d.filter(name, exts)),
+        PickRequest::OpenMany => {
+            return fileio::place_filters().fold(d.title(vectorcraft_ui_egui::i18n::t("Place")), |d, (name, exts)| {
+                d.filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts)
+            });
+        }
         PickRequest::Folder => return d,
     };
-    let d = pick.filters.iter().fold(d, |d, (name, exts)| d.filter(name, exts));
+    let d = pick
+        .filters
+        .iter()
+        .fold(d, |d, (name, exts)| d.filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts));
     let d = match &pick.folder {
         Some(folder) => d.folder(folder),
         None => d,

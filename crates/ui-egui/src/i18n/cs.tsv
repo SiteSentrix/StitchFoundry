@@ -1651,7 +1651,7 @@ lighting	Light	Světlo
 	Small Thumbnail View	Malé miniatury
 	Swatch Libraries Menu	Nabídka knihoven vzorníku
 	User Library	Uživatelská knihovna
-	{kind} Gradient	Přechod: {kind}
+	{kind} Gradient	{kind} přechod
 	{kind}, {model}	{kind}, {model}
 	No symbols in this document	V tomto dokumentu nejsou žádné symboly
 	Select art and click New Symbol to make one.	Vyberte kresbu a symbol vytvořte tlačítkem Nový symbol.
@@ -4472,3 +4472,24 @@ effect	Regular	Pravidelný
 	Artistic	Umělecké
 	Film Grain…	Filmové zrno…
 	Highlight Area	Oblast světel
+
+# Czech render-site follow-up (AI drafts; native review requested).
+file-filter	All readable files	Všechny čitelné soubory
+file-filter	All placeable files	Všechny soubory pro umístění
+file-filter	Swatch libraries	Knihovny vzorníků
+file-filter	Flattener presets	Přednastavení sloučení průhlednosti
+file-filter	PDF presets	Přednastavení PDF
+file-filter	Print presets	Přednastavení tisku
+file-filter	SVG Compressed	Komprimované SVG
+file-filter	PDF-compatible .ai	.ai kompatibilní s PDF
+file-filter	VectorCraft Template	Šablona VectorCraft
+file-filter	Templates	Šablony
+diagnostics	render	vykreslení
+diagnostics	ui	rozhraní
+	Preset {number}	Přednastavení {number}
+	PRs	PR
+	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, řádky +{added} / −{deleted} (Δ {delta}), binární soubory +{binary_added} / −{binary_deleted}, {first} – {last}
+@plural	{n} PR|{n} PRs	{n} PR|{n} PR|{n} PR
+@plural	{n} commit|{n} commits	{n} commit|{n} commity|{n} commitů
+gradient-kind	Radial	Kruhový
+mark-style	Japanese	Japonské
