@@ -158,6 +158,27 @@ fn art_of_neighbouring_artboards_off_a_page_is_left_to_its_own_page() {
     assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 2);
 }
 
+/// A `.ai` keeps its art past the artboard edge (#646): a note mostly left of artboard 2 (as notes
+/// for a design are put beside it) doesn't lie over artboard 1 in the row, where it would be taken
+/// for that page's art: page 2 moves right until its art clears page 1's.
+#[test]
+fn art_of_an_ai_page_reaching_left_does_not_lie_over_the_page_before() {
+    let ai = "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>";
+    let page = |content: &str| PdfPage { entries: ai.into(), ..PdfPage::new(100.0, 100.0, content) };
+    // Page 2's note runs from 70 points left of its box to 10 points into it.
+    let pages = [page("0 g 10 10 20 20 re f"), page("1 1 1 rg 1 0 0 RG -70 10 80 60 re B")];
+    let d = open(&pdf(&pages, None), ImportOptions::default());
+    let (a, b) = (d.artboards[0].rect, d.artboards[1].rect);
+    let note = d.layers[1].children().unwrap()[0].visual_bounds().unwrap();
+    assert!(note.x0 >= a.x1 + 36.0, "the note clears artboard 1: {note:?} {a:?}");
+    assert!((b.x0 - note.x0 - 70.0).abs() < 1.0, "and keeps its place by artboard 2: {note:?} {b:?}");
+    assert_eq!((b.width(), b.height()), (100.0, 100.0));
+    // A plain PDF clips its art to the page: its pages stay 36 points apart.
+    let plain = [PdfPage::new(100.0, 100.0, "0 g 10 10 20 20 re f"), PdfPage::new(100.0, 100.0, "1 0 0 RG -70 10 80 60 re S")];
+    let d = open(&pdf(&plain, None), ImportOptions::default());
+    assert_eq!(d.artboards[1].rect.x0, d.artboards[0].rect.x1 + 36.0);
+}
+
 #[test]
 fn an_encrypted_pdf_opens_with_its_password_only() {
     let bytes = pdf(&[PdfPage::new(200.0, 100.0, "1 0 0 rg 10 10 50 50 re f")], Some("secret"));
