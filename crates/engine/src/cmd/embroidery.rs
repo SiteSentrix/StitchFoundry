@@ -2194,6 +2194,9 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     if approval && !customer.is_empty() {
         sub = format!("{sub}   Customer: {customer}");
     }
+    if let Some(cw) = cfg.active_colorway() {
+        sub = format!("{sub}   Colorway: {}", cw.name);
+    }
     sheet_text(&mut doc, 40.0, 96.0, &sub, 9.0, grey)?;
     if let Some((text, widths)) = &code {
         sheet_barcode(&mut doc, widths, pw - 40.0, 36.0, black)?;

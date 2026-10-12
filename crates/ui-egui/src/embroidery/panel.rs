@@ -1998,6 +1998,7 @@ fn machine_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
             app.run("embroidery.settings", json!({ "basting": { "margin": v.clamp(0.0, 50.0) } })).ok();
         }
     }
+    colorway_rows(app, ui);
     // the cost estimate's prices
     let cost = &s["cost"];
     if let Some(v) = check(ui, tl!("Estimate cost"), cost.is_object()) {
@@ -2039,6 +2040,46 @@ fn machine_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
         }
     } else if r.has_focus() {
         app.embroidery.notes_draft = Some(text);
+    }
+}
+
+/// The design's colorways: the one in use, a new one or deleting it, and its threads.
+fn colorway_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Ok(l) = app.run("embroidery.colorway.list", json!({})) else { return };
+    let slots = l["slots"].as_array().cloned().unwrap_or_default();
+    if slots.is_empty() {
+        return;
+    }
+    let colorways = l["colorways"].as_array().cloned().unwrap_or_default();
+    let active = l["active"].as_u64().unwrap_or(0) as usize;
+    let mut names: Vec<String> = vec![tl!("The design's own").to_string()];
+    names.extend(colorways.iter().map(|c| c["name"].as_str().unwrap_or_default().to_string()));
+    let opts: Vec<&str> = names.iter().map(String::as_str).collect();
+    if let Some(i) = pick_names(ui, tl!("Colorway"), "colorway", active, &opts) {
+        app.run("embroidery.colorway.activate", json!({ "index": i })).ok();
+    }
+    ui.horizontal(|ui| {
+        if button(ui, tl!("New Colorway")).clicked() {
+            app.run("embroidery.colorway.add", json!({})).ok();
+        }
+        if active > 0 && button(ui, tl!("Delete Colorway")).clicked() {
+            app.run("embroidery.colorway.remove", json!({})).ok();
+        }
+    });
+    // the active colorway's thread for each of the design's colours
+    let Some(cw) = active.checked_sub(1).and_then(|i| colorways.get(i)) else { return };
+    for (slot, own) in slots.iter().enumerate() {
+        let hex = cw["threads"][slot]["color"].as_str().or_else(|| own["color"].as_str()).unwrap_or("#000000");
+        let Some(c) = vectorcraft_embroidery::sf_core::Rgb::from_hex(hex) else { continue };
+        let mut rgb = [c.r, c.g, c.b];
+        ui.horizontal(|ui| {
+            ui.label(own["name"].as_str().unwrap_or_default());
+            ui.label("→");
+            if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).changed() {
+                let hex = vectorcraft_embroidery::sf_core::Rgb::new(rgb[0], rgb[1], rgb[2]).to_hex();
+                app.run("embroidery.colorway.setThread", json!({ "slot": slot, "color": hex })).ok();
+            }
+        });
     }
 }
 

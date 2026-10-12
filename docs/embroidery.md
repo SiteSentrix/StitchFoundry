@@ -512,6 +512,12 @@ time and thread used, and whether the design fits the hoop. Its settings:
   charge an order, in a currency; `embroidery.cost {quantity}` prices an order, the set-up spread
   over its pieces (`embroidery.settings {cost: {perThousand?, perHour?, threadPerKm?, setup?,
   heads?, currency?}}`).
+- **Colorway**: other thread schemes for the same design, a shirt in navy and one in white.
+  *New Colorway* copies the threads in use; each of the design's colours (in the order it first
+  uses them) then gets a thread of the colorway's own, from the colour buttons below. The
+  colorway picked is what the stitches show, machine files carry and worksheets print (named
+  there); *The design's own* goes back to the threads set on the objects, and the art keeps its
+  colours throughout (`embroidery.colorway.list|add|activate|setThread|rename|remove`).
 - **Thread chart**: the chart the panel's thread list picks from. Threads keep their name and
   code; PES and JEF files use the nearest colour of the machine's own palette. **Match Threads to
   Chart** (also in the Embroidery menu, for the selection) gives every stitched object the chart's

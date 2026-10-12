@@ -353,6 +353,75 @@ fn monograms_stack_wear_ornaments_and_ring_borders() {
 }
 
 #[test]
+fn colorways_rethread_the_design_everywhere() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let a = rect(&mut s, 20.0 * PT, 20.0 * PT, 30.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    rect(&mut s, 60.0 * PT, 20.0 * PT, 30.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#1a3e8c"})).unwrap();
+    let colours = |s: &Session| s.embroidery_plan().unwrap().pattern().threads.iter().map(|t| t.color.to_hex()).collect::<Vec<_>>();
+    assert_eq!(colours(&s), ["#d62828", "#1a3e8c"]);
+    let l = s.execute("embroidery.colorway.list", &json!({})).unwrap();
+    assert_eq!((l["active"].as_u64(), l["slots"].as_array().unwrap().len()), (Some(0), 2), "{l}");
+    // a copy, made the active one, then its first colour green
+    let r = s.execute("embroidery.colorway.add", &json!({"name": "Spring"})).unwrap();
+    assert_eq!(r["index"].as_u64(), Some(1));
+    s.execute("embroidery.colorway.setThread", &json!({"slot": 0, "color": "#2a9d4b", "name": "Leaf"})).unwrap();
+    assert_eq!(colours(&s), ["#2a9d4b", "#1a3e8c"]);
+    // the art keeps its own colour; machine files carry the colorway
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = s.execute("embroidery.export", &json!({"format": "pes"})).unwrap();
+    assert_eq!(r["colors"].as_u64(), Some(2));
+    // back to the design's own, and to the colorway again
+    s.execute("embroidery.colorway.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(colours(&s), ["#d62828", "#1a3e8c"]);
+    s.execute("embroidery.colorway.activate", &json!({"index": 1})).unwrap();
+    assert_eq!(colours(&s)[0], "#2a9d4b");
+    // printed on the worksheet
+    s.execute("embroidery.worksheet", &json!({"barcode": "none"})).unwrap();
+    let mut texts = Vec::new();
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    assert!(texts.iter().any(|t| t.contains("Colorway: Spring")), "{texts:?}");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    // a second, renamed; undo the rename
+    s.execute("embroidery.colorway.add", &json!({"from": 0})).unwrap();
+    assert_eq!(colours(&s)[0], "#d62828", "copied from the design's own");
+    s.execute("embroidery.colorway.rename", &json!({"name": "Night"})).unwrap();
+    let l = s.execute("embroidery.colorway.list", &json!({})).unwrap();
+    assert_eq!(l["colorways"][1]["name"], "Night");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let l = s.execute("embroidery.colorway.list", &json!({})).unwrap();
+    assert_eq!(l["colorways"][1]["name"], "Colorway 2");
+    // deleting the first keeps the second active, now number 1
+    let r = s.execute("embroidery.colorway.remove", &json!({"index": 1})).unwrap();
+    assert_eq!(r["active"].as_u64(), Some(1));
+    let r = s.execute("embroidery.colorway.remove", &json!({})).unwrap();
+    assert_eq!(r["active"].as_u64(), Some(0));
+    assert_eq!(colours(&s), ["#d62828", "#1a3e8c"]);
+    // bad requests
+    for (cmd, p) in [
+        ("embroidery.colorway.activate", json!({"index": 3})),
+        ("embroidery.colorway.setThread", json!({"slot": 0, "color": "#000000"})),
+        ("embroidery.colorway.rename", json!({"name": "x"})),
+        ("embroidery.colorway.remove", json!({})),
+        ("embroidery.colorway.add", json!({"from": 7})),
+    ] {
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+    }
+    s.execute("embroidery.colorway.add", &json!({})).unwrap();
+    for p in [json!({"slot": 2, "color": "#000000"}), json!({"slot": 0, "color": "green"})] {
+        assert!(s.execute("embroidery.colorway.setThread", &p).is_err(), "{p}");
+    }
+}
+
+#[test]
 fn costs_are_estimated_and_printed() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

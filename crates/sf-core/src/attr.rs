@@ -656,6 +656,41 @@ pub struct DocEmbroidery {
     /// What sewing the design costs, shown with its figures and on worksheets (none: not shown).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost: Option<CostModel>,
+    /// Other thread schemes for the design.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub colorways: Vec<Colorway>,
+    /// The scheme in use: 0 the design's own threads, else `colorways[colorway - 1]`.
+    #[serde(skip_serializing_if = "is_zero_index")]
+    pub colorway: usize,
+}
+
+fn is_zero_index(v: &usize) -> bool {
+    *v == 0
+}
+
+/// Colorways a design keeps at most.
+pub const MAX_COLORWAYS: usize = 50;
+
+/// A thread scheme for the design: a thread for each of its colours ("slots": its own threads
+/// in the order they are first used).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Colorway {
+    pub name: String,
+    pub threads: Vec<Thread>,
+}
+
+impl DocEmbroidery {
+    /// The colorway in use, if not the design's own threads.
+    pub fn active_colorway(&self) -> Option<&Colorway> {
+        self.colorway.checked_sub(1).and_then(|i| self.colorways.get(i))
+    }
+
+    /// The threads of scheme `index` (0: the design's own, `own`) for each slot: a colorway's
+    /// own where it has one, the design's for colours it gained since.
+    pub fn threads_of(&self, index: usize, own: &[Thread]) -> Vec<Thread> {
+        let cw = index.checked_sub(1).and_then(|i| self.colorways.get(i));
+        own.iter().enumerate().map(|(k, t)| cw.and_then(|c| c.threads.get(k)).cloned().unwrap_or_else(|| t.clone())).collect()
+    }
 }
 
 /// What sewing a design costs: a price per thousand stitches, the machine's time (shared by
@@ -846,6 +881,8 @@ impl Default for DocEmbroidery {
             font: None,
             notes: String::new(),
             cost: None,
+            colorways: Vec::new(),
+            colorway: 0,
         }
     }
 }
