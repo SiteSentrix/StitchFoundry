@@ -395,7 +395,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CS-02 | Offset fills (concentric offsets) | Done | Contour fill with a ring count and spacing (*Rings*) | – |
 | CS-03 | Spiral fills | Done | | – |
 | CS-04 | Radial (ripple) fills | Done | | – |
-| CS-05 | Flexi-splits (split lines following a curve) | Partial | A drawn curve repeated across the fill (`embroidery.carveSplits` `repeat`); split lines that follow the shape by themselves still missing | 2 |
+| CS-05 | Flexi-splits (split lines following a curve) | Done | A drawn curve repeated across the fill (`embroidery.carveSplits` `repeat`), and split lines that follow the shape by themselves: its outline repeated inward (Embroidery › Contour Split Lines) | – |
 | CS-06 | Florentine effect (stitches follow a drawn curve) | Done | Turning fill along inclination lines; tatami rows that copy a drawn line (Embroidery › Fill Along Lines, one line) | – |
 | CS-07 | Liquid effect (curved fill between two guide curves) | Done | Embroidery › Fill Along Lines with two lines: tatami rows changing shape evenly from one line to the other (public description: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Decorative/curves/curves-11.htm) | – |
 | MO-01 | Single motifs (place one stitched motif) | Done | Embroidery › Place Motif puts one motif on the artboard as a run you move and reshape; the Motif tool places one where you click, or as long as you drag and turned your way | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 135 done,
-34 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 136 done,
+33 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

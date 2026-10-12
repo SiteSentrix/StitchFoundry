@@ -1613,6 +1613,28 @@ fn stamps_from_the_library_press_into_fills() {
 }
 
 #[test]
+fn contour_split_lines_follow_the_outline_inward() {
+    let mut s = session();
+    // 200 × 150 pt: 70.6 × 52.9 mm, so rings 5 mm apart run out after five
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let plain = needles(&s, a);
+    let r = s.execute("embroidery.contourSplits", &json!({"spacing": 5})).unwrap();
+    assert_eq!(r["lines"].as_u64(), Some(5), "{r}");
+    let lines = emb(&s, a).splits;
+    assert!(lines.iter().all(|l| l.first() == l.last() && l.len() >= 5));
+    // the first ring is 5 mm in from the left edge
+    let left = lines[0].iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    assert!((left - (10.0 + 5.0 * vectorcraft_embroidery::PT_PER_MM)).abs() < 0.5, "{left}");
+    assert_ne!(needles(&s, a), plain);
+    // too far apart for any ring, too close, or not a tatami fill
+    assert!(s.execute("embroidery.contourSplits", &json!({"spacing": 100})).is_err());
+    assert!(s.execute("embroidery.contourSplits", &json!({"spacing": 0.1})).is_err());
+    s.execute("embroidery.set", &json!({"type": "satinfill"})).unwrap();
+    assert!(s.execute("embroidery.contourSplits", &json!({})).is_err());
+}
+
+#[test]
 fn a_repeated_line_carves_flexi_splits_across_the_fill() {
     let mut s = session();
     let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);

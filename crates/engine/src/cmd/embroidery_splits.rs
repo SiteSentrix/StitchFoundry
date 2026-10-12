@@ -43,6 +43,15 @@ pub fn specs() -> Vec<CommandSpec> {
             carve_splits
         ),
         cmd!(
+            "embroidery.contourSplits",
+            "Contour Split Lines",
+            ["Embroidery"],
+            None,
+            "{ids?, spacing?: mm (0.5–100; 4)} split lines that follow the selected tatami fills' outlines: each outline, holes too, repeated inward every `spacing` until the shape runs out, so the fill shows rings along its edge → {ids, lines}",
+            has_selection,
+            contour_splits
+        ),
+        cmd!(
             "embroidery.carveStamp",
             "Carve Stamp",
             [],
@@ -249,6 +258,64 @@ fn carve_stamp(s: &mut Session, p: &Value) -> Result<Value> {
     let added: usize = plans.iter().map(|(_, l)| l.len()).sum();
     let ids: Vec<NodeId> = plans.iter().map(|(id, _)| *id).collect();
     s.edit("Carve Stamp", |d, _| {
+        for (id, lines) in &plans {
+            let e = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery.as_deref_mut().ok_or(EngineError::NoNode(*id))?;
+            e.splits.extend(lines.iter().cloned());
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "lines": added }))
+}
+
+/// Most rings Contour Split Lines draws in one fill.
+const MAX_RINGS: usize = 200;
+
+fn contour_splits(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.contourSplits";
+    let spacing = match p.get("spacing") {
+        None | Some(Value::Null) => 4.0,
+        Some(v) => v.as_f64().filter(|v| (0.5..=100.0).contains(v)).ok_or_else(|| bad(CMD, "`spacing` is 0.5 to 100 mm"))?,
+    };
+    let d = &s.doc()?.doc;
+    let fills: Vec<NodeId> = leaf_targets(s, &targets(s, p)?)?.into_iter().filter(|id| tatami(d, *id)).collect();
+    if fills.is_empty() {
+        return Err(bad(CMD, "select tatami fills"));
+    }
+    let mut plans: Vec<(NodeId, Vec<Vec<sf_core::Point>>)> = Vec::new();
+    for id in &fills {
+        let Some(n) = d.node(*id) else { continue };
+        // the outline moved in a spacing at a time, until nothing is left
+        let mut lines: Vec<Vec<sf_core::Point>> = Vec::new();
+        for region in regions_mm(n) {
+            for k in 1..=MAX_RINGS {
+                let inset = sf_core::geom::poly::offset(std::slice::from_ref(&region), -spacing * k as f64);
+                if inset.is_empty() {
+                    break;
+                }
+                for ring in inset.iter().flat_map(|q| q.rings()) {
+                    let mut pts: Vec<sf_core::Point> = ring.iter().map(|q| *q * PT_PER_MM).collect();
+                    if let Some(&first) = pts.first() {
+                        pts.push(first);
+                    }
+                    if pts.len() >= 4 {
+                        lines.push(pts);
+                    }
+                }
+            }
+        }
+        if lines.is_empty() {
+            continue;
+        }
+        let have = n.embroidery.as_deref().map_or((0, 0), |e| (e.splits.len(), e.splits.iter().map(Vec::len).sum()));
+        check_size(CMD, have, &lines)?;
+        plans.push((*id, lines));
+    }
+    if plans.is_empty() {
+        return Err(bad(CMD, format!("the fills are too small for rings {spacing} mm apart")));
+    }
+    let added: usize = plans.iter().map(|(_, l)| l.len()).sum();
+    let ids: Vec<NodeId> = plans.iter().map(|(id, _)| *id).collect();
+    s.edit("Contour Split Lines", |d, _| {
         for (id, lines) in &plans {
             let e = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?.embroidery.as_deref_mut().ok_or(EngineError::NoNode(*id))?;
             e.splits.extend(lines.iter().cloned());

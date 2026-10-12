@@ -265,6 +265,10 @@ the fill: an embossed texture without another thread.
   object is a tatami fill, the front-most one is the stamp for the others.
   With the `repeat` parameter (mm), each line is copied that far apart across the whole fill:
   draw one wave across a shape for wavy lines all over it (flexi splits).
+- **Contour split lines:** **Embroidery › Contour Split Lines** gives the selected tatami fills
+  split lines that follow their outlines: each outline, holes too, repeated inward every 4 mm
+  (`embroidery.contourSplits {spacing}`) until the shape runs out, so the fill shows rings along
+  its edge.
 - **Carving stamps:** **Embroidery › Carve Stamp** presses a stamp from the library into the
   selected tatami fills, in the middle of each and 60% as wide as its smaller side: star, heart,
   flower, leaf (with its veins), spiral, sun, moon, snowflake, paw print, swirl, shell,
@@ -567,6 +571,7 @@ tool list for all parameters):
 | `embroidery.autoDirection` / `addGuide` / `moveGuide` / `removeGuide` / `clearGuides` / `setBeads` | stitch direction and start/stop |
 | `embroidery.setParams {params: {texture: {pattern, size?, angle?} \| null}}` | a tatami fill's texture (programmed splits): `diamonds`, `waves`, `herringbone`, `bricks`, `circles`, `scales` |
 | `embroidery.carveSplits {ids?, repeat?, keep?}`, `embroidery.setSplits {id, splits}`, `embroidery.clearSplits {ids?}` | split lines in tatami fills: carved from other art (a stamp's outline, lines, lines repeated across the fill), set from points, cleared |
+| `embroidery.contourSplits {ids?, spacing?}` | split lines following tatami fills' outlines inward |
 | `embroidery.carveStamp {stamp, ids?, at?, size?, angle?}`, `embroidery.stamps` | press a carving stamp from the library into tatami fills; list the library |
 | `embroidery.fillAlongLines {ids?, keep?}`, `embroidery.setFlowLines {id, lines}`, `embroidery.clearFlowLines {ids?}` | flow lines in tatami fills: rows copying one line or flowing from one to another, taken from other art, set from points, cleared |
 | `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif (built-in or the design's) as a path sewn in a single run |
