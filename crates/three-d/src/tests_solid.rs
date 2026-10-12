@@ -349,3 +349,16 @@ fn the_edge_index_finds_the_nearest_edge() {
         assert!((fast - slow).abs() < 1e-9, "{q:?}: {fast} against {slow}");
     }
 }
+
+/// From a point outside the grid, an edge further along the grid's side can be nearer than one
+/// straight ahead: the search doesn't stop before it has looked there.
+#[test]
+fn the_edge_index_looks_along_the_side_from_outside() {
+    let ring = |b: BezPath| rings(&shape(&b).0, 64.0, MAX_SOLID_POINTS).unwrap().remove(0);
+    // Straight ahead of the point, a little further up its side, and the far corner (a 64 pt grid).
+    let rings = vec![ring(square(2.5, 0.0, 1.0)), ring(square(0.0, 4.2, 0.8)), ring(square(63.0, 63.0, 1.0))];
+    let edges = Edges::new(&rings);
+    let q = Point::new(-10.0, 0.5);
+    let (fast, slow) = (edges.distance(q), edge_distance(&rings, q));
+    assert!((fast - slow).abs() < 1e-9, "{fast} against {slow}");
+}

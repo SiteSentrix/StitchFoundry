@@ -701,14 +701,18 @@ impl Edges {
         Self { edges, origin: bounds.origin(), size, n: N, buckets }
     }
 
+    /// The bucket row or column of coordinate `v`, from the grid's origin `o` on that axis.
+    fn cell(&self, v: f64, o: f64) -> isize {
+        (((v - o) / self.size).floor() as isize).clamp(0, self.n as isize - 1)
+    }
+
     /// Is `p` within `tolerance` of an edge? Only the buckets `p` could share an edge with are
     /// looked at.
     fn near(&self, p: Point, tolerance: f64) -> bool {
         self.touch(Rect::new(p.x - tolerance, p.y - tolerance, p.x + tolerance, p.y + tolerance)) && {
             let n = self.n as isize;
-            let index = |v: f64, o: f64| (((v - o) / self.size).floor() as isize).clamp(0, n - 1);
-            let (i0, i1) = (index(p.x - tolerance, self.origin.x), index(p.x + tolerance, self.origin.x));
-            let (j0, j1) = (index(p.y - tolerance, self.origin.y), index(p.y + tolerance, self.origin.y));
+            let (i0, i1) = (self.cell(p.x - tolerance, self.origin.x), self.cell(p.x + tolerance, self.origin.x));
+            let (j0, j1) = (self.cell(p.y - tolerance, self.origin.y), self.cell(p.y + tolerance, self.origin.y));
             (j0..=j1).any(|j| {
                 (i0..=i1).any(|i| {
                     self.buckets[(j * n + i) as usize]
@@ -724,9 +728,8 @@ impl Edges {
     /// buckets `r` covers comes more than once).
     fn each(&self, r: Rect, mut f: impl FnMut(Point, Point)) {
         let n = self.n as isize;
-        let index = |v: f64, o: f64| (((v - o) / self.size).floor() as isize).clamp(0, n - 1);
-        for j in index(r.y0, self.origin.y)..=index(r.y1, self.origin.y) {
-            for i in index(r.x0, self.origin.x)..=index(r.x1, self.origin.x) {
+        for j in self.cell(r.y0, self.origin.y)..=self.cell(r.y1, self.origin.y) {
+            for i in self.cell(r.x0, self.origin.x)..=self.cell(r.x1, self.origin.x) {
                 for (a, b) in self.buckets[(j * n + i) as usize].iter().filter_map(|k| self.edges.get(*k as usize)) {
                     if a.x.min(b.x) <= r.x1 && a.x.max(b.x) >= r.x0 && a.y.min(b.y) <= r.y1 && a.y.max(b.y) >= r.y0 {
                         f(*a, *b);
@@ -739,8 +742,8 @@ impl Edges {
     /// Does any edge pass through `r` (its bounding box, at least, overlapping it)?
     fn touch(&self, r: Rect) -> bool {
         let n = self.n as isize;
-        let index = |v: f64, o: f64| (((v - o) / self.size).floor() as isize).clamp(0, n - 1);
-        let (i0, i1, j0, j1) = (index(r.x0, self.origin.x), index(r.x1, self.origin.x), index(r.y0, self.origin.y), index(r.y1, self.origin.y));
+        let (i0, i1) = (self.cell(r.x0, self.origin.x), self.cell(r.x1, self.origin.x));
+        let (j0, j1) = (self.cell(r.y0, self.origin.y), self.cell(r.y1, self.origin.y));
         (j0..=j1).any(|j| {
             (i0..=i1).any(|i| {
                 self.buckets[(j * n + i) as usize]
@@ -760,7 +763,7 @@ impl Edges {
         }
         let n = self.n as isize;
         let (ci, cj) = ((fx.floor() as isize).clamp(0, n - 1), (fy.floor() as isize).clamp(0, n - 1));
-        // How far `p` is outside the grid, which every bucket's distance bound must add.
+        // How far `p` is outside the grid: the nearest point of the grid to it lies in `p`'s bucket.
         let outside = (fx.clamp(0.0, n as f64) - fx).hypot(fy.clamp(0.0, n as f64) - fy) * self.size;
         let mut best = f64::INFINITY;
         for r in 0..n {
@@ -776,8 +779,9 @@ impl Edges {
                     }
                 }
             }
-            // Buckets r + 1 away are at least r buckets from any point of `p`'s own.
-            if best <= outside + r as f64 * self.size {
+            // Buckets r + 1 away are at least r buckets from any point of `p`'s own, and that
+            // far across the grid from a `p` outside it (at right angles to its way in, at worst).
+            if best <= outside.hypot(r as f64 * self.size) {
                 break;
             }
         }
