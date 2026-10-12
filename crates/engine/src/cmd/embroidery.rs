@@ -228,7 +228,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Worksheet",
             ["Embroidery"],
             None,
-            "{kind?: production|approval|pattern (production), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given), barcode?: code128|code39|none (code128: the job's barcode at the top right), barcodeText?: text (the design's name; up to 48 characters, Code 39: digits, letters, space and -.$/+%)} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
+            "{kind?: production|approval|pattern (production), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given), barcode?: code128|code39|none (code128: the job's barcode at the top right), barcodeText?: text (the design's name; up to 48 characters, Code 39: digits, letters, space and -.$/+%), colorways?: bool (true: each colorway's threads, colour by colour, when the design has any)} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
             has_doc,
             worksheet
         ),
@@ -2301,6 +2301,29 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     if stats.colors.len() > room {
         sheet_text(&mut doc, 58.0, y, &format!("… and {} more", stats.colors.len() - room), 9.0, grey)?;
         y += 15.0;
+    }
+    // the design's colorways, a line or two each: its threads colour by colour
+    if !cfg.colorways.is_empty() && p.get("colorways").and_then(Value::as_bool).unwrap_or(true) {
+        let width = ((pw - 98.0) / 4.8).max(20.0) as usize;
+        y += 8.0;
+        sheet_text(&mut doc, 40.0, y, "Colorways", 11.0, black)?;
+        y += 16.0;
+        let own = &plan.own_threads;
+        let schemes = std::iter::once(("The design's own".to_string(), own.clone()))
+            .chain(cfg.colorways.iter().enumerate().map(|(i, c)| (c.name.clone(), cfg.threads_of(i + 1, own))));
+        let mut printed = 0;
+        for (k, (name, threads)) in schemes.enumerate() {
+            let mark = if k == cfg.colorway { " (in use)" } else { "" };
+            let list: Vec<String> = threads.iter().enumerate().map(|(i, t)| format!("{}. {}", i + 1, t.label())).collect();
+            for line in wrap_text(&format!("{name}{mark}: {}", list.join(", ")), width).iter().take(3) {
+                if printed >= 14 {
+                    break;
+                }
+                sheet_text(&mut doc, 58.0, y, line, 9.0, black)?;
+                y += 12.0;
+                printed += 1;
+            }
+        }
     }
     if !notes.is_empty() {
         // wrapped to the page, eight lines at most
