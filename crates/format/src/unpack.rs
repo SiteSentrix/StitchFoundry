@@ -11,6 +11,8 @@ use crate::{BLOB_MAGIC, FormatError, MAX_BLOB, MAX_BLOBS, MAX_JSON, MAX_UNPACKED
 
 /// Bytes unpacked at a time while looking for the end of the JSON.
 const CHUNK: u64 = 64 << 10;
+/// Most bytes reserved for an entry before any of it is unpacked.
+const RESERVE_MAX: usize = 64 << 20;
 
 fn damaged(e: impl std::fmt::Display) -> FormatError {
     FormatError::NotVectorcraft(format!("damaged compressed data: {e}"))
@@ -206,7 +208,8 @@ impl Stream<'_> {
         }
         let mut bytes = Vec::new();
         let n = usize::try_from(len).map_err(|_| FormatError::TooBig)?;
-        bytes.try_reserve_exact(n).map_err(|_| FormatError::TooBig)?;
+        // The length is the file's word: reserve up to a bound, and let real data grow the rest.
+        bytes.try_reserve_exact(n.min(RESERVE_MAX)).map_err(|_| FormatError::TooBig)?;
         let got = (&mut self.r).take(len).read_to_end(&mut bytes).map_err(damaged)?;
         self.pos += got as u64;
         Ok((got as u64 == len).then_some(bytes))
