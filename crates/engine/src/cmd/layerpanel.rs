@@ -9,7 +9,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
-use super::layer::{make_layer, row_roots, rows_param};
+use super::layer::{NewLayers, row_roots, rows_param};
 use super::*;
 use crate::EngineError;
 
@@ -234,28 +234,23 @@ fn template(s: &mut Session, p: &Value) -> Result<Value> {
 /// another) into layer `into`, keeping the document's stacking order, then delete the emptied
 /// layers.
 fn merge_into(d: &mut Document, into: NodeId, others: &[NodeId]) -> Result<()> {
+    let listed: HashSet<NodeId> = others.iter().copied().collect();
     let own: Vec<NodeId> =
-        d.node(into).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).filter(|c| !others.contains(c)).collect()).unwrap_or_default();
-    let mut moved = vec![];
+        d.node(into).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).filter(|c| !listed.contains(c)).collect()).unwrap_or_default();
+    let (mut moved, mut emptied) = (vec![], vec![]);
     for id in others {
         let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
         if n.is_layer() {
             moved.extend(n.children().into_iter().flatten().map(|c| c.id));
+            emptied.push(*id);
         } else {
             moved.push(*id);
         }
     }
     // Where everything is now: the merged layer stacks its contents in this order.
     let keys: HashMap<NodeId, Vec<usize>> = own.iter().chain(&moved).filter_map(|id| Some((*id, d.index_path(*id)?))).collect();
-    let mut taken = vec![];
-    for id in &moved {
-        taken.push(d.remove(*id)?);
-    }
-    for id in others {
-        if d.node(*id).is_some() {
-            d.remove(*id)?;
-        }
-    }
+    let taken = d.remove_many(&moved)?;
+    d.remove_many(&emptied)?;
     let ch = d.children_mut(Some(into))?;
     let mut all = std::mem::take(ch);
     all.extend(taken);
@@ -312,9 +307,7 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     let others: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && l.visible && !l.is_template()).map(|l| l.id).collect();
     let hidden: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && !l.visible && !l.is_template()).map(|l| l.id).collect();
     s.edit("Flatten Artwork", |d, sel| {
-        for h in &hidden {
-            d.remove(*h)?;
-        }
+        d.remove_many(&hidden)?;
         // Hidden layers are discarded with their guides.
         d.drop_guides_of_deleted_layers(sel);
         merge_into(d, into, &others)?;
@@ -352,39 +345,38 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let new = s.edit(if build { "Release to Layers (Build)" } else { "Release to Layers (Sequence)" }, |d, sel| {
         // A group's objects go into sublayers of the layer holding it, where it was.
-        let (parent, mut index) = if group {
+        let (parent, index) = if group {
             let layer = d.layer_containing(id).ok_or(EngineError::NoNode(id))?;
             let (par, i, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
             if par == Some(layer) { (layer, i) } else { (layer, usize::MAX) }
         } else {
             (id, 0)
         };
-        let mut originals = vec![];
-        for o in &objects {
-            originals.push(Arc::unwrap_or_clone(d.remove(*o)?));
-        }
+        let originals = d.remove_many(&objects)?;
         if group {
             d.remove(id)?;
         }
-        let mut new = vec![];
+        let mut names = NewLayers::of(d);
+        let mut layers = Vec::with_capacity(originals.len());
         let last = originals.len().saturating_sub(1);
         for k in 0..originals.len() {
-            let mut layer = make_layer(d, None);
-            let lid = layer.id;
-            let held: Vec<Node> = if build {
+            let mut layer = names.make(d, None);
+            let held: Vec<Arc<Node>> = if build {
                 // Copies of the objects below and itself; the top layer keeps the originals.
-                (0..=k).filter_map(|j| originals.get(j)).map(|o| if k == last { o.clone() } else { d.reid(o) }).collect()
+                (0..=k).filter_map(|j| originals.get(j)).map(|o| if k == last { o.clone() } else { Arc::new(d.reid(o)) }).collect()
             } else {
                 originals.get(k).cloned().into_iter().collect()
             };
             if let Some(ch) = layer.children_mut() {
-                ch.extend(held.into_iter().map(Arc::new));
+                ch.extend(held);
             }
-            let at = if group { index } else { index.min(d.children(Some(parent)).map_or(0, Vec::len)) };
-            d.insert(Some(parent), at, layer)?;
-            index = at.saturating_add(1);
-            new.push(lid);
+            names.add(&layer);
+            layers.push(Arc::new(layer));
         }
+        let new: Vec<NodeId> = layers.iter().map(|l| l.id).collect();
+        let ch = d.children_mut(Some(parent))?;
+        let at = index.min(ch.len());
+        ch.splice(at..at, layers);
         sel.prune(d);
         Ok(new)
     })?;
