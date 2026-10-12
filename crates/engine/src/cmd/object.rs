@@ -479,6 +479,11 @@ fn send_to_current_layer(s: &mut Session, _: &Value) -> Result<Value> {
     // Ids are reused after undo: the remembered current layer must still be a layer.
     let st = s.doc()?;
     let layer = st.current_layer().or_else(|| st.doc.default_layer()).ok_or_else(|| EngineError::Other("no current layer".into()))?;
+    // When the current layer is hidden or locked, or is inside a hidden or locked layer, the
+    // command fails with the error that `DocState::target_parent` gives for new art.
+    if !st.doc.is_editable(layer) {
+        return Err(EngineError::Other("the target layer is locked or hidden".into()));
+    }
     // When the selected objects are already the topmost in the current layer, in paint order, the
     // document and its undo history stay as they are.
     if st.doc.children(Some(layer)).is_some_and(|c| c.iter().rev().map(|n| n.id).take(ids.len()).eq(ids.iter().rev().copied())) {
