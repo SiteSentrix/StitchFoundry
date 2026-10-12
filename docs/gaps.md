@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G4: full-name font matching (#1258); Windows font-service QA pending; estimate unchanged; G11: no-op anchor Align keeps history and saved state (#1180 follow-up); estimates unchanged; G1: dedicated Eyedropper cursor and precise-cursor checks (#1269); estimates unchanged; G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G1: Curvature point display improved (#1236, in part); estimates unchanged; G4: full-name font matching (#1258); Windows font-service QA pending; estimate unchanged; G11: no-op anchor Align keeps history and saved state (#1180 follow-up); estimates unchanged; G1: dedicated Eyedropper cursor and precise-cursor checks (#1269); estimates unchanged; G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -43,6 +43,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G1 Interaction fidelity
 
+- **Improved:** Curvature uses circular point markers without direction handles or duplicate markers
+  (#1236, in part); real egui frames cover creation, existing paths, Anchor Size and Hide Edges.
+  The request to change interpolation of existing paths remains open.
 - **Improved:** Eyedropper has an original pipette cursor at its sampling tip; Use Precise
   Cursors keeps the crosshair. Bitmap/DPI and preference checks cover the distinction (#1269).
   OS cursor display and Caps Lock remain unverified.
@@ -214,6 +217,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | G1: Curvature point display improved; existing-path interpolation request remains open (#1236, in part); estimates unchanged |
 | 2026-10-12 | minor | G4: full-name font matching and Missing Fonts searches verified (#1258); Windows font-service QA pending; estimate unchanged |
 | 2026-10-12 | minor | G11: no-op anchor Align no longer consumes Undo, clears Redo or marks saved paths modified (#1180 follow-up); estimate unchanged |
 | 2026-10-12 | minor | G1: Eyedropper uses an original pipette glyph; precise setting and DPI checks verified (#1269); estimates unchanged |

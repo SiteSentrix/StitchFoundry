@@ -408,9 +408,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     // Selection visuals and tool overlays.
     let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
+    let view_info = app.view_info();
+    // View → Hide Gradient Annotator hides the Gradient tool's annotator.
+    let overlays = if !revolve_edit && (app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator) {
+        app.session.overlays(view_info)
+    } else {
+        vec![]
+    };
     if app.ui.view.edges && !revolve_edit {
         hover_highlight(app, &painter, &xf);
-        selection_overlay(app, &painter, &xf);
+        selection_overlay(app, &painter, &xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })));
         if app.ui.view.text_threads {
             thread_overlay(app, &painter, &xf);
         }
@@ -418,12 +425,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             hidden_chars_overlay(app, &painter, &xf);
         }
     }
-    let view_info = app.view_info();
-    // View → Hide Gradient Annotator hides the Gradient tool's annotator.
-    if !revolve_edit && (app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator) {
-        let overlays = app.session.overlays(view_info);
-        draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
-    }
+    draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
     ime_output(app, ui.ctx(), &xf);
     crate::place::paint_drop_highlight(app, ui.ctx(), &painter, rect);
 
@@ -1454,6 +1456,10 @@ fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size:
     }
 }
 
+fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
+    p.circle(c, size / 2.0, if filled { color } else { Color32::WHITE }, Stroke::new(1.0, color));
+}
+
 /// Type → Show Hidden Characters: spaces as dots, ¶ at paragraph ends, # at the end of a story.
 fn hidden_chars_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(st) = app.session.active() else { return };
@@ -1593,7 +1599,7 @@ fn print_tiling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
 /// The print tiling's lines: a neutral grey that reads on the paper and on the pasteboard.
 const PRINT_TILING: Color32 = Color32::from_gray(96);
 
-fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
     // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
     // a drag moves or resizes the selection, so only the art is seen going with the pointer (#712).
     let show_box = app.session.tool_id() == "selection"
@@ -1608,6 +1614,7 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(st) = app.session.active() else { return };
     let tool = app.session.tool_id();
     let direct = vectorcraft_tools::catalog::edits_anchors(tool);
+    let curvature = tool == "curvature";
     // Selection & Anchor Display › Size (1–7, 3 the default): anchors, handles and the bounding
     // box's handles a point bigger or smaller per step.
     let look = HandleLook::of(&app.session.prefs);
@@ -1653,6 +1660,10 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                 return;
             }
             let NodeKind::Path { path, .. } = &c.kind else { return };
+            // The Curvature tool owns its points while drawing; existing paths use this overlay.
+            if curvature && curve_points_from_tool {
+                return;
+            }
             let selected_segments = st.selection.segments.get(&c.id);
             if let Some(segments) = selected_segments {
                 for &(si, seg) in segments {
@@ -1674,7 +1685,7 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                     None => !direct || c.id == *id,
                 };
                 let sp = xf.to_screen(a.p);
-                if sel && (direct || partial.is_some()) {
+                if !curvature && sel && (direct || partial.is_some()) {
                     with_handles += 1;
                     let sides = path.subpaths.get(si).map(|subpath| st.selection.handle_sides(c.id, si, ai, subpath)).unwrap_or((true, true));
                     handles.extend(
@@ -1685,13 +1696,12 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                     );
                 }
                 let anchor_selected = sel && selected_segments.is_none();
-                anchor_square(
-                    p,
-                    sp,
-                    if anchor_selected && partial.is_some() { selected_anchor(color) } else { color },
-                    anchor_selected,
-                    anchor(partial.is_some() || direct),
-                );
+                let ink = if anchor_selected && partial.is_some() { selected_anchor(color) } else { color };
+                if curvature {
+                    curve_point(p, sp, ink, anchor_selected && partial.is_some(), grow + 6.0);
+                } else {
+                    anchor_square(p, sp, ink, anchor_selected, anchor(partial.is_some() || direct));
+                }
             }
         });
         // Centre point (Attributes panel → Show Center).
@@ -1837,6 +1847,7 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, l
                 }
             }
             Overlay::Anchor { p: pt, color, filled, size } => anchor_square(p, xf.to_screen(*pt), c32(*color), *filled, *size),
+            Overlay::CurvePoint { p: pt, color, filled, size } => curve_point(p, xf.to_screen(*pt), c32(*color), *filled, *size + look.grow),
             Overlay::Handle { p: pt, color } => look.draw(p, xf.to_screen(*pt), c32(*color)),
             Overlay::Label { p: pt, text, color } => {
                 let sp = xf.to_screen(*pt) + vec2(8.0, -14.0);
@@ -2916,6 +2927,107 @@ mod tests {
         app.session.execute("prefs.set", &json!({"key": "anchorSize", "value": 7})).unwrap();
         let big = sizes(&mut app);
         assert!(big.contains(&8.0) && big.contains(&10.0) && !big.contains(&4.0), "4 points bigger at 7: {big:?}");
+    }
+
+    /// #1236: Curvature edits points, so existing paths show one circular marker per point and
+    /// no direction handles; switching back to Direct Selection keeps its normal handles.
+    #[test]
+    fn curvature_points_of_an_existing_path_have_no_direction_handles() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = vectorcraft_doc::NodeId(
+            app.session
+                .execute(
+                    "path.curvature",
+                    &json!({"points": [
+                        {"x": 60, "y": 200}, {"x": 120, "y": 80}, {"x": 210, "y": 160}, {"x": 280, "y": 60}, {"x": 350, "y": 180}
+                    ]}),
+                )
+                .unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        let document = app.session.active().unwrap().doc.clone();
+        let ctx = egui::Context::default();
+        app.select_tool("curvature");
+        let drawn = shapes(&mut app, &ctx);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let points: Vec<_> = document.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| xf.to_screen(a.p)).collect();
+        let marker = |shape: &Shape| matches!(shape, Shape::Circle(c) if points.iter().any(|p| p.distance(c.center) < 0.01));
+        assert_eq!(drawn.iter().filter(|s| marker(s)).count(), 5, "one circular marker at every curve point");
+        assert!(
+            !drawn.iter().any(|s| matches!(s, Shape::Rect(r) if points.iter().any(|p| p.distance(r.rect.center()) < 0.01))),
+            "no square at a curve point"
+        );
+        let color = c32(document.layer_color(id));
+        let handles = |shapes: &[Shape]| shapes.iter().filter(|s| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == color)).count();
+        assert_eq!(handles(&drawn), 0, "Curvature hides the direction lines");
+        app.session.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2]], "mode": "set"})).unwrap();
+        let partial = shapes(&mut app, &ctx);
+        assert_eq!(partial.iter().filter(|s| marker(s)).count(), 5, "other curve points stay visible");
+        assert_eq!(handles(&partial), 0, "a single selected point still shows no direction lines");
+        app.ui.view.edges = false;
+        assert_eq!(shapes(&mut app, &ctx).iter().filter(|s| marker(s)).count(), 0, "Hide Edges still hides an existing path's markers");
+        app.ui.view.edges = true;
+        app.select_tool("directSelection");
+        assert_eq!(handles(&shapes(&mut app, &ctx)), 2, "Direct Selection keeps the selected point's two handles");
+        app.select_tool("pen");
+        assert_eq!(handles(&shapes(&mut app, &ctx)), 2, "Pen keeps the selected point's two handles");
+        assert_eq!(
+            serde_json::to_value(&app.session.active().unwrap().doc).unwrap(),
+            serde_json::to_value(&document).unwrap(),
+            "tool switches and painting don't change the curve"
+        );
+    }
+
+    /// While drawing, Curvature's current-point feedback takes the place of generic selection
+    /// markers: no duplicate squares or handles, and the path is unchanged by drawing a frame.
+    #[test]
+    fn curvature_drawing_shows_its_points_once() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        shapes(&mut app, &ctx);
+        app.select_tool("curvature");
+        for (x, y) in [(60.0, 200.0), (120.0, 80.0), (210.0, 160.0), (280.0, 60.0), (350.0, 180.0)] {
+            let view = app.view_info();
+            for kind in [vectorcraft_tools::PointerKind::Down, vectorcraft_tools::PointerKind::Up] {
+                app.session.pointer(&vectorcraft_tools::PointerEvent::new(kind, x, y), view).unwrap();
+            }
+        }
+        let st = app.session.active().unwrap();
+        let id = st.selection.objects[0];
+        let document = st.doc.clone();
+        let selection = st.selection.clone();
+        let drawn = shapes(&mut app, &ctx);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let points: Vec<_> = document.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| xf.to_screen(a.p)).collect();
+        let markers: Vec<_> = drawn
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Circle(c) if points.iter().any(|p| p.distance(c.center) < 0.01) => Some(c),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(markers.len(), 5, "one marker per point, including the current point");
+        assert_eq!(markers.iter().filter(|c| c.fill != Color32::WHITE).count(), 1, "only the last touched point is filled");
+        assert!(
+            !drawn.iter().any(|s| matches!(s, Shape::Rect(r) if points.iter().any(|p| p.distance(r.rect.center()) < 0.01))),
+            "neither tool nor selection draws anchor squares"
+        );
+        let color = c32(document.layer_color(id));
+        assert!(!drawn.iter().any(|s| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == color)), "no direction lines");
+        app.session.execute("prefs.set", &json!({"key": "anchorSize", "value": 7})).unwrap();
+        assert_eq!(
+            shapes(&mut app, &ctx)
+                .iter()
+                .filter(|s| matches!(s, Shape::Circle(c) if c.radius == 5.0 && points.iter().any(|p| p.distance(c.center) < 0.01)))
+                .count(),
+            5,
+            "point markers respect Anchor Size"
+        );
+        assert_eq!(app.session.active().unwrap().selection, selection);
+        assert_eq!(serde_json::to_value(&app.session.active().unwrap().doc).unwrap(), serde_json::to_value(&document).unwrap());
     }
 
     /// Selection & Anchor Display › Handles and Show handles when multiple anchors are selected
