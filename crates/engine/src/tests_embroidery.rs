@@ -1615,3 +1615,43 @@ fn a_fill_blends_into_other_colours_across_its_rows() {
     s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
     assert!(s.execute("embroidery.makeBlend", &json!({"colors": ["#ff0000", "#0000ff"]})).is_err(), "tatami only");
 }
+
+#[test]
+fn outlines_and_borders_are_sewn_after_the_shapes() {
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#aa2233"})).unwrap();
+    // A satin outline 1 mm out from the shape, above it, in its thread.
+    let id = NodeId(s.execute("embroidery.addOutline", &json!({})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().doc.paint_order([id, a]), vec![a, id]);
+    let e = emb(&s, id);
+    assert!(matches!(e.stitch, sf_core::attr::StitchType::Satin(_)));
+    assert_eq!(e.thread.map(|t| t.color), Some(Rgb::new(0xaa, 0x22, 0x33)));
+    let span = |id: NodeId, s: &Session| {
+        let pts = needles(s, id);
+        pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.x), hi.max(p.x)))
+    };
+    let (lo, hi) = span(id, &s);
+    // the satin column (2.5 mm) centred 1 mm out
+    assert!((lo - (100.0 * MM - 1.0 - 1.25)).abs() < 0.6 && (hi - (200.0 * MM + 1.0 + 1.25)).abs() < 0.6, "{lo}..{hi}");
+    // A rectangle border 4 mm out, a motif border, an oval.
+    for (params, kind) in [
+        (json!({"ids": [a.0], "shape": "rectangle", "offset": 4, "stitch": "bean"}), "run"),
+        (json!({"ids": [a.0], "shape": "rounded", "stitch": "motif", "motif": "scallop"}), "run"),
+        (json!({"ids": [a.0], "shape": "oval", "stitch": "run"}), "run"),
+    ] {
+        let id = NodeId(s.execute("embroidery.addOutline", &params).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(emb(&s, id).stitch.id(), kind, "{params}");
+        assert!(needles(&s, id).len() > 20, "{params}");
+    }
+    for bad in [
+        json!({"ids": [a.0], "shape": "hexagon"}),
+        json!({"ids": [a.0], "stitch": "fill"}),
+        json!({"ids": [a.0], "offset": 1e9}),
+        json!({"ids": [a.0], "motif": "dragon"}),
+    ] {
+        assert!(s.execute("embroidery.addOutline", &bad).is_err(), "{bad}");
+    }
+}

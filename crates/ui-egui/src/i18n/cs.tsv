@@ -4578,3 +4578,12 @@ machine	Stop	Zastavení
 	Blend into	Prolnout do
 	Make Blend	Vytvořit prolnutí
 	Blend Colors	Prolnout barvy
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	Přidat obrys
+	Satin Outline	Saténový obrys
+	Bean Outline	Trojitý obrys
+	Rectangle Border	Obdélníkový rámeček
+	Oval Border	Oválný rámeček
+	Rounded Border	Zaoblený rámeček
+	Motif Border	Rámeček z motivů

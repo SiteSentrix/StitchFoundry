@@ -4547,3 +4547,12 @@ machine	Stop	停止
 	Blend into	ブレンド先
 	Make Blend	ブレンドを作成
 	Blend Colors	色をブレンド
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	輪郭を追加
+	Satin Outline	サテンの輪郭
+	Bean Outline	三重縫いの輪郭
+	Rectangle Border	四角い枠
+	Oval Border	楕円の枠
+	Rounded Border	角丸の枠
+	Motif Border	モチーフの枠

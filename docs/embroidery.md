@@ -104,6 +104,13 @@ its own band and fading to nothing at the next colour's, so the thread colours m
 rows; the layers together sew about as much as the fill did, and only the first keeps the
 underlay. `embroidery.makeBlend` takes up to six colours. Turn the fill's angle to turn the blend.
 
+**Outlines and borders:** **Embroidery › Add Outline** sews an outline round the selected
+stitched shapes and type, after them and in the top one's thread: a **Satin Outline** or **Bean
+Outline** following them 1 mm out, or a **Rectangle**, **Oval**, **Rounded** or **Motif Border**
+framing them. `embroidery.addOutline` takes the shape (`offset`, `rectangle`, `oval`, `rounded`),
+how far out (`offset`, mm), the stitch (`run`, `bean`, `satin`, `motif`), its `width` and `motif`.
+The outline is an ordinary path afterwards: reshape it or change its stitch type.
+
 **Laydown:** **Embroidery › Add Laydown** puts an open tatami (rows 2.5 mm apart, at 45°, no
 underlay, travel along its outline) under the selected stitched shapes and type, 1.5 mm beyond
 them, sewn first in the bottom one's thread. On towels, fleece and knits it flattens the pile so
@@ -460,6 +467,7 @@ tool list for all parameters):
 | `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif as a path sewn in a single run |
 | `embroidery.addLaydown {ids?, margin?, spacing?, angle?}` | an open fill sewn first under the selected shapes and type (pile fabrics) |
 | `embroidery.makeBlend {colors, ids?, spacing?}` | a tatami fill as stacked layers blending 2 to 6 thread colours across its rows |
+| `embroidery.addOutline {ids?, shape?, offset?, stitch?, width?, motif?}` | a stitched outline or border round the selected shapes and type |
 | `embroidery.draw {brush, points \| stamp, …}` | a brush stroke, as the widget draws it |
 | `embroidery.column {points: [[x, y, curve?]…], id?}` | a Column A/B satin column from points on its two sides in turn; with `id`, continue that column |
 | `embroidery.autoDigitize {colors, …}` | trace a selected image into stitches |

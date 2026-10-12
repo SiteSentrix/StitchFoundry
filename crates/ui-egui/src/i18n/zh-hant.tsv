@@ -3919,3 +3919,12 @@ machine	Stop	停止
 	Blend into	漸變到
 	Make Blend	產生漸變
 	Blend Colors	顏色漸變
+
+# Embroidery (StitchFoundry): outlines and borders
+	Add Outline	新增輪廓
+	Satin Outline	緞紋輪廓
+	Bean Outline	三重針輪廓
+	Rectangle Border	矩形邊框
+	Oval Border	橢圓邊框
+	Rounded Border	圓角邊框
+	Motif Border	圖案邊框
