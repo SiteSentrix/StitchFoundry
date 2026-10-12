@@ -415,10 +415,17 @@ document uses are written, and document keys written by a newer version are kept
 
 ## Resources
 
+Fixed resources and the four templates (same as [Resource templates](#resource-templates) under Protocol):
+
 | URI | Content |
 |---|---|
 | `vectorcraft://document` | `document.inspect` summary (JSON) |
 | `vectorcraft://document/json` | The complete document model (JSON) |
+| `vectorcraft://commands` | Live command catalog with enabled state |
+| `vectorcraft://object/{id}` | One layer or object (`document.node {id, summary: true}`) |
+| `vectorcraft://command/{id}` | One command's metadata and enablement |
+| `vectorcraft://effect/{id}` | One live effect with parameters and defaults |
+| `vectorcraft://swatch/{name}` | One swatch (percent-encode spaces) |
 
 ## Examples
 
@@ -814,6 +821,28 @@ Guides) can't be picked. An artboard guide is picked, drawn and snapped to acros
 {"name":"run_command","arguments":{"command":"guide.add","params":{"vertical":false,"pos":200,"artboard":0}}}
 {"name":"pointer_gesture","arguments":{"tool":"selection","events":[{"kind":"down","x":100,"y":50},{"kind":"drag","x":140,"y":50},{"kind":"up","x":140,"y":50}]}}
 {"name":"run_command","arguments":{"command":"guide.list","params":{}}}
+```
+
+## Symbols, brushes, variables and Image Trace
+
+These families are in the live catalog (`command_list` / `vectorcraft://commands`); the prompt `trace-and-style`
+already walks Image Trace. Short agent entry points:
+
+- Symbols: `symbol.list`, `symbol.new {name?, ids?}`, `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`,
+  `symbol.replace`, `symbol.edit`, `symbol.duplicate`, `symbol.selectInstances {name}`.
+- Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
+  `brush.setCurrent {name}`, `brush.options {name, params?}`, `brush.freehand`, `object.expandBrush {ids?}`.
+- Variables: `variable.list`, `variable.define {name, kind: text|visibility}`, `variable.bind {variable, ids?}`,
+  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.unbind`, `dataset.new` / `dataset.set` /
+  `dataset.select`.
+- Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
+  `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`.
+
+```json
+{"name":"run_command","arguments":{"command":"symbol.list","params":{}}}
+{"name":"run_command","arguments":{"command":"brush.list","params":{}}}
+{"name":"run_command","arguments":{"command":"variable.list","params":{}}}
+{"name":"run_command","arguments":{"command":"imageTrace.presets","params":{}}}
 ```
 
 ## Graphic styles
@@ -1624,7 +1653,10 @@ default: View › Actual Size / `view.actualSize` is one document point per scre
 96 screen points, an inch at the system's reference density whatever the display scaling). `blackOnScreen`
 (Appearance of Black › On Screen, `accurate` by default) sets how the canvas shows pure CMYK black, black ink alone
 at 100%: `accurate` shows it through the CMYK profile, a dark grey, and `rich` shows it as RGB black. Rich blacks,
-black tints and images show the same either way, and exports are unchanged.
+black tints and images show the same either way, and exports are unchanged. `antiAliasedBitmaps` (off by default;
+desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps; off, their pixels stay hard-edged.
+`disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
+segment or an anchor of a selected path.
 
 `gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid
 draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets the grid of every open document.
@@ -1654,6 +1686,9 @@ Guides change where a snapped point lands:
   angles through the point it leaves from (the Pen's or Curvature tool's last anchor, a line's start) lands on that
   line, where a target's alignment line crosses it if one does nearby. "90°" gives the horizontal and the vertical,
   "45°" the diagonals, "60°" and "30°" the multiples of those angles in between. Off, the point only lines up.
+- `spacingGuides` (on by default): a moved selection (Selection tool / `pointer_gesture` with `selection`) snaps so
+  the gap to a neighbour matches the equal spacing among other objects nearby; off, only alignment and construction
+  guides pull.
 
 With Smart Guides on, a bounding-box handle dragged with the Selection or Free Transform tool (`mods.shift`
 proportional, `mods.alt` from the centre) lands on another object's anchor or centre (labelled "anchor" or
@@ -1684,8 +1719,6 @@ of it headless), gathered once per document state; the shape being drawn is neve
 With a 100 × 100 square at (100, 100), the first starts the rectangle on its corner (200, 200); the second puts the
 Pen's second anchor at (150, 431), in line with the square's centre.
 
-Not read yet: Spacing Guides (the tools draw none).
-
 ## Type preferences
 
 - `placeholderText` (on by default): type the Type tools place (`pointer_gesture` with `type`, `areaType`…) starts with
@@ -1706,12 +1739,21 @@ Not read yet: Spacing Guides (the tools draw none).
   Type → Font menus label a family by its native-language name when the font has one. `text.fontList` and
   `text.setStyle {font}` always use the English (canonical) family name; a document may still name a font by any of
   its aliases (`ヒラギノ角ゴシック` resolves to Hiragino Sans).
+- `hyphenationExceptions` (empty by default): Preferences › Hyphenation › Exceptions. A comma-separated list of words,
+  matched without regard to case: a word with no hyphens is never hyphenated (`typography`), and a word with hyphens
+  breaks only where they are (`hap-pen`). `prefs.set` pushes the list into the hyphenator and reflows open documents.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeSizeIncrement":4,"trackingIncrement":50}}}}
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"fontNamesInEnglish","value":false}}}
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"hyphenationExceptions","value":"typography, hap-pen"}}}
 {"name":"run_command","arguments":{"command":"type.step","params":{"attribute":"tracking","by":-2}}}
 ```
+
+File Handling › `appendConverted` (on by default): an older native file (the former `.drawcraft` extension or an
+older format version) opens titled `<name> [Converted]`, and Save doesn't write over it: `document.save` without a
+`path` answers with a suggested `.vectorcraft` name (the app asks for one). Off, it opens under its own name and Save
+writes over it.
 
 ## Width points
 
@@ -2155,10 +2197,10 @@ the package report write.
 
 ## Slices
 
-Object → Slice cuts the art into the pieces web output saves. User slices are rectangles of their own
-(`document.slices`, ids from the object id counter); `object.slice.make` turns the selected objects into object
-slices, whose slice follows the object's bounds; auto slices fill what no other slice covers (the artboards with
-Clip to Artboard on, the default, else the art and the slices). `slice.list` returns every slice as laid out,
+Object → Slice cuts the art into the pieces web output saves. User slices are rectangles of their own (ids from the
+object id counter); `object.slice.make` turns the selected objects into object slices, whose slice follows the
+object's bounds; auto slices fill what no other slice covers (the artboards with Clip to Artboard on, the default,
+else the art and the slices). `slice.list` returns every slice as laid out,
 numbered left to right and top to bottom: `{number, id (null for auto slices), source: user|object|auto, name, x, y,
 width, height, options, selected}`, plus `clipToArtboard`, `hidden` and `locked`.
 
@@ -2771,8 +2813,8 @@ not kerned). Off by default and saved only when on. One undo step.
 start, end, digits}` (a range) set the numeral system the characters' digits are drawn in, as the Character panel menu's
 Digits does with the Middle Eastern (Indic) options shown: `arabic` draws every digit as the Western 0–9, `hindi` as the
 Arabic-Indic ٠–٩ (U+0660–U+0669) and `farsi` as the Eastern Arabic-Indic ۰–۹ (U+06F0–U+06F9), whichever of the three sets
-was typed; `default` leaves each digit as typed. The text keeps the digits that were typed (`text.get`, search, the
-caret and selection are unchanged); only the glyphs change, as with All Caps, and SVG export writes the digits as drawn.
+was typed; `default` leaves each digit as typed. The text keeps the digits that were typed (`text.getRange`, search,
+the caret and selection are unchanged); only the glyphs change, as with All Caps, and SVG export writes the digits as drawn.
 A digit the font lacks comes from a fallback font. Default and saved only when set. One undo step.
 
 ```json
