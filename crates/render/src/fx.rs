@@ -82,6 +82,16 @@ fn is_container(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
 }
 
+/// Can the art [`Renderer::fx_art`] makes for `n` be made from live objects it evaluates? It can
+/// when `n` is a live object, and when `n` is a group or layer without a Pathfinder effect that
+/// holds live objects and whose geometry effects reshape them or whose own fills and strokes paint
+/// their evaluated outlines ([`effects::evaluate_container`]).
+fn evaluates_live(n: &Node) -> bool {
+    use vectorcraft_doc::live::{is_live, subtree_has_live};
+    let to_members = effects::has_geometry(&n.appearance.effects) || n.appearance.items.iter().any(effects::paints);
+    is_live(n) || (is_container(n) && to_members && !effects::has_pathfinder(n) && subtree_has_live(n))
+}
+
 /// What [`Renderer::raster_fx`] paints effects around.
 struct Content<'a> {
     /// The object the effects belong to (cached shadows are checked against it).
@@ -496,12 +506,14 @@ impl Inputs {
 /// ([`crate::pattern::hash_tiling`]), of the symbols' names and art and of the images' keys and
 /// pixels, and the address of the color settings. Art, pixels and previews are hashed by the
 /// addresses of their shared values, and names, keys, tiles, tile types and overlaps are hashed by
-/// value.
+/// value. The live cache keeps these inputs with each evaluated live object and with each mesh's
+/// quads (`crate::live`), and [`Renderer::fx_art`] keeps them with art that can be made from
+/// evaluated live objects.
 pub(crate) struct DocInputs {
     patterns: u64,
     symbols: u64,
     images: u64,
-    cms: usize,
+    pub(crate) cms: usize,
     /// Weak references to the values whose addresses the hashes hold: a weak reference keeps the
     /// allocation, not the value, so no other value gets one of those addresses while these
     /// inputs are kept.
@@ -780,14 +792,26 @@ impl Renderer {
     /// reshaped by its geometry effects, else type, images and paths as themselves and the others
     /// as their evaluated art (groups and layers: [`effects::evaluate_container`], keeping their
     /// knockout setting), recoloured by the colour adjustments in it ([`Self::adjusted_art`]);
-    /// without the object's transparency and effects (a path keeps its geometry effects).
+    /// without the object's transparency and effects (a path keeps its geometry effects). Art that
+    /// is made from live objects it evaluated ([`evaluates_live`]) is kept only while the inputs of
+    /// their evaluation stay the same ([`Self::live_found`]).
     fn fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>, cache: bool) -> Arc<Node> {
         let key = Arc::as_ptr(a) as usize;
+        let mut kept = None;
         if cache
-            && let Some((node, art)) = self.fx_arts.get(&key, self.stamp)
+            && let Some((node, art, found)) = self.fx_arts.get(&key, self.stamp)
             && Arc::ptr_eq(node, a)
         {
-            return art.clone();
+            match found {
+                None => return art.clone(),
+                Some(was) => kept = Some((art.clone(), was.0)),
+            }
+        }
+        let found = (kept.is_some() || (cache && evaluates_live(a))).then(|| self.live_found(doc, a));
+        if let Some((art, was)) = kept
+            && found.as_ref().is_some_and(|f| f.0 == was)
+        {
+            return art;
         }
         let symbol = match &a.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
@@ -821,7 +845,7 @@ impl Renderer {
         let art = Arc::new(art);
         if cache {
             let bytes = crate::lru::node_bytes(&art);
-            self.fx_arts.insert(key, (a.clone(), art.clone()), bytes, self.stamp);
+            self.fx_arts.insert(key, (a.clone(), art.clone(), found), bytes, self.stamp);
         }
         art
     }
@@ -1149,7 +1173,7 @@ impl Renderer {
 
     /// [`DocInputs`] for document `doc`: found once a frame (and again for another document drawn
     /// in it, such as a placed document's own), and kept while they stay the same.
-    fn doc_inputs(&mut self, doc: &Document) -> Arc<DocInputs> {
+    pub(crate) fn doc_inputs(&mut self, doc: &Document) -> Arc<DocInputs> {
         let at = (self.stamp, std::ptr::from_ref(doc) as usize);
         if let Some((seen, d)) = &self.doc_inputs
             && *seen == at

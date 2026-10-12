@@ -610,6 +610,122 @@ fn art_with_live_objects_draws_pattern_layout_edits() {
     });
 }
 
+/// An envelope of `d` bending `content` with an arc warp (30%); with `patterns`, Distort
+/// Appearance and Distort Pattern Fills are on, and the tiles of its pattern fills bend with it.
+fn arc_envelope(d: &mut Document, content: Vec<Node>, patterns: bool) -> Node {
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance: patterns, distort_pattern_fills: patterns, ..Default::default() };
+    let content = content.into_iter().map(Arc::new).collect();
+    Node::new(
+        d.alloc_id(),
+        NodeKind::Envelope { content, kind: Box::new(kind), fidelity: 50.0, editing: false, options, frame: Box::new(Affine::IDENTITY) },
+    )
+}
+
+/// An envelope that bends the tiles of its pattern fills is evaluated again when a pattern it tiles
+/// changes its tile type or its overlap, as Pattern Options sets them: a band filled with the
+/// pattern, and type whose characters are filled with it.
+#[test]
+fn live_objects_draw_pattern_layout_edits() {
+    use vectorcraft_doc::pattern::{Overlap, PatternDef, TileType, pattern_paint};
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    use vectorcraft_geom::shapes::rectangle;
+    let bricks = |d: &mut Document| {
+        if let Some(def) = d.pattern_mut("Checks") {
+            def.tile_type = TileType::BrickByRow { offset: 0.5 };
+        }
+    };
+    let mut d = Document::new(200.0, 100.0);
+    d.patterns.push(checks(Color::rgb(1.0, 0.0, 0.0)));
+    let band = filled(&mut d, rectangle(Rect::new(20.0, 20.0, 180.0, 80.0)), pattern_paint("Checks"), vec![]);
+    let envelope = arc_envelope(&mut d, vec![band], true);
+    edit_draws_as_new(with_art(d, vec![envelope]), bricks);
+    // Pattern `Halves` is a 30 × 10 bar, red on the left and blue on the right, in a 20 × 20 tile:
+    // each tile's bar reaches into the next tile, and the bar drawn in front depends on the overlap.
+    let mut d = Document::new(200.0, 100.0);
+    let half = |x: f64, c: Color| {
+        let paint = vectorcraft_doc::Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+        Arc::new(Node::path(NodeId(900), rectangle(Rect::new(x, 0.0, x + 15.0, 10.0)), paint))
+    };
+    let mut halves = PatternDef::new("Halves", vec![half(0.0, Color::rgb(1.0, 0.0, 0.0)), half(15.0, Color::rgb(0.0, 0.0, 1.0))]);
+    halves.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(halves);
+    let band = filled(&mut d, rectangle(Rect::new(20.0, 20.0, 180.0, 80.0)), pattern_paint("Halves"), vec![]);
+    let envelope = arc_envelope(&mut d, vec![band], true);
+    edit_draws_as_new(with_art(d, vec![envelope]), |d| {
+        if let Some(def) = d.pattern_mut("Halves") {
+            def.overlap = Overlap { right_in_front: true, bottom_in_front: true };
+        }
+    });
+    // Type whose characters are filled with `Checks`.
+    let mut d = Document::new(200.0, 100.0);
+    d.patterns.push(checks(Color::rgb(1.0, 0.0, 0.0)));
+    let style = CharStyle { size: 90.0, fill: pattern_paint("Checks"), ..Default::default() };
+    let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 80.0), "HHH", style))));
+    let envelope = arc_envelope(&mut d, vec![text], true);
+    edit_draws_as_new(with_art(d, vec![envelope]), bricks);
+}
+
+/// An envelope is evaluated again when a symbol or a pattern changes that it shows through other
+/// art: a symbol shown in the art of the symbol it bends, a symbol that is the opacity mask of the
+/// object it bends, and, with the tiles of its pattern fills bending with it, a pattern filling
+/// the art of the symbol it bends and a symbol in the art of a pattern it tiles.
+#[test]
+fn live_objects_draw_symbol_and_pattern_art_edits() {
+    use vectorcraft_doc::pattern::{PatternDef, TileType, pattern_paint};
+    use vectorcraft_geom::shapes::rectangle;
+    // Symbol `S` ([`symbol_art`]) becomes a wide red bar.
+    let with_s = || {
+        let mut d = Document::new(200.0, 100.0);
+        let art = symbol_art(&mut d);
+        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+        d
+    };
+    let red_bar = |d: &mut Document| {
+        let bar = rectangle(Rect::new(-20.0, -4.0, 20.0, 4.0));
+        let red = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+        let s = d.symbols.iter().position(|s| s.name == "S").unwrap();
+        d.symbols[s].art = Arc::new(Node::path(d.alloc_id(), bar, red));
+    };
+    let instance = |d: &mut Document, symbol: &str, xf: Affine| Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf });
+    // An instance of symbol `A`, whose art shows `S`.
+    let mut d = with_s();
+    let shown = instance(&mut d, "S", Affine::IDENTITY);
+    let a = Node::group(d.alloc_id(), vec![Arc::new(shown)]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "A".into(), art: Arc::new(a) });
+    let a = instance(&mut d, "A", Affine::translate((100.0, 50.0)) * Affine::scale(2.0));
+    let envelope = arc_envelope(&mut d, vec![a], false);
+    edit_draws_as_new(with_art(d, vec![envelope]), red_bar);
+    // A black rectangle whose opacity mask is an instance of `S`.
+    let mut d = with_s();
+    let mask = instance(&mut d, "S", Affine::translate((100.0, 50.0)) * Affine::scale(3.0));
+    let mut masked = filled(&mut d, rectangle(Rect::new(20.0, 20.0, 180.0, 80.0)), Paint::solid(Color::BLACK), vec![]);
+    masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(mask, true)));
+    let envelope = arc_envelope(&mut d, vec![masked], false);
+    edit_draws_as_new(with_art(d, vec![envelope]), red_bar);
+    // An instance of symbol `Banded`, a band filled with `Checks`, whose tile type turns to bricks.
+    let mut d = Document::new(200.0, 100.0);
+    d.patterns.push(checks(Color::rgb(1.0, 0.0, 0.0)));
+    let band = filled(&mut d, rectangle(Rect::new(-80.0, -30.0, 80.0, 30.0)), pattern_paint("Checks"), vec![]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Banded".into(), art: Arc::new(band) });
+    let banded = instance(&mut d, "Banded", Affine::translate((100.0, 50.0)));
+    let envelope = arc_envelope(&mut d, vec![banded], true);
+    edit_draws_as_new(with_art(d, vec![envelope]), |d| {
+        if let Some(def) = d.pattern_mut("Checks") {
+            def.tile_type = TileType::BrickByRow { offset: 0.5 };
+        }
+    });
+    // A band filled with pattern `Dots`, whose art is an instance of `S` at half size.
+    let mut d = with_s();
+    let dot = instance(&mut d, "S", Affine::translate((10.0, 10.0)) * Affine::scale(0.5));
+    let mut dots = PatternDef::new("Dots", vec![Arc::new(dot)]);
+    dots.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(dots);
+    let band = filled(&mut d, rectangle(Rect::new(20.0, 20.0, 180.0, 80.0)), pattern_paint("Dots"), vec![]);
+    let envelope = arc_envelope(&mut d, vec![band], true);
+    edit_draws_as_new(with_art(d, vec![envelope]), red_bar);
+}
+
 fn effect(id: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
     vectorcraft_doc::Effect { id: id.into(), params, visible: true }
 }
