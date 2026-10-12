@@ -645,7 +645,7 @@ fn path_ids(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 
 fn edit_paths(s: &mut Session, label: &str, f: impl Fn(&PathData) -> PathData) -> Result<(Vec<NodeId>, usize, usize)> {
     let roots = selected_roots(s)?;
-    s.edit(label, |d, _| {
+    s.edit(label, |d, sel| {
         let ids = path_ids(d, &roots);
         if ids.is_empty() {
             return Err(EngineError::Other(format!("{label}: select paths")));
@@ -660,6 +660,11 @@ fn edit_paths(s: &mut Session, label: &str, f: impl Fn(&PathData) -> PathData) -
                     continue;
                 }
                 after += np.anchor_count();
+                if *path != np {
+                    // Refit and subdivision change what the old component indexes refer to.
+                    // Keep the object selected whole so its new points remain editable.
+                    sel.anchors.remove(id);
+                }
                 *path = np;
                 *live = None;
             }
