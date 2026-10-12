@@ -1,6 +1,7 @@
 //! Import fidelity: soft masks → opacity masks, isolated and knockout groups, tiling patterns →
-//! pattern swatches, text → point type, mesh shadings → gradient meshes, gradient stop opacity
-//! and shading Extend flags; strokes stay live strokes.
+//! pattern swatches, text → point type, mesh shadings → gradient meshes, gradient stop opacity,
+//! shading Extend flags and shapes filled with a shading → gradient-filled paths; strokes stay
+//! live strokes.
 
 use std::sync::Arc;
 
@@ -350,6 +351,37 @@ fn a_shading_that_does_not_extend_paints_only_between_its_ends() {
     let d = open(&one_page("/Sh0 sh", &shading("true false"), &[]));
     let b = all(&d).into_iter().find(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })).unwrap().geometric_bounds().unwrap();
     assert!(b.x0 <= 0.0 && (b.x1 - 80.0).abs() < 0.01, "{b:?}");
+}
+
+/// A diamond (10–90 × 10–90) clipping `paint`, which fills its bounds: how a shape filled with a
+/// gradient is written (`W n`, then `sh`).
+fn clipped_diamond(paint: &str) -> Document {
+    let shading = "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [10 0 90 0] /Extend [true true] /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >>";
+    let resources = format!("/Shading << /Sh0 {shading} >> /Pattern << /P0 << /PatternType 2 /Shading {shading} >> >>");
+    open(&one_page(&format!("q 10 50 m 50 90 l 90 50 l 50 10 l h W n {paint} Q"), &resources, &[]))
+}
+
+#[test]
+fn a_shape_filled_with_a_shading_becomes_one_path_with_the_gradient() {
+    let d = clipped_diamond("/Sh0 sh");
+    assert!(!all(&d).iter().any(|n| matches!(n.kind, NodeKind::Group { .. })), "no group");
+    let objs = objects(&d);
+    let [n] = objs.as_slice() else { panic!("one object: {objs:#?}") };
+    let p = n.path_data().unwrap();
+    assert!(p.is_closed() && p.anchor_count() == 4, "the diamond: {p:?}");
+    assert!(near(n.geometric_bounds().unwrap(), Rect::new(10.0, 10.0, 90.0, 90.0)), "{:?}", n.geometric_bounds());
+    let Some(Paint::Gradient(g)) = n.appearance.fill().map(|f| &f.paint) else { panic!("a gradient fill: {:?}", n.appearance.items) };
+    assert_eq!(g.gradient.kind, GradientKind::Linear);
+    assert_eq!(g.gradient.stops.first().map(|s| s.color.to_rgb()), Some([1.0, 0.0, 0.0]));
+    assert_eq!(g.gradient.stops.last().map(|s| s.color.to_rgb()), Some([0.0, 0.0, 1.0]));
+    let geom = g.geom.as_ref().unwrap();
+    assert!((geom.start.x - 10.0).abs() < 0.01 && (geom.end.x - 90.0).abs() < 0.01, "placed as before: {geom:?}");
+    assert!(n.appearance.stroke().is_none());
+    // A gradient that doesn't cover the clip, and a flat colour, stay clipped.
+    for paint in ["/Pattern cs /P0 scn 40 40 20 20 re f", "1 0 0 rg 0 0 100 100 re f"] {
+        let d = clipped_diamond(paint);
+        assert!(all(&d).iter().any(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })), "{paint}");
+    }
 }
 
 #[test]
