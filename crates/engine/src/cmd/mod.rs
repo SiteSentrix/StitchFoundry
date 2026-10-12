@@ -23,6 +23,7 @@ pub mod embroidery;
 pub mod embroidery_art;
 pub mod embroidery_blend;
 pub mod embroidery_buttonholes;
+pub mod embroidery_colorways;
 pub mod embroidery_edit;
 pub mod embroidery_flow;
 pub mod embroidery_fontdoc;
@@ -249,6 +250,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_lettering::specs());
         v.extend(embroidery_fontdoc::specs());
         v.extend(embroidery_monogram::specs());
+        v.extend(embroidery_colorways::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
         v.extend(pathops::specs());

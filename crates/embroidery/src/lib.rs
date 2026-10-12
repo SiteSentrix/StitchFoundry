@@ -55,6 +55,9 @@ pub struct StitchPlan {
     /// The machine pattern (millimetres) and where each object's stitches are.
     pub built: Built,
     pub stats: Option<PatternStats>,
+    /// The design's own threads in the order first used (its colorways' slots); `design`'s
+    /// palette holds the active colorway's.
+    pub own_threads: Vec<sf_core::Thread>,
 }
 
 impl StitchPlan {
@@ -434,9 +437,14 @@ impl Planner {
         cover_partial_applique(&mut design.objects);
         order_branches(&mut design.objects, &mut node_ids);
         design.next_id = design.objects.iter().map(|o| o.id).max().unwrap_or(0) + 1;
+        // the active colorway's threads in place of the design's own
+        let own_threads = design.palette.clone();
+        if let Some(cfg) = doc.embroidery.as_deref().filter(|c| c.colorway > 0) {
+            design.palette = cfg.threads_of(cfg.colorway, &own_threads);
+        }
         let built = build_cached(&design, &mut self.cache);
         let stats = (!built.pattern.stitches.is_empty()).then(|| pattern_stats(&built.pattern, &design.settings));
-        StitchPlan { design, nodes: node_ids, built, stats }
+        StitchPlan { design, nodes: node_ids, built, stats, own_threads }
     }
 }
 
