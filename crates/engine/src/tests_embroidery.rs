@@ -482,6 +482,35 @@ fn worksheets_show_the_design_and_its_figures() {
     let st = s.doc().unwrap();
     assert_eq!((st.doc.artboards[0].rect.width(), st.doc.artboards[0].rect.height()), (612.0, 792.0));
     assert!(s.execute("embroidery.worksheet", &json!({"page": "a3"})).is_err());
+    // a barcode at the top right: the design's name by default, as bars inside the margin
+    let barcode = |s: &Session| {
+        let st = s.doc().unwrap();
+        let mut found = None;
+        st.doc.walk(|n| {
+            if n.name.as_deref() == Some("Barcode") {
+                found = Some((n.geometric_bounds().unwrap(), n.kind.clone()));
+            }
+        });
+        found
+    };
+    let (b, kind) = barcode(&s).expect("a barcode");
+    assert!(b.x1 <= 612.0 - 40.0 + 1e-6 && b.x0 > 300.0 && (b.y1 - b.y0 - 44.0).abs() < 1e-6, "{b:?}");
+    let NodeKind::Path { path, .. } = kind else { panic!("bars") };
+    // Code 128 of "Untitled-1": start, 10 characters, check and stop: 13 symbols of 3 bars, 4 in the stop
+    assert_eq!(path.subpaths.len(), 12 * 3 + 4);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("embroidery.worksheet", &json!({"barcode": "code39", "barcodeText": "job 42"})).unwrap();
+    let (_, kind) = barcode(&s).unwrap();
+    let NodeKind::Path { path, .. } = kind else { panic!("bars") };
+    // *JOB 42*: 8 characters of 5 bars
+    assert_eq!(path.subpaths.len(), 8 * 5);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("embroidery.worksheet", &json!({"barcode": "none"})).unwrap();
+    assert!(barcode(&s).is_none());
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    for bad in [json!({"barcode": "qr"}), json!({"barcode": "code39", "barcodeText": "a_b"}), json!({"barcodeText": "é"})] {
+        assert!(s.execute("embroidery.worksheet", &bad).is_err(), "{bad}");
+    }
     // the design's own notes, kept with it and printed when none are given, wrapped
     s.execute("document.activate", &json!({"index": 0})).unwrap();
     let long = format!("Left chest, 9 cm below the collar. {}", "Use white bobbin thread. ".repeat(6));

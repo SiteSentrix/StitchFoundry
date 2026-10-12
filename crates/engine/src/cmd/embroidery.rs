@@ -228,7 +228,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Worksheet",
             ["Embroidery"],
             None,
-            "{kind?: production|approval|pattern (production), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given)} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
+            "{kind?: production|approval|pattern (production), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given), barcode?: code128|code39|none (code128: the job's barcode at the top right), barcodeText?: text (the design's name; up to 48 characters, Code 39: digits, letters, space and -.$/+%)} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
             has_doc,
             worksheet
         ),
@@ -2037,6 +2037,35 @@ fn sheet_text(doc: &mut Document, x: f64, y: f64, text: &str, size: f64, color: 
     Ok(())
 }
 
+/// A barcode module's width (points) for one `total` modules wide: 0.75 pt (a common minimum
+/// for laser printers), narrower to keep it within 230 pt.
+fn barcode_module(total: f64) -> f64 {
+    (230.0 / total.max(1.0)).min(0.75)
+}
+
+/// A barcode's bars (`widths`, bar first, in modules) ending at `right`, from `top` 44 pt down.
+fn sheet_barcode(doc: &mut Document, widths: &[u8], right: f64, top: f64, color: Color) -> Result<()> {
+    use vectorcraft_geom::path::{PathData, SubPath};
+    let total: f64 = widths.iter().map(|w| f64::from(*w)).sum();
+    let m = barcode_module(total);
+    let mut x = right - total * m;
+    let mut bars = Vec::new();
+    for (i, w) in widths.iter().enumerate() {
+        let w = f64::from(*w) * m;
+        if i % 2 == 0 {
+            let corners =
+                [kurbo::Point::new(x, top), kurbo::Point::new(x + w, top), kurbo::Point::new(x + w, top + 44.0), kurbo::Point::new(x, top + 44.0)];
+            bars.push(SubPath::polyline(&corners, true));
+        }
+        x += w;
+    }
+    let mut n = vectorcraft_doc::Node::path(doc.alloc_id(), PathData::new(bars), Appearance::basic(Paint::solid(color), Paint::None, 0.0));
+    n.name = Some("Barcode".into());
+    let layer = doc.layers.first().map(|l| l.id);
+    doc.insert(layer, usize::MAX, n).map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok(())
+}
+
 /// `text` in lines of at most `width` characters, broken between words (a longer word cut) and
 /// at its own line breaks.
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
@@ -2130,6 +2159,22 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // the design's own notes unless others are given
     let notes = if notes.is_empty() { cfg.notes.trim().chars().take(2000).collect() } else { notes };
+    // the job's barcode: its name unless other text is given
+    let code = match str_param(p, "barcode").unwrap_or("code128") {
+        "none" => None,
+        name => {
+            let kind = sf_core::barcode::Symbology::from_name(name).ok_or_else(|| bad(CMD, "`barcode` is code128, code39 or none"))?;
+            match str_param(p, "barcodeText").map(str::trim).filter(|t| !t.is_empty()) {
+                Some(text) => {
+                    let widths = sf_core::barcode::encode(kind, text)
+                        .ok_or_else(|| bad(CMD, "`barcodeText` is 1 to 48 characters the code has (Code 39: digits, letters, space and -.$/+%)"))?;
+                    Some((text.to_string(), widths))
+                }
+                // a name the code can't carry: no barcode rather than no worksheet
+                None => sf_core::barcode::encode(kind, &title).map(|w| (title.clone(), w)),
+            }
+        }
+    };
     let black = Color::rgb8(0x1a, 0x1a, 0x1a);
     let grey = Color::rgb8(0x66, 0x66, 0x66);
     let mut doc = Document::new(pw, ph);
@@ -2150,6 +2195,12 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
         sub = format!("{sub}   Customer: {customer}");
     }
     sheet_text(&mut doc, 40.0, 96.0, &sub, 9.0, grey)?;
+    if let Some((text, widths)) = &code {
+        sheet_barcode(&mut doc, widths, pw - 40.0, 36.0, black)?;
+        let total: f64 = widths.iter().map(|w| f64::from(*w)).sum();
+        let x = pw - 40.0 - total * barcode_module(total);
+        sheet_text(&mut doc, x, 92.0, text, 8.0, black)?;
+    }
     // the design, life size when it fits the box, in its thread colours
     let b = pattern.bounds();
     // the box the design is drawn in: most of the page for a pattern

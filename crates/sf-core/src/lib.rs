@@ -18,6 +18,7 @@
 
 pub mod ai;
 pub mod attr;
+pub mod barcode;
 pub mod brush;
 pub mod direction;
 pub mod engine;
