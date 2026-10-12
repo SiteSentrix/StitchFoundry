@@ -359,3 +359,40 @@ fn a_placed_document_brings_its_links_with_the_files_pixels() {
     assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some(pic.as_str()), "still linked");
     assert!(!doc.images[&im.key].is_proxy(), "the file's pixels, not the preview");
 }
+
+/// The placed (linked) files of a `.ai` file come in with the preview the file keeps of them: one
+/// not found shows it, one found is read at once into the same bounds, which isn't a change.
+#[test]
+fn links_of_an_imported_file_are_read_where_they_are_found() {
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("imported");
+    let pic = dir.file("photo.png").replace('\\', "/");
+    // A 2×1 preview (premultiplied ARGB: a blue at half opacity) of a file of 600 × 300 px placed at
+    // 60 × 30 pt, which the PDF part draws there too.
+    let place = format!(
+        "%AI5_BeginPlace\n[0.1 0 0 -0.1 20 80] 0 0 600 300 4 4 0\n({pic})`\n%AI26_BeginPlacedObjectPreview\n2 1 8 32 17 \x7f\x10\x10\x60\x7f\x10\x10\x60\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n"
+    );
+    let doc_path = dir.file("poster.ai");
+    write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &place)).as_bytes(), "0.56 0.56 0.87 rg 20 50 60 30 re f"));
+    let placed = |s: &Session| {
+        let mut found = vec![];
+        s.doc().unwrap().doc.visit_images(|n, im| found.push((n.geometric_bounds().unwrap(), im.clone())));
+        let [one] = &found[..] else { panic!("one image: {found:?}") };
+        one.clone()
+    };
+    let in_place = |b: Rect| [b.x0 - 20.0, b.y0 - 20.0, b.x1 - 80.0, b.y1 - 50.0].iter().all(|d| d.abs() < 1e-6);
+    let mut s = session();
+
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"][0]["name"].as_str(), r["missingLinks"][0]["path"].as_str()), (Some("photo.png"), Some(pic.as_str())), "{r}");
+    assert!(r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("low-resolution preview")), "{r}");
+    let (b, im) = placed(&s);
+    assert!(in_place(b) && im.width == 2 && s.doc().unwrap().doc.images[&im.key].is_proxy(), "{b:?} {im:?}");
+
+    write(&pic, &png(600, 300, RED));
+    let r = open(&mut s, &doc_path);
+    assert_eq!((&r["missingLinks"], &r["modifiedLinks"], &r["updatedLinks"]), (&json!([]), &json!([]), &json!([])), "{r}");
+    let (b, im) = placed(&s);
+    assert!(in_place(b) && (im.width, im.height) == (600, 300) && im.link.as_ref().is_some_and(|l| l.hash.is_some()), "{b:?} {im:?}");
+    assert!(!s.doc().unwrap().doc.images[&im.key].is_proxy());
+}

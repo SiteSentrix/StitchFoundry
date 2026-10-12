@@ -4,8 +4,8 @@
 //!   readers of the printed format skip them as comments).
 //! - Any other line starting with `%` is a [`Tok::Comment`] (the section markers).
 //! - `%` later in a line starts a comment that is skipped.
-//! - The binary image data after `%%BeginData:` is one [`Tok::Data`]; the binary previews of placed
-//!   files are skipped.
+//! - The binary image data after `%%BeginData:` is one [`Tok::Data`]; the binary preview of a placed
+//!   file is one [`Tok::Preview`].
 
 use super::super::lex::{find, hex_decode};
 
@@ -25,6 +25,8 @@ pub(super) enum Tok<'a> {
     Comment(&'a [u8]),
     /// An image's samples: what follows `XI` in a `%%BeginData:` section.
     Data(&'a [u8]),
+    /// A placed file's preview: what is between `%AI26_BeginPlacedObjectPreview` and its end.
+    Preview(&'a [u8]),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -34,8 +36,10 @@ pub(super) struct Token<'a> {
     pub hidden: bool,
 }
 
-/// Binary sections skipped whole: (begin, end) markers.
-const SKIPPED: [(&[u8], &[u8]); 2] = [(b"%AI26_BeginPlacedObjectPreview", b"%AI26_EndPlacedObjectPreview"), (b"%%BeginDocument", b"%%EndDocument")];
+/// A placed file's preview (binary): (begin, end) markers.
+const PREVIEW: (&[u8], &[u8]) = (b"%AI26_BeginPlacedObjectPreview", b"%AI26_EndPlacedObjectPreview");
+/// A binary section skipped whole: (begin, end) markers.
+const DOCUMENT: (&[u8], &[u8]) = (b"%%BeginDocument", b"%%EndDocument");
 
 fn is_space(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b'\x0c' | b'\0')
@@ -160,13 +164,15 @@ impl<'a> Lexer<'a> {
     }
 
     /// The token a comment line stands for when it starts a section read differently: image data
-    /// (`%%BeginData:` followed by `XI`) and skipped binary sections.
+    /// (`%%BeginData:` followed by `XI`), a placed file's preview and skipped binary sections.
     fn special(&mut self, line: &'a [u8]) -> Option<Token<'a>> {
-        if let Some((_, end)) = SKIPPED.iter().find(|(b, _)| line.starts_with(b)) {
+        if let Some((_, end)) = [PREVIEW, DOCUMENT].iter().find(|(b, _)| line.starts_with(b)) {
+            let from = self.pos;
             let after = find(self.rest(), end).map_or(self.src.len(), |i| self.pos + i);
             self.pos = after;
             self.line();
-            return Some(Token { tok: Tok::Comment(line.get(1..).unwrap_or_default()), hidden: false });
+            let tok = if *end == PREVIEW.1 { Tok::Preview(self.slice(from, after)) } else { Tok::Comment(line.get(1..).unwrap_or_default()) };
+            return Some(Token { tok, hidden: false });
         }
         let n = line.strip_prefix(b"%%BeginData:")?;
         let n: usize = std::str::from_utf8(n).ok()?.split_whitespace().next()?.parse().ok()?;
@@ -324,10 +330,13 @@ mod tests {
     }
 
     #[test]
-    fn binary_previews_are_skipped() {
+    fn binary_sections_are_one_token() {
         let toks = all(b"%AI26_BeginPlacedObjectPreview\r\n2 1 (\x00\xff\r\n%AI26_EndPlacedObjectPreview\r\nN\r\n");
-        assert_eq!(toks.last(), Some(&t(Tok::Word(b"N"), false)));
-        assert_eq!(toks.len(), 2);
+        assert_eq!(toks, vec![t(Tok::Preview(b"\r\n2 1 (\x00\xff\r\n"), false), t(Tok::Word(b"N"), false)]);
+        let toks = all(b"%%BeginDocument: a.eps\n(\x00 frobnicate\n%%EndDocument\nN\n");
+        assert_eq!(toks, vec![t(Tok::Comment(b"%BeginDocument: a.eps"), false), t(Tok::Word(b"N"), false)]);
+        // One that doesn't end takes the rest.
+        assert_eq!(all(b"%AI26_BeginPlacedObjectPreview\r1 (").len(), 1);
     }
 
     #[test]

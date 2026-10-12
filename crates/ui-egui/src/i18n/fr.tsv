@@ -3940,6 +3940,7 @@ axis	Both	Les deux
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	le dégradé « {name} » n’est pas défini dans le fichier : une couleur unie le remplace
 @msg	an image VectorCraft can't read was left out	une image que VectorCraft ne peut pas lire a été ignorée
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
+@msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	its editing data doesn't say where its art is	ses données d’édition ne disent pas où se trouve son illustration
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ce fichier a été enregistré sans compatibilité PDF et ses données d’édition sont illisibles ({why})
 @msg	No fonts are missing in this document	Aucune police ne manque dans ce document

@@ -3927,6 +3927,7 @@ axis	Both	Обидві
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градієнт «{name}» не визначено у файлі: замість нього використовується суцільний колір
 @msg	an image VectorCraft can't read was left out	зображення, яке VectorCraft не може прочитати, пропущено
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
+@msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	цей файл збережений без сумісності з PDF, і його дані редагування не вдається прочитати ({why})
 @msg	No fonts are missing in this document	У цьому документі немає відсутніх шрифтів

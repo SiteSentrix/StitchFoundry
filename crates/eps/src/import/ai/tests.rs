@@ -371,6 +371,81 @@ fn images_with_alpha_channels() {
     assert!(art(&r.doc).is_empty() && r.warnings.iter().any(|w| w.contains("cut short")));
 }
 
+/// Editing data with one layer (showing or not) holding a placed file: its matrix, the file at
+/// `path` in the box 10 20 14 22, and `preview` (what its preview section holds), then `after`.
+fn placed(visible: bool, matrix: &str, path: &str, preview: Option<&[u8]>, after: &str) -> Vec<u8> {
+    let text = stream(&layer("@@").replacen("1 1 1 1", if visible { "1 1 1 1" } else { "0 1 1 1" }, 1));
+    let (head, tail) = text.split_once("@@").unwrap();
+    let mut s = format!(
+        "{head}%AI5_BeginPlace\r%%FileType: 1\r{matrix} 10 20 14 22 4 4 0\r({path})`\r%%IncludeFile:{path}\r\
+         %AI17_Begin_Content_if_version_gt:24 12\r%AI28_BeginPlacedRelativePath\r()\r%AI28_EndPlacedRelativePath\r%AI17_Alternate_Content\r%AI17_End_Versioned_Content\r\
+         %AI17_Begin_Content_if_version_gt:24 5\r"
+    )
+    .into_bytes();
+    if let Some(p) = preview {
+        s.extend_from_slice(b"%AI26_BeginPlacedObjectPreview\r");
+        s.extend_from_slice(p);
+        s.extend_from_slice(b"\r%AI26_EndPlacedObjectPreview\r");
+    }
+    s.extend_from_slice(format!("%AI17_End_Versioned_Content\r~\r%AI5_EndPlace\r{after}{tail}").as_bytes());
+    s
+}
+
+#[test]
+fn placed_files_are_linked_images_showing_their_preview() {
+    // A 2×1 preview (premultiplied ARGB, a padded row) of a file of 4×2 pixels.
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let name = "%_/ArtDictionary :\r%_(Photo) /String (AIArtName) ,\r%_;\r";
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/pics/photo.png", Some(&preview), name)).unwrap();
+    let a = art(&r.doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!((im.link.as_ref().map(|l| l.path.as_str()), im.width, im.height), (Some("/pics/photo.png"), 2, 1));
+    assert_eq!(a[0].name.as_deref(), Some("Photo"));
+    assert!(r.doc.images[&im.key].is_proxy(), "the preview is what a missing link shows");
+    let (img, xf) = pixels(&r.doc);
+    assert_eq!((img.get_pixel(0, 0).0, img.get_pixel(1, 0).0), ([255, 0, 0, 255], [0, 127, 0, 128]));
+    // Without a template box the pixels start at the box's corner, the first row the top one:
+    // (10, 20) is at (50, 100) in art space, the page's top.
+    assert_eq!((xf * Point::ZERO, xf * Point::new(2.0, 1.0)), (Point::new(50.0, 0.0), Point::new(70.0, 10.0)));
+    assert!(r.warnings.iter().any(|w| w.contains("low-resolution preview")), "{:?}", r.warnings);
+    // With a template box, the pixels start at the canvas point of art space's origin (8091.5,
+    // 8241.5 here), wherever the box is.
+    let mut data = placed(true, "[5 0 0 -5 -40407.5 41307.5]", "a.png", Some(&preview), "");
+    let at = data.windows(15).position(|w| w == b"%AI5_BeginLayer").unwrap();
+    data.splice(at..at, *b"%AI3_TemplateBox: 100 50 100 50\n");
+    let xf = pixels(&read(&data).unwrap().doc).1;
+    assert_eq!((xf * Point::ZERO, xf * Point::new(2.0, 1.0)), (Point::new(50.0, 0.0), Point::new(70.0, 10.0)));
+    // Turned a quarter: the box's rows run along x.
+    let r = read(&placed(true, "[0 5 5 0 0 0]", "a.png", Some(&preview), "")).unwrap();
+    let xf = pixels(&r.doc).1;
+    assert_eq!((xf * Point::ZERO, xf * Point::new(2.0, 1.0)), (Point::new(100.0, 50.0), Point::new(110.0, 30.0)));
+
+    // Without a preview it can read (none, cut short, not 32 bits, absurd sizes), without a path or
+    // a matrix, the file isn't read from its editing data.
+    let cut = &preview[..preview.len() - 6];
+    let huge = b"70000 70000 280000 32 17 \0\0\0\0";
+    let overflow = b"1 2 18446744073709551615 32 17 \0\0\0\0\0\0\0\0";
+    for (matrix, path, preview) in [
+        ("[5 0 0 -5 0 200]", "a.png", None),
+        ("[5 0 0 -5 0 200]", "a.png", Some(cut)),
+        ("[5 0 0 -5 0 200]", "a.png", Some(&b"2 1 2 8 17 \0\0"[..])),
+        ("[5 0 0 -5 0 200]", "a.png", Some(&huge[..])),
+        ("[5 0 0 -5 0 200]", "a.png", Some(&overflow[..])),
+        ("[5 0 0 -5 0 200]", "a.png", Some(&b"2 1"[..])),
+        ("[5 0 0 -5 0 200]", "", Some(&preview[..])),
+        ("[0 0 0 0 0 0]", "a.png", Some(&preview[..])),
+        ("[1 2 3]", "a.png", Some(&preview[..])),
+    ] {
+        let e = read(&placed(true, matrix, path, preview, "")).unwrap_err();
+        assert!(e.contains("placed files"), "{matrix} {path} {preview:?}: {e}");
+    }
+    // On a layer that doesn't show, such a file is left out of it.
+    let r = read(&placed(false, "[5 0 0 -5 0 200]", "a.png", None, "")).unwrap();
+    assert!(r.hidden_unread.contains("placed files") && art(&r.doc).is_empty());
+    // `~` ends nothing else.
+    assert!(read(stream(&layer("~\n")).as_bytes()).unwrap_err().contains("`~`"));
+}
+
 #[test]
 fn text_objects_are_slots_named_after_their_story() {
     let words = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n3 /StoryIndex ,\n;\n%_/ArtDictionary :\n%_/XMLUID : (Title) ; (AI10_ArtUID) ,\n%_;\n";
