@@ -1225,10 +1225,10 @@ mod tests {
             last = d;
             walked += p.distance(prev);
             prev = p;
-            // upright to it: the glyph's up nearly away from the centre, its baseline along the curve
+            // upright to it: the glyph's up nearly away from the centre (a spiral's tangent leans in a little more near it)
             let up = m * vectorcraft_geom::Point::new(0.0, -1.0) - p;
             let out = (p - centre) / d;
-            assert!((up.x * out.x + up.y * out.y) > 0.99, "{k}: {up:?} {out:?}");
+            assert!((up.x * out.x + up.y * out.y) > 0.97, "{k}: {up:?} {out:?}");
         }
         // `along` is the length along the spiral (the chords a little shorter)
         assert!(walked < 1000.5 && walked > 999.0, "{walked}");

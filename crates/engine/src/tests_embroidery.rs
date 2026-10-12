@@ -3087,11 +3087,17 @@ fn lettering_aligns_and_follows_arcs() {
     assert!(s.execute("embroidery.lettering.edit", &json!({"arc": 1e9})).is_err());
     assert!(s.execute("embroidery.lettering.edit", &json!({"align": "middle"})).is_err());
     assert!(s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "arc": "x"})).is_err());
-    // round a spiral: winding in, the glyphs closer to its centre each
-    let sp = set(&mut s, json!({"text": "AAAAAAAAAAAA", "arc": 40, "spiral": 15}));
-    let centre = vectorcraft_geom::Point::new(300.0, 300.0 + 40.0 * 72.0 / 25.4);
+    // round a spiral: winding in (each A is 40 mm wide: 6 go a fifth of the way round, the
+    // radius 11 mm less by the last)
+    let sp = set(&mut s, json!({"text": "AAAAAA", "arc": 200, "spiral": 60}));
+    let centre = vectorcraft_geom::Point::new(300.0, 300.0 + 200.0 * 72.0 / 25.4);
     let d: Vec<f64> = sp.iter().map(|b| b.center().distance(centre)).collect();
-    assert!(d.windows(2).all(|w| w[1] < w[0]), "{d:?}");
+    let round = set(&mut s, json!({"text": "AAAAAA", "arc": 200}));
+    let r: Vec<f64> = round.iter().map(|b| b.center().distance(centre)).collect();
+    // against the same glyphs round the circle: further in at each
+    let gap: Vec<f64> = d.iter().zip(&r).map(|(a, b)| a - b).collect();
+    assert!(gap.windows(2).all(|w| w[1] < w[0]) && gap[5] < -20.0, "{gap:?}");
+    s.execute("embroidery.lettering.edit", &json!({"spiral": 15})).unwrap();
     let spiral = |s: &Session| {
         let st = s.doc().unwrap();
         match st.doc.node(st.selection.objects[0]).unwrap().embroidery.as_deref().map(|e| &e.stitch) {
