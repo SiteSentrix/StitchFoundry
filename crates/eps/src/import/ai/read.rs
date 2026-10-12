@@ -338,7 +338,6 @@ const IGNORED: &[&str] = &[
     "X=",
     "X+",
     "Bc",
-    "Xm",
     "XP",
     "Np",
     // Flatness (`i`): how finely curves print.
@@ -921,13 +920,22 @@ impl<'a> Reader<'a> {
                     i.bm(&vals);
                 }
             }
+            "Xm" => {
+                if let Some(i) = self.instance.as_mut() {
+                    i.xm(&vals);
+                }
+            }
             "Bh" => {
                 if let Some(i) = self.instance.as_mut() {
                     i.bh(&vals);
                 }
             }
             "BB" => {
-                if let Some(i) = self.instance.take() {
+                // An instance that closes with no path to paint is an object's own note of its
+                // gradient, written after it: it paints nothing (not the next path either).
+                if let Some(i) = self.instance.take()
+                    && !self.path.elements().is_empty()
+                {
                     self.set_instance(&i);
                 }
             }
