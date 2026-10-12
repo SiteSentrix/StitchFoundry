@@ -206,6 +206,15 @@ pub fn specs() -> Vec<CommandSpec> {
             auto_digitize
         ),
         cmd!(
+            "embroidery.cost",
+            "Cost Estimate",
+            [],
+            None,
+            "{quantity?: pieces (1; 1–1000000)} what sewing the design costs by its cost settings (embroidery.settings {cost}; else 1 a 1000 stitches and 3 a 1000 m of thread): stitches, machine time shared over its heads, thread and the set-up spread over the order → {currency, quantity, perPiece, total, stitches, time, thread, setup, text}",
+            has_doc,
+            cost
+        ),
+        cmd!(
             "embroidery.outlineAround",
             "Outline Around",
             ["Embroidery"],
@@ -273,7 +282,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Settings",
             [],
             None,
-            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null, fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, notes?: text (kept with the design, printed on its worksheets; 2000 characters at most), basting?: bool | {hoop?: bool (round the hoop's field, else the design), margin?: mm (5; 0–50: out from the design, in from the hoop's edge), length?: mm (6; 2–12)} | null (a basting run sewn first, in the first thread), checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags)} → the settings",
+            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null, fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, notes?: text (kept with the design, printed on its worksheets; 2000 characters at most), cost?: true | {perThousand?: price a 1000 stitches (0–1000), perHour?: machine time (0–10000), threadPerKm?: thread a 1000 m (0–10000), setup?: an order (0–1000000), heads?: pieces sewn at once (1–100), currency?: up to 4 characters} | null (the cost estimate shown with the figures and on worksheets), basting?: bool | {hoop?: bool (round the hoop's field, else the design), margin?: mm (5; 0–50: out from the design, in from the hoop's edge), length?: mm (6; 2–12)} | null (a basting run sewn first, in the first thread), checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags)} → the settings",
             has_doc,
             settings
         ),
@@ -1738,6 +1747,42 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
         cfg.notes = t.trim().chars().take(2000).collect();
         changed = true;
     }
+    if let Some(v) = p.get("cost") {
+        cfg.cost = match v {
+            Value::Null | Value::Bool(false) => None,
+            Value::Bool(true) => Some(cfg.cost.clone().unwrap_or_default()),
+            Value::Object(o) => {
+                let mut m = cfg.cost.clone().unwrap_or_default();
+                for (k, slot, hi) in [
+                    ("perThousand", &mut m.per_thousand, 1000.0),
+                    ("perHour", &mut m.per_hour, 10_000.0),
+                    ("threadPerKm", &mut m.thread_per_km, 10_000.0),
+                    ("setup", &mut m.setup, 1_000_000.0),
+                ] {
+                    if let Some(v) = o.get(k) {
+                        *slot = v.as_f64().filter(|x| (0.0..=hi).contains(x)).ok_or_else(|| bad(CMD, format!("cost.{k} is 0 to {hi}")))?;
+                    }
+                }
+                if let Some(v) = o.get("heads") {
+                    m.heads = v
+                        .as_u64()
+                        .filter(|h| (1..=100).contains(h))
+                        .and_then(|h| u32::try_from(h).ok())
+                        .ok_or_else(|| bad(CMD, "cost.heads is 1 to 100"))?;
+                }
+                if let Some(v) = o.get("currency") {
+                    m.currency = v
+                        .as_str()
+                        .filter(|c| c.chars().count() <= 4 && !c.chars().any(char::is_control))
+                        .ok_or_else(|| bad(CMD, "cost.currency is up to 4 characters"))?
+                        .to_string();
+                }
+                Some(m)
+            }
+            _ => return Err(bad(CMD, "cost is true, false or {perThousand?, perHour?, threadPerKm?, setup?, heads?, currency?}")),
+        };
+        changed = true;
+    }
     if let Some(v) = p.get("basting") {
         st.basting = match v {
             Value::Null | Value::Bool(false) => None,
@@ -2146,7 +2191,7 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let mut y = 512.0;
     let st = &cfg.settings;
-    let lines = [
+    let mut lines = vec![
         format!("Size: {:.1} × {:.1} mm (shown at {shown} %)", stats.width_mm, stats.height_mm),
         format!("Stitches: {}   Colours: {}   Colour changes: {}   Trims: {}", stats.stitches, stats.colors.len(), stats.color_changes, stats.trims),
         format!(
@@ -2163,6 +2208,17 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
             if cfg.machine.is_empty() { "none" } else { cfg.machine.as_str() }
         ),
     ];
+    if let Some(m) = &cfg.cost {
+        let e = m.estimate(&stats, 1);
+        lines.push(format!(
+            "Cost: {} a piece (stitches {}, machine time {}, thread {}, set-up {})",
+            m.money(e.per_piece),
+            m.money(e.stitches),
+            m.money(e.time),
+            m.money(e.thread),
+            m.money(e.setup)
+        ));
+    }
     for l in &lines {
         sheet_text(&mut doc, 40.0, y, l, 10.0, black)?;
         y += 15.0;
@@ -2206,6 +2262,32 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "kind": kind, "colors": stats.colors.len(), "scale": shown }))
 }
 
+/// A cost estimate as the commands give it.
+fn cost_json(m: &sf_core::attr::CostModel, e: &sf_core::attr::CostEstimate, quantity: u32) -> Value {
+    let r = |v: f64| (v * 100.0).round() / 100.0;
+    json!({
+        "currency": m.currency, "quantity": quantity, "perPiece": r(e.per_piece), "total": r(e.total),
+        "stitches": r(e.stitches), "time": r(e.time), "thread": r(e.thread), "setup": r(e.setup),
+        "text": format!("{} a piece", m.money(e.per_piece)),
+    })
+}
+
+fn cost(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.cost";
+    let quantity = match p.get("quantity") {
+        None | Some(Value::Null) => 1,
+        Some(v) => v
+            .as_u64()
+            .filter(|q| (1..=1_000_000).contains(q))
+            .and_then(|q| u32::try_from(q).ok())
+            .ok_or_else(|| bad(CMD, "`quantity` is 1 to 1000000"))?,
+    };
+    let model = s.doc()?.doc.embroidery.as_deref().and_then(|e| e.cost.clone()).unwrap_or_default();
+    let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
+    let stats = plan.stats.as_ref().ok_or_else(|| bad(CMD, "nothing is stitched yet: give objects a stitch type first"))?;
+    Ok(cost_json(&model, &model.estimate(stats, quantity), quantity))
+}
+
 fn info(s: &mut Session, _p: &Value) -> Result<Value> {
     let plan = s.embroidery_plan().ok_or_else(|| bad("embroidery.info", "no document"))?;
     let cfg = s.doc()?.doc.embroidery.as_deref().cloned().unwrap_or_default();
@@ -2228,6 +2310,10 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         "tieIn": st.tie_in, "tieOff": st.tie_off, "tieLength": st.tie_length, "tieStyle": st.tie_style.id(), "machineSpeed": st.machine_speed,
         "trimSeconds": st.trim_seconds, "colorChangeSeconds": st.color_change_seconds,
         "basting": st.basting.map(|b| json!({ "hoop": b.hoop, "margin": b.margin, "length": b.length })),
+        "cost": cfg.cost.as_ref().map(|m| json!({
+            "perThousand": m.per_thousand, "perHour": m.per_hour, "threadPerKm": m.thread_per_km,
+            "setup": m.setup, "heads": m.heads, "currency": m.currency,
+        })),
         "checks": {
             "denseLayers": cfg.checks.dense_layers, "longStitch": cfg.checks.long_stitch,
             "smallLettering": cfg.checks.small_lettering, "tinyObject": cfg.checks.tiny_object,
@@ -2271,6 +2357,7 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         "machines": machines,
         "settings": settings,
         "notes": cfg.notes,
+        "costEstimate": cfg.cost.as_ref().map(|m| cost_json(m, &m.estimate(st, 1), 1)),
     }))
 }
 

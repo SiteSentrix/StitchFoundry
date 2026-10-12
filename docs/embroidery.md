@@ -504,6 +504,12 @@ time and thread used, and whether the design fits the hoop. Its settings:
   *Basting round* the design (*Basting margin* out from it, 5 mm) or the hoop (that far in from
   its edge, the hoop centred on the design); it is written into the machine file
   (`embroidery.settings {basting: true | {hoop?, margin?, length?} | false}`).
+- **Estimate cost**: what sewing the design costs, shown under its figures (*Cost a piece*) and on
+  worksheets. *Cost settings*: a price per 1000 stitches, the machine's time an hour (shared by
+  the pieces its *Machine heads* sew at once), thread per 1000 m (top and bobbin) and a set-up
+  charge an order, in a currency; `embroidery.cost {quantity}` prices an order, the set-up spread
+  over its pieces (`embroidery.settings {cost: {perThousand?, perHour?, threadPerKm?, setup?,
+  heads?, currency?}}`).
 - **Thread chart**: the chart the panel's thread list picks from. Threads keep their name and
   code; PES and JEF files use the nearest colour of the machine's own palette. **Match Threads to
   Chart** (also in the Embroidery menu, for the selection) gives every stitched object the chart's

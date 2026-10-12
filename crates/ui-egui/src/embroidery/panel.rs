@@ -1770,6 +1770,9 @@ fn design_section(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         row(ui, tl!("Trims"), info["trims"].as_u64().unwrap_or(0).to_string());
         row(ui, tl!("Sewing time"), info["time"].as_str().unwrap_or_default().to_string());
         row(ui, tl!("Thread"), format!("{:.1} m", info["threadM"].as_f64().unwrap_or(0.0)));
+        if let Some(c) = info["costEstimate"]["perPiece"].as_f64() {
+            row(ui, tl!("Cost a piece"), format!("{}{c:.2}", info["costEstimate"]["currency"].as_str().unwrap_or_default()));
+        }
         if let Some(fits) = info["fits"].as_bool() {
             let (txt, col) = if fits { (tl!("Fits the hoop"), t.accent) } else { (tl!("Larger than the hoop"), t.error) };
             ui.label(egui::RichText::new(txt).color(col));
@@ -1994,6 +1997,35 @@ fn machine_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
         if let Some(v) = num(ui, tl!("Basting margin"), "basting-margin", b["margin"].as_f64().unwrap_or(5.0), " mm", 1) {
             app.run("embroidery.settings", json!({ "basting": { "margin": v.clamp(0.0, 50.0) } })).ok();
         }
+    }
+    // the cost estimate's prices
+    let cost = &s["cost"];
+    if let Some(v) = check(ui, tl!("Estimate cost"), cost.is_object()) {
+        app.run("embroidery.settings", json!({ "cost": v })).ok();
+    }
+    if cost.is_object() {
+        egui::CollapsingHeader::new(tl!("Cost settings")).id_salt("emb-cost-settings").show(ui, |ui| {
+            for (label, key, id, decimals) in [
+                (tl!("Per 1000 stitches"), "perThousand", "cost-k", 2),
+                (tl!("Machine time an hour"), "perHour", "cost-h", 2),
+                (tl!("Thread per 1000 m"), "threadPerKm", "cost-t", 2),
+                (tl!("Set-up an order"), "setup", "cost-s", 2),
+                (tl!("Machine heads"), "heads", "cost-heads", 0),
+            ] {
+                if let Some(v) = num(ui, label, id, cost[key].as_f64().unwrap_or(0.0), "", decimals) {
+                    let v = if key == "heads" { v.round().clamp(1.0, 100.0) } else { v.max(0.0) };
+                    app.run("embroidery.settings", json!({ "cost": { key: v } })).ok();
+                }
+            }
+            let symbols = ["$", "€", "£", "¥", "kr ", "CHF ", "R$", "zł "];
+            let now = cost["currency"].as_str().unwrap_or("$");
+            let cur = symbols.iter().position(|c| *c == now).unwrap_or(0);
+            if let Some(i) = pick_names(ui, tl!("Currency"), "cost-currency", cur, &symbols)
+                && let Some(c) = symbols.get(i)
+            {
+                app.run("embroidery.settings", json!({ "cost": { "currency": c } })).ok();
+            }
+        });
     }
     // notes kept with the design, set when the field is left
     let saved = info["notes"].as_str().unwrap_or_default().to_string();
