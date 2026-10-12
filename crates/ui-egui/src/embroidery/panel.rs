@@ -397,6 +397,17 @@ pub(crate) fn font_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             font_cmd(app, "embroidery.fontDoc.addGlyphs", json!({ "chars": chars }));
         }
     });
+    // designs on keys: the selected art becomes a glyph
+    ui.horizontal(|ui| {
+        ui.label(tl!("Selection to glyph"));
+        ui.add(egui::TextEdit::singleline(&mut app.embroidery.font_assign).desired_width(40.0).char_limit(8));
+        if button(ui, tl!("Assign")).on_hover_text(tl!("The selected art becomes the glyph, moved onto its artboard")).clicked()
+            && !app.embroidery.font_assign.trim().is_empty()
+        {
+            let glyph = app.embroidery.font_assign.trim().to_string();
+            font_cmd(app, "embroidery.fontDoc.assign", json!({ "glyph": glyph }));
+        }
+    });
     // kerning: each pair how much closer, 0 to take it out; a pair to add
     ui.add_space(4.0);
     ui.label(tl!("Kerning (mm closer)"));

@@ -4706,3 +4706,6 @@ machine	Stop	Зупинка
 	Type family	Гарнітура
 	New Font from Type	Новий шрифт зі шрифту
 	Edit Font	Змінити шрифт
+	Assign to Glyph	Призначити гліфу
+	Selection to glyph	Виділення в гліф
+	The selected art becomes the glyph, moved onto its artboard	Виділений об’єкт стає гліфом і переміщується на його монтажну область

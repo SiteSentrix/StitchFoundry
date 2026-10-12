@@ -4680,3 +4680,6 @@ machine	Stop	Stopp
 	Type family	Schriftfamilie
 	New Font from Type	Neue Schrift aus Schrift
 	Edit Font	Schrift bearbeiten
+	Assign to Glyph	Glyphe zuweisen
+	Selection to glyph	Auswahl als Glyphe
+	The selected art becomes the glyph, moved onto its artboard	Die ausgewählte Grafik wird zur Glyphe und auf ihre Zeichenfläche verschoben

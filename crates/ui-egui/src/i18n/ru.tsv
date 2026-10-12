@@ -4722,3 +4722,6 @@ machine	Stop	Остановка
 	Type family	Гарнитура
 	New Font from Type	Новый шрифт из шрифта
 	Edit Font	Изменить шрифт
+	Assign to Glyph	Назначить глифу
+	Selection to glyph	Выделение в глиф
+	The selected art becomes the glyph, moved onto its artboard	Выделенный объект становится глифом и перемещается на его монтажную область

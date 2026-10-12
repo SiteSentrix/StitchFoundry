@@ -626,6 +626,11 @@ a font document from an installed TrueType or OpenType family, each glyph its ou
 family's own advance, digitized as Convert Artwork would (satin where the strokes are thin enough,
 fill where they're wide), ready to refine and save. Check the type's licence allows it.
 
+Designs on keys (a keyboard collection): select a design in a font document and *Assign* it to a
+character in the Font Creator section (`embroidery.fontDoc.assign {glyph}`): it moves onto that
+glyph's artboard (one is made if the font hasn't the glyph), its bottom on the baseline, the
+artboard widened to hold it. Save the font and type with the designs like any lettering.
+
 Any loaded font, Ink/Stitch's or one made here, opens as a font document to refine
 (`embroidery.font.edit {name}`): its glyphs on their artboards at their advances, its properties
 and kerning; saving it replaces the loaded font of that name (rename it with

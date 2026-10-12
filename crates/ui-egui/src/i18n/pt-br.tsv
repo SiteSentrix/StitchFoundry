@@ -3993,3 +3993,6 @@ machine	Trim	Corte de linha
 	Type family	Família tipográfica
 	New Font from Type	Nova fonte a partir de fonte
 	Edit Font	Editar fonte
+	Assign to Glyph	Atribuir ao glifo
+	Selection to glyph	Seleção como glifo
+	The selected art becomes the glyph, moved onto its artboard	A arte selecionada se torna o glifo, movida para sua prancheta

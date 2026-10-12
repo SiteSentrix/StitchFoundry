@@ -172,6 +172,8 @@ pub struct EmbroideryUi {
     pub font_test: String,
     pub font_family: String,
     pub font_other: String,
+    /// The glyph the selected art becomes.
+    pub font_assign: String,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -255,6 +257,7 @@ impl Default for EmbroideryUi {
             font_test: String::new(),
             font_family: "Source Sans 3".into(),
             font_other: String::new(),
+            font_assign: String::new(),
             prompt: prompt::PromptState::default(),
         }
     }

@@ -4726,3 +4726,6 @@ machine	Stop	Arresto
 	Type family	Famiglia di caratteri
 	New Font from Type	Nuovo font da un font
 	Edit Font	Modifica font
+	Assign to Glyph	Assegna a glifo
+	Selection to glyph	Selezione come glifo
+	The selected art becomes the glyph, moved onto its artboard	La grafica selezionata diventa il glifo, spostata sulla sua tavola
