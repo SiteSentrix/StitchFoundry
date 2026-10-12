@@ -3,6 +3,7 @@
 
 pub mod overlay;
 pub mod panel;
+pub mod profile_curve;
 pub mod prompt;
 pub mod sequence;
 pub mod stitch_list;

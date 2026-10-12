@@ -4637,3 +4637,4 @@ machine	Stop	Зупинка
 	Straight	Пряма
 	Keyhole	З вічком
 	Count	Кількість
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Ряди впоперек форми: вище — щільніше. Перетягніть точку; подвійне клацання додає точку, клацання правою кнопкою по точці вилучає її.

@@ -838,6 +838,10 @@ fn profile_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, f: &FillP
     {
         set(app, target, json!({ "spacing_profile": p }));
     }
+    // the profile as a curve to reshape
+    if let Some(p) = super::profile_curve::show(ui, egui::Id::new("emb-profile-curve"), &f.spacing_profile, d) {
+        set(app, target, json!({ "spacing_profile": p }));
+    }
     let Target::Selection(id) = target else { return };
     ui.horizontal(|ui| {
         ui.label(tl!("Blend into"));

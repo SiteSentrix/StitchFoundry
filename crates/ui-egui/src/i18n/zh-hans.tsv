@@ -4239,3 +4239,4 @@ machine	Stop	停止
 	Straight	直形
 	Keyhole	锁眼形
 	Count	数量
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	整个形状上的行：越高越密。拖动点；双击添加点；右键单击点将其移除。
