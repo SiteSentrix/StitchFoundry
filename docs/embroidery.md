@@ -262,6 +262,12 @@ the fill: an embossed texture without another thread.
   object is a tatami fill, the front-most one is the stamp for the others.
   With the `repeat` parameter (mm), each line is copied that far apart across the whole fill:
   draw one wave across a shape for wavy lines all over it (flexi splits).
+- **Carving stamps:** **Embroidery › Carve Stamp** presses a stamp from the library into the
+  selected tatami fills, in the middle of each and 60% as wide as its smaller side: star, heart,
+  flower, leaf (with its veins), spiral, sun, moon, snowflake, paw print, swirl, shell,
+  butterfly, clover, feather, rings and diamond, all drawn for StitchFoundry. The stamp becomes
+  split lines like any carving (`embroidery.carveStamp` takes `at`, `size` and `angle`;
+  `embroidery.stamps` lists the library).
 - Split lines show dashed on the selected fill, move, turn and
   scale with it, and stay its own: **Make Properties Current** and styles leave them out.
   **Embroidery › Clear Split Lines** (or the button in the panel) takes them out again.
@@ -555,6 +561,7 @@ tool list for all parameters):
 | `embroidery.autoDirection` / `addGuide` / `moveGuide` / `removeGuide` / `clearGuides` / `setBeads` | stitch direction and start/stop |
 | `embroidery.setParams {params: {texture: {pattern, size?, angle?} \| null}}` | a tatami fill's texture (programmed splits): `diamonds`, `waves`, `herringbone`, `bricks`, `circles`, `scales` |
 | `embroidery.carveSplits {ids?, repeat?, keep?}`, `embroidery.setSplits {id, splits}`, `embroidery.clearSplits {ids?}` | split lines in tatami fills: carved from other art (a stamp's outline, lines, lines repeated across the fill), set from points, cleared |
+| `embroidery.carveStamp {stamp, ids?, at?, size?, angle?}`, `embroidery.stamps` | press a carving stamp from the library into tatami fills; list the library |
 | `embroidery.fillAlongLines {ids?, keep?}`, `embroidery.setFlowLines {id, lines}`, `embroidery.clearFlowLines {ids?}` | flow lines in tatami fills: rows copying one line or flowing from one to another, taken from other art, set from points, cleared |
 | `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif (built-in or the design's) as a path sewn in a single run |
 | `embroidery.motif.make {name?, ids?}`, `embroidery.motif.apply {name, ids?}`, `embroidery.motif.list`, `embroidery.motif.delete {name}` | the design's own motifs: made from the selected path, sewn by the selected runs and fills (paths not stitched yet become motif runs or fills), listed with how many objects sew each, removed |
