@@ -446,6 +446,9 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
             if n.appearance.paint_at(index, fill).is_none() {
                 n.appearance.set_paint_at(index, fill, Paint::None);
             }
+            if !fill {
+                restore_unpainted_stroke(&mut n.appearance, index, &paint);
+            }
             let placed = place_paint(&paint, p, item_paint_bounds(n, index, fill));
             n.appearance.set_paint_at(index, fill, placed);
             Ok(())
@@ -470,6 +473,9 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     if fill {
         s.paint.fill = unplaced(&paint);
     } else {
+        if !paint.is_none() && s.paint.stroke.is_none() && s.paint.stroke_width == 0.0 {
+            s.paint.stroke_width = 1.0;
+        }
         s.paint.stroke = unplaced(&paint);
     }
     if bool_or(p, "focus", true) {
@@ -495,6 +501,17 @@ fn set_run_stroke(style: &mut CharStyle, paint: Paint) {
     style.stroke = paint;
 }
 
+/// Use the existing 1 pt default when adding paint to an unpainted zero-width stroke.
+pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>, paint: &Paint) {
+    if !paint.is_none()
+        && let Some(stroke) = ap.stroke_at_mut(index)
+        && stroke.paint.is_none()
+        && stroke.width == 0.0
+    {
+        stroke.width = 1.0;
+    }
+}
+
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = paint_targets(s, p)?;
     if !ids.is_empty() {
@@ -512,10 +529,14 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
                 let f = n.appearance.fill_paint();
                 let st = n.appearance.stroke_paint();
                 n.appearance.set_fill(st);
+                restore_unpainted_stroke(&mut n.appearance, None, &f);
                 n.appearance.set_stroke(f);
             }
             Ok(())
         })?;
+    }
+    if s.paint.stroke.is_none() && !s.paint.fill.is_none() && s.paint.stroke_width == 0.0 {
+        s.paint.stroke_width = 1.0;
     }
     std::mem::swap(&mut s.paint.fill, &mut s.paint.stroke);
     ok()
