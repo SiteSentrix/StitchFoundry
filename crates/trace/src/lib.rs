@@ -8,7 +8,10 @@
 //!    histogram as the [`Palette`] asks: median cut to a colour count followed by weighted k-means
 //!    (Limited), median cut until every colour box is tight (Full Tone), one of those two by
 //!    whether the image is flat art (Automatic), or the most used colours of a swatch library
-//!    (Document Library). Transparent pixels are left out.
+//!    (Document Library). Transparent pixels are left out. The palette is made of the picture's own
+//!    colours: the blends that anti-aliasing and blur leave along edges take none of it, colours that
+//!    noise made of one colour are merged, and a blend pixel goes to one of the two colours it lies
+//!    between (see `quantize`).
 //! 2. **Remove noise**: 4-connected same-colour components smaller than `noise` pixels are merged
 //!    into their most common neighbouring colour.
 //! 3. **Follow boundaries**: for each colour layer, the pixel-crack edges between inside and
