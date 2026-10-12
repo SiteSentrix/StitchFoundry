@@ -162,10 +162,11 @@ pub fn illustrator_data(bytes: &[u8], password: Option<&str>) -> Option<Vec<u8>>
     (!data.is_empty()).then_some(data)
 }
 
-/// Does the PDF's first page carry an editor's private data (a PDF-compatible `.ai`)? Without
-/// reading the data.
+/// Does the PDF's first page carry an editor's copy of the art: a PDF-compatible `.ai`
+/// (`AIPrivateData` keys) or a PDF saved with its editing data (`AIPDFPrivateData`, #1345)? Without
+/// reading the data. Either's trim boxes are its editor's artboards.
 pub fn has_illustrator_data(bytes: &[u8], password: Option<&str>) -> bool {
-    open(bytes, password).is_ok_and(|pdf| pdf.pages().first().is_some_and(has_private_data))
+    open(bytes, password).is_ok_and(|pdf| pdf.pages().first().is_some_and(|p| piece_info_has(p, &[b"AIPrivateData", b"AIPDFPrivateData"])))
 }
 
 /// `stream` decoded, up to `most` bytes: the decoder is run here rather than by the PDF reader's
@@ -193,8 +194,16 @@ fn inflated(stream: &Stream<'_>, most: usize) -> Option<Vec<u8>> {
 /// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData`)?
 /// A file saved without PDF compatibility keeps its art there and shows a placeholder page.
 pub(crate) fn has_private_data(page: &Page<'_>) -> bool {
-    fn walk(d: &Dict<'_>, depth: u32) -> bool {
-        depth < 4 && d.keys().any(|k| k.starts_with(b"AIPrivateData") || d.get::<Dict<'_>>(k.as_ref()).is_some_and(|sub| walk(&sub, depth + 1)))
+    piece_info_has(page, &[b"AIPrivateData"])
+}
+
+/// Does `page`'s `PieceInfo` hold a key starting with one of `prefixes`, up to four dictionaries in?
+fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
+    fn walk(d: &Dict<'_>, prefixes: &[&[u8]], depth: u32) -> bool {
+        depth < 4
+            && d.keys().any(|k| {
+                prefixes.iter().any(|p| k.starts_with(p)) || d.get::<Dict<'_>>(k.as_ref()).is_some_and(|sub| walk(&sub, prefixes, depth + 1))
+            })
     }
-    page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, 0))
+    page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, prefixes, 0))
 }

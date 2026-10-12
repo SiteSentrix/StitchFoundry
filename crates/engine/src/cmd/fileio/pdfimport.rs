@@ -97,8 +97,8 @@ impl LoadOptions {
     }
 
     /// The PDF import options: `pages` resolved against the file's page count. A PDF-compatible
-    /// `.ai` asked for its crop box opens on its trim boxes, its editor's artboards, with the bleed
-    /// round them (its crop box takes the bleed in).
+    /// `.ai`, or a PDF saved with its editing data, asked for its crop box opens on its trim boxes,
+    /// its editor's artboards, with the bleed round them (its crop box takes the bleed in).
     fn import_options(&self, bytes: &[u8]) -> Result<ImportOptions> {
         let pages = match &self.pages {
             None => None,

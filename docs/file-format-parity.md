@@ -34,6 +34,7 @@ private editing data. VectorCraft:
   when the program runs, from the layers alone when it names its prolog without including it (#1027).
   A PDF-compatible `.ai` opens on its PDF part's trim boxes (its artboards), the bleed boxes round them
   becoming the document's bleed, so art in the bleed shows outside the artboard, within the bleed guide (#1266).
+  A PDF saved with its editing data (`AIPDFPrivateData`) opens the same way.
 - **Writes** a PDF-compatible `.ai` (Save As › `ai`): Illustrator opens it as plain art. It never writes
   Illustrator's private editing data, which is undocumented.
 - **Known failures in users' files:** layer structure flattened or multiplied (#951: 109 layers instead of
@@ -84,7 +85,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 |---|---|---|
 | 2026-10-12 | minor | PDF and `.ai` import: a shape painted with a gradient opens as one path with the gradient (#1304). PDF and `.ai` export: the constant alpha soft mask of a CMYK page with transparency is white (#1286, in part) |
 | 2026-10-12 | minor | DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves stay open and curves retained; rational/non-rational import and export versions regression-tested; scores/hours unchanged |
-| 2026-10-12 | minor | A `.ai` opens on its trim boxes with its bleed boxes as the document's bleed; a PDF opened on its trim boxes too (#1266) |
+| 2026-10-12 | minor | A `.ai` opens on its trim boxes with its bleed boxes as the document's bleed; a PDF opened on its trim boxes too (#1266); a PDF saved with its editing data opens as the `.ai` does |
 | 2026-10-11 | minor | An EPS keeps its own page and its stacked text strokes through its layers (#1102) |
 | 2026-10-11 | minor | A `.ai` read as its PDF part keeps its artboard layout from the editing data (#1068) |
 | 2026-10-11 | minor | Spot colours defined in Lab keep their Lab values, from the editing data and from a PDF part whose ink alternate is an ICC Lab profile (#1032) |
