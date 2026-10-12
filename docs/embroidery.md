@@ -567,6 +567,19 @@ one line.
   and files that library wrote open here with the right size, colours and structure. **They have not been sewn on real machines yet**, so
   test-sew before production runs.
 
+## Ink/Stitch designs
+
+An SVG made with Ink/Stitch, the embroidery extension for Inkscape, opens stitched the way its
+Ink/Stitch settings say (they are kept with the art and saved with it): dashed strokes run, with
+their stitch length, bean stitch and repeats; satin columns sew between their two rails, their
+rungs becoming inclination lines; other strokes become satin lines as wide as the stroke; and
+filled shapes fill, with their fill method (contour, meander and circular fills as contour,
+meander and spiral fills, the others tatami), angle, row spacing, stitch length, stagger and
+underlay. Art without settings of its own is sewn with the defaults, as Ink/Stitch would. A fill
+with a stroke sews the fill only. Commands (trims, stops) and the newer stitch types
+(ripple, tartan, gradient fills…) come in as their nearest StitchFoundry stitching. The mapping
+was written from Ink/Stitch's public documentation, not its code.
+
 ## Commands
 
 Every feature is an engine command. A few of the main ones (see `document.commands` or the MCP

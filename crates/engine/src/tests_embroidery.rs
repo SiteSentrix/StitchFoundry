@@ -2102,6 +2102,54 @@ fn my_motifs_carry_motifs_from_design_to_design() {
     assert_eq!(s.execute("embroidery.motif.list", &json!({})).unwrap()["motifs"].as_array().unwrap().len(), 1);
 }
 
+/// An Ink/Stitch design of our own: a bean stitch run sewn twice, a satin column with three
+/// rungs, a fill at 30° and a plain stroke Ink/Stitch would sew as satin.
+const INKSTITCH_DESIGN: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkstitch="http://inkstitch.org/namespace" width="100mm" height="60mm" viewBox="0 0 100 60">
+  <path id="run" d="M 10 10 L 90 10" style="fill:none;stroke:#cc0000;stroke-width:0.3;stroke-dasharray:1,0.5" inkstitch:running_stitch_length_mm="2" inkstitch:bean_stitch_repeats="1" inkstitch:repeats="2"/>
+  <path id="satin" d="M 10 20 L 90 20 M 10 26 L 90 26 M 30 18 L 30 28 M 50 18 L 50 28 M 70 18 L 70 28" style="fill:none;stroke:#0000cc;stroke-width:0.5" inkstitch:satin_column="True" inkstitch:zigzag_spacing_mm="0.35" inkstitch:pull_compensation_mm="0.2 0.3" inkstitch:contour_underlay="True" inkstitch:center_walk_underlay="False"/>
+  <path id="fill" d="M 10 35 H 50 V 55 H 10 Z" style="fill:#00aa00;stroke:none" inkstitch:angle="30" inkstitch:row_spacing_mm="0.3" inkstitch:max_stitch_length_mm="3.5"/>
+  <path id="plain" d="M 60 35 L 90 55" style="fill:none;stroke:#333333;stroke-width:3"/>
+</svg>"##;
+
+#[test]
+fn ink_stitch_designs_open_with_their_stitch_settings() {
+    use sf_core::attr::StitchType;
+    use sf_core::model::{FillKind, RunKind};
+    let mut s = Session::new();
+    let r = crate::cmd::fileio::open_bytes(&mut s, "design.svg", INKSTITCH_DESIGN.as_bytes(), None).unwrap();
+    assert!(r["warnings"].to_string().contains("Ink/Stitch"), "{r}");
+    let node = |s: &Session, name: &str| {
+        let mut found = None;
+        s.doc().unwrap().doc.walk(|n| {
+            if n.name.as_deref() == Some(name) {
+                found = Some(n.clone());
+            }
+        });
+        found.unwrap()
+    };
+    let emb = |name: &str| node(&s, name).embroidery.as_deref().cloned().unwrap();
+    // a bean stitch sewn twice, 2 mm stitches
+    let StitchType::Run(run) = emb("run").stitch else { panic!() };
+    assert_eq!((run.kind, run.stitch_length, run.passes), (RunKind::Triple, 2.0, 2));
+    // a satin column between its two rails, its three rungs as inclination lines
+    let e = emb("satin");
+    let StitchType::Satin(p) = &e.stitch else { panic!() };
+    assert_eq!((p.spacing, p.pull_comp, p.pull_comp_2), (0.35, 0.2, Some(0.3)));
+    assert!(!p.underlay.auto && p.underlay.edge_run && !p.underlay.center_run && !p.underlay.zigzag);
+    assert_eq!((e.guides.len(), node(&s, "satin").path_data().unwrap().subpaths.len()), (3, 2));
+    // a fill at 30°, rows 0.3 mm apart
+    let StitchType::Fill(f) = emb("fill").stitch else { panic!() };
+    assert_eq!((f.kind, f.angle, f.spacing, f.stitch_length), (FillKind::Tatami, 30.0, 0.3, 3.5));
+    // a plain stroke: a satin line as wide as the stroke
+    let e = emb("plain");
+    assert!(matches!(e.stitch, StitchType::Satin(_)) && (e.width.unwrap() - 3.0).abs() < 0.01, "{:?}", e.width);
+    assert!(stitches(&s) > 300);
+    // An SVG with no Ink/Stitch settings opens as plain art.
+    let plain = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><path id="p" d="M10 10 L90 90" stroke="#000" fill="none"/></svg>"##;
+    crate::cmd::fileio::open_bytes(&mut s, "plain.svg", plain.as_bytes(), None).unwrap();
+    assert!(node(&s, "p").embroidery.is_none());
+}
+
 #[test]
 fn a_laydown_is_sewn_first_under_the_selected_shapes() {
     const MM: f64 = vectorcraft_embroidery::MM_PER_PT;

@@ -550,8 +550,9 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-03 | Agents digitize through MCP / control channel | Done | Every feature is a command |
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
+| BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 142 done,
+**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 143 done,
 28 partial, 55 missing, 6 out of scope (counted 2026-10-12, after phase 2). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.

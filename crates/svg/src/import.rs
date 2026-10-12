@@ -169,6 +169,8 @@ pub(crate) const SUBLAYER: &str = "data-vc-layer";
 
 /// The Inkscape namespace (its layers and their labels).
 const INKSCAPE: &str = "http://www.inkscape.org/namespaces/inkscape";
+/// Ink/Stitch's namespace: its embroidery settings, kept as `inkstitch-*` data.
+const INKSTITCH: &str = "http://inkstitch.org/namespace";
 
 /// The layer name on root element `root` (`<svg id="Main">`, or its `data-name`), as exports of
 /// one-layer documents write it. An Inkscape root's id (`svg8`) is one Inkscape made up, not a name.
@@ -468,7 +470,10 @@ impl Edits {
 fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
-    if !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode"].iter().any(|t| svg.contains(t)) {
+    if !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode", INKSTITCH]
+        .iter()
+        .any(|t| svg.contains(t))
+    {
         return (svg.into(), found);
     }
     let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
@@ -481,7 +486,7 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
             found.links.insert(edits.id(svg, a), url.to_string());
         }
     }
-    if svg.contains("data-") {
+    if svg.contains("data-") || svg.contains(INKSTITCH) {
         for e in elements().filter(|e| OBJECT_ELEMENTS.contains(&e.tag_name().name())) {
             let data = user_data(e);
             if !data.is_empty() {
@@ -551,15 +556,17 @@ const OBJECT_ELEMENTS: &[&str] = &["g", "a", "use", "path", "rect", "circle", "e
 const MAX_DATA: usize = 64;
 
 /// The `data-*` attributes of element `e`, in order, without the `data-` (ours, `data-name` and
-/// `data-vc-*`, aside).
+/// `data-vc-*`, aside), then its Ink/Stitch embroidery settings (`inkstitch:angle` as
+/// `inkstitch-angle`, written back as `data-inkstitch-angle`).
 fn user_data(e: XNode) -> Vec<(String, String)> {
-    e.attributes()
+    let own = e
+        .attributes()
         .filter(|a| a.namespace().is_none())
         .filter_map(|a| Some((a.name().strip_prefix("data-")?, a.value())))
         .filter(|(k, _)| !k.is_empty() && *k != "name" && !k.starts_with("vc-"))
-        .take(MAX_DATA)
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
+        .map(|(k, v)| (k.to_string(), v.to_string()));
+    let inkstitch = e.attributes().filter(|a| a.namespace() == Some(INKSTITCH)).map(|a| (format!("inkstitch-{}", a.name()), a.value().to_string()));
+    own.chain(inkstitch).take(MAX_DATA).collect()
 }
 
 /// Make `n` link to `url`, unless it links somewhere already (an inner link wins).
