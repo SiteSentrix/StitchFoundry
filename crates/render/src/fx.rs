@@ -274,6 +274,9 @@ fn draw_scaled(ctx: &mut RenderContext, image: std::sync::Arc<vello_cpu::Pixmap>
     // On whole pixels at full size the cheapest sampler is exact.
     let quality = if k < 1.0 { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };
     let sampler = peniko::ImageSampler { quality, ..Default::default() };
+    // The raster maps 1:1 onto the rect: a paint transform left by an earlier fill (a pattern,
+    // radial or freeform gradient) would resample it (#1536).
+    ctx.reset_paint_transform();
     ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(image), sampler });
     ctx.fill_rect(&Rect::new(0.0, 0.0, w, h));
     ctx.set_transform(Affine::IDENTITY);
@@ -617,6 +620,7 @@ impl Renderer {
         ctx.set_transform(Affine::translate((x, y)));
         ctx.set_blend_mode(blend_mode(mode));
         let sampler = peniko::ImageSampler { quality: peniko::ImageQuality::Low, ..Default::default() };
+        ctx.reset_paint_transform();
         ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(image), sampler });
         ctx.fill_rect(&Rect::new(0.0, 0.0, w, h));
         ctx.set_blend_mode(blend_mode(vectorcraft_doc::color::BlendMode::Normal));

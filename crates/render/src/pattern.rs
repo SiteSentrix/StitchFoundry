@@ -274,6 +274,58 @@ mod tests {
         p[0] > 200 && p[1] > 200 && p[2] > 200
     }
 
+    /// #1536: a raster effect drawn after a pattern fill is the same as without the pattern (the
+    /// pattern's paint transform must not resample the effect's raster).
+    #[test]
+    fn effects_after_a_pattern_fill_keep_their_place_and_size() {
+        let fx = |id: &str, params: serde_json::Value| vectorcraft_doc::Effect { id: id.into(), params, visible: true };
+        for effect in [
+            fx("blur.gaussian", serde_json::json!({"radius": 4.0})),
+            fx("stylize.dropShadow", serde_json::json!({"x": 6, "y": 6, "blur": 3, "opacity": 100})),
+        ] {
+            let make = |with_pattern: bool| {
+                let mut d = doc_with_pattern(TileType::Grid);
+                let l = d.layers[0].id;
+                let filled = d.children(Some(l)).unwrap()[0].id;
+                d.remove(filled).unwrap();
+                if with_pattern {
+                    let id = d.alloc_id();
+                    let n = Node::path(
+                        id,
+                        shapes::rectangle(Rect::new(0.0, 0.0, 80.0, 80.0)),
+                        Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0),
+                    );
+                    d.insert(Some(l), 0, n).unwrap();
+                }
+                let id = d.alloc_id();
+                let mut n = Node::path(
+                    id,
+                    shapes::ellipse(Rect::new(120.0, 110.0, 180.0, 170.0)),
+                    Appearance::basic(Paint::solid(Color::rgb(0.5, 0.5, 0.5)), Paint::None, 0.0),
+                );
+                n.appearance.effects.push(effect.clone());
+                let at = d.children(Some(l)).map_or(0, Vec::len);
+                d.insert(Some(l), at, n).unwrap();
+                d
+            };
+            // Supersampled, as raster exports draw.
+            let one = |d: &Document| {
+                let mut r = Renderer::new();
+                r.render(
+                    d,
+                    200,
+                    200,
+                    Affine::IDENTITY,
+                    &RenderOptions { background: Some([255, 255, 255, 255]), supersample: true, ..Default::default() },
+                )
+            };
+            let (with, without) = (one(&make(true)), one(&make(false)));
+            for (x, y) in [(150, 140), (125, 140), (176, 160), (150, 172), (184, 176)] {
+                assert_eq!(with.pixel(x, y), without.pixel(x, y), "{} at ({x}, {y})", effect.id);
+            }
+        }
+    }
+
     #[test]
     fn pattern_fill_is_periodic() {
         let d = doc_with_pattern(TileType::Grid);
