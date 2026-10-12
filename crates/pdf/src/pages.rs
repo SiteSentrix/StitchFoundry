@@ -197,6 +197,14 @@ pub(crate) fn has_private_data(page: &Page<'_>) -> bool {
     piece_info_has(page, &[b"AIPrivateData"])
 }
 
+/// Does `page` state where its art is: an art, trim or bleed box (ISO 32000-1 §14.11.2, the
+/// extent of the page's meaningful content and of the finished page)? A page written from an
+/// artboard has them; the notice a file saved without its PDF part shows instead of its art is
+/// the same page whatever the document, with no art to state the place of.
+pub(crate) fn states_art(page: &Page<'_>) -> bool {
+    [&b"ArtBox"[..], b"TrimBox", b"BleedBox"].iter().any(|k| page.raw().get::<[f32; 4]>(*k).is_some())
+}
+
 /// Does `page`'s `PieceInfo` hold a key starting with one of `prefixes`, up to four dictionaries in?
 fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
     fn walk(d: &Dict<'_>, prefixes: &[&[u8]], depth: u32) -> bool {

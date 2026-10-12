@@ -154,6 +154,52 @@ fn an_ai_file_saved_without_its_pdf_part_opens_from_its_editing_data() {
     assert!(e.contains("placeholder"), "{e}");
 }
 
+/// A page of text alone, as text-only art has in its PDF part: no path is painted.
+const TEXT_ART: &str = "BT /F1 36 Tf 10 40 Td (Text only) Tj ET";
+
+/// The kinds of what the first layer holds: type (or its outlines, without the font) and others.
+fn text_and_others(s: &Session) -> (usize, usize) {
+    let art = s.doc().unwrap().doc.layers[0].children().unwrap();
+    let text = art.iter().filter(|n| matches!(n.kind, NodeKind::Text(_)) || n.name.as_deref() == Some("<Text Outlines>")).count();
+    (text, art.len() - text)
+}
+
+#[test]
+fn an_ai_file_whose_pdf_part_is_only_text_opens_from_it_when_its_editing_data_cant_be_read() {
+    // #1387. The page states where its art is (an art, trim or bleed box), which the notice
+    // page of a file saved without its PDF part has no art to do.
+    let unreadable = b"%AI24_ZStandard_Data\0\0\0\0\0\0\0\0";
+    for boxed in ["/ArtBox [0 0 200 100]", "/TrimBox [0 0 200 100]", "/BleedBox [0 0 200 100]"] {
+        let mut s = Session::new();
+        let r = open(&mut s, "text.ai", &ai::ai_with(unreadable, TEXT_ART, boxed), json!({})).unwrap();
+        // Then a note on the font, where the machine lacks it.
+        assert_eq!(r["warnings"][0], json!(vectorcraft_pdf::OFF_ARTBOARD_NOTE), "{boxed}: {r}");
+        assert_eq!(text_and_others(&s), (1, 0), "{boxed}");
+        // The PDF part alone, as asked.
+        open(&mut s, "text.ai", &ai::ai_with(unreadable, TEXT_ART, boxed), json!({"editingData": false})).unwrap();
+        assert_eq!(text_and_others(&s), (1, 0), "{boxed}");
+    }
+    // The same page without a box is the notice: the file still says why it can't open.
+    let mut s = Session::new();
+    let e = open(&mut s, "text.ai", &ai::ai(unreadable, TEXT_ART), json!({})).unwrap_err().to_string();
+    assert!(e.contains("without PDF compatibility") && e.contains("can't be read"), "{e}");
+    let e = open(&mut s, "text.ai", &ai::ai(unreadable, TEXT_ART), json!({"editingData": false})).unwrap_err().to_string();
+    assert!(e.contains("placeholder"), "{e}");
+    // Placed, it is read as its page too.
+    let r = s.execute("file.new", &json!({})).and_then(|_| {
+        let data = vectorcraft_format::base64_encode(&ai::ai_with(unreadable, TEXT_ART, "/ArtBox [0 0 200 100]"));
+        s.execute("file.place", &json!({"name": "text.ai", "dataBase64": data, "link": false}))
+    });
+    assert!(r.is_ok(), "{r:?}");
+}
+
+#[test]
+fn an_ai_file_whose_pdf_part_is_only_text_still_opens_from_editing_data_that_reads() {
+    let mut s = Session::new();
+    open(&mut s, "art.ai", &ai::ai_with(&compressed(&ai::sample_data()), TEXT_ART, "/ArtBox [0 0 200 100]"), json!({})).unwrap();
+    check_sample(&s);
+}
+
 #[test]
 fn editing_data_false_opens_only_what_the_page_prints() {
     let mut s = Session::new();

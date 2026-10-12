@@ -196,8 +196,9 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     b.warnings = notes;
     let cache = InterpreterCache::new();
     let mut x = 0.0;
-    // Every page only a placeholder (text) over private data: the file's art isn't in its PDF part.
-    let mut placeholder = true;
+    // Every page only text over private data: a file saved without its PDF part shows a notice
+    // there, not its art. A page that states where its art is isn't that notice.
+    let (mut only_text, mut art_boxes) = (true, false);
     let mut slots: Vec<Slot> = vec![];
     let mut group_art: HashMap<usize, Vec<Arc<Node>>> = HashMap::new();
     let mut nesting = Nesting::new();
@@ -266,7 +267,8 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             b.warn(PAST_PAGE_NOTE);
         }
         let children: Vec<Arc<Node>> = parts.iter().flat_map(|(_, v)| v.iter().cloned()).collect();
-        placeholder &= ai && only_text(&children);
+        only_text &= ai && is_only_text(&children);
+        art_boxes |= crate::pages::states_art(page);
         let mut right = ab.x1;
         if opts.crop == CropTo::Bounding
             && let Some(art) = vectorcraft_doc::live::nodes_bounds(&children)
@@ -308,7 +310,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             }
         }
     }
-    if placeholder {
+    if only_text && !art_boxes {
         return Err(PdfError::PlaceholderOnly);
     }
     // A group the pages mark but draw nothing in is an empty layer, as the editor had it.
@@ -380,7 +382,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             }
         }
     }
-    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf) })
+    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text })
 }
 
 /// The characters of a CID-keyed CFF font embedded without a ToUnicode map (as macOS writes
@@ -604,7 +606,7 @@ fn drop_page_fill(parts: &mut Vec<(Option<usize>, Vec<Arc<Node>>)>, page: Rect) 
 }
 
 /// Is this art text and nothing else (in groups and clips), with some text?
-fn only_text(nodes: &[Arc<Node>]) -> bool {
+fn is_only_text(nodes: &[Arc<Node>]) -> bool {
     fn walk(nodes: &[Arc<Node>], text: &mut bool) -> bool {
         nodes.iter().all(|n| match &n.kind {
             NodeKind::Path { clipping: true, .. } => true,
