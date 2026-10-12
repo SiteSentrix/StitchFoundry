@@ -4161,3 +4161,41 @@ theme	Appearance	Erscheinungsbild
 	Use Outside Rectangle As Frame	Äußeres Rechteck als Rahmen verwenden
 	Create Compound Path From Ellipses	Zusammengesetzten Pfad aus Ellipsen erstellen
 	Fill Grid	Raster füllen
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	Hinten
+	Both sides	Beidseitig
+	Classic	Klassisch
+	Cove	Hohlkehle
+	Depth	Tiefe
+	Front	Vorne
+	Isometric Bottom	Isometrisch unten
+	Isometric Left	Isometrisch links
+	Isometric Right	Isometrisch rechts
+	Isometric Top	Isometrisch oben
+	Off-Axis Back	Schräg hinten
+	Off-Axis Bottom	Schräg unten
+	Off-Axis Front	Schräg vorne
+	Off-Axis Left	Schräg links
+	Off-Axis Right	Schräg rechts
+	Off-Axis Top	Schräg oben
+	Ogee	Karnies
+	Reset all 3D settings to their defaults.	Alle 3D-Einstellungen auf ihre Standardwerte zurücksetzen.
+	Step	Stufe
+	Taper	Verjüngung
+	Twist	Verdrehung
+	Volume	Volumen
+3d	Cap	Deckflächen
+3d	Solid	Massiv
+3d	Hollow	Hohl
+3d	Bevel	Abgeflachte Kante
+3d	Rounded	Abgerundet
+3d	Space	Abstand
+	Bevel Shape	Form der abgeflachten Kante
+	Bevel Inside	Abgeflachte Kante nach innen
+	Bevel both sides	Abgeflachte Kante beidseitig
+	Presets	Vorgaben
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ein Objekt kann nur einen 3D-Effekt haben. Bearbeiten Sie die Optionen des vorhandenen Effekts oder entfernen Sie ihn zuerst.
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} erfordert derzeit einen Pfad oder zusammengesetzten Pfad. Wandeln Sie Text, Bilder und Gruppen zuerst in Pfade um.
+@msg	{label} requires a shape with at least two anchors	{label} erfordert eine Form mit mindestens zwei Ankerpunkten
+@msg	The shape is too complex for a 3D effect	Die Form ist für einen 3D-Effekt zu komplex
+@msg	The 3D surface is too complex; simplify the shape	Die 3D-Oberfläche ist zu komplex; vereinfachen Sie die Form

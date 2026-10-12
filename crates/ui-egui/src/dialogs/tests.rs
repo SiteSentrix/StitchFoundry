@@ -257,6 +257,31 @@ fn revolve_dialog_preview_cancel_confirm_and_undo() {
 }
 
 #[test]
+fn extrude_inflate_and_rotate_dialogs_preview_confirm_and_undo() {
+    for effect in vectorcraft_effects::SOLIDS {
+        let mut app = app();
+        app.run("path.create", json!({"d":"M100 100 L200 100 L200 200 L100 200 Z"})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        app.run("effect.dialog", json!({"effect": effect, "item": null})).unwrap();
+        frame(&mut app, Default::default());
+        assert!(app.session.in_interaction(), "{effect}: previewing");
+        cancel(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, before, "{effect}: Cancel restores");
+        app.run("effect.dialog", json!({"effect": effect, "item": null})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("rotationY".into(), json!(45));
+        frame(&mut app, Default::default());
+        confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        let n = doc.node(doc.layers[0].children().unwrap()[0].id).unwrap();
+        assert_eq!(n.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), [effect]);
+        assert_eq!(n.appearance.effects[0].params["rotationY"], json!(45));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, before, "{effect}: one undo step");
+    }
+}
+
+#[test]
 fn dialogs_are_as_tall_as_their_content() {
     // The save prompt, shown after a taller dialog, is as tall as its text and buttons: no empty
     // band around the buttons, nothing inherited from the other dialog.

@@ -13,11 +13,16 @@ struct Harness {
 
 impl Harness {
     fn new(screen: Vec2) -> Self {
+        Self::with("M150 40 L180 60 L180 140 L150 160", REVOLVE, screen)
+    }
+
+    /// The dialog of 3D effect `effect` on a path drawn from SVG path data `d`.
+    fn with(d: &str, effect: &str, screen: Vec2) -> Self {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width":300,"height":300})).unwrap();
-        app.run("path.create", json!({"d":"M150 40 L180 60 L180 140 L150 160"})).unwrap();
+        app.run("path.create", json!({"d": d})).unwrap();
         app.run("paint.setFill", json!({"color":"#338ad6"})).unwrap();
-        app.run("effect.dialog", json!({"effect":REVOLVE,"item":null})).unwrap();
+        app.run("effect.dialog", json!({"effect":effect,"item":null})).unwrap();
         let ctx = egui::Context::default();
         theme::install_fonts(&ctx);
         theme::apply(&ctx, Default::default());
@@ -198,4 +203,57 @@ fn advanced_visibility_option_is_saved_resettable_and_leaves_preview_geometry_co
     let state = h.app.session.doc().unwrap();
     let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
     assert_eq!(loaded.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["expandVisibleOnly"], json!(true));
+}
+
+/// Extrude & Bevel, Inflate and Rotate open the same compact controls, with their own options, the
+/// Position presets and the artboard gizmo turning about the centre of the art.
+#[test]
+fn the_other_3d_effects_show_their_options_and_position_presets() {
+    use vectorcraft_effects::{EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS};
+    let square = "M100 100 L200 100 L200 200 L100 200 Z";
+    for (effect, own) in [
+        (EXTRUDE, &["Depth", "Twist", "Taper", "Cap", "Bevel", "Bevel Shape", "Space", "Bevel Inside", "Bevel both sides"][..]),
+        (INFLATE, &["Depth", "Volume", "Both sides"][..]),
+        (ROTATE, &[][..]),
+    ] {
+        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
+        h.settle();
+        // Extrude & Bevel and Inflate open on their Object tab; Rotate on Rotation.
+        for text in own.iter() {
+            h.rect(text);
+        }
+        if !own.is_empty() {
+            h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+            h.settle();
+        }
+        for text in ["Presets", "Rotation X", "Perspective"] {
+            h.rect(text);
+        }
+        // The defaults are the Off-Axis Front position, shown by name.
+        h.rect("Off-Axis Front");
+        assert!(!h.texts.iter().any(|(t, _)| t == "Revolve angle"), "{effect}: Revolve's own options stay out");
+        let d = h.app.ui.dialog.as_ref().unwrap();
+        assert!(dialogs::revolve_gizmo::active(d), "{effect}: the gizmo is on");
+        // A preset's angles show its name; other angles are Custom.
+        let [x, y, z] = ROTATION_PRESETS[14].1;
+        let d = h.app.ui.dialog.as_mut().unwrap();
+        d.fields.extend([("rotationX".into(), json!(x)), ("rotationY".into(), json!(y)), ("rotationZ".into(), json!(z))]);
+        h.settle();
+        h.rect("Isometric Top");
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("rotationZ".into(), json!(12.5));
+        h.settle();
+        h.rect("Custom");
+    }
+}
+
+#[test]
+fn extrude_bevel_options_enable_with_a_bevel_shape() {
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
+    h.settle();
+    let width = h.response(("revolve-reset", "bevelWidth"));
+    assert!(!h.ctx.read_response(Id::new(("revolve-reset", "bevelWidth"))).unwrap().enabled(), "no bevel: its sizes are off");
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("bevel".into(), json!("rounded"));
+    h.settle();
+    assert!(h.ctx.read_response(Id::new(("revolve-reset", "bevelWidth"))).unwrap().enabled());
+    assert_eq!(h.response(("revolve-reset", "bevelWidth")), width);
 }

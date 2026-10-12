@@ -1,11 +1,14 @@
-//! A portable surface-of-revolution evaluator. No windowing, GPU or document dependencies.
+//! Portable 3D effect geometry: Revolve, Extrude & Bevel, Inflate and Rotate. No windowing, GPU or
+//! document dependencies.
 //!
 //! Open profiles generate uncapped surfaces. Faces are projected and sorted back to front,
 //! then flat shaded. This vector preview uses a painter's algorithm, not a depth buffer:
 //! intersecting profiles can have ambiguous visibility and are not solid modelling inputs.
 #![forbid(unsafe_code)]
 
+mod solid;
 mod visibility;
+pub use solid::{Bevel, BevelShape, Extrude, Facet, Inflate, View, extrude, inflate, plane};
 pub use visibility::{VisibleFace, visible_faces};
 
 use vectorcraft_geom::{BezPath, ParamCurve, PathData, Point, Rect};

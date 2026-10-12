@@ -65,6 +65,38 @@ fn revolve_canvas_matches_baked_art_and_shades_its_surface() {
     assert_eq!(live.pixels, render_threads(&d, 4).pixels);
 }
 
+/// Extrude & Bevel, Inflate and Rotate draw on the canvas exactly as they export, filling more
+/// than the flat square with faces of differing shades (Rotate: one shade, narrower).
+#[test]
+fn solid_effects_canvas_matches_baked_art_and_shades_their_faces() {
+    for (effect, params) in [
+        ("threeD.extrude", json!({"depth": 30, "bevel": "rounded"})),
+        ("threeD.inflate", json!({"depth": 10})),
+        ("threeD.rotate", json!({"rotationX": 0, "rotationY": 55, "rotationZ": 0})),
+    ] {
+        let mut n = Node::path(
+            NodeId(0),
+            shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.9, 0.2, 0.1)), Paint::None, 0.0),
+        );
+        n.appearance.effects.push(fx(effect, params));
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let live = render(&d);
+        let exported = render(&vectorcraft_effects::bake_document(&d).unwrap());
+        assert_eq!(live.pixels, exported.pixels, "{effect}: canvas and baked/exported faces agree");
+        assert_eq!(live.pixels, render_threads(&d, 4).pixels, "{effect}");
+        let reds: Vec<_> =
+            live.pixels.as_chunks::<4>().0.iter().filter(|p| p[0] as u16 > p[1] as u16 * 2 && p[0] as u16 > p[2] as u16 * 2).map(|p| p[0]).collect();
+        let shades = reds.iter().max().unwrap() - reds.iter().min().unwrap();
+        if effect == "threeD.rotate" {
+            assert!(reds.len() < 40 * 40 && reds.len() > 600, "{effect}: the square foreshortened, {} px", reds.len());
+        } else {
+            assert!(reds.len() > 40 * 40, "{effect}: a solid larger than its front, {} px", reds.len());
+            assert!(shades > 60, "{effect}: lighting varies across the faces ({shades})");
+        }
+    }
+}
+
 #[test]
 fn revolve_visible_surface_expansion_preserves_the_view_and_transparent_art() {
     let mut bp = vectorcraft_geom::BezPath::new();

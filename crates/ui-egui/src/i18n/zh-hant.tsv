@@ -3578,3 +3578,41 @@ lighting	Light	光源
 	Use Outside Rectangle As Frame	使用外部矩形作為框架
 	Create Compound Path From Ellipses	從橢圓形建立複合路徑
 	Fill Grid	格線填色
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	背面
+	Both sides	雙面
+	Classic	經典
+	Cove	凹圓
+	Depth	深度
+	Front	正面
+	Isometric Bottom	等角底部
+	Isometric Left	等角左側
+	Isometric Right	等角右側
+	Isometric Top	等角頂部
+	Off-Axis Back	離軸背面
+	Off-Axis Bottom	離軸底部
+	Off-Axis Front	離軸正面
+	Off-Axis Left	離軸左側
+	Off-Axis Right	離軸右側
+	Off-Axis Top	離軸頂部
+	Ogee	反曲線
+	Reset all 3D settings to their defaults.	將所有 3D 設定重設為預設值。
+	Step	階梯
+	Taper	錐化
+	Twist	扭轉
+	Volume	體積
+3d	Cap	封口
+3d	Solid	實心
+3d	Hollow	空心
+3d	Bevel	斜角
+3d	Rounded	圓角
+3d	Space	間距
+	Bevel Shape	斜角形狀
+	Bevel Inside	斜角向內
+	Bevel both sides	雙面斜角
+	Presets	預設集
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	一個物件只能套用一種 3D 效果。請編輯現有效果的選項，或先將其移除。
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}目前需要路徑或複合路徑。請先將文字、影像和群組轉換為路徑。
+@msg	{label} requires a shape with at least two anchors	{label}需要至少有兩個錨點的形狀
+@msg	The shape is too complex for a 3D effect	形狀過於複雜，無法套用 3D 效果
+@msg	The 3D surface is too complex; simplify the shape	3D 表面過於複雜；請簡化形狀

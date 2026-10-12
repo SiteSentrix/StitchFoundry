@@ -40,6 +40,7 @@ fn clear_item_effects(item: &mut AppearanceItem) {
 /// Does anything in `n`'s subtree need baking?
 pub fn needs_bake(n: &Node) -> bool {
     crate::has_revolve(n)
+        || crate::has_solid(n)
         || has_adjustment(n)
         || has_crop_marks(n)
         || has_pathfinder(n)
@@ -93,7 +94,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     if let Some(m) = crop_marks_art(n) {
         return Some(bake_pieces(d, m));
     }
-    if let Some(m) = crate::revolve_art(n) {
+    if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
         let m = evaluate_container(&m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
@@ -232,7 +233,7 @@ pub type StrokeArt<'a> = &'a mut dyn FnMut(&mut Document, &PathData, FillRule, &
 /// without transparency or effects of its own takes `n`'s place itself. Hidden fills, strokes and
 /// effects are dropped. `None` for other kinds of objects.
 pub fn expand_leaf(d: &mut Document, n: &Node, stroke_art: StrokeArt) -> Option<Node> {
-    if let Some(m) = crate::revolve::expand_revolve_art(n) {
+    if let Some(m) = crate::revolve::expand_revolve_art(n).or_else(|| crate::solid_art(n)) {
         let m = evaluate_container(&m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
@@ -299,7 +300,7 @@ pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
 /// the members of a group keeping `n`'s id, transparency, opacity mask and raster effects. `None`
 /// when it has neither a stroke to outline nor a geometry effect, so bending first changes nothing.
 pub fn bake_appearance(n: &Node) -> Option<Node> {
-    if let Some(m) = crate::revolve_art(n) {
+    if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
         return Some(m);
     }
     if !matches!(n.kind, NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. }) {

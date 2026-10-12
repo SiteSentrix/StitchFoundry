@@ -924,6 +924,21 @@ See [Revolve](revolve.md) for the scope and limitations.
 {"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{}}}
 ```
 
+## Extrude & Bevel, Inflate and Rotate
+
+`effect.apply {effect: "threeD.extrude" | "threeD.inflate" | "threeD.rotate", params: {...}, ids?, item?}` applies
+the other 3D types to a path or compound path, live like Revolve (the source stays editable; SVG/PDF exports and
+`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included.
+
+`threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, -360..360, 0), `taper` (1..100%, 100),
+`cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
+and `bevelHeight` (points, default 4), `bevelRepeat` (1..32), `bevelSpace` (0..90%), `bevelInside`,
+`bevelBothSides`. `threeD.inflate`: `depth` (points, default 0), `volume` (0..100%, default 50), `bothSides`.
+All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
+`perspective` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
+the scope and what differs from the public documentation.
+
+
 ## Edit Colors and Recolor Artwork
 
 `edit.colors.invert`, `edit.colors.toCMYK`, `edit.colors.toGrayscale`, `edit.colors.toRGB`, `edit.colors.saturate`,

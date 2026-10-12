@@ -1,4 +1,5 @@
-//! Artboard rotation and light controls for the active Revolve dialog. Gestures edit fields;
+//! Artboard rotation and light controls for the active 3D effect dialog (Extrude & Bevel, Revolve,
+//! Inflate, Rotate). Gestures edit fields;
 //! the existing effect preview applies commands and owns OK, Cancel and undo.
 use egui::{Align2, FontId, Id, Pos2, Rect, Sense, Stroke, Vec2, vec2};
 use serde_json::json;
@@ -12,7 +13,7 @@ const KEYS: [&str; 3] = ["rotationX", "rotationY", "rotationZ"];
 const SAMPLES: usize = 96;
 
 pub(crate) fn active(d: &Dialog) -> bool {
-    d.kind == "effect" && d.str("__effect") == REVOLVE
+    d.kind == "effect" && vectorcraft_effects::is_three_d(&d.str("__effect"))
 }
 
 pub(crate) fn lighting(d: &Dialog) -> bool {
@@ -85,7 +86,9 @@ impl Geometry {
         let bounds = node.geometric_bounds()?;
         let xf = Xf::new(app.canvas_rect?, app.view()?);
         let options = revolve_options(&super::form::params(d));
-        let center = xf.to_screen(options.rotation_origin(bounds));
+        // Revolve turns about its axis; the others about the centre of the art's bounds.
+        let origin = if d.str("__effect") == REVOLVE { options.rotation_origin(bounds) } else { bounds.center() };
+        let center = xf.to_screen(origin);
         if !center.x.is_finite() || !center.y.is_finite() || !xf.rect.contains(center) {
             return None;
         }

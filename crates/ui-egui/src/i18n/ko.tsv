@@ -4170,3 +4170,41 @@ lighting	Light	광원
 	Use Outside Rectangle As Frame	바깥쪽 사각형을 프레임으로 사용
 	Create Compound Path From Ellipses	원에서 컴파운드 패스 만들기
 	Fill Grid	격자 칠하기
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	뒷면
+	Both sides	양면
+	Classic	클래식
+	Cove	오목
+	Depth	깊이
+	Front	앞면
+	Isometric Bottom	등각 밑면
+	Isometric Left	등각 왼쪽
+	Isometric Right	등각 오른쪽
+	Isometric Top	등각 윗면
+	Off-Axis Back	비스듬한 뒷면
+	Off-Axis Bottom	비스듬한 밑면
+	Off-Axis Front	비스듬한 앞면
+	Off-Axis Left	비스듬한 왼쪽
+	Off-Axis Right	비스듬한 오른쪽
+	Off-Axis Top	비스듬한 윗면
+	Ogee	S자
+	Reset all 3D settings to their defaults.	모든 3D 설정을 기본값으로 재설정합니다.
+	Step	계단
+	Taper	테이퍼
+	Twist	비틀기
+	Volume	볼륨
+3d	Cap	캡
+3d	Solid	솔리드
+3d	Hollow	속이 빈
+3d	Bevel	베벨
+3d	Rounded	둥글게
+3d	Space	간격
+	Bevel Shape	베벨 모양
+	Bevel Inside	안쪽 베벨
+	Bevel both sides	양면 베벨
+	Presets	사전 설정
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	오브젝트에는 3D 효과를 하나만 적용할 수 있습니다. 기존 효과의 옵션을 편집하거나 먼저 제거하십시오.
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}에는 현재 패스 또는 컴파운드 패스가 필요합니다. 문자, 이미지 및 그룹을 먼저 패스로 변환하십시오.
+@msg	{label} requires a shape with at least two anchors	{label}에는 고정점이 두 개 이상인 모양이 필요합니다
+@msg	The shape is too complex for a 3D effect	모양이 너무 복잡하여 3D 효과를 적용할 수 없습니다
+@msg	The 3D surface is too complex; simplify the shape	3D 표면이 너무 복잡합니다. 모양을 단순화하십시오

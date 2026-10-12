@@ -4887,6 +4887,7 @@ name = "vectorcraft-three-d"
 version = "0.10.0"
 dependencies = [
  "vectorcraft-geom",
+ "vectorcraft-pathops",
 ]
 
 [[package]]

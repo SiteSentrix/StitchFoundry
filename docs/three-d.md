@@ -1,0 +1,92 @@
+# Extrude & Bevel, Inflate and Rotate
+
+The other three 3D types of **Effect › 3D and Materials** next to [Revolve](revolve.md). Like Revolve each is a
+live effect: the source path stays editable, the effect draws shaded vector faces, and SVG/PDF export, native
+saves and **Object › Expand Appearance** use the same evaluator.
+
+Select a path or compound path, then choose **Effect › 3D and Materials › Extrude & Bevel…**, **Inflate…** or
+**Rotate…**. The options dialog opens beside the artboard with tabs:
+
+- **Object** (Extrude & Bevel and Inflate): the shape's own options, below.
+- **Rotation**: a **Presets** menu, **Rotation X/Y/Z** (−180° to 180°) and **Perspective**. The rotation rings
+  on the artboard turn the object about the centre of its bounds; Shift snaps to 15°.
+- **Lighting**: **Shading**, the light's **Direction** and **Elevation** (or drag the light on the artboard),
+  **Intensity** and **Ambient**, as for Revolve.
+
+Preview changes are temporary until OK; Cancel restores the document; OK is one undo step. An object takes one
+3D effect: edit its options in the Appearance panel, or remove it before applying another.
+
+## Extrude & Bevel
+
+The art is the front face; its outline is extruded backwards by **Depth** (0–2,000 pt), so seen straight on the
+object is where the art was.
+
+| Option | What it does |
+|---|---|
+| Depth | 0–2,000 pt. At 0 the object is flat (the art turned like Rotate). |
+| Twist | −360° to 360°: the back face turned against the front, the walls following in slices. |
+| Taper | 1–100 %: the back face's size against the front's. |
+| Cap | **Solid** closes the front and back; **Hollow** leaves them open, showing the insides of the walls. |
+| Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. |
+| Width, Height | How far the bevel reaches across the face and along the depth (0–1,000 pt each). The height is limited to the depth (half of it on each side with Bevel both sides). |
+| Repeat, Space | The cross-section repeated 1–32 times across the width, with a share (0–90 %) of the width flat between repeats. |
+| Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
+| Bevel both sides | The back is bevelled too. |
+
+Holes stay holes, with walls of their own. Bevels move each corner along its bisector (mitres are limited to four
+times the width), so a bevel wider than a narrow part of the shape folds over itself.
+
+## Inflate
+
+The shape puffed out like a cushion: its outline stays where the art is and the surface rises towards the
+middle.
+
+| Option | What it does |
+|---|---|
+| Depth | 0–2,000 pt of flat side between the front and the back. |
+| Volume | 0–100 %. The surface is a membrane under even pressure, held along the outline (and around holes): it rises vertically from the edge and rounds smoothly inside, without creases along the shape's middle. At 50 % a circle becomes a half sphere; 100 % puffs twice as high, 0 % is flat. |
+| Both sides | The back puffs out too; otherwise it is flat. |
+
+The surface is cut into a grid of 48 facets across the larger side, halved or quartered where it rises steeply near the outline (the cells meet without cracks), each clipped to the shape and flat shaded.
+
+## Rotate
+
+The flat art turned in 3D about the centre of its bounds. Every fill and stroke is turned with its own paint (a
+stroke as its outline, so it foreshortens with the art) and shaded as one plane; a plane has two sides, so its
+back shows when it is turned past 90°.
+
+## Rotation presets
+
+**Front**, **Back**, **Left**, **Right**, **Top** and **Bottom** face the art that way. **Off-Axis** tilts each 20°
+down and 25° aside, so the top and the right show. **Isometric Left/Right/Top/Bottom** lay the art on that plane
+of an isometric view (each visible axis foreshortened equally). These are our own values, from the geometry of
+each view; the dialog shows a preset's name when the angles match it and **Custom** otherwise. The new effects
+open at Off-Axis Front.
+
+## Parameters (`effect.apply`, `effect.setParams`)
+
+`threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
+`ogee`), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
+`threeD.inflate`: `depth`, `volume` (%), `bothSides`. All three take the view and lighting parameters Revolve
+uses: `rotationX`, `rotationY`, `rotationZ`, `perspective` (%), `shade`, `lightAzimuth`, `lightElevation`,
+`lightIntensity` (%), `ambient` (%). Lengths are points and scale with the object (Scale Strokes & Effects).
+Commands validate the shape and the parameters before the document changes.
+
+## What differs from the public documentation
+
+Behaviour reference: the public [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
+and [Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html)
+pages, and the archived Extrude & Bevel option list (depth 0–2,000, cap on/off, bevel height, bevel extent in or
+out, perspective). No Adobe software, assets, presets or bevel shapes were used.
+
+- **Materials** (base, Adobe Substance and graphics), **several lights**, light colour and softness, **shadows**
+  and **ray-traced rendering** are not built: shading is one directional light, flat per face, painted with the
+  object's top fill (else its top stroke) for Extrude & Bevel and Inflate.
+- **Perspective** is a 0–100 % strength, as Revolve's, not a 0–160° lens angle.
+- The bevel shapes and their names are our own; custom bevel paths are not supported.
+- Visibility is a painter's algorithm: faces of a closed solid turned away are left out, the rest drawn back to
+  front. Concave solids seen at steep angles can overlap wrongly; open (hollow) solids show both sides.
+- Shading is flat per facet: an inflated rim seen almost edge-on shows faint banding where the facets get finer.
+- Paths and compound paths only: convert type, images and groups to outlines first. One 3D effect per object.
+- **3D (Classic)** (the track cube, surface types, blend steps, map art), Turntable and 3D export are separate,
+  unbuilt items.
