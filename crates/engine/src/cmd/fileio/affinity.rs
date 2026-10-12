@@ -488,6 +488,10 @@ impl Builder {
         };
         if let Some(f) = t.frame {
             obj.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, (f.x1 - f.x0) * k, (f.y1 - f.y0) * k)) };
+            // Affinity shows a line in a frame shorter than it (#1423); here none of it would draw.
+            if vectorcraft_text::fit_first_line(vectorcraft_text::FontDb::global(), &mut obj) {
+                self.warn("text frames too short for their first line (made taller so the line shows)");
+            }
         }
         obj
     }

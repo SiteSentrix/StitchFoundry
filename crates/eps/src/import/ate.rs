@@ -669,30 +669,9 @@ impl Story {
     /// Area type that the file lays lines out in, in a frame too short for its first line as it is
     /// laid out here: a font that isn't available shows in the fallback font, whose lines may be
     /// taller, and type that doesn't fit its frame isn't drawn. The frame is made taller, from its
-    /// top, by what the first line needs. Whether it was.
+    /// top, by what the first line needs (`vectorcraft_text::fit_first_line`). Whether it was.
     pub(super) fn fit_first_line(&self, t: &mut TextObject) -> bool {
-        let TextKind::Area { frame } = &t.kind else { return false };
-        let db = vectorcraft_text::FontDb::global();
-        let Some(b) = frame.bounds().filter(|b| b.height() > 1e-6 && !self.lines.is_empty()) else { return false };
-        if !vectorcraft_text::layout(db, t).lines.is_empty() {
-            return false;
-        }
-        // The height of its first line: the line's as point type.
-        let point = TextObject { kind: TextKind::Point, ..t.clone() };
-        let Some(need) = vectorcraft_text::layout(db, &point).lines.first().map(|l| l.ascent + l.descent) else { return false };
-        // (A little more than it, for the rounding of the layout.)
-        let by = (need + 0.05) / b.height();
-        if !(by.is_finite() && by > 1.0) {
-            return false;
-        }
-        let taller = frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)));
-        let short = std::mem::replace(&mut t.kind, TextKind::Area { frame: taller });
-        // Something else keeps the line out (a frame narrower than a letter): as the file has it.
-        if vectorcraft_text::layout(db, t).lines.is_empty() {
-            t.kind = short;
-            return false;
-        }
-        true
+        !self.lines.is_empty() && vectorcraft_text::fit_first_line(vectorcraft_text::FontDb::global(), t)
     }
 
     /// The leading the file's own line positions imply: the distance from one line to the next, less

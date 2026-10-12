@@ -89,6 +89,26 @@ fn frame_type_keeps_dimensions_alignment_and_unit_conversion() {
 }
 
 #[test]
+fn a_frame_too_short_for_its_first_line_is_made_taller_with_a_warning() {
+    // #1423: a title taller than its frame (60 pt type in a 50 pt frame) drew nothing.
+    let lines = |t: &TextObject| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines.len();
+    let title = |size: f64| import(vec![block(utf8("T"), vec![run(1, Some(attrs("Frame", "", 400, false, size)))], &[3])], true, 144.0, IDENTITY);
+    let short = title(120.0);
+    let t = texts(&short.doc)[0];
+    let TextKind::Area { frame } = &t.kind else { panic!("expected area type") };
+    let b = frame.bounds().unwrap();
+    assert!((b.x0, b.y0, b.width()) == (0.0, 0.0, 100.0) && b.height() > 50.0 && b.height() < 100.0, "taller from its top: {b:?}");
+    assert_eq!(lines(t), 1, "the line shows");
+    assert!(short.warnings.iter().any(|w| w.contains("too short for their first line")), "{:?}", short.warnings);
+    // A frame that holds its line keeps its height, and nothing is said.
+    let fits = title(20.0);
+    let t = texts(&fits.doc)[0];
+    let TextKind::Area { frame } = &t.kind else { panic!("expected area type") };
+    assert_eq!((frame.bounds().unwrap().height(), lines(t)), (50.0, 1));
+    assert!(!fits.warnings.iter().any(|w| w.contains("too short")), "{:?}", fits.warnings);
+}
+
+#[test]
 fn each_font_weight_and_italic_maps_to_the_expected_style() {
     let cases = [
         (100, "Thin"),
