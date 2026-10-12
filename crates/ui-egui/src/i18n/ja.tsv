@@ -4613,3 +4613,7 @@ machine	Stop	停止
 	Shell	貝殻
 	Butterfly	蝶
 	Clover	クローバー
+	Show Repeats	繰り返しを表示
+	Repeats across	横の繰り返し数
+	Repeats down	縦の繰り返し数
+	Gap between repeats	繰り返しの間隔

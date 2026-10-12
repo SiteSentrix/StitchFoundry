@@ -4644,3 +4644,7 @@ machine	Stop	Zastavení
 	Shell	Mušle
 	Butterfly	Motýl
 	Clover	Jetel
+	Show Repeats	Zobrazit opakování
+	Repeats across	Opakování vodorovně
+	Repeats down	Opakování svisle
+	Gap between repeats	Mezera mezi opakováními

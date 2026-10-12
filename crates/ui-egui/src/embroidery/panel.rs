@@ -1128,6 +1128,19 @@ fn design_section(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
             app.embroidery.fabric = fabric;
         }
     });
+    // the whole design repeated in a grid: a preview of a repeated layout, not sewn
+    let [cols, rows] = app.embroidery.repeats;
+    if let Some(v) = num(ui, tl!("Repeats across"), "rep-cols", f64::from(cols), "", 0) {
+        app.run("ui.embroideryRepeats", json!({ "columns": v })).ok();
+    }
+    if let Some(v) = num(ui, tl!("Repeats down"), "rep-rows", f64::from(rows), "", 0) {
+        app.run("ui.embroideryRepeats", json!({ "rows": v })).ok();
+    }
+    if cols * rows > 1
+        && let Some(v) = num(ui, tl!("Gap between repeats"), "rep-gap", app.embroidery.repeat_gap, " mm", 1)
+    {
+        app.run("ui.embroideryRepeats", json!({ "gap": v })).ok();
+    }
 }
 
 /// The design fabric's settings: editable when the fabric was made for the design; a

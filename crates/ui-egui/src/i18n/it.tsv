@@ -4619,3 +4619,7 @@ machine	Stop	Arresto
 	Shell	Conchiglia
 	Butterfly	Farfalla
 	Clover	Trifoglio
+	Show Repeats	Mostra ripetizioni
+	Repeats across	Ripetizioni in orizzontale
+	Repeats down	Ripetizioni in verticale
+	Gap between repeats	Spazio tra le ripetizioni

@@ -4617,3 +4617,7 @@ machine	Stop	Parada
 	Shell	Concha
 	Butterfly	Mariposa
 	Clover	Trébol
+	Show Repeats	Mostrar repeticiones
+	Repeats across	Repeticiones a lo ancho
+	Repeats down	Repeticiones hacia abajo
+	Gap between repeats	Separación entre repeticiones

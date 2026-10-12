@@ -15,6 +15,10 @@ use crate::canvas::Xf;
 /// Thread thickness of 40 wt polyester lying on fabric, in mm.
 const THREAD_WIDTH_MM: f64 = 0.36;
 
+/// Most vertices the repeats of a design may add up to, so a big design repeated many times
+/// keeps the canvas responsive (copies beyond it are left out).
+const MAX_REPEAT_VERTICES: usize = 6_000_000;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Key {
     plan: usize,
@@ -22,6 +26,8 @@ struct Key {
     mode: StitchView,
     upto: usize,
     points: bool,
+    repeats: [u32; 2],
+    gap: i64,
 }
 
 /// The overlay mesh for the last view; rebuilt only when the plan or view changes.
@@ -91,10 +97,9 @@ fn thread(mesh: &mut Mesh, a: Pos2, b: Pos2, half_w: f32, color: Rgb) {
     }
 }
 
-fn build(pattern: &Pattern, xf: &Xf, mode: StitchView, upto: usize, points: bool) -> (Mesh, Vec<[Pos2; 2]>) {
+fn build(pattern: &Pattern, xf: &Xf, mode: StitchView, upto: usize, points: bool, visible: egui::Rect) -> (Mesh, Vec<[Pos2; 2]>) {
     let mut mesh = Mesh::default();
     let mut jumps = Vec::new();
-    let visible = xf.rect.expand(40.0);
     let true_view = mode == StitchView::TrueView;
     let half_w = if true_view { ((THREAD_WIDTH_MM * PT_PER_MM * xf.zoom) as f32 * 0.5).max(0.45) } else { 0.6 };
     let n = upto.min(pattern.stitches.len());
@@ -142,7 +147,7 @@ fn build(pattern: &Pattern, xf: &Xf, mode: StitchView, upto: usize, points: bool
 }
 
 impl MeshCache {
-    fn update(&mut self, plan: &Arc<StitchPlan>, xf: &Xf, mode: StitchView, upto: usize, points: bool) {
+    fn update(&mut self, plan: &Arc<StitchPlan>, xf: &Xf, (mode, upto, points): (StitchView, usize, bool), (repeats, gap): ([u32; 2], f64)) {
         let q = |v: f64| (v * 1000.0).round() as i64;
         let key = Key {
             plan: Arc::as_ptr(plan) as usize,
@@ -150,15 +155,53 @@ impl MeshCache {
             mode,
             upto,
             points,
+            repeats,
+            gap: q(gap),
         };
         if self.key == Some(key) {
             return;
         }
-        let (mesh, jumps) = build(plan.pattern(), xf, mode, upto, points);
-        self.mesh = Arc::new(mesh);
+        // Stitches off screen are left out, unless a copy of them shows.
+        let step = repeat_step(plan.pattern(), xf, gap);
+        let visible = xf.rect.expand(40.0);
+        let [cols, rows] = repeats.map(|n| n.clamp(1, 10) as f32 - 1.0);
+        let cull = [step[0] * cols, step[1] * rows, step[0] * cols + step[1] * rows].into_iter().fold(visible, |r, d| r.union(visible.translate(-d)));
+        let (mesh, jumps) = build(plan.pattern(), xf, mode, upto, points, cull);
+        self.mesh = Arc::new(tiled(mesh, repeats, step));
         self.jumps = jumps;
         self.key = Some(key);
     }
+}
+
+/// How far apart repeats of the design are drawn on screen, across and down: its stitches'
+/// width and height plus `gap` (mm).
+fn repeat_step(pattern: &Pattern, xf: &Xf, gap: f64) -> [egui::Vec2; 2] {
+    let b = pattern.bounds();
+    if b.is_empty() {
+        return [egui::Vec2::ZERO; 2];
+    }
+    let gap = if gap.is_finite() { gap.clamp(0.0, 500.0) } else { 0.0 };
+    let at = |x: f64, y: f64| xf.to_screen(pt(vectorcraft_embroidery::sf_core::Point::new(x, y)));
+    let o = at(b.min.x, b.min.y);
+    [at(b.max.x + gap, b.min.y) - o, at(b.min.x, b.max.y + gap) - o]
+}
+
+/// The design's mesh repeated `cols × rows` times, `step` apart across and down: the first
+/// where the design is, the others beside it and below.
+fn tiled(mesh: Mesh, [cols, rows]: [u32; 2], step: [egui::Vec2; 2]) -> Mesh {
+    let (cols, rows) = (cols.clamp(1, 10), rows.clamp(1, 10));
+    if cols * rows == 1 || mesh.vertices.is_empty() {
+        return mesh;
+    }
+    let room = (MAX_REPEAT_VERTICES / mesh.vertices.len()).max(1);
+    let mut out = mesh.clone();
+    let offsets = (0..rows).flat_map(|j| (0..cols).map(move |i| (i, j))).skip(1).take(room.saturating_sub(1));
+    for (i, j) in offsets {
+        let mut copy = mesh.clone();
+        copy.translate(step[0] * i as f32 + step[1] * j as f32);
+        out.append(copy);
+    }
+    out
 }
 
 /// Paints the stitch plan over the art.
@@ -195,8 +238,9 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
     if let Some(hoop) = st.doc.embroidery.as_deref().and_then(|e| e.hoop.as_ref()) {
         hoop_outline(painter, xf, hoop, plan.pattern());
     }
+    let repeats = (app.embroidery.repeats, app.embroidery.repeat_gap);
     let cache = &mut app.embroidery.mesh;
-    cache.update(&plan, xf, mode, upto, points);
+    cache.update(&plan, xf, (mode, upto, points), repeats);
     painter.add(Shape::mesh(cache.mesh.clone()));
     if connectors {
         for [a, b] in &cache.jumps {
@@ -282,4 +326,26 @@ fn hoop_outline(painter: &Painter, xf: &Xf, hoop: &vectorcraft_embroidery::sf_co
     }
     let top_left = xf.to_screen(pt(c + vectorcraft_embroidery::sf_core::Point::new(-hoop.width / 2.0, -hoop.height / 2.0)));
     painter.text(top_left + egui::vec2(4.0, -4.0), egui::Align2::LEFT_BOTTOM, &hoop.name, egui::FontId::proportional(11.0), color);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeats_tile_the_mesh_across_and_down() {
+        let mut mesh = Mesh::default();
+        quad(&mut mesh, Pos2::new(0.0, 0.0), Pos2::new(10.0, 0.0), 1.0, Color32::RED);
+        let n = mesh.vertices.len();
+        let step = [egui::vec2(20.0, 0.0), egui::vec2(0.0, 15.0)];
+        // once: the mesh as it is
+        assert_eq!(tiled(mesh.clone(), [1, 1], step).vertices.len(), n);
+        // three across, two down: six copies, the last one along and down
+        let t = tiled(mesh.clone(), [3, 2], step);
+        assert_eq!(t.vertices.len(), n * 6);
+        let last = &t.vertices[n * 5..];
+        assert!(last.iter().zip(&mesh.vertices).all(|(a, b)| a.pos == b.pos + egui::vec2(40.0, 15.0)));
+        // more than ten each way is ten
+        assert_eq!(tiled(mesh, [50, 1], step).vertices.len(), n * 10);
+    }
 }

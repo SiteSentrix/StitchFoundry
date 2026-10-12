@@ -4201,3 +4201,7 @@ machine	Stop	停止
 	Shell	贝壳
 	Butterfly	蝴蝶
 	Clover	三叶草
+	Show Repeats	显示重复
+	Repeats across	横向重复
+	Repeats down	纵向重复
+	Gap between repeats	重复间距

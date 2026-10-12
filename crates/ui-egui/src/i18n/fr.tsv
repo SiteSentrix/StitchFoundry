@@ -4627,3 +4627,7 @@ machine	Stop	Arrêt
 	Shell	Coquillage
 	Butterfly	Papillon
 	Clover	Trèfle
+	Show Repeats	Afficher les répétitions
+	Repeats across	Répétitions en largeur
+	Repeats down	Répétitions en hauteur
+	Gap between repeats	Écart entre les répétitions
