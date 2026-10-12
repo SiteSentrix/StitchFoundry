@@ -35,7 +35,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | Audience | Ready % | Opus 5.5 agent hours to ~95% (one agent) | With 4–6 agents | Work that dominates |
 |---|---:|---:|---:|---|
-| **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (50–85 h), raster effects (23–39 h), advanced type (20–28 h), generative AI (30–60 h), localization (70–110 h) and ecosystem |
+| **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (50–85 h), raster effects (23–39 h), advanced type (20–28 h), generative AI (30–60 h), localization (60–100 h) and ecosystem |
 | **Mainstream illustrator** | **~65%** (60–70%) | **~230–380 h** | ~65–110 h | the interaction-fidelity pass (60–90 h), hardening and QA (30–50 h), stability (20–35 h), performance budgets (15–25 h), `.ai` exchange (10–20 h), the remaining depth of the everyday areas |
 | **Essentials user** | **~75%** (70–80%) | **~60–105 h** | ~25–45 h | launch and stability on Windows (20–35 h), in-app help and onboarding (8–15 h), basic QA (10–15 h), Shape Builder regions (4–8 h), UI polish |
 
@@ -52,7 +52,7 @@ everything is measured from our code against Illustrator's public documentation.
 | UI/UX fidelity | 55% | 70–110 | [ui-parity.md](docs/ui-parity.md) |
 | File formats | 75% | 15–30 | [file-format-parity.md](docs/file-format-parity.md) |
 | Hardware (GPU, pen, touch, displays) | 35% | 25–45 | [hardware-parity.md](docs/hardware-parity.md) |
-| Localization (12 key languages) | 54% (measured) | 70–110 | [localization-parity.md](docs/localization-parity.md) |
+| Localization (12 key languages) | 63% (measured) | 60–100 | [localization-parity.md](docs/localization-parity.md) |
 | Performance | ~60% | 15–25 | [gaps.md › G15](docs/gaps.md#g15-performance-budgets-and-a-gpu-renderer) |
 | Stability | ~60% | 30–50 | [gaps.md › G10](docs/gaps.md#g10-launch-and-stability-on-real-machines) |
 | Platforms | 80% | 15–25 | [gaps.md › G8](docs/gaps.md#g8-hardening-at-scale) |
@@ -106,7 +106,7 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Indonesian | `id` | none | 0% |
 | Japanese | `ja` | full | 100% |
 | German | `de` | full | 98% |
-| Korean | `ko` | none | 0% |
+| Korean | `ko` | full | 100% |
 | Vietnamese | `vi` | none | 0% |
 
 Also shipped: Traditional Chinese (partial, 80%), Hungarian, Italian, Russian and Ukrainian (full), Czech (catalog complete; render-site gaps reduced; native review pending).
