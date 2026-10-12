@@ -511,6 +511,10 @@ fn structured_junk() {
         ("embroidery.lettering.edit", json!({"ids": [u64::MAX], "size": "x"})),
         ("embroidery.lettering.edit", json!({"arc": -1, "align": "right"})),
         ("embroidery.font.forget", json!({"name": ""})),
+        ("embroidery.fontDoc.new", json!({"chars": "AbC%", "size": 200, "descent": 200})),
+        ("embroidery.fontDoc.save", json!({"folder": ""})),
+        ("embroidery.fontDoc.kern", json!({"pair": "A b", "value": 1e300})),
+        ("embroidery.fontDoc.addGlyphs", json!({"names": ["abcdefghijk", "", "x"]})),
         ("embroidery.monogram", json!({"letters": "ABC", "font": "x", "size": 300, "border": "diamond", "at": [1e300, -1e300]})),
         ("embroidery.monogram", json!({"letters": 5, "font": []})),
         ("embroidery.teamNames.read", json!({"csv": "\"unclosed,\n;;;\r\n\"\"", "column": 99, "header": true})),
@@ -678,7 +682,11 @@ fn every_command_undoes_exactly() {
             if after != before {
                 failures.push(format!("{}: {}", c.id, vectorcraft_testkit::invariants::first_diff(&before, &after, "$")));
             }
-        } else if doc_json(&s.doc().unwrap().doc) != before && !c.params.contains("View state: not an undo step") {
+        } else if doc_json(&s.doc().unwrap().doc) != before
+            && !c.params.contains("View state: not an undo step")
+            // commands that open a document of their own, as File › New does
+            && !c.params.contains("opens a new document")
+        {
             failures.push(format!("{}: changed the document without an undo step", c.id));
         }
     }

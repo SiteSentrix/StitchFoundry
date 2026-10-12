@@ -2329,6 +2329,68 @@ fn monograms_set_their_letters_inside_a_border() {
 }
 
 #[test]
+fn embroidery_fonts_are_made_in_font_documents() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let r = s.execute("embroidery.fontDoc.new", &json!({"name": "Hand", "chars": "AB", "size": 20})).unwrap();
+    assert_eq!(r["glyphs"].as_u64(), Some(2));
+    let (a, guides) = {
+        let st = s.doc().unwrap();
+        assert_eq!(st.doc.artboards.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), ["A", "B"]);
+        let a = st.doc.artboards[0].clone();
+        (a.rect, st.doc.guides.iter().filter(|g| g.artboard == Some(a.id)).map(|g| g.pos).collect::<Vec<_>>())
+    };
+    // each artboard with its baseline (8 mm, 0.4 × the size, up from the bottom) and cap height
+    let base = a.y1 - 8.0 * PT;
+    assert_eq!(guides.len(), 2);
+    assert!((guides[0] - base).abs() < 1e-9 && (guides[1] - (base - 20.0 * PT)).abs() < 1e-9, "{guides:?}");
+    // nothing digitized yet
+    assert!(s.execute("embroidery.fontDoc.save", &json!({})).is_err());
+    // A: a satin line from the baseline up to the capitals' height, on A's artboard
+    let d = format!("M {} {} L {} {}", a.x0 + 10.0, base, a.x0 + 20.0, base - 20.0 * PT);
+    let id = s.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    // properties and kerning
+    s.execute("embroidery.fontDoc.setProps", &json!({"letterCase": "upper", "space": 5, "maxScale": 3})).unwrap();
+    s.execute("embroidery.fontDoc.kern", &json!({"pair": "A B", "value": 2})).unwrap();
+    let info = s.execute("embroidery.fontDoc.info", &json!({})).unwrap();
+    assert_eq!((info["missing"].as_u64(), info["glyphs"][0]["done"].as_bool()), (Some(1), Some(true)));
+    assert_eq!(info["font"]["kerning"]["A B"].as_f64(), Some(2.0));
+    // saved: loaded for lettering at once
+    let r = s.execute("embroidery.fontDoc.save", &json!({})).unwrap();
+    assert_eq!((r["name"].as_str(), r["glyphs"].as_u64()), (Some("Hand"), Some(1)));
+    assert_eq!(r["missing"], json!(["B"]));
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let r = s.execute("embroidery.lettering", &json!({"text": "a", "font": "Hand", "at": [100, 500]})).unwrap();
+    let lid = NodeId(r["id"].as_u64().unwrap());
+    // the glyph as digitized: on the baseline, 20 mm high, 10 pt in from where the line starts
+    let b = s.doc().unwrap().doc.node(lid).unwrap().geometric_bounds().unwrap();
+    assert!((b.y1 - 500.0).abs() < 0.5 && (b.height() - 20.0 * PT).abs() < 0.5 && (b.x0 - 110.0).abs() < 0.5, "{b:?}");
+    assert!(stitches(&s) > 20);
+    // saved to a folder: a later session loads it from there
+    let dir = std::env::temp_dir().join(format!("sf-font-made-{}", std::process::id()));
+    let path = dir.to_string_lossy().to_string();
+    // the font document is the second open (the session started with one)
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("embroidery.fontDoc.save", &json!({"folder": path})).unwrap();
+    assert!(dir.join("font.json").is_file() && dir.join("glyphs.stitchfoundry").is_file());
+    let mut later = session();
+    later.prefs.embroidery_font_dirs = s.prefs.embroidery_font_dirs.clone();
+    assert!(later.execute("embroidery.lettering", &json!({"text": "A", "font": "Hand"})).is_ok());
+    // more glyphs below; and a document that isn't a font
+    let r = s.execute("embroidery.fontDoc.addGlyphs", &json!({"chars": "BCfi", "names": ["fi"]})).unwrap();
+    assert_eq!(r["added"].as_u64(), Some(4));
+    assert!(s.execute("embroidery.fontDoc.addGlyphs", &json!({"chars": "AB"})).is_err());
+    assert!(s.execute("embroidery.fontDoc.kern", &json!({"pair": "AB", "value": 1})).is_err());
+    assert!(s.execute("embroidery.fontDoc.setProps", &json!({"letterCase": "title"})).is_err());
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    assert!(s.execute("embroidery.fontDoc.save", &json!({})).is_err());
+    assert!(s.execute("embroidery.fontDoc.info", &json!({})).is_err());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

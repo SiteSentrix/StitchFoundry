@@ -93,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// What a font tells about itself.
-fn describe(f: &EmbFont) -> Value {
+pub(super) fn describe(f: &EmbFont) -> Value {
     let i = &f.info;
     let size = |k: f64| (i.size > 0.0 && k > 0.0).then_some(i.size * k);
     json!({
@@ -156,15 +156,31 @@ fn read_text(path: &str, max: usize, what: &str) -> Result<String> {
     String::from_utf8(bytes).map_err(|_| bad(LOAD, format!("{what} is not text")))
 }
 
-/// The font's files in folder `dir`: font.json and its art (ltr.svg, →.svg or rtl.svg; else the
-/// SVGs in an ltr folder).
+/// A font's glyph art: Ink/Stitch's SVG, or a StitchFoundry document of glyph layers (its glyphs
+/// on their baselines at 0, in points).
+pub(super) enum Art {
+    Svg(String),
+    Native(Vec<u8>),
+}
+
+/// The file a font made in StitchFoundry keeps its glyphs in, next to its font.json.
+pub(super) const GLYPHS_FILE: &str = "glyphs.stitchfoundry";
+
+/// The font's files in folder `dir`: font.json and its art (glyphs.stitchfoundry; ltr.svg, →.svg
+/// or rtl.svg; else the SVGs in an ltr folder).
 #[cfg(not(target_arch = "wasm32"))]
-fn read_folder(dir: &str) -> Result<(String, Vec<String>)> {
+fn read_folder(dir: &str) -> Result<(String, Vec<Art>)> {
     let at = |name: &str| std::path::Path::new(dir).join(name).to_string_lossy().to_string();
     let json = read_text(&at("font.json"), MAX_JSON, "font.json")?;
     let mut svgs = Vec::new();
-    if let Some(file) = ["ltr.svg", "→.svg", "rtl.svg", "←.svg"].iter().map(|n| at(n)).find(|p| std::path::Path::new(p).is_file()) {
-        svgs.push(read_text(&file, MAX_SVG, "the glyph art")?);
+    if std::path::Path::new(&at(GLYPHS_FILE)).is_file() {
+        let bytes = crate::cmd::fileio::read_file(&at(GLYPHS_FILE))?;
+        if bytes.len() > MAX_SVG {
+            return Err(bad(LOAD, format!("the glyph art is too big ({} MB at most)", MAX_SVG >> 20)));
+        }
+        svgs.push(Art::Native(bytes));
+    } else if let Some(file) = ["ltr.svg", "→.svg", "rtl.svg", "←.svg"].iter().map(|n| at(n)).find(|p| std::path::Path::new(p).is_file()) {
+        svgs.push(Art::Svg(read_text(&file, MAX_SVG, "the glyph art")?));
     } else if let Ok(rd) = std::fs::read_dir(at("ltr")) {
         let mut files: Vec<String> = rd
             .filter_map(|e| e.ok().map(|e| e.path()))
@@ -173,7 +189,7 @@ fn read_folder(dir: &str) -> Result<(String, Vec<String>)> {
             .collect();
         files.sort();
         for f in files.iter().take(MAX_FILES) {
-            svgs.push(read_text(f, MAX_SVG, "the glyph art")?);
+            svgs.push(Art::Svg(read_text(f, MAX_SVG, "the glyph art")?));
         }
     }
     if svgs.is_empty() {
@@ -183,18 +199,38 @@ fn read_folder(dir: &str) -> Result<(String, Vec<String>)> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn read_folder(dir: &str) -> Result<(String, Vec<String>)> {
+fn read_folder(dir: &str) -> Result<(String, Vec<Art>)> {
     Err(bad(LOAD, format!("{dir}: no file system here (pass json and svg)")))
 }
 
-/// A font from its files' text.
-fn font_from(json: &str, svgs: &[String]) -> Result<EmbFont> {
-    let art = svgs.iter().map(|svg| glyph_art(svg)).collect::<Result<Vec<_>>>()?;
+/// A font from its files.
+fn font_from(json: &str, arts: &[Art]) -> Result<EmbFont> {
+    let art = arts
+        .iter()
+        .map(|a| match a {
+            Art::Svg(svg) => glyph_art(svg),
+            // our own: stitched already, its glyphs on their baselines at 0, in points
+            Art::Native(bytes) => {
+                vectorcraft_format::load(bytes).map(|doc| (doc, 0.0, 1.0)).map_err(|e| bad(LOAD, format!("the glyph art can't be read: {e}")))
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
     EmbFont::new(json, art).map_err(|e| bad(LOAD, e))
 }
 
+/// Remembers font folder `dir` for later sessions.
+pub(super) fn remember_folder(s: &mut Session, dir: &str) {
+    let dirs = &mut s.prefs.embroidery_font_dirs;
+    if !dirs.iter().any(|d| d == dir) {
+        if dirs.len() >= MAX_FONTS {
+            dirs.remove(0);
+        }
+        dirs.push(dir.to_string());
+    }
+}
+
 /// Adds `font` to the loaded fonts, in place of one of the same name.
-fn add_font(s: &mut Session, font: EmbFont) {
+pub(super) fn add_font(s: &mut Session, font: EmbFont) {
     let fonts = &mut s.embroidery_fonts;
     fonts.retain(|f| !f.info.name.eq_ignore_ascii_case(&font.info.name));
     if fonts.len() >= MAX_FONTS {
@@ -232,7 +268,7 @@ fn load_font(s: &mut Session, p: &Value) -> Result<Value> {
             if j.len() > MAX_JSON || v.len() > MAX_SVG {
                 return Err(bad(LOAD, "the font is too big"));
             }
-            (j.to_string(), vec![v.to_string()], None)
+            (j.to_string(), vec![Art::Svg(v.to_string())], None)
         }
         (_, _, Some(path)) => {
             let (json, svgs) = read_folder(path)?;
@@ -248,13 +284,7 @@ fn load_font(s: &mut Session, p: &Value) -> Result<Value> {
     add_font(s, font);
     // remembered for later sessions
     if let Some(dir) = folder {
-        let dirs = &mut s.prefs.embroidery_font_dirs;
-        if !dirs.contains(&dir) {
-            if dirs.len() >= MAX_FONTS {
-                dirs.remove(0);
-            }
-            dirs.push(dir);
-        }
+        remember_folder(s, &dir);
     }
     Ok(out)
 }

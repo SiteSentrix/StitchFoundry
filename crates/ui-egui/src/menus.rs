@@ -109,6 +109,7 @@ fn embroidery_menu() -> Vec<Item> {
                 .collect(),
         ),
         c("Make Motif", "embroidery.motif.make"),
+        sub("Embroidery Fonts", vec![c("New Embroidery Font", "embroidery.fontDoc.new"), c("Save Embroidery Font…", "ui.saveEmbroideryFont")]),
         sub(
             "Place Ring",
             vec![
@@ -206,6 +207,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Show Repeats",
         "",
         "{columns?: 1–10, rows?: 1–10, gap?: mm (0–500)} show the whole design repeated in a grid on the canvas, columns across and rows down with a gap between the copies, to preview a repeated layout; nothing more is sewn (1 × 1: once) → {columns, rows, gap}",
+    ),
+    (
+        "ui.saveEmbroideryFont",
+        "Save Embroidery Font…",
+        "",
+        "{folder?} save the font document as an embroidery font folder (embroidery.fontDoc.save) in folder, else a picked one, and load it for lettering → the font",
     ),
     (
         "ui.embroideryWidget",
@@ -1083,6 +1090,16 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             e.repeat_gap = v;
         }
         return Some(Ok(json!({ "columns": e.repeats[0], "rows": e.repeats[1], "gap": e.repeat_gap })));
+    }
+    if id == "ui.saveEmbroideryFont" {
+        let folder = match p.get("folder").and_then(Value::as_str) {
+            Some(f) => Some(f.to_string()),
+            None => crate::picks::folder(app),
+        };
+        return Some(match folder {
+            Some(folder) => app.run("embroidery.fontDoc.save", json!({ "folder": folder })),
+            None => Err("cancelled".into()),
+        });
     }
     if id == "ui.embroideryWidget" {
         if app.session.active().is_none() {
@@ -2167,6 +2184,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.designFromPrompt" => app.session.active().is_some() && crate::embroidery::prompt::available(app),
         "ui.redrawImage" => crate::embroidery::prompt::available(app) && crate::embroidery::prompt::selected_image(app).is_some(),
         "file.export.embroidery" => app.session.embroidery_plan().is_some_and(|p| !p.is_empty()),
+        "ui.saveEmbroideryFont" => app.session.active().is_some_and(|st| st.doc.embroidery.as_deref().is_some_and(|e| e.font.is_some())),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
