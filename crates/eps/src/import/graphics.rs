@@ -434,7 +434,10 @@ impl Interp<'_> {
                     self.g.path.curve_to(xf * a, xf * b, xf * p);
                     self.g.cur = Some(xf * p);
                 }
-                PathEl::ClosePath => self.g.path.close_path(),
+                PathEl::ClosePath => {
+                    self.grow()?;
+                    self.g.path.close_path();
+                }
             }
         }
         Ok(())
@@ -1528,6 +1531,7 @@ impl Interp<'_> {
             }
             ClosePath => {
                 if self.g.cur.is_some() {
+                    self.grow()?;
                     self.g.path.close_path();
                     self.g.cur = self.g.start;
                 }
