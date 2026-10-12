@@ -126,7 +126,10 @@ pub(super) fn text_edit(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32
         .stroke(egui::Stroke::new(1.0, t.input_border))
         .corner_radius(egui::CornerRadius::same(3))
         .inner_margin(egui::Margin::symmetric(6, 3))
-        .show(ui, |ui| ui.add(egui::TextEdit::singleline(&mut s).id(id).frame(egui::Frame::NONE).desired_width(width)));
+        .show(ui, |ui| {
+            crate::theme::strong_selected_text(ui);
+            ui.add(egui::TextEdit::singleline(&mut s).id(id).frame(egui::Frame::NONE).desired_width(width))
+        });
     if r.inner.changed() {
         d.fields.insert(key.into(), Value::String(s));
     }
@@ -143,7 +146,10 @@ pub(super) fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32
         .stroke(egui::Stroke::new(1.0, t.input_border))
         .corner_radius(egui::CornerRadius::same(3))
         .inner_margin(egui::Margin::symmetric(6, 3))
-        .show(ui, |ui| ui.add(egui::TextEdit::multiline(&mut s).frame(egui::Frame::NONE).desired_width(width).desired_rows(rows)));
+        .show(ui, |ui| {
+            crate::theme::strong_selected_text(ui);
+            ui.add(egui::TextEdit::multiline(&mut s).frame(egui::Frame::NONE).desired_width(width).desired_rows(rows))
+        });
     if r.inner.changed() {
         d.fields.insert(key.into(), Value::String(s));
     }

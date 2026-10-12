@@ -229,6 +229,14 @@ impl Tokens {
     }
 }
 
+/// Selected text in the text fields `ui` draws from here on is in the strong text colour. egui
+/// paints it in the selection stroke's colour, the accent, which is hard to read on the selection's
+/// accent tint (#1465). For fields that draw their own frame: egui's frame takes its focus ring from
+/// the same stroke.
+pub fn strong_selected_text(ui: &mut egui::Ui) {
+    ui.visuals_mut().selection.stroke.color = Tokens::get(ui.ctx()).text_strong;
+}
+
 pub const FONT_UI: &str = "ui";
 pub const FONT_UI_SEMIBOLD: &str = "ui-semibold";
 pub const FONT_MONO: &str = "mono";

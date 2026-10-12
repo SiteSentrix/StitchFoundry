@@ -363,6 +363,7 @@ fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize
             let resp = egui::Frame::NONE
                 .inner_margin(margin)
                 .show(ui, |ui| {
+                    crate::theme::strong_selected_text(ui);
                     let edit = if rows > 1 { egui::TextEdit::multiline(&mut buf).desired_rows(rows) } else { egui::TextEdit::singleline(&mut buf) };
                     ui.add(
                         edit.id(id)
