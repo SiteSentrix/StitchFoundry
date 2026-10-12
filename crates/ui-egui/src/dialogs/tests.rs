@@ -393,6 +393,119 @@ fn given_headings_are_shown_as_they_are() {
 }
 
 #[test]
+fn plugin_integer_field_preserves_precision_and_clamps_exactly() {
+    use egui::{Event, Key, Modifiers, PointerButton};
+    use vectorcraft_plugins::ParamSpec;
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let min = -9007199254740995_i64;
+    let max = 9007199254740995_i64;
+    let specs = vec![("seed".into(), ParamSpec::Int { min, max, default: 0 })];
+    let mut d = Dialog::new(plugin::KIND, json!({"seed": 0}));
+    let mut frame = |events: Vec<Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            form::schema_fields(ui, &mut d, &specs);
+        });
+        out.textures_delta.clear();
+        (out, d.fields["seed"].clone())
+    };
+    fn number_rect(shape: &egui::Shape) -> Option<egui::Rect> {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text() == "0" => Some(t.visual_bounding_rect()),
+            egui::Shape::Vec(shapes) => shapes.iter().find_map(number_rect),
+            _ => None,
+        }
+    }
+    let (out, _) = frame(vec![]);
+    let pos = out.shapes.iter().find_map(|s| number_rect(&s.shape)).unwrap().center();
+    for (text, expected) in [
+        ("9007199254740993", 9007199254740993_i64),
+        ("9007199254740996", max),
+        ("-9007199254740996", min),
+        ("invalid", min),
+        ("1.5", min),
+        ("9223372036854775808", min),
+    ] {
+        frame(vec![
+            Event::PointerMoved(pos),
+            Event::PointerButton { pos, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::default() },
+        ]);
+        frame(vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::default() }]);
+        frame(vec![
+            Event::Key {
+                key: Key::A,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers { ctrl: true, command: true, ..Default::default() },
+            },
+            Event::Text(text.into()),
+        ]);
+        let (_, value) =
+            frame(vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
+        assert_eq!(value, json!(expected), "{text}");
+    }
+}
+
+#[test]
+fn plugin_integer_field_with_small_bounds_keeps_numeric_editing() {
+    use egui::{Event, Key, Modifiers, PointerButton};
+    use vectorcraft_plugins::ParamSpec;
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let min = 1;
+    let max = 16;
+    let specs = vec![("seed".into(), ParamSpec::Int { min, max, default: 0 })];
+    let mut d = Dialog::new(plugin::KIND, json!({"seed": 3}));
+    let mut frame = |events: Vec<Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            form::schema_fields(ui, &mut d, &specs);
+        });
+        out.textures_delta.clear();
+        (out, d.fields["seed"].clone())
+    };
+    fn number_rect(shape: &egui::Shape) -> Option<egui::Rect> {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text() == "3" => Some(t.visual_bounding_rect()),
+            egui::Shape::Vec(shapes) => shapes.iter().find_map(number_rect),
+            _ => None,
+        }
+    }
+    let (out, _) = frame(vec![]);
+    let pos = out.shapes.iter().find_map(|s| number_rect(&s.shape)).unwrap().center();
+    frame(vec![
+        Event::PointerMoved(pos),
+        Event::PointerButton { pos, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::default() },
+    ]);
+    frame(vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::default() }]);
+    frame(vec![Event::Key { key: Key::ArrowUp, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
+    let (_, value) = frame(vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
+    assert_eq!(value, json!(4));
+    for (text, expected) in [("7", 7), ("2 + 3", 5), ("17", max)] {
+        frame(vec![
+            Event::PointerMoved(pos),
+            Event::PointerButton { pos, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::default() },
+        ]);
+        frame(vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::default() }]);
+        frame(vec![
+            Event::Key {
+                key: Key::A,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers { ctrl: true, command: true, ..Default::default() },
+            },
+            Event::Text(text.into()),
+        ]);
+        let (_, value) =
+            frame(vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
+        assert_eq!(value, json!(expected), "{text}");
+    }
+}
+
+#[test]
 fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     let mut app = app();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();

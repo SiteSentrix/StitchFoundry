@@ -322,8 +322,19 @@ pub(super) fn schema_fields(ui: &mut egui::Ui, d: &mut Dialog, specs: &[(String,
                     crate::widgets::range_field(ui, ("plugin-num", k), x, *min..=*max, "", 2, 100.0).map(|x| json!(x))
                 }
                 ParamSpec::Int { min, max, .. } => {
-                    let x = cur.as_i64().unwrap_or(*min) as f64;
-                    crate::widgets::range_field(ui, ("plugin-int", k), x, *min as f64..=*max as f64, "", 0, 100.0).map(|x| json!(x as i64))
+                    let x = cur.as_i64().unwrap_or(*min).clamp(*min, *max);
+                    // An f64 holds every whole number up to 2^53, so the numeric field (arrows, wheel, arithmetic) is exact there.
+                    // Past it, the number typed is read as an integer.
+                    const EXACT: i64 = 1 << 53;
+                    if -EXACT <= *min && *max <= EXACT {
+                        crate::widgets::range_field(ui, ("plugin-int", k), x as f64, *min as f64..=*max as f64, "", 0, 100.0).map(|x| json!(x as i64))
+                    } else {
+                        let shown = x.to_string();
+                        crate::widgets::take_dialog_focus(ui, ui.id().with(("plugin-int", k)), &shown);
+                        crate::widgets::text_field(ui, ("plugin-int", k), Some(&shown), 100.0, 1)
+                            .and_then(|text| text.parse::<i64>().ok())
+                            .map(|x| json!(x.clamp(*min, *max)))
+                    }
                 }
                 ParamSpec::Bool { .. } => {
                     let b = cur.as_bool().unwrap_or(false);
