@@ -764,6 +764,60 @@ fn a_transform_that_moves_nothing_records_no_undo_step() {
     assert_eq!(count(&s), n + 1);
 }
 
+/// #1408: with anchors selected with Direct Selection, the Transform commands and tools transform
+/// those anchors alone, about the centre of their own box; a copy still copies the whole object.
+#[test]
+fn transforms_act_on_direct_selected_anchors() {
+    let mut s = session();
+    let square = json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}], "closed": true});
+    let id = NodeId(s.execute("path.create", &square).unwrap()["id"].as_u64().unwrap());
+    let points = |s: &Session| -> Vec<(f64, f64)> {
+        let NodeKind::Path { path, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("a path") };
+        path.subpaths[0].anchors.iter().map(|a| (a.p.x.round(), a.p.y.round())).collect()
+    };
+    let top = json!({"id": id.0, "anchors": [[0, 0], [0, 1]]});
+    s.execute("select.anchors", &top).unwrap();
+    let cases = [
+        ("object.scale", json!({"sx": 50}), [(25.0, 0.0), (75.0, 0.0)]),
+        ("object.scale", json!({"sx": 50, "origin": [0, 100]}), [(0.0, 50.0), (50.0, 50.0)]),
+        ("object.rotate", json!({"angle": 90}), [(50.0, 50.0), (50.0, -50.0)]),
+        ("object.reflect", json!({"axis": "vertical"}), [(100.0, 0.0), (0.0, 0.0)]),
+        ("object.shear", json!({"angle": 45, "axis": "vertical", "origin": [0, 0]}), [(0.0, 0.0), (100.0, 100.0)]),
+        ("object.move", json!({"dx": 10, "dy": -10}), [(10.0, -10.0), (110.0, -10.0)]),
+        ("object.transform", json!({"matrix": [1, 0, 0, 1, 5, 5], "anchors": true}), [(5.0, 5.0), (105.0, 5.0)]),
+    ];
+    for (cmd, p, [a, b]) in cases {
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(points(&s), [a, b, (100.0, 100.0), (0.0, 100.0)], "{cmd} {p}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("select.anchors", &top).unwrap();
+    }
+    // Transform Again repeats it on the anchors.
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(points(&s), [(20.0, 0.0), (120.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.anchors", &top).unwrap();
+    // Without `anchors`, object.transform (the Selection tool's) takes the whole path, and so does a copy.
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 5]})).unwrap();
+    assert_eq!(points(&s), [(5.0, 5.0), (105.0, 5.0), (105.0, 105.0), (5.0, 105.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.anchors", &top).unwrap();
+    let copies = s.execute("object.scale", &json!({"sx": 50, "copy": true})).unwrap();
+    assert_eq!(copies["ids"].as_array().unwrap().len(), 1);
+    assert_eq!(points(&s), [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], "the original stays");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.anchors", &top).unwrap();
+    // The Scale tool: a drag from (100, 50) to (75, 50) halves the top edge about its centre (50, 0).
+    let v = ViewInfo::default();
+    s.select_tool("scale", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 75.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 75.0, 50.0), v).unwrap();
+    assert_eq!(points(&s), [(25.0, 0.0), (75.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+}
+
 /// Arrange commands that leave the stacking order as it is record no undo step: Bring to Front and
 /// Bring Forward on the front objects, Send to Back and Send Backward on the back ones, and Send to
 /// Current Layer on objects already on top of the current layer.

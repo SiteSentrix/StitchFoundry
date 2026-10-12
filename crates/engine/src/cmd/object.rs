@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform",
             [],
             None,
-            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool, typeAreas?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} apply an affine to the selection (or ids); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences); typeAreas: area type among them (not type inside a group) reshapes its frame by the matrix and its text reflows at its size, as a bounding-box handle drag does (default: the type transforms too)",
+            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool, typeAreas?: bool, anchors?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} apply an affine to the selection (or ids); anchors (without ids or copy): paths with anchors selected with Direct Selection have only those anchors and their handles transformed, as the Transform tools and object.move/rotate/scale/reflect/shear do (default: the whole objects); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences); typeAreas: area type among them (not type inside a group) reshapes its frame by the matrix and its text reflows at its size, as a bounding-box handle drag does (default: the type transforms too)",
             has_doc,
             transform
         ),
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move…",
             ["Object", "Transform"],
             Some("Cmd+Shift+M"),
-            "{dx, dy, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
+            "{dx, dy, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             move_cmd
         ),
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rotate…",
             ["Object", "Transform"],
             None,
-            "{angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} → {ids}",
+            "{angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} → {ids}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             rotate
         ),
@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Scale…",
             ["Object", "Transform"],
             None,
-            "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} (strokes/corners default to the preferences)",
+            "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} (strokes/corners default to the preferences). With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             scale
         ),
@@ -59,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reflect…",
             ["Object", "Transform"],
             None,
-            "{axis: \"vertical\"|\"horizontal\"|deg, origin?, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
+            "{axis: \"vertical\"|\"horizontal\"|deg, origin?, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             reflect
         ),
@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Shear…",
             ["Object", "Transform"],
             None,
-            "{angle: deg, axis?: \"horizontal\"|\"vertical\", origin?, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
+            "{angle: deg, axis?: \"horizontal\"|\"vertical\", origin?, copy?, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             shear
         ),
@@ -223,6 +223,13 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     if let Some(o) = point_param(p, "origin") {
         return Ok(o);
     }
+    // Direct-selected anchors transform alone (see [`apply_transform`]), about their own centre.
+    let st = s.doc()?;
+    if !bool_or(p, "copy", false)
+        && let Some(b) = st.selection.anchor_bounds(&st.doc, s.prefs.use_preview_bounds)
+    {
+        return Ok(b.center());
+    }
     s.transform_box(ids).map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()))
 }
 
@@ -263,7 +270,10 @@ pub(crate) fn transform_patterns(s: &mut Session, p: &Value, ids: &[NodeId]) -> 
 /// Apply `xf` to `ids` (`copy` param: duplicate first; `strokes`/`corners`: see [`scaling`];
 /// `patterns`: see [`transform_patterns`]; `typeAreas`: see [`resize_type_area`]). Outside an
 /// interaction, records `xf` and the options it used for Transform Again.
-pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, p: &Value) -> Result<Value> {
+///
+/// `anchors` (`ids` being the selection): with anchors selected with Direct Selection and no
+/// copy, only those anchors transform, their handles with them, and the objects selected whole.
+pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, p: &Value, anchors: bool) -> Result<Value> {
     let copy = bool_or(p, "copy", false);
     let areas = bool_or(p, "typeAreas", false);
     let mut sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
@@ -273,7 +283,12 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     // With a copy, the reply lists the copies, and there are none.
     let d = &s.doc()?.doc;
     let none = d.index_paths(ids.iter().copied()).is_empty();
-    let ids = if none || (!copy && xf == Affine::IDENTITY) {
+    let ids = if anchors && !copy && !s.doc()?.selection.anchors.is_empty() {
+        if xf != Affine::IDENTITY {
+            super::path::transform_anchors(s, label, xf, sc)?;
+        }
+        ids
+    } else if none || (!copy && xf == Affine::IDENTITY) {
         if copy { vec![] } else { ids }
     } else {
         s.edit(label, |d, sel| {
@@ -316,16 +331,16 @@ fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
 
 fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
-    let ids = match ids_param(p, "ids") {
-        Some(v) => v,
-        None => selected_roots(s)?,
+    let (ids, anchors) = match ids_param(p, "ids") {
+        Some(v) => (v, false),
+        None => (selected_roots(s)?, bool_or(p, "anchors", false)),
     };
-    apply_transform(s, "Transform", ids, m, p)
+    apply_transform(s, "Transform", ids, m, p, anchors)
 }
 
 fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p)
+    apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p, true)
 }
 
 fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
@@ -348,7 +363,7 @@ fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         return super::docmenu::guide_move(s, &json!({ "dx": dx, "dy": dy, "copy": copy }));
     }
     let ids = selected_roots(s)?;
-    apply_transform(s, "Move", ids, Affine::translate((dx, dy)), p)
+    apply_transform(s, "Move", ids, Affine::translate((dx, dy)), p, true)
 }
 
 fn about(o: Point, a: Affine) -> Affine {
@@ -364,7 +379,7 @@ fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Angles are counter-clockwise; y is down, so negate.
     let a = about(o, Affine::rotate(-angle.to_radians()));
-    apply_transform(s, "Rotate", ids, a, p)
+    apply_transform(s, "Rotate", ids, a, p, true)
 }
 
 fn scale(s: &mut Session, p: &Value) -> Result<Value> {
@@ -375,7 +390,7 @@ fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     if sx == 0.0 || sy == 0.0 {
         return Err(bad("object.scale", "scale must be non-zero"));
     }
-    apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p)
+    apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p, true)
 }
 
 fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
@@ -394,7 +409,7 @@ fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad("object.reflect", format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`")));
         }
     };
-    apply_transform(s, "Reflect", ids, about(o, m), p)
+    apply_transform(s, "Reflect", ids, about(o, m), p, true)
 }
 
 fn shear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -403,7 +418,7 @@ fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
     let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
     let m = if vertical { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
-    apply_transform(s, "Shear", ids, about(o, m), p)
+    apply_transform(s, "Shear", ids, about(o, m), p, true)
 }
 
 /// The last transform's matrix on the selection, with the options `last_transform` keeps for it; an
@@ -417,7 +432,7 @@ fn transform_again(s: &mut Session, p: &Value) -> Result<Value> {
         o.extend(given.iter().filter(|(_, v)| v.is_boolean()).map(|(k, v)| (k.clone(), v.clone())));
     }
     let ids = selected_roots(s)?;
-    apply_transform(s, "Transform Again", ids, m, &options)
+    apply_transform(s, "Transform Again", ids, m, &options, true)
 }
 
 enum Arrange {
@@ -1311,10 +1326,10 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     // leave a rounding error in it on a rotated object or with Use Preview Bounds.
     let current = |k: &str, now: f64| p.get(k).and_then(Value::as_f64).is_none_or(|x| x == now);
     if current("x", page.x) && current("y", page.y) && current("width", v.width()) && current("height", v.height()) {
-        return apply_transform(s, "Transform", ids, Affine::IDENTITY, p);
+        return apply_transform(s, "Transform", ids, Affine::IDENTITY, p, false);
     }
     let to = frame.to_local(Point::new(f64_or(p, "x", page.x), f64_or(p, "y", page.y)));
-    apply_transform(s, "Transform", ids, frame.conjugate(Affine::translate(to - new_rp) * scale), p)
+    apply_transform(s, "Transform", ids, frame.conjugate(Affine::translate(to - new_rp) * scale), p, false)
 }
 
 fn expand_shape(s: &mut Session, _: &Value) -> Result<Value> {
