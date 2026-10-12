@@ -3909,3 +3909,13 @@ machine	Stop	停止
 	E-stitch	E 形針跡
 	Rings (0: all)	圈數（0：全部）
 	Add Laydown	新增鋪底
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	間距曲線
+	Even	均勻
+	Accordion	疏密交替
+	Fade out	漸隱
+	Fade in	漸顯
+	Blend into	漸變到
+	Make Blend	產生漸變
+	Blend Colors	顏色漸變

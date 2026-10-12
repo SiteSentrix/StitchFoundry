@@ -4497,3 +4497,13 @@ machine	Stop	Stopp
 	E-stitch	E-Stich
 	Rings (0: all)	Ringe (0: alle)
 	Add Laydown	Unterlagefläche hinzufügen
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	Abstandsprofil
+	Even	Gleichmäßig
+	Accordion	Akkordeon
+	Fade out	Ausblenden
+	Fade in	Einblenden
+	Blend into	Übergang zu
+	Make Blend	Übergang erstellen
+	Blend Colors	Farben überblenden

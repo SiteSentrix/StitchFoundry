@@ -1003,6 +1003,12 @@ pub struct FillParams {
     /// Contour fills: how many rings in from the outline (an offset fill); 0 = all the way in.
     #[serde(skip_serializing_if = "is_zero")]
     pub rings: u32,
+    /// Tatami and satin fills: the row spacing across the shape (accordion spacing, colour
+    /// blends), as points `[t, spacing]`: `t` from 0 to 1 in the direction the rows stack,
+    /// spacing in mm, 0 for no rows. Between points the density (one over the spacing) changes
+    /// evenly. Empty = `spacing` (graded to `spacing_end` when that is set).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub spacing_profile: Vec<[f64; 2]>,
 }
 
 fn is_zero(n: &u32) -> bool {
@@ -1029,6 +1035,7 @@ impl Default for FillParams {
             motif: Motif::Wave,
             motif_size: 4.0,
             rings: 0,
+            spacing_profile: Vec::new(),
         }
     }
 }

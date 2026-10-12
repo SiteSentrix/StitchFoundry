@@ -54,6 +54,9 @@ pub(crate) struct ScanConfig {
     pub splits: Vec<Vec<Point>>,
     /// Trapunto: travel keeps to the outline instead of running along the rows.
     pub trapunto: bool,
+    /// Row spacing along a profile across the shape (see `FillParams::profile`), already in
+    /// row spacing (halved for satin); empty = `row_spacing`.
+    pub profile: Vec<[f64; 2]>,
 }
 
 impl Default for ScanConfig {
@@ -71,6 +74,38 @@ impl Default for ScanConfig {
             texture: None,
             splits: Vec::new(),
             trapunto: false,
+            profile: Vec::new(),
+        }
+    }
+}
+
+/// Most rows one fill sews along a spacing profile.
+const MAX_PROFILE_ROWS: usize = 200_000;
+
+/// A spacing profile ready to read: its points that are numbers as `(t, rows per mm)`, in
+/// order across the shape.
+struct Profile(Vec<(f64, f64)>);
+
+impl Profile {
+    /// `None` when the profile has no points that are numbers.
+    fn new(points: &[[f64; 2]]) -> Option<Profile> {
+        let density = |s: f64| if s > 1e-9 { 1.0 / s.max(0.05) } else { 0.0 };
+        let mut pts: Vec<(f64, f64)> =
+            points.iter().filter(|[t, s]| t.is_finite() && s.is_finite()).map(|&[t, s]| (t.clamp(0.0, 1.0), density(s))).collect();
+        pts.sort_by(|a, b| a.0.total_cmp(&b.0));
+        (!pts.is_empty()).then_some(Profile(pts))
+    }
+
+    /// The rows per mm at `t` (0 to 1 across the shape): the density (one over the spacing, 0
+    /// for no rows) changes evenly between the points.
+    fn density(&self, t: f64) -> f64 {
+        let pts = &self.0;
+        let i = pts.partition_point(|p| p.0 <= t);
+        match (i.checked_sub(1).and_then(|k| pts.get(k)), pts.get(i)) {
+            (Some(a), Some(b)) if b.0 - a.0 > 1e-12 => a.1 + (b.1 - a.1) * (t - a.0) / (b.0 - a.0),
+            (Some(a), _) => a.1,
+            (None, Some(b)) => b.1,
+            (None, None) => 0.0,
         }
     }
 }
@@ -399,7 +434,23 @@ fn plan(rings: &[Vec<Point>], cfg: &ScanConfig) -> Option<Plan> {
     let s1 = if cfg.row_spacing_end > 0.0 { cfg.row_spacing_end.max(0.05) } else { s0 };
     let height = y1 - y0;
     let mut ys = Vec::new();
-    if (s1 - s0).abs() < 1e-12 {
+    let profile = Profile::new(&cfg.profile);
+    let profiled = profile.is_some();
+    if let Some(profile) = &profile {
+        // Along the profile: walk across the shape adding up the rows asked for, and sew one
+        // each time they make a whole row (half a row in from the edge to start with).
+        let dy = (height / 400_000.0).max(0.02);
+        let mut acc = 0.5;
+        let mut y = y0;
+        while y < y1 && ys.len() < MAX_PROFILE_ROWS {
+            acc += profile.density(((y - y0) / height.max(1e-9)).clamp(0.0, 1.0)) * dy;
+            if acc >= 1.0 {
+                ys.push(y);
+                acc = (acc - 1.0).min(1.0);
+            }
+            y += dy;
+        }
+    } else if (s1 - s0).abs() < 1e-12 {
         // Centre the rows so both edges get the same margin.
         let n = (height / s0).floor() as usize + 1;
         let used = (n - 1) as f64 * s0;
@@ -415,8 +466,12 @@ fn plan(rings: &[Vec<Point>], cfg: &ScanConfig) -> Option<Plan> {
             y += spacing_at(y);
         }
     }
-    if ys.is_empty() {
+    // A profile can ask for no rows anywhere; otherwise there is always one.
+    if ys.is_empty() && !profiled {
         ys.push((y0 + y1) * 0.5);
+    }
+    if ys.is_empty() {
+        return None;
     }
     // Nudge rows off exact vertex heights to avoid degenerate crossings.
     for y in &mut ys {
@@ -955,6 +1010,30 @@ mod tests {
                 assert!(max_stitch(&pts) <= plain.max(4.0 * 1.35) + 1e-6, "{pattern:?} at {angle}°: {}", max_stitch(&pts));
             }
         }
+    }
+
+    #[test]
+    fn a_spacing_profile_sets_the_rows_across_the_shape() {
+        let poly = Polygon::from_ring(rect(0.0, 0.0, 20.0, 40.0));
+        let ys = |cfg: &ScanConfig| rows(&scan_fill(&poly, cfg, None, None)).iter().map(|r| r.0).collect::<Vec<f64>>();
+        // Accordion: dense at the ends and in the middle, sparse in between.
+        let acc = ys(&ScanConfig { profile: vec![[0.0, 0.4], [0.25, 2.0], [0.5, 0.4], [0.75, 2.0], [1.0, 0.4]], ..Default::default() });
+        let band = |v: &[f64], a: f64, b: f64| v.iter().filter(|y| **y >= a && **y < b).count();
+        assert!(band(&acc, 0.0, 4.0) > 2 * band(&acc, 8.0, 12.0) && band(&acc, 18.0, 22.0) > 2 * band(&acc, 8.0, 12.0), "{acc:?}");
+        // A fade to nothing halfway across.
+        let fade = ys(&ScanConfig { profile: vec![[0.0, 0.4], [0.5, 0.0]], ..Default::default() });
+        assert!(fade.len() > 10 && fade.iter().all(|y| *y < 20.0), "{fade:?}");
+        // Two layers fading into each other add up to an even fill.
+        let a = ys(&ScanConfig { profile: vec![[0.0, 0.4], [1.0, 0.0]], ..Default::default() }).len() as f64;
+        let b = ys(&ScanConfig { profile: vec![[0.0, 0.0], [1.0, 0.4]], ..Default::default() }).len() as f64;
+        let even = ys(&ScanConfig::default()).len() as f64;
+        assert!(((a + b) / even - 1.0).abs() < 0.1, "{a} + {b} vs {even}");
+        // No rows anywhere; points that aren't numbers are no profile.
+        assert!(scan_fill(&poly, &ScanConfig { profile: vec![[0.0, 0.0], [1.0, 0.0]], ..Default::default() }, None, None).is_empty());
+        let junk = ScanConfig { profile: vec![[f64::NAN, 1.0], [0.5, f64::INFINITY]], ..Default::default() };
+        assert_eq!(scan_fill(&poly, &junk, None, None), scan_fill(&poly, &ScanConfig::default(), None, None));
+        assert!(Profile::new(&[[f64::NAN, 1.0]]).is_none());
+        assert!(Profile::new(&[[0.0, 1e-300], [1.0, 1e300]]).is_some_and(|p| p.density(0.5).is_finite()));
     }
 
     #[test]

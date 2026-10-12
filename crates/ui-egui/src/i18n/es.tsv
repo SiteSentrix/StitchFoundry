@@ -4541,3 +4541,13 @@ machine	Stop	Parada
 	E-stitch	Puntada E
 	Rings (0: all)	Anillos (0: todos)
 	Add Laydown	Añadir base de asentamiento
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	Perfil de espaciado
+	Even	Uniforme
+	Accordion	Acordeón
+	Fade out	Desvanecer
+	Fade in	Aparecer
+	Blend into	Fundir con
+	Make Blend	Crear fusión
+	Blend Colors	Fundir colores

@@ -417,8 +417,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SP-06 | Stippling (random meandering run fill) | Done | Meander fill: a rounded line that never crosses itself, with path spacing, stitch length and randomness | – |
 | SP-07 | Maze-like fills | Done | Meander | – |
 | SP-08 | Trapunto (open fill with raised outline effect) | Done | Tatami *Trapunto*: travel keeps to the outline (with an open density) | – |
-| SP-09 | Accordion spacing with custom profiles | Partial | Linear gradient spacing; add profile curves (2026 feature) | 2 |
-| SP-10 | Colour blending / multi-blend (several layered fills with graded density) | Missing | §7.4 | 2 |
+| SP-09 | Accordion spacing with custom profiles | Done | Tatami *Spacing profile*: even, accordion, fade out and in, or any points agents set | – |
+| SP-10 | Colour blending / multi-blend (several layered fills with graded density) | Done | Make Blend: stacked tatami layers, 2 to 6 colours, each fading into the next | – |
 | SP-11 | Chenille-type patterns on regular machines (square, coil) | Missing | Pattern generators | 4 |
 | SP-12 | Cross-stitch fills (X stitches on a grid) | Partial | Cross-hatch fill exists; add true X-stitch grid fill | 2 |
 | SP-13 | Redwork (outlines grouped into one path, entry = exit) | Missing | Group outlines, route as one tour (2026 feature) | 2 |
@@ -522,8 +522,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
-| NEW-01 | Multi Blend (stacked layers of fills with graded spacing in one object) | Missing | §7.4 | 2 |
-| NEW-02 | Custom accordion profiles | Missing | SP-09 | 2 |
+| NEW-01 | Multi Blend (stacked layers of fills with graded spacing in one object) | Partial | Make Blend makes the layers as separate objects (one per thread), not one object | 2 |
+| NEW-02 | Custom accordion profiles | Partial | Profiles from points through `embroidery.setParams`; presets in the panel, no curve editor yet | 2 |
 | NEW-03 | Redwork | Missing | SP-13 | 2 |
 | NEW-04 | Buttonholes | Missing | SP-14 | 2 |
 | NEW-05 | Grids, guides, snapping to objects | Done | VectorCraft | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 114 done,
-41 partial, 70 missing, 6 out of scope (counted 2026-10-12, after fill types and laydown). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 116 done,
+42 partial, 67 missing, 6 out of scope (counted 2026-10-12, after spacing profiles and blends). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -718,7 +718,8 @@ own and edited standard ones, MF-02 and MF-03, came last). Phase 0 is still open
 sewn on a real machine yet; the owner has the VP3 test kit. Phase 2 started on 2026-10-12 with
 tatami textures and split lines (PS-02…04, CS-05), then hand stitch, jagged edges and trapunto
 (SP-02, SP-03, SP-08), then motifs (MO-01, MO-03, MO-04), then offset, zigzag, E-stitch and stipple fills and laydown
-(CS-02, SP-05, SP-06, RE-06).
+(CS-02, SP-05, SP-06, RE-06), then spacing profiles and colour blends (SP-09, SP-10, NEW-01,
+NEW-02).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

@@ -1581,3 +1581,37 @@ fn a_laydown_is_sewn_first_under_the_selected_shapes() {
         assert!(s.execute("embroidery.addLaydown", &bad).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn a_fill_blends_into_other_colours_across_its_rows() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let plain = needles(&s, a).len() as f64;
+    let r = s.execute("embroidery.makeBlend", &json!({"colors": ["#ff0000", "#ffff00", "#0000ff"]})).unwrap();
+    let ids: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(ids.len(), 3);
+    assert_eq!(ids[0], a, "the fill itself is the first layer");
+    assert_eq!(s.doc().unwrap().doc.paint_order(ids.clone()), ids, "stacked in order");
+    let colors: Vec<Rgb> = ids.iter().map(|id| emb(&s, *id).thread.unwrap().color).collect();
+    assert_eq!(colors, vec![Rgb::new(255, 0, 0), Rgb::new(255, 255, 0), Rgb::new(0, 0, 255)]);
+    let (f0, f1, f2) = (fill_params(&s, ids[0]), fill_params(&s, ids[1]), fill_params(&s, ids[2]));
+    assert_eq!(f0.spacing_profile, vec![[0.0, 0.4], [0.5, 0.0]]);
+    assert_eq!(f1.spacing_profile, vec![[0.0, 0.0], [0.5, 0.4], [1.0, 0.0]]);
+    assert_eq!(f2.spacing_profile, vec![[0.5, 0.0], [1.0, 0.4]]);
+    assert!(f0.underlay.tatami && !f1.underlay.tatami && !f2.underlay.edge_run, "underlay once");
+    // The layers together sew about as much as the plain fill.
+    let total: f64 = ids.iter().map(|id| needles(&s, *id).len() as f64).sum();
+    assert!((0.7..1.4).contains(&(total / plain)), "{total} vs {plain}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(ids[1]).is_none() && fill_params(&s, a).spacing_profile.is_empty());
+    for bad in [json!({"colors": ["#ff0000"]}), json!({"colors": ["#ff0000", "plaid"]}), json!({"colors": vec!["#ff0000"; 7]}), json!({})] {
+        assert!(s.execute("embroidery.makeBlend", &bad).is_err(), "{bad}");
+    }
+    // A spacing profile through setParams.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"spacingProfile": [[0.0, 0.4], [0.5, 2.0], [1.0, 0.4]]}})).unwrap();
+    assert!(((needles(&s, a).len() as f64) / plain) < 0.8, "sparser in the middle");
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    assert!(s.execute("embroidery.makeBlend", &json!({"colors": ["#ff0000", "#0000ff"]})).is_err(), "tatami only");
+}

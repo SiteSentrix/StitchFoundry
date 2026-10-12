@@ -4543,3 +4543,13 @@ machine	Stop	Arresto
 	E-stitch	Punto E
 	Rings (0: all)	Anelli (0: tutti)
 	Add Laydown	Aggiungi base di appoggio
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	Profilo di spaziatura
+	Even	Uniforme
+	Accordion	Fisarmonica
+	Fade out	Dissolvenza in uscita
+	Fade in	Dissolvenza in entrata
+	Blend into	Sfumare verso
+	Make Blend	Crea sfumatura
+	Blend Colors	Sfuma colori

@@ -4539,3 +4539,13 @@ machine	Stop	Остановка
 	E-stitch	Е-стежок
 	Rings (0: all)	Кольца (0: все)
 	Add Laydown	Добавить подложку
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	Профиль интервала
+	Even	Равномерный
+	Accordion	Гармошка
+	Fade out	Затухание
+	Fade in	Появление
+	Blend into	Переход в
+	Make Blend	Создать переход
+	Blend Colors	Смешать цвета
