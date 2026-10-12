@@ -4696,3 +4696,27 @@ machine	Stop	停止
 	Edit Embroidery Font	刺繍フォントを編集
 	Merge Embroidery Font	刺繍フォントを統合
 	New Embroidery Font from Type	フォントから新しい刺繍フォント
+	Font Creator	フォント作成
+	Capitals' height	大文字の高さ
+	Line spacing	行間
+	Space width	スペースの幅
+	As typed	入力どおり
+	Capitals	大文字
+	Small letters	小文字
+	Letter case	大文字小文字
+	Sews well from	きれいに縫える最小
+	Sews well up to	きれいに縫える最大
+	Still to digitize	未デジタイズ
+	Show this glyph	このグリフを表示
+	Not digitized yet: show its artboard	未デジタイズ：アートボードを表示
+	Glyphs to add	追加するグリフ
+	Kerning (mm closer)	カーニング（mm 詰める）
+	Pair	ペア
+	Kern	カーニング
+	Merge glyphs from	グリフを統合するフォント
+	Test text	テスト文字
+	Try in a New Document	新規ドキュメントで試す
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	刺繍フォントを作成：デジタイズするグリフごとにアートボードがあるドキュメント。
+	Type family	書体ファミリー
+	New Font from Type	フォントから新規作成
+	Edit Font	フォントを編集

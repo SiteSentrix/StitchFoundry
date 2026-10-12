@@ -162,6 +162,16 @@ pub struct EmbroideryUi {
     pub monogram_style: usize,
     pub monogram_border: usize,
     pub monogram_size: f64,
+    /// The Font Creator section: the font name as typed (and whether it is being typed), glyphs
+    /// to add, a kerning pair to add, text to try the font with, and the type family and loaded
+    /// font picked to start from or merge.
+    pub font_name: String,
+    pub font_name_editing: bool,
+    pub font_add: String,
+    pub kern_pair: String,
+    pub font_test: String,
+    pub font_family: String,
+    pub font_other: String,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -238,6 +248,13 @@ impl Default for EmbroideryUi {
             monogram_style: 0,
             monogram_border: 1,
             monogram_size: 0.0,
+            font_name: String::new(),
+            font_name_editing: false,
+            font_add: String::new(),
+            kern_pair: String::new(),
+            font_test: String::new(),
+            font_family: "Source Sans 3".into(),
+            font_other: String::new(),
             prompt: prompt::PromptState::default(),
         }
     }

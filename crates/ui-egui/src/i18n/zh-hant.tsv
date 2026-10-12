@@ -4068,3 +4068,27 @@ machine	Stop	停止
 	Edit Embroidery Font	編輯刺繡字型
 	Merge Embroidery Font	合併刺繡字型
 	New Embroidery Font from Type	從字型新增刺繡字型
+	Font Creator	字型建立
+	Capitals' height	大寫高度
+	Line spacing	行距
+	Space width	空格寬度
+	As typed	依輸入
+	Capitals	大寫
+	Small letters	小寫
+	Letter case	大小寫
+	Sews well from	適合繡製的最小值
+	Sews well up to	適合繡製的最大值
+	Still to digitize	尚待數位化
+	Show this glyph	顯示此字形
+	Not digitized yet: show its artboard	尚未數位化：顯示其工作區域
+	Glyphs to add	要新增的字形
+	Kerning (mm closer)	字距（縮近 mm）
+	Pair	字對
+	Kern	字距調整
+	Merge glyphs from	從以下字型合併字形
+	Test text	測試文字
+	Try in a New Document	在新文件中試用
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	製作刺繡字型：每個待數位化的字形一個工作區域的文件。
+	Type family	字型系列
+	New Font from Type	從字型新增
+	Edit Font	編輯字型
