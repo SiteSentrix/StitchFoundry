@@ -293,7 +293,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | MF-01 | Machine format profiles (max stitch, max jump, trim method, tie-in/off, colour change codes) | Done | Seven built-in profiles, one per format (commercial: DST, EXP, U01; home: PES, JEF, VP3, XXX), set the design's longest stitch and jump, speed and trim time; `embroidery.settings {machine}`, Machine settings in the panel | 1 |
 | MF-02 | Edit standard profiles, advanced settings | Done | Save to Machine keeps the design's machine settings in its profile: limits, speed and trim time, and the advanced ones (shortest stitch, trim length, ties, colour change time); Reset Machine puts a standard profile back; `embroidery.machine.save` / `delete` | 1 |
 | MF-03 | Custom machine formats | Done | Profiles of your own (a name and one of the formats) kept in the preferences; Save as New Machine, rename, change format, delete; a design keeps its machine's name and format | 1 |
-| MF-04 | More file formats | Partial | Add SEW, HUS, SHV, PCS, ZSK Z00, Barudan FDR/U00, Happy TAP, Toyota 100, Tajima TBF (with sequin codes), Melco CND (condensed), plus CSV/JSON stitch dumps | 6 |
+| MF-04 | More file formats | Partial | Pfaff PCS (experimental) and Happy TAP read and written; HUS and VIP need a compression writer and SEW uncertain header fields (public descriptions only); add ZSK Z00, Barudan FDR/U00, Toyota 100, Tajima TBF, CSV/JSON stitch dumps; CSD, JPX, PHB/PHC, ZHS, EMD are not publicly described | 6 |
 
 ### 6.4 Stitch types and digitizing input
 
@@ -504,7 +504,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | RP-04 | Output designs as images | Partial | Art exports; add rendered stitch image export (PNG/SVG of TrueView) | 6 |
 | MFL-01 | Native design file | Done | `.stitchfoundry` (the reference's EMB is proprietary: Out) | – |
 | MFL-02 | Condensed formats (Melco CND), colour-merge | Missing | MF-04 | 6 |
-| OUT-01 | Export for machine | Done | 8 formats | – |
+| OUT-01 | Export for machine | Done | 10 formats | – |
 | OUT-02 | Batch output profiles (machine files + design + worksheets in one step) | Missing | `embroidery.output {profile}` (2026 feature) | 6 |
 | OUT-03 | Send to machine / USB / network queue | Done | Send to Machine writes to remembered machine folders (USB, the machine's folder, network shares), checked first; a queue manager is HW-01 | – |
 | OUT-04 | Wireless transfer to specific machine brands | Out | Proprietary protocols; revisit if documented | – |

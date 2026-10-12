@@ -39,7 +39,9 @@ fn random_bytes_behind_a_valid_header() {
             Format::Pes | Format::Pec => 0x220,
             Format::Jef => 0x94,
             Format::Vp3 => 120,
-            Format::Exp => 0,
+            Format::Exp | Format::Tap => 0,
+            // the hoop, the colours and the record count
+            Format::Pcs => 22,
         };
         for _ in 0..2000 {
             let mut bytes = valid[..keep.min(valid.len())].to_vec();

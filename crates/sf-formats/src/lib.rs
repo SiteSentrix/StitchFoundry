@@ -14,6 +14,8 @@
 //! | [`Format::Vp3`] | Pfaff / Husqvarna Viking | RGB + thread names | stitch, jump, trim, one block per colour |
 //! | [`Format::Xxx`] | Singer | RGB | stitch, jump, trim, colour change, end |
 //! | [`Format::U01`] | Barudan | no | stitch, jump, trim, stop, needle change, end |
+//! | [`Format::Pcs`] | Pfaff (experimental) | RGB, 16 at most | stitch, move, colour change (trims are a move where the needle is) |
+//! | [`Format::Tap`] | Happy | no | as DST |
 //!
 //! ## Coordinates and preparation
 //!
@@ -48,9 +50,11 @@ mod bytes;
 mod dst;
 mod exp;
 mod jef;
+mod pcs;
 mod pec;
 mod pes;
 mod plan;
+mod tap;
 mod u01;
 mod vp3;
 mod xxx;
@@ -89,11 +93,17 @@ pub enum Format {
     /// Barudan `.u01`: 3-byte records (±12.7 mm) with trim, stop and needle
     /// change functions.
     U01,
+    /// Pfaff `.pcs` (experimental): an RGB table of up to 16 colours, then 9-byte records at
+    /// absolute positions in 1/6 mm; a trim is a move to where the needle is.
+    Pcs,
+    /// Happy `.tap`: DST's records without its header.
+    Tap,
 }
 
 impl Format {
     /// Every supported format.
-    pub const ALL: [Format; 8] = [Format::Dst, Format::Exp, Format::Jef, Format::Pes, Format::Pec, Format::Vp3, Format::Xxx, Format::U01];
+    pub const ALL: [Format; 10] =
+        [Format::Dst, Format::Exp, Format::Jef, Format::Pes, Format::Pec, Format::Vp3, Format::Xxx, Format::U01, Format::Pcs, Format::Tap];
 
     /// File extension, lower case without the dot (`"dst"`).
     pub fn extension(self) -> &'static str {
@@ -106,6 +116,8 @@ impl Format {
             Format::Vp3 => "vp3",
             Format::Xxx => "xxx",
             Format::U01 => "u01",
+            Format::Pcs => "pcs",
+            Format::Tap => "tap",
         }
     }
 
@@ -120,6 +132,8 @@ impl Format {
             Format::Vp3 => "Pfaff VP3",
             Format::Xxx => "Singer XXX",
             Format::U01 => "Barudan U01",
+            Format::Pcs => "Pfaff PCS",
+            Format::Tap => "Happy TAP",
         }
     }
 
@@ -134,7 +148,7 @@ impl Format {
     /// Whether the format stores thread colours. DST, EXP and U01 only store
     /// colour changes; their readers colour the blocks from a generic palette.
     pub fn has_colors(self) -> bool {
-        !matches!(self, Format::Dst | Format::Exp | Format::U01)
+        !matches!(self, Format::Dst | Format::Exp | Format::U01 | Format::Tap)
     }
 
     /// Whether the format has a stop command distinct from a colour change.
@@ -264,6 +278,8 @@ pub fn write(format: Format, pattern: &Pattern, opts: &WriteOptions) -> Result<V
         Format::Vp3 => vp3::write(pattern, opts),
         Format::Xxx => xxx::write(pattern, opts),
         Format::U01 => u01::write(pattern, opts),
+        Format::Pcs => pcs::write(pattern, opts),
+        Format::Tap => tap::write(pattern, opts),
     }
 }
 
@@ -278,6 +294,8 @@ pub fn read(format: Format, bytes: &[u8]) -> Result<Pattern, FormatError> {
         Format::Vp3 => vp3::read(bytes),
         Format::Xxx => xxx::read(bytes),
         Format::U01 => u01::read(bytes),
+        Format::Pcs => pcs::read(bytes),
+        Format::Tap => tap::read(bytes),
     }
 }
 
@@ -297,12 +315,14 @@ pub fn prepare(format: Format, pattern: &Pattern, opts: &WriteOptions) -> Result
         Format::Vp3 => vp3::plan(pattern, opts)?,
         Format::Xxx => xxx::plan(pattern, opts)?,
         Format::U01 => u01::plan(pattern, opts)?,
+        Format::Pcs => pcs::plan(pattern, opts)?,
+        Format::Tap => tap::plan(pattern, opts)?,
     };
     let mut out = plan.to_pattern(&cfg);
     // The label as the file stores it.
     out.name = match format {
         Format::Dst | Format::Pes | Format::Pec => bytes::ascii_label(opts.label(pattern), 16).trim_end().to_string(),
-        Format::Exp | Format::Jef | Format::Vp3 | Format::Xxx | Format::U01 => String::new(),
+        Format::Exp | Format::Jef | Format::Vp3 | Format::Xxx | Format::U01 | Format::Pcs | Format::Tap => String::new(),
     };
     Ok(out)
 }
@@ -323,6 +343,10 @@ pub fn detect(bytes: &[u8]) -> Option<Format> {
         Some(Format::Jef)
     } else if xxx::sniff(bytes) {
         Some(Format::Xxx)
+    } else if pcs::sniff(bytes) {
+        Some(Format::Pcs)
+    } else if tap::sniff(bytes) {
+        Some(Format::Tap)
     } else if u01::sniff(bytes) {
         Some(Format::U01)
     } else if exp::sniff(bytes) {

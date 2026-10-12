@@ -55,6 +55,8 @@ fn machine_file_items() -> Vec<Item> {
         f("Pfaff VP3 (.vp3)…", "vp3"),
         f("Singer XXX (.xxx)…", "xxx"),
         f("Barudan U01 (.u01)…", "u01"),
+        f("Pfaff PCS (.pcs)…", "pcs"),
+        f("Happy TAP (.tap)…", "tap"),
         f("Brother PEC (.pec)…", "pec"),
     ]
 }

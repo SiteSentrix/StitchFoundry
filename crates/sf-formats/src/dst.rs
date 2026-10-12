@@ -218,6 +218,11 @@ pub(crate) fn read(bytes: &[u8]) -> Result<Pattern, FormatError> {
     }
     let body = bytes.get(HEADER..).ok_or(FormatError::Truncated)?;
     let name = read_label(bytes.get(3..19).unwrap_or_default());
+    read_records(body, name)
+}
+
+/// Decodes DST stitch records (up to the end record) into a pattern named `name`.
+pub(crate) fn read_records(body: &[u8], name: String) -> Result<Pattern, FormatError> {
     let mut dec = Decoder::new(10.0, true);
     let mut run: Vec<(i64, i64)> = Vec::new();
     for chunk in body.chunks_exact(3) {
