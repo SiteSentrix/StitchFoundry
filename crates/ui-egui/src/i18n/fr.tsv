@@ -13,23 +13,23 @@
 # tested). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Photoshop-style raster effects (Effect menu, their dialogs).
-	Glowing Edges…	Bords lumineux…
-	Glowing Edges	Bords lumineux
+	Glowing Edges…	Contour lumineux…
+	Glowing Edges	Contour lumineux
 	Edge Width	Largeur du bord
 	Edge Brightness	Luminosité du bord
 	Smoothness	Lissage
 	Radial Blur…	Flou radial…
-	Smart Blur…	Flou intelligent…
-	Sharpen	Netteté
-	Unsharp Mask…	Masque de netteté…
+	Smart Blur…	Flou optimisé…
+	Sharpen	Renforcement
+	Unsharp Mask…	Accentuation…
 	Pixelate	Pixellisation
 	Color Halftone…	Demi-teintes couleur…
-	Crystallize…	Cristalliser…
-	Mezzotint…	Manière noire…
+	Crystallize…	Cristallisation…
+	Mezzotint…	Mezzo-tinto…
 	Pointillize…	Pointillisme…
 	Color Halftone	Demi-teintes couleur
-	Crystallize	Cristalliser
-	Mezzotint	Manière noire
+	Crystallize	Cristallisation
+	Mezzotint	Mezzo-tinto
 	Pointillize	Pointillisme
 	Max. Radius	Rayon max.
 	Channel 1	Couche 1
@@ -48,8 +48,8 @@
 	Medium Strokes	Traits moyens
 	Long Strokes	Traits longs
 	Radial Blur	Flou radial
-	Smart Blur	Flou intelligent
-	Unsharp Mask	Masque de netteté
+	Smart Blur	Flou optimisé
+	Unsharp Mask	Accentuation
 	Gaussian Blur	Flou gaussien
 	Method	Méthode
 	Quality	Qualité
@@ -93,8 +93,8 @@
 	Absolute Position	Position absolue
 	Accurate	Précis
 	Abutting	Contigu
-	Action {n}	Action {n}
-	Actions	Actions
+	Action {n}	Script {n}
+	Actions	Scripts
 	Activate Document	Activer le document
 	Active Perspective Plane	Plan de perspective actif
 	Actual Size	Taille réelle
@@ -131,7 +131,7 @@
 	Adjust Options:	Options de réglage :
 	Advanced	Avancé
 	Advanced Options	Options avancées
-	Align	Aligner
+	Align	Alignement
 	Align center	Centrer
 	Align left	Aligner à gauche
 	Align Objects:	Aligner les objets :
@@ -211,7 +211,7 @@
 	Arch…	Arche…
 	Arc…	Arc…
 	Area / Path Type	Texte captif / curviligne
-	Area Graph Tool	Outil Graphe en aires
+	Area Graph Tool	Outil Graphe à couches
 	Area Text Objects	Objets texte captif
 	Area Type Options	Options de texte captif
 	Area Type Options…	Options de texte captif…
@@ -244,7 +244,7 @@
 	Assign Profile…	Attribuer un profil…
 	Assign:	Attribuer :
 	Attach to Active Plane	Associer au plan actif
-	Attributes	Attributs
+	Attributes	Options d’objet
 	Author Title:	Fonction de l’auteur :
 	Author:	Auteur :
 	Auto	Auto
@@ -264,21 +264,21 @@
 	Automatically	Automatiquement
 	Automatically Save Recovery Data	Enregistrer automatiquement les données de récupération
 	Average	Moyenne
-	Average…	Moyenne…
+	Average…	Alignement…
 	Axis:	Axe :
 	Background Color:	Couleur d’arrière-plan :
 	Background Contents	Contenu de l’arrière-plan
 	Background Contents:	Contenu de l’arrière-plan :
 	Background:	Arrière-plan :
 	Backspace	Retour arrière
-	Bar Graph Tool	Outil Graphe en barres
+	Bar Graph Tool	Outil Graphe à barres
 	Baseline	Ligne de base
 	Baseline Shift	Décalage de la ligne de base
 	Basic Latin	Latin de base
 	Batch	Traitement par lots
 	Begin Recording	Démarrer l’enregistrement
 	Bend:	Courbure :
-	Bevel Join	Raccord biseauté
+	Bevel Join	Sommet en biseau
 	Bitmap	Bitmap
 	Black	Noir
 	Black and White	Noir et blanc
@@ -288,13 +288,13 @@
 	Bleed:	Fond perdu :
 	Bleeds	Fonds perdus
 	Blend	Dégradé de formes
-	Blend Front to Back	Fusionner de l’avant vers l’arrière
-	Blend Horizontally	Fusionner horizontalement
+	Blend Front to Back	Dégradé de l’avant vers l’arrière
+	Blend Horizontally	Dégradé horizontal
 	Blend Info	Infos sur le dégradé de formes
 	Blend Options	Options de dégradé de formes
 	Blend Options…	Options de dégradé de formes…
 	Blend Tool	Outil Dégradé de formes
-	Blend Vertically	Fusionner verticalement
+	Blend Vertically	Dégradé vertical
 	Blending Mode	Mode de fusion
 	Blends and Transparency	Dégradés de formes et transparence
 	Bloat Tool	Outil Dilatation
@@ -386,7 +386,7 @@
 	Click	Clic
 	Click an anchor point	Cliquez sur un point d’ancrage
 	Click or drag	Cliquez ou faites glisser
-	Click the art with the Gradient tool to add or select points.	Cliquez sur l’illustration avec l’outil Dégradé pour ajouter ou sélectionner des points.
+	Click the art with the Gradient tool to add or select points.	Cliquez sur l’illustration avec l’outil Dégradé de couleurs pour ajouter ou sélectionner des points.
 	Click the first point	Cliquez sur le premier point
 	Click the ramp or a type button to apply a gradient.	Cliquez sur la rampe de dégradé ou sur un bouton de type pour appliquer un dégradé.
 	Click to add a tab stop, drag to move it, drag it off the ruler to delete it	Cliquez pour ajouter une tabulation, faites-la glisser pour la déplacer, faites-la glisser hors de la règle pour la supprimer
@@ -466,7 +466,7 @@
 	Colorize	Coloriser
 	Colors	Couleurs
 	Colors:	Couleurs :
-	Column Graph Tool	Outil Graphe en colonnes
+	Column Graph Tool	Outil Graphe à barres verticales
 	Columns:	Colonnes :
 	Column…	Colonne…
 	Combine Slices	Combiner les tranches
@@ -603,7 +603,7 @@
 	dash	tiret
 	Dash Pattern	Motif de tirets
 	Dashed	Pointillés
-	Dashed Line	Ligne pointillée
+	Dashed Line	Pointillé
 	Data Recovery	Récupération des données
 	Data…	Données…
 	Dates	Dates
@@ -649,7 +649,7 @@
 	Delete Selection	Supprimer la sélection
 	Delete Slices	Supprimer les tranches
 	Delete Spine Point	Supprimer le point de la dorsale
-	Delete Stop	Supprimer le point de couleur
+	Delete Stop	Supprimer l’étape de dégradé
 	Delete Swatch	Supprimer la nuance
 	Delete Symbol	Supprimer le symbole
 	Delete Tab	Supprimer la tabulation
@@ -690,11 +690,11 @@
 	Discard White Overprint in Output	Ignorer la surimpression du blanc en sortie
 	Discarded {} recovered document(s)	{} document(s) récupéré(s) ignoré(s)
 	Discord	Discord
-	Discretionary Hyphen	Césure conditionnelle
+	Discretionary Hyphen	Tiret conditionnel
 	Discretionary Ligatures	Ligatures conditionnelles
 	Display All Blacks Accurately	Afficher tous les noirs avec précision
-	Display All Blacks as Rich Black	Afficher tous les noirs en noir quadrichromique
-	Display Bitmaps as Anti-aliased Images in Pixel Preview	Afficher les bitmaps lissés dans l’aperçu des pixels
+	Display All Blacks as Rich Black	Afficher tous les noirs en noir intense
+	Display Bitmaps as Anti-aliased Images in Pixel Preview	Afficher les bitmaps lissés dans l’aperçu en pixels
 	Display Options	Options d’affichage
 	Display Print Size at 100% Zoom	Afficher la taille d’impression avec un zoom de 100 %
 	Distort & Transform	Distorsion et transformation
@@ -707,9 +707,9 @@
 	Distribute Spacing	Répartir l’espacement
 	Distribute Spacing:	Répartition de l’espacement :
 	Dither:	Simulation :
-	Divide	Diviser
+	Divide	Division
 	Divide Horizontally Into	Diviser horizontalement en
-	Divide Objects Below	Diviser les objets sous-jacents
+	Divide Objects Below	Diviser les objets inférieurs
 	Divide Slices	Diviser les tranches
 	Divide Slices…	Diviser les tranches…
 	Divide Vertically Into	Diviser verticalement en
@@ -723,9 +723,9 @@
 	Document JSON	JSON du document
 	Document open password	Mot de passe d’ouverture du document
 	Document profile	Profil du document
-	Document Raster Effects Settings	Paramètres de pixellisation du document
-	Document Raster Effects Settings Dialog	Boîte de dialogue Paramètres de pixellisation du document
-	Document Raster Effects Settings…	Paramètres de pixellisation du document…
+	Document Raster Effects Settings	Paramètres des effets de pixellisation du document
+	Document Raster Effects Settings Dialog	Boîte de dialogue Paramètres des effets de pixellisation du document
+	Document Raster Effects Settings…	Paramètres des effets de pixellisation du document…
 	Document Setup	Format de document
 	Document Setup…	Format de document…
 	Document Swatches	Nuances du document
@@ -788,7 +788,7 @@
 	DXF Options	Options DXF
 	DXF Options Dialog	Boîte de dialogue Options DXF
 	e.g. 1-3, 5	p. ex. 1-3, 5
-	Each page prints as one image, at the document's raster effects resolution.	Chaque page s’imprime comme une seule image, à la résolution de pixellisation du document.
+	Each page prints as one image, at the document's raster effects resolution.	Chaque page s’imprime comme une seule image, à la résolution des effets de pixellisation du document.
 	Earth Tones	Tons terre
 	East Asian Type	Texte d’Asie orientale
 	Edit	Édition
@@ -816,7 +816,7 @@
 	Edit Text	Modifier le texte
 	Edit the applied effect, or add another one?	Modifier l’effet appliqué ou en ajouter un autre ?
 	Edit the selected point's colour in the Color panel	Modifier la couleur du point sélectionné dans le panneau Couleur
-	Edit the stop	Modifier le point de couleur
+	Edit the stop	Modifier l’étape de dégradé
 	Edit Theme	Modifier le thème
 	Edit theme	Modifier le thème
 	Edit Toolbar	Modifier la barre d’outils
@@ -888,10 +888,10 @@
 	Every (minutes)	Toutes les (minutes)
 	Every option is at its default.	Toutes les options ont leur valeur par défaut.
 	Every option matches {base}.	Toutes les options correspondent à {base}.
-	Every-line Composer	Composeur multiligne
+	Every-line Composer	Compositeur multiligne
 	Exact dash lengths	Longueurs de tirets exactes
 	Exceptions (comma separated)	Exceptions (séparées par des virgules)
-	Exclude	Exclure
+	Exclude	Exclusion
 	Exclusion	Exclusion
 	Exit Isolation Mode	Quitter le mode Isolation
 	Expand	Décomposer
@@ -947,13 +947,13 @@
 	Exported {what} with {} note(s): {first}	{what} exporté avec {} remarque(s) : {first}
 	Exporting {}	Exportation de {}
 	Export…	Exporter…
-	Extrude & Bevel…	Extrusion et biseau…
+	Extrude & Bevel…	Extrusion et biseautage…
 	Eyedropper	Pipette
 	Eyedropper Applies:	La pipette applique :
 	Eyedropper Options	Options de la pipette
 	Eyedropper Picks Up:	La pipette prélève :
 	Eyedropper Tool	Outil Pipette
-	Eyedropper: click the art to sample the stop's colour	Pipette : cliquez sur l’illustration pour prélever la couleur du point de couleur
+	Eyedropper: click the art to sample the stop's colour	Pipette : cliquez sur l’illustration pour prélever la couleur de l’étape de dégradé
 	Favorites	Favoris
 	Feather…	Contour progressif…
 	Feet	Pieds
@@ -1026,7 +1026,7 @@
 	Path:	Tracé :
 	Largest:	Le plus grand :
 	Direction:	Direction :
-	Symbolism Tools Options	Options des outils de symbole
+	Symbolism Tools Options	Options des outils de symbolisme
 	Symbol Set Density:	Densité du jeu de symboles :
 	Flat Image	Image aplatie
 	Flat Logo	Logo en aplats
@@ -1070,8 +1070,8 @@
 	Fractional Widths	Largeurs fractionnaires
 	Fractions	Fractions
 	Free	Libre
-	Free Distort	Distorsion libre
-	Free Distort…	Distorsion libre…
+	Free Distort	Distorsion manuelle
+	Free Distort…	Distorsion manuelle…
 	Free Transform Tool	Outil Transformation manuelle
 	Freeform Gradient	Dégradé de forme libre
 	French	Français
@@ -1113,7 +1113,7 @@
 	Gradient Finishes	Finitions de dégradé
 	Gradient Mesh	Filet de dégradé
 	Gradient swatches	Nuances de dégradé
-	Gradient Tool	Outil Dégradé
+	Gradient Tool	Outil Dégradé de couleurs
 	Gradient Vector	Vecteur de dégradé
 	Gradient within stroke	Dégradé à l’intérieur du contour
 	Gradients	Dégradés
@@ -1145,7 +1145,7 @@
 	Graphic Style Options…	Options de style graphique…
 	Graphic Styles	Styles graphiques
 	Graphic Styles Options	Options des styles graphiques
-	Graphics	Graphismes
+	Graphics	Graphiques
 	Graphics Processor	Processeur graphique
 	Graphics: {adapter}	Carte graphique : {adapter}
 	Gravity	Gravité
@@ -1162,8 +1162,8 @@
 	Gridline every	Pas de la grille
 	Gridline every:	Pas de la grille :
 	Grids In Back	Grilles à l’arrière-plan
-	Group	Grouper
-	Group Selection Tool	Outil Sélection d’éléments du groupe
+	Group	Associer
+	Group Selection Tool	Outil Sélection directe progressive
 	Guides	Repères
 	Guides & Grid	Repères et grille
 	H Spacing:	Espacement H :
@@ -1190,7 +1190,7 @@
 	Show Properties Panel	Afficher le panneau Propriétés
 	Hide Corner Widget	Masquer le widget d’angle
 	Hide Corner Widget for angles greater than	Masquer le widget d’angle pour les angles supérieurs à
-	Hide Edges	Masquer les bords
+	Hide Edges	Masquer les contours
 	Hide Gradient Annotator	Masquer l’annotateur de dégradé
 	Hide Grid	Masquer la grille
 	Hide Guides	Masquer les repères
@@ -1198,7 +1198,7 @@
 	Hide Note	Masquer la note
 	Hide Options	Masquer les options
 	Hide Others	Masquer les autres
-	Hide Print Tiling	Masquer la mosaïque d’impression
+	Hide Print Tiling	Masquer les limites d’impression
 	Hide Rulers	Masquer les règles
 	Hide Slices	Masquer les tranches
 	Hide Text Threads	Masquer les liens de texte
@@ -1222,10 +1222,10 @@
 	Horizon Height:	Hauteur de l’horizon :
 	Horizontal	Horizontal
 	Horizontal %	% horizontal
-	Horizontal Align Center	Alignement centré horizontal
-	Horizontal Align Left	Alignement à gauche horizontal
-	Horizontal Align Right	Alignement à droite horizontal
-	Horizontal Distribute Center	Répartition horizontale centrée
+	Horizontal Align Center	Alignement horizontal au centre
+	Horizontal Align Left	Alignement horizontal à gauche
+	Horizontal Align Right	Alignement horizontal à droite
+	Horizontal Distribute Center	Répartition horizontale au centre
 	Horizontal Distribute Left	Répartition horizontale à gauche
 	Horizontal Distribute Right	Répartition horizontale à droite
 	Horizontal Distribute Space	Répartition horizontale de l’espacement
@@ -1282,7 +1282,7 @@
 	Include SVG Code	Inclure le code SVG
 	Include Swatches for Tints	Inclure les nuances des teintes
 	Inflate…	Gonfler…
-	Info	Infos
+	Info	Informations
 	Ink	Encre
 	Inner Glow…	Lueur interne…
 	Input Black	Noir en entrée
@@ -1316,7 +1316,7 @@
 	Join our Discord	Rejoignez notre Discord
 	Join the ArtCraft community on Discord (discord.gg/artcraft)	Rejoignez la communauté ArtCraft sur Discord (discord.gg/artcraft)
 	Join the lines of each paragraph	Joindre les lignes de chaque paragraphe
-	Join Tool	Outil Joindre
+	Join Tool	Outil Jonction
 	Justification…	Justification…
 	Justify all lines	Justifier toutes les lignes
 	Justify with last line aligned center	Justifier, dernière ligne centrée
@@ -1337,7 +1337,7 @@
 	Keyboard Shortcuts…	Raccourcis clavier…
 	Keywords:	Mots-clés :
 	Knife	Cutter
-	Knockout Group	Groupe de masquage
+	Knockout Group	Groupe perçant
 	Lab	Lab
 	Lab Spot Colors:	Tons directs Lab :
 	Lab Values	Valeurs Lab
@@ -1401,10 +1401,10 @@
 	Line Cut	Coupe de ligne
 	Line Cut Tool	Outil Coupe de ligne
 	Line Endings:	Fins de ligne :
-	Line Graph Tool	Outil Graphe en courbes
-	Line Segment	Segment de ligne
-	Line Segment Tool	Outil Segment de ligne
-	Line Segment Tool Options	Options de l’outil Segment de ligne
+	Line Graph Tool	Outil Graphe linéaire
+	Line Segment	Trait
+	Line Segment Tool	Outil Trait
+	Line Segment Tool Options	Options de l’outil Trait
 	Line-end Punctuation Half Width	Ponctuation de fin de ligne en demi-chasse
 	Linear Gradient	Dégradé linéaire
 	Lines	Lignes
@@ -1471,7 +1471,7 @@
 	Make all bleed settings the same	Utiliser la même valeur pour tous les fonds perdus
 	Make and Expand	Créer et décomposer
 	Make Clipping Mask	Créer un masque d’écrêtage
-	Make Compound Shape	Créer une forme transparente
+	Make Compound Shape	Créer une forme composée
 	Make Envelope	Créer une enveloppe
 	Make Guides	Créer des repères
 	Make Mask	Créer un masque
@@ -1481,23 +1481,23 @@
 	Make with Mesh…	Créer avec un filet…
 	Make with Top Object	Créer avec l’objet au premier plan
 	Make with Warp…	Créer avec une déformation…
-	Make/Release Clipping Mask	Créer/libérer un masque d’écrêtage
+	Make/Release Clipping Mask	Créer/annuler un masque d’écrêtage
 	Manage Workspaces	Gérer les espaces de travail
 	Manage Workspaces…	Gérer les espaces de travail…
 	Manually	Manuellement
 	Mark as trapped	Marquer comme grossi-maigri
 	Mark Older Files as [Converted] When Opened	Marquer les anciens fichiers comme [Converti] à l’ouverture
 	Marker…	Marqueur…
-	Marks	Marques
-	Marks and Bleed	Marques et fond perdu
-	Marks and Bleeds	Marques et fonds perdus
+	Marks	Repères
+	Marks and Bleed	Repères et fond perdu
+	Marks and Bleeds	Repères et fonds perdus
 	Match User Interface Brightness	Adapter à la luminosité de l’interface
 	Light Gray	Gris clair
 	Medium Gray	Gris moyen
 	Dark Gray	Gris foncé
-	Materials…	Matériaux…
-	Matte	Détourage
-	Matte:	Détourage :
+	Materials…	Matières…
+	Matte	Cache
+	Matte:	Cache :
 	Maximize	Agrandir
 	Maximum	Maximum
 	Maximum Editability	Modification maximale
@@ -1518,7 +1518,7 @@
 	Merge Layers	Fusionner les calques
 	Merge Selected	Fusionner la sélection
 	Merge Swatches	Fusionner les nuances
-	Mesh Tool	Outil Filet
+	Mesh Tool	Outil Maillage
 	Message:	Message :
 	Metadata:	Métadonnées :
 	Metallic Gradients	Dégradés métalliques
@@ -1529,7 +1529,7 @@
 	Minimal	Minimal
 	Minimize	Réduire
 	Minus Back	Soustraction arrière
-	Minus Front	Soustraction avant
+	Minus Front	Soustraction
 	Mirror	Symétrie
 	Mirror & Cut	Symétrie et découpe
 	Mirror & Cut Tool	Outil Symétrie et découpe
@@ -1605,7 +1605,7 @@
 	New Bristle Brush	Nouvelle forme Soies
 	Calligraphic Brush Options	Options de forme calligraphique
 	Bristle Brush Options	Options de forme Soies
-	Scatter Brush Options	Options de forme de diffusion
+	Scatter Brush Options	Options de forme diffuse
 	Art Brush Options	Options de forme artistique
 	Pattern Brush Options	Options de forme de motif
 	Scatter:	Dispersion :
@@ -1669,13 +1669,13 @@
 	New Graphic Style…	Nouveau style graphique…
 	New Layer Options…	Options du nouveau calque…
 	New Layer…	Nouveau calque…
-	New Opacity Masks Are Clipping	Les nouveaux masques d’opacité sont écrêtés
+	New Opacity Masks Are Clipping	Les nouveaux masques d’opacité sont des masques d’écrêtage
 	New Opacity Masks Are Inverted	Les nouveaux masques d’opacité sont inversés
 	New Paragraph Style	Nouveau style de paragraphe
 	New Pattern Brush from Selection	Nouvelle forme de motif à partir de la sélection
 	New PDF Preset	Nouveau paramètre prédéfini PDF
 	New Print Preset	Nouveau paramètre prédéfini d’impression
-	New Scatter Brush from Selection	Nouvelle forme de diffusion à partir de la sélection
+	New Scatter Brush from Selection	Nouvelle forme diffuse à partir de la sélection
 	New Sublayer…	Nouveau sous-calque…
 	New Swatch	Nouvelle nuance
 	New Swatch…	Nouvelle nuance…
@@ -1695,12 +1695,12 @@
 	Next Object Below	Objet suivant au-dessous
 	Next Page	Page suivante
 	Next page	Page suivante
-	No actions. Press ● to record.	Aucune action. Appuyez sur ● pour enregistrer.
+	No actions. Press ● to record.	Aucun script. Appuyez sur ● pour enregistrer.
 	No assets	Aucune ressource
 	No assets yet. Collect art with Object › Collect for Export, or drag it into the Asset Export panel.	Aucune ressource pour l’instant. Rassemblez des illustrations avec Objet › Rassembler pour l’exportation, ou faites-les glisser dans le panneau Exportation de ressources.
 	No Break	Sans coupure
 	No brushes	Aucune forme
-	No colors to recolor (preserved colors are left out).	Aucune couleur à recolorier (les couleurs conservées sont exclues).
+	No colors to recolor (preserved colors are left out).	Aucune couleur à redéfinir (les couleurs conservées sont exclues).
 	No CSS	Aucun CSS
 	No document	Aucun document
 	No Document	Aucun document
@@ -1733,7 +1733,7 @@
 	None (keep transparency)	Aucun (conserver la transparence)
 	None.	Aucun.
 	Normal	Normal
-	Normal Screen Mode	Mode Écran standard
+	Normal Screen Mode	Mode Écran normal
 	Note:	Remarque :
 	Nothing matches the Show filter.	Aucun élément ne correspond au filtre Afficher.
 	Nothing to print	Rien à imprimer
@@ -1864,7 +1864,7 @@
 	Outlines and Rules	Contours et filets
 	Output	Sortie
 	Output All Blacks Accurately	Rendre tous les noirs avec précision
-	Output All Blacks as Rich Black	Rendre tous les noirs en noir riche
+	Output All Blacks as Rich Black	Rendre tous les noirs en noir intense
 	Output Black	Noir de sortie
 	Output condition:	Condition de sortie :
 	Output Intent	Mode de sortie
@@ -1895,7 +1895,7 @@
 	Page	Page
 	Page information	Informations de page
 	Page Isolated Blending	Fusion isolée de la page
-	Page Knockout Group	Groupe de masquage de la page
+	Page Knockout Group	Groupe perçant de la page
 	Pages	Pages
 	Paintbrush	Pinceau
 	Paintbrush Tool	Outil Pinceau
@@ -1906,16 +1906,16 @@
 	Paragraph Style	Style de paragraphe
 	Paragraph Style Options	Options de style de paragraphe
 	Paragraph Styles	Styles de paragraphe
-	Paragraph Symbol	Pied-de-mouche
+	Paragraph Symbol	Symbole de paragraphe
 	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Fait partie d’ArtCraft. MIT OR Apache-2.0. Polices : Source Sans 3, Inter, JetBrains Mono (OFL). Icônes : Lucide (ISC) + VectorCraft.
 	Password	Mot de passe
 	Paste	Coller
-	Paste in Back	Coller à l’arrière-plan
-	Paste in Front	Coller au premier plan
-	Paste in Place	Coller à la même position
+	Paste in Back	Coller derrière
+	Paste in Front	Coller devant
+	Paste in Place	Coller sur place
 	Paste Offset	Décalage au collage
-	Paste on All Artboards	Coller sur tous les plans de travail
-	Paste Remembers Layers	Coller en conservant les calques
+	Paste on All Artboards	Coller dans tous les plans de travail
+	Paste Remembers Layers	Coller selon les calques mémorisés
 	Paste without Formatting	Coller sans mise en forme
 	Pasted	Collé
 	Pastels	Pastels
@@ -1961,17 +1961,17 @@
 	Perspective Grid Settings	Réglages de la grille de perspective
 	Perspective Grid Tool	Outil Grille de perspective
 	Perspective Plane Options…	Options du plan de perspective…
-	Perspective Selection Tool	Outil Sélection de perspective
+	Perspective Selection Tool	Outil Sélection d’une perspective
 	Phone 390×844	Téléphone 390×844
 	Picas	Picas
-	Pie Graph Tool	Outil Graphe à secteurs
-	Pixel Preview	Aperçu des pixels
+	Pie Graph Tool	Outil Graphe sectoriel
+	Pixel Preview	Aperçu en pixels
 	Pixels	Pixels
 	Place	Importer
 	Place DXF	Importer un fichier DXF
 	Place onto a new locked, dimmed template layer below the current layer	Importer dans un nouveau calque modèle verrouillé et estompé sous le calque actif
 	Place PDF	Importer un fichier PDF
-	Place Symbol Instance	Placer une occurrence de symbole
+	Place Symbol Instance	Importer une instance de symbole
 	Place the pages with the placement again	Importer de nouveau les pages avec le même placement
 	Placed File Info	Informations sur le fichier importé
 	Placement Options	Options de placement
@@ -2047,9 +2047,9 @@
 	Print Presets…	Paramètres prédéfinis d’impression…
 	Print Preview	Aperçu avant impression
 	Print Setup	Configuration de l’impression
-	Print Tiling	Mosaïque d’impression
-	Print Tiling Pages	Pages de la mosaïque d’impression
-	Print Tiling Tool	Outil Mosaïque d’impression
+	Print Tiling	Limites d’impression
+	Print Tiling Pages	Pages des limites d’impression
+	Print Tiling Tool	Outil Limites d’impression
 	Printer	Imprimante
 	Printer mark type:	Type de repères d’impression :
 	Printer profile:	Profil de l’imprimante :
@@ -2073,7 +2073,7 @@
 	Hindi	Hindi
 	Farsi	Farsi
 	Proportional Oldstyle	Elzévirien proportionnel
-	Pucker & Bloat…	Contracter et dilater…
+	Pucker & Bloat…	Contraction et dilatation…
 	Pucker Tool	Outil Contraction
 	Punctuation	Ponctuation
 	Punctuation Space	Espace de ponctuation
@@ -2147,11 +2147,11 @@
 	Recent Font 9	Police récente 9
 	Recent Fonts	Polices récentes
 	Recent URLs	URL récentes
-	Recolor	Recolorier
-	Recolor Artwork	Recolorier la composition
-	Recolor Artwork…	Recolorier la composition…
-	Recolor this row	Recolorier cette ligne
-	Recolor with Preset	Recolorier avec un paramètre prédéfini
+	Recolor	Redéfinir les couleurs
+	Recolor Artwork	Redéfinir les couleurs de l’illustration
+	Recolor Artwork…	Redéfinir les couleurs de l’illustration…
+	Recolor this row	Redéfinir les couleurs de cette ligne
+	Recolor with Preset	Redéfinir les couleurs avec un paramètre prédéfini
 	Recover Documents	Récupérer les documents
 	Recovery Data	Données de récupération
 	Rectangle	Rectangle
@@ -2214,14 +2214,14 @@
 	Registration marks	Repères de montage
 	Registry name:	Nom du registre :
 	Regular	Normal
-	Release	Libérer
-	Release Compound Shape	Libérer la forme composée
-	Release Guides	Libérer les repères
+	Release	Annuler
+	Release Compound Shape	Annuler la forme composée
+	Release Guides	Annuler les repères
 	Release Opacity Mask	Annuler le masque d’opacité
 	Release Selection	Libérer la sélection
 	Release to Layers (Build)	Diviser en calques (cumul)
 	Release to Layers (Sequence)	Diviser en calques (séquence)
-	Release with Perspective	Libérer avec la perspective
+	Release with Perspective	Annuler avec la perspective
 	Relink	Lier à nouveau
 	Relink Linked Files to the Document	Lier à nouveau les fichiers liés au document
 	Relink to Folder…	Lier à nouveau à un dossier…
@@ -2267,13 +2267,13 @@
 	Replace	Remplacer
 	Replace Font	Remplacer la police
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Remplacez-le par un autre fichier ou ignorez-le : ses images continueront d’afficher l’aperçu enregistré avec le document.
-	Replace Spine	Remplacer la colonne vertébrale
+	Replace Spine	Remplacer la dorsale
 	Replace Symbol	Remplacer le symbole
 	Replace With Font	Remplacer par la police
 	Replaces the saved preset of that name.	Remplace le paramètre prédéfini enregistré sous ce nom.
 	Replace…	Remplacer…
 	Require a password to open the document	Exiger un mot de passe pour ouvrir le document
-	Reselect	Sélectionner à nouveau
+	Reselect	Resélectionner
 	Reset	Réinitialiser
 	Reset Bounding Box	Réinitialiser le cadre de sélection
 	Reset Envelope Mesh	Réinitialiser le filet de l’enveloppe
@@ -2284,7 +2284,7 @@
 	Reset Panel	Réinitialiser le panneau
 	Reset Preferences	Réinitialiser les préférences
 	Reset Profiles	Réinitialiser les profils
-	Reset Rotate View	Réinitialiser la rotation de la vue
+	Reset Rotate View	Réinitialiser la rotation de l’affichage
 	Reset the rows to the artwork's colors	Réinitialiser les lignes avec les couleurs de l’illustration
 	Reset to Default	Rétablir les valeurs par défaut
 	Reset to White, Black	Réinitialiser à blanc, noir
@@ -2312,7 +2312,7 @@
 	Reverse Path Direction	Inverser le sens du tracé
 	Reverse Path Direction Off	Inversion du sens du tracé désactivée
 	Reverse Path Direction On	Inversion du sens du tracé activée
-	Reverse Spine	Inverser la colonne vertébrale
+	Reverse Spine	Inverser la dorsale
 	Revert	Version précédente
 	Revert to the saved version of “{name}”?	Revenir à la version enregistrée de « {name} » ?
 	Replace “{name}”, the file this document was opened from?	Remplacer « {name} », le fichier à partir duquel ce document a été ouvert ?
@@ -2333,20 +2333,20 @@
 	Rotate	Rotation
 	Rotate 90° CW	Rotation de 90° horaire
 	Rotate Tool	Outil Rotation
-	Rotate View Tool	Outil Faire pivoter la vue
+	Rotate View Tool	Outil Faire pivoter l’affichage
 	Rotate…	Rotation…
 	Rotation	Rotation
-	Roughen…	Distorsion grossière…
+	Roughen…	Rugosité…
 	Round Cap	Extrémité arrondie
 	Round Corners…	Arrondis…
-	Round Join	Raccord arrondi
+	Round Join	Sommet arrondi
 	Rounded	Arrondi
 	Rounded Rectangle	Rectangle arrondi
 	Rounded Rectangle Tool	Outil Rectangle arrondi
 	Rounded Rectangle…	Rectangle arrondi…
 	Row Size:	Taille des lignes :
 	Rows:	Lignes :
-	Rule:	Filet :
+	Rule:	Règle :
 	Rulers	Règles
 	Rulers & Grids	Règles et grilles
 	Run Plug-in	Exécuter le module externe
@@ -2469,17 +2469,17 @@
 	Scale…	Mise à l’échelle…
 	Scaling	Mise à l’échelle
 	Scaling:	Mise à l’échelle :
-	Scallop Tool	Outil Festons
+	Scallop Tool	Outil Feston
 	Scans:	Analyses :
 	Scatter	Dispersion
-	Scatter Graph Tool	Outil Graphe de dispersion
+	Scatter Graph Tool	Outil Graphe à nuage de points
 	Scissors Tool	Outil Ciseaux
 	Scratch Disks	Disques de travail
 	Screen	Superposition
 	Screen (72 ppi)	Écran (72 ppp)
 	Screen Mode	Mode d’affichage
 	Screens	Écrans
-	Scribble…	Griffonnage…
+	Scribble…	Gribouillage…
 	Script / Brush	Manuscrite / Pinceau
 	Scripts	Scripts
 	Search	Rechercher
@@ -2498,7 +2498,7 @@
 	Select All	Tout sélectionner
 	Select All Art on Layer	Sélectionner toute l’illustration du calque
 	Select All Assets	Sélectionner toutes les ressources
-	Select All Instances	Sélectionner toutes les occurrences
+	Select All Instances	Sélectionner toutes les instances
 	Select All Pins	Sélectionner toutes les épingles
 	Select All Unused	Sélectionner tous les éléments inutilisés
 	Select an image to see its Link Info.	Sélectionnez une image pour afficher les informations sur son lien.
@@ -2511,7 +2511,7 @@
 	Select art and click New Symbol to make one.	Sélectionnez une illustration et cliquez sur Nouveau symbole pour en créer un.
 	Select art and use New Brush to make one.	Sélectionnez une illustration et utilisez Nouvelle forme pour en créer une.
 	Select Freeform Point	Sélectionner un point libre
-	Select Gradient Stop	Sélectionner un point de dégradé
+	Select Gradient Stop	Sélectionner une étape de dégradé
 	Select Guides	Sélectionner les repères
 	Select Objects	Sélectionner des objets
 	Select objects to see their CSS, or Generate CSS for the whole document.	Sélectionnez des objets pour afficher leur CSS, ou utilisez Générer le CSS pour tout le document.
@@ -2562,17 +2562,17 @@
 	Setup…	Configuration…
 	Shadows and Glows	Ombres et lueurs
 	Shape	Forme
-	Shape Builder	Concepteur de formes
-	Shape Builder Regions	Zones du Concepteur de formes
-	Shape Builder Tool	Outil Concepteur de formes
+	Shape Builder	Concepteur de forme
+	Shape Builder Regions	Zones du Concepteur de forme
+	Shape Builder Tool	Outil Concepteur de forme
 	Shape Effects	Effets de forme
 	Shape Modes:	Modes de forme :
 	Shape Properties:	Propriétés de la forme :
 	Shaper Tool	Outil Shaper
 	Shapes	Formes
-	Shear	Distorsion
-	Shear Tool	Outil Distorsion
-	Shear…	Distorsion…
+	Shear	Déformation
+	Shear Tool	Outil Déformation
+	Shear…	Déformation…
 	Shell Lower…	Coquillage inférieur…
 	Shell Upper…	Coquillage supérieur…
 	Shift	Maj
@@ -2597,7 +2597,7 @@
 	Show Color Swatches	Afficher les nuances de couleur
 	Show Corner Widget	Afficher le widget d’angle
 	Show East Asian Options	Afficher les options d’Asie orientale
-	Show Edges	Afficher les bords
+	Show Edges	Afficher les contours
 	Show Embedded	Afficher les éléments incorporés
 	Show Find Field	Afficher le champ de recherche
 	Show Font Names in English	Afficher les noms de police en anglais
@@ -2626,7 +2626,7 @@
 	Show Pattern Swatches	Afficher les nuances de motif
 	Show Perspective Grid	Afficher la grille de perspective
 	Show Pixel Grid (Above 600% Zoom)	Afficher la grille de pixels (zoom supérieur à 600 %)
-	Show Print Tiling	Afficher la mosaïque d’impression
+	Show Print Tiling	Afficher les limites d’impression
 	Show Rulers	Afficher les règles
 	Show Rulers (⌘R)	Afficher les règles (⌘R)
 	Show Slice Numbers	Afficher les numéros de tranche
@@ -2691,9 +2691,9 @@
 	Small Thumbnail View	Petites vignettes
 	Small Thumbnails	Petites vignettes
 	Smaller ↔ Larger	Plus petit ↔ Plus grand
-	Smart Guides	Repères commandés
-	Smart Guides (View → Smart Guides)	Repères commandés (Affichage → Repères commandés)
-	Smart Guides (⌘U)	Repères commandés (⌘U)
+	Smart Guides	Repères commentés
+	Smart Guides (View → Smart Guides)	Repères commentés (Affichage → Repères commentés)
+	Smart Guides (⌘U)	Repères commentés (⌘U)
 	Smart Punctuation…	Ponctuation typographique…
 	Smooth	Lisser
 	Corner	Angle
@@ -2704,16 +2704,16 @@
 	Snap Curves To Lines	Aimanter les courbes aux lignes
 	View:	Affichage :
 	Tracing Result	Résultat de la vectorisation
-	Tracing Result with Outlines	Résultat de la vectorisation avec contours
+	Tracing Result with Outlines	Résultat de la vectorisation avec tracés
 	Outlines	Contours
-	Outlines with Source Image	Contours avec l’image source
+	Outlines with Source Image	Tracés avec l’image source
 	Source Image	Image source
 	Image Trace View	Affichage de la vectorisation de l’image
 	Snap Options	Options de magnétisme
-	Snap to Glyph	Aimanter au glyphe
-	Snap to Grid	Aimanter à la grille
-	Snap to Pixel	Aimanter au pixel
-	Snap to Point	Aimanter au point
+	Snap to Glyph	Magnétisme du glyphe
+	Snap to Grid	Magnétisme de la grille
+	Snap to Pixel	Magnétisme du pixel
+	Snap to Point	Magnétisme du point
 	Snapping Tolerance	Tolérance du magnétisme
 	Social Square Post 1080×1080	Publication carrée pour réseaux sociaux 1080×1080
 	Soft Light	Lumière tamisée
@@ -2737,10 +2737,10 @@
 	Spiral	Spirale
 	Spiral Tool	Outil Spirale
 	Split Freeform Line	Scinder la ligne libre
-	Split Into Grid	Diviser en grille
+	Split Into Grid	Découper en grille
 	Total:	Total :
 	Add Guides	Ajouter des repères
-	Split Into Grid…	Diviser en grille…
+	Split Into Grid…	Découper en grille…
 	Split Path	Scinder le tracé
 	spot	ton direct
 	Spot Color	Ton direct
@@ -2750,7 +2750,7 @@
 	Square	Carré
 	Squeeze…	Compression…
 	Stacked Bar Graph Tool	Outil Graphe à barres empilées
-	Stacked Column Graph Tool	Outil Graphe à colonnes empilées
+	Stacked Column Graph Tool	Outil Graphe à barres verticales empilées
 	Stair Step	En escalier
 	Standard Ligatures	Ligatures standard
 	Standard Vertical Roman Alignment	Alignement vertical standard des caractères romains
@@ -2823,8 +2823,8 @@
 	Rename Library…	Renommer la bibliothèque…
 	Delete the library “{name}”?	Supprimer la bibliothèque « {name} » ?
 	Drag art or swatches here, or use + to add the selection's colors and text styles.	Faites glisser ici des illustrations ou des nuances, ou utilisez + pour ajouter les couleurs et les styles de texte de la sélection.
-	Its graphics, colors and text styles are deleted from this machine.	Ses graphismes, couleurs et styles de texte sont supprimés de cet ordinateur.
-	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	Conservez ici des graphismes, des couleurs et des styles de texte pour les utiliser dans n’importe quel document. Les bibliothèques sont stockées sur cet ordinateur, sans compte.
+	Its graphics, colors and text styles are deleted from this machine.	Ses graphiques, couleurs et styles de texte sont supprimés de cet ordinateur.
+	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	Conservez ici des graphiques, des couleurs et des styles de texte pour les utiliser dans n’importe quel document. Les bibliothèques sont stockées sur cet ordinateur, sans compte.
 	This library is empty	Cette bibliothèque est vide
 	Add to Library	Ajouter à la bibliothèque
 	Delete Library	Supprimer la bibliothèque
@@ -2850,20 +2850,20 @@
 	Rename Library	Renommer la bibliothèque
 	Show Library	Afficher la bibliothèque
 	Use Library Item	Utiliser l’élément de la bibliothèque
-	Graphic	Graphisme
+	Graphic	Graphique
 	Show all open documents	Afficher tous les documents ouverts
-	Symbol Instance	Occurrence de symbole
+	Symbol Instance	Instance de symbole
 	Symbol Libraries	Bibliothèques de symboles
 	Symbol Libraries (on the roadmap)	Bibliothèques de symboles (prévu dans la feuille de route)
-	Symbol Screener Tool	Outil Transparence de symbole
-	Symbol Scruncher Tool	Outil Contraction de symbole
-	Symbol Shifter Tool	Outil Déplacement de symbole
-	Symbol Sizer Tool	Outil Redimensionnement de symbole
-	Symbol Spinner Tool	Outil Rotation de symbole
+	Symbol Screener Tool	Outil Transparence de symboles
+	Symbol Scruncher Tool	Outil Espacement de symboles
+	Symbol Shifter Tool	Outil Glissement de symboles
+	Symbol Sizer Tool	Outil Redimensionnement de symboles
+	Symbol Spinner Tool	Outil Rotation de symboles
 	Symbol Sprayer	Pulvérisation de symboles
 	Symbol Sprayer Tool	Outil Pulvérisation de symboles
-	Symbol Stainer Tool	Outil Coloration de symbole
-	Symbol Styler Tool	Outil Style de symbole
+	Symbol Stainer Tool	Outil Coloration de symboles
+	Symbol Styler Tool	Outil Stylisation de symboles
 	Symbolism Tool	Outil Symbolisme
 	Symbols	Symboles
 	System Layout	Disposition système
@@ -2887,16 +2887,16 @@
 	Text Fill Color	Couleur de fond du texte
 	Text Import Options	Options d’importation du texte
 	Text Stroke Color	Couleur de contour du texte
-	Text Wrap	Habillage
-	Text Wrap Options	Options d’habillage
-	Text Wrap Options…	Options d’habillage…
+	Text Wrap	Habillage de texte
+	Text Wrap Options	Options d’habillage de texte
+	Text Wrap Options…	Options d’habillage de texte…
 	The bounds of the visible art.	Les limites de l’illustration visible.
 	The cell shows the type object's text as HTML.	La cellule affiche le texte de l’objet texte au format HTML.
 	The document has no colour swatches.	Le document ne contient aucune nuance de couleur.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	Le bord du papier que l’imprimante ne peut pas atteindre : l’illustration reste à l’intérieur, et l’aperçu l’affiche en pointillés.
 	The page as it prints	La page telle qu’elle s’imprime
 	the preset	le paramètre prédéfini
-	The Print Tiling tool placed the pages.	L’outil Mosaïque d’impression a placé les pages.
+	The Print Tiling tool placed the pages.	L’outil Limites d’impression a placé les pages.
 	The selected objects have no CSS of their own (see below).	Les objets sélectionnés n’ont pas de CSS propre (voir ci-dessous).
 	The system's settings of this printer	Les réglages système de cette imprimante
 	Thin Space	Espace fine
@@ -2956,8 +2956,8 @@
 	Transform	Transformation
 	Transform Again	Répéter la transformation
 	Transform Both	Transformer les deux
-	Transform Each	Transformer individuellement
-	Transform Each…	Transformer individuellement…
+	Transform Each	Transformation répartie
+	Transform Each…	Transformation répartie…
 	Transform in Perspective	Transformer en perspective
 	Transform Object Only	Transformer l’objet uniquement
 	Transform Panel	Panneau Transformation
@@ -2983,7 +2983,7 @@
 	Trim	Détourage
 	Trim mark weight:	Épaisseur des traits de coupe :
 	Trim marks	Traits de coupe
-	Trim View	Vue rognée
+	Trim View	Affichage rogné
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Les couleurs vraies nécessitent la version 2004 ou ultérieure : la plus proche des 256 couleurs est écrite.
 	Turn off Data Recovery for complex documents	Désactiver la récupération des données pour les documents complexes
 	Tweak…	Retoucher…
@@ -3144,7 +3144,7 @@
 	Vertical %	% vertical
 	Vertical Align Bottom	Alignement vertical en bas
 	Vertical Align Center	Alignement vertical au centre
-	Horizontal & Vertical Align Center	Alignement centré horizontal et vertical
+	Horizontal & Vertical Align Center	Alignement horizontal et vertical au centre
 	Vertical Align Top	Alignement vertical en haut
 	Vertical Area Type Tool	Outil Texte captif vertical
 	Vertical Distribute Bottom	Répartition verticale en bas
@@ -3195,7 +3195,7 @@
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
-	Wrinkle Tool	Outil Fronce
+	Wrinkle Tool	Outil Fronces
 	Write Layers	Écrire les calques
 	XML ID	ID XML
 	Yards	Yards
@@ -3440,9 +3440,9 @@ axis	Both	Les deux
 @msg	Packaged {n} file(s) in {folder}{note}	{n} fichier(s) assemblé(s) dans {folder}{note}
 @msg	Packaged {n} file(s){note}	{n} fichier(s) assemblé(s){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
-@msg	Release Guides: no guides	Libérer les repères : aucun repère
-@msg	Release: no layer to put the rectangle in	Libérer : aucun calque où placer le rectangle
-@msg	Replace Spine: select a blend and a path	Remplacer la trajectoire : sélectionnez un dégradé de formes et un tracé
+@msg	Release Guides: no guides	Annuler les repères : aucun repère
+@msg	Release: no layer to put the rectangle in	Annuler : aucun calque où placer le rectangle
+@msg	Replace Spine: select a blend and a path	Remplacer la dorsale : sélectionnez un dégradé de formes et un tracé
 @msg	select two or more objects to distribute	sélectionnez au moins deux objets à répartir
 @msg	select paths or anchor points	sélectionnez des tracés ou des points d’ancrage
 @msg	SVG parse error: {0}	Erreur d’analyse SVG : {0}
@@ -3452,10 +3452,10 @@ axis	Both	Les deux
 @msg	Saved to User Defined: {_1}	Enregistré dans Défini par l’utilisateur : {_1}
 @msg	Saved {path}	{path} enregistré
 @msg	Select text or click into text with the Type tool to insert glyphs	Sélectionnez du texte ou cliquez dans un texte avec l’outil Texte pour insérer des glyphes
-@msg	Shape Builder: no region under the pointer	Concepteur de formes : aucune zone sous le pointeur
-@msg	Shape Builder: select paths or compound paths	Concepteur de formes : sélectionnez des tracés ou des tracés transparents
+@msg	Shape Builder: no region under the pointer	Concepteur de forme : aucune zone sous le pointeur
+@msg	Shape Builder: select paths or compound paths	Concepteur de forme : sélectionnez des tracés ou des tracés transparents
 @msg	Show All Hidden Attributes: nothing is hidden	Afficher tous les attributs masqués : rien n’est masqué
-@msg	Split Into Grid: select paths large enough for the grid	Diviser en grille : sélectionnez des tracés assez grands pour la grille
+@msg	Split Into Grid: select paths large enough for the grid	Découper en grille : sélectionnez des tracés assez grands pour la grille
 @msg	Targa files are RGB: colorModel rgb	Les fichiers Targa sont en RVB : colorModel rgb
 @msg	Text Wrap: select a wrap object	Habillage de texte : sélectionnez un objet d’habillage
 @msg	`aspect` must be a number (%)	`aspect` doit être un nombre (%)
@@ -3507,7 +3507,7 @@ axis	Both	Les deux
 @msg	a document needs at least one artboard	un document doit avoir au moins un plan de travail
 @msg	a document needs at least one layer	un document doit avoir au moins un calque
 @msg	a freeform gradient keeps at least one point	un dégradé de forme libre garde au moins un point
-@msg	a gradient needs at least two stops	un dégradé doit avoir au moins deux points de couleur
+@msg	a gradient needs at least two stops	un dégradé doit avoir au moins deux étapes de dégradé
 @msg	a graphic style named `{to}` already exists	un style graphique nommé `{to}` existe déjà
 @msg	a page is missing	une page est manquante
 @msg	a page out of range	une page hors limites
@@ -3635,7 +3635,7 @@ axis	Both	Les deux
 @msg	no files to place	aucun fichier à importer
 @msg	no format to export to	aucun format d’exportation
 @msg	no free recovery area	aucune zone de récupération libre
-@msg	no gradient stop or freeform point is selected	aucun point de couleur ni point de forme libre n’est sélectionné
+@msg	no gradient stop or freeform point is selected	aucune étape de dégradé ni point de forme libre n’est sélectionné
 @msg	no graphic style `{name}`	aucun style graphique `{name}`
 @msg	no graphic style `{n}`	aucun style graphique `{n}`
 @msg	no interaction in progress	aucune interaction en cours
@@ -3664,7 +3664,7 @@ axis	Both	Les deux
 @msg	no selected slice in the image: select slices, or save all of them	aucune tranche sélectionnée dans l’image : sélectionnez des tranches ou enregistrez-les toutes
 @msg	no selection bounds	la sélection n’a pas de limites
 @msg	no slice selected	aucune tranche sélectionnée
-@msg	no such action	action inexistante
+@msg	no such action	script inexistant
 @msg	no such anchor	point d’ancrage inexistant
 @msg	no such artboard	plan de travail inexistant
 @msg	no such document	document inexistant
@@ -3681,7 +3681,7 @@ axis	Both	Les deux
 @msg	no such width point	point de largeur inexistant
 @msg	no swatch `{name}`	aucune nuance `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	aucune bibliothèque de nuances `{l}` (voir swatch.library.list)
-@msg	no symbol instances selected	aucune occurrence de symbole sélectionnée
+@msg	no symbol instances selected	aucune instance de symbole sélectionnée
 @msg	no target object has an opacity mask: select one or give `id`	aucun objet ciblé n’a de masque d’opacité : sélectionnez-en un ou indiquez `id`
 @msg	no threaded text selected	aucun texte lié sélectionné
 @msg	no user library folder here	aucun dossier de bibliothèques utilisateur ici
@@ -3748,7 +3748,7 @@ axis	Both	Les deux
 @msg	select a linked image: an embedded one has no file	sélectionnez une image liée : une image incorporée n’a pas de fichier
 @msg	select a repeat	sélectionnez une répétition
 @msg	select a stroke with a variable width	sélectionnez un contour de largeur variable
-@msg	select a symbol instance	sélectionnez une occurrence de symbole
+@msg	select a symbol instance	sélectionnez une instance de symbole
 @msg	select an Image Trace object	sélectionnez un objet de vectorisation de l’image
 @msg	could not decode image: {0}	impossible de décoder l’image : {0}
 @msg	image is empty	l’image est vide
@@ -3757,7 +3757,7 @@ axis	Both	Les deux
 @msg	select an envelope	sélectionnez une enveloppe
 @msg	select an image	sélectionnez une image
 @msg	select an object in perspective	sélectionnez un objet en perspective
-@msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) à recolorier
+@msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) dont redéfinir les couleurs
 @msg	select at least two objects	sélectionnez au moins deux objets
 @msg	select objects, not layers	sélectionnez des objets, pas des calques
 @msg	select one path, or give its `id`	sélectionnez un tracé ou indiquez son `id`
@@ -3772,9 +3772,9 @@ axis	Both	Les deux
 @msg	shadings of more than 4096 patches or triangles were left out	les ombrages de plus de 4096 carreaux ou triangles ont été ignorés
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	les ombrages dont les fonctions sont de type inconnu sont remplis de leur couleur médiane
 @msg	shortcut for `{k}` must be a string	le raccourci de `{k}` doit être une chaîne
-@msg	stop {i} needs `offset`	le point de couleur {i} nécessite `offset`
-@msg	stop {i} needs a valid `color`	le point de couleur {i} nécessite une `color` valide
-@msg	stop {i}: `{k}` must be a number	point de couleur {i} : `{k}` doit être un nombre
+@msg	stop {i} needs `offset`	l’étape de dégradé {i} nécessite `offset`
+@msg	stop {i} needs a valid `color`	l’étape de dégradé {i} nécessite une `color` valide
+@msg	stop {i}: `{k}` must be a number	étape de dégradé {i} : `{k}` doit être un nombre
 @msg	the EMF header is damaged	l’en-tête EMF est endommagé
 @msg	the PDF has no pages	le PDF n’a aucune page
 @msg	the PDF is no longer loaded	le PDF n’est plus chargé
@@ -3985,7 +3985,7 @@ axis	Both	Les deux
 	The dialog was closed before its file dialog answered	La boîte de dialogue a été fermée avant la réponse de sa boîte de dialogue de fichiers
 	Shaper	Shaper
 	Expand Shaper Group	Décomposer le groupe Shaper
-	Release Shaper Group	Libérer le groupe Shaper
+	Release Shaper Group	Annuler le groupe Shaper
 	Select Shaper Face	Sélectionner la face Shaper
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Faites glisser ici des illustrations, des couleurs et des styles de texte pour les réutiliser d’un document à l’autre. Les bibliothèques sont enregistrées sur cet ordinateur — aucun compte n’est nécessaire.
 	1 Color Job	Travail 1 couleur
@@ -4040,18 +4040,18 @@ axis	Both	Les deux
 	Duplication	Duplication
 	Interpolation	Interpolation
 @msg	Imported library {name}	Bibliothèque {name} importée
-	RGB:	RGB:
-	CMYK:	CMYK:
+	RGB:	RVB :
+	CMYK:	CMJN :
 	Texture	Texture
 	Craquelure…	Craquelure…
 	Grain…	Grain…
-	Mosaic Tiles…	Carreaux de mosaïque…
+	Mosaic Tiles…	Effet mosaïque…
 	Patchwork…	Patchwork…
 	Stained Glass…	Vitrail…
 	Texturizer…	Placage de texture…
 	Craquelure	Craquelure
 	Grain	Grain
-	Mosaic Tiles	Carreaux de mosaïque
+	Mosaic Tiles	Effet mosaïque
 	Patchwork	Patchwork
 	Stained Glass	Vitrail
 	Texturizer	Placage de texture
@@ -4092,12 +4092,12 @@ effect	Soft	Doux
 	Short	Courte
 	Full Width	Toute la largeur
 	Distort	Déformation
-	Diffuse Glow…	Diffusion lumineuse…
+	Diffuse Glow…	Lueur diffuse…
 	Glass…	Verre…
-	Ocean Ripple…	Ondulation océanique…
-	Diffuse Glow	Diffusion lumineuse
+	Ocean Ripple…	Océan…
+	Diffuse Glow	Lueur diffuse
 	Glass	Verre
-	Ocean Ripple	Ondulation océanique
+	Ocean Ripple	Océan
 	Graininess	Granularité
 	Glow Amount	Intensité de la lueur
 	Clear Amount	Zone claire
@@ -4163,7 +4163,7 @@ effect	Soft	Doux
 lighting	Light	Lumière
 	Accented Edges…	Contours accentués…
 	Angled Strokes…	Traits obliques…
-	Crosshatch…	Hachures croisées…
+	Crosshatch…	Croisillons…
 	Dark Strokes…	Traits sombres…
 	Ink Outlines…	Contours à l'encre…
 	Spatter…	Éclaboussures…
@@ -4171,7 +4171,7 @@ lighting	Light	Lumière
 	Sumi-e…	Sumi-e…
 	Accented Edges	Contours accentués
 	Angled Strokes	Traits obliques
-	Crosshatch	Hachures croisées
+	Crosshatch	Croisillons
 	Dark Strokes	Traits sombres
 	Ink Outlines	Contours à l'encre
 	Spatter	Éclaboussures
@@ -4391,7 +4391,7 @@ lighting	Light	Lumière
 	Greeting Card	Carte de vœux
 	Grey	Gris
 	Grid Repeat	Répétition en grille
-	Group Selection	Sélection d’éléments du groupe
+	Group Selection	Sélection directe progressive
 	Guide	Repère
 	Gutter	Gouttière
 	Gutter:	Gouttière :
@@ -4444,7 +4444,7 @@ lighting	Light	Lumière
 	Low Fidelity Photo	Photo basse fidélité
 	Low Resolution	Basse résolution
 	Low resolution (150 ppi)	Basse résolution (150 ppp)
-	Make Text Wrap	Créer l’habillage
+	Make Text Wrap	Créer l’habillage de texte
 	Maximize Editability	Modification maximale
 	Measure	Mesure
 	Medium Resolution	Résolution moyenne
@@ -4510,8 +4510,8 @@ lighting	Light	Lumière
 	Radial Repeat	Répétition radiale
 	Rasterized Complex Regions	Zones complexes pixellisées
 	Relative Colorimetric	Colorimétrique relatif
-	Release Image Trace	Libérer la vectorisation de l’image
-	Release Text Wrap	Libérer l’habillage
+	Release Image Trace	Annuler la vectorisation de l’image
+	Release Text Wrap	Annuler l’habillage de texte
 	Remove the shortcut	Supprimer le raccourci
 	Reset Automation	Réinitialiser Automation
 	Reset Essentials Classic	Réinitialiser Essentials Classic
@@ -4526,7 +4526,7 @@ lighting	Light	Lumière
 	Reverse Triangle	Triangle inversé
 	Right Complement	Complément droit
 	Roman	Romain
-	Rotate View	Faire pivoter la vue
+	Rotate View	Faire pivoter l’affichage
 	Run Length	RLE (longueur de séquence)
 	SVG 1.1	SVG 1.1
 	Save Selection	Enregistrer la sélection
@@ -4535,7 +4535,7 @@ lighting	Light	Lumière
 	Scale X:	Échelle X :
 	Scale Y	Échelle Y
 	Scale Y:	Échelle Y :
-	Scallop	Festons
+	Scallop	Feston
 	Scissors	Ciseaux
 	Selected Slices	Tranches sélectionnées
 	Selected Styles Only (0)	Styles sélectionnés uniquement (0)
@@ -4545,7 +4545,7 @@ lighting	Light	Lumière
 	Set:	Jeu :
 	Shades	Tons foncés
 	Shades of Gray	Nuances de gris
-	Shear:	Distorsion :
+	Shear:	Déformation :
 	Shift+Click	Maj+clic
 	Shift+Drag	Maj+glisser
 	Shortcut	Raccourci
@@ -4636,7 +4636,7 @@ lighting	Light	Lumière
 	Web 1600×900	Web 1600×900
 	WebP	WebP
 	Working RGB	RVB de travail
-	Wrinkle	Fronce
+	Wrinkle	Fronces
 	X:	X :
 	Y:	Y :
 	[Custom]	[Personnalisé]
