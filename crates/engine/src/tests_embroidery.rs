@@ -2523,6 +2523,7 @@ fn designs_become_glyphs_to_type_with() {
 #[test]
 fn lettering_sews_in_order_joined_and_trimmed() {
     use sf_core::attr::Embroidery;
+    use vectorcraft_doc::{Node, NodeKind};
     // the first (or last) art with stitches in a glyph
     fn end(n: &Node, last: bool) -> Option<&Embroidery> {
         match &n.kind {
