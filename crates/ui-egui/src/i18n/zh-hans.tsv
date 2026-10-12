@@ -3843,3 +3843,4 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes no parameters	未知参数 `{key}`；该命令没有参数
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
+@msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制

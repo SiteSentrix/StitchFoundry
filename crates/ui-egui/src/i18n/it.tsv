@@ -4252,3 +4252,4 @@ lighting	Light	Luce
 @msg	unknown parameter `{key}`; the command takes no parameters	parametro sconosciuto `{key}`; il comando non ha parametri
 @msg	unknown parameter `{key}`; the command takes: {keys}	parametro sconosciuto `{key}`; il comando accetta: {keys}
 	Load EPS into Clipboard	Carica EPS negli appunti
+@msg	an image of {w} × {h} pixels is too large to draw	un'immagine di {w} × {h} pixel è troppo grande per essere disegnata

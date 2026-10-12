@@ -2193,7 +2193,8 @@ listed in `warnings`. Binary DXF and DWG files answer an error saying to save th
 
 `links.list {show?: all|missing|modified|embedded, sort?: name|kind|status}` lists every image in the layers, top
 first, as the Links panel does: `{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth,
-pixelHeight, path?, found?, page?, preview?}`. `links.info {id?}` is the Link Info: `image.info`'s fields plus
+pixelHeight, path?, found?, page?, preview?, note?}` (`note`: the image is too large to decode and isn't drawn;
+`document.open` and `file.place` say the same in their `warnings`). `links.info {id?}` is the Link Info: `image.info`'s fields plus
 `status`, `format`, the file's `ppi` and the `effectivePpi`, `scale` (% of 100%), `rotation` (degrees,
 counter-clockwise), `placement` and, for a linked file, `fileName`, `location`, `fileSize`, `created`, `modified`.
 `links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose

@@ -4683,3 +4683,4 @@ gradient-kind	Radial	Radial
 mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
+@msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
