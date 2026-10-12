@@ -32,6 +32,9 @@ fn tags_map_to_languages() {
     for tag in ["ko", "ko-KR", "ko_KR.UTF-8", "KO-kr"] {
         assert_eq!(lang_from_tag(tag), Some(ko()), "{tag}");
     }
+    for tag in ["vi", "vi-VN", "vi_VN.UTF-8", "VI-vn"] {
+        assert_eq!(lang_from_tag(tag), Some(vi()), "{tag}");
+    }
     // Traditional Chinese: by region, by script, and with a region after the script.
     assert_eq!(lang_from_tag("zh_TW.UTF-8"), Some(ZH()));
     assert_eq!(lang_from_tag("zh-TW"), Some(ZH()));
@@ -449,7 +452,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 11] = ["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pt-br", "ru", "uk"];
+const KEEPS_MENU_NAMES: [&str; 12] = ["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pt-br", "ru", "uk", "vi"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -660,6 +663,63 @@ fn korean_reads_as_korean() {
     }
     let nested = "command `object.group` is not available right now: nothing selected";
     assert_eq!(message(ko(), nested), "명령 `object.group`은(는) 지금 사용할 수 없습니다: 선택된 항목이 없습니다");
+}
+
+fn vi() -> Lang {
+    Lang::from_code("vi").expect("vi registered")
+}
+
+/// Vietnamese has one plural form and covers the complete interface and messages.
+#[test]
+fn vietnamese_reads_as_vietnamese() {
+    assert_eq!(vi().name(), "Tiếng Việt");
+    assert!(vi().complete_menus());
+    assert_eq!(Lang::from_pref("vi"), vi());
+    assert_eq!(Lang::from_pref("VI"), vi());
+    for (en, want) in [
+        ("Artboard Tool", "Công cụ Bảng vẽ"),
+        ("Swatches", "Mẫu màu"),
+        ("Stroke", "Nét"),
+        ("Fill", "Tô"),
+        ("Direct Selection Tool", "Công cụ Chọn trực tiếp"),
+        ("Save As…", "Lưu thành…"),
+        ("Undo", "Hoàn tác"),
+        ("Close", "Đóng"),
+    ] {
+        assert_eq!(tr(vi(), en), want);
+    }
+    for n in [0, 1, 3, 21] {
+        assert_eq!(trn(vi(), n, "{n} Layer", "{n} Layers"), format!("{n} lớp"));
+    }
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(vi(), nested), "lệnh `object.group` hiện không khả dụng: chưa chọn gì");
+}
+
+/// Ambiguous English terms keep their intended Vietnamese meaning across UI contexts.
+#[test]
+fn vietnamese_domain_terms_are_consistent() {
+    for (en, want) in [
+        ("All Scripts", "Tất cả hệ chữ"),
+        ("Pointillize", "Hiệu ứng chấm"),
+        ("Object Highlighting", "Đánh dấu đối tượng"),
+        ("Color Theme", "Bộ màu"),
+        ("Color Themes", "Bộ màu"),
+        ("Asset Export", "Xuất asset"),
+        ("Envelope Distort", "Biến dạng Envelope"),
+        ("Move Spine Point", "Di chuyển điểm trục"),
+        ("Dashed Line", "Đường nét đứt"),
+        ("Eyedropper Tool", "Công cụ Ống hút màu"),
+        ("Character Alignment", "Căn chỉnh ký tự"),
+    ] {
+        assert_eq!(tr(vi(), en), want, "{en}");
+    }
+    assert_eq!(tr(vi(), "Appearance"), "Diện mạo");
+    assert_eq!(tr_ctx(vi(), "theme", "Appearance"), "Giao diện");
+    assert_eq!(message(vi(), "no saved themes"), "chưa có bộ màu nào được lưu");
+    assert_eq!(message(vi(), r#"choice must be "merge" or "add", not `foo`"#), r#"lựa chọn phải là "merge" hoặc "add", không phải `foo`"#);
+    assert_eq!(message(vi(), "select a blend"), "hãy chọn một đối tượng hòa trộn");
+    assert_eq!(message(vi(), "select a repeat"), "hãy chọn một đối tượng lặp");
+    assert_eq!(message(vi(), "Replace Spine: select a blend and a path"), "Thay thế trục: chọn một đối tượng hòa trộn và một đường dẫn");
 }
 
 fn uk() -> Lang {
@@ -1103,7 +1163,7 @@ fn select_key_param_error_is_translated() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "ru", "uk"];
+const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "ru", "uk", "vi"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
