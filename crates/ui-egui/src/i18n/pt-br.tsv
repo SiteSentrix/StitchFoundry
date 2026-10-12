@@ -3803,3 +3803,9 @@ machine	Trim	Corte de linha
 	Graded	Graduado
 	Width at end	Largura no final
 	Row spacing	Espaçamento entre fileiras
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	Ponto E
+	Rings (0: all)	Anéis (0: todos)
+	Add Laydown	Adicionar base de assentamento
+	Zigzag	Zigue-zague

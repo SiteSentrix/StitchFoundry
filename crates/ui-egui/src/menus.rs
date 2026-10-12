@@ -98,7 +98,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("Clear Split Lines", "embroidery.clearSplits"),
         sub(
             "Place Motif",
-            ["Wave", "Scallop", "Diamond", "Cross", "Feather", "Heart", "Star", "Leaf", "Loop"]
+            ["Wave", "Scallop", "Diamond", "Cross", "Feather", "Heart", "Star", "Leaf", "Loop", "Zigzag", "E-stitch"]
                 .into_iter()
                 .map(|m| cp(m, "embroidery.placeMotif", json!({ "motif": m.to_lowercase() })))
                 .collect(),
@@ -108,6 +108,7 @@ fn embroidery_menu() -> Vec<Item> {
         Sep,
         c("Remove Holes", "embroidery.removeHoles"),
         c("Fill Holes", "embroidery.fillHoles"),
+        c("Add Laydown", "embroidery.addLaydown"),
         Sep,
         c("Sort by Thread Color", "embroidery.sortByColor"),
         c("Match Threads to Chart", "embroidery.matchThreads"),

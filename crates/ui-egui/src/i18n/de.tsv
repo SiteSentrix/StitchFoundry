@@ -4492,3 +4492,8 @@ machine	Stop	Stopp
 	Graded	Abgestuft
 	Width at end	Breite am Ende
 	Row spacing	Reihenabstand
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	E-Stich
+	Rings (0: all)	Ringe (0: alle)
+	Add Laydown	Unterlagefläche hinzufügen

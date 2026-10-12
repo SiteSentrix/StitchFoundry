@@ -518,6 +518,12 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                     set(app, target, json!({ "stitch_length": v }));
                 }
             }
+            // an offset fill: only so many rings in from the outline
+            if f.kind == FillKind::Contour
+                && let Some(v) = num(ui, tl!("Rings (0: all)"), "frings", f64::from(f.rings), "", 0)
+            {
+                set(app, target, json!({ "rings": v.round().clamp(0.0, 500.0) as u32 }));
+            }
             if f.kind == FillKind::Motif {
                 if let Some(m) = pick_motif(ui, f.motif) {
                     set(app, target, json!({ "motif": m }));
@@ -656,7 +662,19 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
 
 /// The motif dropdown: the motif picked, if it changed.
 fn pick_motif(ui: &mut Ui, current: Motif) -> Option<Motif> {
-    let names = [tl!("Wave"), tl!("Scallop"), tl!("Diamond"), tl!("Cross"), tl!("Feather"), tl!("Heart"), tl!("Star"), tl!("Leaf"), tl!("Loop")];
+    let names = [
+        tl!("Wave"),
+        tl!("Scallop"),
+        tl!("Diamond"),
+        tl!("Cross"),
+        tl!("Feather"),
+        tl!("Heart"),
+        tl!("Star"),
+        tl!("Leaf"),
+        tl!("Loop"),
+        tl!("Zigzag"),
+        tl!("E-stitch"),
+    ];
     let cur = Motif::ALL.iter().position(|m| *m == current).unwrap_or(0);
     pick(ui, tl!("Motif"), "motif", cur, &names).and_then(|i| Motif::ALL.get(i).copied())
 }

@@ -555,11 +555,26 @@ pub enum Motif {
     Star,
     Leaf,
     Loop,
+    /// An open zigzag: in a motif fill, a zigzag fill.
+    Zigzag,
+    /// A blanket prong: in a motif fill, an E-stitch fill.
+    EStitch,
 }
 
 impl Motif {
-    pub const ALL: [Motif; 9] =
-        [Motif::Wave, Motif::Scallop, Motif::Diamond, Motif::Cross, Motif::Feather, Motif::Heart, Motif::Star, Motif::Leaf, Motif::Loop];
+    pub const ALL: [Motif; 11] = [
+        Motif::Wave,
+        Motif::Scallop,
+        Motif::Diamond,
+        Motif::Cross,
+        Motif::Feather,
+        Motif::Heart,
+        Motif::Star,
+        Motif::Leaf,
+        Motif::Loop,
+        Motif::Zigzag,
+        Motif::EStitch,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -572,6 +587,8 @@ impl Motif {
             Motif::Star => "Star",
             Motif::Leaf => "Leaf",
             Motif::Loop => "Loop",
+            Motif::Zigzag => "Zigzag",
+            Motif::EStitch => "E-stitch",
         }
     }
 }
@@ -983,6 +1000,13 @@ pub struct FillParams {
     /// Motif fills: the motif on the rows, and its size (mm, across the row and along it).
     pub motif: Motif,
     pub motif_size: f64,
+    /// Contour fills: how many rings in from the outline (an offset fill); 0 = all the way in.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub rings: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 impl Default for FillParams {
@@ -1004,6 +1028,7 @@ impl Default for FillParams {
             trapunto: false,
             motif: Motif::Wave,
             motif_size: 4.0,
+            rings: 0,
         }
     }
 }

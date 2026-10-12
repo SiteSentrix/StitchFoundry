@@ -4563,3 +4563,8 @@ machine	Stop	Zastavení
 	Graded	Odstupňované
 	Width at end	Šířka na konci
 	Row spacing	Rozestup řad
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	Steh E
+	Rings (0: all)	Kruhy (0: všechny)
+	Add Laydown	Přidat podkladovou vrstvu

@@ -366,7 +366,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | RE-03 | Automatic underlay | Done | | – |
 | RE-04 | Underlay by shape (choose per object), double zigzag | Done | Centre/edge/zigzag/double zigzag/tatami, automatic by width; per-type underlay presets through the current properties (SYS-02) | 1 |
 | RE-05 | Pull compensation, twin-sided (different per side) | Done | Pull compensation per side (`pull_comp_2`) | 1 |
-| RE-06 | Laydown (open base stitching for pile fabrics) | Missing | Open tatami/grid underlay layer object-wide | 2 |
+| RE-06 | Laydown (open base stitching for pile fabrics) | Done | Embroidery › Add Laydown: an open tatami under the selected shapes and type, a margin beyond them, sewn first | – |
 | SQ-01 | Remove underlying stitching (cut lower fills where upper objects cover) | Done | Per-object option with overlap (default 1 mm): fills sewn before it are cut by what it covers, live | 1 |
 | SQ-02 | Stitch angles, density | Done | | – |
 | SQ-03 | Remove small stitches | Done | | – |
@@ -392,7 +392,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | PS-03 | User-defined splits (draw split lines) | Done | Paths drawn over a tatami fill carved in as split lines (Embroidery › Carve Split Lines, `embroidery.setSplits`), shown dashed on the fill | – |
 | PS-04 | Carving stamps (embossed patterns pressed into fills) | Partial | Any closed shape's outline pressed in (Carve Split Lines); no stamp library yet | 2 |
 | CS-01 | Contour fill/outline | Done | | – |
-| CS-02 | Offset fills (concentric offsets) | Partial | Contour fill; add offset-ring fill with set count/spacing | 2 |
+| CS-02 | Offset fills (concentric offsets) | Done | Contour fill with a ring count and spacing (*Rings*) | – |
 | CS-03 | Spiral fills | Done | | – |
 | CS-04 | Radial (ripple) fills | Done | | – |
 | CS-05 | Flexi-splits (split lines following a curve) | Partial | A drawn curve repeated across the fill (`embroidery.carveSplits` `repeat`); split lines that follow the shape by themselves still missing | 2 |
@@ -413,8 +413,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SP-02 | Hand-stitch effect (random spacing and thickness) | Done | *Hand stitch* run style: thick (triple) stitches and thin gaps, lengths varied at random | – |
 | SP-03 | Jagged edges (random satin length) | Done | Satin *Jagged edges* on side 1, side 2 or both, up to a depth | – |
 | SP-04 | String stitching (long free-hanging threads) | Missing | Run with long stitches and anchors | 2 |
-| SP-05 | Zigzag and E-stitch borders/fills | Partial | Zigzag and blanket runs; add zigzag/E-stitch fills | 2 |
-| SP-06 | Stippling (random meandering run fill) | Partial | Meander fill; add stipple with stitch length and spacing controls | 2 |
+| SP-05 | Zigzag and E-stitch borders/fills | Done | Zigzag and blanket runs; zigzag and E-stitch motifs for motif fills | – |
+| SP-06 | Stippling (random meandering run fill) | Done | Meander fill: a rounded line that never crosses itself, with path spacing, stitch length and randomness | – |
 | SP-07 | Maze-like fills | Done | Meander | – |
 | SP-08 | Trapunto (open fill with raised outline effect) | Done | Tatami *Trapunto*: travel keeps to the outline (with an open density) | – |
 | SP-09 | Accordion spacing with custom profiles | Partial | Linear gradient spacing; add profile curves (2026 feature) | 2 |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 110 done,
-44 partial, 71 missing, 6 out of scope (counted 2026-10-12, after motifs). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 114 done,
+41 partial, 70 missing, 6 out of scope (counted 2026-10-12, after fill types and laydown). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -717,7 +717,8 @@ and target dir each) calendar time drops by roughly half.
 own and edited standard ones, MF-02 and MF-03, came last). Phase 0 is still open: nothing has been
 sewn on a real machine yet; the owner has the VP3 test kit. Phase 2 started on 2026-10-12 with
 tatami textures and split lines (PS-02…04, CS-05), then hand stitch, jagged edges and trapunto
-(SP-02, SP-03, SP-08), then motifs (MO-01, MO-03, MO-04).
+(SP-02, SP-03, SP-08), then motifs (MO-01, MO-03, MO-04), then offset, zigzag, E-stitch and stipple fills and laydown
+(CS-02, SP-05, SP-06, RE-06).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

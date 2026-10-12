@@ -4536,3 +4536,8 @@ machine	Stop	Parada
 	Graded	Graduado
 	Width at end	Ancho al final
 	Row spacing	Espaciado entre filas
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	Puntada E
+	Rings (0: all)	Anillos (0: todos)
+	Add Laydown	Añadir base de asentamiento

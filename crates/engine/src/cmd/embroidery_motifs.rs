@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Place Motif",
         [],
         None,
-        "{motif: wave|scallop|diamond|cross|feather|heart|star|leaf|loop, size?: mm (its length, 10), at?: [x, y] (its centre; default: the first artboard's centre), angle?: degrees} one motif as a path sewn in a single run, ready to move, scale and reshape → {id}",
+        "{motif: wave|scallop|diamond|cross|feather|heart|star|leaf|loop|zigzag|e-stitch, size?: mm (its length, 10), at?: [x, y] (its centre; default: the first artboard's centre), angle?: degrees} one motif as a path sewn in a single run, ready to move, scale and reshape → {id}",
         has_doc,
         place_motif
     )]

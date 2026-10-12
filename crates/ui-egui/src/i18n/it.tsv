@@ -4538,3 +4538,8 @@ machine	Stop	Arresto
 	Graded	Graduato
 	Width at end	Larghezza alla fine
 	Row spacing	Spaziatura delle file
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	Punto E
+	Rings (0: all)	Anelli (0: tutti)
+	Add Laydown	Aggiungi base di appoggio

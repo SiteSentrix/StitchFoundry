@@ -1546,3 +1546,38 @@ fn motif_fills_and_graded_motif_runs_are_stitch_parameters() {
     let sf_core::attr::StitchType::Run(r) = emb(&s, line).stitch else { panic!() };
     assert_eq!(r.width_end, Some(8.0));
 }
+
+#[test]
+fn a_laydown_is_sewn_first_under_the_selected_shapes() {
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 60.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#336699"})).unwrap();
+    let b = rect(&mut s, 160.0, 140.0, 80.0, 80.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let id = NodeId(s.execute("embroidery.addLaydown", &json!({"margin": 2.0})).unwrap()["id"].as_u64().unwrap());
+    // Below both, in the bottom one's thread, as an open tatami with no underlay.
+    let order = s.doc().unwrap().doc.paint_order([id, a, b]);
+    assert_eq!(order, vec![id, a, b]);
+    let e = emb(&s, id);
+    assert_eq!(e.thread.as_ref().map(|t| t.color), Some(Rgb::new(0x33, 0x66, 0x99)));
+    let f = fill_params(&s, id);
+    assert!(f.trapunto && !f.underlay.edge_run && !f.underlay.tatami && (f.spacing - 2.5).abs() < 1e-9);
+    // It covers both shapes and 2 mm more: from 100 − 2 mm to 240 + 2 mm across.
+    let pts = needles(&s, id);
+    let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.x), hi.max(p.x)));
+    assert!((lo - (100.0 * MM - 2.0)).abs() < 0.6 && (hi - (240.0 * MM + 2.0)).abs() < 0.6, "{lo}..{hi}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_none());
+    // Lines alone cover nothing; bad values change nothing.
+    let line = NodeId(s.execute("path.create", &json!({"d": "M 0 0 L 50 50"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "run"})).unwrap();
+    assert!(s.execute("embroidery.addLaydown", &json!({})).is_err());
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for bad in [json!({"margin": -1}), json!({"spacing": 0.2}), json!({"angle": "x"})] {
+        assert!(s.execute("embroidery.addLaydown", &bad).is_err(), "{bad}");
+    }
+}

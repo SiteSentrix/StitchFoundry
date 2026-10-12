@@ -3904,3 +3904,8 @@ machine	Stop	停止
 	Graded	漸變
 	Width at end	末端寬度
 	Row spacing	行距
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	E 形針跡
+	Rings (0: all)	圈數（0：全部）
+	Add Laydown	新增鋪底
