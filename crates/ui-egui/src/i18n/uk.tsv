@@ -4735,3 +4735,12 @@ machine	Stop	Зупинка
 	Centre line	Середня лінія
 	Stitch as	Вишити як
 	Click a region of an image to stitch it	Клацніть область зображення, щоб вишити її
+	Send to Machine	Надіслати на машину
+	Machine Folders	Теки машини
+	Add Machine Folder…	Додати теку машини…
+	A USB stick, the machine's folder or a network share the machine reads	USB-накопичувач, тека машини або мережева тека, яку вона читає
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Додайте теку, яку читає ваша машина: USB-накопичувач, її теку або мережеву теку.
+	Machine folder	Тека машини
+	Send	Надіслати
+	Sent:	Надіслано:
+	Forget Folder	Забути теку

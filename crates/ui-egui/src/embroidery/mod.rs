@@ -180,6 +180,9 @@ pub struct EmbroideryUi {
     pub letter_index: usize,
     /// The lettering to set is 3D puff.
     pub lettering_puff: bool,
+    /// The machine folder chosen to send to, and what the last send or check said.
+    pub send_folder: usize,
+    pub send_status: String,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -267,6 +270,8 @@ impl Default for EmbroideryUi {
             lettering_sew: vectorcraft_embroidery::sf_core::attr::LetterSewing::default(),
             letter_index: 0,
             lettering_puff: false,
+            send_folder: 0,
+            send_status: String::new(),
             prompt: prompt::PromptState::default(),
         }
     }

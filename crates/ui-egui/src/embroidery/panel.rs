@@ -158,6 +158,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     team_name_rows(app, ui);
     monogram_rows(app, ui);
     buttonhole_rows(app, ui);
+    egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
     ui.add_space(6.0);
     object_section(app, ui);
     ui.add_space(6.0);
@@ -387,6 +388,51 @@ fn letter_rows(app: &mut VectorcraftApp, ui: &mut Ui, id: u64, l: &Lettering) {
         if let Err(e) = app.run("embroidery.lettering.letter", p) {
             app.status(e);
         }
+    }
+}
+
+/// Send to Machine: the machine folders remembered, one chosen, its file written there.
+pub(crate) fn send_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if app.services.pick_folder.is_some()
+        && button(ui, tl!("Add Machine Folder…"))
+            .on_hover_text(tl!("A USB stick, the machine's folder or a network share the machine reads"))
+            .clicked()
+    {
+        crate::picks::button(app, |app| {
+            let Some(dir) = crate::picks::folder(app) else { return };
+            if app.run("embroidery.send.targets", json!({ "add": dir })).is_ok() {
+                app.embroidery.send_folder = 0;
+            }
+        });
+    }
+    let dirs = app.session.prefs.embroidery_send_dirs.clone();
+    if dirs.is_empty() {
+        ui.label(tl!("Add the folder your machine reads: a USB stick, its folder or a network share."));
+        return;
+    }
+    let names: Vec<&str> = dirs.iter().map(String::as_str).collect();
+    let cur = app.embroidery.send_folder.min(names.len() - 1);
+    if let Some(i) = pick_names(ui, tl!("Machine folder"), "send-folder", cur, &names) {
+        app.embroidery.send_folder = i;
+        app.embroidery.send_status.clear();
+    }
+    let folder = dirs.get(app.embroidery.send_folder.min(dirs.len() - 1)).cloned().unwrap_or_default();
+    ui.horizontal(|ui| {
+        if button(ui, tl!("Send")).clicked() {
+            app.embroidery.send_status = match app.run("embroidery.send", json!({ "folder": folder })) {
+                Ok(r) => format!("{} {}", tl!("Sent:"), r["path"].as_str().unwrap_or_default()),
+                Err(e) => e.to_string(),
+            };
+            app.embroidery.send_folder = 0;
+        }
+        if button(ui, tl!("Forget Folder")).clicked() {
+            app.run("embroidery.send.targets", json!({ "forget": folder })).ok();
+            app.embroidery.send_folder = 0;
+            app.embroidery.send_status.clear();
+        }
+    });
+    if !app.embroidery.send_status.is_empty() {
+        ui.label(app.embroidery.send_status.clone());
     }
 }
 

@@ -4337,3 +4337,12 @@ machine	Stop	停止
 	Centre line	中心线
 	Stitch as	绣制为
 	Click a region of an image to stitch it	点击图像中的区域即可绣制
+	Send to Machine	发送到绣花机
+	Machine Folders	绣花机文件夹
+	Add Machine Folder…	添加绣花机文件夹…
+	A USB stick, the machine's folder or a network share the machine reads	绣花机读取的 U 盘、机器文件夹或网络共享
+	Add the folder your machine reads: a USB stick, its folder or a network share.	添加绣花机读取的文件夹：U 盘、机器文件夹或网络共享。
+	Machine folder	绣花机文件夹
+	Send	发送
+	Sent:	已发送：
+	Forget Folder	忘记文件夹

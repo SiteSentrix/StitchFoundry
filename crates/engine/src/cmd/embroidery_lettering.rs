@@ -1044,7 +1044,7 @@ fn team_names_read(_: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// A name as a file name: no characters files can't have, not too long, not empty.
-fn safe_name(name: &str) -> String {
+pub(super) fn safe_name(name: &str) -> String {
     let s: String = name.chars().map(|c| if c.is_control() || "/\\:*?\"<>|".contains(c) { '_' } else { c }).take(60).collect();
     let s = s.trim().trim_matches('.').trim();
     if s.is_empty() { "name".to_string() } else { s.to_string() }

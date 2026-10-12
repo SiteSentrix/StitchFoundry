@@ -652,6 +652,10 @@ pub struct Prefs {
     /// field: resetting the preferences keeps it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub embroidery_font_dirs: Vec<String>,
+    /// The machine folders designs are sent to (`embroidery.send`): USB sticks, machine folders,
+    /// network shares, the last used first. A local list, not a Preferences dialog field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub embroidery_send_dirs: Vec<String>,
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/StitchFoundry Templates`).
     pub templates_folder: String,
@@ -831,6 +835,7 @@ impl Default for Prefs {
             embroidery_machines: vec![],
             embroidery_motifs: vec![],
             embroidery_font_dirs: vec![],
+            embroidery_send_dirs: vec![],
             templates_folder: String::new(),
             append_converted: true,
             use_compression: false,

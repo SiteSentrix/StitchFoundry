@@ -4709,3 +4709,12 @@ machine	Stop	Stopp
 	Centre line	Mittellinie
 	Stitch as	Sticken als
 	Click a region of an image to stitch it	Auf einen Bereich eines Bildes klicken, um ihn zu sticken
+	Send to Machine	An Maschine senden
+	Machine Folders	Maschinenordner
+	Add Machine Folder…	Maschinenordner hinzufügen…
+	A USB stick, the machine's folder or a network share the machine reads	Ein USB-Stick, der Ordner der Maschine oder eine Netzwerkfreigabe, die sie liest
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Füge den Ordner hinzu, den deine Maschine liest: einen USB-Stick, ihren Ordner oder eine Netzwerkfreigabe.
+	Machine folder	Maschinenordner
+	Send	Senden
+	Sent:	Gesendet:
+	Forget Folder	Ordner vergessen

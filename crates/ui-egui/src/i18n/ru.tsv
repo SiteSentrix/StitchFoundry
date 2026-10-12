@@ -4751,3 +4751,12 @@ machine	Stop	Остановка
 	Centre line	Средняя линия
 	Stitch as	Вышить как
 	Click a region of an image to stitch it	Щёлкните область изображения, чтобы вышить её
+	Send to Machine	Отправить на машину
+	Machine Folders	Папки машины
+	Add Machine Folder…	Добавить папку машины…
+	A USB stick, the machine's folder or a network share the machine reads	USB-накопитель, папка машины или сетевая папка, которую она читает
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Добавьте папку, которую читает ваша машина: USB-накопитель, её папку или сетевую папку.
+	Machine folder	Папка машины
+	Send	Отправить
+	Sent:	Отправлено:
+	Forget Folder	Забыть папку

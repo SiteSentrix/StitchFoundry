@@ -336,6 +336,18 @@ tool's *Stitch as* setting says (in the Embroidery panel while the tool is chose
 The same is `embroidery.clickStitch {at, as?, tolerance?, minHole?, id?}`. Each click is one undo
 step; the image stays under the stitches.
 
+## Send to machine
+
+**Embroidery › Send to Machine** (`embroidery.send`) writes the design's machine file (in its
+machine's format, as Export Machine File does) straight into the folder the machine reads: a USB
+stick, the machine's own folder, or a network share (a hot folder). Add the folder once in the
+Embroidery panel's *Send to Machine* section (*Add Machine Folder…*); it is remembered, the last
+used first, and *Send* writes the file there under the design's name (a number is added when a
+file of that name is there already; `replace: true` writes over it). The folder is checked first:
+when it isn't there (the stick taken out, the share unreachable) the send stops and says so.
+`embroidery.send.targets` lists the folders and whether each is there now. Machines that only take
+designs over their maker's own wireless link are not reached directly; send to a folder they read.
+
 ## Lettering
 
 Type objects are stitched straight from their glyph outlines, so there are no embroidery fonts

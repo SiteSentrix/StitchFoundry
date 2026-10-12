@@ -206,6 +206,24 @@ pub fn specs() -> Vec<CommandSpec> {
             auto_digitize
         ),
         cmd!(
+            "embroidery.send",
+            "Send to Machine",
+            ["Embroidery"],
+            None,
+            "{folder?: the machine's folder (a USB stick, the machine's folder or a network share; default: the last one used), format?: as Export Machine File (the design's machine, else dst), name?: the file's name (the design's), replace?: bool (false: a number is added when the name is taken)} send to machine: the design's machine file written to the folder, which is checked first and remembered → {path, format, bytes, stitches}",
+            has_doc,
+            send_to_machine
+        ),
+        cmd!(
+            "embroidery.send.targets",
+            "Machine Folders",
+            [],
+            None,
+            "{add?: a folder to remember, forget?: a folder to forget} the machine folders designs are sent to, the last used first, each with whether it is there now (a USB stick plugged in, a share reachable) → {targets: [{folder, ready}]}",
+            always,
+            send_targets
+        ),
+        cmd!(
             "embroidery.clickStitch",
             "Click to Stitch",
             [],
@@ -955,6 +973,95 @@ fn is_backdrop(n: &vectorcraft_doc::Node, image: kurbo::Rect) -> bool {
     let outer: f64 = regions.iter().map(|r| sf_core::geom::Polygon::from_ring(r.outer.clone()).area()).sum();
     let whole = image.width() * image.height() * MM_PER_PT * MM_PER_PT;
     whole > 0.0 && outer >= 0.97 * whole
+}
+
+/// Most machine folders remembered.
+const MAX_SEND_DIRS: usize = 16;
+
+/// Whether `dir` is a folder that is there now (a USB stick plugged in, a share reachable).
+#[cfg(not(target_arch = "wasm32"))]
+fn folder_ready(dir: &str) -> bool {
+    std::path::Path::new(dir).is_dir()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn folder_ready(_: &str) -> bool {
+    false
+}
+
+/// Whether a file is at `path` already.
+#[cfg(not(target_arch = "wasm32"))]
+fn file_there(path: &std::path::Path) -> bool {
+    path.exists()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn file_there(_: &std::path::Path) -> bool {
+    false
+}
+
+/// `dir` remembered as the machine folder last used.
+fn remember_send_dir(s: &mut Session, dir: &str) {
+    let dirs = &mut s.prefs.embroidery_send_dirs;
+    dirs.retain(|d| d != dir);
+    dirs.insert(0, dir.to_string());
+    dirs.truncate(MAX_SEND_DIRS);
+}
+
+fn send_to_machine(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.send";
+    let folder = match str_param(p, "folder").map(str::trim).filter(|f| !f.is_empty()) {
+        Some(f) => f.to_string(),
+        None => s
+            .prefs
+            .embroidery_send_dirs
+            .first()
+            .cloned()
+            .ok_or_else(|| bad(CMD, "no machine folder yet: add one in the Embroidery panel, Send to Machine (or give `folder`)"))?,
+    };
+    if !folder_ready(&folder) {
+        return Err(bad(CMD, format!("{folder} isn't there: plug in the USB stick, or check the network share")));
+    }
+    let stem = match str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()) {
+        Some(n) => n.to_string(),
+        None => super::fileio::file_stem(&s.doc()?.doc.title),
+    };
+    let mut q = json!({ "center": true, "name": stem });
+    if let Some(f) = str_param(p, "format") {
+        q["format"] = json!(f);
+    }
+    let out = export_machine_file(s, &q)?;
+    let bytes = out["dataBase64"]
+        .as_str()
+        .and_then(vectorcraft_format::base64_decode)
+        .ok_or_else(|| EngineError::Other("the machine file didn't encode".into()))?;
+    let ext = out["format"].as_str().unwrap_or("dst").to_string();
+    let stem = super::embroidery_lettering::safe_name(&stem);
+    let base = std::path::Path::new(&folder);
+    let mut path = base.join(format!("{stem}.{ext}"));
+    // a file of that name already: a number added, unless it is to be replaced
+    if !bool_or(p, "replace", false) {
+        let mut k = 2;
+        while file_there(&path) && k < 1000 {
+            path = base.join(format!("{stem}-{k}.{ext}"));
+            k += 1;
+        }
+    }
+    let path = path.to_string_lossy().to_string();
+    super::fileio::write_file(&path, &bytes)?;
+    remember_send_dir(s, &folder);
+    Ok(json!({ "path": path, "format": ext, "bytes": bytes.len(), "stitches": out["stitches"] }))
+}
+
+fn send_targets(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(f) = str_param(p, "add").map(str::trim).filter(|f| !f.is_empty()) {
+        remember_send_dir(s, f);
+    }
+    if let Some(f) = str_param(p, "forget") {
+        s.prefs.embroidery_send_dirs.retain(|d| d != f);
+    }
+    let targets: Vec<Value> = s.prefs.embroidery_send_dirs.iter().map(|d| json!({ "folder": d, "ready": folder_ready(d) })).collect();
+    Ok(json!({ "targets": targets }))
 }
 
 /// The ways click-to-stitch can stitch a region.

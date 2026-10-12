@@ -4780,3 +4780,12 @@ machine	Stop	Zastavení
 	Centre line	Středová čára
 	Stitch as	Vyšít jako
 	Click a region of an image to stitch it	Klepněte na oblast obrázku a vyšijte ji
+	Send to Machine	Odeslat do stroje
+	Machine Folders	Složky stroje
+	Add Machine Folder…	Přidat složku stroje…
+	A USB stick, the machine's folder or a network share the machine reads	USB disk, složka stroje nebo síťová složka, kterou stroj čte
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Přidejte složku, kterou váš stroj čte: USB disk, jeho složku nebo síťovou složku.
+	Machine folder	Složka stroje
+	Send	Odeslat
+	Sent:	Odesláno:
+	Forget Folder	Zapomenout složku

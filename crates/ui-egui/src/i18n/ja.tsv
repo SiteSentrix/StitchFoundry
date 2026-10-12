@@ -4749,3 +4749,12 @@ machine	Stop	停止
 	Centre line	中心線
 	Stitch as	刺繍の種類
 	Click a region of an image to stitch it	画像の領域をクリックして刺繍にします
+	Send to Machine	ミシンに送る
+	Machine Folders	ミシンのフォルダー
+	Add Machine Folder…	ミシンのフォルダーを追加…
+	A USB stick, the machine's folder or a network share the machine reads	ミシンが読む USB メモリ、ミシンのフォルダー、またはネットワーク共有
+	Add the folder your machine reads: a USB stick, its folder or a network share.	ミシンが読むフォルダーを追加してください：USB メモリ、ミシンのフォルダー、またはネットワーク共有。
+	Machine folder	ミシンのフォルダー
+	Send	送る
+	Sent:	送信済み：
+	Forget Folder	フォルダーを忘れる

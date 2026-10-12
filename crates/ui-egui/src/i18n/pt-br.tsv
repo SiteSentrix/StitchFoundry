@@ -4025,3 +4025,12 @@ machine	Trim	Corte de linha
 	Centre line	Linha central
 	Stitch as	Bordar como
 	Click a region of an image to stitch it	Clique em uma área de uma imagem para bordá-la
+	Send to Machine	Enviar para a máquina
+	Machine Folders	Pastas da máquina
+	Add Machine Folder…	Adicionar pasta da máquina…
+	A USB stick, the machine's folder or a network share the machine reads	Um pen drive, a pasta da máquina ou um compartilhamento de rede que ela lê
+	Add the folder your machine reads: a USB stick, its folder or a network share.	Adicione a pasta que sua máquina lê: um pen drive, a pasta dela ou um compartilhamento de rede.
+	Machine folder	Pasta da máquina
+	Send	Enviar
+	Sent:	Enviado:
+	Forget Folder	Esquecer pasta
