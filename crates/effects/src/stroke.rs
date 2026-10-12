@@ -19,7 +19,7 @@ mod width;
 
 use std::borrow::Cow;
 
-use kurbo::{BezPath, PathEl, PathSeg};
+use kurbo::{BezPath, ParamCurve, ParamCurveNearest, PathEl, PathSeg, Shape};
 use vectorcraft_doc::{LineCap, LineJoin, StrokeAlign, StrokeLayer};
 pub(crate) use vectorcraft_geom::bez::{kink, segments, subpaths, tangent, unit};
 
@@ -116,8 +116,56 @@ pub fn line_outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64) -> B
             out.extend(dot_outline(&d.dots, width, st.cap, tol).iter());
             out
         }
-        (None, None) => kurbo::stroke(line.iter(), &style(st, width), &kurbo::StrokeOpts::default(), tol),
+        (None, None) => plain_outline(line, &style(st, width), tol),
     }
+}
+
+/// `line` stroked with `style`, to fill with the non-zero rule.
+///
+/// kurbo offsets a closed subpath to both sides, as two contours. Once half the weight is more
+/// than the shape can hold (its inradius), the inner one has crossed the middle and comes out
+/// the far side: wound against the outer contour it would cut a hole where the pen in fact
+/// overlaps itself (#1396). Such a contour is left out, so the stroke paints solid.
+// shortcut: closed subpaths of plain strokes only. An open path that turns back on itself inside
+// a wider stroke (and dashes on such a shape) can still cancel; fix it in the offsetting if reported.
+fn plain_outline(line: &BezPath, style: &kurbo::Stroke, tol: f64) -> BezPath {
+    let stroke = |els: &[PathEl]| kurbo::stroke(els.iter().copied(), style, &kurbo::StrokeOpts::default(), tol);
+    let els = line.elements();
+    // Only a stroke at least as wide as a closed subpath's bounds can cross over: everything
+    // else takes the one call it always did.
+    let may_cross = |sub: &[PathEl]| {
+        let b = BezPath::from_vec(sub.to_vec()).bounding_box();
+        style.width >= b.width().min(b.height())
+    };
+    let subs = subpaths(line);
+    if !subs.iter().any(|(r, closed)| *closed && els.get(r.clone()).is_some_and(may_cross)) {
+        return stroke(els);
+    }
+    let reach = style.width / 2.0 - 2.0 * tol;
+    let mut out = BezPath::new();
+    for (r, closed) in subs {
+        let Some(sub) = els.get(r) else { continue };
+        let outline = stroke(sub);
+        if !(closed && may_cross(sub)) {
+            out.extend(outline.iter());
+            continue;
+        }
+        let sub = BezPath::from_vec(sub.to_vec());
+        for (c, _) in subpaths(&outline) {
+            let Some(contour) = outline.elements().get(c) else { continue };
+            if reaches_edge(contour, &sub, reach) {
+                out.extend(contour.iter().copied());
+            }
+        }
+    }
+    out
+}
+
+/// Whether some point of `contour` lies at least `reach` from `path`: an offset contour that
+/// never does is nowhere the edge of the stroke.
+fn reaches_edge(contour: &[PathEl], path: &BezPath, reach: f64) -> bool {
+    let far = |p: kurbo::Point| path.segments().all(|s| s.nearest(p, 1e-6).distance_sq >= reach * reach);
+    kurbo::segments(contour.iter().copied()).any(|s| far(s.eval(0.0)) || far(s.eval(0.5)))
 }
 
 /// Append `seg` to `out` (which must already have a current point at its start).
