@@ -235,6 +235,11 @@ const BLENDS: [BlendMode; 16] = [
     BlendMode::Luminosity,
 ];
 
+/// The name effects take for blend mode `n` of `Xy` (and of effects' `blnd`).
+pub(super) fn blend_name(n: usize) -> String {
+    format!("{:?}", BLENDS.get(n).copied().unwrap_or(BlendMode::Normal))
+}
+
 #[derive(Debug, Default)]
 struct LayerAttrs {
     name: String,
@@ -350,8 +355,16 @@ struct Reader<'a> {
     drawn_looks: usize,
     /// Nodes read from `%_` lines.
     hidden_ids: HashSet<NodeId>,
+    /// A group just ended, its state (`Xy`, `Xd`, `XW`) not yet read.
+    group_ended: bool,
+    /// Painted copies of clipping paths that have a fill (drawn under what they clip).
+    clip_fills: HashSet<NodeId>,
+    /// Groups closed as an object's drawn look (`9 () XW`).
+    looks: HashSet<NodeId>,
     /// The gradient mesh being read (`/Mesh X!` … `/End X!`), and whether it started on a `%_` line.
     mesh: Option<(super::mesh::MeshReader, bool)>,
+    /// The art styles (`%AI9_BeginArtStyles`), by name.
+    styles: HashMap<String, super::style::ArtStyle>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
     /// A `/ForeignObject`'s `/Data`: its PDF as ASCII85 in comment lines, until the object closes.
@@ -395,6 +408,8 @@ const IGNORED: &[&str] = &[
     "TZ",
     "Xs",
     "Xt",
+    // A brushed path's width at each anchor (`(…) Xt n XD`), on its hidden source path.
+    "XD",
     "Xi",
     "XI",
     "`",
@@ -482,6 +497,10 @@ impl<'a> Reader<'a> {
             warnings: Vec::new(),
             drawn_looks: 0,
             hidden_ids: HashSet::new(),
+            clip_fills: HashSet::new(),
+            looks: HashSet::new(),
+            group_ended: false,
+            styles: HashMap::new(),
             mesh: None,
             cmyk_cache: HashMap::new(),
             done: false,
@@ -552,6 +571,11 @@ impl<'a> Reader<'a> {
         if m == "BeginPattern" && self.pattern.is_none() {
             let section = self.section("EndPattern")?;
             self.define_pattern(section);
+            return Ok(());
+        }
+        if m == "BeginArtStyles" {
+            let section = self.section("EndArtStyles")?;
+            self.styles = super::style::art_styles(section);
             return Ok(());
         }
         if let Some((_, end)) = SKIPPED.iter().find(|(b, _)| *b == m) {
@@ -755,10 +779,20 @@ impl<'a> Reader<'a> {
         let Frame { kind, children: kids, gs, clips, hidden: opened_hidden, .. } = f;
         // A compound path of clipping paths clips its clipping group.
         let clipping = matches!(kind, Kind::Compound) && !clips.is_empty();
+        self.group_ended = !matches!(kind, Kind::Compound);
+        let mut painted = None;
         let node = match kind {
+            // A compound path holding a group (its drawn look) is that look: its paths paint apart.
+            Kind::Compound if kids.iter().any(|k| self.looks.contains(&k.id)) => {
+                let (children, clip) = self.clip_first(kids, &clips);
+                self.new_node(NodeKind::Group { children, clip }, &gs)
+            }
             Kind::Compound => {
-                // A group in a compound path (`*u u … U *U`) only holds its paths.
-                let Some(n) = self.compound(ungrouped(kids), &gs) else { return Ok(()) };
+                // A group in a compound path (`*u u … U *U`) only holds its paths. Clipping subpaths'
+                // painted copies make a compound of their own, under what it clips.
+                let (fills, kids): (Vec<Node>, Vec<Node>) = ungrouped(kids).into_iter().partition(|n| self.clip_fills.contains(&n.id));
+                painted = self.compound(fills, &gs);
+                let Some(n) = self.compound(kids, &gs) else { return Ok(()) };
                 n
             }
             // A group with a clipping path (`q` … `Q`, or a `W` path in a group) is a clipping group.
@@ -770,7 +804,12 @@ impl<'a> Reader<'a> {
         if clipping && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
-        self.add(node, opened_hidden || hidden)
+        self.add(node, opened_hidden || hidden)?;
+        if let Some(p) = painted {
+            self.clip_fills.insert(p.id);
+            self.add(p, opened_hidden || hidden)?;
+        }
+        Ok(())
     }
 
     /// The compound path of `kids`, painted and made transparent as its subpaths say.
@@ -806,7 +845,9 @@ impl<'a> Reader<'a> {
             }
         };
         let clips = clip_node.is_some();
-        let children = clip_node.into_iter().chain(rest.into_iter().map(|(_, n)| n)).map(Arc::new).collect();
+        // A clipping path's own fill paints under the art it clips.
+        let (fills, rest): (Vec<Indexed>, Vec<Indexed>) = rest.into_iter().partition(|(_, n)| self.clip_fills.contains(&n.id));
+        let children = clip_node.into_iter().chain(fills.into_iter().chain(rest).map(|(_, n)| n)).map(Arc::new).collect();
         (children, clips)
     }
 
@@ -880,6 +921,7 @@ impl<'a> Reader<'a> {
         if !matches!(w, "Xy" | "Xd" | "XW" | "BB") {
             self.after_object = false;
         }
+        let group_ended = std::mem::take(&mut self.group_ended);
         let vals = self.operands();
         let vals = self.take_head(vals);
         if let Some(d) = self.gradient_def.as_mut() {
@@ -982,6 +1024,14 @@ impl<'a> Reader<'a> {
             "d" => self.dash(&vals),
             // Transparency and state.
             "Xy" => self.transparency(&vals),
+            // A group's own state (`Xd`, `6 () XW`) without an `Xy` keeps the current transparency, as
+            // the file's PDF part draws it. A look's group (`9 () XW`) has no state of its own.
+            "Xd" if group_ended => {
+                let gs = self.gs.clone();
+                if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. })) {
+                    (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
+                }
+            }
             "Xw" => self.gs.hidden = Self::nums(&vals).last() == Some(&1.0),
             "A" => self.gs.locked = Self::nums(&vals).last() == Some(&1.0),
             "XW" => self.style_marker(&vals, hidden),
@@ -1361,12 +1411,18 @@ impl<'a> Reader<'a> {
     }
 
     /// `n (style) XW` after an object: `1 (style)` after the object written on `%_` lines, its
-    /// drawn look before it. Other markers end what follows an object.
+    /// drawn look before it (all on `%_` lines inside another such object). Other markers end what
+    /// follows an object.
     fn style_marker(&mut self, vals: &[V], hidden: bool) {
         let code = Self::nums(vals).last().copied().unwrap_or(0.0);
         let style = vals.iter().rev().find_map(V::text).unwrap_or_default();
         let after = std::mem::take(&mut self.after_object);
-        if hidden || code != 1.0 || style.is_empty() || !after {
+        if code == 9.0
+            && let Some(look) = self.frames.last().and_then(|f| f.children.last()).filter(|n| matches!(n.kind, NodeKind::Group { .. }))
+        {
+            self.looks.insert(look.id);
+        }
+        if code != 1.0 || style.is_empty() || !after {
             return;
         }
         let Some(f) = self.frames.last_mut() else { return };
@@ -1374,13 +1430,29 @@ impl<'a> Reader<'a> {
         let (Some(object), Some(look)) = (n.checked_sub(1).and_then(|i| f.children.get(i)), n.checked_sub(2).and_then(|i| f.children.get(i))) else {
             return;
         };
-        if !self.hidden_ids.contains(&object.id) || self.hidden_ids.contains(&look.id) || !matches!(look.kind, NodeKind::Group { clip: false, .. }) {
+        if !self.hidden_ids.contains(&object.id)
+            || self.hidden_ids.contains(&look.id) != hidden
+            || !matches!(look.kind, NodeKind::Group { clip: false, .. })
+        {
+            return;
+        }
+        // A style read here: the object, painted as it says.
+        if let Some(appearance) = self.styles.get(&style).and_then(|st| styled(object, st)) {
+            let Some(mut object) = f.children.pop() else { return };
+            f.children.pop();
+            object.appearance = appearance.into();
+            // Now the object itself, not a copy an enclosing look's `strip` would remove.
+            self.hidden_ids.remove(&object.id);
+            f.children.push(object);
             return;
         }
         let is_text = slot_of(object.name.as_deref()).is_some();
         let Some(object) = f.children.pop() else { return };
         let Some(look) = f.children.last_mut() else { return };
-        strip(look, &self.hidden_ids);
+        // Inside a copy on `%_` lines everything is, so nothing tells the look's own copies apart.
+        if !hidden {
+            strip(look, &self.hidden_ids);
+        }
         if is_text {
             // A text object stays the type it is: over what else its look draws, or in place of a
             // look that was only its type.
@@ -1394,7 +1466,9 @@ impl<'a> Reader<'a> {
         look.name = object.name.clone().or(look.name.take());
         look.visible = object.visible;
         look.locked = object.locked;
-        self.drawn_looks += 1;
+        if !hidden {
+            self.drawn_looks += 1;
+        }
     }
 
     // ---- paths -----------------------------------------------------------------------------
@@ -1473,7 +1547,10 @@ impl<'a> Reader<'a> {
         };
         let mut items = Vec::new();
         if fill && !clip {
-            items.push(AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(fill_paint.unwrap_or(gs.fill.clone())) }));
+            items.push(AppearanceItem::Fill(FillLayer {
+                overprint: gs.overprint_fill,
+                ..FillLayer::new(fill_paint.clone().unwrap_or(gs.fill.clone()))
+            }));
         }
         if stroke && !clip {
             let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.width);
@@ -1493,7 +1570,28 @@ impl<'a> Reader<'a> {
         if clip && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
-        self.add(node, hidden)
+        // A clipping path's fill is painted too, under the art it clips, as the file's PDF part draws it.
+        let painted = clip && fill && !matches!(gs.fill, Paint::None);
+        let copy = painted.then(|| {
+            let mut copy = node.clone();
+            copy.id = self.doc.alloc_id();
+            if let NodeKind::Path { clipping, .. } = &mut copy.kind {
+                *clipping = false;
+            }
+            let paint = fill_paint.clone().unwrap_or_else(|| gs.fill.clone());
+            copy.appearance = Appearance {
+                items: vec![AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(paint) })],
+                ..Appearance::default()
+            }
+            .into();
+            copy
+        });
+        self.add(node, hidden)?;
+        if let Some(copy) = copy {
+            self.clip_fills.insert(copy.id);
+            self.add(copy, hidden)?;
+        }
+        Ok(())
     }
 
     /// `/End X!`: the gradient mesh read, as one object.
@@ -1834,6 +1932,28 @@ fn path_rule(n: &Node) -> FillRule {
         NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } => *rule,
         _ => FillRule::NonZero,
     }
+}
+
+/// `object`'s appearance with style `st`: `None` when the style isn't one this reads, or asks a
+/// group for fills or strokes.
+fn styled(object: &Node, st: &super::style::ArtStyle) -> Option<Appearance> {
+    use super::style::StyleItem;
+    if !st.plain || (object.is_container() && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty()) {
+        return None;
+    }
+    let mut items = vec![];
+    for item in &st.items {
+        items.push(match item {
+            StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
+            StyleItem::ObjectFill => AppearanceItem::Fill(object.appearance.fill().filter(|f| matches!(f.paint, Paint::Gradient(_)))?.clone()),
+            StyleItem::Stroke { paint, width, cap, join, miter, dash, profile } => {
+                let mut layer = StrokeLayer::new(paint.clone(), *width);
+                (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
+                AppearanceItem::Stroke(layer)
+            }
+        });
+    }
+    Some(Appearance { items, effects: st.effects.clone(), ..(*object.appearance).clone() })
 }
 
 /// Remove from `n` the children read from `%_` lines (`hidden`: the object itself, not its look).

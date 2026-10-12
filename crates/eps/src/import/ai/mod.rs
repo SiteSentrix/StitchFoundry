@@ -23,6 +23,7 @@ mod mesh;
 mod obj;
 mod paint;
 mod read;
+mod style;
 
 use std::io::Read as _;
 
