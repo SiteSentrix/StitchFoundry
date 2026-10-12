@@ -871,7 +871,7 @@ struct Frame<'a> {
 /// (a `.ai` saved without its PDF part), its type is made from the file's text document alone and
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
 /// the text objects.
-fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool) -> Result<(Document, Vec<String>), String> {
+fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, trust: bool) -> Result<(Document, Vec<String>), String> {
     let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data)?;
     let (mut shown, mut hidden) = (vec![], vec![]);
     let mut frame = None;
@@ -985,7 +985,11 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool) ->
             if unseen > 0 {
                 notes.push(format!("{unseen} {UNSEEN_TEXT}"));
             }
-            notes.extend(compare(&frame, &mut view, &doc)?);
+            match compare(&frame, &mut view, &doc) {
+                Ok(note) => notes.extend(note),
+                Err(why) if trust => notes.push(format!("{why}: they come from its editing data all the same")),
+                Err(why) => return Err(why),
+            }
         }
         None => unmark(&mut doc.layers, true, &mut vec![]),
     }
@@ -1112,7 +1116,7 @@ fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document) -> Result
 /// has one that can't be used, `visible` with a warning that says why.
 pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
     let Some(data) = editing_copy(ps) else { return visible };
-    let result = data.and_then(|data| build(&data, Some(&visible.document), Page::Art, false));
+    let result = data.and_then(|data| build(&data, Some(&visible.document), Page::Art, false, false));
     match result {
         Ok((document, mut warnings)) => {
             for w in &visible.warnings {
@@ -1138,12 +1142,13 @@ pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
 /// The flag returned is `true` when the document is the one read from the layers; else the document
 /// is `visible`, its pages moved by `place_pages` when the layers can't be read. `outlined`: the
 /// PDF part's type was read as outlines (a file whose type shows then comes in as its PDF part).
-pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool) -> (Document, Vec<String>, bool) {
+/// `trust`: layers that draw differently from the PDF part are used all the same, with a warning.
+pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool, trust: bool) -> (Document, Vec<String>, bool) {
     let Ok(data) = ai::decode_private(private) else { return (visible, warnings, false) };
     if !has_layers(&data) {
         return (visible, warnings, false);
     }
-    match build(&data, Some(&visible), Page::Artboard, outlined) {
+    match build(&data, Some(&visible), Page::Artboard, outlined, trust) {
         Ok((mut done, notes)) => {
             done.setup.bleed = visible.setup.bleed;
             let mut all = warnings;
@@ -1210,7 +1215,7 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
 /// alone (`private`, the joined `AIPrivateData` streams) → the document and the import's notes.
 pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
     let data = ai::decode_private(private)?;
-    build(&data, None, Page::Artboard, false)
+    build(&data, None, Page::Artboard, false, false)
 }
 
 /// Does the editing data (or a program in the legacy format) have layers?
@@ -1231,7 +1236,7 @@ fn editing_copy(ps: &[u8]) -> Option<Result<Cow<'_, [u8]>, String>> {
 /// prolog without including it) from its layers alone (`ps`: its program, which has them) → the
 /// document and the import's notes. `None` when the layers aren't in the program.
 pub(super) fn program_alone(ps: &[u8]) -> Option<Result<(Document, Vec<String>), String>> {
-    (!ai::has_eps_data(ps) && has_layers(ps)).then(|| build(ps, None, Page::Art, false))
+    (!ai::has_eps_data(ps) && has_layers(ps)).then(|| build(ps, None, Page::Art, false, false))
 }
 
 #[cfg(test)]

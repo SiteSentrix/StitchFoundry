@@ -36,6 +36,9 @@ pub struct LoadOptions {
     /// layers, hidden objects and the art outside its artboards); else only what its page or PDF
     /// part prints comes in.
     pub editing_data: bool,
+    /// A `.ai` opens from its editing copy even where that draws differently from its PDF part
+    /// (which can be older than it), with a warning, instead of from the PDF part.
+    pub trust_editing_data: bool,
 }
 
 impl Default for LoadOptions {
@@ -50,6 +53,7 @@ impl Default for LoadOptions {
             layers: true,
             dxf: Default::default(),
             editing_data: true,
+            trust_editing_data: false,
         }
     }
 }
@@ -57,7 +61,7 @@ impl Default for LoadOptions {
 impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
-    /// `textAs` (`text` | `outlines`), `layers` (true | false), `editingData` (true | false) and `dxf`
+    /// `textAs` (`text` | `outlines`), `layers` (true | false), `editingData` (true | false | `always`) and `dxf`
     /// (the DXF import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
         let pages = match p.get("pages").filter(|v| !v.is_null()).or_else(|| p.get("page").filter(|v| !v.is_null())) {
@@ -81,12 +85,13 @@ impl LoadOptions {
             None => true,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "layers must be true or false"))?,
         };
-        let editing_data = match p.get("editingData").filter(|v| !v.is_null()) {
-            None => true,
-            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "editingData must be true or false"))?,
+        let (editing_data, trust_editing_data) = match p.get("editingData").filter(|v| !v.is_null()) {
+            None => (true, false),
+            Some(Value::String(s)) if s.eq_ignore_ascii_case("always") => (true, true),
+            Some(v) => (v.as_bool().ok_or_else(|| bad(cmd, "editingData must be true, false or \"always\""))?, false),
         };
         let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
-        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data })
+        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another
