@@ -4,7 +4,7 @@ use vectorcraft_geom::{Anchor, AnchorKind, CubicBez, ParamCurve, PathData, Point
 use vectorcraft_pathops::{SimplifyOptions, simplify_with};
 
 use crate::contour::Loop;
-use crate::logo::{Cubic, Stats, Style, all_within, fit_outline, resample_closed, sample_cubics};
+use crate::logo::{Cubic, Stats, Style, all_within, fit_open, fit_outline, resample_closed, resample_open, sample_cubics};
 use crate::subpixel::{self, Crack};
 
 #[derive(Clone, Copy, Debug)]
@@ -48,26 +48,97 @@ fn rdp(pts: &[Point], a: usize, b: usize, tol: f64, keep: &mut [bool]) {
     }
 }
 
-/// Fit one loop of a `w × h` image into a closed Bézier subpath (pixel coordinates): its points
-/// are placed to a fraction of a pixel ([`subpixel::outline`], which explains `shift`) and fitted as
-/// Flat Logo mode fits its outlines (corners restored, straight runs as lines, the rest as few
-/// curves as `style.tol` allows).
-pub(crate) fn fit_loop(l: &Loop, w: usize, h: usize, shift: &dyn Fn(Crack) -> f64, style: &Style) -> Option<SubPath> {
-    let (pts, hard) = subpixel::outline(l, w, h, shift);
-    let mut style = *style;
-    if hard {
-        // No anti-aliasing: the edge is only known to about half a pixel (as in Flat Logo mode).
-        style.tol *= 2.5;
-        style.line_tol *= 1.8;
-        style.circle_tol *= 1.8;
-        style.sigma = 0.9;
+fn reversed(mut segs: Vec<Cubic>) -> Vec<Cubic> {
+    segs.reverse();
+    for c in &mut segs {
+        c.reverse();
     }
+    segs
+}
+
+fn before(a: Point, b: Point) -> std::cmp::Ordering {
+    a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y))
+}
+
+/// A whole loop fitted. The same loop gives the same curves whichever way it runs and wherever it
+/// starts (it is fitted clockwise from its leftmost point): the outline of a shape and the hole it
+/// leaves in the shape around it are one curve.
+fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
+    let n = pts.len();
+    let area2: f64 = (0..n).map(|i| pts[i].x * pts[(i + 1) % n].y - pts[(i + 1) % n].x * pts[i].y).sum();
+    let flip = area2 < 0.0;
+    let mut pts = pts.to_vec();
+    if flip {
+        pts.reverse();
+    }
+    let start = (0..n).min_by(|&i, &j| before(pts[i], pts[j])).unwrap_or(0);
+    pts.rotate_left(start);
     let mut stats = Stats::default();
-    let mut segs = fit_outline(&pts, &style, &mut stats)?;
+    let mut segs = fit_outline(&pts, style, &mut stats)?;
     // A fit that strayed was replaced by a plain one that nothing has checked: one that strays too
     // (a wild handle on a tiny or ragged loop) gives way to the outline's own points.
     if stats.reverted > 0 && !all_within(&sample_cubics(&segs, 0.25), &resample_closed(&pts, 0.5).map_or_else(|| pts.clone(), |(p, _)| p), 1.5) {
         segs = polygon(&pts, style.tol);
+    }
+    Some(if flip { reversed(segs) } else { segs })
+}
+
+/// A piece of a loop between two junctions fitted, from its first point to its last. The same
+/// piece gives the same curve whichever way it runs (it is fitted from its end further left): the
+/// edge two regions share is one curve.
+fn fit_piece(pts: &[Point], style: &Style) -> Vec<Cubic> {
+    let n = pts.len();
+    let (Some(&first), Some(&last)) = (pts.first(), pts.last()) else { return vec![] };
+    let flip = match before(first, last) {
+        std::cmp::Ordering::Equal => n > 3 && before(pts[1], pts[n - 2]).is_gt(),
+        order => order.is_gt(),
+    };
+    let mut pts = pts.to_vec();
+    if flip {
+        pts.reverse();
+    }
+    let mut segs = fit_open(&pts, style, &mut Stats::default());
+    // Nothing else checks this fit: one that strays gives way to the piece's own points.
+    if !all_within(&sample_cubics(&segs, 0.25), &resample_open(&pts, 0.5).map_or_else(|| pts.clone(), |(p, _)| p), 1.5) {
+        let mut keep = vec![false; n];
+        rdp(&pts, 0, n - 1, style.tol, &mut keep);
+        keep[0] = true;
+        keep[n - 1] = true;
+        let kept: Vec<Point> = (0..n).filter(|&i| keep[i]).map(|i| pts[i]).collect();
+        segs = kept.windows(2).filter(|p| p[0] != p[1]).map(|p| [p[0], p[0], p[1], p[1]]).collect();
+    }
+    if flip { reversed(segs) } else { segs }
+}
+
+/// Fit one loop of a `w × h` image into a closed Bézier subpath (pixel coordinates): its points
+/// are placed to a fraction of a pixel ([`subpixel::outline`], which explains `across`) and fitted
+/// as Flat Logo mode fits its outlines (corners restored, straight runs as lines, the rest as few
+/// curves as `style.tol` allows), piece by piece between its junctions, so that the regions on
+/// either side of an edge get the same curve for it.
+pub(crate) fn fit_loop(
+    l: &Loop,
+    w: usize,
+    h: usize,
+    across: &dyn Fn(Crack) -> (f64, u32),
+    junction_at: &dyn Fn(i32, i32) -> Option<Point>,
+    style: &Style,
+) -> Option<SubPath> {
+    let pieces = subpixel::outline(l, w, h, across, junction_at);
+    let mut segs: Vec<Cubic> = Vec::new();
+    for piece in &pieces {
+        let mut style = *style;
+        if piece.hard {
+            // No anti-aliasing: the edge is only known to about half a pixel (as in Flat Logo mode).
+            style.tol *= 2.5;
+            style.line_tol *= 1.8;
+            style.circle_tol *= 1.8;
+            style.sigma = 0.9;
+        }
+        if piece.closed {
+            segs = fit_closed(&piece.pts, &style)?;
+        } else {
+            segs.extend(fit_piece(&piece.pts, &style));
+        }
     }
     let n = segs.len();
     // A straight piece has no handles.

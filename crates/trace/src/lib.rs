@@ -25,6 +25,9 @@
 //!    is (an anti-aliased or blurred edge pixel is part one tone, part the other), so the outline
 //!    is right to a fraction of a pixel before any fitting; hard-edged images are read as
 //!    staircases instead (see `subpixel`).
+//!    Outlines are cut at their junctions (where three regions meet, and at the image's border)
+//!    and each piece between two is fitted on its own, the same way from either side, so that two
+//!    abutting regions have one and the same curve along the edge they share.
 //! 5. **Curves**: the outline is fitted as Flat Logo mode fits its own (`logo::fit_outline`):
 //!    corners the pixels rounded are put back, straight runs become lines, a round outline a
 //!    true circle, and the rest as few cubic Béziers as the Paths tolerance allows; Snap Curves To
@@ -563,6 +566,46 @@ impl Layers<'_> {
     fn ignored(&self, label: u16) -> bool {
         self.params.ignore_white && self.q.palette.get(label as usize).is_some_and(|c| is_white(*c))
     }
+    /// The region across a crack, for cutting outlines at their junctions: the outside pixel's
+    /// colour. Stacked layers end on many colours at once and share no edge: one neighbour.
+    fn neighbour(&self, c: Crack) -> u32 {
+        if self.params.method == Method::Overlapping {
+            return 0;
+        }
+        c.at(1).and_then(|i| self.q.labels.get(i)).map_or(u32::from(TRANSPARENT), |&l| u32::from(l))
+    }
+    /// The junction at pixel corner `(x, y)`, if there is one: where three or four regions
+    /// meet, or two parts of a region touch by the corner only, or an edge reaches the image's
+    /// border. It lies at the corner, moved across by what the edges that run up and down from it
+    /// say, and up or down by what those to its left and right say (the mean, where there are
+    /// two). It depends on the corner alone, so every region around it gets the same point; on the
+    /// image's border it stays on the border.
+    fn junction(&self, x: i32, y: i32) -> Option<vectorcraft_geom::Point> {
+        let label = |px: i32, py: i32| Crack::new((px, py), (1, 0), self.w, self.h).at(0).and_then(|i| self.q.labels.get(i).copied());
+        // The four pixels around the corner (`None` off the image), and the edges between them.
+        let around = [label(x - 1, y - 1), label(x, y - 1), label(x, y), label(x - 1, y)];
+        let edges = (0..4).filter(|&i| around[i] != around[(i + 1) % 4]).count();
+        let apart = |a: usize, b: usize, c: usize, d: usize| around[a] == around[c] && around[b] != around[a] && around[d] != around[a];
+        let touching = apart(0, 1, 2, 3) || apart(1, 2, 3, 0);
+        // (Stacked layers share no edges: they are cut at the image's border only.)
+        if edges < 3 && !touching || self.params.method == Method::Overlapping {
+            return None;
+        }
+        // The shift of the crack between `a` and the pixel `step` from it, if both are in the
+        // image and of different regions.
+        let shift = |a: (i32, i32), step: (i32, i32)| {
+            let (la, lb) = (label(a.0, a.1)?, label(a.0 + step.0, a.1 + step.1)?);
+            (la != lb).then(|| self.shift(Crack::new(a, step, self.w, self.h)).clamp(-0.5, 0.5))
+        };
+        let mean = |a: Option<f64>, b: Option<f64>| match (a, b) {
+            (Some(a), Some(b)) => (a + b) / 2.0,
+            (Some(v), None) | (None, Some(v)) => v,
+            (None, None) => 0.0,
+        };
+        let dx = mean(shift((x - 1, y - 1), (1, 0)), shift((x - 1, y), (1, 0)));
+        let dy = mean(shift((x - 1, y - 1), (0, 1)), shift((x, y - 1), (0, 1)));
+        Some(vectorcraft_geom::Point::new(f64::from(x) + dx, f64::from(y) + dy))
+    }
     /// How far the edge lies from a crack between two pixels, towards the outside one (−0.5 to 0.5).
     ///
     /// Each pixel of the column across the crack is read as a blend of the tones on its two sides
@@ -690,7 +733,7 @@ impl Layers<'_> {
             true
         };
         for comp in trace_mask(&mask, w, h) {
-            let fit = |l: &Loop| fit::fit_loop(l, w, h, &|c| self.shift(c), &self.style);
+            let fit = |l: &Loop| fit::fit_loop(l, w, h, &|c| (self.shift(c), self.neighbour(c)), &|x, y| self.junction(x, y), &self.style);
             let Some(outer) = fit(&comp.outer) else { continue };
             let mut subs = vec![outer];
             for hole in &comp.holes {
