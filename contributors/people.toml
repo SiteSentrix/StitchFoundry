@@ -89,3 +89,7 @@ sync_github_name = false
 
 [people.Nael-Nathanael]
 sync_github_name = true
+
+[people.switch87]
+real_name = "Gert Pellin"
+sync_github_name = false
