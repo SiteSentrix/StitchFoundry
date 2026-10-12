@@ -505,9 +505,8 @@ fn send_to_current_layer(s: &mut Session, _: &Value) -> Result<Value> {
         return ok();
     }
     s.edit("Send to Current Layer", |d, _| {
-        for id in &ids {
-            d.move_node(*id, Some(layer), usize::MAX)?;
-        }
+        let moved = d.remove_many(&ids)?;
+        d.children_mut(Some(layer))?.extend(moved);
         Ok(())
     })?;
     ok()
@@ -525,14 +524,11 @@ fn group(s: &mut Session, _: &Value) -> Result<Value> {
 
 /// Put `ids` (top-level objects, in paint order) in a new group where the front-most one was.
 pub(crate) fn group_nodes(d: &mut Document, ids: &[NodeId]) -> Result<NodeId> {
-    let Some(top) = ids.last().copied() else { return Err(EngineError::Other("nothing selected".into())) };
-    let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
-    let gid = d.alloc_id();
-    d.insert(par, idx + 1, Node::group(gid, vec![]))?;
-    for id in ids {
-        d.move_node(*id, Some(gid), usize::MAX)?;
+    if ids.is_empty() {
+        return Err(EngineError::Other("nothing selected".into()));
     }
-    Ok(gid)
+    let gid = d.alloc_id();
+    Ok(d.wrap(ids, |children| Node::group(gid, children))?)
 }
 
 fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {
@@ -544,31 +540,30 @@ fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {
     }
     s.edit("Ungroup", |d, sel| {
         let mut new_sel = vec![];
+        let mut ungrouped = vec![];
         for id in &ids {
             let Some(n) = d.node(*id) else { continue };
             let NodeKind::Group { children, clip } = &n.kind else {
                 new_sel.push(*id);
                 continue;
             };
-            let children = children.clone();
-            let clip = *clip;
-            let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
-            let opacity = n.opacity;
-            d.remove(*id)?;
-            for (k, c) in children.into_iter().enumerate() {
-                let mut c = (*c).clone();
+            let mut out = Vec::with_capacity(children.len());
+            for (k, c) in children.iter().enumerate() {
+                let mut c = (**c).clone();
                 // The clipping path keeps its paint (none, unless painted after Make).
-                if clip
+                if *clip
                     && k == 0
                     && let NodeKind::Path { clipping, .. } = &mut c.kind
                 {
                     *clipping = false;
                 }
-                c.opacity *= opacity;
+                c.opacity *= n.opacity;
                 new_sel.push(c.id);
-                d.insert(par, idx + k, c)?;
+                out.push(c);
             }
+            ungrouped.push((*id, out));
         }
+        d.insert_beside(ungrouped, true)?;
         sel.set(new_sel);
         Ok(())
     })?;
@@ -666,10 +661,8 @@ fn show_all(s: &mut Session, _: &Value) -> Result<Value> {
 fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let Some(backmost) = ids.first().copied() else { return Err(EngineError::Other("nothing selected".into())) };
-    let top = ids.last().copied().unwrap_or(backmost);
     let id = s.edit("Make Compound Path", |d, sel| {
         let appearance = d.node(backmost).ok_or(EngineError::NoNode(backmost))?.appearance.clone();
-        let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let mut paths: Vec<Arc<Node>> = vec![];
         for id in &ids {
             let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
@@ -689,11 +682,7 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
         let cid = d.alloc_id();
         let mut c = Node::new(cid, NodeKind::Compound { children: vec![], rule: FillRule::NonZero });
         c.appearance = appearance;
-        d.insert(par, idx + 1, c)?;
-        for id in &ids {
-            d.remove(*id)?;
-        }
-        let ch = d.node_mut(cid).and_then(|n| n.children_mut()).ok_or(EngineError::NoNode(cid))?;
+        let ch = c.children_mut().ok_or(EngineError::NoNode(cid))?;
         // The paths in front run against the backmost one, so where they overlap it they cut holes
         // under the non-zero fill rule (#1197).
         let direction = |n: &Node| n.path_data().and_then(|pd| pd.subpaths.first()).map_or(0.0, |sp| sp.signed_area().signum());
@@ -710,6 +699,7 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
             }
             ch.push(p);
         }
+        d.wrap(&ids, |_| c)?;
         sel.set([cid]);
         Ok(cid)
     })?;
@@ -736,17 +726,17 @@ fn compound_release(s: &mut Session, _: &Value) -> Result<Value> {
     }
     s.edit("Release Compound Path", |d, sel| {
         let mut out = vec![];
+        let mut released = vec![];
         for id in &ids {
             let Some(n) = d.node(*id).cloned().filter(releases) else { continue };
-            let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
-            d.remove(*id)?;
+            let mut parts = vec![];
             match &n.kind {
                 NodeKind::Compound { children, .. } => {
-                    for (k, c) in children.iter().enumerate() {
+                    for c in children {
                         let mut c = (**c).clone();
                         c.appearance = n.appearance.clone();
                         out.push(c.id);
-                        d.insert(par, idx + k, c)?;
+                        parts.push(c);
                     }
                 }
                 // Each subpath becomes a path of its own with the path's paint, in the same
@@ -758,12 +748,14 @@ fn compound_release(s: &mut Session, _: &Value) -> Result<Value> {
                             (*path, *live) = (PathData::single(sp.clone()), None);
                         }
                         out.push(c.id);
-                        d.insert(par, idx + k, c)?;
+                        parts.push(c);
                     }
                 }
                 _ => {}
             }
+            released.push((*id, parts));
         }
+        d.insert_beside(released, true)?;
         sel.set(out);
         Ok(())
     })?;
@@ -811,13 +803,12 @@ fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(&top) = ids.last() else { return Err(EngineError::Other("nothing selected".into())) };
     let gid = s.edit("Make Clipping Mask", |d, sel| {
         make_clipping_path(d, top)?;
-        let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let gid = d.alloc_id();
-        d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![], clip: true }))?;
-        d.move_node(top, Some(gid), 0)?;
-        for id in &ids[..ids.len() - 1] {
-            d.move_node(*id, Some(gid), usize::MAX)?;
-        }
+        // The topmost object, the clipping path, goes first, and the others follow in paint order.
+        d.wrap(&ids, |mut children| {
+            children.rotate_right(1);
+            Node::new(gid, NodeKind::Group { children, clip: true })
+        })?;
         sel.set([gid]);
         Ok(gid)
     })?;

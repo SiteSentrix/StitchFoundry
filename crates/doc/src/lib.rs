@@ -693,6 +693,10 @@ fn yes() -> bool {
     true
 }
 
+/// Listed nodes by parent: the parent's index path (empty for the top-level layers), then the index
+/// of each listed child in it, in order, with the child's place in the list.
+type Places = BTreeMap<Vec<usize>, Vec<(usize, usize)>>;
+
 pub const FORMAT_VERSION: u32 = 1;
 
 impl Document {
@@ -1019,6 +1023,128 @@ impl Document {
         let idx = *self.index_path(id)?.last()?;
         let n = self.children(parent)?.len();
         Some((parent, idx, n))
+    }
+
+    /// Remove the nodes `ids` names and return them in the order of `ids`, in one pass over the
+    /// children of each parent. Each id is listed once and none lies inside another listed node, as
+    /// in a list of top-level objects. For an id that is not in the tree, is listed twice or lies
+    /// inside another listed node, it fails with `NoNode` and leaves the document as it was.
+    pub fn remove_many(&mut self, ids: &[NodeId]) -> Result<Vec<Arc<Node>>, DocError> {
+        let places = self.places(ids)?;
+        let removed = self.take(places, ids.len())?;
+        self.index.clear();
+        Ok(removed)
+    }
+
+    /// Remove the nodes `ids` names, as [`Document::remove_many`] does, and put the node that `make`
+    /// builds from them (in the order of `ids`) in the parent of the last of them, at that node's
+    /// index less the number of listed nodes below it there. Returns the new node's id.
+    pub fn wrap(&mut self, ids: &[NodeId], make: impl FnOnce(Vec<Arc<Node>>) -> Node) -> Result<NodeId, DocError> {
+        let places = self.places(ids)?;
+        let last = ids.len().checked_sub(1);
+        let found = places.iter().find_map(|(up, kids)| kids.iter().find(|(_, k)| Some(*k) == last).map(|(i, _)| (up.clone(), *i)));
+        let Some((up, i)) = found else { return Err(DocError::Invalid("nothing to wrap".into())) };
+        // The parent and each node it is in move down by the listed nodes before them.
+        let below = |parent: &[usize], index: usize| places.get(parent).map_or(0, |kids| kids.partition_point(|(j, _)| *j < index));
+        let to: Vec<usize> = up.iter().enumerate().map(|(l, &j)| j.saturating_sub(below(&up[..l], j))).collect();
+        let at = i.saturating_sub(below(&up, i));
+        let node = make(self.take(places, ids.len())?);
+        let id = node.id;
+        let children = self.children_at(&to).ok_or_else(|| DocError::Invalid("the container of the listed objects is gone".into()))?;
+        let at = at.min(children.len());
+        children.insert(at, Arc::new(node));
+        self.index.clear();
+        Ok(id)
+    }
+
+    /// Put each list of nodes in `items` directly above its anchor (`replace`: in its place), in
+    /// list order, in one pass over the children of each parent. Each anchor is listed once and none
+    /// lies inside another. For an anchor that is not in the tree, is listed twice or lies inside
+    /// another listed anchor, it fails with `NoNode` and leaves the document as it was.
+    pub fn insert_beside(&mut self, items: Vec<(NodeId, Vec<Node>)>, replace: bool) -> Result<(), DocError> {
+        let anchors: Vec<NodeId> = items.iter().map(|(id, _)| *id).collect();
+        let places = self.places(&anchors)?;
+        let mut lists: Vec<Vec<Node>> = items.into_iter().map(|(_, nodes)| nodes).collect();
+        self.edit_children(places, |k, anchor, children| {
+            if !replace {
+                children.push(anchor);
+            }
+            let nodes = lists.get_mut(k).map(std::mem::take).unwrap_or_default();
+            children.extend(nodes.into_iter().map(Arc::new));
+        })?;
+        self.index.clear();
+        Ok(())
+    }
+
+    /// Where each of `ids` is ([`Places`]). Fails with `NoNode` for an id that is not in the tree,
+    /// is listed twice or lies inside another listed node.
+    fn places(&self, ids: &[NodeId]) -> Result<Places, DocError> {
+        let paths = self.index_paths(ids.iter().copied());
+        let mut places = Places::new();
+        for (k, id) in ids.iter().enumerate() {
+            let (&i, up) = paths.get(id).and_then(|p| p.split_last()).ok_or(DocError::NoNode(*id))?;
+            match places.get_mut(up) {
+                Some(kids) => kids.push((i, k)),
+                None => {
+                    places.insert(up.to_vec(), vec![(i, k)]);
+                }
+            }
+        }
+        for kids in places.values_mut() {
+            kids.sort_unstable();
+        }
+        // An id listed twice has one path, so its parent lists the same child twice. A listed node
+        // lies inside another when its parent's path, or a part of it from the top, is the path of a
+        // listed node.
+        let twice = places.values().flat_map(|kids| kids.windows(2)).find(|w| w[0].0 == w[1].0).map(|w| w[1].1);
+        let listed = |path: &[usize]| {
+            path.split_last().is_some_and(|(i, up)| places.get(up).is_some_and(|kids| kids.binary_search_by_key(i, |(j, _)| *j).is_ok()))
+        };
+        let nested = places.iter().find(|(up, _)| (1..=up.len()).any(|l| listed(&up[..l])));
+        let inner = nested.and_then(|(_, kids)| kids.first()).map(|(_, k)| *k);
+        if let Some(id) = twice.or(inner).and_then(|k| ids.get(k)) {
+            return Err(DocError::NoNode(*id));
+        }
+        Ok(places)
+    }
+
+    /// Take the nodes `places` lists out of their parents and return them in the order of the list,
+    /// which is `len` long.
+    fn take(&mut self, places: Places, len: usize) -> Result<Vec<Arc<Node>>, DocError> {
+        let mut taken = vec![None; len];
+        self.edit_children(places, |k, node, _| {
+            if let Some(t) = taken.get_mut(k) {
+                *t = Some(node);
+            }
+        })?;
+        Ok(taken.into_iter().flatten().collect())
+    }
+
+    /// Rebuild the children of each parent in `places` once, the parents later in tree order
+    /// first. `each` gets each listed child, its place in the list and the parent's new children,
+    /// onto which it pushes what takes the child's place.
+    fn edit_children(&mut self, places: Places, mut each: impl FnMut(usize, Arc<Node>, &mut Vec<Arc<Node>>)) -> Result<(), DocError> {
+        for (up, kids) in places.into_iter().rev() {
+            let children = self.children_at(&up).ok_or_else(|| DocError::Invalid("a container of the listed objects is gone".into()))?;
+            let old = std::mem::take(children);
+            children.reserve(old.len());
+            let mut kids = kids.into_iter().peekable();
+            for (i, node) in old.into_iter().enumerate() {
+                match kids.next_if(|(j, _)| *j == i) {
+                    Some((_, k)) => each(k, node, children),
+                    None => children.push(node),
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The children of the node at index path `path`, or the top-level layers for an empty path.
+    fn children_at(&mut self, path: &[usize]) -> Option<&mut Vec<Arc<Node>>> {
+        match path {
+            [] => Some(&mut self.layers),
+            _ => self.node_mut_at(path)?.children_mut(),
+        }
     }
 
     /// Default target layer: the topmost visible, unlocked layer.
