@@ -952,3 +952,51 @@ fn hyphenation_exceptions_preference_reaches_the_hyphenator() {
     set_pref(&mut s, "hyphenationExceptions", json!(""));
     assert!(vectorcraft_text::hyphenation_exceptions().is_empty());
 }
+
+/// #1274: View › Snap to Point lands the anchor a selection is grabbed by (a press within a few
+/// pixels of it) on another object's anchor, with Smart Guides on or off, not the pressed spot
+/// beside it.
+#[test]
+fn snap_to_point_lands_the_grabbed_anchor_on_another_anchor() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    let a = square(&mut s, 100.0, 100.0);
+    square(&mut s, 300.0, 100.0);
+    for v in [ViewInfo { smart_guides: false, ..ViewInfo::default() }, ViewInfo::default()] {
+        s.select_tool("selection", v).unwrap();
+        // Nothing selected, so no bounding box handle sits on the corner.
+        s.execute("select.none", &json!({})).unwrap();
+        // Pressed 2 px left of and below the top-right anchor (150, 100), released with the
+        // pointer 1.4 px from the other square's top-left anchor (300, 100).
+        gesture(&mut s, v, &[(Down, 148.0, 102.0), (Drag, 200.0, 110.0), (Drag, 299.0, 101.0), (Up, 299.0, 101.0)]);
+        assert_eq!(top_left(&s, a), (250.0, 100.0), "the grabbed anchor lands on the anchor ({v:?})");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+/// #1274: with Smart Guides off, View › Snap to Point turns the selection arrow hollow over an
+/// anchor a press would grab, and lands a Pen click within 2 px of an anchor on it.
+#[test]
+fn snap_to_point_cues_anchors_and_lands_pen_clicks_on_them() {
+    use vectorcraft_tools::PointerKind::{Down, Up};
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = new_doc();
+    square(&mut s, 300.0, 100.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let on = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    let off = ViewInfo { snap_to_point: false, ..on };
+    s.select_tool("selection", on).unwrap();
+    let near = vectorcraft_geom::Point::new(302.0, 102.0);
+    assert_eq!(s.cursor(near, Mods::default(), on), Cursor::ArrowHollow);
+    assert_eq!(s.cursor(vectorcraft_geom::Point::new(325.0, 125.0), Mods::default(), on), Cursor::Arrow, "away from the anchors");
+    assert_eq!(s.cursor(near, Mods::default(), off), Cursor::Arrow, "Snap to Point off");
+    for (v, first) in [(on, (300.0, 100.0)), (off, (301.0, 101.0))] {
+        s.select_tool("pen", v).unwrap();
+        gesture(&mut s, v, &[(Down, 301.0, 101.0), (Up, 301.0, 101.0), (Down, 200.0, 250.0), (Up, 200.0, 250.0)]);
+        let id = *s.doc().unwrap().selection.objects.first().unwrap();
+        let p = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors[0].p;
+        assert_eq!((p.x, p.y), first, "{v:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+    }
+}
