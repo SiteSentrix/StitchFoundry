@@ -1035,3 +1035,29 @@ fn join_takes_the_paths_and_the_ends_to_join() {
         assert!(s.execute("path.join", &bad).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn pen_with_alt_converts_the_anchors_of_a_path_in_a_selected_group() {
+    // #1273: a selected group (or compound path) shows its paths' anchors, so Alt with the Pen
+    // converts them as it does a selected path's, rather than starting a new path there.
+    let alt = Mods { alt: true, ..Mods::default() };
+    let v = view();
+    for wrap in ["object.group", "object.compoundPath.make"] {
+        let mut s = session();
+        let anchors = json!([{"x": 100, "y": 200}, {"x": 200, "y": 100, "in": [150, 100], "out": [250, 100]}, {"x": 300, "y": 200}]);
+        let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        s.execute(wrap, &json!({})).unwrap();
+        assert!(!s.doc().unwrap().selection.objects.contains(&id), "{wrap}: the wrapper is selected, not the path");
+        s.select_tool("pen", v).unwrap();
+        // Alt-click the smooth anchor: a corner, in one step, and no new path.
+        assert_eq!(gesture(&mut s, &[(200.0, 100.0)], alt), 1, "{wrap}");
+        let a = path(&s, id).subpaths[0].anchors[1];
+        assert!(!a.has_in() && !a.has_out(), "{wrap}: a corner: {a:?}");
+        assert_eq!(paths(&s).len(), 1, "{wrap}: no new path");
+        // Alt-drag it: smooth again.
+        assert_eq!(gesture(&mut s, &[(200.0, 100.0), (220.0, 100.0), (240.0, 110.0)], alt), 1, "{wrap}");
+        let a = path(&s, id).subpaths[0].anchors[1];
+        assert_eq!((a.h_in, a.h_out), (Point::new(160.0, 90.0), Point::new(240.0, 110.0)), "{wrap}");
+        assert_eq!(paths(&s).len(), 1, "{wrap}: no new path");
+    }
+}

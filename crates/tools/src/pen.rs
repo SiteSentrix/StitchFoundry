@@ -107,12 +107,14 @@ fn last_anchor(cx: &ToolContext, id: NodeId) -> Option<(usize, usize)> {
     Some((si, ai))
 }
 
+/// Alt held over a handle end, an anchor or a segment of a selected path (or of one inside a
+/// selected group or compound path, whose anchors show too): the Anchor Point tool's gesture,
+/// within its tolerance.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Endpoint {
     First,
     Last,
 }
-
 /// Pick the closest eligible endpoint at `p`. The caller supplies the historical
 /// tie choice: closing prefers the first end, resuming prefers the last. A one-anchor path has
 /// no eligible closing end.
@@ -129,15 +131,14 @@ fn pick_endpoint(first: Option<Point>, last: Point, p: Point, tol: f64, tie: End
         (None, None) => None,
     }
 }
-
 /// Alt held over a handle end, an anchor or a segment of a selected path: the Anchor Point tool's
 /// gesture, within its tolerance.
 fn alt_converts(cx: &ToolContext, p: Point, m: Mods) -> bool {
     let point = cx.point_tol();
     m.alt
         && (hit_handle(cx, p, point).is_some()
-            || crate::draw2::anchor_in(cx, editable_paths(cx), p, point).is_some()
-            || crate::draw2::segment_in(cx, editable_paths(cx), p, cx.pick_tol()).is_some())
+            || crate::draw2::anchor_in(cx, crate::draw2::shown_paths(cx), p, point).is_some()
+            || crate::draw2::segment_in(cx, crate::draw2::shown_paths(cx), p, cx.pick_tol()).is_some())
 }
 
 /// Preview the outgoing handle of anchor `ai` of subpath `si` at `h`, the incoming one left alone.
