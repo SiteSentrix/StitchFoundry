@@ -403,7 +403,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | MO-03 | Graded motif runs (motif size varies along the line) | Done | Motif runs grow or shrink to *Width at end* | – |
 | MO-04 | Motif fills, paired motif fills, 3D motif fills | Done | Motif fill: rows of any motif inside the shape, row offset; paired motif fills (a second motif in turn along the rows); 3D motif fills (*3D effect*: globe out, globe in, perspective, with a strength and a direction; public description: https://docs.wilcom.com/embroiderystudio/27/en/OnlineHelp/Decorative/motifs/motifs-14.htm and motifs-15.htm) | – |
 | MO-05 | Graded motif columns | Done | Satin columns and lines sewn as motifs (*Sew as: Motifs*): each as wide as the column where it sits, its length a multiple of that width, turning with the rungs; tapered lines grade them | – |
-| MO-06 | Motif sets and custom motifs (make a motif from an object) | Partial | Embroidery › Make Motif turns a drawn path into a motif kept with the design: motif runs, motif fills, borders and Place Motif sew it, upright as drawn; remaking it by name updates what sews it. No motif sets shared across designs (preferences) yet | 2 |
+| MO-06 | Motif sets and custom motifs (make a motif from an object) | Done | Embroidery › Make Motif turns a drawn path into a motif kept with the design: motif runs, motif fills, borders, the Motif tool and Place Motif sew it, upright as drawn; remaking it by name updates what sews it; My Motifs keeps motifs for any design (`embroidery.motif.keep`) | – |
 
 ### 6.9 Specialty stitching
 
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 136 done,
-33 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 137 done,
+32 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

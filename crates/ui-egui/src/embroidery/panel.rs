@@ -213,11 +213,12 @@ fn digitize_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // the Motif tool: the motif a click or a drag places
     if app.session.tool_id() == MOTIF_TOOL {
-        let library: Vec<String> = app
+        let ours: Vec<String> = app
             .session
             .active()
             .and_then(|st| st.doc.embroidery.as_deref().map(|c| c.motifs.iter().map(|m| m.name.clone()).collect()))
             .unwrap_or_default();
+        let library = with_kept(app, ours);
         let chosen = app.session.tool_options_of(MOTIF_TOOL)["motif"].as_str().unwrap_or("Wave").to_string();
         let built = Motif::ALL.into_iter().find(|m| m.label().eq_ignore_ascii_case(&chosen));
         let custom = built.is_none().then(|| CustomMotif { name: chosen.clone(), ..CustomMotif::default() });
@@ -825,21 +826,39 @@ fn profile_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, f: &FillP
 /// (Make Motif), and Delete Motif when it sews one of those. `custom` is the design motif it
 /// sews, if any: shown even when the design no longer has it.
 fn motif_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, current: Motif, custom: Option<&CustomMotif>) {
-    let library: Vec<String> = app
+    let ours: Vec<String> = app
         .session
         .active()
         .and_then(|st| st.doc.embroidery.as_deref().map(|c| c.motifs.iter().map(|m| m.name.clone()).collect()))
         .unwrap_or_default();
+    let library = with_kept(app, ours.clone());
     match pick_motif(ui, &library, current, custom) {
         Some(MotifChoice::BuiltIn(m)) => set(app, target, json!({ "motif": m, "custom_motif": null })),
         Some(MotifChoice::Design(name)) => use_motif(app, target, &name),
         None => {}
     }
-    if let Some(c) = custom.filter(|c| library.contains(&c.name))
-        && button(ui, tl!("Delete Motif")).on_hover_text(tl!("Remove the motif from the design; what sews it keeps it.")).clicked()
-    {
-        app.run("embroidery.motif.delete", json!({ "name": c.name })).ok();
+    if let Some(c) = custom.filter(|c| ours.contains(&c.name)) {
+        ui.horizontal(|ui| {
+            if button(ui, tl!("Delete Motif")).on_hover_text(tl!("Remove the motif from the design; what sews it keeps it.")).clicked() {
+                app.run("embroidery.motif.delete", json!({ "name": c.name })).ok();
+            }
+            if !app.session.prefs.embroidery_motifs.iter().any(|m| m.name == c.name)
+                && button(ui, tl!("Keep Motif")).on_hover_text(tl!("Keep the motif in My Motifs, for any design")).clicked()
+            {
+                app.run("embroidery.motif.keep", json!({ "name": c.name })).ok();
+            }
+        });
     }
+}
+
+/// The design's motifs, then those of My Motifs it hasn't.
+fn with_kept(app: &VectorcraftApp, mut names: Vec<String>) -> Vec<String> {
+    for m in &app.session.prefs.embroidery_motifs {
+        if !names.contains(&m.name) {
+            names.push(m.name.clone());
+        }
+    }
+    names
 }
 
 /// A built-in motif's name in the UI language.

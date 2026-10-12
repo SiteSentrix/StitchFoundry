@@ -101,6 +101,11 @@ together toward the edge; **Globe in** makes a bowl, the motifs smallest in the 
 **Perspective** makes the fill recede, its motifs and rows smaller toward the far side, which
 *Direction* points to (90°: up). *Strength* (0 to 0.8) sets how much the motifs change; strong
 effects make small stitches where motifs shrink.
+**My Motifs:** *Keep Motif* (beside the motif list, or `embroidery.motif.keep {name}`) keeps one
+of the design's motifs for any design. The motif lists show My Motifs after the design's own;
+applying one adds it to the design. `embroidery.motif.library` lists them and
+`embroidery.motif.forget {name}` takes one out; they are kept with the preferences, and
+resetting the preferences keeps them.
 **Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
 sewn in a single run: move, scale and reshape it like any art. The **Motif tool** (in the
 Embroidery tool group) places one wherever you click, or drag across the canvas for one as long as
