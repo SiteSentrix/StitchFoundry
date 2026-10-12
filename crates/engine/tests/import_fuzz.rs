@@ -2083,7 +2083,7 @@ proptest! {
         survive("hostile editing data in an EPS of its art's box", || vectorcraft_engine::cmd::fileio::load("x.eps", &boxed).ok().map(|l| l.doc))?;
     }
 
-    /// The testkit's sample damaged, as it is and compressed, in EPS and `.ai` files.
+    /// The testkit's sample damaged, as it is and compressed, in EPS, `.ai` and PDF files.
     #[test]
     fn ai_mutated_sample_never_panics(cut in 0usize..4_000, edits in prop::collection::vec((0usize..4_000, any::<u8>()), 0..12)) {
         use vectorcraft_testkit::ai;
@@ -2098,6 +2098,8 @@ proptest! {
             bytes.truncate(cut.max(4));
             let file = ai::ai(&bytes, ai::page_pdf());
             survive(what, || vectorcraft_engine::cmd::fileio::load("x.ai", &file).ok().map(|l| l.doc))?;
+            let file = ai::pdf(&bytes, ai::page_pdf());
+            survive(what, || vectorcraft_engine::cmd::fileio::load("x.pdf", &file).ok().map(|l| l.doc))?;
             let file = ai::eps(&bytes, ai::page_ps());
             survive(what, || vectorcraft_engine::cmd::fileio::load("x.eps", &file).ok().map(|l| l.doc))?;
         }

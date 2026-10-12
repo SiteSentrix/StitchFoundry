@@ -64,10 +64,11 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G9 Illustrator `.ai` and EPS files from real users
 
 - **Missing:** faithful layer and group structure from the editing data in real files (#951: 109 layers instead
-  of 14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
+  of 14), guides and non-printing construction
   lines (#779), open speed on large files (#758), legacy type in `.ai` files in PostScript form (those without
   their prolog open since #1027), live effects, brushes and symbols as live objects (#637; pattern fills and global colours are read since #1025). Writing Illustrator's own editing data is out of scope
-  (undocumented); Save As `.ai` stays PDF-compatible.
+  (undocumented); Save As `.ai` stays PDF-compatible, and Illustrator 2018 opens such a file without its layers and
+  groups (#868).
 - **Evidence:** the issues above; 28 of the 350 issues are about `.ai`/EPS (about 22 people, the most common single
   format theme), 20 fixed, and the 8 open ones are about structure (layers, guides, speed, live objects), not missing
   art. No real-file `.ai` corpus (users' files may be used locally, never committed).

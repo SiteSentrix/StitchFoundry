@@ -1,6 +1,6 @@
-//! Illustrator EPS and `.ai` files open from the editing data they carry: layers, groups, names,
-//! hidden objects, artboards, colours and images as they were; what the reader doesn't read yet
-//! opens as before, with a warning saying why.
+//! Illustrator EPS, `.ai` and PDF files open from the editing data they carry: layers, groups,
+//! names, hidden objects, artboards, colours and images as they were; what the reader doesn't read
+//! yet opens as before, with a warning saying why.
 
 use std::io::Write as _;
 use std::sync::Arc;
@@ -80,6 +80,50 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     // Pages picked: the PDF's.
     open(&mut s, "art.ai", &file, json!({"pages": "1"})).unwrap();
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
+}
+
+/// A PDF saved with the editing data opens from it, as a `.ai` does (#868).
+#[test]
+fn a_pdf_saved_with_the_editing_data_opens_from_it() {
+    let mut s = Session::new();
+    let file = ai::pdf(&compressed(&ai::sample_data()), ai::page_pdf());
+    let r = open(&mut s, "art.pdf", &file, json!({})).unwrap();
+    assert_eq!((&r["format"], &r["warnings"]), (&json!("pdf"), &json!([])), "{r}");
+    check_sample(&s);
+    // Without it: the PDF part.
+    let r = open(&mut s, "art.pdf", &file, json!({"editingData": false})).unwrap();
+    let layers = &s.doc().unwrap().doc.layers;
+    assert_eq!(layers.len(), 1, "{r}");
+    assert_ne!(names(layers), ["Art"]);
+}
+
+/// Art crossing the page's edge opens whole from a PDF's editing data, without the note that the
+/// PDF's art was clipped to the page; without the editing data it is clipped, with the note.
+#[test]
+fn a_pdfs_art_past_the_page_opens_whole_from_its_editing_data() {
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 g\n{}f\n", ai::rect(150.0, 20.0, 250.0, 80.0))));
+    let file = ai::pdf(data.as_bytes(), "0 g 150 20 100 60 re f");
+    let mut s = Session::new();
+    let r = open(&mut s, "past.pdf", &file, json!({})).unwrap();
+    assert_eq!(r["warnings"], json!([]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Art"]);
+    assert!(doc.art_bounds().is_some_and(|b| b.x1 > 200.5), "{:?}", doc.art_bounds());
+    let r = open(&mut s, "past.pdf", &file, json!({"editingData": false})).unwrap();
+    assert_eq!(r["warnings"], json!([vectorcraft_pdf::PAST_PAGE_NOTE]), "{r}");
+    assert!(s.doc().unwrap().doc.art_bounds().is_some_and(|b| b.x1 < 200.5));
+}
+
+/// Editing data that can't be read leaves the file as its PDF part reads, with that part's notes:
+/// a `.ai`'s art outside its artboards is missing, and a PDF's art past the page is clipped.
+#[test]
+fn editing_data_that_cant_be_read_keeps_the_pdf_parts_notes() {
+    let damaged = b"%AI12_CompressedData not zlib";
+    let mut s = Session::new();
+    let r = open(&mut s, "damaged.ai", &ai::ai(damaged, ai::page_pdf()), json!({})).unwrap();
+    assert_eq!(r["warnings"], json!([vectorcraft_pdf::OFF_ARTBOARD_NOTE]), "{r}");
+    let r = open(&mut s, "damaged.pdf", &ai::pdf(damaged, "0 g 150 20 100 60 re f"), json!({})).unwrap();
+    assert_eq!(r["warnings"], json!([vectorcraft_pdf::PAST_PAGE_NOTE]), "{r}");
 }
 
 #[test]
