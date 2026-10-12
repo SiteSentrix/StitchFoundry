@@ -173,7 +173,7 @@ pub(crate) fn effects_scale(doc: &Document) -> f64 {
 pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&Node>, scale: f64) -> Option<Node> {
     // What it paints (its members' effects included), and how far its fills' and strokes' raster
     // effects reach beyond that.
-    let b = vectorcraft_render::painted_bounds(whole)?;
+    let b = vectorcraft_render::painted_bounds(out, whole)?;
     let look = out.raster_effects.clone();
     let reach = whole.appearance.items.iter().map(|i| effects::outset(i.effects(), b)).fold(0.0, f64::max) + 2.0 + look.add_around;
     let b = b.inflate(reach, reach);

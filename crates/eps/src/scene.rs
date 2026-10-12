@@ -9,7 +9,7 @@ use std::sync::Arc;
 use kurbo::Shape;
 use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, ColorMode, Document, Effect, ImageObject, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject,
+    AppearanceItem, ColorMode, Document, Effect, ImageObject, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject,
 };
 use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
@@ -94,6 +94,11 @@ fn overlaps(a: Rect, b: Rect) -> bool {
 
 pub(crate) struct Scene<'a> {
     doc: &'a Document,
+    /// The art boxes of `doc`'s symbols, which the walk measures symbol instances by when it
+    /// leaves out objects outside the region ([`SymbolBoxes::quick`]). The box of an instance whose
+    /// art holds brushed strokes grows by as far as their brush art can paint
+    /// ([`SymbolBoxes::with_brush_art`]).
+    symbols: SymbolBoxes<'a>,
     o: &'a EpsOptions,
     /// RGB and Lab colours are written as CMYK.
     cmyk: bool,
@@ -114,6 +119,7 @@ impl<'a> Scene<'a> {
     pub fn new(doc: &'a Document, o: &'a EpsOptions) -> Self {
         Self {
             doc,
+            symbols: doc.symbol_boxes().quick().with_brush_art(),
             o,
             cmyk: o.cmyk || doc.color_mode == ColorMode::Cmyk,
             cms: vectorcraft_color::cms::active(),
@@ -254,7 +260,7 @@ impl<'a> Scene<'a> {
         if let NodeKind::Layer { template: true, .. } = n.kind {
             return;
         }
-        match n.visual_bounds() {
+        match n.visual_bounds_with(&self.symbols) {
             Some(b) if !force && !overlaps(b.inflate(1.0, 1.0), self.o.region) => return,
             None if !n.is_container() => return,
             _ => {}

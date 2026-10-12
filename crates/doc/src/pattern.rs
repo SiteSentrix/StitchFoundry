@@ -516,8 +516,12 @@ impl RepeatSpec {
     }
     /// Geometric bounds of all instances.
     pub fn bounds(&self) -> Option<Rect> {
-        let b = self.source_bounds()?;
-        self.transforms().into_iter().fold(None, |acc, m| vectorcraft_geom::union_opt(acc, Some(m.transform_rect_bbox(b))))
+        self.copies_bounds(self.source_bounds()?)
+    }
+    /// The bounds of all instances of a source measuring `source`, each placed by its transform
+    /// ([`Self::transforms`]).
+    pub(crate) fn copies_bounds(&self, source: Rect) -> Option<Rect> {
+        self.transforms().into_iter().fold(None, |acc, m| vectorcraft_geom::union_opt(acc, Some(m.transform_rect_bbox(source))))
     }
     /// Apply a document transform (source + arrangement parameters).
     pub fn transform(&mut self, a: Affine, scaling: impl Into<crate::node::Scaling>) {

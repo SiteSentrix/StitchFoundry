@@ -187,6 +187,196 @@ fn hidden_and_culled() {
     assert_eq!(rr.stats.culled, 1);
 }
 
+/// A document with symbol "Far" holding a red rectangle `art`, and an instance of it moved by
+/// (-50, -50): its 20 × 20 square, (-60, -60) to (-40, -40), lies outside a view of the page.
+fn far_instance(art: Rect) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let art = rect_node(&mut d, art, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })).unwrap();
+    d
+}
+
+#[test]
+fn an_instance_is_culled_by_its_symbols_art() {
+    // The art drawn from (350, 350) is out of view.
+    let away = far_instance(Rect::new(400.0, 400.0, 440.0, 440.0));
+    let mut rr = Renderer::new();
+    assert_eq!(rr.render(&away, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixel(70, 70), [0, 0, 0, 0]);
+    assert_eq!(rr.stats.culled, 1);
+    // The symbol's art, from (100, 100), drawn from (50, 50): in view. The instance is the same
+    // node, and the renderer measures it again.
+    let mut near = away.clone();
+    let art = rect_node(&mut near, Rect::new(100.0, 100.0, 140.0, 140.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    near.symbols[0].art = Arc::new(art);
+    assert_eq!(rr.render(&near, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixel(70, 70), [255, 0, 0, 255]);
+    assert_eq!(rr.stats.culled, 0);
+}
+
+#[test]
+fn an_instance_is_culled_by_the_effects_in_its_art() {
+    // The art, (-1, -1) to (1, 1), drawn from (-5, 20) lies left of the view, and its drop shadow,
+    // 8 pt to the right, reaches into it.
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
+    art.appearance.effects.push(shadow);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-5.0, 20.0)) })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert!(img.pixel(3, 20)[3] > 0, "{:?}", img.pixel(3, 20));
+}
+
+#[test]
+fn a_repeat_of_an_instance_is_culled_by_the_effects_in_its_art() {
+    // The instance of the test above as the one copy of a one-by-one grid repeat.
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
+    art.appearance.effects.push(shadow);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-5.0, 20.0)) });
+    let grid = vectorcraft_doc::TileType::Grid;
+    let kind =
+        vectorcraft_doc::RepeatKind::Grid { h_spacing: 0.0, v_spacing: 0.0, rows: 1, cols: 1, grid_type: grid, flip_rows: false, flip_cols: false };
+    let repeat = Node::new(d.alloc_id(), NodeKind::Repeat(vectorcraft_doc::RepeatSpec { kind, source: vec![Arc::new(instance)] }));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, repeat).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert!(img.pixel(3, 20)[3] > 0, "{:?}", img.pixel(3, 20));
+}
+
+#[test]
+fn past_the_measured_placements_an_instance_is_culled_by_an_estimate_of_its_art_effects() {
+    // Symbol `Spot` is a square from (-1, -1) to (1, 1) with a drop shadow 8 pt to the right, and
+    // symbols `Dot` and `Late` each hold an instance of it. 4,100 instances of `Dot`, each turned by
+    // another angle, lie far left of the view: one frame measures the effects in the art of at most
+    // 4,096 placements of symbols that hold instances. An instance of `Late` at (-5, 20) comes
+    // after them: its square lies left of the view, and the shadow reaches into it.
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
+    art.appearance.effects.push(shadow);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Spot".into(), art: Arc::new(art) });
+    for name in ["Dot", "Late"] {
+        let spot = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Spot".into(), xf: Affine::IDENTITY });
+        let group = Node::group(d.alloc_id(), vec![Arc::new(spot)]);
+        d.symbols.push(vectorcraft_doc::Symbol { name: name.into(), art: Arc::new(group) });
+    }
+    let l = d.layers[0].id;
+    for i in 0..4100 {
+        let xf = Affine::translate((-1000.0, 50.0)) * Affine::rotate(f64::from(i) * 1e-4);
+        let id = d.alloc_id();
+        d.insert(Some(l), i as usize, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf })).unwrap();
+    }
+    let id = d.alloc_id();
+    d.insert(Some(l), 4100, Node::new(id, NodeKind::SymbolInstance { symbol: "Late".into(), xf: Affine::translate((-5.0, 20.0)) })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert!(img.pixel(3, 20)[3] > 0, "{:?}", img.pixel(3, 20));
+}
+
+/// Symbols 0 to 29 each hold two instances of the next, sheared two ways, so that the 2^30
+/// instances drawn from the first are all placed differently. Symbol 30 holds a square with a drop
+/// shadow. An instance of symbol 0 lies far left of the view. With `effect`, every instance has
+/// that effect of its own. The renderer must cull the instance of symbol 0 within 30 s.
+fn nested_instances_are_culled_in_bounded_time(effect: Option<vectorcraft_doc::Effect>) {
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = rect_node(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 2, "y": 0, "blur": 0}), visible: true };
+    art.appearance.effects.push(shadow);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "S30".into(), art: Arc::new(art) });
+    let instance = |d: &mut Document, symbol: String, xf: Affine| {
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol, xf });
+        n.appearance.effects.extend(effect.clone());
+        n
+    };
+    for i in (0..30).rev() {
+        let next = format!("S{}", i + 1);
+        let mut pair = vec![];
+        for xf in [Affine::new([1.0, 0.0, 0.1, 1.0, 0.0, 0.0]), Affine::new([1.0, 0.1, 0.0, 1.0, 2.0, 0.0])] {
+            pair.push(Arc::new(instance(&mut d, next.clone(), xf)));
+        }
+        let group = Node::group(d.alloc_id(), pair);
+        d.symbols.push(vectorcraft_doc::Symbol { name: format!("S{i}"), art: Arc::new(group) });
+    }
+    let first = instance(&mut d, "S0".into(), Affine::translate((-100_000.0, 0.0)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, first).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut r = Renderer::new();
+        let img = r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+        tx.send((img.pixel(50, 50), r.stats.culled)).ok();
+    });
+    let (pixel, culled) = rx.recv_timeout(std::time::Duration::from_secs(30)).expect("the frame within 30 s");
+    assert_eq!(pixel, [0, 0, 0, 0]);
+    assert!(culled > 0);
+}
+
+#[test]
+fn nested_instances_with_effects_are_culled_in_bounded_time() {
+    nested_instances_are_culled_in_bounded_time(None);
+}
+
+#[test]
+fn nested_instances_with_geometry_effects_of_their_own_are_culled_in_bounded_time() {
+    // Each instance's Transform effect reshapes the art it shows before the effects in that art run.
+    let moved = vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 1}), visible: true };
+    nested_instances_are_culled_in_bounded_time(Some(moved));
+}
+
+#[test]
+fn a_scaled_instance_is_culled_by_the_effects_in_its_art_as_placed() {
+    // The art, (-1, -1) to (1, 1), scaled 30 times and centered on (-50, 50): (-80, 20) to
+    // (-20, 80), out of view. Its Transform effect doubles the placed art: (-110, -10) to
+    // (10, 110).
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let double = vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"scaleH": 200, "scaleV": 200}), visible: true };
+    art.appearance.effects.push(double);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((-50.0, 50.0)) * Affine::scale(30.0);
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(5, 50), [255, 0, 0, 255]);
+}
+
+#[test]
+fn an_instance_with_a_geometry_effect_is_culled_by_its_reshaped_art() {
+    // The art, (0, 0) to (20, 20), drawn from (-100, 10) is out of view, and the Transform effect
+    // moves it 150 pt right, into view.
+    let mut d = far_instance(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let id = d.layers[0].children().unwrap()[0].id;
+    let inst = d.node_mut(id).unwrap();
+    inst.kind = NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-100.0, 10.0)) };
+    let effect = vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 150}), visible: true };
+    inst.appearance.effects.push(effect);
+    assert_eq!(Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixel(60, 20), [255, 0, 0, 255]);
+}
+
+#[test]
+fn an_instance_with_a_geometry_effect_is_culled_by_the_effects_in_its_reshaped_art() {
+    // The art, (-1, -1) to (1, 1), and the instance at (-11, 20) each have a Transform effect that
+    // scales by 4. The instance's effect scales the placed art, (-12, 19) to (-10, 21), to
+    // (-15, 16) to (-7, 24), and the art's effect then scales that to (-27, 4) to (5, 36), which
+    // reaches into the view.
+    let mut d = Document::new(100.0, 100.0);
+    let scale = serde_json::json!({"scaleH": 400, "scaleV": 400});
+    let effect = || vectorcraft_doc::Effect { id: "distort.transform".into(), params: scale.clone(), visible: true };
+    let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    art.appearance.effects.push(effect());
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let mut instance = Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-11.0, 20.0)) });
+    instance.appearance.effects.push(effect());
+    d.insert(Some(l), 0, instance).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(2, 20), [255, 0, 0, 255]);
+}
+
 #[test]
 fn view_transform_zooms() {
     let mut d = Document::new(100.0, 100.0);

@@ -472,6 +472,39 @@ fn editing_an_instance_or_a_symbol_places_only_its_art_again() {
     assert!(moved.is_subset(&edited) && edited.len() == moved.len() + 6, "{} copies, then {}", moved.len(), edited.len());
 }
 
+/// A symbol whose art, kept between frames, lies outside the 20 × 20 square around the origin:
+/// each frame culls the instance by the art the symbol holds then and draws what a new renderer
+/// draws. When the symbol holds earlier art again, the renderer draws the art it placed for it
+/// then.
+#[test]
+fn instances_of_art_outside_the_square_follow_their_symbols_art() {
+    /// A blue square in a group, 20 × 20 from (x, 0).
+    fn square_at(d: &mut Document, x: f64) -> Arc<Node> {
+        let blue = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+        let square = Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 20.0)), blue);
+        Arc::new(Node::group(d.alloc_id(), vec![Arc::new(square)]))
+    }
+    let mut d = Document::new(200.0, 100.0);
+    // The instance moves the art by (-160, 40): the square from x 100 lies left of the view, and
+    // the one from x 200 lies from (40, 40) to (60, 60), in it. The 20 × 20 square around the
+    // origin lies from (-170, 30) to (-150, 50), left of the view.
+    let (off, on) = (square_at(&mut d, 100.0), square_at(&mut d, 200.0));
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: off.clone() });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-160.0, 40.0)) })).unwrap();
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    let mut placed = vec![];
+    for art in [&off, &on, &off, &on] {
+        d.symbols[0].art = art.clone();
+        let frame = r.render(&d, 200, 100, Affine::IDENTITY, &opts);
+        assert!(frame.pixels == Renderer::new().render(&d, 200, 100, Affine::IDENTITY, &opts).pixels);
+        assert_eq!(frame.pixel(50, 50) == [0, 0, 255, 255], Arc::ptr_eq(art, &on), "{:?}", frame.pixel(50, 50));
+        placed.push(placed_copies(&r, &[&d]));
+    }
+    assert!(!placed[1].is_empty() && placed[3] == placed[1], "the fourth frame draws the art placed in the second");
+}
+
 /// Draws `d` (200 × 100 points, on white), applies `edit` and draws it again with the same
 /// renderer: the frame changed, a new renderer draws the same, and only the document holds the
 /// symbols' art.

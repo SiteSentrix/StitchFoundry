@@ -43,6 +43,8 @@ pub mod shaper;
 pub mod slices;
 pub mod style_libs;
 pub mod swatches;
+mod symbols;
+pub use symbols::SymbolBoxes;
 pub mod text;
 pub mod trace;
 pub mod variables;
@@ -1207,33 +1209,36 @@ impl Document {
             _ => LAYER_COLORS[0].1,
         }
     }
-    /// Union of the geometric bounds of `ids`.
+    /// Union of the geometric bounds of `ids` (their visual bounds when `visual`), with symbol
+    /// instances measured by their art ([`Node::geometric_bounds_with`]).
     pub fn bounds_of(&self, ids: &[NodeId], visual: bool) -> Option<Rect> {
-        ids.iter()
-            .filter_map(|id| self.node(*id))
-            .fold(None, |acc, n| vectorcraft_geom::union_opt(acc, if visual { n.visual_bounds() } else { n.geometric_bounds() }))
+        let symbols = self.symbol_boxes();
+        ids.iter().filter_map(|id| self.node(*id)).fold(None, |acc, n| {
+            vectorcraft_geom::union_opt(acc, if visual { n.visual_bounds_with(&symbols) } else { n.geometric_bounds_with(&symbols) })
+        })
     }
-    /// Bounds of all art.
+    /// Visual bounds of all art, with symbol instances measured by their art.
     pub fn art_bounds(&self) -> Option<Rect> {
-        self.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, l.visual_bounds()))
+        let symbols = self.symbol_boxes();
+        self.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, l.visual_bounds_with(&symbols)))
     }
     /// Artboard index containing point `p` (topmost = last).
     pub fn artboard_at(&self, p: Point) -> Option<usize> {
         self.artboards.iter().rposition(|a| a.rect.contains(p))
     }
     /// The art that moves with an artboard at `rect`: top-level objects (children of layers and
-    /// sublayers) lying entirely inside it. Locked and hidden objects and layers stay put unless
-    /// `locked_and_hidden` (Selection & Anchor Display › Move Locked and Hidden Artwork with
-    /// Artboard).
+    /// sublayers) lying entirely inside it, with symbol instances measured by their art. Locked and
+    /// hidden objects and layers stay put unless `locked_and_hidden` (Selection & Anchor Display ›
+    /// Move Locked and Hidden Artwork with Artboard).
     pub fn art_on_artboard(&self, rect: Rect, locked_and_hidden: bool) -> Vec<NodeId> {
         // Art drawn flush with the artboard can end up a rounding error outside it (a background
         // 3e-14 pt past the top edge, #1295): a millionth of a point is far below anything visible.
         let rect = rect.inflate(1e-6, 1e-6);
-        fn collect(n: &Node, rect: Rect, all: bool, out: &mut Vec<NodeId>) {
+        fn collect(n: &Node, s: &SymbolBoxes, rect: Rect, all: bool, out: &mut Vec<NodeId>) {
             for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
                 if c.is_layer() {
-                    collect(c, rect, all, out);
-                } else if let Some(b) = c.geometric_bounds()
+                    collect(c, s, rect, all, out);
+                } else if let Some(b) = c.geometric_bounds_with(s)
                     // Inside it, edges included: art flush with the right or bottom edge is on it too
                     // (`Rect::contains` leaves those out, #890).
                     && b.x0 >= rect.x0
@@ -1245,9 +1250,10 @@ impl Document {
                 }
             }
         }
+        let symbols = self.symbol_boxes();
         let mut art = vec![];
         for l in self.layers.iter().filter(|l| l.rides_with_artboard(locked_and_hidden)) {
-            collect(l, rect, locked_and_hidden, &mut art);
+            collect(l, &symbols, rect, locked_and_hidden, &mut art);
         }
         art
     }
@@ -1560,6 +1566,17 @@ mod tests {
         {
             assert!(d.art_on_artboard(board, false).is_empty(), "overhang at {board:?}");
         }
+    }
+
+    #[test]
+    fn art_on_artboard_measures_a_symbol_instance_by_its_art() {
+        let mut d = Document::new(612.0, 792.0);
+        let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        d.symbols.push(Symbol { name: "Box".into(), art: Arc::new(art) });
+        let (layer, id) = (d.layers[0].id, d.alloc_id());
+        d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((2.0, 2.0)) })).unwrap();
+        // The art, (2, 2) to (12, 12), lies inside; the 20 × 20 square, (-8, -8) to (12, 12), doesn't.
+        assert_eq!(d.art_on_artboard(Rect::new(0.0, 0.0, 15.0, 15.0), false), vec![id]);
     }
 
     #[test]

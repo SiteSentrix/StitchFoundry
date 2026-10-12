@@ -134,6 +134,54 @@ fn roundtrip_rect_and_ellipse_bounds() {
 }
 
 #[test]
+fn an_instance_whose_art_reaches_the_page_is_written() {
+    // The symbol's red rectangle, (100, 50) to (140, 90), drawn from (-50, -50): on the page, while
+    // the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
+    let mut d = doc(200.0, 100.0);
+    let red = rect_node(Rect::new(100.0, 50.0, 140.0, 90.0), Color::rgb(1.0, 0.0, 0.0));
+    let far = vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(red) };
+    d.symbols.push(far.clone());
+    let instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) });
+    add(&mut d, instance.clone());
+    let out = roundtrip(&d);
+    let l = leaves(&out);
+    assert_eq!(l.len(), 1);
+    assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(50.0, 0.0, 90.0, 40.0), 0.01), "{:?}", l[0].geometric_bounds());
+    // An element of a knockout group, beside a blue rectangle.
+    let mut d = doc(200.0, 100.0);
+    d.symbols.push(far);
+    let blue = rect_node(Rect::new(150.0, 10.0, 170.0, 30.0), Color::rgb(0.0, 0.0, 1.0));
+    let mut group = Node::group(NodeId(0), vec![Arc::new(instance), Arc::new(blue)]);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    let fills: Vec<[u8; 4]> = leaves(&roundtrip(&d)).iter().filter_map(|n| Some(n.appearance.fill_paint().color()?.to_rgba8(1.0))).collect();
+    assert!(fills.contains(&[255, 0, 0, 255]) && fills.contains(&[0, 0, 255, 255]), "{fills:?}");
+}
+
+#[test]
+fn an_instance_whose_brush_art_reaches_the_page_is_written() {
+    // The symbol's art: a line from (0, 40) to (0, 60) with a 1 pt stroke painted by a 20 pt round
+    // nib. Drawn from (-5, 0), the line lies left of the page, and the nib paints 10 pt either side
+    // of it, onto the page.
+    let mut d = doc(200.0, 100.0);
+    let mut lib = vectorcraft_brush::library(&d);
+    let Some(vectorcraft_brush::BrushKind::Calligraphic(c)) = lib.iter_mut().find(|b| b.name == "3 pt. Round").map(|b| &mut b.kind) else {
+        panic!("the 3 pt. Round brush")
+    };
+    c.size = 20.0;
+    vectorcraft_brush::store(&mut d, &lib);
+    let mut stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    let line = Node::path(NodeId(0), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), stroke);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(line) });
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-5.0, 0.0)) }));
+    let out = roundtrip(&d);
+    let l = leaves(&out);
+    assert_eq!(l.len(), 1, "the nib's art");
+    assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(-15.0, 30.0, 5.0, 70.0), 0.01), "{:?}", l[0].geometric_bounds());
+}
+
+#[test]
 fn roundtrip_colours_preserved() {
     let mut d = doc(300.0, 100.0);
     let cols = [Color::rgb8(0x12, 0x34, 0x56), Color::rgb8(0xff, 0x80, 0x00), Color::rgb8(0x00, 0xc0, 0x40)];

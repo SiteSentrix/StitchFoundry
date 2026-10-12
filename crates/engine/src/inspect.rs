@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{ArrowAlign, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, WidthProfile};
 
 use crate::Session;
 
@@ -26,20 +26,21 @@ pub struct SummaryOpts {
     pub compound_member: bool,
 }
 
-/// Compact tree summary of a node (for `document.inspect`): the whole subtree.
-pub fn node_summary(n: &Node) -> Value {
-    node_summary_opts(n, SummaryOpts::default())
+/// Compact tree summary of a node (for `document.inspect`): the whole subtree, symbol instances
+/// measured by their art from `symbols`.
+pub fn node_summary(n: &Node, symbols: &SymbolBoxes) -> Value {
+    node_summary_opts(n, SummaryOpts::default(), symbols)
 }
 
 /// The same summary with [`SummaryOpts`] applied.
-pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
+pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> Value {
     let mut v = json!({
         "id": n.id.0,
         "name": n.display_name(),
         "kind": n.kind_label(),
         "visible": n.visible,
         "locked": n.locked,
-        "bounds": rect_json(n.geometric_bounds()),
+        "bounds": rect_json(n.geometric_bounds_with(symbols)),
     });
     if n.opacity < 1.0 {
         v["opacity"] = json!(n.opacity);
@@ -114,7 +115,7 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
                 child_limit: opts.child_limit,
                 compound_member: matches!(n.kind, NodeKind::Compound { .. }),
             };
-            v["children"] = Value::Array(ch.iter().rev().take(take_n).map(|c| node_summary_opts(c, next)).collect());
+            v["children"] = Value::Array(ch.iter().rev().take(take_n).map(|c| node_summary_opts(c, next, symbols)).collect());
         }
         if take_n < total || v.get("children").is_none() {
             v["childCount"] = json!(total);
@@ -132,6 +133,7 @@ pub fn document(s: &Session) -> Value {
 pub fn document_opts(s: &Session, opts: SummaryOpts) -> Value {
     let Some(st) = s.active() else { return Value::Null };
     let d = &st.doc;
+    let symbols = d.symbol_boxes();
     json!({
         "title": st.title(),
         "path": st.path,
@@ -141,7 +143,7 @@ pub fn document_opts(s: &Session, opts: SummaryOpts) -> Value {
         "colorMode": format!("{:?}", d.color_mode),
         "artboards": d.artboards.iter().map(|a| json!({"name": a.name, "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height()})).collect::<Vec<_>>(),
         // Top of the stack first, like the Layers panel.
-        "layers": d.layers.iter().rev().map(|l| node_summary_opts(l, opts)).collect::<Vec<_>>(),
+        "layers": d.layers.iter().rev().map(|l| node_summary_opts(l, opts, &symbols)).collect::<Vec<_>>(),
         "currentLayer": st.active_layer.map(|l| l.0),
         // The rows highlighted in the Layers panel (`layer.setCurrent`, `layer.highlight`).
         "layerRows": st.highlighted_rows().iter().map(|i| i.0).collect::<Vec<_>>(),

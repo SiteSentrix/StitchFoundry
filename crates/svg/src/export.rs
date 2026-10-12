@@ -1589,7 +1589,7 @@ impl Writer<'_> {
             }
             return 0;
         }
-        let bounds = n.visual_bounds();
+        let bounds = n.visual_bounds_with(&self.doc.symbol_boxes());
         let reach: f64 = fx.iter().map(|f| f.outset(bounds.unwrap_or_default())).sum::<f64>() + 2.0;
         let region = bounds.map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
         let mut opened = 0;

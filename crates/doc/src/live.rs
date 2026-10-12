@@ -1705,11 +1705,23 @@ pub fn subtree_has_live(n: &Node) -> bool {
     any
 }
 
-/// Largest stroke outset in a subtree (for visual bounds of envelopes).
-pub(crate) fn max_outset(nodes: &[Arc<Node>]) -> f64 {
+/// Largest stroke outset in a subtree (for visual bounds of envelopes). With `symbols`, the
+/// outsets in the art of the symbols its instances show count too
+/// ([`crate::symbols::ArtBox::reach`]), grown by [`crate::SymbolBoxes::brush_pad`]. In boxes made
+/// by [`crate::SymbolBoxes::without_art_strokes`], the outsets in the art do not count, and the pad
+/// does.
+pub(crate) fn max_outset(nodes: &[Arc<Node>], symbols: Option<&crate::SymbolBoxes>) -> f64 {
     let mut o = 0.0f64;
     for n in nodes {
-        n.walk(&mut |c| o = o.max(c.appearance.outset()));
+        n.walk(&mut |c| {
+            o = o.max(c.appearance.outset());
+            if let (Some(s), NodeKind::SymbolInstance { symbol, .. }) = (symbols, &c.kind)
+                && let Some(art) = s.art(symbol)
+            {
+                let reach = if s.art_strokes() { art.reach } else { 0.0 };
+                o = o.max(reach + s.brush_pad(symbol));
+            }
+        });
     }
     o
 }

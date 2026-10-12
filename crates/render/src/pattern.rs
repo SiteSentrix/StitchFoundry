@@ -91,6 +91,8 @@ fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w
     let view = Affine::scale_non_uniform(w as f64 / region.width().max(1e-9), h as f64 / region.height().max(1e-9))
         * Affine::translate(-region.origin().to_vec2());
     let opts = RenderOptions::default();
+    r.check_symbols(doc);
+    let symbols = doc.symbol_boxes().quick();
     r.stamp += 1;
     let px_rect = Rect::new(0.0, 0.0, w as f64, h as f64);
     for o in def.offsets_covering(region) {
@@ -98,6 +100,7 @@ fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w
         let frame = Frame {
             mt: false,
             doc,
+            symbols: &symbols,
             view: v,
             visible: v.inverse().transform_rect_bbox(px_rect),
             px: 1.0 / v.determinant().abs().sqrt().max(1e-12),
