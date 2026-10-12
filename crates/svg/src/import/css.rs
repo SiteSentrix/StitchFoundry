@@ -8,7 +8,7 @@
 //! order; a presentation attribute applies only when no rule sets the property.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use usvg::roxmltree;
@@ -188,6 +188,51 @@ struct Rule {
     decls: Rc<Vec<(String, String, bool)>>,
 }
 
+/// The rules filed under the id of their selector's rightmost compound, else under its first
+/// class, else under its type. Rules whose rightmost compound has none of these (`*`, `[x]`) are
+/// in `any`. Each list holds positions in the rule list, in source order.
+#[derive(Default)]
+struct Index {
+    ids: HashMap<String, Vec<usize>>,
+    classes: HashMap<String, Vec<usize>>,
+    tags: HashMap<String, Vec<usize>>,
+    any: Vec<usize>,
+}
+
+impl Index {
+    fn new(rules: &[Rule]) -> Self {
+        let mut index = Self::default();
+        for (i, r) in rules.iter().enumerate() {
+            let list = match r.selector.parts.first() {
+                Some((c, _)) => match (&c.id, c.classes.first(), &c.tag) {
+                    (Some(id), _, _) => index.ids.entry(id.clone()).or_default(),
+                    (None, Some(class), _) => index.classes.entry(class.clone()).or_default(),
+                    (None, None, Some(tag)) => index.tags.entry(tag.clone()).or_default(),
+                    (None, None, None) => &mut index.any,
+                },
+                None => &mut index.any,
+            };
+            list.push(i);
+        }
+        index
+    }
+
+    /// The positions of the rules to test against element `n`, each once, in source order: those
+    /// filed under its id, its classes and its type, and those in `any`.
+    fn candidates(&self, n: XNode) -> Vec<usize> {
+        let mut out = self.any.clone();
+        let mut add = |list: Option<&Vec<usize>>| out.extend(list.into_iter().flatten());
+        add(n.attribute("id").and_then(|id| self.ids.get(id)));
+        let mut seen = HashSet::new();
+        for class in n.attribute("class").into_iter().flat_map(str::split_whitespace).filter(|c| seen.insert(*c)) {
+            add(self.classes.get(class));
+        }
+        add(self.tags.get(n.tag_name().name()));
+        out.sort();
+        out
+    }
+}
+
 /// Rules from every `<style>` element, in source order.
 fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
     // Drop comments.
@@ -245,6 +290,7 @@ fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
 /// The cascade over one parsed document.
 pub(super) struct Styles {
     rules: Vec<Rule>,
+    index: Index,
     /// Declared properties of each element queried so far.
     cache: RefCell<HashMap<roxmltree::NodeId, Rc<HashMap<String, String>>>>,
 }
@@ -259,7 +305,8 @@ impl Styles {
             let css: String = st.children().filter_map(|c| c.text()).collect();
             parse_sheet(&css, &mut rules);
         }
-        Self { rules, cache: RefCell::default() }
+        let index = Index::new(&rules);
+        Self { rules, index, cache: RefCell::default() }
     }
 
     /// Properties set on `n` by rules and its `style` attribute, after the cascade.
@@ -276,7 +323,7 @@ impl Styles {
             }
         };
         let mut order = 0;
-        for r in self.rules.iter().filter(|r| r.selector.matches(n)) {
+        for r in self.index.candidates(n).into_iter().filter_map(|i| self.rules.get(i)).filter(|r| r.selector.matches(n)) {
             for (k, v, imp) in r.decls.iter() {
                 order += 1;
                 put(k, v, (*imp, false, r.selector.specificity, order));
@@ -306,6 +353,8 @@ impl Styles {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
 
     fn with_doc(svg: &str, f: impl FnOnce(&roxmltree::Document, &Styles)) {
@@ -361,6 +410,170 @@ mod tests {
                 assert_eq!(st.own(by_id(doc, "a"), "stroke").as_deref(), Some("red"));
             },
         );
+    }
+
+    /// What [`Styles::declared`] gave before the rules were indexed: every rule tested against `n`.
+    fn declared_by_every_rule(st: &Styles, n: XNode) -> HashMap<String, String> {
+        type Key = (bool, bool, (u32, u32, u32), usize);
+        let mut best: HashMap<String, (Key, String)> = HashMap::new();
+        let mut put = |name: &str, value: &str, key: Key| {
+            if best.get(name).is_none_or(|(k, _)| key >= *k) {
+                best.insert(name.to_string(), (key, value.to_string()));
+            }
+        };
+        let mut order = 0;
+        for r in st.rules.iter().filter(|r| r.selector.matches(n)) {
+            for (k, v, imp) in r.decls.iter() {
+                order += 1;
+                put(k, v, (*imp, false, r.selector.specificity, order));
+            }
+        }
+        if let Some(s) = n.attribute("style") {
+            for (k, v, imp) in parse_decls(s) {
+                order += 1;
+                put(&k, &v, (imp, true, (0, 0, 0), order));
+            }
+        }
+        best.into_iter().map(|(k, (_, v))| (k, v)).collect()
+    }
+
+    /// Checks that each element of `svg` gets the properties [`declared_by_every_rule`] gives it.
+    fn assert_same_as_every_rule(svg: &str) {
+        let doc = roxmltree::Document::parse(svg).unwrap();
+        let st = Styles::new(&doc);
+        for n in doc.descendants().filter(|n| n.is_element()) {
+            assert_eq!(*st.declared(n), declared_by_every_rule(&st, n), "{n:?} in {svg}");
+        }
+    }
+
+    /// Id, class, type, universal and attribute selectors, descendant and child combinators, and
+    /// rules that override each other give each element what testing every rule gives it.
+    #[test]
+    fn indexed_rules_give_what_testing_every_rule_gives() {
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><style>
+            * { stroke: s0 }
+            g rect { fill: f1 }
+            #a { fill: f2 }
+            .a { fill: f3 }
+            rect.a { fill: f4 }
+            .b.a { stroke: s5 }
+            g > .c { fill: f6 }
+            svg > g g rect { font-size: 9px }
+            [data-k=v] { display: none }
+            #a > tspan, text .x { font-size: 8px }
+            .c { fill: f8 !important }
+            rect { fill: f9 }
+            .a { fill: f10 }
+            [data-k] { fill: f11 }
+            </style>
+            <g class="c">
+              <rect id="a" class="a"/>
+              <rect id="r2" class="b&#9;a&#10;a"/>
+              <g class="c x"><rect id="r3" class="c" data-k="v"/><rect id="r4"/></g>
+              <circle id="c5" class="a x" data-k="w" style="stroke: s !important"/>
+            </g>
+            <text id="a" class="a"><tspan id="t6" class="x">t</tspan><tspan id="t7">u</tspan></text>
+            <rect id="r8" class="z"/>
+            </svg>"#;
+        assert_same_as_every_rule(svg);
+        with_doc(svg, |doc, st| {
+            let own = |id: &str, name: &str| st.own(by_id(doc, id), name);
+            assert_eq!(own("a", "fill").as_deref(), Some("f2"), "#a beats rect.a");
+            assert_eq!(own("r2", "fill").as_deref(), Some("f4"), "rect.a beats g rect");
+            assert_eq!(own("r2", "stroke").as_deref(), Some("s5"), "classes apart by a tab and a line feed, one repeated");
+            assert_eq!(own("r3", "fill").as_deref(), Some("f8"), "!important");
+            assert_eq!(own("r3", "display").as_deref(), Some("none"));
+            assert_eq!(own("r4", "fill").as_deref(), Some("f1"), "g rect beats rect");
+            assert_eq!(own("r4", "font-size").as_deref(), Some("9px"));
+            assert_eq!(own("c5", "fill").as_deref(), Some("f11"), "of rules alike, the last one");
+            assert_eq!(own("c5", "stroke").as_deref(), Some("s"));
+            assert_eq!(own("t7", "font-size").as_deref(), Some("8px"));
+            assert_eq!(own("r8", "fill").as_deref(), Some("f9"));
+        });
+    }
+
+    /// An element's candidates hold each rule once, however often the element repeats a class.
+    #[test]
+    fn repeated_classes_give_each_rule_once() {
+        with_doc(
+            r#"<svg xmlns="http://www.w3.org/2000/svg"><style>.a { fill: x } .b { stroke: y } .a.b { opacity: 0.5 } rect { fill: z }</style><rect id="r" class="a a b a b"/></svg>"#,
+            |doc, st| assert_eq!(st.index.candidates(by_id(doc, "r")), [0, 1, 2, 3]),
+        );
+    }
+
+    /// A compound selector over a few tags, ids, classes and attributes.
+    fn arb_compound() -> impl Strategy<Value = String> {
+        let tag = prop::sample::select(vec!["", "*", "g", "rect", "text", "tspan"]);
+        let id = prop::sample::select(vec!["", "#a", "#b"]);
+        let classes = prop::collection::vec(prop::sample::select(vec![".a", ".b", ".c"]), 0..3);
+        let attr = prop::sample::select(vec!["", "[data-k]", "[data-k=v]"]);
+        (tag, id, classes, attr).prop_map(|(t, i, c, a)| match format!("{t}{i}{}{a}", c.concat()) {
+            s if s.is_empty() => "*".to_string(),
+            s => s,
+        })
+    }
+
+    /// One to three compounds joined by descendant and child combinators.
+    fn arb_selector() -> impl Strategy<Value = String> {
+        (arb_compound(), prop::collection::vec((prop::sample::select(vec![" ", " > ", ">"]), arb_compound()), 0..3))
+            .prop_map(|(first, rest)| rest.into_iter().fold(first, |s, (comb, c)| format!("{s}{comb}{c}")))
+    }
+
+    /// A rule of one or two selectors that sets one to three properties, some of them `!important`.
+    fn arb_rule() -> impl Strategy<Value = String> {
+        let decl = (prop::sample::select(vec!["fill", "stroke", "display"]), 0..1000u16, any::<bool>())
+            .prop_map(|(name, v, important)| format!("{name}: v{v}{}", if important { " !important" } else { "" }));
+        (prop::collection::vec(arb_selector(), 1..3), prop::collection::vec(decl, 1..4))
+            .prop_map(|(selectors, decls)| format!("{} {{ {} }}", selectors.join(", "), decls.join("; ")))
+    }
+
+    /// An element that may have an id, classes (some repeated, apart by spaces, tabs and line feeds)
+    /// and a `data-k` or `style` attribute, with up to four children on each of the `depth` levels
+    /// below it.
+    fn arb_element(depth: u32) -> BoxedStrategy<String> {
+        let tag = prop::sample::select(vec!["g", "rect", "text", "tspan"]);
+        let id = prop::sample::select(vec!["", r#" id="a""#, r#" id="b""#, r#" id="c""#]);
+        let classes = prop::collection::vec((prop::sample::select(vec![" ", "&#9;", "&#10;"]), prop::sample::select(vec!["a", "b", "c", "x"])), 0..4)
+            .prop_map(|v| match v.iter().map(|(gap, c)| format!("{gap}{c}")).collect::<String>() {
+                s if s.is_empty() => s,
+                s => format!(r#" class="{s}""#),
+            });
+        let more = prop::sample::select(vec!["", r#" data-k="v""#, r#" data-k="w""#, r#" style="fill: s""#, r#" style="stroke: s !important""#]);
+        let children = if depth == 0 { Just(vec![]).boxed() } else { prop::collection::vec(arb_element(depth - 1), 0..5).boxed() };
+        (tag, id, classes, more, children).prop_map(|(t, i, c, m, ch)| format!("<{t}{i}{c}{m}>{}</{t}>", ch.concat())).boxed()
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { failure_persistence: None, ..ProptestConfig::default() })]
+
+        /// Random style sheets give each element of a random document what testing every rule
+        /// gives it.
+        #[test]
+        fn random_sheets_give_what_testing_every_rule_gives(rules in prop::collection::vec(arb_rule(), 0..24), body in prop::collection::vec(arb_element(3), 1..6)) {
+            assert_same_as_every_rule(&format!(r#"<svg xmlns="http://www.w3.org/2000/svg"><style>{}</style>{}</svg>"#, rules.join("\n"), body.concat()));
+        }
+    }
+
+    /// 50,000 class rules give 50,000 elements, each with one of the classes, their fill within
+    /// 20 s.
+    #[test]
+    fn styling_50000_elements_with_50000_rules_finishes_within_20_s() {
+        const N: usize = 50_000;
+        let rules: String = (0..N).map(|i| format!(".c{i} {{ fill: #{i:06x} }}\n")).collect();
+        let rects: String = (0..N).map(|i| format!(r#"<rect class="c{i}"/>"#)).collect();
+        let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg"><style>{rules}</style>{rects}</svg>"#);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let doc = roxmltree::Document::parse(&svg).unwrap();
+            let st = Styles::new(&doc);
+            let fills: Vec<Option<String>> = doc.descendants().filter(|n| n.tag_name().name() == "rect").map(|n| st.own(n, "fill")).collect();
+            tx.send(fills).ok();
+        });
+        let fills = rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|_| panic!("styling {N} elements did not finish within 20 s"));
+        assert_eq!(fills.len(), N);
+        for (i, fill) in fills.iter().enumerate() {
+            assert_eq!(fill.as_deref(), Some(format!("#{i:06x}").as_str()));
+        }
     }
 
     #[test]
