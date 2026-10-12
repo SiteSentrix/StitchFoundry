@@ -96,6 +96,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("Auto Direction", "embroidery.autoDirection"),
         c("Clear Inclination Lines", "embroidery.clearGuides"),
         c("Carve Split Lines", "embroidery.carveSplits"),
+        c("Contour Split Lines", "embroidery.contourSplits"),
         sub("Carve Stamp", Stamp::ALL.into_iter().map(|s| cp(s.label(), "embroidery.carveStamp", json!({ "stamp": s.id() }))).collect()),
         c("Clear Split Lines", "embroidery.clearSplits"),
         c("Fill Along Lines", "embroidery.fillAlongLines"),
