@@ -243,11 +243,30 @@ impl SaveOptions {
         Ok(())
     }
 
-    /// The defaults for saving `doc` to disk: pretty when small (see [`PRETTY_MAX_OBJECTS`]).
+    /// The defaults for saving `doc` to disk: pretty when small (see [`PRETTY_MAX_OBJECTS`] and
+    /// [`PRETTY_MAX_BYTES`]).
     pub fn for_doc(doc: &Document) -> Self {
         let objects: usize = doc.layers.iter().map(|l| l.count()).sum();
-        Self { pretty: objects <= PRETTY_MAX_OBJECTS, ..Self::default() }
+        Self { pretty: objects <= PRETTY_MAX_OBJECTS && compact_size_at_most(doc, PRETTY_MAX_BYTES), ..Self::default() }
     }
+}
+
+/// Is `doc` at most `limit` bytes as compact JSON? Serializing stops as soon as it is past the
+/// limit, so a large document costs no more than `limit` bytes of work.
+fn compact_size_at_most(doc: &Document, limit: usize) -> bool {
+    struct Capped {
+        left: usize,
+    }
+    impl Write for Capped {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.left = self.left.checked_sub(buf.len()).ok_or_else(|| std::io::Error::other("over the limit"))?;
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    serde_json::to_writer(Capped { left: limit }, doc).is_ok()
 }
 
 /// Serialize a document (pretty = human-diffable) in the current version. Editing-mode working
@@ -259,6 +278,11 @@ pub fn save(doc: &Document, pretty: bool) -> Vec<u8> {
 /// Documents up to this many objects are saved pretty-printed (readable, diffable); larger ones
 /// compact, where indentation would multiply the file size and slow opening down.
 pub const PRETTY_MAX_OBJECTS: usize = 2000;
+
+/// Documents whose compact JSON is larger than this are saved compact even with few objects:
+/// pretty-printing spreads every path anchor over several lines, so traced or generated art (in
+/// layers, symbols or patterns alike) would grow about tenfold.
+pub const PRETTY_MAX_BYTES: usize = 1 << 20;
 
 /// Serialize for saving to disk: pretty when small, compact when large.
 pub fn save_file(doc: &Document) -> Vec<u8> {
