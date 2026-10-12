@@ -62,6 +62,7 @@ pub(crate) fn generate(path: &Contour, params: &RunParams, hint: Option<Point>, 
         RunKind::Back => backstitch(&pts, step, 0.0),
         RunKind::Stem => backstitch(&pts, step, (params.width * 0.5).clamp(0.2, 3.0) * if params.flip { -1.0 } else { 1.0 }),
         RunKind::Hand => hand(&pts, step, params.spacing),
+        RunKind::Sculpture => sculpture(&pts, (step, params.spacing), params.groups),
     };
     let mut once = once;
     if backwards {
@@ -148,6 +149,55 @@ pub(crate) fn backstitch(pts: &[Point], step: f64, slant: f64) -> Vec<Point> {
             out.push(back);
         }
         i += 1;
+    }
+    out
+}
+
+/// Most stitches a sculpture run is cut into.
+const MAX_SCULPTURE_STITCHES: usize = 200_000;
+
+/// Sculpture run: a thick-thin line. `groups[0]` triple stitches `lengths.0` long (each sewn
+/// forward, back and forward again) in turn with `groups[1]` single stitches `lengths.1` long,
+/// all scaled a little so the line ends on a whole stitch.
+pub(crate) fn sculpture(pts: &[Point], lengths: (f64, f64), groups: [u32; 2]) -> Vec<Point> {
+    let total = polyline::length(pts);
+    let Some(&first) = pts.first() else { return Vec::new() };
+    if !(total.is_finite() && total > 1e-6) {
+        return pts.to_vec();
+    }
+    let len = |l: f64, default: f64| if l.is_finite() { l.clamp(0.5, 12.0) } else { default };
+    let (a, b) = (len(lengths.0, 2.5), len(lengths.1, 2.0));
+    let [na, nb] = groups.map(|n| n.min(20));
+    let [na, nb] = if na + nb == 0 { crate::model::SCULPTURE_GROUPS } else { [na, nb] };
+    // One turn of the pattern: (length, triple).
+    let unit: Vec<(f64, bool)> = std::iter::repeat_n((a, true), na as usize).chain(std::iter::repeat_n((b, false), nb as usize)).collect();
+    let mut seq: Vec<(f64, bool)> = Vec::new();
+    let mut s = 0.0;
+    'line: while seq.len() < MAX_SCULPTURE_STITCHES {
+        for &(l, triple) in &unit {
+            if s + l * 0.5 > total {
+                break 'line;
+            }
+            seq.push((l, triple));
+            s += l;
+        }
+    }
+    if seq.is_empty() {
+        seq.push((total, na > 0));
+    }
+    let k = total / seq.iter().map(|u| u.0).sum::<f64>();
+    let mut out = Vec::with_capacity(seq.len() * 3 + 1);
+    out.push(first);
+    let (mut at, mut from) = (0.0, first);
+    for (l, triple) in seq {
+        at = (at + l * k).min(total);
+        let to = polyline::point_at(pts, at);
+        if triple {
+            out.extend([to, from, to]);
+        } else {
+            out.push(to);
+        }
+        from = to;
     }
     out
 }
@@ -549,6 +599,45 @@ mod tests {
         // Few points to sew: the built-in motif instead.
         let few = CustomMotif { name: "Few".into(), points: vec![[0.5, 0.5]], aspect: 1.0 };
         assert_eq!(motif_points(Motif::Diamond, Some(&few)), motif_shape(Motif::Diamond));
+    }
+
+    /// Triple (T) and single (S) stitches in a run's needle points, in order.
+    fn stitch_pattern(pts: &[Point]) -> String {
+        let mut out = String::new();
+        let mut i = 1;
+        while i < pts.len() {
+            if i + 2 < pts.len() + 1 && pts.get(i + 1) == pts.get(i - 1) && pts.get(i + 2) == pts.get(i) {
+                out.push('T');
+                i += 3;
+            } else {
+                out.push('S');
+                i += 1;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn sculpture_runs_alternate_groups_of_triple_and_single_stitches() {
+        // Three triple stitches 2.5 mm long, then one single 1.5 mm long, along 20 mm.
+        let p = RunParams { kind: RunKind::Sculpture, stitch_length: 2.5, spacing: 1.5, ..Default::default() };
+        let pts: Vec<Point> = generate(&line(), &p, None, None).iter().map(|s| s.pos()).collect();
+        assert_eq!(stitch_pattern(&pts), "TTTSTTTST");
+        assert!(pts.last().unwrap().distance(Point::new(20.0, 0.0)) < 1e-9, "ends on the line's end");
+        let lens: Vec<f64> = pts.windows(2).map(|w| w[0].distance(w[1])).collect();
+        assert!(lens.iter().all(|l| (2.3..=2.5).contains(l) || (1.4..=1.5).contains(l)), "{lens:?}");
+        // Other groups; none at all is the default.
+        for (groups, want) in [([1, 2], "TSSTSSTSSTS"), ([0, 1], "SSSSSSSSSSSSS"), ([1, 0], "TTTTTTTT"), ([0, 0], "TTTSTTTST")] {
+            let p = RunParams { groups, ..p.clone() };
+            let pts: Vec<Point> = generate(&line(), &p, None, None).iter().map(|s| s.pos()).collect();
+            assert_eq!(stitch_pattern(&pts), want, "{groups:?}");
+        }
+        // Absurd lengths and counts sew something sensible.
+        for (a, b, groups) in [(f64::NAN, f64::INFINITY, [u32::MAX, u32::MAX]), (-1.0, 0.0, [3, 1]), (1e9, 1e-9, [7, 0])] {
+            let p = RunParams { stitch_length: a, spacing: b, groups, ..p.clone() };
+            let st = generate(&line(), &p, None, None);
+            assert!(!st.is_empty() && st.len() < 1000 && st.iter().all(|s| s.pos().is_finite()), "{a} {b} {groups:?}: {}", st.len());
+        }
     }
 
     #[test]

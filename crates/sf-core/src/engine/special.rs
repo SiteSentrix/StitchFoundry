@@ -3,7 +3,7 @@
 use super::out::Out;
 use super::run::CORNER_ANGLE;
 use crate::geom::{Affine, Point, Polygon, poly, polyline};
-use crate::model::FillParams;
+use crate::model::{CrossStyle, FillParams};
 
 /// Rings of the polygon offset inwards by `spacing/2 + k·spacing`, grouped by level
 /// (outermost first).
@@ -163,8 +163,11 @@ pub(crate) fn radial(polygon: &Polygon, center: Option<Point>, spacing: f64, spl
     }
 }
 
-/// Cross stitch on a square grid (rotated by `angle`).
-pub(crate) fn cross(polygon: &Polygon, cell: f64, angle: f64, out: &mut Out, trim: f64) {
+/// Cross stitch on a square grid (rotated by `angle`), each cell sewn in `style`. Each run of
+/// cells along a row is sewn there and back: an X's "/" diagonals going and its "\" diagonals
+/// coming back, an upright cross's bars going and its middle line again coming back, a double
+/// cross both; a half cross's "/" diagonals are sewn once, rows in turn right to left.
+pub(crate) fn cross(polygon: &Polygon, cell: f64, style: CrossStyle, angle: f64, out: &mut Out, trim: f64) {
     let cell = cell.clamp(1.0, 10.0);
     let fwd = Affine::rotate(angle.to_radians());
     let inv = Affine::rotate(-angle.to_radians());
@@ -196,17 +199,54 @@ pub(crate) fn cross(polygon: &Polygon, cell: f64, angle: f64, out: &mut Out, tri
             runs.reverse();
         }
         for (a, b) in runs {
-            // forward: "/" diagonals, return: "\" diagonals
             let bl = |c: i64| corner(c, r + 1);
             let tl = |c: i64| corner(c, r);
-            out.connect(bl(a), trim, 2.5);
-            for c in a..=b {
-                out.stitch(tl(c + 1));
-                out.stitch(bl(c + 1));
+            // the middle of a cell's left side, of the cell, of its top and of its bottom
+            let ml = |c: i64| tl(c).lerp(bl(c), 0.5);
+            let mid = |c: i64| ml(c).lerp(ml(c + 1), 0.5);
+            if matches!(style, CrossStyle::Full | CrossStyle::Double) {
+                // going: "/" diagonals; coming back: "\" diagonals
+                out.connect(bl(a), trim, 2.5);
+                for c in a..=b {
+                    out.stitch(tl(c + 1));
+                    out.stitch(bl(c + 1));
+                }
+                for c in (a..=b).rev() {
+                    out.stitch(tl(c));
+                    out.stitch(bl(c));
+                }
+            } else if style == CrossStyle::Half {
+                // "/" diagonals, every other row right to left, so each row starts where the last
+                // one ended
+                if r % 2 == 0 {
+                    out.connect(bl(a), trim, 2.5);
+                    for c in a..=b {
+                        out.stitch(tl(c + 1));
+                        out.stitch(bl(c + 1));
+                    }
+                } else {
+                    out.connect(bl(b + 1), trim, 2.5);
+                    for c in (a..=b).rev() {
+                        out.stitch(tl(c + 1));
+                        out.stitch(bl(c));
+                    }
+                }
             }
-            for c in (a..=b).rev() {
-                out.stitch(tl(c));
-                out.stitch(bl(c));
+            if matches!(style, CrossStyle::Upright | CrossStyle::Double) {
+                // going: the middle line, with a bar up and down each cell's middle
+                out.connect(ml(a), trim, 2.5);
+                for c in a..=b {
+                    let m = mid(c);
+                    out.stitch(m);
+                    out.stitch(tl(c).lerp(tl(c + 1), 0.5));
+                    out.stitch(bl(c).lerp(bl(c + 1), 0.5));
+                    out.stitch(m);
+                    out.stitch(ml(c + 1));
+                }
+                // coming back along the middle line
+                for c in (a..=b).rev() {
+                    out.stitch(ml(c));
+                }
             }
         }
     }
@@ -581,9 +621,49 @@ mod tests {
             assert!(w[0].pos().distance(w[1].pos()) <= 7.0 + 1e-6);
         }
         let mut out = Out::new();
-        cross(&square(12.0), 3.0, 0.0, &mut out, 2.0);
+        cross(&square(12.0), 3.0, CrossStyle::Full, 0.0, &mut out, 2.0);
         let st = out.finish();
         // 4×4 cells, each 4 diagonal stitches → 64 + connections
         assert!(st.len() >= 64, "{}", st.len());
+    }
+
+    #[test]
+    fn cross_styles_sew_their_bars() {
+        // One row of three 3 mm cells.
+        let poly = Polygon::from_ring(vec![Point::new(0.0, 0.0), Point::new(9.0, 0.0), Point::new(9.0, 3.0), Point::new(0.0, 3.0)]);
+        let stitches = |style| -> Vec<(Point, Point)> {
+            let mut out = Out::new();
+            cross(&poly, 3.0, style, 0.0, &mut out, 1e9);
+            let pts: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+            pts.windows(2).map(|w| (w[0], w[1])).collect()
+        };
+        let has = |sts: &[(Point, Point)], a: (f64, f64), b: (f64, f64)| {
+            let (a, b) = (Point::new(a.0, a.1), Point::new(b.0, b.1));
+            sts.iter().any(|&(p, q)| (p.distance(a) < 1e-9 && q.distance(b) < 1e-9) || (p.distance(b) < 1e-9 && q.distance(a) < 1e-9))
+        };
+        for style in CrossStyle::ALL {
+            let sts = stitches(style);
+            for x in [0.0, 3.0, 6.0] {
+                let rising = has(&sts, (x, 3.0), (x + 3.0, 0.0));
+                let falling = has(&sts, (x, 0.0), (x + 3.0, 3.0));
+                let bar = has(&sts, (x + 1.5, 0.0), (x + 1.5, 3.0));
+                let across = has(&sts, (x, 1.5), (x + 1.5, 1.5)) && has(&sts, (x + 1.5, 1.5), (x + 3.0, 1.5));
+                let want = match style {
+                    CrossStyle::Full => (true, true, false, false),
+                    CrossStyle::Half => (true, false, false, false),
+                    CrossStyle::Upright => (false, false, true, true),
+                    CrossStyle::Double => (true, true, true, true),
+                };
+                assert_eq!((rising, falling, bar, across), want, "{style:?} at {x}");
+            }
+            assert!(sts.iter().all(|(p, q)| p.distance(*q) <= 3.0 * std::f64::consts::SQRT_2 + 1e-9), "{style:?}");
+        }
+        // Half crosses on three rows: each row starts where the last one ended, one cell down.
+        let mut out = Out::new();
+        cross(&square(9.0), 3.0, CrossStyle::Half, 0.0, &mut out, 1e9);
+        let pts: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+        let sewn: f64 = pts.windows(2).map(|w| w[0].distance(w[1])).sum();
+        let rows = 3.0 * (3.0 * 3.0 * std::f64::consts::SQRT_2 + 3.0 * 3.0);
+        assert!(sewn <= rows + 2.0 * 3.0 + 1e-6, "{sewn} > {}", rows + 6.0);
     }
 }

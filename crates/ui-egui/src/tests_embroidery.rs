@@ -94,6 +94,24 @@ fn the_panel_offers_the_designs_own_motifs() {
 }
 
 #[test]
+fn the_panel_shows_sculpture_runs_and_cross_styles() {
+    let mut app = app();
+    let line = app.run("path.create", json!({"d": "M 20 100 L 300 100"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [line]})).unwrap();
+    app.run("embroidery.set", json!({"type": "run"})).unwrap();
+    app.run("embroidery.setParams", json!({"params": {"kind": "Sculpture"}})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    for want in ["Sculpture run", "Triple stitch length", "Single stitch length", "Triple stitches", "Single stitches"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
+    app.run("shape.rectangle", json!({"x": 20, "y": 150, "width": 100, "height": 100})).unwrap();
+    app.run("embroidery.set", json!({"type": "cross"})).unwrap();
+    app.run("embroidery.setParams", json!({"params": {"cross": "Upright"}})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(texts.iter().any(|t| t == "Cross style") && texts.iter().any(|t| t == "Upright cross"), "{texts:?}");
+}
+
+#[test]
 fn stitch_list_shows_every_record() {
     let mut app = app();
     assert!(painted_text(&mut app, crate::embroidery::stitch_list::show).iter().any(|t| t.contains("Nothing stitched yet")));

@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 use vectorcraft_embroidery::sf_core::attr::{Embroidery, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
-    Corners, CoverKind, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH, TackdownKind,
-    TexturePattern, TieStyle,
+    Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH,
+    TackdownKind, TexturePattern, TieStyle,
 };
 use vectorcraft_embroidery::sf_core::threads::{Rgb, charts};
 
@@ -348,6 +348,7 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 tl!("Backstitch"),
                 tl!("Stem stitch"),
                 tl!("Hand stitch"),
+                tl!("Sculpture run"),
             ];
             let cur = RunKind::ALL.iter().position(|k| *k == r.kind).unwrap_or(0);
             if let Some(i) = pick(ui, tl!("Run style"), "runkind", cur, &kinds)
@@ -355,7 +356,9 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             {
                 set(app, target, json!({ "kind": k }));
             }
-            if let Some(v) = num(ui, tl!("Stitch length"), "len", r.stitch_length, " mm", 2) {
+            // a sculpture run's stitch length is its triple stitches'
+            let length = if r.kind == RunKind::Sculpture { tl!("Triple stitch length") } else { tl!("Stitch length") };
+            if let Some(v) = num(ui, length, "len", r.stitch_length, " mm", 2) {
                 set(app, target, json!({ "stitch_length": v }));
             }
             if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif | RunKind::Stem)
@@ -363,12 +366,26 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
             {
                 set(app, target, json!({ "width": v }));
             }
-            // a hand stitch's spacing is the gap between its stitches
-            let spacing = if r.kind == RunKind::Hand { tl!("Gap") } else { tl!("Spacing") };
-            if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif | RunKind::Hand)
+            // a hand stitch's spacing is the gap between its stitches, a sculpture run's the length
+            // of its single stitches
+            let spacing = match r.kind {
+                RunKind::Hand => tl!("Gap"),
+                RunKind::Sculpture => tl!("Single stitch length"),
+                _ => tl!("Spacing"),
+            };
+            if matches!(r.kind, RunKind::Blanket | RunKind::Zigzag | RunKind::Motif | RunKind::Hand | RunKind::Sculpture)
                 && let Some(v) = num(ui, spacing, "rs", r.spacing, " mm", 2)
             {
                 set(app, target, json!({ "spacing": v }));
+            }
+            if r.kind == RunKind::Sculpture {
+                let [triple, single] = r.groups;
+                if let Some(v) = num(ui, tl!("Triple stitches"), "rgt", f64::from(triple), "", 0) {
+                    set(app, target, json!({ "groups": [v.round().clamp(0.0, 20.0) as u32, single] }));
+                }
+                if let Some(v) = num(ui, tl!("Single stitches"), "rgs", f64::from(single), "", 0) {
+                    set(app, target, json!({ "groups": [triple, v.round().clamp(0.0, 20.0) as u32] }));
+                }
             }
             if matches!(r.kind, RunKind::Blanket | RunKind::Motif | RunKind::Stem)
                 && let Some(v) = check(ui, tl!("Flip to the other side"), r.flip)
@@ -514,6 +531,15 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 let label = if f.kind == FillKind::Cross { tl!("Cell size") } else { tl!("Stitch length") };
                 if let Some(v) = num(ui, label, "fl", f.stitch_length, " mm", 2) {
                     set(app, target, json!({ "stitch_length": v }));
+                }
+            }
+            if f.kind == FillKind::Cross {
+                let styles = [tl!("Full cross"), tl!("Half cross"), tl!("Upright cross"), tl!("Double cross")];
+                let cur = CrossStyle::ALL.iter().position(|c| *c == f.cross).unwrap_or(0);
+                if let Some(i) = pick(ui, tl!("Cross style"), "fcross", cur, &styles)
+                    && let Some(c) = CrossStyle::ALL.get(i)
+                {
+                    set(app, target, json!({ "cross": c }));
                 }
             }
             // an offset fill: only so many rings in from the outline

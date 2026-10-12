@@ -407,6 +407,7 @@ impl ObjectKind {
                 RunKind::Back => "Backstitch",
                 RunKind::Stem => "Stem Stitch",
                 RunKind::Hand => "Hand Stitch",
+                RunKind::Sculpture => "Sculpture Run",
             },
             ObjectKind::Satin(_) => "Satin Column",
             ObjectKind::Fill(f) => f.params.kind.label(),
@@ -523,11 +524,23 @@ pub enum RunKind {
     /// Hand-sewn running stitch: thick stitches (each sewn three times) with short thin ones
     /// between them, lengths varying a little, like a running stitch sewn by hand.
     Hand,
+    /// Sculpture run: a thick-thin line, groups of triple stitches in turn with groups of
+    /// single ones, each with its own stitch length.
+    Sculpture,
 }
 
 impl RunKind {
-    pub const ALL: [RunKind; 8] =
-        [RunKind::Single, RunKind::Triple, RunKind::Blanket, RunKind::Zigzag, RunKind::Motif, RunKind::Back, RunKind::Stem, RunKind::Hand];
+    pub const ALL: [RunKind; 9] = [
+        RunKind::Single,
+        RunKind::Triple,
+        RunKind::Blanket,
+        RunKind::Zigzag,
+        RunKind::Motif,
+        RunKind::Back,
+        RunKind::Stem,
+        RunKind::Hand,
+        RunKind::Sculpture,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -539,6 +552,7 @@ impl RunKind {
             RunKind::Back => "Backstitch",
             RunKind::Stem => "Stem stitch",
             RunKind::Hand => "Hand stitch",
+            RunKind::Sculpture => "Sculpture run",
         }
     }
 }
@@ -630,8 +644,8 @@ pub struct RunParams {
     pub stitch_length: f64,
     /// Blanket prong length / zigzag width / motif width (mm).
     pub width: f64,
-    /// Distance between blanket prongs / zigzag peaks / motif repeats, or the gap between
-    /// hand stitches (mm).
+    /// Distance between blanket prongs / zigzag peaks / motif repeats, the gap between hand
+    /// stitches, or a sculpture run's single stitch length (mm).
     pub spacing: f64,
     /// Put blanket prongs / motifs / stem slants on the other side of the line.
     pub flip: bool,
@@ -646,6 +660,17 @@ pub struct RunParams {
     /// A motif made from a drawn line, sewn instead of `motif`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_motif: Option<CustomMotif>,
+    /// Sculpture runs: how many triple stitches (`stitch_length` long), then how many single
+    /// ones (`spacing` long), in turn.
+    #[serde(skip_serializing_if = "is_sculpture_default")]
+    pub groups: [u32; 2],
+}
+
+/// A sculpture run's groups unless set: three triple stitches, then one single.
+pub const SCULPTURE_GROUPS: [u32; 2] = [3, 1];
+
+fn is_sculpture_default(g: &[u32; 2]) -> bool {
+    *g == SCULPTURE_GROUPS
 }
 
 /// Most passes a run can be sewn.
@@ -663,6 +688,7 @@ impl Default for RunParams {
             passes: 1,
             width_end: None,
             custom_motif: None,
+            groups: SCULPTURE_GROUPS,
         }
     }
 }
@@ -985,6 +1011,28 @@ impl TexturePattern {
     }
 }
 
+/// How a cross fill sews each cell.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CrossStyle {
+    /// An X: both diagonals.
+    #[default]
+    Full,
+    /// One diagonal (/).
+    Half,
+    /// A + : across the middle and up and down it.
+    Upright,
+    /// An X with a + over it (a star).
+    Double,
+}
+
+impl CrossStyle {
+    pub const ALL: [CrossStyle; 4] = [CrossStyle::Full, CrossStyle::Half, CrossStyle::Upright, CrossStyle::Double];
+
+    pub fn is_full(&self) -> bool {
+        *self == CrossStyle::Full
+    }
+}
+
 /// Programmed splits of a tatami fill (a texture).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -1046,6 +1094,9 @@ pub struct FillParams {
     /// `motif_size`, and as high as its drawn proportions make it).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_motif: Option<CustomMotif>,
+    /// Cross fills: how each cell is sewn.
+    #[serde(skip_serializing_if = "CrossStyle::is_full")]
+    pub cross: CrossStyle,
     /// Contour fills: how many rings in from the outline (an offset fill); 0 = all the way in.
     #[serde(skip_serializing_if = "is_zero")]
     pub rings: u32,
@@ -1081,6 +1132,7 @@ impl Default for FillParams {
             motif: Motif::Wave,
             motif_size: 4.0,
             custom_motif: None,
+            cross: CrossStyle::Full,
             rings: 0,
             spacing_profile: Vec::new(),
         }
