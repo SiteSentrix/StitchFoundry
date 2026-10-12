@@ -511,6 +511,8 @@ fn structured_junk() {
         ("embroidery.lettering.edit", json!({"ids": [u64::MAX], "size": "x"})),
         ("embroidery.lettering.edit", json!({"arc": -1, "align": "right"})),
         ("embroidery.font.forget", json!({"name": ""})),
+        ("embroidery.monogram", json!({"letters": "ABC", "font": "x", "size": 300, "border": "diamond", "at": [1e300, -1e300]})),
+        ("embroidery.monogram", json!({"letters": 5, "font": []})),
         ("embroidery.teamNames.read", json!({"csv": "\"unclosed,\n;;;\r\n\"\"", "column": 99, "header": true})),
         ("embroidery.teamNames.read", json!({"path": "/nonexistent/names.csv"})),
         ("embroidery.teamNames.export", json!({"names": ["A"], "dir": ""})),

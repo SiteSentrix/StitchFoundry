@@ -607,6 +607,15 @@ lettering round a circle (*Radius*): **Arch** over its top, **Valley** along its
 upright to it (`arc`: the radius in mm, negative along the bottom); lettering placed from the panel
 is centred on the artboard (`align`: left, centre or right on `at`).
 
+## Monograms
+
+The Embroidery panel's **Monogram** section sets one to three initials in the lettering font:
+**Classic** makes the middle one of three larger, each letter centred on the monogram's middle; **In
+a line** sets them one size on one baseline. A border goes round them: a satin circle, diamond or
+square, or a circle of scallops (`embroidery.monogram {letters, font, size, style, border, at}`).
+Each letter is lettering of its own, set again like any (`embroidery.lettering.edit`), and the
+whole monogram is one group.
+
 ## Team names
 
 One design, many names (a team's shirts): set the name in an embroidery font, select it, and in the

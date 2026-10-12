@@ -155,6 +155,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     digitize_row(app, ui);
     lettering_rows(app, ui);
     team_name_rows(app, ui);
+    monogram_rows(app, ui);
     buttonhole_rows(app, ui);
     ui.add_space(6.0);
     object_section(app, ui);
@@ -339,6 +340,55 @@ pub(crate) fn team_names_body(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Err(e) => app.status(e),
             }
         });
+    }
+}
+
+/// Monograms: one to three letters in the lettering font, the middle one of three larger, with a
+/// border, in the middle of the first artboard.
+fn monogram_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    egui::CollapsingHeader::new(tl!("Monogram")).id_salt("emb-monogram").show(ui, |ui| monogram_body(app, ui));
+}
+
+/// The Monogram section's rows.
+pub(crate) fn monogram_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let font = app
+        .session
+        .embroidery_fonts
+        .iter()
+        .find(|f| f.info.name.eq_ignore_ascii_case(&app.embroidery.lettering_font))
+        .or_else(|| app.session.embroidery_fonts.first())
+        .map(|f| (f.info.name.clone(), f.info.size));
+    let Some((font, own)) = font else {
+        ui.label(tl!("Load an embroidery font (Embroidery Lettering) to make monograms."));
+        return;
+    };
+    ui.label(format!("{}: {font}", tl!("Font")));
+    ui.add(egui::TextEdit::singleline(&mut app.embroidery.monogram_letters).char_limit(3).hint_text(tl!("Initials")));
+    let styles = [tl!("Classic"), tl!("In a line")];
+    if let Some(i) = pick(ui, tl!("Style"), "mono-style", app.embroidery.monogram_style, &styles) {
+        app.embroidery.monogram_style = i.min(1);
+    }
+    let borders = [tl!("None"), tl!("Circle"), tl!("Diamond"), tl!("Square"), tl!("Scallops")];
+    if let Some(i) = pick(ui, tl!("Border"), "mono-border", app.embroidery.monogram_border, &borders) {
+        app.embroidery.monogram_border = i.min(4);
+    }
+    let size = if app.embroidery.monogram_size > 0.0 { app.embroidery.monogram_size } else { own.max(1.0) };
+    if let Some(v) = num(ui, tl!("Size"), "mono-size", size, " mm", 1) {
+        app.embroidery.monogram_size = v.clamp(1.0, 300.0);
+    }
+    let letters = app.embroidery.monogram_letters.trim().to_string();
+    if button(ui, tl!("Place Monogram")).clicked() && !letters.is_empty() {
+        let style = ["classic", "line"].get(app.embroidery.monogram_style).copied().unwrap_or("classic");
+        let border = vectorcraft_engine::cmd::embroidery_monogram::BORDERS.get(app.embroidery.monogram_border).copied().unwrap_or("none");
+        let params = json!({ "letters": letters, "font": font, "size": size, "style": style, "border": border });
+        match app.run("embroidery.monogram", params) {
+            Ok(r) => {
+                if let Some(w) = r["warnings"].as_array().and_then(|w| w.first()).and_then(Value::as_str) {
+                    app.status(w);
+                }
+            }
+            Err(e) => app.status(e),
+        }
     }
 }
 

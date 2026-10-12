@@ -156,6 +156,12 @@ pub struct EmbroideryUi {
     pub fonts_listed: bool,
     /// The Team Names section's names, one a line.
     pub team_names: String,
+    /// The Monogram section: its letters, style (0 classic, 1 line), border (an index of
+    /// `embroidery.monogram`'s borders) and size (mm; 0: the font's own).
+    pub monogram_letters: String,
+    pub monogram_style: usize,
+    pub monogram_border: usize,
+    pub monogram_size: f64,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -228,6 +234,10 @@ impl Default for EmbroideryUi {
             lettering_arc: 0.0,
             fonts_listed: false,
             team_names: String::new(),
+            monogram_letters: String::new(),
+            monogram_style: 0,
+            monogram_border: 1,
+            monogram_size: 0.0,
             prompt: prompt::PromptState::default(),
         }
     }

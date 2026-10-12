@@ -205,7 +205,7 @@ fn add_font(s: &mut Session, font: EmbFont) {
 
 /// Loads the font folders remembered from earlier sessions, the first time a font is needed.
 /// → What failed to load (a folder moved or gone stays remembered: a drive may be away).
-fn ensure_fonts(s: &mut Session) -> Vec<String> {
+pub(super) fn ensure_fonts(s: &mut Session) -> Vec<String> {
     if std::mem::replace(&mut s.embroidery_fonts_ready, true) {
         return Vec::new();
     }
@@ -282,12 +282,12 @@ fn forget_font(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The size (mm) `font` was digitized at.
-fn own_size(font: &EmbFont) -> f64 {
+pub(super) fn own_size(font: &EmbFont) -> f64 {
     if font.info.size > 0.0 { font.info.size } else { 20.0 }
 }
 
 /// What `font` sews well at, said when `size` (mm) is outside it.
-fn size_warnings(font: &EmbFont, size: f64) -> Vec<String> {
+pub(super) fn size_warnings(font: &EmbFont, size: f64) -> Vec<String> {
     let (i, own) = (&font.info, own_size(font));
     let k = size / own;
     let mut warnings = Vec::new();
@@ -301,11 +301,11 @@ fn size_warnings(font: &EmbFont, size: f64) -> Vec<String> {
 }
 
 /// A loaded font, by name (any case).
-fn loaded(s: &Session, name: &str) -> Option<Arc<EmbFont>> {
+pub(super) fn loaded(s: &Session, name: &str) -> Option<Arc<EmbFont>> {
     s.embroidery_fonts.iter().find(|f| f.info.name.eq_ignore_ascii_case(name)).cloned()
 }
 
-fn not_loaded(cmd: &str, name: &str) -> EngineError {
+pub(super) fn not_loaded(cmd: &str, name: &str) -> EngineError {
     bad(cmd, format!("no embroidery font `{name}` is loaded (embroidery.font.load)"))
 }
 
@@ -319,7 +319,7 @@ fn text_param<'a>(p: &'a Value, cmd: &str) -> Result<Option<&'a str>> {
 }
 
 /// A number param in `range`, when given.
-fn ranged(p: &Value, key: &str, range: std::ops::RangeInclusive<f64>, cmd: &str, what: &str) -> Result<Option<f64>> {
+pub(super) fn ranged(p: &Value, key: &str, range: std::ops::RangeInclusive<f64>, cmd: &str, what: &str) -> Result<Option<f64>> {
     match p.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v.as_f64().filter(|v| range.contains(v)).map(Some).ok_or_else(|| bad(cmd, what)),
@@ -342,14 +342,14 @@ fn lettering_of(d: &Document, ids: &[NodeId]) -> Option<(NodeId, Lettering)> {
 }
 
 /// The lettering group's name: its text (the start of it) and font.
-fn lettering_name(spec: &Lettering) -> String {
+pub(super) fn lettering_name(spec: &Lettering) -> String {
     let short: String = spec.text.chars().take(40).map(|c| if c.is_control() { ' ' } else { c }).collect();
     format!("{short} ({})", spec.font)
 }
 
 /// The glyphs `spec` sets in `font`, placed by its frame: a group per glyph, its art sewn as the
 /// font says.
-fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<Arc<Node>> {
+pub(super) fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<Arc<Node>> {
     let i = &font.info;
     let k = spec.size / own_size(font);
     let frame = Affine::new(spec.frame.0);
