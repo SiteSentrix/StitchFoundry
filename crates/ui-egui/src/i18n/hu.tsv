@@ -4646,3 +4646,6 @@ theme	Appearance	Kinézet
 @msg	The shape is too complex for a 3D effect	Az alakzat túl összetett a 3D effektushoz
 @msg	The 3D surface is too complex; simplify the shape	A 3D felület túl összetett; egyszerűsítse az alakzatot
 	Transform Objects	Objektumok transzformálása
+@msg	unknown parameter `{key}`; did you mean `{near}`?	ismeretlen paraméter: `{key}`; erre gondolt: `{near}`?
+@msg	unknown parameter `{key}`; the command takes no parameters	ismeretlen paraméter: `{key}`; a parancsnak nincs paramétere
+@msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}

@@ -240,7 +240,7 @@ The older names below remain listed because existing workflows use them.
 | Tool | Arguments and result |
 |---|---|
 | `command_list` | Optional `filter`, `enabled_only`; returns the command array |
-| `command_run` | `id`, optional `params`; runs the command through the existing backend |
+| `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)) |
 | `command_batch` | `steps: [{id, params?}]`, optional `stop_on_error` (default true), `atomic` and `label`; returns `completed`, `failed`, `results: [{ok, result\|error}]`. Each edit has its own undo step, or with `atomic: true` the batch's edits are one undo step named `label` (else after its first edit; `edit.undoGroup.begin`/`end` underneath); failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below) |
 | `doc_inspect` | Optional `depth`, `childLimit`; same summary as `inspect_document` |
 | `render_preview` | Optional `max_side` (1–4096, default 1024) and `artboard` (0-based, default 0); inline PNG of that artboard without editing it. Artboards too large to render within the allocation bound return a tool error |
@@ -662,6 +662,25 @@ vectorcraft-cli run --cmd file.new --params '{"width":800,"height":600}' \
 applies to the `--cmd` just before it. `run` also accepts the host commands `file.open`, `file.save`, `file.export`,
 `file.exportForScreens` and `tool.select`. `run --in`, `convert` and `info` read every format `document.open` reads
 (`vectorcraft-cli --help` lists them).
+
+### Parameter keys
+
+`command_run`, each step of `command_batch`, `run --cmd … --params` and the control channel's `engine.execute` check
+the keys of `params` against the command's params description (the `params` text `command_list` returns): the object
+it starts with, `{x, width?: pt, name?|title?: …}`, names the keys; `?` marks an optional one. A key it doesn't name
+is refused before the command runs:
+
+```json
+{"id": "file.new", "params": {"widht": 300}}
+→ invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?
+```
+
+Only the top level is checked: the keys of an object inside a value (`artboardLayout: {…}`, an effect's `params`) are
+the command's to read. A description with a `…` entry takes more keys than it lists: those of the command it names
+(`…settings as file.new`), or any key when it names none, as `document.export` and `document.save` do for the options
+of the format they write (one object can carry several formats' options). A command that takes its own reply back
+(`document.setup`, `text.areaOptions`) says so the same way. The app's own journal isn't checked: an action or
+journal recorded by an older version replays as it did.
 
 A step can use an earlier step's result, in `run` as in the `command_batch` tool. A parameter string that is exactly
 `$N` or `$N.path` takes that value from the result of step `N` (counting from 0, in the order they ran; `run --in`'s

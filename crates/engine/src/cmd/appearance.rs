@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Fill",
             ["Window", "Appearance"],
             None,
-            "{ids?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack (a copy of its top fill; type without one: its characters' fill; else the default fill)",
+            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack (a copy of its top fill; type without one: its characters' fill; else the default fill)",
             has_doc,
             |s, p| add_item(s, p, true)
         ),
@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Stroke",
             ["Window", "Appearance"],
             None,
-            "{ids?, target?} add a stroke on top of each selected object's own stack (a copy of its top stroke, else the default stroke)",
+            "{ids?|id?, target?} add a stroke on top of each selected object's own stack (a copy of its top stroke, else the default stroke)",
             has_doc,
             |s, p| add_item(s, p, false)
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear Appearance",
             ["Window", "Appearance"],
             None,
-            "{ids?, target?} leave each object one empty fill and stroke (None; a group none of its own) and reset its opacity and blend mode",
+            "{ids?|id?, target?} leave each object one empty fill and stroke (None; a group none of its own) and reset its opacity and blend mode",
             has_doc,
             clear_appearance
         ),
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reduce to Basic Appearance",
             ["Window", "Appearance"],
             None,
-            "{ids?, target?} keep only the topmost visible fill and stroke, without their own opacity, blend mode or effects (a group keeps no rows it lacked), and drop the object's effects",
+            "{ids?|id?, target?} keep only the topmost visible fill and stroke, without their own opacity, blend mode or effects (a group keeps no rows it lacked), and drop the object's effects",
             has_doc,
             reduce_basic
         ),
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Item",
             [],
             None,
-            "{index: paint-order item index, ids? (default: the selection), target?: \"object\"|\"contents\", opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill)} edit one fill/stroke of each target object's own appearance stack",
+            "{index: paint-order item index, ids?|id? (default: the selection), target?: \"object\"|\"contents\", opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill), tint?: 0..100, keepModel?: bool (both as paint.setFill)} edit one fill/stroke of each target object's own appearance stack",
             has_doc,
             set_item
         ),
@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Item",
             [],
             None,
-            "{index | indices: [..] (paint-order item indices), ids?, target?} remove those fills/strokes from each target object's own stack",
+            "{index | indices: [..] (paint-order item indices), ids?|id?, target?} remove those fills/strokes from each target object's own stack",
             has_doc,
             remove_item
         ),
@@ -90,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Effect",
             [],
             None,
-            "same as effect.apply (an alias): {effect: id, params?: {…}, item?: appearance item index|null, ids?, target?} → {ids, index, item}",
+            "{…as effect.apply} same as effect.apply (an alias): {effect: id, params?: {…}, item?: appearance item index|null, ids?, target?} → {ids, index, item}",
             has_doc,
             super::effectcmd::apply
         ),
@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Item",
             ["Window", "Appearance"],
             None,
-            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (one `index` only; default: right above it, as Alt-dragging a row places it), ids?, target?} copy fills/strokes with their effects",
+            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (one `index` only; default: right above it, as Alt-dragging a row places it), ids?|id?, target?} copy fills/strokes with their effects",
             has_doc,
             duplicate_item
         ),
@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder Appearance Item",
             [],
             None,
-            "{from: paint-order item index | \"contents\", to, contents?: count, ids?, target?} move fill/stroke `from` to paint-order index `to`; on a group, layer or type the Contents (Characters) row stays between the same items (a moved item landing next to it keeps its side) unless `contents` says how many items paint below it afterwards. from \"contents\": move that row so `to` items paint below the members (characters) and the rest above → {index: where the item landed | contents: the row's slot}",
+            "{from: paint-order item index | \"contents\", to, contents?: count, ids?|id?, target?} move fill/stroke `from` to paint-order index `to`; on a group, layer or type the Contents (Characters) row stays between the same items (a moved item landing next to it keeps its side) unless `contents` says how many items paint below it afterwards. from \"contents\": move that row so `to` items paint below the members (characters) and the rest above → {index: where the item landed | contents: the row's slot}",
             has_doc,
             move_item
         ),
@@ -135,7 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Show All Hidden Attributes",
             ["Window", "Appearance"],
             None,
-            "{ids?, target?} make every hidden fill, stroke and effect (the object's and each item's) of each selected object visible again; errors when nothing is hidden → {ids}",
+            "{ids?|id?, target?} make every hidden fill, stroke and effect (the object's and each item's) of each selected object visible again; errors when nothing is hidden → {ids}",
             has_doc,
             show_all_hidden
         ),
@@ -144,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Target Contents",
             [],
             None,
-            "{ids?} select the members of the selected groups and layers (or `ids`), as double-clicking the Appearance panel's Contents row does: the panel then lists, and appearance edits change, their own appearance; errors when none has members → {ids}",
+            "{ids?|id?, target?: \"object\"|\"contents\"} select the members of the selected groups and layers (or `ids`), as double-clicking the Appearance panel's Contents row does: the panel then lists, and appearance edits change, their own appearance; errors when none has members → {ids}",
             has_doc,
             target_contents
         ),

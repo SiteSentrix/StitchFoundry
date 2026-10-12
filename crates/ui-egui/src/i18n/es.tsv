@@ -4620,3 +4620,6 @@ mark-style	Japanese	Japonesas
 @msg	The shape is too complex for a 3D effect	La forma es demasiado compleja para un efecto 3D
 @msg	The 3D surface is too complex; simplify the shape	La superficie 3D es demasiado compleja; simplifique la forma
 	Transform Objects	Transformar objetos
+@msg	unknown parameter `{key}`; did you mean `{near}`?	parámetro desconocido `{key}`; ¿quiso decir `{near}`?
+@msg	unknown parameter `{key}`; the command takes no parameters	parámetro desconocido `{key}`; el comando no tiene parámetros
+@msg	unknown parameter `{key}`; the command takes: {keys}	parámetro desconocido `{key}`; el comando acepta: {keys}

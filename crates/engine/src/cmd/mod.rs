@@ -48,6 +48,7 @@ mod overprint;
 mod package;
 mod paint;
 mod panelcmds;
+pub mod params;
 mod path;
 mod pathops;
 mod patterncmds;

@@ -33,11 +33,19 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Brush",
             [],
             None,
-            "{name, ids?} apply a brush to the strokes of the selected paths (adds a stroke if missing) and make it current → {ids}",
+            "{name, ids?|id?} apply a brush to the strokes of the selected paths (adds a stroke if missing) and make it current → {ids}",
             has_doc,
             brush_apply
         ),
-        cmd!("brush.remove", "Remove Brush Stroke", [], None, "{ids?} remove brushes from the selected strokes → {ids}", has_selection, brush_remove),
+        cmd!(
+            "brush.remove",
+            "Remove Brush Stroke",
+            [],
+            None,
+            "{ids?|id?} remove brushes from the selected strokes → {ids}",
+            has_selection,
+            brush_remove
+        ),
         cmd!(
             "brush.setCurrent",
             "Current Brush",
@@ -52,7 +60,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Brush…",
             [],
             None,
-            "{type: calligraphic|scatter|art|pattern|bristle, name?, params?: {…definition fields}, ids?} new brush; art/scatter/pattern brushes take the selected art (pattern: side tile) unless params give it → {name}",
+            "{type: calligraphic|scatter|art|pattern|bristle, name?, params?: {…definition fields}, ids?|id?} new brush; art/scatter/pattern brushes take the selected art (pattern: side tile) unless params give it → {name}",
             has_doc,
             brush_new
         ),
@@ -72,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Brush Strokes",
             [],
             None,
-            "{ids?} replace brushed paths (in the selection) with groups of the brush art → {ids}",
+            "{ids?|id?} replace brushed paths (in the selection) with groups of the brush art → {ids}",
             has_selection,
             expand_brush
         ),
@@ -81,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paintbrush",
             [],
             None,
-            "{…path.freehand params, brush} paint a freehand stroke with a brush → {id}",
+            "{…params as path.freehand, brush} paint a freehand stroke with a brush → {id}",
             has_doc,
             brush_freehand
         ),
@@ -92,7 +100,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Symbol…",
             [],
             None,
-            "{name?, ids?} make a symbol from the selection and replace it with an instance → {name, id}",
+            "{name?, ids?|id?} make a symbol from the selection and replace it with an instance → {name, id}",
             has_selection,
             symbol_new
         ),
@@ -110,7 +118,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?} expand selected instances into plain art → {ids}",
+            "{ids?|id?} expand selected instances into plain art → {ids}",
             has_selection,
             symbol_break_link
         ),
@@ -119,7 +127,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Symbol",
             [],
             None,
-            "{id?} break the link of the selected instance so its art can be edited; finish with symbol.update → {name, ids}",
+            "{id?, ids?: [id…] (instead of id)} break the link of the selected instance so its art can be edited; finish with symbol.update → {name, ids}",
             has_selection,
             symbol_edit
         ),
@@ -128,7 +136,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Symbol",
             [],
             None,
-            "{name, ids?} replace the symbol's art with the selection (instances update; the selection becomes an instance) → {name, id}",
+            "{name, ids?|id?} replace the symbol's art with the selection (instances update; the selection becomes an instance) → {name, id}",
             has_selection,
             symbol_update
         ),
@@ -147,7 +155,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Symbol",
             [],
             None,
-            "{name, ids?} swap the symbol of the selected instances → {ids}",
+            "{name, ids?|id?} swap the symbol of the selected instances → {ids}",
             has_selection,
             symbol_replace
         ),

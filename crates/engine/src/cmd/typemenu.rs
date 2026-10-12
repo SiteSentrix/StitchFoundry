@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Change Case",
             ["Type", "Change Case"],
             None,
-            "{case: \"upper\"|\"lower\"|\"title\"|\"sentence\", ids?} → {ids}",
+            "{case: \"upper\"|\"lower\"|\"title\"|\"sentence\", ids?|id?} → {ids}",
             has_selection,
             change_case
         ),
@@ -34,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Area Type",
             ["Type"],
             None,
-            "{ids?} point type → area type framed by its current layout bounds → {ids}",
+            "{ids?|id?} point type → area type framed by its current layout bounds → {ids}",
             has_selection,
             to_area
         ),
@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Point Type",
             ["Type"],
             None,
-            "{ids?} area type → point type; soft line wraps become line breaks → {ids}",
+            "{ids?|id?} area type → point type; soft line wraps become line breaks → {ids}",
             has_selection,
             to_point
         ),
@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type on a Path Options…",
             ["Type", "Type on a Path"],
             None,
-            "{ids?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
+            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
             has_selection,
             path_options
         ),
@@ -61,7 +61,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill with Placeholder Text",
             ["Type"],
             None,
-            "{ids?} replace selected text with placeholder text (area type is filled to its frame) → {ids}",
+            "{ids?|id?} replace selected text with placeholder text (area type is filled to its frame) → {ids}",
             has_selection,
             fill_placeholder
         ),
@@ -70,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Character",
             ["Type"],
             None,
-            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string} append to the selected text objects",
+            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string, ids?|id?: object ids (default: the selection)} append to the selected text objects",
             has_selection,
             insert_char
         ),

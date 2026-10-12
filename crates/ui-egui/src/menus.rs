@@ -349,7 +349,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.recolorDialog",
         "Recolor Artwork…",
         "",
-        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name, or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
+        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name; or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
     ),
     (
         "ui.cropImage",
@@ -896,6 +896,16 @@ pub(crate) fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
 }
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
+/// `params` has only keys the params description of engine command `id` names, or the parameter
+/// error naming the one it doesn't (#1442). The UI's own commands aren't checked yet: their
+/// descriptions haven't been audited against what they read.
+pub fn check_params(id: &str, params: &Value) -> Result<(), String> {
+    if UI_COMMANDS.iter().any(|c| c.0 == id) {
+        return Ok(());
+    }
+    vectorcraft_engine::check_params(id, params).map_err(|e| e.to_string())
+}
+
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     if let Some(result) = crate::panel_docking::command(app, id, p) {
         return Some(result);

@@ -34,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Data…",
             ["Object", "Graph"],
             None,
-            "{id?, series?, categories?, rows?, csv?: first row = series labels (first cell empty), then one row per category: label, values…; an empty cell or a null is a blank value, a quoted number a label, a `|` in a label a line break; transpose?: true swaps rows and columns (Transpose row/column), switchXY?: true swaps each scatter series' y and x columns (Switch x/y)} replace the graph's data; no data → the current {csv, series, categories, rows}",
+            "{id?, series?, categories?, rows?, csv?: first row = series labels (first cell empty); then one row per category: label; values…; an empty cell or a null is a blank value; a quoted number a label; a `|` in a label a line break, transpose?: true swaps rows and columns (Transpose row/column), switchXY?: true swaps each scatter series' y and x columns (Switch x/y)} replace the graph's data; no data → the current {csv, series, categories, rows}",
             has_selection,
             set_data
         ),
@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Design…",
             ["Object", "Graph"],
             None,
-            "{new?: name|true (New Design: the selected art becomes a graph design, named \"New Design\" when true; put a rectangle at the back to set the size it draws at), rename?: name, to?: new name (the graphs drawing it follow), paste?: name (Paste Design: a copy of the design's art into the document, selected, to edit and save again), delete?: name|[names] (graphs drawing them go back to their default marks)}; no params or selectUnused → {designs: [names], unused: [the names no graph draws with]}",
+            "{new?: name|true (New Design: the selected art becomes a graph design, named \"New Design\" when true; put a rectangle at the back to set the size it draws at), rename?: name, to?: new name (the graphs drawing it follow), paste?: name (Paste Design: a copy of the design's art into the document, selected, to edit and save again), delete?: name|[names] (graphs drawing them go back to their default marks), ids?|id?: object ids (default: the selection), selectUnused?: bool (Select Unused: just the list)}; no params or selectUnused → {designs: [names], unused: [the names no graph draws with]}",
             has_doc,
             design
         ),

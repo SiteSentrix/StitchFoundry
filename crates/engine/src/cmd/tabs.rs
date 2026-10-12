@@ -13,7 +13,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Tab Stops",
             ["Window", "Tabs"],
             None,
-            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches)",
+            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?|id?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches)",
             has_selection,
             set
         ),
@@ -22,11 +22,11 @@ pub fn specs() -> Vec<CommandSpec> {
             "Tab Stops",
             [],
             None,
-            "{ids?, start?: byte} → {stops} of the first selected text object (its paragraph at `start`; default the first)",
+            "{ids?|id?, start?: byte} → {stops} of the first selected text object (its paragraph at `start`; default the first)",
             has_selection,
             get
         ),
-        cmd!("text.tabs.clear", "Clear All Tabs", ["Window", "Tabs"], None, "{ids?, start?: byte, end?: byte}", has_selection, |s, p| apply(
+        cmd!("text.tabs.clear", "Clear All Tabs", ["Window", "Tabs"], None, "{ids?|id?, start?: byte, end?: byte}", has_selection, |s, p| apply(
             s,
             p,
             vec![],

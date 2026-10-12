@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reverse Path Direction",
             ["Object", "Path"],
             None,
-            "{ids?, reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step → {changed: paths}",
+            "{ids?|id?, reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step → {changed: paths}",
             has_doc,
             reverse
         ),

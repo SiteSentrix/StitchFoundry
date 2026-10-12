@@ -147,7 +147,7 @@ fn shaper_source_move_resize_native_roundtrip_and_release_preserve_live_art() {
     let a = rectangle(&mut s, 0.0, "#ff0000");
     let b = rectangle(&mut s, 50.0, "#0000ff");
     let g = scribble(&mut s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [125.0, 65.0]]);
-    s.execute("object.move", &json!({"ids":[a.0],"dx":20,"dy":10})).unwrap();
+    s.execute("object.move", &json!({"dx":20,"dy":10})).unwrap();
     assert_eq!(fill(&s, g, 30.0, 15.0).as_deref(), Some("#ff0000"));
     assert_eq!(node(&s, a).geometric_bounds().unwrap().x0, 20.0);
     s.execute("select.set", &json!({"ids":[a.0]})).unwrap();
@@ -172,7 +172,7 @@ fn shaper_face_paint_survives_source_edits_and_expand_discards_only_sources() {
     let g = scribble(&mut s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [125.0, 65.0]]);
     s.execute("shaper.select", &json!({"point":[75,50]})).unwrap();
     s.execute("paint.setFill", &json!({"color":"#00ff00"})).unwrap();
-    s.execute("object.move", &json!({"ids":[a.0],"dx":5,"dy":0})).unwrap();
+    s.execute("object.move", &json!({"dx":5,"dy":0})).unwrap();
     assert_eq!(fill(&s, g, 75.0, 50.0).as_deref(), Some("#00ff00"));
     s.execute("shaper.expand", &json!({"id":g.0})).unwrap();
     assert!(node(&s, g).extras().shaper.is_none());
@@ -351,7 +351,7 @@ fn shaper_joined_outline_keeps_its_stroke_paint_after_source_edits() {
     assert!(outlines[0].path_data().unwrap().subpaths[0].closed);
     let outline = outlines[0].id;
     s.execute("paint.setStroke", &json!({"color":"#00ff00","ids":[outline.0]})).unwrap();
-    s.execute("object.move", &json!({"ids":[ids[0].0],"dx":10,"dy":0})).unwrap();
+    s.execute("object.move", &json!({"dx":10,"dy":0})).unwrap();
     let outlines: Vec<_> =
         node(&s, g).children().unwrap().iter().filter(|n| n.name.as_deref().is_some_and(|s| s.starts_with(STROKE_PREFIX))).collect();
     assert_eq!(outlines.len(), 1);

@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Document Color Mode",
             [],
             None,
-            "same as file.documentColorMode: {mode: \"cmyk\"|\"rgb\", convert?: true, intent?, grays?} → {changed} (an alias kept for older scripts; the command palette leaves it out)",
+            "{…as file.documentColorMode} same as file.documentColorMode: {mode: \"cmyk\"|\"rgb\", convert?: true, intent?, grays?} → {changed} (an alias kept for older scripts; the command palette leaves it out)",
             has_doc,
             convert_mode
         ),
@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gamut Warning",
             [],
             None,
-            "{ids?, colors?: [color]} colours that can't be printed in the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
+            "{ids?|id?, colors?: [color]} colours that can't be printed in the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
             has_doc,
             gamut_check
         ),

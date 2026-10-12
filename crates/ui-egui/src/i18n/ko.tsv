@@ -4212,3 +4212,6 @@ lighting	Light	광원
 @msg	The shape is too complex for a 3D effect	모양이 너무 복잡하여 3D 효과를 적용할 수 없습니다
 @msg	The 3D surface is too complex; simplify the shape	3D 표면이 너무 복잡합니다. 모양을 단순화하십시오
 	Transform Objects	개체 변형
+@msg	unknown parameter `{key}`; did you mean `{near}`?	알 수 없는 매개변수 `{key}`: `{near}`을(를) 의미하셨습니까?
+@msg	unknown parameter `{key}`; the command takes no parameters	알 수 없는 매개변수 `{key}`: 이 명령에는 매개변수가 없습니다
+@msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}

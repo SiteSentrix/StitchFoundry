@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Merge Selected",
             ["Window", "Layers"],
             None,
-            "{ids?} (default: the highlighted rows) merge two or more rows into the layer listed (highlighted) last: the other layers' contents and the other rows move into it, keeping their stacking order, and the emptied layers go. Every selected object left hidden or locked, such as one merged into a hidden or locked layer, is deselected (the key object too). One undo step → {id}",
+            "{ids?|id?} (default: the highlighted rows) merge two or more rows into the layer listed (highlighted) last: the other layers' contents and the other rows move into it, keeping their stacking order, and the emptied layers go. Every selected object left hidden or locked, such as one merged into a hidden or locked layer, is deselected (the key object too). One undo step → {id}",
             has_doc,
             merge
         ),
@@ -64,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reverse Order",
             ["Window", "Layers"],
             None,
-            "{ids?} (default: the highlighted rows) reverse the stacking order of two or more rows that share a layer or group; each keeps the places the others held. One undo step",
+            "{ids?|id?} (default: the highlighted rows) reverse the stacking order of two or more rows that share a layer or group; each keeps the places the others held. One undo step",
             has_doc,
             reverse
         ),
@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Template",
             ["Window", "Layers"],
             None,
-            "{ids?, on?: bool (default: toggle the first)} make layers templates (locked, dimmed, left out of print and export) or ordinary layers again (layer.setProps template) → {on}",
+            "{ids?|id?, on?: bool (default: toggle the first)} make layers templates (locked, dimmed, left out of print and export) or ordinary layers again (layer.setProps template) → {on}",
             has_doc,
             template
         ),
@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Hide Others",
             ["Window", "Layers"],
             None,
-            "{ids?} hide every top-level layer but those holding the highlighted rows (else the current layer), which show. One undo step → {count}",
+            "{ids?|id?} hide every top-level layer but those holding the highlighted rows (else the current layer), which show. One undo step → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Visible, false, "layer.hideOthers")
         ),
@@ -96,7 +96,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Others",
             ["Window", "Layers"],
             None,
-            "{ids?} turn Preview off (outline view) for every top-level layer but those holding the highlighted rows (else the current layer), which preview → {count}",
+            "{ids?|id?} turn Preview off (outline view) for every top-level layer but those holding the highlighted rows (else the current layer), which preview → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Preview, false, "layer.outlineOthers")
         ),
@@ -114,7 +114,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Lock Others",
             ["Window", "Layers"],
             None,
-            "{ids?} lock every top-level layer but those holding the highlighted rows (else the current layer), which unlock → {count}",
+            "{ids?|id?} lock every top-level layer but those holding the highlighted rows (else the current layer), which unlock → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Locked, true, "layer.lockOthers")
         ),

@@ -3620,3 +3620,6 @@ lighting	Light	光源
 @msg	The shape is too complex for a 3D effect	形狀過於複雜，無法套用 3D 效果
 @msg	The 3D surface is too complex; simplify the shape	3D 表面過於複雜；請簡化形狀
 	Transform Objects	變形物件
+@msg	unknown parameter `{key}`; did you mean `{near}`?	未知的參數 `{key}`；您是指 `{near}` 嗎？
+@msg	unknown parameter `{key}`; the command takes no parameters	未知的參數 `{key}`；此指令沒有參數
+@msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
