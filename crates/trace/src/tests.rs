@@ -158,6 +158,38 @@ fn color_mode_gradient_uses_at_most_n_colors() {
 }
 
 #[test]
+fn color_mode_separates_close_dark_tones() {
+    // Eight stripes one level apart (32..=39): a fixed 5-bit-per-channel histogram put them all in
+    // one bin, so `colors: 8` gave a single colour and a single path.
+    let img = Raster::from_fn(128, 32, |x, _| {
+        let v = 32 + (x / 16) as u8;
+        [v, v, v, 255]
+    });
+    let params = TraceParams { mode: Mode::Color, colors: 8, noise: 0, method: Method::Abutting, ..TraceParams::default() };
+    let res = trace(&img, &params);
+    let mut tones: Vec<u8> = res.palette.iter().map(|c| c[0]).collect();
+    tones.sort_unstable();
+    assert_eq!(tones, (32..=39).collect::<Vec<u8>>());
+    assert_eq!(res.paths.len(), 8);
+}
+
+#[test]
+fn color_mode_full_range_and_transparent_inputs() {
+    // Full-range input keeps working.
+    let img = Raster::from_fn(256, 4, |x, _| [x as u8, 255 - x as u8, 0, 255]);
+    let q = quantize(&img, &TraceParams { mode: Mode::Color, colors: 6, ..TraceParams::default() });
+    assert!((2..=6).contains(&q.palette.len()), "{}", q.palette.len());
+    // A fully transparent image has no traced pixel and does not fail.
+    let clear = Raster::from_fn(8, 8, |_, _| [10, 20, 30, 0]);
+    let q = quantize(&clear, &TraceParams { mode: Mode::Color, colors: 4, ..TraceParams::default() });
+    assert!(q.labels.iter().all(|&l| l == TRANSPARENT));
+    // Deterministic.
+    let a = quantize(&img, &TraceParams { mode: Mode::Color, colors: 6, ..TraceParams::default() });
+    let b = quantize(&img, &TraceParams { mode: Mode::Color, colors: 6, ..TraceParams::default() });
+    assert_eq!(a, b);
+}
+
+#[test]
 fn grayscale_levels() {
     let img = Raster::from_fn(256, 8, |x, _| [x as u8, x as u8, x as u8, 255]);
     let q = quantize(&img, &TraceParams { mode: Mode::Grayscale, colors: 4, ..TraceParams::default() });
