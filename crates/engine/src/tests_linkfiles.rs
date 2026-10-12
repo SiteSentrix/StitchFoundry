@@ -229,7 +229,7 @@ fn relinking_with_copy_puts_the_file_in_the_documents_folder() {
     std::fs::remove_dir_all(root.join("orig")).unwrap();
     let (found, blue) = (root.join("found/photo.png"), png(40, 30, BLUE));
     write(&found, &blue);
-    let copy = root.join("doc/photo.png");
+    let copy = root.join("doc").join("photo.png");
     let relink = |s: &mut Session, path: &Path| s.execute("links.relink", &json!({"ids": [id], "path": path, "copy": true}));
     let r = relink(&mut s, &found).unwrap();
     assert_eq!(r, json!({"relinked": [id], "notFound": [], "copied": [{"from": found, "to": copy}], "kept": []}));
@@ -247,7 +247,7 @@ fn relinking_with_copy_puts_the_file_in_the_documents_folder() {
     // Another file of the name: the copy gets a number, and the file there stays as it was.
     let (other, red) = (root.join("other/photo.png"), png(50, 30, RED));
     write(&other, &red);
-    let numbered = root.join("doc/photo 2.png");
+    let numbered = root.join("doc").join("photo 2.png");
     assert_eq!(relink(&mut s, &other).unwrap()["copied"], json!([{"from": other, "to": numbered}]));
     assert_eq!((std::fs::read(&copy).unwrap(), std::fs::read(&numbered).unwrap()), (blue, red));
     // That file again: the numbered copy holds the same contents and is used.
