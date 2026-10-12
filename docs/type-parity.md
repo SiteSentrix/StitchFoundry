@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Full-name font matching (#1258); Windows font-service QA pending; scores unchanged; Middle Eastern digit types: Character panel menu › Digits, `{digits}`; the font menu's script filter lists Thai fonts; Thai, Lao, Khmer and Myanmar lines break between words; the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (missing glyphs are looked for again after a font rescan, #1376; scores unchanged; Full-name font matching (#1258); Windows font-service QA pending; scores unchanged; Middle Eastern digit types: Character panel menu › Digits, `{digits}`; the font menu's script filter lists Thai fonts; Thai, Lao, Khmer and Myanmar lines break between words; the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -56,6 +56,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | A character no installed font had is looked for again after the fonts are rescanned, so installing a font fixes it without a restart (#1376, from #992); scores and hours unchanged |
 | 2026-10-12 | minor | Full-name font matching and Missing Fonts searches (#1258): synthetic static/variable font regressions; Windows font-service QA pending; scores and hours unchanged |
 | 2026-10-11 | minor | Middle Eastern: digit types done (Character panel menu › Digits: Default, Arabic, Hindi, Farsi; `text.setFormat` / `text.setRangeStyle {digits}`); Character Direction, kashidas, composers and the split caret still missing; scores unchanged at this rounding |
 | 2026-10-11 | minor | Thai, Lao, Khmer and Myanmar words for the caret (Ctrl/Alt+arrows) and double-click; combining marks count as part of a word; score unchanged (estimated) |
