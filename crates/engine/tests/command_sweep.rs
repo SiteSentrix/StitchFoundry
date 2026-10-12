@@ -501,6 +501,12 @@ fn structured_junk() {
         ("embroidery.contourSplits", json!({"spacing": "x", "ids": [u64::MAX]})),
         ("embroidery.motif.keep", json!({"name": "nope"})),
         ("embroidery.motif.forget", json!({"name": ""})),
+        (
+            "embroidery.font.load",
+            json!({"json": "{\"name\": \"x\", \"size\": 1e308, \"leading\": -1e308, \"horiz_adv_x\": {\"A\": 1e308}}", "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\" viewBox=\"0 0 1e308 1e-308\"><g inkscape:groupmode=\"layer\" inkscape:label=\"GlyphLayer-A\" id=\"l\"><path d=\"M0 0 L1e300 1e300\" stroke=\"#000\" fill=\"none\"/></g></svg>"}),
+        ),
+        ("embroidery.font.load", json!({"path": "/nonexistent/font"})),
+        ("embroidery.lettering", json!({"text": "AAAA", "font": "x", "size": 500, "leading": 5, "at": [1e308, -1e308]})),
         ("embroidery.knife", json!({"overlap": 3})),
         ("embroidery.knife", json!({"overlap": -1, "ids": [u64::MAX]})),
         (

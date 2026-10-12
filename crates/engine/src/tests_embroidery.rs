@@ -2150,6 +2150,68 @@ fn ink_stitch_designs_open_with_their_stitch_settings() {
     assert!(node(&s, "p").embroidery.is_none());
 }
 
+/// A tiny embroidery font of our own in Ink/Stitch's format: capitals 10 mm high, "A" a satin
+/// column and a run, "B" a fill, kerned closer as "AB", and a default glyph.
+const TEST_FONT_JSON: &str = r#"{"name": "Test Script", "font_license": "MIT", "leading": 60, "size": 10,
+  "min_scale": 0.5, "max_scale": 2, "letter_case": "upper", "default_glyph": "?", "horiz_adv_x_default": null,
+  "horiz_adv_x_space": 20, "units_per_em": 60, "horiz_adv_x": {"A": 40, "B": 36, "?": 30}, "kerning_pairs": {"A B": 4}}"#;
+const TEST_FONT_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:inkstitch="http://inkstitch.org/namespace" width="100mm" height="100mm" viewBox="0 0 100 100">
+  <sodipodi:namedview id="nv"><sodipodi:guide position="0,20" orientation="0,1" inkscape:label="baseline" id="g1"/></sodipodi:namedview>
+  <g inkscape:groupmode="layer" inkscape:label="GlyphLayer-A" id="la" style="display:none">
+    <path id="a1" d="M 2 80 L 15 70 M 6 80 L 18 70 M 4 74 L 10 79" style="fill:none;stroke:#000000" inkstitch:satin_column="True"/>
+    <path id="a2" d="M 15 70 L 30 80" style="fill:none;stroke:#000000;stroke-dasharray:1,1" inkstitch:running_stitch_length_mm="2"/>
+  </g>
+  <g inkscape:groupmode="layer" inkscape:label="GlyphLayer-B" id="lb" style="display:none">
+    <path id="b1" d="M 2 70 H 25 V 80 H 2 Z" style="fill:#000000;stroke:none" inkstitch:angle="45"/>
+  </g>
+  <g inkscape:groupmode="layer" inkscape:label="GlyphLayer-?" id="lq" style="display:none">
+    <path id="q1" d="M 2 70 L 20 80" style="fill:none;stroke:#000000;stroke-dasharray:1,1"/>
+  </g>
+</svg>"##;
+
+#[test]
+fn embroidery_fonts_set_lettering_from_their_glyphs() {
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let mut s = session();
+    // loaded from its files' text (a folder on the desktop)
+    let r = s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    assert_eq!(
+        (r["name"].as_str(), r["glyphs"].as_u64(), r["minSize"].as_f64(), r["maxSize"].as_f64()),
+        (Some("Test Script"), Some(3), Some(5.0), Some(20.0))
+    );
+    assert_eq!(s.execute("embroidery.fonts", &json!({})).unwrap()["fonts"].as_array().unwrap().len(), 1);
+    // "ab" set in capitals at the font's own size, from (100, 300) on its baseline
+    let r = s.execute("embroidery.lettering", &json!({"text": "ab", "font": "test script", "at": [100, 300]})).unwrap();
+    assert_eq!(r["glyphs"].as_u64(), Some(2));
+    assert!(r["warnings"].as_array().unwrap().is_empty());
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    let all = st.doc.node(id).unwrap();
+    let glyphs: Vec<_> = all.children().unwrap().iter().map(|g| (g.name.clone().unwrap(), g.geometric_bounds().unwrap())).collect();
+    assert_eq!(glyphs.iter().map(|g| g.0.as_str()).collect::<Vec<_>>(), ["A", "B"]);
+    // the art sits on the baseline: the glyphs' bottoms at y = 300 (they reach 20 mm-units up
+    // from the page bottom, where the baseline guide is)
+    let (a, b) = (glyphs[0].1, glyphs[1].1);
+    assert!((a.y1 - 300.0).abs() < 0.5 && (b.y1 - 300.0).abs() < 0.5, "{a:?} {b:?}");
+    // B starts A's advance (40) less the kerning (4) along: 36 font units, 1 mm each
+    assert!((b.x0 - (100.0 + (36.0 + 2.0) / MM)).abs() < 0.5, "{b:?}");
+    // its glyphs sew: a satin column, a run and a fill
+    assert!(stitches(&s) > 100);
+    // twice the size, with a missing character as the default glyph; past the font's best sizes,
+    // a warning
+    let r = s.execute("embroidery.lettering", &json!({"text": "A%B", "font": "Test Script", "size": 20})).unwrap();
+    assert_eq!(r["glyphs"].as_u64(), Some(3));
+    let r = s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "size": 50})).unwrap();
+    assert!(r["warnings"].to_string().contains("up to 20.0 mm"), "{r}");
+    // bad requests
+    assert!(s.execute("embroidery.lettering", &json!({"text": "A", "font": "Nope"})).is_err());
+    assert!(s.execute("embroidery.lettering", &json!({"text": " ", "font": "Test Script"})).is_err());
+    assert!(s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "size": 0})).is_err());
+    assert!(s.execute("embroidery.font.load", &json!({"json": "{}", "svg": TEST_FONT_SVG})).is_err());
+    assert!(s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": "<svg/>"})).is_err());
+    assert!(s.execute("embroidery.font.load", &json!({})).is_err());
+}
+
 #[test]
 fn a_laydown_is_sewn_first_under_the_selected_shapes() {
     const MM: f64 = vectorcraft_embroidery::MM_PER_PT;

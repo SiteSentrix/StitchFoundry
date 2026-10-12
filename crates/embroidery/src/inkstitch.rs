@@ -222,6 +222,13 @@ pub fn apply(doc: &mut Document) -> usize {
     if !is_inkstitch(doc) {
         return 0;
     }
+    stitch_all(doc)
+}
+
+/// Stitches all of `doc`'s art the way Ink/Stitch would, whether or not it carries settings (an
+/// embroidery font's glyphs); what carries StitchFoundry stitching keeps it. Returns how many
+/// objects it stitched.
+pub fn stitch_all(doc: &mut Document) -> usize {
     // paths, and compound paths as one (not their pieces)
     let mut ids: Vec<NodeId> = Vec::new();
     let mut pieces: HashSet<NodeId> = HashSet::new();

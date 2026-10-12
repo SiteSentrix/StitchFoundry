@@ -939,6 +939,8 @@ pub struct Session {
     pub link_stamps: std::collections::HashMap<(u64, String), link_watch::Stamp>,
     /// The stamps being taken on a worker thread ([`Session::start_link_scan`]).
     pub link_scan: Option<link_watch::LinkScan>,
+    /// The embroidery fonts loaded for lettering (`embroidery.font.load`); not saved.
+    pub embroidery_fonts: Vec<Arc<vectorcraft_embroidery::fonts::EmbFont>>,
 }
 
 impl Default for Session {
@@ -996,6 +998,7 @@ impl Session {
             search_threads: None,
             link_stamps: Default::default(),
             link_scan: None,
+            embroidery_fonts: Vec::new(),
         }
     }
 
