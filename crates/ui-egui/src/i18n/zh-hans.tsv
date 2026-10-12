@@ -3797,3 +3797,32 @@ lighting	Light	光源
 	Use Outside Rectangle As Frame	使用外部矩形作为框架
 	Create Compound Path From Ellipses	从椭圆形创建复合路径
 	Fill Grid	网格填色
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	背面
+	Both sides	双面
+	Classic	经典
+	Cove	凹圆
+	Depth	深度
+	Front	正面
+	Isometric Bottom	等角底部
+	Isometric Left	等角左侧
+	Isometric Right	等角右侧
+	Isometric Top	等角顶部
+	Off-Axis Back	离轴背面
+	Off-Axis Bottom	离轴底部
+	Off-Axis Front	离轴正面
+	Off-Axis Left	离轴左侧
+	Off-Axis Right	离轴右侧
+	Off-Axis Top	离轴顶部
+	Ogee	反曲线
+	Reset all 3D settings to their defaults.	将所有 3D 设置重置为默认值。
+	Step	阶梯
+	Taper	锥化
+	Twist	扭转
+	Volume	体积
+3d	Cap	封口
+3d	Solid	实心
+3d	Hollow	空心
+3d	Bevel	斜角
+3d	Rounded	圆角
+3d	Inside	向内

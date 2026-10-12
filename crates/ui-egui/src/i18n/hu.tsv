@@ -4604,3 +4604,32 @@ theme	Appearance	Kinézet
 	Use Outside Rectangle As Frame	Külső téglalap használata keretként
 	Create Compound Path From Ellipses	Összetett útvonal létrehozása az ellipszisekből
 	Fill Grid	Rács kitöltése
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	Hátulról
+	Both sides	Mindkét oldal
+	Classic	Klasszikus
+	Cove	Homorú
+	Depth	Mélység
+	Front	Elölről
+	Isometric Bottom	Izometrikus alsó
+	Isometric Left	Izometrikus bal
+	Isometric Right	Izometrikus jobb
+	Isometric Top	Izometrikus felső
+	Off-Axis Back	Ferdén hátulról
+	Off-Axis Bottom	Ferdén alulról
+	Off-Axis Front	Ferdén elölről
+	Off-Axis Left	Ferdén balról
+	Off-Axis Right	Ferdén jobbról
+	Off-Axis Top	Ferdén felülről
+	Ogee	S-ív
+	Reset all 3D settings to their defaults.	Az összes 3D-beállítás visszaállítása az alapértékekre.
+	Step	Lépcső
+	Taper	Elvékonyodás
+	Twist	Csavarás
+	Volume	Térfogat
+3d	Cap	Zárólap
+3d	Solid	Tömör
+3d	Hollow	Üreges
+3d	Bevel	Élletörés
+3d	Rounded	Lekerekített
+3d	Inside	Befelé

@@ -26,7 +26,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
-| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 44/50, Photoshop effects 29/57, 3D 1/4 (initial Revolve) |
+| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 44/50, Photoshop effects 29/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
@@ -74,7 +74,7 @@ The dimension hours overlap (feature rows hold some UI, format and AI work), so 
 | Appearance, transparency, graphic styles, masks | 97% | 1–2 |
 | Live vector effects | 85% | 6–10 |
 | Raster effects (Effect Gallery) — [effects-parity.md](docs/effects-parity.md) | 49% | 23–39 |
-| 3D and Materials | ~8% | 50–85 |
+| 3D and Materials | ~25% | 30–55 |
 | Type core — [type-parity.md](docs/type-parity.md) | 80% | 14–19 |
 | Type advanced (CJK, spelling, Touch Type) | 50% | 20–28 |
 | Symbols, blends, envelopes, Repeat, perspective | 85% | 6–10 |
@@ -127,6 +127,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 | Date | What landed |
 |---|---|
+| 2026-10-12 | Effect › 3D and Materials: Extrude & Bevel (depth, twist, taper, solid or hollow caps, six bevel shapes with repeat, spacing, inside and both sides), Inflate (volume, both sides) and Rotate, with Position presets and the rotation and light gizmos; live, exported as vector faces, expandable (#1407). |
 | 2026-10-12 | `convert --editing-data` (`editingData: "always"`) opens a `.ai` from its editing data even where its page, which can be older, draws differently, with a note. |
 | 2026-10-12 | `.ai` import reads an object's art style (a fill and a stroke, variable widths too, with an Outer Glow or Drop Shadow) as its own appearance, paints a clipping path's own fill under what it clips and keeps a group's transparency as its PDF part draws them. |
 | 2026-10-12 | `.ai` import reads gradients with their matrix (radials and skew too), focal point and stop order, gradient meshes and the artboards' names from the editing data. |

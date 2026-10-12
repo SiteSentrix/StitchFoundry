@@ -4161,3 +4161,32 @@ theme	Appearance	Erscheinungsbild
 	Use Outside Rectangle As Frame	Äußeres Rechteck als Rahmen verwenden
 	Create Compound Path From Ellipses	Zusammengesetzten Pfad aus Ellipsen erstellen
 	Fill Grid	Raster füllen
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	Hinten
+	Both sides	Beidseitig
+	Classic	Klassisch
+	Cove	Hohlkehle
+	Depth	Tiefe
+	Front	Vorne
+	Isometric Bottom	Isometrisch unten
+	Isometric Left	Isometrisch links
+	Isometric Right	Isometrisch rechts
+	Isometric Top	Isometrisch oben
+	Off-Axis Back	Schräg hinten
+	Off-Axis Bottom	Schräg unten
+	Off-Axis Front	Schräg vorne
+	Off-Axis Left	Schräg links
+	Off-Axis Right	Schräg rechts
+	Off-Axis Top	Schräg oben
+	Ogee	Karnies
+	Reset all 3D settings to their defaults.	Alle 3D-Einstellungen auf ihre Standardwerte zurücksetzen.
+	Step	Stufe
+	Taper	Verjüngung
+	Twist	Verdrehung
+	Volume	Volumen
+3d	Cap	Deckflächen
+3d	Solid	Massiv
+3d	Hollow	Hohl
+3d	Bevel	Abgeflachte Kante
+3d	Rounded	Abgerundet
+3d	Inside	Nach innen

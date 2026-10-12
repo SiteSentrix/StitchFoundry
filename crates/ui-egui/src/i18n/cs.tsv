@@ -4510,3 +4510,32 @@ mark-style	Japanese	Japonské
 	Use Outside Rectangle As Frame	Použít vnější obdélník jako rámeček
 	Create Compound Path From Ellipses	Vytvořit složenou cestu z elips
 	Fill Grid	Vyplnit mřížku
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	Zezadu
+	Both sides	Obě strany
+	Classic	Klasické
+	Cove	Žlábek
+	Depth	Hloubka
+	Front	Zepředu
+	Isometric Bottom	Izometricky zdola
+	Isometric Left	Izometricky zleva
+	Isometric Right	Izometricky zprava
+	Isometric Top	Izometricky shora
+	Off-Axis Back	Šikmo zezadu
+	Off-Axis Bottom	Šikmo zdola
+	Off-Axis Front	Šikmo zepředu
+	Off-Axis Left	Šikmo zleva
+	Off-Axis Right	Šikmo zprava
+	Off-Axis Top	Šikmo shora
+	Ogee	Esovité
+	Reset all 3D settings to their defaults.	Obnoví výchozí hodnoty všech nastavení 3D.
+	Step	Schod
+	Taper	Zúžení
+	Twist	Zkroucení
+	Volume	Objem
+3d	Cap	Uzávěr
+3d	Solid	Plné
+3d	Hollow	Duté
+3d	Bevel	Zkosení
+3d	Rounded	Zaoblené
+3d	Inside	Dovnitř

@@ -4206,3 +4206,32 @@ lighting	Light	Luce
 	Use Outside Rectangle As Frame	Usa rettangolo esterno come cornice
 	Create Compound Path From Ellipses	Crea tracciato composto dalle ellissi
 	Fill Grid	Riempi griglia
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	Retro
+	Both sides	Entrambi i lati
+	Classic	Classico
+	Cove	Guscio
+	Depth	Profondità
+	Front	Fronte
+	Isometric Bottom	Isometrica sotto
+	Isometric Left	Isometrica sinistra
+	Isometric Right	Isometrica destra
+	Isometric Top	Isometrica sopra
+	Off-Axis Back	Fuori asse retro
+	Off-Axis Bottom	Fuori asse sotto
+	Off-Axis Front	Fuori asse fronte
+	Off-Axis Left	Fuori asse sinistra
+	Off-Axis Right	Fuori asse destra
+	Off-Axis Top	Fuori asse sopra
+	Ogee	Gola
+	Reset all 3D settings to their defaults.	Ripristina i valori predefiniti di tutte le impostazioni 3D.
+	Step	Gradino
+	Taper	Rastremazione
+	Twist	Torsione
+	Volume	Volume
+3d	Cap	Chiusura
+3d	Solid	Pieno
+3d	Hollow	Cavo
+3d	Bevel	Smusso
+3d	Rounded	Arrotondato
+3d	Inside	Verso l'interno

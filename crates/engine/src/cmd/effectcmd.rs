@@ -119,12 +119,17 @@ fn edit_effects(
 }
 
 fn check_revolve_count(n: &Node, cmd: &str) -> Result<()> {
-    let count = n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects())).filter(|e| e.id == effects::REVOLVE).count();
-    if count > 1 {
+    let all = || n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects()));
+    if all().filter(|e| e.id == effects::REVOLVE).count() > 1 {
         return Err(bad(cmd, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
+    }
+    if all().filter(|e| effects::is_three_d(&e.id)).count() > 1 {
+        return Err(bad(cmd, ONE_3D));
     }
     Ok(())
 }
+
+const ONE_3D: &str = "An object takes one 3D effect. Edit the existing effect's options, or remove it first.";
 
 pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.apply";
@@ -149,12 +154,19 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "ids": [gid.0], "index": 0, "item": null, "grouped": true }));
     }
     let item = item_target(s, p, C)?;
-    if id == effects::REVOLVE {
-        for id in appearance_targets(s, p)? {
-            let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
-            effects::validate_revolve(n, &effect.params).map_err(|e| bad(C, e))?;
-            if effects::has_revolve(n) {
-                return Err(bad(C, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
+    if effects::is_three_d(id) {
+        for target in appearance_targets(s, p)? {
+            let n = s.doc()?.doc.node(target).ok_or(EngineError::NoNode(target))?;
+            if id == effects::REVOLVE {
+                effects::validate_revolve(n, &effect.params).map_err(|e| bad(C, e))?;
+                if effects::has_revolve(n) {
+                    return Err(bad(C, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
+                }
+            } else {
+                effects::validate_solid(n, id, &effect.params).map_err(|e| bad(C, e))?;
+            }
+            if effects::has_revolve(n) || effects::has_solid(n) {
+                return Err(bad(C, ONE_3D));
             }
         }
     }
@@ -281,14 +293,18 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
         let target = item.effects_item(&n.appearance, C)?;
         if let Some(e) = n.appearance.effects_at(target).and_then(|fx| fx.get(index))
-            && e.id == effects::REVOLVE
+            && effects::is_three_d(&e.id)
             && visible != Some(false)
         {
             let mut prospective = effects::merged_params(&e.id, &e.params);
             if let (Some(cur), Some(new)) = (prospective.as_object_mut(), params.as_object()) {
                 cur.extend(new.clone());
             }
-            effects::validate_revolve(n, &prospective).map_err(|e| bad(C, e))?;
+            if e.id == effects::REVOLVE {
+                effects::validate_revolve(n, &prospective).map_err(|e| bad(C, e))?;
+            } else {
+                effects::validate_solid(n, &e.id, &prospective).map_err(|e| bad(C, e))?;
+            }
         }
     }
     let ids = edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), |fx| {
@@ -531,6 +547,45 @@ mod tests {
         assert_eq!(node(&s, id).path_data(), Some(&source));
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(effects_for_test(&s, id), before);
+    }
+
+    /// Extrude & Bevel, Inflate and Rotate: applied by command, saved and reopened, edited,
+    /// exported, expanded and undone; one 3D effect per object.
+    #[test]
+    fn solid_effects_apply_save_edit_export_expand_and_undo() {
+        for effect in effects::SOLIDS {
+            let (mut s, id) = session_with_rect();
+            let source = node(&s, id).path_data().unwrap().clone();
+            s.execute("effect.apply", &json!({"effect": effect, "ids": [id.0], "item": null})).unwrap();
+            let art = effects::solid_art(&node(&s, id)).unwrap();
+            assert_eq!(node(&s, id).path_data(), Some(&source), "{effect}: the source stays editable");
+            let doc = &s.doc().unwrap().doc;
+            let restored = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+            assert_eq!(effects::solid_art(restored.node(id).unwrap()).unwrap(), art, "{effect}: reopens the same");
+            // One 3D effect per object, whichever kind.
+            for other in ["threeD.revolve", "threeD.extrude", "threeD.rotate"] {
+                assert!(s.execute("effect.apply", &json!({"effect": other, "ids": [id.0], "item": null})).is_err(), "{effect} + {other}");
+            }
+            s.execute("effect.setParams", &json!({"index": 0, "params": {"rotationY": 50, "depth": 120}, "ids": [id.0], "item": null})).unwrap();
+            assert_ne!(effects::solid_art(&node(&s, id)).unwrap(), art, "{effect}: options change the art");
+            assert!(s.execute("effect.setParams", &json!({"index": 0, "params": {"bevel": "nope"}, "ids": [id.0], "item": null})).is_err());
+            let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+            let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+            assert!(svg.matches("<path").count() >= 2, "{effect}: exported as vector faces");
+            s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+            assert!(matches!(node(&s, id).kind, NodeKind::Group { .. }), "{effect}");
+            assert!(!effects::has_solid(&node(&s, id)));
+            s.execute("edit.undo", &json!({})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(node(&s, id).appearance.effects.len(), 0, "{effect}: back to the plain rectangle");
+        }
+        // Type has no outline to extrude.
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 50, "y": 50, "text": "3D"})).unwrap();
+        let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [t["id"]], "item": null})).unwrap_err();
+        assert!(err.to_string().contains("requires a path"), "{err}");
     }
 
     fn effects_for_test(s: &Session, id: NodeId) -> vectorcraft_doc::Node {

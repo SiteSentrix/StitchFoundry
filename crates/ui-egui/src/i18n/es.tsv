@@ -4578,3 +4578,32 @@ mark-style	Japanese	Japonesas
 	X:	X:
 	Y:	Y:
 @id	file.close	Cerrar archivo
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	Posterior
+	Both sides	Ambos lados
+	Classic	Clásico
+	Cove	Cóncavo
+	Depth	Profundidad
+	Front	Frontal
+	Isometric Bottom	Isométrica inferior
+	Isometric Left	Isométrica izquierda
+	Isometric Right	Isométrica derecha
+	Isometric Top	Isométrica superior
+	Off-Axis Back	Fuera de eje posterior
+	Off-Axis Bottom	Fuera de eje inferior
+	Off-Axis Front	Fuera de eje frontal
+	Off-Axis Left	Fuera de eje izquierda
+	Off-Axis Right	Fuera de eje derecha
+	Off-Axis Top	Fuera de eje superior
+	Ogee	Gola
+	Reset all 3D settings to their defaults.	Restablecer todos los ajustes 3D a sus valores predeterminados.
+	Step	Escalón
+	Taper	Estrechamiento
+	Twist	Torsión
+	Volume	Volumen
+3d	Cap	Tapa
+3d	Solid	Sólido
+3d	Hollow	Hueco
+3d	Bevel	Bisel
+3d	Rounded	Redondeado
+3d	Inside	Hacia dentro

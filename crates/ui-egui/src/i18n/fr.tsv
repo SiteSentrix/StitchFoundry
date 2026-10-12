@@ -4214,3 +4214,32 @@ lighting	Light	Lumière
 	Use Outside Rectangle As Frame	Utiliser le rectangle extérieur comme cadre
 	Create Compound Path From Ellipses	Créer un tracé transparent à partir des ellipses
 	Fill Grid	Remplir la grille
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	Arrière
+	Both sides	Deux côtés
+	Classic	Classique
+	Cove	Cavet
+	Depth	Profondeur
+	Front	Avant
+	Isometric Bottom	Isométrique dessous
+	Isometric Left	Isométrique gauche
+	Isometric Right	Isométrique droite
+	Isometric Top	Isométrique dessus
+	Off-Axis Back	Désaxé arrière
+	Off-Axis Bottom	Désaxé dessous
+	Off-Axis Front	Désaxé avant
+	Off-Axis Left	Désaxé gauche
+	Off-Axis Right	Désaxé droite
+	Off-Axis Top	Désaxé dessus
+	Ogee	Doucine
+	Reset all 3D settings to their defaults.	Rétablir les valeurs par défaut de tous les réglages 3D.
+	Step	Gradin
+	Taper	Effilement
+	Twist	Torsion
+	Volume	Volume
+3d	Cap	Fermeture
+3d	Solid	Plein
+3d	Hollow	Creux
+3d	Bevel	Biseau
+3d	Rounded	Arrondi
+3d	Inside	Vers l'intérieur

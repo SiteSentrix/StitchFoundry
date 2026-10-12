@@ -4200,3 +4200,32 @@ lighting	Light	ライト
 	Use Outside Rectangle As Frame	外側の長方形をフレームとして使用
 	Create Compound Path From Ellipses	楕円形から複合パスを作成
 	Fill Grid	グリッドを塗りつぶす
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	背面
+	Both sides	両面
+	Classic	クラシック
+	Cove	凹面
+	Depth	奥行き
+	Front	正面
+	Isometric Bottom	等角図（底面）
+	Isometric Left	等角図（左）
+	Isometric Right	等角図（右）
+	Isometric Top	等角図（上面）
+	Off-Axis Back	斜め（背面）
+	Off-Axis Bottom	斜め（底面）
+	Off-Axis Front	斜め（正面）
+	Off-Axis Left	斜め（左）
+	Off-Axis Right	斜め（右）
+	Off-Axis Top	斜め（上面）
+	Ogee	S字
+	Reset all 3D settings to their defaults.	すべての 3D 設定を初期値に戻します。
+	Step	段
+	Taper	テーパー
+	Twist	ねじれ
+	Volume	ボリューム
+3d	Cap	キャップ
+3d	Solid	ソリッド
+3d	Hollow	中空
+3d	Bevel	ベベル
+3d	Rounded	丸み
+3d	Inside	内側

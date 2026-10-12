@@ -4186,3 +4186,32 @@ lighting	Light	Світло
 	Use Outside Rectangle As Frame	Використовувати зовнішній прямокутник як рамку
 	Create Compound Path From Ellipses	Створити складений контур з еліпсів
 	Fill Grid	Залити сітку
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	Ззаду
+	Both sides	З обох боків
+	Classic	Класичний
+	Cove	Викружка
+	Depth	Глибина
+	Front	Спереду
+	Isometric Bottom	Ізометрія знизу
+	Isometric Left	Ізометрія ліворуч
+	Isometric Right	Ізометрія праворуч
+	Isometric Top	Ізометрія згори
+	Off-Axis Back	Під кутом ззаду
+	Off-Axis Bottom	Під кутом знизу
+	Off-Axis Front	Під кутом спереду
+	Off-Axis Left	Під кутом ліворуч
+	Off-Axis Right	Під кутом праворуч
+	Off-Axis Top	Під кутом згори
+	Ogee	Гусик
+	Reset all 3D settings to their defaults.	Скинути всі параметри 3D до типових значень.
+	Step	Сходинка
+	Taper	Звуження
+	Twist	Закручування
+	Volume	Об'єм
+3d	Cap	Торці
+3d	Solid	Суцільний
+3d	Hollow	Порожнистий
+3d	Bevel	Фаска
+3d	Rounded	Заокруглений
+3d	Inside	Усередину

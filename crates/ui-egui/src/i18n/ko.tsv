@@ -4170,3 +4170,32 @@ lighting	Light	광원
 	Use Outside Rectangle As Frame	바깥쪽 사각형을 프레임으로 사용
 	Create Compound Path From Ellipses	원에서 컴파운드 패스 만들기
 	Fill Grid	격자 칠하기
+# 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
+	Back	뒷면
+	Both sides	양면
+	Classic	클래식
+	Cove	오목
+	Depth	깊이
+	Front	앞면
+	Isometric Bottom	등각 밑면
+	Isometric Left	등각 왼쪽
+	Isometric Right	등각 오른쪽
+	Isometric Top	등각 윗면
+	Off-Axis Back	비스듬한 뒷면
+	Off-Axis Bottom	비스듬한 밑면
+	Off-Axis Front	비스듬한 앞면
+	Off-Axis Left	비스듬한 왼쪽
+	Off-Axis Right	비스듬한 오른쪽
+	Off-Axis Top	비스듬한 윗면
+	Ogee	S자
+	Reset all 3D settings to their defaults.	모든 3D 설정을 기본값으로 재설정합니다.
+	Step	계단
+	Taper	테이퍼
+	Twist	비틀기
+	Volume	볼륨
+3d	Cap	캡
+3d	Solid	솔리드
+3d	Hollow	속이 빈
+3d	Bevel	베벨
+3d	Rounded	둥글게
+3d	Inside	안쪽
