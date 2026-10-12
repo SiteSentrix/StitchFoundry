@@ -16,16 +16,13 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         "polygon" => Dialog::new(kind, json!({"x": x, "y": y, "radius": "50 pt", "sides": 6})),
         "star" => Dialog::new(kind, json!({"x": x, "y": y, "radius1": "50 pt", "radius2": "25 pt", "points": 5})),
         "lineSegment" => Dialog::new(kind, json!({"x": x, "y": y, "length": "100 pt", "angle": 0})),
-        "rectangularGrid" => {
-            let options = app.session.tool_options_of(kind);
-            Dialog::new(kind, json!({"x": x, "y": y, "width": "100 pt", "height": "100 pt", "rows": options["rows"], "columns": options["columns"]}))
-        }
-        "polarGrid" => {
-            let options = app.session.tool_options_of(kind);
-            Dialog::new(
-                kind,
-                json!({"x": x, "y": y, "width": "100 pt", "height": "100 pt", "concentric": options["concentric"], "radial": options["radial"]}),
-            )
+        // The grids: the tool's stored options (divider counts and skews, switches) at the default size.
+        "rectangularGrid" | "polarGrid" => {
+            let mut fields = app.session.tool_options_of(kind);
+            for (key, value) in [("x", json!(x)), ("y", json!(y)), ("width", json!("100 pt")), ("height", json!("100 pt"))] {
+                fields[key] = value;
+            }
+            Dialog::new(kind, fields)
         }
         // Graph tool click: the graph's size.
         "graph" => Dialog::new(

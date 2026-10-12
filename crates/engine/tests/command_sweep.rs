@@ -325,6 +325,19 @@ fn structured_junk() {
         ("object.path.offsetPath", json!({"offset": 1e308})),
         ("object.path.offsetPath", json!({"offset": -1e308})),
         ("object.path.simplify", json!({"tolerance": -1, "cornerAngle": 1e308})),
+        (
+            "shape.rectangularGrid",
+            json!({"x": 0, "y": 0, "width": 1e308, "height": -1e308, "rows": 999, "columns": u64::MAX, "rowSkew": 1e308, "columnSkew": -1e308, "frame": false, "fill": true}),
+        ),
+        ("shape.rectangularGrid", json!({"x": 0, "y": 0, "width": 0, "height": 0, "rowSkew": "x", "frame": 3})),
+        (
+            "shape.polarGrid",
+            json!({"x": 0, "y": 0, "width": 1e308, "height": 1e-308, "concentric": 999, "radial": 999, "concentricSkew": -1e308, "radialSkew": 1e308, "compound": true, "fill": true}),
+        ),
+        (
+            "shape.polarGrid",
+            json!({"x": 0, "y": 0, "width": 10, "height": 10, "concentric": -1, "radial": 0.5, "radialSkew": null, "compound": "yes"}),
+        ),
         ("object.path.splitIntoGrid", json!({"rows": 500, "columns": 1, "gutter": 1e308})),
         ("object.path.splitIntoGrid", json!({"rows": 0.4})),
         ("object.setBounds", json!({"width": 0, "height": 0})),

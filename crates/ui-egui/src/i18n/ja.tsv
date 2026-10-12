@@ -4192,3 +4192,10 @@ lighting	Light	ライト
 @msg	the file stopped being read (please report this bug)	ファイルの読み込みが中断されました (このバグを報告してください)
 	Concentric Dividers:	同心円の分割線:
 	Radial Dividers:	放射状の分割線:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	歪み:
+	Inside	内側
+	Outside	外側
+	Use Outside Rectangle As Frame	外側の長方形をフレームとして使用
+	Create Compound Path From Ellipses	楕円形から複合パスを作成
+	Fill Grid	グリッドを塗りつぶす

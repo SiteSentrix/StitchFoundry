@@ -3571,3 +3571,10 @@ lighting	Light	光源
 	Highlight Area	亮部範圍
 	Concentric Dividers:	同心分隔線：
 	Radial Dividers:	徑向分隔線：
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	傾斜：
+	Inside	內側
+	Outside	外側
+	Use Outside Rectangle As Frame	使用外部矩形作為框架
+	Create Compound Path From Ellipses	從橢圓形建立複合路徑
+	Fill Grid	格線填色

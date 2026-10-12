@@ -4153,3 +4153,10 @@ theme	Appearance	Erscheinungsbild
 @msg	the file stopped being read (please report this bug)	das Lesen der Datei wurde abgebrochen (bitte melden Sie diesen Fehler)
 	Concentric Dividers:	Konzentrische Trennlinien:
 	Radial Dividers:	Radiale Trennlinien:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Neigung:
+	Inside	Innen
+	Outside	Außen
+	Use Outside Rectangle As Frame	Äußeres Rechteck als Rahmen verwenden
+	Create Compound Path From Ellipses	Zusammengesetzten Pfad aus Ellipsen erstellen
+	Fill Grid	Raster füllen

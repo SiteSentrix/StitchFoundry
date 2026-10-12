@@ -729,6 +729,54 @@ fn polar_grid_shared_canvas_click_defaults_units_counts_and_history() {
     assert_eq!(app.session.doc().unwrap().doc, made);
 }
 
+/// #1377: Polar Grid's dialog has a skew slider under each divider count, Create Compound Path
+/// From Ellipses and Fill Grid, opened with the tool's stored values; OK draws with them and
+/// stores them.
+#[test]
+fn polar_grid_dialog_edits_skews_compound_and_fill() {
+    use vectorcraft_doc::{NodeId, NodeKind};
+    let mut app = app();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    app.run("tool.setOption", json!({"tool": "polarGrid", "values": {"concentric": 3, "radial": 4, "radialSkew": 500}})).unwrap();
+    open_tool_dialog(&mut app, "polarGrid", json!({"x": 10, "y": 20}));
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let labels = [
+        "Concentric Dividers:",
+        "Skew:",
+        "Inside",
+        "Outside",
+        "Radial Dividers:",
+        "Skew:",
+        "Left",
+        "Right",
+        "Create Compound Path From Ellipses",
+        "Fill Grid",
+    ];
+    let mut from = 0;
+    for label in labels {
+        from += text[from..].find(&format!("{label}\n")).unwrap_or_else(|| panic!("no {label:?} in order in {text}")) + label.len();
+    }
+    assert!(!text.contains("Use Outside Rectangle As Frame"), "{text}");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!((d.fields["concentricSkew"].clone(), d.fields["radialSkew"].clone()), (json!(0.0), json!(500.0)));
+    assert_eq!((d.fields["compound"].clone(), d.fields["fill"].clone()), (json!(false), json!(false)));
+    for (key, value) in [("concentricSkew", json!(100)), ("compound", json!(true)), ("fill", json!(true))] {
+        d.fields.insert(key.into(), value);
+    }
+    let result = confirm(&mut app).unwrap();
+    let s = app.session.doc().unwrap();
+    let children = s.doc.node(NodeId(result["id"].as_u64().unwrap())).unwrap().children().unwrap();
+    // Two rings under four radial dividers, all in the current fill.
+    assert_eq!(children.iter().map(|n| matches!(n.kind, NodeKind::Compound { .. })).collect::<Vec<_>>(), [true, true, false, false, false, false]);
+    assert!(children.iter().all(|n| n.appearance.fill().is_some_and(|f| f.paint != vectorcraft_color::Paint::None)));
+    let widths: Vec<f64> = children[0].children().unwrap().iter().map(|n| n.geometric_bounds().unwrap().width()).collect();
+    assert!((widths[0] - 100.0).abs() < 1e-6 && (widths[1] - 93.75).abs() < 1e-6, "outward: {widths:?}");
+    let tips: Vec<f64> = children[3..].iter().map(|n| n.path_data().unwrap().subpaths[0].anchors[1].p.x).collect();
+    assert!(tips.iter().all(|x| *x > 60.0), "right of the top divider: {tips:?}");
+    let saved = json!({"concentric": 3, "radial": 4, "concentricSkew": 100.0, "radialSkew": 500.0, "compound": true, "fill": true});
+    assert_eq!(app.session.tool_options_of("polarGrid"), saved);
+}
+
 #[test]
 fn polar_grid_shared_cancel_reopen_zero_counts_and_failed_creation() {
     let mut app = app();

@@ -4596,3 +4596,10 @@ theme	Appearance	Kinézet
 @msg	the file stopped being read (please report this bug)	a fájl beolvasása megszakadt (kérjük, jelentsd ezt a hibát)
 	Concentric Dividers:	Koncentrikus osztók:
 	Radial Dividers:	Sugárirányú osztók:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Ferdítés:
+	Inside	Belül
+	Outside	Kívül
+	Use Outside Rectangle As Frame	Külső téglalap használata keretként
+	Create Compound Path From Ellipses	Összetett útvonal létrehozása az ellipszisekből
+	Fill Grid	Rács kitöltése

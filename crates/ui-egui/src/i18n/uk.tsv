@@ -4178,3 +4178,10 @@ lighting	Light	Світло
 @msg	the file stopped being read (please report this bug)	читання файлу перервалося (будь ласка, повідомте про цю помилку)
 	Concentric Dividers:	Концентричні розділювачі:
 	Radial Dividers:	Радіальні розділювачі:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Скіс:
+	Inside	Усередині
+	Outside	Зовні
+	Use Outside Rectangle As Frame	Використовувати зовнішній прямокутник як рамку
+	Create Compound Path From Ellipses	Створити складений контур з еліпсів
+	Fill Grid	Залити сітку

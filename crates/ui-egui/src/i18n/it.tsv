@@ -4198,3 +4198,10 @@ lighting	Light	Luce
 @msg	the file stopped being read (please report this bug)	la lettura del file si è interrotta (segnala questo errore)
 	Concentric Dividers:	Divisori concentrici:
 	Radial Dividers:	Divisori radiali:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Inclinazione:
+	Inside	Interno
+	Outside	Esterno
+	Use Outside Rectangle As Frame	Usa rettangolo esterno come cornice
+	Create Compound Path From Ellipses	Crea tracciato composto dalle ellissi
+	Fill Grid	Riempi griglia

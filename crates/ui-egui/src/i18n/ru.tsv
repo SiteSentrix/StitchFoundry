@@ -4194,3 +4194,10 @@ lighting	Light	Свет
 @msg	the file stopped being read (please report this bug)	чтение файла прервалось (пожалуйста, сообщите об этой ошибке)
 	Concentric Dividers:	Концентрические разделители:
 	Radial Dividers:	Радиальные разделители:
+# Grid tool options (the Rectangular Grid and Polar Grid click dialogs).
+	Skew:	Скос:
+	Inside	Внутри
+	Outside	Снаружи
+	Use Outside Rectangle As Frame	Использовать внешний прямоугольник как рамку
+	Create Compound Path From Ellipses	Создать составной контур из эллипсов
+	Fill Grid	Залить сетку
