@@ -652,8 +652,10 @@ impl<'a> Scene<'a> {
         let h = self.handle();
         self.e.entity("SPLINE", h, fixed::MODEL_RECORD, &layer, style, "AcDbSpline");
         self.e.normal();
-        // Planar.
-        self.e.int(70, 8);
+        // Planar (bit 3) and, if the subpath is closed, also closed (bit 0). A geometrically
+        // closed cut needs the closed flag set so CAM/CAM tools (e.g. VCarve) treat it as a
+        // pocket/profile rather than asking the operator to join endpoints. (#1299)
+        self.e.int(70, if sub.closed { 8 | 1 } else { 8 });
         self.e.int(71, 3);
         self.e.int(72, knots.len() as i64);
         self.e.int(73, ctrl.len() as i64);
