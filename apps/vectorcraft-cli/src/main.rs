@@ -4,7 +4,7 @@
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg]... [--scale 2]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--replace-lossy]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000]
@@ -84,12 +84,13 @@ USAGE:
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--replace-lossy]
+  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
       formats). --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
       unless one of them is given, EPS the bounds of the art, the other formats the first artboard.
       Live effects are kept, and hidden layers and objects (written hidden in SVG and PSD), with
-      SVG's data-* attributes; --outline-text writes SVG text as paths. OUT may not be IN when reading
+      SVG's data-* attributes; --outline-text writes SVG text as paths, --decimals sets SVG's coordinate
+      precision (1–7, default 3). OUT may not be IN when reading
       IN left things out (hidden text, art or layers it could not read; the notes say which) unless
       --replace-lossy is given.
 
@@ -216,6 +217,7 @@ fn commands() -> Result<(), String> {
 fn convert(args: &[String]) -> Result<(), String> {
     let mut files = vec![];
     let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy) = (1.0f64, None::<u64>, None::<String>, false, false);
+    let mut decimals = None::<u64>;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -223,6 +225,7 @@ fn convert(args: &[String]) -> Result<(), String> {
             "--artboard" | "-a" => artboard = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--artboard needs an index")?),
             "--range" | "-r" => range = Some(it.next().cloned().ok_or("--range needs artboards such as 1-3,5")?),
             "--outline-text" => outline_text = true,
+            "--decimals" => decimals = Some(it.next().and_then(|v| v.parse::<u64>().ok()).ok_or("--decimals needs a number")?),
             "--replace-lossy" => replace_lossy = true,
             f => files.push(f.to_string()),
         }
@@ -232,7 +235,10 @@ fn convert(args: &[String]) -> Result<(), String> {
     h.call("app.open", json!({"path": input})).map_err(|e| format!("open {input}: {e}"))?;
     // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
     // PSD).
-    let params = json!({"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
+    let mut params = json!({"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
+    if let Some(decimals) = decimals {
+        params["decimals"] = json!(decimals);
+    }
     let r = h.call("engine.execute", json!({"command": "document.export", "params": params})).map_err(|e| format!("export {output}: {e}"))?;
     outln!("{r}");
     Ok(())
