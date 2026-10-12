@@ -140,8 +140,11 @@ motif fills and when placed: upright along a line drawn left to right (*Flip* tu
 **Spacing profiles and colour blends** (tatami): *Spacing profile* sets how the rows space out
 across the shape (in the direction the rows stack): **Even**, **Accordion** (dense, sparse,
 dense, sparse, dense: a shaded, ribbed look), **Fade out** and **Fade in** (the rows thin out to
-nothing across the shape). The density changes evenly between the profile's points; agents can
-set any profile (`spacing_profile: [[t, spacing], …]`, 0 for no rows). **Make Blend** (with a colour
+nothing across the shape). The density changes evenly between the profile's points. Below the
+presets, the profile's curve shows the rows' density across the shape (up is denser; the line is
+the fill's own density; along the bottom, no rows): drag a point to reshape it, double-click to
+add one (16 at most), right-click one to take it out; each change is one undo step. Agents can set
+any profile (`spacing_profile: [[t, spacing], …]`, 0 for no rows). **Make Blend** (with a colour
 picked in *Blend into*) turns the fill into stacked layers, one per colour, each densest across
 its own band and fading to nothing at the next colour's, so the thread colours mix across the
 rows; the layers together sew about as much as the fill did, and only the first keeps the

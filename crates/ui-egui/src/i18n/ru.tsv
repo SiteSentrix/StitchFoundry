@@ -4653,3 +4653,4 @@ machine	Stop	Остановка
 	Straight	Прямая
 	Keyhole	С глазком
 	Count	Количество
+	Rows across the shape: up is denser. Drag a point; double-click to add one; right-click one to take it out.	Ряды поперёк формы: выше — плотнее. Перетащите точку; двойной щелчок добавляет точку, правый щелчок по точке удаляет её.

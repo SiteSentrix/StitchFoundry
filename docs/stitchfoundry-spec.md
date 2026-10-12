@@ -417,7 +417,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SP-06 | Stippling (random meandering run fill) | Done | Meander fill: a rounded line that never crosses itself, with path spacing, stitch length and randomness | – |
 | SP-07 | Maze-like fills | Done | Meander | – |
 | SP-08 | Trapunto (open fill with raised outline effect) | Done | Tatami *Trapunto*: travel keeps to the outline (with an open density) | – |
-| SP-09 | Accordion spacing with custom profiles | Done | Tatami *Spacing profile*: even, accordion, fade out and in, or any points agents set | – |
+| SP-09 | Accordion spacing with custom profiles | Done | Tatami *Spacing profile*: even, accordion, fade out and in, a curve to reshape, or any points agents set | – |
 | SP-10 | Colour blending / multi-blend (several layered fills with graded density) | Done | Make Blend: stacked tatami layers, 2 to 6 colours, each fading into the next | – |
 | SP-11 | Chenille-type patterns on regular machines (square, coil) | Missing | Pattern generators | 4 |
 | SP-12 | Cross-stitch fills (X stitches on a grid) | Done | Cross fill: X stitches on a square grid of any cell size and angle, as full, half, upright or double crosses | – |
@@ -523,7 +523,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | NEW-01 | Multi Blend (stacked layers of fills with graded spacing in one object) | Partial | Make Blend makes the layers as separate objects (one per thread), not one object | 2 |
-| NEW-02 | Custom accordion profiles | Partial | Profiles from points through `embroidery.setParams`; presets in the panel, no curve editor yet | 2 |
+| NEW-02 | Custom accordion profiles | Done | Presets and a curve editor in the Embroidery panel (drag, add and take out points); any points through `embroidery.setParams` | – |
 | NEW-03 | Redwork | Done | SP-13 | – |
 | NEW-04 | Buttonholes | Done | SP-14 | – |
 | NEW-05 | Grids, guides, snapping to objects | Done | VectorCraft | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 139 done,
-30 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 140 done,
+29 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the Motif tool). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
