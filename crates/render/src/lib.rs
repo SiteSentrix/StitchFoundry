@@ -127,6 +127,12 @@ pub struct RenderOptions {
     /// (box-filtered from the full image, kept with the decoded images), so the full image needn't
     /// stay in memory or be sampled. Off, images always sample their full pixels (exports).
     pub image_mips: bool,
+    /// Screen views while an interaction is in progress (a drag, a dialog's preview): an object
+    /// whose content only moved since an earlier frame draws its cached drop shadows, outer glows
+    /// and filtered content from the rasters made then, at the nearest whole pixel, without
+    /// running the effects again (see `fx`). Off, no raster made that way, or made over one, is
+    /// drawn: the effects run again.
+    pub interacting: bool,
     /// Appearance of Black's Rich Black: pure CMYK black (black ink alone at 100%) shows as RGB
     /// black. Off, it shows through the CMYK profile, a dark grey, as other colours do.
     pub rich_black: bool,
@@ -204,6 +210,7 @@ impl Default for RenderOptions {
             precise: false,
             supersample: false,
             image_mips: false,
+            interacting: false,
             rich_black: false,
         }
     }
@@ -444,6 +451,9 @@ static MISSING_INLINE_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic:
 pub struct FrameStats {
     pub drawn: usize,
     pub culled: usize,
+    /// The drop shadows, outer glows and filtered contents the frame drew from rasters made before
+    /// their object moved, or made over such rasters ([`RenderOptions::interacting`]).
+    pub moved: usize,
     pub micros: u64,
 }
 

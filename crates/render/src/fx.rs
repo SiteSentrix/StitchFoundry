@@ -18,6 +18,10 @@
 //!   ([`Renderer::pixel_content`]). The result is cached per object while it and the zoom don't
 //!   change.
 //!
+//! While [`crate::RenderOptions::interacting`], an object whose content only moved draws its
+//! cached shadows, glows and filtered content at its new place instead of running the effects
+//! again ([`Renderer::move_shadow`], [`Renderer::move_pixel_content`]).
+//!
 //! The same applies to one fill or stroke's own raster effects (around that item alone) and to
 //! type, images, symbol instances and live objects ([`Renderer::draw_object_fx`]): their art is
 //! drawn offscreen in the filter layers, reshaped first by their geometry effects. Groups and
@@ -27,9 +31,10 @@
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind};
+use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeId, NodeKind};
+use vectorcraft_effects::pixel::{Channels, PixelFx};
 use vectorcraft_effects::{self as effects, GeomContext, RasterFx};
-use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape, Vec2};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathEl, Point, Rect, Shape, Size, Vec2};
 use vello_common::filter_effects::{EdgeMode, Filter, FilterPrimitive};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko;
@@ -230,7 +235,19 @@ pub(crate) struct PixelEntry {
     rel: (f64, f64),
     k: f64,
     image: std::sync::Arc<vello_cpu::Pixmap>,
+    made: Made,
+    /// Made for the object before it moved ([`Renderer::move_pixel_content`]), or made over
+    /// rasters made before their objects moved: only a frame rendered while interacting draws
+    /// it.
+    moved: bool,
     pub(crate) stamp: u64,
+}
+
+impl PixelEntry {
+    /// The bytes it holds, for [`FX_RASTER_BUDGET`].
+    pub(crate) fn bytes(&self) -> usize {
+        raster_bytes(&self.image) + self.made.bytes()
+    }
 }
 
 /// The four linear coefficients of `view` (zoom and rotation, not the pan), as cache keys.
@@ -260,7 +277,85 @@ pub(crate) struct ShadowEntry {
     /// Pixel offset of the raster's top-left from the anchor's view position.
     rel: (f64, f64),
     image: std::sync::Arc<vello_cpu::Pixmap>,
+    made: Made,
+    /// Made for the object before it moved ([`Renderer::move_shadow`]), or made over rasters
+    /// made before their objects moved: only a frame rendered while interacting draws it.
+    moved: bool,
     pub(crate) stamp: u64,
+}
+
+impl ShadowEntry {
+    /// The bytes it holds, for [`FX_RASTER_BUDGET`].
+    pub(crate) fn bytes(&self) -> usize {
+        raster_bytes(&self.image) + self.made.bytes()
+    }
+}
+
+/// What a cached shadow, glow or filtered raster was made from. While
+/// [`crate::RenderOptions::interacting`], an object whose content only moved after the raster
+/// was made draws from that raster ([`Renderer::move_shadow`], [`Renderer::move_pixel_content`]).
+pub(crate) struct Made {
+    /// The content's pixels as drawn into the raster before the effects ran: premultiplied RGBA,
+    /// or their alpha alone under a shadow or glow.
+    pixels: Vec<u8>,
+    /// The effects run on them.
+    fx: Vec<RasterFx>,
+    /// The size of the content's document-space bounds.
+    size: Size,
+    /// The color channels the Photoshop-style filters were told of (none for shadows and glows).
+    channels: Option<Channels>,
+    /// Feather's clip outline, moved to put the raster's anchor at the origin.
+    outline: Option<(BezPath, FillRule)>,
+}
+
+/// How far (document units) the size of a moved object's content and the points of its Feather
+/// outline may lie from those of the content a raster was made from.
+const MOVED_SLACK: f64 = 1e-6;
+
+impl Made {
+    /// The bytes it holds beyond the raster.
+    fn bytes(&self) -> usize {
+        self.pixels.len() + self.outline.as_ref().map_or(0, |(g, _)| crate::lru::path_bytes(g))
+    }
+
+    /// Whether content of size `size` under the effects `fx`, told of `channels`, with Feather's
+    /// `outline` (moved to put its anchor at the origin) may be this content moved: the same
+    /// effects, channels and outline rule, and the size and outline within [`MOVED_SLACK`].
+    fn fits(&self, fx: &[&RasterFx], size: Size, channels: Option<Channels>, outline: Option<&(BezPath, FillRule)>) -> bool {
+        let near = |a: f64, b: f64| (a - b).abs() <= MOVED_SLACK;
+        self.fx.len() == fx.len()
+            && self.fx.iter().zip(fx).all(|(a, b)| a == *b)
+            && near(self.size.width, size.width)
+            && near(self.size.height, size.height)
+            && self.channels == channels
+            && match (&self.outline, outline) {
+                (None, None) => true,
+                (Some((a, ra)), Some((b, rb))) => ra == rb && same_path(a, b),
+                _ => false,
+            }
+    }
+}
+
+/// Whether `a` and `b` have the same elements with points within [`MOVED_SLACK`] of each other.
+fn same_path(a: &BezPath, b: &BezPath) -> bool {
+    let near = |p: &Point, q: &Point| (*p - *q).hypot() <= MOVED_SLACK;
+    a.elements().len() == b.elements().len()
+        && a.elements().iter().zip(b.elements()).all(|pair| match pair {
+            (PathEl::MoveTo(p), PathEl::MoveTo(q)) | (PathEl::LineTo(p), PathEl::LineTo(q)) => near(p, q),
+            (PathEl::QuadTo(p0, p1), PathEl::QuadTo(q0, q1)) => near(p0, q0) && near(p1, q1),
+            (PathEl::CurveTo(p0, p1, p2), PathEl::CurveTo(q0, q1, q2)) => near(p0, q0) && near(p1, q1) && near(p2, q2),
+            (PathEl::ClosePath, PathEl::ClosePath) => true,
+            _ => false,
+        })
+}
+
+/// Feather's clip outline of `content` when `chain` feathers it, moved to put `anchor` at the
+/// origin ([`Made::outline`]).
+fn feather_outline(chain: &[&RasterFx], content: &Content, anchor: Point) -> Option<(BezPath, FillRule)> {
+    let (g, rule) = content.outline.filter(|_| chain.iter().any(|fx| matches!(fx, RasterFx::Feather { .. })))?;
+    let mut g = g.clone();
+    g.apply_affine(Affine::translate(-anchor.to_vec2()));
+    Some((g, rule))
 }
 
 /// The object a cached raster was made for: the drawn `Arc` itself when known (kept alive, so its
@@ -285,10 +380,18 @@ impl Drawn {
             Self::Copy(c) => **c == *n,
         }
     }
+
+    /// The id of the object drawn.
+    fn id(&self) -> NodeId {
+        match self {
+            Self::Shared(a) => a.id,
+            Self::Copy(c) => c.id,
+        }
+    }
 }
 
-/// Most bytes the shadow and filtered-content rasters of one renderer hold together: the least
-/// recently drawn go beyond it.
+/// Most bytes the shadow and filtered-content rasters of one renderer hold together, with what each
+/// was made from ([`Made`]): the least recently drawn go beyond it.
 pub(crate) const FX_RASTER_BUDGET: usize = 512 << 20;
 
 fn raster_bytes(pm: &vello_cpu::Pixmap) -> usize {
@@ -308,8 +411,9 @@ pub(crate) struct FxGeom {
 impl Renderer {
     /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) from a cached raster:
     /// the silhouette is rendered once into a small crop, blurred and tinted on the CPU, and reused
-    /// while the object and the zoom/rotation are unchanged (pans only move it). Returns false when
-    /// the effect isn't a shadow/glow or the raster would be too large (caller falls back).
+    /// while the object and the zoom/rotation are unchanged (pans only move it), and while
+    /// interacting after the object only moved ([`Self::move_shadow`]). Returns false when the
+    /// effect isn't a shadow/glow or the raster would be too large (caller falls back).
     #[allow(clippy::too_many_arguments)]
     fn draw_shadow_cached(
         &mut self,
@@ -330,10 +434,16 @@ impl Renderer {
         let linear = linear_key(f.view);
         let key = (n as *const Node as usize, i, f.ink);
         let stamp = self.stamp;
-        let hit = self.shadows.get_mut(&key).filter(|e| e.linear == linear && e.node.is(n));
+        let interacting = f.opts.interacting;
+        let exact = |e: &ShadowEntry| e.linear == linear && e.node.is(n) && (interacting || !e.moved);
+        if interacting && !self.shadows.get(&key).is_some_and(exact) {
+            self.move_shadow(f, n, key, fx, reach + Vec2::new(dx, dy), owner, paint);
+        }
+        let hit = self.shadows.get_mut(&key).filter(|e| exact(e));
         let (image, x, y) = match hit {
             Some(e) => {
                 e.stamp = stamp;
+                self.stats.moved += usize::from(e.moved);
                 let p = f.view * e.anchor;
                 (e.image.clone(), (p.x + e.rel.0).round(), (p.y + e.rel.1).round())
             }
@@ -350,10 +460,16 @@ impl Renderer {
                 // Silhouette (the object's painted alpha), offset by the shadow distance.
                 let mut off = f.offscreen_context(w, h);
                 let crop = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
+                let before = self.stats.moved;
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
+                // A silhouette drawn over moved rasters makes a moved shadow.
+                let moved = self.stats.moved > before;
                 off.flush();
                 let mut pm = vello_cpu::Pixmap::new(w, h);
                 off.render(&mut pm, &mut self.resources);
+                // What the raster is made from, for its object once it moves (`move_shadow`).
+                let made =
+                    Made { pixels: pm.data().iter().map(|p| p.a).collect(), fx: vec![fx.clone()], size: reach.size(), channels: None, outline: None };
                 let (wu, hu) = (w as usize, h as usize);
                 let mut a: Vec<f32> = pm.data().iter().map(|p| p.a as f32).collect();
                 effects::pixel::blur_plane(&mut a, wu, hu, blur / 2.0 / f.px);
@@ -367,7 +483,7 @@ impl Renderer {
                 let anchor = reach.origin();
                 let p = f.view * anchor;
                 let node = Drawn::of(n, owner);
-                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel: (x0 - p.x, y0 - p.y), image: image.clone(), stamp });
+                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel: (x0 - p.x, y0 - p.y), image: image.clone(), made, moved, stamp });
                 self.trim_fx_rasters(FX_RASTER_BUDGET);
                 (image, x0, y0)
             }
@@ -383,6 +499,54 @@ impl Renderer {
         ctx.set_blend_mode(blend_mode(vectorcraft_doc::color::BlendMode::Normal));
         ctx.set_transform(Affine::IDENTITY);
         true
+    }
+
+    /// While interacting, give `n` (shadow-cache key `key`) the shadow or glow raster an earlier
+    /// frame made for its object (the same id, effect slot and ink, at this zoom and rotation) when
+    /// only the silhouette's place changed after that frame: made by the same effect `fx` from a
+    /// silhouette whose bounds have the size of `reach` (the content's bounds moved by the
+    /// shadow's offset), and whose alpha is the alpha of `n`'s silhouette drawn into a raster
+    /// placed as that one was against its anchor. The raster is kept as `n`'s, marked moved, and
+    /// is drawn at the nearest whole pixel.
+    #[allow(clippy::too_many_arguments)]
+    fn move_shadow(
+        &mut self,
+        f: &Frame,
+        n: &Node,
+        key: (usize, usize, Ink),
+        fx: &RasterFx,
+        reach: Rect,
+        owner: Option<&Arc<Node>>,
+        paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
+    ) {
+        let (dx, dy) = match fx {
+            RasterFx::DropShadow { dx, dy, .. } => (*dx, *dy),
+            _ => (0.0, 0.0),
+        };
+        let (linear, stamp, size) = (linear_key(f.view), self.stamp, reach.size());
+        let fits = |k: &(usize, usize, Ink), e: &ShadowEntry| {
+            (k.1, k.2) == (key.1, key.2) && e.stamp < stamp && e.linear == linear && e.node.id() == n.id && e.made.fits(&[fx], size, None, None)
+        };
+        let Some((old, rel, w, h)) = self.shadows.iter().find(|(k, e)| fits(k, e)).map(|(k, e)| (*k, e.rel, e.image.width(), e.image.height()))
+        else {
+            return;
+        };
+        // The silhouette drawn where the old one lies in its raster.
+        let anchor = reach.origin();
+        let p = f.view * anchor;
+        let mut off = f.offscreen_context(w, h);
+        let crop = Frame { mt: false, view: Affine::translate((-(p.x + rel.0), -(p.y + rel.1))) * f.view, ..*f };
+        self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
+        off.flush();
+        let mut pm = vello_cpu::Pixmap::new(w, h);
+        off.render(&mut pm, &mut self.resources);
+        if !self.shadows.get(&old).is_some_and(|e| pm.data().iter().map(|p| p.a).eq(e.made.pixels.iter().copied())) {
+            return;
+        }
+        if let Some(mut e) = self.shadows.remove(&old) {
+            (e.node, e.anchor, e.moved) = (Drawn::of(n, owner), anchor, true);
+            self.shadows.insert(key, e);
+        }
     }
 
     /// `draw_shape` for nodes with live effects.
@@ -628,7 +792,8 @@ impl Renderer {
     /// reach, filtered on the CPU and drawn back. The raster holds at most [`PIXEL_BUDGET`] pixels:
     /// larger content is cropped to the view when every effect only looks nearby, else rendered
     /// at a lower resolution. A whole raster at full resolution is cached while the object and the
-    /// zoom stay the same (panning only moves it).
+    /// zoom stay the same (panning only moves it), and while interacting after the content only
+    /// moved ([`Self::move_pixel_content`]).
     fn pixel_content(
         &mut self,
         ctx: &mut RenderContext,
@@ -664,8 +829,23 @@ impl Renderer {
         let linear = linear_key(f.view);
         let key = content.cache.filter(|_| fits && k >= 1.0).map(|slot| (content.node as *const Node as usize, slot, f.ink));
         let stamp = self.stamp;
-        if let Some(e) = key.and_then(|key| self.pixel_fx.get_mut(&key)).filter(|e| e.linear == linear && e.node.is(content.node)) {
+        let channels = match f.ink {
+            Ink::Cmy => effects::pixel::Channels::CmyPlane,
+            Ink::K => effects::pixel::Channels::KPlane,
+            Ink::Display | Ink::RichBlack if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
+            Ink::Display | Ink::RichBlack => effects::pixel::Channels::Rgb,
+        };
+        let interacting = f.opts.interacting;
+        let exact = |e: &PixelEntry| e.linear == linear && e.node.is(content.node) && (interacting || !e.moved);
+        if interacting
+            && let Some(key) = key
+            && !self.pixel_fx.get(&key).is_some_and(exact)
+        {
+            self.move_pixel_content(f, content, key, &chain, channels, paint);
+        }
+        if let Some(e) = key.and_then(|key| self.pixel_fx.get_mut(&key)).filter(|e| exact(e)) {
             e.stamp = stamp;
+            self.stats.moved += usize::from(e.moved);
             let p = f.view * e.anchor;
             let (image, at, k) = (e.image.clone(), ((p.x + e.rel.0).round(), (p.y + e.rel.1).round()), e.k);
             draw_scaled(ctx, image, at, k);
@@ -677,16 +857,21 @@ impl Renderer {
         let px = f.px / k;
         let frame = Frame { mt: false, view, visible: to_doc.transform_rect_bbox(Rect::new(0.0, 0.0, w, h)), px, ..*f };
         let mut off = f.offscreen_context(wu, hu);
+        let before = self.stats.moved;
         self.inside_layer(|r| paint(r, &mut off, &frame));
+        // Content drawn over moved rasters makes a moved raster.
+        let moved = self.stats.moved > before;
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(wu, hu);
         off.render(&mut pm, &mut self.resources);
-        let channels = match f.ink {
-            Ink::Cmy => effects::pixel::Channels::CmyPlane,
-            Ink::K => effects::pixel::Channels::KPlane,
-            Ink::Display | Ink::RichBlack if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
-            Ink::Display | Ink::RichBlack => effects::pixel::Channels::Rgb,
-        };
+        // What the raster is made from, for its object once it moves (`move_pixel_content`).
+        let made = key.map(|_| Made {
+            pixels: pm.data_as_u8_slice().to_vec(),
+            fx: chain.iter().map(|fx| (*fx).clone()).collect(),
+            size: content.reach.size(),
+            channels: Some(channels),
+            outline: feather_outline(&chain, content, content.reach.origin()),
+        });
         // De-Interlace's field lines: the rows of the document's raster grid (1 to 2400 ppi).
         let ppi = Some(f.doc.raster_effects_ppi).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0);
         let (center, extent) = (content.reach.center(), 0.5 * content.reach.width().hypot(content.reach.height()));
@@ -706,23 +891,77 @@ impl Renderer {
             }
         }
         let image = std::sync::Arc::new(pm);
-        if let Some(key) = key {
+        if let Some((key, made)) = key.zip(made) {
             let anchor = content.reach.origin();
             let p = f.view * anchor;
             let rel = (x0 - p.x, y0 - p.y);
             let owner = content.owner.cloned().or_else(|| self.fx_owner.clone().filter(|o| std::ptr::eq(&**o, content.node)));
             let node = Drawn::of(content.node, owner.as_ref());
-            self.pixel_fx.insert(key, PixelEntry { node, linear, anchor, rel, k, image: image.clone(), stamp });
+            self.pixel_fx.insert(key, PixelEntry { node, linear, anchor, rel, k, image: image.clone(), made, moved, stamp });
             self.trim_fx_rasters(FX_RASTER_BUDGET);
         }
         draw_scaled(ctx, image, (x0, y0), k);
     }
 
+    /// While interacting, give `content` (cache key `key`) the filtered raster an earlier frame
+    /// made at full size for its object (the same id, slot and ink, at this zoom and rotation)
+    /// when only the content's place changed after that frame: made by the same effects `chain`,
+    /// told of the same `channels`, from content whose bounds have the same size (and the same
+    /// Feather outline against its anchor), and whose pixels are the pixels of `content` drawn
+    /// into a raster placed as that one was against its anchor. The raster is kept as
+    /// `content`'s, marked moved, and is drawn at the nearest whole pixel. Content under
+    /// De-Interlace takes none.
+    fn move_pixel_content(
+        &mut self,
+        f: &Frame,
+        content: &Content,
+        key: (usize, usize, Ink),
+        chain: &[&RasterFx],
+        channels: Channels,
+        paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
+    ) {
+        if chain.iter().any(|fx| matches!(fx, RasterFx::Pixel(PixelFx::DeInterlace { .. }))) {
+            return;
+        }
+        let (linear, stamp, anchor) = (linear_key(f.view), self.stamp, content.reach.origin());
+        let outline = feather_outline(chain, content, anchor);
+        let fits = |k: &(usize, usize, Ink), e: &PixelEntry| {
+            (k.1, k.2) == (key.1, key.2)
+                && e.stamp < stamp
+                && e.linear == linear
+                && e.k >= 1.0
+                && e.node.id() == content.node.id
+                && e.made.fits(chain, content.reach.size(), Some(channels), outline.as_ref())
+        };
+        let Some((old, rel, w, h)) = self.pixel_fx.iter().find(|(k, e)| fits(k, e)).map(|(k, e)| (*k, e.rel, e.image.width(), e.image.height()))
+        else {
+            return;
+        };
+        // The content drawn where the old content lies in its raster.
+        let p = f.view * anchor;
+        let view = Affine::translate((-(p.x + rel.0), -(p.y + rel.1))) * f.view;
+        let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h)));
+        let frame = Frame { mt: false, view, visible, ..*f };
+        let mut off = f.offscreen_context(w, h);
+        self.inside_layer(|r| paint(r, &mut off, &frame));
+        off.flush();
+        let mut pm = vello_cpu::Pixmap::new(w, h);
+        off.render(&mut pm, &mut self.resources);
+        if !self.pixel_fx.get(&old).is_some_and(|e| e.made.pixels.as_slice() == pm.data_as_u8_slice()) {
+            return;
+        }
+        let owner = content.owner.cloned().or_else(|| self.fx_owner.clone().filter(|o| std::ptr::eq(&**o, content.node)));
+        if let Some(mut e) = self.pixel_fx.remove(&old) {
+            (e.node, e.anchor, e.moved) = (Drawn::of(content.node, owner.as_ref()), anchor, true);
+            self.pixel_fx.insert(key, e);
+        }
+    }
+
     /// Drop the least recently drawn shadow and filtered-content rasters beyond `budget` bytes
     /// ([`FX_RASTER_BUDGET`]).
     fn trim_fx_rasters(&mut self, budget: usize) {
-        let shadows = self.shadows.iter().map(|(k, e)| (e.stamp, false, *k, raster_bytes(&e.image)));
-        let pixels = self.pixel_fx.iter().map(|(k, e)| (e.stamp, true, *k, raster_bytes(&e.image)));
+        let shadows = self.shadows.iter().map(|(k, e)| (e.stamp, false, *k, e.bytes()));
+        let pixels = self.pixel_fx.iter().map(|(k, e)| (e.stamp, true, *k, e.bytes()));
         let mut all: Vec<_> = shadows.chain(pixels).collect();
         let mut total: usize = all.iter().map(|e| e.3).sum();
         if total <= budget {
@@ -891,7 +1130,7 @@ mod tests {
     use vectorcraft_doc::{Appearance, Document, Effect, Node};
     use vectorcraft_geom::{Affine, Rect, shapes};
 
-    use super::{Drawn, raster_bytes};
+    use super::Drawn;
     use crate::{RenderOptions, Rendered, Renderer};
 
     fn doc_with(r: Rect, fill: Color, effects: Vec<(&str, serde_json::Value)>) -> Document {
@@ -976,8 +1215,8 @@ mod tests {
         // A frame of other objects makes rasters of its own; the older ones go first.
         let _ = r.render(&effects_page(), 400, 400, Affine::scale(2.0), &opts);
         let newest = r.stamp;
-        let bytes = |r: &Renderer| r.shadows.values().map(|e| raster_bytes(&e.image)).sum::<usize>();
-        let latest = r.shadows.values().filter(|e| e.stamp == newest).map(|e| raster_bytes(&e.image)).sum::<usize>();
+        let bytes = |r: &Renderer| r.shadows.values().map(|e| e.bytes()).sum::<usize>();
+        let latest = r.shadows.values().filter(|e| e.stamp == newest).map(|e| e.bytes()).sum::<usize>();
         assert!(bytes(&r) > latest);
         r.trim_fx_rasters(latest);
         assert_eq!(bytes(&r), latest);
@@ -1202,7 +1441,163 @@ mod tests {
         assert_eq!(b.pixels, c.pixels);
     }
 
-    /// Reproduce #1257's moving, filtered rectangle without reusing a static frame's raster.
+    /// While interacting, an object that only moved draws its drop shadow and filtered content
+    /// from the rasters of an earlier frame, at the nearest whole pixel, without running the
+    /// effects again (#1257). The frame after the interaction runs them again: it is what a fresh
+    /// renderer draws.
+    #[test]
+    fn moved_objects_draw_their_effect_rasters_while_interacting() {
+        let effects =
+            vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 2, "opacity": 80})), ("texture.craquelure", json!({"crackSpacing": 6}))];
+        let base = doc_with(Rect::new(20.0, 20.0, 50.0, 46.0), Color::rgb(0.9, 0.4, 0.1), effects);
+        let id = base.layers[0].children().unwrap()[0].id;
+        // The object moved from where it started, as each frame of a drag moves it.
+        let moved = |dx: f64, dy: f64| {
+            let mut d = base.clone();
+            d.node_mut(id).unwrap().transform(Affine::translate((dx, dy)), false);
+            d
+        };
+        let (view, still) = (Affine::scale(2.0), RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() });
+        let live = RenderOptions { interacting: true, ..still.clone() };
+        let fresh = |d: &Document| Renderer::new().render(d, 200, 200, view, &still).pixels;
+        let mut r = Renderer::new();
+        assert!(r.render(&base, 200, 200, view, &still).pixels == fresh(&base));
+        assert_eq!(r.stats.moved, 0);
+        let (mut d, mut last) = (base.clone(), vec![]);
+        for (dx, dy) in [(3.0, 0.0), (3.3, 1.2), (5.15, 2.5), (6.3, 2.2)] {
+            d = moved(dx, dy);
+            last = r.render(&d, 200, 200, view, &live).pixels;
+            assert_eq!(r.stats.moved, 2, "the shadow and the filtered content moved by ({dx}, {dy})");
+            // At the nearest whole pixel (2 a point): what a fresh renderer draws there.
+            let whole = moved((dx * 2.0).round() / 2.0, (dy * 2.0).round() / 2.0);
+            assert!(last == fresh(&whole), "moved by ({dx}, {dy})");
+        }
+        // The frame after the drag, of the same document: the effects run again where the object is.
+        let after = r.render(&d, 200, 200, view, &still).pixels;
+        assert_eq!(r.stats.moved, 0);
+        assert!(after == fresh(&d), "the frame after the drag");
+        assert!(after != last, "6.3 is not on a whole pixel");
+    }
+
+    /// While interacting, a raster moves with its object only when the content's pixels (for a
+    /// shadow, their alpha) and the effects stayed the same (#1257): a new fill color under
+    /// Craquelure, other effect settings, a pattern fill that stays on the page, a resized object,
+    /// art added beyond the old raster, a changed Feather outline and De-Interlace run the effects
+    /// again. A shadow keeps its raster under a new fill color.
+    #[test]
+    fn moved_rasters_need_the_same_content_and_effects() {
+        let (view, still) = (Affine::scale(2.0), RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() });
+        let live = RenderOptions { interacting: true, ..still.clone() };
+        // `before` drawn, then `after` while interacting: the rasters drawn moved, and whether the
+        // frame is what a fresh renderer draws.
+        let drag = |before: &Document, after: &Document| {
+            let mut r = Renderer::new();
+            let _ = r.render(before, 200, 200, view, &still);
+            let frame = r.render(after, 200, 200, view, &live).pixels;
+            (r.stats.moved, frame == Renderer::new().render(after, 200, 200, view, &still).pixels)
+        };
+        // `d`'s object moved 5, 3 (10, 6 pixels), then changed by `edit`.
+        let moved = |d: &Document, patterns: bool, edit: &dyn Fn(&mut Node)| {
+            let mut d = d.clone();
+            let id = d.layers[0].children().unwrap()[0].id;
+            let n = d.node_mut(id).unwrap();
+            n.transform(Affine::translate((5.0, 3.0)), vectorcraft_doc::Scaling { patterns, ..Default::default() });
+            edit(n);
+            d
+        };
+        let cracks = || vec![("texture.craquelure", json!({"crackSpacing": 6}))];
+        let base = doc_with(Rect::new(20.0, 20.0, 50.0, 46.0), Color::rgb(0.9, 0.4, 0.1), cracks());
+        assert_eq!(drag(&base, &moved(&base, false, &|_| {})), (1, true), "moved");
+        let recolor = |n: &mut Node| n.appearance.fill_mut().unwrap().paint = Paint::solid(Color::rgb(0.1, 0.4, 0.9));
+        assert_eq!(drag(&base, &moved(&base, false, &recolor)), (0, true), "recolored");
+        let spacing = |n: &mut Node| n.appearance.effects[0].params = json!({"crackSpacing": 9});
+        assert_eq!(drag(&base, &moved(&base, false, &spacing)), (0, true), "other effect settings");
+        let resize = |n: &mut Node| n.transform(Affine::scale_about(1.5, vectorcraft_geom::Point::new(25.0, 23.0)), false);
+        assert_eq!(drag(&base, &moved(&base, false, &resize)), (0, true), "resized");
+        // A square added beyond the old raster leaves the content inside it as it was.
+        let beyond = |n: &mut Node| {
+            if let vectorcraft_doc::NodeKind::Path { path, .. } = &mut n.kind {
+                path.subpaths.extend(shapes::rectangle(Rect::new(75.0, 30.0, 80.0, 35.0)).subpaths);
+            }
+        };
+        assert_eq!(drag(&base, &moved(&base, false, &beyond)), (0, true), "art added beyond the old raster");
+        // At 72 ppi, De-Interlace works on lines 1 point tall. The object moves 3 points down, so
+        // De-Interlace makes its other field again.
+        let fields = doc_with(Rect::new(20.0, 20.0, 50.0, 46.0), Color::rgb(0.9, 0.4, 0.1), vec![("video.deinterlace", json!({}))]);
+        assert_eq!(drag(&fields, &moved(&fields, false, &|_| {})), (0, true), "De-Interlace");
+        // A pattern fill: its tiles stay on the page unless they move with the object.
+        let mut tiled = base.clone();
+        let red = Node::path(
+            vectorcraft_doc::NodeId(900),
+            shapes::rectangle(Rect::new(0.0, 0.0, 3.0, 3.0)),
+            Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0),
+        );
+        let mut def = vectorcraft_doc::pattern::PatternDef::new("Dots", vec![std::sync::Arc::new(red)]);
+        def.tile = Rect::new(0.0, 0.0, 7.0, 7.0);
+        tiled.patterns.push(def);
+        let id = tiled.layers[0].children().unwrap()[0].id;
+        tiled.node_mut(id).unwrap().appearance.fill_mut().unwrap().paint = vectorcraft_doc::pattern::pattern_paint("Dots");
+        assert_eq!(drag(&tiled, &moved(&tiled, false, &|_| {})), (0, true), "tiles that stay on the page");
+        assert_eq!(drag(&tiled, &moved(&tiled, true, &|_| {})), (1, true), "tiles that move with the object");
+        // Feather clips to the outline: a notch in the top edge where the tiles paint nothing
+        // (x 29 to 33 and y 20 to 24 once moved) leaves the content's pixels as they were.
+        let mut feathered = tiled.clone();
+        feathered.node_mut(id).unwrap().appearance.effects =
+            vec![Effect { id: "stylize.feather".into(), params: json!({"radius": 3}), visible: true }];
+        assert_eq!(drag(&feathered, &moved(&feathered, true, &|_| {})), (1, true), "feathered");
+        let notch = |n: &mut Node| {
+            let mut bp = vectorcraft_geom::BezPath::new();
+            bp.move_to((25.0, 23.0));
+            for p in [(30.0, 23.0), (30.5, 23.6), (31.5, 23.6), (32.0, 23.0), (55.0, 23.0), (55.0, 49.0), (25.0, 49.0)] {
+                bp.line_to(p);
+            }
+            bp.close_path();
+            if let vectorcraft_doc::NodeKind::Path { path, .. } = &mut n.kind {
+                *path = vectorcraft_geom::PathData::from_bezpath(&bp);
+            }
+        };
+        assert_eq!(drag(&feathered, &moved(&feathered, true, &notch)), (0, true), "a notch in the feathered outline");
+        // A shadow is made from the silhouette's alpha: recolored, the object takes its shadow
+        // along; notched, the object makes its shadow again.
+        let shadowed =
+            doc_with(Rect::new(20.0, 20.0, 50.0, 46.0), Color::rgb(0.9, 0.4, 0.1), vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 2}))]);
+        assert_eq!(drag(&shadowed, &moved(&shadowed, false, &recolor)), (1, true), "a shadow under a new color");
+        assert_eq!(drag(&shadowed, &moved(&shadowed, false, &notch)), (0, true), "a shadow under a notch");
+    }
+
+    /// A raster made over moved rasters counts as moved itself (#1257): a group with a drop shadow
+    /// and Gaussian Blur of its own, whose filtered member moves by parts of a pixel while the
+    /// other member stays, draws after the drag what a fresh renderer draws.
+    #[test]
+    fn rasters_made_over_moved_rasters_count_as_moved() {
+        let mut d = Document::new(100.0, 100.0);
+        let fill = |c: Color| Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+        let (sid, mid, gid) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let still = Node::path(sid, shapes::rectangle(Rect::new(60.0, 60.0, 80.0, 80.0)), fill(Color::rgb(0.1, 0.5, 0.2)));
+        let mut member = Node::path(mid, shapes::rectangle(Rect::new(20.0, 20.0, 50.0, 46.0)), fill(Color::rgb(0.9, 0.4, 0.1)));
+        member.appearance.effects = vec![Effect { id: "texture.craquelure".into(), params: json!({"crackSpacing": 6}), visible: true }];
+        let mut group = Node::group(gid, vec![std::sync::Arc::new(still), std::sync::Arc::new(member)]);
+        group.appearance.effects = vec![
+            Effect { id: "stylize.dropShadow".into(), params: json!({"x": 4, "y": 3, "blur": 2}), visible: true },
+            Effect { id: "blur.gaussian".into(), params: json!({"radius": 1}), visible: true },
+        ];
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, group).unwrap();
+        let (view, opts) = (Affine::scale(2.0), RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() });
+        let mut r = Renderer::new();
+        let _ = r.render(&d, 200, 200, view, &opts);
+        let mut moved = d.clone();
+        moved.node_mut(mid).unwrap().transform(Affine::translate((3.3, 1.2)), false);
+        let _ = r.render(&moved, 200, 200, view, &RenderOptions { interacting: true, ..opts.clone() });
+        assert!(r.stats.moved > 0, "the member's filtered content moved");
+        let after = r.render(&moved, 200, 200, view, &opts).pixels;
+        assert!(after == Renderer::new().render(&moved, 200, 200, view, &opts).pixels, "the frame after the drag");
+    }
+
+    /// Reproduce #1257's moving, filtered rectangle: the first frame renders as before a drag,
+    /// and the next eight render as the canvas renders a drag's frames (`interacting`). Then the
+    /// eighth position renders as the canvas renders the frame after the drag, and that frame
+    /// renders once more with every raster cached.
     /// Run with `cargo test -p vectorcraft-render texture_drag_perf -- --ignored --nocapture`.
     #[test]
     #[ignore = "manual timing probe; wall-clock performance depends on machine load"]
@@ -1222,23 +1617,33 @@ mod tests {
             ];
             base.insert(Some(layer), 0, n).unwrap();
             let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+            let live = RenderOptions { interacting: true, ..opts.clone() };
             let view = Affine::scale(1.9007 * 1.5);
             let mut r = Renderer::new();
             r.threads = crate::default_threads();
-            let mut ms = vec![];
+            let (mut ms, mut doc) = (vec![], base.clone());
             for frame in 0..9 {
-                let mut doc = base.clone();
+                doc = base.clone();
                 doc.node_mut(id).unwrap().transform(Affine::translate((3.0 + f64::from(frame) * 0.75, f64::from(frame) * 0.5)), false);
                 let start = std::time::Instant::now();
-                let image = r.render(&doc, 1800, 1500, view, &opts);
+                let image = r.render(&doc, 1800, 1500, view, if frame > 0 { &live } else { &opts });
                 let time = start.elapsed().as_secs_f64() * 1000.0;
                 if frame > 0 {
                     ms.push(time);
                 }
                 std::hint::black_box(image);
             }
+            let mut time = |o: &RenderOptions| {
+                let start = std::time::Instant::now();
+                std::hint::black_box(r.render(&doc, 1800, 1500, view, o));
+                start.elapsed().as_secs_f64() * 1000.0
+            };
+            let (after, again) = (time(&opts), time(&opts));
             ms.sort_by(f64::total_cmp);
-            println!("{effect}: moved CMYK rounded rectangle at 190.07%, DPI 1.5, 1800x1500: median {:.2} ms; samples {ms:?}", (ms[3] + ms[4]) * 0.5);
+            println!(
+                "{effect}: moved CMYK rounded rectangle at 190.07%, DPI 1.5, 1800x1500: median {:.2} ms; samples {ms:?}; the frame after the drag {after:.2} ms, that frame again {again:.2} ms",
+                (ms[3] + ms[4]) * 0.5
+            );
         }
     }
 

@@ -512,6 +512,8 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 
 - **Texture redraws (#1257):** Craquelure, Mosaic Tiles and Stained Glass compare squared distances when finding their nearest cells; rounding/tie boundaries use the original distance ordering. Brute-force candidate tests and three 1800×1500 viewport comparisons preserve the old pixels. A CMYK rectangle move at 190.07%/DPI 1.5 is reproducible with `cargo test -p vectorcraft-render texture_drag_perf -- --ignored --nocapture`; idle-machine Windows interaction is still unverified.
 
+- **Moving objects with raster effects (#1257):** during a drag or a dialog's preview, an object whose content only moved draws its cached drop shadows, outer glows and filtered content (Gaussian Blur, Feather and the Photoshop-style filters) from the rasters of an earlier frame at the nearest whole pixel, without running the effects again. The renderer first draws the moved content where the old content lies in its raster and compares the pixels. De-Interlace runs again. The frame after the drag runs the effects again and draws what a fresh renderer draws; on the desktop, the canvas renders that frame on the render worker. `texture_drag_perf` times a drag's frames and the frame after it.
+
 - **Full font names (#1258):** OpenType name ID 4 identifies its face alongside family/legacy/PostScript names, including localized names, for loaded fonts, cataloged files and Missing Fonts searches. Synthetic name-table regressions cover full names distinct from their PostScript name, real-family precedence and variable fonts' default faces. Windows font-service activation remains unverified; scores and hours are unchanged.
 ## Revision history
 
