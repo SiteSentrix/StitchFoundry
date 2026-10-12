@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (Fit Headline in a frame one line tall, #1444; frames and paths beyond a billion points hold no text, #1451; scores unchanged; missing glyphs are looked for again after a font rescan, #1376; scores unchanged; Full-name font matching (#1258); Windows font-service QA pending; scores unchanged; Middle Eastern digit types: Character panel menu › Digits, `{digits}`; the font menu's script filter lists Thai fonts; Thai, Lao, Khmer and Myanmar lines break between words; the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (commands and MCP `add_text` report area type that does not fit its frame, #1471; Tabs panel stop drags, #1458; Fit Headline in a frame one line tall, #1444; frames and paths beyond a billion points hold no text, #1451; scores unchanged; missing glyphs are looked for again after a font rescan, #1376; scores unchanged; Full-name font matching (#1258); Windows font-service QA pending; scores unchanged; Middle Eastern digit types: Character panel menu › Digits, `{digits}`; the font menu's script filter lists Thai fonts; Thai, Lao, Khmer and Myanmar lines break between words; the caret steps over whole clusters such as Thai consonants with their marks; Thai typed in a font without Thai falls back to a font made for Thai; earlier: Proportional Metrics in vertical type, `vpal`, #966) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -19,7 +19,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Feature | Status | Notes |
 |---|---|---|
 | Point, area and type-on-a-path type; vertical variants | done / partial | vertical point, area and path type have initial support |
-| Area Type Options (rows, columns, inset, first baseline, Auto Size, Shrink Text to Fit) | done | |
+| Area Type Options (rows, columns, inset, first baseline, Auto Size, Shrink Text to Fit) | done | the commands that make or restyle type say when it does not fit its frame; MCP `add_text` takes Auto Size and Shrink Text to Fit (#1471) |
 | Threaded text, Fit Headline, Text Wrap | done | Fit Headline sees wrapping in a frame one line tall (#1444) |
 | Type on a Path effects and options; brackets | done | #429 |
 | Character and Paragraph panels, styles with overrides | done | mixed-value display for differing paragraphs missing |
@@ -34,7 +34,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Every-line and Single-line composers | done | tuned by eye, never compared side by side |
 | Hyphenation… and Justification… options | missing | |
 | Optical Margin Alignment | missing | menu stub |
-| Tab stops and leaders; Tabs panel | partial | Tabs panel and stops with leaders in the model (`text.tabs.set`); leader drawing not verified against the docs |
+| Tab stops and leaders; Tabs panel | partial | Tabs panel and stops with leaders in the model (`text.tabs.set`); a stop drags from where the press landed (#1458); leader drawing not verified against the docs |
 | Hidden characters (Show Hidden Characters) | done | `type.hiddenCharacters` |
 | Spell check (Check Spelling, Auto Spell Check, custom dictionary) | missing | menu stubs; needs an openly licensed dictionary |
 | Smart Punctuation, Change Case, Find & Replace | done | |
@@ -56,6 +56,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | The commands that make or restyle type, and MCP `add_text`, report area type that does not fit its frame, and `add_text` takes Auto Size and Shrink Text to Fit (#1500, fixes #1471); a tab stop in the Tabs panel drags from where the press landed, a stop just added included (#1487, fixes #1458); scores and hours unchanged |
 | 2026-10-13 | minor | Fit Headline no longer pushes the tracking to its ceiling and loses glyphs when the frame holds one line (#1445, fixes #1444); text frames, wrap shapes and type paths with coordinates beyond a billion points hold no text, and layout limits its search for room, instead of hanging (#1451); scores and hours unchanged |
 | 2026-10-12 | minor | A character no installed font had is looked for again after the fonts are rescanned, so installing a font fixes it without a restart (#1376, from #992); scores and hours unchanged |
 | 2026-10-12 | minor | Full-name font matching and Missing Fonts searches (#1258): synthetic static/variable font regressions; Windows font-service QA pending; scores and hours unchanged |

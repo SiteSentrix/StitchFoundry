@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (Vietnamese catalog added, complete under the tests; 12-language score 63% → 71%; Czech: 128 strings added since the catalog was completed are translated, #1461; scores and estimates unchanged; Korean catalog added, complete under the tests; 12-language score 54% → 63%; Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (French: 423 strings added since the catalog was measured and 188 entries reworded, #1511; Hungarian: one message in the informal address, #1474; scores and estimates unchanged; Vietnamese catalog added, complete under the tests; 12-language score 63% → 71%; Czech: 128 strings added since the catalog was completed are translated, #1461; scores and estimates unchanged; Korean catalog added, complete under the tests; 12-language score 54% → 63%; Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -80,6 +80,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | French: the 423 strings added since the catalog was last complete are translated, and 188 entries are reworded to the feature names French users know (#1511); Hungarian: one message uses the informal address like the rest of the interface (#1474); the entry counts in the tables are the earlier measurements; native review still pending; scores and estimates unchanged |
 | 2026-10-12 | minor | Vietnamese (`vi`) catalog added, complete under the tests (menus, literals, messages; one plural form); 12-language score 63% → 71%, hours 60–100 → 55–90 |
 | 2026-10-13 | minor | Czech: 128 more strings translated (tool names, PDF and Image Trace presets, pie graph options and others added since the catalog was completed; #1461); the entry count in the table is the 2026-10-11 measurement; native review still pending; scores and estimates unchanged |
 )
