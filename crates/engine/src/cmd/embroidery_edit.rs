@@ -330,8 +330,8 @@ fn check(s: &mut Session, _p: &Value) -> Result<Value> {
 
     // Objects: no stitches, tiny, small lettering.
     for n in stitched_nodes(doc) {
-        // a branch group only says how its members are sewn
-        if n.embroidery.as_deref().is_some_and(|e| matches!(e.stitch, sf_core::attr::StitchType::Branch)) {
+        // a branch group only says how its members are sewn, lettering what they say
+        if n.embroidery.as_deref().is_some_and(|e| matches!(e.stitch, sf_core::attr::StitchType::Branch | sf_core::attr::StitchType::Lettering(_))) {
             continue;
         }
         let ranges = plan.records_of(n.id);

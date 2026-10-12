@@ -4,7 +4,7 @@
 
 use egui::{Color32, Ui};
 use serde_json::{Value, json};
-use vectorcraft_embroidery::sf_core::attr::{Embroidery, StitchType};
+use vectorcraft_embroidery::sf_core::attr::{Embroidery, Lettering, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
     Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, MotifColumn, MotifWarp, RunKind, SatinParams,
@@ -52,7 +52,7 @@ const TYPES: &[(&str, &str)] = &[
 
 fn type_index(e: Option<&Embroidery>) -> usize {
     let key = match e.map(|e| &e.stitch) {
-        None | Some(StitchType::Branch) => "none",
+        None | Some(StitchType::Branch | StitchType::Lettering(_)) => "none",
         Some(st) => st.type_name(),
     };
     TYPES.iter().position(|t| t.1 == key).unwrap_or(0)
@@ -167,8 +167,37 @@ fn lettering_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::CollapsingHeader::new(tl!("Embroidery Lettering")).id_salt("emb-lettering").show(ui, |ui| lettering_body(app, ui));
 }
 
-/// The Embroidery Lettering section's rows.
+/// The selected lettering set in an embroidery font (or the one holding what is selected), and
+/// what it says.
+fn selected_lettering(app: &VectorcraftApp) -> Option<(u64, Lettering)> {
+    let st = app.session.active()?;
+    let d = &st.doc;
+    st.selection.objects.iter().find_map(|id| {
+        let mut at = Some(*id);
+        while let Some(c) = at {
+            if let Some(StitchType::Lettering(l)) = d.node(c)?.embroidery.as_deref().map(|e| &e.stitch) {
+                return Some((c.0, (**l).clone()));
+            }
+            at = d.parent_of(c);
+        }
+        None
+    })
+}
+
+/// The Embroidery Lettering section's rows: new lettering, or the selected lettering to change.
 pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    // a lettering selected: what it says fills the rows
+    let selected = selected_lettering(app);
+    match &selected {
+        Some((id, l)) if app.embroidery.lettering_for != Some(*id) => {
+            app.embroidery.lettering_for = Some(*id);
+            app.embroidery.lettering_text = l.text.clone();
+            app.embroidery.lettering_font = l.font.clone();
+            app.embroidery.lettering_size = l.size;
+        }
+        None => app.embroidery.lettering_for = None,
+        _ => {}
+    }
     if app.services.pick_folder.is_some()
         && button(ui, tl!("Load Embroidery Font…")).on_hover_text(tl!("A font folder in Ink/Stitch's format: font.json and its glyphs")).clicked()
     {
@@ -198,8 +227,13 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.label(tl!("Load an embroidery font to set text with it."));
         return;
     }
+    if let Some((_, l)) = &selected
+        && !fonts.iter().any(|f| f.0.eq_ignore_ascii_case(&l.font))
+    {
+        ui.label(format!("{} {}", tl!("Load this lettering's font to change it:"), l.font));
+    }
     let names: Vec<&str> = fonts.iter().map(|f| f.0.as_str()).collect();
-    let cur = names.iter().position(|n| *n == app.embroidery.lettering_font).unwrap_or(0);
+    let cur = names.iter().position(|n| n.eq_ignore_ascii_case(&app.embroidery.lettering_font)).unwrap_or(0);
     if let Some(i) = pick_names(ui, tl!("Font"), "let-font", cur, &names)
         && let Some(name) = names.get(i)
     {
@@ -216,8 +250,12 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.label(format!("{} {lo:.1}–{hi:.1} mm", tl!("Sews well at")));
     }
     let text = app.embroidery.lettering_text.clone();
-    if button(ui, tl!("Place Lettering")).clicked() && !text.trim().is_empty() {
-        match app.run("embroidery.lettering", json!({ "text": text, "font": name, "size": size })) {
+    let (label, cmd, params) = match &selected {
+        Some((id, _)) => (tl!("Update Lettering"), "embroidery.lettering.edit", json!({ "id": id, "text": text, "font": name, "size": size })),
+        None => (tl!("Place Lettering"), "embroidery.lettering", json!({ "text": text, "font": name, "size": size })),
+    };
+    if button(ui, label).clicked() && !text.trim().is_empty() {
+        match app.run(cmd, params) {
             Ok(r) => {
                 if let Some(w) = r["warnings"].as_array().and_then(|w| w.first()).and_then(Value::as_str) {
                     app.status(w);
@@ -442,7 +480,7 @@ fn style_row(app: &mut VectorcraftApp, ui: &mut Ui, e: &Embroidery) {
             }
         }
     }
-    if !matches!(e.stitch, StitchType::Manual | StitchType::Branch)
+    if !matches!(e.stitch, StitchType::Manual | StitchType::Branch | StitchType::Lettering(_))
         && button(ui, tl!("Make Current")).on_hover_text(tl!("New objects of this stitch type take these properties")).clicked()
     {
         app.run("embroidery.makeCurrent", json!({})).ok();
@@ -826,7 +864,7 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
         StitchType::Manual => {
             ui.label(tl!("Each anchor point is a needle penetration."));
         }
-        StitchType::Branch => {}
+        StitchType::Branch | StitchType::Lettering(_) => {}
         StitchType::Redwork(r) => {
             // redwork lines are sewn in one of the outline stitches
             let kinds = [RunKind::Single, RunKind::Triple, RunKind::Back, RunKind::Stem];

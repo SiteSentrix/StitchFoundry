@@ -63,6 +63,10 @@ pub enum StitchType {
     /// between them retraced along lines already sewn. In a group, the art's own stitching is
     /// left out.
     Redwork(RunParams),
+    /// Lettering in an embroidery font: a group of glyphs, each a group of stitched art, that
+    /// remembers what it says, in what font and how big, so that can change where the lettering
+    /// is now. The group itself sews nothing.
+    Lettering(Box<Lettering>),
 }
 
 impl StitchType {
@@ -105,6 +109,7 @@ impl StitchType {
             StitchType::Manual => "Manual stitches",
             StitchType::Branch => "Branch",
             StitchType::Redwork(_) => "Redwork",
+            StitchType::Lettering(_) => "Lettering",
         }
     }
 
@@ -136,6 +141,7 @@ impl StitchType {
             StitchType::Manual => "manual",
             StitchType::Branch => "branch",
             StitchType::Redwork(_) => "redwork",
+            StitchType::Lettering(_) => "lettering",
         }
     }
 
@@ -150,7 +156,45 @@ impl StitchType {
             StitchType::Manual => "manual",
             StitchType::Branch => "branch",
             StitchType::Redwork(_) => "redwork",
+            StitchType::Lettering(_) => "lettering",
         }
+    }
+}
+
+/// Lettering set in an embroidery font ([`StitchType::Lettering`]): what it says, in what and how
+/// big, and where, so it can be set again.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Lettering {
+    pub text: String,
+    /// The font, by name.
+    pub font: String,
+    /// The capitals' height (mm).
+    pub size: f64,
+    /// Lines apart, × the font's own line spacing.
+    #[serde(default = "one")]
+    pub leading: f64,
+    /// From the lettering's own space (points: the first line's baseline runs from (0, 0) along
+    /// x, the lines follow down y) to the document. It follows the lettering as it moves, turns
+    /// and slants; a scale goes into `size`.
+    pub frame: Affine,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+impl Lettering {
+    /// Follows the lettering through `m`: the frame takes it, but for its scale, which `size`
+    /// takes (the glyphs' places grow with the size, so that is the same).
+    pub fn transform(&mut self, m: &Affine) {
+        let f = self.frame.then(m);
+        let k = f.determinant().abs().sqrt();
+        if !(k.is_finite() && k > 1e-9 && f.0.iter().all(|v| v.is_finite())) {
+            return;
+        }
+        let [a, b, c, d, e, g] = f.0;
+        self.frame = Affine([a / k, b / k, c / k, d / k, e, g]);
+        self.size *= k;
     }
 }
 
@@ -333,6 +377,9 @@ impl Embroidery {
     /// Follows a host transform: positions move, the fill angle turns with the
     /// shape and satin widths scale with it.
     pub fn transform(&mut self, m: &Affine) {
+        if let StitchType::Lettering(l) = &mut self.stitch {
+            l.transform(m);
+        }
         for g in &mut self.guides {
             g.transform(m);
         }
@@ -489,6 +536,30 @@ impl Default for DocEmbroidery {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lettering_follows_its_group_its_scale_going_into_its_size() {
+        let at = Affine::translate(Point::new(100.0, 50.0));
+        let mut l = Lettering { text: "Hi".into(), font: "F".into(), size: 10.0, leading: 1.0, frame: at };
+        // turned a quarter about the origin, then doubled
+        l.transform(&Affine::rotate(std::f64::consts::FRAC_PI_2).then(&Affine::scale(2.0, 2.0)));
+        assert!((l.size - 20.0).abs() < 1e-9, "{l:?}");
+        let o = l.frame.apply(Point::new(0.0, 0.0));
+        let x = l.frame.apply(Point::new(1.0, 0.0));
+        assert!((o.x + 100.0).abs() < 1e-9 && (o.y - 200.0).abs() < 1e-9, "{o:?}");
+        assert!((x.x - o.x).abs() < 1e-9 && (x.y - o.y - 1.0).abs() < 1e-9, "{x:?}");
+        // kept through save and open, and moved with the group
+        let mut e = Embroidery::new(StitchType::Lettering(Box::new(l.clone())));
+        let back: Embroidery = serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
+        assert_eq!(back, e);
+        e.transform(&Affine::translate(Point::new(5.0, 0.0)));
+        let StitchType::Lettering(m) = &e.stitch else { panic!() };
+        assert!((m.frame.apply(Point::new(0.0, 0.0)).x + 95.0).abs() < 1e-9 && m.size == l.size);
+        // a transform that flattens it leaves it be
+        let mut z = l.clone();
+        z.transform(&Affine::scale(0.0, 0.0));
+        assert_eq!(z, l);
+    }
 
     #[test]
     fn json_is_compact_and_round_trips() {

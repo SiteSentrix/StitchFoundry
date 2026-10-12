@@ -4646,3 +4646,6 @@ machine	Stop	Зупинка
 	Load an embroidery font to set text with it.	Завантажте шрифт для вишивки, щоб набрати ним текст.
 	Sews well at	Добре вишивається при
 	Place Lettering	Розмістити напис
+	Edit Lettering	Змінити напис
+	Update Lettering	Оновити напис
+	Load this lettering's font to change it:	Завантажте шрифт цього напису, щоб змінити його:

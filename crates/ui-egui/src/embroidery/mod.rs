@@ -147,6 +147,8 @@ pub struct EmbroideryUi {
     pub lettering_font: String,
     pub lettering_text: String,
     pub lettering_size: f64,
+    /// The selected lettering whose text, font and size fill the section (to change it).
+    pub lettering_for: Option<u64>,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -215,6 +217,7 @@ impl Default for EmbroideryUi {
             lettering_font: String::new(),
             lettering_text: String::new(),
             lettering_size: 0.0,
+            lettering_for: None,
             prompt: prompt::PromptState::default(),
         }
     }

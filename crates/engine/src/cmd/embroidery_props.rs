@@ -134,7 +134,7 @@ fn source(s: &Session, p: &Value, cmd: &str) -> Result<(NodeId, Embroidery)> {
     ids.iter()
         .find_map(|id| {
             let e = d.node(*id)?.embroidery.as_deref()?;
-            (!matches!(e.stitch, StitchType::Manual | StitchType::Branch)).then(|| (*id, e.clone()))
+            (!matches!(e.stitch, StitchType::Manual | StitchType::Branch | StitchType::Lettering(_))).then(|| (*id, e.clone()))
         })
         .ok_or_else(|| bad(cmd, "select an object stitched with a stitch type (not manual stitches)"))
 }
@@ -178,7 +178,7 @@ fn make_current(s: &mut Session, p: &Value) -> Result<Value> {
 /// The stitch type a type name (or alias) names, unless it has no properties.
 fn typed(name: &str, cmd: &str) -> Result<StitchType> {
     match stitch_type(name) {
-        Some(Some(st)) if !matches!(st, StitchType::Manual | StitchType::Branch) => Ok(st),
+        Some(Some(st)) if !matches!(st, StitchType::Manual | StitchType::Branch | StitchType::Lettering(_)) => Ok(st),
         Some(_) => Err(bad(cmd, format!("`{name}` has no properties to set"))),
         None => Err(bad(cmd, format!("unknown stitch type `{name}`"))),
     }
@@ -192,7 +192,7 @@ fn current_set_params(s: &mut Session, p: &Value) -> Result<Value> {
     let start = config(s)?.current_for(key).cloned().unwrap_or_else(|| Embroidery::new(st));
     let e = patched(&start, patch).map_err(|m| bad(CMD, m))?.properties();
     let key = e.stitch.type_name();
-    if matches!(e.stitch, StitchType::Manual | StitchType::Branch) {
+    if matches!(e.stitch, StitchType::Manual | StitchType::Branch | StitchType::Lettering(_)) {
         return Err(bad(CMD, "the stitch type cannot change here"));
     }
     s.edit("New Object Properties", |d, _| {

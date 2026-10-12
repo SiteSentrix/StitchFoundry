@@ -591,11 +591,16 @@ set text with them (`embroidery.lettering {text, font, size, at}`): each glyph's
 its settings say, placed with the font's advances and kerning, lines its leading apart, ligatures
 first, in the font's letter case, characters it lacks shown as its default glyph. `size` is the
 capitals' height in mm; outside the sizes the font says it sews well at, the lettering comes with
-a warning. Fonts stay loaded until StitchFoundry quits; the lettering itself is ordinary stitched
-art, a group per glyph, saved with the design. In the Embroidery panel, **Embroidery Lettering**
+a warning. Fonts stay loaded until StitchFoundry quits; the lettering itself is stitched art, a
+group per glyph, saved with the design. The lettering's group remembers what it says, in what font,
+how big and where: `embroidery.lettering.edit {text?, font?, size?, leading?}` sets it again where
+it is now, moved, turned and scaled as it is (scaling it changes its size), as long as its font is
+loaded; the glyphs' own stitching can be changed like any art's, until it is set again.
+**Embroidery › Break Apart** turns it into its glyphs, no longer lettering. In the Embroidery panel, **Embroidery Lettering**
 does the same: *Load Embroidery Font…* picks a font folder, then choose the font, type the text,
 set its size (the sizes the font sews well at are shown) and *Place Lettering* puts it in the
-middle of the artboard.
+middle of the artboard. With a lettering selected, the section shows what it says, in what font and
+how big: change any of them and *Update Lettering* sets it again where it is.
 
 ## Commands
 

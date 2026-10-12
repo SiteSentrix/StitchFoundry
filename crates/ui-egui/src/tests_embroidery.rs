@@ -201,6 +201,15 @@ fn the_panel_sets_lettering_in_a_loaded_font() {
     }
     let r = app.run("embroidery.lettering", json!({"text": "AA", "font": "Panel Font", "size": 10})).unwrap();
     assert_eq!(r["glyphs"].as_u64(), Some(2));
+    // the new lettering is selected: the section shows what it says, to change it
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
+    assert!(texts.iter().any(|t| t == "Update Lettering") && !texts.iter().any(|t| t == "Place Lettering"), "{texts:?}");
+    assert_eq!((app.embroidery.lettering_text.as_str(), app.embroidery.lettering_size), ("AA", 10.0));
+    // nothing selected: new lettering again
+    app.run("select.none", json!({})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
+    assert!(texts.iter().any(|t| t == "Place Lettering"), "{texts:?}");
+    assert_eq!(app.embroidery.lettering_for, None);
 }
 
 #[test]

@@ -2213,6 +2213,66 @@ fn embroidery_fonts_set_lettering_from_their_glyphs() {
 }
 
 #[test]
+fn lettering_is_set_again_where_it_is_now() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let r = s.execute("embroidery.lettering", &json!({"text": "AB", "font": "Test Script", "at": [100, 300]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let spec = |s: &Session| match &s.doc().unwrap().doc.node(id).unwrap().embroidery.as_deref().unwrap().stitch {
+        sf_core::attr::StitchType::Lettering(l) => (**l).clone(),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!((spec(&s).text.as_str(), spec(&s).size), ("AB", 10.0));
+    let boxes = |s: &Session| -> Vec<vectorcraft_geom::Rect> {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap()).collect()
+    };
+    let near = |a: &[vectorcraft_geom::Rect], b: &[vectorcraft_geom::Rect]| {
+        a.len() == b.len()
+            && a.iter()
+                .zip(b)
+                .all(|(p, q)| (p.x0 - q.x0).abs() < 0.01 && (p.y0 - q.y0).abs() < 0.01 && (p.x1 - q.x1).abs() < 0.01 && (p.y1 - q.y1).abs() < 0.01)
+    };
+    // moved, doubled and turned: the size follows the scale
+    s.execute("object.move", &json!({"dx": 50, "dy": 0})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "origin": [150, 300]})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 30, "origin": [150, 300]})).unwrap();
+    assert!((spec(&s).size - 20.0).abs() < 1e-6, "{:?}", spec(&s));
+    // set again as it is: the glyphs come back where the transforms put them
+    let moved = boxes(&s);
+    s.execute("embroidery.lettering.edit", &json!({})).unwrap();
+    assert!(near(&boxes(&s), &moved), "{moved:?} {:?}", boxes(&s));
+    // a new text, at half the size: "BA", the B where the A began
+    let r = s.execute("embroidery.lettering.edit", &json!({"text": "BA", "size": 10})).unwrap();
+    assert_eq!(r["glyphs"].as_u64(), Some(2));
+    let names: Vec<String> = s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|g| g.name.clone().unwrap()).collect();
+    assert_eq!(names, ["B", "A"]);
+    assert_eq!((spec(&s).text.as_str(), spec(&s).size), ("BA", 10.0));
+    assert!(s.doc().unwrap().doc.node(id).unwrap().name.as_deref().unwrap().starts_with("BA"));
+    // one undo step back to "AB"
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(&boxes(&s), &moved));
+    // kept through save and open
+    let doc = s.doc().unwrap().doc.clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(id).unwrap().embroidery, doc.node(id).unwrap().embroidery);
+    // a font that isn't loaded, bad sizes, nothing selected
+    assert!(s.execute("embroidery.lettering.edit", &json!({"font": "Nope"})).is_err());
+    assert!(s.execute("embroidery.lettering.edit", &json!({"size": 0})).is_err());
+    assert!(s.execute("embroidery.lettering.edit", &json!({"text": ""})).is_err());
+    // a glyph selected inside it edits the lettering
+    let glyph = s.doc().unwrap().doc.node(id).unwrap().children().unwrap()[0].id;
+    s.execute("select.set", &json!({"ids": [glyph.0]})).unwrap();
+    assert!(s.execute("embroidery.lettering.edit", &json!({"text": "A"})).is_ok());
+    assert_eq!(spec(&s).text, "A");
+    // broken apart: its glyphs, no longer lettering
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("embroidery.breakApart", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_none());
+    assert!(s.execute("embroidery.lettering.edit", &json!({"text": "B"})).is_err());
+    assert!(stitches(&s) > 50);
+}
+
+#[test]
 fn a_laydown_is_sewn_first_under_the_selected_shapes() {
     const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
     let mut s = session();

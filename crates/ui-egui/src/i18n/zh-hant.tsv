@@ -4032,3 +4032,6 @@ machine	Stop	停止
 	Load an embroidery font to set text with it.	載入刺繡字型後即可用它排字。
 	Sews well at	適合繡製的大小
 	Place Lettering	放置文字
+	Edit Lettering	編輯文字
+	Update Lettering	更新文字
+	Load this lettering's font to change it:	載入此文字的字型以變更它：

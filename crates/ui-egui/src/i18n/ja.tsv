@@ -4660,3 +4660,6 @@ machine	Stop	停止
 	Load an embroidery font to set text with it.	刺繍フォントを読み込むと文字を配置できます。
 	Sews well at	きれいに縫えるサイズ
 	Place Lettering	文字を配置
+	Edit Lettering	文字を編集
+	Update Lettering	文字を更新
+	Load this lettering's font to change it:	この文字を変更するにはフォントを読み込んでください：
