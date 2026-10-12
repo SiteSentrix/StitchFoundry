@@ -2011,6 +2011,49 @@ fn three_d_motif_fills_are_a_stitch_parameter() {
 }
 
 #[test]
+fn the_motif_tool_places_motifs_where_you_click_and_drag() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
+    let mut s = session();
+    let v = crate::ViewInfo::default();
+    s.select_tool("embroideryMotif", v).unwrap();
+    s.execute("tool.setOption", &json!({"tool": "embroideryMotif", "values": {"motif": "Heart"}})).ok();
+    s.set_tool_options(Some("embroideryMotif"), json!({"motif": "Heart"}).as_object().unwrap());
+    let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y).with_mods(Mods::default());
+    let count = |s: &Session| {
+        let mut n = 0;
+        s.doc().unwrap().doc.walk(|_| n += 1);
+        n
+    };
+    let before = count(&s);
+    // a click: one heart 10 mm long round where it was clicked
+    s.pointer(&ev(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&ev(PointerKind::Up, 100.0, 100.0), v).unwrap();
+    assert_eq!(count(&s), before + 1);
+    let id = *s.doc().unwrap().selection.objects.first().unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert_eq!(n.name.as_deref(), Some("Heart"));
+    let b = n.geometric_bounds().unwrap();
+    assert!((b.width() * MM - 10.0).abs() < 0.5 && b.center().distance(vectorcraft_geom::Point::new(100.0, 100.0)) < 15.0, "{b:?}");
+    // a drag: as long as the drag, upright along it
+    s.pointer(&ev(PointerKind::Down, 50.0, 300.0), v).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 120.0, 300.0), v).unwrap();
+    s.pointer(&ev(PointerKind::Up, 200.0, 300.0), v).unwrap();
+    assert_eq!(count(&s), before + 2);
+    let id = *s.doc().unwrap().selection.objects.first().unwrap();
+    let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+    assert!((b.width() - 150.0).abs() < 2.0 && (b.center().x - 125.0).abs() < 2.0, "{b:?}");
+    // one undo step each
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(count(&s), before + 1);
+    // Escape during a drag places nothing
+    s.pointer(&ev(PointerKind::Down, 50.0, 400.0), v).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 150.0, 400.0), v).unwrap();
+    s.tool_key(vectorcraft_tools::ToolKey::Escape, Mods::default(), v).unwrap();
+    assert_eq!(count(&s), before + 1);
+}
+
+#[test]
 fn a_laydown_is_sewn_first_under_the_selected_shapes() {
     const MM: f64 = vectorcraft_embroidery::MM_PER_PT;
     let mut s = session();

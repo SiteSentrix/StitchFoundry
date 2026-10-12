@@ -102,7 +102,10 @@ together toward the edge; **Globe in** makes a bowl, the motifs smallest in the 
 *Direction* points to (90°: up). *Strength* (0 to 0.8) sets how much the motifs change; strong
 effects make small stitches where motifs shrink.
 **Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
-sewn in a single run: move, scale and reshape it like any art.
+sewn in a single run: move, scale and reshape it like any art. The **Motif tool** (in the
+Embroidery tool group) places one wherever you click, or drag across the canvas for one as long as
+the drag and turned its way; pick the motif, built-in or one of the design's, in the Embroidery
+panel while the tool is active.
 
 **Motif columns:** a satin column or satin line can be sewn as motifs instead of satin (*Sew
 as: Motifs*, `motif_column`): along its middle, each motif as wide as the column where it sits (a
