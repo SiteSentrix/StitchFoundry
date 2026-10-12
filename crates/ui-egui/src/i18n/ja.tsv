@@ -4537,3 +4537,13 @@ machine	Stop	停止
 	E-stitch	Eステッチ
 	Rings (0: all)	リング数 (0: すべて)
 	Add Laydown	ベース縫いを追加
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	間隔プロファイル
+	Even	均一
+	Accordion	アコーディオン
+	Fade out	フェードアウト
+	Fade in	フェードイン
+	Blend into	ブレンド先
+	Make Blend	ブレンドを作成
+	Blend Colors	色をブレンド

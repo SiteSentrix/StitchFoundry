@@ -539,9 +539,13 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 if let Some(v) = num(ui, tl!("Row offset"), "fo", f.offset, "", 2) {
                     set(app, target, json!({ "offset": v }));
                 }
-                if let Some(v) = num(ui, tl!("Gradient to"), "fg", f.spacing_end, " mm", 2) {
+                // a spacing profile replaces the gradient
+                if f.spacing_profile.is_empty()
+                    && let Some(v) = num(ui, tl!("Gradient to"), "fg", f.spacing_end, " mm", 2)
+                {
                     set(app, target, json!({ "spacing_end": v }));
                 }
+                profile_rows(app, ui, target, f);
             }
             if matches!(f.kind, FillKind::Tatami | FillKind::Meander)
                 && let Some(v) = num(ui, tl!("Randomness"), "fr", f.random, "", 2)
@@ -658,6 +662,41 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
     {
         set(app, target, json!({ "underlying_overlap": v.clamp(0.0, 10.0) }));
     }
+}
+
+/// The spacing profile of a tatami fill: presets from its density (even, accordion, fading out
+/// or in across the rows), and Make Blend, which turns it into layers blending its thread into
+/// another colour.
+fn profile_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, f: &FillParams) {
+    let d = f.spacing.max(0.1);
+    let presets: [Vec<[f64; 2]>; 4] =
+        [Vec::new(), vec![[0.0, d], [0.25, d * 4.0], [0.5, d], [0.75, d * 4.0], [1.0, d]], vec![[0.0, d], [1.0, 0.0]], vec![[0.0, 0.0], [1.0, d]]];
+    let mut names = vec![tl!("Even"), tl!("Accordion"), tl!("Fade out"), tl!("Fade in")];
+    let cur = presets.iter().position(|p| *p == f.spacing_profile).unwrap_or_else(|| {
+        names.push(tl!("Custom"));
+        names.len() - 1
+    });
+    if let Some(i) = pick(ui, tl!("Spacing profile"), "fprofile", cur, &names)
+        && let Some(p) = presets.get(i)
+    {
+        set(app, target, json!({ "spacing_profile": p }));
+    }
+    let Target::Selection(id) = target else { return };
+    ui.horizontal(|ui| {
+        ui.label(tl!("Blend into"));
+        egui::color_picker::color_edit_button_srgb(ui, &mut app.embroidery.blend_to);
+        if button(ui, tl!("Make Blend")).clicked() {
+            let from = app.session.active().and_then(|st| {
+                let n = st.doc.node(vectorcraft_doc::NodeId(id))?;
+                Some(vectorcraft_embroidery::node_thread(n, n.embroidery.as_deref()?).color)
+            });
+            let [r, g, b] = app.embroidery.blend_to;
+            if let Some(from) = from {
+                let to = Rgb::new(r, g, b);
+                app.run("embroidery.makeBlend", json!({ "ids": [id], "colors": [from.to_hex(), to.to_hex()] })).ok();
+            }
+        }
+    });
 }
 
 /// The motif dropdown: the motif picked, if it changed.

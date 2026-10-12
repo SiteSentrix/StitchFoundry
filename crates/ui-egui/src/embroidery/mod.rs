@@ -134,6 +134,8 @@ pub struct EmbroideryUi {
     pub new_type: String,
     /// Design from Prompt: the API key and the request on its way.
     pub prompt: prompt::PromptState,
+    /// The colour a tatami fill blends into (Make Blend in the Embroidery panel).
+    pub blend_to: [u8; 3],
 }
 
 impl Default for EmbroideryUi {
@@ -153,6 +155,7 @@ impl Default for EmbroideryUi {
             digitize_background: true,
             checks: None,
             new_type: "fill".into(),
+            blend_to: [255, 255, 255],
             prompt: prompt::PromptState::default(),
         }
     }

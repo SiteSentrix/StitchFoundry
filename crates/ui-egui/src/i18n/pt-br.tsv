@@ -3809,3 +3809,13 @@ machine	Trim	Corte de linha
 	Rings (0: all)	Anéis (0: todos)
 	Add Laydown	Adicionar base de assentamento
 	Zigzag	Zigue-zague
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	Perfil de espaçamento
+	Even	Uniforme
+	Accordion	Acordeão
+	Fade out	Esmaecer
+	Fade in	Surgir
+	Blend into	Mesclar com
+	Make Blend	Criar mescla
+	Blend Colors	Mesclar cores

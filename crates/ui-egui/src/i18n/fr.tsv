@@ -4551,3 +4551,13 @@ machine	Stop	Arrêt
 	E-stitch	Point E
 	Rings (0: all)	Anneaux (0 : tous)
 	Add Laydown	Ajouter une couche de fond
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	Profil d'espacement
+	Even	Uniforme
+	Accordion	Accordéon
+	Fade out	Fondu sortant
+	Fade in	Fondu entrant
+	Blend into	Fondre vers
+	Make Blend	Créer le fondu
+	Blend Colors	Fondre les couleurs

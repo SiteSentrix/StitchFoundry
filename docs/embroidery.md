@@ -49,7 +49,7 @@ the control channel, the CLI and the MCP server.
 | Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path (wave, scallop, diamond, cross, feather, heart, star, leaf, loop), motifs growing or shrinking along it when graded | stitch length, width, width at end, spacing, flip side |
 | Hand stitch | a run that looks sewn by hand: thick stitches (each sewn three times) with short thin ones between them, lengths varying a little | stitch length, gap, passes |
 | Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), jagged edges, underlay (incl. double zigzag) |
-| Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, texture, split lines, trapunto, underlay |
+| Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, spacing profile, colour blends, texture, split lines, trapunto, underlay |
 | Satin fill | satin rows across the shape | density, pull compensation |
 | Contour / Spiral / Radial / Cross / Meander fill | rows following the outline (all the way in, or only so many rings: an offset fill), a spiral, rays from the centre, cross stitches on a grid, or a flowing stipple line that never crosses itself | spacing, stitch length, rings (contour), randomness (meander) |
 | Motif fill | rows of motifs across the shape, kept inside it, each row shifted by the row offset | motif, motif size, row spacing, stitch length, row offset, angle |
@@ -93,6 +93,16 @@ whichever end sewing starts from (the closest join). A **motif fill** sews rows 
 the row offset shifts each row along by that fraction of a motif (0.5 for a brick layout).
 **Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
 sewn in a single run: move, scale and reshape it like any art.
+
+**Spacing profiles and colour blends** (tatami): *Spacing profile* sets how the rows space out
+across the shape (in the direction the rows stack): **Even**, **Accordion** (dense, sparse,
+dense, sparse, dense: a shaded, ribbed look), **Fade out** and **Fade in** (the rows thin out to
+nothing across the shape). The density changes evenly between the profile's points; agents can
+set any profile (`spacing_profile: [[t, spacing], …]`, 0 for no rows). **Make Blend** (with a colour
+picked in *Blend into*) turns the fill into stacked layers, one per colour, each densest across
+its own band and fading to nothing at the next colour's, so the thread colours mix across the
+rows; the layers together sew about as much as the fill did, and only the first keeps the
+underlay. `embroidery.makeBlend` takes up to six colours. Turn the fill's angle to turn the blend.
 
 **Laydown:** **Embroidery › Add Laydown** puts an open tatami (rows 2.5 mm apart, at 45°, no
 underlay, travel along its outline) under the selected stitched shapes and type, 1.5 mm beyond
@@ -449,6 +459,7 @@ tool list for all parameters):
 | `embroidery.carveSplits {ids?, repeat?, keep?}`, `embroidery.setSplits {id, splits}`, `embroidery.clearSplits {ids?}` | split lines in tatami fills: carved from other art (a stamp's outline, lines, lines repeated across the fill), set from points, cleared |
 | `embroidery.placeMotif {motif, size?, at?, angle?}` | one motif as a path sewn in a single run |
 | `embroidery.addLaydown {ids?, margin?, spacing?, angle?}` | an open fill sewn first under the selected shapes and type (pile fabrics) |
+| `embroidery.makeBlend {colors, ids?, spacing?}` | a tatami fill as stacked layers blending 2 to 6 thread colours across its rows |
 | `embroidery.draw {brush, points \| stamp, …}` | a brush stroke, as the widget draws it |
 | `embroidery.column {points: [[x, y, curve?]…], id?}` | a Column A/B satin column from points on its two sides in turn; with `id`, continue that column |
 | `embroidery.autoDigitize {colors, …}` | trace a selected image into stitches |

@@ -4568,3 +4568,13 @@ machine	Stop	Zastavení
 	E-stitch	Steh E
 	Rings (0: all)	Kruhy (0: všechny)
 	Add Laydown	Přidat podkladovou vrstvu
+
+# Embroidery (StitchFoundry): spacing profiles and blends
+	Spacing profile	Profil rozestupů
+	Even	Rovnoměrný
+	Accordion	Harmonika
+	Fade out	Slábnoucí
+	Fade in	Sílící
+	Blend into	Prolnout do
+	Make Blend	Vytvořit prolnutí
+	Blend Colors	Prolnout barvy
