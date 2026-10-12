@@ -1,4 +1,4 @@
-//! Selection state (objects and, for direct selection, individual anchors; ruler guides).
+//! Selection state (objects and, for direct selection, anchors and segments; ruler guides).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -8,14 +8,21 @@ use crate::{Document, NodeId};
 
 /// (subpath index, anchor index) inside a path.
 pub type AnchorRef = (usize, usize);
+/// (subpath index, segment index) inside a path.
+pub type SegmentRef = (usize, usize);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
     /// Selected objects in selection order.
     pub objects: Vec<NodeId>,
-    /// Direct-selected anchors per path. A path in `objects` with no entry here is fully selected.
+    /// Direct-selected anchors, or a selected segment's endpoints used for movement. A path in
+    /// `objects` with no entry here is fully selected; `segments` distinguishes segment picks.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub anchors: BTreeMap<NodeId, BTreeSet<AnchorRef>>,
+    /// Explicitly selected segments. Their endpoints in `anchors` move with them, but are not
+    /// selected anchor points: Delete cuts connections and their anchor squares stay hollow.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub segments: BTreeMap<NodeId, BTreeSet<SegmentRef>>,
     /// Key object for Align, one object of a selection of two or more. [`Selection::prune`] clears
     /// it when every selected object is the key or lies inside it, as when one object is left
     /// selected or when the key is a group selected with only its own members.
@@ -55,6 +62,7 @@ impl Selection {
     pub fn clear(&mut self) {
         self.objects.clear();
         self.anchors.clear();
+        self.segments.clear();
         self.key = None;
         self.target = None;
         self.slices.clear();
@@ -78,6 +86,7 @@ impl Selection {
         self.slices.clear();
         self.objects.retain(|x| *x != id);
         self.anchors.remove(&id);
+        self.segments.remove(&id);
         if self.key == Some(id) {
             self.key = None;
         }
@@ -116,13 +125,24 @@ impl Selection {
     pub fn partial(&self, id: NodeId) -> Option<&BTreeSet<AnchorRef>> {
         self.anchors.get(&id)
     }
+    /// Which direction handles belong to selected segments; both for an anchor selection.
+    pub fn handle_sides(&self, id: NodeId, si: usize, ai: usize, sp: &vectorcraft_geom::SubPath) -> (bool, bool) {
+        let Some(segments) = self.segments.get(&id) else { return (true, true) };
+        let previous = ai.checked_sub(1).or_else(|| sp.closed.then_some(sp.segment_count()).and_then(|n| n.checked_sub(1)));
+        (previous.is_some_and(|i| segments.contains(&(si, i))), segments.contains(&(si, ai)))
+    }
     /// Drop ids that no longer exist or are no longer editable.
     pub fn prune(&mut self, doc: &Document) {
         // Every id this looks up, found in one walk of the tree.
-        let ids = self.objects.iter().chain(self.anchors.keys()).copied().chain(self.key).chain(self.target);
+        let ids = self.objects.iter().chain(self.anchors.keys()).chain(self.segments.keys()).copied().chain(self.key).chain(self.target);
         let found = doc.index_paths(ids);
         self.objects.retain(|id| found.contains_key(id));
         self.anchors.retain(|id, _| found.contains_key(id));
+        self.segments.retain(|id, refs| {
+            let Some(path) = found.get(id).and_then(|p| doc.node_at(p)).and_then(|n| n.path_data()) else { return false };
+            refs.retain(|&(si, seg)| path.subpaths.get(si).is_some_and(|sp| seg < sp.segment_count()));
+            !refs.is_empty() && self.objects.contains(id) && self.anchors.contains_key(id)
+        });
         // The key object stays while another selected object lies outside it.
         let keep = self.key.and_then(|k| found.get(&k)).and_then(|p| doc.node_at(p)).is_some_and(|n| {
             let mut inside = BTreeSet::new();

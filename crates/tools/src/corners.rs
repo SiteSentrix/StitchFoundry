@@ -54,7 +54,7 @@ impl PathWidgets {
     /// The widgets of path `id` at `zoom` (screen px per document point), if it has any: any path
     /// with Direct Selection (`any_path`), live rectangles and polygons with Selection.
     fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool) -> Option<Self> {
-        if !doc.is_editable(id) {
+        if !doc.is_editable(id) || selection.segments.contains_key(&id) {
             return None;
         }
         let NodeKind::Path { path, live, .. } = &doc.node(id)?.kind else { return None };
