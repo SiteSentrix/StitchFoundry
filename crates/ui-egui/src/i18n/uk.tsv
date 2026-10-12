@@ -3374,6 +3374,7 @@ axis	Both	Обидві
 @msg	its page has text, and its layers have no text objects to put it in	на його сторінці є текст, а на шарах немає текстових об’єктів, куди його помістити
 @msg	its type is to come in as outlines, which only its page has	його текст має прийти у вигляді контурів, а вони є лише на його сторінці
 @msg	the art on them differs from the page's in {_1}% of it	зображення на шарах відрізняється від зображення на сторінці на {_1} % площі
+@msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	зображення на шарах відрізняється від зображення на сторінці на {_1} % площі: проте шари взято з його даних для редагування
 @msg	`to` must be "corner" or "smooth"	`to` має бути "corner" або "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Файли BMP бувають RGB або у відтінках сірого: colorModel rgb або gray
 @msg	Blend colors: select at least three objects with filled colours	Змішування кольорів: виберіть не менше трьох об’єктів із кольоровими заливками

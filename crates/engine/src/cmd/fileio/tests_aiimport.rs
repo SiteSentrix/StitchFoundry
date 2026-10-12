@@ -211,7 +211,10 @@ fn editing_data_false_opens_only_what_the_page_prints() {
         assert_ne!(names(layers), ["Art"], "{name}: the page's layer");
     }
     let e = open(&mut s, "art.eps", &ai::eps(&ai::sample_data(), ai::page_ps()), json!({"editingData": "no"})).unwrap_err().to_string();
-    assert!(e.contains("editingData must be true or false"), "{e}");
+    assert!(e.contains("editingData must be true, false or \"always\""), "{e}");
+    // `always`: the editing data, as by default (whether it draws as the page does is the reader's).
+    open(&mut s, "art.ai", &ai::ai(&compressed(&ai::sample_data()), ai::page_pdf()), json!({"editingData": "always"})).unwrap();
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
     // A file that is only its editing data can't open without it.
     let e = open(&mut s, "art.ai", &ai::ai(&compressed(&ai::sample_data()), PLACEHOLDER), json!({"editingData": false})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");

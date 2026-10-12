@@ -3048,6 +3048,7 @@ axis	Both	Ambos
 @msg	its page has text, and its layers have no text objects to put it in	sua página tem texto, e suas camadas não têm objetos de texto para recebê-lo
 @msg	its type is to come in as outlines, which only its page has	seu texto deve entrar como contornos, que somente sua página possui
 @msg	the art on them differs from the page's in {_1}% of it	a arte nelas difere da página em {_1}% do conteúdo
+@msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	a arte nelas difere da página em {_1}% do conteúdo: mesmo assim elas vêm dos seus dados de edição
 @msg	`to` must be "corner" or "smooth"	`to` deve ser "corner" ou "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	arquivos BMP são RGB ou em tons de cinza: colorModel rgb ou gray
 @msg	Blend colors: select at least three objects with filled colours	Mesclar cores: selecione pelo menos três objetos com preenchimento de cor
