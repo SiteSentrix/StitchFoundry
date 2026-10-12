@@ -162,6 +162,9 @@ impl OtFeatures {
         }
         if self.proportional(st) {
             v.push(f(b"palt", true));
+            // Kerning for the glyphs `palt` makes proportional (OpenType `apkn`), with automatic
+            // kerning only.
+            v.push(f(b"apkn", st.kerning.is_none()));
         }
         v
     }
@@ -180,20 +183,24 @@ impl OtFeatures {
     }
 
     /// The harfrust features for vertical text in style `st` shaped top to bottom: [`Self::resolve`],
-    /// with `vpal` when `proportional`.
-    pub(crate) fn resolve_vertical(&self, st: &CharStyle, proportional: bool) -> Vec<Feature> {
+    /// with `vpal` when `proportional`, and vertical kerning (`vkrn`, and `vapk` for the glyphs
+    /// `vpal` makes proportional) when `kerning` and the style's kerning is automatic.
+    pub(crate) fn resolve_vertical(&self, st: &CharStyle, proportional: bool, kerning: bool) -> Vec<Feature> {
         let mut v = self.resolve(st);
         if proportional {
             v.push(f(b"vpal", true));
         }
+        let kern = kerning && st.kerning.is_none();
+        v.push(f(b"vkrn", kern));
+        v.push(f(b"vapk", kern));
         v
     }
 
     /// The harfrust features for text in style `st` with full-width glyphs on their full widths:
-    /// [`Self::resolve`] without `palt`.
+    /// [`Self::resolve`] without `palt` (and its kerning, `apkn`).
     pub(crate) fn resolve_fixed_width(&self, st: &CharStyle) -> Vec<Feature> {
         let mut v = self.resolve(st);
-        v.retain(|x| x.tag != Tag::new(b"palt"));
+        v.retain(|x| x.tag != Tag::new(b"palt") && x.tag != Tag::new(b"apkn"));
         v
     }
 }
