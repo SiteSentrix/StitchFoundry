@@ -285,9 +285,13 @@ fn gradients() {
     let defs = "%AI5_BeginGradient: (G)\n(G) 1 2 Bd\n[\n<00FF>\n0\n0 0 0 0 1 0 0 2 1 6 %_BS\n\
                 %_0 0 0 0 1 0 0 2 1 6 40 0 Bs\n%_0 0 0 0 0 0 1 2 0.5 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
     let art_ = format!(
-        "{RED}{}Bb\n0 0 0 0 Bh\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n50 0 0 -50 100 50 Bm\nf\n0 BB\n{}f\n",
+        "{RED}{}Bb\n0 0 0 0 Bh\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n50 0 0 -50 100 50 Bm\nf\n0 BB\n{}f\n\
+         Bb\n2 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 0 0 0 0 0 1 Xa\n{}f\n\
+         {}Bb\n-20 -10 144 0.77 Bh\n1 (G) -0.1 0.4 0 1.35 1 0 0 -1 0 16384 1 Bg\n50 0 0 -50 100 50 Bm\nf\n0 BB\n",
         rect_path(50.0, 0.0, 150.0, 100.0),
         rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(20.0, 0.0, 30.0, 10.0),
+        rect_path(50.0, 0.0, 150.0, 100.0),
     );
     let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
     let a = art(&doc);
@@ -300,6 +304,15 @@ fn gradients() {
     assert_eq!((geom.start, geom.end), (Point::new(100.0, 50.0), Point::new(150.0, 50.0)));
     // The gradient was the one object's.
     assert_eq!(fill(&a[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+    // A gradient instance that paints nothing doesn't stick to the next object, which sets its colour.
+    assert_eq!(fill(&a[2]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    // A radial gradient is its matrix's unit circle whatever `Bg`'s origin and length, and its
+    // highlight an offset from the centre in art space.
+    let Paint::Gradient(g) = fill(&a[3]) else { panic!("{:?}", fill(&a[3])) };
+    let geom = g.geom.unwrap();
+    assert_eq!((geom.start, geom.end), (Point::new(100.0, 50.0), Point::new(150.0, 50.0)));
+    let focal = geom.focal.unwrap();
+    assert!((focal - Point::new(80.0, 60.0)).hypot() < 1e-6, "{focal:?}");
     // A linear gradient with a stop in the middle: `Xm` places its whole ramp, a `Bm` each of its
     // two parts. The object's own note of its gradient after it paints nothing.
     let defs = "(L) 0 3 Bd\n%_1 0 50 100 Bs\n%_0.5 0 50 40 Bs\n%_0 0 50 0 Bs\nBD\n";
@@ -317,6 +330,43 @@ fn gradients() {
     let geom = g.geom.unwrap();
     assert!(geom.start.distance(Point::new(150.0, 0.0)) < 1e-9 && geom.end.distance(Point::new(150.0, 100.0)) < 1e-9, "{geom:?}");
     assert_eq!(fill(&a[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "the note after the object isn't the next path's paint");
+}
+
+#[test]
+fn gradients_through_a_skewed_matrix() {
+    // GUARDS: a sheared `Xm` leaves the matrix's columns oblique. A linear ramp runs along the
+    // normal to its isolines, not along its first column; a radial's ellipse is the one the unit
+    // circle maps to, set by the principal axes.
+    let defs = |name: &str, kind: u8| {
+        format!(
+            "%AI5_BeginGradient: ({name})\n({name}) {kind} 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n"
+        )
+    };
+    let instance = |name: &str| format!("Bb\n1 ({name}) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 10 10 100 50 Xm\nf\n0 BB\n");
+    let art_ = format!("{}{}{}{}", rect_path(0.0, 0.0, 200.0, 100.0), instance("Lin"), rect_path(0.0, 0.0, 200.0, 100.0), instance("Rad"));
+    let doc = read_ok(&format!("{}{}{}", defs("Lin", 0), defs("Rad", 1), layer(&art_))).doc;
+    let a = art(&doc);
+    let Paint::Gradient(g) = fill(&a[0]) else { panic!("{:?}", fill(&a[0])) };
+    let geom = g.geom.unwrap();
+    assert!((geom.start - Point::new(100.0, 50.0)).hypot() < 1e-9 && (geom.end - Point::new(105.0, 55.0)).hypot() < 1e-9, "{geom:?}");
+    let Paint::Gradient(g) = fill(&a[1]) else { panic!("{:?}", fill(&a[1])) };
+    let geom = g.geom.unwrap();
+    let golden = (1.0 + 5f64.sqrt()) / 2.0;
+    assert!((geom.start.distance(geom.end) - 10.0 * golden).abs() < 1e-9, "{geom:?}");
+    assert!((geom.aspect - 1.0 / golden.powi(2)).abs() < 1e-9, "{geom:?}");
+}
+
+#[test]
+fn stops_sharing_a_ramp_point_keep_their_order() {
+    // GUARDS: stops come last first, so a sort alone puts the two at 100 the wrong way round and
+    // the ramp blends towards the colour meant only for past its end.
+    let defs = "%AI5_BeginGradient: (S)\n(S) 0 3 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\n\
+                %_0 0 0 0 0 1 0 2 1 6 50 100 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 0 Bs\nBD\n%AI5_EndGradient\n";
+    let art_ = format!("{}Bb\n1 (S) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 0 10 100 50 Xm\nf\n0 BB\n", rect_path(0.0, 0.0, 200.0, 100.0));
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
+    let colors: Vec<_> = g.gradient.stops.iter().map(|s| s.color).collect();
+    assert_eq!(colors, [Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0), Color::rgb(1.0, 0.0, 0.0)]);
 }
 
 #[test]
@@ -737,4 +787,71 @@ fn closing_brackets_without_their_opening_dont_rescan_the_stack() {
     let started = std::time::Instant::now();
     let _ = read(stream(&layer(&body)).as_bytes());
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+}
+
+#[test]
+fn artboards_after_what_stops_the_reading() {
+    let board = |name: &str, x: i32| {
+        format!(
+            "%_/Dictionary :\n%_/FillStyle : 0 1 0 0 0 Xy\n%_/Def ; \n%_ (EachArtboardColor) ,\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_({name}) /UnicodeString (Name) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x + 100
+        )
+    };
+    let array = format!("%_/Array :\n{}{}%_; (ArtboardArray) ,\n", board("one", 0), board("two", 200));
+    // Art in the document's own data that the reader can't follow comes before the artboards.
+    let data = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n%_/Dictionary :\nLB\n{array}%_; /NotRecorded ,\n%_;\n");
+    let boards: Vec<_> = super::artboards(data.as_bytes()).into_iter().map(|(n, r)| (n, r.x0)).collect();
+    assert_eq!(boards, [("one".to_string(), 0.0), ("two".to_string(), 200.0)]);
+}
+
+#[test]
+fn a_radial_gradient_without_xm_is_its_bm_circle_else_its_bg_circle() {
+    // GUARDS: files write `Bg` as the unit circle and place the radial with `Bm`; reading `Bg` alone collapses it.
+    let defs =
+        "%AI5_BeginGradient: (R)\n(R) 1 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let geom = |instance: &str| {
+        let doc = read_ok(&format!("{defs}{}", layer(&format!("{}Bb\n10 0 0 0.5 Bh\n{instance}f\n0 BB\n", rect_path(0.0, 0.0, 200.0, 100.0))))).doc;
+        let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
+        g.geom.unwrap()
+    };
+    let placed = geom("1 (R) 0 0 0 1 1 0 0 1 0 0 Bg\n50 0 0 -50 100 50 Bm\n");
+    assert_eq!((placed.start, placed.end, placed.focal), (Point::new(100.0, 50.0), Point::new(150.0, 50.0), Some(Point::new(110.0, 50.0))));
+    let own = geom("1 (R) 60 50 0 20 1 0 0 1 0 0 Bg\n");
+    assert_eq!((own.start, own.end, own.focal), (Point::new(60.0, 50.0), Point::new(80.0, 50.0), Some(Point::new(70.0, 50.0))));
+}
+
+/// Two art styles: `Blue`, a blue fill and a drop shadow; `Lit`, the object's gradient and an outer glow.
+#[test]
+fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
+    // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.
+    let r = read_ok(&format!("%%BeginProlog\n%\n%%EndProlog\n{}", layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)))));
+    assert_eq!(art(&r.doc).len(), 1);
+}
+
+#[test]
+fn a_gradient_mesh_reads_as_a_patch() {
+    let corner = |rgb: &str, x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| {
+        format!("%_[{rgb} 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1)
+    };
+    let mesh = |space: &str| {
+        format!(
+            "/Mesh X!\n%_({space}) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n/End X!\n",
+            corner("1 0 0", 0, 0, (0, 10), (10, 0)),
+            corner("0 1 0", 0, 40, (10, 40), (0, 30)),
+            corner("0 0 1", 40, 40, (40, 30), (30, 40)),
+            corner("1 1 1", 40, 0, (30, 0), (40, 10)),
+        )
+    };
+    let doc = read_ok(&layer(&mesh("DeviceRGB"))).doc;
+    let NodeKind::Mesh(m) = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    let colors: Vec<_> = m.points.iter().map(|p| p.color).collect();
+    assert_eq!(colors, [Color::rgb(1.0, 0.0, 0.0), Color::rgb(1.0, 1.0, 1.0), Color::rgb(0.0, 1.0, 0.0), Color::rgb(0.0, 0.0, 1.0)]);
+    use vectorcraft_doc::live::{H_DOWN, H_RIGHT};
+    let first = &m.points[0];
+    assert_eq!(
+        (first.p, first.handles[H_DOWN], first.handles[H_RIGHT]),
+        (Point::new(0.0, 100.0), kurbo::Vec2::new(0.0, -10.0), kurbo::Vec2::new(10.0, 0.0))
+    );
+    let e = read(stream(&layer(&mesh("Separation"))).as_bytes()).unwrap_err();
+    assert!(e.contains("gradient meshes"), "{e}");
 }
