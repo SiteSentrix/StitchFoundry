@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 use vectorcraft_embroidery::sf_core::attr::{Embroidery, StitchType};
 use vectorcraft_embroidery::sf_core::brush::WidthProfile;
 use vectorcraft_embroidery::sf_core::model::{
-    Corners, CoverKind, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH, TackdownKind, TexturePattern,
-    TieStyle,
+    Corners, CoverKind, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, RunKind, SatinParams, TATAMI_LENGTH, TackdownKind,
+    TexturePattern, TieStyle,
 };
 use vectorcraft_embroidery::sf_core::threads::{Rgb, charts};
 
@@ -380,9 +380,7 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 set(app, target, json!({ "passes": v.round().clamp(1.0, f64::from(MAX_PASSES)) as u32 }));
             }
             if r.kind == RunKind::Motif {
-                if let Some(m) = pick_motif(ui, r.motif) {
-                    set(app, target, json!({ "motif": m }));
-                }
+                motif_rows(app, ui, target, r.motif, r.custom_motif.as_ref());
                 // Graded: the motifs grow or shrink to another width along the line.
                 if let Some(v) = check(ui, tl!("Graded"), r.width_end.is_some()) {
                     set(app, target, json!({ "width_end": if v { json!(r.width * 2.0) } else { Value::Null } }));
@@ -525,9 +523,7 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
                 set(app, target, json!({ "rings": v.round().clamp(0.0, 500.0) as u32 }));
             }
             if f.kind == FillKind::Motif {
-                if let Some(m) = pick_motif(ui, f.motif) {
-                    set(app, target, json!({ "motif": m }));
-                }
+                motif_rows(app, ui, target, f.motif, f.custom_motif.as_ref());
                 if let Some(v) = num(ui, tl!("Motif size"), "fms", f.motif_size, " mm", 1) {
                     set(app, target, json!({ "motif_size": v.clamp(1.0, 50.0) }));
                 }
@@ -699,9 +695,38 @@ fn profile_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, f: &FillP
     });
 }
 
-/// The motif dropdown: the motif picked, if it changed.
-fn pick_motif(ui: &mut Ui, current: Motif) -> Option<Motif> {
-    let names = [
+/// The motif of a motif run or fill: a dropdown of the built-in motifs, then the design's own
+/// (Make Motif), and Delete Motif when it sews one of those. `custom` is the design motif it
+/// sews, if any: shown even when the design no longer has it.
+fn motif_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, current: Motif, custom: Option<&CustomMotif>) {
+    let library: Vec<String> = app
+        .session
+        .active()
+        .and_then(|st| st.doc.embroidery.as_deref().map(|c| c.motifs.iter().map(|m| m.name.clone()).collect()))
+        .unwrap_or_default();
+    match pick_motif(ui, &library, current, custom) {
+        Some(MotifChoice::BuiltIn(m)) => set(app, target, json!({ "motif": m, "custom_motif": null })),
+        Some(MotifChoice::Design(name)) => use_motif(app, target, &name),
+        None => {}
+    }
+    if let Some(c) = custom.filter(|c| library.contains(&c.name))
+        && button(ui, tl!("Delete Motif")).on_hover_text(tl!("Remove the motif from the design; what sews it keeps it.")).clicked()
+    {
+        app.run("embroidery.motif.delete", json!({ "name": c.name })).ok();
+    }
+}
+
+/// A motif picked from the motif dropdown.
+enum MotifChoice {
+    BuiltIn(Motif),
+    /// One of the design's motifs, by name.
+    Design(String),
+}
+
+/// The motif dropdown over the built-in motifs and the design's (`library`): the motif picked,
+/// if it changed.
+fn pick_motif(ui: &mut Ui, library: &[String], current: Motif, custom: Option<&CustomMotif>) -> Option<MotifChoice> {
+    let mut names = vec![
         tl!("Wave"),
         tl!("Scallop"),
         tl!("Diamond"),
@@ -714,8 +739,38 @@ fn pick_motif(ui: &mut Ui, current: Motif) -> Option<Motif> {
         tl!("Zigzag"),
         tl!("E-stitch"),
     ];
-    let cur = Motif::ALL.iter().position(|m| *m == current).unwrap_or(0);
-    pick(ui, tl!("Motif"), "motif", cur, &names).and_then(|i| Motif::ALL.get(i).copied())
+    let builtin = names.len();
+    names.extend(library.iter().map(String::as_str));
+    if let Some(c) = custom
+        && !library.contains(&c.name)
+    {
+        names.push(&c.name);
+    }
+    let cur = match custom {
+        Some(c) => names.iter().skip(builtin).position(|n| *n == c.name).map_or(0, |i| i + builtin),
+        None => Motif::ALL.iter().position(|m| *m == current).unwrap_or(0),
+    };
+    let i = pick_names(ui, tl!("Motif"), "motif", cur, &names)?;
+    match Motif::ALL.get(i) {
+        Some(m) => Some(MotifChoice::BuiltIn(*m)),
+        None => library.get(i.checked_sub(builtin)?).cloned().map(MotifChoice::Design),
+    }
+}
+
+/// Sew one of the design's motifs: the selected objects through Apply Motif (which sizes them
+/// for it), new objects through the properties they take.
+fn use_motif(app: &mut VectorcraftApp, target: Target, name: &str) {
+    match target {
+        Target::Selection(_) => {
+            app.run("embroidery.motif.apply", json!({ "name": name })).ok();
+        }
+        Target::Current(_) => {
+            let m = app.session.active().and_then(|st| st.doc.embroidery.as_deref()?.motif(name).cloned());
+            if let Some(m) = m {
+                set(app, target, json!({ "custom_motif": m }));
+            }
+        }
+    }
 }
 
 /// A texture pattern's name in the UI language.

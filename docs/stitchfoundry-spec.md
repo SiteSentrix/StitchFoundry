@@ -399,11 +399,11 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CS-06 | Florentine effect (stitches follow a drawn curve) | Done | Turning fill along inclination lines | – |
 | CS-07 | Liquid effect (curved fill between two guide curves) | Partial | Turning fill with two guides; add explicit two-curve mode | 2 |
 | MO-01 | Single motifs (place one stitched motif) | Partial | Embroidery › Place Motif puts one motif on the artboard as a run you move and reshape; no placement tool yet | 2 |
-| MO-02 | Motif runs | Done | 9 built-in motifs | – |
+| MO-02 | Motif runs | Done | 11 built-in motifs, and the design's own | – |
 | MO-03 | Graded motif runs (motif size varies along the line) | Done | Motif runs grow or shrink to *Width at end* | – |
 | MO-04 | Motif fills, paired motif fills, 3D motif fills | Partial | Motif fill: rows of any motif inside the shape, row offset; paired and 3D motif fills still missing | 2 |
 | MO-05 | Graded motif columns | Missing | Motif sized to column width | 2 |
-| MO-06 | Motif sets and custom motifs (make a motif from an object) | Missing | Motif library in document + prefs | 2 |
+| MO-06 | Motif sets and custom motifs (make a motif from an object) | Partial | Embroidery › Make Motif turns a drawn path into a motif kept with the design: motif runs, motif fills, borders and Place Motif sew it, upright as drawn; remaking it by name updates what sews it. No motif sets shared across designs (preferences) yet | 2 |
 
 ### 6.9 Specialty stitching
 
@@ -552,7 +552,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
 **Tally:** 231 rows (grouping the roughly 300 features the reference lists): 119 done,
-41 partial, 65 missing, 6 out of scope (counted 2026-10-12, after repeats and envelopes). Most of what is missing is breadth (more stitch
+42 partial, 64 missing, 6 out of scope (counted 2026-10-12, after custom motifs). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
