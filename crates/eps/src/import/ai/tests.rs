@@ -411,6 +411,19 @@ fn stops_sharing_a_ramp_point_keep_their_order() {
 }
 
 #[test]
+fn stops_listed_upwards_keep_the_midpoint_of_the_one_that_starts_the_ramp() {
+    // GUARDS: reversing a list that runs upwards swaps two stops at 0, and the ramp to 100 takes the
+    // midpoint of the zero-length part between them.
+    let defs = "%AI5_BeginGradient: (U)\n(U) 0 3 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 1 1 2 1 6 50 0 Bs\n\
+                %_0 0 0 0 1 1 1 2 1 6 87 0 Bs\n%_0 0 0 0 0 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let art_ = format!("{}Bb\n1 (U) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 0 10 100 50 Xm\nf\n0 BB\n", rect_path(0.0, 0.0, 200.0, 100.0));
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
+    let midpoints: Vec<_> = g.gradient.stops.iter().map(|s| s.midpoint).collect();
+    assert_eq!(midpoints, [0.5, 0.87, 0.5]);
+}
+
+#[test]
 fn per_anchor_data_reads() {
     let art_ = format!("{RED}{}f\n(00800080) Xt 0 XD\n%_(00004000) Xt 1 XD\n", rect_path(0.0, 0.0, 10.0, 10.0));
     assert_eq!(art(&read_ok(&layer(&art_)).doc).len(), 1);

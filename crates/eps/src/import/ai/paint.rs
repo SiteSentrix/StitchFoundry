@@ -158,8 +158,11 @@ impl GradientDef {
         if self.gradient.stops.is_empty() {
             return None;
         }
-        // Stops come last first: reversed, stops sharing a ramp point keep their order.
-        self.gradient.stops.reverse();
+        // Stops are listed along the ramp from either end: listed downwards they're reversed, so
+        // stops sharing a ramp point keep their order (and each its midpoint, to the next stop).
+        if self.gradient.stops.first().zip(self.gradient.stops.last()).is_some_and(|(first, last)| first.offset > last.offset) {
+            self.gradient.stops.reverse();
+        }
         self.gradient.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
         Some((self.name, self.gradient))
     }
