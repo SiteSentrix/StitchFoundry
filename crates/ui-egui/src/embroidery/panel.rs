@@ -261,9 +261,17 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(v) = num(ui, tl!("Size"), "let-size", size, " mm", 1) {
         app.embroidery.lettering_size = v.clamp(1.0, 500.0);
     }
-    // the sizes the font sews well at
+    // the sizes the font sews well at: a warning as soon as the size is outside them
     if let (Some(lo), Some(hi)) = (lo, hi) {
-        ui.label(format!("{} {lo:.1}–{hi:.1} mm", tl!("Sews well at")));
+        let said = format!("{} {lo:.1}–{hi:.1} mm", tl!("Sews well at"));
+        let size = if app.embroidery.lettering_size > 0.0 { app.embroidery.lettering_size } else { size };
+        if size < lo - 1e-6 || size > hi + 1e-6 {
+            let t = Tokens::get(ui.ctx());
+            ui.colored_label(t.warning, format!("▲ {said}"))
+                .on_hover_text(tl!("Outside the sizes the font was made for: its stitches may come out too dense or too long"));
+        } else {
+            ui.label(said);
+        }
     }
     // the baseline: straight, or round a circle, arched over its top or along its bottom
     let arc = app.embroidery.lettering_arc;

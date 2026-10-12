@@ -209,6 +209,11 @@ fn the_panel_sets_lettering_in_a_loaded_font() {
     let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
     assert!(texts.iter().any(|t| t == "Update Lettering") && !texts.iter().any(|t| t == "Place Lettering"), "{texts:?}");
     assert_eq!((app.embroidery.lettering_text.as_str(), app.embroidery.lettering_size), ("AA", 10.0));
+    // a size typed outside what the font sews well at: warned of at once
+    app.embroidery.lettering_size = 30.0;
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
+    assert!(texts.iter().any(|t| t == "▲ Sews well at 5.0–20.0 mm"), "{texts:?}");
+    app.embroidery.lettering_size = 10.0;
     // a monogram in the font
     let texts = painted_text_in(&mut app, crate::embroidery::panel::monogram_body, 600.0);
     for want in ["Font: Panel Font", "Classic", "Circle", "Place Monogram"] {

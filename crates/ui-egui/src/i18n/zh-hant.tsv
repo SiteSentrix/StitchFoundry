@@ -4105,3 +4105,4 @@ machine	Stop	停止
 	After each letter	每個字母後
 	After each word	每個單字後
 	After each line	每行後
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	超出字型設計的尺寸範圍：針跡可能過密或過長

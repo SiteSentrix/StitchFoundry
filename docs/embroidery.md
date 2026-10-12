@@ -600,7 +600,7 @@ it is now, moved, turned and scaled as it is (scaling it changes its size), as l
 loaded; the glyphs' own stitching can be changed like any art's, until it is set again.
 **Embroidery › Break Apart** turns it into its glyphs, no longer lettering. In the Embroidery panel, **Embroidery Lettering**
 does the same: *Load Embroidery Font…* picks a font folder, then choose the font, type the text,
-set its size (the sizes the font sews well at are shown) and *Place Lettering* puts it in the
+set its size (the sizes the font sews well at are shown, marked ▲ as a warning while the size typed is outside them) and *Place Lettering* puts it in the
 middle of the artboard. With a lettering selected, the section shows what it says, in what font and
 how big: change any of them and *Update Lettering* sets it again where it is. *Baseline* bends the
 lettering round a circle (*Radius*): **Arch** over its top, **Valley** along its bottom, glyphs

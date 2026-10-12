@@ -4733,3 +4733,4 @@ machine	Stop	停止
 	After each letter	文字ごと
 	After each word	単語ごと
 	After each line	行ごと
+	Outside the sizes the font was made for: its stitches may come out too dense or too long	フォントが想定するサイズの範囲外です。ステッチが密すぎたり長すぎたりすることがあります
