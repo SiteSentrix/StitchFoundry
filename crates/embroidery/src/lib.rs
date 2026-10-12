@@ -124,6 +124,75 @@ pub fn stitched_nodes(doc: &Document) -> Vec<Arc<Node>> {
     out
 }
 
+/// Most instances of one repeat that are sewn.
+const MAX_REPEAT_INSTANCES: usize = 1000;
+
+/// Repeats and envelopes evaluated for sewing, kept while the object doesn't change (the same
+/// `Arc`), so the plan of an unchanged document stays the same.
+#[derive(Default)]
+struct LiveCache(HashMap<NodeId, (Arc<Node>, Vec<Arc<Node>>)>);
+
+impl LiveCache {
+    /// What a repeat or envelope sews: its source moved to each instance, or its contents bent
+    /// through it. The objects keep their ids, so selecting one shows the stitches of every copy.
+    fn expand(&mut self, n: &Arc<Node>, fresh: &mut HashMap<NodeId, (Arc<Node>, Vec<Arc<Node>>)>) -> Vec<Arc<Node>> {
+        let out = match self.0.remove(&n.id) {
+            Some((key, out)) if Arc::ptr_eq(&key, n) => out,
+            _ => match &n.kind {
+                NodeKind::Repeat(spec) => spec
+                    .transforms()
+                    .into_iter()
+                    .take(MAX_REPEAT_INSTANCES)
+                    .flat_map(|m| {
+                        spec.source.iter().map(move |c| {
+                            let mut copy = (**c).clone();
+                            copy.transform(m, false);
+                            Arc::new(copy)
+                        })
+                    })
+                    .collect(),
+                NodeKind::Envelope { .. } => vectorcraft_doc::live::expand_live(n).into_iter().map(Arc::new).collect(),
+                _ => Vec::new(),
+            },
+        };
+        fresh.insert(n.id, (n.clone(), out.clone()));
+        out
+    }
+}
+
+/// The stitched nodes in sewing order as [`stitched_nodes`] lists them, with repeats sewn once
+/// per instance and envelopes' contents bent through them.
+fn sewing_order(doc: &Document, cache: &mut LiveCache) -> Vec<Arc<Node>> {
+    fn walk(n: &Arc<Node>, cache: &mut LiveCache, fresh: &mut HashMap<NodeId, (Arc<Node>, Vec<Arc<Node>>)>, out: &mut Vec<Arc<Node>>) {
+        if !n.visible {
+            return;
+        }
+        if n.embroidery.is_some() {
+            out.push(n.clone());
+            if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
+                return;
+            }
+        }
+        if matches!(n.kind, NodeKind::Repeat(_) | NodeKind::Envelope { .. }) {
+            for c in cache.expand(n, fresh) {
+                walk(&c, cache, fresh, out);
+            }
+        } else if let Some(children) = n.children() {
+            for c in children {
+                walk(c, cache, fresh, out);
+            }
+        }
+    }
+    let mut fresh = HashMap::new();
+    let mut out = Vec::new();
+    for l in &doc.layers {
+        walk(l, cache, &mut fresh, &mut out);
+    }
+    // Forget repeats and envelopes that are gone.
+    cache.0 = fresh;
+    out
+}
+
 /// Thread of a stitched node: its own thread, else its paint colour.
 pub fn node_thread(node: &Node, e: &Embroidery) -> Thread {
     if let Some(t) = &e.thread {
@@ -251,8 +320,10 @@ struct NodeEntry {
 /// equality is a reliable "unchanged" test.
 #[derive(Default)]
 pub struct Planner {
-    nodes: HashMap<NodeId, NodeEntry>,
+    /// Converted objects by node and occurrence (the copies of a repeat share their source's id).
+    nodes: HashMap<(NodeId, usize), NodeEntry>,
     cache: StitchCache,
+    live: LiveCache,
     last: Option<Snapshot>,
 }
 
@@ -269,7 +340,7 @@ impl Planner {
 
     /// The stitch plan for `doc`, reusing everything that didn't change.
     pub fn plan(&mut self, doc: &Document) -> Arc<StitchPlan> {
-        let order = stitched_nodes(doc);
+        let order = sewing_order(doc, &mut self.live);
         let settings = doc.embroidery.as_deref().cloned();
         if let Some(s) = &self.last
             && s.settings == settings
@@ -293,10 +364,15 @@ impl Planner {
         let branches = branch_groups(doc);
         // objects that remove the stitching below them: (first object index, what they cover)
         let mut cuts: Vec<(usize, Vec<Polygon>)> = Vec::new();
-        let mut fresh: HashMap<NodeId, NodeEntry> = HashMap::with_capacity(stitched.len());
+        let mut fresh: HashMap<(NodeId, usize), NodeEntry> = HashMap::with_capacity(stitched.len());
+        let mut seen: HashMap<NodeId, usize> = HashMap::new();
         for n in stitched {
             let Some(e) = n.embroidery.as_deref() else { continue };
-            let objects = match self.nodes.remove(&n.id) {
+            // the copies of a repeat share their source's id: tell them apart
+            let occurrence = seen.entry(n.id).or_insert(0);
+            let key = (n.id, *occurrence);
+            *occurrence += 1;
+            let objects = match self.nodes.remove(&key) {
                 Some(entry) if Arc::ptr_eq(&entry.node, n) => entry.objects,
                 _ => {
                     let thread = node_thread(n, e);
@@ -307,8 +383,9 @@ impl Planner {
                         .into_iter()
                         .enumerate()
                         .map(|(k, kind)| {
-                            // stable ids per node part keep the stitch cache warm
-                            let id: ObjectId = n.id.0.wrapping_mul(64).wrapping_add(k as u64);
+                            // stable ids per node part (and copy) keep the stitch cache warm
+                            let copy = (key.1 as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+                            let id: ObjectId = n.id.0.wrapping_mul(64).wrapping_add(k as u64) ^ copy;
                             let mut o = EmbObject::new(id, kind, 0);
                             o.name = name.clone();
                             o.entry = e.entry.map(|p| p * MM_PER_PT);
@@ -342,7 +419,7 @@ impl Planner {
                     cuts.push((start, cover));
                 }
             }
-            fresh.insert(n.id, NodeEntry { node: n.clone(), objects });
+            fresh.insert(key, NodeEntry { node: n.clone(), objects });
         }
         self.nodes = fresh;
         cut_underlying(&mut design.objects, &mut node_ids, cuts);
