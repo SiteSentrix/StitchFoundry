@@ -1181,12 +1181,12 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
             sf_core::BBox::new(min, sf_core::Point::new(min.x + field.0, min.y + field.1))
         })
         .collect();
-    // each object whole in the first hooping that holds it
+    // each object whole in the first hooping that holds it (its stitches: the travel in may be far off)
     let pattern = &plan.built.pattern;
     let mut assigned: Vec<Vec<usize>> = vec![Vec::new(); cells.len()];
     for (k, span) in plan.built.spans.iter().enumerate() {
         let pts: Vec<sf_core::Point> =
-            pattern.stitches.get(span.range.clone()).unwrap_or_default().iter().filter(|s| s.is_move()).map(|s| s.pos()).collect();
+            pattern.stitches.get(span.range.clone()).unwrap_or_default().iter().filter(|s| s.cmd == sf_core::Cmd::Stitch).map(|s| s.pos()).collect();
         let Some(ob) = pts.iter().copied().map(|q| sf_core::BBox::new(q, q)).reduce(sf_core::BBox::union) else { continue };
         let fits = |cell: &sf_core::BBox| {
             ob.min.x >= cell.min.x - 1e-6 && ob.min.y >= cell.min.y - 1e-6 && ob.max.x <= cell.max.x + 1e-6 && ob.max.y <= cell.max.y + 1e-6
@@ -1275,6 +1275,8 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
                         first = false;
                     }
                     sf_core::Cmd::Stitch => hp.stitch(q),
+                    // the travel in from the object before, perhaps in another hooping
+                    sf_core::Cmd::Jump | sf_core::Cmd::Trim if first => {}
                     sf_core::Cmd::Jump => hp.jump(q),
                     sf_core::Cmd::Trim => hp.trim(),
                     sf_core::Cmd::Stop => hp.stop(),
