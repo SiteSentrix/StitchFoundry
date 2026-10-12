@@ -4233,3 +4233,4 @@ theme	Appearance	Giao diện
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
+	Load EPS into Clipboard	Tải EPS vào bảng tạm

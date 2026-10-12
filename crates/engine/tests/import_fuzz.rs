@@ -1290,6 +1290,13 @@ proptest! {
         survive("mutated EPS PostScript", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
     }
 
+    /// A damaged EPS another app copied: Paste reads it as an error or as objects.
+    #[test]
+    fn pasted_eps_never_panics(cut in 0usize..400_000, edits in prop::collection::vec((0usize..400_000, any::<u8>()), 0..12)) {
+        static SAMPLE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+        paste_from_elsewhere("clipboard.importEps", json!({"dataBase64": mutated_b64(SAMPLE.get_or_init(foreign_eps_sample).clone(), cut, &edits)}))?;
+    }
+
     /// Hostile PostScript programs: operators in any order with any operands, opened and placed;
     /// as files in the legacy Illustrator format too (the creator line is what turns on its
     /// documented `u` … `U` groups), the groups unbalanced, deep and among clips; in a layer, which
