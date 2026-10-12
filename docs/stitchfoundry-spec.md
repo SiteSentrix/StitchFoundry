@@ -542,7 +542,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-18 | AI product mockups: the design shown on a shirt, cap or bag | Missing | §11; MD-01 | A |
 | NEW-19 | Puff fill for wide areas, and the puff sewing order (a flat outline first, a stop to lay the foam) | Done | A filled shape made puff is sewn as satin across it; Sew Puff Last (`embroidery.puff.last`) moves the puff after the rest with a stop before it | – |
 | NEW-20 | A library of ready-digitized embroidery fonts, marked puff, small or appliqué where they suit | Missing | Digitized by the project from OFL typefaces with the font creator, kept in craft-fonts (never in this repo); font-list badges | 3 |
-| NEW-21 | Bubble (outline) text, and circle and spiral baselines | Missing | Extends LT-03 and the lettering commands | 3 |
+| NEW-21 | Bubble (outline) text, and circle and spiral baselines | Partial | Outline Around (`embroidery.outlineAround`): one satin or run outline round the selected art at a gap (bubble lettering, sticker borders); circles via `arc`; spiral baselines still to come | 3 |
 | NEW-22 | Appliqué lettering (each letter a patch: placement, tack-down, cover) | Missing | Lettering whose glyph outlines become appliqué (AP-*) | 4 |
 | NEW-23 | Auto basting (a basting run round the design or the hoop, first) | Missing | A design-level option written into the machine file | 6 |
 | NEW-24 | Scatter copies (copies of a motif strewn over an area) | Missing | Random or even spread with a minimum gap | 7 |
@@ -571,7 +571,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
 **Tally:** 250 rows (grouping the roughly 300 features the reference lists): 159 done,
-30 partial, 55 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+31 partial, 54 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
