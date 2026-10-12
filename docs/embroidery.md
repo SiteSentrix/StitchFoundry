@@ -497,6 +497,11 @@ time and thread used, and whether the design fits the hoop. Its settings:
   the section also has their **Name**, their file **Format** and **Delete Machine**. Profiles are
   kept with your preferences, not in the design: a design keeps the name and format of its
   machine, so it still exports in that format on a computer without the profile.
+- **Basting first**: a basting run, long running stitches (6 mm) sewn before everything else in
+  the first thread and without ties, holding the fabric to the stabiliser, to pick out after.
+  *Basting round* the design (*Basting margin* out from it, 5 mm) or the hoop (that far in from
+  its edge, the hoop centred on the design); it is written into the machine file
+  (`embroidery.settings {basting: true | {hoop?, margin?, length?} | false}`).
 - **Thread chart**: the chart the panel's thread list picks from. Threads keep their name and
   code; PES and JEF files use the nearest colour of the machine's own palette. **Match Threads to
   Chart** (also in the Embroidery menu, for the selection) gives every stitched object the chart's

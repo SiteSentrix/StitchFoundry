@@ -525,6 +525,7 @@ fn structured_junk() {
         ("embroidery.worksheet", json!({"kind": 5, "notes": [1]})),
         ("embroidery.multiHoop", json!({"width": 1e300, "height": -5, "overlap": f64::NAN})),
         ("embroidery.outlineAround", json!({"ids": [u64::MAX], "gap": f64::NAN})),
+        ("embroidery.settings", json!({"basting": {"margin": f64::NAN, "length": "x", "hoop": null}})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "spiral": f64::INFINITY, "arc": 0})),
         ("embroidery.fontDoc.fromType", json!({"family": "Source Sans 3", "chars": "\u{0}\u{fffd}x", "size": 5})),
         ("embroidery.fontDoc.merge", json!({"font": "x", "chars": "abc"})),

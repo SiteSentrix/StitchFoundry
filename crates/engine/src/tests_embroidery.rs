@@ -353,6 +353,33 @@ fn monograms_stack_wear_ornaments_and_ring_borders() {
 }
 
 #[test]
+fn basting_is_sewn_first_round_the_design_or_inside_the_hoop() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 50.0 * PT, 50.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let plain = s.embroidery_plan().unwrap().pattern().clone();
+    let r = s.execute("embroidery.settings", &json!({"basting": true})).unwrap();
+    assert_eq!(r["settings"]["basting"]["margin"].as_f64(), Some(5.0), "{r}");
+    let p = s.embroidery_plan().unwrap().pattern().clone();
+    // 5 mm round: 50 × 30 mm, a needle point at most 6 mm on
+    let b = p.bounds();
+    assert!((b.width() - 50.0).abs() < 0.2 && (b.height() - 30.0).abs() < 0.2, "{b:?}");
+    assert!(p.stitch_count() > plain.stitch_count() + 20 && p.threads.len() == plain.threads.len());
+    // in the info, then round a 100 × 100 hoop 10 mm in
+    assert!(s.execute("embroidery.info", &json!({})).unwrap()["settings"]["basting"].is_object());
+    s.execute("embroidery.settings", &json!({"hoop": {"width": 100, "height": 100}, "basting": {"hoop": true, "margin": 10}})).unwrap();
+    let b = s.embroidery_plan().unwrap().pattern().bounds();
+    assert!((b.width() - 80.0).abs() < 0.2 && (b.height() - 80.0).abs() < 0.2, "{b:?}");
+    // off again; bad values
+    s.execute("embroidery.settings", &json!({"basting": false})).unwrap();
+    assert_eq!(s.embroidery_plan().unwrap().pattern().stitch_count(), plain.stitch_count());
+    for bad in [json!({"basting": 5}), json!({"basting": {"margin": -1}}), json!({"basting": {"length": 50}}), json!({"basting": {"hoop": 1}})] {
+        assert!(s.execute("embroidery.settings", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn big_designs_split_into_hoopings_with_registration_marks() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

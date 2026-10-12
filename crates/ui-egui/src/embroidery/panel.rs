@@ -1981,6 +1981,20 @@ fn machine_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
         });
         machine_profile_rows(app, ui, &machines, &current, info["machineFormat"].as_str().unwrap_or("dst"));
     });
+    // a basting run sewn first, round the design or inside the hoop
+    let b = &s["basting"];
+    if let Some(v) = check(ui, tl!("Basting first"), b.is_object()) {
+        app.run("embroidery.settings", json!({ "basting": v })).ok();
+    }
+    if b.is_object() {
+        let cur = usize::from(b["hoop"].as_bool() == Some(true));
+        if let Some(i) = pick(ui, tl!("Basting round"), "basting-round", cur, &[tl!("The design"), tl!("The hoop")]) {
+            app.run("embroidery.settings", json!({ "basting": { "hoop": i == 1 } })).ok();
+        }
+        if let Some(v) = num(ui, tl!("Basting margin"), "basting-margin", b["margin"].as_f64().unwrap_or(5.0), " mm", 1) {
+            app.run("embroidery.settings", json!({ "basting": { "margin": v.clamp(0.0, 50.0) } })).ok();
+        }
+    }
 }
 
 /// Keeping the design's machine settings in its machine's profile or a new one of the user's;

@@ -273,7 +273,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Settings",
             [],
             None,
-            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null, fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags)} → the settings",
+            "{hoop?: name | {width, height, shape?: rect|oval} (mm) | null, fabric?, chart?, machine?: a machine profile (dst|exp|u01|pes|jef|vp3|xxx, or one of yours: embroidery.machine.list) | null (sets its values first; the design is exported in its format), trimThreshold?, tieIn?, tieOff?, tieLength?, tieStyle?: single|double|triangle, minStitch?, maxStitch?, maxJump?, machineSpeed?, trimSeconds?, colorChangeSeconds?, basting?: bool | {hoop?: bool (round the hoop's field, else the design), margin?: mm (5; 0–50: out from the design, in from the hoop's edge), length?: mm (6; 2–12)} | null (a basting run sewn first, in the first thread), checks?: {denseLayers?, longStitch?, smallLettering?, tinyObject?} (what Check Design flags)} → the settings",
             has_doc,
             settings
         ),
@@ -1729,6 +1729,26 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
         st.tie_off = v;
         changed = true;
     }
+    if let Some(v) = p.get("basting") {
+        st.basting = match v {
+            Value::Null | Value::Bool(false) => None,
+            Value::Bool(true) => Some(st.basting.unwrap_or_default()),
+            Value::Object(o) => {
+                let mut b = st.basting.unwrap_or_default();
+                if let Some(h) = o.get("hoop") {
+                    b.hoop = h.as_bool().ok_or_else(|| bad(CMD, "basting.hoop is true or false"))?;
+                }
+                for (k, slot, lo, hi) in [("margin", &mut b.margin, 0.0, 50.0), ("length", &mut b.length, 2.0, 12.0)] {
+                    if let Some(v) = o.get(k) {
+                        *slot = v.as_f64().filter(|x| (lo..=hi).contains(x)).ok_or_else(|| bad(CMD, format!("basting.{k} is {lo} to {hi} mm")))?;
+                    }
+                }
+                Some(b)
+            }
+            _ => return Err(bad(CMD, "basting is true, false or {hoop?, margin?, length?}")),
+        };
+        changed = true;
+    }
     if let Some(v) = p.get("tieStyle") {
         let name = v.as_str().unwrap_or_default();
         st.tie_style =
@@ -2160,6 +2180,7 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         "maxStitch": st.max_stitch, "maxJump": st.max_jump, "minStitch": st.min_stitch, "trimThreshold": st.trim_threshold,
         "tieIn": st.tie_in, "tieOff": st.tie_off, "tieLength": st.tie_length, "tieStyle": st.tie_style.id(), "machineSpeed": st.machine_speed,
         "trimSeconds": st.trim_seconds, "colorChangeSeconds": st.color_change_seconds,
+        "basting": st.basting.map(|b| json!({ "hoop": b.hoop, "margin": b.margin, "length": b.length })),
         "checks": {
             "denseLayers": cfg.checks.dense_layers, "longStitch": cfg.checks.long_stitch,
             "smallLettering": cfg.checks.small_lettering, "tinyObject": cfg.checks.tiny_object,

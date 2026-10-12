@@ -552,6 +552,8 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
     let mut pos: Option<Point> = None;
     let mut force_trim = false;
     let covers = branch_covers(design);
+    // a basting run, sewn first in the first thread
+    let mut basting = settings.basting.and_then(|b| b.stitches(design.bbox(), design.hoop.as_ref()));
     for (index, obj) in design.objects.iter().enumerate() {
         if !obj.visible {
             continue;
@@ -570,6 +572,12 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
             }
             em.p.threads.push(design.thread(obj.color));
             current_color = Some(obj.color);
+            // picked out after: no ties
+            if let Some(b) = basting.take() {
+                (em.tie_in, em.tie_off) = (false, false);
+                em.object(&b);
+                em.cut();
+            }
         } else if let (Some(p), Some(cover)) = (pos, covers.get(index).and_then(Option::as_ref))
             && em.live
             && !force_trim
@@ -689,6 +697,37 @@ mod tests {
         assert_eq!(p.count(Cmd::Jump), 1);
         // so the frame goes nowhere outside what is sewn
         assert_eq!(p.extents(), p.bounds());
+    }
+
+    #[test]
+    fn basting_goes_round_first_in_the_first_thread() {
+        let mut d = demo();
+        let plain = build(&d);
+        let bb = d.bbox();
+        d.settings.basting = Some(Basting::default());
+        let built = build(&d);
+        let p = &built.pattern;
+        assert_eq!(p.threads, plain.pattern.threads);
+        // its stitches, up to the first trim: a rectangle 5 mm round the design, ≤ 6 mm apart
+        let end = p.stitches.iter().position(|s| s.cmd == Cmd::Trim).unwrap();
+        let run: Vec<Point> = p.stitches[..end].iter().filter(|s| s.cmd == Cmd::Stitch).map(Stitch::pos).collect();
+        let rb = run.iter().fold(BBox::EMPTY, |b, q| b.union(BBox::new(*q, *q)));
+        assert!((rb.min.x - (bb.min.x - 5.0)).abs() < 1e-9 && (rb.max.y - (bb.max.y + 5.0)).abs() < 1e-9, "{rb:?} {bb:?}");
+        assert!(run.windows(2).all(|w| w[0].distance(w[1]) <= 6.0 + 1e-9));
+        assert!(run.first().unwrap().distance(*run.last().unwrap()) < 1e-9, "closed");
+        // the objects follow, their spans past it
+        assert!(built.spans[0].range.start > end);
+        assert_eq!(built.spans.len(), plain.spans.len());
+        // inside the hoop instead, centred on the design
+        d.hoop = Some(crate::hoops::Hoop::new("H", 100.0, 80.0, crate::hoops::HoopShape::Rect));
+        d.settings.basting = Some(Basting { hoop: true, margin: 4.0, ..Basting::default() });
+        let p = build(&d).pattern;
+        let end = p.stitches.iter().position(|s| s.cmd == Cmd::Trim).unwrap();
+        let rb = p.stitches[..end].iter().filter(|s| s.cmd == Cmd::Stitch).fold(BBox::EMPTY, |b, s| b.union(BBox::new(s.pos(), s.pos())));
+        assert!((rb.width() - 92.0).abs() < 1e-9 && (rb.height() - 72.0).abs() < 1e-9, "{rb:?}");
+        // a hoop with no room: none
+        d.settings.basting = Some(Basting { hoop: true, margin: 45.0, ..Basting::default() });
+        assert_eq!(build(&d).pattern.stitch_count(), plain.pattern.stitch_count());
     }
 
     #[test]
