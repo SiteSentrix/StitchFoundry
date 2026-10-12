@@ -194,6 +194,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.lettering_text = l.text.clone();
             app.embroidery.lettering_font = l.font.clone();
             app.embroidery.lettering_size = l.size;
+            app.embroidery.lettering_arc = l.arc;
         }
         None => app.embroidery.lettering_for = None,
         _ => {}
@@ -249,10 +250,33 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let (Some(lo), Some(hi)) = (lo, hi) {
         ui.label(format!("{} {lo:.1}–{hi:.1} mm", tl!("Sews well at")));
     }
+    // the baseline: straight, or round a circle, arched over its top or along its bottom
+    let arc = app.embroidery.lettering_arc;
+    let kinds = [tl!("Straight"), tl!("Arch"), tl!("Valley")];
+    let cur = if arc > 0.0 {
+        1
+    } else if arc < 0.0 {
+        2
+    } else {
+        0
+    };
+    if let Some(i) = pick(ui, tl!("Baseline"), "let-arc", cur, &kinds) {
+        let r = if arc != 0.0 { arc.abs() } else { 60.0 };
+        app.embroidery.lettering_arc = [0.0, r, -r].get(i).copied().unwrap_or(0.0);
+    }
+    if app.embroidery.lettering_arc != 0.0
+        && let Some(v) = num(ui, tl!("Radius"), "let-radius", app.embroidery.lettering_arc.abs(), " mm", 0)
+    {
+        app.embroidery.lettering_arc = v.clamp(1.0, 10000.0).copysign(app.embroidery.lettering_arc);
+    }
+    let arc = app.embroidery.lettering_arc;
     let text = app.embroidery.lettering_text.clone();
     let (label, cmd, params) = match &selected {
-        Some((id, _)) => (tl!("Update Lettering"), "embroidery.lettering.edit", json!({ "id": id, "text": text, "font": name, "size": size })),
-        None => (tl!("Place Lettering"), "embroidery.lettering", json!({ "text": text, "font": name, "size": size })),
+        Some((id, _)) => {
+            (tl!("Update Lettering"), "embroidery.lettering.edit", json!({ "id": id, "text": text, "font": name, "size": size, "arc": arc }))
+        }
+        // new lettering is centred on the artboard
+        None => (tl!("Place Lettering"), "embroidery.lettering", json!({ "text": text, "font": name, "size": size, "arc": arc, "align": "centre" })),
     };
     if button(ui, label).clicked() && !text.trim().is_empty() {
         match app.run(cmd, params) {

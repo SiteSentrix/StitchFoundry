@@ -4663,3 +4663,5 @@ machine	Stop	停止
 	Edit Lettering	文字を編集
 	Update Lettering	文字を更新
 	Load this lettering's font to change it:	この文字を変更するにはフォントを読み込んでください：
+	Arch	上向きの円弧
+	Valley	下向きの円弧

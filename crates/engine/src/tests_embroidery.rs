@@ -2213,6 +2213,37 @@ fn embroidery_fonts_set_lettering_from_their_glyphs() {
 }
 
 #[test]
+fn lettering_aligns_and_follows_arcs() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let set = |s: &mut Session, extra: serde_json::Value| -> Vec<vectorcraft_geom::Rect> {
+        let mut p = json!({"text": "AAA", "font": "Test Script", "at": [300, 300]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let id = NodeId(s.execute("embroidery.lettering", &p).unwrap()["id"].as_u64().unwrap());
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap()).collect()
+    };
+    // "AAA" is 120 font units of 1 mm: starting, centred and ending on the origin, half a line apart
+    let half = 60.0 * 72.0 / 25.4;
+    let (l, c, r) = (set(&mut s, json!({})), set(&mut s, json!({"align": "centre"})), set(&mut s, json!({"align": "right"})));
+    assert!((l[0].x0 - c[0].x0 - half).abs() < 0.01 && (c[0].x0 - r[0].x0 - half).abs() < 0.01, "{l:?} {c:?} {r:?}");
+    // arched over a circle 40 mm in radius: the middle A highest; along its bottom: lowest
+    let a = set(&mut s, json!({"align": "centre", "arc": 40}));
+    assert!(a[1].y0 < a[0].y0 - 2.0 && a[1].y0 < a[2].y0 - 2.0, "{a:?}");
+    let v = set(&mut s, json!({"align": "centre", "arc": -40}));
+    assert!(v[1].y1 > v[0].y1 + 2.0 && v[1].y1 > v[2].y1 + 2.0, "{v:?}");
+    // straightened where it is: level again
+    s.execute("embroidery.lettering.edit", &json!({"arc": 0})).unwrap();
+    let id = s.doc().unwrap().selection.objects[0];
+    let st: Vec<_> = s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap()).collect();
+    assert!(st.iter().all(|b| (b.y1 - st[0].y1).abs() < 0.01), "{st:?}");
+    // bad arcs and alignments
+    assert!(s.execute("embroidery.lettering.edit", &json!({"arc": 0.5})).is_err());
+    assert!(s.execute("embroidery.lettering.edit", &json!({"arc": 1e9})).is_err());
+    assert!(s.execute("embroidery.lettering.edit", &json!({"align": "middle"})).is_err());
+    assert!(s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "arc": "x"})).is_err());
+}
+
+#[test]
 fn lettering_is_set_again_where_it_is_now() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

@@ -173,6 +173,13 @@ pub struct Lettering {
     /// Lines apart, × the font's own line spacing.
     #[serde(default = "one")]
     pub leading: f64,
+    /// The baseline bent round a circle this big (radius, mm): positive, arched over its top;
+    /// negative, along its bottom; 0, straight.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub arc: f64,
+    /// Where the lines sit on the origin: their start, middle or end.
+    #[serde(default, skip_serializing_if = "is_left")]
+    pub align: LetterAlign,
     /// From the lettering's own space (points: the first line's baseline runs from (0, 0) along
     /// x, the lines follow down y) to the document. It follows the lettering as it moves, turns
     /// and slants; a scale goes into `size`.
@@ -181,6 +188,46 @@ pub struct Lettering {
 
 fn one() -> f64 {
     1.0
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+fn is_left(a: &LetterAlign) -> bool {
+    *a == LetterAlign::Left
+}
+
+/// Where lettering's lines sit on its origin.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LetterAlign {
+    #[default]
+    Left,
+    #[serde(alias = "center")]
+    Centre,
+    Right,
+}
+
+impl LetterAlign {
+    /// The share of a line's width before the origin.
+    pub fn share(self) -> f64 {
+        match self {
+            LetterAlign::Left => 0.0,
+            LetterAlign::Centre => 0.5,
+            LetterAlign::Right => 1.0,
+        }
+    }
+
+    /// `left`, `centre` (or `center`) or `right`.
+    pub fn from_name(name: &str) -> Option<LetterAlign> {
+        match name.to_ascii_lowercase().as_str() {
+            "left" => Some(LetterAlign::Left),
+            "centre" | "center" => Some(LetterAlign::Centre),
+            "right" => Some(LetterAlign::Right),
+            _ => None,
+        }
+    }
 }
 
 impl Lettering {
@@ -195,6 +242,7 @@ impl Lettering {
         let [a, b, c, d, e, g] = f.0;
         self.frame = Affine([a / k, b / k, c / k, d / k, e, g]);
         self.size *= k;
+        self.arc *= k;
     }
 }
 
@@ -540,10 +588,10 @@ mod tests {
     #[test]
     fn lettering_follows_its_group_its_scale_going_into_its_size() {
         let at = Affine::translate(Point::new(100.0, 50.0));
-        let mut l = Lettering { text: "Hi".into(), font: "F".into(), size: 10.0, leading: 1.0, frame: at };
+        let mut l = Lettering { text: "Hi".into(), font: "F".into(), size: 10.0, leading: 1.0, arc: 30.0, align: LetterAlign::Centre, frame: at };
         // turned a quarter about the origin, then doubled
         l.transform(&Affine::rotate(std::f64::consts::FRAC_PI_2).then(&Affine::scale(2.0, 2.0)));
-        assert!((l.size - 20.0).abs() < 1e-9, "{l:?}");
+        assert!((l.size - 20.0).abs() < 1e-9 && (l.arc - 60.0).abs() < 1e-9, "{l:?}");
         let o = l.frame.apply(Point::new(0.0, 0.0));
         let x = l.frame.apply(Point::new(1.0, 0.0));
         assert!((o.x + 100.0).abs() < 1e-9 && (o.y - 200.0).abs() < 1e-9, "{o:?}");

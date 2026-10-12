@@ -600,7 +600,10 @@ loaded; the glyphs' own stitching can be changed like any art's, until it is set
 does the same: *Load Embroidery Font…* picks a font folder, then choose the font, type the text,
 set its size (the sizes the font sews well at are shown) and *Place Lettering* puts it in the
 middle of the artboard. With a lettering selected, the section shows what it says, in what font and
-how big: change any of them and *Update Lettering* sets it again where it is.
+how big: change any of them and *Update Lettering* sets it again where it is. *Baseline* bends the
+lettering round a circle (*Radius*): **Arch** over its top, **Valley** along its bottom, glyphs
+upright to it (`arc`: the radius in mm, negative along the bottom); lettering placed from the panel
+is centred on the artboard (`align`: left, centre or right on `at`).
 
 ## Commands
 
