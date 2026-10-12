@@ -4686,3 +4686,8 @@ machine	Stop	Zastavení
 	Embroidery Lettering	Vyšívané písmo
 	Load Embroidery Font	Načíst vyšívací písmo
 	Embroidery Fonts	Vyšívací písma
+	Load Embroidery Font…	Načíst vyšívací písmo…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Složka písma ve formátu Ink/Stitch: font.json a jeho glyfy
+	Load an embroidery font to set text with it.	Načtěte vyšívací písmo a sázejte jím text.
+	Sews well at	Dobře se vyšívá při
+	Place Lettering	Umístit nápis

@@ -592,7 +592,10 @@ its settings say, placed with the font's advances and kerning, lines its leading
 first, in the font's letter case, characters it lacks shown as its default glyph. `size` is the
 capitals' height in mm; outside the sizes the font says it sews well at, the lettering comes with
 a warning. Fonts stay loaded until StitchFoundry quits; the lettering itself is ordinary stitched
-art, a group per glyph, saved with the design.
+art, a group per glyph, saved with the design. In the Embroidery panel, **Embroidery Lettering**
+does the same: *Load Embroidery Font…* picks a font folder, then choose the font, type the text,
+set its size (the sizes the font sews well at are shown) and *Place Lettering* puts it in the
+middle of the artboard.
 
 ## Commands
 

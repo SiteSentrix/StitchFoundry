@@ -4659,3 +4659,8 @@ machine	Stop	Parada
 	Embroidery Lettering	Rotulación de bordado
 	Load Embroidery Font	Cargar fuente de bordado
 	Embroidery Fonts	Fuentes de bordado
+	Load Embroidery Font…	Cargar fuente de bordado…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Una carpeta de fuente en el formato de Ink/Stitch: font.json y sus glifos
+	Load an embroidery font to set text with it.	Cargue una fuente de bordado para escribir con ella.
+	Sews well at	Borda bien a
+	Place Lettering	Colocar rotulación

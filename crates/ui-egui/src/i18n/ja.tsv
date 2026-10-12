@@ -4655,3 +4655,8 @@ machine	Stop	停止
 	Embroidery Lettering	刺繍文字
 	Load Embroidery Font	刺繍フォントを読み込む
 	Embroidery Fonts	刺繍フォント
+	Load Embroidery Font…	刺繍フォントを読み込む…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Ink/Stitch 形式のフォントフォルダー（font.json とグリフ）
+	Load an embroidery font to set text with it.	刺繍フォントを読み込むと文字を配置できます。
+	Sews well at	きれいに縫えるサイズ
+	Place Lettering	文字を配置

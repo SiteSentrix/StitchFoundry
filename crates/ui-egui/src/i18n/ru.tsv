@@ -4657,3 +4657,8 @@ machine	Stop	Остановка
 	Embroidery Lettering	Вышитые надписи
 	Load Embroidery Font	Загрузить шрифт для вышивки
 	Embroidery Fonts	Шрифты для вышивки
+	Load Embroidery Font…	Загрузить шрифт для вышивки…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Папка шрифта в формате Ink/Stitch: font.json и глифы
+	Load an embroidery font to set text with it.	Загрузите шрифт для вышивки, чтобы набрать им текст.
+	Sews well at	Хорошо вышивается при
+	Place Lettering	Разместить надпись

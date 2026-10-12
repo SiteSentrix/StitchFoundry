@@ -4027,3 +4027,8 @@ machine	Stop	停止
 	Embroidery Lettering	刺繡文字
 	Load Embroidery Font	載入刺繡字型
 	Embroidery Fonts	刺繡字型
+	Load Embroidery Font…	載入刺繡字型…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Ink/Stitch 格式的字型資料夾：font.json 及其字形
+	Load an embroidery font to set text with it.	載入刺繡字型後即可用它排字。
+	Sews well at	適合繡製的大小
+	Place Lettering	放置文字

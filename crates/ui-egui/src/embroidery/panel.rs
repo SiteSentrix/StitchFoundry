@@ -153,11 +153,79 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     digitize_row(app, ui);
+    lettering_rows(app, ui);
     buttonhole_rows(app, ui);
     ui.add_space(6.0);
     object_section(app, ui);
     ui.add_space(6.0);
     design_section(app, ui, &t);
+}
+
+/// Lettering with embroidery fonts (Ink/Stitch's format): load a font folder, pick a font, type,
+/// place the lettering in the middle of the first artboard.
+fn lettering_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    egui::CollapsingHeader::new(tl!("Embroidery Lettering")).id_salt("emb-lettering").show(ui, |ui| lettering_body(app, ui));
+}
+
+/// The Embroidery Lettering section's rows.
+pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if app.services.pick_folder.is_some()
+        && button(ui, tl!("Load Embroidery Font…")).on_hover_text(tl!("A font folder in Ink/Stitch's format: font.json and its glyphs")).clicked()
+    {
+        crate::picks::button(app, |app| {
+            let Some(dir) = crate::picks::folder(app) else { return };
+            match app.run("embroidery.font.load", json!({ "path": dir })) {
+                Ok(r) => {
+                    if let Some(name) = r["name"].as_str() {
+                        app.embroidery.lettering_font = name.to_string();
+                    }
+                }
+                Err(e) => app.status(e),
+            }
+        });
+    }
+    let fonts: Vec<(String, Option<f64>, Option<f64>, f64)> = app
+        .session
+        .embroidery_fonts
+        .iter()
+        .map(|f| {
+            let i = &f.info;
+            let size = |k: f64| (i.size > 0.0 && k > 0.0).then_some(i.size * k);
+            (i.name.clone(), size(i.min_scale), size(i.max_scale), i.size)
+        })
+        .collect();
+    if fonts.is_empty() {
+        ui.label(tl!("Load an embroidery font to set text with it."));
+        return;
+    }
+    let names: Vec<&str> = fonts.iter().map(|f| f.0.as_str()).collect();
+    let cur = names.iter().position(|n| *n == app.embroidery.lettering_font).unwrap_or(0);
+    if let Some(i) = pick_names(ui, tl!("Font"), "let-font", cur, &names)
+        && let Some(name) = names.get(i)
+    {
+        app.embroidery.lettering_font = name.to_string();
+    }
+    let Some((name, lo, hi, own)) = fonts.get(cur).cloned() else { return };
+    ui.add(egui::TextEdit::multiline(&mut app.embroidery.lettering_text).desired_rows(2).hint_text(tl!("Text")));
+    let size = if app.embroidery.lettering_size > 0.0 { app.embroidery.lettering_size } else { own.max(1.0) };
+    if let Some(v) = num(ui, tl!("Size"), "let-size", size, " mm", 1) {
+        app.embroidery.lettering_size = v.clamp(1.0, 500.0);
+    }
+    // the sizes the font sews well at
+    if let (Some(lo), Some(hi)) = (lo, hi) {
+        ui.label(format!("{} {lo:.1}–{hi:.1} mm", tl!("Sews well at")));
+    }
+    let text = app.embroidery.lettering_text.clone();
+    if button(ui, tl!("Place Lettering")).clicked() && !text.trim().is_empty() {
+        match app.run("embroidery.lettering", json!({ "text": text, "font": name, "size": size })) {
+            Ok(r) => {
+                if let Some(w) = r["warnings"].as_array().and_then(|w| w.first()).and_then(Value::as_str) {
+                    app.status(w);
+                }
+            }
+            Err(e) => app.status(e),
+        }
+    }
 }
 
 /// Buttonholes: one, or a row of them evenly spaced, in the middle of the first artboard.

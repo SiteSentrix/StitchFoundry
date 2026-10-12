@@ -4641,3 +4641,8 @@ machine	Stop	Зупинка
 	Embroidery Lettering	Вишиті написи
 	Load Embroidery Font	Завантажити шрифт для вишивки
 	Embroidery Fonts	Шрифти для вишивки
+	Load Embroidery Font…	Завантажити шрифт для вишивки…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Тека шрифту у форматі Ink/Stitch: font.json і гліфи
+	Load an embroidery font to set text with it.	Завантажте шрифт для вишивки, щоб набрати ним текст.
+	Sews well at	Добре вишивається при
+	Place Lettering	Розмістити напис

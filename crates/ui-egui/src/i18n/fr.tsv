@@ -4669,3 +4669,8 @@ machine	Stop	Arrêt
 	Embroidery Lettering	Lettrage brodé
 	Load Embroidery Font	Charger une police de broderie
 	Embroidery Fonts	Polices de broderie
+	Load Embroidery Font…	Charger une police de broderie…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Un dossier de police au format d’Ink/Stitch : font.json et ses glyphes
+	Load an embroidery font to set text with it.	Chargez une police de broderie pour composer du texte.
+	Sews well at	Se brode bien à
+	Place Lettering	Placer le lettrage
