@@ -114,7 +114,8 @@ fn set_view(app: &mut VectorcraftApp, view: TraceView) {
 /// The selected Image Trace object's View row (Control bar, Properties).
 pub(crate) fn view_row(app: &mut VectorcraftApp, ui: &mut Ui, current: TraceView, width: f32) {
     widgets::dim_label(ui, tl!("View:"));
-    if let Some(v) = view_dropdown(ui, current, width) {
+    // No wider than what the label leaves of the row (#1358).
+    if let Some(v) = view_dropdown(ui, current, width.min(ui.available_width())) {
         set_view(app, v);
     }
 }
@@ -417,6 +418,31 @@ mod tests {
         app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false})).unwrap();
         app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
         app
+    }
+
+    /// #1358: in Properties the View row fits the panel, so the panel doesn't widen and clip its
+    /// labels (the row took the panel's whole width for its menu, beside its label).
+    #[test]
+    fn the_view_row_fits_the_properties_panel() {
+        let mut app = traced_app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // Where the panel's content ends after a few frames.
+        let right = |app: &mut VectorcraftApp| {
+            let mut right = 0.0;
+            for _ in 0..3 {
+                let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                    crate::panels::properties::show(app, ui);
+                    right = ui.min_rect().right();
+                });
+                out.textures_delta.clear();
+            }
+            right
+        };
+        let traced = right(&mut app);
+        app.run("select.none", json!({})).unwrap();
+        assert_eq!(traced, right(&mut app));
     }
 
     #[test]
