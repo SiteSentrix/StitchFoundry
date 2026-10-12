@@ -792,6 +792,51 @@ pub(crate) fn write_new_file(path: &str, bytes: &[u8]) -> Result<()> {
     })
 }
 
+/// The highest number [`copy_new`] gives a copy's name (`Name 99.png`).
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_COPY_NUMBER: u32 = 99;
+
+/// Where [`copy_new`] put a file.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) enum Placed {
+    /// Copied to this new file.
+    Copied(std::path::PathBuf),
+    /// Kept as this file, which holds the same contents.
+    Kept(std::path::PathBuf),
+}
+
+/// Put a copy of the file `from` into the folder `dir`, never replacing a file there. It tries
+/// `Name.ext`, then `Name 2.ext` up to `Name 99.ext`, and stops at the first name that is free,
+/// where `create` makes the copy, or that is a file holding the same contents (`same`, given that
+/// file and its metadata), which is kept. When `create` fails with `AlreadyExists` (the name was
+/// taken meanwhile), it tries the next name. `None` when no name is free or holds the same
+/// contents; a name whose metadata can't be read counts as taken.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn copy_new(
+    from: &std::path::Path,
+    dir: &std::path::Path,
+    create: impl Fn(&std::path::Path) -> std::io::Result<()>,
+    same: impl Fn(&std::path::Path, &std::fs::Metadata) -> bool,
+) -> std::io::Result<Option<Placed>> {
+    use std::io::ErrorKind;
+    let (Some(name), Some(stem)) = (from.file_name(), from.file_stem()) else { return Err(ErrorKind::InvalidInput.into()) };
+    let ext = from.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    for n in 1..=MAX_COPY_NUMBER {
+        let to = if n == 1 { dir.join(name) } else { dir.join(format!("{} {n}{ext}", stem.to_string_lossy())) };
+        match std::fs::symlink_metadata(&to) {
+            Err(e) if e.kind() == ErrorKind::NotFound => match create(&to) {
+                Ok(()) => return Ok(Some(Placed::Copied(to))),
+                // Taken meanwhile: the next name.
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(e),
+            },
+            Ok(m) if m.is_file() && same(&to, &m) => return Ok(Some(Placed::Kept(to))),
+            _ => {}
+        }
+    }
+    Ok(None)
+}
+
 /// The most entries `file.list` returns.
 const LIST_MAX: usize = 5000;
 

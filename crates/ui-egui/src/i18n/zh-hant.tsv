@@ -2210,6 +2210,13 @@
 	Relinked {n} image(s); not in that folder: {}	已重新連結 {n} 張影像；不在該資料夾中：{}
 	Relinked {} image(s)	已重新連結 {} 張影像
 	Relink…	重新連結…
+	Find Linked Files	尋找連結檔案
+	Find Linked Files in Folder…	在資料夾中尋找連結檔案…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	請為每個連結檔案選擇要重新連結的檔案。大小和內容與連結所儲存相同的檔案會排在最前面。
+	Same file	相同檔案
+	Same size	相同大小
+	Don't Relink	不重新連結
+	Copy into the document's folder	複製到文件所在的資料夾
 	Reload Plug-ins	重新載入增效模組
 	Remove	移除
 	Remove Anchor Points	移除錨點

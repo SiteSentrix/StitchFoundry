@@ -2232,6 +2232,13 @@
 	Relinked {n} image(s); not in that folder: {}	Immagini ricollegate: {n}; non presenti in quella cartella: {}
 	Relinked {} image(s)	Immagini ricollegate: {}
 	Relink…	Ricollega…
+	Find Linked Files	Trova file collegati
+	Find Linked Files in Folder…	Trova file collegati in una cartella…
+	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Scegli il file a cui ricollegare ogni file collegato. I file con le dimensioni e il contenuto salvati con il collegamento compaiono per primi.
+	Same file	Stesso file
+	Same size	Stesse dimensioni
+	Don't Relink	Non ricollegare
+	Copy into the document's folder	Copia nella cartella del documento
 	Reload Plug-ins	Ricarica plug-in
 	Remove	Rimuovi
 	Remove Anchor Points	Rimuovi punti di ancoraggio
@@ -3956,6 +3963,9 @@ axis	Both	Entrambi
 @msg	larger than 256 MB	più grande di 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	i file superano 1 GB: aggiungine meno alla volta
 @msg	every numbered name for it is taken in the Fonts folder	tutti i nomi numerati per il file sono già usati nella cartella Fonts
+@msg	every numbered name for {name} is taken in the document's folder	tutti i nomi numerati per {name} sono già usati nella cartella del documento
+@msg	No linked files to look for	Nessun file collegato da cercare
+@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Immagini ricollegate: {n}; impossibile ricollegare {name}: {reason}
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servizi

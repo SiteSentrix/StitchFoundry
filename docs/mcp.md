@@ -65,10 +65,10 @@ the suite) keep the agent to the folders you give it:
 
 - Every file a command reads must lie inside the **read root**: `open_file`, `file.place`, relinking and
   updating links, the images an SVG links to, swatch library, graphic style library and colour-profile loads, plug-ins,
-  `file.newFromTemplate`, preset imports, the folders `text.findFontFiles` searches.
+  `file.newFromTemplate`, preset imports, the folders `text.findFontFiles` and `links.findFiles` search.
 - Every file a command writes must lie inside the **write root**: `save_file`, `export`, the save and
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
-  library and preset saves to a path.
+  library and preset saves to a path, the copies `links.relink {copy}` makes.
 - `file.list {path}` (through `run_command`) lists a folder's files and folders, held to the read root like any read, so an agent can see what it was given (#1163).
 - Read and write access are separate. Give the same folder twice for both; a root left out grants none
   of its access (with only `--automation-read-root`, nothing can be written to disk, though `export` and
@@ -1934,6 +1934,24 @@ comes back to the front, following the same preference. `links.check` reports ev
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. Without a
 file system (the web), linked images show their previews.
 
+`links.findFiles {folder}` looks in an absolute folder and its subfolders, on separate threads, for the files of the
+active document's missing links, or of the images and placed documents `ids` whatever their status, and returns at once
+with an `id` and the search's `state` (`searching` while it runs). It finds the files with each linked file's name, in
+any letter case, and lists them best first as `{path, size, match, caseDiffers?}`: `same` when the file has the size and
+hash saved with the link, `size` when it has the saved size and the link saved no hash (or the file is larger than 1 GB,
+which a search doesn't hash), else `name`. Within each kind, a file whose name has the link's letter case comes first.
+Then each file's folder names are compared with the saved path's, from the innermost outward up to the first one that
+differs, and a file with more matching names comes first; files that still tie are listed by path. `links.findFiles {}`
+returns the last search's state, and `{stop: true}` stops it. A search looks for at most 1,000 linked files, keeps the
+first 10 files of each one's name and up to 10 that are the same file, and ends once every linked file has its same
+file; it searches only the folders `text.findFontFiles` may search, with the same `maxSeconds`, depth and count limits.
+`links.relink {ids, path, copy: true}` copies the file into the saved document's folder and links images to the copy,
+never replacing a file there: the names `Name.png`, `Name 2.png` up to `Name 99.png` are tried in turn until one is
+free, which gets the copy (`copied`), or is a file with the same contents, which is used (`kept`). With `copy`, a call
+that includes a placed document fails and relinks nothing; placed documents are relinked without `copy`, where their
+files are. Find in Folder… in the Linked File Not Found dialog and in the Links panel menu (`ui.findLinksInFolder`) runs
+both. The web build has no folder search.
+
 Placed documents (a `.vectorcraft` file placed linked) work the same way: the document keeps the file's bytes and a
 preview (JPEG or PNG, 1 px per point, at most 1024 px a side), and a save writes the preview (Include Linked Files:
 the file); output reads the file again, or uses the preview with a warning when it is gone or changed.
@@ -1946,6 +1964,9 @@ the document; so does `object.expand`.
 {"name":"run_command","arguments":{"command":"links.check","params":{}}}
 {"name":"run_command","arguments":{"command":"links.relink","params":{"ids":[12],"path":"/new/photo.png"}}}
 {"name":"run_command","arguments":{"command":"links.update","params":{}}}
+{"name":"run_command","arguments":{"command":"links.findFiles","params":{"folder":"/Users/me/Archive"}}}
+{"name":"run_command","arguments":{"command":"links.findFiles","params":{}}}
+{"name":"run_command","arguments":{"command":"links.relink","params":{"ids":[12],"path":"/Users/me/Archive/2024/photo.png","copy":true}}}
 ```
 
 Placing a text file (`.txt`) sets it as area type: `file.place {path | name+dataBase64, text?: {characterSet?:
@@ -2898,8 +2919,9 @@ drive, are searched as any other folder is.
 `text.addFontFiles {files}` copies files that the session's last search found into VectorCraft's `Fonts` folder, then
 scans the fonts again, and type set in them redraws. It copies only regular `.ttf`, `.otf`, `.ttc`, `.otc`, `.woff`
 and `.woff2` files and suitcase fonts (with their resource fork), at most 256 MB a file and 1 GB in all, and lists any
-other file in `skipped`. It never replaces a file: a file with the same contents is kept (`kept`), and when another
-file has the name, the copy gets a number (`Name 2.otf`). Copy only fonts you own or are licensed to install. `command.batch` returns before a search ends; later requests over MCP or the control channel poll
+other file in `skipped`. It never replaces a file: the names `Name.otf`, `Name 2.otf` up to `Name 99.otf` are tried in
+turn until one is free, which gets the copy, or is a file with the same contents, which is kept (`kept`).
+Copy only fonts you own or are licensed to install. `command.batch` returns before a search ends; later requests over MCP or the control channel poll
 `text.findFontFiles {}`. `vectorcraft-cli run` stops the search when its last step ends. The web build has no Fonts
 folder and no folder search.
 

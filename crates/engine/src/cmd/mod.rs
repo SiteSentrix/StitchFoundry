@@ -35,6 +35,7 @@ pub(crate) mod inline;
 mod layer;
 mod layerpanel;
 pub mod library;
+pub mod linkfiles;
 pub mod links;
 mod live;
 pub(crate) mod maskedit;
@@ -261,6 +262,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(newdoc::specs());
         v.extend(place::specs());
         v.extend(links::specs());
+        v.extend(linkfiles::specs());
         v.extend(pdfcmds::specs());
         v.extend(fileio::dxf::specs());
         v.extend(fileio::eps::specs());
