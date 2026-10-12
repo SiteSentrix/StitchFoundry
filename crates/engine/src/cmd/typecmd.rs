@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Text",
             [],
             None,
-            "{id?|ids?, text} replace the contents of text objects (keeps the first run's style)",
+            "{id?|ids?, text} replace the contents of text objects (keeps the first run's style) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
             has_doc,
             set_text
         ),
@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text)",
+            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
             has_doc,
             set_style
         ),
@@ -201,6 +201,22 @@ pub(crate) fn refresh_bounds_of(d: &mut Document, ids: &[NodeId]) {
             refresh_bounds(t);
         }
     }
+}
+
+/// `result` with `overflow: [id…]`: the area type and type on a path among `ids` whose text
+/// doesn't fit (the red overflow "+"; its lines past the frame aren't drawn). Left out when all of
+/// it fits. The commands that make type or change what it holds answer with it, so the call that
+/// pushed text out of its frame says so itself.
+pub(crate) fn with_overflow(s: &Session, ids: &[NodeId], mut result: Value) -> Value {
+    let Ok(st) = s.doc() else { return result };
+    let db = vectorcraft_text::FontDb::global();
+    let fits = |t: &TextObject| matches!(t.kind, vectorcraft_doc::TextKind::Point) || !vectorcraft_text::layout(db, t).overflow;
+    let over = |id: &&NodeId| matches!(st.doc.node(**id).map(|n| &n.kind), Some(NodeKind::Text(t)) if !fits(t));
+    let over: Vec<u64> = ids.iter().filter(over).map(|i| i.0).collect();
+    if !over.is_empty() {
+        result["overflow"] = json!(over);
+    }
+    result
 }
 
 /// Text objects among `ids` and their descendants.
@@ -373,7 +389,7 @@ fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
 }
 
 fn justify_param(v: &str) -> Option<Justify> {
@@ -501,7 +517,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
 }
 
 /// Reshape area type's frame with `f` ([`TextObject::transform_area`],
