@@ -64,7 +64,7 @@ fn lengths(kind: &str) -> &'static [&'static str] {
 /// number: fields that ↑/↓ step by one (Shift: ten) and that do math, as the distances do.
 fn suffix(kind: &str, key: &str) -> Option<&'static str> {
     match (kind, key) {
-        ("rotate" | "shear", "angle") => Some("°"),
+        ("rotate" | "shear" | "reflect", "angle") => Some("°"),
         ("scale", "sx" | "sy") => Some("%"),
         _ => None,
     }
@@ -103,7 +103,8 @@ fn choices(kind: &str, key: &str) -> Vec<(&'static str, &'static str)> {
     match (kind, key) {
         ("offsetPath", "joins") => vec![("miter", tl!("Miter")), ("round", tl!("Round")), ("bevel", tl!("Bevel"))],
         ("average", "axis") => vec![axis("horizontal", "Horizontal"), axis("vertical", "Vertical"), axis("both", "Both")],
-        ("reflect" | "shear", "axis") => vec![axis("horizontal", "Horizontal"), axis("vertical", "Vertical")],
+        ("reflect", "axis") => vec![axis("horizontal", "Horizontal"), axis("vertical", "Vertical"), axis("angle", "Angle")],
+        ("shear", "axis") => vec![axis("horizontal", "Horizontal"), axis("vertical", "Vertical")],
         _ => vec![],
     }
 }

@@ -4243,3 +4243,4 @@ lighting	Light	Свет
 @msg	{label} requires a shape with at least two anchors	{label}: требуется фигура не менее чем с двумя опорными точками
 @msg	The shape is too complex for a 3D effect	Фигура слишком сложна для 3D-эффекта
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхность слишком сложна; упростите фигуру
+	Transform Objects	Трансформировать объекты

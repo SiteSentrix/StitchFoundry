@@ -205,6 +205,45 @@ fn transform_patterns_only_moves_placement() {
     assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 5.0, 0.0]);
 }
 
+/// #1448, #1460: with Transform Objects off, the transform commands leave the art where it is and
+/// move only its pattern tiles (Transform Patterns on), or nothing at all; Transform Again repeats
+/// that.
+#[test]
+fn transforms_without_transform_objects_move_only_the_pattern() {
+    let mut s = session();
+    make_dots(&mut s);
+    let big = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [big.0], "swatch": "Dots"})).unwrap();
+    s.execute("select.set", &json!({"ids": [big.0]})).unwrap();
+    let before = node(&s, big).geometric_bounds();
+    let tiles = |s: &Session| {
+        let n = node(s, big);
+        let Paint::Pattern { xf, .. } = n.appearance.fill_paint() else { panic!() };
+        xf.as_coeffs()
+    };
+    for (cmd, p, want) in [
+        ("object.move", json!({"dx": 5, "dy": 0}), [1.0, 0.0, 0.0, 1.0, 5.0, 0.0]),
+        ("object.transformAgain", json!({}), [1.0, 0.0, 0.0, 1.0, 10.0, 0.0]),
+        ("object.reflect", json!({"axis": "vertical", "origin": [0, 0]}), [-1.0, 0.0, 0.0, 1.0, -10.0, 0.0]),
+        ("object.transformEach", json!({"moveH": 10, "reference": 0}), [-1.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+    ] {
+        // Transform Again repeats the move as it was made, options included.
+        if cmd != "object.transformAgain" {
+            let mut off = p.clone();
+            off["objects"] = json!(false);
+            off["patterns"] = json!(false);
+            s.execute(cmd, &off).unwrap();
+            assert_eq!(node(&s, big).geometric_bounds(), before, "{cmd}: neither transforms");
+            off["patterns"] = json!(true);
+            s.execute(cmd, &off).unwrap();
+        } else {
+            s.execute(cmd, &p).unwrap();
+        }
+        assert_eq!(node(&s, big).geometric_bounds(), before, "{cmd}");
+        assert_eq!(tiles(&s), want, "{cmd}");
+    }
+}
+
 #[test]
 fn list_reports_patterns_and_edit_state() {
     let mut s = session();
