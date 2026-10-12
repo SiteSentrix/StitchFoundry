@@ -3668,6 +3668,8 @@ axis	Both	Ambos
 @msg	invalid native panel set	conjunto de painéis nativos inválido
 @msg	missing panel layout	layout de painéis ausente
 @msg	unsupported native docking operation	operação de encaixe nativa não suportada
+	Ruler Origin	Origem das réguas
+	Reset Ruler Origin	Redefinir origem das réguas
 	Artistic	Artístico
 	Film Grain…	Granulação de filme…
 	Grain	Grão

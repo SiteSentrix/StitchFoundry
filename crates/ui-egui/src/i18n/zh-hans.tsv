@@ -3781,6 +3781,8 @@ lighting	Light	光源
 	Move Guide to Layer	将参考线移至图层
 	Linux Display Server	Linux 显示服务器
 	X11 (XWayland)	X11 (XWayland)
+	Ruler Origin	标尺原点
+	Reset Ruler Origin	重置标尺原点
 	Artistic	艺术效果
 	Film Grain…	胶片颗粒…
 	Highlight Area	高光区域

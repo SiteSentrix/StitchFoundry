@@ -2774,6 +2774,7 @@
 	Require a password to open the document	Jelszó kérése a dokumentum megnyitásához
 	Reselect	Újrakijelölés
 	Reset	Visszaállít
+	Reset Ruler Origin	Vonalzók origójának visszaállítása
 	Reset all	Összes visszaállítása
 	Reset all Revolve settings to their defaults.	A tengely körüli forgatás minden beállítását visszaállítja az alapértékre.
 	Reset Automation	Automation visszaállítása
@@ -2888,6 +2889,7 @@
 	Row Size:	Sorméret:
 	Rows:	Sorok:
 	Rule:	Szabály:
+	Ruler Origin	Vonalzók origója
 	Rulers	Vonalzók
 	Rulers & Grids	Vonalzók és rácsok
 	Run Length	Futáshossz (RLE)
