@@ -1,6 +1,6 @@
 //! The system clipboard's formats: Copy and Cut publish every flavour the engine makes
 //! ([`Session::clipboard_flavours`](vectorcraft_engine::Session::clipboard_flavours): text, SVG,
-//! PDF, PNG), and a Paste first turns what another app copied (SVG, PDF, an EMF, text, a bitmap,
+//! PDF, PNG), and a Paste first turns what another app copied (SVG, PDF, EPS, an EMF, text, a bitmap,
 //! or a copied file that is one of them) into the internal clipboard with the `clipboard.import*`
 //! commands. The host installs the platform side as
 //! [`Services::system_clipboard`](crate::Services::system_clipboard); without it (the web) Copy
@@ -8,7 +8,7 @@
 //! reads from a paste itself ([`VectorcraftApp::paste_from_host`]).
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::clipboard::{BITMAP, EMF, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
+use vectorcraft_engine::cmd::clipboard::{BITMAP, EMF, EPS, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
 
 use crate::VectorcraftApp;
 
@@ -43,6 +43,7 @@ pub(crate) fn import_command(f: &Flavour, center: Option<[f64; 2]>) -> (&'static
         }
         SVG => ("clipboard.importSvg", json!({ "dataBase64": b64(), "center": center })),
         PDF => ("clipboard.importPdf", json!({ "dataBase64": b64(), "center": center })),
+        EPS => ("clipboard.importEps", json!({ "dataBase64": b64(), "center": center })),
         EMF => ("clipboard.importEmf", json!({ "dataBase64": b64(), "center": center })),
         mime => ("clipboard.importImage", json!({ "dataBase64": b64(), "mime": mime, "center": center })),
     }
