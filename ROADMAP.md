@@ -127,7 +127,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 | Date | What landed |
 |---|---|
-| 2026-10-12 | Effect › 3D and Materials: Extrude & Bevel (depth, twist, taper, solid or hollow caps, six bevel shapes with repeat, spacing, inside and both sides), Inflate (volume, both sides) and Rotate, with Position presets and the rotation and light gizmos; live, exported as vector faces, expandable (#1407). |
+| 2026-10-12 | Effect › 3D and Materials: Extrude & Bevel (depth, twist, taper, solid or hollow caps, five bevel shapes with repeat, spacing, inside and both sides), Inflate (volume, both sides) and Rotate, with Position presets and the rotation and light gizmos; live, exported as vector faces, expandable (#1407). |
 | 2026-10-12 | `convert --editing-data` (`editingData: "always"`) opens a `.ai` from its editing data even where its page, which can be older, draws differently, with a note. |
 | 2026-10-12 | `.ai` import reads an object's art style (a fill and a stroke, variable widths too, with an Outer Glow or Drop Shadow) as its own appearance, paints a clipping path's own fill under what it clips and keeps a group's transparency as its PDF part draws them. |
 | 2026-10-12 | `.ai` import reads gradients with their matrix (radials and skew too), focal point and stop order, gradient meshes and the artboards' names from the editing data. |

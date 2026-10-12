@@ -211,9 +211,11 @@ fn advanced_visibility_option_is_saved_resettable_and_leaves_preview_geometry_co
 fn the_other_3d_effects_show_their_options_and_position_presets() {
     use vectorcraft_effects::{EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS};
     let square = "M100 100 L200 100 L200 200 L100 200 Z";
-    for (effect, own) in
-        [(EXTRUDE, &["Depth", "Twist", "Taper", "Cap", "Bevel"][..]), (INFLATE, &["Depth", "Volume", "Both sides"][..]), (ROTATE, &[][..])]
-    {
+    for (effect, own) in [
+        (EXTRUDE, &["Depth", "Twist", "Taper", "Cap", "Bevel", "Bevel Shape", "Space", "Bevel Inside", "Bevel both sides"][..]),
+        (INFLATE, &["Depth", "Volume", "Both sides"][..]),
+        (ROTATE, &[][..]),
+    ] {
         let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
         h.settle();
         // Extrude & Bevel and Inflate open on their Object tab; Rotate on Rotation.
@@ -224,7 +226,7 @@ fn the_other_3d_effects_show_their_options_and_position_presets() {
             h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
             h.settle();
         }
-        for text in ["Position", "Rotation X", "Perspective"] {
+        for text in ["Presets", "Rotation X", "Perspective"] {
             h.rect(text);
         }
         // The defaults are the Off-Axis Front position, shown by name.

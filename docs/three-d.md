@@ -8,7 +8,7 @@ Select a path or compound path, then choose **Effect › 3D and Materials › Ex
 **Rotate…**. The options dialog opens beside the artboard with tabs:
 
 - **Object** (Extrude & Bevel and Inflate): the shape's own options, below.
-- **Rotation**: a **Position** preset, **Rotation X/Y/Z** (−180° to 180°) and **Perspective**. The rotation rings
+- **Rotation**: a **Presets** menu, **Rotation X/Y/Z** (−180° to 180°) and **Perspective**. The rotation rings
   on the artboard turn the object about the centre of its bounds; Shift snaps to 15°.
 - **Lighting**: **Shading**, the light's **Direction** and **Elevation** (or drag the light on the artboard),
   **Intensity** and **Ambient**, as for Revolve.
@@ -27,11 +27,11 @@ object is where the art was.
 | Twist | −360° to 360°: the back face turned against the front, the walls following in slices. |
 | Taper | 1–100 %: the back face's size against the front's. |
 | Cap | **Solid** closes the front and back; **Hollow** leaves them open, showing the insides of the walls. |
-| Bevel | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. |
-| Width, Height | How far the bevel reaches across the face and along the depth (0–1,000 pt each). The height is limited to the depth (half of it on each side with Both sides). |
-| Repeat, Spacing | The cross-section repeated 1–32 times across the width, with a share (0–90 %) of the width flat between repeats. |
-| Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
-| Both sides | The back is bevelled too. |
+| Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. |
+| Width, Height | How far the bevel reaches across the face and along the depth (0–1,000 pt each). The height is limited to the depth (half of it on each side with Bevel both sides). |
+| Repeat, Space | The cross-section repeated 1–32 times across the width, with a share (0–90 %) of the width flat between repeats. |
+| Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
+| Bevel both sides | The back is bevelled too. |
 
 Holes stay holes, with walls of their own. Bevels move each corner along its bisector (mitres are limited to four
 times the width), so a bevel wider than a narrow part of the shape folds over itself.
@@ -55,7 +55,7 @@ The flat art turned in 3D about the centre of its bounds. Every fill and stroke 
 stroke as its outline, so it foreshortens with the art) and shaded as one plane; a plane has two sides, so its
 back shows when it is turned past 90°.
 
-## Position presets
+## Rotation presets
 
 **Front**, **Back**, **Left**, **Right**, **Top** and **Bottom** face the art that way. **Off-Axis** tilts each 20°
 down and 25° aside, so the top and the right show. **Isometric Left/Right/Top/Bottom** lay the art on that plane

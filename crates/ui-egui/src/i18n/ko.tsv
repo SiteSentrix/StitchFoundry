@@ -4198,4 +4198,13 @@ lighting	Light	광원
 3d	Hollow	속이 빈
 3d	Bevel	베벨
 3d	Rounded	둥글게
-3d	Inside	안쪽
+3d	Space	간격
+	Bevel Shape	베벨 모양
+	Bevel Inside	안쪽 베벨
+	Bevel both sides	양면 베벨
+	Presets	사전 설정
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	오브젝트에는 3D 효과를 하나만 적용할 수 있습니다. 기존 효과의 옵션을 편집하거나 먼저 제거하십시오.
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}에는 현재 패스 또는 컴파운드 패스가 필요합니다. 문자, 이미지 및 그룹을 먼저 패스로 변환하십시오.
+@msg	{label} requires a shape with at least two anchors	{label}에는 고정점이 두 개 이상인 모양이 필요합니다
+@msg	The shape is too complex for a 3D effect	모양이 너무 복잡하여 3D 효과를 적용할 수 없습니다
+@msg	The 3D surface is too complex; simplify the shape	3D 표면이 너무 복잡합니다. 모양을 단순화하십시오

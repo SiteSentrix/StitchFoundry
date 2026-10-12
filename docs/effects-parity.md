@@ -85,7 +85,7 @@ not an accuracy guarantee for arbitrary artwork. Tests: `pixel::tests::film_grai
 | Item | Ours |
 |---|---|
 | Revolve | initial: live, editable profile, rotation and light gizmos, flat shading, SVG/PDF output, Expand Appearance ([revolve.md](revolve.md), #846) |
-| Extrude & Bevel, Inflate, Rotate | initial: live, depth, twist, taper, solid or hollow caps, six original bevel shapes, Inflate volume and both sides, Rotate of every fill and stroke, Position presets, rotation and light gizmos, SVG/PDF output, Expand Appearance ([three-d.md](three-d.md)) |
+| Extrude & Bevel, Inflate, Rotate | initial: live, depth, twist, taper, solid or hollow caps, five original bevel shapes, Inflate volume and both sides, Rotate of every fill and stroke, Position presets, rotation and light gizmos, SVG/PDF output, Expand Appearance ([three-d.md](three-d.md)) |
 | Materials panel, lighting, ray-traced render | one directional light with flat shading only; no materials, several lights, light colour, shadows or ray tracing |
 | 3D (Classic): Extrude & Bevel, Revolve, Rotate | none |
 | Turntable (30.0 beta) | none |

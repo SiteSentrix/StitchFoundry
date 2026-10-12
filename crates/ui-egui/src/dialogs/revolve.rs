@@ -21,7 +21,8 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.data_mut(|m| m.remove::<bool>(widgets::dialog_focus_flag()));
     let screen = ui.ctx().content_rect();
     let width = (screen.width() - 64.0).clamp(240.0, SIDE_W);
-    let height = (screen.height() - 240.0).clamp(120.0, 340.0);
+    // Tall enough for Extrude & Bevel's Object tab, the longest, where the screen has the room.
+    let height = (screen.height() - 240.0).clamp(120.0, 450.0);
     ui.set_width(width);
     egui::ScrollArea::vertical().id_salt("revolve-body").max_height(height).auto_shrink([false, true]).show(ui, |ui| {
         controls(app, ui, d);
@@ -179,18 +180,18 @@ fn extrude_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
         (json!("step"), tl!("Step")),
         (json!("ogee"), tl!("Ogee")),
     ];
-    choice(ui, d, "bevel", tl!("Shape"), &shapes);
+    choice(ui, d, "bevel", tl!("Bevel Shape"), &shapes);
     ui.add_enabled_ui(d.str("bevel") != "none", |ui| {
         number(ui, d, "bevelWidth", tl!("Width"), (0.0, 1000.0), "", 1, Some(unit));
         number(ui, d, "bevelHeight", tl!("Height"), (0.0, 1000.0), "", 1, Some(unit));
         number(ui, d, "bevelRepeat", tl!("Repeat"), (1.0, 32.0), "", 0, None);
-        number(ui, d, "bevelSpace", tl!("Spacing"), (0.0, 90.0), "%", 1, None);
-        toggle(ui, d, "bevelInside", c3("Inside"), false);
-        toggle(ui, d, "bevelBothSides", tl!("Both sides"), false);
+        number(ui, d, "bevelSpace", c3("Space"), (0.0, 90.0), "%", 1, None);
+        toggle(ui, d, "bevelInside", tl!("Bevel Inside"), false);
+        toggle(ui, d, "bevelBothSides", tl!("Bevel both sides"), false);
     });
 }
 
-/// Position presets, rotation and perspective for Extrude & Bevel, Inflate and Rotate.
+/// Rotation presets, rotation and perspective for Extrude & Bevel, Inflate and Rotate.
 fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     heading(ui, tl!("Rotation"));
     let names = [
@@ -215,7 +216,7 @@ fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     let current = ROTATION_PRESETS.iter().position(|(_, a)| a.iter().zip(angles).all(|(a, b)| (a - b).abs() < 0.005));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, tl!("Position"));
+        label(ui, tl!("Presets"));
         let width = VALUE_W + rail_width(ui) + 6.0;
         let shown = current.and_then(|i| names.get(i).copied()).unwrap_or(tl!("Custom"));
         if let Some(k) = widgets::dropdown(ui, "three-d-position", shown, &names, width)
