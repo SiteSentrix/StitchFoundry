@@ -4682,3 +4682,27 @@ machine	Stop	Зупинка
 	Edit Embroidery Font	Змінити шрифт для вишивки
 	Merge Embroidery Font	Об’єднати шрифт для вишивки
 	New Embroidery Font from Type	Новий шрифт для вишивки зі шрифту
+	Font Creator	Створення шрифтів
+	Capitals' height	Висота великих літер
+	Line spacing	Міжрядковий інтервал
+	Space width	Ширина пробілу
+	As typed	Як набрано
+	Capitals	Великі літери
+	Small letters	Малі літери
+	Letter case	Регістр
+	Sews well from	Добре вишивається від
+	Sews well up to	Добре вишивається до
+	Still to digitize	Залишилося оцифрувати
+	Show this glyph	Показати цей гліф
+	Not digitized yet: show its artboard	Ще не оцифровано: показати його монтажну область
+	Glyphs to add	Додати гліфи
+	Kerning (mm closer)	Кернінг (мм ближче)
+	Pair	Пара
+	Kern	Кернінг
+	Merge glyphs from	Об’єднати гліфи з
+	Test text	Пробний текст
+	Try in a New Document	Спробувати в новому документі
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Створіть шрифт для вишивки: документ з монтажною областю для кожного гліфа, який треба оцифрувати.
+	Type family	Гарнітура
+	New Font from Type	Новий шрифт зі шрифту
+	Edit Font	Змінити шрифт

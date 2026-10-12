@@ -224,6 +224,23 @@ fn the_panel_sets_lettering_in_a_loaded_font() {
 }
 
 #[test]
+fn the_font_creator_section_makes_and_edits_fonts() {
+    let mut app = app();
+    // no font document: ways to start one
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::font_body, 900.0);
+    for want in ["New Embroidery Font", "New Font from Type"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
+    // a font document: its properties, its glyphs (still to digitize) and kerning
+    app.run("embroidery.fontDoc.new", json!({"name": "Hand", "chars": "AB", "size": 20})).unwrap();
+    app.run("embroidery.fontDoc.kern", json!({"pair": "A B", "value": 2})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::font_body, 900.0);
+    for want in ["Capitals' height: 20.0 mm", "Glyphs: 2 · Still to digitize: 2", "A", "B", "A B", "Try in a New Document"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
+}
+
+#[test]
 fn the_panel_edits_a_redwork_group_as_one() {
     let mut app = app();
     let a = app.run("path.create", json!({"d": "M 20 20 L 120 20 L 120 120 Z"})).unwrap()["id"].as_u64().unwrap();

@@ -4656,3 +4656,27 @@ machine	Stop	Stopp
 	Edit Embroidery Font	Stickschrift bearbeiten
 	Merge Embroidery Font	Stickschrift zusammenführen
 	New Embroidery Font from Type	Neue Stickschrift aus Schrift
+	Font Creator	Schriftersteller
+	Capitals' height	Versalhöhe
+	Line spacing	Zeilenabstand
+	Space width	Leerzeichenbreite
+	As typed	Wie eingegeben
+	Capitals	Großbuchstaben
+	Small letters	Kleinbuchstaben
+	Letter case	Groß-/Kleinschreibung
+	Sews well from	Stickt gut ab
+	Sews well up to	Stickt gut bis
+	Still to digitize	Noch zu digitalisieren
+	Show this glyph	Diese Glyphe zeigen
+	Not digitized yet: show its artboard	Noch nicht digitalisiert: ihre Zeichenfläche zeigen
+	Glyphs to add	Hinzuzufügende Glyphen
+	Kerning (mm closer)	Unterschneidung (mm enger)
+	Pair	Paar
+	Kern	Unterschneiden
+	Merge glyphs from	Glyphen zusammenführen aus
+	Test text	Testtext
+	Try in a New Document	In neuem Dokument ausprobieren
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Eine Stickschrift erstellen: ein Dokument mit einer Zeichenfläche je zu digitalisierender Glyphe.
+	Type family	Schriftfamilie
+	New Font from Type	Neue Schrift aus Schrift
+	Edit Font	Schrift bearbeiten

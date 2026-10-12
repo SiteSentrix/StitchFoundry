@@ -4700,3 +4700,27 @@ machine	Stop	Parada
 	Edit Embroidery Font	Editar fuente de bordado
 	Merge Embroidery Font	Combinar fuente de bordado
 	New Embroidery Font from Type	Nueva fuente de bordado desde texto
+	Font Creator	Creador de fuentes
+	Capitals' height	Altura de mayúsculas
+	Line spacing	Interlineado
+	Space width	Ancho del espacio
+	As typed	Como se escribe
+	Capitals	Mayúsculas
+	Small letters	Minúsculas
+	Letter case	Mayúsculas/minúsculas
+	Sews well from	Borda bien desde
+	Sews well up to	Borda bien hasta
+	Still to digitize	Por digitalizar
+	Show this glyph	Mostrar este glifo
+	Not digitized yet: show its artboard	Aún sin digitalizar: mostrar su mesa de trabajo
+	Glyphs to add	Glifos que añadir
+	Kerning (mm closer)	Kerning (mm más juntos)
+	Pair	Par
+	Kern	Ajustar
+	Merge glyphs from	Combinar glifos de
+	Test text	Texto de prueba
+	Try in a New Document	Probar en un documento nuevo
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Cree una fuente de bordado: un documento con una mesa de trabajo por cada glifo que digitalizar.
+	Type family	Familia tipográfica
+	New Font from Type	Nueva fuente desde texto
+	Edit Font	Editar fuente

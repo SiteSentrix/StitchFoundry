@@ -4702,3 +4702,27 @@ machine	Stop	Arresto
 	Edit Embroidery Font	Modifica font da ricamo
 	Merge Embroidery Font	Unisci font da ricamo
 	New Embroidery Font from Type	Nuovo font da ricamo da un font
+	Font Creator	Crea font
+	Capitals' height	Altezza maiuscole
+	Line spacing	Interlinea
+	Space width	Larghezza spazio
+	As typed	Come digitato
+	Capitals	Maiuscole
+	Small letters	Minuscole
+	Letter case	Maiuscole/minuscole
+	Sews well from	Si ricama bene da
+	Sews well up to	Si ricama bene fino a
+	Still to digitize	Da digitalizzare
+	Show this glyph	Mostra questo glifo
+	Not digitized yet: show its artboard	Non ancora digitalizzato: mostra la sua tavola
+	Glyphs to add	Glifi da aggiungere
+	Kerning (mm closer)	Crenatura (mm più vicini)
+	Pair	Coppia
+	Kern	Crena
+	Merge glyphs from	Unisci glifi da
+	Test text	Testo di prova
+	Try in a New Document	Prova in un nuovo documento
+	Make an embroidery font: a document with an artboard for each glyph to digitize.	Crea un font da ricamo: un documento con una tavola per ogni glifo da digitalizzare.
+	Type family	Famiglia di caratteri
+	New Font from Type	Nuovo font da un font
+	Edit Font	Modifica font
