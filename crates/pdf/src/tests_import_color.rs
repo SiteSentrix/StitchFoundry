@@ -245,3 +245,20 @@ fn spot_colours_with_an_icc_lab_alternate_keep_their_lab_values() {
     // An RGB profile stays RGB.
     assert!(near(d.swatch("Leafy").unwrap().paint.color().unwrap(), Color::rgb(0.5, 0.9, 0.1)), "{:?}", d.swatch("Leafy"));
 }
+
+#[test]
+fn rgb_numbers_stand_in_editor_documents_only() {
+    // GUARDS: an editor's document keeps its `ICCBased` RGB numbers; a PDF's profile stands.
+    let f = first_extra(1);
+    let icc = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::PROPHOTO_RGB).unwrap();
+    let hex: String = icc.iter().map(|b| format!("{b:02x}")).collect();
+    let profile = format!("<< /N 3 /Filter /ASCIIHexDecode /Length {} >>\nstream\n{hex}>\nendstream", hex.len() + 1);
+    let mut page = page_with(&format!("/CS0 [/ICCBased {f} 0 R]"), &[("CS0", "0.2 0.6 0.4")]);
+    page.entries = "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>".into();
+    let bytes = pdf_with(&[page], &[&profile], None);
+    let color = |uncalibrated_rgb| {
+        solid(&fills(&import_with_report(&bytes, &ImportOptions { uncalibrated_rgb, ..Default::default() }).unwrap().document)[0]).0
+    };
+    assert!(near(color(true), Color::rgb(0.2, 0.6, 0.4)), "{:?}", color(true));
+    assert!(!near(color(false), Color::rgb(0.2, 0.6, 0.4)), "{:?}", color(false));
+}

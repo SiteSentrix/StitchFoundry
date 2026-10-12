@@ -432,8 +432,8 @@ fn objects(d: &Document) -> Vec<Node> {
 
 #[test]
 fn an_object_written_as_a_fill_and_a_closed_stroke_stays_one_path_with_a_live_stroke() {
-    // As Illustrator writes an object: the fill of the outline left open, then the stroke of it
-    // closed, each in its own transform. Two subpaths: one ending on its start, one not.
+    // The fill of the outline left open, then the stroke of it closed, each in its own
+    // transform. Two subpaths: one ending on its start, one not.
     let outline = "0 0 m -20 1 l -30 -12 l -30 30 l 0 0 l 5 5 m 10 5 l 10 10 l";
     let content = format!(
         "0.2 0.2 0.2 rg q 1 0 0 1 50 50 cm {outline} f Q 1 1 1 RG 1.5 w 1 J 1 j 4 M [3 2] 1 d q 1 0 0 1 50 50 cm {} S Q",
@@ -455,6 +455,45 @@ fn an_object_written_as_a_fill_and_a_closed_stroke_stays_one_path_with_a_live_st
     let p = n.path_data().unwrap();
     assert_eq!(p.subpaths.len(), 2);
     assert!(p.is_closed());
+}
+
+#[test]
+fn a_fill_in_a_translucent_group_doesnt_take_the_stroke_drawn_after_it() {
+    // A fill at 75 % under an opaque stroke of the same outline: the fill in a transparency group
+    // drawn at 75 %, the stroke after the group.
+    let x = first_extra(1);
+    let outline = "10 10 m 60 10 l 60 60 l 10 60 l h";
+    let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency >>", &format!("1 0 0 rg {outline} f"));
+    let content = format!("q /G gs /X0 Do Q 0 0 1 RG 2 w {outline} S");
+    let d = open(&one_page(&content, &format!("/ExtGState << /G << /ca 0.75 /CA 0.75 >> >> /XObject << /X0 {x} 0 R >>"), &[&form]));
+    let objs = objects(&d);
+    let stroke = objs.iter().find(|n| n.appearance.stroke().is_some()).expect("a stroke");
+    let alpha = all(&d)
+        .iter()
+        .filter(|n| n.appearance.stroke().is_some() || n.children().is_some_and(|c| c.iter().any(|k| k.id == stroke.id)))
+        .map(|n| n.opacity)
+        .product::<f32>();
+    assert_eq!(alpha, 1.0, "the stroke stays opaque: {objs:#?}");
+    let fill = objs.iter().find(|n| n.appearance.fill().is_some()).expect("a fill");
+    assert!((fill.opacity * fill.appearance.fill().unwrap().opacity - 0.75).abs() < 1e-3, "{fill:#?}");
+}
+
+#[test]
+fn a_fill_in_a_soft_masked_group_doesnt_take_the_stroke_drawn_after_it() {
+    // ISO 32000-1 §11.6.5.2: the soft mask in the graphics state applies to the group drawn under
+    // it, not to the stroke after `Q`.
+    let (m, x) = (first_extra(1), first_extra(1) + 1);
+    let outline = "10 10 m 60 10 l 60 60 l 10 60 l h";
+    let mask = stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceRGB >>", "1 1 1 rg 0 0 35 100 re f");
+    let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency >>", &format!("1 0 0 rg {outline} f"));
+    let content = format!("q /GS gs /X0 Do Q 0 0 1 RG 2 w {outline} S");
+    let resources = format!("/ExtGState << /GS << /SMask << /Type /Mask /S /Luminosity /G {m} 0 R >> >> >> /XObject << /X0 {x} 0 R >>");
+    let d = open(&one_page(&content, &resources, &[&mask, &form]));
+    let nodes = all(&d);
+    let stroke = nodes.iter().find(|n| n.appearance.stroke().is_some()).expect("a stroke");
+    assert!(stroke.appearance.fill().is_none() && stroke.extras().mask.is_none(), "the stroke is its own unmasked object: {stroke:#?}");
+    let masked = nodes.iter().filter(|n| n.extras().mask.is_some()).collect::<Vec<_>>();
+    assert!(!masked.is_empty() && masked.iter().all(|n| n.appearance.stroke().is_none()), "{masked:#?}");
 }
 
 #[test]

@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (a `.ai` whose PDF part is only text opens from it, #1387; PDF and `.ai` import keep overprint, #1388; `.ai` editing data: gradients with middle stops, #1390; type of objects with an appearance, hidden layers and later artboards, #1391; area type in a frame too short for the fallback font, #1392; `.ai` editing data: placed (linked) files read, #1264; gradient-filled shapes import as paths, #1304; white constant alpha soft masks, #1286 in part; DXF control-point SPLINE closure read, #1299 follow-up; `.ai` and PDF trim and bleed boxes as artboard and bleed, #1266) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (a `.ai` whose PDF part is only text opens from it, #1387; PDF and `.ai` import keep overprint, #1388; `.ai` editing data: gradients with middle stops, #1390; type of objects with an appearance, hidden layers and later artboards, #1391; area type in a frame too short for the fallback font, #1392; `.ai` editing data: placed (linked) files read, #1264; gradient-filled shapes import as paths, #1304; white constant alpha soft masks, #1286 in part; DXF control-point SPLINE closure read, #1299 follow-up; `.ai` and PDF trim and bleed boxes as artboard and bleed, #1266; `.ai` keeps its RGB numbers; PDF import keeps a stroke apart from a fill masked or faded by its group) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/mod.rs`). Illustrator's list comes from its public
@@ -32,6 +32,9 @@ private editing data. VectorCraft:
   Level 3 interpreter. A `.ai` in PostScript form (versions 3 to 8, and what Rhino and other CAD apps
   write) is its own editing data: it opens through the layers its program has, compared with its page
   when the program runs, from the layers alone when it names its prolog without including it (#1027).
+  RGB in the PDF page's `ICCBased` spaces keeps the file's numbers in a `.ai` (the `uncalibrated_rgb`
+  import option, on for editor documents, off for PDFs), so `.ai` files tagged with a non-sRGB RGB profile
+  open with different, unconverted RGB colours than before.
   A PDF-compatible `.ai` opens on its PDF part's trim boxes (its artboards), the bleed boxes round them
   becoming the document's bleed, so art in the bleed shows outside the artboard, within the bleed guide (#1266).
   A PDF saved with its editing data (`AIPDFPrivateData`) opens the same way.
@@ -83,6 +86,8 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | `.ai` read as its PDF part keeps the RGB numbers of its `ICCBased` spaces (`uncalibrated_rgb`, on for `.ai`, off for PDFs): a user-visible colour change for `.ai` files tagged with a non-sRGB RGB profile |
+| 2026-10-12 | minor | PDF import: a fill that took its opacity or soft mask from a transparency group no longer absorbs the same-outline stroke drawn after the group, so the stroke keeps neither |
 | 2026-10-12 | minor | A `.ai` whose PDF part draws only text opens from that part when its editing data can't be read, instead of being refused as saved without PDF compatibility: a page that states an art, trim or bleed box is art, not the placeholder (#1387); scores unchanged |
 | 2026-10-12 | minor | PDF and `.ai` import, and placed PDFs, keep overprint: the graphics state's `/OP` and `/op` (ISO 32000-1 §8.6.7) become the overprint of fills, strokes and type, so a spot colour set to overprint still does after export; `/OPM 0` is reported in a note (#1388); scores unchanged |
 | 2026-10-12 | minor | `.ai` editing data: a gradient with middle stops runs its whole ramp (#1390); type of objects with an appearance, of hidden layers and on later artboards goes to its own text object (#1391); area type in a frame too short for the fallback font shows its first line (#1392); scores unchanged |

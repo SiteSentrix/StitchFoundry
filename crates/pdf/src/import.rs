@@ -194,6 +194,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
     b.taken = taken;
     b.warnings = notes;
+    b.colors.uncalibrated_rgb = opts.uncalibrated_rgb && picked.iter().filter_map(|&n| pages.get(n)).any(crate::pages::has_private_data);
     let cache = InterpreterCache::new();
     let mut x = 0.0;
     // Every page only text over private data: a file saved without its PDF part shows a notice
@@ -1673,9 +1674,8 @@ impl<'a> Device<'a> for Builder<'_> {
             PathDrawMode::Stroke(props) => {
                 let mut st = stroke_layer(paint, opacity, props, mean_scale(transform));
                 st.overprint = overprint;
-                // Fill-then-stroke of the same path (the `B` operator, or a fill and a stroke of
-                // the outline as Illustrator writes an object) becomes one object: a path with a
-                // fill and a live stroke.
+                // Fill-then-stroke of the same path (the `B` operator, or a fill and then a stroke
+                // of the same outline) becomes one object: a path with a fill and a live stroke.
                 let blend = self.blend;
                 let fill = self.last_fill.take();
                 let last = match self.mask {
@@ -1687,6 +1687,10 @@ impl<'a> Device<'a> for Builder<'_> {
                     && let Some((id, outline)) = fill
                     && last.id == id
                     && last.blend == blend
+                    // Opacity or a mask of its own came from a transparency group the fill was
+                    // drawn in and this stroke wasn't.
+                    && last.opacity == 1.0
+                    && last.extras().mask.is_none()
                     && last.appearance.stroke().is_none()
                     && same_outline(&outline, &bp)
                 {
