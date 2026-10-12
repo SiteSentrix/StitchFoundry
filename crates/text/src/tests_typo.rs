@@ -212,6 +212,124 @@ fn area_flow_inside_circle_keeps_glyphs_inside() {
     assert!(w(l.lines.len() / 2) > w(0));
 }
 
+/// Lays `t` out as [`layout`] does, on a thread of its own, and fails the test when that panics or
+/// takes more than 20 s.
+fn layout_soon(t: &TextObject) -> TextLayout {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (t, text) = (t.clone(), t.plain_text());
+    std::thread::spawn(move || tx.send(layout(db(), &t)).ok());
+    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
+}
+
+/// Each line's baseline, left and right edges, and byte range.
+fn line_places(l: &TextLayout) -> Vec<(f64, f64, f64, usize, usize)> {
+    l.lines.iter().map(|li| (li.baseline, li.x0, li.x1, li.start, li.end)).collect()
+}
+
+/// A frame or text wrap shape with a coordinate beyond a billion points either way, or one that
+/// isn't finite, is left out: the frame holds no text, and the wrap shape is ignored.
+#[test]
+fn frames_and_wrap_shapes_beyond_a_billion_points_are_left_out() {
+    // A box from x0 to x1 and from 0 to `height` whose top edge has a control point at x = `far`,
+    // on the edge's own line.
+    let boxed = |x0: f64, x1: f64, height: f64, far: f64| {
+        let mut p = BezPath::new();
+        p.move_to((x0, 0.0));
+        p.curve_to((x0, 0.0), (far, 0.0), (x1, 0.0));
+        p.line_to((x1, height));
+        p.line_to((x0, height));
+        p.close_path();
+        p
+    };
+    let rectangle = layout(db(), &area("Hi there", style(12.0), Rect::new(0.0, 0.0, 100.0, 40.0), Justify::Left));
+    let within = layout_soon(&area_path("Hi there", style(12.0), &boxed(0.0, 100.0, 40.0, 1e9), Justify::Left));
+    assert_eq!(line_places(&within), line_places(&rectangle));
+    let mut beyond = [8e115, 2e9, f64::INFINITY].map(|far| boxed(0.0, 100.0, 40.0, far)).to_vec();
+    beyond.push(Rect::new(0.0, 0.0, 100.0, f64::NAN).to_path(0.1));
+    for frame in &beyond {
+        let l = layout_soon(&area_path("Hi there", style(12.0), frame, Justify::Left));
+        assert!(l.lines.is_empty() && l.glyphs.is_empty() && l.overflow, "{frame:?}");
+    }
+    // Text wrapped around the right half of a 300 by 200 frame.
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
+    let unwrapped = layout(db(), &t);
+    let mut wrapped = |path: BezPath| {
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&path), wrap: Default::default() }];
+        layout_soon(&t)
+    };
+    let half = wrapped(Rect::new(150.0, 0.0, 300.0, 200.0).to_path(0.1));
+    assert_ne!(line_places(&half), line_places(&unwrapped));
+    assert_eq!(line_places(&wrapped(boxed(150.0, 300.0, 200.0, 1e9))), line_places(&half));
+    for far in [8e115, 2e9, f64::INFINITY] {
+        assert_eq!(line_places(&wrapped(boxed(150.0, 300.0, 200.0, far))), line_places(&unwrapped), "{far}");
+    }
+    assert_eq!(line_places(&wrapped(Rect::new(150.0, 0.0, 300.0, f64::NAN).to_path(0.1))), line_places(&unwrapped));
+}
+
+/// Layout steps a line down a frame (or a row or column of one) at most 100,000 times to find room
+/// for it: in a frame taller than 100,000 leads, a step is a 100,000th of the frame's height.
+#[test]
+fn tall_frames_are_searched_for_room_in_at_most_100000_steps() {
+    // A triangle from y = -1e9 to 1e9, `base` wide at the bottom.
+    let triangle = |base: f64| {
+        let mut p = BezPath::new();
+        p.move_to((0.0, -1e9));
+        p.line_to((base / 2.0, 1e9));
+        p.line_to((-base / 2.0, 1e9));
+        p.close_path();
+        p
+    };
+    // No line fits in this triangle: it is at most 0.5 pt wide, and a line needs a span wider than
+    // 1 pt or its ascent, whichever is more. A lead of 0.5 pt type counts as 1 pt.
+    let none = layout_soon(&area_path("Hi", style(0.5), &triangle(0.5), Justify::Left));
+    assert!(none.lines.is_empty() && none.overflow);
+    // This one is wide enough for 12 pt type from about y = -7.6e8 down.
+    let some = layout_soon(&area_path("Hi", style(12.0), &triangle(100.0), Justify::Left));
+    assert!(!some.overflow && some.lines.len() == 1);
+    // At the height of the line's top, the line's left and right edges lie inside the triangle.
+    let line = &some.lines[0];
+    let half_width = (line.baseline - line.ascent + 1e9) / 2e9 * 50.0;
+    assert!(line.x0 >= -half_width - 1e-6 && line.x1 <= half_width + 1e-6, "{line:?}");
+}
+
+/// A paragraph whose Space Before puts it 1e300 pt above a triangle frame that comes to a point at
+/// its top overflows. At that height a step of one lead leaves the baseline where it is, and
+/// layout takes at most 100,000 such steps.
+#[test]
+fn a_paragraph_spaced_far_above_its_frame_overflows() {
+    let mut triangle = BezPath::new();
+    triangle.move_to((0.0, 0.0));
+    triangle.line_to((500.0, 1000.0));
+    triangle.line_to((-500.0, 1000.0));
+    triangle.close_path();
+    let mut t = area_path("Hi\nthere", style(12.0), &triangle, Justify::Left);
+    let far = vectorcraft_doc::ParaStyle { space_before: -1e300, ..Default::default() };
+    t.set_paragraph_styles(vec![t.para.clone(), far]);
+    let l = layout_soon(&t);
+    assert!(l.overflow && l.lines.len() == 1, "{:?}", line_places(&l));
+}
+
+/// Type on a path whose path has a coordinate beyond a billion points either way, or one that isn't
+/// finite, holds no text.
+#[test]
+fn type_on_a_path_beyond_a_billion_points_holds_no_text() {
+    // An S-shaped curve from (0, 0) to (3s, 0) with control points (s, s) and (2s, -s).
+    let on = |s: f64| {
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        p.curve_to((s, s), (2.0 * s, -s), (3.0 * s, 0.0));
+        let mut t = TextObject::point(Point::ZERO, "On a path", style(8.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&p), start: 0.0, end: None };
+        t
+    };
+    let within = layout_soon(&on(1e9 / 3.0));
+    assert!(!within.overflow && within.glyphs.len() == 9);
+    for s in [1e115, 1e9, f64::INFINITY] {
+        let l = layout_soon(&on(s));
+        assert!(l.glyphs.is_empty() && l.overflow, "{s}");
+    }
+}
+
 #[test]
 fn justify_all_line_widths_equal() {
     let t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 240.0, 800.0), Justify::JustifyAll);

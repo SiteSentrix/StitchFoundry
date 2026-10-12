@@ -1838,6 +1838,24 @@ fn the_frames_fixture_reads_as_threaded_area_type_and_type_on_a_path() {
     assert_eq!(l.doc.text_threads.len(), 1);
 }
 
+/// The smallest failing input `eps_text_frames_never_panic` found: the first frame's bottom edge
+/// has a control point at x = 8e115 (`8e0115`). That frame holds no text, and the story flows on
+/// into the second frame.
+#[test]
+fn a_text_frame_with_a_control_point_at_8e115_opens_with_its_story_in_the_next_frame() {
+    let text = mutate_text(&frames_document_text(), 1397, &[(191, '1'), (1586, 'e')]);
+    assert!(text.contains(" 8e0115 "));
+    let l = vectorcraft_engine::cmd::fileio::load("x.eps", &text_eps_of(&text, FRAME_OBJECTS)).unwrap();
+    let mut texts = vec![];
+    l.doc.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            texts.push(t.plain_text());
+        }
+    });
+    assert_eq!(texts, ["", "A story in two frames\nand more", "On a path"], "{:?}", l.warnings);
+    survive("a frame with a control point at 8e115 pt", || Some(l.doc)).unwrap();
+}
+
 /// An EPS with a hidden text object whose story is in `document`.
 fn text_eps(document: &str) -> Vec<u8> {
     text_eps_of(document, "/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n")
