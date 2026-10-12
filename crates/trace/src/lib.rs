@@ -12,6 +12,9 @@
 //!    colours: the blends that anti-aliasing and blur leave along edges take none of it, colours that
 //!    noise made of one colour are merged, and a blend pixel goes to one of the two colours it lies
 //!    between (see `quantize`).
+//!    A continuous-tone image (a photo) is first smoothed within its tones, edges kept (see
+//!    `smooth`): otherwise its noise decides, pixel by pixel, which of two neighbouring tones a
+//!    pixel gets, and every such pixel is a speck.
 //! 2. **Remove noise**: 4-connected same-colour components smaller than `noise` pixels are merged
 //!    into their most common neighbouring colour.
 //! 3. **Follow boundaries**: for each colour layer, the pixel-crack edges between inside and
@@ -41,6 +44,7 @@ mod fit;
 mod logo;
 mod mosaic;
 mod quantize;
+mod smooth;
 mod subpixel;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -457,6 +461,9 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     if params.mode == Mode::Logo {
         return logo::trace_logo(img, params, max_anchors);
     }
+    // A photo is traced from a copy with its noise smoothed away (see `smooth`).
+    let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
+    let img = smoothed.as_ref().unwrap_or(img);
     let mut q = quantize(img, params);
     denoise(&mut q.labels, w, h, params.noise as usize);
     // Pixel count per palette entry.
@@ -469,6 +476,19 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     // Layers bottom → top: largest area first.
     let mut order: Vec<usize> = (0..q.palette.len()).filter(|&i| counts[i] > 0).collect();
     order.sort_by(|a, b| counts[*b].cmp(&counts[*a]).then(a.cmp(b)));
+    if params.method == Method::Overlapping {
+        // Stacked layers go by lightness instead, from the largest colour's end of the scale: each
+        // layer reaches under all those above it, so where two colours meet, every layer between
+        // them in the stack ends on that same edge and shows through its anti-aliasing. Neighbours
+        // in a picture are mostly neighbours in tone, and in this order they are neighbours in the
+        // stack too (by area, an unrelated colour's edge would shine through as a hairline).
+        let light = |i: usize| q.palette.get(i).map_or(0, |c| u32::from(c[0]) * 299 + u32::from(c[1]) * 587 + u32::from(c[2]) * 114);
+        let first = order.first().copied();
+        order.sort_by(|a, b| light(*a).cmp(&light(*b)).then(a.cmp(b)));
+        if first.is_some_and(|f| order.iter().position(|&i| i == f).is_some_and(|at| at * 2 >= order.len())) {
+            order.reverse();
+        }
+    }
     let mut rank = vec![usize::MAX; q.palette.len()];
     for (r, &i) in order.iter().enumerate() {
         rank[i] = r;
@@ -538,6 +558,11 @@ struct Layers<'a> {
 }
 
 impl Layers<'_> {
+    /// Ignore White: white is no part of any layer (stacked layers reach under the layers above
+    /// them, and must not reach under white that is left out).
+    fn ignored(&self, label: u16) -> bool {
+        self.params.ignore_white && self.q.palette.get(label as usize).is_some_and(|c| is_white(*c))
+    }
     /// How far the edge lies from a crack between two pixels, towards the outside one (−0.5 to 0.5).
     ///
     /// Each pixel of the column across the crack is read as a blend of the tones on its two sides
@@ -649,7 +674,7 @@ impl Layers<'_> {
             .map(|(i, &l)| {
                 l != TRANSPARENT
                     && !thin.get(i).copied().unwrap_or(false)
-                    && if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) } else { l as usize == ci }
+                    && if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) && !self.ignored(l) } else { l as usize == ci }
             })
             .collect();
         // Without Fills, areas are outlined with a 1 px stroke.
