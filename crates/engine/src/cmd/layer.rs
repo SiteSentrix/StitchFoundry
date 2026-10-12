@@ -234,23 +234,47 @@ pub(crate) fn locked_within(d: &Document, id: NodeId) -> bool {
     d.ancestry(id).unwrap_or_default().iter().any(|a| d.node(*a).is_some_and(|n| n.locked))
 }
 
-/// Every layer and sublayer, depth first.
-fn all_layers(d: &Document) -> Vec<&Node> {
-    let mut out = vec![];
-    d.walk(|n| {
+/// The number and the names of a document's layers and sublayers, from which [`NewLayers::make`]
+/// names and colors a new layer. [`NewLayers::of`] reads them in one walk of the document, and
+/// [`NewLayers::add`] counts each new layer as it goes in.
+pub(crate) struct NewLayers {
+    count: usize,
+    taken: HashSet<String>,
+}
+
+impl NewLayers {
+    pub(crate) fn of(d: &Document) -> Self {
+        let mut layers = Self { count: 0, taken: HashSet::new() };
+        d.walk(|n| layers.note(n));
+        layers
+    }
+
+    /// A new layer named `name` (default: the next `Layer N`, as [`Document::next_layer_name`]
+    /// gives it) in the next layer color.
+    pub(crate) fn make(&self, d: &mut Document, name: Option<&str>) -> Node {
+        let name = name
+            .map(str::to_string)
+            .unwrap_or_else(|| (self.count + 1..).map(|i| format!("Layer {i}")).find(|name| !self.taken.contains(name)).unwrap_or_default());
+        let id = d.alloc_id();
+        Node::layer(id, &name, LayerColor::Preset((self.count % LAYER_COLORS.len()) as u8))
+    }
+
+    /// Count `n`, a layer going into the document, and the layers inside it.
+    pub(crate) fn add(&mut self, n: &Node) {
+        n.walk(&mut |c| self.note(c));
+    }
+
+    fn note(&mut self, n: &Node) {
         if n.is_layer() {
-            out.push(n);
+            self.count += 1;
+            self.taken.extend(n.name.clone());
         }
-    });
-    out
+    }
 }
 
 /// A new layer named `name` (default: the next `Layer N`) in the next layer colour.
 pub(crate) fn make_layer(d: &mut Document, name: Option<&str>) -> Node {
-    let n = all_layers(d).len();
-    let name = name.map(str::to_string).unwrap_or_else(|| d.next_layer_name());
-    let id = d.alloc_id();
-    Node::layer(id, &name, LayerColor::Preset((n % LAYER_COLORS.len()) as u8))
+    NewLayers::of(d).make(d, name)
 }
 
 /// A layer colour: a preset index (0–26), `#rrggbb` or a preset's name (any case).
@@ -464,13 +488,12 @@ fn delete_rows(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad("layer.delete", "no such rows"));
     }
-    if st.doc.layers.iter().all(|l| ids.contains(&l.id)) {
+    let listed: HashSet<NodeId> = ids.iter().copied().collect();
+    if st.doc.layers.iter().all(|l| listed.contains(&l.id)) {
         return Err(EngineError::Other("a document needs at least one layer".into()));
     }
     s.edit("Delete Selection", |d, sel| {
-        for id in &ids {
-            d.remove(*id)?;
-        }
+        d.remove_many(&ids)?;
         // The guides on the deleted layers go with them.
         d.drop_guides_of_deleted_layers(sel);
         sel.prune(d);
@@ -491,18 +514,12 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("layer.duplicate", "no such rows"));
     }
     let copies = s.edit("Duplicate Selection", |d, _| {
-        let mut out = vec![];
-        for id in &ids {
-            let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
-            let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
-            let mut c = d.reid(&n);
+        super::edit::copy_above(d, &ids, |d, n, c| {
             if n.is_layer() {
                 c.name = Some(format!("{} copy", n.display_name()));
-                d.copy_layer_guides(&n, &c);
+                d.copy_layer_guides(n, c);
             }
-            out.push(d.insert(par, idx + 1, c)?);
-        }
-        Ok(out)
+        })
     })?;
     s.doc_mut()?.layer_rows = copies.clone();
     Ok(json!({ "ids": copies.iter().map(|i| i.0).collect::<Vec<_>>() }))
@@ -579,14 +596,23 @@ fn collect(s: &mut Session, p: &Value) -> Result<Value> {
     let lid = s.edit("Collect in New Layer", |d, sel| {
         // Where the topmost of them is: beside it in its layer, or on top of the layer holding
         // its group.
-        let (parent, index) = match d.position(top) {
-            Some((par, i, _)) if par.is_none_or(|p| d.node(p).is_some_and(Node::is_layer)) => (par, i + 1),
-            _ => (d.layer_containing(top), usize::MAX),
-        };
-        let layer = make_layer(d, None);
-        let lid = d.insert(parent, index, layer)?;
-        for id in &ids {
-            d.move_node(*id, Some(lid), usize::MAX)?;
+        let beside = d.position(top).is_some_and(|(par, _, _)| par.is_none_or(|p| d.node(p).is_some_and(Node::is_layer)));
+        let holder = d.layer_containing(top);
+        let mut layer = make_layer(d, None);
+        let lid = layer.id;
+        if beside {
+            d.wrap(&ids, |rows| {
+                if let Some(ch) = layer.children_mut() {
+                    *ch = rows;
+                }
+                layer
+            })?;
+        } else {
+            let rows = d.remove_many(&ids)?;
+            if let Some(ch) = layer.children_mut() {
+                *ch = rows;
+            }
+            d.insert(holder, usize::MAX, layer)?;
         }
         sel.prune(d);
         sel.deselect_uneditable(d);
@@ -683,19 +709,20 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let label = if copy { "Duplicate Rows" } else { "Move Rows" };
     let moved = s.edit(label, |d, sel| {
-        let mut nodes = vec![];
-        for id in &ids {
-            nodes.push(if copy {
+        let nodes = if copy {
+            let mut nodes = vec![];
+            for id in &ids {
                 let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
                 let c = d.reid(&n);
                 if n.is_layer() {
                     d.copy_layer_guides(&n, &c);
                 }
-                c
-            } else {
-                Arc::unwrap_or_clone(d.remove(*id)?)
-            });
-        }
+                nodes.push(Arc::new(c));
+            }
+            nodes
+        } else {
+            d.remove_many(&ids)?
+        };
         let count = d.children(parent).map_or(0, Vec::len);
         let mut index = match anchor {
             None => count,
@@ -708,11 +735,10 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         if count > 0 && parent.and_then(|p| d.node(p)).is_some_and(Node::clips) {
             index = index.max(1);
         }
-        let mut out = vec![];
-        for n in nodes {
-            out.push(d.insert(parent, index, n)?);
-            index += 1;
-        }
+        let out: Vec<NodeId> = nodes.iter().map(|n| n.id).collect();
+        let ch = d.children_mut(parent)?;
+        let index = index.min(ch.len());
+        ch.splice(index..index, nodes);
         sel.prune(d);
         sel.deselect_uneditable(d);
         Ok(out)

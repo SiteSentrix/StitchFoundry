@@ -558,10 +558,20 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
-/// Duplicate `roots` directly above each original, transform the copies, select them. The copies
-/// take new ids in the order of `roots`. Roots listed twice, or inside another root, are copied one
-/// at a time: each copy is made from the document as the copies before it left it.
+/// Duplicate `roots` directly above each original, transform the copies, select them
+/// ([`copy_above`]).
 pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selection, roots: &[NodeId], xf: Affine) -> Result<Vec<NodeId>> {
+    let out = copy_above(d, roots, |_, _, c| c.transform(xf, true))?;
+    sel.set(out.iter().copied());
+    Ok(out)
+}
+
+/// Copy `roots` directly above each original and return the copies' ids. `change` gets the
+/// document, each original and its copy before the copy goes in, and must leave the document's
+/// tree as it is. The copies take new ids in the order of `roots`. Roots listed twice, or inside
+/// another root, are copied one at a time: each copy is made from the document as the copies
+/// before it left it.
+pub(crate) fn copy_above(d: &mut Document, roots: &[NodeId], mut change: impl FnMut(&mut Document, &Node, &mut Node)) -> Result<Vec<NodeId>> {
     let paths = d.index_paths(roots.iter().copied());
     let mut found: Vec<_> = roots.iter().filter_map(|id| paths.get(id)).collect();
     found.sort_unstable();
@@ -570,7 +580,7 @@ pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selectio
         for id in roots {
             let Some(n) = paths.get(id).and_then(|p| d.node_at(p)).cloned() else { continue };
             let mut c = d.reid(&n);
-            c.transform(xf, true);
+            change(d, &n, &mut c);
             copies.push((*id, vec![c]));
         }
         let out: Vec<NodeId> = copies.iter().flat_map(|(_, c)| c.iter().map(|n| n.id)).collect();
@@ -582,12 +592,11 @@ pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selectio
             let Some((par, idx, _)) = d.position(*id) else { continue };
             let Some(n) = d.node(*id).cloned() else { continue };
             let mut c = d.reid(&n);
-            c.transform(xf, true);
+            change(d, &n, &mut c);
             out.push(d.insert(par, idx + 1, c)?);
         }
         out
     };
-    sel.set(out.iter().copied());
     Ok(out)
 }
 
