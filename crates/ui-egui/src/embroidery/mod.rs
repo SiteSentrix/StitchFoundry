@@ -136,6 +136,10 @@ pub struct EmbroideryUi {
     pub prompt: prompt::PromptState,
     /// The colour a tatami fill blends into (Make Blend in the Embroidery panel).
     pub blend_to: [u8; 3],
+    /// The whole design shown repeated, columns across and rows down (1 × 1: once), with a
+    /// gap between the copies (mm): a preview of a repeated layout, not sewn.
+    pub repeats: [u32; 2],
+    pub repeat_gap: f64,
 }
 
 impl Default for EmbroideryUi {
@@ -156,6 +160,8 @@ impl Default for EmbroideryUi {
             checks: None,
             new_type: "fill".into(),
             blend_to: [255, 255, 255],
+            repeats: [1, 1],
+            repeat_gap: 5.0,
             prompt: prompt::PromptState::default(),
         }
     }

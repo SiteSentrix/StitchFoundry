@@ -4615,3 +4615,7 @@ machine	Stop	Остановка
 	Shell	Ракушка
 	Butterfly	Бабочка
 	Clover	Клевер
+	Show Repeats	Показать повторы
+	Repeats across	Повторов по горизонтали
+	Repeats down	Повторов по вертикали
+	Gap between repeats	Зазор между повторами

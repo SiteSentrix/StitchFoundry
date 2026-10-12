@@ -263,7 +263,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BAS-12 | Stitch player (slow redraw) | Done | Stitch Sequence panel player | – |
 | BAS-13 | Travel tools: step through a design by stitch, object, colour, trim, function | Done | Stitch Sequence panel: Travel by (stitch, object, colour, trim, function) with back and next buttons; the object reached is selected | 1 |
 | BAS-14 | Colour-Object list (objects in sewing order, grouped by colour) | Done | Stitch Sequence panel: rows grouped by thread, drag to reorder, Shift/Ctrl multi-select, eye and lock per row, hidden objects listed to show again | 1 |
-| BAS-15 | Show repeats (preview tiled/repeated layouts) | Partial | Repeat objects are sewn and shown copy by copy; a view repeating the whole design without sewing it is missing | 2 |
+| BAS-15 | Show repeats (preview tiled/repeated layouts) | Done | Repeat objects are sewn and shown copy by copy; the Embroidery panel's *Repeats across* and *Repeats down* (`ui.embroideryRepeats`) show the whole design repeated in a grid, a gap apart, without sewing it | – |
 | BAS-16 | Design information (stitches, size, colours, time, thread, cost) | Partial | Panel stats; add cost estimate (OUT-*) | 6 |
 | BAS-17 | Print preview of designs | Partial | VectorCraft printing prints art; embroidery worksheets in RP-* | 6 |
 | BAS-18 | Thread palette, assign and edit thread colours | Done | Panel colour + chart picker | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 132 done,
-37 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the stamp library). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 133 done,
+36 partial, 56 missing, 6 out of scope (counted 2026-10-12, after the repeat preview). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -726,8 +726,8 @@ RS-03, BAS-15), then the design's own motifs (MO-06), sculpture runs and cross-s
 SP-12), redwork (SP-13), buttonholes (SP-14), rings and outlines round lines (PT-02, RS-02, PT-05),
 more textures and paired motif fills (PS-02, MO-04), graded motif columns (MO-05), string stitching
 (SP-04), the automatic knife (RS-06), 3D motif fills (MO-04) and flow lines, the liquid effect
-(CS-07), and a library of carving stamps (PS-04). Left in phase 2: more textures, a motif
-placement tool (MO-01) and a repeat preview (BAS-15).
+(CS-07), a library of carving stamps (PS-04) and a repeat preview (BAS-15). Left in phase 2: more
+textures and a motif placement tool (MO-01).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

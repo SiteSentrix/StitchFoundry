@@ -412,6 +412,9 @@ time and thread used, and whether the design fits the hoop. Its settings:
 - **Show stitches** (Hidden / Lines / TrueView), **Artwork** (Normal / Dimmed / Hidden),
   connectors, needle points, the selection's **start and stop** beads and its **inclination
   lines** (shown with any tool, not only the Inclination tool).
+- **Repeats across** and **Repeats down** (up to 10 each) show the whole design repeated in a
+  grid on the canvas, **Gap between repeats** apart, to preview a repeated layout (a border, an
+  all-over pattern); only the design itself is sewn (`ui.embroideryRepeats`).
 
 Thread colour follows the object's paint colour unless set in the panel. **Select › Same ›
 Thread Color** and **Stitch Type** select every stitched object like the selected one.

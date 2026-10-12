@@ -3985,3 +3985,7 @@ machine	Stop	停止
 	Shell	貝殼
 	Butterfly	蝴蝶
 	Clover	三葉草
+	Show Repeats	顯示重複
+	Repeats across	橫向重複
+	Repeats down	縱向重複
+	Gap between repeats	重複間距

@@ -201,6 +201,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{prompt?: what to change, size?: mm (longest side), colors?: 1-12} open Redraw Image with Claude for the selected image: Claude redraws it as flat-colour artwork with your own Anthropic API key (redraw only artwork you own or may use), and embroidery.placeArt places it on the image and digitizes it (desktop only) → {open}",
     ),
     (
+        "ui.embroideryRepeats",
+        "Show Repeats",
+        "",
+        "{columns?: 1–10, rows?: 1–10, gap?: mm (0–500)} show the whole design repeated in a grid on the canvas, columns across and rows down with a gap between the copies, to preview a repeated layout; nothing more is sewn (1 × 1: once) → {columns, rows, gap}",
+    ),
+    (
         "ui.embroideryWidget",
         "Digitizing Widget",
         "",
@@ -1060,6 +1066,22 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     }
     if id == "ui.redrawImage" {
         return Some(crate::embroidery::prompt::open_redraw(app, p));
+    }
+    if id == "ui.embroideryRepeats" {
+        let num = |k: &str, range: std::ops::RangeInclusive<f64>| {
+            p.get(k).and_then(Value::as_f64).filter(|v| v.is_finite()).map(|v| v.clamp(*range.start(), *range.end()))
+        };
+        let e = &mut app.embroidery;
+        if let Some(v) = num("columns", 1.0..=10.0) {
+            e.repeats[0] = v.round() as u32;
+        }
+        if let Some(v) = num("rows", 1.0..=10.0) {
+            e.repeats[1] = v.round() as u32;
+        }
+        if let Some(v) = num("gap", 0.0..=500.0) {
+            e.repeat_gap = v;
+        }
+        return Some(Ok(json!({ "columns": e.repeats[0], "rows": e.repeats[1], "gap": e.repeat_gap })));
     }
     if id == "ui.embroideryWidget" {
         if app.session.active().is_none() {

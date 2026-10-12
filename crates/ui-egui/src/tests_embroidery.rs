@@ -138,6 +138,23 @@ fn the_panel_shows_sculpture_runs_and_cross_styles() {
 }
 
 #[test]
+fn the_design_can_be_shown_repeated() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 60})).unwrap();
+    app.run("embroidery.set", json!({"type": "fill"})).unwrap();
+    let r = app.run("ui.embroideryRepeats", json!({"columns": 3, "rows": 2, "gap": 4})).unwrap();
+    assert_eq!(r, json!({"columns": 3, "rows": 2, "gap": 4.0}));
+    assert_eq!((app.embroidery.repeats, app.embroidery.repeat_gap), ([3, 2], 4.0));
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    for want in ["Repeats across", "Repeats down", "Gap between repeats"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
+    // out of range: clamped; junk: left as it was
+    let r = app.run("ui.embroideryRepeats", json!({"columns": 99, "rows": -3, "gap": "x"})).unwrap();
+    assert_eq!(r, json!({"columns": 10, "rows": 1, "gap": 4.0}));
+}
+
+#[test]
 fn the_panel_edits_a_redwork_group_as_one() {
     let mut app = app();
     let a = app.run("path.create", json!({"d": "M 20 20 L 120 20 L 120 120 Z"})).unwrap()["id"].as_u64().unwrap();
