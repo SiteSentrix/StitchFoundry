@@ -348,7 +348,14 @@ fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
 fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize) -> (String, Response, Rect) {
     let t = Tokens::get(ui.ctx());
     let editing = ui.memory(|m| m.has_focus(id));
-    let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.to_string()) } else { shown.to_string() };
+    // When the value changes under a focused field (the slider beside it, a preview, another
+    // field's edit), its text follows: the text typed for the old value would otherwise go back in
+    // on the next Enter, Tab or arrow key (#1457).
+    let shown_id = id.with("shown");
+    let followed = ui.data_mut(|d| d.get_temp::<String>(shown_id)).is_none_or(|before| before == shown);
+    ui.data_mut(|d| d.insert_temp(shown_id, shown.to_string()));
+    let typed = if editing && followed { ui.data_mut(|d| d.get_temp::<String>(id)) } else { None };
+    let mut buf: String = typed.unwrap_or_else(|| shown.to_string());
     // The box is exactly as tall as the other controls of a row (26 points a line), its text
     // centred in it: a frame around the text came out a point taller and stood out next to
     // spinners and dropdowns (#900).
