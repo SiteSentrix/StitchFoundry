@@ -1022,6 +1022,7 @@ mod area_tests {
 }
 
 /// Width of the first line and of the space it can fill, with `tracking` on the first paragraph.
+/// The third value is where the first line ends in the plain text.
 fn headline_fit(t: &TextObject, tracking: f64) -> Option<(f64, f64, usize)> {
     let mut probe = t.clone();
     let para_end = probe.plain_text().find('\n').unwrap_or(usize::MAX);
@@ -1031,7 +1032,7 @@ fn headline_fit(t: &TextObject, tracking: f64) -> Option<(f64, f64, usize)> {
     let line = lay.lines.first()?;
     let para = t.para_at(0);
     let avail = cell.width() - 2.0 * t.area.inset - para.left_indent - para.right_indent;
-    Some((line.x1 - line.x0, avail, lay.lines.iter().filter(|l| l.start < para_end).count()))
+    Some((line.x1 - line.x0, avail, line.end))
 }
 
 fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1044,8 +1045,11 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
         if !matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) {
             continue;
         }
-        // Largest tracking that keeps the first paragraph on one line (bisection).
-        let one_line = |tr: f64| headline_fit(t, tr).is_some_and(|(_, _, lines)| lines == 1);
+        // Largest tracking that keeps the first paragraph on one line (bisection). The layout
+        // drops lines that overflow the frame, so a frame one line tall hides the wrapped rest:
+        // "one line" means the first line reaches the end of the first paragraph.
+        let para_end = t.plain_text().find('\n').unwrap_or(t.plain_text().len());
+        let one_line = |tr: f64| headline_fit(t, tr).is_some_and(|(_, _, end)| end >= para_end);
         let (mut lo, mut hi) = (-200.0, 2000.0);
         if !one_line(lo) {
             continue;
@@ -1087,9 +1091,27 @@ mod headline_tests {
         let tr = s.execute("text.fitHeadline", &json!({})).unwrap()["tracking"].as_f64().unwrap();
         assert!(tr > 100.0, "a short word spreads out: {tr}");
         let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!() };
-        let (w, avail, lines) = headline_fit(t, tr).unwrap();
-        assert_eq!(lines, 1);
+        let (w, avail, end) = headline_fit(t, tr).unwrap();
+        assert_eq!(end, 8);
         assert!(avail - w < 30.0, "{w} of {avail}");
         assert_eq!(t.runs.last().unwrap().style.tracking, 0.0, "the body keeps its tracking");
+    }
+
+    #[test]
+    fn fit_headline_fills_even_when_the_frame_holds_one_line() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id = s
+            .execute("text.create", &json!({"x": 10, "y": 10, "text": "NEON DRIVE", "size": 36, "area": {"width": 240, "height": 50}}))
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let tr = s.execute("text.fitHeadline", &json!({})).unwrap()["tracking"].as_f64().unwrap();
+        assert!(tr < 1500.0, "a frame one line tall must not push the tracking to the ceiling: {tr}");
+        let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!() };
+        let (w, avail, end) = headline_fit(t, tr).unwrap();
+        assert_eq!(end, 10);
+        assert!(avail - w < 5.0, "{w} of {avail}");
     }
 }
