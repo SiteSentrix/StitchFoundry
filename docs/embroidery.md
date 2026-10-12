@@ -50,6 +50,7 @@ the control channel, the CLI and the MCP server.
 | Redwork | the lines of a path, compound path, type or redwork group sewn as one line that ends where it starts, the way between lines retraced along them | run style (single, triple, backstitch, stem stitch), stitch length |
 | Hand stitch | a run that looks sewn by hand: thick stitches (each sewn three times) with short thin ones between them, lengths varying a little | stitch length, gap, passes |
 | Sculpture run | a thick-thin line: groups of triple stitches in turn with groups of single ones | triple and single stitch lengths, how many of each, passes |
+| String stitch | string art (as in Paghadi work): long straight stitches spanning part of the line, overlapping; on curves they draw a curve inside it, round a circle a ring | chord length, spacing, passes |
 | Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), jagged edges, underlay (incl. double zigzag) |
 | Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, spacing profile, colour blends, texture, split lines, trapunto, underlay |
 | Satin fill | satin rows across the shape | density, pull compensation |
@@ -480,6 +481,12 @@ rounded round the slit, or a keyhole eye), the other side and a bartack at the n
 turn and resize it like any art. `embroidery.addButtonholes` places a string of them too
 (`count`, evenly spaced from `at` to `to`), with the slit `length`, the `width` and an `angle`.
 
+**Embroidery › Automatic Knife** cuts the selected stitched shapes round their holes and where
+they branch (at sharp inside corners, like the arms of a T) into simpler pieces, each its own
+object with the same stitching and its own automatic direction, a single angle or turning;
+the pieces overlap by 0.3 mm along the cuts (`overlap`) and become a branch group, sewn as one
+path. Edit each piece's direction like any object's; Break Apart separates the group.
+
 **Embroidery › Redwork** sews the selected line art (paths, compound paths and type) the way
 hand redwork is sewn: as one line that starts and ends at the same point, so there is one tie-in
 and one tie-off. Every line is sewn once in the run style (*Single*, *Triple*, *Backstitch* or
@@ -553,6 +560,7 @@ tool list for all parameters):
 | `embroidery.fabric.save {name, from?, …}`, `embroidery.fabric.delete {name}` | fabrics made for the design |
 | `embroidery.branch {ids?}`, `embroidery.breakApart {ids?}` | sew objects as one path; separate a branch, a redwork group or a many-part object |
 | `embroidery.addButtonholes {style?, length?, width?, angle?, at?, to?, count?}` | straight, rounded or keyhole buttonholes: one, or a string evenly spaced from `at` to `to` |
+| `embroidery.knife {ids?, overlap?}` | cut stitched shapes round their holes and at their branches into pieces that each turn their own way, a branch group |
 | `embroidery.redwork {ids?, kind?}` | sew line art as redwork: one line ending where it starts, the way between lines retraced along them (`kind`: `run`, `bean`, `backstitch`, `stemstitch`) |
 | `embroidery.reverse`, `embroidery.removeHoles {maxArea?}`, `embroidery.fillHoles` | sewing direction and holes |
 | `select.same.thread`, `select.same.stitchType` | select like objects |

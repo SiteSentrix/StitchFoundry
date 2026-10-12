@@ -896,6 +896,56 @@ fn break_apart_gives_each_part_its_own_object() {
 }
 
 #[test]
+fn the_automatic_knife_cuts_shapes_into_pieces_that_turn_their_own_way() {
+    let area = |s: &Session, id: NodeId| -> f64 {
+        vectorcraft_embroidery::regions_mm(s.doc().unwrap().doc.node(id).unwrap()).iter().map(sf_core::geom::Polygon::area).sum()
+    };
+    let mut s = session();
+    // a "T" filled as one shape: cut where the stem meets the bar
+    let t = stitched_path(&mut s, "M10 10 H210 V50 H130 V210 H90 V50 H10 Z", "fill");
+    s.execute("embroidery.setThread", &json!({"color": "#2255aa"})).unwrap();
+    let whole = area(&s, t);
+    let r = s.execute("embroidery.knife", &json!({})).unwrap();
+    let ids: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    let [g] = ids.as_slice() else { panic!("{r}") };
+    let st = s.doc().unwrap();
+    assert!(st.doc.node(t).is_none());
+    let group = st.doc.node(*g).unwrap();
+    assert_eq!(group.embroidery.as_deref().unwrap().stitch.id(), "branch");
+    let pieces: Vec<NodeId> = group.children().unwrap().iter().map(|c| c.id).collect();
+    assert!(pieces.len() >= 2, "{}", pieces.len());
+    for p in &pieces {
+        let e = emb(&s, *p);
+        assert_eq!(e.stitch.id(), "fill");
+        assert!(e.auto_direction && e.guides.is_empty());
+        assert_eq!(e.thread.unwrap().color, Rgb::new(0x22, 0x55, 0xaa));
+        assert!(!s.embroidery_plan().unwrap().records_of(*p).is_empty());
+    }
+    // the pieces cover the T, overlapping a little along the cuts
+    let cut: f64 = pieces.iter().map(|p| area(&s, *p)).sum();
+    assert!(cut > whole * 0.98 && cut < whole * 1.08, "{cut} {whole}");
+    // undo brings the T back
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(t).is_some() && s.doc().unwrap().doc.node(*g).is_none());
+    // a square ring is cut round its hole, without overlap if asked
+    let ring = stitched_path(&mut s, "M300 10 H500 V210 H300 Z M340 50 V170 H460 V50 Z", "fill");
+    let whole = area(&s, ring);
+    let r = s.execute("embroidery.knife", &json!({"overlap": 0})).unwrap();
+    let g = NodeId(r["ids"][0].as_u64().unwrap());
+    let pieces: Vec<NodeId> = s.doc().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|c| c.id).collect();
+    assert!(pieces.len() >= 2 && pieces.iter().all(|p| s.doc().unwrap().doc.node(*p).unwrap().path_data().unwrap().subpaths.len() == 1));
+    let cut: f64 = pieces.iter().map(|p| area(&s, *p)).sum();
+    assert!(cut > whole * 0.97 && cut <= whole * 1.001, "{cut} {whole}");
+    // a plain square has nothing to cut; neither has a line
+    rect(&mut s, 10.0, 300.0, 100.0, 100.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    assert!(s.execute("embroidery.knife", &json!({})).is_err());
+    stitched_path(&mut s, "M10 450 L300 450", "run");
+    assert!(s.execute("embroidery.knife", &json!({})).is_err());
+    assert!(s.execute("embroidery.knife", &json!({"ids": [g.0], "overlap": 5})).is_err());
+}
+
+#[test]
 fn auto_sequence_groups_colours_and_keeps_overlaps_in_order() {
     let mut s = session();
     let stitched = |s: &mut Session, x: f64, y: f64, color: &str| {

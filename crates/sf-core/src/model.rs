@@ -410,6 +410,7 @@ impl ObjectKind {
                 RunKind::Stem => "Stem Stitch",
                 RunKind::Hand => "Hand Stitch",
                 RunKind::Sculpture => "Sculpture Run",
+                RunKind::String => "String Stitch",
             },
             ObjectKind::Satin(_) => "Satin Column",
             ObjectKind::Fill(f) => f.params.kind.label(),
@@ -537,10 +538,14 @@ pub enum RunKind {
     /// Sculpture run: a thick-thin line, groups of triple stitches in turn with groups of
     /// single ones, each with its own stitch length.
     Sculpture,
+    /// String stitching (string art, as in Paghadi work): long straight stitches spanning
+    /// `width` mm of the line, one starting every `spacing` mm, overlapping; on curves they
+    /// draw a curve inside the line.
+    String,
 }
 
 impl RunKind {
-    pub const ALL: [RunKind; 9] = [
+    pub const ALL: [RunKind; 10] = [
         RunKind::Single,
         RunKind::Triple,
         RunKind::Blanket,
@@ -550,6 +555,7 @@ impl RunKind {
         RunKind::Stem,
         RunKind::Hand,
         RunKind::Sculpture,
+        RunKind::String,
     ];
 
     pub fn label(self) -> &'static str {
@@ -563,6 +569,7 @@ impl RunKind {
             RunKind::Stem => "Stem stitch",
             RunKind::Hand => "Hand stitch",
             RunKind::Sculpture => "Sculpture run",
+            RunKind::String => "String stitch",
         }
     }
 }

@@ -471,6 +471,25 @@ fn structured_junk() {
                 {"command": "embroidery.setParams", "params": {"params": {"motifColumn": "x"}}},
             ]}),
         ),
+        ("embroidery.knife", json!({"overlap": 3})),
+        ("embroidery.knife", json!({"overlap": -1, "ids": [u64::MAX]})),
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.set", "params": {"type": "fill"}},
+                {"command": "embroidery.knife", "params": {"overlap": 1e-308}},
+                {"command": "embroidery.breakApart", "params": {}},
+            ]}),
+        ),
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.set", "params": {"type": "run"}},
+                {"command": "embroidery.setParams", "params": {"params": {"kind": "String", "width": 1e308, "spacing": 1e-308}}},
+                {"command": "embroidery.setParams", "params": {"params": {"width": -1e308, "spacing": 1e308, "passes": 9}}},
+                {"command": "embroidery.setParams", "params": {"params": {"width": 0.3, "spacing": 0.3}}},
+            ]}),
+        ),
         ("embroidery.redwork", json!({"kind": "satin"})),
         ("embroidery.redwork", json!({"ids": [u64::MAX], "kind": null})),
         ("embroidery.motif.apply", json!({"name": null, "ids": [u64::MAX]})),

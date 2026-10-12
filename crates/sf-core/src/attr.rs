@@ -119,7 +119,7 @@ impl StitchType {
                 RunKind::Blanket => "blanket",
                 RunKind::Back => "backstitch",
                 RunKind::Stem => "stemstitch",
-                RunKind::Single | RunKind::Zigzag | RunKind::Motif | RunKind::Hand | RunKind::Sculpture => "run",
+                RunKind::Single | RunKind::Zigzag | RunKind::Motif | RunKind::Hand | RunKind::Sculpture | RunKind::String => "run",
             },
             StitchType::Satin(_) => "satin",
             StitchType::Fill(f) => match f.kind {

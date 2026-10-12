@@ -63,6 +63,7 @@ pub(crate) fn generate(path: &Contour, params: &RunParams, hint: Option<Point>, 
         RunKind::Stem => backstitch(&pts, step, (params.width * 0.5).clamp(0.2, 3.0) * if params.flip { -1.0 } else { 1.0 }),
         RunKind::Hand => hand(&pts, step, params.spacing),
         RunKind::Sculpture => sculpture(&pts, (step, params.spacing), params.groups),
+        RunKind::String => string(&pts, params.width, params.spacing, path.closed),
     };
     let mut once = once;
     if backwards {
@@ -200,6 +201,36 @@ pub(crate) fn sculpture(pts: &[Point], lengths: (f64, f64), groups: [u32; 2]) ->
         from = to;
     }
     out
+}
+
+/// Most long stitches one string run sews.
+const MAX_STRINGS: usize = 100_000;
+
+/// String stitching (string art, as in Paghadi work): straight stitches each spanning `chord` mm
+/// of the line, one starting every `spacing` mm, joined by shorter stitches back along it. The
+/// long stitches overlap, and on curves they draw a curve inside the line. Along an open line
+/// the last one ends at its end; round a closed line (`closed`, the polyline back at its start)
+/// they go all the way round.
+pub(crate) fn string(pts: &[Point], chord: f64, spacing: f64, closed: bool) -> Vec<Point> {
+    let total = polyline::length(pts);
+    if pts.is_empty() || !(total.is_finite() && total > 1e-6) {
+        return pts.to_vec();
+    }
+    let spacing = if spacing.is_finite() { spacing.clamp(0.3, 50.0) } else { 1.0 };
+    let chord = if chord.is_finite() { chord.clamp(spacing, 200.0) } else { 6.0 };
+    let chord = chord.min(if closed { total * 0.5 } else { total });
+    let at = |s: f64| polyline::point_at(pts, if closed { s.rem_euclid(total) } else { s.clamp(0.0, total) });
+    // Where the long stitches start: round a closed line all the way, along an open one up to a
+    // chord before its end.
+    let reach = if closed { total } else { (total - chord).max(0.0) };
+    let n = ((reach / spacing).round() as usize).clamp(1, MAX_STRINGS);
+    let starts: Vec<f64> =
+        if closed { (0..n).map(|k| k as f64 * total / n as f64).collect() } else { (0..=n).map(|k| k as f64 * reach / n as f64).collect() };
+    let mut out = Vec::with_capacity(starts.len() * 2);
+    for s in starts {
+        out.extend([at(s), at(s + chord)]);
+    }
+    polyline::dedup(&out, 1e-9)
 }
 
 /// Bean stitch: every stitch is sewn forward, back and forward again.
@@ -701,6 +732,33 @@ mod tests {
             let p = RunParams { stitch_length: a, spacing: b, groups, ..p.clone() };
             let st = generate(&line(), &p, None, None);
             assert!(!st.is_empty() && st.len() < 1000 && st.iter().all(|s| s.pos().is_finite()), "{a} {b} {groups:?}: {}", st.len());
+        }
+    }
+
+    #[test]
+    fn string_stitches_overlap_and_draw_a_curve_inside_a_round_line() {
+        // Along a straight line: long stitches 6 mm long starting every 1 mm, back and forth.
+        let p = RunParams { kind: RunKind::String, width: 6.0, spacing: 1.0, ..Default::default() };
+        let pts: Vec<Point> = generate(&line(), &p, None, None).iter().map(|s| s.pos()).collect();
+        assert_eq!(pts.first(), Some(&Point::new(0.0, 0.0)));
+        assert!(pts.last().unwrap().distance(Point::new(20.0, 0.0)) < 1e-9, "ends on the line's end");
+        let long = pts.windows(2).step_by(2).filter(|w| (w[0].distance(w[1]) - 6.0).abs() < 1e-6).count();
+        assert_eq!(long, 15, "a long stitch every mm along the 14 mm before the last chord");
+        // Round a circle 10 mm across, chords of a quarter of the way round: every needle point on
+        // the circle, and the stitches keep away from its middle (they draw an inner circle).
+        let ring: Vec<Point> =
+            (0..64).map(|i| f64::from(i) * std::f64::consts::TAU / 64.0).map(|a| Point::new(5.0 * a.cos(), 5.0 * a.sin())).collect();
+        let circle = Contour::from_points(&ring, true);
+        let p = RunParams { kind: RunKind::String, width: 31.4159 / 4.0, spacing: 0.8, ..Default::default() };
+        let pts: Vec<Point> = generate(&circle, &p, None, None).iter().map(|s| s.pos()).collect();
+        assert!(pts.len() > 70 && pts.iter().all(|q| (q.length() - 5.0).abs() < 0.05), "{}", pts.len());
+        let inner = pts.windows(2).map(|w| polyline::distance_to_segment(Point::ZERO, w[0], w[1])).fold(f64::INFINITY, f64::min);
+        assert!((3.3..=3.7).contains(&inner), "the chords stay {inner} mm from the middle");
+        // Absurd values sew something bounded.
+        for (w, s) in [(f64::NAN, f64::NAN), (1e308, 1e-308), (-1.0, 1e308)] {
+            let p = RunParams { kind: RunKind::String, width: w, spacing: s, ..Default::default() };
+            let st = generate(&circle, &p, None, None);
+            assert!(!st.is_empty() && st.len() < 400_000 && st.iter().all(|s| s.pos().is_finite()), "{w} {s}");
         }
     }
 

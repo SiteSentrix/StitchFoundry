@@ -348,7 +348,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | RS-03 | Envelopes on embroidery | Done | Stitched objects in an envelope are sewn bent through it (their inclination lines and beads aren't bent) | – |
 | RS-04 | Break apart branched objects | Done | Embroidery › Break Apart (`embroidery.breakApart`): a branch gives back its objects; a stitched path or compound path of separate parts becomes one object per part, holes staying with their part | 1 |
 | RS-05 | Knife (cut shapes) | Done | VectorCraft knife/scissors | – |
-| RS-06 | Automatic knife (split long shapes into sewable parts) | Missing | Split objects longer than a limit along their medial axis | 2 |
+| RS-06 | Automatic knife (split long shapes into sewable parts) | Done | Embroidery › Automatic Knife: shapes cut round their holes and at sharp inside corners into pieces with automatic directions, overlapping along the cuts, as a branch group (public description: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Modifying/reshape/reshape-14.htm) | – |
 | RS-07 | Shaping tools (weld, trim, intersect on embroidery) | Done | Pathfinder keeps stitch settings | – |
 
 ### 6.7 Stitch editing, reinforcement, quality, connectors
@@ -412,7 +412,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SP-01 | Freehand embroidery | Done | Brush tool | – |
 | SP-02 | Hand-stitch effect (random spacing and thickness) | Done | *Hand stitch* run style: thick (triple) stitches and thin gaps, lengths varied at random | – |
 | SP-03 | Jagged edges (random satin length) | Done | Satin *Jagged edges* on side 1, side 2 or both, up to a depth | – |
-| SP-04 | String stitching (long free-hanging threads) | Missing | Run with long stitches and anchors | 2 |
+| SP-04 | String stitching (long free-hanging threads) | Done | String stitch, a run style: long straight stitches spanning part of the line (*Chord length*), one starting every *Spacing*, overlapping like string art; round a closed line they make a ring, a coverage set by the chord (public description: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Decorative/specialty/specialty-9.htm) | – |
 | SP-05 | Zigzag and E-stitch borders/fills | Done | Zigzag and blanket runs; zigzag and E-stitch motifs for motif fills | – |
 | SP-06 | Stippling (random meandering run fill) | Done | Meander fill: a rounded line that never crosses itself, with path spacing, stitch length and randomness | – |
 | SP-07 | Maze-like fills | Done | Meander | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 127 done,
-40 partial, 58 missing, 6 out of scope (counted 2026-10-12, after graded motif columns). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 129 done,
+40 partial, 56 missing, 6 out of scope (counted 2026-10-12, after string stitching and the knife). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -724,8 +724,8 @@ tatami textures and split lines (PS-02…04, CS-05), then hand stitch, jagged ed
 NEW-02), then outlines and borders (PT-01, PT-05), then repeats and envelopes sewn as they look (PT-06,
 RS-03, BAS-15), then the design's own motifs (MO-06), sculpture runs and cross-stitch styles (ST-02,
 SP-12), redwork (SP-13), buttonholes (SP-14), rings and outlines round lines (PT-02, RS-02, PT-05),
-more textures and paired motif fills (PS-02, MO-04) and graded motif columns (MO-05). Left in phase
-2: the automatic knife (RS-06), string stitching (SP-04), a stamp library (PS-04), more textures, a
+more textures and paired motif fills (PS-02, MO-04), graded motif columns (MO-05), string stitching
+(SP-04) and the automatic knife (RS-06). Left in phase 2: a stamp library (PS-04), more textures, a
 motif placement tool (MO-01), 3D motif fills (MO-04), the two-curve liquid fill (CS-07) and a repeat
 preview (BAS-15).
 
