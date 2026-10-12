@@ -4546,3 +4546,8 @@ machine	Stop	Arrêt
 	Graded	Progressif
 	Width at end	Largeur à la fin
 	Row spacing	Espacement des rangs
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	Point E
+	Rings (0: all)	Anneaux (0 : tous)
+	Add Laydown	Ajouter une couche de fond

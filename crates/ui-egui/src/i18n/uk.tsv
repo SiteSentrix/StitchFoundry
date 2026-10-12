@@ -4518,3 +4518,8 @@ machine	Stop	Зупинка
 	Graded	З градацією
 	Width at end	Ширина в кінці
 	Row spacing	Відстань між рядами
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	Е-стібок
+	Rings (0: all)	Кільця (0: усі)
+	Add Laydown	Додати підкладку

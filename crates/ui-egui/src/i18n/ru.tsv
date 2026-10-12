@@ -4534,3 +4534,8 @@ machine	Stop	Остановка
 	Graded	С градацией
 	Width at end	Ширина в конце
 	Row spacing	Расстояние между рядами
+
+# Embroidery (StitchFoundry): fill types and laydown
+	E-stitch	Е-стежок
+	Rings (0: all)	Кольца (0: все)
+	Add Laydown	Добавить подложку

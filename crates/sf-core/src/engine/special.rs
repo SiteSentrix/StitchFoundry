@@ -29,9 +29,10 @@ fn inset_levels(polygon: &Polygon, spacing: f64, max_levels: usize) -> Vec<Vec<V
     levels
 }
 
-/// Contour fill: concentric rows following the outline, outside in.
-pub(crate) fn contour(polygon: &Polygon, spacing: f64, step: f64, out: &mut Out, hint: Option<Point>, trim: f64) {
-    let levels = inset_levels(polygon, spacing.max(0.2), 2000);
+/// Contour fill: concentric rows following the outline, outside in; only the first `rings`
+/// when that isn't 0 (an offset fill, a band along the outline).
+pub(crate) fn contour(polygon: &Polygon, (spacing, rings): (f64, u32), step: f64, out: &mut Out, hint: Option<Point>, trim: f64) {
+    let levels = inset_levels(polygon, spacing.max(0.2), if rings > 0 { (rings as usize).min(2000) } else { 2000 });
     for rings in levels {
         let mut left = rings;
         while !left.is_empty() {
@@ -65,7 +66,7 @@ pub(crate) fn spiral(polygon: &Polygon, spacing: f64, step: f64, out: &mut Out, 
     let spacing = spacing.max(0.2);
     let levels = inset_levels(polygon, spacing, 2000);
     if polygon.holes.iter().any(|h| h.len() >= 3) || levels.iter().any(|l| l.len() != 1) || levels.len() < 2 {
-        contour(polygon, spacing, step, out, hint, trim);
+        contour(polygon, (spacing, 0), step, out, hint, trim);
         return;
     }
     let here = out.pos().or(hint).unwrap_or(levels[0][0][0]);
@@ -339,7 +340,7 @@ pub(crate) fn meander(polygon: &Polygon, spacing: f64, step: f64, random: f64, o
         })
         .collect();
     if !inside.iter().any(|&b| b) {
-        contour(polygon, c, step, out, hint, trim);
+        contour(polygon, (c, 0), step, out, hint, trim);
         return;
     }
     // Random spanning forest by depth-first search.
@@ -502,12 +503,19 @@ mod tests {
     #[test]
     fn contour_rings_inside() {
         let mut out = Out::new();
-        contour(&square(20.0), 1.0, 2.5, &mut out, None, 2.0);
+        contour(&square(20.0), (1.0, 0), 2.5, &mut out, None, 2.0);
         let st = out.finish();
         assert!(st.len() > 100);
         for s in st.iter().filter(|s| s.cmd == Cmd::Stitch) {
             assert!(s.x >= 0.0 && s.x <= 20.0 && s.y >= 0.0 && s.y <= 20.0);
         }
+        // An offset fill: three rings 1 mm apart along the outline, the middle left open.
+        let mut out = Out::new();
+        contour(&square(20.0), (1.0, 3), 2.5, &mut out, None, 2.0);
+        let band: Vec<Point> = out.finish().iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.pos()).collect();
+        let depth = |p: &Point| p.x.min(p.y).min(20.0 - p.x).min(20.0 - p.y);
+        assert!(band.len() > 30 && band.iter().all(|p| depth(p) <= 2.5 + 1e-6), "{:?}", band.iter().map(depth).fold(0.0, f64::max));
+        assert!(band.len() < st.len() / 2);
     }
 
     #[test]

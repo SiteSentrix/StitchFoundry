@@ -263,6 +263,9 @@ pub(crate) fn motif_shape(m: Motif) -> Vec<(f64, f64)> {
             v.push((1.0, 0.0));
             v
         }
+        Motif::Zigzag => vec![(0.0, 0.0), (0.25, 0.5), (0.75, -0.5), (1.0, 0.0)],
+        // A prong out to one side and back, then along: blanket stitch.
+        Motif::EStitch => vec![(0.0, 0.0), (0.0, 1.0), (0.0, 0.0), (1.0, 0.0)],
         // A loop like a handwritten l.
         Motif::Loop => {
             let mut v = vec![(0.0, 0.0)];
