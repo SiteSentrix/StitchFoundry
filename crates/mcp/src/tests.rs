@@ -586,6 +586,110 @@ fn remote_connect_fails_fast() {
     drop(held);
 }
 
+fn reusable_listener(addr: std::net::SocketAddr) -> std::net::TcpListener {
+    let socket = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
+    socket.set_reuse_address(true).unwrap();
+    socket.bind(&addr.into()).unwrap();
+    socket.listen(1).unwrap();
+    socket.into()
+}
+
+fn wait_for_remote_eof(remote: &Remote) {
+    let probe = remote.connection_probe();
+    probe.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    assert_eq!(probe.peek(&mut [0]).unwrap(), 0);
+}
+
+#[test]
+fn remote_edit_succeeds_once_when_app_restarts() {
+    let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
+    let addr = listener.local_addr().unwrap();
+    let mut remote = Remote::connect(&addr.to_string()).unwrap();
+    let (old_connection, _) = listener.accept().unwrap();
+    let old_handle = std::thread::spawn(move || {
+        let timeout = std::time::Duration::from_secs(2);
+        old_connection.set_read_timeout(Some(timeout)).unwrap();
+        old_connection.set_write_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(old_connection.try_clone().unwrap());
+        let mut writer = old_connection;
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let message: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(message["method"], "document.inspect");
+        let result = Headless::with_document().call("document.inspect", message["params"].clone()).unwrap();
+        writeln!(writer, "{}", json!({"id": message["id"], "ok": true, "result": result})).unwrap();
+        writer
+    });
+    let inspected = remote.call("document.inspect", json!({})).unwrap();
+    assert!(inspected["objects"].as_u64().unwrap() > 0);
+    drop(old_handle.join().unwrap());
+    drop(listener);
+    wait_for_remote_eof(&remote);
+
+    let listener = reusable_listener(addr);
+    listener.set_nonblocking(true).unwrap();
+    let handle = std::thread::spawn(move || {
+        let timeout = std::time::Duration::from_secs(2);
+        let deadline = std::time::Instant::now() + timeout;
+        let stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if std::time::Instant::now() >= deadline {
+                        return (0, 0);
+                    }
+                    std::thread::yield_now();
+                }
+                Err(error) => panic!("accept failed: {error}"),
+            }
+        };
+        stream.set_nonblocking(false).unwrap();
+        stream.set_read_timeout(Some(timeout)).unwrap();
+        stream.set_write_timeout(Some(timeout)).unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut backend = Headless::with_document();
+        let base = backend.call("document.inspect", json!({})).unwrap()["objects"].as_u64().unwrap();
+        let mut requests = 0;
+        for line in BufReader::new(stream).lines() {
+            let message: Value = serde_json::from_str(&line.unwrap()).unwrap();
+            let result = backend.call(message["method"].as_str().unwrap(), message["params"].clone()).unwrap();
+            requests += 1;
+            writeln!(writer, "{}", json!({"id": message["id"], "ok": true, "result": result})).unwrap();
+        }
+        let objects = backend.call("document.inspect", json!({})).unwrap()["objects"].as_u64().unwrap();
+        (requests, objects - base)
+    });
+
+    let edit = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {"x": 10, "y": 10, "width": 20, "height": 20}}));
+    drop(remote);
+    let (requests, edits) = handle.join().unwrap();
+
+    assert!(edit.is_ok(), "the first edit after restart must succeed: {edit:?}");
+    assert_eq!((requests, edits), (1, 1), "the edit must be sent and applied exactly once");
+}
+
+#[test]
+fn remote_call_reports_nothing_sent_when_reconnect_is_refused() {
+    let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
+    let addr = listener.local_addr().unwrap();
+    let mut remote = Remote::connect(&addr.to_string()).unwrap();
+    let (old_connection, _) = listener.accept().unwrap();
+    drop(old_connection);
+    drop(listener);
+    wait_for_remote_eof(&remote);
+    let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
+    held.set_reuse_address(true).unwrap();
+    held.bind(&addr.into()).unwrap();
+
+    let start = std::time::Instant::now();
+    let error = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {"width": 20, "height": 20}})).unwrap_err();
+
+    assert!(start.elapsed() < std::time::Duration::from_secs(2));
+    assert!(error.contains("not reachable"), "{error}");
+    assert!(error.contains("nothing was sent"), "{error}");
+    assert!(!error.contains("operation may have completed"), "{error}");
+}
+
 #[test]
 fn headless_backend_methods() {
     let mut h = Headless::new();
