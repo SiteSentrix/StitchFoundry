@@ -4149,3 +4149,5 @@ theme	Appearance	Erscheinungsbild
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	die komprimierte Datei entpackt sich auf mehr, als VectorCraft liest ({_1} MB Dokument, {_2} MB pro Bild)
 @msg	the document is too large to save compressed ({0}): save it with Use Compression off	das Dokument ist zu groß, um komprimiert gespeichert zu werden ({0}): speichern Sie es mit deaktivierter Option „Komprimierung verwenden“
 @msg	the file stopped being read (please report this bug)	das Lesen der Datei wurde abgebrochen (bitte melden Sie diesen Fehler)
+	Concentric Dividers:	Konzentrische Trennlinien:
+	Radial Dividers:	Radiale Trennlinien:

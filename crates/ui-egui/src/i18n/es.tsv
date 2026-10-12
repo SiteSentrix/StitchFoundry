@@ -4192,3 +4192,5 @@ lighting	Light	Luz
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	el archivo comprimido ocupa al descomprimirse más de lo que VectorCraft lee ({_1} MB de documento, {_2} MB por imagen)
 @msg	the document is too large to save compressed ({0}): save it with Use Compression off	el documento es demasiado grande para guardarlo comprimido ({0}): guárdelo con Usar compresión desactivado
 @msg	the file stopped being read (please report this bug)	se dejó de leer el archivo (informe de este error)
+	Concentric Dividers:	Divisiones concéntricas:
+	Radial Dividers:	Divisiones radiales:
