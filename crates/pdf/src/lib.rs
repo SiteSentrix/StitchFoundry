@@ -122,11 +122,23 @@ pub struct ImportOptions {
     /// Optional content groups become layers (else each page is one layer, without the art
     /// that is off).
     pub layers: bool,
+    /// The file is an editor's own document (`.ai`): RGB in its `ICCBased` spaces keeps its numbers
+    /// (see `Colors::uncalibrated_rgb`). Off for PDFs, whose profiles stand.
+    pub uncalibrated_rgb: bool,
 }
 
 impl Default for ImportOptions {
     fn default() -> Self {
-        Self { max_pages: None, artboard_gap: 36.0, pages: None, crop: CropTo::default(), password: None, text_as: TextAs::default(), layers: true }
+        Self {
+            max_pages: None,
+            artboard_gap: 36.0,
+            pages: None,
+            crop: CropTo::default(),
+            password: None,
+            text_as: TextAs::default(),
+            layers: true,
+            uncalibrated_rgb: false,
+        }
     }
 }
 
