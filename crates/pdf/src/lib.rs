@@ -69,7 +69,7 @@ mod syntax;
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
 pub use export::{export, export_with_report, page_areas};
-pub use import::{OFF_ARTBOARD_NOTE, import, import_with_report};
+pub use import::{OFF_ARTBOARD_NOTE, PAST_PAGE_NOTE, import, import_with_report};
 pub use pages::{PageInfo, PdfInfo, has_illustrator_data, illustrator_data, info, is_postscript};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
 pub use presets::*;

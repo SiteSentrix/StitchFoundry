@@ -148,21 +148,24 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
     load_with(name, bytes, &LoadOptions::default())
 }
 
-/// A PDF-compatible `.ai` read through the editor's own copy of its art, which it carries: its
-/// layers and hidden objects as they were, and the art outside its artboard (its PDF part has
-/// only what is on the artboards), as an EPS of the editor is read. Anything else as it was.
+/// A PDF-compatible `.ai`, or a PDF saved with the editing data, read through the editor's own copy
+/// of its art, which it carries: its layers and hidden objects as they were, and the art outside
+/// its artboard (its PDF part has only what is on the artboards), as an EPS of the editor is read.
+/// Anything else as it was.
 fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>) -> (Document, Vec<String>) {
     if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return (doc, warnings);
     }
     let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined);
-    // The note that the art outside the artboard is lost is the reason the layers weren't read.
-    if warnings.iter().any(|w| w.starts_with("the file's layers weren't read from its editing data")) {
+    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined);
+    // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
+    if !read {
         return (doc, warnings);
     }
-    warnings.retain(|w| w != vectorcraft_pdf::OFF_ARTBOARD_NOTE);
+    // The layers hold the art that the PDF part leaves out or, in a PDF, that the import clipped
+    // to the page.
+    warnings.retain(|w| w != vectorcraft_pdf::OFF_ARTBOARD_NOTE && w != vectorcraft_pdf::PAST_PAGE_NOTE);
     (doc, warnings)
 }
 

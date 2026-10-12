@@ -1080,31 +1080,32 @@ pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
     }
 }
 
-/// The `.ai` `visible` (read as its PDF part) read through its editing copy (`private`, the joined
-/// `AIPrivateData` streams) instead, as [`layered`] reads an EPS: with the layers and objects of the
-/// file, its artboards (with the PDF part's bleed), and the art that lies outside them, which its
-/// PDF part doesn't have.
+/// The `.ai` `visible` (read as its PDF part), or a PDF saved with the editing data, read through
+/// its editing copy (`private`, the joined `AIPrivateData` or `AIPDFPrivateData` streams) instead,
+/// as [`layered`] reads an EPS: with the layers and objects of the file, its artboards (with the
+/// PDF part's bleed), and the art that lies outside them, which its PDF part doesn't have.
 /// `warnings` are the notes of reading the PDF part; the notes returned are those, and the layers'.
-/// `outlined`: the PDF part's type was read as outlines (a file whose type shows then comes in as
-/// its PDF part).
-pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool) -> (Document, Vec<String>) {
-    let Ok(data) = ai::decode_private(private) else { return (visible, warnings) };
+/// The flag returned is `true` when the document is the one read from the layers; else the document
+/// is `visible`, its pages moved by `place_pages` when the layers can't be read. `outlined`: the
+/// PDF part's type was read as outlines (a file whose type shows then comes in as its PDF part).
+pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool) -> (Document, Vec<String>, bool) {
+    let Ok(data) = ai::decode_private(private) else { return (visible, warnings, false) };
     if !has_layers(&data) {
-        return (visible, warnings);
+        return (visible, warnings, false);
     }
     match build(&data, Some(&visible), Page::Artboard, outlined) {
         Ok((mut done, notes)) => {
             done.setup.bleed = visible.setup.bleed;
             let mut all = warnings;
             all.extend(notes.into_iter().filter(|n| !all.contains(n)).collect::<Vec<_>>());
-            (done, all)
+            (done, all, true)
         }
         Err(why) => {
             let mut all = warnings;
             all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
             let mut visible = visible;
             place_pages(&ai::artboards(&data), &mut visible);
-            (visible, all)
+            (visible, all, false)
         }
     }
 }

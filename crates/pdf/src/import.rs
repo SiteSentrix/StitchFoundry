@@ -136,7 +136,7 @@ pub const OFF_ARTBOARD_NOTE: &str =
     "only the PDF-compatible part of this file was read: art outside its artboards is kept in the editor's private data alone, so it doesn't open";
 
 /// Warning: art reaching past the page box was clipped to it.
-pub(crate) const PAST_PAGE_NOTE: &str = "art reaching past the page was clipped to it, as PDF viewers show it";
+pub const PAST_PAGE_NOTE: &str = "art reaching past the page was clipped to it, as PDF viewers show it";
 
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {

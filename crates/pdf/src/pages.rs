@@ -145,15 +145,18 @@ const PRIVATE_DATA_OWNER: &[u8] = b"Illustrator"; // brand-ok: the key the files
 const MAX_PRIVATE: usize = 256 << 20;
 
 /// The private data of an Illustrator `.ai` (its first page's `PieceInfo`): the `AIPrivateData`
-/// streams in order, joined. `None` for a PDF without them (or with a stream that can't be read).
+/// streams in order, joined. A PDF saved with the editing data has its streams under
+/// `AIPDFPrivateData1`, `AIPDFPrivateData2`, … instead: those are read when there is no
+/// `AIPrivateData1`. `None` for a PDF without either (or with a stream that can't be read).
 /// What it holds is the editor's own copy of the art (see `vectorcraft_eps::layered_ai`).
 pub fn illustrator_data(bytes: &[u8], password: Option<&str>) -> Option<Vec<u8>> {
     let pdf = open(bytes, password).ok()?;
     let page = pdf.pages().first()?;
     let private = page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private")?;
+    let key = if private.contains_key(b"AIPrivateData1") { "AIPrivateData" } else { "AIPDFPrivateData" };
     let mut data = vec![];
     for n in 1..=100_000u32 {
-        let Some(stream) = private.get::<Stream<'_>>(format!("AIPrivateData{n}").as_bytes()) else { break };
+        let Some(stream) = private.get::<Stream<'_>>(format!("{key}{n}").as_bytes()) else { break };
         data.extend_from_slice(&inflated(&stream, MAX_PRIVATE - data.len())?);
     }
     (!data.is_empty()).then_some(data)
