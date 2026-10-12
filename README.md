@@ -148,6 +148,9 @@ exposes to agents, and exported by VectorCraft's own renderer. The source files 
 ## Quick start
 
 ```sh
+git clone https://github.com/storytold/vectorcraft
+cd vectorcraft
+
 cargo run --release -p vectorcraft                          # desktop app
 cargo run --release -p vectorcraft -- examples/dusk-poster.vectorcraft
 cargo run --release -p vectorcraft -- --control 7979        # + JSON control channel
