@@ -353,6 +353,43 @@ fn monograms_stack_wear_ornaments_and_ring_borders() {
 }
 
 #[test]
+fn costs_are_estimated_and_printed() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    assert!(s.execute("embroidery.cost", &json!({})).is_err(), "nothing stitched");
+    rect(&mut s, 50.0 * PT, 50.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    let stitches = info["stitches"].as_f64().unwrap();
+    assert!(info["costEstimate"].is_null(), "not shown until asked for");
+    s.execute("embroidery.settings", &json!({"cost": {"perThousand": 2, "threadPerKm": 0, "setup": 10, "currency": "€"}})).unwrap();
+    let c = s.execute("embroidery.cost", &json!({"quantity": 5})).unwrap();
+    let want = (stitches / 1000.0 * 2.0 * 100.0).round() / 100.0;
+    assert!((c["stitches"].as_f64().unwrap() - want).abs() < 0.011 && c["setup"].as_f64() == Some(2.0), "{c}");
+    assert!((c["total"].as_f64().unwrap() - 5.0 * c["perPiece"].as_f64().unwrap()).abs() < 0.03 && c["currency"] == "€", "{c}");
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["settings"]["cost"]["heads"].as_u64(), Some(1));
+    assert!(info["costEstimate"]["text"].as_str().unwrap().starts_with('€'), "{info}");
+    // on the worksheet
+    s.execute("embroidery.worksheet", &json!({})).unwrap();
+    let mut texts = Vec::new();
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    assert!(texts.iter().any(|t| t.starts_with("Cost: €")), "{texts:?}");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    // off; bad values
+    s.execute("embroidery.settings", &json!({"cost": null})).unwrap();
+    assert!(s.execute("embroidery.info", &json!({})).unwrap()["costEstimate"].is_null());
+    for bad in [json!({"cost": 1}), json!({"cost": {"heads": 0}}), json!({"cost": {"perHour": -1}}), json!({"cost": {"currency": "dollars"}})] {
+        assert!(s.execute("embroidery.settings", &bad).is_err(), "{bad}");
+    }
+    assert!(s.execute("embroidery.cost", &json!({"quantity": 0})).is_err());
+}
+
+#[test]
 fn basting_is_sewn_first_round_the_design_or_inside_the_hoop() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

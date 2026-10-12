@@ -653,6 +653,64 @@ pub struct DocEmbroidery {
     /// Notes kept with the design (placement, garment, customer wishes), printed on worksheets.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub notes: String,
+    /// What sewing the design costs, shown with its figures and on worksheets (none: not shown).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost: Option<CostModel>,
+}
+
+/// What sewing a design costs: a price per thousand stitches, the machine's time (shared by
+/// the pieces its heads sew at once), the thread (top and bobbin) and a set-up charge spread
+/// over the order.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CostModel {
+    pub per_thousand: f64,
+    /// The machine's time, an hour.
+    pub per_hour: f64,
+    /// Thread, per 1000 m.
+    pub thread_per_km: f64,
+    /// Once an order.
+    pub setup: f64,
+    /// Pieces sewn at once.
+    pub heads: u32,
+    /// Written before amounts ("$", "€", "kr ").
+    pub currency: String,
+}
+
+impl Default for CostModel {
+    fn default() -> Self {
+        CostModel { per_thousand: 1.0, per_hour: 0.0, thread_per_km: 3.0, setup: 0.0, heads: 1, currency: "$".into() }
+    }
+}
+
+/// A cost estimate, a piece but for `total`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CostEstimate {
+    pub stitches: f64,
+    pub time: f64,
+    pub thread: f64,
+    pub setup: f64,
+    pub per_piece: f64,
+    pub total: f64,
+}
+
+impl CostModel {
+    /// The cost of `quantity` pieces of a design with these figures.
+    pub fn estimate(&self, stats: &crate::stats::PatternStats, quantity: u32) -> CostEstimate {
+        let q = f64::from(quantity.max(1));
+        let fin = |v: f64| if v.is_finite() { v.max(0.0) } else { 0.0 };
+        let stitches = fin(stats.stitches as f64 / 1000.0 * self.per_thousand);
+        let time = fin(stats.seconds / 3600.0 * self.per_hour / f64::from(self.heads.max(1)));
+        let thread = fin((stats.thread_m + stats.bobbin_m) / 1000.0 * self.thread_per_km);
+        let setup = fin(self.setup / q);
+        let per_piece = stitches + time + thread + setup;
+        CostEstimate { stitches, time, thread, setup, per_piece, total: per_piece * q }
+    }
+
+    /// `v` as money.
+    pub fn money(&self, v: f64) -> String {
+        format!("{}{v:.2}", self.currency)
+    }
 }
 
 /// An embroidery font being made: a document whose artboards, each named after its glyph, hold
@@ -787,6 +845,7 @@ impl Default for DocEmbroidery {
             motifs: Vec::new(),
             font: None,
             notes: String::new(),
+            cost: None,
         }
     }
 }
@@ -794,6 +853,35 @@ impl Default for DocEmbroidery {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn costs_add_stitches_time_thread_and_a_share_of_the_set_up() {
+        let stats = crate::stats::PatternStats {
+            stitches: 12_000,
+            jumps: 0,
+            trims: 0,
+            color_changes: 0,
+            stops: 0,
+            bounds: crate::geom::BBox::EMPTY,
+            width_mm: 0.0,
+            height_mm: 0.0,
+            thread_m: 40.0,
+            bobbin_m: 10.0,
+            seconds: 1800.0,
+            colors: Vec::new(),
+            max_stitch_mm: 0.0,
+        };
+        let m = CostModel { per_thousand: 0.5, per_hour: 20.0, thread_per_km: 4.0, setup: 30.0, heads: 4, currency: "€".into() };
+        let e = m.estimate(&stats, 10);
+        // 6 for the stitches, half an hour over 4 heads at 20 an hour, 50 m of thread, 30 over 10
+        for (got, want) in [(e.stitches, 6.0), (e.time, 2.5), (e.thread, 0.2), (e.setup, 3.0), (e.per_piece, 11.7), (e.total, 117.0)] {
+            assert!((got - want).abs() < 1e-9, "{e:?}");
+        }
+        assert_eq!(m.money(e.per_piece), "€11.70");
+        // no pieces is one; no heads is one
+        let one = CostModel { heads: 0, ..m.clone() }.estimate(&stats, 0);
+        assert!((one.setup - 30.0).abs() < 1e-9 && (one.time - 10.0).abs() < 1e-9, "{one:?}");
+    }
 
     #[test]
     fn lettering_follows_its_group_its_scale_going_into_its_size() {
