@@ -469,11 +469,14 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     let img = smoothed.as_ref().unwrap_or(img);
     let mut q = quantize(img, params);
     denoise(&mut q.labels, w, h, params.noise as usize);
-    // Pixel count per palette entry.
+    // Pixel count per palette entry, and the box its pixels lie in.
     let mut counts = vec![0usize; q.palette.len()];
-    for &l in &q.labels {
-        if let Some(c) = counts.get_mut(l as usize) {
+    let mut boxes: Vec<Option<(usize, usize, usize, usize)>> = vec![None; q.palette.len()];
+    for (i, &l) in q.labels.iter().enumerate() {
+        if let (Some(c), Some(b)) = (counts.get_mut(l as usize), boxes.get_mut(l as usize)) {
             *c += 1;
+            let (x, y) = (i % w, i / w);
+            *b = Some(b.map_or((x, y, x + 1, y + 1), |b| (b.0.min(x), b.1.min(y), b.2.max(x + 1), b.3.max(y + 1))));
         }
     }
     // Layers bottom → top: largest area first.
@@ -503,6 +506,7 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
         rank: &rank,
         params,
         img,
+        boxes,
         bw_tones: bw_tones(img, &q),
         style: params.outline_style(),
         opts: fit::FitOptions {
@@ -517,7 +521,12 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
         max_anchors,
     };
     let mut out = TraceResult::default();
-    for (paths, &(_, ci)) in parallel_map(&layers, |&(r, ci)| job.layer(r, ci)).into_iter().zip(&layers) {
+    // A layer takes about ten bytes a pixel of its box while it is traced (its mask, the labels
+    // of its components, the stack that fills them, its edges): as many layers at a time as fit
+    // in half a gigabyte, so that a large image is not traced at the cost of gigabytes.
+    let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
+    let at_a_time = ((512 << 20) / (largest * 10)).max(1);
+    for (paths, &(_, ci)) in parallel_map_at_most(at_a_time, &layers, |&(r, ci)| job.layer(r, ci)).into_iter().zip(&layers) {
         out.paths.extend(paths.ok_or(TraceError::TooComplex { max: max_anchors })?);
         let color = q.palette[ci];
         if !out.palette.contains(&color) {
@@ -547,6 +556,8 @@ struct Layers<'a> {
     rank: &'a [usize],
     params: &'a TraceParams,
     img: &'a Raster,
+    /// The box each palette entry's pixels lie in: `(x0, y0, x1, y1)`, the far sides excluded.
+    boxes: Vec<Option<(usize, usize, usize, usize)>>,
     /// Black and White: the mean luminance of the white pixels and of the black ones.
     bw_tones: [f64; 2],
     /// How outlines are fitted.
@@ -709,17 +720,23 @@ impl Layers<'_> {
         } else {
             (vec![], vec![])
         };
-        let mask: Vec<bool> = self
-            .q
-            .labels
-            .iter()
-            .enumerate()
-            .map(|(i, &l)| {
-                l != TRANSPARENT
-                    && !thin.get(i).copied().unwrap_or(false)
-                    && if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) && !self.ignored(l) } else { l as usize == ci }
-            })
-            .collect();
+        // The layer is traced within the box its pixels lie in, not the whole image.
+        let part = |l: u16| if overlapping { self.rank.get(l as usize).is_some_and(|&lr| lr >= r) && !self.ignored(l) } else { l as usize == ci };
+        let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+        for (l, b) in self.boxes.iter().enumerate() {
+            if let Some(b) = b.filter(|_| part(l as u16)) {
+                (x0, y0, x1, y1) = (x0.min(b.0), y0.min(b.1), x1.max(b.2), y1.max(b.3));
+            }
+        }
+        if x0 >= x1 || y0 >= y1 {
+            return Some(vec![]);
+        }
+        let (bw, bh) = (x1 - x0, y1 - y0);
+        let mut mask = Vec::with_capacity(bw * bh);
+        for y in y0..y1 {
+            let row = self.q.labels.get(y * w + x0..y * w + x1)?;
+            mask.extend(row.iter().enumerate().map(|(k, &l)| l != TRANSPARENT && !thin.get(y * w + x0 + k).copied().unwrap_or(false) && part(l)));
+        }
         // Without Fills, areas are outlined with a 1 px stroke.
         let area_stroke = (params.strokes && !params.fills).then_some(1.0);
         let min_hole = params.noise.max(1) as i64;
@@ -732,7 +749,16 @@ impl Layers<'_> {
             paths.push(TracedPath { path, color, pixels, stroke });
             true
         };
-        for comp in trace_mask(&mask, w, h) {
+        let mut comps = trace_mask(&mask, bw, bh);
+        drop(mask);
+        for comp in &mut comps {
+            for l in std::iter::once(&mut comp.outer).chain(&mut comp.holes) {
+                for p in &mut l.pts {
+                    *p = (p.0 + x0 as i32, p.1 + y0 as i32);
+                }
+            }
+        }
+        for comp in comps {
             let fit = |l: &Loop| fit::fit_loop(l, w, h, &|c| (self.shift(c), self.neighbour(c)), &|x, y| self.junction(x, y), &self.style);
             let Some(outer) = fit(&comp.outer) else { continue };
             let mut subs = vec![outer];
@@ -756,9 +782,14 @@ impl Layers<'_> {
 }
 
 /// `f` of each of `items`, in order, spread over the available cores.
-#[cfg(not(target_arch = "wasm32"))]
 fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
-    let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(items.len());
+    parallel_map_at_most(usize::MAX, items, f)
+}
+
+/// `f` of each of `items`, in order, spread over the available cores, at most `at_a_time` at once.
+#[cfg(not(target_arch = "wasm32"))]
+fn parallel_map_at_most<T: Sync, R: Send>(at_a_time: usize, items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(items.len()).min(at_a_time);
     if threads <= 1 {
         return items.iter().map(f).collect();
     }
@@ -787,7 +818,7 @@ fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Ve
 
 /// `f` of each of `items`, in order (no threads on the web).
 #[cfg(target_arch = "wasm32")]
-fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+fn parallel_map_at_most<T: Sync, R: Send>(_: usize, items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     items.iter().map(f).collect()
 }
 

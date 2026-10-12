@@ -1037,3 +1037,15 @@ fn abutting_regions_share_one_curve_along_their_edge() {
     }
     assert!(shared >= 12, "{shared} shared curves");
 }
+
+#[test]
+fn layers_traced_a_few_at_a_time_come_out_the_same() {
+    let items: Vec<usize> = (0..40).collect();
+    for at_a_time in [1, 3, usize::MAX] {
+        assert_eq!(parallel_map_at_most(at_a_time, &items, |i| i * i), items.iter().map(|i| i * i).collect::<Vec<_>>());
+    }
+    // A layer is traced within the box of its pixels: a shape far from the image's origin stays there.
+    let img = Raster::from_fn(90, 70, |x, y| if (60..80).contains(&x) && (40..60).contains(&y) { BLACK } else { WHITE });
+    let b = trace(&img, &bw()).paths[0].path.bounds().unwrap();
+    assert!([(b.x0, 60.0), (b.y0, 40.0), (b.x1, 80.0), (b.y1, 60.0)].iter().all(|(got, want)| (got - want).abs() < 0.01), "{b:?}");
+}
