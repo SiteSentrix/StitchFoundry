@@ -4606,6 +4606,7 @@ theme	Appearance	Kinézet
 	Use Outside Rectangle As Frame	Külső téglalap használata keretként
 	Create Compound Path From Ellipses	Összetett útvonal létrehozása az ellipszisekből
 	Fill Grid	Rács kitöltése
+	Select two or more objects, or a group	Jelöljön ki két vagy több objektumot, vagy egy csoportot
 # 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
 	Back	Hátulról
 	Both sides	Mindkét oldal

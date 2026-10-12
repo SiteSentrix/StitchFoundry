@@ -191,6 +191,20 @@ fn pathfinder_undo_restores() {
     assert!(s.doc().unwrap().selection.contains(a) && s.doc().unwrap().selection.contains(b));
 }
 
+/// #1450: a group selected alone gives the shape modes its members to work on.
+#[test]
+fn a_group_selected_alone_is_combined_member_by_member() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(&mut s, 10.0, 0.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.len(), 1);
+    let id = s.execute("object.pathfinder.minusFront", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let bounds = s.doc().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
+    assert_eq!((bounds.x0, bounds.x1), (0.0, 10.0), "the back member less the front one");
+}
+
 #[test]
 fn unite_with_group() {
     let mut s = session();

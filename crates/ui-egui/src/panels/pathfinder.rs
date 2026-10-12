@@ -29,14 +29,34 @@ fn run(app: &mut VectorcraftApp, ui: &Ui, op: &str, label: &str) {
     }
 }
 
+/// How many objects the selection gives an operation: a group selected alone counts as its
+/// members (#1450).
+fn operands(app: &VectorcraftApp) -> usize {
+    let alone = app.session.active().filter(|d| d.selection.len() == 1).and_then(|d| d.doc.node(*d.selection.objects.first()?));
+    match alone.and_then(|n| n.children().filter(|_| matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. }))) {
+        Some(members) => members.len(),
+        None => selection_len(app),
+    }
+}
+
+/// An operation's button, greyed out and saying what it needs unless the selection has `min` operands.
+fn button(ui: &mut Ui, icon: &str, tip: &str, n: usize, min: usize) -> bool {
+    let resp = widgets::icon_button_enabled(ui, icon, tip, false, n >= min, 34.0);
+    if n < min {
+        resp.on_hover_text(tl!("Select two or more objects, or a group"));
+        return false;
+    }
+    resp.clicked()
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let n = selection_len(app);
+    let n = operands(app);
     let t = crate::theme::Tokens::get(ui.ctx());
     widgets::subheader(ui, tl!("Shape Modes:"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
         for (icon, tip, op) in SHAPE_MODES {
-            if widgets::icon_button_enabled(ui, icon, tip, false, n >= 2, 34.0).clicked() {
+            if button(ui, icon, tip, n, 2) {
                 run(app, ui, op, tip);
             }
         }
@@ -53,7 +73,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.spacing_mut().item_spacing.x = 5.0;
         for (icon, tip, op) in PATHFINDERS {
             let min = if op == "outline" || op == "divide" { 1 } else { 2 };
-            if widgets::icon_button_enabled(ui, icon, tip, false, n >= min, 34.0).clicked() {
+            if button(ui, icon, tip, n, min) {
                 run(app, ui, op, tip);
             }
         }

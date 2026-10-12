@@ -4188,6 +4188,7 @@ lighting	Light	Світло
 	Use Outside Rectangle As Frame	Використовувати зовнішній прямокутник як рамку
 	Create Compound Path From Ellipses	Створити складений контур з еліпсів
 	Fill Grid	Залити сітку
+	Select two or more objects, or a group	Виділіть два або більше об’єктів чи групу
 # 3D and Materials › Extrude & Bevel, Inflate and Rotate: options, Position presets and bevel shapes.
 	Back	Ззаду
 	Both sides	З обох боків
