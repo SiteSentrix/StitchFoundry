@@ -235,10 +235,13 @@ fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
     v
 }
 
-/// The anchor within `tol` of `p` nearest to it, of the topmost visible path or area type frame
-/// that has one: (id, si, ai, where it is).
+/// The anchor within `tol` of `p` nearest to it, of the topmost selected path or area type frame
+/// that has one, else of the topmost visible one: (id, si, ai, where it is). Selected objects come
+/// first so an object above can't take the press from the one being edited (#1508), as
+/// [`hovered_anchor`] marks it.
 fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, Point)> {
-    let owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n));
+    let mut owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n));
+    owners.sort_by_key(|id| !cx.selection.contains(*id));
     owners.into_iter().find_map(|id| {
         let pd = cx.doc.node(id).and_then(editable_path)?;
         nearest_anchor(&pd, p, tol).map(|(si, ai, a)| (id, si, ai, a))
@@ -1222,6 +1225,32 @@ mod tests {
         let sq = vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 300.0, 400.0, 400.0));
         d.insert(Some(l), 1, vectorcraft_doc::Node::path(b, sq, vectorcraft_doc::Appearance::default_art())).unwrap();
         (d, a, b)
+    }
+
+    /// An anchor of a selected path is picked before the one of an unselected path on a layer
+    /// above that covers it, as Highlight anchors on mouse over already marks it (#1508); with
+    /// nothing selected, the topmost path's anchor is picked.
+    #[test]
+    fn a_selected_path_s_anchor_is_picked_before_one_above_it() {
+        let (mut d, a) = doc_with_rect();
+        let top = d.add_layer(None);
+        let b = d.alloc_id();
+        let sq = vectorcraft_geom::shapes::rectangle(Rect::new(101.0, 100.0, 201.0, 200.0));
+        d.insert(Some(top), 0, vectorcraft_doc::Node::path(b, sq, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let p = paint();
+        let pick = |id: NodeId| vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "set"}))];
+        let s = anchors_of(a, &[(0, 2)]);
+        let mut t = DirectSelectionTool::new(false);
+        assert_eq!(t.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 101.0, 100.0)), pick(a));
+        let mut whole = Selection::default();
+        whole.set([a]);
+        let mut t = DirectSelectionTool::new(false);
+        let cx2 = cx(&d, &whole, &p);
+        assert!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Down, 101.0, 100.0)).is_empty());
+        assert_eq!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Up, 101.0, 100.0)), pick(a));
+        let none = Selection::default();
+        let mut t = DirectSelectionTool::new(false);
+        assert_eq!(t.pointer(&cx(&d, &none, &p), &PointerEvent::new(PointerKind::Down, 101.0, 100.0)), pick(b));
     }
 
     /// The anchors `anchors` of path `id` direct-selected.
