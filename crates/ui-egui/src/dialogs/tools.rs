@@ -20,6 +20,13 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             let options = app.session.tool_options_of(kind);
             Dialog::new(kind, json!({"x": x, "y": y, "width": "100 pt", "height": "100 pt", "rows": options["rows"], "columns": options["columns"]}))
         }
+        "polarGrid" => {
+            let options = app.session.tool_options_of(kind);
+            Dialog::new(
+                kind,
+                json!({"x": x, "y": y, "width": "100 pt", "height": "100 pt", "concentric": options["concentric"], "radial": options["radial"]}),
+            )
+        }
         // Graph tool click: the graph's size.
         "graph" => Dialog::new(
             "command",

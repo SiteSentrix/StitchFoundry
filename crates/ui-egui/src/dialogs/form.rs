@@ -49,7 +49,7 @@ pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, key: &str, unit: Unit, w
 fn lengths(kind: &str) -> &'static [&'static str] {
     match kind {
         "move" => &["dx", "dy"],
-        "rectangle" | "ellipse" | "rectangularGrid" | "artboardOptions" => &["width", "height"],
+        "rectangle" | "ellipse" | "rectangularGrid" | "polarGrid" | "artboardOptions" => &["width", "height"],
         "roundedRectangle" => &["width", "height", "radius"],
         "polygon" => &["radius"],
         "star" => &["radius1", "radius2"],
@@ -68,6 +68,7 @@ fn order(kind: &str) -> &'static [&'static str] {
         "offsetPath" => &["offset", "joins", "miterLimit"],
         "splitIntoGrid" => &["rows", "columns", "gutter"],
         "rectangularGrid" => &["width", "height", "rows", "columns"],
+        "polarGrid" => &["width", "height", "concentric", "radial"],
         "artboardOptions" => &["name", "width", "height"],
         _ => &[],
     }
@@ -182,6 +183,8 @@ pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
                 let label = match (d.kind.as_str(), k.as_str()) {
                     ("rectangularGrid", "rows") => tl!("Horizontal Dividers:").into(),
                     ("rectangularGrid", "columns") => tl!("Vertical Dividers:").into(),
+                    ("polarGrid", "concentric") => tl!("Concentric Dividers:").into(),
+                    ("polarGrid", "radial") => tl!("Radial Dividers:").into(),
                     _ => humanized(&k),
                 };
                 field(ui, d, &k, &label);

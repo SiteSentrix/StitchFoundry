@@ -41,6 +41,7 @@ fn kinds_map_to_their_dialogs() {
         ("roundedRectangle", DialogKind::Shape),
         ("lineSegment", DialogKind::Shape),
         ("rectangularGrid", DialogKind::Shape),
+        ("polarGrid", DialogKind::Shape),
         ("shear", DialogKind::Transform),
         ("splitIntoGrid", DialogKind::PathOp),
         ("artboardOptions", DialogKind::ArtboardOptions),
@@ -87,6 +88,7 @@ fn every_dialog_draws() {
         "star",
         "lineSegment",
         "rectangularGrid",
+        "polarGrid",
         "rotate",
         "reflect",
         "scale",
@@ -649,4 +651,73 @@ fn zig_zag_has_sliders_and_radio_buttons() {
         assert!(lines.contains(&want), "no {want:?} in {lines:?}");
     }
     assert!(!lines.contains(&"Ridges:"), "{lines:?}");
+}
+
+#[test]
+fn polar_grid_shared_canvas_click_defaults_units_counts_and_history() {
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = app();
+    app.select_tool("polarGrid");
+    app.run("tool.setOption", json!({"tool": "polarGrid", "values": {"concentric": 2, "radial": 3}})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, 30.0, 40.0), Default::default());
+    }
+    assert_eq!(DialogKind::of("polarGrid"), Some(DialogKind::Shape));
+    let d = app.ui.dialog.as_mut().expect("canvas click opens the shared shape form");
+    assert_eq!(d.fields["width"], json!("100 pt"));
+    assert_eq!(d.fields["height"], json!("100 pt"));
+    assert_eq!((d.fields["concentric"].clone(), d.fields["radial"].clone()), (json!(2), json!(3)));
+    d.fields.insert("width".into(), json!("25.4 mm"));
+    d.fields.insert("height".into(), json!("0.5 in"));
+    frame(&mut app, Default::default());
+    let result = confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    let s = app.session.doc().unwrap();
+    let group = s.doc.node(NodeId(result["id"].as_u64().unwrap())).unwrap();
+    let children = group.children().unwrap();
+    assert_eq!(children.len(), 6);
+    assert_eq!(children.iter().filter(|n| n.path_data().unwrap().is_closed()).count(), 3);
+    assert_eq!(s.history.undo.len(), undo + 1);
+    let made = s.doc.clone();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, made);
+}
+
+#[test]
+fn polar_grid_shared_cancel_reopen_zero_counts_and_failed_creation() {
+    let mut app = app();
+    app.run("tool.setOption", json!({"tool": "polarGrid", "values": {"concentric": 2, "radial": 3}})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    open_tool_dialog(&mut app, "polarGrid", json!({"x": 10, "y": 20}));
+    let d = app.ui.dialog.as_mut().expect("shared Polar Grid form opens");
+    d.fields.insert("concentric".into(), json!(8));
+    cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    open_tool_dialog(&mut app, "polarGrid", json!({"x": 10, "y": 20}));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["concentric"], json!(2));
+    for key in ["concentric", "radial"] {
+        app.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(0));
+    }
+    let result = confirm(&mut app).unwrap();
+    let group = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(result["id"].as_u64().unwrap())).unwrap();
+    assert_eq!(group.children().unwrap().len(), 1);
+    assert!(group.children().unwrap()[0].path_data().unwrap().is_closed());
+    open_tool_dialog(&mut app, "polarGrid", json!({"x": 10, "y": 20}));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["radial"], json!(0));
+    cancel(&mut app);
+    let layer = app.session.doc().unwrap().doc.layers[0].id;
+    app.run("layer.setProps", json!({"ids": [layer.0], "locked": true})).unwrap();
+    let options = app.session.tool_options_of("polarGrid");
+    let before = app.session.doc().unwrap().doc.clone();
+    open_tool_dialog(&mut app, "polarGrid", json!({"x": 10, "y": 20}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("radial".into(), json!(9));
+    assert!(confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options_of("polarGrid"), options);
+    assert_eq!(app.session.doc().unwrap().doc, before);
 }
