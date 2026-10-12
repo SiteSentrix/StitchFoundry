@@ -399,6 +399,22 @@ fn structured_junk() {
             "embroidery.placeArt",
             json!({"svg": "<svg xmlns='http://www.w3.org/2000/svg'><rect width='9' height='9' fill='#000'/></svg>", "at": [1e308, -1e308], "size": 5}),
         ),
+        // Fill textures and split lines with absurd values, on fills made for them.
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.set", "params": {"type": "fill"}},
+                {"command": "embroidery.setParams", "params": {"params": {"texture": {"pattern": "circles", "size": 1e308, "angle": 1e308}}}},
+                {"command": "embroidery.setParams", "params": {"params": {"texture": {"pattern": "scales", "size": -1e308, "angle": -0.0}}}},
+                {"command": "embroidery.carveSplits", "params": {"repeat": 0.5, "keep": true}},
+                {"command": "embroidery.carveSplits", "params": {"repeat": 1e308}},
+                {"command": "embroidery.setParams", "params": {"params": {"texture": {"pattern": "nope"}}}},
+            ]}),
+        ),
+        ("embroidery.setSplits", json!({"id": 1, "splits": [[[0, 0], [1e308, -1e308]], [[-1e308, 1e308], [0, 1e-308], [5, 5]]]})),
+        ("embroidery.setSplits", json!({"id": 2, "splits": [[[0, 0]], "x", null]})),
+        ("embroidery.carveSplits", json!({"repeat": -1, "keep": "yes"})),
+        ("embroidery.clearSplits", json!({"ids": [u64::MAX]})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {

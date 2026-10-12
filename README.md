@@ -41,6 +41,9 @@
   the shape and the stitches follow.
 - **Direction placed for you, then yours to change.** Stitch angles are chosen automatically and
   stay editable on the canvas with inclination lines and start and stop beads.
+- **Fill textures.** Tatami fills take a texture pattern (diamonds, waves, herringbone, bricks,
+  circles, scales) or lines carved in from your own art: a drawn line, a shape's outline like a
+  carving stamp, or a curve repeated across the fill.
 - **Digitizing tools.** Column A/B digitizing, a radial digitizing widget with satin brushes,
   lettering from any font, and Auto-Digitize for flat-colour images.
 - **Design from Prompt and Redraw Image.** Describe a design, or select a logo, and Claude draws

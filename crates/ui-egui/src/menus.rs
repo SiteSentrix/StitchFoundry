@@ -93,6 +93,8 @@ fn embroidery_menu() -> Vec<Item> {
         ),
         c("Auto Direction", "embroidery.autoDirection"),
         c("Clear Inclination Lines", "embroidery.clearGuides"),
+        c("Carve Split Lines", "embroidery.carveSplits"),
+        c("Clear Split Lines", "embroidery.clearSplits"),
         c("Reverse Stitch Direction", "embroidery.reverse"),
         c("Make Properties Current", "embroidery.makeCurrent"),
         Sep,

@@ -9,9 +9,11 @@
 //! connecting stitches end up hidden — the same trick human digitizers use.
 
 use super::out::Out;
-use crate::geom::{Affine, Point, Polygon, poly, polyline};
+use crate::geom::{Affine, BBox, Point, Polygon, poly, polyline};
+use crate::model::{Texture, TexturePattern};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::f64::consts::{PI, TAU};
 
 /// Cost multiplier for travelling along an outline stretch whose neighbouring
 /// rows are already sewn (the travel would sit visibly on top).
@@ -42,6 +44,11 @@ pub(crate) struct ScanConfig {
     pub travel_length: f64,
     /// Needle-point jitter (0–1, fraction of a quarter stitch).
     pub random: f64,
+    /// Programmed splits (tatami): the needle points follow the lines of a pattern tiled over
+    /// the fill.
+    pub texture: Option<Texture>,
+    /// Split lines (tatami; design space, mm): each row has a needle point where it crosses one.
+    pub splits: Vec<Vec<Point>>,
 }
 
 impl Default for ScanConfig {
@@ -56,6 +63,158 @@ impl Default for ScanConfig {
             pull_comp: 0.0,
             travel_length: 2.5,
             random: 0.0,
+            texture: None,
+            splits: Vec::new(),
+        }
+    }
+}
+
+/// Most segments a programmed split pattern is tiled into over one fill: a larger fill gets
+/// larger tiles.
+const MAX_PATTERN_SEGMENTS: f64 = 400_000.0;
+/// Most split-line segments drawn on one fill that are used.
+const MAX_SPLIT_SEGMENTS: usize = 100_000;
+/// Most bands of rows the split lines are sorted into.
+const MAX_BANDS: f64 = 4096.0;
+
+/// Split lines in row space (rows run along x), sorted into bands of rows so a row only looks
+/// at the lines near it.
+struct Splits {
+    /// Segments, each from its lower to its higher y.
+    segs: Vec<(Point, Point)>,
+    /// The segments reaching into each band.
+    bands: Vec<Vec<usize>>,
+    y0: f64,
+    band: f64,
+    /// Programmed splits: the needle points are where the rows cross the lines, with the tatami
+    /// grid only filling gaps too long for one stitch. Otherwise the grid stays and the
+    /// crossings join it.
+    pattern: bool,
+}
+
+impl Splits {
+    /// The split lines of `cfg` over a fill whose rings in row space are `rings` (`fwd` turns
+    /// design space into row space); `None` without any (or for satin).
+    fn new(cfg: &ScanConfig, rings: &[Vec<Point>], fwd: &Affine) -> Option<Splits> {
+        if !cfg.stitch_length.is_finite() || (cfg.texture.is_none() && cfg.splits.is_empty()) {
+            return None;
+        }
+        let bb = rings.iter().map(|r| polyline::bbox(r)).reduce(BBox::union)?;
+        if bb.is_empty() || !(bb.width().is_finite() && bb.height().is_finite()) {
+            return None;
+        }
+        let mut segs: Vec<(Point, Point)> = Vec::new();
+        for line in &cfg.splits {
+            for w in line.windows(2) {
+                if let [a, b] = w {
+                    push_segment(&mut segs, fwd.apply(*a), fwd.apply(*b));
+                }
+            }
+        }
+        segs.truncate(MAX_SPLIT_SEGMENTS);
+        if let Some(t) = cfg.texture {
+            pattern_segments(t, &bb, &mut segs);
+        }
+        if segs.is_empty() {
+            return None;
+        }
+        let (y0, y1) = (bb.min.y, bb.max.y);
+        let band = ((y1 - y0) / MAX_BANDS).max(2.0);
+        let n = ((y1 - y0) / band).floor() as usize + 1;
+        let mut bands: Vec<Vec<usize>> = vec![Vec::new(); n];
+        for (i, (a, b)) in segs.iter().enumerate() {
+            if b.y < y0 || a.y > y1 {
+                continue;
+            }
+            let first = ((a.y - y0) / band).floor().max(0.0) as usize;
+            let last = (((b.y - y0) / band).floor().max(0.0) as usize).min(n - 1);
+            for list in bands.iter_mut().take(last + 1).skip(first) {
+                list.push(i);
+            }
+        }
+        Some(Splits { segs, bands, y0, band, pattern: cfg.texture.is_some() })
+    }
+
+    /// Where the row at `y` crosses the lines, in increasing x.
+    fn crossings(&self, y: f64, out: &mut Vec<f64>) {
+        out.clear();
+        let k = ((y - self.y0) / self.band).floor();
+        if k.is_nan() || k < 0.0 {
+            return;
+        }
+        let Some(list) = self.bands.get(k as usize) else { return };
+        for &i in list {
+            let Some(&(a, b)) = self.segs.get(i) else { continue };
+            // Half-open, so a row through a vertex counts it once.
+            if a.y <= y && y < b.y {
+                let x = a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x);
+                if x.is_finite() {
+                    out.push(x);
+                }
+            }
+        }
+        out.sort_by(f64::total_cmp);
+    }
+}
+
+/// Adds the segment from `a` to `b`, lower end first, unless it runs along the rows (it would
+/// never cross them).
+fn push_segment(segs: &mut Vec<(Point, Point)>, a: Point, b: Point) {
+    if a.is_finite() && b.is_finite() && (a.y - b.y).abs() > 1e-9 {
+        segs.push(if a.y <= b.y { (a, b) } else { (b, a) });
+    }
+}
+
+/// The lines of one tile of `pattern`, in tile widths with y down, and the tile's height. Every
+/// line crosses the rows: one along them would leave no needle points.
+fn tile(pattern: TexturePattern) -> (f64, Vec<Vec<Point>>) {
+    let p = Point::new;
+    let curve = |n: usize, f: &dyn Fn(f64) -> Point| (0..=n).map(|k| f(k as f64 / n as f64)).collect::<Vec<_>>();
+    match pattern {
+        TexturePattern::Diamonds => (1.0, vec![vec![p(0.0, 0.0), p(1.0, 1.0)], vec![p(1.0, 0.0), p(0.0, 1.0)]]),
+        TexturePattern::Waves => (1.0, vec![curve(16, &|t| p(0.5 + 0.2 * (TAU * t).sin(), t))]),
+        TexturePattern::Herringbone => (1.0, vec![vec![p(0.0, 0.0), p(0.5, 0.5), p(0.0, 1.0)], vec![p(0.5, 0.0), p(1.0, 0.5), p(0.5, 1.0)]]),
+        // Courses half a brick high; the joints of one course fall mid-brick in the next.
+        TexturePattern::Bricks => (1.0, vec![vec![p(0.0, 0.0), p(0.0, 0.5)], vec![p(0.5, 0.5), p(0.5, 1.0)]]),
+        TexturePattern::Circles => (1.0, vec![curve(20, &|t| p(0.5 + 0.36 * (TAU * t).cos(), 0.5 + 0.36 * (TAU * t).sin()))]),
+        // Rows of half circles hanging from the row above, each row half a scale along.
+        TexturePattern::Scales => {
+            let arc = |cx: f64, cy: f64| curve(12, &|t: f64| p(cx + 0.5 * (PI * t).cos(), cy + 0.5 * (PI * t).sin()));
+            (1.0, vec![arc(0.5, 0.0), arc(0.0, 0.5)])
+        }
+    }
+}
+
+/// The lines of texture `t` tiled over `bb` (row space), turned by its angle.
+fn pattern_segments(t: Texture, bb: &BBox, segs: &mut Vec<(Point, Point)>) {
+    let (h, lines) = tile(t.pattern);
+    let per_tile: usize = lines.iter().map(|l| l.len().saturating_sub(1)).sum();
+    let angle = if t.angle.is_finite() { t.angle.to_radians() } else { 0.0 };
+    let (turn, back) = (Affine::rotate(angle), Affine::rotate(-angle));
+    // The fill's box in pattern space.
+    let pb = BBox::from_points(bb.corners().map(|c| back.apply(c)));
+    let mut w = if t.size.is_finite() { t.size.clamp(1.0, 100.0) } else { 6.0 };
+    let tiles = |w: f64| ((pb.width() / w).ceil() + 3.0) * ((pb.height() / (w * h)).ceil() + 3.0);
+    let count = tiles(w) * per_tile as f64;
+    if !count.is_finite() {
+        return;
+    }
+    if count > MAX_PATTERN_SEGMENTS {
+        w *= (count / MAX_PATTERN_SEGMENTS).sqrt();
+    }
+    // Tiles from a fixed origin, so the texture stays put while the shape changes.
+    let (i0, i1) = ((pb.min.x / w).floor() as i64 - 1, (pb.max.x / w).ceil() as i64);
+    let (j0, j1) = ((pb.min.y / (w * h)).floor() as i64 - 1, (pb.max.y / (w * h)).ceil() as i64);
+    for j in j0..=j1 {
+        for i in i0..=i1 {
+            let o = Point::new(i as f64 * w, j as f64 * w * h);
+            for line in &lines {
+                for pair in line.windows(2) {
+                    if let [a, b] = pair {
+                        push_segment(segs, turn.apply(o + *a * w), turn.apply(o + *b * w));
+                    }
+                }
+            }
         }
     }
 }
@@ -405,8 +564,9 @@ fn travel_path(pts: &mut Vec<Point>, g: &Graph, path: &[usize], step: f64) {
     }
 }
 
-/// Needle positions along one row from `xa` to `xb` (inclusive).
-fn row_points(xa: f64, xb: f64, row: usize, cfg: &ScanConfig, out: &mut Vec<f64>) {
+/// Needle positions along one row (number `row`, at height `y`) from `xa` to `xb` (inclusive),
+/// with needle points where it crosses `splits`.
+fn row_points(xa: f64, xb: f64, (row, y): (usize, f64), cfg: &ScanConfig, splits: Option<&Splits>, out: &mut Vec<f64>) {
     out.clear();
     let (lo, hi) = (xa.min(xb), xa.max(xb));
     let len = hi - lo;
@@ -437,7 +597,16 @@ fn row_points(xa: f64, xb: f64, row: usize, cfg: &ScanConfig, out: &mut Vec<f64>
     };
     let x_at = |m: i64| (phase + m as f64 * step + jitter(m)).clamp(lo + min_end * 0.5, hi - min_end * 0.5);
     out.push(xa);
-    if m1 >= m0 {
+    if let Some(sp) = splits.filter(|_| cfg.stitch_length.is_finite()) {
+        let grid: Vec<f64> = if m1 >= m0 { (m0..=m1).map(x_at).collect() } else { Vec::new() };
+        let mut inner = Vec::new();
+        split_points(sp, y, (lo, hi), &grid, step, min_end, &mut inner);
+        if xa <= xb {
+            out.extend(inner);
+        } else {
+            out.extend(inner.into_iter().rev());
+        }
+    } else if m1 >= m0 {
         if xa <= xb {
             for m in m0..=m1 {
                 out.push(x_at(m));
@@ -449,6 +618,51 @@ fn row_points(xa: f64, xb: f64, row: usize, cfg: &ScanConfig, out: &mut Vec<f64>
         }
     }
     out.push(xb);
+}
+
+/// Needle points strictly inside the row at `y` from `lo` to `hi`, in increasing x, with split
+/// lines `sp`: one where the row crosses each line (none nearer than `edge` to an end or to the
+/// one before), the tatami `grid` points at least `edge` from them (programmed splits keep only
+/// those that break a gap too long for one stitch), and even steps through any gap still too
+/// long.
+fn split_points(sp: &Splits, y: f64, (lo, hi): (f64, f64), grid: &[f64], step: f64, edge: f64, out: &mut Vec<f64>) {
+    let mut cuts = Vec::new();
+    sp.crossings(y, &mut cuts);
+    let mut kept: Vec<f64> = Vec::with_capacity(cuts.len());
+    for c in cuts {
+        if c >= lo + edge && c <= hi - edge && kept.last().is_none_or(|&k| c - k >= edge) {
+            kept.push(c);
+        }
+    }
+    let long = step * 1.35;
+    let mut grid = grid.iter().copied().peekable();
+    let mut gap: Vec<f64> = Vec::new();
+    // Each gap from `a` to `b` between the row's ends and the crossings.
+    let (mut a, mut a_cut) = (lo, false);
+    for (i, b) in kept.iter().copied().chain(std::iter::once(hi)).enumerate() {
+        let b_cut = i < kept.len();
+        let wide = b - a > long;
+        gap.clear();
+        gap.push(a);
+        while let Some(x) = grid.next_if(|&x| x < b) {
+            let clear = x > a && (!a_cut || x - a >= edge) && (!b_cut || b - x >= edge);
+            if clear && (!sp.pattern || wide) {
+                gap.push(x);
+            }
+        }
+        gap.push(b);
+        for w in gap.windows(2) {
+            let [p, q] = w else { continue };
+            if q - p > long {
+                let n = ((q - p) / step).ceil().min(1e4) as usize;
+                out.extend((1..n).map(|k| p + (q - p) * k as f64 / n as f64));
+            }
+            if *q < b || b_cut {
+                out.push(*q);
+            }
+        }
+        (a, a_cut) = (b, b_cut);
+    }
 }
 
 /// Fills one polygon. Returns needle positions in design space.
@@ -465,6 +679,7 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
     let Some(mut plan) = plan(&rings, cfg) else {
         return Vec::new();
     };
+    let splits = Splits::new(cfg, &rings, &fwd);
     let hint_rs = hint.map(|h| fwd.apply(h));
     let pc = cfg.pull_comp;
     let travel = cfg.travel_length.max(0.5);
@@ -589,7 +804,7 @@ pub(crate) fn scan_fill(polygon: &Polygon, cfg: &ScanConfig, hint: Option<Point>
             } else {
                 push_run(&mut pts, start, travel.min(cfg.stitch_length.max(1.0)));
             }
-            row_points(xa, xb, s.row, cfg, &mut xs);
+            row_points(xa, xb, (s.row, s.y), cfg, splits.as_ref(), &mut xs);
             for &x in xs.iter().skip(1) {
                 pts.push(Point::new(x, s.y));
             }
@@ -662,6 +877,103 @@ mod tests {
 
     fn max_stitch(pts: &[Point]) -> f64 {
         pts.windows(2).map(|w| w[0].distance(w[1])).fold(0.0, f64::max)
+    }
+
+    /// The needle points of each row (by height), in increasing x.
+    fn rows(pts: &[Point]) -> Vec<(f64, Vec<f64>)> {
+        let mut by_y: std::collections::BTreeMap<i64, (f64, Vec<f64>)> = std::collections::BTreeMap::new();
+        for p in pts {
+            by_y.entry((p.y * 1e6).round() as i64).or_insert((p.y, Vec::new())).1.push(p.x);
+        }
+        by_y.into_values()
+            .map(|(y, mut xs)| {
+                xs.sort_by(f64::total_cmp);
+                (y, xs)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn rows_have_a_needle_point_where_they_cross_a_split_line() {
+        let poly = Polygon::from_ring(rect(0.0, 0.0, 30.0, 20.0));
+        let cfg = ScanConfig { splits: vec![vec![Point::new(10.3, -5.0), Point::new(10.3, 25.0)]], ..Default::default() };
+        let pts = scan_fill(&poly, &cfg, None, None);
+        let plain = rows(&scan_fill(&poly, &ScanConfig::default(), None, None));
+        let split = rows(&pts);
+        assert_eq!(split.len(), plain.len());
+        for ((y, xs), (_, before)) in split.iter().zip(&plain) {
+            assert!(xs.iter().any(|x| (x - 10.3).abs() < 1e-9), "row {y}: {xs:?}");
+            // Away from the line the tatami grid stays as it was.
+            let far = |v: &Vec<f64>| v.iter().copied().filter(|x| (x - 10.3).abs() > 4.0 * 1.35).collect::<Vec<_>>();
+            assert_eq!(far(xs), far(before), "row {y}");
+        }
+        assert!(max_stitch(&pts) <= 4.0 * 1.35 + 1e-9, "{}", max_stitch(&pts));
+    }
+
+    #[test]
+    fn a_texture_puts_the_needle_points_on_its_lines() {
+        let poly = Polygon::from_ring(rect(0.0, 0.0, 40.0, 30.0));
+        let cfg = ScanConfig { texture: Some(Texture { pattern: TexturePattern::Bricks, size: 6.0, angle: 0.0 }), ..Default::default() };
+        let pts = scan_fill(&poly, &cfg, None, None);
+        let edge = (4.0f64 * 0.35).clamp(0.4, 1.5);
+        let mut checked = 0;
+        for (y, xs) in rows(&pts) {
+            // Courses 3 mm high: joints every 6 mm, half a brick along in every other course.
+            if (y / 3.0 - (y / 3.0).round()).abs() < 1e-6 {
+                continue;
+            }
+            let along = if (y / 3.0).floor() as i64 % 2 == 0 { 0.0 } else { 3.0 };
+            for joint in (0..8).map(|k| 6.0 * f64::from(k) + along).filter(|x| *x >= edge && *x <= 40.0 - edge) {
+                assert!(xs.iter().any(|x| (x - joint).abs() < 1e-9), "row {y}: no needle point at the joint {joint}: {xs:?}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 400, "{checked}");
+        assert!(max_stitch(&pts) <= 4.0 * 1.35 + 1e-9, "{}", max_stitch(&pts));
+    }
+
+    #[test]
+    fn every_texture_fills_turned_shapes_soundly() {
+        let poly = Polygon::from_ring(vec![Point::new(0.0, 0.0), Point::new(50.0, 10.0), Point::new(30.0, 45.0), Point::new(-5.0, 30.0)]);
+        for pattern in TexturePattern::ALL {
+            for (angle, turn) in [(0.0, 0.0), (30.0, 45.0), (-75.0, 90.0)] {
+                let t = Texture { pattern, size: pattern.default_size(4.0), angle: turn };
+                let cfg = ScanConfig { angle, texture: Some(t), ..Default::default() };
+                let pts = scan_fill(&poly, &cfg, None, None);
+                assert!(pts.len() > 500 && pts.iter().all(|p| p.is_finite()), "{pattern:?}");
+                // Nothing longer than a long tatami stitch (or than plain tatami's longest: a short
+                // row with no needle point in it).
+                let plain = max_stitch(&scan_fill(&poly, &ScanConfig { angle, ..Default::default() }, None, None));
+                assert!(max_stitch(&pts) <= plain.max(4.0 * 1.35) + 1e-6, "{pattern:?} at {angle}°: {}", max_stitch(&pts));
+            }
+        }
+    }
+
+    #[test]
+    fn absurd_textures_and_split_lines_stay_sound() {
+        let poly = Polygon::from_ring(rect(0.0, 0.0, 30.0, 20.0));
+        for (size, turn) in [(1e308, 0.0), (-5.0, 1e308), (f64::NAN, f64::NAN), (0.0, -1e-308), (f64::INFINITY, 45.0)] {
+            for pattern in TexturePattern::ALL {
+                let cfg = ScanConfig { texture: Some(Texture { pattern, size, angle: turn }), ..Default::default() };
+                let pts = scan_fill(&poly, &cfg, None, None);
+                assert!(!pts.is_empty() && pts.iter().all(|p| p.is_finite()), "{pattern:?} {size} {turn}");
+                assert!(max_stitch(&pts) <= 4.0 * 1.35 + 1e-6);
+            }
+        }
+        let lines = vec![
+            vec![Point::new(0.0, 0.0), Point::new(1e308, -1e308)],
+            vec![Point::new(-1e308, -1e308), Point::new(1e308, 1e308)],
+            vec![Point::new(f64::NAN, 0.0), Point::new(5.0, 5.0)],
+            vec![Point::new(5.0, 5.0)],
+            vec![],
+        ];
+        let pts = scan_fill(&poly, &ScanConfig { splits: lines, ..Default::default() }, None, None);
+        assert!(!pts.is_empty() && pts.iter().all(|p| p.is_finite()));
+        // Satin rows aren't split.
+        let satin =
+            ScanConfig { stitch_length: f64::INFINITY, splits: vec![vec![Point::new(10.0, -1.0), Point::new(10.0, 21.0)]], ..Default::default() };
+        let plain = ScanConfig { stitch_length: f64::INFINITY, ..Default::default() };
+        assert_eq!(scan_fill(&poly, &satin, None, None), scan_fill(&poly, &plain, None, None));
     }
 
     #[test]

@@ -40,7 +40,10 @@ pub fn object_stitches(obj: &EmbObject, settings: &DesignSettings, entry_hint: O
     match &obj.kind {
         ObjectKind::Run(r) => run::generate(&r.path, &r.params, hint, exit),
         ObjectKind::Satin(s) => satin::generate(&s.column, &s.params, hint, exit, settings.max_stitch),
-        ObjectKind::Fill(f) => fill_shape(&f.shape, &f.params, &f.guides, 0.0, hint, exit, (trim, settings.max_stitch)),
+        ObjectKind::Fill(f) => {
+            let job = FillJob { params: &f.params, splits: &f.splits, extra_angle: 0.0 };
+            fill_shape(&f.shape, job, &f.guides, hint, exit, (trim, settings.max_stitch))
+        }
         ObjectKind::Applique(a) => applique::generate(&a.shape, &a.params, hint, trim),
         ObjectKind::Lettering(l) => lettering(l, hint, exit, (trim, settings.max_stitch)),
         ObjectKind::Stitches(b) => b.stitches.iter().copied().filter(|s| s.cmd != Cmd::ColorChange && s.cmd != Cmd::End).collect(),
@@ -53,18 +56,20 @@ pub fn fill_statistics(polygon: &Polygon, angle: f64, spacing: f64) -> Option<(u
     fill::statistics(polygon, angle, spacing)
 }
 
+/// What a fill sews: its parameters, its split lines (mm) and a turn added to its stitch angle
+/// (a lettering glyph's).
+#[derive(Clone, Copy)]
+struct FillJob<'a> {
+    params: &'a FillParams,
+    splits: &'a [Vec<Point>],
+    extra_angle: f64,
+}
+
 /// Fills a shape (possibly made of several pieces) with underlay and top stitching.
 /// `limits` are the trim threshold and the machine's longest stitch (mm).
-fn fill_shape(
-    shape: &Shape,
-    params: &FillParams,
-    guides: &[Guide],
-    extra_angle: f64,
-    hint: Option<Point>,
-    exit: Option<Point>,
-    limits: (f64, f64),
-) -> Vec<Stitch> {
+fn fill_shape(shape: &Shape, job: FillJob, guides: &[Guide], hint: Option<Point>, exit: Option<Point>, limits: (f64, f64)) -> Vec<Stitch> {
     let (trim, max_stitch) = limits;
+    let params = job.params;
     let mut pieces = fill::prepare(shape.polygon(FLATTEN_TOLERANCE));
     let mut out = Out::new();
     while !pieces.is_empty() {
@@ -91,23 +96,24 @@ fn fill_shape(
         // A single guide (or guides that don't form a strip) sets the angle.
         if let Some(g) = guides.first() {
             let p = FillParams { angle: g.angle(), ..params.clone() };
-            fill_piece(&piece, &p, 0.0, &mut out, here, ex, trim);
+            fill_piece(&piece, FillJob { params: &p, extra_angle: 0.0, ..job }, &mut out, here, ex, trim);
         } else {
-            fill_piece(&piece, params, extra_angle, &mut out, here, ex, trim);
+            fill_piece(&piece, job, &mut out, here, ex, trim);
         }
     }
     out.finish()
 }
 
-fn fill_piece(piece: &Polygon, params: &FillParams, extra_angle: f64, out: &mut Out, hint: Option<Point>, exit: Option<Point>, trim: f64) {
+fn fill_piece(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<Point>, exit: Option<Point>, trim: f64) {
     // Everything inside the piece will be covered, so connections can run inside it.
     let saved_region = std::mem::replace(&mut out.region, vec![piece.clone()]);
-    fill_piece_inner(piece, params, extra_angle, out, hint, exit, trim);
+    fill_piece_inner(piece, job, out, hint, exit, trim);
     out.region = saved_region;
 }
 
-fn fill_piece_inner(piece: &Polygon, params: &FillParams, extra_angle: f64, out: &mut Out, hint: Option<Point>, exit: Option<Point>, trim: f64) {
-    let angle = params.angle + extra_angle;
+fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<Point>, exit: Option<Point>, trim: f64) {
+    let params = job.params;
+    let angle = params.angle + job.extra_angle;
     let u = &params.underlay;
     if !matches!(params.kind, FillKind::Cross | FillKind::Meander) && (u.edge_run || u.tatami) {
         let inset = poly::offset(std::slice::from_ref(piece), -u.inset.max(0.0));
@@ -151,6 +157,8 @@ fn fill_piece_inner(piece: &Polygon, params: &FillParams, extra_angle: f64, out:
                 pull_comp: params.pull_comp,
                 travel_length: 2.5,
                 random: params.random,
+                texture: if satin { None } else { params.texture },
+                splits: if satin { Vec::new() } else { job.splits.to_vec() },
             };
             fill::scan_fill_all(std::slice::from_ref(piece), &cfg, out, here, exit, trim);
         }
@@ -169,7 +177,7 @@ fn lettering(l: &LetteringObject, hint: Option<Point>, exit: Option<Point>, limi
     for (i, g) in l.glyphs.iter().enumerate() {
         let here = out.pos().or(hint);
         let ex = if i + 1 == n { exit } else { None };
-        let st = fill_shape(&g.shape, &l.fill, &[], g.angle, here, ex, limits);
+        let st = fill_shape(&g.shape, FillJob { params: &l.fill, splits: &[], extra_angle: g.angle }, &[], here, ex, limits);
         if let Some(first) = st.first() {
             out.connect(first.pos(), trim, 2.5);
             out.append(st);

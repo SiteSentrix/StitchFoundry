@@ -800,6 +800,72 @@ impl Default for FillUnderlay {
     }
 }
 
+/// A programmed split pattern: the needle points of a tatami fill follow its lines, so the fill
+/// shows a texture. Generated in code and tiled over the fill.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TexturePattern {
+    #[default]
+    Diamonds,
+    Waves,
+    Herringbone,
+    Bricks,
+    Circles,
+    Scales,
+}
+
+impl TexturePattern {
+    pub const ALL: [TexturePattern; 6] = [
+        TexturePattern::Diamonds,
+        TexturePattern::Waves,
+        TexturePattern::Herringbone,
+        TexturePattern::Bricks,
+        TexturePattern::Circles,
+        TexturePattern::Scales,
+    ];
+
+    /// The pattern's id in params and files.
+    pub fn id(self) -> &'static str {
+        match self {
+            TexturePattern::Diamonds => "diamonds",
+            TexturePattern::Waves => "waves",
+            TexturePattern::Herringbone => "herringbone",
+            TexturePattern::Bricks => "bricks",
+            TexturePattern::Circles => "circles",
+            TexturePattern::Scales => "scales",
+        }
+    }
+
+    /// The tile width (mm) the pattern reads best at with stitch length `stitch_length`: bricks
+    /// with their joints a long stitch apart (no stitches between them), scales large enough for
+    /// their flat bottoms to show.
+    pub fn default_size(self, stitch_length: f64) -> f64 {
+        let l = if stitch_length.is_finite() { stitch_length } else { 4.0 };
+        match self {
+            TexturePattern::Bricks => (l * 1.3).clamp(3.0, 12.0),
+            TexturePattern::Scales => (l * 2.5).clamp(4.0, 14.0),
+            _ => (l * 1.5).clamp(3.0, 12.0),
+        }
+    }
+}
+
+/// Programmed splits of a tatami fill (a texture).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Texture {
+    pub pattern: TexturePattern,
+    /// Width of one pattern tile (mm).
+    pub size: f64,
+    /// Turn of the pattern against the stitch rows (degrees).
+    pub angle: f64,
+}
+
+impl Default for Texture {
+    fn default() -> Self {
+        Texture { pattern: TexturePattern::Diamonds, size: 6.0, angle: 0.0 }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FillParams {
@@ -830,6 +896,9 @@ pub struct FillParams {
     /// where the satin turns along inclination lines, instead of `underlay`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub satin_column: Option<SatinParams>,
+    /// Programmed splits (tatami): the needle points follow a pattern, a texture in the fill.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub texture: Option<Texture>,
 }
 
 impl Default for FillParams {
@@ -847,6 +916,7 @@ impl Default for FillParams {
             random: 0.0,
             underlay: FillUnderlay::default(),
             satin_column: None,
+            texture: None,
         }
     }
 }
@@ -868,11 +938,15 @@ pub struct FillObject {
     /// turn smoothly from guide to guide ("turning" fill / satin).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
+    /// Split lines (tatami): a needle point of each row falls where the row crosses one, so the
+    /// lines show in the fill (drawn splits, carved stamps, flexi splits).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub splits: Vec<Vec<Point>>,
 }
 
 impl FillObject {
     pub fn new(shape: Shape, params: FillParams) -> Self {
-        FillObject { shape, params, guides: Vec::new() }
+        FillObject { shape, params, guides: Vec::new(), splits: Vec::new() }
     }
 }
 

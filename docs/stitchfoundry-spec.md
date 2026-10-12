@@ -213,6 +213,8 @@ Working and tested (see [`embroidery.md`](embroidery.md) for behaviour):
 - Underlay (auto by width, centre run, edge run, zigzag, tatami), pull compensation, auto
   spacing, short stitches, auto split, tatami offsets, gradient density, randomised needle
   points, ties, trims by connector length, tiny-stitch removal, closest joins.
+- Tatami textures (6 programmed split patterns) and split lines carved in from other art
+  (drawn lines, a shape's outline like a carving stamp, a curve repeated across the fill).
 - Automatic, editable stitch direction: auto inclination lines, best fill angle, splitting at
   holes and stroke joins; Inclination tool; draggable start/stop beads.
 - Digitizing widget + Embroidery Brush (9 brushes, 11 shapes, sew before/after selection,
@@ -386,14 +388,14 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | PS-01 | Tatami offsets (texture by row offset patterns) | Done | | – |
-| PS-02 | Program splits (needle-point patterns inside fills) | Missing | Pattern library of penetration grids; §7.3 | 2 |
-| PS-03 | User-defined splits (draw split lines) | Missing | Split guide lines on the object | 2 |
-| PS-04 | Carving stamps (embossed patterns pressed into fills) | Missing | Stamp shapes break stitches along their outline | 2 |
+| PS-02 | Program splits (needle-point patterns inside fills) | Partial | Tatami *Texture*: 6 patterns generated in code (diamonds, waves, herringbone, bricks, circles, scales) with tile size and turn; §7.3 wants 40+ | 2 |
+| PS-03 | User-defined splits (draw split lines) | Done | Paths drawn over a tatami fill carved in as split lines (Embroidery › Carve Split Lines, `embroidery.setSplits`), shown dashed on the fill | – |
+| PS-04 | Carving stamps (embossed patterns pressed into fills) | Partial | Any closed shape's outline pressed in (Carve Split Lines); no stamp library yet | 2 |
 | CS-01 | Contour fill/outline | Done | | – |
 | CS-02 | Offset fills (concentric offsets) | Partial | Contour fill; add offset-ring fill with set count/spacing | 2 |
 | CS-03 | Spiral fills | Done | | – |
 | CS-04 | Radial (ripple) fills | Done | | – |
-| CS-05 | Flexi-splits (split lines following a curve) | Missing | Split penetrations along guide curves | 2 |
+| CS-05 | Flexi-splits (split lines following a curve) | Partial | A drawn curve repeated across the fill (`embroidery.carveSplits` `repeat`); split lines that follow the shape by themselves still missing | 2 |
 | CS-06 | Florentine effect (stitches follow a drawn curve) | Done | Turning fill along inclination lines | – |
 | CS-07 | Liquid effect (curved fill between two guide curves) | Partial | Turning fill with two guides; add explicit two-curve mode | 2 |
 | MO-01 | Single motifs (place one stitched motif) | Missing | Motif library + placement tool | 2 |
@@ -549,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 105 done,
-39 partial, 81 missing, 6 out of scope (counted 2026-10-11, after Redraw Image with Claude). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 106 done,
+42 partial, 77 missing, 6 out of scope (counted 2026-10-12, after fill textures and split lines). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -600,6 +602,17 @@ in place.
 - Carving stamp: a shape (or stamp library entry) whose outline forces penetrations on fills
   under it, producing embossed lines.
 - All three plug into `engine::fill::row_points` as "penetration rules".
+
+Built (P2.1, 2026-10-12): split lines and pattern lines both become crossings of each tatami row,
+found through segments bucketed by row band (`engine::fill::Splits`). Drawn lines keep the tatami
+grid and add a needle point at each crossing (grid points closer than the shortest stitch move
+out of the way); a texture (programmed splits) uses the crossings alone, with grid points only
+where the gap between two lines is too long for one stitch. Patterns are lines in a unit tile
+(`fill::tile`), tiled from a fixed origin and capped at 400,000 segments per fill. Split lines live
+on the object (`Embroidery.splits`, host coordinates, transformed with it), the texture in its fill
+parameters (`FillParams.texture`). Satin fills, turning fills and underlay leave them out.
+Still to do: the 40+ pattern library, a stamp library, splits that follow the shape (flexi
+splits without a drawn curve), and a tool for drawing split lines on the object.
 
 ### 7.4 Multi Blend and accordion profiles (SP-09, SP-10, NEW-01…02)
 
@@ -702,7 +715,8 @@ and target dir each) calendar time drops by roughly half.
 
 **Status (October 2026):** phase 1 is complete, every item in its row (machine profiles of your
 own and edited standard ones, MF-02 and MF-03, came last). Phase 0 is still open: nothing has been
-sewn on a real machine yet; the owner has the VP3 test kit.
+sewn on a real machine yet; the owner has the VP3 test kit. Phase 2 started on 2026-10-12 with
+tatami textures and split lines (PS-02…04, CS-05).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.

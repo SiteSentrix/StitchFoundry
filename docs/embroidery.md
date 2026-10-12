@@ -48,7 +48,7 @@ the control channel, the CLI and the MCP server.
 | Stem stitch | rope-like outline: backstitch with slanted stitches | stitch length, width, side, passes |
 | Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path | stitch length, width, spacing, flip side |
 | Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), underlay (incl. double zigzag) |
-| Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, underlay |
+| Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, texture, split lines, underlay |
 | Satin fill | satin rows across the shape | density, pull compensation |
 | Contour / Spiral / Radial / Cross / Meander fill | rows following the outline, a spiral, rays from the centre, crossed rows, or a random maze-like path | spacing, stitch length |
 | Appliqué | placement run, stop, tack-down, stop, cover satin | cover width and density |
@@ -138,6 +138,34 @@ in each hole, sewn right after its shape, so a hole can be sewn in another threa
 draw a shape over a stitched object, select both and choose **Minus Front** (Window ›
 Pathfinder). The hole is cut out and the object keeps its stitch settings. Pathfinder operations
 carry stitch settings the same way they carry appearance.
+
+## Fill textures and split lines
+
+A tatami fill sews its rows with the needle points staggered a little from row to row, which
+reads as a flat, even surface. Where the needle points line up instead, they show as lines in
+the fill: an embossed texture without another thread.
+
+- **Texture** (Embroidery panel, tatami fills): a pattern tiled over the fill, with a needle point
+  wherever a row crosses one of its lines (programmed splits). **Diamonds**, **Waves**,
+  **Herringbone**, **Bricks**, **Circles** and **Scales**; *Texture size* is the width of one
+  pattern tile (to start with, a size that suits the stitch length), *Texture angle* turns the
+  pattern against the stitch rows. Between the pattern's lines the stitches run straight to the
+  next line, broken up only where the gap is longer than a long stitch, so the pattern reads
+  clearly. The pattern stays put on the page while the shape changes.
+- **Split lines** (drawn splits, carving stamps, flexi splits): draw paths over a tatami fill,
+  select them with the fill and choose **Embroidery › Carve Split Lines**. The fill keeps its usual
+  stitching and gains a needle point where each row crosses a line. A closed path presses in its
+  whole outline, like a carving stamp (a star, a heart, a letter's outline); open paths draw
+  lines. The paths are used up unless the command's `keep` parameter is on. When every selected
+  object is a tatami fill, the front-most one is the stamp for the others.
+  With the `repeat` parameter (mm), each line is copied that far apart across the whole fill:
+  draw one wave across a shape for wavy lines all over it (flexi splits).
+- Split lines show dashed on the selected fill, move, turn and
+  scale with it, and stay its own: **Make Properties Current** and styles leave them out.
+  **Embroidery › Clear Split Lines** (or the button in the panel) takes them out again.
+- Textures and split lines change only straight tatami rows: satin fills, turning fills (two
+  inclination lines or more) and underlay ignore them, and a textured tatami shape doesn't turn
+  along long thin shapes on its own.
 
 ## The digitizing widget and brush
 
@@ -386,6 +414,8 @@ tool list for all parameters):
 | `embroidery.setThread {color, name?, code?, chart?}` | set the thread |
 | `embroidery.convert` | stitch types from the artwork's look |
 | `embroidery.autoDirection` / `addGuide` / `moveGuide` / `removeGuide` / `clearGuides` / `setBeads` | stitch direction and start/stop |
+| `embroidery.setParams {params: {texture: {pattern, size?, angle?} \| null}}` | a tatami fill's texture (programmed splits): `diamonds`, `waves`, `herringbone`, `bricks`, `circles`, `scales` |
+| `embroidery.carveSplits {ids?, repeat?, keep?}`, `embroidery.setSplits {id, splits}`, `embroidery.clearSplits {ids?}` | split lines in tatami fills: carved from other art (a stamp's outline, lines, lines repeated across the fill), set from points, cleared |
 | `embroidery.draw {brush, points \| stamp, …}` | a brush stroke, as the widget draws it |
 | `embroidery.column {points: [[x, y, curve?]…], id?}` | a Column A/B satin column from points on its two sides in turn; with `id`, continue that column |
 | `embroidery.autoDigitize {colors, …}` | trace a selected image into stitches |

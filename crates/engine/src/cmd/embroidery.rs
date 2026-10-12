@@ -101,7 +101,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stitch Parameters",
             [],
             None,
-            "{params: {spacing?, stitch_length?, angle?, pull_comp?, pull_comp_2?: mm|null (satin side 2), preserve_long?, passes?: 1–9 (runs; 2 = backtrack), kind?, underlay?: {…, double_zigzag?}, corners?: Auto|Turn|Miter|Cap (satin lines), width?, profile?, auto_direction?, trim_after?, tie_in?: bool|null, tie_off?: bool|null (null: the design setting), remove_underlying?: bool (fills below leave out what this covers), underlying_overlap?: mm|null (kept under its edge; null: 1 mm), …} (mm and degrees; camelCase also accepted), ids?} merge stitch parameters into the selected stitched objects → {ids}",
+            "{params: {spacing?, stitch_length?, angle?, pull_comp?, pull_comp_2?: mm|null (satin side 2), preserve_long?, passes?: 1–9 (runs; 2 = backtrack), kind?, underlay?: {…, double_zigzag?}, corners?: Auto|Turn|Miter|Cap (satin lines), width?, profile?, auto_direction?, trim_after?, tie_in?: bool|null, tie_off?: bool|null (null: the design setting), remove_underlying?: bool (fills below leave out what this covers), underlying_overlap?: mm|null (kept under its edge; null: 1 mm), texture?: {pattern: diamonds|waves|herringbone|bricks|circles|scales, size?: mm (tile width, 6), angle?: degrees (turn against the rows)}|null (tatami programmed splits), …} (mm and degrees; camelCase also accepted), ids?} merge stitch parameters into the selected stitched objects → {ids}",
             has_selection,
             set_params
         ),

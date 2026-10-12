@@ -158,6 +158,11 @@ pub struct Embroidery {
     /// more make the stitches turn along the shape.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
+    /// Split lines (host coordinates; tatami fills): each stitch row has a needle point where
+    /// it crosses one, so the lines show in the fill (drawn splits, carved stamps, flexi
+    /// splits).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub splits: Vec<Vec<Point>>,
     /// Pick the stitch direction automatically while there are no guides.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub auto_direction: bool,
@@ -216,6 +221,7 @@ impl Embroidery {
             width: None,
             profile: WidthProfile::Constant,
             guides: Vec::new(),
+            splits: Vec::new(),
             auto_direction: true,
             entry: None,
             exit: None,
@@ -232,12 +238,13 @@ impl Embroidery {
     }
 
     /// The object's stitch properties without what belongs to its shape (inclination
-    /// lines, beads, hand-edited stitches, a fill's centre), its thread or its style:
-    /// what current properties and styles hold.
+    /// lines, split lines, beads, hand-edited stitches, a fill's centre), its thread or its
+    /// style: what current properties and styles hold.
     pub fn properties(&self) -> Embroidery {
         let mut e = self.clone();
         e.thread = None;
         e.guides.clear();
+        e.splits.clear();
         e.entry = None;
         e.exit = None;
         e.frozen = None;
@@ -249,8 +256,8 @@ impl Embroidery {
     }
 
     /// Takes the stitch properties of `props` (see [`Embroidery::properties`]),
-    /// keeping this object's thread, inclination lines, beads, hand-edited stitches,
-    /// fill centre and style.
+    /// keeping this object's thread, inclination and split lines, beads, hand-edited
+    /// stitches, fill centre and style.
     pub fn take_properties(&mut self, props: &Embroidery) {
         let center = match &self.stitch {
             StitchType::Fill(f) => f.center,
@@ -259,6 +266,7 @@ impl Embroidery {
         let mut e = props.properties();
         e.thread = self.thread.take();
         e.guides = std::mem::take(&mut self.guides);
+        e.splits = std::mem::take(&mut self.splits);
         e.entry = self.entry;
         e.exit = self.exit;
         e.frozen = self.frozen.take();
@@ -307,6 +315,9 @@ impl Embroidery {
     pub fn transform(&mut self, m: &Affine) {
         for g in &mut self.guides {
             g.transform(m);
+        }
+        for p in self.splits.iter_mut().flatten() {
+            *p = m.apply(*p);
         }
         for s in self.frozen.iter_mut().flatten() {
             let p = m.apply(s.pos());

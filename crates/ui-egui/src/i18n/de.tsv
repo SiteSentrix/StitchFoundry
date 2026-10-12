@@ -4458,3 +4458,17 @@ machine	Stop	Stopp
 @msg	select an image to redraw	wählen Sie ein Bild zum Neuzeichnen aus
 @msg	the image couldn't be read	das Bild konnte nicht gelesen werden
 @msg	The image is too large to send: crop it, or place a smaller copy.	Das Bild ist zu groß zum Senden: Beschneiden Sie es oder platzieren Sie eine kleinere Kopie.
+
+# Embroidery (StitchFoundry): fill textures and split lines
+	Set Split Lines	Teilungslinien festlegen
+	Carve Split Lines	Teilungslinien einprägen
+	Clear Split Lines	Teilungslinien löschen
+	Split lines:	Teilungslinien:
+	Texture size	Strukturgröße
+	Texture angle	Strukturwinkel
+	Diamonds	Rauten
+	Waves	Wellen
+	Herringbone	Fischgrät
+	Bricks	Ziegel
+	Circles	Kreise
+	Scales	Schuppen

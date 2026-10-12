@@ -4498,3 +4498,17 @@ machine	Stop	停止
 @msg	select an image to redraw	描き直す画像を選択してください
 @msg	the image couldn't be read	画像を読み込めませんでした
 @msg	The image is too large to send: crop it, or place a smaller copy.	画像が大きすぎて送信できません: 切り抜くか、小さいコピーを配置してください。
+
+# Embroidery (StitchFoundry): fill textures and split lines
+	Set Split Lines	分割線を設定
+	Carve Split Lines	分割線を彫り込む
+	Clear Split Lines	分割線を消去
+	Split lines:	分割線:
+	Texture size	テクスチャのサイズ
+	Texture angle	テクスチャの角度
+	Diamonds	ひし形
+	Waves	波
+	Herringbone	ヘリンボーン
+	Bricks	レンガ
+	Circles	円
+	Scales	うろこ

@@ -218,6 +218,16 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
             }
         }
     }
+    // Split lines of the selected fills, dashed: each stitch row has a needle point where it
+    // crosses one.
+    let teal = Color32::from_rgb(0, 150, 170);
+    for id in &selected {
+        let Some(e) = st.doc.node(*id).and_then(|n| n.embroidery.as_deref()) else { continue };
+        for line in &e.splits {
+            let pts: Vec<Pos2> = line.iter().map(|q| xf.to_screen(vectorcraft_geom::Point::new(q.x, q.y))).collect();
+            painter.add(Shape::dashed_line(&pts, Stroke::new(1.2, teal), 5.0, 3.0));
+        }
+    }
     // Start (green) and stop (red) beads of the selected stitched objects.
     for id in selected.iter().copied().filter(|_| beads) {
         let ranges = plan.records_of(id);
