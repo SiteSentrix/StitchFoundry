@@ -140,6 +140,50 @@ pub struct EmbroideryUi {
     /// gap between the copies (mm): a preview of a repeated layout, not sewn.
     pub repeats: [u32; 2],
     pub repeat_gap: f64,
+    /// The Buttonholes section's settings.
+    pub buttonholes: Buttonholes,
+}
+
+/// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Buttonholes {
+    /// 0 straight, 1 rounded, 2 keyhole.
+    pub style: usize,
+    /// The slit's length and the buttonhole's width (mm).
+    pub length: f64,
+    pub width: f64,
+    pub count: u32,
+    /// From one buttonhole's middle to the next (mm).
+    pub spacing: f64,
+    /// Degrees (0: the slits along x, the row down the page).
+    pub angle: f64,
+}
+
+impl Default for Buttonholes {
+    fn default() -> Self {
+        Buttonholes { style: 0, length: 15.0, width: 4.0, count: 1, spacing: 25.0, angle: 0.0 }
+    }
+}
+
+impl Buttonholes {
+    /// `embroidery.addButtonholes` params for these buttonholes, the row centred on `centre`
+    /// (points) and running square to the slits.
+    pub fn params(&self, centre: vectorcraft_geom::Point) -> serde_json::Value {
+        let style = ["straight", "rounded", "keyhole"].get(self.style).copied().unwrap_or("straight");
+        let count = self.count.clamp(1, 50);
+        let (sin, cos) = self.angle.to_radians().sin_cos();
+        let half = self.spacing * vectorcraft_embroidery::PT_PER_MM * f64::from(count - 1) * 0.5;
+        let (dx, dy) = (-sin * half, cos * half);
+        serde_json::json!({
+            "style": style,
+            "length": self.length,
+            "width": self.width,
+            "angle": self.angle,
+            "count": count,
+            "at": [centre.x - dx, centre.y - dy],
+            "to": [centre.x + dx, centre.y + dy],
+        })
+    }
 }
 
 impl Default for EmbroideryUi {
@@ -162,6 +206,7 @@ impl Default for EmbroideryUi {
             blend_to: [255, 255, 255],
             repeats: [1, 1],
             repeat_gap: 5.0,
+            buttonholes: Buttonholes::default(),
             prompt: prompt::PromptState::default(),
         }
     }

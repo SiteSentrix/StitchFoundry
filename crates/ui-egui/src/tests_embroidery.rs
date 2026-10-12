@@ -164,6 +164,27 @@ fn the_panel_picks_the_motif_tools_motif() {
 }
 
 #[test]
+fn buttonholes_are_added_in_a_row_from_the_panel() {
+    use crate::embroidery::Buttonholes;
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    // three keyholes 20 mm apart, centred on (300, 200), running down the page
+    let b = Buttonholes { style: 2, count: 3, spacing: 20.0, ..Buttonholes::default() };
+    let p = b.params(vectorcraft_geom::Point::new(300.0, 200.0));
+    assert_eq!((p["style"].as_str(), p["count"].as_u64()), (Some("keyhole"), Some(3)));
+    let (at, to) = (&p["at"], &p["to"]);
+    assert!((at[1].as_f64().unwrap() - (200.0 - 20.0 * PT)).abs() < 1e-9 && (to[1].as_f64().unwrap() - (200.0 + 20.0 * PT)).abs() < 1e-9, "{p}");
+    assert!((at[0].as_f64().unwrap() - 300.0).abs() < 1e-9);
+    // turned a quarter: the row runs across instead
+    let p = Buttonholes { angle: 90.0, count: 2, ..Buttonholes::default() }.params(vectorcraft_geom::Point::new(0.0, 0.0));
+    assert!((p["at"][0].as_f64().unwrap() - 12.5 * PT).abs() < 1e-9, "{p}");
+    // they place
+    let mut app = app();
+    app.run("embroidery.addButtonholes", p).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(texts.iter().any(|t| t == "Buttonholes"), "{texts:?}");
+}
+
+#[test]
 fn the_panel_edits_a_redwork_group_as_one() {
     let mut app = app();
     let a = app.run("path.create", json!({"d": "M 20 20 L 120 20 L 120 120 Z"})).unwrap()["id"].as_u64().unwrap();
