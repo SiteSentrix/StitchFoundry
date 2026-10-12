@@ -763,8 +763,27 @@ struct Region {
     gap: f64,
 }
 
-/// Flattened closed polygons of a path.
-fn polygons(path: &BezPath) -> Vec<Vec<Point>> {
+/// The largest magnitude a coordinate of a frame, a text wrap shape or the path of type on a path
+/// may have (points), control points included. A frame or path with a larger coordinate, or a
+/// coordinate that isn't finite, holds no text, and a text wrap shape with one is ignored.
+const MAX_COORD: f64 = 1e9;
+
+/// Are the coordinates of `path`, control points included, finite and within [`MAX_COORD`]?
+fn in_range(path: &BezPath) -> bool {
+    let near = |p: &Point| p.x.abs() <= MAX_COORD && p.y.abs() <= MAX_COORD;
+    path.elements().iter().all(|el| match el {
+        PathEl::MoveTo(p) | PathEl::LineTo(p) => near(p),
+        PathEl::QuadTo(a, p) => near(a) && near(p),
+        PathEl::CurveTo(a, b, p) => near(a) && near(b) && near(p),
+        PathEl::ClosePath => true,
+    })
+}
+
+/// Flattened closed polygons of a path; `None` when it isn't [`in_range`].
+fn polygons(path: &BezPath) -> Option<Vec<Vec<Point>>> {
+    if !in_range(path) {
+        return None;
+    }
     let mut polys: Vec<Vec<Point>> = Vec::new();
     kurbo::flatten(path, 0.1, |el| match el {
         PathEl::MoveTo(p) => polys.push(vec![p]),
@@ -776,7 +795,7 @@ fn polygons(path: &BezPath) -> Vec<Vec<Point>> {
         _ => {}
     });
     polys.retain(|p| p.len() >= 3);
-    polys
+    Some(polys)
 }
 
 /// Inside intervals (even-odd) of the horizontal line at `y` through `polys`.
@@ -844,9 +863,13 @@ fn intersect_intervals(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
 
 impl Region {
     fn cells(path: &BezPath, opts: &LayoutOptions, wrap: &[vectorcraft_doc::WrapShape]) -> Vec<Region> {
-        let polys = polygons(path);
-        let wraps: Vec<(Vec<Vec<Point>>, f64, bool)> =
-            wrap.iter().map(|w| (polygons(&w.path.to_bezpath()), w.wrap.offset.max(0.0), w.wrap.invert)).filter(|w| !w.0.is_empty()).collect();
+        // A frame out of range has no cells, and a wrap shape out of range is left out.
+        let Some(polys) = polygons(path) else { return vec![] };
+        let wraps: Vec<(Vec<Vec<Point>>, f64, bool)> = wrap
+            .iter()
+            .filter_map(|w| Some((polygons(&w.path.to_bezpath())?, w.wrap.offset.max(0.0), w.wrap.invert)))
+            .filter(|w| !w.0.is_empty())
+            .collect();
         let bbox = path.bounding_box();
         let rect = polys.len() == 1 && {
             let area: f64 = polys[0].iter().zip(polys[0].iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() * 0.5;
@@ -992,6 +1015,10 @@ struct Pen<'r> {
     next_top: Option<f64>,
 }
 
+/// The largest number of steps layout takes to move a line down a frame cell to find room for it:
+/// in a cell taller than this many leads, a step is the cell's height divided by this.
+const MAX_STEPS: usize = 100_000;
+
 impl Pen<'_> {
     /// Baseline and horizontal span for a line with estimated metrics `est` and indents; `None` =
     /// the frame is full (overflow).
@@ -1012,7 +1039,10 @@ impl Pen<'_> {
                 None => r.top() + r.shift + est.first_baseline(self.fb, self.fb_min),
                 Some(b) => self.next_baseline(b, est) + r.gap,
             };
-            loop {
+            // The baseline moves down the cell a lead at a time, or a `MAX_STEPS`th of the cell's
+            // height when that is more, in at most `MAX_STEPS` steps.
+            let step = est.lead.max(1.0).max(r.cell.height() / MAX_STEPS as f64);
+            for _ in 0..=MAX_STEPS {
                 if baseline + est.desc > r.bottom() + 0.01 {
                     break;
                 }
@@ -1020,13 +1050,13 @@ impl Pen<'_> {
                 if r.wraps.is_empty() {
                     match r.span(baseline - est.asc, baseline + est.desc) {
                         Some(s) if fits(&s) => return Some((baseline, s.0, s.1, false)),
-                        _ => baseline += est.lead.max(1.0),
+                        _ => baseline += step,
                     }
                 } else {
                     // Wrap objects can split a line: fill every span, left to right.
                     let mut spans: Vec<(f64, f64)> = r.spans(baseline - est.asc, baseline + est.desc).into_iter().filter(fits).collect();
                     if spans.is_empty() {
-                        baseline += est.lead.max(1.0);
+                        baseline += step;
                         continue;
                     }
                     let (a, b) = spans.remove(0);
@@ -1752,7 +1782,8 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &Path
         }
     }
     let rtl = rtl.unwrap_or(false);
-    let ap = ArcPath::new(path);
+    // A path out of range holds no text, as a path with no length holds none.
+    let ap = if in_range(&path.to_bezpath()) { ArcPath::new(path) } else { ArcPath::default() };
     let m = Metrics::max(&sg).map(|m| (m.asc, m.desc)).unwrap_or_else(|| {
         let s = style_metrics(cx.db, cx.style_at(0));
         (s.0, s.1)
