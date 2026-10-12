@@ -189,6 +189,26 @@ fn affinity_native(stream: &[u8], method: vectorcraft_affinity::synth::Method) -
     vectorcraft_affinity::synth::container(&[("doc.dat", stream, method)], None)
 }
 
+/// Ink/Stitch designs whose settings are junk open, and sew, without trouble.
+#[test]
+fn ink_stitch_settings_with_junk_values() {
+    let junk = ["", "x", "NaN", "inf", "-1e308", "1e308", "True", "0 0 0", "-5"];
+    for v in junk {
+        let svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkstitch="http://inkstitch.org/namespace" viewBox="0 0 100 100" width="100" height="100">
+  <path d="M10 10 L90 10 M10 16 L90 16 M20 5 L20 20" fill="none" stroke="#000" inkstitch:satin_column="True" inkstitch:zigzag_spacing_mm="{v}" inkstitch:pull_compensation_mm="{v}" inkstitch:reverse_rails="{v}"/>
+  <path d="M10 50 L90 50" fill="none" stroke="#000" stroke-dasharray="1 1" inkstitch:running_stitch_length_mm="{v}" inkstitch:repeats="{v}" inkstitch:bean_stitch_repeats="{v}"/>
+  <path d="M10 60 H90 V90 H10 Z" fill="#000" inkstitch:angle="{v}" inkstitch:row_spacing_mm="{v}" inkstitch:max_stitch_length_mm="{v}" inkstitch:staggers="{v}" inkstitch:fill_method="{v}"/>
+  <path d="M10 95 L90 95 M50 90 L50 99" fill="none" stroke="#000" inkstitch:satin_column="True"/>
+</svg>"##
+        );
+        let mut s = vectorcraft_engine::Session::new();
+        let r = vectorcraft_testkit::catch_quiet(|| vectorcraft_engine::cmd::fileio::open_bytes(&mut s, "junk.svg", svg.as_bytes(), None));
+        assert!(r.is_ok(), "{v}: panicked");
+        let _ = s.embroidery_plan();
+    }
+}
+
 #[test]
 fn the_native_affinity_sample_reaches_every_reader_path() {
     let bytes = affinity_native(&affinity_native_stream(), vectorcraft_affinity::synth::Method::Zstd);

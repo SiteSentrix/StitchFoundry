@@ -10,6 +10,7 @@
 //! millimetres (y down). [`mm`] and [`pt`] convert between them.
 
 mod convert;
+pub mod inkstitch;
 
 pub use convert::{holes, parts};
 

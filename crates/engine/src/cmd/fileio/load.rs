@@ -267,7 +267,13 @@ pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, 
         let link = crate::cmd::links::link_info(path, &bytes);
         Some((bytes, link))
     };
-    vectorcraft_svg::import_with(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }).map_err(err)
+    let (mut doc, mut warnings) = vectorcraft_svg::import_with(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }).map_err(err)?;
+    // an Ink/Stitch design: its art sewn the way its settings say
+    let stitched = vectorcraft_embroidery::inkstitch::apply(&mut doc);
+    if stitched > 0 {
+        warnings.push(format!("an Ink/Stitch design: {stitched} objects sewn from their Ink/Stitch settings"));
+    }
+    Ok((doc, warnings))
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →

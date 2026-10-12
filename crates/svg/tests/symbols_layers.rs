@@ -229,6 +229,26 @@ fn data_of(d: &Document, name: &str) -> Vec<(String, String)> {
 }
 
 #[test]
+fn ink_stitch_settings_are_kept_as_data() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkstitch="http://inkstitch.org/namespace" viewBox="0 0 100 100" width="100" height="100">
+  <path id="satin" d="M10 10 L90 10 M10 16 L90 16" fill="none" stroke="#000" inkstitch:satin_column="True" inkstitch:zigzag_spacing_mm="0.4" data-note="mine"/>
+  <path d="M10 50 L90 50" fill="none" stroke="#000" stroke-dasharray="1 1" inkstitch:running_stitch_length_mm="2.5"/>
+</svg>"##;
+    let d = import(svg).unwrap();
+    let data = data_of(&d, "satin");
+    let want = |k: &str, v: &str| (k.to_string(), v.to_string());
+    assert_eq!(data, [want("note", "mine"), want("inkstitch-satin_column", "True"), want("inkstitch-zigzag_spacing_mm", "0.4")]);
+    // an object without an id keeps them too
+    let mut all = vec![];
+    d.walk(|n| all.extend(n.attrs.as_deref().map(|a| a.data.clone()).unwrap_or_default()));
+    assert!(all.contains(&want("inkstitch-running_stitch_length_mm", "2.5")), "{all:?}");
+    // written back as data attributes, they come back the same
+    let out = export(&d, &ExportOptions::default());
+    assert!(out.contains("data-inkstitch-satin_column=\"True\""), "{out}");
+    assert_eq!(data_of(&import(&out).unwrap(), "satin"), data);
+}
+
+#[test]
 fn hidden_objects_and_data_attributes_round_trip() {
     let d = import(RIG).unwrap();
     let pivot = |v: &str| vec![("pivot".to_string(), v.to_string())];

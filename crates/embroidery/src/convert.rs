@@ -64,7 +64,7 @@ pub fn parts(subpaths: &[&SubPath]) -> Vec<usize> {
         .collect()
 }
 
-fn flatten_subpath(sp: &SubPath) -> Option<Line> {
+pub(crate) fn flatten_subpath(sp: &SubPath) -> Option<Line> {
     let first = sp.anchors.first()?;
     let mut pts = vec![mm(first.p)];
     for i in 0..sp.segment_count() {
