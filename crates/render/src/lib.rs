@@ -1023,7 +1023,13 @@ impl Renderer {
             && f.opts.dim_templates
             && !f.opts.skip_templates
         {
-            if !preview && !f.opts.outline {
+            // A template layer stays in Preview while the view is in Outline (and whatever its own
+            // Preview option says): its picture is there to be traced (#1486).
+            if *template && f.opts.outline {
+                let opts = RenderOptions { outline: false, ..f.opts.clone() };
+                return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
+            }
+            if !preview && !template && !f.opts.outline {
                 let opts = RenderOptions { outline: true, ..f.opts.clone() };
                 return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
             }

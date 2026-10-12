@@ -67,6 +67,34 @@ fn dim_images_fades_only_the_images() {
     assert_eq!(render(&d, true).pixel(65, 25), [255, 0, 0, 255], "exports are not dimmed");
 }
 
+/// In Outline view a template layer still draws in Preview, dimmed, so its picture can be traced;
+/// the layer above it draws in outline (#1486).
+#[test]
+fn a_template_layer_stays_in_preview_in_outline_view() {
+    let mut d = doc(|k| {
+        if let NodeKind::Layer { template, preview, .. } = k {
+            *template = true;
+            // Preview off doesn't put a template in outline either.
+            *preview = false;
+        }
+    });
+    let top = Node::layer(d.alloc_id(), "Drawing", vectorcraft_doc::LayerColor::Preset(0));
+    let top_id = d.insert(None, 9, top).unwrap();
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let sq = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 60.0, 40.0, 90.0)), red);
+    d.insert(Some(top_id), 0, sq).unwrap();
+    let draw = |outline: bool| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline, ..Default::default() };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let (preview, outline) = (draw(false), draw(true));
+    let [r, g, b, _] = outline.pixel(65, 25);
+    assert!(r == 255 && (120..=135).contains(&g) && g == b, "the template's image, dimmed: {:?}", outline.pixel(65, 25));
+    assert_eq!(outline.pixel(65, 25), preview.pixel(65, 25), "as in Preview");
+    assert_eq!(outline.pixel(25, 75), [255, 255, 255, 255], "the drawing layer has no fill in outline");
+    assert_eq!(preview.pixel(25, 75), [255, 0, 0, 255]);
+}
+
 /// A guide path draws on screen only: exports leave it out, as they leave templates out (and as
 /// the SVG, PSD and PDF exports and printing already do).
 #[test]
