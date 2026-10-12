@@ -96,6 +96,12 @@ the row offset shifts each row along by that fraction of a motif (0.5 for a bric
 **Embroidery › Place Motif** places one motif (10 mm long) in the middle of the artboard as a path
 sewn in a single run: move, scale and reshape it like any art.
 
+**Rings:** **Embroidery › Place Ring** places a 20 mm ring, 3 mm wide, in the middle of the
+artboard: a **Satin Ring** (a satin border round a circle), a **Filled Ring** (a fill between two
+circles) or a **Bean Ring** (a bean run round a circle). It is an ordinary circle afterwards:
+move, scale and reshape it. `embroidery.placeRing` takes the `stitch`, the `diameter`, the
+ring's `width` and where it goes (`at`).
+
 **Your own motifs:** draw a motif as a path, left to right the way it should sew along a
 left-to-right line, select it and choose **Embroidery › Make Motif**. An open path runs from its
 first point to its last, so the motif starts and ends on the line between them; a closed shape
@@ -120,9 +126,10 @@ rows; the layers together sew about as much as the fill did, and only the first 
 underlay. `embroidery.makeBlend` takes up to six colours. Turn the fill's angle to turn the blend.
 
 **Outlines and borders:** **Embroidery › Add Outline** sews an outline round the selected
-stitched shapes and type, after them and in the top one's thread: a **Satin Outline** or **Bean
-Outline** following them 1 mm out, or a **Rectangle**, **Oval**, **Rounded** or **Motif Border**
-framing them. `embroidery.addOutline` takes the shape (`offset`, `rectangle`, `oval`, `rounded`),
+stitched shapes, lines and type, after them and in the top one's thread: a **Satin Outline** or
+**Bean Outline** following them 1 mm out, or a **Rectangle**, **Oval**, **Rounded** or **Motif
+Border** framing them. A line is outlined round the band its stitches cover (a satin line as wide
+as it is sewn, a run as if 1 mm wide), a closed line or border round its outside. `embroidery.addOutline` takes the shape (`offset`, `rectangle`, `oval`, `rounded`),
 how far out (`offset`, mm), the stitch (`run`, `bean`, `satin`, `motif`), its `width` and `motif`.
 The outline is an ordinary path afterwards: reshape it or change its stitch type.
 
@@ -521,7 +528,8 @@ tool list for all parameters):
 | `embroidery.motif.make {name?, ids?}`, `embroidery.motif.apply {name, ids?}`, `embroidery.motif.list`, `embroidery.motif.delete {name}` | the design's own motifs: made from the selected path, sewn by the selected runs and fills (paths not stitched yet become motif runs or fills), listed with how many objects sew each, removed |
 | `embroidery.addLaydown {ids?, margin?, spacing?, angle?}` | an open fill sewn first under the selected shapes and type (pile fabrics) |
 | `embroidery.makeBlend {colors, ids?, spacing?}` | a tatami fill as stacked layers blending 2 to 6 thread colours across its rows |
-| `embroidery.addOutline {ids?, shape?, offset?, stitch?, width?, motif?}` | a stitched outline or border round the selected shapes and type |
+| `embroidery.addOutline {ids?, shape?, offset?, stitch?, width?, motif?}` | a stitched outline or border round the selected shapes, lines and type |
+| `embroidery.placeRing {stitch?, diameter?, width?, at?}` | a satin, filled or bean ring |
 | `embroidery.draw {brush, points \| stamp, …}` | a brush stroke, as the widget draws it |
 | `embroidery.column {points: [[x, y, curve?]…], id?}` | a Column A/B satin column from points on its two sides in turn; with `id`, continue that column |
 | `embroidery.autoDigitize {colors, …}` | trace a selected image into stitches |

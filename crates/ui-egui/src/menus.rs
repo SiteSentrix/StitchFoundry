@@ -104,6 +104,14 @@ fn embroidery_menu() -> Vec<Item> {
                 .collect(),
         ),
         c("Make Motif", "embroidery.motif.make"),
+        sub(
+            "Place Ring",
+            vec![
+                cp("Satin Ring", "embroidery.placeRing", json!({ "stitch": "satin" })),
+                cp("Filled Ring", "embroidery.placeRing", json!({ "stitch": "fill" })),
+                cp("Bean Ring", "embroidery.placeRing", json!({ "stitch": "bean" })),
+            ],
+        ),
         c("Reverse Stitch Direction", "embroidery.reverse"),
         c("Make Properties Current", "embroidery.makeCurrent"),
         Sep,

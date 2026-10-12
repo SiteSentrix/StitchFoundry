@@ -8,7 +8,7 @@ use sf_core::geom::{BBox, Polygon, poly};
 use sf_core::model::{Motif, RunKind, RunParams, SatinParams};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind};
-use vectorcraft_embroidery::{PT_PER_MM, node_thread, regions_mm};
+use vectorcraft_embroidery::{MM_PER_PT, PT_PER_MM, node_thread, regions_mm};
 use vectorcraft_geom::Rect;
 use vectorcraft_geom::path::{PathData, SubPath};
 
@@ -24,10 +24,31 @@ pub fn specs() -> Vec<CommandSpec> {
         "Add Outline",
         ["Embroidery"],
         None,
-        "{ids?, shape?: offset|rectangle|oval|rounded (offset: following the shapes), offset?: mm out from them (1; may be negative for offset), stitch?: run|bean|satin|motif (satin), width?: mm (satin or motif, 2.5), motif?: wave|scallop|… or one of the design's motifs (wave)} a stitched outline or border round the selected stitched shapes and type, sewn after them in the top one's thread → {id}",
+        "{ids?, shape?: offset|rectangle|oval|rounded (offset: following the shapes), offset?: mm out from them (1; may be negative for offset), stitch?: run|bean|satin|motif (satin), width?: mm (satin or motif, 2.5), motif?: wave|scallop|… or one of the design's motifs (wave)} a stitched outline or border round the selected stitched shapes, lines and type (a line: round the band its stitches cover), sewn after them in the top one's thread → {id}",
         has_selection,
         add_outline
     )]
+}
+
+/// What a stitched object covers (mm): a shape its area; a line (or a border) the band its
+/// stitches cover, satin as wide as it is sewn and runs 1 mm, without the space a closed line
+/// goes round.
+fn covered_mm(n: &Node) -> Vec<Polygon> {
+    if !vectorcraft_embroidery::is_line_art(n) {
+        return regions_mm(n);
+    }
+    let width = match n.embroidery.as_deref() {
+        Some(e) if matches!(e.stitch, StitchType::Satin(_)) => e.width.unwrap_or(n.appearance.stroke_width() * MM_PER_PT).max(0.5),
+        _ => 1.0,
+    };
+    let lines: Vec<(Vec<sf_core::Point>, bool)> = vectorcraft_embroidery::outlines_mm(n)
+        .into_iter()
+        .map(|l| {
+            let closed = l.len() > 2 && l.first().zip(l.last()).is_some_and(|(a, b)| a.distance(*b) < 1e-6);
+            (l, closed)
+        })
+        .collect();
+    poly::stroke(&lines, width).into_iter().map(|p| Polygon::new(p.outer, Vec::new())).collect()
 }
 
 fn add_outline(s: &mut Session, p: &Value) -> Result<Value> {
@@ -61,7 +82,7 @@ fn add_outline(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = stitched_targets(s, p)?;
     let d = &s.doc()?.doc;
     let ids: Vec<NodeId> = d.paint_order(ids.into_iter().filter(|id| d.node(*id).is_some_and(|n| n.embroidery.is_some())));
-    let areas: Vec<Polygon> = ids.iter().filter_map(|id| d.node(*id)).flat_map(regions_mm).collect();
+    let areas: Vec<Polygon> = ids.iter().filter_map(|id| d.node(*id)).flat_map(covered_mm).collect();
     let Some(&top) = ids.last() else {
         return Err(bad(CMD, "select stitched shapes or type"));
     };
@@ -71,13 +92,13 @@ fn add_outline(s: &mut Session, p: &Value) -> Result<Value> {
         let grown = poly::offset(&union, offset);
         let subs: Vec<SubPath> = grown.iter().flat_map(|g| g.rings()).filter(|r| r.len() >= 3).map(|r| SubPath::polyline(&pts(r), true)).collect();
         if subs.is_empty() {
-            return Err(bad(CMD, "the selection covers no area to outline (lines have none)"));
+            return Err(bad(CMD, "the selection has nothing to outline"));
         }
         PathData::new(subs)
     } else {
         let bb = BBox::from_points(union.iter().flat_map(|g| g.outer.iter().copied()));
         if bb.is_empty() {
-            return Err(bad(CMD, "the selection covers no area to outline (lines have none)"));
+            return Err(bad(CMD, "the selection has nothing to outline"));
         }
         let m = offset.max(0.0);
         let r = Rect::new((bb.min.x - m) * PT_PER_MM, (bb.min.y - m) * PT_PER_MM, (bb.max.x + m) * PT_PER_MM, (bb.max.y + m) * PT_PER_MM);
