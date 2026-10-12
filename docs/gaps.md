@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (G11: valid selection after Simplify and Add Anchor Points (#1272); estimates unchanged; G2: Film Grain added; Photoshop effects 29/57; 28 filters remain; G10: RPM runtime dependency metadata (#1275); estimates unchanged; G15: texture-effect distance searches optimized (#1257); idle-machine/platform drag QA still pending; estimate unchanged; G1: Curvature point display improved (#1236, in part); estimates unchanged; G4: full-name font matching (#1258); Windows font-service QA pending; estimate unchanged; G11: no-op anchor Align keeps history and saved state (#1180 follow-up); estimates unchanged; G1: dedicated Eyedropper cursor and precise-cursor checks (#1269); estimates unchanged; G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Artboards: Escape exits editing; an active drag cancels first; shortcut-routing regression; scores and hours unchanged; G11: valid selection after Simplify and Add Anchor Points (#1272); estimates unchanged; G2: Film Grain added; Photoshop effects 29/57; 28 filters remain; G10: RPM runtime dependency metadata (#1275); estimates unchanged; G15: texture-effect distance searches optimized (#1257); idle-machine/platform drag QA still pending; estimate unchanged; G1: Curvature point display improved (#1236, in part); estimates unchanged; G4: full-name font matching (#1258); Windows font-service QA pending; estimate unchanged; G11: no-op anchor Align keeps history and saved state (#1180 follow-up); estimates unchanged; G1: dedicated Eyedropper cursor and precise-cursor checks (#1269); estimates unchanged; G1: Eyedropper reads visible locked and outside-isolation sources (#1251); estimate unchanged; G11: Direct Selection segment Delete (#1278); estimates unchanged; G1: painted strokes regain the existing default after None/zero-width inheritance (#1253); estimate unchanged; G15: large-selection edits, cached live effects and faster Pathfinder, #1173; G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -94,6 +94,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Estimate:** 30–50 h (the corpus and QA part blocks beta).
 
 ## G11 Correctness bugs in core tools
+
+- **Done:** Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests_distortkeys.rs`.
 
 - **Done:** Simplify and Add Anchor Points clear stale component selections on rewritten paths; Simplify previews and reports original/new point counts (#1272).
 - **Done:** no-op anchor Align preserves Undo, Redo, saved state and path geometry (#1180 follow-up),
@@ -220,6 +222,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | Artboards: Escape exits editing; an active drag cancels first; shortcut-routing regression; scores and hours unchanged |
 | 2026-10-12 | minor | G11: clear stale component refs after Simplify/Add Anchor Points; preview and point counts give visible feedback (#1272); estimates unchanged |
 | 2026-10-12 | minor | G2: Artistic › Film Grain added with live controls and raster exports; measured Photoshop filters 29/57, 28 remaining (23–39 h). |
 | 2026-10-12 | minor | G10: RPM required dependencies and glibc floor metadata checked (#1275); real-distro install/start-up QA remains; estimates unchanged |
