@@ -185,6 +185,25 @@ fn buttonholes_are_added_in_a_row_from_the_panel() {
 }
 
 #[test]
+fn the_panel_sets_lettering_in_a_loaded_font() {
+    let mut app = app();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    assert!(texts.iter().any(|t| t == "Embroidery Lettering"), "{texts:?}");
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
+    assert!(texts.iter().any(|t| t == "Load an embroidery font to set text with it."), "{texts:?}");
+    let json = r#"{"name": "Panel Font", "size": 10, "min_scale": 0.5, "max_scale": 2, "leading": 60, "horiz_adv_x": {"A": 40}}"#;
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="100mm" height="100mm" viewBox="0 0 100 100"><g inkscape:groupmode="layer" inkscape:label="GlyphLayer-A" id="l"><path d="M2 100 L20 80" fill="none" stroke="#000" stroke-dasharray="1 1"/></g></svg>"##;
+    app.run("embroidery.font.load", json!({"json": json, "svg": svg})).unwrap();
+    // the font, the sizes it sews well at and the button to place the text
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::lettering_body, 600.0);
+    for want in ["Panel Font", "Sews well at 5.0–20.0 mm", "Place Lettering"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
+    let r = app.run("embroidery.lettering", json!({"text": "AA", "font": "Panel Font", "size": 10})).unwrap();
+    assert_eq!(r["glyphs"].as_u64(), Some(2));
+}
+
+#[test]
 fn the_panel_edits_a_redwork_group_as_one() {
     let mut app = app();
     let a = app.run("path.create", json!({"d": "M 20 20 L 120 20 L 120 120 Z"})).unwrap()["id"].as_u64().unwrap();

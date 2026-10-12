@@ -4661,3 +4661,8 @@ machine	Stop	Arresto
 	Embroidery Lettering	Scritte da ricamo
 	Load Embroidery Font	Carica font da ricamo
 	Embroidery Fonts	Font da ricamo
+	Load Embroidery Font…	Carica font da ricamo…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Una cartella di font nel formato di Ink/Stitch: font.json e i suoi glifi
+	Load an embroidery font to set text with it.	Carica un font da ricamo per comporre del testo.
+	Sews well at	Si ricama bene a
+	Place Lettering	Inserisci scritta

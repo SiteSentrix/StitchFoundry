@@ -3928,3 +3928,8 @@ machine	Trim	Corte de linha
 	Embroidery Lettering	Letreiro bordado
 	Load Embroidery Font	Carregar fonte de bordado
 	Embroidery Fonts	Fontes de bordado
+	Load Embroidery Font…	Carregar fonte de bordado…
+	A font folder in Ink/Stitch's format: font.json and its glyphs	Uma pasta de fonte no formato do Ink/Stitch: font.json e seus glifos
+	Load an embroidery font to set text with it.	Carregue uma fonte de bordado para escrever com ela.
+	Sews well at	Borda bem em
+	Place Lettering	Colocar letreiro

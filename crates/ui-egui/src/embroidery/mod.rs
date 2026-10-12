@@ -143,6 +143,10 @@ pub struct EmbroideryUi {
     pub repeat_gap: f64,
     /// The Buttonholes section's settings.
     pub buttonholes: Buttonholes,
+    /// The Embroidery Lettering section: the font, the text and its size (mm; 0: the font's own).
+    pub lettering_font: String,
+    pub lettering_text: String,
+    pub lettering_size: f64,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -208,6 +212,9 @@ impl Default for EmbroideryUi {
             repeats: [1, 1],
             repeat_gap: 5.0,
             buttonholes: Buttonholes::default(),
+            lettering_font: String::new(),
+            lettering_text: String::new(),
+            lettering_size: 0.0,
             prompt: prompt::PromptState::default(),
         }
     }
