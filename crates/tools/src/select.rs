@@ -234,7 +234,11 @@ impl Tool for SelectionTool {
     }
 
     fn transforming(&self) -> bool {
-        matches!(self.state, State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. })
+        match &self.state {
+            State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
+            State::Corner(c) => c.adjusting(),
+            _ => false,
+        }
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
@@ -597,6 +601,36 @@ mod tests {
         let Some(Action::Preview(_, v)) = a.get(1) else { panic!("{a:?}") };
         let (x, y) = (v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap());
         assert!((200.0 + x - 350.3).abs() < 1e-9 && (200.0 + y - 250.0).abs() < 1e-9, "the corner lands at ({}, {})", 200.0 + x, 200.0 + y);
+    }
+
+    /// A corner-radius drag is a transform, so the sharp selection box hides while the radius changes.
+    #[test]
+    fn a_corner_drag_counts_as_transforming_once_it_moves() {
+        use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+        let live = LiveShape::Rectangle {
+            w: 100.0,
+            h: 100.0,
+            radii: [0.0; 4],
+            kinds: Default::default(),
+            xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+        };
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let id = d.alloc_id();
+        let mut n = Node::path(id, live.to_path(), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(live));
+        }
+        d.insert(Some(d.layers[0].id), 0, n).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert!(!t.transforming());
+        t.pointer(&cx, &ev(PointerKind::Down, 190.0, 191.0));
+        assert!(!t.transforming(), "a press is still a click");
+        t.pointer(&cx, &ev(PointerKind::Drag, 175.0, 176.0));
+        assert!(t.transforming());
     }
 
     /// #812: with Smart Guides on, hovering near an object's centre or an anchor labels it, and a
