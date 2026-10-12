@@ -243,6 +243,35 @@ fn partial_cover_leaves_out_edges_sewn_over_later() {
 }
 
 #[test]
+fn worksheets_show_the_design_and_its_figures() {
+    let mut s = session();
+    assert!(s.execute("embroidery.worksheet", &json!({})).is_err());
+    rect(&mut s, 20.0, 20.0, 120.0, 80.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    rect(&mut s, 160.0, 20.0, 20.0, 140.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#1a3e8c"})).unwrap();
+    let r = s.execute("embroidery.worksheet", &json!({"kind": "approval", "customer": "Lee", "notes": "Left chest"})).unwrap();
+    assert_eq!((r["kind"].as_str(), r["colors"].as_u64(), r["scale"].as_f64()), (Some("approval"), Some(2), Some(100.0)));
+    let st = s.doc().unwrap();
+    assert!(st.doc.title.ends_with("worksheet"), "{}", st.doc.title);
+    let mut texts = Vec::new();
+    let mut lines = 0;
+    st.doc.walk(|n| match &n.kind {
+        NodeKind::Text(t) => texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>()),
+        NodeKind::Path { .. } if matches!(n.appearance.stroke_paint(), Paint::Solid { .. }) => lines += 1,
+        _ => {}
+    });
+    for want in ["Approval sheet", "Stitches: ", "Colours in sewing order", "Notes: Left chest", "Approved by"] {
+        assert!(texts.iter().any(|t| t.contains(want)), "{want} missing from {texts:?}");
+    }
+    assert!(texts.iter().any(|t| t.contains("Customer: Lee")), "{texts:?}");
+    assert!(lines >= 2, "the stitches drawn in two colours: {lines}");
+    assert!(s.execute("embroidery.worksheet", &json!({"kind": "invoice"})).is_err());
+}
+
+#[test]
 fn auto_digitize_traces_an_image_into_satin_and_fill() {
     let mut s = session();
     // A white logo: a blue disc, a long red bar and a speck.
