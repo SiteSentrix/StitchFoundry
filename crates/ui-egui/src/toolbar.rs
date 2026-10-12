@@ -95,7 +95,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The user's choice alone: a window too short for the tools scrolls them.
     let cols = if app.ui.toolbar_double { 2 } else { 1 };
-    let w = if cols == 2 { 76.0 } else { WIDTH };
+    // Two 36 pt buttons with 2 pt either side inside the border and separator line (at 76 they
+    // overran the right border).
+    let w = if cols == 2 { 80.0 } else { WIDTH };
     // Where the panel docks: along the window's left edge, under the bars.
     let edge = ui.available_rect_before_wrap();
     ui.ctx().data_mut(|d| d.insert_temp(crate::floating::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
@@ -199,11 +201,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
             }
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                if cols == 1 {
-                    ui.add_space((WIDTH - 36.0) / 2.0);
-                } else {
-                    ui.add_space(2.0);
-                }
+                // Centred on the panel's inside (`bounds`: within its border and, docked, the
+                // separator line egui reserves on its right), not on `WIDTH`, which sat them 2½ pt
+                // right of centre docked; nor on this row, which the scroll area starts ½ pt in.
+                ui.add_space((bounds.center().x - cols as f32 * 18.0 - ui.cursor().min.x).max(0.0));
                 for &k in &row {
                     let slot = &all[k].1;
                     let shown_id = if slot.contains(&active) {
@@ -860,6 +861,36 @@ pub(crate) mod tests {
             frame_in(&mut app, &ctx, f64::from(k) * 0.1, vec![], 500.0);
         }
         assert_eq!(frame_in(&mut app, &ctx, 8.0, vec![], 500.0)[0], tools[0]);
+    }
+
+    /// The tool buttons sit in the middle of the panel, between its border and the separator
+    /// line, docked and floating, in one or two columns (docked, they sat 2½ pt right of centre).
+    #[test]
+    fn the_tool_buttons_are_centred_in_the_panel() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        for (double, floating) in [(false, None), (true, None), (false, Some([100.0, 100.0])), (true, Some([100.0, 100.0]))] {
+            app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
+            app.ui.toolbar_pos = floating;
+            frame(&mut app, &ctx, 0.0, vec![]);
+            let tools = frame(&mut app, &ctx, 0.1, vec![]);
+            // The title bar spans the panel's inside.
+            let hdr = ctx.viewport(|vp| {
+                vp.prev_pass
+                    .widgets
+                    .layers()
+                    .flat_map(|(_, w)| w.iter())
+                    .filter(|w| w.rect.height() == 14.0 && w.rect.width() > 40.0)
+                    .map(|w| w.rect)
+                    .next()
+            });
+            let hdr = hdr.unwrap();
+            let first = tools[0];
+            let row_right = tools.iter().filter(|r| r.top() == first.top()).map(|r| r.right()).fold(first.right(), f32::max);
+            assert_eq!(row_right - hdr.center().x, hdr.center().x - first.left(), "double {double}, floating {floating:?}: {first:?} in {hdr:?}");
+            assert!(first.left() >= hdr.left() && row_right <= hdr.right(), "double {double}, floating {floating:?}: {first:?} in {hdr:?}");
+        }
     }
 
     /// #812: double-clicking the Artboard tool opens Artboard Options of the active artboard, a
