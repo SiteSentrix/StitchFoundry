@@ -174,6 +174,8 @@ pub struct EmbroideryUi {
     pub font_other: String,
     /// The glyph the selected art becomes.
     pub font_assign: String,
+    /// The order, joins and trims of the lettering to set.
+    pub lettering_sew: vectorcraft_embroidery::sf_core::attr::LetterSewing,
 }
 
 /// Buttonholes to add from the Embroidery panel: one, or a row of them evenly spaced.
@@ -258,6 +260,7 @@ impl Default for EmbroideryUi {
             font_family: "Source Sans 3".into(),
             font_other: String::new(),
             font_assign: String::new(),
+            lettering_sew: vectorcraft_embroidery::sf_core::attr::LetterSewing::default(),
             prompt: prompt::PromptState::default(),
         }
     }

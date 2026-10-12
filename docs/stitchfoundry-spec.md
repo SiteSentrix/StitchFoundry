@@ -456,7 +456,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | LT-07 | Special characters | Done | Glyphs panel | – |
 | LT-08 | Lettering stitch types | Partial | Satin/tatami automatic; add per-text choice of column vs fill recipes | 3 |
 | LT-09 | Lettering art (envelopes, arcs, warps) | Partial | VectorCraft envelopes; needs stitchable envelopes (RS-03) | 3 |
-| LT-10 | Letter sequencing (left-right, centre-out) and join methods (closest, baseline) | Missing | Option on lettering objects | 3 |
+| LT-10 | Letter sequencing (left-right, centre-out) and join methods (closest, baseline) | Done | Embroidery-font lettering sews its letters left to right, right to left or centre out and its lines down or up, joined where closest or along the baseline, trimmed after each letter, word or line (`order`, `lines`, `join`, `trim`; Sew order, Join, Trims in the panel) | – |
 | LT-11 | Auto kerning and letter spacing | Done | Font kerning, tracking | – |
 | LT-12 | Lettering underlay | Done | Auto underlay | – |
 | LT-13 | Recommended minimum/maximum height per font shown while typing | Partial | Embroidery fonts give their sizes (`embroidery.fonts`: minSize, maxSize) and lettering outside them comes with a warning; not yet shown while typing | 3 |
@@ -552,8 +552,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 
-**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 149 done,
-31 partial, 46 missing, 6 out of scope (counted 2026-10-12, after the font editor). Most of what is missing is breadth (more stitch
+**Tally:** 232 rows (grouping the roughly 300 features the reference lists): 150 done,
+31 partial, 45 missing, 6 out of scope (counted 2026-10-12, after the font editor). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

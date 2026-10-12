@@ -3996,3 +3996,14 @@ machine	Trim	Corte de linha
 	Assign to Glyph	Atribuir ao glifo
 	Selection to glyph	Seleção como glifo
 	The selected art becomes the glyph, moved onto its artboard	A arte selecionada se torna o glifo, movida para sua prancheta
+	Sew order	Ordem de costura
+	Left to right	Da esquerda para a direita
+	Right to left	Da direita para a esquerda
+	Centre out	Do centro para fora
+	Closest	Mais próxima
+	Along the baseline	Ao longo da linha de base
+	Trims	Cortes
+	Where needed	Onde necessário
+	After each letter	Após cada letra
+	After each word	Após cada palavra
+	After each line	Após cada linha

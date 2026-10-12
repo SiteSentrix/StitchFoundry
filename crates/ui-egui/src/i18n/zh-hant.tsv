@@ -4095,3 +4095,13 @@ machine	Stop	停止
 	Assign to Glyph	指定為字形
 	Selection to glyph	所選內容作為字形
 	The selected art becomes the glyph, moved onto its artboard	所選圖稿成為該字形，並移到其工作區域上
+	Sew order	縫製順序
+	Left to right	從左到右
+	Right to left	從右到左
+	Centre out	從中間向外
+	Closest	最近
+	Along the baseline	沿基線
+	Where needed	需要時
+	After each letter	每個字母後
+	After each word	每個單字後
+	After each line	每行後

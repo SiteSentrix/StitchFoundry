@@ -607,6 +607,23 @@ lettering round a circle (*Radius*): **Arch** over its top, **Valley** along its
 upright to it (`arc`: the radius in mm, negative along the bottom); lettering placed from the panel
 is centred on the artboard (`align`: left, centre or right on `at`).
 
+How lettering is sewn (*Sew order*, *Join* and *Trims* in the section; `order`, `lines`, `join`
+and `trim` on `embroidery.lettering` and `.edit`):
+
+- **Sew order**: the letters left to right, right to left, or **centre out**: the middle letter
+  first, then the letters back to the first, then on from the middle to the last, so a cap's
+  front panel is held where it matters most. `lines: up` sews the lines from the last up.
+- **Join**: *Closest* starts each letter where it is closest to where the last stopped; *Along
+  the baseline* starts each letter at its baseline's start and stops it at the end (start and stop
+  points on its first and last pieces), so the thread runs on along the baseline, hidden in a
+  towel's pile.
+- **Trims**: where the jumps need them (the machine's settings), or after each letter, each word
+  or each line.
+
+These follow the public descriptions of lettering sequencing and joins, for example
+https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-15.htm
+and https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-16.htm.
+
 ## Making embroidery fonts
 
 **Embroidery › Embroidery Fonts › New Embroidery Font** starts the font creator: a new document

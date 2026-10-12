@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use sf_core::attr::{Embroidery, LetterAlign, Lettering, StitchType};
+use sf_core::attr::{Embroidery, LetterAlign, LetterJoin, LetterOrder, LetterSewing, LetterTrim, Lettering, StitchType};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_embroidery::fonts::{EmbFont, MAX_TEXT};
 use vectorcraft_geom::Affine;
@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Lettering",
             [],
             None,
-            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
+            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight), order?: left|right|centre (the letters sewn left to right, right to left or from the middle out, as for caps; left), lines?: down|up (the lines sewn from the first down or the last up; down), join?: closest|baseline (each letter started where closest to the last, or at its baseline's start and stopped at its end, the thread running on along the baseline; closest), trim?: auto|letter|word|line (the thread cut after each letter, word or line; auto: where the jumps need it)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
             has_doc,
             lettering
         ),
@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Lettering",
             [],
             None,
-            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
+            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm, order?, lines?, join?, trim?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
             has_selection,
             edit_lettering
         ),
@@ -396,6 +396,7 @@ pub(super) fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<
     }
     let r = spec.arc * vectorcraft_embroidery::PT_PER_MM;
     let mut out = Vec::new();
+    let origin = vectorcraft_geom::Point::new(0.0, 0.0);
     for g in &placed {
         let Some(glyph) = font.glyphs.get(&g.glyph) else { continue };
         let u = glyph.unit * k;
@@ -428,9 +429,129 @@ pub(super) fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<
         }
         let mut grp = Node::group(d.alloc_id(), children);
         grp.name = Some(g.glyph.clone());
-        out.push(Arc::new(grp));
+        // its baseline's start and end
+        let start = frame * place(r, along - g.advance * 0.5 * u, down) * origin;
+        let end = frame * place(r, along + g.advance * 0.5 * u, down) * origin;
+        out.push(SetGlyph { line: g.line, word: g.word, along, start, end, art: grp });
     }
-    out
+    sewn(out, &spec.sew)
+}
+
+/// A glyph set: its line, word and place along the line (points), its baseline's start and end
+/// (document points) and its art.
+struct SetGlyph {
+    line: usize,
+    word: usize,
+    along: f64,
+    start: vectorcraft_geom::Point,
+    end: vectorcraft_geom::Point,
+    art: Node,
+}
+
+/// `glyphs` in the order `sew` says (the lines down or up, in each the letters left to right,
+/// right to left or from the middle out), joined along the baseline if it says so, the thread
+/// cut after the letters, words or lines it says.
+fn sewn(glyphs: Vec<SetGlyph>, sew: &LetterSewing) -> Vec<Arc<Node>> {
+    let lines = glyphs.iter().map(|g| g.line + 1).max().unwrap_or(0);
+    let mut line_order: Vec<usize> = (0..lines).collect();
+    if sew.up {
+        line_order.reverse();
+    }
+    // the glyphs' indices in sewing order, each with whether it is sewn leftwards
+    let mut seq: Vec<(usize, bool)> = Vec::with_capacity(glyphs.len());
+    for l in line_order {
+        let mut on: Vec<(usize, f64)> = glyphs.iter().enumerate().filter(|(_, g)| g.line == l).map(|(i, g)| (i, g.along)).collect();
+        on.sort_by(|a, b| a.1.total_cmp(&b.1));
+        match sew.order {
+            LetterOrder::Left => seq.extend(on.iter().map(|g| (g.0, false))),
+            LetterOrder::Right => seq.extend(on.iter().rev().map(|g| (g.0, true))),
+            LetterOrder::Centre => {
+                let (to_first, to_last) = on.split_at((on.len().saturating_sub(1) / 2 + 1).min(on.len()));
+                seq.extend(to_first.iter().rev().map(|g| (g.0, true)));
+                seq.extend(to_last.iter().map(|g| (g.0, false)));
+            }
+        }
+    }
+    let mut slots: Vec<Option<SetGlyph>> = glyphs.into_iter().map(Some).collect();
+    let mut list: Vec<(SetGlyph, bool)> = seq.into_iter().filter_map(|(i, left)| Some((slots.get_mut(i)?.take()?, left))).collect();
+    // where the thread is cut: after a glyph whose next is another letter, word or line
+    let cuts: Vec<bool> = list
+        .windows(2)
+        .map(|w| match w {
+            [(a, _), (b, _)] => match sew.trim {
+                LetterTrim::Auto => false,
+                LetterTrim::Letter => true,
+                LetterTrim::Word => a.word != b.word || a.line != b.line,
+                LetterTrim::Line => a.line != b.line,
+            },
+            _ => false,
+        })
+        .collect();
+    for (k, (g, left)) in list.iter_mut().enumerate() {
+        if sew.join == LetterJoin::Baseline {
+            let (from, to) = if *left { (g.end, g.start) } else { (g.start, g.end) };
+            if let Some(e) = stitched_end(&mut g.art, false) {
+                e.entry = Some(sf_core::Point::new(from.x, from.y));
+            }
+            if let Some(e) = stitched_end(&mut g.art, true) {
+                e.exit = Some(sf_core::Point::new(to.x, to.y));
+            }
+        }
+        if cuts.get(k).copied().unwrap_or(false)
+            && let Some(e) = stitched_end(&mut g.art, true)
+        {
+            e.trim_after = true;
+        }
+    }
+    list.into_iter().map(|(g, _)| Arc::new(g.art)).collect()
+}
+
+/// Whether `n` is, or holds, art with stitches.
+fn has_stitches(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Group { children, .. } => children.iter().any(|c| has_stitches(c)),
+        _ => n.embroidery.is_some(),
+    }
+}
+
+/// The settings of the first (or `last`) art with stitches in `n`, sewing order.
+fn stitched_end(n: &mut Node, last: bool) -> Option<&mut Embroidery> {
+    match &mut n.kind {
+        NodeKind::Group { children, .. } => {
+            let i = if last { children.iter().rposition(|c| has_stitches(c)) } else { children.iter().position(|c| has_stitches(c)) }?;
+            stitched_end(Arc::make_mut(children.get_mut(i)?), last)
+        }
+        _ => n.embroidery.as_deref_mut(),
+    }
+}
+
+/// A name-valued param `key`, when given.
+fn name_param<'a>(p: &'a Value, key: &str, cmd: &str) -> Result<Option<&'a str>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_str().map(Some).ok_or_else(|| bad(cmd, format!("`{key}` is a name, not {v}"))),
+    }
+}
+
+/// The sewing settings `p` gives, over `sew`.
+fn sew_params(p: &Value, cmd: &str, sew: &mut LetterSewing) -> Result<()> {
+    if let Some(v) = name_param(p, "order", cmd)? {
+        sew.order = LetterOrder::from_name(v).ok_or_else(|| bad(cmd, "`order` is left, right or centre"))?;
+    }
+    if let Some(v) = name_param(p, "lines", cmd)? {
+        sew.up = match v.to_ascii_lowercase().as_str() {
+            "down" => false,
+            "up" => true,
+            _ => return Err(bad(cmd, "`lines` is down or up")),
+        };
+    }
+    if let Some(v) = name_param(p, "join", cmd)? {
+        sew.join = LetterJoin::from_name(v).ok_or_else(|| bad(cmd, "`join` is closest or baseline"))?;
+    }
+    if let Some(v) = name_param(p, "trim", cmd)? {
+        sew.trim = LetterTrim::from_name(v).ok_or_else(|| bad(cmd, "`trim` is auto, letter, word or line"))?;
+    }
+    Ok(())
 }
 
 /// Where a glyph's baseline middle goes, `along` a line `down` from the first (points):
@@ -479,6 +600,8 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => s.doc()?.doc.artboards.first().map_or(Point::new(0.0, 0.0), |a| a.rect.center()),
         Some(_) => point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(SET, "`at` is [x, y]"))?,
     };
+    let mut sew = LetterSewing::default();
+    sew_params(p, SET, &mut sew)?;
     let spec = Lettering {
         text: text.to_string(),
         font: font.info.name.clone(),
@@ -486,6 +609,7 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         leading,
         arc: arc_param(p, SET)?.unwrap_or(0.0),
         align: align_param(p, SET)?.unwrap_or_default(),
+        sew,
         frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
     };
     // scaled from the size the font was digitized at; outside what it sews well at, a warning
@@ -532,6 +656,7 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(v) = align_param(p, EDIT)? {
         spec.align = v;
     }
+    sew_params(p, EDIT, &mut spec.sew)?;
     warnings.extend(size_warnings(&font, spec.size));
     let count = s.edit("Edit Lettering", |d, sel| {
         let glyphs = glyphs(d, &font, &spec);

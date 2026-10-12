@@ -4725,3 +4725,13 @@ machine	Stop	Остановка
 	Assign to Glyph	Назначить глифу
 	Selection to glyph	Выделение в глиф
 	The selected art becomes the glyph, moved onto its artboard	Выделенный объект становится глифом и перемещается на его монтажную область
+	Sew order	Порядок вышивки
+	Left to right	Слева направо
+	Right to left	Справа налево
+	Centre out	От центра
+	Closest	Кратчайшее
+	Along the baseline	По базовой линии
+	Where needed	Где нужно
+	After each letter	После каждой буквы
+	After each word	После каждого слова
+	After each line	После каждой строки

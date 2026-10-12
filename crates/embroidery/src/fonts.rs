@@ -91,6 +91,8 @@ pub struct Placed {
     pub glyph: String,
     pub x: f64,
     pub line: usize,
+    /// The word it is in, counted through the text (a space or a line break starts the next).
+    pub word: usize,
     /// How far the next glyph starts along (font units).
     pub advance: f64,
 }
@@ -159,13 +161,24 @@ impl EmbFont {
         let mut out = Vec::new();
         let (mut x, mut line) = (0.0, 0);
         let mut prev: Option<String> = None;
+        // the word the next glyph is in, and whether a space or line break came before it
+        let (mut word, mut gap) = (0, false);
         let mut i = 0;
         while i < text.len() {
             let c = text.get(i).copied().unwrap_or(' ');
+            if c.is_whitespace() {
+                gap = true;
+            }
             if c == '\n' {
                 (x, line, prev) = (0.0, line + 1, None);
                 i += 1;
                 continue;
+            }
+            if gap && !c.is_whitespace() {
+                gap = false;
+                if !out.is_empty() {
+                    word += 1;
+                }
             }
             // the longest glyph name the text matches here
             let found = (1..=MAX_NAME.min(text.len() - i)).rev().find_map(|n| {
@@ -178,7 +191,7 @@ impl EmbFont {
                         x -= self.kerning(p, &name);
                     }
                     let advance = self.advance(&name, g);
-                    out.push(Placed { glyph: name.clone(), x, line, advance });
+                    out.push(Placed { glyph: name.clone(), x, line, word, advance });
                     x += advance;
                     prev = Some(name);
                     i += n;
@@ -187,7 +200,7 @@ impl EmbFont {
                     match self.glyphs.get(&self.info.default_glyph).filter(|_| !c.is_whitespace()) {
                         Some(g) => {
                             let advance = self.advance(&self.info.default_glyph, g);
-                            out.push(Placed { glyph: self.info.default_glyph.clone(), x, line, advance });
+                            out.push(Placed { glyph: self.info.default_glyph.clone(), x, line, word, advance });
                             x += advance;
                         }
                         None => x += self.space(),

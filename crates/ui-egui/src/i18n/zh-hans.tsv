@@ -4311,3 +4311,13 @@ machine	Stop	停止
 	Assign to Glyph	指定为字形
 	Selection to glyph	所选内容作为字形
 	The selected art becomes the glyph, moved onto its artboard	所选图稿成为该字形，并移到其画板上
+	Sew order	缝制顺序
+	Left to right	从左到右
+	Right to left	从右到左
+	Centre out	从中间向外
+	Closest	最近
+	Along the baseline	沿基线
+	Where needed	需要时
+	After each letter	每个字母后
+	After each word	每个单词后
+	After each line	每行后

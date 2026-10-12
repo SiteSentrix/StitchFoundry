@@ -2521,6 +2521,78 @@ fn designs_become_glyphs_to_type_with() {
 }
 
 #[test]
+fn lettering_sews_in_order_joined_and_trimmed() {
+    use sf_core::attr::Embroidery;
+    // the first (or last) art with stitches in a glyph
+    fn end(n: &Node, last: bool) -> Option<&Embroidery> {
+        match &n.kind {
+            NodeKind::Group { children, .. } if last => children.iter().rev().find_map(|c| end(c, last)),
+            NodeKind::Group { children, .. } => children.iter().find_map(|c| end(c, last)),
+            _ => n.embroidery.as_deref(),
+        }
+    }
+    // each glyph sewn: its name, left edge, start and stop, and whether the thread is cut after it
+    type Sewn = (String, f64, Option<sf_core::Point>, Option<sf_core::Point>, bool);
+    fn sewn(s: &Session, id: NodeId) -> Vec<Sewn> {
+        let st = s.doc().unwrap();
+        let kids = st.doc.node(id).unwrap().children().unwrap();
+        kids.iter()
+            .map(|g| {
+                let (a, z) = (end(g, false).unwrap(), end(g, true).unwrap());
+                (g.name.clone().unwrap(), g.geometric_bounds().unwrap().x0, a.entry, z.exit, z.trim_after)
+            })
+            .collect()
+    }
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let set = |s: &mut Session, text: &str, extra: Value| -> Vec<Sewn> {
+        let mut p = json!({"text": text, "font": "Test Script", "at": [100, 300]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let id = NodeId(s.execute("embroidery.lettering", &p).unwrap()["id"].as_u64().unwrap());
+        sewn(s, id)
+    };
+    let xs = |v: &[Sewn]| v.iter().map(|g| g.1).collect::<Vec<_>>();
+    // left to right as it was; right to left; from the middle out: the second, first, third, fourth
+    let plain = set(&mut s, "ABAB", json!({}));
+    let l = xs(&plain);
+    assert!(l.windows(2).all(|w| w[0] < w[1]), "{l:?}");
+    assert!(plain.iter().all(|g| g.2.is_none() && g.3.is_none() && !g.4), "{plain:?}");
+    let r = xs(&set(&mut s, "ABAB", json!({"order": "right"})));
+    assert!(r.windows(2).all(|w| w[0] > w[1]), "{r:?}");
+    let c = xs(&set(&mut s, "ABAB", json!({"order": "centre"})));
+    assert!((c[0] - l[1]).abs() < 1e-9 && (c[1] - l[0]).abs() < 1e-9 && (c[2] - l[2]).abs() < 1e-9 && (c[3] - l[3]).abs() < 1e-9, "{c:?}");
+    // the lines from the last up
+    let u = set(&mut s, "A\nB", json!({"lines": "up"}));
+    assert_eq!(u.iter().map(|g| g.0.as_str()).collect::<Vec<_>>(), ["B", "A"]);
+    // along the baseline: each letter starts at its baseline's start and stops at its end, where the next starts
+    let b = set(&mut s, "AA", json!({"join": "baseline"}));
+    for g in &b {
+        let (a, z) = (g.2.unwrap(), g.3.unwrap());
+        assert!((a.y - 300.0).abs() < 1e-6 && (z.y - 300.0).abs() < 1e-6 && a.x < z.x, "{b:?}");
+    }
+    assert!((b[0].2.unwrap().x - 100.0).abs() < 1e-6 && (b[1].2.unwrap().x - b[0].3.unwrap().x).abs() < 1e-6, "{b:?}");
+    // right to left along it: started at the end, stopped at the start
+    let rb = set(&mut s, "AA", json!({"join": "baseline", "order": "right"}));
+    assert!(rb.iter().all(|g| g.2.unwrap().x > g.3.unwrap().x), "{rb:?}");
+    // the thread cut after each word, letter or line; not after the last
+    let cut = |v: &[Sewn]| v.iter().map(|g| g.4).collect::<Vec<_>>();
+    assert_eq!(cut(&set(&mut s, "AB A", json!({"trim": "word"}))), [false, true, false]);
+    assert_eq!(cut(&set(&mut s, "AB\nA", json!({"trim": "line"}))), [false, true, false]);
+    assert_eq!(cut(&set(&mut s, "AB A", json!({"trim": "letter"}))), [true, true, false]);
+    // set again: what it said stays, what is given changes
+    s.execute("embroidery.lettering.edit", &json!({"text": "BAB"})).unwrap();
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(cut(&sewn(&s, id)), [true, true, false]);
+    s.execute("embroidery.lettering.edit", &json!({"trim": "auto", "order": "centre"})).unwrap();
+    let e = sewn(&s, id);
+    assert_eq!((cut(&e), e[0].0.as_str()), (vec![false, false, false], "A"));
+    // names it doesn't know
+    for bad in [json!({"order": "middle"}), json!({"join": "nearest"}), json!({"trim": 5}), json!({"lines": "sideways"})] {
+        assert!(s.execute("embroidery.lettering.edit", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
