@@ -1517,6 +1517,28 @@ fn inspect_lists_everything() {
     assert!(s.commands().len() > 100);
 }
 
+/// A compound path reports the paint that lives on it, and any node reports a blend other than Normal.
+#[test]
+fn inspect_reports_compound_paint_and_blend() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 40.0, 40.0);
+    let b = rect(&mut s, 10.0, 10.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.setProps", &json!({"id": c, "blend": "Multiply"})).unwrap();
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let node = &v["layers"][0]["children"][0];
+    assert_eq!(node["id"], c);
+    assert_eq!(node["kind"], "Compound Path");
+    assert!(node["fill"].as_str().is_some_and(|f| f != "None"), "compound paint: {node}");
+    assert!(node.get("stroke").is_some() && node.get("strokeWidth").is_some(), "{node}");
+    assert_eq!(node["blend"], "Multiply");
+    let plain = rect(&mut s, 80.0, 0.0, 10.0, 10.0);
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let plain = v["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == plain.0).unwrap();
+    assert!(plain.get("blend").is_none(), "Normal is omitted: {plain}");
+}
+
 /// `document.node {summary: true}` answers the `document.inspect` shape for one node:
 /// the same fields the full-tree summary carries, without serializing the whole tree.
 #[test]
@@ -1530,6 +1552,47 @@ fn document_node_summary_matches_inspect() {
     let node = v["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == id).cloned().unwrap();
     assert_eq!(summary, node, "{summary} vs {node}");
     assert!(s.execute("document.node", &json!({"id": 999999, "summary": true})).is_err());
+}
+
+/// #1389: the paint of a compound path is on the compound, which reports it; its members report
+/// that they are members instead of a paint they don't have. Every node reports a blend mode
+/// that isn't Normal, as it does an opacity below 100%.
+#[test]
+fn inspect_reports_a_compound_paths_paint_and_blend_modes() {
+    let mut s = session();
+    let plain = rect(&mut s, 300.0, 0.0, 50.0, 50.0).0;
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 200.0, 200.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    s.execute("object.setProps", &json!({"opacity": 80, "blend": "Color Burn"})).unwrap();
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let nodes = v["layers"][0]["children"].as_array().unwrap();
+    let compound = nodes.iter().find(|n| n["kind"] == "Compound Path").unwrap();
+    assert_eq!((&compound["fill"], &compound["stroke"], &compound["strokeWidth"]), (&json!("#ff0000"), &json!("#0000ff"), &json!(3.0)), "{compound}");
+    assert_eq!(compound["blend"], "Color Burn", "{compound}");
+    // The label is what `object.setProps` takes.
+    s.execute("object.setProps", &json!({"blend": compound["blend"]})).unwrap();
+    let members = compound["children"].as_array().unwrap();
+    assert_eq!(members.len(), 2);
+    for m in members {
+        assert_eq!(m["compoundMember"], true, "{m}");
+        assert!(["fill", "stroke", "strokeWidth", "strokeOptions", "blend"].iter().all(|k| m.get(k).is_none()), "{m}");
+        // One member read on its own says the same.
+        assert_eq!(&s.execute("document.node", &json!({"id": m["id"], "summary": true})).unwrap(), m);
+    }
+    assert_eq!(s.execute("document.node", &json!({"id": compound["id"], "summary": true})).unwrap(), *compound);
+    // A plain object: no blend while it is Normal, nothing about compound paths.
+    let plain = nodes.iter().find(|n| n["id"] == plain).unwrap();
+    assert!(plain.get("blend").is_none() && plain.get("compoundMember").is_none() && plain.get("fill").is_some(), "{plain}");
+    // A group has a blend mode too, and still no paint.
+    s.execute("select.set", &json!({"ids": [plain["id"]]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.setProps", &json!({"ids": [g], "blend": "Multiply"})).unwrap();
+    let group = s.execute("document.node", &json!({"id": g, "summary": true})).unwrap();
+    assert!(group["blend"] == "Multiply" && group.get("fill").is_none(), "{group}");
 }
 
 /// `depth` and `childLimit` slice a summary read; a level that shows fewer children

@@ -1,6 +1,7 @@
 //! Agent-friendly document summaries and view-models for panels.
 
 use serde_json::{Value, json};
+use vectorcraft_color::BlendMode;
 use vectorcraft_doc::{ArrowAlign, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, WidthProfile};
 
 use crate::Session;
@@ -20,6 +21,9 @@ pub struct SummaryOpts {
     /// Children shown per node (`None`: all, top of the stack first). A level that shows
     /// fewer children than it has reports `childCount`, so truncation is never silent.
     pub child_limit: Option<u64>,
+    /// The node is a member of a compound path, which paints it: it has no paint of its own
+    /// to report.
+    pub compound_member: bool,
 }
 
 /// Compact tree summary of a node (for `document.inspect`): the whole subtree.
@@ -40,6 +44,9 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
     if n.opacity < 1.0 {
         v["opacity"] = json!(n.opacity);
     }
+    if n.blend != BlendMode::Normal {
+        v["blend"] = json!(n.blend.label());
+    }
     // The angle of its rotated bounding box (counter-clockwise degrees).
     if n.bbox_angle != 0.0 {
         v["rotation"] = json!(n.bbox_angle);
@@ -58,12 +65,15 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
             v["objectStroke"] = json!(n.appearance.stroke_paint().label());
             v["objectStrokeWidth"] = json!(n.appearance.stroke_width());
         }
-    } else if !n.is_container() {
+    } else if opts.compound_member {
+        v["compoundMember"] = json!(true);
+    } else if !n.is_container() || matches!(n.kind, NodeKind::Compound { .. }) {
+        // A compound path is a container, but its fill and stroke live on it, not on its members.
         v["fill"] = json!(n.appearance.fill_paint().label());
         v["stroke"] = json!(n.appearance.stroke_paint().label());
         v["strokeWidth"] = json!(n.appearance.stroke_width());
     }
-    if let Some(st) = node_stroke(n) {
+    if let Some(st) = node_stroke(n).filter(|_| !opts.compound_member) {
         v["strokeOptions"] = stroke_options(&st);
     }
     match &n.kind {
@@ -99,7 +109,11 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
         let total = ch.len();
         let take_n = opts.child_limit.map_or(total, |l| l.min(total as u64) as usize);
         if opts.depth.is_none_or(|d| d > 0) {
-            let next = SummaryOpts { depth: opts.depth.map(|d| d.saturating_sub(1)), child_limit: opts.child_limit };
+            let next = SummaryOpts {
+                depth: opts.depth.map(|d| d.saturating_sub(1)),
+                child_limit: opts.child_limit,
+                compound_member: matches!(n.kind, NodeKind::Compound { .. }),
+            };
             v["children"] = Value::Array(ch.iter().rev().take(take_n).map(|c| node_summary_opts(c, next)).collect());
         }
         if take_n < total || v.get("children").is_none() {

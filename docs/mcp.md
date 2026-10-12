@@ -162,6 +162,11 @@ that shows fewer children than it has reports their total as `childCount`, so tr
 nothing truncated the reply is the plain summary. Both must be non-negative integers and need `summary: true`
 (the full object JSON is never truncated); anything else is an error.
 
+In the summary an object reports its paint as `fill`, `stroke` (labels) and `strokeWidth`. So does a compound path,
+whose paint is its own: its member paths report `compoundMember: true` instead of a paint they don't have. Every
+node (layers and groups too) reports `opacity` when it is below 1 and `blend` when it isn't Normal, as the label
+`object.setProps {blend}` takes (`"Multiply"`, `"Color Burn"`).
+
 On a large document, drill instead of dumping: `inspect_document {depth: 0}` (or `run_command document.inspect
 {depth?, childLimit?}`, same rules) is the skeleton (artboards with top layers and counts), `run_command
 document.find {name?, kind?, text?, limit?}` locates nodes across the whole tree, and `document.node` reads the
