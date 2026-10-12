@@ -382,7 +382,13 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
 /// [`encode_all`] of `doc` as it is.
 fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     let f = super::writable(C, Some(format), None)?;
+    let failed = vectorcraft_render::decode_failures();
     let mut enc = encode_files(doc, f, p)?;
+    // An image the renderer couldn't decode draws nothing: say so rather than write a picture
+    // that silently lacks it.
+    if f.raster && vectorcraft_render::decode_failures() > failed {
+        enc.warnings.push("an image couldn't be decoded and is missing from the picture".into());
+    }
     // Formats that draw type: missing fonts come out in the fallback font (PDF and SVG say so
     // themselves: SVG only when it outlines or embeds fonts).
     if (f.raster || matches!(f.id, "eps" | "emf" | "wmf"))
