@@ -3569,6 +3569,12 @@
 @plural	{n} star|{n} stars	{n} ngôi sao
 @plural	{n} step|{n} steps	{n} bước
 @plural	{n} stroke|{n} strokes	{n} nét
+3d	Bevel	Vát cạnh
+3d	Cap	Nắp
+3d	Hollow	Rỗng
+3d	Rounded	Bo tròn
+3d	Solid	Đặc
+3d	Space	Khoảng cách
 axis	Both	Cả hai
 axis	Horizontal	Ngang
 axis	Vertical	Dọc
@@ -3655,6 +3661,7 @@ theme	Appearance	Giao diện
 @msg	an image whose data is cut short was left out	một ảnh bị cắt ngắn dữ liệu đã bị bỏ qua
 @msg	an object can't be read	không thể đọc một đối tượng
 @msg	an object in perspective would leave the edited grid	đối tượng trong phối cảnh sẽ rời khỏi lưới đang chỉnh sửa
+@msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Một đối tượng chỉ nhận một hiệu ứng 3D. Hãy chỉnh sửa tùy chọn của hiệu ứng hiện có hoặc xóa nó trước.
 @msg	anchor must name a registered panel	anchor phải đặt tên bảng đã đăng ký
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art hoặc type
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	chữ vùng trong khung quá ngắn cho một dòng của phông chữ đang hiển thị đã có khung cao hơn ({_1}): chữ sẽ không hiển thị nếu không
@@ -4062,10 +4069,12 @@ theme	Appearance	Giao diện
 @msg	Targa files are RGB: colorModel rgb	Tệp Targa là RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Bọc chữ: hãy chọn đối tượng bọc
 @msg	that document is no longer open	tài liệu đó không còn mở
+@msg	The 3D surface is too complex; simplify the shape	Bề mặt 3D quá phức tạp; hãy đơn giản hóa hình dạng
 @msg	the art could not be sampled	không thể lấy mẫu tác phẩm
 @msg	the art has no bounds	tác phẩm không có giới hạn
 @msg	the art is too light for any dots	tác phẩm quá sáng để có bất kỳ chấm nào
 @msg	the art on them differs from the page's in {_1}% of it	tác phẩm trên chúng khác với trang {_1}%
+@msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	tác phẩm trên chúng khác với tác phẩm của trang ở {_1}% diện tích: dù vậy chúng vẫn được lấy từ dữ liệu chỉnh sửa
 @msg	the artboard to fit must be a positive size up to {_1} pt	bảng vẽ cần khớp phải có kích thước dương tối đa {_1} pt
 @msg	the background worker stopped	tiến trình nền đã dừng
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	tệp nén giải nén ra nhiều hơn VectorCraft đọc ({_1} MB tài liệu, {_2} MB mỗi ảnh)
@@ -4128,6 +4137,7 @@ theme	Appearance	Giao diện
 @msg	the selected stroke's profile is already listed as {_1}	hồ sơ của nét đã chọn đã được liệt kê là {_1}
 @msg	the selection has no URL (or they differ)	vùng chọn không có URL (hoặc chúng khác nhau)
 @msg	the selection isn't in perspective	vùng chọn không ở trong phối cảnh
+@msg	The shape is too complex for a 3D effect	Hình dạng quá phức tạp cho hiệu ứng 3D
 @msg	the stroke has no weight	nét không có độ dày
 @msg	the target layer is locked or hidden	lớp đích bị khóa hoặc ẩn
 @msg	the thumbnail image is malformed	ảnh thu nhỏ bị sai định dạng
@@ -4204,7 +4214,9 @@ theme	Appearance	Giao diện
 @msg	{C}: no effect at index {from}	{C}: không có hiệu ứng tại chỉ mục {from}
 @msg	{depth}-bit PSD files in this colour mode can't be read	tệp PSD {depth}-bit ở chế độ màu này không thể đọc được
 @msg	{key} must be a finite coordinate	{key} phải là tọa độ hữu hạn
+@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} hiện yêu cầu một đường dẫn hoặc đường dẫn phức. Hãy chuyển văn bản, hình ảnh và nhóm thành đường dẫn trước.
 @msg	{label} produced an empty result	{label} tạo ra kết quả trống
+@msg	{label} requires a shape with at least two anchors	{label} yêu cầu một hình dạng có ít nhất hai điểm neo
 @msg	{label}: lost track of a shape's style	{label}: mất dấu kiểu của hình dạng
 @msg	{label}: select paths	{label}: hãy chọn đường dẫn
 @msg	{label}: select paths, compound paths, groups or text	{label}: hãy chọn đường dẫn, đường dẫn phức, nhóm hoặc văn bản
