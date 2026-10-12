@@ -1,7 +1,8 @@
 //! `vectorcraft-cli perf`: the performance budgets (plan §4) measured on a synthetic document.
 //!
-//! Each row is the median of several runs. Timings are wall-clock: on a busy machine (load
-//! average above the core count) they are noise, and the report says so.
+//! Each row is the median of several runs. Timings are wall-clock: on a busy machine (a load
+//! average above three quarters of the cores, or on Windows more than three quarters of the
+//! cores busy over a second) they are noise, and the report says so.
 
 use std::time::Instant;
 
@@ -61,6 +62,7 @@ fn median_ms(runs: usize, mut f: impl FnMut()) -> f64 {
 }
 
 /// 1-minute load average (macOS / Linux), if available.
+#[cfg(not(windows))]
 fn load_average() -> Option<f64> {
     let out = std::process::Command::new("sysctl").args(["-n", "vm.loadavg"]).output().ok().filter(|o| o.status.success());
     let text = match out {
@@ -68,6 +70,27 @@ fn load_average() -> Option<f64> {
         None => std::fs::read_to_string("/proc/loadavg").ok()?,
     };
     text.split_whitespace().map(|t| t.trim_matches(|c| c == '{' || c == '}')).find_map(|t| t.parse().ok())
+}
+
+/// The cores busy on average over one second (Windows), if available: the share of the
+/// processors' time that `GetSystemTimes` reports as kernel or user time but not as idle time,
+/// times `cores`. A load average also counts the threads waiting for a core.
+#[cfg(windows)]
+fn busy_cores(cores: usize) -> Option<f64> {
+    let times = || winsafe::GetSystemTimes().ok().map(|(idle, kernel, user)| [idle, kernel, user].map(u64::from));
+    let before = times()?;
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    busy_share(before, times()?).map(|share| share * cores as f64)
+}
+
+/// The share of the processors' time between two `[idle, kernel, user]` readings of
+/// `GetSystemTimes` that was busy (kernel time includes idle time). It is None when no time
+/// passed, a time went back, or the idle time exceeds the kernel and user time.
+#[cfg(any(windows, test))]
+fn busy_share([idle0, kernel0, user0]: [u64; 3], [idle1, kernel1, user1]: [u64; 3]) -> Option<f64> {
+    let total = kernel1.checked_sub(kernel0)?.checked_add(user1.checked_sub(user0)?)?;
+    let busy = total.checked_sub(idle1.checked_sub(idle0)?)?;
+    (total > 0).then(|| busy as f64 / total as f64)
 }
 
 /// Milliseconds per pointer move of a Direct Selection drag of a handle, then of a segment, of a
@@ -114,10 +137,19 @@ fn edit_drags(n: usize) -> Result<(f64, f64), String> {
 }
 
 /// Resident memory of this process in MB (`ps`), if available.
+#[cfg(not(windows))]
 fn rss_mb() -> Option<f64> {
     let pid = std::process::id().to_string();
     let out = std::process::Command::new("ps").args(["-o", "rss=", "-p", &pid]).output().ok().filter(|o| o.status.success())?;
     String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().ok().map(|kb| kb / 1024.0)
+}
+
+/// The working set of this process in MB (`GetProcessMemoryInfo`), if available: its pages that
+/// are in physical memory, the figure `ps` reports as resident memory elsewhere.
+#[cfg(windows)]
+fn rss_mb() -> Option<f64> {
+    let counters = winsafe::HPROCESS::GetCurrentProcess().GetProcessMemoryInfo().ok()?;
+    Some(counters.WorkingSetSize as f64 / (1024.0 * 1024.0))
 }
 
 /// `--deep`: tracked rows (no budget yet) for work the budgets above don't reach: editing a whole
@@ -243,8 +275,10 @@ fn deep(n: usize) -> Result<(), String> {
     for (name, ms) in &rows {
         outln!("  {name:<52} {ms:>10.2} ms");
     }
+    // `rss_mb` reads the working set on Windows.
+    let memory = if cfg!(windows) { "working set" } else { "memory" };
     for (what, mb) in &mem {
-        outln!("  memory {what:<45} {mb:>8.0} MB");
+        outln!("  {:<52} {mb:>8.0} MB", format!("{memory} {what}"));
     }
     Ok(())
 }
@@ -261,8 +295,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
     }
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
-    let load = load_average();
-    outln!("VectorCraft performance budgets — {n} paths, {cores} cores, load average {}", load.map_or("?".into(), |l| format!("{l:.1}")));
+    // The figure is the 1-minute load average, or on Windows the cores busy over one second.
+    #[cfg(not(windows))]
+    let (load, label) = (load_average(), "load average");
+    #[cfg(windows)]
+    let (load, label) = (busy_cores(cores), "cores busy");
+    outln!("VectorCraft performance budgets — {n} paths, {cores} cores, {label} {}", load.map_or("?".into(), |l| format!("{l:.1}")));
     let noisy = load.is_some_and(|l| l > cores as f64 * 0.75);
     if noisy {
         outln!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
@@ -356,5 +394,40 @@ pub fn run(args: &[String]) -> Result<(), String> {
             Ok(())
         }
         _ => Err(format!("{over} budget(s) exceeded")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn busy_share_leaves_out_idle_time() {
+        // In one second four processors log 40,000,000 ticks of 100 ns of kernel and user time,
+        // 10,000,000 of them idle.
+        assert_eq!(busy_share([7, 100, 50], [10_000_007, 25_000_100, 15_000_050]), Some(0.75));
+        // There is no share when no time passed, a time went back, or the idle time exceeds the
+        // kernel and user time.
+        assert_eq!(busy_share([7, 100, 50], [7, 100, 50]), None);
+        assert_eq!(busy_share([7, 100, 50], [8, 99, 60]), None);
+        assert_eq!(busy_share([0, 0, 0], [30, 10, 10]), None);
+    }
+
+    /// On Windows `busy_cores` gives a number between 0 and the cores.
+    #[cfg(windows)]
+    #[test]
+    fn windows_reads_how_many_cores_are_busy() {
+        let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
+        let busy = busy_cores(cores);
+        assert!(busy.is_some_and(|b| (0.0..=cores as f64).contains(&b)), "{busy:?} of {cores}");
+    }
+
+    /// On Windows `rss_mb` gives this process's working set: more than 0 MB and less than
+    /// 10,000 MB.
+    #[cfg(windows)]
+    #[test]
+    fn windows_reads_the_working_set() {
+        let mb = rss_mb();
+        assert!(mb.is_some_and(|mb| mb > 0.0 && mb < 10_000.0), "{mb:?}");
     }
 }

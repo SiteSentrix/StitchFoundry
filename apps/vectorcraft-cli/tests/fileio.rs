@@ -83,6 +83,12 @@ fn help_lists_readable_formats() {
     assert!(out.contains("Readable formats: .vectorcraft") && out.contains(".ait") && out.contains(".webp"), "{out}");
 }
 
+#[test]
+fn help_lists_perf_deep() {
+    let out = ok(&["--help"]);
+    assert!(out.contains("vectorcraft-cli perf [--paths N] [--deep]") && out.contains("--deep also times"), "{out}");
+}
+
 /// `info` reports the import warnings: an EPS read only up to an error names it.
 #[test]
 fn info_reports_why_an_eps_read_partly() {
