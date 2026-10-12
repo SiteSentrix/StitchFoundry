@@ -4151,13 +4151,10 @@ theme	Appearance	Erscheinungsbild
 @msg	{key} must be a finite coordinate	{key} muss eine endliche Koordinate sein
 @msg	invalid restored panel group	Ungültige wiederhergestellte Bedienfeldgruppe
 # 3D and Materials › Revolve: its options dialog and gizmos.
-	Ambient	Umgebungslicht
 	Axis side	Achsenseite
-	Direction	Richtung
 	Drag rings to rotate. Shift snaps to 15°.	Ziehen Sie die Ringe, um zu drehen. Mit Shift in 15°-Schritten.
 	Drag the light, or its rings. Shift snaps to 15°.	Ziehen Sie das Licht oder seine Ringe. Mit Shift in 15°-Schritten.
 	Drag values or labels. Double-click a value to type.	Ziehen Sie Werte oder Beschriftungen. Doppelklicken Sie auf einen Wert, um ihn einzugeben.
-	Elevation	Höhe
 	Intensity	Intensität
 	Keep visible surfaces only when expanding	Beim Umwandeln nur sichtbare Flächen behalten
 	Lighting	Beleuchtung
@@ -4271,3 +4268,6 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+	Softness	Weichheit
+	Ambient Light	Umgebungslicht
+	Light behind the object	Licht hinter dem Objekt

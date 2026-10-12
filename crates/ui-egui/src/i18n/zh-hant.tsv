@@ -3577,9 +3577,6 @@ effect	Soft	柔和
 	Rotation Y	Y 軸旋轉
 	Rotation Z	Z 軸旋轉
 	Shading	明暗處理
-	Direction	方向
-	Elevation	仰角
-	Ambient	環境光
 	Segments	分段數
 	Show axis	顯示軸
 	Reset all	全部重設
@@ -3685,3 +3682,6 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
+	Softness	柔和度
+	Ambient Light	環境光
+	Light behind the object	光源位於物件後方

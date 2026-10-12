@@ -10,8 +10,8 @@ Select a path or compound path, then choose **Effect › 3D and Materials › Ex
 - **Object** (Extrude & Bevel and Inflate): the shape's own options, below.
 - **Rotation**: a **Presets** menu, **Rotation X/Y/Z** (−180° to 180°) and **Perspective** (0° to 160°, below). The rotation rings
   on the artboard turn the object about the centre of its bounds; Shift snaps to 15°.
-- **Lighting**: **Shading**, the light's **Direction** and **Elevation** (or drag the light on the artboard),
-  **Intensity** and **Ambient**, as for Revolve.
+- **Lighting**: **Shading** and the light's settings (below), as for Revolve; or drag the light on the
+  artboard.
 
 Preview changes are temporary until OK; Cancel restores the document; OK is one undo step. An object takes one
 3D effect: edit its options in the Appearance panel, or remove it before applying another.
@@ -81,13 +81,31 @@ that shows exactly the same view: the strength put the eye at 4 × that size / s
 sin(angle / 2) = √3 × strength / 4, and 100 % is about 51.3°. An angle given as well wins; the dialog shows and
 saves the angle.
 
+## Lighting
+
+One white directional light, with the public panel options' Light Settings in their order (Color aside):
+
+| Option | |
+|---|---|
+| Intensity | 0–100 %, default 80 %: the light's brightness. |
+| Rotation | −180° to 180°: round the object on the page. Our reading: 0° is on the object's right, counterclockwise, as Illustrator's other angles. |
+| Height | 0° to 90°: from beside the object (0°) to straight in front of it (90°). |
+| Softness | 0–100 %, default 0 %: how far round the object the light reaches. Our reading: at 0 % the light falls off with the angle to nothing at 90° (as before), at 100 % it reaches nothing only straight away from the light. |
+| Ambient Light | 0–200 %, default 25 %: light from everywhere. Faces are never brighter than the art's own colour, so past 100 % (less the light's share) it adds nothing more. |
+| Light behind the object | The documented "Move selected light to the back of object": the light shines from behind. |
+
+The documentation gives no defaults; ours keep the earlier light: Rotation 125.26° and Height 30° are the direction
+the default light had (45° left of the eye and 45° up). Effects saved before (and scripts) give the light by
+`lightAzimuth` and `lightElevation`; those are read as the Rotation, Height and side of the same direction, so the
+shading is exactly as before.
+
 ## Parameters (`effect.apply`, `effect.setParams`)
 
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
 `ogee`), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
 `threeD.inflate`: `depth`, `volume` (%), `bothSides`. All three take the view and lighting parameters Revolve
-uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shade`, `lightAzimuth`, `lightElevation`,
-`lightIntensity` (%), `ambient` (%). Lengths are points and scale with the object (Scale Strokes & Effects).
+uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shade`, `lightIntensity` (%), `lightRotation`,
+`lightHeight` (degrees), `lightSoftness` (%), `ambient` (%, to 200), `lightBehind`. Lengths are points and scale with the object (Scale Strokes & Effects).
 Commands validate the shape and the parameters before the document changes.
 
 ## What differs from the public documentation
@@ -97,7 +115,7 @@ and [Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effe
 pages, and the archived Extrude & Bevel option list (depth 0–2,000, cap on/off, bevel height, bevel extent in or
 out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 
-- **Materials** (base, Adobe Substance and graphics), **several lights**, light colour and softness, **shadows**
+- **Materials** (base, Adobe Substance and graphics), **several lights**, light colour, light presets, **shadows**
   and **ray-traced rendering** are not built: shading is one directional light, flat per face, painted with the
   object's top fill (else its top stroke) for Extrude & Bevel and Inflate.
 - The bevel shapes and their names are our own; custom bevel paths are not supported.

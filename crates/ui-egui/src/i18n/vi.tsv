@@ -191,7 +191,6 @@
 	Alt	Alt
 	Alt:	Alt:
 	Alter Paths for Appearance	Sửa đường dẫn cho diện mạo
-	Ambient	Ánh sáng môi trường
 	Amount	Mức độ
 	Amount:	Mức độ:
 	Anchor Point	Điểm neo
@@ -864,7 +863,6 @@
 	Dim Images to:	Làm mờ ảnh đến:
 	Dimensions	Kích thước
 	Direct Selection Tool	Công cụ Chọn trực tiếp
-	Direction	Hướng
 	Direction Balance	Cân bằng hướng
 	Direction Handles	Tay nắm hướng
 	Direction:	Hướng:
@@ -1035,7 +1033,6 @@
 	Effective PPI	PPI hiệu dụng
 	Effects	Hiệu ứng
 	Effect…	Hiệu ứng…
-	Elevation	Độ cao
 	Eliminate	Loại bỏ
 	Ellipse	Hình elip
 	Ellipse Properties:	Thuộc tính hình elip:
@@ -4298,3 +4295,6 @@ theme	Appearance	Giao diện
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
+	Softness	Độ mềm
+	Ambient Light	Ánh sáng môi trường
+	Light behind the object	Ánh sáng phía sau đối tượng

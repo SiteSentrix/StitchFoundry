@@ -175,7 +175,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Done:** an initial live Revolve in the `three-d` crate (#846, from the contributor who offered in #605);
   Extrude & Bevel, Inflate and Rotate with Position presets ([three-d.md](three-d.md), #1407).
-- **Missing:** materials (base, Substance, graphics), several lights, light colour and softness, shadows,
+- **Missing:** materials (base, Substance, graphics), several lights, light colour and presets, shadows,
   ray-traced rendering, Revolve caps, exact visibility for intersecting and concave surfaces, 3D Classic,
   Turntable, 3D export (OBJ, USDA, glTF).
 - **Impact:** specialist; Materials is the one menu stub left.

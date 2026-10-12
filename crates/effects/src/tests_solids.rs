@@ -178,6 +178,48 @@ fn an_earlier_perspective_strength_draws_as_its_angle() {
     }
 }
 
+/// Effects from before Rotation and Height set the light by azimuth and elevation: each 3D effect
+/// shades its faces exactly as with the Rotation, Height and side that stand for it.
+#[test]
+fn an_earlier_light_direction_shades_as_its_rotation_and_height() {
+    fn colours(n: &Node, out: &mut Vec<[f32; 3]>) {
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first()
+            && let Some(c) = f.paint.color()
+        {
+            out.push(c.to_rgb());
+        }
+        for c in n.children().into_iter().flatten() {
+            colours(c, out);
+        }
+    }
+    for id in SOLIDS.iter().copied().chain([crate::REVOLVE]) {
+        for (azimuth, elevation) in [(-45.0, 45.0), (150.0, -30.0), (60.0, 80.0), (-120.0, 10.0)] {
+            let with = |light: Value| {
+                let mut p = json!({"rotationX": -25, "rotationY": 35, "rotationZ": 0, "depth": 60, "lightSoftness": 0});
+                p.as_object_mut().unwrap().extend(light.as_object().unwrap().clone());
+                let mut n = square_node();
+                n.appearance.effects.push(Effect { id: id.into(), params: p, visible: true });
+                let art = if id == crate::REVOLVE { crate::revolve_art(&n) } else { solid_art(&n) }.unwrap();
+                let mut out = vec![];
+                colours(&art, &mut out);
+                out
+            };
+            let (r, h, behind) = vectorcraft_three_d::light_from_azimuth_elevation(azimuth, elevation);
+            let old = with(json!({"lightAzimuth": azimuth, "lightElevation": elevation}));
+            let new = with(json!({"lightRotation": r, "lightHeight": h, "lightBehind": behind}));
+            assert!(!old.is_empty() && old.len() == new.len(), "{id}");
+            for (a, b) in old.iter().zip(&new) {
+                assert!(a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-6), "{id} {azimuth} {elevation}: {a:?} against {b:?}");
+            }
+        }
+        let merged = crate::merged_params(id, &json!({"lightAzimuth": 90, "lightElevation": 0}));
+        assert!(
+            merged.get("lightAzimuth").is_none() && merged["lightHeight"].as_f64().unwrap().abs() < 1e-9 && merged["lightBehind"] == json!(false),
+            "{id}: {merged}"
+        );
+    }
+}
+
 #[test]
 fn effects_before_it_shape_the_solid_and_effects_after_it_bend_the_result() {
     let mut n = square_node();

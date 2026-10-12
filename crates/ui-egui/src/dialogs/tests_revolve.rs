@@ -152,15 +152,15 @@ fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
     h.settle();
     h.click(h.rect("Lighting").center());
     assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("__gizmo"), "light");
-    for label in ["Shading", "Direction", "Elevation", "Intensity", "Ambient"] {
+    for label in ["Shading", "Intensity", "Height", "Softness", "Ambient Light", "Light behind the object"] {
         assert!(Rect::from_min_size(Pos2::ZERO, h.screen).contains_rect(h.rect(label)));
     }
     let panel = h.ctx.memory(|m| m.area_rect(Id::new(("dialog", "effect")).with("revolve"))).unwrap();
     assert!(panel.width() < 420.0 && panel.height() < 460.0, "compact lighting controls: {panel:?}");
-    h.drag(h.rect("Direction").center(), vec2(24.0, 0.0));
-    assert_ne!(h.value("lightAzimuth"), -45.0);
-    h.click(h.response(("revolve-reset", "lightAzimuth")).center());
-    assert_eq!(h.value("lightAzimuth"), -45.0);
+    h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
+    assert_ne!(h.value("lightHeight"), 30.0);
+    h.click(h.response(("revolve-reset", "lightHeight")).center());
+    assert_eq!(h.value("lightHeight"), 30.0);
     h.click(h.rect("Rotation").center());
     assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("__gizmo"), "rotation");
     assert!(!h.rect("Rotation X").is_negative());

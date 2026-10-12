@@ -4168,9 +4168,6 @@ effect	Vertical	세로
 	Rotation Y	Y 회전
 	Rotation Z	Z 회전
 	Shading	셰이딩
-	Direction	방향
-	Elevation	고도
-	Ambient	주변광
 	Segments	세그먼트
 	Show axis	축 표시
 	Reset all	모두 재설정
@@ -4280,3 +4277,6 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
+	Softness	부드러움
+	Ambient Light	주변광
+	Light behind the object	개체 뒤의 조명

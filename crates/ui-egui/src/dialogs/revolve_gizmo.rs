@@ -143,7 +143,7 @@ impl Geometry {
         let mut best = None;
         let mut distance = 9.0;
         for (axis, ring) in self.light_rings(options).iter().enumerate() {
-            let (start, span) = if axis == 0 { (0.0, std::f32::consts::TAU) } else { (-std::f32::consts::FRAC_PI_2, std::f32::consts::PI) };
+            let (start, span) = if axis == 0 { (0.0, std::f32::consts::TAU) } else { (0.0, std::f32::consts::FRAC_PI_2) };
             for i in 0..SAMPLES {
                 let a = start + i as f32 * span / SAMPLES as f32;
                 let (from, to) = (self.center + ring.point(a), self.center + ring.point(a + span / SAMPLES as f32));
@@ -180,6 +180,11 @@ struct Drag {
 fn wrap(n: f64, snap: bool) -> f64 {
     let n = if snap { (n / 15.0).round() * 15.0 } else { n };
     (n + 180.0).rem_euclid(360.0) - 180.0
+}
+
+/// A Height, 0° to 90°, on 15° steps with Shift.
+fn snap_height(height: f64, snap: bool) -> f64 {
+    (if snap { (height / 15.0).round() * 15.0 } else { height }).clamp(0.0, 90.0)
 }
 
 pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
@@ -265,24 +270,18 @@ pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
                         let start = revolve_options(&serde_json::Value::Object(current.fields.clone()));
                         let projected = light_position(geometry, start) + (p - current.origin);
                         let point = geometry.xf.delta_to_doc(projected - geometry.center) * (geometry.xf.zoom / f64::from(geometry.radius * 1.4));
-                        let [azimuth, elevation] = start.light_at_on_side(Point::new(point.x, point.y));
-                        d.fields.insert("lightAzimuth".into(), json!(wrap(azimuth, snap)));
-                        d.fields.insert(
-                            "lightElevation".into(),
-                            json!((if snap { (elevation / 15.0).round() * 15.0 } else { elevation }).clamp(-90.0, 90.0)),
-                        );
+                        let [rotation, height] = start.light_at_on_side(Point::new(point.x, point.y));
+                        d.fields.insert("lightRotation".into(), json!(wrap(rotation, snap)));
+                        d.fields.insert("lightHeight".into(), json!(snap_height(height, snap)));
                     }
                     Mode::LightRing { axis } => {
                         let delta = geometry.xf.delta_to_doc(p - current.origin) * geometry.xf.zoom;
                         let start = revolve_options(&serde_json::Value::Object(current.fields.clone()));
                         if *axis == 0 {
-                            d.fields.insert("lightAzimuth".into(), json!(wrap(start.light_azimuth + delta.x * 0.6, snap)));
+                            // Right turns the light counterclockwise, as along the ring's foot.
+                            d.fields.insert("lightRotation".into(), json!(wrap(start.light_rotation + delta.x * 0.6, snap)));
                         } else {
-                            let elevation = start.light_elevation - delta.y * 0.6;
-                            d.fields.insert(
-                                "lightElevation".into(),
-                                json!((if snap { (elevation / 15.0).round() * 15.0 } else { elevation }).clamp(-90.0, 90.0)),
-                            );
+                            d.fields.insert("lightHeight".into(), json!(snap_height(start.light_height - delta.y * 0.6, snap)));
                         }
                     }
                 }
@@ -371,7 +370,7 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
     painter.circle_stroke(g.center, radius, Stroke::new(1.0, t.text_dim.gamma_multiply(0.3)));
     let labels = g.light_labels();
     for (axis, ring) in g.light_rings(options).iter().enumerate() {
-        let (start, span) = if axis == 0 { (0.0, std::f32::consts::TAU) } else { (-std::f32::consts::FRAC_PI_2, std::f32::consts::PI) };
+        let (start, span) = if axis == 0 { (0.0, std::f32::consts::TAU) } else { (0.0, std::f32::consts::FRAC_PI_2) };
         for i in 0..SAMPLES {
             let a = start + i as f32 * span / SAMPLES as f32;
             let behind = ring.depth[0] * a.cos() + ring.depth[1] * a.sin() < -0.05;
@@ -387,7 +386,7 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
         }
         let label = labels[axis];
         painter.rect_filled(label, 4.0, if active == Some(axis) { t.hover } else { t.panel });
-        let text = if axis == 0 { tl!("Direction") } else { tl!("Elevation") };
+        let text = if axis == 0 { tl!("Rotation") } else { tl!("Height") };
         painter.text(label.center(), Align2::CENTER_CENTER, text, FontId::proportional(11.0), t.warning);
     }
     let p = light_position(g, options);
@@ -415,7 +414,9 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
     painter.rect_filled(Rect::from_min_size(name_pos - vec2(4.0, 2.0), galley.size() + vec2(8.0, 4.0)), 3.0, t.panel);
     painter.galley(name_pos, galley, t.warning);
     if drag.is_some() {
-        let text = format!("{} {:.1}°   {} {:.1}°", tl!("Direction"), d.f64("lightAzimuth", -45.0), tl!("Elevation"), d.f64("lightElevation", 45.0));
+        let [rotation, height] = [("lightRotation", vectorcraft_three_d::DEFAULT_LIGHT.0), ("lightHeight", vectorcraft_three_d::DEFAULT_LIGHT.1)]
+            .map(|(k, v)| d.f64(k, v));
+        let text = format!("{} {rotation:.1}°   {} {height:.1}°", tl!("Rotation"), tl!("Height"));
         let galley = painter.layout_no_wrap(text, FontId::proportional(11.5), t.text_strong);
         let pos = g.center + vec2(0.0, radius + 56.0);
         painter.rect_filled(Rect::from_center_size(pos, galley.size() + vec2(12.0, 6.0)), 4.0, t.panel);

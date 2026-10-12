@@ -4200,9 +4200,6 @@ axis	Both	Ambos
 	Rotation Y	Rotación Y
 	Rotation Z	Rotación Z
 	Shading	Sombreado
-	Direction	Dirección
-	Elevation	Elevación
-	Ambient	Luz ambiental
 	Segments	Segmentos
 	Show axis	Mostrar eje
 	Reset all	Restablecer todo
@@ -4688,3 +4685,6 @@ mark-style	Japanese	Japonesas
 @msg	unknown parameter `{key}`; the command takes: {keys}	parámetro desconocido `{key}`; el comando acepta: {keys}
 	Load EPS into Clipboard	Cargar EPS en el portapapeles
 @msg	an image of {w} × {h} pixels is too large to draw	una imagen de {w} × {h} píxeles es demasiado grande para dibujarse
+	Softness	Suavidad
+	Ambient Light	Luz ambiental
+	Light behind the object	Luz detrás del objeto

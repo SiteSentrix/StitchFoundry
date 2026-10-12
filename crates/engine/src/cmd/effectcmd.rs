@@ -327,8 +327,8 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             if !cur.is_object() {
                 *cur = effects::merged_params(&e.id, &Value::Null);
             }
-            // Earlier parameters (a Perspective strength) take their current form first, so the
-            // new values replace them and the rest is kept.
+            // Earlier parameters (a Perspective strength, a light by azimuth and elevation) take
+            // their current form first, so the new values replace them and the rest is kept.
             *cur = effects::upgrade_params(&e.id, cur);
             if let Value::Object(m) = cur {
                 m.extend(new);
@@ -625,6 +625,26 @@ mod tests {
             json!({"depth": 50, "perspective": 60});
         s.execute("effect.setParams", &json!({"index": 0, "params": {"perspectiveAngle": 120}, "ids": [id.0], "item": null})).unwrap();
         assert_eq!(params(&s), json!({"depth": 50, "perspectiveAngle": 120}));
+    }
+
+    /// Scripts from before Rotation and Height give the light by `lightAzimuth` and
+    /// `lightElevation`: stored as the same light; a later Height keeps that light's Rotation.
+    #[test]
+    fn an_earlier_light_direction_is_set_as_rotation_and_height() {
+        let (mut s, id) = session_with_rect();
+        s.execute(
+            "effect.apply",
+            &json!({"effect": effects::ROTATE, "ids": [id.0], "item": null, "params": {"lightAzimuth": 180, "lightElevation": 0}}),
+        )
+        .unwrap();
+        let params = |s: &Session| node(s, id).appearance.effects[0].params.clone();
+        // Straight from behind the object, level with it.
+        assert!(params(&s).get("lightAzimuth").is_none() && params(&s).get("lightElevation").is_none(), "{}", params(&s));
+        assert_eq!((params(&s)["lightHeight"].as_f64().unwrap().round(), &params(&s)["lightBehind"]), (90.0, &json!(true)));
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.effects[0].params =
+            json!({"lightAzimuth": 90, "lightElevation": 0});
+        s.execute("effect.setParams", &json!({"index": 0, "params": {"lightHeight": 60}, "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(params(&s), json!({"lightRotation": 0.0, "lightHeight": 60, "lightBehind": false}));
     }
 
     fn effects_for_test(s: &Session, id: NodeId) -> vectorcraft_doc::Node {

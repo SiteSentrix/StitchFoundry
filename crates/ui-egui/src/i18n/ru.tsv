@@ -4198,9 +4198,6 @@ axis	Both	Оба
 	Rotation Y	Поворот Y
 	Rotation Z	Поворот Z
 	Shading	Затенение
-	Direction	Направление
-	Elevation	Высота
-	Ambient	Фоновое освещение
 	Segments	Сегменты
 	Show axis	Показать ось
 	Reset all	Сбросить всё
@@ -4312,3 +4309,6 @@ lighting	Light	Свет
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
+	Softness	Мягкость
+	Ambient Light	Окружающий свет
+	Light behind the object	Свет позади объекта

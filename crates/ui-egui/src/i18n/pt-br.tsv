@@ -2840,10 +2840,7 @@ imageTrace	Outline	Contorno
 	Rotation Y	Rotação Y
 	Rotation Z	Rotação Z
 	Shading	Sombreamento
-	Direction	Direção
-	Elevation	Elevação
 	Intensity	Intensidade
-	Ambient	Luz ambiente
 	Segments	Segmentos
 	Show axis	Mostrar eixo
 	Reset all	Redefinir tudo
@@ -3751,3 +3748,6 @@ axis	Both	Ambos
 @msg	unknown parameter `{key}`; the command takes no parameters	parâmetro desconhecido `{key}`; o comando não tem parâmetros
 @msg	unknown parameter `{key}`; the command takes: {keys}	parâmetro desconhecido `{key}`; o comando aceita: {keys}
 	Load EPS into Clipboard	Carregar EPS na Área de Transferência
+	Softness	Suavidade
+	Ambient Light	Luz ambiente
+	Light behind the object	Luz atrás do objeto

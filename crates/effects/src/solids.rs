@@ -62,9 +62,11 @@ pub fn view_options(p: &Value) -> View {
         rotation_y: num(p, "rotationY", ROTATION_PRESETS[6].1[1]),
         rotation_z: num(p, "rotationZ", ROTATION_PRESETS[6].1[2]),
         perspective: num(p, "perspectiveAngle", 0.0),
-        light_azimuth: num(p, "lightAzimuth", -45.0),
-        light_elevation: num(p, "lightElevation", 45.0),
+        light_rotation: num(p, "lightRotation", vectorcraft_three_d::DEFAULT_LIGHT.0),
+        light_height: num(p, "lightHeight", vectorcraft_three_d::DEFAULT_LIGHT.1),
+        light_behind: flag(p, "lightBehind", false),
         light_intensity: num(p, "lightIntensity", 80.0) / 100.0,
+        light_softness: num(p, "lightSoftness", 0.0) / 100.0,
         ambient: num(p, "ambient", 25.0) / 100.0,
         shade: flag(p, "shade", true),
     }
