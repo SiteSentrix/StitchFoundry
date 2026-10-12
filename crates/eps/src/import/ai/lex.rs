@@ -179,8 +179,12 @@ impl<'a> Lexer<'a> {
         // The count starts after the comment's line end character (a following `\n` counts).
         let from = self.pos + 1;
         let region = self.src.get(from..)?;
-        let skip = region.iter().take_while(|b| is_space(**b)).count();
-        if !region.get(skip..)?.starts_with(b"XI") {
+        let mut skip = region.iter().take_while(|b| is_space(**b)).count();
+        // A hidden object's section is on `%_` lines up to its samples: `%_XI`, then `%_%%EndData`.
+        let hidden = region.get(skip..)?.starts_with(b"%_XI");
+        if hidden {
+            skip += 2;
+        } else if !region.get(skip..)?.starts_with(b"XI") {
             return None;
         }
         let mut data = from + skip + 2;
@@ -198,7 +202,9 @@ impl<'a> Lexer<'a> {
             None => declared,
         };
         self.pos = end;
-        Some(Token { tok: Tok::Data(self.src.get(data..end).unwrap_or_default()), hidden: false })
+        let samples = self.src.get(data..end).unwrap_or_default();
+        let samples = if hidden { samples.strip_suffix(b"%_").unwrap_or(samples) } else { samples };
+        Some(Token { tok: Tok::Data(samples), hidden: false })
     }
 
     /// A regular token's characters.
@@ -326,6 +332,10 @@ mod tests {
         assert_eq!(toks.last(), Some(&t(Tok::Word(b"u"), false)), "{toks:?}");
         // A section of hex lines is comments.
         let toks = all(b"%%BeginData: 9 Hex Bytes\r\n%00FF\r\n%%EndData\r\n1\r\n");
+        assert_eq!(toks.last(), Some(&t(Tok::Num(1.0), false)));
+        // On `%_` lines (an opacity mask's image, say) too: a `(` in the samples starts no string.
+        let toks = all(b"%_XI\r%_%%BeginData: 4\r%_XI\r(\x00\x00\x00%_%%EndData\r%_XH\r1\r");
+        assert!(toks.contains(&t(Tok::Data(b"(\x00\x00\x00"), true)), "{toks:?}");
         assert_eq!(toks.last(), Some(&t(Tok::Num(1.0), false)));
     }
 

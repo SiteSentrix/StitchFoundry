@@ -11,10 +11,13 @@
 //! - A gradient on an object: `[flag] Bb` (1: the stroke), `flag (name) x y angle length a b c d
 //!   tx ty Bg`, the focal point `x y angle length Bh`, `flag BB`. Newer files write the gradient's
 //!   place as matrices after `Bg` (whose own numbers are then not in art space): `a b c d tx ty Xm`
-//!   takes the unit vector onto a linear gradient's whole ramp (0 to 100, its angle and length in
-//!   it), and `a b c d tx ty Bm` takes it onto the part between two stops next to each other, one
+//!   takes the unit vector (a radial's unit circle) onto the gradient's whole ramp (0 to 100, its
+//!   angle and length in it), and `a b c d tx ty Bm` takes it onto the part between two stops next to each other, one
 //!   `Bm` for each pair in the order of the ramp (`Bc`, around them, are the caps past the first and
-//!   last stops). A radial gradient has one `Bm`, which takes the unit circle onto it.
+//!   last stops). Without `Xm`, a radial gradient's one `Bm` takes the unit circle onto it.
+//!
+//! "AI7 spec": Adobe Illustrator File Format Specification, version 7.0 (1998), listed by PRONOM at
+//! https://www.nationalarchives.gov.uk/PRONOM/fmt/423; §3.5 documents the gradient operators.
 
 use std::collections::HashMap;
 
@@ -155,6 +158,8 @@ impl GradientDef {
         if self.gradient.stops.is_empty() {
             return None;
         }
+        // Stops come last first: reversed, stops sharing a ramp point keep their order.
+        self.gradient.stops.reverse();
         self.gradient.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
         Some((self.name, self.gradient))
     }
@@ -170,9 +175,10 @@ pub(super) struct Instance {
     length: f64,
     /// `Bg`'s own matrix.
     bg: Affine,
-    /// The matrix of a linear gradient's whole ramp (`Xm`), when there is one.
+    /// `Xm`: "the overall matrix applied to the gradient" (AI7 spec §3.5.4), when there is one.
     xm: Option<Affine>,
-    /// The first and the last gradient matrix (`Bm`), when there are any.
+    /// The first and the last gradient matrix (`Bm`), when there are any. After `Xm` they are
+    /// imaging bands (AI7 spec §3.5.6), not the gradient's matrix.
     bm: Option<(Affine, Affine)>,
     /// The focal point's offset from the origin (`Bh`).
     hilight: Vec2,
@@ -216,7 +222,7 @@ impl Instance {
         }
     }
 
-    /// `a b c d tx ty Xm`.
+    /// `a b c d tx ty Xm`: "the overall matrix applied to the gradient" (AI7 spec §3.5.4).
     pub fn xm(&mut self, vals: &[V]) {
         self.xm = Self::matrix(vals);
     }
@@ -234,12 +240,29 @@ impl Instance {
         let name = self.name.as_ref()?;
         let gradient = defs.get(name)?.clone();
         let radial = gradient.kind == GradientKind::Radial;
-        // The unit vector through `m`, the point across it (for an elliptical radial gradient) and
-        // the focal point.
-        let unit = |m: Affine| (m * Point::ORIGIN, m * Point::new(1.0, 0.0), m * Point::new(0.0, 1.0), m * self.hilight.to_point());
-        let whole = if radial { self.bm.map(|(m, _)| m).or(self.xm) } else { self.xm };
-        let (start, end, across, focal) = match (whole, self.bm) {
-            (Some(m), _) => unit(to_doc * m),
+        // `Xm` maps the unit circle (or vector) to the art, `Bg`'s origin, angle and length already
+        // in it, and so does a radial's `Bm`: files whose PDF part draws the radial draw it through
+        // that `Bm` alone, whatever `Bg` holds. The highlight is an offset from the centre in art space.
+        let unit = self.xm.or(self.bm.filter(|_| radial).map(|(first, _)| first));
+        // A skewed matrix leaves `along` and `across` oblique: a linear ramp runs along the normal to
+        // its isolines (`across`), and a radial's ellipse is set by the matrix's principal axes.
+        let through = |m: Affine, origin: Point, dir: Vec2| {
+            let start = m * origin;
+            let along = m * (origin + dir) - start;
+            let across = m * (origin + Vec2::new(-dir.y, dir.x)) - start;
+            if radial {
+                let (major, minor) = principal_axes(along, across);
+                (start, start + major, minor.hypot() / major.hypot())
+            } else {
+                let normal = Vec2::new(-across.y, across.x).normalize();
+                (start, start + normal * along.dot(normal), 1.0)
+            }
+        };
+        let (start, end, aspect, focal) = match (unit, self.bm) {
+            (Some(unit), _) => {
+                let (start, end, aspect) = through(to_doc * unit, Point::ORIGIN, Vec2::new(1.0, 0.0));
+                (start, end, aspect, to_doc * (unit * Point::ORIGIN + self.hilight))
+            }
             // A linear gradient's `Bm`s alone: they run from its first stop to its last.
             (None, Some((first, last))) => {
                 let (a, b) = (to_doc * first * Point::ORIGIN, to_doc * last * Point::new(1.0, 0.0));
@@ -247,25 +270,36 @@ impl Instance {
                 let to = gradient.stops.last().map_or(1.0, |s| f64::from(s.offset));
                 let whole = (b - a) / (to - from).max(1e-6);
                 let start = a - whole * from;
-                (start, start + whole, start, start)
+                (start, start + whole, 1.0, start)
             }
             // `Bg`'s own numbers, in art space through its matrix.
             (None, None) => {
                 let m = to_doc * self.bg;
                 let a = self.angle.to_radians();
-                let dir = Vec2::new(a.cos(), a.sin()) * self.length;
-                (m * self.origin, m * (self.origin + dir), m * (self.origin + Vec2::new(-dir.y, dir.x)), m * (self.origin + self.hilight))
+                let (start, end, aspect) = through(m, self.origin, Vec2::new(a.cos(), a.sin()) * self.length);
+                (start, end, aspect, m * (self.origin + self.hilight))
             }
         };
         if !(start.is_finite() && end.is_finite()) || start.distance(end) < 1e-9 {
             return None;
         }
-        let aspect = (across.distance(start) / start.distance(end)).clamp(0.01, 100.0);
+        let aspect = aspect.clamp(0.01, 100.0);
         let focal = (self.hilight.hypot() > 1e-9).then_some(focal).filter(|p| p.is_finite());
-        let geom = GradientGeom { start, end, aspect: if radial { aspect } else { 1.0 }, focal: if radial { focal } else { None } };
+        let geom = GradientGeom { start, end, aspect, focal: if radial { focal } else { None } };
         let angle = -(end - start).atan2().to_degrees();
         Some(Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), angle, swatch: Some(name.clone()), ..GradientPaint::new(gradient) })))
     }
+}
+
+/// The semi-axes of the ellipse the unit circle maps to under the linear map with columns `u` and `v`,
+/// the major one first.
+fn principal_axes(u: Vec2, v: Vec2) -> (Vec2, Vec2) {
+    let (xx, yy, xy) = (u.x * u.x + v.x * v.x, u.y * u.y + v.y * v.y, u.x * u.y + v.x * v.y);
+    let angle = 0.5 * (2.0 * xy).atan2(xx - yy);
+    let spread = (0.25 * (xx - yy).powi(2) + xy * xy).sqrt();
+    let (major, minor) = ((0.5 * (xx + yy) + spread).sqrt(), (0.5 * (xx + yy) - spread).max(0.0).sqrt());
+    let axis = Vec2::new(angle.cos(), angle.sin());
+    (axis * major, Vec2::new(-axis.y, axis.x) * minor)
 }
 
 #[cfg(test)]
@@ -332,7 +366,7 @@ mod tests {
         let defs = HashMap::from([(name, g)]);
         let mut i = Instance::begin(&[]);
         let mut bg = vec![V::Num(1.0), V::Str(b"G".to_vec())];
-        bg.extend(nums(&[0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+        bg.extend(nums(&[100.0, 100.0, 0.0, 50.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
         i.bg(&bg);
         i.bm(&nums(&[50.0, 0.0, 0.0, -50.0, 100.0, 100.0]));
         let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
@@ -341,6 +375,14 @@ mod tests {
         assert_eq!(geom.end, Point::new(150.0, 100.0));
         assert!((geom.aspect - 1.0).abs() < 1e-9);
         assert!(i.paint(&HashMap::new(), Affine::IDENTITY).is_none());
+        // Newer files give the matrix with `Xm`; the `Bm`s after it are bands of a cached ramp.
+        let mut i = Instance::begin(&[]);
+        i.bg(&bg);
+        i.xm(&nums(&[40.0, 0.0, 0.0, -40.0, 10.0, 10.0]));
+        i.bm(&nums(&[5.0, 0.0, 0.0, -40.0, 30.0, 10.0]));
+        let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
+        let geom = gp.geom.unwrap();
+        assert_eq!((geom.start, geom.end), (Point::new(10.0, 10.0), Point::new(50.0, 10.0)));
     }
 
     /// A linear gradient of three stops as newer files place it: `Bg` with numbers that aren't in

@@ -1160,19 +1160,25 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
     }
 }
 
-/// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) moved, with
-/// the art on each, to where `boards` (the artboards of its editing data, in art space) are, so
-/// the artboards keep their layout when the layers can't be read (#1068). Left as they are unless
-/// there are as many artboards as pages, of the same sizes.
-fn place_pages(boards: &[Rect], doc: &mut Document) {
-    let (Some(first), true) = (boards.first(), boards.len() == doc.artboards.len() && boards.len() > 1) else { return };
-    if boards.iter().zip(&doc.artboards).any(|(b, a)| (b.width() - a.rect.width()).abs() > 0.5 || (b.height() - a.rect.height()).abs() > 0.5) {
+/// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) named as
+/// `boards` (the artboards of its editing data, in art space) name them, and moved, with the art on
+/// each, to where they are, so the artboards keep their names and layout when the layers can't be
+/// read (#1068). Left as they are unless there are as many artboards as pages, of the same sizes.
+fn place_pages(boards: &[(String, Rect)], doc: &mut Document) {
+    if boards.is_empty() || boards.len() != doc.artboards.len() {
         return;
     }
+    if boards.iter().zip(&doc.artboards).any(|((_, b), a)| (b.width() - a.rect.width()).abs() > 0.5 || (b.height() - a.rect.height()).abs() > 0.5) {
+        return;
+    }
+    for ((name, _), a) in boards.iter().zip(&mut doc.artboards) {
+        a.name.clone_from(name);
+    }
+    let [(_, first), _, ..] = boards else { return };
     // Art space (y up) → the document, the first artboard's top left at the origin, as `read` has it.
     let to_doc = Affine::new([1.0, 0.0, 0.0, -1.0, -first.x0, first.y1]);
     let pages: Vec<Rect> = doc.artboards.iter().map(|a| a.rect).collect();
-    let moves: Vec<Vec2> = boards.iter().zip(&pages).map(|(b, page)| to_doc.transform_rect_bbox(*b).origin() - page.origin()).collect();
+    let moves: Vec<Vec2> = boards.iter().zip(&pages).map(|((_, b), page)| to_doc.transform_rect_bbox(*b).origin() - page.origin()).collect();
     for layer in &mut doc.layers {
         place_art(Arc::make_mut(layer), &pages, &moves);
     }

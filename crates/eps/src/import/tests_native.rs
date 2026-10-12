@@ -239,13 +239,13 @@ fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
 }
 
 /// A `.ai` whose layers can't be read comes in as its PDF part, a page per artboard in a row; its
-/// pages still go where its editing data puts its artboards, with their art (#1068).
+/// pages still go where its editing data puts its artboards, with their art, and keep their names (#1068).
 #[test]
 fn an_ai_file_read_as_its_pdf_part_keeps_its_artboard_layout() {
     // Two 100-point artboards, the second below the first (art space, y up).
     let board = |x0: i32, y0: i32| {
         format!(
-            "%_/Dictionary :\n%_{x0} {} /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} {y0} /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            "%_/Dictionary :\n%_{x0} {} /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} {y0} /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_(at {x0} {y0}) /UnicodeString (Name) ,\n%_; ,\n",
             y0 + 100,
             x0 + 100
         )
@@ -271,6 +271,8 @@ fn an_ai_file_read_as_its_pdf_part_keeps_its_artboard_layout() {
     assert!(!read && w.iter().any(|w| w.contains("layers weren't read")), "{w:?}");
     let rects: Vec<_> = d.artboards.iter().map(|a| a.rect).collect();
     assert_eq!(rects, [vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0), vectorcraft_geom::Rect::new(0.0, 150.0, 100.0, 250.0)]);
+    let board_names: Vec<_> = d.artboards.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(board_names, ["at 0 0", "at 0 -150"]);
     let moved = squares(&d);
     assert!((moved[0] - squares(&pdf)[0]).hypot() < 1e-6, "the first page's art stays: {moved:?}");
     assert!((moved[1] - vectorcraft_geom::Point::new(10.0, 160.0)).hypot() < 1e-6, "the second's goes with its page: {moved:?}");
@@ -278,6 +280,7 @@ fn an_ai_file_read_as_its_pdf_part_keeps_its_artboard_layout() {
     for list in [&[(0, 0)][..], &[(0, 0), (0, -150), (200, 0)]] {
         let (d, _, _) = crate::layered_ai(&private(&unread(list)), pdf.clone(), vec![], false);
         assert_eq!(d.artboards[1].rect, pdf.artboards[1].rect, "{list:?}");
+        assert_eq!(d.artboards[1].name, pdf.artboards[1].name, "{list:?}");
     }
 }
 

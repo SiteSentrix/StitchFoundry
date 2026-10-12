@@ -19,6 +19,7 @@
 
 mod frames;
 mod lex;
+mod mesh;
 mod obj;
 mod paint;
 mod read;

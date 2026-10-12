@@ -113,13 +113,60 @@ pub fn read(data: &[u8]) -> Result<Structure, String> {
     r.finish()
 }
 
-/// The artboards (art space) of the editing data `data` that [`read`] can't read as a whole, as far
-/// as it gets: where to put the pages of its PDF part instead (#1068).
-pub fn artboards(data: &[u8]) -> Vec<Rect> {
+/// The artboards (names, and rects in art space) of the editing data `data` that [`read`] can't
+/// read as a whole, as far as it gets: where to put the pages of its PDF part instead, and what to
+/// call them (#1068).
+pub fn artboards(data: &[u8]) -> Vec<(String, Rect)> {
+    let found = artboards_read(data);
+    if !found.is_empty() {
+        return found;
+    }
+    // Reading can stop before the artboards (art kept in the document's data comes first): read
+    // their array on its own.
+    artboard_array(data).map_or(found, |array| {
+        let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
+        alone.extend_from_slice(array);
+        alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
+        artboards_read(&alone)
+    })
+}
+
+/// The `ArtboardArray` entry of the editing data `data`, from its `/Array :` to its key: found
+/// from the key back, counting the dictionaries its artboards open and close.
+fn artboard_array(data: &[u8]) -> Option<&[u8]> {
+    const KEY: &[u8] = b"%_; (ArtboardArray) ,";
+    let end = data.windows(KEY.len()).rposition(|w| w == KEY)? + KEY.len();
+    let head = data.get(..end)?;
+    let mut depth = 0usize;
+    let mut line_end = head.len();
+    loop {
+        let line_start = head.get(..line_end)?.iter().rposition(|&b| b == b'\n' || b == b'\r').map_or(0, |at| at + 1);
+        if let Some(text) = head.get(line_start..line_end)?.strip_prefix(b"%_") {
+            if text.starts_with(b";") || text.starts_with(b"/Def ;") {
+                depth += 1;
+            } else if text.starts_with(b"/") && text.windows(2).any(|w| w == b" :") {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return head.get(line_start..);
+                }
+            }
+        }
+        line_end = line_start.checked_sub(1)?;
+    }
+}
+
+/// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
+/// those of a `/Document` still open when it stopped (its art can be what stopped it).
+fn artboards_read(data: &[u8]) -> Vec<(String, Rect)> {
     let mut r = Reader::new(data);
-    // Artboards read before an error still say where they are.
     let _ = r.run();
-    r.artboards.into_iter().map(|(_, rect)| rect).collect()
+    let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
+    for o in &open {
+        if r.artboards.is_empty() {
+            r.document(o);
+        }
+    }
+    r.artboards
 }
 
 #[derive(Clone, Debug)]
@@ -303,6 +350,8 @@ struct Reader<'a> {
     drawn_looks: usize,
     /// Nodes read from `%_` lines.
     hidden_ids: HashSet<NodeId>,
+    /// The gradient mesh being read (`/Mesh X!` … `/End X!`), and whether it started on a `%_` line.
+    mesh: Option<(super::mesh::MeshReader, bool)>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
     /// A `/ForeignObject`'s `/Data`: its PDF as ASCII85 in comment lines, until the object closes.
@@ -433,6 +482,7 @@ impl<'a> Reader<'a> {
             warnings: Vec::new(),
             drawn_looks: 0,
             hidden_ids: HashSet::new(),
+            mesh: None,
             cmyk_cache: HashMap::new(),
             done: false,
             obj_hidden: false,
@@ -576,7 +626,7 @@ impl<'a> Reader<'a> {
             if let Tok::Comment(c) = t.tok {
                 let line = String::from_utf8_lossy(c);
                 let m = marker(&line);
-                if m == begin {
+                if !begin.is_empty() && m == begin {
                     depth += 1;
                 } else if m == end {
                     if depth == 0 {
@@ -708,21 +758,7 @@ impl<'a> Reader<'a> {
         let node = match kind {
             Kind::Compound => {
                 // A group in a compound path (`*u u … U *U`) only holds its paths.
-                let mut kids = ungrouped(kids);
-                // The compound path's paint is its last path's (a gradient's instance wraps only
-                // that one); the last painted one, should the last have none.
-                let Some(shown) = kids.iter().rev().find(|k| !k.appearance.items.is_empty()).or(kids.last()) else { return Ok(()) };
-                let (appearance, opacity, blend, rule) = (shown.appearance.clone(), shown.opacity, shown.blend, path_rule(shown));
-                for k in &mut kids {
-                    k.opacity = 1.0;
-                    k.blend = BlendMode::Normal;
-                    k.visible = true;
-                    k.locked = false;
-                }
-                let mut n = self.new_node(NodeKind::Compound { children: kids.into_iter().map(Arc::new).collect(), rule }, &gs);
-                n.appearance = appearance;
-                n.opacity = opacity;
-                n.blend = blend;
+                let Some(n) = self.compound(ungrouped(kids), &gs) else { return Ok(()) };
                 n
             }
             // A group with a clipping path (`q` … `Q`, or a `W` path in a group) is a clipping group.
@@ -735,6 +771,25 @@ impl<'a> Reader<'a> {
             f.clips.push(f.children.len());
         }
         self.add(node, opened_hidden || hidden)
+    }
+
+    /// The compound path of `kids`, painted and made transparent as its subpaths say.
+    fn compound(&mut self, mut kids: Vec<Node>, gs: &GState) -> Option<Node> {
+        // The compound path's paint is its last path's (a gradient's instance wraps only
+        // that one); the last painted one, should the last have none.
+        let shown = kids.iter().rev().find(|k| !k.appearance.items.is_empty()).or(kids.last())?;
+        let (appearance, opacity, blend, rule) = (shown.appearance.clone(), shown.opacity, shown.blend, path_rule(shown));
+        for k in &mut kids {
+            k.opacity = 1.0;
+            k.blend = BlendMode::Normal;
+            k.visible = true;
+            k.locked = false;
+        }
+        let mut n = self.new_node(NodeKind::Compound { children: kids.into_iter().map(Arc::new).collect(), rule }, gs);
+        n.appearance = appearance;
+        n.opacity = opacity;
+        n.blend = blend;
+        Some(n)
     }
 
     /// `kids` with the clipping paths among them (indexes `clips`) first, several as one compound
@@ -838,6 +893,26 @@ impl<'a> Reader<'a> {
                 _ => {}
             }
             return Ok(());
+        }
+        if w == "X!" || self.mesh.is_some() {
+            let name = vals.iter().rev().find_map(|v| if let V::Name(n) = v { Some(n.as_str()) } else { None });
+            match (w, name) {
+                ("X!", Some("Mesh")) => {
+                    self.end_path_quietly();
+                    self.mesh = Some((super::mesh::MeshReader::default(), hidden));
+                    return Ok(());
+                }
+                ("X!", Some("End")) if self.mesh.is_some() => return self.end_mesh(),
+                ("X#", _) => {
+                    let to_doc = self.space();
+                    if let Some((m, _)) = self.mesh.as_mut() {
+                        m.entry(&vals, to_doc);
+                    }
+                    return Ok(());
+                }
+                _ if self.mesh.is_some() => return Ok(()),
+                _ => {}
+            }
         }
         match w {
             // Containers.
@@ -1238,10 +1313,14 @@ impl<'a> Reader<'a> {
         if let Some(n) = named {
             self.spots.push(n);
         }
+        // A colour set after a gradient instance that painted nothing (`Bb` … `0 BB` with no
+        // path) is the next object's paint, not the gradient.
         if w.ends_with(|c: char| c.is_ascii_lowercase()) {
             self.gs.fill = p;
+            self.pending_fill = None;
         } else {
             self.gs.stroke = p;
+            self.pending_stroke = None;
         }
     }
 
@@ -1414,6 +1493,24 @@ impl<'a> Reader<'a> {
         if clip && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
+        self.add(node, hidden)
+    }
+
+    /// `/End X!`: the gradient mesh read, as one object.
+    fn end_mesh(&mut self) -> Result<(), String> {
+        let Some((m, hidden)) = self.mesh.take() else { return Ok(()) };
+        if m.unread || m.patches.is_empty() {
+            self.unreadable("gradient meshes it can't read");
+            return Ok(());
+        }
+        let gs = self.gs.clone();
+        let mut patches: Vec<Node> = m.patches.into_iter().map(|p| self.new_node(NodeKind::Mesh(p), &gs)).collect();
+        let mut node = match patches.len() {
+            1 => patches.pop().unwrap_or_else(|| self.new_node(NodeKind::Group { children: vec![], clip: false }, &gs)),
+            _ => self.new_node(NodeKind::Group { children: patches.into_iter().map(Arc::new).collect(), clip: false }, &gs),
+        };
+        node.opacity = gs.opacity;
+        node.blend = gs.blend;
         self.add(node, hidden)
     }
 
