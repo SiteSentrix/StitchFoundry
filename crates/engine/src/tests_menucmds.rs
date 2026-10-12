@@ -620,6 +620,22 @@ fn find_and_replace_options() {
     assert!(s.execute("edit.findReplace", &json!({"find": ""})).is_err());
 }
 
+/// Find and Replace that replaces each match with the text it is (`CAT` found in `cat`, ignoring
+/// case, and replaced by `cat`) records no undo step: the step to redo stays and the document stays
+/// unmodified. It still replies with the count. A replacement that changes the text is one undo step.
+#[test]
+fn find_and_replace_that_changes_nothing_records_no_undo_step() {
+    let mut s = session();
+    let a = text(&mut s, "cat cat");
+    select_with_a_step_to_redo(&mut s, &[a]);
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "CAT", "replace": "cat"})).unwrap(), json!({"count": 2}));
+    assert_eq!((history(&s), plain(&s, a)), (before, "cat cat".to_string()));
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2}));
+    assert_eq!((history(&s), plain(&s, a)), ((before.0 + 1, 0, true), "dog dog".to_string()));
+}
+
 #[test]
 fn find_next_cycles_through_text_objects() {
     let mut s = session();
@@ -795,12 +811,49 @@ fn change_case_variants() {
     assert!(s.execute("type.changeCase", &json!({"case": "weird"})).is_err());
 }
 
+/// Change Case is one undo step, and Change Case to the case the text has already records no undo
+/// step: the step to redo stays and the document stays unmodified. It still replies with the
+/// objects.
+#[test]
+fn change_case_to_the_case_the_text_has_records_no_undo_step() {
+    let mut s = session();
+    let t = text(&mut s, "hello wORLD. again here");
+    for case in ["upper", "lower", "title", "sentence"] {
+        sel(&mut s, &[t]);
+        let undo = history(&s).0;
+        s.execute("type.changeCase", &json!({"case": case})).unwrap();
+        assert_eq!(history(&s), (undo + 1, 0, true), "{case}");
+        select_with_a_step_to_redo(&mut s, &[t]);
+        let before = (history(&s), plain(&s, t));
+        assert_eq!(s.execute("type.changeCase", &json!({"case": case})).unwrap(), json!({"ids": [t.0]}), "{case} again");
+        assert_eq!((history(&s), plain(&s, t)), before, "{case} again");
+    }
+}
+
 #[test]
 fn smart_punctuation_quotes_dashes_ellipsis() {
     let mut s = session();
     let t = text(&mut s, "\"Hi\" it's 1--2 and 3---4...");
     sel(&mut s, &[t]);
     assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap()["changed"], 1);
+    assert_eq!(plain(&s, t), "“Hi” it’s 1–2 and 3—4…");
+}
+
+/// Smart Punctuation on type with nothing left to change, or on a selection with no type in it,
+/// records no undo step and replies `changed: 0`.
+#[test]
+fn smart_punctuation_with_nothing_to_change_records_no_undo_step() {
+    let mut s = session();
+    let t = text(&mut s, "\"Hi\" it's 1--2 and 3---4...");
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[t]);
+    assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap()["changed"], 1);
+    for id in [t, r] {
+        select_with_a_step_to_redo(&mut s, &[id]);
+        let before = history(&s);
+        assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap(), json!({"changed": 0}), "{id:?}");
+        assert_eq!(history(&s), before, "{id:?}");
+    }
     assert_eq!(plain(&s, t), "“Hi” it’s 1–2 and 3—4…");
 }
 
@@ -817,6 +870,29 @@ fn convert_point_area_roundtrip() {
     let NodeKind::Text(tt) = &node(&s, t).kind else { panic!() };
     assert!(matches!(tt.kind, TextKind::Point));
     assert_eq!(tt.plain_text(), "Some words");
+}
+
+/// Convert To Area Type with no point type selected, and Convert To Point Type with no area type
+/// selected, record no undo step and reply with the objects. With point type and area type
+/// selected, Convert To Area Type converts the point type in one undo step, and Convert To Point
+/// Type then converts both in another.
+#[test]
+fn converting_type_to_the_kind_it_is_records_no_undo_step() {
+    let mut s = session();
+    let p = text(&mut s, "Point");
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 100, "text": "Area", "area": {"width": 100, "height": 50}})).unwrap());
+    for (c, id) in [("type.convertToAreaType", a), ("type.convertToPointType", p)] {
+        select_with_a_step_to_redo(&mut s, &[id]);
+        let before = history(&s);
+        assert_eq!(s.execute(c, &json!({})).unwrap(), json!({"ids": [id.0]}), "{c}");
+        assert_eq!(history(&s), before, "{c}");
+    }
+    for c in ["type.convertToAreaType", "type.convertToPointType"] {
+        select_with_a_step_to_redo(&mut s, &[p, a]);
+        let undo = history(&s).0;
+        s.execute(c, &json!({})).unwrap();
+        assert_eq!(history(&s), (undo + 1, 0, true), "{c}");
+    }
 }
 
 #[test]
@@ -854,6 +930,26 @@ fn area_placeholder_fills_frame() {
     sel(&mut s, &[a]);
     s.execute("type.fillPlaceholder", &json!({})).unwrap();
     assert!(plain(&s, a).len() > 400);
+}
+
+/// Fill with Placeholder Text on type that holds its placeholder text already (point type, and area
+/// type filled to its frame), and `type.insert` with an empty `text`, record no undo step and reply
+/// with the objects. Inserting text is one undo step.
+#[test]
+fn placeholder_and_insert_that_change_nothing_record_no_undo_step() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 100, "text": "", "area": {"width": 300, "height": 300}})).unwrap());
+    sel(&mut s, &[t, a]);
+    s.execute("type.fillPlaceholder", &json!({})).unwrap();
+    select_with_a_step_to_redo(&mut s, &[t, a]);
+    let before = (history(&s), plain(&s, t), plain(&s, a));
+    for (c, p) in [("type.fillPlaceholder", json!({})), ("type.insert", json!({"text": ""}))] {
+        assert_eq!(s.execute(c, &p).unwrap(), json!({"ids": [t.0, a.0]}), "{c}");
+        assert_eq!((history(&s), plain(&s, t), plain(&s, a)), before, "{c}");
+    }
+    s.execute("type.insert", &json!({"text": "z"})).unwrap();
+    assert_eq!(history(&s), (before.0.0 + 1, 0, true));
 }
 
 #[test]
