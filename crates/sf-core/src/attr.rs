@@ -58,6 +58,11 @@ pub enum StitchType {
     /// the shortest travel, with the thread carried between them as running stitches
     /// where later members cover it. The group itself sews nothing.
     Branch,
+    /// Redwork: the lines of a path, compound path, type or group (all its art) sewn as one
+    /// line that starts and ends at the same point, every line once in the run style, the way
+    /// between them retraced along lines already sewn. In a group, the art's own stitching is
+    /// left out.
+    Redwork(RunParams),
 }
 
 impl StitchType {
@@ -86,6 +91,7 @@ impl StitchType {
             "motiffill" => StitchType::Fill(FillParams { kind: FillKind::Motif, spacing: 5.0, stitch_length: 2.0, ..FillParams::default() }),
             "applique" => StitchType::Applique(AppliqueParams::default()),
             "manual" => StitchType::Manual,
+            "redwork" => StitchType::Redwork(RunParams::default()),
             _ => return None,
         })
     }
@@ -98,13 +104,14 @@ impl StitchType {
             StitchType::Applique(_) => "Appliqué",
             StitchType::Manual => "Manual stitches",
             StitchType::Branch => "Branch",
+            StitchType::Redwork(_) => "Redwork",
         }
     }
 
     /// The stitch type menu entry (the `embroidery.set` type) this is: `run`, `bean`,
     /// `blanket`, `backstitch`, `stemstitch`, `satin`, `fill`, `satinfill`, `contour`,
-    /// `spiral`, `radial`, `cross`, `meander`, `motiffill`, `applique`, `manual` or `branch`. Zigzag
-    /// and motif runs are runs (styles of the Run entry).
+    /// `spiral`, `radial`, `cross`, `meander`, `motiffill`, `applique`, `manual`, `branch` or
+    /// `redwork`. Zigzag and motif runs are runs (styles of the Run entry).
     pub fn type_name(&self) -> &'static str {
         match self {
             StitchType::Run(r) => match r.kind {
@@ -128,11 +135,12 @@ impl StitchType {
             StitchType::Applique(_) => "applique",
             StitchType::Manual => "manual",
             StitchType::Branch => "branch",
+            StitchType::Redwork(_) => "redwork",
         }
     }
 
     /// Short machine-readable name (`run`, `satin`, `fill`, `applique`, `manual`,
-    /// `branch`).
+    /// `branch`, `redwork`).
     pub fn id(&self) -> &'static str {
         match self {
             StitchType::Run(_) => "run",
@@ -141,6 +149,7 @@ impl StitchType {
             StitchType::Applique(_) => "applique",
             StitchType::Manual => "manual",
             StitchType::Branch => "branch",
+            StitchType::Redwork(_) => "redwork",
         }
     }
 }

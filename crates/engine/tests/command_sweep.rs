@@ -439,6 +439,21 @@ fn structured_junk() {
                 {"command": "embroidery.setParams", "params": {"params": {"customMotif": {"points": "x"}}}},
             ]}),
         ),
+        // Redwork of whatever is selected, with absurd run settings, then broken apart.
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.redwork", "params": {"kind": "stem"}},
+                {"command": "embroidery.setParams", "params": {"params": {"stitchLength": 1e308, "kind": "Motif", "width": -1e308}}},
+                {"command": "embroidery.set", "params": {"type": "redwork"}},
+                {"command": "embroidery.set", "params": {"type": "fill"}},
+                {"command": "embroidery.breakApart", "params": {}},
+                {"command": "embroidery.set", "params": {"type": "redwork"}},
+                {"command": "embroidery.setParams", "params": {"params": {"stitchLength": 1e-308}}},
+            ]}),
+        ),
+        ("embroidery.redwork", json!({"kind": "satin"})),
+        ("embroidery.redwork", json!({"ids": [u64::MAX], "kind": null})),
         ("embroidery.motif.apply", json!({"name": null, "ids": [u64::MAX]})),
         ("embroidery.motif.delete", json!({"name": ["x"]})),
         ("embroidery.motif.make", json!({"ids": [u64::MAX], "name": 5})),

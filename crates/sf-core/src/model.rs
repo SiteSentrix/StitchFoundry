@@ -393,6 +393,8 @@ pub enum ObjectKind {
     Lettering(LetteringObject),
     /// Raw stitches (imported machine files or manual stitching).
     Stitches(StitchBlock),
+    /// Line art sewn as one line that starts and ends at the same point (redwork).
+    Redwork(RedworkObject),
 }
 
 impl ObjectKind {
@@ -414,6 +416,7 @@ impl ObjectKind {
             ObjectKind::Applique(_) => "Appliqué",
             ObjectKind::Lettering(_) => "Lettering",
             ObjectKind::Stitches(_) => "Stitches",
+            ObjectKind::Redwork(_) => "Redwork",
         }
     }
 
@@ -425,6 +428,7 @@ impl ObjectKind {
             ObjectKind::Applique(a) => a.shape.bbox(),
             ObjectKind::Lettering(l) => l.glyphs.iter().fold(BBox::EMPTY, |b, g| b.union(g.shape.bbox())),
             ObjectKind::Stitches(s) => BBox::from_points(s.stitches.iter().filter(|s| s.is_move()).map(Stitch::pos)),
+            ObjectKind::Redwork(r) => r.lines.iter().fold(BBox::EMPTY, |b, c| b.union(c.bbox())),
         }
     }
 
@@ -457,6 +461,11 @@ impl ObjectKind {
                     st.y = p.y;
                 }
             }
+            ObjectKind::Redwork(r) => {
+                for c in &mut r.lines {
+                    c.transform(m);
+                }
+            }
         }
     }
 
@@ -479,6 +488,7 @@ impl ObjectKind {
                 l.glyphs.iter().flat_map(|g| std::iter::once(&g.shape.outer).chain(&g.shape.holes).map(ring).collect::<Vec<_>>()).collect()
             }
             ObjectKind::Stitches(s) => vec![s.stitches.iter().filter(|s| s.is_move()).map(Stitch::pos).collect()],
+            ObjectKind::Redwork(r) => r.lines.iter().map(|c| if c.closed { ring(c) } else { c.polyline(tol) }).collect(),
         }
     }
 }
@@ -691,6 +701,15 @@ impl Default for RunParams {
             groups: SCULPTURE_GROUPS,
         }
     }
+}
+
+/// Line art sewn as one line (redwork): every line once in the run style, the way between them
+/// retraced along lines already sewn, ending where it starts.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct RedworkObject {
+    pub lines: Vec<Contour>,
+    #[serde(default)]
+    pub params: RunParams,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

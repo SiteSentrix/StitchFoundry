@@ -10,6 +10,7 @@
 mod applique;
 mod fill;
 mod out;
+mod redwork;
 mod run;
 mod satin;
 mod special;
@@ -45,6 +46,7 @@ pub fn object_stitches(obj: &EmbObject, settings: &DesignSettings, entry_hint: O
             fill_shape(&f.shape, job, &f.guides, hint, exit, (trim, settings.max_stitch))
         }
         ObjectKind::Applique(a) => applique::generate(&a.shape, &a.params, hint, trim),
+        ObjectKind::Redwork(r) => redwork::generate(&r.lines, &r.params, hint, trim),
         ObjectKind::Lettering(l) => lettering(l, hint, exit, (trim, settings.max_stitch)),
         ObjectKind::Stitches(b) => b.stitches.iter().copied().filter(|s| s.cmd != Cmd::ColorChange && s.cmd != Cmd::End).collect(),
     }
@@ -596,7 +598,7 @@ pub fn object_polygons(obj: &EmbObject) -> Vec<Polygon> {
         ObjectKind::Applique(a) => vec![a.shape.polygon(FLATTEN_TOLERANCE)],
         ObjectKind::Satin(s) => vec![Polygon::from_ring(s.column.outline(FLATTEN_TOLERANCE))],
         ObjectKind::Lettering(l) => l.glyphs.iter().map(|g| g.shape.polygon(FLATTEN_TOLERANCE)).collect(),
-        ObjectKind::Run(_) | ObjectKind::Stitches(_) => Vec::new(),
+        ObjectKind::Run(_) | ObjectKind::Stitches(_) | ObjectKind::Redwork(_) => Vec::new(),
     }
 }
 

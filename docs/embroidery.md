@@ -47,6 +47,7 @@ the control channel, the CLI and the MCP server.
 | Backstitch | hand-sewn look: each stitch goes forward two steps and back one | stitch length, passes |
 | Stem stitch | rope-like outline: backstitch with slanted stitches | stitch length, width, side, passes |
 | Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path (wave, scallop, diamond, cross, feather, heart, star, leaf, loop, zigzag, E-stitch, or one drawn for the design), motifs growing or shrinking along it when graded | stitch length, width, width at end, spacing, flip side |
+| Redwork | the lines of a path, compound path, type or redwork group sewn as one line that ends where it starts, the way between lines retraced along them | run style (single, triple, backstitch, stem stitch), stitch length |
 | Hand stitch | a run that looks sewn by hand: thick stitches (each sewn three times) with short thin ones between them, lengths varying a little | stitch length, gap, passes |
 | Sculpture run | a thick-thin line: groups of triple stitches in turn with groups of single ones | triple and single stitch lengths, how many of each, passes |
 | Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), jagged edges, underlay (incl. double zigzag) |
@@ -455,6 +456,19 @@ Where nothing covers the way, the thread is trimmed as usual. **Break Apart** tu
 back into separate objects; on a stitched path or compound path made of separate parts it
 makes one object per part, each with the same stitching (a hole stays with its part).
 
+**Embroidery › Redwork** sews the selected line art (paths, compound paths and type) the way
+hand redwork is sewn: as one line that starts and ends at the same point, so there is one tie-in
+and one tie-off. Every line is sewn once in the run style (*Single*, *Triple*, *Backstitch* or
+*Stem stitch*); to get from one line to the next the needle retraces lines already sewn as a
+single run on top, choosing the shortest ways, so no travel shows off the lines. Lines that
+cross, touch, or end within 0.3 mm of another line meet there; parts that don't touch are
+joined by travel or a trim. The art becomes a *redwork* group in the first thread given to its lines (else the first
+line's stroke colour), and
+its own stitching (a fill, say) is left out while it is in the group; the panel sets the run
+style and stitch length. **Break Apart** gives the art back as it was. A single path, compound
+path or type can be redwork on its own too (stitch type *Redwork*): its subpaths are sewn as
+one line.
+
 ## Machine files
 
 | Format | Extension | Colours | Open | Export |
@@ -488,7 +502,7 @@ tool list for all parameters):
 
 | Command | Does |
 |---|---|
-| `embroidery.set {type}` | give the selection a stitch type (`run`, `bean`, `blanket`, `satin`, `fill`, `satinfill`, `contour`, `spiral`, `radial`, `cross`, `meander`, `applique`, `manual`, `none`) |
+| `embroidery.set {type}` | give the selection a stitch type (`run`, `bean`, `blanket`, `satin`, `fill`, `satinfill`, `contour`, `spiral`, `radial`, `cross`, `meander`, `applique`, `manual`, `redwork`, `none`) |
 | `embroidery.setParams {params}` | change stitch parameters (camelCase names, mm) |
 | `embroidery.setThread {color, name?, code?, chart?}` | set the thread |
 | `embroidery.convert` | stitch types from the artwork's look |
@@ -512,7 +526,8 @@ tool list for all parameters):
 | `embroidery.makeCurrent`, `embroidery.current`, `embroidery.current.setParams {type, params}`, `embroidery.current.reset {type?}` | the properties new objects take |
 | `embroidery.style.new {name?}` / `apply {name}` / `redefine {name}` / `unlink` / `rename {name, to}` / `duplicate` / `delete` / `list` | embroidery styles |
 | `embroidery.fabric.save {name, from?, …}`, `embroidery.fabric.delete {name}` | fabrics made for the design |
-| `embroidery.branch {ids?}`, `embroidery.breakApart {ids?}` | sew objects as one path; separate a branch or a many-part object |
+| `embroidery.branch {ids?}`, `embroidery.breakApart {ids?}` | sew objects as one path; separate a branch, a redwork group or a many-part object |
+| `embroidery.redwork {ids?, kind?}` | sew line art as redwork: one line ending where it starts, the way between lines retraced along them (`kind`: `run`, `bean`, `backstitch`, `stemstitch`) |
 | `embroidery.reverse`, `embroidery.removeHoles {maxArea?}`, `embroidery.fillHoles` | sewing direction and holes |
 | `select.same.thread`, `select.same.stitchType` | select like objects |
 | `embroidery.check` | sewing problems (dense spots, long stitches, tiny objects, small lettering, hoop) |

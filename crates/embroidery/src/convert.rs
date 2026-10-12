@@ -4,7 +4,7 @@ use crate::{MM_PER_PT, mm};
 use sf_core::attr::{Embroidery, StitchType};
 use sf_core::direction::{Guide, auto_fill_angle, auto_guides};
 use sf_core::geom::{Column, Contour, Point, Polygon, Rung, Shape, poly, polyline, shape::flatten_cubic};
-use sf_core::model::{AppliqueObject, FillKind, FillObject, FillParams, ObjectKind, RunObject, SatinObject, StitchBlock};
+use sf_core::model::{AppliqueObject, FillKind, FillObject, FillParams, ObjectKind, RedworkObject, RunObject, SatinObject, StitchBlock};
 use sf_core::pattern::{Cmd, Stitch};
 use sf_core::satin_line::satin_line;
 use sf_core::threads::Rgb;
@@ -185,6 +185,17 @@ fn column_like(ring: &[Point], guides: &[Guide]) -> bool {
     !guides.is_empty() && area > 1e-9 && half * half / area > 6.5
 }
 
+/// The lines of a node: its own (a path, compound path or type), or those of all the visible art
+/// in a group.
+fn art_lines(node: &Node) -> Vec<Line> {
+    match &node.kind {
+        NodeKind::Group { .. } | NodeKind::Layer { .. } => {
+            node.children().into_iter().flatten().filter(|c| c.visible).flat_map(|c| art_lines(c)).collect()
+        }
+        _ => node_lines(node).map(|(lines, _)| lines).unwrap_or_default(),
+    }
+}
+
 /// Converts one stitched node into embroidery objects (several for multi-part
 /// runs or fills). Positions are in millimetres.
 pub(crate) fn convert(node: &Node, e: &Embroidery) -> Vec<ObjectKind> {
@@ -200,6 +211,13 @@ pub(crate) fn convert(node: &Node, e: &Embroidery) -> Vec<ObjectKind> {
     match &e.stitch {
         // a branch group only says how its members are sewn
         StitchType::Branch => {}
+        // redwork: all the lines of the node (a group: of the visible art in it) sewn as one line
+        StitchType::Redwork(params) => {
+            let lines: Vec<Contour> = art_lines(node).into_iter().map(|l| Contour::from_points(&l.pts, l.closed)).collect();
+            if !lines.is_empty() {
+                out.push(ObjectKind::Redwork(RedworkObject { lines, params: params.clone() }));
+            }
+        }
         StitchType::Manual => {
             let mut st: Vec<Stitch> = Vec::new();
             for sp in subpaths(node) {

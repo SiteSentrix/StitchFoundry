@@ -130,6 +130,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("Match Threads to Chart", "embroidery.matchThreads"),
         c("Auto Sequence", "embroidery.autoSequence"),
         c("Branch", "embroidery.branch"),
+        c("Redwork", "embroidery.redwork"),
         c("Break Apart", "embroidery.breakApart"),
         c("Check Design", "ui.embroideryCheck"),
         Sep,

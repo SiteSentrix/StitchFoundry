@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use sf_core::attr::{Embroidery, StitchType};
+use sf_core::model::{RunKind, RunParams};
 use sf_core::sequence::{Item, sequence};
 use vectorcraft_doc::{Node, NodeId, NodeKind};
 use vectorcraft_embroidery::parts;
@@ -27,11 +28,20 @@ pub fn specs() -> Vec<CommandSpec> {
             branch
         ),
         cmd!(
+            "embroidery.redwork",
+            "Redwork",
+            [],
+            None,
+            "{ids?, kind?: run|bean|backstitch|stemstitch (run)} sew the selected line art (paths, compound paths and type, whatever their own stitching) as redwork: one line that starts and ends at the same point, every line sewn once in the run style and the way between them retraced along lines already sewn as a single run; lines ending within 0.3 mm of another meet it. They become a redwork group in the first thread given to them, else the first line's stroke colour (Break Apart gives them back) → {id}",
+            has_selection,
+            redwork
+        ),
+        cmd!(
             "embroidery.breakApart",
             "Break Apart",
             [],
             None,
-            "{ids?} separate the selection again: a branch group gives back its objects, and a stitched path or compound path made of separate parts becomes one object per part, each stitched the same way (holes stay with their part) → {ids}",
+            "{ids?} separate the selection again: a branch or redwork group gives back its objects, and a stitched path or compound path made of separate parts becomes one object per part, each stitched the same way (holes stay with their part) → {ids}",
             has_selection,
             break_apart
         ),
@@ -47,8 +57,57 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// A branch or redwork group: a group sewn by what it holds.
 fn is_branch(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Group { .. }) && n.embroidery.as_deref().is_some_and(|e| matches!(e.stitch, StitchType::Branch))
+    matches!(n.kind, NodeKind::Group { .. })
+        && n.embroidery.as_deref().is_some_and(|e| matches!(e.stitch, StitchType::Branch | StitchType::Redwork(_)))
+}
+
+fn redwork(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.redwork";
+    let kind = match str_param(p, "kind").unwrap_or("run") {
+        "run" | "single" => RunKind::Single,
+        "bean" | "triple" => RunKind::Triple,
+        "backstitch" | "back" => RunKind::Back,
+        "stemstitch" | "stem" => RunKind::Stem,
+        other => return Err(bad(CMD, format!("`kind` is run, bean, backstitch or stemstitch, not `{other}`"))),
+    };
+    let roots = match p.get("ids") {
+        Some(_) => super::edit::roots_of(&s.doc()?.doc, checked_ids_param(s, p, "ids", CMD)?),
+        None => super::edit::selected_roots(s)?,
+    };
+    // the first thread given to a line, else the first line's stroke colour
+    let thread = {
+        let d = &s.doc()?.doc;
+        let (mut given, mut stroke) = (None, None);
+        for id in &roots {
+            if let Some(n) = d.node(*id) {
+                n.walk(&mut |c| {
+                    if vectorcraft_embroidery::stitchable(c) {
+                        given = given.take().or_else(|| c.embroidery.as_deref().and_then(|e| e.thread.clone()));
+                        stroke = stroke.take().or_else(|| Some(vectorcraft_embroidery::node_thread(c, &Embroidery::run())));
+                    }
+                });
+            }
+        }
+        given.or(stroke).ok_or_else(|| bad(CMD, "select line art (paths or type) to sew as redwork"))?
+    };
+    let gid = s.edit("Redwork", |d, sel| {
+        // one selected group becomes redwork; else the selection is grouped
+        let single_group = (roots.len() == 1).then(|| roots[0]).filter(|id| d.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. })));
+        let gid = match single_group {
+            Some(g) => g,
+            None => super::object::group_nodes(d, &roots)?,
+        };
+        let mut e = Embroidery::new(StitchType::Redwork(RunParams { kind, ..RunParams::default() }));
+        e.thread = Some(thread.clone());
+        let n = d.node_mut(gid).ok_or(EngineError::NoNode(gid))?;
+        n.embroidery = Some(Box::new(e));
+        n.name.get_or_insert_with(|| "Redwork".to_string());
+        sel.set([gid]);
+        Ok(gid)
+    })?;
+    Ok(json!({ "id": gid.0 }))
 }
 
 fn branch(s: &mut Session, _p: &Value) -> Result<Value> {
