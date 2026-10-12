@@ -4074,3 +4074,15 @@ machine	Stop	停止
 @msg	the artwork has nothing to place	图稿中没有可置入的内容
 @msg	the artwork can't be read: {e}	无法读取图稿：{e}
 @msg	The AI won't copy someone else's logo or character: {e}	AI 不会复制他人的标志或角色：{e}
+
+# Embroidery (StitchFoundry): Redraw Image with Claude
+	Redraw Image with Claude…	使用 Claude 重绘图像…
+	Redraw Image with Claude	使用 Claude 重绘图像
+	What to change (optional):	要更改的内容 (可选)：
+	Only redraw artwork you own or have permission to use.	只重绘您拥有或已获得使用许可的图稿。
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude 使用您自己的 Anthropic API 密钥将图像重绘为平涂图稿，费用计入您的 Anthropic 账户；随后由 StitchFoundry 打版。绣制前请检查针迹。
+	Redraw with Claude…	使用 Claude 重绘…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude 会将图像重绘为干净的平涂图稿，再由 StitchFoundry 打版
+@msg	select an image to redraw	请选择要重绘的图像
+@msg	the image couldn't be read	无法读取图像
+@msg	The image is too large to send: crop it, or place a smaller copy.	图像过大，无法发送：请裁剪图像，或置入较小的副本。

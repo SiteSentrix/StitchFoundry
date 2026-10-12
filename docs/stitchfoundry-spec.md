@@ -536,7 +536,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-14 | Laydown stitch | Missing | RE-06 | 2 |
 | NEW-15 | Magnetic hoop presets | Partial | Add more hoop presets (data only) | 6 |
 | NEW-16 | AI text to embroidery: a prompt becomes flat-colour art drawn to digitize well, then a design | Partial | Embroidery › Design from Prompt (desktop): Claude draws flat-colour SVG with the user's own Anthropic API key (`sf_core::ai`), and `embroidery.placeArt` places it, gives its shapes stitch types with underlying fills cut (0.4 mm overlap), matches the chart's threads and brings same-coloured shapes together where the stacking allows (`embroidery.autoSequence {ids}`), in one undo step. Left: StitchFoundry accounts and credits (§11), the web app | A |
-| NEW-17 | AI image or logo to embroidery: the upload is redrawn as clean flat art, then digitized | Missing | §11; with AD-03, AD-04 | A |
+| NEW-17 | AI image or logo to embroidery: the upload is redrawn as clean flat art, then digitized | Partial | Embroidery › Redraw Image with Claude (desktop): the selected image goes to Claude with the user's own key (no larger than the model looks at), its redrawing lands on the image (`embroidery.placeArt {frame}`) and is digitized as NEW-16's. Left: accounts and credits (§11), the web app, AD-03 and AD-04 for redrawings that need click-to-stitch or outlines | A |
 | NEW-18 | AI product mockups: the design shown on a shirt, cap or bag | Missing | §11; MD-01 | A |
 
 ### 6.15 Beyond the reference
@@ -550,7 +550,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
 **Tally:** 231 rows (grouping the roughly 300 features the reference lists): 105 done,
-38 partial, 82 missing, 6 out of scope (counted 2026-10-11, after Design from Prompt). Most of what is missing is breadth (more stitch
+39 partial, 81 missing, 6 out of scope (counted 2026-10-11, after Redraw Image with Claude). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -697,7 +697,7 @@ and target dir each) calendar time drops by roughly half.
 | **5. Auto and photo digitizing** | AD-03, AD-04, BM-02, BM-03, PH-01…03, SE-06 | 3–5 |
 | **6. Production and management** | Colorways and visualizer (CW-*); worksheets, barcodes, images (RP-*); batch output (OUT-02); cost (OUT-05); hooping and multi-hooping (HO-*, MH-*); more formats (MF-04, MFL-02); hot folders (OUT-03); design library (DM-*); templates and clipart; kiosk (KI-01); background exports | 6–8 |
 | **R. Release readiness** | Rebrand done 2026-10-11: StitchFoundry by SiteSentrix, an original icon, app id `com.sitesentrix.stitchfoundry`, its own preferences folder (reads VectorCraft's once), the ArtCraft name, logos and links removed, presets and profiles renamed with their old names still accepted; the repository is public at github.com/SiteSentrix/StitchFoundry, and CI (`.github/workflows/ci.yml`) runs `cargo xtask ci` on every push to main and every pull request; the Brother and Janome thread palettes are credited to pyembroidery (MIT) in `NOTICE`. The programs are `stitchfoundry` and `stitchfoundry-cli`, and the packages, installers and release files are named `stitchfoundry` too, so both apps install side by side (the Cargo packages keep VectorCraft's names). Designs save as `.stitchfoundry` (VectorCraft documents inside; `.vectorcraft` and `.drawcraft` still open), and macOS knows the type. Left: the web build's file names; VectorCraft's packaging and platform workflows, which only run in its repository; the maintainer address in the Linux packages; signed installers; website and download page; a community space | 2–3, plus the owner's Apple and Windows developer accounts |
-| **A. AI service** | The cloud AI features ([§11](#11-open-source-and-ai-features)): accounts, credits and billing behind a small cloud backend; text to embroidery (NEW-16) first, then image or logo to embroidery (NEW-17, pulling in AD-03 and AD-04), the assistant panel (NEW-07) and product mockups (NEW-18); bring-your-own-key for every AI feature. Landed 2026-10-11: text to embroidery with your own Anthropic API key (Embroidery › Design from Prompt, desktop), so the cloud side comes next | 8–12, plus the owner's payment, AI provider and hosting accounts |
+| **A. AI service** | The cloud AI features ([§11](#11-open-source-and-ai-features)): accounts, credits and billing behind a small cloud backend; text to embroidery (NEW-16) first, then image or logo to embroidery (NEW-17, pulling in AD-03 and AD-04), the assistant panel (NEW-07) and product mockups (NEW-18); bring-your-own-key for every AI feature. Landed 2026-10-11 with your own Anthropic API key (desktop): text to embroidery (Embroidery › Design from Prompt) and image or logo to embroidery (Redraw Image with Claude), so the cloud side comes next | 8–12, plus the owner's payment, AI provider and hosting accounts |
 | **7. Hardening and extras** | Real-machine tuning from sew-outs, performance at 100k+ stitches, web app embroidery pass, translation review, chenille machines and cross-stitch designer (CH-01, CH-03), assistant panel (NEW-07), Ink/Stitch-inspired extras (BEY-05) | 5–10, spread over the calendar |
 
 **Status (October 2026):** phase 1 is complete, every item in its row (machine profiles of your
@@ -792,14 +792,18 @@ Decided by the owner on 2026-10-11: StitchFoundry is free and open source, and s
      Built with your own key (Embroidery › Design from Prompt, desktop): Claude draws the art as
      SVG, filled shapes only, so no image model or tracing is needed, and `embroidery.placeArt`
      gives the shapes stitch types. The cloud credits come next.
-  2. **Image or logo to embroidery** (NEW-17): an image model redraws the upload as clean flat
-     art, then it is digitized; needs AD-03, AD-04 and good test-sews.
+  2. **Image or logo to embroidery** (NEW-17): the upload is redrawn as clean flat art, then it
+     is digitized; needs AD-03, AD-04 and good test-sews. Built with your own key (Embroidery ›
+     Redraw Image with Claude, desktop): Claude sees the image and draws it anew as SVG, which
+     lands on the image. With your own key a line asks users to redraw only artwork they may use;
+     the cloud version adds the terms of service.
   3. **Assistant** (NEW-07): Claude answers embroidery questions and edits the design by running
      engine commands (every feature is already a command).
   4. **Product mockups** (NEW-18): the design shown on a shirt, cap or bag, for selling to
      customers.
   Uploads need terms of service: users confirm they may use the art, and prompts for others'
-  characters or logos are refused (Design from Prompt already asks Claude to decline them). Server secrets (API keys, billing settings) live in
+  characters or logos are refused (Design from Prompt already asks Claude to decline them; with
+  your own key, Redraw Image only reminds users, as the owner decided on 2026-10-11). Server secrets (API keys, billing settings) live in
   configuration, never in the repository.
 - A public GitHub repository with CI, signed release builds, a download page, and a community
   space for questions, test-sew photos and designs.

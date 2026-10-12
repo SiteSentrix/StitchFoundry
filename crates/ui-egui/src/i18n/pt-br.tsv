@@ -3752,3 +3752,15 @@ machine	Trim	Corte de linha
 @msg	the artwork has nothing to place	a arte não tem nada para colocar
 @msg	the artwork can't be read: {e}	não foi possível ler a arte: {e}
 @msg	The AI won't copy someone else's logo or character: {e}	A IA não copia logotipos nem personagens de terceiros: {e}
+
+# Embroidery (StitchFoundry): Redraw Image with Claude
+	Redraw Image with Claude…	Redesenhar Imagem com o Claude…
+	Redraw Image with Claude	Redesenhar Imagem com o Claude
+	What to change (optional):	O que mudar (opcional):
+	Only redraw artwork you own or have permission to use.	Redesenhe apenas artes que sejam suas ou que você tenha permissão para usar.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	O Claude redesenha a imagem como arte em cores chapadas com a sua própria chave de API da Anthropic, cobrada na sua conta Anthropic; depois o StitchFoundry a digitaliza. Confira os pontos antes de bordar.
+	Redraw with Claude…	Redesenhar com o Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	O Claude redesenha a imagem como arte limpa em cores chapadas; depois o StitchFoundry a digitaliza
+@msg	select an image to redraw	selecione uma imagem para redesenhar
+@msg	the image couldn't be read	não foi possível ler a imagem
+@msg	The image is too large to send: crop it, or place a smaller copy.	A imagem é grande demais para enviar: recorte-a ou coloque uma cópia menor.

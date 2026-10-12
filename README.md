@@ -43,8 +43,9 @@
   stay editable on the canvas with inclination lines and start and stop beads.
 - **Digitizing tools.** Column A/B digitizing, a radial digitizing widget with satin brushes,
   lettering from any font, and Auto-Digitize for flat-colour images.
-- **Design from Prompt.** Describe a design and Claude draws it as flat-colour art, which
-  StitchFoundry digitizes in one step (desktop app, with your own Anthropic API key).
+- **Design from Prompt and Redraw Image.** Describe a design, or select a logo, and Claude draws
+  it as clean flat-colour art, which StitchFoundry digitizes in one step (desktop app, with your
+  own Anthropic API key).
 - **Stitch-level control.** Edit single stitches and machine functions, split objects, branch
   objects into one thread run, sequence automatically, and keep objects alike with styles.
 - **Design checks** for dense areas, long stitches and lettering too small to sew, machine
@@ -62,8 +63,8 @@ JSON control channel and an MCP server the way a person does.
 
 ## Free and open source
 
-StitchFoundry is free and open source. Design from Prompt runs on your own Anthropic API key;
-optional cloud credits for it, and a logo turned into stitches, are planned.
+StitchFoundry is free and open source. Its AI features (Design from Prompt, Redraw Image with
+Claude) run on your own Anthropic API key; optional cloud credits for them are planned.
 
 ## Build and run
 

@@ -4472,3 +4472,15 @@ machine	Stop	Зупинка
 @msg	the artwork has nothing to place	у малюнку немає нічого для розміщення
 @msg	the artwork can't be read: {e}	не вдається прочитати малюнок: {e}
 @msg	The AI won't copy someone else's logo or character: {e}	ШІ не копіює чужі логотипи й персонажів: {e}
+
+# Embroidery (StitchFoundry): Redraw Image with Claude
+	Redraw Image with Claude…	Перемалювати зображення за допомогою Claude…
+	Redraw Image with Claude	Перемалювати зображення за допомогою Claude
+	What to change (optional):	Що змінити (необов’язково):
+	Only redraw artwork you own or have permission to use.	Перемальовуйте лише малюнки, які належать вам або які ви маєте право використовувати.
+	Claude redraws the image as flat-colour art with your own Anthropic API key, billed to your Anthropic account; StitchFoundry then digitizes it. Check the stitches before you sew.	Claude перемальовує зображення у вигляді малюнка з однотонних заливок за допомогою вашого власного ключа API Anthropic, оплата стягується з вашого облікового запису Anthropic; потім StitchFoundry його оцифровує. Перевірте стібки перед вишиванням.
+	Redraw with Claude…	Перемалювати за допомогою Claude…
+	Claude redraws the image as clean flat-colour art, then StitchFoundry digitizes it	Claude перемалює зображення у вигляді чистого малюнка з однотонних заливок, а StitchFoundry його оцифрує
+@msg	select an image to redraw	виділіть зображення для перемальовування
+@msg	the image couldn't be read	не вдалося прочитати зображення
+@msg	The image is too large to send: crop it, or place a smaller copy.	Зображення завелике для надсилання: обріжте його або помістіть меншу копію.

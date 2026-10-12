@@ -333,4 +333,52 @@ mod design_from_prompt {
         assert!(!crate::menus::enabled(&web, "ui.designFromPrompt"));
         assert!(web.run("ui.designFromPrompt", json!({})).is_err());
     }
+
+    /// A 40 × 20 PNG: red on the left, blue on the right.
+    const LOGO_PNG: &str =
+        "iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAALElEQVR42mM8ISfHQC4Ik1tFtl4mhgECoxaPWjxq8ajFoxaPWjxq8ajF9AcAqiICSl834YsAAAAASUVORK5CYII=";
+
+    #[test]
+    fn an_image_is_redrawn_and_lands_on_it() {
+        // a drawing on a page with the image's aspect: a circle on the left, a square on the right
+        let art = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500"><circle cx="250" cy="250" r="200" fill="#c81e1e"/><rect x="600" y="100" width="300" height="300" fill="#1e3cc8"/></svg>"##;
+        let (mut app, sent, _) = app(200, reply(art), Duration::ZERO);
+        assert!(!crate::menus::enabled(&app, "ui.redrawImage"), "no image selected");
+        assert!(app.run("ui.redrawImage", json!({})).is_err());
+        let placed = app.run("file.place", json!({"name": "logo.png", "dataBase64": LOGO_PNG, "at": [200, 150]})).unwrap();
+        let image = vectorcraft_doc::NodeId(placed["ids"][0].as_u64().unwrap());
+        assert!(crate::menus::enabled(&app, "ui.redrawImage"));
+        app.run("ui.redrawImage", json!({"prompt": "thicker letters"})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!(d.fields["image"], json!(image.0));
+        // the image is 40 × 20 pt (72 ppi), 14 mm across: brought up to the 20 mm least size
+        assert_eq!(d.f64("size", 0.0), 20.0);
+        let texts = dialog_text(&mut app);
+        for want in ["Redraw Image with Claude", "What to change (optional):", "Only redraw artwork you own or have permission to use."] {
+            assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+        }
+        app.embroidery.prompt.key = "sk-ant-test".into();
+        crate::dialogs::confirm(&mut app).unwrap();
+        wait(&mut app);
+        assert!(app.ui.dialog.is_none(), "{:?}", app.embroidery.prompt.error);
+        // the image went along as a PNG, before the instruction and the notes
+        let body: Value = serde_json::from_str(&sent.lock().unwrap()[0].body).unwrap();
+        let content = &body["messages"][0]["content"];
+        assert_eq!(content[0]["source"]["media_type"], "image/png");
+        assert!(content[0]["source"]["data"].as_str().unwrap().len() > 50);
+        assert!(content[1]["text"].as_str().unwrap().ends_with("What to change: thicker letters"));
+        // the art lands on the image: its page is the image's place, scaled about its centre to 20 mm
+        let st = app.session.active().unwrap();
+        let g = st.doc.node(st.selection.objects[0]).unwrap();
+        assert_eq!(g.name.as_deref(), Some("Redrawn image"));
+        assert!(g.children().unwrap().iter().all(|c| c.embroidery.is_some()));
+        let img = st.doc.node(image).unwrap().geometric_bounds().unwrap();
+        let k = 20.0 * vectorcraft_embroidery::PT_PER_MM / img.width();
+        let (w, h) = (img.width() * k, img.height() * k);
+        let (x0, y0) = (img.center().x - w / 2.0, img.center().y - h / 2.0);
+        let b = g.geometric_bounds().unwrap();
+        for (got, want) in [(b.x0, x0 + 0.05 * w), (b.x1, x0 + 0.9 * w), (b.y0, y0 + 0.1 * h), (b.y1, y0 + 0.9 * h)] {
+            assert!((got - want).abs() < 0.5, "{b:?} in a frame at ({x0}, {y0}) {w} × {h}");
+        }
+    }
 }

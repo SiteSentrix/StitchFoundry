@@ -426,38 +426,54 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
     )
 }
 
-/// SVG art made elsewhere (Design from Prompt's) placed as one group named `name`, its longest side
-/// `longest` points, centred on `at` (else the first artboard's centre), as an edit labelled
-/// `label`. The files it links to aren't read, and only the objects `keep` accepts are placed (see
-/// [`pruned`]) → (the group, the import's warnings).
-#[allow(clippy::too_many_arguments)]
+/// Where [`place_svg`] puts the art.
+pub(crate) enum Fit {
+    /// The art's longest side this many points, centred on the point (else the first artboard's
+    /// centre).
+    Longest(f64, Option<Point>),
+    /// The SVG's page (its viewBox) fitted into the rectangle, keeping its aspect: art drawn over an
+    /// image lands on it.
+    Frame(Rect),
+}
+
+/// SVG art made elsewhere (Design from Prompt's) placed as one group named `name` where `placement` says,
+/// as an edit labelled `label`. The files it links to aren't read, and only the objects `keep`
+/// accepts are placed (see [`pruned`]) → (the group, the import's warnings).
 pub(crate) fn place_svg(
     s: &mut Session,
     cmd: &str,
     label: &str,
     name: &str,
     svg: &str,
-    longest: f64,
-    at: Option<Point>,
+    placement: Fit,
     keep: &dyn Fn(&Node) -> bool,
 ) -> Result<(NodeId, Vec<String>)> {
-    if !(longest.is_finite() && longest > 0.0) {
-        return Err(bad(cmd, "the size must be positive"));
-    }
-    if at.is_some_and(|c| !(c.x.abs() <= MAX_COORD && c.y.abs() <= MAX_COORD)) {
-        return Err(bad(cmd, "at lies outside the canvas"));
+    let on_canvas = |p: Point| p.x.abs() <= MAX_COORD && p.y.abs() <= MAX_COORD;
+    match &placement {
+        Fit::Longest(longest, _) if !(longest.is_finite() && *longest > 0.0) => return Err(bad(cmd, "the size must be positive")),
+        Fit::Longest(_, Some(at)) if !on_canvas(*at) => return Err(bad(cmd, "at lies outside the canvas")),
+        Fit::Frame(r) if !(r.width() > 0.0 && r.height() > 0.0 && on_canvas(r.origin()) && on_canvas(Point::new(r.x1, r.y1))) => {
+            return Err(bad(cmd, "frame must be [x, y, width, height] on the canvas with a positive size"));
+        }
+        _ => {}
     }
     let format = fileio::detect("art.svg", svg.as_bytes()).ok_or_else(|| bad(cmd, "the artwork isn't SVG"))?;
     let (mut doc, warnings) = vectorcraft_svg::import_with_report(svg).map_err(|e| bad(cmd, format!("the artwork can't be read: {e}")))?;
     doc.drop_edit_modes();
+    let page = doc.artboards.first().map(|a| a.rect).filter(|r| r.width() > 0.0 && r.height() > 0.0);
     let layers = std::mem::take(&mut doc.layers);
     let nodes = pruned(art_of(layers.iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten())), keep);
     let natural = nodes.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds()));
     let natural = natural.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, "the artwork has nothing to place"))?;
     let st = s.doc()?;
-    let centre = at.or_else(|| st.doc.artboards.first().map(|a| a.rect.center())).unwrap_or_default();
-    let k = longest / natural.width().max(natural.height());
-    let m = Affine::translate(centre.to_vec2()) * Affine::scale(k) * Affine::translate(-natural.center().to_vec2());
+    let m = match placement {
+        Fit::Frame(r) => fit(page.unwrap_or(natural), r),
+        Fit::Longest(longest, at) => {
+            let centre = at.or_else(|| st.doc.artboards.first().map(|a| a.rect.center())).unwrap_or_default();
+            let k = longest / natural.width().max(natural.height());
+            Affine::translate(centre.to_vec2()) * Affine::scale(k) * Affine::translate(-natural.center().to_vec2())
+        }
+    };
     let parent = st.insertion_parent();
     let loaded = Loaded {
         name: name.to_string(),
