@@ -18,6 +18,10 @@
 # tests): the product name, language names, OpenType, the built-in workspace names and the
 # bracketed perspective grid preset names. Keep placeholders, ellipses and the leading/trailing
 # spaces of fragments when editing.
+	New Design	Nový návrh
+	Delete Design	Odstranit návrh
+	Paste Design	Vložit návrh
+	Select Unused	Vybrat nepoužité
 	Glowing Edges…	Zářící okraje…
 	About VectorCraft	O aplikaci VectorCraft
 	Align to Path	Zarovnat k cestě
@@ -223,6 +227,8 @@
 	Type…	Typ…
 	Data…	Údaje…
 	Design…	Návrh…
+	Graph Design	Návrh grafu
+	Graph Marker	Značka grafu
 	Column…	Sloupec…
 	Marker…	Značka…
 	Collect for Export	Shromáždit pro export

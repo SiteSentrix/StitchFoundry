@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (M14: native macOS save Format menu, #866; M6: compound appearance and member fill-rule fixes, #1197; estimates unchanged; M9: PDF raster-effect cap warnings; G11: #893 fixed, #937 open; M7: accurate character controls after scaling, #1034; estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (M12: graph designs, graph data, Graph Type and label options; M14: native macOS save Format menu, #866; M6: compound appearance and member fill-rule fixes, #1197; estimates unchanged; M9: PDF raster-effect cap warnings; G11: #893 fixed, #937 open; M7: accurate character controls after scaling, #1034; estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Forward-looking plan. Where VectorCraft stands is in [`ROADMAP.md`](../ROADMAP.md) and
 [target-app-parity.md](target-app-parity.md); the ranked work list is [gaps.md](gaps.md). Hours are Opus 5.5
@@ -59,7 +59,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | M9 | Live effects (+ 3D & Materials) | 🟡 2D effects done incl. Effect → Pathfinder, Color Adjustments and Document Raster Effects Settings; PDF export warns when the pixel cap lowers raster-effect resolution; initial Revolve only; SVG Filters, remaining raster effects and 3D pending | 81–130 |
 | M10 | Brushes, symbols, patterns, Repeat | 🟡 pattern swatches (5 tile types, Pattern Options, editing mode, SVG `<pattern>`/PDF export) and live Repeat (radial/grid/mirror) done; brushes/symbols in progress | 23–37 |
 | M11 | Artboards & views (artboard panel/tool with Move Artwork for X/Y fields and Artboard Options, Trim View, middle-button pan, print tiling and the status bar's artboard navigator done; multiple windows, presentation polish) | 🟡 | 15–25 |
-| M12 | Advanced color & art (CMYK/ICC, separations, Gradient Mesh, Live Paint, Image Trace, Graphs) | 🟡 Gradient Mesh, Live Paint, Image Trace (13 presets, 18 ms/1k² image; the Flat Logo mode places edges to a fraction of a pixel, restores sharp corners, snaps lines and circles, and refuses gradients), Recolor Artwork, colour management (ICC, soft proofing, separations preview), Graphs (all 9 tools, Graph Data/Type, group-selected series colours persist through regenerate/save/open) done; graph Design/Column/Marker designs pending | 6–10 |
+| M12 | Advanced color & art (CMYK/ICC, separations, Gradient Mesh, Live Paint, Image Trace, Graphs) | 🟡 Gradient Mesh, Live Paint, Image Trace (13 presets, 18 ms/1k² image; the Flat Logo mode places edges to a fraction of a pixel, restores sharp corners, snaps lines and circles, and refuses gradients), Recolor Artwork, colour management (ICC, soft proofing, separations preview), Graphs (all 9 tools, Graph Data/Type, group-selected series colours persist through regenerate/save/open) done; Graph Design and Marker designs done; graph Column designs pending | 6–10 |
 | M13 | Automation (Actions ✅ record/playback, persisted; variables, scripting, batch) | 🟡 | 18–27 |
 | M14 | 1.0 polish (preferences, shortcut editor, workspaces, accessibility, packaging for all OSes) | 🟡 Preferences, shortcut editor (chords with Shift and a punctuation key fire as typed), workspaces, a custom title bar on Windows/Linux with a Home button, content-sized dialogs, menus that scroll when longer than the window and macOS native menu dismissal done (M14.8), and native macOS save sheets with a Format menu (#866); an experimental, unsupported Windows 7 x64 portable OpenGL build (not verified by maintainers); accessibility and broader Windows/Linux packaging/QA pending | 18–28 |
 | — | Interaction fidelity pass (every tool's modifiers, Properties panel per context, isolation, nuance) | ⬜ | 60–90 |
@@ -79,6 +79,7 @@ After placed documents (File › Place of a `.vectorcraft` file, linked), M4.14�
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | M12: Object › Graph › Design… and Marker… (graph designs, marker designs); column designs remain. Scores/hours unchanged. |
 | 2026-10-12 | minor | M14: native macOS save Format menu (#866); filename regression tests, actual SVG save and PDF selection/cancel verified; estimates unchanged |
 | 2026-10-12 | minor | M6: compound paths inherit the backmost appearance; selected members read and change the compound fill rule (#1197); estimates unchanged |
 | 2026-10-11 | minor | M9: PDF raster-effect resolution-cap warnings verified with real capped/uncapped exports; scores and hours unchanged |
