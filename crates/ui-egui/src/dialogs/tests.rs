@@ -392,33 +392,67 @@ fn given_headings_are_shown_as_they_are() {
     assert_eq!((spec(&d.kind).heading)(&d), "Black");
 }
 
-#[test]
-fn plugin_integer_field_preserves_precision_and_clamps_exactly() {
-    use egui::{Event, Key, Modifiers, PointerButton};
-    use vectorcraft_plugins::ParamSpec;
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    let min = -9007199254740995_i64;
-    let max = 9007199254740995_i64;
-    let specs = vec![("seed".into(), ParamSpec::Int { min, max, default: 0 })];
-    let mut d = Dialog::new(plugin::KIND, json!({"seed": 0}));
-    let mut frame = |events: Vec<Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-            form::schema_fields(ui, &mut d, &specs);
+/// A plug-in dialog with one whole-number field `seed` in `min..=max`, driven by egui events.
+struct PluginIntField {
+    ctx: egui::Context,
+    d: Dialog,
+    specs: Vec<(String, vectorcraft_plugins::ParamSpec)>,
+    pos: egui::Pos2,
+}
+
+impl PluginIntField {
+    fn new(min: i64, max: i64, start: i64) -> Self {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let specs = vec![("seed".into(), vectorcraft_plugins::ParamSpec::Int { min, max, default: 0 })];
+        let mut f = PluginIntField { ctx, d: Dialog::new(plugin::KIND, json!({ "seed": start })), specs, pos: egui::Pos2::ZERO };
+        fn number_rect(shape: &egui::Shape, text: &str) -> Option<egui::Rect> {
+            match shape {
+                egui::Shape::Text(t) if t.galley.text() == text => Some(t.visual_bounding_rect()),
+                egui::Shape::Vec(shapes) => shapes.iter().find_map(|s| number_rect(s, text)),
+                _ => None,
+            }
+        }
+        let out = f.run(vec![]);
+        f.pos = out.shapes.iter().find_map(|s| number_rect(&s.shape, &start.to_string())).unwrap().center();
+        f
+    }
+
+    fn run(&mut self, events: Vec<egui::Event>) -> egui::FullOutput {
+        let (d, specs) = (&mut self.d, &self.specs);
+        let mut out = self.ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            form::schema_fields(ui, d, specs);
         });
         out.textures_delta.clear();
-        (out, d.fields["seed"].clone())
-    };
-    fn number_rect(shape: &egui::Shape) -> Option<egui::Rect> {
-        match shape {
-            egui::Shape::Text(t) if t.galley.text() == "0" => Some(t.visual_bounding_rect()),
-            egui::Shape::Vec(shapes) => shapes.iter().find_map(number_rect),
-            _ => None,
-        }
+        out
     }
-    let (out, _) = frame(vec![]);
-    let pos = out.shapes.iter().find_map(|s| number_rect(&s.shape)).unwrap().center();
+
+    /// Clicks the field, sends `events`, presses Enter and returns the field's value.
+    fn commit(&mut self, events: Vec<egui::Event>) -> serde_json::Value {
+        use egui::{Event, Key, Modifiers, PointerButton};
+        let (pos, button) = (self.pos, PointerButton::Primary);
+        self.run(vec![Event::PointerMoved(pos), Event::PointerButton { pos, button, pressed: true, modifiers: Modifiers::default() }]);
+        self.run(vec![Event::PointerButton { pos, button, pressed: false, modifiers: Modifiers::default() }]);
+        self.run(events);
+        self.run(vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
+        self.d.fields["seed"].clone()
+    }
+
+    /// Replaces the field's text with `text` and commits it.
+    fn type_text(&mut self, text: &str) -> serde_json::Value {
+        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
+        self.commit(vec![
+            egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: all },
+            egui::Event::Text(text.into()),
+        ])
+    }
+}
+
+#[test]
+fn plugin_integer_field_preserves_precision_and_clamps_exactly() {
+    let (min, max) = (-9007199254740995_i64, 9007199254740995_i64);
+    let mut f = PluginIntField::new(min, max, 0);
     for (text, expected) in [
         ("9007199254740993", 9007199254740993_i64),
         ("9007199254740996", max),
@@ -427,81 +461,17 @@ fn plugin_integer_field_preserves_precision_and_clamps_exactly() {
         ("1.5", min),
         ("9223372036854775808", min),
     ] {
-        frame(vec![
-            Event::PointerMoved(pos),
-            Event::PointerButton { pos, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::default() },
-        ]);
-        frame(vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::default() }]);
-        frame(vec![
-            Event::Key {
-                key: Key::A,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: Modifiers { ctrl: true, command: true, ..Default::default() },
-            },
-            Event::Text(text.into()),
-        ]);
-        let (_, value) =
-            frame(vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
-        assert_eq!(value, json!(expected), "{text}");
+        assert_eq!(f.type_text(text), json!(expected), "{text}");
     }
 }
 
 #[test]
 fn plugin_integer_field_with_small_bounds_keeps_numeric_editing() {
-    use egui::{Event, Key, Modifiers, PointerButton};
-    use vectorcraft_plugins::ParamSpec;
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    let min = 1;
-    let max = 16;
-    let specs = vec![("seed".into(), ParamSpec::Int { min, max, default: 0 })];
-    let mut d = Dialog::new(plugin::KIND, json!({"seed": 3}));
-    let mut frame = |events: Vec<Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-            form::schema_fields(ui, &mut d, &specs);
-        });
-        out.textures_delta.clear();
-        (out, d.fields["seed"].clone())
-    };
-    fn number_rect(shape: &egui::Shape) -> Option<egui::Rect> {
-        match shape {
-            egui::Shape::Text(t) if t.galley.text() == "3" => Some(t.visual_bounding_rect()),
-            egui::Shape::Vec(shapes) => shapes.iter().find_map(number_rect),
-            _ => None,
-        }
-    }
-    let (out, _) = frame(vec![]);
-    let pos = out.shapes.iter().find_map(|s| number_rect(&s.shape)).unwrap().center();
-    frame(vec![
-        Event::PointerMoved(pos),
-        Event::PointerButton { pos, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::default() },
-    ]);
-    frame(vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::default() }]);
-    frame(vec![Event::Key { key: Key::ArrowUp, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
-    let (_, value) = frame(vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
-    assert_eq!(value, json!(4));
-    for (text, expected) in [("7", 7), ("2 + 3", 5), ("17", max)] {
-        frame(vec![
-            Event::PointerMoved(pos),
-            Event::PointerButton { pos, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::default() },
-        ]);
-        frame(vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::default() }]);
-        frame(vec![
-            Event::Key {
-                key: Key::A,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: Modifiers { ctrl: true, command: true, ..Default::default() },
-            },
-            Event::Text(text.into()),
-        ]);
-        let (_, value) =
-            frame(vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::default() }]);
-        assert_eq!(value, json!(expected), "{text}");
+    let mut f = PluginIntField::new(1, 16, 3);
+    let up = egui::Event::Key { key: egui::Key::ArrowUp, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    assert_eq!(f.commit(vec![up]), json!(4));
+    for (text, expected) in [("7", 7), ("2 + 3", 5), ("17", 16)] {
+        assert_eq!(f.type_text(text), json!(expected), "{text}");
     }
 }
 
