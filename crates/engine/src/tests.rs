@@ -571,13 +571,13 @@ fn selection_tool_drag_is_one_undo_step() {
 }
 
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
-fn history(s: &Session) -> (usize, usize, bool) {
+pub(crate) fn history(s: &Session) -> (usize, usize, bool) {
     let st = s.doc().unwrap();
     (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
 }
 
 /// Select `ids` with a move of them left to redo, and mark the document saved.
-fn select_with_a_step_to_redo(s: &mut Session, ids: &[NodeId]) {
+pub(crate) fn select_with_a_step_to_redo(s: &mut Session, ids: &[NodeId]) {
     s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
     s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();

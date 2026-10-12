@@ -250,6 +250,18 @@ fn set_flags(s: &mut Session, target: &Value, label: &str, p: &Value) -> Result<
         return Err(bad("transparency.setOpacityMask", "give at least one of clip, invert, disabled, linked"));
     }
     let ids = masked_targets(s, target)?;
+    // When every mask already has the flags given, the document and its undo history stay as they
+    // are.
+    let has_flags = |m: &OpacityMask| {
+        clip.is_none_or(|v| m.clip == v)
+            && invert.is_none_or(|v| m.invert == v)
+            && disabled.is_none_or(|v| m.disabled == v)
+            && linked.is_none_or(|v| m.linked == v)
+    };
+    let d = &s.doc()?.doc;
+    if ids.iter().all(|id| d.node(*id).and_then(|n| n.mask.as_deref()).is_none_or(has_flags)) {
+        return ok();
+    }
     s.edit(label, |d, _| {
         for id in &ids {
             if let Some(m) = d.node_mut(*id).and_then(|n| n.mask.as_mut()) {
