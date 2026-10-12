@@ -4666,3 +4666,6 @@ machine	Stop	Arresto
 	Load an embroidery font to set text with it.	Carica un font da ricamo per comporre del testo.
 	Sews well at	Si ricama bene a
 	Place Lettering	Inserisci scritta
+	Edit Lettering	Modifica scritta
+	Update Lettering	Aggiorna scritta
+	Load this lettering's font to change it:	Carica il font di questa scritta per modificarla:

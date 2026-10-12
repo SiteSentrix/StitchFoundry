@@ -466,7 +466,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | TM-03 | Monograms: templates, letter styles, ornaments, borders | Missing | §7.7; our own templates | 3 |
 | CL-01 | Convert TrueType/OpenType fonts | Done | Live from glyph outlines | – |
 | CL-02 | User-refined letters (save edited glyphs) | Missing | Recipe overrides per glyph | 3 |
-| CL-03 | Create custom embroidery fonts (from art or fonts) | Partial | Embroidery fonts in Ink/Stitch's format (font folders users have: glyphs digitized as art, advances, kerning, leading) set lettering (`embroidery.lettering`); making fonts in the app (§7.8 recipes + editor) still to come | 3 |
+| CL-03 | Create custom embroidery fonts (from art or fonts) | Partial | Embroidery fonts in Ink/Stitch's format (font folders users have: glyphs digitized as art, advances, kerning, leading) set lettering that stays editable (`embroidery.lettering`, `embroidery.lettering.edit`); making fonts in the app (§7.8 recipes + editor) still to come | 3 |
 | CL-04 | Merge fonts | Missing | Recipe sets | 3 |
 | KDC-01 | Keyboard design collections (map designs to keys, type with them) | Missing | Design-per-character sets usable as fonts (2025 feature) | 3 |
 | KI-01 | Lettering kiosk (simplified mode for counter staff) | Missing | Locked-down "kiosk" workspace with templates | 6 |

@@ -507,6 +507,8 @@ fn structured_junk() {
         ),
         ("embroidery.font.load", json!({"path": "/nonexistent/font"})),
         ("embroidery.lettering", json!({"text": "AAAA", "font": "x", "size": 500, "leading": 5, "at": [1e308, -1e308]})),
+        ("embroidery.lettering.edit", json!({"text": "AAAA", "size": 500, "leading": 5, "font": "x"})),
+        ("embroidery.lettering.edit", json!({"ids": [u64::MAX], "size": "x"})),
         ("embroidery.knife", json!({"overlap": 3})),
         ("embroidery.knife", json!({"overlap": -1, "ids": [u64::MAX]})),
         (

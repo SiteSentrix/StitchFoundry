@@ -213,8 +213,8 @@ pub(crate) fn convert(node: &Node, e: &Embroidery) -> Vec<ObjectKind> {
         return out;
     }
     match &e.stitch {
-        // a branch group only says how its members are sewn
-        StitchType::Branch => {}
+        // a branch group only says how its members are sewn, lettering what they say
+        StitchType::Branch | StitchType::Lettering(_) => {}
         // redwork: all the lines of the node (a group: of the visible art in it) sewn as one line
         StitchType::Redwork(params) => {
             let lines: Vec<Contour> = art_lines(node).into_iter().map(|l| Contour::from_points(&l.pts, l.closed)).collect();

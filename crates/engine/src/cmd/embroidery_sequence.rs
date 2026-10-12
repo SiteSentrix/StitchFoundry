@@ -68,10 +68,10 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-/// A branch or redwork group: a group sewn by what it holds.
+/// A branch, redwork or lettering group: a group sewn by what it holds.
 fn is_branch(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { .. })
-        && n.embroidery.as_deref().is_some_and(|e| matches!(e.stitch, StitchType::Branch | StitchType::Redwork(_)))
+        && n.embroidery.as_deref().is_some_and(|e| matches!(e.stitch, StitchType::Branch | StitchType::Redwork(_) | StitchType::Lettering(_)))
 }
 
 fn redwork(s: &mut Session, p: &Value) -> Result<Value> {

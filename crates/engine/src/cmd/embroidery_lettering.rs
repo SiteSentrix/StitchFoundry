@@ -6,7 +6,8 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node};
+use sf_core::attr::{Embroidery, Lettering, StitchType};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_embroidery::fonts::{EmbFont, MAX_TEXT};
 use vectorcraft_geom::Affine;
 
@@ -14,6 +15,7 @@ use super::*;
 
 const LOAD: &str = "embroidery.font.load";
 const SET: &str = "embroidery.lettering";
+const EDIT: &str = "embroidery.lettering.edit";
 /// Biggest font.json and glyph art read (bytes), most art files one font has, and most fonts
 /// loaded at once.
 const MAX_JSON: usize = 2 << 20;
@@ -46,9 +48,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Lettering",
             [],
             None,
-            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (the start of the first line's baseline; default: the first artboard's centre), leading?: × the font's line height (1)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering; a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
+            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (the start of the first line's baseline; default: the first artboard's centre), leading?: × the font's line height (1)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
             has_doc,
             lettering
+        ),
+        cmd!(
+            "embroidery.lettering.edit",
+            "Edit Lettering",
+            [],
+            None,
+            "{id?, text?, font?, size?: mm, leading?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
+            has_selection,
+            edit_lettering
         ),
     ]
 }
@@ -174,84 +185,181 @@ fn list_fonts(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "fonts": s.embroidery_fonts.iter().map(|f| describe(f)).collect::<Vec<_>>() }))
 }
 
-fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
-    let text = str_param(p, "text").filter(|t| !t.trim().is_empty()).ok_or_else(|| bad(SET, "missing `text`"))?;
-    if text.chars().count() > MAX_TEXT {
-        return Err(bad(SET, format!("at most {MAX_TEXT} characters")));
-    }
-    let name = str_param(p, "font").ok_or_else(|| bad(SET, "missing `font`"))?;
-    let font = s
-        .embroidery_fonts
-        .iter()
-        .find(|f| f.info.name.eq_ignore_ascii_case(name))
-        .cloned()
-        .ok_or_else(|| bad(SET, format!("no embroidery font `{name}` is loaded (embroidery.font.load)")))?;
-    let own = if font.info.size > 0.0 { font.info.size } else { 20.0 };
-    let size = match p.get("size") {
-        None | Some(Value::Null) => own,
-        Some(v) => v.as_f64().filter(|v| (1.0..=500.0).contains(v)).ok_or_else(|| bad(SET, "`size` is 1 to 500 mm"))?,
-    };
-    let leading = match p.get("leading") {
-        None | Some(Value::Null) => 1.0,
-        Some(v) => v.as_f64().filter(|v| (0.2..=5.0).contains(v)).ok_or_else(|| bad(SET, "`leading` is 0.2 to 5"))?,
-    };
-    let at = match p.get("at") {
-        None | Some(Value::Null) => s.doc()?.doc.artboards.first().map_or(Point::new(0.0, 0.0), |a| a.rect.center()),
-        Some(_) => point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(SET, "`at` is [x, y]"))?,
-    };
-    // scaled from the size the font was digitized at; outside what it sews well at, a warning
+/// The size (mm) `font` was digitized at.
+fn own_size(font: &EmbFont) -> f64 {
+    if font.info.size > 0.0 { font.info.size } else { 20.0 }
+}
+
+/// What `font` sews well at, said when `size` (mm) is outside it.
+fn size_warnings(font: &EmbFont, size: f64) -> Vec<String> {
+    let (i, own) = (&font.info, own_size(font));
     let k = size / own;
     let mut warnings = Vec::new();
-    let i = &font.info;
     if i.min_scale > 0.0 && k < i.min_scale - 1e-9 {
         warnings.push(format!("{} sews well from {:.1} mm", i.name, own * i.min_scale));
     }
     if i.max_scale > 0.0 && k > i.max_scale + 1e-9 {
         warnings.push(format!("{} sews well up to {:.1} mm", i.name, own * i.max_scale));
     }
-    let placed = font.layout(text);
+    warnings
+}
+
+/// A loaded font, by name (any case).
+fn loaded(s: &Session, name: &str) -> Option<Arc<EmbFont>> {
+    s.embroidery_fonts.iter().find(|f| f.info.name.eq_ignore_ascii_case(name)).cloned()
+}
+
+fn not_loaded(cmd: &str, name: &str) -> EngineError {
+    bad(cmd, format!("no embroidery font `{name}` is loaded (embroidery.font.load)"))
+}
+
+/// `text`, when given: 1 to [`MAX_TEXT`] characters, not all blank.
+fn text_param<'a>(p: &'a Value, cmd: &str) -> Result<Option<&'a str>> {
+    match p.get("text") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(t)) if !t.trim().is_empty() && t.chars().count() <= MAX_TEXT => Ok(Some(t.as_str())),
+        Some(_) => Err(bad(cmd, format!("`text` is 1 to {MAX_TEXT} characters"))),
+    }
+}
+
+/// A number param in `range`, when given.
+fn ranged(p: &Value, key: &str, range: std::ops::RangeInclusive<f64>, cmd: &str, what: &str) -> Result<Option<f64>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_f64().filter(|v| range.contains(v)).map(Some).ok_or_else(|| bad(cmd, what)),
+    }
+}
+
+/// The lettering among `ids`, or holding one of them (a glyph selected inside it), and what it
+/// says.
+fn lettering_of(d: &Document, ids: &[NodeId]) -> Option<(NodeId, Lettering)> {
+    ids.iter().find_map(|id| {
+        let mut at = Some(*id);
+        while let Some(c) = at {
+            if let Some(StitchType::Lettering(l)) = d.node(c)?.embroidery.as_deref().map(|e| &e.stitch) {
+                return Some((c, (**l).clone()));
+            }
+            at = d.parent_of(c);
+        }
+        None
+    })
+}
+
+/// The lettering group's name: its text (the start of it) and font.
+fn lettering_name(spec: &Lettering) -> String {
+    let short: String = spec.text.chars().take(40).map(|c| if c.is_control() { ' ' } else { c }).collect();
+    format!("{short} ({})", spec.font)
+}
+
+/// The glyphs `spec` sets in `font`, placed by its frame: a group per glyph, its art sewn as the
+/// font says.
+fn glyphs(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<Arc<Node>> {
+    let i = &font.info;
+    let k = spec.size / own_size(font);
+    let frame = Affine::new(spec.frame.0);
+    let mut out = Vec::new();
+    for g in font.layout(&spec.text) {
+        let Some(glyph) = font.glyphs.get(&g.glyph) else { continue };
+        let u = glyph.unit;
+        // the glyph's art from its page to its place: its baseline on the line, its origin at x
+        let m = frame
+            * Affine::translate((g.x * u * k, g.line as f64 * i.leading * spec.leading * u * k))
+            * Affine::scale(k)
+            * Affine::translate((0.0, -glyph.baseline));
+        let children: Vec<Arc<Node>> = glyph
+            .art
+            .children()
+            .map(|c| {
+                c.iter()
+                    .map(|n| {
+                        let mut n = d.reid(n);
+                        n.visible = true;
+                        n.transform(m, true);
+                        Arc::new(n)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if children.is_empty() {
+            continue;
+        }
+        let mut grp = Node::group(d.alloc_id(), children);
+        grp.name = Some(g.glyph.clone());
+        out.push(Arc::new(grp));
+    }
+    out
+}
+
+fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
+    let text = text_param(p, SET)?.ok_or_else(|| bad(SET, "missing `text`"))?;
+    let name = str_param(p, "font").ok_or_else(|| bad(SET, "missing `font`"))?;
+    let font = loaded(s, name).ok_or_else(|| not_loaded(SET, name))?;
+    let size = ranged(p, "size", 1.0..=500.0, SET, "`size` is 1 to 500 mm")?.unwrap_or_else(|| own_size(&font));
+    let leading = ranged(p, "leading", 0.2..=5.0, SET, "`leading` is 0.2 to 5")?.unwrap_or(1.0);
+    let at = match p.get("at") {
+        None | Some(Value::Null) => s.doc()?.doc.artboards.first().map_or(Point::new(0.0, 0.0), |a| a.rect.center()),
+        Some(_) => point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(SET, "`at` is [x, y]"))?,
+    };
+    let spec = Lettering {
+        text: text.to_string(),
+        font: font.info.name.clone(),
+        size,
+        leading,
+        frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
+    };
+    // scaled from the size the font was digitized at; outside what it sews well at, a warning
+    let warnings = size_warnings(&font, size);
     let parent = s.doc()?.insertion_parent();
     let (id, count) = s.edit("Embroidery Lettering", |d, sel| {
-        let mut glyphs = Vec::new();
-        for g in &placed {
-            let Some(glyph) = font.glyphs.get(&g.glyph) else { continue };
-            let u = glyph.unit;
-            // the glyph's art from its page to its place: its baseline on the line, its origin at x
-            let m = Affine::translate((at.x + g.x * u * k, at.y + g.line as f64 * i.leading * leading * u * k))
-                * Affine::scale(k)
-                * Affine::translate((0.0, -glyph.baseline));
-            let children: Vec<Arc<Node>> = glyph
-                .art
-                .children()
-                .map(|c| {
-                    c.iter()
-                        .map(|n| {
-                            let mut n = d.reid(n);
-                            n.visible = true;
-                            n.transform(m, true);
-                            Arc::new(n)
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            if children.is_empty() {
-                continue;
-            }
-            let mut grp = Node::group(d.alloc_id(), children);
-            grp.name = Some(g.glyph.clone());
-            glyphs.push(Arc::new(grp));
-        }
+        let glyphs = glyphs(d, &font, &spec);
         if glyphs.is_empty() {
-            return Err(bad(SET, format!("{} has none of these characters", i.name)));
+            return Err(bad(SET, format!("{} has none of these characters", font.info.name)));
         }
         let count = glyphs.len();
         let mut all = Node::group(d.alloc_id(), glyphs);
-        let short: String = text.chars().take(40).collect();
-        all.name = Some(format!("{short} ({})", i.name));
+        all.name = Some(lettering_name(&spec));
+        all.embroidery = Some(Box::new(Embroidery::new(StitchType::Lettering(Box::new(spec.clone())))));
         let id = all.id;
         d.insert(parent, usize::MAX, all)?;
         sel.set([id]);
         Ok((id, count))
+    })?;
+    Ok(json!({ "id": id.0, "glyphs": count, "warnings": warnings }))
+}
+
+fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = targets(s, p)?;
+    let (id, mut spec) = lettering_of(&s.doc()?.doc, &ids).ok_or_else(|| bad(EDIT, "select lettering set in an embroidery font"))?;
+    if let Some(t) = text_param(p, EDIT)? {
+        spec.text = t.to_string();
+    }
+    if let Some(f) = str_param(p, "font") {
+        spec.font = f.to_string();
+    }
+    let font = loaded(s, &spec.font).ok_or_else(|| not_loaded(EDIT, &spec.font))?;
+    spec.font = font.info.name.clone();
+    if let Some(v) = ranged(p, "size", 1.0..=500.0, EDIT, "`size` is 1 to 500 mm")? {
+        spec.size = v;
+    }
+    if let Some(v) = ranged(p, "leading", 0.2..=5.0, EDIT, "`leading` is 0.2 to 5")? {
+        spec.leading = v;
+    }
+    let warnings = size_warnings(&font, spec.size);
+    let count = s.edit("Edit Lettering", |d, sel| {
+        let glyphs = glyphs(d, &font, &spec);
+        if glyphs.is_empty() {
+            return Err(bad(EDIT, format!("{} has none of these characters", font.info.name)));
+        }
+        let count = glyphs.len();
+        let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
+        let NodeKind::Group { children, .. } = &mut n.kind else { return Err(EngineError::NoNode(id)) };
+        *children = glyphs;
+        n.name = Some(lettering_name(&spec));
+        if let Some(e) = n.embroidery.as_deref_mut() {
+            e.stitch = StitchType::Lettering(Box::new(spec.clone()));
+        }
+        sel.set([id]);
+        Ok(count)
     })?;
     Ok(json!({ "id": id.0, "glyphs": count, "warnings": warnings }))
 }

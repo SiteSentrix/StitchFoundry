@@ -4662,3 +4662,6 @@ machine	Stop	Остановка
 	Load an embroidery font to set text with it.	Загрузите шрифт для вышивки, чтобы набрать им текст.
 	Sews well at	Хорошо вышивается при
 	Place Lettering	Разместить надпись
+	Edit Lettering	Изменить надпись
+	Update Lettering	Обновить надпись
+	Load this lettering's font to change it:	Загрузите шрифт этой надписи, чтобы изменить её:
