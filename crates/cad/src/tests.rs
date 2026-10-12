@@ -155,6 +155,7 @@ fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     // The ellipse: four cubics through clamped knots.
     let spline = &e[3];
     assert_eq!((get(spline, 71), get(spline, 73)), (Some("3"), Some("13")));
+    assert_eq!(get(spline, 70), Some("9"), "closed planar spline (#1299): 1 = closed, 8 = planar");
     assert_eq!(all(spline, 40), [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0]);
     // R14 has lightweight polylines but no lineweights: the stroke is a polyline width.
     let r14 = export(&d, &DxfOptions { version: DxfVersion::R14, ..opts(&d) }).unwrap();
