@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -49,9 +49,10 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Italian | `it` | 4,011 / 4,020 | full |
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
+| Hungarian | `hu` | 4,524 rows: menus, `tl!` literals and messages complete (tests); one plural form | full |
 | Czech | `cs` | 4,411 catalog entries, including 636 `@msg` rows (measured locally 2026-10-11); menu, literal and message coverage enforced by tests | catalog complete; render-site gaps reduced; native review pending |
 
-Eleven non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
+Twelve non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
 interface languages (including Korean, Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
 editions with Arabic and Hebrew); it doesn't ship Hindi, Indonesian or Vietnamese.
 
@@ -78,5 +79,6 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | Hungarian (`hu`) catalog added, complete under the tests |
 | 2026-10-11 | minor | Czech render-site follow-up: file-dialog filters, diagnostics, preset numbering, contributor tooltips/plurals, gradient grammar and contextual printer mark styles; estimates unchanged |
 | 2026-10-10 | major | First per-language table, measured from the catalog row counts against the complete French catalog |
