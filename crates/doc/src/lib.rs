@@ -1100,6 +1100,9 @@ impl Document {
     /// `locked_and_hidden` (Selection & Anchor Display › Move Locked and Hidden Artwork with
     /// Artboard).
     pub fn art_on_artboard(&self, rect: Rect, locked_and_hidden: bool) -> Vec<NodeId> {
+        // Art drawn flush with the artboard can end up a rounding error outside it (a background
+        // 3e-14 pt past the top edge, #1295): a millionth of a point is far below anything visible.
+        let rect = rect.inflate(1e-6, 1e-6);
         fn collect(n: &Node, rect: Rect, all: bool, out: &mut Vec<NodeId>) {
             for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
                 if c.is_layer() {
@@ -1403,6 +1406,26 @@ mod tests {
         Arc::make_mut(&mut d.layers[0]).locked = true;
         assert!(d.art_on_artboard(wide, false).is_empty());
         assert_eq!(d.art_on_artboard(wide, true), vec![a, b], "a locked layer's art too");
+    }
+
+    #[test]
+    fn art_on_artboard_tolerates_roundoff_at_each_edge() {
+        let (d, a, _) = doc_with_rects();
+        let roundoff = 1e-12;
+        for board in [
+            Rect::new(roundoff, 0.0, 10.0, 10.0),
+            Rect::new(0.0, roundoff, 10.0, 10.0),
+            Rect::new(0.0, 0.0, 10.0 - roundoff, 10.0),
+            Rect::new(0.0, 0.0, 10.0, 10.0 - roundoff),
+        ] {
+            assert_eq!(d.art_on_artboard(board, false), vec![a], "roundoff at {board:?}");
+        }
+        // A real overhang remains outside.
+        for board in
+            [Rect::new(0.001, 0.0, 10.0, 10.0), Rect::new(0.0, 0.001, 10.0, 10.0), Rect::new(0.0, 0.0, 9.999, 10.0), Rect::new(0.0, 0.0, 10.0, 9.999)]
+        {
+            assert!(d.art_on_artboard(board, false).is_empty(), "overhang at {board:?}");
+        }
     }
 
     #[test]
