@@ -589,3 +589,50 @@ fn thai_falls_back_to_a_font_made_for_thai() {
     assert!(first.is_some(), "Thai drawn in {:?}; {thai} is installed", thai_glyphs.iter().map(family).collect::<Vec<_>>());
     assert!(thai_glyphs.iter().all(|g| g.gid != 0), "no .notdef");
 }
+
+/// #1258: full names can differ from the PostScript name, and name one particular face.
+#[test]
+fn full_names_resolve_faces_and_missing_font_searches() {
+    let data = named(&[
+        (3, EN, 1, "Alias Script"),
+        (3, EN, 2, "Italic"),
+        (3, EN, 4, "Alias Script Italic"),
+        (3, JA, 4, "例の書体 斜体"),
+        (3, EN, 6, "AliasScriptI"),
+    ]);
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-full-name", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("Alias.ttf");
+    std::fs::write(&file, &data).unwrap();
+    for loaded in [false, true] {
+        let db = FontDb::with_font_dirs(vec![dir.clone()]);
+        if loaded {
+            assert!(db.add_font(data.clone()) > 0);
+        }
+        for name in ["Alias Script Italic", "Alias-Script-Italic", "ALIAS SCRIPT ITALIC", "例の書体 斜体", "AliasScriptI"] {
+            for requested_style in ["Regular", "Bold"] {
+                let (face, matched) = db.resolve(name, requested_style).unwrap();
+                assert_eq!((face.family.as_str(), face.style.as_str(), matched), ("Alias Script", "Italic", FontMatch::Exact));
+                let wanted = WantedFonts::new(&[WantedFont { family: name.into(), style: requested_style.into(), installed: None }]);
+                assert_eq!(wanted.provided_by(&file), [0], "search for {name} {requested_style}");
+            }
+        }
+        // Full names are face aliases; the API for actual PostScript names stays precise.
+        assert!(db.find_postscript("Alias Script Italic").is_none());
+        assert!(db.by_postscript_name("Alias Script Italic").is_none());
+        assert_eq!(db.find_postscript("AliasScriptI").unwrap().style, "Italic");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A real family's name keeps the requested style even if another face uses it as a full name.
+#[test]
+fn a_full_name_does_not_override_an_installed_family() {
+    let db = FontDb::with_font_dirs(vec![]);
+    assert!(
+        db.add_font(named(&[(3, EN, 1, "Alias Script"), (3, EN, 2, "Italic"), (3, EN, 4, "Alias Script Italic"), (3, EN, 6, "AliasScriptI")])) > 0
+    );
+    assert!(db.add_font(named(&[(3, EN, 1, "Alias Script Italic"), (3, EN, 2, "Regular"), (3, EN, 6, "OtherAlias-Regular")])) > 0);
+    let (face, matched) = db.resolve("Alias Script Italic", "Regular").unwrap();
+    assert_eq!((face.family.as_str(), face.style.as_str(), matched), ("Alias Script Italic", "Regular", FontMatch::Exact));
+}
