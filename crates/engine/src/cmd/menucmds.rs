@@ -625,7 +625,18 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
     const C: &str = "object.cropImage";
     let st = s.doc()?;
     let blob = st.doc.images.get(&im.key).ok_or_else(|| bad(C, "the image's pixels are missing"))?;
-    let px = image::load_from_memory(&blob.bytes).map_err(|_| bad(C, "the image's pixels can't be read"))?.to_rgba8();
+    // A CMYK image (kept as its ink amounts) has no alpha: nothing to cut.
+    if blob.is_cmyk() {
+        return Ok(json!({ "id": id.0, "width": im.width, "height": im.height, "trimmed": false }));
+    }
+    // Print rasters run to gigabytes decoded: the same allowance opening them has.
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
+        .with_guessed_format()
+        .map_err(|_| bad(C, "the image's pixels can't be read"))?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
+    reader.limits(limits);
+    let px = reader.decode().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?.to_rgba8();
     let (w, h) = px.dimensions();
     let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
     for (x, y, p) in px.enumerate_pixels() {

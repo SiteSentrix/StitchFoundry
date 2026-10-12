@@ -1826,3 +1826,15 @@ fn crop_image_trim_cuts_to_the_opaque_pixels_as_they_are() {
     assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64()), (Some(false), Some(30)), "{r}");
     assert_eq!(bounds(&s, img), b);
 }
+
+#[test]
+fn crop_image_trim_leaves_a_cmyk_image_alone() {
+    // CMYK images keep their ink amounts and have no alpha: nothing to cut, and not an error.
+    let inks = vectorcraft_doc::cmyk::Inks::new(4, 2, [255, 0, 0, 0].repeat(8)).unwrap();
+    let tiff = vectorcraft_doc::ImageBlob::cmyk_tiff(&inks).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "inks.tif", "dataBase64": vectorcraft_format::base64_encode(&tiff.bytes)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
+    assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64(), r["height"].as_u64()), (Some(false), Some(4), Some(2)), "{r}");
+}

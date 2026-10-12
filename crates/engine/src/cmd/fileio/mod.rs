@@ -28,6 +28,7 @@ pub mod eps;
 mod export;
 pub(crate) mod imagemap;
 mod load;
+pub(crate) use load::MAX_RASTER_ALLOC;
 mod metafile;
 mod native;
 pub mod pdf;
