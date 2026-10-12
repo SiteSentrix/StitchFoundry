@@ -206,6 +206,15 @@ pub fn specs() -> Vec<CommandSpec> {
             auto_digitize
         ),
         cmd!(
+            "embroidery.clickStitch",
+            "Click to Stitch",
+            [],
+            None,
+            "{at: [x, y] (points) a spot on an image, as?: fill|fillNoHoles|satin|outline|centerline (fill), tolerance?: 0–255 how far a colour may be from the spot's and still join the region (32), minHole?: px holes smaller than this are filled (16), id?: the image (default: the topmost one under the spot)} click-to-stitch: the region of the image round the spot (its pixels joined to it in about its colour) becomes a stitched object in its colour: tatami with or without its holes, satin across it, a running outline, or running centre lines; added over the image and selected → {id, as, pixels, color}",
+            has_doc,
+            click_stitch
+        ),
+        cmd!(
             "embroidery.draw",
             "Brush Stroke",
             [],
@@ -946,6 +955,88 @@ fn is_backdrop(n: &vectorcraft_doc::Node, image: kurbo::Rect) -> bool {
     let outer: f64 = regions.iter().map(|r| sf_core::geom::Polygon::from_ring(r.outer.clone()).area()).sum();
     let whole = image.width() * image.height() * MM_PER_PT * MM_PER_PT;
     whole > 0.0 && outer >= 0.97 * whole
+}
+
+/// The ways click-to-stitch can stitch a region.
+const CLICK_AS: [&str; 5] = ["fill", "fillNoHoles", "satin", "outline", "centerline"];
+
+fn click_stitch(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.clickStitch";
+    let at = point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(CMD, "`at` is [x, y], a spot on an image"))?;
+    let kind = str_param(p, "as").unwrap_or("fill");
+    let kind = CLICK_AS
+        .into_iter()
+        .find(|k| k.eq_ignore_ascii_case(kind))
+        .ok_or_else(|| bad(CMD, "`as` is fill, fillNoHoles, satin, outline or centerline"))?;
+    let whole = |key: &str, max: u64, default: u64| -> Result<u64> {
+        match p.get(key) {
+            None | Some(Value::Null) => Ok(default),
+            Some(v) => v.as_u64().filter(|v| *v <= max).ok_or_else(|| bad(CMD, format!("`{key}` is 0 to {max}"))),
+        }
+    };
+    let tolerance = u8::try_from(whole("tolerance", 255, 32)?).unwrap_or(32);
+    let min_hole = usize::try_from(whole("minHole", 1_000_000, 16)?).unwrap_or(16);
+    // the image: the one given, else the topmost under the spot
+    let (im, bytes) = {
+        let d = &s.doc()?.doc;
+        let node = match p.get("id").and_then(Value::as_u64) {
+            Some(id) => d.node(NodeId(id)).cloned(),
+            None => {
+                let mut top = None;
+                d.walk(|n| {
+                    if matches!(n.kind, NodeKind::Image(_)) && n.visible && n.geometric_bounds().is_some_and(|b| b.contains(at)) {
+                        top = Some(n.clone());
+                    }
+                });
+                top
+            }
+        };
+        let Some(NodeKind::Image(im)) = node.map(|n| n.kind) else { return Err(bad(CMD, "click on an image (or give its `id`)")) };
+        let blob = d.images.get(&im.key).ok_or_else(|| EngineError::Other(format!("image data `{}` is missing", im.key)))?;
+        (im, blob.bytes.clone())
+    };
+    let raster = vectorcraft_trace::Raster::decode(&bytes).map_err(|e| bad(CMD, e.to_string()))?;
+    // the raster may be bigger or smaller than the image's own size: pixels mapped over it
+    let to_doc =
+        im.xf * kurbo::Affine::scale_non_uniform(f64::from(im.width) / f64::from(raster.width), f64::from(im.height) / f64::from(raster.height));
+    if to_doc.determinant().abs() < 1e-12 {
+        return Err(bad(CMD, "the image has no size"));
+    }
+    let q = to_doc.inverse() * at;
+    if !(q.x.is_finite() && q.y.is_finite() && q.x >= 0.0 && q.y >= 0.0 && q.x < f64::from(raster.width) && q.y < f64::from(raster.height)) {
+        return Err(bad(CMD, "the spot isn't on the image"));
+    }
+    let region = vectorcraft_trace::region::pick(&raster, q.x as u32, q.y as u32, tolerance)
+        .ok_or_else(|| bad(CMD, "nothing to stitch there: the spot is transparent"))?;
+    let (w, h) = (raster.width as usize, raster.height as usize);
+    let path = match kind {
+        "centerline" => {
+            let subs: Vec<_> = vectorcraft_trace::region::centre_lines(&region.mask, w, h).into_iter().flat_map(|(p, _)| p.subpaths).collect();
+            (!subs.is_empty()).then(|| vectorcraft_geom::path::PathData::new(subs))
+        }
+        _ => vectorcraft_trace::region::outline(&region.mask, w, h, kind != "fillNoHoles", min_hole),
+    }
+    .ok_or_else(|| bad(CMD, "the region is too small to stitch"))?
+    .transformed(to_doc);
+    let [r, g, b, _] = region.color;
+    let paint = Paint::solid(Color::rgb8(r, g, b));
+    let line = matches!(kind, "outline" | "centerline");
+    let look = if line { Appearance::basic(Paint::None, paint, 1.0) } else { Appearance::basic(paint, Paint::None, 0.0) };
+    let stitch = match kind {
+        "satin" => StitchType::Satin(SatinParams::default()),
+        "outline" | "centerline" => StitchType::Run(RunParams::default()),
+        _ => StitchType::Fill(FillParams::default()),
+    };
+    let parent = s.doc()?.insertion_parent();
+    let id = s.edit("Click to Stitch", |d, sel| {
+        let mut n = vectorcraft_doc::Node::path(d.alloc_id(), path, look);
+        n.embroidery = Some(Box::new(Embroidery::new(stitch)));
+        let id = n.id;
+        d.insert(parent, usize::MAX, n)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0, "as": kind, "pixels": region.pixels, "color": format!("#{r:02x}{g:02x}{b:02x}") }))
 }
 
 fn auto_digitize(s: &mut Session, p: &Value) -> Result<Value> {

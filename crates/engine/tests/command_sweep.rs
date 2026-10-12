@@ -519,6 +519,8 @@ fn structured_junk() {
         ("embroidery.lettering.edit", json!({"order": "centre", "lines": 1})),
         ("embroidery.lettering.letter", json!({"index": u64::MAX, "scale": f64::MAX})),
         ("embroidery.puff", json!({"ids": [u64::MAX], "cap": -1})),
+        ("embroidery.clickStitch", json!({"at": [f64::MAX, 0], "as": "fill", "id": u64::MAX})),
+        ("embroidery.clickStitch", json!({"at": [1e300, -1e300], "tolerance": -1})),
         ("embroidery.fontDoc.fromType", json!({"family": "Source Sans 3", "chars": "\u{0}\u{fffd}x", "size": 5})),
         ("embroidery.fontDoc.merge", json!({"font": "x", "chars": "abc"})),
         ("embroidery.fontDoc.kern", json!({"pair": "A b", "value": 1e300})),

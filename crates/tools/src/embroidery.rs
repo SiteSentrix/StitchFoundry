@@ -29,6 +29,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         "embroideryStitches" => Some(Box::new(StitchTool::default())),
         "embroideryColumn" => Some(Box::new(ColumnTool::default())),
         "embroideryMotif" => Some(Box::new(MotifTool::default())),
+        "embroideryClick" => Some(Box::new(ClickStitchTool::default())),
         _ => None,
     }
 }
@@ -786,6 +787,60 @@ impl Tool for MotifTool {
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         if self.from.take().is_some() { vec![Action::Cancel] } else { vec![] }
+    }
+}
+
+/// Click-to-Stitch tool: a click on an image stitches the region round the spot
+/// (`embroidery.clickStitch`), as the tool's settings say: `as` (fill, fillNoHoles, satin,
+/// outline or centerline) and `tolerance`.
+pub struct ClickStitchTool {
+    pub stitch_as: String,
+    pub tolerance: u8,
+}
+
+impl Default for ClickStitchTool {
+    fn default() -> Self {
+        ClickStitchTool { stitch_as: "fill".into(), tolerance: 32 }
+    }
+}
+
+impl Tool for ClickStitchTool {
+    fn id(&self) -> &'static str {
+        "embroideryClick"
+    }
+
+    fn pointer(&mut self, _cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        match ev.kind {
+            PointerKind::Up => vec![Action::Exec(
+                "embroidery.clickStitch".into(),
+                json!({ "at": [ev.pos.x, ev.pos.y], "as": self.stitch_as, "tolerance": self.tolerance }),
+            )],
+            _ => vec![],
+        }
+    }
+
+    fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
+        Cursor::Crosshair
+    }
+
+    fn options(&self) -> Value {
+        json!({ "as": self.stitch_as, "tolerance": self.tolerance })
+    }
+
+    fn set_option(&mut self, key: &str, value: &Value) {
+        match key {
+            "as" => {
+                if let Some(v) = value.as_str().filter(|v| ["fill", "fillNoHoles", "satin", "outline", "centerline"].contains(v)) {
+                    self.stitch_as = v.to_string();
+                }
+            }
+            "tolerance" => {
+                if let Some(v) = value.as_u64().and_then(|v| u8::try_from(v).ok()) {
+                    self.tolerance = v;
+                }
+            }
+            _ => {}
+        }
     }
 }
 
