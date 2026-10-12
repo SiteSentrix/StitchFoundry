@@ -754,6 +754,10 @@ impl Renderer {
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
         let art = self.fx_art(f.doc, a, cache);
+        // Art the cache did not keep is made again in the next frame.
+        let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
+        let outer = self.made_again;
+        self.made_again = outer || !kept;
         // With Crop Marks, the object inside the art paints its own raster effects.
         let rfx = if effects::has_crop_marks(a) { vec![] } else { effects::raster_effects(&a.appearance.effects) };
         match cull_bounds(&art) {
@@ -769,6 +773,7 @@ impl Renderer {
             }
             _ => self.draw_node(ctx, f, &art, true),
         }
+        self.made_again = outer;
     }
 
     /// The art [`Self::draw_object_fx`] draws for `a` (cached by `Arc` identity when `cache`):

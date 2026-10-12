@@ -1,7 +1,7 @@
 //! What renderers keep between frames: decoded images shared by all of them, image mips, symbol
-//! art placed for instances and inline graphics, raster effects made again when what they read
-//! changes, and caches swept by every kind of render. Each test holds [`fonts_steady`]: fonts added
-//! while it runs would make its renderers lay type out again.
+//! art placed for instances and inline graphics, stroke outlines, raster effects made again when
+//! what they read changes, and caches swept by every kind of render. Each test holds [`fonts_steady`]:
+//! fonts added while it runs would make its renderers lay type out again.
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
@@ -242,6 +242,187 @@ fn symbol_instances_keep_their_placed_art_between_frames() {
     assert!(r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels == first);
     assert_eq!(placed_copies(&r, &[&d]), placed, "the second frame draws the art the first placed");
     assert_eq!(Arc::strong_count(&d.symbols[0].art), 1, "only the document holds the symbol's art");
+}
+
+/// The stroke outlines and the gradient slices of strokes that `r` keeps and that its last frame made
+/// or used.
+fn stroke_outlines(r: &Renderer) -> (Vec<Arc<BezPath>>, Vec<Slices>) {
+    let outlines = r.strokes.values().filter(|e| e.stamp == r.stamp).map(|e| e.outline.clone()).collect();
+    (outlines, r.stroke_slices.values().filter(|e| e.stamp == r.stamp).map(|e| e.slices.clone()).collect())
+}
+
+/// How many of the outlines and of the slices in `before` (see [`stroke_outlines`]) the last frame of
+/// `r` used again.
+fn used_again(r: &Renderer, before: &(Vec<Arc<BezPath>>, Vec<Slices>)) -> (usize, usize) {
+    fn again<T>(was: &[Arc<T>], now: &[Arc<T>]) -> usize {
+        was.iter().filter(|a| now.iter().any(|b| Arc::ptr_eq(a, b))).count()
+    }
+    let (outlines, slices) = stroke_outlines(r);
+    (again(&before.0, &outlines), again(&before.1, &slices))
+}
+
+/// Copies can share the original's appearance: three copies of [`symbol_art`] made as
+/// `edit.duplicate` makes them, and a wave whose stroke has a gradient along it with a copy made as
+/// the Layers panel's Duplicate Selection makes it. Each object keeps its own stroke outlines and
+/// gradient slices from frame to frame, a copy moved gets new ones while the others keep theirs,
+/// and each frame draws what a new renderer draws.
+#[test]
+fn copies_sharing_an_appearance_keep_their_own_stroke_outlines() {
+    use vectorcraft_doc::{Appearance, StrokeGradientMode};
+    let mut d = Document::new(200.0, 100.0);
+    let art = symbol_art(&mut d);
+    let l = d.layers[0].id;
+    let mut copies = vec![];
+    for x in [30.0, 80.0, 130.0] {
+        let mut copy = d.reid(&art);
+        copy.transform(Affine::translate((x, 30.0)), true);
+        copies.push(d.insert(Some(l), usize::MAX, copy).unwrap());
+    }
+    let mut st = StrokeLayer::new(Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(Default::default()))), 6.0);
+    st.gradient_mode = StrokeGradientMode::Along;
+    let mut wave = BezPath::new();
+    wave.move_to((20.0, 75.0));
+    wave.curve_to((60.0, 55.0), (100.0, 95.0), (180.0, 75.0));
+    let ap = Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() };
+    let wave = Node::path(d.alloc_id(), vectorcraft_geom::PathData::from_bezpath(&wave), ap);
+    let duplicate = d.reid(&wave);
+    d.insert(Some(l), usize::MAX, wave).unwrap();
+    d.insert(Some(l), usize::MAX, duplicate).unwrap();
+    let opts = RenderOptions::default();
+    let frame = |r: &mut Renderer, d: &Document| r.render(d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let mut r = Renderer::new();
+    frame(&mut r, &d);
+    let before = stroke_outlines(&r);
+    assert_eq!((before.0.len(), before.1.len()), (8, 2), "the strokes of three copies and two waves, and the waves' slices");
+    assert!(frame(&mut r, &d) == frame(&mut Renderer::new(), &d));
+    assert_eq!(used_again(&r, &before), (8, 2), "the second frame draws the outlines the first made");
+    // The first copy moves 5 pt right.
+    if let Some(n) = d.node_mut(copies[0]) {
+        n.transform(Affine::translate((5.0, 0.0)), true);
+    }
+    assert!(frame(&mut r, &d) == frame(&mut Renderer::new(), &d));
+    assert_eq!(used_again(&r, &before), (6, 2), "the other copies and the waves keep theirs");
+}
+
+/// The art placed for unstained symbol instances shares its appearance with the symbol's art (the
+/// first and the third instance of [`symbol_doc`]). Each instance keeps its own stroke outlines from
+/// frame to frame, and the second frame draws what a new renderer draws.
+#[test]
+fn symbol_instances_keep_their_own_stroke_outlines_between_frames() {
+    let d = symbol_doc();
+    let opts = RenderOptions::default();
+    let frame = |r: &mut Renderer| r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let mut r = Renderer::new();
+    frame(&mut r);
+    let before = stroke_outlines(&r);
+    assert_eq!(before.0.len(), 6, "the square's and the line's strokes of three instances");
+    assert!(frame(&mut r) == frame(&mut Renderer::new()));
+    assert_eq!(used_again(&r, &before), (6, 0), "the second frame draws the outlines the first made");
+}
+
+/// The art of symbol `I` ([`symbol_art`] with an image over it) is placed again in every frame.
+/// The copies placed for its three unstained instances and for an inline graphic at the art's own
+/// size replace each other's stroke outlines: the renderer keeps one outline for each of the art's
+/// two strokes. Two copies of [`symbol_art`] made as `edit.duplicate` makes them and two instances
+/// of symbol `S` ([`symbol_art`]), drawn after those, keep their own outlines. With no room in the
+/// placed-art cache, `S`'s art is placed again in every frame as well, and its copies keep one
+/// outline for each stroke. Each frame draws what a new renderer draws.
+#[test]
+fn art_placed_again_in_every_frame_keeps_one_outline_per_stroke() {
+    use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
+    let mut d = Document::new(200.0, 100.0);
+    d.images.insert("dot".into(), ImageBlob::new("image/png", png(4, 4, 108)));
+    let mut art = symbol_art(&mut d);
+    let im = ImageObject { key: "dot".into(), width: 4, height: 4, xf: Affine::translate((-2.0, -2.0)), link: None, placement: Default::default() };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    if let Some(c) = art.children_mut() {
+        c.push(Arc::new(image));
+    }
+    d.symbols.push(vectorcraft_doc::Symbol { name: "I".into(), art: Arc::new(art) });
+    let art = symbol_art(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    let l = d.layers[0].id;
+    let instance = |d: &mut Document, symbol: &str, x: f64, y: f64| {
+        let id = d.alloc_id();
+        d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: symbol.into(), xf: Affine::translate((x, y)) })).unwrap();
+    };
+    for x in [25.0, 65.0, 105.0] {
+        instance(&mut d, "I", x, 25.0);
+    }
+    // Type as tall as `I`'s art shows the inline graphic at scale 1.
+    let size = d.symbol_art_bounds("I").map_or(0.0, |b| b.height());
+    let style = CharStyle { size, ..Default::default() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(140.0, 32.0), "A", style.clone());
+    t.runs.push(TextRun::inline(InlineArt::new("I"), style));
+    let id = d.alloc_id();
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    let art = symbol_art(&mut d);
+    for x in [105.0, 145.0] {
+        let mut copy = d.reid(&art);
+        copy.transform(Affine::translate((x, 72.0)), true);
+        d.insert(Some(l), usize::MAX, copy).unwrap();
+    }
+    for x in [25.0, 65.0] {
+        instance(&mut d, "S", x, 72.0);
+    }
+    let opts = RenderOptions::default();
+    let frame = |r: &mut Renderer| r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let counts = |r: &Renderer| (r.strokes.len(), r.stroke_slices.len());
+    let mut r = Renderer::new();
+    let mut full = Renderer::new();
+    full.placed_arts = FrameCache::new(0, 0);
+    let mut before = (vec![], vec![]);
+    for n in 1..=4 {
+        let want = frame(&mut Renderer::new());
+        assert!(frame(&mut r) == want && frame(&mut full) == want, "frame {n}");
+        // Two outlines for the art placed for `I`, two for each copy and two for each instance of
+        // `S`; with no room in the cache, two for the art placed for `S`.
+        assert_eq!((counts(&r), counts(&full)), ((10, 0), (8, 0)), "frame {n}");
+        if n == 1 {
+            before = stroke_outlines(&r);
+        }
+    }
+    assert_eq!(used_again(&r, &before), (8, 0), "the instances of `S` and the copies keep theirs");
+}
+
+/// The document holds a Grid Repeat of [`symbol_art`] (nine groups) and a group with a Transform
+/// effect around two copies of [`symbol_art`] made as `edit.duplicate` makes them. With no room in
+/// the caches of evaluated live objects and of effect art, the repeat is evaluated again and the
+/// group's art is made again in every frame. Their copies then replace each other's stroke
+/// outlines: the renderer keeps two outlines for the repeat and two for the copies. With room, each
+/// copy keeps its own. Each frame draws what a new renderer draws.
+#[test]
+fn art_evaluated_again_in_every_frame_keeps_one_outline_per_stroke() {
+    let mut d = Document::new(200.0, 100.0);
+    let l = d.layers[0].id;
+    let mut source = symbol_art(&mut d);
+    source.transform(Affine::translate((20.0, 20.0)), true);
+    let repeat = vectorcraft_doc::pattern::RepeatSpec::grid(vec![Arc::new(source)], 4.0, 4.0);
+    let id = d.alloc_id();
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::Repeat(repeat))).unwrap();
+    let art = symbol_art(&mut d);
+    let mut copies = vec![];
+    for x in [130.0, 170.0] {
+        let mut copy = d.reid(&art);
+        copy.transform(Affine::translate((x, 30.0)), true);
+        copies.push(Arc::new(copy));
+    }
+    let mut moved = Node::group(d.alloc_id(), copies);
+    moved.appearance.effects.push(effect("distort.transform", serde_json::json!({"moveV": 30.0})));
+    d.insert(Some(l), usize::MAX, moved).unwrap();
+    let opts = RenderOptions::default();
+    let frame = |r: &mut Renderer| r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let mut r = Renderer::new();
+    let mut full = Renderer::new();
+    full.live = live::LiveCache::with_budget(0);
+    full.fx_arts = FrameCache::new(0, 0);
+    for n in 1..=4 {
+        let want = frame(&mut Renderer::new());
+        assert!(frame(&mut r) == want && frame(&mut full) == want, "frame {n}");
+        // Two outlines for each of the nine repeated groups and each copy; with no room in the
+        // caches, two for the repeat and two for the copies.
+        assert_eq!((r.strokes.len(), full.strokes.len()), (22, 4), "frame {n}");
+    }
 }
 
 /// Moving an instance places its art again, and editing a symbol's art places the art of its
