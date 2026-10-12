@@ -807,6 +807,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-print"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=d991bf6792f8ade99c51358bf3c1d902c8cd96b5#d991bf6792f8ade99c51358bf3c1d902c8cd96b5"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "craft-ui"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=5c874d51eeb3de70e735c8ce87a59a7dedd47675#5c874d51eeb3de70e735c8ce87a59a7dedd47675"
@@ -4487,6 +4495,7 @@ dependencies = [
  "arboard",
  "block2 0.6.2",
  "clipboard-win",
+ "craft-print",
  "eframe",
  "egui",
  "image",

@@ -290,7 +290,19 @@ mod tests {
         app.run("file.place", json!({"path": pic.to_string_lossy()})).unwrap();
         let doc = dir.join("doc.vectorcraft").to_string_lossy().into_owned();
         app.run("document.save", json!({"path": doc})).unwrap();
+        let original_stamp = std::fs::metadata(&pic).unwrap().modified().unwrap();
+        let mark_modified = |seconds| {
+            // Link stamps use milliseconds. Equal-size writes can finish within one tick;
+            // advance the fixture's mtime explicitly rather than relying on a sleep or load.
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&pic)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(original_stamp + std::time::Duration::from_secs(seconds)))
+                .unwrap();
+        };
         std::fs::write(&pic, png([0, 0, 200])).unwrap();
+        mark_modified(2);
         crate::io::open_path(&mut app, &doc).unwrap();
         let d = app.ui.dialog.as_ref().expect("asks");
         assert_eq!((d.kind.as_str(), d.str("__command")), (super::super::confirm::KIND, "links.update".to_string()));
@@ -299,8 +311,10 @@ mod tests {
         // Manually: no question.
         app.run("prefs.set", json!({"key": "updateLinks", "value": "manually"})).unwrap();
         std::fs::write(&pic, png([0, 200, 0])).unwrap();
+        mark_modified(4);
         crate::io::open_path(&mut app, &doc).unwrap();
         assert!(app.ui.dialog.is_none());
+        assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
         let _ = std::fs::remove_dir_all(dir);
     }
 }

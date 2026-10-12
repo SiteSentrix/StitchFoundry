@@ -612,7 +612,10 @@ print queue (the web: the browser's print dialog), else, with `toFile` or no pri
 PDF. With `discard: true` it is Done: it only keeps the settings. Settings that can't print (a missing artboard, a
 range of no tiles) answer with an error and keep the dialog open. `file.print {settings?, printer?, toFile?, path?}`
 prints without the dialog; `print.printers` lists the printers and `print.printerSetup {printer?}` opens their system
-settings (Setup…).
+settings (Setup…). Desktop submission returns `{background: true, printed: false, printer, status}`
+while the spooler runs on a worker. `ui.inspect` lists it under `background`; completion or refusal
+appears in `ui.status`. Quit waits for submissions. PDF/PostScript export and the browser's print
+dialog retain their existing command results.
 
 Print presets: in the `print` dialog, `preset` names the print preset whose settings were loaded last; setting it
 (`ui.dialog.set {field: "preset", value: "Posters"}`) loads that preset's settings, and the list reads `[Custom]` once
