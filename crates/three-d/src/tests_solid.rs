@@ -252,10 +252,10 @@ fn the_inflate_membrane_matches_known_solutions() {
     let mut c = BezPath::new();
     c.extend(vectorcraft_geom::kurbo::Shape::path_elements(&vectorcraft_geom::kurbo::Circle::new((100.0, 100.0), 50.0), 0.01));
     let (p, b) = shape(&c);
-    let disc = Membrane::solve(&rings(&p).unwrap(), b.origin(), b.width() / 48.0, 49, 49);
+    let disc = Membrane::solve(&rings(&p, 100.0, MAX_SOLID_POINTS).unwrap(), b.origin(), b.width() / 48.0, 49, 49);
     assert!(close(disc.peak, 50.0 * 50.0 / 4.0, 625.0 * 0.02), "{}", disc.peak);
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
-    let sq = Membrane::solve(&rings(&p).unwrap(), b.origin(), 100.0 / 48.0, 49, 49);
+    let sq = Membrane::solve(&rings(&p, 100.0, MAX_SOLID_POINTS).unwrap(), b.origin(), 100.0 / 48.0, 49, 49);
     assert!(close(sq.peak, 0.07367 * 100.0 * 100.0, 736.7 * 0.02), "{}", sq.peak);
     // Smooth across the middle: no crease where a distance-to-the-edge height would have one
     // (the diagonals). The second difference along a diagonal stays small and even.
@@ -286,4 +286,79 @@ fn inflate_cells_across_a_hole_edge_are_cut_to_the_shape() {
     // Straight on, the facets still cover exactly the shape.
     let flat = inflate(&p, r, Inflate::default(), front()).unwrap();
     assert!(close(area(&flat), 220.0 * 220.0 - 100.0 * 90.0, 1e-3), "{}", area(&flat));
+}
+
+/// A row of `count` small bumps, each a curve, closed along the bottom: like an outlined word,
+/// many short curves.
+fn bumps(count: usize) -> (PathData, Rect) {
+    let mut b = BezPath::new();
+    b.move_to((0.0, 20.0));
+    for i in 0..count {
+        let x = i as f64 * 4.0;
+        b.curve_to((x + 1.0, 14.0), (x + 3.0, 14.0), (x + 4.0, 20.0));
+    }
+    b.line_to((count as f64 * 4.0, 30.0));
+    b.line_to((0.0, 30.0));
+    b.close_path();
+    shape(&b)
+}
+
+/// Curves are followed within a tolerance rather than by sixteen points each: small curves take a
+/// few points, so shapes of many curves (outlined type) fit; Rotate, which only turns the outline,
+/// takes far more.
+#[test]
+fn small_curves_take_few_points_and_rotate_takes_large_outlines() {
+    // 300 curves were 4,800 points at sixteen each, over the old limit of 1,024.
+    let (p, r) = bumps(300);
+    assert!(extrude(&p, r, Extrude::default(), front()).is_ok());
+    assert!(inflate(&p, r, Inflate { volume: 20.0, ..Inflate::default() }, front()).is_ok());
+    assert!(plane(&p, r, front()).is_ok());
+    // 4,000 curves: too many for a solid, not for Rotate.
+    let (p, r) = bumps(4000);
+    assert!(extrude(&p, r, Extrude::default(), front()).unwrap_err().contains("too complex"));
+    assert_eq!(plane(&p, r, front()).unwrap().len(), 1);
+    // Each piece stays within the tolerance of the curve: a circle's chords sag at most 0.05 pt
+    // here (1/2000 of its 100 pt size is less).
+    let mut c = BezPath::new();
+    c.extend(vectorcraft_geom::kurbo::Shape::path_elements(&vectorcraft_geom::kurbo::Circle::new((50.0, 50.0), 50.0), 0.01));
+    let (p, r) = shape(&c);
+    let ring = &rings(&p, 100.0, MAX_SOLID_POINTS).unwrap()[0];
+    for (a, b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+        let mid = a.midpoint(*b);
+        assert!(50.0 - mid.distance(Point::new(50.0, 50.0)) <= 0.05 + 1e-3, "{a:?} {b:?}");
+    }
+    assert!(r.width() > 0.0);
+    // A small bump takes a few points; a large curve more than sixteen where it needs them.
+    let (p, r) = bumps(300);
+    let small = rings(&p, r.width().max(r.height()), MAX_SOLID_POINTS).unwrap()[0].len();
+    assert!(small <= 300 * 4 + 3, "{small} points for 300 bumps");
+    assert!(ring.len() > 4 * 16, "a 100 pt circle within 0.05 pt: {}", ring.len());
+}
+
+/// The bucketed nearest-edge search agrees with checking every edge, inside, outside and far
+/// beyond the shape.
+#[test]
+fn the_edge_index_finds_the_nearest_edge() {
+    let (p, r) = bumps(200);
+    let rings = rings(&p, r.width(), MAX_SOLID_POINTS).unwrap();
+    let edges = Edges::new(&rings);
+    for k in 0..400 {
+        let t = f64::from(k);
+        let q = Point::new(-300.0 + (t * 37.0) % 1400.0, -50.0 + (t * 13.0) % 130.0);
+        let (fast, slow) = (edges.distance(q), edge_distance(&rings, q));
+        assert!((fast - slow).abs() < 1e-9, "{q:?}: {fast} against {slow}");
+    }
+}
+
+/// From a point outside the grid, an edge further along the grid's side can be nearer than one
+/// straight ahead: the search doesn't stop before it has looked there.
+#[test]
+fn the_edge_index_looks_along_the_side_from_outside() {
+    let ring = |b: BezPath| rings(&shape(&b).0, 64.0, MAX_SOLID_POINTS).unwrap().remove(0);
+    // Straight ahead of the point, a little further up its side, and the far corner (a 64 pt grid).
+    let rings = vec![ring(square(2.5, 0.0, 1.0)), ring(square(0.0, 4.2, 0.8)), ring(square(63.0, 63.0, 1.0))];
+    let edges = Edges::new(&rings);
+    let q = Point::new(-10.0, 0.5);
+    let (fast, slow) = (edges.distance(q), edge_distance(&rings, q));
+    assert!((fast - slow).abs() < 1e-9, "{fast} against {slow}");
 }

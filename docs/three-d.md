@@ -88,5 +88,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   front. Concave solids seen at steep angles can overlap wrongly; open (hollow) solids show both sides.
 - Shading is flat per facet: an inflated rim seen almost edge-on shows faint banding where the facets get finer.
 - Paths and compound paths only: convert type, images and groups to outlines first. One 3D effect per object.
+- Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
+  and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points, Rotate (which only turns
+  the outline) 65,536.
 - **3D (Classic)** (the track cube, surface types, blend steps, map art), Turntable and 3D export are separate,
   unbuilt items.
