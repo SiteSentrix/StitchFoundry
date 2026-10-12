@@ -1517,7 +1517,8 @@ remote mode, MCP's `run_command` calls and each step of the `command_batch` tool
 Actions panel plays an action as a `command.batch`. An action recorded in the Actions panel leaves the artboard out,
 and its steps of these commands get the artboard that is active when the action plays. A press with the Selection,
 Direct Selection or Group Selection tool inside an artboard makes that artboard the active one; with the Selection
-tool, a Shift-click on an empty spot inside an artboard makes it active and keeps the selection.
+tool, a Shift-click on an empty spot inside an artboard makes it active and keeps the selection. Choosing the Artboard
+tool (`tool.select {tool: "artboard"}`) starts it on the active artboard: its `active` option is that artboard's index.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","to":"artboard","artboard":1}}}
