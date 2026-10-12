@@ -48,10 +48,11 @@ the control channel, the CLI and the MCP server.
 | Stem stitch | rope-like outline: backstitch with slanted stitches | stitch length, width, side, passes |
 | Blanket, zigzag, motif | E-stitch prongs, an open zigzag or a repeating motif along the path (wave, scallop, diamond, cross, feather, heart, star, leaf, loop, zigzag, E-stitch, or one drawn for the design), motifs growing or shrinking along it when graded | stitch length, width, width at end, spacing, flip side |
 | Hand stitch | a run that looks sewn by hand: thick stitches (each sewn three times) with short thin ones between them, lengths varying a little | stitch length, gap, passes |
+| Sculpture run | a thick-thin line: groups of triple stitches in turn with groups of single ones | triple and single stitch lengths, how many of each, passes |
 | Satin | a column; on a closed shape, satin that turns along it | density, pull compensation (one value, or one per side), auto spacing, short stitches, auto split, preserve long stitches, tatami stitches (a tatami border), jagged edges, underlay (incl. double zigzag) |
 | Tatami fill | rows of staggered stitches at the best angle, or turning along inclination lines | density, stitch length, row offset, angle, randomised needle points, gradient density, spacing profile, colour blends, texture, split lines, trapunto, underlay |
 | Satin fill | satin rows across the shape | density, pull compensation |
-| Contour / Spiral / Radial / Cross / Meander fill | rows following the outline (all the way in, or only so many rings: an offset fill), a spiral, rays from the centre, cross stitches on a grid, or a flowing stipple line that never crosses itself | spacing, stitch length, rings (contour), randomness (meander) |
+| Contour / Spiral / Radial / Cross / Meander fill | rows following the outline (all the way in, or only so many rings: an offset fill), a spiral, rays from the centre, cross stitches on a grid (full X, half, upright + or double), or a flowing stipple line that never crosses itself | spacing, stitch length, rings (contour), cross style and cell size (cross), randomness (meander) |
 | Motif fill | rows of motifs across the shape, kept inside it, each row shifted by the row offset | motif, motif size, row spacing, stitch length, row offset, angle |
 | Appliqué | placement run, stop, tack-down, stop, cover satin | cover width and density |
 | Manual | a stitch at every anchor point | none |
@@ -140,6 +141,17 @@ the design sits on top instead of sinking in. Lines get no laydown. The command'
 forward again so it lies thick, joined by single stitches about *Gap* long that hardly show; each
 length varies a little at random (the same way every time), so the line looks sewn by hand. It
 starts and ends with a thick stitch.
+
+**Sculpture run** (a run style): a thick-thin line. *Triple stitches* stitches *Triple stitch
+length* long, each sewn forward, back and forward again, in turn with *Single stitches* stitches
+*Single stitch length* long (three and one to start with); all lengths are scaled a little so
+the line ends on a whole stitch.
+
+**Cross fill styles:** *Cross style* sews each cell of a cross fill as a **full cross** (an X:
+the "/" diagonals along the row and the "\" diagonals coming back), a **half cross** (the "/"
+diagonals only), an **upright cross** (a + : the middle line with a bar up and down each cell,
+and the middle line again coming back) or a **double cross** (an X with a + over it). *Cell size*
+sets the grid.
 
 **Jagged edges** (satin): the stitches on one side (*Side 1* is the first rail), the other or
 both end short of the edge by a random amount up to *Jag depth*, for fur, grass and feathers. A

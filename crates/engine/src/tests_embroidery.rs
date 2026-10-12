@@ -1617,6 +1617,34 @@ fn a_drawn_path_becomes_one_of_the_designs_motifs() {
 }
 
 #[test]
+fn sculpture_runs_and_cross_styles_are_stitch_parameters() {
+    use sf_core::attr::StitchType;
+    use sf_core::model::{CrossStyle, RunKind};
+    let mut s = session();
+    let line = NodeId(s.execute("path.create", &json!({"d": "M 20 100 L 300 100"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "run"})).unwrap();
+    let single = needles(&s, line).len();
+    s.execute("embroidery.setParams", &json!({"params": {"kind": "Sculpture", "groups": [2, 2], "spacing": 1.5}})).unwrap();
+    let StitchType::Run(r) = emb(&s, line).stitch else { panic!() };
+    assert_eq!((r.kind, r.groups), (RunKind::Sculpture, [2, 2]));
+    // Triple stitches go there and back: more needle points than a single run.
+    assert!(needles(&s, line).len() > single * 3 / 2, "{} {single}", needles(&s, line).len());
+    // A cross fill's style.
+    let a = rect(&mut s, 10.0, 150.0, 200.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "cross"})).unwrap();
+    let full = needles(&s, a);
+    s.execute("embroidery.setParams", &json!({"params": {"cross": "Half"}})).unwrap();
+    assert_eq!(fill_params(&s, a).cross, CrossStyle::Half);
+    let half = needles(&s, a);
+    assert!(half.len() * 3 < full.len() * 2, "{} {}", half.len(), full.len());
+    s.execute("embroidery.setParams", &json!({"params": {"cross": "Double"}})).unwrap();
+    assert!(needles(&s, a).len() > full.len());
+    assert!(s.execute("embroidery.setParams", &json!({"params": {"cross": "Diagonal"}})).is_err());
+    assert_eq!(fill_params(&s, a).cross, CrossStyle::Double);
+}
+
+#[test]
 fn motif_fills_and_graded_motif_runs_are_stitch_parameters() {
     let mut s = session();
     let a = rect(&mut s, 10.0, 10.0, 200.0, 150.0);

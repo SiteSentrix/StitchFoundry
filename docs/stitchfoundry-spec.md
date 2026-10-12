@@ -300,7 +300,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | ST-01 | Run (single) | Done | | – |
-| ST-02 | Sculpture run (raised, satin-like run) | Missing | Run with a short back-and-forth zigzag of set width | 2 |
+| ST-02 | Sculpture run (raised, satin-like run) | Done | A thick-thin run style: groups of triple stitches in turn with groups of single ones, each with its own stitch length and count (as public help describes it: https://docs.wilcom.com/embroiderystudio/27/en/OnlineHelp/Digitizing/stitches/stitches-6.htm) | – |
 | ST-03 | Backstitch, stemstitch | Done | Backstitch and stem stitch run styles (forward two, back one; stem slanted) | 1 |
 | ST-04 | Satin borders and fills | Done | | – |
 | ST-05 | Tatami borders and fills | Done | Fills; tatami borders: *Tatami stitches* on any satin column, line or border (rows split at the stitch length, offset a quarter per row) | 1 |
@@ -420,7 +420,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SP-09 | Accordion spacing with custom profiles | Done | Tatami *Spacing profile*: even, accordion, fade out and in, or any points agents set | – |
 | SP-10 | Colour blending / multi-blend (several layered fills with graded density) | Done | Make Blend: stacked tatami layers, 2 to 6 colours, each fading into the next | – |
 | SP-11 | Chenille-type patterns on regular machines (square, coil) | Missing | Pattern generators | 4 |
-| SP-12 | Cross-stitch fills (X stitches on a grid) | Partial | Cross-hatch fill exists; add true X-stitch grid fill | 2 |
+| SP-12 | Cross-stitch fills (X stitches on a grid) | Done | Cross fill: X stitches on a square grid of any cell size and angle, as full, half, upright or double crosses | – |
 | SP-13 | Redwork (outlines grouped into one path, entry = exit) | Missing | Group outlines, route as one tour (2026 feature) | 2 |
 | SP-14 | Buttonholes (preset types, single or a string) | Missing | Satin bartacks + sides; docker for spacing (2026 feature) | 2 |
 
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 119 done,
-42 partial, 64 missing, 6 out of scope (counted 2026-10-12, after custom motifs). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 121 done,
+41 partial, 63 missing, 6 out of scope (counted 2026-10-12, after sculpture runs and cross styles). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
