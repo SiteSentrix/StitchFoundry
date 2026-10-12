@@ -631,6 +631,24 @@ These follow the public descriptions of lettering sequencing and joins, for exam
 https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-15.htm
 and https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-16.htm.
 
+## 3D puff
+
+**Embroidery › 3D Puff** (`embroidery.puff {ids?, on?, cap?}`) sews the selected objects' satin
+over foam: dense (0.16 mm), with no underlay, auto split or short stitches (they would flatten
+or cut the foam inside the column), the sides pushed out 0.35 mm (the foam pushes the thread out
+rather than pulling it in), and a cap across each end of a column, its stitches reaching 0.5 mm
+(`cap`) past the end so the foam is cut and covered there too. Chosen again on satin that is all
+puff already, it turns it back to plain satin. Lettering takes it too (`puff: true` on
+`embroidery.lettering` and `.edit`, *3D puff* in the lettering section): its glyphs' satin is puff,
+and stays so when the lettering is set again. Pieces that aren't satin are left as they are.
+
+To sew it: give the puff its own thread colour so the machine stops before it, lay the foam
+(2–4 mm, in the thread's colour) over the area, sew, then tear the foam away and heat it to shrink
+the fibres left. Columns 3 to 7 mm wide puff best: narrower ones don't hold the foam, wider ones
+let it bulge out. These follow public descriptions of the practice:
+https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar and
+https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery.
+
 ## Making embroidery fonts
 
 **Embroidery › Embroidery Fonts › New Embroidery Font** starts the font creator: a new document

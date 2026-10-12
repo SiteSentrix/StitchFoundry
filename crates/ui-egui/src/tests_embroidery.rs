@@ -200,7 +200,7 @@ fn the_panel_sets_lettering_in_a_loaded_font() {
         assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
     }
     // how it is sewn: its order, joins and trims
-    for want in ["Sew order", "Left to right", "Join", "Closest", "Trims", "Where needed"] {
+    for want in ["Sew order", "Left to right", "Join", "Closest", "Trims", "Where needed", "3D puff"] {
         assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
     }
     assert!(!texts.iter().any(|t| t == "Move along"), "{texts:?}");

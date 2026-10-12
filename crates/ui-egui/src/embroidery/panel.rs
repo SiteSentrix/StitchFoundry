@@ -206,6 +206,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.lettering_size = l.size;
             app.embroidery.lettering_arc = l.arc;
             app.embroidery.lettering_sew = l.sew;
+            app.embroidery.lettering_puff = l.puff.is_some();
         }
         None => app.embroidery.lettering_for = None,
         _ => {}
@@ -317,12 +318,14 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         sew.trim = *t;
     }
+    ui.checkbox(&mut app.embroidery.lettering_puff, tl!("3D puff"))
+        .on_hover_text(tl!("Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop"));
     let sew = serde_json::to_value(app.embroidery.lettering_sew).unwrap_or_default();
     let arc = app.embroidery.lettering_arc;
     let text = app.embroidery.lettering_text.clone();
     let mut params = json!({ "text": text, "font": name, "size": size, "arc": arc,
         "order": sew["order"], "lines": if sew["up"].as_bool() == Some(true) { "up" } else { "down" },
-        "join": sew["join"], "trim": sew["trim"] });
+        "join": sew["join"], "trim": sew["trim"], "puff": app.embroidery.lettering_puff });
     let (label, cmd) = match &selected {
         Some((id, _)) => {
             params["id"] = json!(id);

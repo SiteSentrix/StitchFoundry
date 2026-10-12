@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use sf_core::attr::{Embroidery, LetterAdjust, LetterAlign, LetterJoin, LetterOrder, LetterSewing, LetterTrim, Lettering, StitchType};
+use sf_core::model::Puff;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_embroidery::fonts::{EmbFont, MAX_TEXT};
 use vectorcraft_geom::Affine;
@@ -77,7 +78,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Lettering",
             [],
             None,
-            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight), order?: left|right|centre (the letters sewn left to right, right to left or from the middle out, as for caps; left), lines?: down|up (the lines sewn from the first down or the last up; down), join?: closest|baseline (each letter started where closest to the last, or at its baseline's start and stopped at its end, the thread running on along the baseline; closest), trim?: auto|letter|word|line (the thread cut after each letter, word or line; auto: where the jumps need it)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
+            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight), puff?: bool (3D puff: the glyphs' satin sewn over foam, see embroidery.puff), order?: left|right|centre (the letters sewn left to right, right to left or from the middle out, as for caps; left), lines?: down|up (the lines sewn from the first down or the last up; down), join?: closest|baseline (each letter started where closest to the last, or at its baseline's start and stopped at its end, the thread running on along the baseline; closest), trim?: auto|letter|word|line (the thread cut after each letter, word or line; auto: where the jumps need it)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
             has_doc,
             lettering
         ),
@@ -86,9 +87,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Lettering",
             [],
             None,
-            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm, order?, lines?, join?, trim?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
+            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm, puff?: bool, order?, lines?, join?, trim?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
             has_selection,
             edit_lettering
+        ),
+        cmd!(
+            "embroidery.puff",
+            "3D Puff",
+            ["Embroidery"],
+            None,
+            "{ids?, on?: bool (default: on, or off when all the satin chosen is puff already), cap?: mm the end caps reach past a column's ends (0.5; 0–3)} 3D puff: the selected objects' satin (lettering's too, kept when it is set again) sewn over foam: dense (0.16 mm), no underlay, auto split or short stitches, the sides pushed out 0.35 mm, a cap across each end that cuts and covers the foam. Columns 3 to 7 mm wide puff best; sew the puff in a colour of its own so the machine stops to lay the foam → {satin: pieces set, other: pieces that aren't satin (left as they are), on}",
+            has_selection,
+            puff
         ),
         cmd!(
             "embroidery.lettering.letter",
@@ -451,6 +461,9 @@ fn glyphs_indexed(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<(us
         }
         let mut grp = Node::group(d.alloc_id(), children);
         grp.name = Some(g.glyph.clone());
+        if spec.puff.is_some() {
+            puff_all(&mut grp, spec.puff, &mut (0, 0));
+        }
         // its baseline's start and end
         let start = frame * place(r, along, down) * adjust * Affine::translate((-g.advance * 0.5 * u, 0.0)) * origin;
         let end = frame * place(r, along, down) * adjust * Affine::translate((g.advance * 0.5 * u, 0.0)) * origin;
@@ -548,6 +561,94 @@ fn stitched_end(n: &mut Node, last: bool) -> Option<&mut Embroidery> {
     }
 }
 
+/// Every piece of satin in `n` sewn over foam (`puff`) or plain again (`None`); `counts`: the
+/// satin pieces set and the other stitched pieces passed by.
+fn puff_all(n: &mut Node, puff: Option<Puff>, counts: &mut (usize, usize)) {
+    if let NodeKind::Group { children, .. } = &mut n.kind {
+        for c in children.iter_mut() {
+            puff_all(Arc::make_mut(c), puff, counts);
+        }
+        return;
+    }
+    match n.embroidery.as_deref_mut().map(|e| &mut e.stitch) {
+        Some(StitchType::Satin(params)) => {
+            match puff {
+                Some(p) => p.apply(params),
+                None => Puff::remove(params),
+            }
+            counts.0 += 1;
+        }
+        Some(_) => counts.1 += 1,
+        None => {}
+    }
+}
+
+/// Whether all the satin in `n` is puff already (and there is some).
+fn all_puff(n: &Node) -> (usize, usize) {
+    if let NodeKind::Group { children, .. } = &n.kind {
+        return children.iter().map(|c| all_puff(c)).fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+    }
+    match n.embroidery.as_deref().map(|e| &e.stitch) {
+        Some(StitchType::Satin(params)) => (1, usize::from(params.puff.is_some())),
+        _ => (0, 0),
+    }
+}
+
+/// `puff`, when given: whether the lettering is 3D puff.
+fn puff_param(p: &Value, cmd: &str) -> Result<Option<bool>> {
+    match p.get("puff") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_bool().map(Some).ok_or_else(|| bad(cmd, "`puff` is true or false")),
+    }
+}
+
+fn puff(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.puff";
+    let ids = super::edit::roots_of(&s.doc()?.doc, targets(s, p)?);
+    let cap = ranged(p, "cap", 0.0..=3.0, CMD, "`cap` is 0 to 3 mm")?;
+    // on unless said, or unless all the satin chosen is puff already (the menu item turns it off)
+    let on = match p.get("on") {
+        None | Some(Value::Null) => {
+            let d = &s.doc()?.doc;
+            let (satin, puffed) = ids.iter().filter_map(|id| d.node(*id)).map(all_puff).fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+            let letterings = ids.iter().filter_map(|id| lettering_of(d, &[*id])).filter(|(l, _)| ids.contains(l)).collect::<Vec<_>>();
+            !(satin > 0 && satin == puffed && letterings.iter().all(|(_, l)| l.puff.is_some()))
+        }
+        Some(v) => v.as_bool().ok_or_else(|| bad(CMD, "`on` is true or false"))?,
+    };
+    let setting = on.then(|| Puff { cap: cap.unwrap_or(Puff::default().cap) });
+    // lettering is set again from its font, puff or not
+    let _ = ensure_fonts(s);
+    let mut letterings = Vec::new();
+    for id in &ids {
+        if let Some((l, mut spec)) = lettering_of(&s.doc()?.doc, &[*id]).filter(|(l, _)| l == id) {
+            spec.puff = setting;
+            let font = loaded(s, &spec.font).ok_or_else(|| not_loaded(CMD, &spec.font))?;
+            letterings.push((l, spec, font));
+        }
+    }
+    let counts = s.edit("3D Puff", |d, _| {
+        let mut counts = (0, 0);
+        for id in &ids {
+            if let Some((_, spec, font)) = letterings.iter().find(|(l, _, _)| l == id) {
+                let glyphs = glyphs(d, font, spec);
+                let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+                counts.0 += glyphs.iter().map(|g| all_puff(g).0).sum::<usize>();
+                if let NodeKind::Group { children, .. } = &mut n.kind {
+                    *children = glyphs;
+                }
+                if let Some(e) = n.embroidery.as_deref_mut() {
+                    e.stitch = StitchType::Lettering(Box::new(spec.clone()));
+                }
+            } else {
+                puff_all(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, setting, &mut counts);
+            }
+        }
+        Ok(counts)
+    })?;
+    Ok(json!({ "satin": counts.0, "other": counts.1, "on": on }))
+}
+
 /// A name-valued param `key`, when given.
 fn name_param<'a>(p: &'a Value, key: &str, cmd: &str) -> Result<Option<&'a str>> {
     match p.get(key) {
@@ -625,6 +726,7 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut sew = LetterSewing::default();
     sew_params(p, SET, &mut sew)?;
+    let puff = puff_param(p, SET)?.unwrap_or(false).then(Puff::default);
     let spec = Lettering {
         text: text.to_string(),
         font: font.info.name.clone(),
@@ -634,6 +736,7 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         align: align_param(p, SET)?.unwrap_or_default(),
         sew,
         letters: Vec::new(),
+        puff,
         frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
     };
     // scaled from the size the font was digitized at; outside what it sews well at, a warning
@@ -681,6 +784,9 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
         spec.align = v;
     }
     sew_params(p, EDIT, &mut spec.sew)?;
+    if let Some(on) = puff_param(p, EDIT)? {
+        spec.puff = if on { Some(spec.puff.unwrap_or_default()) } else { None };
+    }
     warnings.extend(size_warnings(&font, spec.size));
     let count = set_again(s, id, &spec, &font, "Edit Lettering", EDIT)?;
     Ok(json!({ "id": id.0, "glyphs": count, "warnings": warnings }))

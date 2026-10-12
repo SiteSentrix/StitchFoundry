@@ -259,8 +259,52 @@ pub(crate) fn generate(col: &Column, params: &SatinParams, hint: Option<Point>, 
         return Vec::new();
     }
     let mut out = Out::new();
-    stitch_pairs(&fine, params, width, max_stitch, 0.0, &mut out);
+    // 3D puff: a cap across each end, the first before the column, the last after it
+    let cap = params.puff.map(|p| p.cap.clamp(0.0, 3.0));
+    let spacing = params.spacing.max(0.1);
+    if let Some(cap) = cap {
+        out.stitches(end_cap(&fine, false, cap, spacing));
+    }
+    // the start cap ends by where the column starts: reached with running stitches
+    stitch_pairs(&fine, params, width, max_stitch, if cap.is_some() { 2.0 } else { 0.0 }, &mut out);
+    if let Some(cap) = cap {
+        let pts = end_cap(&fine, true, cap, spacing);
+        if let Some(&p0) = pts.first() {
+            out.run_to(p0, 2.0);
+        }
+        out.stitches(pts);
+    }
     out.finish()
+}
+
+/// A puff end cap across the column's first (or `last`) rung: satin whose stitches lie along
+/// the column, from 1 mm inside it to `past` mm beyond its end, so they cut the foam's edge and
+/// cover it. Empty for a column too short to tell which way is out.
+fn end_cap(fine: &[(Point, Point)], last: bool, past: f64, spacing: f64) -> Vec<Point> {
+    let along: Box<dyn Iterator<Item = &(Point, Point)>> = if last { Box::new(fine.iter().rev()) } else { Box::new(fine.iter()) };
+    let mut along = along;
+    let Some(&(a, b)) = along.next() else { return Vec::new() };
+    // the first cap ends at the first rail, where the column starts
+    let (a, b) = if last { (a, b) } else { (b, a) };
+    let end = a.midpoint(b);
+    // the way out of the column: from a rung inside towards the end, square to the end rung
+    let Some(inside) = along.map(|(p, q)| p.midpoint(*q)).find(|m| m.distance(end) > 0.3) else { return Vec::new() };
+    let mut out_dir = (b - a).perp().normalized();
+    if out_dir.dot(inside - end) > 0.0 {
+        out_dir = -out_dir;
+    }
+    let width = a.distance(b);
+    if !(width.is_finite() && out_dir.is_finite()) || width < 1e-6 {
+        return Vec::new();
+    }
+    // a zigzag across the end, `spacing` per cycle
+    let n = ((width / spacing).ceil() as usize).clamp(1, 2000) * 2;
+    (0..=n)
+        .map(|k| {
+            let p = a.lerp(b, k as f64 / n as f64);
+            if k % 2 == 0 { p - out_dir * 1.0 } else { p + out_dir * past }
+        })
+        .collect()
 }
 
 /// Underlay and top satin over rail pairs already in sewing order, `width` mm wide
@@ -477,6 +521,26 @@ mod tests {
         // satin without it keeps whole stitches
         let satin = generate(&straight(6.0, 30.0), &SatinParams { tatami: false, split_length: 8.0, ..params.clone() }, None, None, 12.0);
         assert!(satin.iter().filter(|s| s.cmd == Cmd::Stitch).all(|s| s.pos().y < 0.3 || s.pos().y > 5.7 || s.pos().x < 0.5 || s.pos().x > 29.5));
+    }
+
+    #[test]
+    fn puff_caps_reach_past_the_ends() {
+        let mut params = SatinParams::default();
+        crate::model::Puff::default().apply(&mut params);
+        let st = generate(&straight(5.0, 20.0), &params, None, None, 12.0);
+        let xs: Vec<f64> = st.iter().filter(|s| s.cmd == Cmd::Stitch).map(|s| s.x).collect();
+        let (lo, hi) = (xs.iter().cloned().fold(f64::INFINITY, f64::min), xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max));
+        assert!((lo + 0.5).abs() < 1e-9 && (hi - 20.5).abs() < 1e-9, "{lo} {hi}");
+        // dense: 0.16 mm a cycle along 20 mm, and a cap at each end
+        let plain = generate(&straight(5.0, 20.0), &SatinParams::default(), None, None, 12.0);
+        assert!(st.len() > 2 * plain.len(), "{} {}", st.len(), plain.len());
+        // pushed out at the sides, no underlay inside the column
+        let ys: Vec<f64> = st.iter().filter(|s| s.x > 1.5 && s.x < 18.5).map(|s| s.y).collect();
+        assert!(ys.iter().all(|y| (y + 0.35).abs() < 1e-9 || (y - 5.35).abs() < 1e-9), "{ys:?}");
+        // back to plain satin: no caps
+        crate::model::Puff::remove(&mut params);
+        let again = generate(&straight(5.0, 20.0), &params, None, None, 12.0);
+        assert!(again.iter().all(|s| s.x > -1e-9 && s.x < 20.0 + 1e-9) && params == SatinParams::default());
     }
 
     #[test]
