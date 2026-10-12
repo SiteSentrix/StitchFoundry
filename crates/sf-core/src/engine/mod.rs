@@ -9,6 +9,7 @@
 
 mod applique;
 mod fill;
+mod flow;
 mod out;
 mod redwork;
 mod run;
@@ -42,7 +43,7 @@ pub fn object_stitches(obj: &EmbObject, settings: &DesignSettings, entry_hint: O
         ObjectKind::Run(r) => run::generate(&r.path, &r.params, hint, exit),
         ObjectKind::Satin(s) => satin::generate(&s.column, &s.params, hint, exit, settings.max_stitch),
         ObjectKind::Fill(f) => {
-            let job = FillJob { params: &f.params, splits: &f.splits, extra_angle: 0.0 };
+            let job = FillJob { params: &f.params, splits: &f.splits, flow: &f.flow, extra_angle: 0.0 };
             fill_shape(&f.shape, job, &f.guides, hint, exit, (trim, settings.max_stitch))
         }
         ObjectKind::Applique(a) => applique::generate(&a.shape, &a.params, hint, trim),
@@ -71,12 +72,13 @@ pub fn fill_statistics(polygon: &Polygon, angle: f64, spacing: f64) -> Option<(u
     fill::statistics(polygon, angle, spacing)
 }
 
-/// What a fill sews: its parameters, its split lines (mm) and a turn added to its stitch angle
-/// (a lettering glyph's).
+/// What a fill sews: its parameters, its split lines and flow lines (mm) and a turn added to
+/// its stitch angle (a lettering glyph's).
 #[derive(Clone, Copy)]
 struct FillJob<'a> {
     params: &'a FillParams,
     splits: &'a [Vec<Point>],
+    flow: &'a [Vec<Point>],
     extra_angle: f64,
 }
 
@@ -97,6 +99,11 @@ fn fill_shape(shape: &Shape, job: FillJob, guides: &[Guide], hint: Option<Point>
         };
         let piece = pieces.remove(i);
         let ex = if pieces.is_empty() { exit } else { None };
+        // Flow lines lead the rows of a tatami fill, whatever the inclination lines say.
+        if !job.flow.is_empty() && params.kind == FillKind::Tatami {
+            fill_piece(&piece, job, &mut out, here, ex, trim);
+            continue;
+        }
         // Two or more inclination lines bend the stitches along the shape.
         if guides.len() >= 2
             && piece.holes.is_empty()
@@ -177,7 +184,10 @@ fn fill_piece_inner(piece: &Polygon, job: FillJob, out: &mut Out, hint: Option<P
                 trapunto: params.trapunto,
                 profile: params.spacing_profile.iter().map(|&[t, s]| [t, s * f]).collect(),
             };
-            fill::scan_fill_all(std::slice::from_ref(piece), &cfg, out, here, exit, trim);
+            // rows along flow lines, or straight when they make no frame for the piece
+            if satin || job.flow.is_empty() || !flow::flow_fill(piece, job.flow, &cfg, out, here, exit, trim) {
+                fill::scan_fill_all(std::slice::from_ref(piece), &cfg, out, here, exit, trim);
+            }
         }
         FillKind::Contour => special::contour(piece, (params.spacing.max(0.2), params.rings), params.stitch_length.max(0.5), out, here, trim),
         FillKind::Spiral => special::spiral(piece, params.spacing.max(0.2), params.stitch_length.max(0.5), out, here, trim),
@@ -195,7 +205,7 @@ fn lettering(l: &LetteringObject, hint: Option<Point>, exit: Option<Point>, limi
     for (i, g) in l.glyphs.iter().enumerate() {
         let here = out.pos().or(hint);
         let ex = if i + 1 == n { exit } else { None };
-        let st = fill_shape(&g.shape, FillJob { params: &l.fill, splits: &[], extra_angle: g.angle }, &[], here, ex, limits);
+        let st = fill_shape(&g.shape, FillJob { params: &l.fill, splits: &[], flow: &[], extra_angle: g.angle }, &[], here, ex, limits);
         if let Some(first) = st.first() {
             out.connect(first.pos(), trim, 2.5);
             out.append(st);

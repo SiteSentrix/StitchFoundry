@@ -65,6 +65,12 @@ fn the_panel_shows_a_fills_texture_and_split_lines() {
     for want in ["Scales", "Texture size", "Texture angle", "Split lines: 1", "Clear Split Lines"] {
         assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
     }
+    // Rows following flow lines, with a button to straighten them.
+    app.run("embroidery.setFlowLines", json!({"id": id, "lines": [[[10, 30], [230, 10]], [[10, 190], [230, 160]]]})).unwrap();
+    let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);
+    for want in ["Rows follow lines: 2", "Clear Flow Lines"] {
+        assert!(texts.iter().any(|t| t == want), "{want} missing from {texts:?}");
+    }
     // Satin fills have neither.
     app.run("embroidery.set", json!({"type": "satinfill"})).unwrap();
     let texts = painted_text_in(&mut app, crate::embroidery::panel::show, 2400.0);

@@ -4584,3 +4584,7 @@ machine	Stop	Зупинка
 	3D effect	3D-ефект
 	Globe out	Сфера назовні
 	Globe in	Сфера всередину
+	Fill Along Lines	Заливка вздовж ліній
+	Clear Flow Lines	Очистити лінії потоку
+	Rows follow lines:	Ряди йдуть уздовж ліній:
+	Set Flow Lines	Задати лінії потоку

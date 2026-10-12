@@ -3871,3 +3871,7 @@ machine	Trim	Corte de linha
 	Globe out	Globo para fora
 	Globe in	Globo para dentro
 	Strength	Intensidade
+	Fill Along Lines	Preencher ao longo de linhas
+	Clear Flow Lines	Limpar linhas de fluxo
+	Rows follow lines:	As fileiras seguem linhas:
+	Set Flow Lines	Definir linhas de fluxo

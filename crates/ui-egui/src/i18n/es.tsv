@@ -4602,3 +4602,7 @@ machine	Stop	Parada
 	3D effect	Efecto 3D
 	Globe out	Globo hacia fuera
 	Globe in	Globo hacia dentro
+	Fill Along Lines	Rellenar siguiendo líneas
+	Clear Flow Lines	Quitar líneas de flujo
+	Rows follow lines:	Las filas siguen líneas:
+	Set Flow Lines	Definir líneas de flujo

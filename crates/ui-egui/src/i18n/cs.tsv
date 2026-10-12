@@ -4629,3 +4629,7 @@ machine	Stop	Zastavení
 	3D effect	3D efekt
 	Globe out	Koule ven
 	Globe in	Koule dovnitř
+	Fill Along Lines	Výplň podél čar
+	Clear Flow Lines	Vymazat čáry toku
+	Rows follow lines:	Řady sledují čáry:
+	Set Flow Lines	Nastavit čáry toku

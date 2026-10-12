@@ -4598,3 +4598,7 @@ machine	Stop	停止
 	3D effect	3D効果
 	Globe out	球面（凸）
 	Globe in	球面（凹）
+	Fill Along Lines	線に沿って塗りつぶし
+	Clear Flow Lines	フローラインを消去
+	Rows follow lines:	列が線に沿う:
+	Set Flow Lines	フローラインを設定

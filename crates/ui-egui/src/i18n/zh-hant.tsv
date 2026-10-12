@@ -3970,3 +3970,7 @@ machine	Stop	停止
 	3D effect	3D 效果
 	Globe out	球面外凸
 	Globe in	球面內凹
+	Fill Along Lines	沿線填充
+	Clear Flow Lines	清除流線
+	Rows follow lines:	行沿線走向：
+	Set Flow Lines	設定流線

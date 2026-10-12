@@ -482,6 +482,18 @@ fn structured_junk() {
                 {"command": "embroidery.setParams", "params": {"params": {"warp": "x"}}},
             ]}),
         ),
+        ("embroidery.fillAlongLines", json!({"keep": true})),
+        ("embroidery.setFlowLines", json!({"id": 1, "lines": [[[1e308, -1e308], [-1e308, 1e308]], [[0, 0], [1e-308, 1e-308]]]})),
+        ("embroidery.setFlowLines", json!({"id": u64::MAX, "lines": [[[0, 0], [1, 1]]]})),
+        (
+            "command.batch",
+            json!({"commands": [
+                {"command": "embroidery.set", "params": {"type": "fill"}},
+                {"command": "embroidery.setFlowLines", "params": {"id": 2, "lines": [[[0, 0], [100, 0]], [[0, 0.001], [100, 0.002]]]}},
+                {"command": "embroidery.setFlowLines", "params": {"id": 3, "lines": [[[0, 0], [100, 100]], [[0, 100], [100, 0]]]}},
+                {"command": "embroidery.clearFlowLines", "params": {}},
+            ]}),
+        ),
         ("embroidery.knife", json!({"overlap": 3})),
         ("embroidery.knife", json!({"overlap": -1, "ids": [u64::MAX]})),
         (

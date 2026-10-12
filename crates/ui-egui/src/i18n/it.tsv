@@ -4604,3 +4604,7 @@ machine	Stop	Arresto
 	3D effect	Effetto 3D
 	Globe out	Globo verso l’esterno
 	Globe in	Globo verso l’interno
+	Fill Along Lines	Riempi lungo linee
+	Clear Flow Lines	Cancella linee di flusso
+	Rows follow lines:	Le file seguono linee:
+	Set Flow Lines	Imposta linee di flusso

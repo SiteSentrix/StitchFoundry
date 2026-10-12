@@ -4558,3 +4558,7 @@ machine	Stop	Stopp
 	3D effect	3D-Effekt
 	Globe out	Kugel nach außen
 	Globe in	Kugel nach innen
+	Fill Along Lines	Entlang Linien füllen
+	Clear Flow Lines	Flusslinien entfernen
+	Rows follow lines:	Reihen folgen Linien:
+	Set Flow Lines	Flusslinien festlegen

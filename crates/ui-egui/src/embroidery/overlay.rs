@@ -228,6 +228,15 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
             painter.add(Shape::dashed_line(&pts, Stroke::new(1.2, teal), 5.0, 3.0));
         }
     }
+    // Flow lines of the selected fills, dashed: the rows follow them.
+    let violet = Color32::from_rgb(150, 80, 200);
+    for id in &selected {
+        let Some(e) = st.doc.node(*id).and_then(|n| n.embroidery.as_deref()) else { continue };
+        for line in &e.flow {
+            let pts: Vec<Pos2> = line.iter().map(|q| xf.to_screen(vectorcraft_geom::Point::new(q.x, q.y))).collect();
+            painter.add(Shape::dashed_line(&pts, Stroke::new(1.5, violet), 8.0, 4.0));
+        }
+    }
     // Start (green) and stop (red) beads of the selected stitched objects.
     for id in selected.iter().copied().filter(|_| beads) {
         let ranges = plan.records_of(id);

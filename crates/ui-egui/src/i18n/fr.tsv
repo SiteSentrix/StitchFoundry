@@ -4612,3 +4612,7 @@ machine	Stop	Arrêt
 	3D effect	Effet 3D
 	Globe out	Globe vers l’extérieur
 	Globe in	Globe vers l’intérieur
+	Fill Along Lines	Remplir le long de lignes
+	Clear Flow Lines	Effacer les lignes de flux
+	Rows follow lines:	Les rangs suivent des lignes :
+	Set Flow Lines	Définir les lignes de flux

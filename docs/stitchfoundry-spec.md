@@ -396,8 +396,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CS-03 | Spiral fills | Done | | – |
 | CS-04 | Radial (ripple) fills | Done | | – |
 | CS-05 | Flexi-splits (split lines following a curve) | Partial | A drawn curve repeated across the fill (`embroidery.carveSplits` `repeat`); split lines that follow the shape by themselves still missing | 2 |
-| CS-06 | Florentine effect (stitches follow a drawn curve) | Done | Turning fill along inclination lines | – |
-| CS-07 | Liquid effect (curved fill between two guide curves) | Partial | Turning fill with two guides; add explicit two-curve mode | 2 |
+| CS-06 | Florentine effect (stitches follow a drawn curve) | Done | Turning fill along inclination lines; tatami rows that copy a drawn line (Embroidery › Fill Along Lines, one line) | – |
+| CS-07 | Liquid effect (curved fill between two guide curves) | Done | Embroidery › Fill Along Lines with two lines: tatami rows changing shape evenly from one line to the other (public description: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Decorative/curves/curves-11.htm) | – |
 | MO-01 | Single motifs (place one stitched motif) | Partial | Embroidery › Place Motif puts one motif on the artboard as a run you move and reshape; no placement tool yet | 2 |
 | MO-02 | Motif runs | Done | 11 built-in motifs, and the design's own | – |
 | MO-03 | Graded motif runs (motif size varies along the line) | Done | Motif runs grow or shrink to *Width at end* | – |
@@ -551,8 +551,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-04 | Runs in the browser | Partial | Compiles to wasm; embroidery not yet tried in the web app |
 | BEY-05 | Ink/Stitch-inspired extras: tartan fill, linear-gradient fill, auto-route satin, cutwork | Missing | Phase 2/7 |
 
-**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 130 done,
-39 partial, 56 missing, 6 out of scope (counted 2026-10-12, after 3D motif fills). Most of what is missing is breadth (more stitch
+**Tally:** 231 rows (grouping the roughly 300 features the reference lists): 131 done,
+38 partial, 56 missing, 6 out of scope (counted 2026-10-12, after flow lines). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
@@ -725,9 +725,9 @@ NEW-02), then outlines and borders (PT-01, PT-05), then repeats and envelopes se
 RS-03, BAS-15), then the design's own motifs (MO-06), sculpture runs and cross-stitch styles (ST-02,
 SP-12), redwork (SP-13), buttonholes (SP-14), rings and outlines round lines (PT-02, RS-02, PT-05),
 more textures and paired motif fills (PS-02, MO-04), graded motif columns (MO-05), string stitching
-(SP-04), the automatic knife (RS-06) and 3D motif fills (MO-04). Left in phase 2: a stamp library
-(PS-04), more textures, a motif placement tool (MO-01), the two-curve liquid fill (CS-07) and a
-repeat preview (BAS-15).
+(SP-04), the automatic knife (RS-06), 3D motif fills (MO-04) and flow lines, the liquid effect
+(CS-07). Left in phase 2: a stamp library (PS-04), more textures, a motif placement tool (MO-01)
+and a repeat preview (BAS-15).
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.
