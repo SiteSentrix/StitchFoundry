@@ -414,6 +414,11 @@ mod tests {
         app
     }
 
+    /// `rel` (`/`-separated) inside `root`, with the platform's separators, as the app reports paths.
+    fn at(root: &Path, rel: &str) -> PathBuf {
+        rel.split('/').fold(root.to_path_buf(), |p, c| p.join(c))
+    }
+
     fn write(path: &Path, bytes: &[u8]) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
@@ -439,7 +444,7 @@ mod tests {
             app.run("file.place", json!({"path": path})).unwrap();
             files.push(png(n));
         }
-        let doc = root.join("doc/doc.vectorcraft");
+        let doc = at(root, "doc/doc.vectorcraft");
         std::fs::create_dir_all(doc.parent().unwrap()).unwrap();
         app.run("document.save", json!({"path": doc})).unwrap();
         std::fs::remove_dir_all(root.join("orig")).unwrap();
@@ -475,10 +480,10 @@ mod tests {
         let bytes = opened_without(&mut app, &root, &["a.png", "b.png"]);
         assert_eq!(kind(&app), Some(super::super::missing_links::KIND));
         assert!(frame(&mut app).contains("Find in Folder…"));
-        let (a, b) = (root.join("found/sub/a.png"), root.join("found/b.png"));
+        let (a, b) = (at(&root, "found/sub/a.png"), at(&root, "found/b.png"));
         write(&a, &bytes[0]);
         write(&b, &bytes[1]);
-        write(&root.join("found/other/b.png"), b"another file");
+        write(&at(&root, "found/other/b.png"), b"another file");
         // What Find in Folder… does with the folder picked.
         app.ui.dialog.as_mut().unwrap().fields.insert("searchFolder".into(), json!(root.join("found")));
         let r = super::super::confirm(&mut app).unwrap();
@@ -506,14 +511,14 @@ mod tests {
         let root = folder("back");
         let mut app = app_for(&root);
         let bytes = opened_without(&mut app, &root, &["a.png", "b.png", "c.png"]);
-        write(&root.join("found/a.png"), &bytes[0]);
-        write(&root.join("found/b.png"), b"not an image");
+        write(&at(&root, "found/a.png"), &bytes[0]);
+        write(&at(&root, "found/b.png"), b"not an image");
         app.ui.dialog.as_mut().unwrap().fields.insert("searchFolder".into(), json!(root.join("found")));
         super::super::confirm(&mut app).unwrap();
         searched(&mut app);
         let d = app.ui.dialog.as_ref().unwrap();
         // b.png's only file is chosen, c.png has none.
-        assert_eq!((pick(d, "b.png"), pick(d, "c.png")), (&json!(root.join("found/b.png")), &Value::Null));
+        assert_eq!((pick(d, "b.png"), pick(d, "c.png")), (&json!(at(&root, "found/b.png")), &Value::Null));
         assert!(frame(&mut app).contains("Not found"));
         super::super::confirm(&mut app).unwrap();
         assert!(app.ui.status.starts_with("Relinked 1 image(s); b.png couldn't be relinked: "), "{}", app.ui.status);
@@ -558,15 +563,15 @@ mod tests {
         opened_without(&mut app, &root, &["a.png"]);
         super::super::cancel(&mut app);
         // Two files of the name and neither the same file: the search reads both folders.
-        write(&root.join("one/a.png"), b"one file");
-        write(&root.join("one/x/a.png"), b"another file");
+        write(&at(&root, "one/a.png"), b"one file");
+        write(&at(&root, "one/x/a.png"), b"another file");
         std::fs::create_dir_all(root.join("two")).unwrap();
         app.run("ui.findLinksInFolder", json!({"folder": root.join("one")})).unwrap();
         searched(&mut app);
         assert_eq!(app.ui.dialog.as_ref().unwrap().fields["found"][0]["files"].as_array().map(Vec::len), Some(2));
         // The second file chosen, then another folder searched, which has no file of the name.
         let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("picks".into(), json!([root.join("one/x/a.png")]));
+        d.fields.insert("picks".into(), json!([at(&root, "one/x/a.png")]));
         d.fields.insert("touched".into(), json!([0]));
         d.fields.insert("searchFolder".into(), json!(root.join("two")));
         super::super::confirm(&mut app).unwrap();
@@ -609,20 +614,20 @@ mod tests {
         let mut app = app_for(&root);
         let bytes = opened_without(&mut app, &root, &["a.png"]);
         super::super::cancel(&mut app);
-        write(&root.join("found/a.png"), &bytes[0]);
+        write(&at(&root, "found/a.png"), &bytes[0]);
         app.run("ui.findLinksInFolder", json!({"folder": root.join("found")})).unwrap();
         searched(&mut app);
         assert!(frame(&mut app).contains("Copy into the document's folder"));
         app.ui.dialog.as_mut().unwrap().fields.insert("copy".into(), json!(true));
         let r = super::super::confirm(&mut app).unwrap();
         assert_eq!((r["relinked"].as_array().unwrap().len(), app.ui.dialog.is_none()), (1, true), "{r}");
-        let copy = root.join("doc/a.png");
+        let copy = at(&root, "doc/a.png");
         assert_eq!(std::fs::read(&copy).unwrap(), bytes[0]);
         let c = app.run("links.check", json!({})).unwrap();
         assert_eq!((c["missing"].as_u64(), c["links"][0]["path"].as_str()), (Some(0), Some(&*copy.to_string_lossy())), "{c}");
         // An unsaved document has no folder to copy into.
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let id = app.run("file.place", json!({"path": root.join("found/a.png")})).unwrap()["ids"][0].clone();
+        let id = app.run("file.place", json!({"path": at(&root, "found/a.png")})).unwrap()["ids"][0].clone();
         app.run("select.set", json!({"ids": [id]})).unwrap();
         app.run("ui.findLinksInFolder", json!({"folder": root.join("found")})).unwrap();
         searched(&mut app);
@@ -636,14 +641,14 @@ mod tests {
         let mut app = app_for(&root);
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
-        let badge = root.join("orig/badge.vectorcraft");
+        let badge = at(&root, "orig/badge.vectorcraft");
         std::fs::create_dir_all(badge.parent().unwrap()).unwrap();
         app.run("document.save", json!({"path": badge})).unwrap();
-        let found = root.join("found/badge.vectorcraft");
+        let found = at(&root, "found/badge.vectorcraft");
         write(&found, &std::fs::read(&badge).unwrap());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app.run("file.place", json!({"path": badge, "link": true})).unwrap();
-        let doc = root.join("doc/doc.vectorcraft");
+        let doc = at(&root, "doc/doc.vectorcraft");
         std::fs::create_dir_all(doc.parent().unwrap()).unwrap();
         app.run("document.save", json!({"path": doc})).unwrap();
         std::fs::remove_dir_all(root.join("orig")).unwrap();
@@ -654,7 +659,7 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("copy".into(), json!(true));
         let r = super::super::confirm(&mut app).unwrap();
         assert_eq!((r["relinked"].as_array().unwrap().len(), &r["failed"]), (1, &json!([])), "{r}");
-        assert!(!root.join("doc/badge.vectorcraft").exists());
+        assert!(!at(&root, "doc/badge.vectorcraft").exists());
         assert_eq!(app.run("links.check", json!({})).unwrap()["links"][0]["path"], json!(found));
     }
 
@@ -673,7 +678,7 @@ mod tests {
         assert!(crate::menus::enabled(&app, "ui.findLinksInFolder"));
         // Nothing to look for: no folder is asked for.
         assert_eq!(app.run("ui.findLinksInFolder", json!({})).err().as_deref(), Some("No linked files to look for"));
-        let here = root.join("found/here.png");
+        let here = at(&root, "found/here.png");
         write(&here, &png(1));
         let id = app.run("file.place", json!({"path": here})).unwrap()["ids"][0].clone();
         app.run("select.set", json!({"ids": [id]})).unwrap();
@@ -697,7 +702,7 @@ mod tests {
         let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut app.services);
         app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let here = root.join("found/here.png");
+        let here = at(&root, "found/here.png");
         write(&here, &png(1));
         let id = app.run("file.place", json!({"path": here})).unwrap()["ids"][0].clone();
         app.run("select.set", json!({"ids": [id]})).unwrap();
