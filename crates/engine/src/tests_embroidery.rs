@@ -580,6 +580,43 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
 }
 
 #[test]
+fn stitch_lists_and_gcode_export_the_stitches_as_text() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    let stitches = s.embroidery_plan().unwrap().pattern().stitch_count();
+    let text = |r: &Value| String::from_utf8(vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    let csv = text(&s.execute("embroidery.export", &json!({"format": "csv"})).unwrap());
+    assert!(csv.starts_with("index,command,x,y,thread,color,name\n"));
+    assert_eq!(csv.lines().filter(|l| l.contains(",stitch,")).count(), stitches);
+    assert!(csv.lines().filter(|l| l.contains(",stitch,")).all(|l| l.contains(",1,#d62828,")));
+    let json_text = text(&s.execute("embroidery.export", &json!({"format": "JSON", "name": "Badge"})).unwrap());
+    let v: Value = serde_json::from_str(&json_text).unwrap();
+    assert_eq!((v["name"].as_str(), v["threads"][0]["color"].as_str()), (Some("Badge"), Some("#d62828")));
+    // the stitches about the centre: a 40 mm wide design spans about ±20 mm
+    let xs: Vec<f64> = v["stitches"].as_array().unwrap().iter().filter_map(|s| s[0].as_f64()).collect();
+    let (lo, hi) = xs.iter().fold((f64::MAX, f64::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
+    assert!((lo + 20.0).abs() < 1.5 && (hi - 20.0).abs() < 1.5, "{lo} {hi}");
+    let g = text(&s.execute("embroidery.export", &json!({"format": "gcode", "gcode": {"feed": 900, "zStep": 0, "stitchCommand": "M3"}})).unwrap());
+    assert!(g.contains(" F900\n") && !g.contains("G1 Z") && g.lines().filter(|l| *l == "M3").count() == stitches, "{}", &g[..300.min(g.len())]);
+    assert!(s.execute("embroidery.export", &json!({"format": "gcode", "gcode": {"feed": -1}})).is_err());
+    // in a batch, beside the machine file
+    let dir = std::env::temp_dir().join(format!("sf-textual-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let r = s
+        .execute(
+            "embroidery.output",
+            &json!({"dir": dir.to_string_lossy(), "formats": ["dst", "gcode", "csv"], "worksheet": "none", "design": false, "name": "Job"}),
+        )
+        .unwrap();
+    assert!(dir.join("Job.gcode").exists() && dir.join("Job.csv").exists(), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn exports_that_write_files_are_remembered_and_run_again() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

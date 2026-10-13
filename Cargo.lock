@@ -3961,6 +3961,7 @@ dependencies = [
 name = "sf-formats"
 version = "0.9.0"
 dependencies = [
+ "serde_json",
  "sf-core",
  "thiserror 2.0.21",
 ]
