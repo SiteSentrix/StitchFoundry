@@ -11,7 +11,7 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::colormgmt::{PROFILES_KEY, doc_profiles};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::{RenderOptions, Renderer};
-use vectorcraft_testkit::fixtures::{exec, rect, session};
+use vectorcraft_testkit::fixtures::{exec, id_of, rect, select, session};
 
 /// The active Color Settings: one test at a time.
 fn settings() -> MutexGuard<'static, ()> {
@@ -83,4 +83,69 @@ fn raster_effects_draw_through_new_color_settings() {
     assert!(frame(&mut r, &s, &live) == fresh, "while interacting");
     assert!(frame(&mut r, &s, &opts) == fresh, "after it");
     cms::set_active(&old).unwrap();
+}
+
+/// Live objects follow the Color Settings: in the next frame, a blend of an RGB red and a CMYK cyan,
+/// the same blend in an envelope, an envelope that distorts the appearance of a CMYK cyan rectangle
+/// with Revolve, and a gradient mesh in CMYK colors draw through the new working CMYK profile, and
+/// so do the blend and the mesh with a drop shadow.
+#[test]
+fn live_objects_draw_through_new_color_settings() {
+    let _g = settings();
+    let old = cms::active_settings();
+    let cyan = json!({"c": 100, "m": 0, "y": 0, "k": 0});
+    let blend = |s: &mut Session| {
+        let a = rect(s, 20.0, 40.0, 60.0, 120.0);
+        exec(s, "paint.setFill", json!({"ids": [a.0], "color": "#ff0000"}));
+        let b = rect(s, 300.0, 40.0, 60.0, 120.0);
+        exec(s, "paint.setFill", json!({"ids": [b.0], "color": cyan}));
+        id_of(&exec(s, "object.blend.make", json!({"ids": [a.0, b.0], "steps": 5})))
+    };
+    let mut blended = session();
+    blend(&mut blended);
+    let mut enveloped = session();
+    let b = blend(&mut enveloped);
+    exec(&mut enveloped, "object.envelope.makeWithWarp", json!({"ids": [b.0], "style": "arc", "bend": 30}));
+    let mut revolved = session();
+    let profile = rect(&mut revolved, 150.0, 60.0, 60.0, 120.0);
+    exec(&mut revolved, "paint.setFill", json!({"ids": [profile.0], "color": cyan}));
+    exec(&mut revolved, "effect.apply", json!({"ids": [profile.0], "effect": "threeD.revolve"}));
+    let e = id_of(&exec(&mut revolved, "object.envelope.makeWithWarp", json!({"ids": [profile.0], "style": "arc", "bend": 30})));
+    select(&mut revolved, &[e]);
+    exec(&mut revolved, "object.envelope.options", json!({"distortAppearance": true}));
+    let mesh = |s: &mut Session| {
+        let m = rect(s, 20.0, 20.0, 360.0, 260.0);
+        exec(s, "paint.setFill", json!({"ids": [m.0], "color": cyan}));
+        exec(s, "object.mesh.create", json!({"ids": [m.0], "rows": 2, "cols": 2}));
+        exec(s, "object.mesh.setPointColor", json!({"id": m.0, "index": 4, "color": {"c": 0, "m": 100, "y": 0, "k": 0}}));
+        m
+    };
+    let mut meshed = session();
+    mesh(&mut meshed);
+    let shadow = json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    let mut shadowed_blend = session();
+    let b = blend(&mut shadowed_blend);
+    exec(&mut shadowed_blend, "effect.apply", json!({"ids": [b.0], "effect": "stylize.dropShadow", "params": shadow}));
+    let mut shadowed_mesh = session();
+    let m = mesh(&mut shadowed_mesh);
+    exec(&mut shadowed_mesh, "effect.apply", json!({"ids": [m.0], "effect": "stylize.dropShadow", "params": shadow}));
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let frame = |r: &mut Renderer, s: &Session| r.render(&s.doc().unwrap().doc, 400, 300, Affine::IDENTITY, &opts).pixels;
+    for (what, mut s) in [
+        ("the blend", blended),
+        ("the envelope", enveloped),
+        ("the revolved rectangle", revolved),
+        ("the mesh", meshed),
+        ("the blend with a drop shadow", shadowed_blend),
+        ("the mesh with a drop shadow", shadowed_mesh),
+    ] {
+        let mut r = Renderer::new();
+        let before = frame(&mut r, &s);
+        s.execute("edit.colorSettings", &json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+        let fresh = frame(&mut Renderer::new(), &s);
+        let warm = frame(&mut r, &s);
+        cms::set_active(&old).unwrap();
+        assert!(fresh != before, "{what}: the new profile changes the frame");
+        assert!(warm == fresh, "{what}: drawn as a new renderer draws it");
+    }
 }

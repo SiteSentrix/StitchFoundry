@@ -105,3 +105,96 @@ fn symbol_type_redraws_when_its_font_becomes_available() {
     assert_ne!(before, after, "drawn in the font that arrived");
     assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
 }
+
+/// Type that an envelope bends redraws in a font that becomes available, in the envelope and in
+/// the art of a symbol whose instance an envelope bends: the envelopes are evaluated again when the
+/// fonts change.
+#[test]
+fn enveloped_type_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
+    const FAMILY: &str = "Warped Serif 4";
+    let mut d = Document::new(300.0, 150.0);
+    let word = |d: &mut Document, at: Point| {
+        let style = CharStyle { size: 50.0, font_family: FAMILY.into(), ..Default::default() };
+        Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(at, "Hamburg", style))))
+    };
+    let typed = word(&mut d, Point::new(10.0, 60.0));
+    let art = word(&mut d, Point::new(-140.0, 20.0));
+    let art = Node::group(d.alloc_id(), vec![Arc::new(art)]);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+    let shown = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 120.0)) });
+    let l = d.layers[0].id;
+    for (i, content) in [typed, shown].into_iter().enumerate() {
+        let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let envelope = NodeKind::Envelope {
+            content: vec![Arc::new(content)],
+            kind: Box::new(kind),
+            fidelity: 50.0,
+            editing: false,
+            options: Default::default(),
+            frame: Box::new(Affine::IDENTITY),
+        };
+        let id = d.alloc_id();
+        d.insert(Some(l), i, Node::new(id, envelope)).unwrap();
+    }
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let before = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+    assert!(vectorcraft_text::FontDb::global().add_font(serif_as(FAMILY)) > 0);
+    let after = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+    assert_ne!(before, after, "drawn in the font that arrived");
+    assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
+}
+
+/// Type that an envelope bends redraws in a font that becomes available when the art drawn for
+/// effects is made from the envelope's evaluation: the envelope with a drop shadow, and the
+/// envelope in a group with a geometry effect or with a fill of its own.
+#[test]
+fn enveloped_type_under_effects_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{AppearanceItem, Effect, FillLayer};
+    let cases = [
+        ("Shadow Serif 4", "the envelope with a drop shadow"),
+        ("Effect Serif 4", "the group with a geometry effect"),
+        ("Filled Serif 4", "the group with a fill"),
+    ];
+    for (i, (family, what)) in cases.into_iter().enumerate() {
+        let mut d = Document::new(300.0, 150.0);
+        let style = CharStyle { size: 50.0, font_family: family.into(), ..Default::default() };
+        let typed = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 80.0), "Hamburg", style))));
+        let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let envelope = NodeKind::Envelope {
+            content: vec![Arc::new(typed)],
+            kind: Box::new(kind),
+            fidelity: 50.0,
+            editing: false,
+            options: Default::default(),
+            frame: Box::new(Affine::IDENTITY),
+        };
+        let mut object = Node::new(d.alloc_id(), envelope);
+        match i {
+            0 => {
+                let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+                object.appearance.effects.push(Effect { id: "stylize.dropShadow".into(), params, visible: true });
+            }
+            1 => {
+                object = Node::group(d.alloc_id(), vec![Arc::new(object)]);
+                object.appearance.effects.push(Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 0.0}), visible: true });
+            }
+            _ => {
+                object = Node::group(d.alloc_id(), vec![Arc::new(object)]);
+                object.appearance.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)))));
+            }
+        }
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, object).unwrap();
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut r = Renderer::new();
+        let before = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+        assert!(vectorcraft_text::FontDb::global().add_font(serif_as(family)) > 0);
+        let after = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+        assert_ne!(before, after, "{what}: drawn in the font that arrived");
+        assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "{what}: as a new renderer draws it");
+    }
+}
