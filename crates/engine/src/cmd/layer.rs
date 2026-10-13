@@ -377,10 +377,7 @@ fn check_options(cmd: &str, p: &Value, xml_id: bool) -> Result<()> {
         && let Some(name) = str_param(p, "name").filter(|n| !n.trim().is_empty())
         && !vectorcraft_doc::xml_id::is_valid(name)
     {
-        return Err(bad(
-            cmd,
-            "Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)",
-        ));
+        return Err(bad(cmd, "Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)"));
     }
     Ok(())
 }

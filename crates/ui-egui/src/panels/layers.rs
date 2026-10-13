@@ -691,11 +691,7 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     });
     // Name (Preferences › Units › Identify Objects By: Object Name or XML ID).
     let xml_id = view.identify_xml_id;
-    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) {
-        "<Opacity Mask>".to_string()
-    } else {
-        n.identify_label(xml_id)
-    };
+    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.identify_label(xml_id) };
     let font = egui::FontId::proportional(13.0);
     let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id()));
     let name_rect = egui::Rect::from_min_max(egui::pos2(x - 2.0, r.center().y - 10.0), egui::pos2(r.right() - 44.0, r.center().y + 10.0));

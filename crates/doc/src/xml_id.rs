@@ -91,11 +91,7 @@ fn strip_unique(id: &str) -> &str {
         return id;
     };
     let digits = body.get(at + 1..).unwrap_or_default();
-    if digits.len() >= 20 && digits.bytes().all(|b| b.is_ascii_digit()) {
-        body.get(..at).unwrap_or(id)
-    } else {
-        id
-    }
+    if digits.len() >= 20 && digits.bytes().all(|b| b.is_ascii_digit()) { body.get(..at).unwrap_or(id) } else { id }
 }
 
 #[cfg(test)]
