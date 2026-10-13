@@ -468,10 +468,11 @@ impl Ctx {
             None => {
                 let id = href(tp)?.trim().strip_prefix('#')?;
                 let el = xml.descendants().find(|n| n.is_element() && n.attribute("id") == Some(id))?;
-                if el.tag_name().name() != "path" {
-                    return None;
-                }
-                let mut bp = BezPath::from_svg(el.attribute("d")?).ok()?;
+                let d = match el.tag_name().name() {
+                    "path" => el.attribute("d")?.to_string(),
+                    _ => self.shape_path(el)?,
+                };
+                let mut bp = BezPath::from_svg(&d).ok()?;
                 bp.apply_affine(parse_transform(el.attribute("transform")));
                 bp
             }
@@ -481,6 +482,82 @@ impl Ctx {
         }
         let usable = bp.segments().next().is_some();
         usable.then_some(bp)
+    }
+
+    /// The equivalent path of a basic shape (SVG 2 › Basic Shapes), as path data: what a
+    /// `<textPath>` that points at it follows. Circles and ellipses start at 3 o'clock and rounded
+    /// rects at the end of the top-left corner, all running clockwise; lines and polylines follow
+    /// their points. `None` for other elements and for shapes that render nothing.
+    fn shape_path(&self, el: XNode) -> Option<String> {
+        let (vw, vh) = self.viewport;
+        let len = |a: &str, pct: f64| el.attribute(a).and_then(|v| self.length(v, DEFAULT_FONT_SIZE, pct));
+        let x = |a: &str| len(a, vw).unwrap_or(0.0);
+        let y = |a: &str| len(a, vh).unwrap_or(0.0);
+        let points = || -> Vec<f64> { el.attribute("points").map(|v| list(v).map_while(|t| t.parse().ok()).collect()).unwrap_or_default() };
+        let ellipse = |cx: f64, cy: f64, rx: f64, ry: f64| {
+            (rx > 0.0 && ry > 0.0).then(|| {
+                format!(
+                    "M{} {} A{rx} {ry} 0 0 1 {cx} {} A{rx} {ry} 0 0 1 {} {cy} A{rx} {ry} 0 0 1 {cx} {} A{rx} {ry} 0 0 1 {} {cy}Z",
+                    cx + rx,
+                    cy,
+                    cy + ry,
+                    cx - rx,
+                    cy - ry,
+                    cx + rx
+                )
+            })
+        };
+        match el.tag_name().name() {
+            "circle" => {
+                let r = len("r", ((vw * vw + vh * vh) / 2.0).sqrt())?;
+                ellipse(x("cx"), y("cy"), r, r)
+            }
+            "ellipse" => {
+                let (rx, ry) = (len("rx", vw), len("ry", vh));
+                let (rx, ry) = (rx.or(ry)?, ry.or(rx)?);
+                ellipse(x("cx"), y("cy"), rx, ry)
+            }
+            "rect" => {
+                let (x0, y0, w, h) = (x("x"), y("y"), len("width", vw)?, len("height", vh)?);
+                if w <= 0.0 || h <= 0.0 {
+                    return None;
+                }
+                let (rx, ry) = (len("rx", vw).filter(|v| *v > 0.0), len("ry", vh).filter(|v| *v > 0.0));
+                let (rx, ry) = (rx.or(ry).unwrap_or(0.0).min(w / 2.0), ry.or(rx).unwrap_or(0.0).min(h / 2.0));
+                if rx <= 0.0 || ry <= 0.0 {
+                    return Some(format!("M{x0} {y0} H{} V{} H{x0}Z", x0 + w, y0 + h));
+                }
+                let (x1, y1) = (x0 + w, y0 + h);
+                Some(format!(
+                    "M{} {y0} H{} A{rx} {ry} 0 0 1 {x1} {} V{} A{rx} {ry} 0 0 1 {} {y1} H{} A{rx} {ry} 0 0 1 {x0} {} V{} A{rx} {ry} 0 0 1 {} {y0}Z",
+                    x0 + rx,
+                    x1 - rx,
+                    y0 + ry,
+                    y1 - ry,
+                    x1 - rx,
+                    x0 + rx,
+                    y1 - ry,
+                    y0 + ry,
+                    x0 + rx
+                ))
+            }
+            "line" => Some(format!("M{} {} L{} {}", x("x1"), y("y1"), x("x2"), y("y2"))),
+            tag @ ("polyline" | "polygon") => {
+                let pts = points();
+                let mut d = String::new();
+                for (i, [x, y]) in pts.as_chunks::<2>().0.iter().enumerate() {
+                    let _ = write!(d, "{}{x} {y} ", if i == 0 { 'M' } else { 'L' });
+                }
+                if d.is_empty() {
+                    return None;
+                }
+                if tag == "polygon" {
+                    d.push('Z');
+                }
+                Some(d)
+            }
+            _ => None,
+        }
     }
 
     /// Read one `<text>`: the pending text and its `url(#…)` paints.
