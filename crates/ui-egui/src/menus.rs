@@ -169,6 +169,7 @@ fn embroidery_menu() -> Vec<Item> {
         c("Regenerate Stitches", "embroidery.regenerate"),
         Sep,
         sub("Export Machine File", machine_file_items()),
+        cp("Lettering Kiosk", "embroidery.kiosk", json!({ "on": true })),
         Sep,
         cp("Embroidery", "window.panel", json!({ "panel": "embroidery" })),
         cp("Stitch Sequence", "window.panel", json!({ "panel": "stitchSequence" })),

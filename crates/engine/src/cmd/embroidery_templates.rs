@@ -131,6 +131,18 @@ const BUILTIN: &[Builtin] = &[
     },
 ];
 
+/// The area a built-in template's designs go in (x, y, width, height in mm): its guide, inside a
+/// patch's border (in a round patch, the square inside its circle).
+pub(crate) fn area(name: &str) -> Option<(f64, f64, f64, f64)> {
+    let b = BUILTIN.iter().find(|b| b.name.eq_ignore_ascii_case(name))?;
+    let (x, y, w, h) = b.guide;
+    let mut inset = b.border.map_or(0.0, |width| width + 2.0);
+    if b.round {
+        inset += (w.min(h) / 2.0 - inset) * (1.0 - std::f64::consts::FRAC_1_SQRT_2);
+    }
+    Some((x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset))
+}
+
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let mut v: Vec<Value> = BUILTIN.iter().map(|b| json!({ "name": b.name, "description": b.description, "custom": false })).collect();
     v.extend(s.prefs.embroidery_templates.iter().map(|t| json!({ "name": t.name, "description": "", "custom": true })));

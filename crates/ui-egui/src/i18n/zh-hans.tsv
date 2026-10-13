@@ -4533,3 +4533,22 @@ machine	Stop	停止
 	Worksheet Setup	工作单设置
 	Merge Colours	合并颜色
 	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	相同或相近颜色的线合并为一种，其色块连在一起；撤销可恢复
+	Lettering Kiosk	文字自助模式
+	Kiosk Lettering	自助文字
+	Type a name and make the design	输入名字并生成设计
+	No embroidery font is loaded: ask the shop to load one.	未加载刺绣字体：请让店家加载一个。
+	As large as fits	尽量大
+	Make Design	生成设计
+	T-shirt	T恤
+	Polo shirt	Polo衫
+	Hoodie	连帽衫
+	Tote bag	托特包
+	Towel	毛巾
+	Product	产品
+	Show on Product	在产品上显示
+	Back to the Design	回到设计
+	Save Machine File…	保存机器文件…
+	Next Name	下一个名字
+	PIN	PIN 码
+	Leave Kiosk	退出自助模式
+	Leaving the kiosk will take this PIN	退出自助模式需要此 PIN 码

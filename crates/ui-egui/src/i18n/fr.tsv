@@ -4967,3 +4967,22 @@ machine	Stop	Arrêt
 	Worksheet Setup	Réglages de la fiche de travail
 	Merge Colours	Fusionner les couleurs
 	Threads of the same or a near colour made one, and their colour blocks joined; undo puts them back	Les fils de même couleur ou d’une couleur proche n’en font plus qu’un et leurs blocs de couleur se rejoignent ; annuler les rétablit
+	Lettering Kiosk	Kiosque de lettrage
+	Kiosk Lettering	Lettrage du kiosque
+	Type a name and make the design	Saisissez un nom et créez le motif
+	No embroidery font is loaded: ask the shop to load one.	Aucune police de broderie n’est chargée : demandez à la boutique d’en charger une.
+	As large as fits	Aussi grand que possible
+	Make Design	Créer le motif
+	T-shirt	T-shirt
+	Polo shirt	Polo
+	Hoodie	Sweat à capuche
+	Tote bag	Tote bag
+	Towel	Serviette
+	Product	Produit
+	Show on Product	Montrer sur le produit
+	Back to the Design	Retour au motif
+	Save Machine File…	Enregistrer le fichier machine…
+	Next Name	Nom suivant
+	PIN	Code PIN
+	Leave Kiosk	Quitter le kiosque
+	Leaving the kiosk will take this PIN	Quitter le kiosque demandera ce code PIN
