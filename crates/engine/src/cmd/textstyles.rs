@@ -133,6 +133,14 @@ fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
     m
 }
 
+/// Captured character styles set Auto leading explicitly. A missing style attribute instead
+/// leaves the text's existing leading alone, unlike a run's omitted Auto value.
+fn char_attrs(v: &CharStyle) -> Map<String, Value> {
+    let mut m = to_attrs(v);
+    m.insert("leading".into(), json!(v.leading));
+    m
+}
+
 /// Every attribute name `T` reads, including those its JSON leaves out at their defaults (Auto
 /// leading and kerning, no mojikumi…): the field names serde's derive hands `deserialize_struct`.
 /// Not `justify_auto`, which [`to_map`] turns into `"justify": "Auto"`.
@@ -183,6 +191,10 @@ fn with_attrs<T: Serialize + DeserializeOwned>(base: &T, attrs: &Map<String, Val
 /// round-trip through JSON.
 fn restyle<T: Serialize + DeserializeOwned + Clone>(cur: &T, old: &Map<String, Value>, new: &Map<String, Value>) -> T {
     let Some(mut m) = to_map(cur) else { return cur.clone() };
+    // Runs omit Auto leading from JSON; it still matches a style's explicit null.
+    if old.get("leading") == Some(&Value::Null) {
+        m.entry("leading").or_insert(Value::Null);
+    }
     for (k, v) in new {
         if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
             m.insert(k.clone(), v.clone());
@@ -265,7 +277,7 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<Stri
     let Some(NodeKind::Text(t)) = id.and_then(|i| d.node(i)).map(|n| &n.kind) else { return Ok(None) };
     let at = p.get("start").and_then(Value::as_u64).map_or(0, |v| usize::try_from(v).unwrap_or(usize::MAX));
     Ok(Some(match kind {
-        Kind::Char => to_attrs(&vectorcraft_text::edit::style_at(&t.runs, at)),
+        Kind::Char => char_attrs(&vectorcraft_text::edit::style_at(&t.runs, at)),
         // The paragraph at `start`.
         Kind::Para => to_attrs(t.para_at(t.paragraphs_in(at, at).start)),
     }))
@@ -294,7 +306,7 @@ fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, V
             // form (so comparing a style with its text's attributes is exact).
             let c = kind.cmd(verb);
             let full = match kind {
-                Kind::Char => to_attrs(&with_attrs(&CharStyle::default(), m, &c)?),
+                Kind::Char => char_attrs(&with_attrs(&CharStyle::default(), m, &c)?),
                 Kind::Para => to_attrs(&with_attrs(&ParaStyle::default(), m, &c)?),
             };
             Ok(Some(m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect()))
@@ -641,6 +653,72 @@ mod tests {
         let other = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "C"})).unwrap()["id"].as_u64().unwrap();
         s.execute("library.use", &json!({"library": lib["library"], "kind": "charStyle", "item": lib["name"]})).unwrap();
         assert_eq!(runs(&s, other)[0].style.leading, Some(30.0));
+    }
+
+    #[test]
+    fn auto_leading_redefine_keeps_overrides_and_history() {
+        for redefine in [true, false] {
+            let (mut s, source) = session_with_text("Source");
+            let [linked, local] =
+                ["Linked", "Local"].map(|text| s.execute("text.create", &json!({"x": 10, "y": 90, "text": text})).unwrap()["id"].as_u64().unwrap());
+            let ids = [source, linked, local];
+            s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"leading": 30}})).unwrap();
+            s.execute("charStyle.apply", &json!({"name": "Body", "ids": ids})).unwrap();
+            s.execute("text.setStyle", &json!({"ids": [local], "leading": 42})).unwrap();
+            s.execute("text.setStyle", &json!({"ids": [source], "leading": "auto"})).unwrap();
+            let before = s.doc().unwrap().doc.clone();
+            let undo = s.doc().unwrap().history.undo.len();
+            if redefine {
+                s.execute("charStyle.redefine", &json!({"name": "Body", "id": source})).unwrap();
+            } else {
+                s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"leading": null}})).unwrap();
+            }
+            assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [None, None, Some(42.0)]);
+            assert!(ids.iter().all(|&id| runs(&s, id)[0].style.style_name.as_deref() == Some("Body")));
+            let after = s.doc().unwrap().doc.clone();
+            assert_eq!(after.char_styles[0].attrs.get("leading"), Some(&Value::Null), "Auto is explicit, not an unset attribute");
+            assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc, before);
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc, after);
+            let back = vectorcraft_format::load(&vectorcraft_format::save(&after, false)).unwrap();
+            assert_eq!(back.char_styles, after.char_styles);
+            for id in ids {
+                let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("not text") };
+                assert_eq!(t.runs, runs(&s, id));
+            }
+            // Auto users follow the next numeric definition; real numeric and Auto overrides stay.
+            s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"leading": 26}})).unwrap();
+            assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [Some(26.0), Some(26.0), Some(42.0)]);
+            s.execute("text.setStyle", &json!({"ids": [linked], "leading": "auto"})).unwrap();
+            s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"leading": 28}})).unwrap();
+            assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [Some(28.0), None, Some(42.0)]);
+            // Omitting leading replaces the definition without resetting the text's leading.
+            s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"tracking": 20}})).unwrap();
+            assert!(!s.doc().unwrap().doc.char_styles[0].attrs.contains_key("leading"));
+            assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [Some(28.0), None, Some(42.0)]);
+        }
+    }
+
+    #[test]
+    fn auto_leading_new_distinguishes_unset_attributes() {
+        let (mut s, id) = session_with_text("Title");
+        s.execute("text.setStyle", &json!({"leading": 30})).unwrap();
+        s.execute("charStyle.new", &json!({"name": "Sparse", "attrs": {"tracking": 20}})).unwrap();
+        assert!(!s.doc().unwrap().doc.char_styles[0].attrs.contains_key("leading"));
+        s.execute("charStyle.apply", &json!({"name": "Sparse", "id": id})).unwrap();
+        assert_eq!(runs(&s, id)[0].style.leading, Some(30.0));
+        s.execute("charStyle.new", &json!({"name": "Automatic", "attrs": {"leading": null}})).unwrap();
+        s.execute("charStyle.apply", &json!({"name": "Automatic", "id": id})).unwrap();
+        assert_eq!(runs(&s, id)[0].style.leading, None);
+        assert_eq!(s.doc().unwrap().doc.char_styles[1].attrs.get("leading"), Some(&Value::Null));
+        // New from Auto text captures that value too, rather than leaving leading unspecified.
+        s.execute("charStyle.new", &json!({"name": "Captured", "id": id})).unwrap();
+        s.execute("text.setStyle", &json!({"ids": [id], "leading": 36})).unwrap();
+        s.execute("charStyle.apply", &json!({"name": "Captured", "id": id})).unwrap();
+        assert_eq!(runs(&s, id)[0].style.leading, None);
+        assert_eq!(s.doc().unwrap().doc.char_styles[2].attrs.get("leading"), Some(&Value::Null));
     }
 
     #[test]

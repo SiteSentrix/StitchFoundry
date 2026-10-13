@@ -63,6 +63,10 @@ fn current(app: &VectorcraftApp, kind: Kind) -> Option<(Option<String>, Map<Stri
     }
     .ok()?;
     let mut m = v.as_object()?.clone();
+    // A character style can explicitly set Auto, which the run's JSON leaves out.
+    if kind == Kind::Char {
+        m.entry("leading").or_insert(Value::Null);
+    }
     let name = m.remove("style_name").and_then(|v| v.as_str().map(str::to_string));
     Some((name, m))
 }
@@ -211,5 +215,23 @@ mod tests {
         app.run("charStyle.apply", target(&app, Kind::Char, json!({"name": "Big"}))).unwrap();
         let (name, attrs) = current(&app, Kind::Char).unwrap();
         assert_eq!((name.as_deref(), attrs["size"].as_f64()), (Some("Big"), Some(30.0)));
+    }
+
+    #[test]
+    fn auto_leading_style_marks_only_real_overrides() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("charStyle.new", json!({"name": "Automatic", "attrs": {"leading": null}})).unwrap();
+        app.run("charStyle.apply", json!({"name": "Automatic"})).unwrap();
+        for (leading, label) in [(json!("auto"), "Automatic"), (json!(30), "Automatic+")] {
+            app.run("text.setStyle", json!({"leading": leading})).unwrap();
+            let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, Kind::Char));
+            assert!(shown.lines().any(|line| line == label), "expected {label} in {shown}");
+        }
+        app.run("charStyle.apply", json!({"name": "Automatic", "clearOverrides": true})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, Kind::Char));
+        assert!(shown.lines().any(|line| line == "Automatic"), "no override after clearing: {shown}");
     }
 }
