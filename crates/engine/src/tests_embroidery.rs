@@ -65,6 +65,50 @@ fn every_type_and_brush_stitches() {
 }
 
 #[test]
+fn an_opened_machine_files_stitches_become_runs_satins_and_fills() {
+    use sf_core::attr::StitchType;
+    let mut s = session();
+    // a tatami square, a satin bar and a run, each its own thread
+    rect(&mut s, 50.0, 50.0, 150.0, 150.0);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#1d3557"})).unwrap();
+    rect(&mut s, 260.0, 60.0, 260.0, 22.0);
+    s.execute("embroidery.set", &json!({"type": "satin"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    s.execute("path.create", &json!({"d": "M 260 200 C 330 140 420 260 520 200"})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "run"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#2a9d8f"})).unwrap();
+    let before = stitches(&s);
+    // VP3 keeps the threads' colours
+    let vp3 = s.execute("embroidery.export", &json!({"format": "vp3"})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    s.execute("file.place", &json!({"name": "design.vp3", "dataBase64": vp3})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    // with nothing selected: every manual stitch object
+    let r = s.execute("embroidery.stitchesToObjects", &json!({})).unwrap();
+    assert!(r["fills"].as_u64().unwrap() >= 1 && r["satins"].as_u64().unwrap() >= 1 && r["runs"].as_u64().unwrap() >= 1, "{r}");
+    let d = &s.doc().unwrap().doc;
+    let mut kinds = Vec::new();
+    d.walk(|n| {
+        if let Some(e) = n.embroidery.as_deref() {
+            let c = e.thread.as_ref().map(|t| t.color.to_hex()).unwrap_or_default();
+            kinds.push((c, std::mem::discriminant(&e.stitch)));
+        }
+    });
+    let has = |c: &str, st: StitchType| kinds.iter().any(|(k, d)| k == c && *d == std::mem::discriminant(&st));
+    assert!(has("#1d3557", StitchType::Fill(Default::default())), "the square is a fill in its thread: {kinds:?}");
+    assert!(has("#d62828", StitchType::Satin(Default::default())), "the bar is a satin: {kinds:?}");
+    assert!(has("#2a9d8f", StitchType::Run(Default::default())), "the line is a run: {kinds:?}");
+    assert!(!kinds.iter().any(|(_, d)| *d == std::mem::discriminant(&StitchType::Manual)), "no manual stitches left");
+    // sewn again much as they were
+    let after = stitches(&s);
+    assert!(after * 2 > before && after < before * 2, "{before} → {after}");
+    // one undo step back
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.execute("embroidery.stitchesToObjects", &json!({"ids": [999_999]})).is_err());
+}
+
+#[test]
 fn inclination_lines_turn_and_follow_the_object() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 200.0, 40.0);
