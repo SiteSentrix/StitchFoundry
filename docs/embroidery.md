@@ -476,9 +476,11 @@ the request says wins over it.
 
 **Embroidery › Product Visualizer** (`embroidery.visualize {product?, color?, placement?}`) shows
 the design, life size and in its thread colours, on a product drawn in the product's colour: a
-T-shirt, polo, hoodie, cap, tote bag or towel. It goes where such designs usually go
-(`placement`: left or right chest, full front, full back, back yoke, sleeve or pocket on
-garments; the front of a cap; the middle of a bag; above a towel's border), seen from the back
+T-shirt, polo, hoodie, cap, tote bag or towel. Caps come in four styles: a structured ball cap
+(`cap`), a snapback with a flat bill (`snapback`), a trucker cap with a mesh back (`trucker`) and
+a low, unstructured dad cap (`dadcap`, whose front takes designs up to about 100 mm). It goes
+where such designs usually go (`placement`: left or right chest, full front, full back, back
+yoke, sleeve or pocket on garments; the front of a cap; the middle of a bag; above a towel's border), seen from the back
 for the full back and yoke. A design wider than usual there is warned of. With `image` it goes
 on a photo of the customer's own product instead: `imageWidth` says how many mm the photo shows
 across, `at` where the design's middle goes. The mock-up opens as a new document, to show the
@@ -500,7 +502,7 @@ tape, a cap front, a left chest…), type the name, pick a font and a thread, an
 (`embroidery.kiosk.order {text, template?, font?, color?, size?}`) starts a design from the
 template with the name set in the font, centred in the template's area and made as large as fits
 (or the size asked for), in the thread. **Show on Product** puts it on a T-shirt, polo, hoodie,
-cap, bag or towel (the Product Visualizer); **Send to Machine** queues it for the shop's machine
+ball cap, snapback, trucker or dad cap, bag or towel (the Product Visualizer); **Send to Machine** queues it for the shop's machine
 folder, **Save Machine File…** saves it; **Next Name** starts again.
 
 The shop chooses what the counter offers (`embroidery.kiosk {templates, fonts, colors, folder,

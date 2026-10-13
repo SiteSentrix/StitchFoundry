@@ -4978,3 +4978,6 @@ machine	Stop	Arresto
 	PIN	PIN
 	Leave Kiosk	Esci dal chiosco
 	Leaving the kiosk will take this PIN	Per uscire dal chiosco servirà questo PIN
+	Snapback	Cappellino snapback
+	Trucker cap	Cappellino trucker
+	Dad cap	Cappellino morbido

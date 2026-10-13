@@ -683,7 +683,7 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
     s.set_active(0);
     let r = s.execute("embroidery.visualize", &json!({"product": "polo", "placement": "full-back", "color": "#102040"})).unwrap();
     assert_eq!(r["view"].as_str(), Some("back"));
-    for product in ["hoodie", "cap", "tote", "towel"] {
+    for product in ["hoodie", "cap", "snapback", "trucker", "dadcap", "tote", "towel"] {
         s.set_active(0);
         let r = s.execute("embroidery.visualize", &json!({"product": product, "areas": true})).unwrap();
         assert_eq!(r["product"].as_str(), Some(product));

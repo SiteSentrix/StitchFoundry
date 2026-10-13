@@ -4986,3 +4986,6 @@ machine	Stop	Arrêt
 	PIN	Code PIN
 	Leave Kiosk	Quitter le kiosque
 	Leaving the kiosk will take this PIN	Quitter le kiosque demandera ce code PIN
+	Snapback	Casquette snapback
+	Trucker cap	Casquette trucker
+	Dad cap	Casquette souple

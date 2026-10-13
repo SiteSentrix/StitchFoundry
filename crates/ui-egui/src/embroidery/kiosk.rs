@@ -12,7 +12,7 @@ use crate::theme::Tokens;
 /// The threads offered when the shop gave none.
 const THREADS: [&str; 12] =
     ["#1d3557", "#d62828", "#ffffff", "#000000", "#f4a261", "#2a9d8f", "#e9c46a", "#6d597a", "#c0c0c0", "#d4af37", "#e76f51", "#457b9d"];
-const PRODUCTS: [&str; 6] = ["tshirt", "polo", "hoodie", "cap", "tote", "towel"];
+const PRODUCTS: [&str; 9] = ["tshirt", "polo", "hoodie", "cap", "snapback", "trucker", "dadcap", "tote", "towel"];
 
 /// What the counter has typed and picked.
 #[derive(Default)]
@@ -152,7 +152,17 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
     let made = app.embroidery.kiosk.design.filter(|i| *i < app.session.documents().len());
     if let Some(design) = made {
         ui.add_space(10.0);
-        let labels = [tl!("T-shirt"), tl!("Polo shirt"), tl!("Hoodie"), tl!("Cap"), tl!("Tote bag"), tl!("Towel")];
+        let labels = [
+            tl!("T-shirt"),
+            tl!("Polo shirt"),
+            tl!("Hoodie"),
+            tl!("Cap"),
+            tl!("Snapback"),
+            tl!("Trucker cap"),
+            tl!("Dad cap"),
+            tl!("Tote bag"),
+            tl!("Towel"),
+        ];
         let cur = app.embroidery.kiosk.product.min(labels.len() - 1);
         if let Some(i) = pick_names(ui, tl!("Product"), "kiosk-product", cur, &labels) {
             app.embroidery.kiosk.product = i;
