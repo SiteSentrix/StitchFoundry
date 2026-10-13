@@ -42,6 +42,12 @@ impl LiveCache {
         self.expanded.sweep(stamp);
         self.meshes.sweep(stamp);
     }
+
+    /// A cache whose evaluations take at most `budget` bytes.
+    #[cfg(test)]
+    pub(crate) fn with_budget(budget: usize) -> Self {
+        Self { expanded: FrameCache::new(budget, 256), ..Default::default() }
+    }
 }
 
 /// One level of evaluation of a live node (blend steps, envelope result with type outlined run by
@@ -146,6 +152,10 @@ impl Renderer {
             NodeKind::Mesh(m) => self.draw_mesh(ctx, f, a, m, cache),
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => {
                 let items = self.live_expanded(f.doc, a, cache);
+                // An evaluation the cache did not keep is made again in the next frame.
+                let kept = cache && self.live.expanded.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &items));
+                let outer = self.made_again;
+                self.made_again = outer || !kept;
                 // The flag holds while this blend is drawn (see `draw_live`).
                 if self.knockout && matches!(a.kind, NodeKind::Blend { .. }) {
                     self.draw_knockout(ctx, f, &items);
@@ -154,6 +164,7 @@ impl Renderer {
                         self.draw_arc(ctx, f, c);
                     }
                 }
+                self.made_again = outer;
             }
             _ => {}
         }

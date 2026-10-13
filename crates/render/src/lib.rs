@@ -395,11 +395,15 @@ pub struct Renderer {
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
     pub threads: u16,
     geom: PtrMap<usize, GeomEntry>,
-    /// Expanded stroke outlines keyed by (stroke layer address, width bits, tolerance level):
-    /// panning re-renders reuse them instead of re-expanding every stroke.
-    strokes: PtrMap<(usize, u64, i32), StrokeEntry>,
+    /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
+    /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
+    strokes: PtrMap<(usize, usize, u64, i32), StrokeEntry>,
     /// The node being drawn on the plain-path fast path (owner of cached stroke outlines).
     cur: Option<Arc<Node>>,
+    /// Whether the art being drawn is made again in every frame: symbol art that
+    /// [`Self::placed_art`] did not keep, and evaluations of live objects and effect art that their
+    /// caches did not keep.
+    made_again: bool,
     /// The node `draw_shape_fx` may cache the live-effect geometry of (the one `draw_arc` is drawing).
     fx_owner: Option<Arc<Node>>,
     /// Live-effect geometry per node ([`fx::FxGeom`]), keyed by `Arc` identity like `geom`.
@@ -445,8 +449,9 @@ pub struct Renderer {
     clip_paths: Vec<(BezPath, FillRule, Affine)>,
     /// What clipping paths paint, per clipping path (see [`Self::clip_paint_of`]).
     clip_paints: FrameCache<usize, ClipPaintEntry>,
-    /// Gradients along or across strokes, keyed like `strokes` (see [`Self::fill_path_gradient`]).
-    stroke_slices: PtrMap<(usize, i32), SliceEntry>,
+    /// Gradients along or across strokes (see [`Self::fill_path_gradient`]), keyed by
+    /// ([`Self::stroke_owner`], stroke layer address, tolerance level).
+    stroke_slices: PtrMap<(usize, usize, i32), SliceEntry>,
     /// What the image keys colour adjustments give their recoloured images name: the image
     /// recoloured and the adjustment, with its hash (see [`Self::adjusted_image`]).
     adjusts: HashMap<String, (String, u64, vectorcraft_effects::ColorMap)>,
@@ -529,6 +534,7 @@ impl Renderer {
             geom: PtrMap::default(),
             strokes: PtrMap::default(),
             cur: None,
+            made_again: false,
             fx_owner: None,
             fx_geom: PtrMap::default(),
             stamp: 0,
@@ -1190,8 +1196,10 @@ impl Renderer {
             NodeKind::Image(im) => self.draw_image(ctx, f, im),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
-                    let art = self.placed_art(&sym.art, *xf, false, Some(n));
+                    let (art, kept) = self.placed_art(&sym.art, *xf, false, Some(n));
+                    let outer = std::mem::replace(&mut self.made_again, !kept);
                     self.draw_node(ctx, f, &art, true);
+                    self.made_again = outer;
                 }
             }
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
@@ -1443,7 +1451,7 @@ impl Renderer {
         };
         let slices = match self.cur.clone() {
             Some(node) => {
-                let key = (st as *const StrokeLayer as usize, level);
+                let key = (self.stroke_owner(&node), st as *const StrokeLayer as usize, level);
                 match self.stroke_slices.get_mut(&key) {
                     Some(e) if Arc::ptr_eq(&e.node, &node) => {
                         e.stamp = self.stamp;
@@ -1481,13 +1489,13 @@ impl Renderer {
     }
 
     /// The line part of a stroke of the fast-path node `self.cur` (see
-    /// [`effects::stroke::line_outline`]), cached across frames. The tolerance (vello's 0.25
-    /// device px) is bucketed to powers of two, never coarser than needed, so zooming reuses
-    /// outlines until the level changes.
+    /// [`effects::stroke::line_outline`]), cached across frames under [`Self::stroke_owner`] and
+    /// the stroke layer. The tolerance (vello's 0.25 device px) is bucketed to powers of two, never
+    /// coarser than needed, so zooming reuses outlines until the level changes.
     fn cached_stroke(&mut self, f: &Frame, line: &BezPath, st: &StrokeLayer, width: f64) -> Option<Arc<BezPath>> {
         let node = self.cur.clone()?;
         let level = (f.px * 0.25).log2().floor() as i32;
-        let key = (st as *const StrokeLayer as usize, width.to_bits(), level);
+        let key = (self.stroke_owner(&node), st as *const StrokeLayer as usize, width.to_bits(), level);
         if let Some(e) = self.strokes.get_mut(&key)
             && Arc::ptr_eq(&e.node, &node)
         {
@@ -1497,6 +1505,12 @@ impl Renderer {
         let outline = Arc::new(effects::stroke::line_outline(line, st, width, 2f64.powi(level)));
         self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp });
         Some(outline)
+    }
+
+    /// What the `strokes` and `stroke_slices` keys hold for the fast-path node `node`: its address,
+    /// or 0 while art made again in every frame is drawn ([`Self::made_again`]).
+    fn stroke_owner(&self, node: &Arc<Node>) -> usize {
+        if self.made_again { 0 } else { Arc::as_ptr(node) as usize }
     }
 
     fn draw_text(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject) {
@@ -1525,23 +1539,26 @@ impl Renderer {
             let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
             let Some(sym) = f.doc.symbols.iter().find(|s| s.name == art.symbol) else { continue };
             // Strokes scale with the art (it is sized to the type, as in the SVG `<use>`).
-            let node = self.placed_art(&sym.art, t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true, None);
+            let (node, kept) = self.placed_art(&sym.art, t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true, None);
+            let outer = std::mem::replace(&mut self.made_again, !kept);
             self.draw_node(ctx, f, &node, true);
+            self.made_again = outer;
         }
         self.inline_depth -= 1;
     }
 
-    /// Symbol art `art` as an instance or an inline graphic draws it ([`place`]). Art that is a
-    /// group or a layer without an appearance of its own is kept between frames under the art's
-    /// `Arc`, `xf`, `scale_strokes` and the stain of instance `inst`: its members keep their `Arc`s
-    /// from frame to frame, and the caches keyed by a node's address (geometry, glyphs, live-effect
-    /// geometry) hit for them. Other art is placed again in every frame, and so is art that holds
-    /// symbol instances, type with inline graphics, images, placed documents, live blends,
-    /// envelopes or repeats, or raster effects ([`depends_on_document`]). Art that holds type is
+    /// Symbol art `art` as an instance or an inline graphic draws it ([`place`]), and whether it is
+    /// kept. Art that is a group or a layer without an appearance of its own is kept between frames
+    /// under the art's `Arc`, `xf`, `scale_strokes` and the stain of instance `inst`: its members
+    /// keep their `Arc`s from frame to frame, and the caches keyed by a node's address (geometry,
+    /// stroke outlines, glyphs, live-effect geometry) hit for them. Other art is placed again in
+    /// every frame, and so is art that holds symbol instances, type with inline graphics, images,
+    /// placed documents, live blends, envelopes or repeats, or raster effects
+    /// ([`depends_on_document`]), and art that the cache has no room for. Art that holds type is
     /// placed again when the fonts change.
-    fn placed_art(&mut self, art: &Arc<Node>, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> Arc<Node> {
+    fn placed_art(&mut self, art: &Arc<Node>, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> (Arc<Node>, bool) {
         if !matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || fx::has_object_fx(art) {
-            return place(art, xf, scale_strokes, inst);
+            return (place(art, xf, scale_strokes, inst), false);
         }
         let stain = stain_bits(inst.and_then(vectorcraft_brush::stain));
         let key = (Arc::as_ptr(art) as usize, xf.as_coeffs().map(f64::to_bits), scale_strokes, stain);
@@ -1550,18 +1567,19 @@ impl Renderer {
             && e.fonts.is_none_or(|g| g == vectorcraft_text::FontDb::global().generation())
         {
             return match &e.placed {
-                Some(placed) => placed.clone(),
-                None => place(art, xf, scale_strokes, inst),
+                Some(placed) => (placed.clone(), true),
+                None => (place(art, xf, scale_strokes, inst), false),
             };
         }
         let placed = place(art, xf, scale_strokes, inst);
         let kept = (!depends_on_document(art)).then(|| placed.clone());
-        let fonts = (kept.is_some() && holds_type(art)).then(|| vectorcraft_text::FontDb::global().generation());
+        let keeps = kept.is_some();
+        let fonts = (keeps && holds_type(art)).then(|| vectorcraft_text::FontDb::global().generation());
         // The bytes count the key and the entry, the art's allocation that the weak reference
         // keeps, and the kept art.
         let bytes = size_of::<(PlacedKey, PlacedEntry, Node)>() + kept.as_deref().map_or(0, lru::node_bytes);
-        self.placed_arts.insert(key, PlacedEntry { art: Arc::downgrade(art), placed: kept, fonts }, bytes, self.stamp);
-        placed
+        let inserted = self.placed_arts.insert(key, PlacedEntry { art: Arc::downgrade(art), placed: kept, fonts }, bytes, self.stamp);
+        (placed, keeps && inserted)
     }
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).
