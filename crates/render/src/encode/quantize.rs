@@ -421,9 +421,7 @@ impl<'a> PaletteIndex<'a> {
                 hi[axis] = hi[axis].max(c[axis]);
             }
         }
-        let axis = (0..3)
-            .max_by(|&a, &b| (w[a] * (hi[a] - lo[a])).total_cmp(&(w[b] * (hi[b] - lo[b]))))
-            .unwrap_or(0);
+        let axis = (0..3).max_by(|&a, &b| (w[a] * (hi[a] - lo[a])).total_cmp(&(w[b] * (hi[b] - lo[b])))).unwrap_or(0);
         let mid = ids.len() / 2;
         ids.select_nth_unstable_by(mid, |&a, &b| {
             let ac = colors.get(a).map_or(0.0, |c| c[axis]);
@@ -624,15 +622,16 @@ mod nearest_tests {
             for size in [0, 1, 2, 8, 12, 13, 16, 17, 32, 64, 128, 256] {
                 // Include duplicated colours, close k-means-style floating-point centres,
                 // and a wide colour gamut. Query points are fractional, as with dithering.
-                let colors: Vec<[f32; 3]> = (0..size)
-                    .map(|i| {
-                        if i % 11 == 0 {
-                            [127.0, 127.0, 127.0]
-                        } else {
-                            [0, 1, 2].map(|_| (next(&mut seed) % 65_536) as f32 * (255.0 / 65_535.0))
-                        }
-                    })
-                    .collect();
+                let colors: Vec<[f32; 3]> =
+                    (0..size)
+                        .map(|i| {
+                            if i % 11 == 0 {
+                                [127.0, 127.0, 127.0]
+                            } else {
+                                [0, 1, 2].map(|_| (next(&mut seed) % 65_536) as f32 * (255.0 / 65_535.0))
+                            }
+                        })
+                        .collect();
                 let index = PaletteIndex::new(&colors, w);
                 for _ in 0..500 {
                     let c = [0, 1, 2].map(|_| (next(&mut seed) % 65_536) as f32 * (255.0 / 65_535.0));
@@ -662,12 +661,8 @@ mod nearest_tests {
         use std::time::Instant;
 
         let mut seed = 0x87bb_7641;
-        let colors: Vec<[f32; 3]> = (0..256)
-            .map(|_| [0, 1, 2].map(|_| (next(&mut seed) % 256) as f32))
-            .collect();
-        let queries: Vec<[f32; 3]> = (0..100_000)
-            .map(|_| [0, 1, 2].map(|_| (next(&mut seed) % 65_536) as f32 * (255.0 / 65_535.0)))
-            .collect();
+        let colors: Vec<[f32; 3]> = (0..256).map(|_| [0, 1, 2].map(|_| (next(&mut seed) % 256) as f32)).collect();
+        let queries: Vec<[f32; 3]> = (0..100_000).map(|_| [0, 1, 2].map(|_| (next(&mut seed) % 65_536) as f32 * (255.0 / 65_535.0))).collect();
         let w = [0.55, 0.77, 0.34];
         let start = Instant::now();
         let baseline: Vec<_> = queries.iter().map(|&c| linear(&colors, c, w)).collect();
