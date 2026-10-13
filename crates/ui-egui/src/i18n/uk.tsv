@@ -4855,3 +4855,10 @@ machine	Stop	Зупинка
 	couldn't be read:	не читаються:
 	Product Visualizer	Перегляд на виробі
 @msg	product outline: {e}	контур виробу: {e}
+	Exports	Експорт
+	Nothing exported yet in this session.	У цьому сеансі ще нічого не експортовано.
+	Again	Повторити
+	Export it again, as it was asked, from this document	Експортувати знову, як було задано, з цього документа
+	Export History	Історія експорту
+	Clear Export History	Очистити історію експорту
+	Export Again	Експортувати знову

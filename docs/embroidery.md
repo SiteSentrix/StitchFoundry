@@ -462,6 +462,16 @@ sewn, then sew on. Without `dir` it only plans (which object goes where). Object
 across hoopings yet: one larger than a hooping is refused (choose a larger hoop or a wider
 overlap).
 
+## Export history
+
+Every export that writes files is remembered for the session, newest first: File › Export,
+Send to Machine, Batch Output, multi-hooping and batch convert, each with the document it came
+from, the files it wrote, or why it failed (`export.history`). **Export Again** (`export.again
+{index}`) runs one again as it was asked, from the active document, writing the same files
+again; the Embroidery panel's **Exports** section lists the latest with an **Again** button.
+Exports are encoded and written off the UI thread while you go on working when **Background
+Export** is on (Preferences › File Handling).
+
 ## Send to machine
 
 **Embroidery › Send to Machine** (`embroidery.send`) writes the design's machine file (in its

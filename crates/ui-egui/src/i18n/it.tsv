@@ -4875,3 +4875,10 @@ machine	Stop	Arresto
 	couldn't be read:	illeggibili:
 	Product Visualizer	Anteprima sul prodotto
 @msg	product outline: {e}	contorno del prodotto: {e}
+	Exports	Esportazioni
+	Nothing exported yet in this session.	Ancora nulla esportato in questa sessione.
+	Again	Di nuovo
+	Export it again, as it was asked, from this document	Esportalo di nuovo, come richiesto, da questo documento
+	Export History	Cronologia esportazioni
+	Clear Export History	Cancella cronologia esportazioni
+	Export Again	Esporta di nuovo

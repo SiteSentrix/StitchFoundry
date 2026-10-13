@@ -4873,3 +4873,10 @@ machine	Stop	Parada
 	couldn't be read:	no se pudieron leer:
 	Product Visualizer	Visualizador de productos
 @msg	product outline: {e}	contorno del producto: {e}
+	Exports	Exportaciones
+	Nothing exported yet in this session.	Aún no se ha exportado nada en esta sesión.
+	Again	Otra vez
+	Export it again, as it was asked, from this document	Exportarlo otra vez, tal como se pidió, desde este documento
+	Export History	Historial de exportaciones
+	Clear Export History	Borrar historial de exportaciones
+	Export Again	Exportar otra vez

@@ -533,7 +533,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-09 | Twin-sided pull compensation | Done | RE-05 | 1 |
 | NEW-10 | Batch output, barcode formats | Partial | Batch output and profiles done (OUT-02); Code 128 and Code 39 on worksheets (RP-02) still to be checked with a scanner | 1 |
 | NEW-11 | Lettering min/max height display | Done | LT-13 | – |
-| NEW-12 | Background exports with history | Missing | Exports run off the UI thread, Exports panel | 6 |
+| NEW-12 | Background exports with history | Done | Background Export (from VectorCraft) encodes off the UI thread; `export.history` remembers every file-writing export (File › Export, send, batch output, multi-hooping, convert) with its files or error; `export.again`; the Exports section | 0 |
 | NEW-13 | Keyboard design collections | Done | KDC-01 | – |
 | NEW-14 | Laydown stitch | Done | RE-06 | – |
 | NEW-15 | Magnetic hoop presets | Partial | Add more hoop presets (data only) | 6 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 181 done,
-30 partial, 33 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 182 done,
+30 partial, 32 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

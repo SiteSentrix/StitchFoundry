@@ -161,6 +161,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     buttonhole_rows(app, ui);
     egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
     egui::CollapsingHeader::new(tl!("Batch Output")).id_salt("emb-output").show(ui, |ui| output_body(app, ui));
+    egui::CollapsingHeader::new(tl!("Exports")).id_salt("emb-exports").show(ui, |ui| exports_body(app, ui));
     ui.add_space(6.0);
     object_section(app, ui);
     ui.add_space(6.0);
@@ -527,6 +528,49 @@ fn write_output(app: &mut VectorcraftApp, dir: &str) {
         Ok(r) => format!("{} {} → {}", r["files"].as_array().map_or(0, Vec::len), tl!("files written"), r["dir"].as_str().unwrap_or(dir)),
         Err(e) => e.to_string(),
     };
+}
+
+/// The exports of this session that wrote files, newest first: where they went, or why they
+/// failed, each to run again.
+pub(crate) fn exports_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let list = app.session.export_history.iter().take(12).cloned().collect::<Vec<_>>();
+    if list.is_empty() {
+        ui.label(egui::RichText::new(tl!("Nothing exported yet in this session.")).small());
+        return;
+    }
+    let now = vectorcraft_doc::metadata::now_unix();
+    let t = Tokens::get(ui.ctx());
+    let mut again = None;
+    for (i, r) in list.iter().enumerate() {
+        let paths: Vec<&str> = r["paths"].as_array().map(|p| p.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+        let what = match paths.as_slice() {
+            [] => r["command"].as_str().unwrap_or_default().to_string(),
+            [one] => vectorcraft_engine::cmd::fileio::file_name(one),
+            [first, rest @ ..] => format!("{} +{}", vectorcraft_engine::cmd::fileio::file_name(first), rest.len()),
+        };
+        let ago = match (now, r["at"].as_i64()) {
+            (Some(n), Some(a)) if n >= a => format!("{} min", (n - a) / 60),
+            _ => String::new(),
+        };
+        ui.horizontal(|ui| {
+            let ok = r["ok"].as_bool().unwrap_or(false);
+            let mark = if ok { egui::RichText::new("✓").color(t.accent) } else { egui::RichText::new("✗").color(t.error) };
+            ui.label(mark);
+            let tip = if ok { paths.join("\n") } else { r["error"].as_str().unwrap_or_default().to_string() };
+            ui.label(egui::RichText::new(format!("{what}  {ago}")).small()).on_hover_text(tip);
+            if button(ui, tl!("Again")).on_hover_text(tl!("Export it again, as it was asked, from this document")).clicked() {
+                again = Some(i);
+            }
+        });
+    }
+    if let Some(i) = again
+        && let Err(e) = app.run("export.again", json!({ "index": i }))
+    {
+        app.status(e);
+    }
+    if button(ui, tl!("Clear")).clicked() {
+        app.run("export.history.clear", json!({})).ok();
+    }
 }
 
 /// Batch Output: the design's machine files in the formats ticked, its worksheet and the design,

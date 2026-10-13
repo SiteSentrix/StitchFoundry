@@ -535,6 +535,8 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     };
     // Background Export: encoded and written from this snapshot while editing goes on.
     let label = format!("Exporting {}", fileio::file_name(&path));
+    let mut asked = again.clone();
+    asked["path"] = json!(path);
     let (params, target) = (params.clone(), path.clone());
     let work = move |write: Writer| {
         let enc = fileio::encode_all(&doc, f.id, &params).map_err(|e| e.to_string())?;
@@ -546,7 +548,8 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         Ok(out)
     };
     let enabled = app.session.prefs.background_export;
-    let mut r = background::run(app, enabled, label, None, work, |app, r| {
+    let mut r = background::run(app, enabled, label, None, work, move |app, r| {
+        vectorcraft_engine::cmd::export_history::note(&mut app.session, "document.export", &asked, r.as_ref().map_err(String::clone));
         let r = r?;
         let what = match r["files"].as_array() {
             Some(files) => format!("{} files", files.len()),
