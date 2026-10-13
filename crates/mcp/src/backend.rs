@@ -94,6 +94,16 @@ impl Backend for Remote {
             format!("VectorCraft app at {}: `{method}` failed: {e}; operation may have completed; inspect state before retrying", self.addr)
         })?;
         let v: Value = serde_json::from_str(reply.trim()).map_err(|e| format!("bad reply from app: {e}"))?;
+        if v.get("id") != Some(&json!(id)) {
+            // Not the answer to this call: the stream is desynchronised (or the endpoint faulty),
+            // so the connection is dropped and the next call starts a fresh one. The operation may
+            // still have completed, as with any reply that never arrived whole (#1728).
+            self.conn = None;
+            return Err(format!(
+                "VectorCraft app at {}: reply id mismatch (expected {id}); connection dropped; operation may have completed; inspect state before retrying",
+                self.addr
+            ));
+        }
         if v.get("ok").and_then(Value::as_bool) == Some(true) {
             Ok(v.get("result").cloned().unwrap_or(Value::Null))
         } else {

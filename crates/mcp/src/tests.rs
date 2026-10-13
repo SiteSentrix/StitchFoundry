@@ -507,6 +507,42 @@ fn remote_does_not_replay_when_edit_reply_is_lost() {
 }
 
 #[test]
+fn remote_rejects_a_reply_with_a_mismatched_id_and_reconnects() {
+    // A fake control server that answers the first request with another call's id, then serves
+    // correctly: the client must reject the stray reply, drop the connection, and reconnect.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let h = std::thread::spawn(move || {
+        let mut seen = vec![];
+        for stream in listener.incoming().flatten().take(2) {
+            stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+            let mut out = stream.try_clone().unwrap();
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                continue;
+            }
+            let msg: Value = serde_json::from_str(&line).unwrap();
+            // First connection: somebody else's answer. Later ones: the right echo.
+            let id = if seen.is_empty() { json!(msg["id"].as_u64().unwrap_or(0) + 1000) } else { msg["id"].clone() };
+            let reply = json!({"ok": true, "result": {"echo": msg["params"]}, "id": id});
+            writeln!(out, "{reply}").unwrap();
+            seen.push(msg);
+        }
+        seen
+    });
+    let mut remote = Remote::connect(&addr).unwrap();
+    let err = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {}})).expect_err("a stray reply must not be trusted");
+    assert!(err.contains("mismatch"), "{err}");
+    let good = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {}}));
+    assert!(good.is_ok(), "the next call reconnects: {good:?}");
+    drop(remote);
+    let seen = h.join().unwrap();
+    assert_eq!(seen.len(), 2, "one request per connection: {seen:?}");
+    assert_ne!(seen[0]["id"], seen[1]["id"]);
+}
+
+#[test]
 fn remote_connect_fails_fast() {
     // A port this test holds, bound but not listening, so connecting to it is refused. (A port
     // bound and dropped could be taken by another process or test before the connect.)
