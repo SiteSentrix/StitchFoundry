@@ -1991,7 +1991,10 @@ three: General (rulers, positions and sizes, the Info panel, dialog distances, c
 `numbersWithoutUnitsArePoints` (on by default) makes the desktop app's length fields in picas read a number typed
 with no unit in points (`12` is 12 pt, `2p6` and `1p` stay picas, `12 mm` millimetres); off, it is in picas. Fields in
 other units read it in their unit either way, and the Preferences dialog dims the option unless a unit is Picas.
-Command params are in points either way.
+Command params are in points either way. `identifyObjectsBy` (`objectName` by default, or `xmlId`) sets how Layers,
+Variables and Layer Options show and edit object names: Object Name keeps free text; XML ID shows AI-style XML ids
+(`My Rect #2` as `My_Rect__x23_2`) and `layer.setProps` / rename require a valid XML ID (letter, underscore or colon
+first; no spaces), stored back as the object name.
 `prefs.list` marks the length preferences (`keyboardIncrement`, `cornerRadius`, `pasteOffset`, `gridlineEvery`,
 `typeSizeIncrement`, `baselineShiftIncrement`) with `measure: "general"|"type"`; they are kept in points and also take
 a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `Centimeters`, `Pixels`, `Feet & Inches`,

@@ -169,7 +169,8 @@ fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
     if view.opts.thumb(n) {
         x = row_thumb(&ui, view, n, r, x).right() + 4.0;
     }
-    let name = painted_name(n, &n.display_name(), crate::i18n::current());
+    let label = n.identify_label(view.identify_xml_id);
+    let name = if view.identify_xml_id { label } else { painted_name(n, &label, crate::i18n::current()) };
     ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), t.text);
 }
 
@@ -329,6 +330,8 @@ struct View<'a> {
     column: Option<ColumnDrag>,
     /// The row to scroll into view.
     reveal: Option<NodeId>,
+    /// Preferences › Units › Identify Objects By › XML ID.
+    identify_xml_id: bool,
 }
 
 /// What one frame of the panel decided.
@@ -390,6 +393,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         h: app.ui.layers_panel.row(),
         column: ui.data(|d| d.get_temp(key("column"))),
         reveal,
+        identify_xml_id: app.session.prefs.identify_objects_by == "xmlId",
     };
     let mut out = Out::default();
     ui.add_space(6.0);
@@ -685,8 +689,9 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         x = th.right() + 4.0;
         th
     });
-    // Name.
-    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.display_name() };
+    // Name (Preferences › Units › Identify Objects By: Object Name or XML ID).
+    let xml_id = view.identify_xml_id;
+    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.identify_label(xml_id) };
     let font = egui::FontId::proportional(13.0);
     let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id()));
     let name_rect = egui::Rect::from_min_max(egui::pos2(x - 2.0, r.center().y - 10.0), egui::pos2(r.right() - 44.0, r.center().y + 10.0));
@@ -713,10 +718,13 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         _ => {
             let painter = ui.painter().with_clip_rect(name_rect);
             // Generated names ("<Path>", "<Opacity Mask>") are translated where painted; the stored name stays English.
+            // XML IDs stay as ids (not translated).
             let shown = if doc.mask_edit.is_some_and(|m| m.layer == n.id) {
                 tl!("<Opacity Mask>").to_string()
+            } else if xml_id {
+                name.clone()
             } else {
-                painted_name(n, &name, crate::i18n::current())
+                painted_name(n, &n.display_name(), crate::i18n::current())
             };
             let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, shown, font, if item.dim { t.text_dim } else { t.text });
             name_end = text.right();
@@ -758,7 +766,7 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         let on_name = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x <= name_end.max(name_rect.left() + 20.0) && p.x >= name_rect.left());
         let on_thumb = thumb_rect.is_some_and(|th| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| th.contains(p)));
         if on_name && !on_thumb {
-            ui.data_mut(|d| d.insert_temp(rename_id(), (n.id.0, n.display_name())));
+            ui.data_mut(|d| d.insert_temp(rename_id(), (n.id.0, n.identify_label(view.identify_xml_id))));
         } else {
             out.actions.push(("ui.layerOptions".into(), json!({"ids": [n.id.0]})));
         }

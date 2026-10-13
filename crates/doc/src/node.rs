@@ -978,6 +978,12 @@ impl Node {
             _ => format!("<{}>", self.kind_label()),
         }
     }
+
+    /// [`Self::display_name`], or its XML id when Preferences › Units › Identify Objects By is XML ID.
+    pub fn identify_label(&self, xml_id: bool) -> String {
+        let name = self.display_name();
+        if xml_id { crate::xml_id::from_object_name(&name) } else { name }
+    }
     /// Path data for path nodes.
     pub fn path_data(&self) -> Option<&PathData> {
         match &self.kind {

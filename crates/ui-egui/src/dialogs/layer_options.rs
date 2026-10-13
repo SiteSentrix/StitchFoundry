@@ -33,9 +33,10 @@ fn color_field(c: LayerColor) -> String {
 }
 
 /// The fields for `n` (a layer or any other row).
-fn fields_of(n: &Node) -> serde_json::Map<String, Value> {
+/// `xml_id`: Preferences › Units › Identify Objects By › XML ID.
+fn fields_of(n: &Node, xml_id: bool) -> serde_json::Map<String, Value> {
     let mut f = serde_json::Map::new();
-    f.insert("name".into(), json!(n.display_name()));
+    f.insert("name".into(), json!(n.identify_label(xml_id)));
     f.insert("visible".into(), json!(n.visible));
     f.insert("locked".into(), json!(n.locked));
     f.insert("layer".into(), json!(n.is_layer()));
@@ -70,7 +71,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
     };
     let first = ids.first().and_then(|id| st.doc.node(*id)).ok_or("no such layer or object")?;
-    let mut f = fields_of(first);
+    let xml_id = app.session.prefs.identify_objects_by == "xmlId";
+    let mut f = fields_of(first, xml_id);
     f.insert("ids".into(), json!(ids.iter().map(|i| i.0).collect::<Vec<_>>()));
     f.insert("mode".into(), json!("edit"));
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
@@ -93,8 +95,10 @@ pub fn open_new(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     let sublayer = p.get("sublayer").and_then(Value::as_bool).unwrap_or(false);
     let color = LayerColor::Preset((layers.len() % LAYER_COLORS.len()) as u8);
+    let name = format!("Layer {i}");
+    let name = if app.session.prefs.identify_objects_by == "xmlId" { vectorcraft_doc::xml_id::from_object_name(&name) } else { name };
     let fields = json!({
-        "mode": if sublayer { "newSublayer" } else { "new" }, "layer": true, "name": format!("Layer {i}"), "color": color_field(color),
+        "mode": if sublayer { "newSublayer" } else { "new" }, "layer": true, "name": name, "color": color_field(color),
         "template": false, "locked": false, "visible": true, "printable": true, "preview": true, "dimImages": false, "dimPercent": 50,
     });
     app.ui.dialog = Some(Dialog::new(KIND, fields));

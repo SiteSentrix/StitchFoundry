@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Layer Options…",
             ["Window", "Layers"],
             None,
-            "{ids?|id? (default: the highlighted rows, else the current layer), name?, visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name} Layer Options; rows that are not layers take name, visible and locked. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
+            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name} Layer Options; rows that are not layers take name, visible and locked. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
             has_doc,
             set_props
         ),
@@ -297,7 +297,9 @@ fn layer_color_param(v: &Value) -> std::result::Result<LayerColor, String> {
 }
 
 /// Layer Options in `p` applied to layer or row `n` (validated first by [`check_options`]).
-fn apply_options(n: &mut Node, p: &Value) {
+/// `xml_id`: Preferences › Units › Identify Objects By › XML ID — `name` is an XML id and is
+/// stored as the object name ([`vectorcraft_doc::xml_id`]).
+fn apply_options(n: &mut Node, p: &Value, xml_id: bool) {
     if let Some(v) = str_param(p, "name") {
         if v.trim().is_empty() {
             // A layer keeps a name; an object goes back to its generated `<Kind>` one.
@@ -305,7 +307,8 @@ fn apply_options(n: &mut Node, p: &Value) {
                 n.name = None;
             }
         } else {
-            n.name = Some(v.chars().take(512).collect());
+            let name = if xml_id { vectorcraft_doc::xml_id::to_object_name(v) } else { v.to_string() };
+            n.name = Some(name.chars().take(512).collect());
         }
     }
     if let Some(v) = p.get("visible").and_then(Value::as_bool) {
@@ -354,7 +357,9 @@ fn apply_options(n: &mut Node, p: &Value) {
 }
 
 /// Bad values in Layer Options params, as an error for `cmd`.
-fn check_options(cmd: &str, p: &Value) -> Result<()> {
+/// `xml_id`: Preferences › Units › Identify Objects By › XML ID — a non-empty `name` must be a
+/// valid XML id.
+fn check_options(cmd: &str, p: &Value, xml_id: bool) -> Result<()> {
     if let Some(v) = p.get("color") {
         layer_color_param(v).map_err(|e| bad(cmd, e))?;
     }
@@ -367,6 +372,12 @@ fn check_options(cmd: &str, p: &Value) -> Result<()> {
         && !(v.is_boolean() || v.is_null() || v.as_f64().is_some_and(f64::is_finite))
     {
         return Err(bad(cmd, "`dimImages` is a percentage or false"));
+    }
+    if xml_id
+        && let Some(name) = str_param(p, "name").filter(|n| !n.trim().is_empty())
+        && !vectorcraft_doc::xml_id::is_valid(name)
+    {
+        return Err(bad(cmd, "Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)"));
     }
     Ok(())
 }
@@ -446,12 +457,13 @@ fn clip_toggle(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// A new layer with the options in `p`, at `parent`/`index`; it becomes current and highlighted.
 fn add_layer(s: &mut Session, p: &Value, cmd: &str, label: &str, place: impl FnOnce(&Document) -> Result<(Option<NodeId>, usize)>) -> Result<Value> {
-    check_options(cmd, p)?;
+    let xml_id = s.prefs.identify_objects_by == "xmlId";
+    check_options(cmd, p, xml_id)?;
     let name = str_param(p, "name").filter(|n| !n.trim().is_empty()).map(str::to_string);
     let id = s.edit(label, |d, _| {
         let (parent, index) = place(d)?;
         let mut n = make_layer(d, name.as_deref());
-        apply_options(&mut n, p);
+        apply_options(&mut n, p, xml_id);
         Ok(d.insert(parent, index, n)?)
     })?;
     let st = s.doc_mut()?;
@@ -568,14 +580,15 @@ fn highlight(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setProps";
-    check_options(C, p)?;
+    let xml_id = s.prefs.identify_objects_by == "xmlId";
+    check_options(C, p, xml_id)?;
     let ids = rows_param(s, p, C)?;
     if ids.is_empty() {
         return Err(bad(C, "no rows"));
     }
     s.edit("Layer Options", |d, sel| {
         for id in &ids {
-            apply_options(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, p);
+            apply_options(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, p, xml_id);
         }
         sel.deselect_uneditable(d);
         Ok(())
