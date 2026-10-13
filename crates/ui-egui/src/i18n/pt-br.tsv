@@ -3094,6 +3094,7 @@ axis	Both	Ambos
 @msg	No saved selections (Select → Save Selection…)	Nenhuma seleção salva (Selecionar → Salvar seleção…)
 @msg	No saved views (View → New View…)	Nenhuma vista salva (Exibir → Nova vista…)
 @msg	Offset Path: select paths	Deslocar traçado: selecione traçados
+@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Deslocar traçado: o deslocamento não deixa nada dos traçados selecionados (um deslocamento para dentro maior que as formas)
 @msg	Opened with {_1} note(s): {_2}	Aberto com {_1} observação(ões): {_2}
 @msg	Opened {url}	{url} aberto
 @msg	Outline Stroke: no stroked paths selected	Contornar traço: nenhum traçado com traço selecionado

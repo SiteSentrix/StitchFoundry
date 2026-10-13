@@ -919,3 +919,14 @@ fn trim_merge_and_crop_remove_strokes() {
         }
     }
 }
+
+/// #1590: an inset larger than the shape leaves nothing, and the error says so rather than asking
+/// for paths that are selected.
+#[test]
+fn offset_path_that_leaves_nothing_says_so() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let e = s.execute("object.path.offsetPath", &json!({"offset": -20})).unwrap_err().to_string();
+    assert!(e.contains("leaves nothing") && !e.contains("select paths"), "{e}");
+}
