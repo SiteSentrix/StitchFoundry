@@ -249,6 +249,10 @@ impl Tool for GestureTool {
             _ => vec![],
         }
     }
+    /// `[` and `]` are the Blob Brush's and the Eraser's: their size (#1661).
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        matches!(key, ToolKey::BracketLeft | ToolKey::BracketRight) && matches!(self.id, "blobBrush" | "eraser")
+    }
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {
         match key {
             ToolKey::Escape if self.active => {

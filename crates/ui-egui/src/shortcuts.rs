@@ -391,6 +391,38 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         }
     }
+    // `[` and `]` the active tool takes (the Blob Brush's and the Eraser's size, the Symbolism
+    // tools' diameter, with Shift their intensity). Read as typed, so
+    // layouts where a bracket takes Option or AltGr count too; `{` and `}` are Shift's.
+    if !(m.command || m.ctrl) {
+        let typed: Vec<(String, ToolKey, bool)> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Text(t) => match t.as_str() {
+                        "[" => Some((t.clone(), ToolKey::BracketLeft, false)),
+                        "]" => Some((t.clone(), ToolKey::BracketRight, false)),
+                        "{" => Some((t.clone(), ToolKey::BracketLeft, true)),
+                        "}" => Some((t.clone(), ToolKey::BracketRight, true)),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .collect()
+        });
+        let mut taken = false;
+        for (text, key, shift) in typed {
+            if app.session.tool_claims_key(key, view) {
+                ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Text(t) if *t == text)));
+                let r = app.session.tool_key(key, Mods { shift, ..Mods::default() }, view);
+                crate::canvas::apply_requests(app, r);
+                taken = true;
+            }
+        }
+        if taken {
+            return;
+        }
+    }
     // Command shortcuts.
     let mut fire = None;
     for (sc, id, p) in all_shortcuts() {
@@ -697,6 +729,33 @@ mod tests {
         app.select_tool("rectangle");
         frame(&mut app, vec![enter()]);
         assert_eq!(kind(&app), None, "another tool has its own Enter");
+    }
+
+    /// #1661: typed `[` and `]` reach the tool that takes them: the Blob Brush's and the Eraser's
+    /// size (Option or AltGr brackets too), the stroke weight left as it is; other tools leave them
+    /// alone.
+    #[test]
+    fn brackets_size_the_blob_brush_and_the_eraser() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.session.execute("stroke.set", &json!({"weight": 3})).unwrap();
+        let size = |app: &mut VectorcraftApp| app.session.tool_options()["size"].as_f64().unwrap();
+        let text = |t: &str| egui::Event::Text(t.into());
+        for tool in ["blobBrush", "eraser"] {
+            app.select_tool(tool);
+            let before = size(&mut app);
+            frame(&mut app, vec![text("]")]);
+            frame(&mut app, vec![text("]")]);
+            assert_eq!(size(&mut app), before + 2.0, "{tool}");
+            // Option-8 types `[` on a Turkish Mac keyboard.
+            let option_8 = egui::Event::Key { key: Key::Num8, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::ALT };
+            frame(&mut app, vec![option_8, text("[")]);
+            assert_eq!(size(&mut app), before + 1.0, "{tool}: a bracket typed with Option");
+        }
+        assert_eq!(app.session.paint.stroke_width, 3.0, "the stroke weight stays");
+        app.select_tool("rectangle");
+        frame(&mut app, vec![text("[")]);
+        assert_eq!(app.session.paint.stroke_width, 3.0);
     }
 
     #[test]
