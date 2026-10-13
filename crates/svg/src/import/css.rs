@@ -84,9 +84,18 @@ fn is_ident(c: char) -> bool {
     c.is_alphanumeric() || c == '-' || c == '_'
 }
 
+/// How deep `:not()`s may nest (real style sheets nest one or two).
+const MAX_NOT_NESTING: usize = 8;
+
 impl Selector {
     /// `None` for selectors this cascade doesn't support (they never match).
     fn parse(s: &str) -> Option<Self> {
+        Self::parse_nested(s, 0)
+    }
+
+    /// [`Self::parse`] for a selector `nesting` `:not()`s deep: past [`MAX_NOT_NESTING`] it is not
+    /// supported, so a style sheet of `:not(:not(:not(…` can't exhaust the stack.
+    fn parse_nested(s: &str, nesting: usize) -> Option<Self> {
         fn ident(chars: &mut std::iter::Peekable<std::str::Chars>) -> Option<String> {
             let mut out = String::new();
             while let Some(&c) = chars.peek().filter(|c| is_ident(**c)) {
@@ -148,7 +157,7 @@ impl Selector {
                 }
                 ':' => {
                     chars.next();
-                    if !ident(&mut chars)?.eq_ignore_ascii_case("not") || chars.next() != Some('(') {
+                    if nesting >= MAX_NOT_NESTING || !ident(&mut chars)?.eq_ignore_ascii_case("not") || chars.next() != Some('(') {
                         return None;
                     }
                     let mut depth = 1;
@@ -170,7 +179,7 @@ impl Selector {
                     // A list of compound selectors (each may hold a `:not()` of its own).
                     let mut most = (0, 0, 0);
                     for a in top_level_commas(&arg) {
-                        let s = Self::parse(a)?;
+                        let s = Self::parse_nested(a, nesting + 1)?;
                         let [(c, _)]: [(Compound, bool); 1] = s.parts.try_into().ok()?;
                         most = most.max(s.specificity);
                         comp.nots.push(c);
@@ -680,6 +689,11 @@ mod tests {
         assert_eq!(Selector::parse("rect:not(.keep)").unwrap().specificity, (0, 1, 1));
         assert_eq!(Selector::parse("g :not(#a, .b.c, text)").unwrap().specificity, (1, 0, 1));
         assert_eq!(Selector::parse(":not(rect):not([x])").unwrap().specificity, (0, 1, 1));
+        // Nesting is bounded: a hostile sheet can't recurse without end.
+        let nested = |n: usize| format!("{}.x{}", ":not(".repeat(n), ")".repeat(n));
+        assert!(Selector::parse(&nested(MAX_NOT_NESTING)).is_some());
+        assert!(Selector::parse(&nested(MAX_NOT_NESTING + 1)).is_none());
+        assert!(Selector::parse(&nested(200_000)).is_none());
         with_doc(
             r#"<svg xmlns="http://www.w3.org/2000/svg"><style>
             rect:not(.keep) { fill: green }
