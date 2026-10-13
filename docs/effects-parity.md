@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -99,6 +99,7 @@ Revolve caps, 3D Classic, Turntable, 3D export) is 25–45 h.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | 3D Perspective is the documented 0°–160° angle, earlier strengths read as the same view ([three-d.md](three-d.md#perspective)); 3D stays ~25%, 25–45 h |
 | 2026-10-13 | minor | Raster effects (blur, shadow, glow, grain) drawn after a pattern, radial or freeform gradient fill export at their place and size (#1541, fixes #1536); scores unchanged (estimated) |
 | 2026-10-13 | minor | 3D and Materials: outlined words and other shapes of many small curves take Rotate, Extrude & Bevel and Inflate (curves are sampled by a tolerance; Rotate takes up to 65,536 outline points; #1481); Extrude & Bevel's Twist runs 0° to 360° as the public panel reference gives it, a negative value drawing untwisted (#1524); a twisted extrusion keeps its walls, which were dropped from about 45° (#1525); details in [three-d.md](three-d.md); 3D stays ~25%, 25–45 h (estimated) |
 | 2026-10-13 | minor | Inflate takes Twist, Taper and Cap ([three-d.md](three-d.md)); 3D stays ~25%, 25–45 h: materials, lights and shadows are the bulk of what remains |

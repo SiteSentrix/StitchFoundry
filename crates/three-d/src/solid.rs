@@ -11,7 +11,7 @@
 
 use vectorcraft_geom::{BezPath, ParamCurve, PathData, Point, Rect};
 
-use crate::{MAX_FACES, Revolve, V3};
+use crate::{MAX_FACES, Revolve, V3, eye_distance, perspective_scale};
 
 /// The view shared by every 3D effect: rotation, perspective and one directional light.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -19,7 +19,7 @@ pub struct View {
     pub rotation_x: f64,
     pub rotation_y: f64,
     pub rotation_z: f64,
-    /// Perspective strength, 0 for orthographic projection, up to 1.
+    /// Perspective, 0° (none) to 160°, as Revolve's.
     pub perspective: f64,
     pub light_azimuth: f64,
     pub light_elevation: f64,
@@ -389,7 +389,10 @@ fn inset(ring: &[Point], w: f64) -> Vec<Point> {
 struct Camera {
     view: Revolve,
     origin: Point,
-    distance: f64,
+    /// The eye's distance in front of the centre; `None` without perspective.
+    eye: Option<f64>,
+    /// Deeper than any part of the object: faces drawn first go this far behind it.
+    far: f64,
     light: V3,
 }
 
@@ -398,7 +401,7 @@ impl Camera {
         let view = view.revolve();
         let [lx, ly, lz] = view.light_direction();
         let size = (bounds.width() / 2.0).max(bounds.height() / 2.0).max(depth / 2.0).max(1.0);
-        Self { view, origin: bounds.center(), distance: 4.0 * size, light: V3(lx, ly, lz) }
+        Self { view, origin: bounds.center(), eye: eye_distance(view.perspective, size), far: 16.0 * size, light: V3(lx, ly, lz) }
     }
     fn rotate(&self, v: V3) -> V3 {
         self.view.rotate(v)
@@ -408,13 +411,13 @@ impl Camera {
         self.rotate(V3(p.x - self.origin.x, p.y - self.origin.y, z))
     }
     fn project(&self, v: V3) -> Point {
-        let f = self.distance / (self.distance - v.2 * self.view.perspective);
+        let f = perspective_scale(self.eye, v.2);
         Point::new(self.origin.x + v.0 * f, self.origin.y + v.1 * f)
     }
     /// The cosine between a face's outward unit normal `n` and the direction from `at` (both in
     /// view space) to the eye: positive when the face is turned towards the viewer.
     fn facing(&self, at: V3, n: V3) -> f64 {
-        let to_eye = if self.view.perspective > 0.0 { V3(0.0, 0.0, self.distance / self.view.perspective).sub(at).unit() } else { V3(0.0, 0.0, 1.0) };
+        let to_eye = self.eye.map_or(V3(0.0, 0.0, 1.0), |e| V3(0.0, 0.0, e).sub(at).unit());
         n.dot(to_eye)
     }
     fn brightness(&self, n: V3) -> f64 {
@@ -461,7 +464,7 @@ impl Builder<'_> {
         if contours.iter().map(|c| signed_area(c).abs()).sum::<f64>() < 1e-10 {
             return Ok(());
         }
-        let depth = if behind { centre.2 - 4.0 * self.camera.distance } else { centre.2 };
+        let depth = if behind { centre.2 - self.camera.far } else { centre.2 };
         self.facets.push(Facet { contours, depth, brightness: self.camera.brightness(n) });
         if self.facets.len() > MAX_FACES {
             return Err("The 3D surface is too complex; simplify the shape".into());

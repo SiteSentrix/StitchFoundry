@@ -216,7 +216,7 @@ fn malformed_and_degenerate_input_is_bounded() {
         cap: true,
         bevel: Some(Bevel { width: f64::NAN, height: 1e12, repeat: usize::MAX, space: 7.0, ..Bevel::default() }),
     };
-    let f = extrude(&p, b, wild, View { rotation_x: f64::NAN, perspective: 9.0, ..front() }).unwrap();
+    let f = extrude(&p, b, wild, View { rotation_x: f64::NAN, perspective: 900.0, ..front() }).unwrap();
     assert!(f.iter().flat_map(|f| f.contours.iter().flatten()).all(|q| q.x.is_finite() && q.y.is_finite()));
     assert!(
         inflate(&p, b, Inflate { depth: -5.0, volume: f64::NAN, both_sides: true, twist: f64::INFINITY, taper: f64::NAN, cap: true }, front())
@@ -243,9 +243,28 @@ fn perspective_makes_the_near_face_larger() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
     let o = Extrude { depth: 100.0, ..Extrude::default() };
     let flat = extent(&extrude(&p, b, o, front()).unwrap());
-    let deep = extent(&extrude(&p, b, o, View { perspective: 0.6, ..front() }).unwrap());
+    let deep = extent(&extrude(&p, b, o, View { perspective: 30.0, ..front() }).unwrap());
     assert!(deep.width() > flat.width() + 1.0);
     assert!(close(deep.center().x, flat.center().x, 1e-6));
+}
+
+/// The wider the Perspective, the nearer the eye: seen straight on, the front of a cube is drawn
+/// larger and larger, up to 160°, where the eye is still outside the cube.
+#[test]
+fn a_wider_perspective_brings_the_eye_nearer() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let o = Extrude { depth: 100.0, ..Extrude::default() };
+    let mut last = 100.0;
+    for angle in [20.0, 60.0, 110.0, 160.0] {
+        // The front face alone shows: its width is the cube's on the page.
+        let width = extent(&extrude(&p, b, o, View { perspective: angle, ..front() }).unwrap()).width();
+        assert!(width > last, "{angle}°: {width} after {last}");
+        last = width;
+    }
+    // At 160° the eye is about 87.9 pt in front of the cube's centre (√3 × 50 / sin 80°), so the
+    // front face, 50 pt nearer than the centre, is drawn about 2.3 times its size.
+    let eye = 3f64.sqrt() * 50.0 / 80f64.to_radians().sin();
+    assert!(close(last, 100.0 * eye / (eye - 50.0), 1e-6), "{last}");
 }
 
 #[test]

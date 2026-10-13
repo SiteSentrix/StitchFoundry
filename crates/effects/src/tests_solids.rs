@@ -146,11 +146,43 @@ fn a_twisted_tapered_hollow_inflate_exports_and_expands() {
     assert!(ids.len() > 20, "{} nodes", ids.len());
 }
 
+/// Files and scripts from before the Perspective angle give `perspective` as a 0–100 % strength:
+/// each 3D effect draws it exactly as the angle that stands for it, an angle given too wins, and
+/// the current parameters carry only the angle.
+#[test]
+fn an_earlier_perspective_strength_draws_as_its_angle() {
+    let art = |n: &Node, id: &str| if id == crate::REVOLVE { crate::revolve_art(n) } else { solid_art(n) };
+    for id in SOLIDS.iter().copied().chain([crate::REVOLVE]) {
+        let view = |extra: Value| {
+            let mut p = json!({"rotationX": -25, "rotationY": 35, "rotationZ": 0, "depth": 80});
+            p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            p
+        };
+        let with = |params: Value| {
+            let mut n = square_node();
+            // As read from a file: the stored parameters, not a fresh effect's.
+            n.appearance.effects.push(Effect { id: id.into(), params, visible: true });
+            art(&n, id).unwrap().visual_bounds().unwrap()
+        };
+        let angle = vectorcraft_three_d::perspective_from_strength(0.6);
+        let old = with(view(json!({"perspective": 60})));
+        let new = with(view(json!({"perspectiveAngle": angle})));
+        let none = with(view(json!({})));
+        for (a, b) in [(old.x0, new.x0), (old.y0, new.y0), (old.x1, new.x1), (old.y1, new.y1)] {
+            assert!((a - b).abs() < 1e-9, "{id}: {old:?} against {new:?}, none {none:?}");
+        }
+        assert!((old.width() - none.width()).abs() > 1.0 || (old.height() - none.height()).abs() > 1.0, "{id}: perspective shows");
+        assert_eq!(with(view(json!({"perspective": 60, "perspectiveAngle": 0}))), none, "{id}: the angle wins");
+        let merged = crate::merged_params(id, &view(json!({"perspective": 60})));
+        assert!(merged.get("perspective").is_none() && (merged["perspectiveAngle"].as_f64().unwrap() - angle).abs() < 1e-12, "{id}");
+    }
+}
+
 #[test]
 fn effects_before_it_shape_the_solid_and_effects_after_it_bend_the_result() {
     let mut n = square_node();
     n.appearance.effects.push(fx("path.offsetPath", json!({"offset": 20})));
-    n.appearance.effects.push(fx(EXTRUDE, json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "perspective": 0})));
+    n.appearance.effects.push(fx(EXTRUDE, json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "perspectiveAngle": 0})));
     // Straight on, the extrusion shows its front: the offset square.
     let b = solid_art(&n).unwrap().visual_bounds().unwrap();
     assert!((b.width() - 140.0 - 0.75).abs() < 1e-6, "{b:?}");

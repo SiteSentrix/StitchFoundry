@@ -8,7 +8,8 @@ edge of the profile's bounds; **Offset** moves the axis outward. For a cylinder 
 line, give it a nonzero offset. A vertical line at zero offset lies on the axis and has no surface.
 
 **Revolve angle** sweeps 0 to 360 degrees. **Rotation X/Y/Z** rotates the viewing direction, with all three axes defaulting to 0 degrees. **Perspective**
-is zero for an orthographic view. **Segments** controls radial resolution (8 to 128 for a full turn).
+runs 0° to 160°, as documented: 0° is an orthographic view, and wider angles bring the eye nearer (see
+[three-d.md](three-d.md#perspective)). **Segments** controls radial resolution (8 to 128 for a full turn).
 Lighting is a directional light with azimuth, elevation, intensity and ambient contribution.
 Turn **Shading** off to keep the source paint without lighting.
 

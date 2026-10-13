@@ -1023,8 +1023,8 @@ or compound path. `effect.dialog` opens compact options with artboard rotation a
 SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is supported per profile.
 
 Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
-`edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspective`
-(0..100%, default 0), `segments` (8..128, default 64), `shade` (default true), `lightAzimuth`
+`edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspectiveAngle`
+(degrees, 0..160, default 0; an earlier `perspective`, 0..100%, is read as the angle that shows the same view), `segments` (8..128, default 64), `shade` (default true), `lightAzimuth`
 (degrees, default -45), `lightElevation` (degrees, default 45), `lightIntensity` (0..100%, default 80),
 `ambient` (0..100%, default 25), and `expandVisibleOnly` (boolean, default true). A vertical-line profile needs a positive offset to have a radius.
 Open profiles have no end caps. Visibility of intersecting surfaces is approximate.
@@ -1055,7 +1055,7 @@ and `bevelHeight` (points, default 4), `bevelRepeat` (1..32), `bevelSpace` (0..9
 `bevelBothSides`. `threeD.inflate`: `depth` (points, default 0), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100), `cap` (true
 solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
-`perspective` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
+`perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
 the scope and what differs from the public documentation.
 
 
