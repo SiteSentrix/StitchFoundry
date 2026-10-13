@@ -29,6 +29,33 @@ fn doc() -> Document {
     d
 }
 
+/// A large palette should create one class per distinct declaration, preserving first-use
+/// numbers even when earlier styles recur after hundreds of others.
+#[test]
+fn many_css_styles_preserve_first_use_numbers() {
+    let mut d = Document::new(300.0, 10.0);
+    let layer = d.layers[0].id;
+    let colors = (0u16..256).chain([0, 128, 255]);
+    for (x, color) in colors.enumerate() {
+        let x = x as f64;
+        let appearance = Appearance::basic(Paint::solid(Color::rgb8(color as u8, 31, 63)), Paint::None, 0.0);
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 0.0, x + 0.5, 1.0)), appearance);
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+
+    for (styling, definition_marker) in [(Styling::InternalCss, ".cls-"), (Styling::StyleEntities, "<!ENTITY st")] {
+        let svg = export(&d, &ExportOptions { styling, ..Default::default() });
+        let paths: Vec<_> = svg.lines().filter(|line| line.contains("<path ")).collect();
+        assert_eq!(paths.len(), 259, "{styling:?}");
+        for (i, path) in paths.iter().enumerate() {
+            let number = if i < 256 { i + 1 } else { [1, 129, 256][i - 256] };
+            let expected = if styling == Styling::InternalCss { format!("class=\"cls-{number}\"") } else { format!("style=\"&st{number};\"") };
+            assert!(path.contains(&expected), "path {i} should reference {expected}: {path}");
+        }
+        assert_eq!(svg.matches(definition_marker).count(), 256, "{styling:?}");
+    }
+}
+
 #[test]
 fn every_combination_reads_back() {
     let d = doc();
