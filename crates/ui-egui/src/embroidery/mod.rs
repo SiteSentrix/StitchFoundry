@@ -172,6 +172,8 @@ pub struct EmbroideryUi {
     pub recolor_tone: [u8; 3],
     /// The name typed to keep the design as a template.
     pub template_name: String,
+    /// A new job order as typed: customer, quantity and due date.
+    pub job_draft: (String, u32, String),
     /// The Monogram section: its letters, style (0 classic, 1 line), border (an index of
     /// `embroidery.monogram`'s borders) and size (mm; 0: the font's own).
     pub monogram_letters: String,
@@ -292,6 +294,7 @@ impl Default for EmbroideryUi {
             recolor_degrees: 60.0,
             recolor_tone: [0x1d, 0x35, 0x57],
             template_name: String::new(),
+            job_draft: (String::new(), 1, String::new()),
             monogram_letters: String::new(),
             monogram_style: 0,
             monogram_border: 1,

@@ -4934,3 +4934,14 @@ machine	Stop	Arrêt
 	Save as Design Template	Enregistrer comme modèle de motif
 	Delete Design Template	Supprimer le modèle de motif
 	Print Stitch View	Imprimer la vue des points
+	Job Orders	Commandes
+	Customer	Client
+	Due (YYYY-MM-DD)	Échéance (AAAA-MM-JJ)
+	New Job for This Design	Nouvelle commande pour ce motif
+	In production	En production
+	Cancelled	Annulée
+	New Job Order	Nouvelle commande
+	Update Job Order	Modifier la commande
+	Delete Job Order	Supprimer la commande
+	Job Worksheet	Fiche de la commande
+	Job Output	Sortie de la commande

@@ -4922,3 +4922,14 @@ machine	Stop	Остановка
 	Save as Design Template	Сохранить как шаблон дизайна
 	Delete Design Template	Удалить шаблон дизайна
 	Print Stitch View	Печать вида стежков
+	Job Orders	Заказы
+	Customer	Клиент
+	Due (YYYY-MM-DD)	Срок (ГГГГ-ММ-ДД)
+	New Job for This Design	Новый заказ на этот дизайн
+	In production	В производстве
+	Cancelled	Отменён
+	New Job Order	Новый заказ
+	Update Job Order	Изменить заказ
+	Delete Job Order	Удалить заказ
+	Job Worksheet	Рабочий лист заказа
+	Job Output	Вывод заказа

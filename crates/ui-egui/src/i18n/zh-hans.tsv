@@ -4501,3 +4501,14 @@ machine	Stop	停止
 	Save as Design Template	另存为设计模板
 	Delete Design Template	删除设计模板
 	Print Stitch View	打印针迹视图
+	Job Orders	订单
+	Customer	客户
+	Due (YYYY-MM-DD)	交期 (YYYY-MM-DD)
+	New Job for This Design	为此设计新建订单
+	In production	生产中
+	Cancelled	已取消
+	New Job Order	新建订单
+	Update Job Order	更新订单
+	Delete Job Order	删除订单
+	Job Worksheet	订单工作单
+	Job Output	订单输出
