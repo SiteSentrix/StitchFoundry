@@ -216,3 +216,16 @@ fn percentages_in_a_symbol_are_of_its_view_box() {
     };
     assert_similar(&drawing("100%", "100%", "25%", "50%"), &drawing("100", "50", "25", "25"), 24.0, 0.001);
 }
+
+/// #1598: an unsupported filter's warning names the filter, its primitives and the object, and
+/// says it is drawn without it (not "a group": usvg wraps the element in one).
+#[test]
+fn unsupported_filters_are_named_in_the_warning() {
+    let body = r#"<filter id="f"><feColorMatrix type="saturate" values="0"/></filter><filter id="t"><feTurbulence baseFrequency="0.05"/></filter>
+        <rect x="20" y="20" width="60" height="60" fill="red" filter="url(#f)"/>
+        <rect id="r" x="100" y="20" width="60" height="60" fill="blue" filter="url(#t)"/>"#;
+    let (d, w) = import_with_report(&svg(body)).unwrap();
+    assert!(w.iter().any(|w| w == "filter 'f' (feColorMatrix) on an object isn't supported; drawn without it"), "{w:?}");
+    assert!(w.iter().any(|w| w == "filter 't' (feTurbulence) on 'r' isn't supported; drawn without it"), "{w:?}");
+    assert_eq!(art(&d).iter().filter(|n| n.path_data().is_some()).count(), 2, "both drawn");
+}

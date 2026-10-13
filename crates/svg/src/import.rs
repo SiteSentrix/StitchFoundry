@@ -245,6 +245,44 @@ impl RootUnits {
     }
 }
 
+/// `'id' (feA, feB)` for each filter: its id and the primitives it uses, for warnings.
+fn filter_names(filters: &[Arc<usvg::filter::Filter>]) -> String {
+    use usvg::filter::Kind as K;
+    let names: Vec<String> = filters
+        .iter()
+        .map(|f| {
+            let mut kinds: Vec<&str> = Vec::new();
+            for p in f.primitives() {
+                let k = match p.kind() {
+                    K::Blend(_) => "feBlend",
+                    K::ColorMatrix(_) => "feColorMatrix",
+                    K::ComponentTransfer(_) => "feComponentTransfer",
+                    K::Composite(_) => "feComposite",
+                    K::ConvolveMatrix(_) => "feConvolveMatrix",
+                    K::DiffuseLighting(_) => "feDiffuseLighting",
+                    K::DisplacementMap(_) => "feDisplacementMap",
+                    K::DropShadow(_) => "feDropShadow",
+                    K::Flood(_) => "feFlood",
+                    K::GaussianBlur(_) => "feGaussianBlur",
+                    K::Image(_) => "feImage",
+                    K::Merge(_) => "feMerge",
+                    K::Morphology(_) => "feMorphology",
+                    K::Offset(_) => "feOffset",
+                    K::SpecularLighting(_) => "feSpecularLighting",
+                    K::Tile(_) => "feTile",
+                    K::Turbulence(_) => "feTurbulence",
+                };
+                if !kinds.contains(&k) {
+                    kinds.push(k);
+                }
+            }
+            let id = if f.id().is_empty() || made_up(f.id()) { String::new() } else { format!("'{}' ", f.id()) };
+            format!("{id}({})", kinds.join(", "))
+        })
+        .collect();
+    names.join(", ")
+}
+
 /// How many clip paths deep (`<clipPath clip-path>`) an object's clip is read.
 const MAX_CLIP_NEST: usize = 16;
 
@@ -902,7 +940,19 @@ impl Importer {
         let effects = match g.filters() {
             [] => vec![],
             filters => fx::effects(filters, ts, &self.blends).unwrap_or_else(|| {
-                self.warn(format!("filter on {label} ignored"));
+                // usvg wraps a filtered element in a group of its own: name the element then.
+                let on = match g.children() {
+                    [usvg::Node::Group(_)] | [] => label.clone(),
+                    [one] if made_up(g.id()) || g.id().is_empty() => {
+                        if one.id().is_empty() || made_up(one.id()) {
+                            "an object".to_string()
+                        } else {
+                            format!("'{}'", one.id())
+                        }
+                    }
+                    _ => label.clone(),
+                };
+                self.warn(format!("filter {} on {on} isn't supported; drawn without it", filter_names(filters)));
                 vec![]
             }),
         };
