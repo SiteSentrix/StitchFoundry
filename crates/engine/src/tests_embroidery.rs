@@ -793,6 +793,33 @@ fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
 }
 
 #[test]
+fn an_object_larger_than_a_hooping_is_split_over_hoopings() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // a 300 × 40 mm band: no 130 × 180 hooping holds it
+    rect(&mut s, 10.0 * PT, 20.0 * PT, 300.0 * PT, 40.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let whole = s.embroidery_plan().unwrap().pattern().stitch_count();
+    assert!(s.execute("embroidery.multiHoop", &json!({"hoop": "Brother 130 × 180 (5×7)", "split": false})).is_err());
+    let dir = std::env::temp_dir().join(format!("sf-split-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let r = s.execute("embroidery.multiHoop", &json!({"hoop": "Brother 130 × 180 (5×7)", "dir": dir.to_string_lossy(), "marks": false})).unwrap();
+    let hoopings = r["hoopings"].as_array().unwrap();
+    assert!(hoopings.len() >= 3 && hoopings.iter().all(|h| h["split"].as_u64() == Some(1)), "{r}");
+    // every piece inside its hoop; together about the whole (plus ties)
+    let mut total = 0;
+    for h in hoopings {
+        let bytes = std::fs::read(h["file"].as_str().unwrap()).unwrap();
+        let p = sf_formats::read(sf_formats::Format::Dst, &bytes).unwrap();
+        let b = p.bounds();
+        assert!(b.min.x >= -65.1 && b.max.x <= 65.1 && b.min.y >= -90.1 && b.max.y <= 90.1, "{b:?}");
+        total += p.stitch_count();
+    }
+    assert!(total >= whole && total < whole + whole / 4, "{total} vs {whole}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_design_sits_at_a_fixed_place_in_the_hoop() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
@@ -1384,10 +1411,10 @@ fn big_designs_split_into_hoopings_with_registration_marks() {
         assert!(b.min.x >= -65.1 && b.max.x <= 65.1 && b.min.y >= -90.1 && b.max.y <= 90.1, "{b:?}");
         assert!(p.color_blocks().len() >= 2, "the marks are a colour of their own");
     }
-    // the plan only, without marks; a hoop too small for an object
+    // the plan only, without marks; a hoop too small for an object: split, or refused
     let r = s.execute("embroidery.multiHoop", &json!({"width": 130, "height": 180, "marks": false})).unwrap();
     assert!(r["files"].as_array().unwrap().is_empty());
-    assert!(s.execute("embroidery.multiHoop", &json!({"width": 40, "height": 40, "overlap": 5})).is_err());
+    assert!(s.execute("embroidery.multiHoop", &json!({"width": 40, "height": 40, "overlap": 5, "split": false})).is_err());
     assert!(s.execute("embroidery.multiHoop", &json!({"width": 130, "height": 180, "overlap": 80})).is_err());
     // marks of one's own: three targets in each overlap, in blue
     let first = |s: &mut Session| {
