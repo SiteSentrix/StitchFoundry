@@ -4847,3 +4847,5 @@ machine	Stop	Parada
 	colours	colores
 	Print Catalogue	Imprimir catálogo
 	A sheet of the designs found, to print or save as PDF	Una hoja con los diseños encontrados, para imprimir o guardar como PDF
+@msg	larger than {_1} MB	mayor de {_1} MB
+@msg	not a machine file: .{ext}	no es un archivo de máquina de bordar: .{ext}

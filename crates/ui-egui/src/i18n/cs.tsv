@@ -4874,3 +4874,5 @@ machine	Stop	Zastavení
 	colours	barev
 	Print Catalogue	Tisknout katalog
 	A sheet of the designs found, to print or save as PDF	List nalezených výšivek k tisku nebo uložení do PDF
+@msg	larger than {_1} MB	větší než {_1} MB
+@msg	not a machine file: .{ext}	není to soubor pro vyšívací stroj: .{ext}
