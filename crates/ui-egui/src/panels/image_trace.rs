@@ -68,11 +68,12 @@ struct TraceUi {
     synced: Value,
 }
 
-fn presets(app: &mut VectorcraftApp) -> Vec<(String, Value)> {
+/// Each preset: its name, its parameters, and those of its enhanced version (null if it has none).
+fn presets(app: &mut VectorcraftApp) -> Vec<(String, Value, Value)> {
     let v = app.session.execute("imageTrace.presets", &json!({})).unwrap_or_default();
     v["presets"]
         .as_array()
-        .map(|a| a.iter().map(|p| (p["name"].as_str().unwrap_or("").to_string(), p["params"].clone())).collect())
+        .map(|a| a.iter().map(|p| (p["name"].as_str().unwrap_or("").to_string(), p["params"].clone(), p["enhanced"].clone())).collect())
         .unwrap_or_default()
 }
 
@@ -146,7 +147,7 @@ fn preset_label(name: &str) -> &str {
 
 fn preset_list(app: &mut VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
     let mut chosen = None;
-    for (name, _) in presets(app) {
+    for (name, ..) in presets(app) {
         if ui.add(egui::Button::selectable(name == current, preset_label(&name))).clicked() {
             chosen = Some(name);
         }
@@ -242,6 +243,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             retrace = true;
         }
     });
+    // The preset's enhanced version (with Shapes and Auto Grouping) or its legacy one.
+    if let Some((_, legacy, better)) = all.iter().find(|p| p.0 == st.preset && !p.2.is_null()) {
+        let on = *better == st.params;
+        if widgets::check(ui, tl!("Enhanced"), on, true) {
+            st.params = if on { legacy.clone() } else { better.clone() };
+            retrace = true;
+        }
+    }
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("View:"));
         if let Some(v) = view_dropdown(ui, st.view, 170.0) {

@@ -77,8 +77,8 @@ fn inside_or_near(p: Point, o: &Outer) -> bool {
 /// path whose outer contour holds all of its own. The path that covers the whole `w` × `h` image
 /// (the paper) is nobody's parent: everything would be inside it.
 ///
-/// Drawing each path followed by those inside it paints the picture `paths` paints in its own
-/// order: where the paths can overlap (`stacked`), a path only gets a parent below it, and only
+/// Drawing each path together with those inside it (in their own order) paints the picture
+/// `paths` paints in its own order: where the paths can overlap (`stacked`), a path only gets a parent below it, and only
 /// if no path that would then come after it instead of before it shares any of its box.
 pub(crate) fn parents(paths: &[TracedPath], w: usize, h: usize, stacked: bool) -> Vec<Option<usize>> {
     let outers: Vec<Option<Outer>> = paths.iter().map(outer).collect();

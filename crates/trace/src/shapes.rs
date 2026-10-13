@@ -128,6 +128,17 @@ pub(crate) fn recognise(sp: &SubPath, hard: bool) -> Option<TracedShape> {
     for angle in side.into_iter().chain([folded(axis), 0.0]) {
         let xy: Vec<(f64, f64)> = pts.iter().map(|&p| local(p, angle)).collect();
         let (hw, hh) = xy.iter().fold((0.0f64, 0.0f64), |m, p| (m.0.max(p.0.abs()), m.1.max(p.1.abs())));
+        // (Its half sizes: where its sides lie on average, not where their farthest points do.)
+        let side = |far: f64, upright: bool, other: f64| {
+            let on: Vec<f64> = xy
+                .iter()
+                .map(|p| if upright { (p.0, p.1) } else { (p.1, p.0) })
+                .filter(|&(a, b)| a.abs() >= far - 0.5 && b.abs() <= other - CORNER)
+                .map(|(a, _)| a.abs())
+                .collect();
+            if on.len() >= 4 { on.iter().sum::<f64>() / on.len() as f64 } else { far }
+        };
+        let (hw, hh) = (side(hw, true, hh), side(hh, false, hw));
         if hw <= 2.0 || hh <= 2.0 {
             continue;
         }

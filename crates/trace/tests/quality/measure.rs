@@ -214,21 +214,25 @@ pub struct Metrics {
     pub outside: f64,
 }
 
-/// The order a grouped result is painted in: each path, then those inside it.
+/// The order a grouped result is painted in: each path together with those inside it, in the
+/// order they were traced in (as the app builds its groups).
 fn draw_order(res: &TraceResult) -> Vec<usize> {
+    fn draw(i: usize, inside: &[Vec<usize>], order: &mut Vec<usize>) {
+        let below = inside[i].partition_point(|&c| c < i);
+        inside[i][..below].iter().for_each(|&c| draw(c, inside, order));
+        order.push(i);
+        inside[i][below..].iter().for_each(|&c| draw(c, inside, order));
+    }
     let mut inside = vec![vec![]; res.paths.len()];
-    let mut stack = vec![];
-    for i in (0..res.paths.len()).rev() {
+    let mut roots = vec![];
+    for i in 0..res.paths.len() {
         match res.parents.get(i).copied().flatten() {
-            Some(p) => inside[p].insert(0, i),
-            None => stack.push(i),
+            Some(p) => inside[p].push(i),
+            None => roots.push(i),
         }
     }
     let mut order = vec![];
-    while let Some(i) = stack.pop() {
-        order.push(i);
-        stack.extend(inside[i].iter().rev());
-    }
+    roots.into_iter().for_each(|i| draw(i, &inside, &mut order));
     order
 }
 
@@ -236,7 +240,7 @@ fn draw_order(res: &TraceResult) -> Vec<usize> {
 pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params: &TraceParams, res: &TraceResult) -> Metrics {
     let n = size as usize;
     let shapes: Vec<(BezPath, [u8; 3])> = res.paths.iter().map(|tp| (painted(tp), tp.color)).collect();
-    // Painted as the result is grouped: each path, then those inside it.
+    // Painted as the result is grouped.
     let drawn: Vec<(BezPath, [u8; 3], Option<&TracedGradient>)> =
         draw_order(res).into_iter().map(|i| (shapes[i].0.clone(), shapes[i].1, res.paths[i].gradient.as_ref())).collect();
     let (delta_mean, edge_delta) = fidelity(src, &render_painted(&drawn, [255; 3], n, n));
