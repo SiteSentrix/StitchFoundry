@@ -155,7 +155,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
         if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0).clicked() {
-            app.run("ui.symbolOptions", json!({})).ok();
+            // Alt skips Symbol Options: the symbol is made under the default name.
+            let cmd = if ui.input(|i| i.modifiers.alt) { "symbol.new" } else { "ui.symbolOptions" };
+            app.run(cmd, json!({})).ok();
         }
         if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Symbol"), false, sel.is_some(), 24.0).clicked()
             && let Some(n) = &sel
