@@ -1249,6 +1249,26 @@ fn ruler_guides_and_lock() {
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
 }
 
+/// #1534: Lock Guides locks the paths made into guides too: they can't be selected (so neither
+/// moved, reshaped nor deleted), by a click, a marquee or Select All, and locking lets them go.
+#[test]
+fn locked_guides_lock_guide_paths() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 20.0, 20.0, 10.0, 10.0));
+    sel(&mut s, &[a]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    sel(&mut s, &[a, b]);
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    sel(&mut s, &[a, b]);
+    assert_eq!(selected(&s), vec![a, b]);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert_eq!(selected(&s), vec![b]);
+}
+
 fn guides(s: &Session) -> Vec<(bool, f64)> {
     s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect()
 }

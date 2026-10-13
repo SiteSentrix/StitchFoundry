@@ -489,8 +489,10 @@ fn release_guides(s: &mut Session, _: &Value) -> Result<Value> {
 fn lock_guides(s: &mut Session, p: &Value) -> Result<Value> {
     let v = p.get("locked").and_then(Value::as_bool).unwrap_or(!s.menu.guides_locked);
     s.menu.guides_locked = v;
-    // Locked guides can't stay selected.
-    if v && !s.doc()?.selection.guides.is_empty() {
+    // Locked guides can't stay selected, ruler guides or guide paths ([`Session::select`] lets
+    // those go).
+    let st = s.doc()?;
+    if v && (!st.selection.guides.is_empty() || st.selection.objects.iter().any(|id| crate::is_guide_path(&st.doc, *id))) {
         s.select(|_, sel| sel.guides.clear())?;
     }
     Ok(json!({ "locked": v }))
