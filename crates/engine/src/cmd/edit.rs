@@ -128,7 +128,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?} delete the objects `ids`, else the selection (direct-selected anchors, else objects, else ruler guides)",
+            "{ids?} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides)",
             has_selection_or_guides,
             clear
         ),
@@ -368,7 +368,7 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
-    // Direct-selected anchors or segments: remove those components instead of whole objects.
+    // Direct-selected anchors or segments: remove those, and any objects selected whole with them.
     if explicit.is_none() && !s.doc()?.selection.anchors.is_empty() {
         return super::path::delete_anchors(s, p);
     }

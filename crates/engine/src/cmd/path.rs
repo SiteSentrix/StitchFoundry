@@ -91,7 +91,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Anchor Points",
             [],
             None,
-            "{} delete the direct-selected anchors and their segments, opening closed paths there (the Delete key)",
+            "{} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key)",
             has_anchors,
             delete_anchors
         ),
@@ -521,10 +521,27 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();
+    // Every anchor selected stores the path as an object, with no `anchors` entry. A marquee that
+    // also catches part of another path must still delete those whole objects.
+    let whole = st.selection.whole();
     s.edit("Clear", |d, selection| {
+        let targets: BTreeSet<NodeId> = whole.into_iter().filter(|id| d.node(*id).is_some_and(|n| !n.is_layer())).collect();
+        let whole_ids: Vec<NodeId> = targets
+            .iter()
+            .copied()
+            .filter(|id| !d.ancestry(*id).unwrap_or_default().iter().rev().skip(1).any(|ancestor| targets.contains(ancestor)))
+            .collect();
+        if !whole_ids.is_empty() {
+            d.remove_many(&whole_ids)?;
+        }
         let mut survivors = vec![];
-        let mut emptied = Beside::replacing(d, &sel.keys().copied().collect::<Vec<_>>());
+        let remaining: Vec<NodeId> = sel.keys().copied().filter(|id| d.node(*id).is_some()).collect();
+        let mut emptied = Beside::replacing(d, &remaining);
         for (id, set) in &sel {
+            // The path went with a fully selected group around it.
+            if d.node(*id).is_none() {
+                continue;
+            }
             let remove_node = {
                 let path = path_mut(d, *id)?;
                 if let Some(refs) = segments.get(id) {
@@ -538,37 +555,71 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
                         })
                         .collect();
                 } else {
-                    // Deleting an anchor from a closed path opens it there (Illustrator behaviour on Delete).
-                    for &(si, ai) in set.iter().rev() {
-                        if let Some(sp) = path.subpaths.get_mut(si)
-                            && ai < sp.anchors.len()
-                        {
-                            if sp.closed {
-                                sp.anchors.rotate_left(ai + 1);
-                                sp.anchors.pop();
-                                sp.closed = false;
-                            } else {
-                                sp.anchors.remove(ai);
-                            }
-                        }
-                    }
+                    // Remove every selected anchor against the original indexes. A closed path opens
+                    // across each deleted run and keeps the surviving stretches in their old order.
+                    path.subpaths = std::mem::take(&mut path.subpaths)
+                        .into_iter()
+                        .enumerate()
+                        .flat_map(|(si, sp)| {
+                            let gone = set.iter().filter_map(|&(s, ai)| (s == si).then_some(ai)).collect();
+                            without_anchors(sp, &gone)
+                        })
+                        .collect();
                 }
                 path.subpaths.retain(|s| s.anchors.len() >= 2);
                 path.subpaths.is_empty()
             };
             if remove_node {
                 emptied.put(d, *id, vec![])?;
-            } else if segments.contains_key(id) {
+            } else {
+                // The remainder is selected whole, so the next Delete removes it.
                 survivors.push(*id);
             }
         }
         emptied.finish(d)?;
-        // Another Delete removes the remaining path after a segment cut. Anchor Delete keeps
-        // its existing deselection behavior.
         selection.set(survivors);
         Ok(())
     })?;
     ok()
+}
+
+/// Remove anchors `removed`. An open path stays one path and joins across the gap. A closed path
+/// opens there: each stretch of anchors that were not deleted becomes its own open path, in the
+/// original order, including a stretch that wraps past the last anchor.
+fn without_anchors(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
+    let n = sp.anchors.len();
+    let gone: BTreeSet<usize> = removed.iter().copied().filter(|&i| i < n).collect();
+    if gone.is_empty() {
+        return vec![sp];
+    }
+    let keep = |anchors: Vec<Anchor>| (anchors.len() >= 2).then(|| SubPath::new(anchors, false));
+    if !sp.closed {
+        return keep(sp.anchors.into_iter().enumerate().filter(|(i, _)| !gone.contains(i)).map(|(_, a)| a).collect()).into_iter().collect();
+    }
+    let mut runs: Vec<Vec<Anchor>> = vec![];
+    let mut run = vec![];
+    for (i, anchor) in sp.anchors.into_iter().enumerate() {
+        if gone.contains(&i) {
+            if !run.is_empty() {
+                runs.push(std::mem::take(&mut run));
+            }
+        } else {
+            run.push(anchor);
+        }
+    }
+    // The anchors before the first deletion and after the last are one stretch.
+    if gone.contains(&0) {
+        if !run.is_empty() {
+            runs.push(run);
+        }
+    } else if !runs.is_empty() {
+        let head = runs.remove(0);
+        run.extend(head);
+        runs.insert(0, run);
+    } else if !run.is_empty() {
+        runs.push(run);
+    }
+    runs.into_iter().filter_map(keep).collect()
 }
 
 /// Remove connections, splitting open/closed contours into their surviving open runs.
