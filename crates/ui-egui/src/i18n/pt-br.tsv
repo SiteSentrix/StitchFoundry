@@ -1070,7 +1070,7 @@
 	Identify Objects By	Identificar Objetos Por
 	Ignore	Ignorar
 	Ignore Artboards (all the art as one page)	Ignorar Mesas de Trabalho (toda a arte como uma página)
-	Ignore White	Ignorar Branco
+	Ignore Color	Ignorar Cor
 	Image Info	Informações da Imagem
 	Image Map:	Mapa da Imagem:
 	Image Size	Tamanho da Imagem
@@ -2661,6 +2661,7 @@
 	{warning}: click to correct to the closest color ({hex})	{warning}: clique para corrigir para a cor mais próxima ({hex})
 	“{file}” is protected by a password.	“{file}” é protegido por uma senha.
 	● Recording	● Gravando
+imageTrace	Outline	Contorno
 @plural	{n} item|{n} items	{n} item|{n} itens
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Tabela de Cores ({n} cor)|Tabela de Cores ({n} cores)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Excluir este {n} estilo gráfico?|Excluir estes {n} estilos gráficos?

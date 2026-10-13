@@ -26,5 +26,6 @@ mod unmix;
 
 pub(crate) use geom::{Cubic, all_within, resample_closed, resample_open, sample_cubics};
 pub(crate) use outline::{Stats, Style, fit_open, fit_outline};
+pub(crate) use palette::parse_hex;
 pub(crate) use pipeline::trace_logo;
 pub(crate) use restore::RestoreParams;

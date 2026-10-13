@@ -255,7 +255,7 @@ fn snap_curves_to_lines_straightens_near_lines() {
 
 #[test]
 fn presets_resolve() {
-    assert_eq!(presets().len(), 13);
+    assert_eq!(presets().len(), 15);
     for n in PRESET_NAMES {
         assert!(preset(n).is_some(), "{n}");
     }
@@ -1071,4 +1071,25 @@ fn a_blurred_thin_line_on_unevenly_lit_paper_is_a_few_anchors() {
     // And it lies along the line's middle, about as wide as its ink.
     let off = along(path).iter().filter(|p| p.x > 14.0 && p.x < 146.0).map(|p| ((p.y - (17.3 + 0.06 * p.x)).abs() - 1.0).abs()).fold(0.0, f64::max);
     assert!(off < 0.5, "edges {off} px from where the ink's width puts them");
+}
+
+#[test]
+fn ignore_color_leaves_out_the_colour_picked() {
+    // Navy field, yellow disc, green bar.
+    let img = three_colour_art(0.0);
+    let params = TraceParams { colors: 3, ignore_white: true, ..sixteen_colors() };
+    // White by default: nothing here is white.
+    assert_eq!(trace(&img, &params).paths.len(), 3);
+    // The navy picked a little off: the field goes, the disc and the bar stay.
+    let res = trace(&img, &TraceParams { ignore_color: Some("#18263c".replace("3c", "5e")), ..params.clone() });
+    assert_eq!(res.paths.len(), 2);
+    assert!(res.paths.iter().all(|p| p.color != [20, 40, 90]));
+    // Not ticked, the colour is not left out; and a colour that is none is refused.
+    assert_eq!(trace(&img, &TraceParams { ignore_white: false, ignore_color: Some("#14285a".into()), ..params.clone() }).paths.len(), 3);
+    let bad = trace_within(&img, &TraceParams { ignore_color: Some("navy".into()), ..params.clone() }, usize::MAX);
+    assert!(matches!(bad, Err(TraceError::BadPalette(_))));
+    // Old documents have no such setting: white.
+    let old: TraceParams = serde_json::from_str(r#"{"mode":"color","ignoreWhite":true}"#).unwrap();
+    assert_eq!(old.ignore_color, None);
+    assert_eq!(serde_json::to_value(&params).unwrap()["ignoreColor"], serde_json::Value::Null);
 }

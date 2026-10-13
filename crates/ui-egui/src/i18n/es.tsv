@@ -247,6 +247,7 @@
 	Author Title:	Cargo del autor:
 	Author:	Autor:
 	Auto	Auto
+	Auto Color	Color automático
 	Automatic	Automático
 	Auto Size New Area Type	Ajustar automáticamente el tamaño del nuevo texto de área
 	Auto Spell Check	Revisión ortográfica automática
@@ -1244,6 +1245,7 @@
 	Identify Objects By	Identificar objetos por
 	Ignore	Ignorar
 	Ignore Artboards (all the art as one page)	Ignorar mesas de trabajo (toda la ilustración como una página)
+	Ignore Color	Ignorar color
 	Ignore White	Ignorar blanco
 	Palette:	Paleta:
 	Limited	Limitada
@@ -3236,6 +3238,7 @@
 	{warning}: click to correct to the closest color ({hex})	{warning}: clic para corregir al color más cercano ({hex})
 	“{file}” is protected by a password.	“{file}” está protegido con contraseña.
 	● Recording	● Grabando
+imageTrace	Outline	Contorno
 @plural	{n} item|{n} items	{n} elemento|{n} elementos
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Tabla de colores ({n} color)|Tabla de colores ({n} colores)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	¿Eliminar {n} estilo gráfico?|¿Eliminar estos {n} estilos gráficos?

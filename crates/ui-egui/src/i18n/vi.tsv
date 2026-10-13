@@ -288,6 +288,7 @@
 	Auto Spell Check	Kiểm tra chính tả tự động
 	Auto-Collapse Iconic Panels	Tự động thu gọn bảng dạng biểu tượng
 	Auto-Rotate (turn the paper to each artboard)	Tự động xoay (xoay trang cho mỗi bảng vẽ)
+	Auto Color	Màu tự động
 	Automatic	Tự động
 	Automatic flatness	Độ phẳng tự động
 	Automatically	Tự động
@@ -1437,6 +1438,7 @@
 	Identify Objects By	Nhận diện đối tượng theo
 	Ignore	Bỏ qua
 	Ignore Artboards (all the art as one page)	Bỏ qua bảng vẽ (toàn bộ bản vẽ thành một trang)
+	Ignore Color	Bỏ qua màu
 	Ignore White	Bỏ qua màu trắng
 	Image	Hình ảnh
 	Image Info	Thông tin hình ảnh
@@ -3556,6 +3558,7 @@
 	{warning}: click to correct to the closest color ({hex})	{warning}: bấm để chỉnh sang màu gần nhất ({hex})
 	“{file}” is protected by a password.	“{file}” được bảo vệ bằng mật khẩu.
 	● Recording	● Đang ghi
+imageTrace	Outline	Đường viền
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Bảng màu ({n} màu)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Xóa {n} kiểu đồ họa này?
 @plural	{n} area highlighted|{n} areas highlighted	{n} vùng được tô sáng

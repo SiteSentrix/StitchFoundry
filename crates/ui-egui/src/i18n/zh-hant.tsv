@@ -216,6 +216,7 @@
 	Author Title:	作者職稱：
 	Author:	作者：
 	Auto	自動
+	Auto Color	自動顏色
 	Automatic	自動
 	Auto Size New Area Type	自動調整新區域文字大小
 	Auto Spell Check	自動拼字檢查
@@ -1219,6 +1220,7 @@
 	Identify Objects By	識別物件依據
 	Ignore	略過
 	Ignore Artboards (all the art as one page)	忽略工作區域 (所有圖稿視為單一頁面)
+	Ignore Color	忽略顏色
 	Ignore White	忽略白色
 	Palette:	調色盤：
 	Limited	有限
@@ -3222,6 +3224,7 @@
 	{warning}: click to correct to the closest color ({hex})	{warning}：按一下以修正為最接近的顏色 ({hex})
 	“{file}” is protected by a password.	「{file}」受密碼保護。
 	● Recording	● 錄製中
+imageTrace	Outline	輪廓
 @plural	{n} item|{n} items	{n} 個項目
 @plural	Color Table ({n} color)|Color Table ({n} colors)	色彩表 ({n} 色)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	要刪除這 {n} 個繪圖樣式嗎？

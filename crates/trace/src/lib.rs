@@ -269,8 +269,12 @@ pub struct TraceParams {
     /// `noise / 10` pixels of the source image.)
     pub noise: u32,
     pub method: Method,
-    /// Drop white areas (no white background shape).
+    /// Ignore Color: drop the areas of one colour (no background shape): white, unless
+    /// `ignore_color` names another.
     pub ignore_white: bool,
+    /// The colour Ignore Color leaves out (`#rrggbb`): the palette colours within about 30 levels
+    /// of it. `None` is white. (Flat Logo mode leaves out white only.)
+    pub ignore_color: Option<String>,
     /// Replace nearly-straight curves with straight lines. In Logo mode this also snaps tight arcs
     /// to true circles.
     pub snap_curves_to_lines: bool,
@@ -302,6 +306,7 @@ impl Default for TraceParams {
             noise: 25,
             method: Method::Abutting,
             ignore_white: false,
+            ignore_color: None,
             snap_curves_to_lines: false,
             fills: true,
             strokes: false,
@@ -353,6 +358,7 @@ impl TraceParams {
 /// Built-in preset names in panel order (our own parameter sets).
 pub const PRESET_NAMES: &[&str] = &[
     "Default",
+    "Auto Color",
     "High Fidelity Photo",
     "Low Fidelity Photo",
     "3 Colors",
@@ -364,6 +370,7 @@ pub const PRESET_NAMES: &[&str] = &[
     "Silhouettes",
     "Line Art",
     "Technical Drawing",
+    "Outline",
     "Flat Logo",
 ];
 
@@ -392,6 +399,10 @@ pub fn preset(name: &str) -> Option<TraceParams> {
     };
     Some(match key.as_str() {
         "default" => d,
+        // A posterised image of a photo or of artwork: its own colours where it is flat art, as
+        // many as its tones need where it is not.
+        // (Color detail 85: a colour on a hundredth of the picture is still one of its colours.)
+        "auto color" => TraceParams { palette: Palette::Automatic, color_detail: 85.0, ..color(6, 65.0, 60.0, 16, Method::Abutting) },
         "high fidelity photo" => color(64, 90.0, 25.0, 4, Method::Overlapping),
         "low fidelity photo" => color(20, 60.0, 50.0, 12, Method::Overlapping),
         "3 colors" => color(3, 60.0, 60.0, 20, Method::Abutting),
@@ -403,6 +414,8 @@ pub fn preset(name: &str) -> Option<TraceParams> {
         "silhouettes" => bw(200, 40.0, 60.0, 30, false),
         "line art" => bw(128, 80.0, 70.0, 10, false),
         "technical drawing" => bw(128, 95.0, 90.0, 4, true),
+        // Black outlines: lines as stroked centre lines, wider areas as stroked outlines.
+        "outline" => TraceParams { fills: false, strokes: true, ..bw(128, 80.0, 70.0, 10, false) },
         // Flat-colour logos: colours found automatically, edges placed to a fraction of a pixel.
         "flat logo" => TraceParams { mode: Mode::Logo, colors: 8, paths: 60.0, corners: 50.0, noise: 6, snap_curves_to_lines: true, ..d },
         _ => return None,
@@ -446,6 +459,14 @@ fn is_white(c: [u8; 3]) -> bool {
     c.iter().all(|&v| v >= 245)
 }
 
+/// Whether Ignore Color leaves palette colour `c` out: `target` is the colour picked (`None`: white).
+fn is_ignored(c: [u8; 3], target: Option<[u8; 3]>) -> bool {
+    match target {
+        None => is_white(c),
+        Some(t) => (0..3).map(|k| (f64::from(c[k]) - f64::from(t[k])).powi(2)).sum::<f64>() <= 30.0 * 30.0 || (is_white(t) && is_white(c)),
+    }
+}
+
 /// Trace `img` with `params`. Failures (an image Logo mode refuses, say) give an empty result: use
 /// [`trace_within`] to see why.
 pub fn trace(img: &Raster, params: &TraceParams) -> TraceResult {
@@ -464,6 +485,11 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     if params.mode == Mode::Logo {
         return logo::trace_logo(img, params, max_anchors);
     }
+    // The colour Ignore Color leaves out, if not white.
+    let ignore = match &params.ignore_color {
+        Some(name) if params.ignore_white => Some(logo::parse_hex(name).ok_or_else(|| TraceError::BadPalette(name.clone()))?),
+        _ => None,
+    };
     // A photo is traced from a copy with its noise smoothed away (see `smooth`).
     let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
     let img = smoothed.as_ref().unwrap_or(img);
@@ -500,12 +526,13 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
         rank[i] = r;
     }
     let layers: Vec<(usize, usize)> =
-        order.iter().copied().enumerate().filter(|&(_, ci)| !(params.ignore_white && is_white(q.palette[ci]))).collect();
+        order.iter().copied().enumerate().filter(|&(_, ci)| !(params.ignore_white && is_ignored(q.palette[ci], ignore))).collect();
     let job = Layers {
         q: &q,
         rank: &rank,
         params,
         img,
+        ignore,
         boxes,
         bw_tones: bw_tones(img, &q),
         style: params.outline_style(),
@@ -571,6 +598,8 @@ struct Layers<'a> {
     rank: &'a [usize],
     params: &'a TraceParams,
     img: &'a Raster,
+    /// The colour Ignore Color leaves out, if not white.
+    ignore: Option<[u8; 3]>,
     /// The box each palette entry's pixels lie in: `(x0, y0, x1, y1)`, the far sides excluded.
     boxes: Vec<Option<(usize, usize, usize, usize)>>,
     /// Black and White: the luminance of white and of black (see `bw_tones`).
@@ -590,7 +619,7 @@ impl Layers<'_> {
     /// Ignore White: white is no part of any layer (stacked layers reach under the layers above
     /// them, and must not reach under white that is left out).
     fn ignored(&self, label: u16) -> bool {
-        self.params.ignore_white && self.q.palette.get(label as usize).is_some_and(|c| is_white(*c))
+        self.params.ignore_white && self.q.palette.get(label as usize).is_some_and(|c| is_ignored(*c, self.ignore))
     }
     /// The region across a crack, for cutting outlines at their junctions: the outside pixel's
     /// colour. Stacked layers end on many colours at once and share no edge: one neighbour.

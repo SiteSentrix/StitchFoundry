@@ -606,6 +606,7 @@
 	VectorCraft on GitHub	VectorCraft w serwisie GitHub
 	Search Commands…	Szukaj poleceń…
 	VectorCraft Help…	Pomoc VectorCraft…
+	Auto Color	Kolor automatyczny
 	Automatic	Automatycznie
 	Isolate Selected Group	Izoluj zaznaczoną grupę
 	Exit Isolation Mode	Wyjdź z trybu izolacji
@@ -1374,6 +1375,7 @@ lighting	Light	Światło
 	Abutting	Stykające się
 	Black and White	Czarno-biały
 	Corners	Narożniki
+	Ignore Color	Ignoruj kolor
 	Ignore White	Ignoruj biel
 	Palette:	Paleta:
 	Limited	Ograniczona
@@ -3528,6 +3530,7 @@ effect	Regular	Normalny
 	Stroke Direction	Kierunek pociągnięć
 	Stroke Width	Szerokość pociągnięć
 	Stroke Pressure	Nacisk pociągnięć
+imageTrace	Outline	Kontur
 @plural	{n} item|{n} items	{n} element|{n} elementy|{n} elementów
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Tablica kolorów ({n} kolor)|Tablica kolorów ({n} kolory)|Tablica kolorów ({n} kolorów)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Usunąć {n} styl graficzny?|Usunąć {n} style graficzne?|Usunąć {n} stylów graficznych?

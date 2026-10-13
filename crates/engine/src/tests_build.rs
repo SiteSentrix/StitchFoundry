@@ -795,7 +795,8 @@ fn image_trace_presets_query_and_errors() {
     let mut s = session();
     let r = s.execute("imageTrace.presets", &json!({})).unwrap();
     let names: Vec<&str> = r["presets"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
-    assert_eq!(names.len(), 13);
+    assert_eq!(names.len(), 15);
+    assert!(names.contains(&"Auto Color") && names.contains(&"Outline"));
     assert!(names.contains(&"Technical Drawing") && names.contains(&"Shades of Gray") && names.contains(&"Flat Logo"));
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
     assert!(s.execute("imageTrace.make", &json!({"id": a.0})).is_err(), "not an image");

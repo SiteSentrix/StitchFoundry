@@ -68,10 +68,10 @@ fn target(preset: &str, input: &Input) -> bool {
         "High Fidelity Photo" | "Low Fidelity Photo" | "Shades of Gray" => &[Class::Tone],
         // Three colours cannot show the badge's five.
         "3 Colors" => return input.name == "two touching halves",
-        "6 Colors" | "16 Colors" | "Flat Logo" => &[Class::Flat],
+        "6 Colors" | "16 Colors" | "Flat Logo" | "Auto Color" => &[Class::Flat],
         "Sketched Art" => &[Class::Shape, Class::Lines],
         "Silhouettes" => &[Class::Shape],
-        "Line Art" => &[Class::Lines],
+        "Line Art" | "Outline" => &[Class::Lines],
         "Technical Drawing" => &[Class::Lines, Class::Poly],
         _ => &[Class::Shape, Class::Poly],
     };
