@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -727,6 +727,42 @@ fn traced_shape(shape: tr::TracedShape, xf: vectorcraft_geom::Affine) -> LiveSha
     live
 }
 
+/// Auto Grouping: `nodes` (one per traced path, bottom-most first) with each path that has others
+/// inside it (`parents`, as the tracer gives them) in a group with them: the path, then what is
+/// inside it. Without parents, the nodes as they are.
+fn grouped(d: &mut Document, nodes: Vec<Node>, parents: &[Option<usize>]) -> Vec<Arc<Node>> {
+    let n = nodes.len();
+    let mut inside: Vec<Vec<usize>> = vec![vec![]; n];
+    let mut roots = vec![];
+    for i in 0..n {
+        match parents.get(i).copied().flatten().and_then(|p| inside.get_mut(p).filter(|_| p != i)) {
+            Some(of) => of.push(i),
+            None => roots.push(i),
+        }
+    }
+    // Outermost first, so that backwards each path comes after those inside it.
+    let mut order = roots.clone();
+    let mut at = 0;
+    while let Some(&i) = order.get(at) {
+        order.extend(inside.get(i).into_iter().flatten());
+        at += 1;
+    }
+    let mut nodes: Vec<Option<Node>> = nodes.into_iter().map(Some).collect();
+    let mut built: Vec<Option<Arc<Node>>> = vec![None; n];
+    for &i in order.iter().rev() {
+        let Some(node) = nodes.get_mut(i).and_then(Option::take) else { continue };
+        let within: Vec<Arc<Node>> = inside.get(i).into_iter().flatten().filter_map(|&c| built.get_mut(c)?.take()).collect();
+        let made = if within.is_empty() { node } else { Node::group(d.alloc_id(), std::iter::once(Arc::new(node)).chain(within).collect()) };
+        if let Some(slot) = built.get_mut(i) {
+            *slot = Some(Arc::new(made));
+        }
+    }
+    // (Paths that are inside each other in a ring are reached from no root: the tracer makes none,
+    // and they are kept all the same.)
+    let ring = nodes.into_iter().flatten().map(Arc::new).collect::<Vec<_>>();
+    roots.iter().filter_map(|&r| built.get_mut(r)?.take()).chain(ring).collect()
+}
+
 fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     const C: &str = "imageTrace.make";
     let mut params = trace_params(p)?;
@@ -787,6 +823,7 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
             hidden.visible = false;
             children.push(Arc::new(hidden));
         }
+        let mut traced = Vec::with_capacity(res.paths.len());
         for tp in res.paths {
             let path = tp.path.transformed(xf);
             let mut n = shape_node(d, path, None);
@@ -812,8 +849,9 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
                 .into(),
                 None => fill_only(paint).into(),
             };
-            children.push(Arc::new(n));
+            traced.push(n);
         }
+        children.extend(grouped(d, traced, &res.parents));
         let gid = d.alloc_id();
         let mut g = Node::group(gid, children);
         g.name = if expand { None } else { Some(TRACE_NAME.into()) };

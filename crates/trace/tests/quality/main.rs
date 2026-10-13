@@ -65,10 +65,14 @@ static ALLOC: Counting = Counting;
 /// Whether `input` is what `preset` is meant for.
 fn target(preset: &str, input: &Input) -> bool {
     let classes: &[Class] = match preset {
-        "High Fidelity Photo" | "Low Fidelity Photo" | "Shades of Gray" => &[Class::Tone],
+        "High Fidelity Photo"
+        | "Low Fidelity Photo"
+        | "Shades of Gray"
+        | "Shades of Gray with Auto Grouping"
+        | "High Fidelity Photo with Auto Grouping" => &[Class::Tone],
         // Three colours cannot show the badge's five.
         "3 Colors" => return input.name == "two touching halves",
-        "6 Colors" | "16 Colors" | "Flat Logo" | "Auto Color" => &[Class::Flat],
+        "6 Colors" | "16 Colors" | "Flat Logo" | "Auto Color" | "6 Colors with Auto Grouping" => &[Class::Flat],
         "Default with Shapes" | "6 Colors with Shapes" => &[Class::Plain],
         "Sketched Art" => &[Class::Shape, Class::Lines],
         "Silhouettes" => &[Class::Shape],
@@ -137,7 +141,7 @@ fn svg_trace(svg: &str) -> TraceResult {
         }
         Some(TracedPath { path: vectorcraft_geom::PathData::from_bezpath(&path), color: [0; 3], pixels: 0, stroke: None, shape: None })
     });
-    TraceResult { paths: paths.collect(), palette: vec![[0; 3]] }
+    TraceResult { paths: paths.collect(), palette: vec![[0; 3]], ..Default::default() }
 }
 
 fn run_all(presets: &[(&'static str, TraceParams)], drawn: &[Drawing]) -> Vec<Run> {
@@ -173,12 +177,12 @@ fn stat(runs: &[&Metrics], field: impl Fn(&Metrics) -> f64, max: bool, digits: u
     if x.is_finite() { format!("{:.digits$}", x + 0.0) } else { "all".into() }
 }
 
-const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px | centre off | width off | anchors a stroke | shapes % |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
+const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px | centre off | width off | anchors a stroke | shapes % | grouped % |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
 
 fn row(runs: &[&Run]) -> String {
     let m: Vec<&Metrics> = runs.iter().filter_map(|r| r.metrics.as_ref()).collect();
     if m.is_empty() {
-        return format!("| refused |{}", " |".repeat(21));
+        return format!("| refused |{}", " |".repeat(22));
     }
     let cells = [
         stat(&m, |m| m.delta, false, 2),
@@ -203,6 +207,7 @@ fn row(runs: &[&Run]) -> String {
         stat(&m, |m| m.width_off, false, 2),
         stat(&m, |m| m.stroke_anchors, false, 1),
         stat(&m, |m| m.shapes, false, 0),
+        stat(&m, |m| m.grouped, false, 0),
     ];
     format!("| {} |", cells.join(" | "))
 }
@@ -226,10 +231,17 @@ fn cost(img: &Raster, params: &TraceParams) -> String {
 }
 
 fn report() -> String {
-    // The built-in presets, and two of them with the Shapes option on.
+    // The built-in presets, and some of them with the Shapes or the Auto Grouping option on.
     let mut presets = presets();
     for (name, base) in [("Default with Shapes", "Default"), ("6 Colors with Shapes", "6 Colors")] {
         presets.push((name, TraceParams { shapes: true, ..vectorcraft_trace::preset(base).unwrap() }));
+    }
+    for (name, base) in [
+        ("6 Colors with Auto Grouping", "6 Colors"),
+        ("Shades of Gray with Auto Grouping", "Shades of Gray"),
+        ("High Fidelity Photo with Auto Grouping", "High Fidelity Photo"),
+    ] {
+        presets.push((name, TraceParams { auto_grouping: true, ..vectorcraft_trace::preset(base).unwrap() }));
     }
     let inputs = inputs();
     let drawn = draw_all(&inputs);

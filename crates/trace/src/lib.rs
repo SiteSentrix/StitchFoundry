@@ -45,6 +45,7 @@
 mod centerline;
 mod contour;
 mod fit;
+mod group;
 mod logo;
 mod mosaic;
 mod quantize;
@@ -284,6 +285,8 @@ pub struct TraceParams {
     /// Shapes: a filled outline that is a circle, an ellipse, a rectangle (square or rounded
     /// corners) or a regular polygon comes out as exactly that shape ([`TracedPath::shape`]).
     pub shapes: bool,
+    /// Auto Grouping: say which path lies inside which ([`TraceResult::parents`]).
+    pub auto_grouping: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
     /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
@@ -315,6 +318,7 @@ impl Default for TraceParams {
             ignore_color: None,
             snap_curves_to_lines: false,
             shapes: false,
+            auto_grouping: false,
             fills: true,
             strokes: false,
             stroke_width: 10.0,
@@ -442,6 +446,9 @@ pub struct TraceResult {
     pub paths: Vec<TracedPath>,
     /// Colours actually used.
     pub palette: Vec<[u8; 3]>,
+    /// Auto Grouping: for each of `paths`, the path it lies inside, if any (empty without the
+    /// option). Each path drawn before those inside it paints what `paths` paints in its order.
+    pub parents: Vec<Option<usize>>,
 }
 
 impl TraceResult {
@@ -477,6 +484,17 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     if w == 0 || h == 0 || img.rgba.len() != w * h * 4 {
         return Ok(TraceResult::default());
     }
+    let mut out = trace_paths(img, params, max_anchors)?;
+    if params.auto_grouping {
+        // Abutting areas cannot overlap; stacked layers, Logo's shapes and stroked lines can.
+        let stacked = params.method == Method::Overlapping || params.mode == Mode::Logo || params.strokes;
+        out.parents = group::parents(&out.paths, img.width as usize, img.height as usize, stacked);
+    }
+    Ok(out)
+}
+
+fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result<TraceResult, TraceError> {
+    let (w, h) = (img.width as usize, img.height as usize);
     if params.mode == Mode::Logo {
         return logo::trace_logo(img, params, max_anchors);
     }
