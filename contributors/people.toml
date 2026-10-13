@@ -93,3 +93,8 @@ sync_github_name = true
 [people.switch87]
 real_name = "Gert Pellin"
 sync_github_name = false
+
+[people.lewandowskit]
+real_name = "Tomasz Lewandowski"
+display_name = "Tomasz Lewandowski"
+sync_github_name = false
