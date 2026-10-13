@@ -268,6 +268,7 @@ fn used_again(r: &Renderer, before: &(Vec<Arc<BezPath>>, Vec<Slices>)) -> (usize
 /// and each frame draws what a new renderer draws.
 #[test]
 fn copies_sharing_an_appearance_keep_their_own_stroke_outlines() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::{Appearance, StrokeGradientMode};
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
@@ -309,6 +310,7 @@ fn copies_sharing_an_appearance_keep_their_own_stroke_outlines() {
 /// frame to frame, and the second frame draws what a new renderer draws.
 #[test]
 fn symbol_instances_keep_their_own_stroke_outlines_between_frames() {
+    let _fonts = fonts_steady();
     let d = symbol_doc();
     let opts = RenderOptions::default();
     let frame = |r: &mut Renderer| r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
@@ -329,6 +331,7 @@ fn symbol_instances_keep_their_own_stroke_outlines_between_frames() {
 /// outline for each stroke. Each frame draws what a new renderer draws.
 #[test]
 fn art_placed_again_in_every_frame_keeps_one_outline_per_stroke() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
     let mut d = Document::new(200.0, 100.0);
     d.images.insert("dot".into(), ImageBlob::new("image/png", png(4, 4, 108)));
@@ -393,6 +396,7 @@ fn art_placed_again_in_every_frame_keeps_one_outline_per_stroke() {
 /// copy keeps its own. Each frame draws what a new renderer draws.
 #[test]
 fn art_evaluated_again_in_every_frame_keeps_one_outline_per_stroke() {
+    let _fonts = fonts_steady();
     let mut d = Document::new(200.0, 100.0);
     let l = d.layers[0].id;
     let mut source = symbol_art(&mut d);
