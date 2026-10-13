@@ -56,6 +56,48 @@ fn legacy_profile_name_resolves_in_commands_and_files() {
     cms::set_active(&before).unwrap();
 }
 
+/// Separations Preview follows the Color Settings and the profiles loaded: a renderer draws a gray
+/// square on the Black plate through the new working CMYK profile, and the four process plates
+/// through a proof profile loaded again under the same name, as a new renderer draws them.
+#[test]
+fn separations_preview_draws_through_new_color_settings() {
+    let _g = settings();
+    let mut s = session();
+    let gray = rect(&mut s, 20.0, 20.0, 160.0, 120.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [gray.0], "color": "#808080"}));
+    // The proof and Overprint Preview options the canvas takes from the view state the
+    // commands set.
+    let canvas = || RenderOptions {
+        proof: vectorcraft_render::proof::active_proof(),
+        overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
+        background: Some([255, 255, 255, 255]),
+        ..Default::default()
+    };
+    let frame = |r: &mut Renderer, s: &Session| r.render(&s.doc().unwrap().doc, 400, 300, Affine::IDENTITY, &canvas()).pixels;
+    exec(&mut s, "view.separationsPreview", json!({"only": "Black"}));
+    let mut r = Renderer::new();
+    let before = frame(&mut r, &s);
+    let old = cms::active_settings();
+    s.execute("edit.colorSettings", &json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let fresh = frame(&mut Renderer::new(), &s);
+    let warm = frame(&mut r, &s);
+    cms::set_active(&old).unwrap();
+    assert!(fresh != before, "the new profile changes the plate");
+    assert!(warm == fresh);
+    let name = "Separations Proof CMYK";
+    cms::register_icc(&cms::icc_bytes(cms::GENERIC_CMYK).unwrap(), Some(name.into())).unwrap();
+    exec(&mut s, "view.proofSetup", json!({"target": format!("cmyk:{name}")}));
+    exec(&mut s, "view.separationsPreview", json!({"plates": ["Cyan", "Magenta", "Yellow", "Black"]}));
+    let before = frame(&mut r, &s);
+    cms::register_icc(&cms::icc_bytes(cms::DEVICE_CMYK).unwrap(), Some(name.into())).unwrap();
+    let fresh = frame(&mut Renderer::new(), &s);
+    let warm = frame(&mut r, &s);
+    exec(&mut s, "view.proofSetup", json!({"target": "workingCmyk"}));
+    exec(&mut s, "view.separationsPreview", json!({"on": false}));
+    assert!(fresh != before, "the profile loaded again changes the plates");
+    assert!(warm == fresh);
+}
+
 /// Raster effects follow the Color Settings: a blurred CMYK fill, and a white square's drop shadow
 /// in a CMYK color, are drawn again through the new working CMYK profile, in a frame drawn while
 /// interacting (as during a dialog's preview) and after it.
