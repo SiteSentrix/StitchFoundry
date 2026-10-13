@@ -210,6 +210,8 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.lettering_sew = l.sew;
             app.embroidery.lettering_puff = l.puff.is_some();
             app.embroidery.lettering_applique = l.applique.map(|c| [c.r, c.g, c.b]);
+            app.embroidery.lettering_stitch = l.stitch;
+            app.embroidery.lettering_small = l.small;
         }
         None => app.embroidery.lettering_for = None,
         _ => {}
@@ -330,6 +332,24 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.checkbox(&mut app.embroidery.lettering_puff, tl!("3D puff"))
         .on_hover_text(tl!("Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop"));
+    // how the letters are stitched, and small text
+    {
+        use vectorcraft_embroidery::sf_core::attr::{LetterStitch, SmallText};
+        let kinds = [LetterStitch::Font, LetterStitch::Satin, LetterStitch::Fill];
+        let cur = kinds.iter().position(|k| *k == app.embroidery.lettering_stitch).unwrap_or(0);
+        if let Some(i) = pick(ui, tl!("Letters sewn"), "let-stitch", cur, &[tl!("As the font has them"), tl!("Satin"), tl!("Fill")])
+            && let Some(k) = kinds.get(i)
+        {
+            app.embroidery.lettering_stitch = *k;
+        }
+        let smalls = [SmallText::Auto, SmallText::On, SmallText::Off];
+        let cur = smalls.iter().position(|k| *k == app.embroidery.lettering_small).unwrap_or(0);
+        if let Some(i) = pick(ui, tl!("Small text"), "let-small", cur, &[tl!("Under 6 mm"), tl!("On"), tl!("Off")])
+            && let Some(k) = smalls.get(i)
+        {
+            app.embroidery.lettering_small = *k;
+        }
+    }
     // appliqué letters, in a fabric colour
     ui.horizontal(|ui| {
         let mut on = app.embroidery.lettering_applique.is_some();
@@ -350,7 +370,9 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     let text = app.embroidery.lettering_text.clone();
     let mut params = json!({ "text": text, "font": name, "size": size, "arc": arc, "spiral": spiral,
         "order": sew["order"], "lines": if sew["up"].as_bool() == Some(true) { "up" } else { "down" },
-        "join": sew["join"], "trim": sew["trim"], "puff": app.embroidery.lettering_puff, "applique": applique });
+        "join": sew["join"], "trim": sew["trim"], "puff": app.embroidery.lettering_puff, "applique": applique,
+        "stitch": serde_json::to_value(app.embroidery.lettering_stitch).unwrap_or_default(),
+        "small": serde_json::to_value(app.embroidery.lettering_small).unwrap_or_default() });
     let (label, cmd) = match &selected {
         Some((id, _)) => {
             params["id"] = json!(id);

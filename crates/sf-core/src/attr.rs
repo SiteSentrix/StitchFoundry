@@ -197,6 +197,12 @@ pub struct Lettering {
     /// (placement line, tack-down and cover), instead of its stitches.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub applique: Option<crate::threads::Rgb>,
+    /// How its letters are stitched: as the font has them, or all satin or all fill.
+    #[serde(default, skip_serializing_if = "LetterStitch::is_font")]
+    pub stitch: LetterStitch,
+    /// Small-text settings: shorter stitches, lighter pull compensation, a light underlay.
+    #[serde(default, skip_serializing_if = "SmallText::is_auto")]
+    pub small: SmallText,
     /// From the lettering's own space (points: the first line's baseline runs from (0, 0) along
     /// x, the lines follow down y) to the document. It follows the lettering as it moves, turns
     /// and slants; a scale goes into `size`.
@@ -205,6 +211,72 @@ pub struct Lettering {
 
 fn one() -> f64 {
     1.0
+}
+
+/// How lettering's letters are stitched.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LetterStitch {
+    /// As the font digitizes them.
+    #[default]
+    Font,
+    /// Satin: filled parts sewn as satin across them.
+    Satin,
+    /// Each letter one tatami fill, the shape of what it sews.
+    Fill,
+}
+
+impl LetterStitch {
+    pub fn is_font(&self) -> bool {
+        *self == LetterStitch::Font
+    }
+
+    pub fn from_name(name: &str) -> Option<LetterStitch> {
+        match name {
+            "font" => Some(LetterStitch::Font),
+            "satin" => Some(LetterStitch::Satin),
+            "fill" => Some(LetterStitch::Fill),
+            _ => None,
+        }
+    }
+}
+
+/// Small-text settings for lettering.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SmallText {
+    /// On below [`SmallText::BELOW`].
+    #[default]
+    Auto,
+    On,
+    Off,
+}
+
+impl SmallText {
+    /// Capitals lower than this (mm) are small text.
+    pub const BELOW: f64 = 6.0;
+
+    pub fn is_auto(&self) -> bool {
+        *self == SmallText::Auto
+    }
+
+    pub fn from_name(name: &str) -> Option<SmallText> {
+        match name {
+            "auto" => Some(SmallText::Auto),
+            "on" => Some(SmallText::On),
+            "off" => Some(SmallText::Off),
+            _ => None,
+        }
+    }
+
+    /// Whether lettering `size` mm high is sewn as small text.
+    pub fn applies(self, size: f64) -> bool {
+        match self {
+            SmallText::Auto => size < SmallText::BELOW,
+            SmallText::On => true,
+            SmallText::Off => false,
+        }
+    }
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -901,6 +973,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn small_text_is_below_six_millimetres_unless_said() {
+        assert!(SmallText::Auto.applies(4.0) && !SmallText::Auto.applies(8.0));
+        assert!(SmallText::On.applies(20.0) && !SmallText::Off.applies(2.0));
+        assert_eq!((SmallText::from_name("on"), LetterStitch::from_name("fill")), (Some(SmallText::On), Some(LetterStitch::Fill)));
+    }
+
+    #[test]
     fn costs_add_stitches_time_thread_and_a_share_of_the_set_up() {
         let stats = crate::stats::PatternStats {
             stitches: 12_000,
@@ -944,6 +1023,8 @@ mod tests {
             letters: vec![LetterAdjust { dy: 2.0, ..LetterAdjust::none(1) }],
             puff: None,
             applique: None,
+            stitch: LetterStitch::Font,
+            small: SmallText::Auto,
             frame: at,
         };
         // turned a quarter about the origin, then doubled

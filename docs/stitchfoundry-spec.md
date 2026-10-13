@@ -454,13 +454,13 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | LT-05 | Adjust individual letters (position, size, rotation, stitch settings) | Done | Embroidery-font lettering: a letter moved, scaled or turned (`embroidery.lettering.letter`; the Letter rows in the panel), kept when it is set again; a glyph's stitching changes like any art's until it is set again; VectorCraft type: kerning and baseline shift | – |
 | LT-06 | Break apart lettering | Done | Create Outlines, then stitch | – |
 | LT-07 | Special characters | Done | Glyphs panel | – |
-| LT-08 | Lettering stitch types | Partial | Satin/tatami automatic; add per-text choice of column vs fill recipes | 3 |
+| LT-08 | Lettering stitch types | Done | Embroidery-font lettering sewn as the font has it, all satin or each letter one fill (`stitch`); 3D puff and appliqué letters too | 0 |
 | LT-09 | Lettering art (envelopes, arcs, warps) | Partial | VectorCraft envelopes; needs stitchable envelopes (RS-03) | 3 |
 | LT-10 | Letter sequencing (left-right, centre-out) and join methods (closest, baseline) | Done | Embroidery-font lettering sews its letters left to right, right to left or centre out and its lines down or up, joined where closest or along the baseline, trimmed after each letter, word or line (`order`, `lines`, `join`, `trim`; Sew order, Join, Trims in the panel) | – |
 | LT-11 | Auto kerning and letter spacing | Done | Font kerning, tracking | – |
 | LT-12 | Lettering underlay | Done | Auto underlay | – |
 | LT-13 | Recommended minimum/maximum height per font shown while typing | Done | Embroidery fonts give their sizes (`embroidery.fonts`: minSize, maxSize); the lettering section shows them by the size, marked as a warning while the size typed is outside them, and lettering set outside them comes with a warning | – |
-| LT-14 | Small-text optimisation (short stitches, lighter pull compensation, special underlay) | Partial | Thickness-based; add small-text profile | 3 |
+| LT-14 | Small-text optimisation (short stitches, lighter pull compensation, special underlay) | Done | Lettering `small` (auto, on or off; auto under 6 mm): centre-run underlay, half the pull compensation, short stitches; fills and runs shortened | 0 |
 | TM-01 | Team names: many names under one design, CSV import/export | Done | Embroidery panel › Team Names: names typed or read from a CSV column (`embroidery.teamNames.read`), set in the selected embroidery-font lettering; VectorCraft Variables datasets still drive type | – |
 | TM-02 | Team-name templates; output per name (files, multi-head) | Partial | One machine file per name, named after it (`embroidery.teamNames.export`); any design with its lettering is the template; multi-head layouts and a names worksheet still to come | 2 |
 | TM-03 | Monograms: templates, letter styles, ornaments, borders | Partial | Embroidery panel › Monogram (`embroidery.monogram`): one to three initials in an embroidery font, classic (the middle one larger), in a line or stacked; satin circle, diamond, square, oval, octagon, heart or shield borders or scallops, in up to four rings; hearts, stars, dots or swirls either side; a gallery of saved templates still to come | 2 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 170 done,
-34 partial, 40 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 172 done,
+32 partial, 40 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
