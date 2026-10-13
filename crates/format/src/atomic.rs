@@ -24,7 +24,11 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// folder refuses the temporary file or the rename, the content is copied into `path` instead (see
 /// the module docs).
 pub fn write_atomic_with(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
-    write_atomic_stepping(path, fill, create_new, |tmp, target| std::fs::rename(tmp, target))
+    // Replacing a file: its staging copy starts owner-only, so a private document is never readable
+    // beside the target before `keep_permissions` has run (#1712). A new file keeps the default mode.
+    let replacing = path.exists();
+    let create = |tmp: &Path| if replacing { create_private(tmp) } else { create_new(tmp) };
+    write_atomic_stepping(path, fill, create, |tmp, target| std::fs::rename(tmp, target))
 }
 
 fn create_new(path: &Path) -> io::Result<File> {
@@ -249,6 +253,28 @@ mod tests {
     /// The other files in `d` besides `keep`.
     fn leftovers(d: &Path, keep: &str) -> Vec<String> {
         std::fs::read_dir(d).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).filter(|n| n != keep).collect()
+    }
+
+    /// Replacing a private file (#1712): the staging file is owner-only while it is written, whatever
+    /// the umask, and the saved file keeps the old permissions.
+    #[cfg(unix)]
+    #[test]
+    fn staging_of_a_private_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let d = dir("private-staging");
+        let path = d.join("doc.vectorcraft");
+        std::fs::write(&path, b"secret").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let mut staging_mode = 0;
+        write_atomic_with(&path, |f| {
+            staging_mode = f.metadata()?.permissions().mode() & 0o777;
+            f.write_all(b"new")
+        })
+        .unwrap();
+        assert_eq!(staging_mode, 0o600, "the staging file must not be group or world readable");
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
