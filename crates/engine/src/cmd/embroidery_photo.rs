@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Photo Stitch",
             ["Embroidery"],
             None,
-            "{id?: an image (the selected one), mode?: lines|coral|color (lines), color?: \"#rrggbb\" the thread (lines, coral; black), invert?: bool (light thread on a dark fabric: the light parts sewn), contrast?: 0.3–3 (1), spacing?: mm between lines 0.6–5 (1.6; lines), angle?: degrees (0; lines), density?: 0.5–8 points a mm² where darkest (3; coral), colors?: 2–12 (6; color), chart?: (the design's; color), cell?: mm 0.5–5 (1; color)} the image sewn as photo stitch over it: lines across it whose zigzag widens where it is darker (lines), one run meandering through points that crowd where it is darker (coral), or its main colours as short-stitch fills, the lightest first, matched to the chart's threads (color) → {ids, mode, points?, colors?}",
+            "{id?: an image (the selected one), mode?: lines|coral|color (lines), color?: \"#rrggbb\" the thread (lines, coral; black), invert?: bool (light thread on a dark fabric: the light parts sewn), contrast?: 0.3–3 (1), spacing?: mm between lines 0.6–5 (1.6; lines), angle?: degrees (0; lines), density?: 0.5–8 points a mm² where darkest (3; coral), colors?: 2–12 (6; color), chart?: (the design's; color), cell?: mm 0.5–5 (1; color), background?: bool (false: the colour covering most of the image's edges is left unsewn; color)} the image sewn as photo stitch over it: lines across it whose zigzag widens where it is darker (lines), one run meandering through points that crowd where it is darker (coral), or its main colours as short-stitch fills, the lightest first, matched to the chart's threads, its background left out (color) → {ids, mode, points?, colors?}",
             has_doc,
             photo_stitch
         ),
@@ -561,7 +561,7 @@ fn coral(pic: &Picture, density: f64, invert: bool, contrast: f64) -> Result<Vec
 /// Colour photo: the image on a grid of `cell` mm cells, each the nearest of its `n` main colours
 /// matched to the chart's threads, specks cleaned; each colour's region one short-stitch tatami
 /// fill, the lightest first, their angles turned colour to colour.
-fn colour_fills(s: &Session, pic: &Picture, n: usize, cell: f64, chart: &ThreadChart) -> Result<Vec<vectorcraft_doc::Node>> {
+fn colour_fills(s: &Session, pic: &Picture, n: usize, cell: f64, chart: &ThreadChart, background: bool) -> Result<Vec<vectorcraft_doc::Node>> {
     use kurbo::Shape;
     let b = pic.bounds();
     let mm = PT_PER_MM;
@@ -591,6 +591,26 @@ fn colour_fills(s: &Session, pic: &Picture, n: usize, cell: f64, chart: &ThreadC
         });
     let mut cells = quantise(&grid, &palette);
     majority(&mut cells, w, h, 2);
+    // the background: the colour covering most of the edges, left unsewn unless asked for
+    let skip = if background {
+        None
+    } else {
+        let mut edge = vec![0usize; palette.len()];
+        let mut total = 0usize;
+        for y in 0..h {
+            for x in 0..w {
+                if x == 0 || y == 0 || x + 1 == w || y + 1 == h {
+                    total += 1;
+                    if let Some(Some(i)) = cells.get(y * w + x)
+                        && let Some(e) = edge.get_mut(*i)
+                    {
+                        *e += 1;
+                    }
+                }
+            }
+        }
+        edge.iter().enumerate().max_by_key(|(_, n)| **n).filter(|(_, n)| **n * 2 > total).map(|(i, _)| i)
+    };
     // the lightest colour sewn first
     let mut order: Vec<usize> = (0..palette.len()).collect();
     order.sort_by(|a, b| {
@@ -601,6 +621,9 @@ fn colour_fills(s: &Session, pic: &Picture, n: usize, cell: f64, chart: &ThreadC
     let new = super::embroidery::new_stitching(&s.doc()?.doc);
     let mut out = Vec::new();
     for (k, i) in order.iter().enumerate() {
+        if skip == Some(*i) {
+            continue;
+        }
         let mask: Vec<bool> = cells.iter().map(|v| *v == Some(*i)).collect();
         let Some(path) = vectorcraft_trace::region::outline(&mask, w, h, true, 4) else { continue };
         let path = path.transformed(to_doc);
@@ -661,7 +684,7 @@ fn photo_stitch(s: &mut Session, p: &Value) -> Result<Value> {
             let n = whole(p, "colors", 2, 12, 6, CMD)? as usize;
             let cell = number(p, "cell", 0.5, 5.0, 1.0, CMD)?;
             let chart = chart(s, p, CMD)?;
-            let fills = colour_fills(s, &pic, n, cell, &chart)?;
+            let fills = colour_fills(s, &pic, n, cell, &chart, bool_or(p, "background", false))?;
             let k = fills.len();
             (fills, None, Some(k))
         }

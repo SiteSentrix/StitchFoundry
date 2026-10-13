@@ -697,7 +697,8 @@ to sew it over the image as ordinary objects you can edit:
   yet sewn; a gap over 5 mm starts a new run.
 - **Colour** (`mode: color`): the photo's main colours (`colors`, 6), matched to the chart's
   threads, on a grid of `cell` mm; each colour's region becomes a short-stitch tatami fill, the
-  lightest sewn first, its angle turned colour to colour.
+  lightest sewn first, its angle turned colour to colour. The background (the colour covering
+  most of the photo's edges) is left unsewn unless `background` is on.
 
 `invert` sews the light parts instead (a light thread on a dark fabric) and `contrast` sharpens
 (above 1) or softens the tones. Prepare Image first to cut noise in a busy photo.
