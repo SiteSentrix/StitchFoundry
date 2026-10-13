@@ -403,7 +403,10 @@ impl Interp<'_> {
         let f = font.borrow();
         let name = f.get(&Key::name("FontName")).and_then(Obj::text).map_or_else(|| DEFAULT_FONT.to_string(), |n| n.to_string());
         let m = f.get(&Key::name("FontMatrix")).and_then(|o| o.items().and_then(|i| matrix_of(&i.borrow()))).unwrap_or(Affine::scale(0.001));
-        Ok((name, m * Affine::scale(1000.0)))
+        // Type 1 glyphs are in 1000-unit space; a Type 42 font's glyph space is one unit an em
+        // (its FontMatrix, usually the identity, is already the em's).
+        let units = if f.get(&Key::name("FontType")).and_then(Obj::as_num) == Some(42.0) { 1.0 } else { 1000.0 };
+        Ok((name, m * Affine::scale(units)))
     }
 
     /// `s` (read as Latin-1) set in the current font at user point `at`: point type placed there,
