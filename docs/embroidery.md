@@ -450,6 +450,19 @@ on a photo of the customer's own product instead: `imageWidth` says how many mm 
 across, `at` where the design's middle goes. The mock-up opens as a new document, to show the
 customer, print or export (PNG, PDF).
 
+## Hoops
+
+The Embroidery panel's Design section picks the design's hoop from the standard ones (Brother,
+Janome, Bernina, Husqvarna, Tajima, cap, sleeve and jacket-back frames, and magnetic frames by
+size) and one's own. **Smallest That Fits** (`embroidery.hoop.auto {brand?, turn?, special?}`)
+chooses the smallest hoop that holds the design, turned a quarter when that fits better (`turn:
+false` keeps hoops as they are; cap, sleeve and jacket-back frames only with `special`; `brand`
+keeps to hoops whose names have it). **Rotate Hoop** (`embroidery.hoop.rotate`) turns the hoop a
+quarter. **Custom Hoops** keeps hoops of one's own by name with their field
+(`embroidery.hoop.saveCustom {name, width, height, shape?}`, `.deleteCustom`), listed with the
+standard ones everywhere a hoop is chosen (`embroidery.hoops` lists them all, with whether the
+design fits each).
+
 ## Multi-hooping
 
 A design larger than the hoop is sewn in several hoopings: `embroidery.multiHoop {hoop?, width?,

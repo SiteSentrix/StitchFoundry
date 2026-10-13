@@ -660,6 +660,10 @@ pub struct Prefs {
     /// writes. A local library, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub embroidery_output_profiles: Vec<cmd::embroidery_output::OutputProfile>,
+    /// Hoops of the user's own (`embroidery.hoop.saveCustom`), listed after the standard ones. A
+    /// local library, not a Preferences dialog field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub embroidery_custom_hoops: Vec<sf_core::hoops::Hoop>,
     /// The machine folders designs are sent to (`embroidery.send`): USB sticks, machine folders,
     /// network shares, the last used first. A local list, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -845,6 +849,7 @@ impl Default for Prefs {
             embroidery_font_dirs: vec![],
             embroidery_monogram_templates: vec![],
             embroidery_output_profiles: vec![],
+            embroidery_custom_hoops: vec![],
             embroidery_send_dirs: vec![],
             templates_folder: String::new(),
             append_converted: true,

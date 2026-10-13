@@ -4887,3 +4887,14 @@ machine	Stop	Остановка
 @msg	PNG encoding failed: {e}	ошибка кодирования PNG: {e}
 @msg	the design has no stitches	в дизайне нет стежков
 @msg	the image would be {w} × {h} pixels: lower ppmm	изображение будет {w} × {h} пикселей: уменьшите ppmm
+	Smallest That Fits	Наименьшие подходящие
+	The smallest hoop that holds the design, turned if that fits better	Наименьшие пяльцы, вмещающие дизайн, повёрнутые, если так лучше
+	Rotate Hoop	Повернуть пяльцы
+	Custom Hoops	Свои пяльцы
+	Hoop name	Название пялец
+	Save Hoop	Сохранить пяльцы
+	Delete Hoop	Удалить пяльцы
+	Hoops	Пяльцы
+	Choose Smallest Hoop	Выбрать наименьшие пяльцы
+	Save Custom Hoop	Сохранить свои пяльцы
+	Delete Custom Hoop	Удалить свои пяльцы

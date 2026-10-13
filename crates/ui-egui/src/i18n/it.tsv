@@ -4891,3 +4891,14 @@ machine	Stop	Arresto
 @msg	PNG encoding failed: {e}	codifica PNG non riuscita: {e}
 @msg	the design has no stitches	il disegno non ha punti
 @msg	the image would be {w} × {h} pixels: lower ppmm	l'immagine sarebbe di {w} × {h} pixel: riduci ppmm
+	Smallest That Fits	Il più piccolo adatto
+	The smallest hoop that holds the design, turned if that fits better	Il telaio più piccolo che contiene il disegno, ruotato se così sta meglio
+	Rotate Hoop	Ruota telaio
+	Custom Hoops	Telai personali
+	Hoop name	Nome del telaio
+	Save Hoop	Salva telaio
+	Delete Hoop	Elimina telaio
+	Hoops	Telai
+	Choose Smallest Hoop	Scegli il telaio più piccolo
+	Save Custom Hoop	Salva telaio personale
+	Delete Custom Hoop	Elimina telaio personale

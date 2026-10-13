@@ -164,6 +164,8 @@ pub struct EmbroideryUi {
     pub library: LibraryView,
     /// The Batch Output section's choices.
     pub output: OutputView,
+    /// A hoop of one's own as typed: name, width and height (mm).
+    pub hoop_draft: (String, f64, f64),
     /// The Monogram section: its letters, style (0 classic, 1 line), border (an index of
     /// `embroidery.monogram`'s borders) and size (mm; 0: the font's own).
     pub monogram_letters: String,
@@ -279,6 +281,7 @@ impl Default for EmbroideryUi {
             team_names: String::new(),
             library: LibraryView::default(),
             output: OutputView::default(),
+            hoop_draft: (String::new(), 150.0, 150.0),
             monogram_letters: String::new(),
             monogram_style: 0,
             monogram_border: 1,

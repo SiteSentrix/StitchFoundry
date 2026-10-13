@@ -580,6 +580,48 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
 }
 
 #[test]
+fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // 170 mm wide, 110 high: a 5×7 hoop holds it turned
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 170.0 * PT, 110.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let r = s.execute("embroidery.hoop.auto", &json!({"brand": "brother"})).unwrap();
+    assert_eq!((r["hoop"].as_str(), r["rotated"].as_bool()), (Some("Brother 130 × 180 (5×7)"), Some(true)), "{r}");
+    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(180.0), Some(130.0)));
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!((info["fits"].as_bool(), info["hoopSize"][0].as_f64()), (Some(true), Some(180.0)), "{info}");
+    // not turned: the next size up that holds it as it is
+    let r = s.execute("embroidery.hoop.auto", &json!({"brand": "brother", "turn": false})).unwrap();
+    assert_eq!(r["hoop"].as_str(), Some("Brother 200 × 200 (8×8)"));
+    // turned back by hand
+    s.execute("embroidery.hoop.auto", &json!({"brand": "brother"})).unwrap();
+    let r = s.execute("embroidery.hoop.rotate", &json!({})).unwrap();
+    assert_eq!((r["width"].as_f64(), r["rotated"].as_bool()), (Some(130.0), Some(false)));
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["fits"].as_bool(), Some(false));
+    // magnetic frames are hoops too; any brand: the smallest field of all
+    let r = s.execute("embroidery.hoop.auto", &json!({"brand": "magnetic"})).unwrap();
+    assert!(r["hoop"].as_str().unwrap().starts_with("Magnetic frame"), "{r}");
+    // one's own, smaller than any standard one that fits, then chosen
+    s.execute("embroidery.hoop.saveCustom", &json!({"name": "Shop frame", "width": 175, "height": 115})).unwrap();
+    let r = s.execute("embroidery.hoop.auto", &json!({})).unwrap();
+    assert_eq!(r["hoop"].as_str(), Some("Shop frame"));
+    let list = s.execute("embroidery.hoops", &json!({})).unwrap();
+    let own = list["hoops"].as_array().unwrap().iter().find(|h| h["name"] == "Shop frame").unwrap();
+    assert_eq!((own["custom"].as_bool(), own["fits"].as_bool()), (Some(true), Some(true)));
+    s.execute("embroidery.settings", &json!({"hoop": "Shop frame"})).unwrap();
+    assert!(s.execute("embroidery.hoop.saveCustom", &json!({"name": "Jacket back 360 × 360", "width": 300, "height": 300})).is_err());
+    assert!(s.execute("embroidery.hoop.saveCustom", &json!({"name": "Tiny", "width": 5, "height": 300})).is_err());
+    s.execute("embroidery.hoop.deleteCustom", &json!({"name": "shop FRAME"})).unwrap();
+    assert!(s.execute("embroidery.hoop.deleteCustom", &json!({"name": "Shop frame"})).is_err());
+    // too big for any hoop
+    rect(&mut s, 0.0, 0.0, 900.0 * PT, 900.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    assert!(s.execute("embroidery.hoop.auto", &json!({})).is_err());
+    assert!(s.execute("embroidery.hoop.auto", &json!({"special": true})).is_err());
+}
+
+#[test]
 fn the_design_exports_as_an_image_of_its_stitches() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

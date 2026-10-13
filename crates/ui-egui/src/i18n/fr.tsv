@@ -4899,3 +4899,14 @@ machine	Stop	Arrêt
 @msg	PNG encoding failed: {e}	échec de l'encodage PNG : {e}
 @msg	the design has no stitches	le motif n'a aucun point
 @msg	the image would be {w} × {h} pixels: lower ppmm	l'image ferait {w} × {h} pixels : réduisez ppmm
+	Smallest That Fits	Le plus petit qui convient
+	The smallest hoop that holds the design, turned if that fits better	Le plus petit tambour qui contient le motif, tourné s'il convient mieux ainsi
+	Rotate Hoop	Tourner le tambour
+	Custom Hoops	Tambours personnels
+	Hoop name	Nom du tambour
+	Save Hoop	Enregistrer le tambour
+	Delete Hoop	Supprimer le tambour
+	Hoops	Tambours
+	Choose Smallest Hoop	Choisir le plus petit tambour
+	Save Custom Hoop	Enregistrer un tambour personnel
+	Delete Custom Hoop	Supprimer un tambour personnel

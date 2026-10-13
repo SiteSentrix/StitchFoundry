@@ -4916,3 +4916,14 @@ machine	Stop	Zastavení
 @msg	PNG encoding failed: {e}	kódování PNG selhalo: {e}
 @msg	the design has no stitches	výšivka nemá žádné stehy
 @msg	the image would be {w} × {h} pixels: lower ppmm	obrázek by měl {w} × {h} pixelů: snižte ppmm
+	Smallest That Fits	Nejmenší, který stačí
+	The smallest hoop that holds the design, turned if that fits better	Nejmenší rámeček, do kterého se výšivka vejde, otočený, pokud se tak vejde lépe
+	Rotate Hoop	Otočit rámeček
+	Custom Hoops	Vlastní rámečky
+	Hoop name	Název rámečku
+	Save Hoop	Uložit rámeček
+	Delete Hoop	Smazat rámeček
+	Hoops	Rámečky
+	Choose Smallest Hoop	Zvolit nejmenší rámeček
+	Save Custom Hoop	Uložit vlastní rámeček
+	Delete Custom Hoop	Smazat vlastní rámeček
