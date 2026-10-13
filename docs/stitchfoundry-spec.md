@@ -455,7 +455,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | LT-06 | Break apart lettering | Done | Create Outlines, then stitch | – |
 | LT-07 | Special characters | Done | Glyphs panel | – |
 | LT-08 | Lettering stitch types | Done | Embroidery-font lettering sewn as the font has it, all satin or each letter one fill (`stitch`); 3D puff and appliqué letters too | 0 |
-| LT-09 | Lettering art (envelopes, arcs, warps) | Partial | VectorCraft envelopes; needs stitchable envelopes (RS-03) | 3 |
+| LT-09 | Lettering art (envelopes, arcs, warps) | Done | VectorCraft envelopes and warps on embroidery lettering: sewn as they look, the lettering editable inside them; arcs and spirals built in (LT-03) | 0 |
 | LT-10 | Letter sequencing (left-right, centre-out) and join methods (closest, baseline) | Done | Embroidery-font lettering sews its letters left to right, right to left or centre out and its lines down or up, joined where closest or along the baseline, trimmed after each letter, word or line (`order`, `lines`, `join`, `trim`; Sew order, Join, Trims in the panel) | – |
 | LT-11 | Auto kerning and letter spacing | Done | Font kerning, tracking | – |
 | LT-12 | Lettering underlay | Done | Auto underlay | – |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 175 done,
-29 partial, 40 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 176 done,
+28 partial, 40 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

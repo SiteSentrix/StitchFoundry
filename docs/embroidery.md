@@ -769,6 +769,14 @@ These follow the public descriptions of lettering sequencing and joins, for exam
 https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-15.htm
 and https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-16.htm.
 
+## Warped lettering
+
+Lettering takes the envelopes and warps any art does (**Object › Envelope Distort › Make with
+Warp**: arc, arch, bulge, flag, wave, fish, rise, fisheye, inflate, squeeze, twist): its stitches
+bend with the letters, and it stays lettering, so it can be set again with new text inside the
+envelope (`embroidery.lettering.edit`). Moderate bends sew best; strong ones stretch satin
+columns wide or crowd them.
+
 ## Lettering stitches and small text
 
 *Letters sewn* (`stitch`) sews lettering as the font digitizes it, all **satin** (its filled
