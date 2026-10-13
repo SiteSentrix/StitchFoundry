@@ -1806,7 +1806,7 @@ black tints and images show the same either way, and exports are unchanged. `bla
 Printing / Exporting, `accurate` by default) does the same for RGB raster exports (`document.export`,
 `document.serialize`, `document.exportSelection`, `document.exportForScreens`, `document.exportForOffice`) and for
 Print as Bitmap: `rich` draws pure CMYK black as RGB black in the pixels; CMYK ink exports and the document's
-colours stay as they are. Agents can also pass `richBlack: true` on those raster options. `antiAliasedBitmaps` (off by default;
+colours stay as they are. `antiAliasedBitmaps` (off by default;
 desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps; off, their pixels stay hard-edged.
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
 segment or an anchor of a selected path.

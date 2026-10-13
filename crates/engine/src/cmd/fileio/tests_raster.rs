@@ -136,6 +136,29 @@ fn black_output_rich_draws_pure_cmyk_black_as_rgb_black_in_png() {
     assert_eq!(centre(&mut s), rich, "a rich black shows the same either way");
 }
 
+/// Output All Blacks as Rich Black reaches a CMYK document composed from ink planes (one with a
+/// blending mode) as it does one drawn directly, and leaves CMYK-model exports alone: only RGB
+/// output changes.
+#[test]
+fn black_output_rich_covers_ink_plane_documents_and_leaves_cmyk_exports_alone() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 40, "height": 20, "colorMode": "cmyk"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("paint.setFill", &json!({"color": {"c": 0, "m": 0, "y": 0, "k": 1}})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 30, "y": 0, "width": 10, "height": 20})).unwrap();
+    s.execute("transparency.set", &json!({"blendMode": "multiply"})).unwrap();
+    let png =
+        |s: &mut Session| rgba(&b64(&s.execute("document.export", &json!({"format": "png", "background": "white"})).unwrap())).get_pixel(10, 10).0;
+    let cmyk = |s: &mut Session, format: &str| b64(&s.execute("document.export", &json!({"format": format, "colorModel": "cmyk"})).unwrap());
+    let accurate = png(&mut s);
+    assert!(accurate[0] > 10, "accurate: dark grey, {accurate:?}");
+    let inks = [cmyk(&mut s, "tiff"), cmyk(&mut s, "jpg")];
+    s.execute("prefs.set", &json!({"key": "blackOutput", "value": "rich"})).unwrap();
+    assert_eq!(png(&mut s), [0, 0, 0, 255], "rich: RGB black through the ink planes too");
+    assert!(inks == [cmyk(&mut s, "tiff"), cmyk(&mut s, "jpg")], "CMYK exports keep the document's inks");
+}
+
 #[test]
 fn formats_list_the_raster_options() {
     let mut s = Session::new();
