@@ -223,6 +223,32 @@ fn conflicts(s: &mut Session, _: &Value) -> Result<Value> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn pasting_in_front_of_a_compound_paths_member_goes_beside_the_compound() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let a = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        let b = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        let c = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+        // a group on the clipboard
+        let x = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [x]})).unwrap();
+        s.execute("object.group", &json!({})).unwrap();
+        s.execute("edit.copy", &json!({})).unwrap();
+        for mode in ["edit.pasteInFront", "edit.pasteInBack"] {
+            // a member of the compound selected
+            let member = s.doc().unwrap().doc.node(c).and_then(|n| n.children().and_then(|ch| ch.first().map(|m| m.id))).unwrap();
+            s.execute("select.set", &json!({"ids": [member.0]})).unwrap();
+            s.execute(mode, &json!({})).unwrap();
+            let d = &s.doc().unwrap().doc;
+            let kids = d.node(c).unwrap().children().unwrap();
+            assert!(kids.iter().all(|k| matches!(k.kind, vectorcraft_doc::NodeKind::Path { .. })), "{mode}: nothing pasted into the compound");
+            let pasted = s.doc().unwrap().selection.objects[0];
+            assert_eq!(d.parent_of(c), d.parent_of(pasted), "{mode}: beside it");
+        }
+    }
+
     fn session() -> Session {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();

@@ -403,7 +403,12 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         PasteMode::Front | PasteMode::Back => {
             let order = st.selection.in_paint_order(&st.doc);
             let a = if mode == PasteMode::Front { order.last() } else { order.first() };
-            a.and_then(|id| st.doc.position(*id))
+            // a compound path's member stands for its compound: nothing is pasted into one
+            let a = a.map(|id| match st.doc.parent_of(*id) {
+                Some(p) if st.doc.node(p).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. })) => p,
+                _ => *id,
+            });
+            a.and_then(|id| st.doc.position(id))
         }
         _ => None,
     };
