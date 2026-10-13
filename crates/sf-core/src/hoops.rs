@@ -19,11 +19,20 @@ pub struct Hoop {
     pub height: f64,
     #[serde(default)]
     pub shape: HoopShape,
+    /// A multi-position hoop's positions: where each sewing field's centre is (mm from the
+    /// frame's centre); the fabric is hooped once and the machine sews one position at a time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub positions: Vec<[f64; 2]>,
 }
 
 impl Hoop {
     pub fn new(name: &str, width: f64, height: f64, shape: HoopShape) -> Self {
-        Hoop { name: name.into(), width, height, shape }
+        Hoop { name: name.into(), width, height, shape, positions: Vec::new() }
+    }
+
+    /// A multi-position hoop: a `width` × `height` field at each of `positions`.
+    pub fn multi(name: &str, width: f64, height: f64, positions: &[[f64; 2]]) -> Self {
+        Hoop { positions: positions.to_vec(), ..Hoop::new(name, width, height, HoopShape::Rect) }
     }
 
     /// Sewing field bounds (centred on the origin).
@@ -103,6 +112,9 @@ pub fn standard_hoops() -> Vec<Hoop> {
         Hoop::new("Magnetic frame 250 × 250", 250.0, 250.0, Rect),
         Hoop::new("Magnetic frame 350 × 350", 350.0, 350.0, Rect),
         Hoop::new("Magnetic pocket frame 100 × 70", 100.0, 70.0, Rect),
+        // multi-position frames: hooped once, sewn a position at a time
+        Hoop::multi("Multi-position 130 × 300 (3 × 130 × 180)", 130.0, 180.0, &[[0.0, -60.0], [0.0, 0.0], [0.0, 60.0]]),
+        Hoop::multi("Multi-position 200 × 360 (2 × 200 × 200)", 200.0, 200.0, &[[0.0, -80.0], [0.0, 80.0]]),
     ]
 }
 

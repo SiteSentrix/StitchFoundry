@@ -541,6 +541,10 @@ trimmed, so the pieces meet in the overlaps; a stitch longer than half the overl
 the hooping's stitches in their colours inside the hoop's field (life size when it fits the
 page), its place in the grid, its file and how to line the next one up.
 
+A **multi-position hoop** (Multi-position 130 × 300 with three 130 × 180 positions, 200 × 360
+with two 200 × 200) is hooped once: with one, the frame's positions are the hoopings, each a
+machine file to sew with the frame at that position, and no registration marks are sewn.
+
 The marks are set with the design (`embroidery.settings {registration: {shape, size, perOverlap,
 color}}`): crosses, rings or targets (a ring with a cross), how far they reach (3 mm), how many
 in each overlap (2; 1 to 4) and their thread's colour (light grey).

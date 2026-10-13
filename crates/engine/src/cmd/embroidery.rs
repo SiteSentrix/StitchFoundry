@@ -246,7 +246,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Multi-Hooping",
             [],
             None,
-            "{dir?: the folder to write to (without it: the plan only), hoop?: a standard hoop's name (default: the design's), width?, height?: mm (a hoop of this field instead), overlap?: mm the hoopings share (10; 0–100), format?: as Export Machine File, prefix?: what the file names start with, marks?: bool (true), split?: bool (true: an object no hooping holds whole is split, each stitch sewn in the hooping whose middle is nearest it, each piece tied in and off; false: refused), sheets?: bool (false: true opens a document of a page per hooping, to print: its stitches in its hoop, life size when they fit, its place in the grid and its file)} multi-hooping: a design larger than the hoop split into hoopings on a grid that overlap by `overlap`, each object sewn whole in the first hooping that holds it, each hooping a machine file of its own (centred on the hoop, `name-1`, `name-2`…) that first sews registration crosses in the overlaps it shares with its neighbours, as a colour of its own, to line the fabric up by → {hoopings: [{index, column, row, objects, stitches, file?}], columns, rows, files}",
+            "{dir?: the folder to write to (without it: the plan only), hoop?: a standard hoop's name (default: the design's), width?, height?: mm (a hoop of this field instead), overlap?: mm the hoopings share (10; 0–100), format?: as Export Machine File, prefix?: what the file names start with, marks?: bool (true), split?: bool (true: an object no hooping holds whole is split, each stitch sewn in the hooping whose middle is nearest it, each piece tied in and off; false: refused), sheets?: bool (false: true opens a document of a page per hooping, to print: its stitches in its hoop, life size when they fit, its place in the grid and its file)} multi-hooping: a design larger than the hoop split into hoopings on a grid that overlap by `overlap`, each object sewn whole in the first hooping that holds it, each hooping a machine file of its own (centred on the hoop, `name-1`, `name-2`…) that first sews registration crosses in the overlaps it shares with its neighbours, as a colour of its own, to line the fabric up by; with a multi-position hoop (`embroidery.hoops`: positions) the frame's positions are the hoopings, hooped once, without marks → {hoopings: [{index, column, row, objects, stitches, file?}], columns, rows, files}",
             has_doc,
             multi_hoop
         ),
@@ -1223,26 +1223,28 @@ fn marks_of(cells: &[sf_core::BBox], cols: usize, rows: usize, col: usize, row: 
 fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.multiHoop";
     let cfg = s.doc()?.doc.embroidery.as_deref().cloned().unwrap_or_default();
-    // the hoop's field (mm)
-    let field = match (p.get("width").and_then(Value::as_f64), p.get("height").and_then(Value::as_f64)) {
-        (Some(w), Some(h)) if (20.0..=2000.0).contains(&w) && (20.0..=2000.0).contains(&h) => (w, h),
+    // the hoop's field (mm), and a multi-position hoop's positions
+    let (field, positions) = match (p.get("width").and_then(Value::as_f64), p.get("height").and_then(Value::as_f64)) {
+        (Some(w), Some(h)) if (20.0..=2000.0).contains(&w) && (20.0..=2000.0).contains(&h) => ((w, h), Vec::new()),
         (Some(_), _) | (_, Some(_)) => return Err(bad(CMD, "`width` and `height` are 20 to 2000 mm, both given")),
         _ => match str_param(p, "hoop") {
-            Some(name) => {
-                super::embroidery_hoops::find_hoop(s, name).map(|h| (h.width, h.height)).ok_or_else(|| bad(CMD, format!("no hoop `{name}`")))?
-            }
+            Some(name) => super::embroidery_hoops::find_hoop(s, name)
+                .map(|h| ((h.width, h.height), h.positions.clone()))
+                .ok_or_else(|| bad(CMD, format!("no hoop `{name}`")))?,
             None => cfg
                 .hoop
                 .as_ref()
-                .map(|h| (h.width, h.height))
+                .map(|h| ((h.width, h.height), h.positions.clone()))
                 .ok_or_else(|| bad(CMD, "choose a hoop: the design has none (or give `hoop`, or `width` and `height`)"))?,
         },
     };
+    let multi_position = !positions.is_empty();
     let overlap = super::embroidery_lettering::ranged(p, "overlap", 0.0..=100.0, CMD, "`overlap` is 0 to 100 mm")?.unwrap_or(10.0);
-    if overlap * 2.0 >= field.0.min(field.1) {
+    if overlap * 2.0 >= field.0.min(field.1) && !multi_position {
         return Err(bad(CMD, "the overlap is too wide for the hoop"));
     }
-    let marks = bool_or(p, "marks", true);
+    // a multi-position hoop isn't hooped again: nothing to line up
+    let marks = bool_or(p, "marks", true) && !multi_position;
     let plan = s.embroidery_plan().ok_or_else(|| bad(CMD, "no document"))?;
     if plan.built.pattern.stitch_count() == 0 {
         return Err(bad(CMD, "nothing is stitched yet: give objects a stitch type first"));
@@ -1251,20 +1253,34 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
     let b = plan.built.pattern.bounds();
     let (step_x, step_y) = (field.0 - overlap, field.1 - overlap);
     let count = |len: f64, size: f64, step: f64| if len <= size { 1 } else { ((len - overlap) / step).ceil().max(1.0) as usize };
-    let (cols, rows) = (count(b.width(), field.0, step_x), count(b.height(), field.1, step_y));
+    let (cols, rows) = if multi_position { (1, positions.len()) } else { (count(b.width(), field.0, step_x), count(b.height(), field.1, step_y)) };
     if cols * rows > 64 {
         return Err(bad(CMD, format!("{cols} × {rows} hoopings: more than 64; choose a larger hoop")));
     }
     let span = (cols as f64 * step_x + overlap, rows as f64 * step_y + overlap);
     let c = sf_core::Point::new((b.min.x + b.max.x) / 2.0, (b.min.y + b.max.y) / 2.0);
     let origin = sf_core::Point::new(c.x - span.0 / 2.0, c.y - span.1 / 2.0);
-    let cells: Vec<sf_core::BBox> = (0..rows)
-        .flat_map(|r| (0..cols).map(move |k| (k, r)))
-        .map(|(k, r)| {
-            let min = sf_core::Point::new(origin.x + k as f64 * step_x, origin.y + r as f64 * step_y);
-            sf_core::BBox::new(min, sf_core::Point::new(min.x + field.0, min.y + field.1))
-        })
-        .collect();
+    let cells: Vec<sf_core::BBox> = if multi_position {
+        // the frame centred on the design, a field at each of its positions
+        positions
+            .iter()
+            .map(|[x, y]| {
+                let m = sf_core::Point::new(c.x + x, c.y + y);
+                sf_core::BBox::new(
+                    sf_core::Point::new(m.x - field.0 / 2.0, m.y - field.1 / 2.0),
+                    sf_core::Point::new(m.x + field.0 / 2.0, m.y + field.1 / 2.0),
+                )
+            })
+            .collect()
+    } else {
+        (0..rows)
+            .flat_map(|r| (0..cols).map(move |k| (k, r)))
+            .map(|(k, r)| {
+                let min = sf_core::Point::new(origin.x + k as f64 * step_x, origin.y + r as f64 * step_y);
+                sf_core::BBox::new(min, sf_core::Point::new(min.x + field.0, min.y + field.1))
+            })
+            .collect()
+    };
     // each object whole in the first hooping that holds it (its stitches: the travel in may be far off)
     let pattern = &plan.built.pattern;
     let mut assigned: Vec<Vec<usize>> = vec![Vec::new(); cells.len()];
