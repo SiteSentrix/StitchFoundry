@@ -27,14 +27,17 @@
 //! - `tiff`: the TIFF preview.
 //! - `import`: the PostScript interpreter.
 //! - `print`: print jobs as PostScript files ([`print()`]), their pages drawn by `scene`.
+//! - `legacy_ai`: legacy `.ai` files of version 7 ([`export_legacy_ai`]), with their layers and groups.
 
 mod import;
+mod legacy_ai;
 mod print;
 mod ps;
 mod scene;
 mod tiff;
 
 pub use import::{Imported, ai_alone, family_style, import, import_with, is_loss, layered_ai};
+pub use legacy_ai::{LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
 pub use print::{PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;
