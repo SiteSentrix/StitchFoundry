@@ -113,8 +113,15 @@ fn type_tool_typing_is_one_undo_step() {
     assert!(!s.in_interaction(), "moving the caret commits");
     assert_eq!(undo_labels(&s).last().map(String::as_str), Some("Typing"));
     s.tool_text("!", v).unwrap();
-    key(&mut s, ToolKey::Escape, Mods::default());
+    // #1686: Escape is the tool's while editing, and asks the UI for the Selection tool.
+    assert!(s.tool_claims_key(ToolKey::Escape, v));
+    let r = s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    assert!(r.iter().any(|r| matches!(r, UiRequest::SwitchTool(t) if t == "selection")), "{r:?}");
+    assert!(!s.tool_claims_key(ToolKey::Escape, v));
     assert_eq!(obj(&s, id).plain_text(), "Hello worl!d");
+    // #1686: Escape ends editing, the type still selected; the UI goes on to the Selection tool.
+    assert!(!s.tool_wants_text());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "Hello world");
     s.execute("edit.undo", &json!({})).unwrap();
