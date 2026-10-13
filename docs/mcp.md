@@ -1802,7 +1802,11 @@ default: View › Actual Size / `view.actualSize` is one document point per scre
 96 screen points, an inch at the system's reference density whatever the display scaling). `blackOnScreen`
 (Appearance of Black › On Screen, `accurate` by default) sets how the canvas shows pure CMYK black, black ink alone
 at 100%: `accurate` shows it through the CMYK profile, a dark grey, and `rich` shows it as RGB black. Rich blacks,
-black tints and images show the same either way, and exports are unchanged. `antiAliasedBitmaps` (off by default;
+black tints and images show the same either way, and exports are unchanged. `blackOutput` (Appearance of Black ›
+Printing / Exporting, `accurate` by default) does the same for RGB raster exports (`document.export`,
+`document.serialize`, `document.exportSelection`, `document.exportForScreens`, `document.exportForOffice`) and for
+Print as Bitmap: `rich` draws pure CMYK black as RGB black in the pixels; CMYK ink exports and the document's
+colours stay as they are. `antiAliasedBitmaps` (off by default;
 desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps; off, their pixels stay hard-edged.
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
 segment or an anchor of a selected path.

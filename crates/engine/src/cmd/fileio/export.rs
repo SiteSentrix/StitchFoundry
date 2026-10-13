@@ -11,14 +11,17 @@ use crate::DocState;
 
 use super::super::*;
 use super::encode::single_artboard;
-use super::{ARTBOARD_PARAMS, Format, default_name, encode, encode_all, encode_with_warnings, merge, writable, write_encoded, write_or_return};
+use super::{
+    ARTBOARD_PARAMS, Format, default_name, encode, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded,
+    write_or_return,
+};
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
     let expanded = expand_presets(s, "document.serialize", p)?;
-    let p = &*expanded;
-    let doc = &*source(s, f, p, "document.serialize")?;
-    let enc = encode_all(doc, f.id, p)?;
+    let p = with_black_output(s, &expanded);
+    let doc = &*source(s, f, &p, "document.serialize")?;
+    let enc = encode_all(doc, f.id, &p)?;
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
     let (main, linked) = files.split_at(enc.files.len());
     // Text formats come back as text; an SVG in UTF-16 or ISO 8859-1 also as its bytes.
@@ -50,9 +53,9 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let f = writable("document.export", str_param(p, "format"), path)?;
     let expanded = expand_presets(s, "document.export", p)?;
-    let p = &*expanded;
-    let doc = &*source(s, f, p, "document.export")?;
-    let enc = encode_all(doc, f.id, p)?;
+    let p = with_black_output(s, &expanded);
+    let doc = &*source(s, f, &p, "document.export")?;
+    let enc = encode_all(doc, f.id, &p)?;
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
 
@@ -185,11 +188,11 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path");
     let f = writable(C, str_param(p, "format"), path)?;
     let expanded = expand_presets(s, C, p)?;
-    let p = &*expanded;
+    let p = with_black_output(s, &expanded);
     let (d, bounds) = selection(s, C)?;
     // The encoder's warnings (options accepted but not applied, features approximated or left
     // out), as document.export reports them.
-    let (bytes, warnings) = encode_with_warnings(&d, f.id, &without_artboards(p))?;
+    let (bytes, warnings) = encode_with_warnings(&d, f.id, &without_artboards(&p))?;
     write_or_return(path, &bytes, json!({ "format": f.id, "warnings": warnings, "bounds": [bounds.x0, bounds.y0, bounds.width(), bounds.height()] }))
 }
 
@@ -211,7 +214,8 @@ pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("no artboard {artboard} (0-based; the document has {})", doc.artboards.len())));
     }
     let background = if bool_or(p, "transparent", false) { "transparent" } else { "white" };
-    let bytes = encode(doc, "png", &json!({ "ppi": ppi, "background": background, "artboard": artboard }))?;
+    let opts = with_black_output(s, &json!({ "ppi": ppi, "background": background, "artboard": artboard }));
+    let bytes = encode(doc, "png", &opts)?;
     // The pixel size, from the PNG header.
     let side = |at: usize| bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).map_or(0, u32::from_be_bytes);
     write_or_return(path, &bytes, json!({ "width": side(16), "height": side(20) }))

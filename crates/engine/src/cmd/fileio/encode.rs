@@ -175,6 +175,8 @@ struct RasterOptions {
     layers: Option<bool>,
     max_editability: Option<bool>,
     hidden_layers: Option<bool>,
+    /// Appearance of Black › Printing / Exporting (`prefs.blackOutput`); agents can set it here too.
+    rich_black: Option<bool>,
 }
 
 impl RasterOptions {
@@ -239,6 +241,7 @@ impl RasterOptions {
                 hidden_layers: self.hidden_layers.unwrap_or(false),
                 embed_icc,
             },
+            rich_black: self.rich_black.unwrap_or(false),
         })
     }
 }

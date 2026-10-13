@@ -128,7 +128,7 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     let flat = super::rasterfx::flatten_raster_effects(doc);
     let doc = flat.as_ref().unwrap_or(doc);
     // Print as Bitmap and the flattener preset (Advanced) render and flatten it first.
-    let prepared = super::printadvanced::prepare(PRINT, doc, &set, &s.prefs.flattener_presets)?;
+    let prepared = super::printadvanced::prepare(PRINT, doc, &set, &s.prefs.flattener_presets, s.prefs.black_output == "rich")?;
     let path = str_param(p, "path");
     if !postscript {
         let r = vectorcraft_pdf::print(prepared.as_ref().unwrap_or(doc), &PrintOptions { settings: set, ..Default::default() })
