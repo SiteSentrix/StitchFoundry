@@ -83,6 +83,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         base *= aff(g.transform());
         top = g;
     }
+    if let Some(boards) = inkscape_pages(&xml, base) {
+        im.doc.artboards = boards;
+    }
 
     // Top-level `<g id>` elements become layers (as in the reference app), named from their
     // labels (`data-name`…) else their ids; otherwise all art goes into "Layer 1". A clip path on
@@ -283,6 +286,30 @@ fn filter_names(filters: &[Arc<usvg::filter::Filter>]) -> String {
     names.join(", ")
 }
 
+/// Inkscape's pages (`<inkscape:page>` in its `<sodipodi:namedview>`, in user units) as artboards
+/// through `user` (user units → document points), named by their labels; `None` without any.
+fn inkscape_pages(xml: &roxmltree::Document, user: Affine) -> Option<Vec<vectorcraft_doc::Artboard>> {
+    let num = |n: roxmltree::Node, a: &str| n.attribute(a).and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite());
+    let pages: Vec<vectorcraft_doc::Artboard> = xml
+        .descendants()
+        .filter(|n| n.is_element() && n.tag_name().name() == "page" && n.tag_name().namespace() == Some(INKSCAPE))
+        .filter_map(|p| {
+            let (w, h) = (num(p, "width")?, num(p, "height")?);
+            let (x, y) = (num(p, "x").unwrap_or(0.0), num(p, "y").unwrap_or(0.0));
+            (w > 0.0 && h > 0.0).then(|| (p, Rect::new(x, y, x + w, y + h)))
+        })
+        .take(1000)
+        .enumerate()
+        .map(|(i, (p, r))| vectorcraft_doc::Artboard {
+            id: i as u32 + 1,
+            name: p.attribute((INKSCAPE, "label")).filter(|l| !l.trim().is_empty()).map_or_else(|| format!("Artboard {}", i + 1), str::to_string),
+            rect: user.transform_rect_bbox(r),
+            show_center_mark: false,
+            show_cross_hairs: false,
+        })
+        .collect();
+    (!pages.is_empty()).then_some(pages)
+}
 /// How many clip paths deep (`<clipPath clip-path>`) an object's clip is read.
 const MAX_CLIP_NEST: usize = 16;
 
