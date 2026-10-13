@@ -39,8 +39,9 @@ const MAX_PATH: usize = 1 << 20;
 const MAX_DRAWN: usize = 1 << 24;
 /// Samples taken of a shading function that isn't a plain interpolation.
 const SHADING_SAMPLES: usize = 32;
-/// Most bounds of a stitched linear function that become a gradient's stops: past it, the
-/// function is sampled like any other (each stop evaluates the whole function).
+/// Most bounds of a stitched linear function that become a gradient's stops (two where the pieces
+/// don't meet): past it, the function is sampled like any other (each stop evaluates the whole
+/// function).
 const MAX_STITCH_STOPS: usize = 1024;
 /// Most functions one evaluation of a shading's function visits: the function itself, each entry
 /// of an array of functions and, in each stitching function, the piece that applies to the input.
@@ -1098,7 +1099,9 @@ impl Interp<'_> {
         // Where the colour changes: the ends, and the bounds of stitched linear functions (unless
         // there are too many).
         let mut visits = 0;
-        let ts: Vec<f64> = match linear_points(&f, 0, &mut visits).filter(|p| p.len() <= MAX_STITCH_STOPS) {
+        let points = linear_points(&f, 0, &mut visits).filter(|p| p.len() <= MAX_STITCH_STOPS);
+        let stitched = points.is_some();
+        let ts: Vec<f64> = match points {
             Some(mut pts) => {
                 pts.retain(|t| (d0.min(d1)..=d0.max(d1)).contains(t));
                 pts.iter().map(|t| if d1 != d0 { (t - d0) / (d1 - d0) } else { 0.0 }).chain([0.0, 1.0]).collect()
@@ -1112,15 +1115,25 @@ impl Interp<'_> {
         let c = |i: usize| coords.get(i).copied().unwrap_or(0.0);
         let (r0, r1) = (c(2).max(0.0), c(5).max(1e-6));
         let mut stops = Vec::with_capacity(ts.len());
+        let stop = |paint: Paint, offset: f64| match paint {
+            Paint::Solid { color, swatch, tint } => GradientStop { swatch, tint, ..GradientStop::new(offset as f32, color) },
+            _ => GradientStop::new(offset as f32, Color::BLACK),
+        };
         for t in ts {
             let comps = self.eval(&f, &[d0 + (d1 - d0) * t], 0)?;
             let paint = self.paint_of(&space, &comps)?;
             let offset = if radial { (r0 + (r1 - r0) * t) / r1 } else { t };
-            let stop = match paint {
-                Paint::Solid { color, swatch, tint } => GradientStop { swatch, tint, ..GradientStop::new(offset as f32, color) },
-                _ => GradientStop::new(offset as f32, Color::BLACK),
-            };
-            stops.push(stop);
+            // At a bound of a stitched function the pieces need not meet (a hard colour change):
+            // the colour just before the bound is a stop at the same offset, ahead of the one
+            // after it.
+            if stitched && t > 0.0 && t < 1.0 {
+                let comps = self.eval(&f, &[d0 + (d1 - d0) * (t - 1e-9)], 0)?;
+                let before = stop(self.paint_of(&space, &comps)?, offset);
+                if before.color != stop(paint.clone(), offset).color {
+                    stops.push(before);
+                }
+            }
+            stops.push(stop(paint, offset));
         }
         let (gk, geom) = if radial {
             let centre = Point::new(c(3), c(4));

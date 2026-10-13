@@ -920,10 +920,12 @@ fn gradients_stitched_from_linear_pieces_keep_or_sample_their_stops() {
              /Functions [ {pieces} {{ F }} repeat ] /Bounds [ 1 1 {bounds} {{ {pieces} div }} for ] >> >> shfill"
         )
     };
-    // A few pieces: the bounds are kept exactly as stops (three bounds -> five stops with the ends).
-    assert_eq!(stitch_stops(&stitched(3)), vec![0.0, 0.25, 0.5, 0.75, 1.0]);
-    // At the cap (1024 bounds, 1025 pieces) the 1024 bounds and the two ends are all kept.
-    assert_eq!(stitch_stops(&stitched(1024)).len(), 1026);
+    // A few pieces: the bounds are kept exactly as stops. Each piece runs from 0 to 1, so at every
+    // bound the colour jumps: two stops there (three bounds -> eight stops with the ends).
+    assert_eq!(stitch_stops(&stitched(3)), vec![0.0, 0.25, 0.25, 0.5, 0.5, 0.75, 0.75, 1.0]);
+    // At the cap (1024 bounds, 1025 pieces) the 1024 bounds (two stops each) and the two ends are
+    // all kept.
+    assert_eq!(stitch_stops(&stitched(1024)).len(), 2 * 1024 + 2);
     // One past it (1025 bounds, 1026 pieces) the function is sampled instead.
     assert_eq!(stitch_stops(&stitched(1025)).len(), 33);
 }
