@@ -3536,6 +3536,52 @@ theme	Appearance	外観
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 # Japanese: no final 。 (these are status lines, and reasons that follow a colon), unless the English ends
 # with a period; a space between Japanese text and an adjacent Latin word, number or {placeholder}.
+# Swatches panel: the default swatches' names (shown in the UI language; documents keep them)
+swatch	[None]	[なし]
+swatch	[Registration]	[レジストレーション]
+swatch	White	ホワイト
+swatch	Black	ブラック
+swatch	Red	レッド
+swatch	Orange Red	オレンジレッド
+swatch	Orange	オレンジ
+swatch	Amber	アンバー
+swatch	Yellow	イエロー
+swatch	Yellow Green	イエローグリーン
+swatch	Lime	ライム
+swatch	Green	グリーン
+swatch	Emerald	エメラルド
+swatch	Teal	ティール
+swatch	Aqua	アクア
+swatch	Cyan Green	シアングリーン
+swatch	Cyan	シアン
+swatch	Azure	アジュール
+swatch	Blue	ブルー
+swatch	Indigo	インディゴ
+swatch	Violet	バイオレット
+swatch	Purple	パープル
+swatch	Magenta	マゼンタ
+swatch	Rose	ローズ
+swatch	Pink	ピンク
+swatch	Brown	ブラウン
+swatch	Tan	タン
+swatch	Coffee	コーヒー
+swatch	Chocolate	チョコレート
+swatch	Sand	サンド
+swatch	Copper	カッパー
+swatch	Rust	ラスト
+swatch	Walnut	ウォルナット
+swatch	Espresso	エスプレッソ
+swatch	White, Black	ホワイト、ブラック
+swatch	Radial White, Black	円形 ホワイト、ブラック
+swatch	Sunset	サンセット
+swatch	Ocean	オーシャン
+swatch	Grays	グレー
+swatch	Brights	ビビッド
+swatch	Bright Red	ビビッドレッド
+swatch	Bright Yellow	ビビッドイエロー
+swatch	Bright Green	ビビッドグリーン
+swatch	Bright Blue	ビビッドブルー
+swatch	Bright Violet	ビビッドバイオレット
 @msg	Reset {_1}	{_1} をリセットしました
 @msg	Saving	保存中
 @msg	Saving {_1}	{_1} を保存中
