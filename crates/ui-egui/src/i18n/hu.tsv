@@ -4441,6 +4441,8 @@ imageTrace	Outline	Körvonal
 @msg	resolutions must be between 1 and 2400 ppi	a felbontás 1 és 2400 ppi között lehet
 @msg	Restored {_1} recovered document(s): save them to keep them	Helyreállított dokumentumok: {_1}; mentsd őket, ha meg akarod tartani
 @msg	result would exceed the canvas (coordinates out of range)	az eredmény túllépné a vásznat (a koordináták tartományon kívül esnek)
+@msg	objects can't be nested more than 32 deep	az objektumok legfeljebb 32 szint mélyen ágyazhatók egymásba
+@msg	the SVG's elements are nested more than {0} deep	az SVG elemei több mint {0} szint mélyen vannak egymásba ágyazva
 @msg	Save for Web: the image is empty	Mentés webre: a kép üres
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	a Mentés ezt írja: {_1}, ezt nem: {_2}; más formátumhoz használd a document.export parancsot
 @msg	saved panel layout is invalid; reset the workspace first	a mentett panelelrendezés érvénytelen; előbb állítsd vissza a munkaterületet

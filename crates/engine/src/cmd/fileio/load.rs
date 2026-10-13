@@ -139,7 +139,8 @@ fn restore_or_import(
 /// (with a warning for each that can't be used).
 pub(crate) fn native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
     let f = vectorcraft_format::load_file(bytes).map_err(err)?;
-    let warnings = super::native::install_profiles(f.profiles);
+    let mut warnings = super::native::install_profiles(f.profiles);
+    warnings.extend(f.depth_notes);
     Ok((f.doc, f.info, warnings))
 }
 

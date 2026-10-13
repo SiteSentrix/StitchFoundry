@@ -32,6 +32,7 @@ pub(super) fn import(name: &str, bytes: &[u8]) -> Result<Imported> {
         Ok(d) => {
             let mut b = Builder { doc: Document::new(0.0, 0.0), warnings: Vec::new(), k: 72.0 / d.dpi, layer: 0 };
             b.document(&d)?;
+            b.doc.limit_depth_noting(&mut b.warnings);
             let mut warnings = d.warnings.iter().map(|w| format!("Affinity: not imported or approximated: {w}.")).collect::<Vec<_>>();
             warnings.extend(b.warnings.iter().map(|w| format!("Affinity: {w}.")));
             Ok(Imported { doc: b.doc, warnings, preview_only: false })

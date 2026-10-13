@@ -3705,6 +3705,8 @@ theme	Appearance	Erscheinungsbild
 @msg	recovery copy `{file}`: {e}	Wiederherstellungskopie `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	Auflösungen müssen zwischen 1 und 2400 ppi liegen
 @msg	result would exceed the canvas (coordinates out of range)	das Ergebnis würde die Arbeitsfläche überschreiten (Koordinaten außerhalb des Bereichs)
+@msg	objects can't be nested more than 32 deep	Objekte können nicht tiefer als 32 Ebenen verschachtelt werden
+@msg	the SVG's elements are nested more than {0} deep	die Elemente der SVG-Datei sind tiefer als {0} Ebenen verschachtelt
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale muss eine Zahl von {_1} bis {_2} sein, nicht {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale muss eine Zahl von {_1} bis {_2} sein, nicht {s}
 @msg	select (or target) objects whose appearance isn't basic	wählen Sie Objekte aus (oder als Ziel), deren Aussehen nicht einfach ist

@@ -17,7 +17,7 @@ pub(super) type XNode<'a, 'i> = roxmltree::Node<'a, 'i>;
 
 /// `name: value` declarations of a block or `style` attribute, with their `!important` flag. The
 /// `font` shorthand becomes its longhands, as usvg reads it for the rest of the drawing (#1557).
-fn parse_decls(s: &str) -> Vec<(String, String, bool)> {
+pub(super) fn parse_decls(s: &str) -> Vec<(String, String, bool)> {
     s.split(';')
         .filter_map(|d| {
             let (k, v) = d.split_once(':')?;
@@ -371,8 +371,13 @@ impl Styles {
         Self { rules, index, cache: RefCell::default() }
     }
 
+    /// Do the document's style sheets have any rules?
+    pub(super) fn has_rules(&self) -> bool {
+        !self.rules.is_empty()
+    }
+
     /// Properties set on `n` by rules and its `style` attribute, after the cascade.
-    fn declared(&self, n: XNode) -> Rc<HashMap<String, String>> {
+    pub(super) fn declared(&self, n: XNode) -> Rc<HashMap<String, String>> {
         if let Some(m) = self.cache.borrow().get(&n.id()) {
             return m.clone();
         }

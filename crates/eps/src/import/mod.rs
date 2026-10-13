@@ -268,5 +268,7 @@ fn finish_with(out: Out, layers: Vec<Arc<Node>>) -> Imported {
         }
     }
     doc.layers = layers;
-    Imported { document: doc, warnings: out.warnings, preview: false }
+    let mut warnings = out.warnings;
+    doc.limit_depth_noting(&mut warnings);
+    Imported { document: doc, warnings, preview: false }
 }

@@ -149,6 +149,7 @@ pub const PAST_PAGE_NOTE: &str = "art reaching past the page was clipped to it, 
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open(bytes, opts.password.as_deref())?;
     let picked = crate::pages::picked(opts, original.pages().len())?;
+    picked.iter().filter_map(|&n| original.pages().get(n)).try_for_each(crate::pages::content_too_deep)?;
     let mut ocgs = Ocgs::read(&original);
     let route = opts.layers && !ocgs.list.is_empty();
     // Content that is off imports as hidden layers: an update of the file turns every group on
@@ -166,6 +167,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let all_on = turned_on.is_some();
     let pdf = turned_on.unwrap_or(original);
     let pages = pdf.pages();
+    picked.iter().filter_map(|&n| pages.get(n)).try_for_each(crate::pages::content_too_deep)?;
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
     let sink2 = sink.clone();
@@ -417,6 +419,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             }
         }
     }
+    doc.limit_depth_noting(&mut warnings);
     Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text })
 }
 

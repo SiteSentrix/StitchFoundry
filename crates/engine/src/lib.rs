@@ -583,6 +583,10 @@ pub(crate) fn is_guide_path(d: &Document, id: NodeId) -> bool {
     d.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: true, .. }))
 }
 
+/// The error of an edit that would nest objects deeper than [`vectorcraft_doc::MAX_DEPTH`].
+pub const TOO_DEEP: &str = "objects can't be nested more than 32 deep";
+const _: () = assert!(vectorcraft_doc::MAX_DEPTH == 32, "TOO_DEEP (and its catalog rows) names the cap");
+
 /// Cheap sanity check after an edit: artboards and the objects just touched (the selection) must
 /// have finite, in-range geometry, so saved files always reload and renderers never see NaN/∞.
 fn doc_sane(d: &Document, sel: &Selection) -> bool {
@@ -1245,6 +1249,9 @@ impl Session {
     }
     /// Add a document and make it active.
     pub fn add_document(&mut self, mut doc: Document, path: Option<String>) -> usize {
+        // Every edit is checked against the document before it, so the first one is within the cap
+        // (importers and the native reader have seen to theirs already, with a warning).
+        doc.limit_depth();
         Self::refresh_text_bounds(&mut doc);
         // Guides from files saved before guides had layers go on a layer.
         doc.adopt_guides();
@@ -1262,6 +1269,7 @@ impl Session {
         if index >= self.docs.len() {
             return false;
         }
+        doc.limit_depth();
         Self::refresh_text_bounds(&mut doc);
         doc.adopt_guides();
         if self.active == Some(index) {
@@ -1476,7 +1484,10 @@ impl Session {
                     if !st.doc.variables.bindings.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_variable_bindings();
                     }
-                    if doc_sane(&st.doc, &st.selection) {
+                    if st.doc.too_deep(Some(&before)) {
+                        // Deeper trees overflow the stack of what walks them.
+                        Err(EngineError::Other(TOO_DEEP.into()))
+                    } else if doc_sane(&st.doc, &st.selection) {
                         Ok(v)
                     } else {
                         Err(EngineError::Other("result would exceed the canvas (coordinates out of range)".into()))

@@ -12,7 +12,73 @@ use super::graphics::GState;
 pub(crate) type Dict = HashMap<Key, Obj>;
 
 /// A shared, mutable dictionary.
-pub(crate) type DictRef = Rc<RefCell<Dict>>;
+#[derive(Clone, Debug)]
+pub(crate) struct DictRef(Rc<RefCell<Dict>>);
+
+impl DictRef {
+    pub fn new(d: Dict) -> Self {
+        Self(Rc::new(RefCell::new(d)))
+    }
+}
+
+impl std::ops::Deref for DictRef {
+    type Target = Rc<RefCell<Dict>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for DictRef {
+    fn drop(&mut self) {
+        if Rc::strong_count(&self.0) == 1
+            && let Ok(mut d) = self.0.try_borrow_mut()
+        {
+            drop_held(d.drain().map(|(_, v)| v));
+        }
+    }
+}
+
+thread_local! {
+    /// What the composite objects being dropped held, waiting for their turn (while any is).
+    static HELD: RefCell<Option<Vec<Obj>>> = const { RefCell::new(None) };
+}
+
+/// Drop what a composite object held, now that nothing else refers to it, without recursion: a
+/// program nests arrays and dictionaries as deep as it likes (`[ exch ]` in a loop), and dropping
+/// them one inside the other overflows the stack. What `held` holds in its turn waits in [`HELD`]
+/// for the outermost drop, which works through it.
+fn drop_held(held: impl Iterator<Item = Obj>) {
+    let holds = |o: &Obj| matches!(o, Obj::Array { .. } | Obj::Dict(_) | Obj::File { .. } | Obj::GState(_));
+    // (Without the list, when the thread is ending: dropped as they come.)
+    let outermost = HELD.try_with(|h| {
+        let Ok(mut h) = h.try_borrow_mut() else { return false };
+        let outermost = h.is_none();
+        h.get_or_insert_with(Vec::new).extend(held.filter(holds));
+        outermost
+    });
+    if !matches!(outermost, Ok(true)) {
+        return;
+    }
+    // Each drop here puts what it held on the list instead of dropping it.
+    while let Ok(Some(next)) = HELD.try_with(|h| h.try_borrow_mut().ok().and_then(|mut h| h.as_mut().and_then(Vec::pop))) {
+        drop(next);
+    }
+    let _ = HELD.try_with(|h| h.try_borrow_mut().map(|mut h| *h = None)); // Nothing to do when the thread is ending.
+}
+
+/// What [`Shared`] values may be: bytes, or objects (which may hold more of themselves).
+pub(crate) trait Held: Sized {
+    /// Drop the values of storage nothing refers to any more.
+    fn release(_values: Vec<Self>) {}
+}
+
+impl Held for u8 {}
+
+impl Held for Obj {
+    fn release(values: Vec<Self>) {
+        drop_held(values.into_iter());
+    }
+}
 
 /// A dictionary key.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -72,7 +138,7 @@ impl Obj {
     }
 
     pub fn dict(d: Dict) -> Self {
-        Self::Dict(Rc::new(RefCell::new(d)))
+        Self::Dict(DictRef::new(d))
     }
 
     /// The number this is (integers and reals).
@@ -135,13 +201,23 @@ impl Obj {
 /// The values of a string or an array: a run of storage that other strings or arrays may share
 /// (`getinterval` makes a new object over part of the same values, as PostScript does).
 #[derive(Clone, Debug)]
-pub(crate) struct Shared<T> {
+pub(crate) struct Shared<T: Held> {
     buf: Rc<RefCell<Vec<T>>>,
     at: usize,
     len: usize,
 }
 
-impl<T: Clone> Shared<T> {
+impl<T: Held> Drop for Shared<T> {
+    fn drop(&mut self) {
+        if Rc::strong_count(&self.buf) == 1
+            && let Ok(mut values) = self.buf.try_borrow_mut()
+        {
+            T::release(std::mem::take(&mut *values));
+        }
+    }
+}
+
+impl<T: Clone + Held> Shared<T> {
     pub fn new(v: Vec<T>) -> Self {
         Self { len: v.len(), buf: Rc::new(RefCell::new(v)), at: 0 }
     }
@@ -198,7 +274,7 @@ impl<T: Clone> Shared<T> {
 }
 
 /// Hashes what [`Shared::same`] compares: the storage and the run of it.
-impl<T> Hash for Shared<T> {
+impl<T: Held> Hash for Shared<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         Rc::as_ptr(&self.buf).hash(state);
         (self.at, self.len).hash(state);

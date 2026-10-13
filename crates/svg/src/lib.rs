@@ -312,6 +312,9 @@ pub struct LinkedImage {
 pub enum SvgError {
     #[error("SVG parse error: {0}")]
     Parse(String),
+    /// Its elements nest (references followed) deeper than the reader goes.
+    #[error("the SVG's elements are nested more than {0} deep")]
+    TooDeep(usize),
 }
 
 /// Export a document as an SVG string (linked images are not returned: see [`export_full`]).
@@ -347,7 +350,8 @@ pub struct Editing {
 
 /// The native document an SVG carries, if any, and whether the SVG was edited since.
 pub fn editing(svg: &str) -> Option<Editing> {
-    if !svg.contains(EDITING_NS) {
+    // (An SVG nested too deep for the XML reader carries none: it isn't one of ours.)
+    if !svg.contains(EDITING_NS) || import::xml_too_deep(svg) {
         return None;
     }
     let opts = usvg::roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
@@ -500,14 +504,18 @@ pub fn import_with_report(svg: &str) -> Result<(Document, Vec<String>), SvgError
     import_with(svg, &ImportOptions::default())
 }
 
+pub use import::MAX_ELEMENT_DEPTH;
+
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
 pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
-    import::import(svg, opts)
+    // usvg converts the tree by recursion, in large stack frames: the nesting it is given is
+    // capped (`import::depth`), and it gets room for that cap whatever thread asks.
+    vectorcraft_doc::depth::with_deep_stack(|| import::import(svg, opts))
 }
 
 /// Reads a linked file: its bytes and the link to it (absolute path, size, time and hash), or
 /// `None` when there is no readable file at the (absolute) path.
-pub type ReadFile<'a> = &'a dyn Fn(&str) -> Option<(Vec<u8>, vectorcraft_doc::LinkInfo)>;
+pub type ReadFile<'a> = &'a (dyn Fn(&str) -> Option<(Vec<u8>, vectorcraft_doc::LinkInfo)> + Sync);
 
 /// How [`import_with`] reads the files an SVG's `<image>` elements link to.
 ///

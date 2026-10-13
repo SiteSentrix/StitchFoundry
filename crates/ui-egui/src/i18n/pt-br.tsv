@@ -3449,6 +3449,8 @@ axis	Both	Ambos
 @msg	recovery copy `{file}`: {e}	cópia de recuperação `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	as resoluções devem estar entre 1 e 2400 ppi
 @msg	result would exceed the canvas (coordinates out of range)	o resultado excederia a tela (coordenadas fora do intervalo)
+@msg	objects can't be nested more than 32 deep	os objetos não podem ser aninhados em mais de 32 níveis
+@msg	the SVG's elements are nested more than {0} deep	os elementos do SVG estão aninhados em mais de {0} níveis
 @msg	scale must be a number from {_1} to {_2}, not {_3}	a escala deve ser um número de {_1} a {_2}, não {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	a escala deve ser um número de {_1} a {_2}, não {s}
 @msg	select (or target) objects whose appearance isn't basic	selecione (ou direcione) objetos cuja aparência não seja básica
