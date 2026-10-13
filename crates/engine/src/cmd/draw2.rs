@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pencil",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic brushes with Pressure variation; a point without one presses fully), fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, extend?: {id, end: \"start\"|\"end\"}} fit a freehand stroke → {id}",
+            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic brushes with Pressure variation; a point without one presses fully), fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, extend?: {id, end: \"start\"|\"end\"}, scale?: number (1; the Paintbrush's size, set with [ and ]: a new stroke drawn at this times the stroke weight, which stays as it is)} fit a freehand stroke → {id}",
             has_doc,
             freehand
         ),
@@ -618,7 +618,10 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     // A pencil path with a fill keeps a stroke of None (#1679); only one that would show nothing
     // gets black. A brush is its stroke.
     let stroke = if brush || fill.is_none() { stroke_paint(s) } else { s.paint.stroke.clone() };
-    let mut look = s.new_art_look(fill, stroke, s.paint.stroke_width.max(0.1));
+    // The Paintbrush's own size scales the stroke it draws, not the weight new art takes.
+    let scale = f64_or(p, "scale", 1.0);
+    let scale = if scale.is_finite() { scale.clamp(0.1, 100.0) } else { 1.0 };
+    let mut look = s.new_art_look(fill, stroke, s.paint.stroke_width.max(0.1) * scale);
     if let Some(st) = look.appearance.stroke_mut() {
         st.pressure = pressure;
     }

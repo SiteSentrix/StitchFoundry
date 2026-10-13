@@ -29,7 +29,8 @@ pub struct GestureTool {
     extend: Option<(NodeId, bool)>,
     /// Fit tolerance in points (Pencil/Paintbrush/Smooth "Fidelity").
     pub fidelity: f64,
-    /// Brush / eraser diameter in points.
+    /// Brush / eraser diameter in points; the Paintbrush's size, its strokes drawn at
+    /// `size / PAINTBRUSH_SIZE` of the stroke weight.
     pub size: f64,
     /// Fill new pencil/brush strokes.
     pub fill: bool,
@@ -40,6 +41,11 @@ pub struct GestureTool {
     /// Smart Guides for the Pencil's ends.
     snap: DrawSnap,
 }
+
+/// The Paintbrush's starting size, as the Blob Brush's: strokes at the stroke weight. `[` and `]`
+/// take a point off or add one, so each press draws the next stroke a tenth of the weight thinner
+/// or thicker (our own step; the public references give none).
+pub const PAINTBRUSH_SIZE: f64 = 10.0;
 
 impl GestureTool {
     pub fn new(id: &str) -> Self {
@@ -62,7 +68,7 @@ impl GestureTool {
             began: false,
             extend: None,
             fidelity,
-            size: 10.0,
+            size: if id == "paintbrush" { PAINTBRUSH_SIZE } else { 10.0 },
             fill: false,
             edit_within: 12.0,
             close_within: 15.0,
@@ -147,6 +153,8 @@ impl GestureTool {
         });
         if let Some((id, start)) = self.extend {
             v["extend"] = json!({"id": id.0, "end": if start { "start" } else { "end" }});
+        } else if self.id == "paintbrush" && self.size != PAINTBRUSH_SIZE {
+            v["scale"] = json!(self.size / PAINTBRUSH_SIZE);
         }
         v
     }
@@ -249,6 +257,9 @@ impl Tool for GestureTool {
             _ => vec![],
         }
     }
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        matches!(key, ToolKey::BracketLeft | ToolKey::BracketRight) && matches!(self.id, "paintbrush" | "blobBrush" | "eraser")
+    }
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {
         match key {
             ToolKey::Escape if self.active => {
@@ -259,11 +270,13 @@ impl Tool for GestureTool {
                 self.clear();
                 if began { vec![Action::Cancel] } else { vec![] }
             }
-            ToolKey::BracketLeft if matches!(self.id, "blobBrush" | "eraser") => {
+            // The Paintbrush's size is its own: the stroke weight and the selection stay as they
+            // are, and the next stroke is drawn thinner or thicker.
+            ToolKey::BracketLeft if matches!(self.id, "blobBrush" | "eraser" | "paintbrush") => {
                 self.size = (self.size - 1.0).max(1.0);
                 vec![]
             }
-            ToolKey::BracketRight if matches!(self.id, "blobBrush" | "eraser") => {
+            ToolKey::BracketRight if matches!(self.id, "blobBrush" | "eraser" | "paintbrush") => {
                 self.size = (self.size + 1.0).min(1000.0);
                 vec![]
             }
@@ -296,8 +309,9 @@ impl Tool for GestureTool {
     }
     fn options(&self) -> Value {
         match self.id {
-            "pencil" | "paintbrush" => {
-                json!({"fidelity": self.fidelity, "fill": self.fill, "editWithin": self.edit_within, "closeWithin": self.close_within})
+            "pencil" => json!({"fidelity": self.fidelity, "fill": self.fill, "editWithin": self.edit_within, "closeWithin": self.close_within}),
+            "paintbrush" => {
+                json!({"fidelity": self.fidelity, "fill": self.fill, "editWithin": self.edit_within, "closeWithin": self.close_within, "size": self.size})
             }
             "smooth" => json!({"fidelity": self.fidelity}),
             "blobBrush" | "eraser" => json!({"size": self.size}),
@@ -438,5 +452,29 @@ mod tests {
         let mut b = GestureTool::new("blobBrush");
         b.key(&cx, ToolKey::BracketRight, Mods::default());
         assert_eq!(b.options()["size"], 11.0);
+    }
+
+    /// #1661: `[` and `]` size the Paintbrush itself, a tenth of its starting size a press:
+    /// the next stroke is drawn that much thinner or thicker; continuing a path keeps its weight.
+    #[test]
+    fn paintbrush_brackets_size_its_next_stroke() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = GestureTool::new("paintbrush");
+        assert!(t.claims_key(&cx, ToolKey::BracketRight) && t.freehand_params(false).get("scale").is_none());
+        for _ in 0..10 {
+            assert!(t.key(&cx, ToolKey::BracketRight, Mods::default()).is_empty(), "no command: the weight stays");
+        }
+        assert_eq!(t.options()["size"], 20.0);
+        assert_eq!(t.freehand_params(false)["scale"], json!(2.0));
+        for _ in 0..40 {
+            t.key(&cx, ToolKey::BracketLeft, Mods::default());
+        }
+        assert_eq!(t.options()["size"], 1.0);
+        t.extend = Some((NodeId(1), false));
+        assert!(t.freehand_params(false).get("scale").is_none());
+        assert!(!GestureTool::new("pencil").claims_key(&cx, ToolKey::BracketRight));
     }
 }
