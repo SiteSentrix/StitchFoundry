@@ -2304,6 +2304,39 @@ fn align_moves_selected_anchor_points() {
     assert_eq!(anchors(&s)[2].1 - anchors(&s)[0].1, 120.0, "its shape kept");
 }
 
+/// #1636: with anchor points selected, the Distribute commands space those points, on one path
+/// or across paths, and leave the other points and the paths' objects where they are.
+#[test]
+fn distribute_spaces_selected_anchor_points() {
+    let mut s = session();
+    let new = |s: &mut Session, d: &str| NodeId(s.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap());
+    let a = new(&mut s, "M10 10 L20 50 L100 30 L60 90");
+    let pts = |s: &Session, id: NodeId| -> Vec<(f64, f64)> {
+        s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| (a.p.x, a.p.y)).collect()
+    };
+    // One path selected whole is one object: nothing to distribute.
+    assert!(s.execute("object.distribute", &json!({"horizontal": "center"})).is_err());
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0], [0, 1], [0, 2]], "mode": "set"})).unwrap();
+    for h in ["left", "center", "right"] {
+        s.execute("object.distribute", &json!({"horizontal": h})).unwrap();
+        assert_eq!(pts(&s, a), [(10.0, 10.0), (55.0, 50.0), (100.0, 30.0), (60.0, 90.0)], "{h}: a point has no width");
+    }
+    let steps = history(&s);
+    s.execute("object.distribute", &json!({"horizontal": "left"})).unwrap();
+    assert_eq!(history(&s), steps, "already distributed: no undo step");
+    s.execute("object.distribute", &json!({"vertical": "top"})).unwrap();
+    assert_eq!(pts(&s, a), [(10.0, 10.0), (55.0, 50.0), (100.0, 30.0), (60.0, 90.0)], "10, 30, 50 are even already");
+    s.execute("object.distributeSpacing", &json!({"axis": "vertical", "spacing": 5})).unwrap();
+    assert_eq!(pts(&s, a), [(10.0, 10.0), (55.0, 20.0), (100.0, 15.0), (60.0, 90.0)], "5 apart from the first, in order");
+    assert!(s.execute("object.distribute", &json!({})).is_err());
+    // Across paths: the points of both, with the second path's unselected point left alone.
+    let b = new(&mut s, "M40 200 L400 300");
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+    s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal"})).unwrap();
+    assert_eq!((pts(&s, a)[0].0, pts(&s, b), pts(&s, a)[2].0), (10.0, vec![(55.0, 200.0), (400.0, 300.0)], 100.0));
+}
+
 /// Repeating anchor Align must leave one Undo for the move that actually changed the path.
 #[test]
 fn repeating_anchor_alignment_does_not_consume_undo() {
