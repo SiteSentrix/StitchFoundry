@@ -1241,11 +1241,50 @@ impl<'p> Builder<'p> {
     }
 
     fn flush_text(&mut self) {
-        let Some((t, opacity, facts)) = self.text.take().and_then(TextLine::finish) else { return };
-        let mut n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
-        n.opacity = opacity;
-        self.lines.insert(n.id, facts);
-        self.push_node(n);
+        let Some(mut line) = self.text.take() else { return };
+        let held = std::mem::take(&mut line.held);
+        if let Some((t, opacity, facts)) = line.finish() {
+            let mut n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
+            n.opacity = opacity;
+            self.lines.insert(n.id, facts);
+            self.push_node(n);
+        }
+        // The strokes of its glyphs' outlines, right after it ([`import_lines`] makes them its stroke).
+        for n in held {
+            self.push_node(n);
+        }
+    }
+
+    /// A stroke of the outline of the glyph just drawn, in the glyph's own paint, while every glyph
+    /// before it on the open line was stroked so too, is held with the line instead of ending it
+    /// (an editor writes type on a path glyph by glyph, each followed by the stroke added to the
+    /// type). `false`: it isn't one.
+    fn hold_glyph_stroke(&mut self, path: &BezPath, transform: Affine, paint: &hayro_interpret::Paint<'_>, draw_mode: &PathDrawMode) -> bool {
+        let PathDrawMode::Stroke(props) = draw_mode else { return false };
+        if self.mask.is_some() || self.blend != BlendMode::Normal || matches!(paint, hayro_interpret::Paint::Pattern(_)) {
+            return false;
+        }
+        let (p, opacity) = self.paint(paint, true);
+        let Some(line) = &self.text else { return false };
+        let Some(ink) = line.ink.last() else { return false };
+        if line.held.len() + 1 != line.ink.len() || opacity < 0.999 || !line.last_fill().is_some_and(|f| *f == p) {
+            return false;
+        }
+        let mut bp = path.clone();
+        bp.apply_affine(transform);
+        let b = bp.bounding_box();
+        let tol = 0.01 * (ink.width() + ink.height()) + 0.01;
+        if ![(b.x0, ink.x0), (b.y0, ink.y0), (b.x1, ink.x1), (b.y1, ink.y1)].iter().all(|(a, c)| (a - c).abs() <= tol) {
+            return false;
+        }
+        let mut st = stroke_layer(p, opacity, props, mean_scale(transform));
+        // Every painted path takes its turn in the scan's overprint list, a held one too.
+        st.overprint = self.path_overprint();
+        let n = Node::path(self.id(), PathData::from_bezpath(&bp), Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() });
+        if let Some(line) = &mut self.text {
+            line.held.push(n);
+        }
+        true
     }
 
     /// Convert a hayro paint to a VectorCraft paint and opacity (`stroke`: for a stroke).
@@ -1667,6 +1706,10 @@ impl<'a> Device<'a> for Builder<'_> {
 
     fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &hayro_interpret::Paint<'a>, draw_mode: &PathDrawMode) {
         self.flush_glyphs();
+        if self.hold_glyph_stroke(path, transform, paint, draw_mode) {
+            self.pending = false;
+            return;
+        }
         self.flush_text();
         self.pending = false;
         let overprint = self.path_overprint();

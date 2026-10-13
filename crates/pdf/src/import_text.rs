@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, ParaDirection, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Node, ParaDirection, TextKind, TextObject, TextRun};
 use vectorcraft_text::TextLayout;
 
 /// One glyph's placement: its baseline origin, advance direction, size and horizontal scale.
@@ -144,6 +144,9 @@ pub(crate) struct TextLine {
     gaps: Vec<(usize, f64)>,
     /// Each glyph's advance in the file's font (points), with [`Self::baseline`].
     advances: Vec<f64>,
+    /// The strokes of its glyphs' outlines drawn between them, one per glyph with ink so far
+    /// (written right after the line).
+    pub held: Vec<Node>,
 }
 
 /// What a finished line of type tells beyond its text object (see [`crate::import_lines`]).
@@ -177,7 +180,13 @@ impl TextLine {
             ink: vec![],
             gaps: vec![],
             advances: vec![],
+            held: vec![],
         }
+    }
+
+    /// The paint the last glyph is filled with.
+    pub fn last_fill(&self) -> Option<&Paint> {
+        self.runs.last()?.0.fill.as_ref()
     }
 
     /// Add glyph `text` set vertically (`upright`) if it continues this column (or makes this

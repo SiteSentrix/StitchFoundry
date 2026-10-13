@@ -153,6 +153,25 @@ fn a_stroke_on_the_type_of_a_moved_ai_page_is_still_the_types_stroke() {
     assert!(matches!(art[1].appearance.items.as_slice(), [AppearanceItem::Stroke(_)]), "{:?}", art[1].appearance);
 }
 
+#[test]
+fn glyphs_each_followed_by_their_stroked_outline_stay_one_object() {
+    // Type on a path is written glyph by glyph: each glyph, then its outline stroked in the same
+    // colour (a shadow under the type).
+    let glyph = |c: char, x: f64, stroke: &str| format!("BT 0 0 1 rg /F1 24 Tf {x} 50 Td ({c}) Tj ET {stroke} 0.5 w {}", outline(c, x));
+    let i_at = 10.0 + 0.722 * 24.0;
+    let d = import(&page(&(glyph('H', 10.0, "0 0 1 RG") + &glyph('i', i_at, "0 0 1 RG")))).unwrap();
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "one object: {art:?}");
+    let NodeKind::Text(t) = &art[0].kind else { panic!("{:?}", art[0].kind) };
+    assert_eq!(t.plain_text(), "Hi");
+    let [AppearanceItem::Stroke(st)] = art[0].appearance.items.as_slice() else { panic!("{:?}", art[0].appearance) };
+    assert_eq!(st.paint.color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    // A stroke of another colour drawn over each glyph in turn would also cover the next one's
+    // neighbour as one object's stroke: the glyphs stay as the file draws them.
+    let d = import(&page(&(glyph('H', 10.0, "1 1 1 RG") + &glyph('i', i_at, "1 1 1 RG")))).unwrap();
+    assert_eq!(texts(&d).len(), 2);
+}
+
 /// A 300 × 200 pt page with `lines` of (x, y from the top, size, text) in Source Sans 3.
 fn source_sans(lines: &[(f32, f32, f32, &str)]) -> Vec<u8> {
     crate::tests_live_text::text_pdf(lines, false)
