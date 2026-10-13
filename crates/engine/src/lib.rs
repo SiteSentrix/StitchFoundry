@@ -1223,7 +1223,7 @@ impl Session {
     }
     /// Text layout bounds are a cache (not saved): compute them for a document just read, or
     /// selection boxes and hit testing would use the rough estimate until each text is edited.
-    fn refresh_text_bounds(doc: &mut Document) {
+    pub(crate) fn refresh_text_bounds(doc: &mut Document) {
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
         let mut texts = vec![];
