@@ -4,10 +4,10 @@ use std::collections::HashMap;
 
 use kurbo::{BezPath, ParamCurveArclen, Point, Shape, Stroke, StrokeOpts};
 use vectorcraft_geom::SubPath;
-use vectorcraft_trace::{Method, Mode, Raster, TraceParams, TraceResult, TracedPath};
+use vectorcraft_trace::{Method, Mode, Raster, TraceParams, TraceResult, TracedGradient, TracedPath};
 
 use crate::inputs::{Class, Input, Variant};
-use crate::raster::{coverage_into, polylines, render};
+use crate::raster::{coverage_into, polylines, render_painted};
 
 /// sRGB to Oklab (Björn Ottosson, "A perceptual color space for image processing", 2020).
 pub fn oklab(c: [u8; 3]) -> [f64; 3] {
@@ -196,6 +196,13 @@ pub struct Metrics {
     pub shapes: f64,
     /// Auto Grouping: share (%) of the paths that lie inside another.
     pub grouped: f64,
+    /// Gradients: paths filled with one; and where the input is a known gradient, whether one was
+    /// found (%), the angle (°) between its line and the largest traced gradient's, and the largest
+    /// difference (levels of a channel) between their colours along the true line.
+    pub gradients: f64,
+    pub ramp_found: f64,
+    pub ramp_angle: f64,
+    pub ramp_off: f64,
     /// Paths under 6 px of area.
     pub specks: f64,
     /// How far (px) the trace reaches outside the image: a stray curve.
@@ -225,8 +232,33 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
     let n = size as usize;
     let shapes: Vec<(BezPath, [u8; 3])> = res.paths.iter().map(|tp| (painted(tp), tp.color)).collect();
     // Painted as the result is grouped: each path, then those inside it.
-    let drawn: Vec<(BezPath, [u8; 3])> = draw_order(res).into_iter().map(|i| shapes[i].clone()).collect();
-    let (delta_mean, edge_delta) = fidelity(src, &render(&drawn, [255; 3], n, n));
+    let drawn: Vec<(BezPath, [u8; 3], Option<&TracedGradient>)> =
+        draw_order(res).into_iter().map(|i| (shapes[i].0.clone(), shapes[i].1, res.paths[i].gradient.as_ref())).collect();
+    let (delta_mean, edge_delta) = fidelity(src, &render_painted(&drawn, [255; 3], n, n));
+    // Gradients: how many paths have one; and the largest of them against the gradient the input
+    // is: the angle between their lines, and the largest difference of a channel between their
+    // colours at 17 points along the true line.
+    let gradients = res.paths.iter().filter(|tp| tp.gradient.is_some()).count() as f64;
+    let (mut ramp_found, mut ramp_angle, mut ramp_off) = (f64::NAN, f64::NAN, f64::NAN);
+    if let Some(ramp) = &input.ramp {
+        let k = f64::from(size) / 256.0;
+        let found = res.paths.iter().filter(|tp| tp.gradient.is_some()).max_by_key(|tp| tp.pixels).and_then(|tp| tp.gradient.as_ref());
+        ramp_found = if found.is_some() { 100.0 } else { 0.0 };
+        if let Some(g) = found {
+            let (truth, own) = (ramp.end - ramp.start, g.end - g.start);
+            let between = (truth.atan2() - own.atan2()).to_degrees().rem_euclid(180.0);
+            ramp_angle = between.min(180.0 - between);
+            ramp_off = (0..=16)
+                .map(|j| {
+                    let p = ramp.start + truth * (f64::from(j) / 16.0);
+                    // (The true colour as this variant shows it: a scan's are its own.)
+                    let a = variant.color(ramp.color_at(p).map(|v| v.round() as u8)).map(f64::from);
+                    let b = g.color_at((p.to_vec2() * k).to_point());
+                    (0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f64::max)
+                })
+                .fold(0.0, f64::max);
+        }
+    }
     let grouped = if res.parents.is_empty() { f64::NAN } else { 100.0 * res.parents.iter().flatten().count() as f64 / res.paths.len().max(1) as f64 };
 
     // The background's frame: a path as large as the image.
@@ -239,7 +271,7 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
 
     let nan = f64::NAN;
     let (mut geo_mean, mut geo_max, mut miss_max, mut corners, mut kinks, mut slivers, mut sliver_area) = (nan, nan, nan, nan, nan, nan, nan);
-    if input.class != Class::Tone {
+    if !matches!(input.class, Class::Tone | Class::Ramp) {
         let truth_shapes = input.scaled(size);
         let truth = Outline::new(truth_shapes.iter().map(|(p, _)| p), None);
         let traced = Outline::new(shapes.iter().map(|(p, _)| p), Some(f64::from(size)));
@@ -341,6 +373,10 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
 
     Metrics {
         grouped,
+        gradients,
+        ramp_found,
+        ramp_angle,
+        ramp_off,
         shapes: shapes_found,
         centre_off,
         width_off,

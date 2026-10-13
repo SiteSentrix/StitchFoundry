@@ -74,6 +74,7 @@ fn target(preset: &str, input: &Input) -> bool {
         "3 Colors" => return input.name == "two touching halves",
         "6 Colors" | "16 Colors" | "Flat Logo" | "Auto Color" | "6 Colors with Auto Grouping" => &[Class::Flat],
         "Default with Shapes" | "6 Colors with Shapes" => &[Class::Plain],
+        name if name.ends_with("Gradients") => &[Class::Ramp],
         "Sketched Art" => &[Class::Shape, Class::Lines],
         "Silhouettes" => &[Class::Shape],
         "Line Art" | "Outline" => &[Class::Lines],
@@ -139,7 +140,14 @@ fn svg_trace(svg: &str) -> TraceResult {
                 _ => panic!("unread transform {t}"),
             });
         }
-        Some(TracedPath { path: vectorcraft_geom::PathData::from_bezpath(&path), color: [0; 3], pixels: 0, stroke: None, shape: None })
+        Some(TracedPath {
+            path: vectorcraft_geom::PathData::from_bezpath(&path),
+            color: [0; 3],
+            pixels: 0,
+            stroke: None,
+            shape: None,
+            gradient: None,
+        })
     });
     TraceResult { paths: paths.collect(), palette: vec![[0; 3]], ..Default::default() }
 }
@@ -177,12 +185,12 @@ fn stat(runs: &[&Metrics], field: impl Fn(&Metrics) -> f64, max: bool, digits: u
     if x.is_finite() { format!("{:.digits$}", x + 0.0) } else { "all".into() }
 }
 
-const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px | centre off | width off | anchors a stroke | shapes % | grouped % |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
+const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px | centre off | width off | anchors a stroke | shapes % | grouped % | gradient paths | found % | angle off | ramp off |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
 
 fn row(runs: &[&Run]) -> String {
     let m: Vec<&Metrics> = runs.iter().filter_map(|r| r.metrics.as_ref()).collect();
     if m.is_empty() {
-        return format!("| refused |{}", " |".repeat(22));
+        return format!("| refused |{}", " |".repeat(26));
     }
     let cells = [
         stat(&m, |m| m.delta, false, 2),
@@ -208,6 +216,10 @@ fn row(runs: &[&Run]) -> String {
         stat(&m, |m| m.stroke_anchors, false, 1),
         stat(&m, |m| m.shapes, false, 0),
         stat(&m, |m| m.grouped, false, 0),
+        stat(&m, |m| m.gradients, false, 1),
+        stat(&m, |m| m.ramp_found, false, 0),
+        stat(&m, |m| m.ramp_angle, true, 1),
+        stat(&m, |m| m.ramp_off, true, 0),
     ];
     format!("| {} |", cells.join(" | "))
 }
@@ -242,6 +254,15 @@ fn report() -> String {
         ("High Fidelity Photo with Auto Grouping", "High Fidelity Photo"),
     ] {
         presets.push((name, TraceParams { auto_grouping: true, ..vectorcraft_trace::preset(base).unwrap() }));
+    }
+    // Gradients: on the inputs that are linear gradients, with the option and without it.
+    for (name, base, gradients) in [
+        ("6 Colors, no Gradients", "6 Colors", false),
+        ("6 Colors with Gradients", "6 Colors", true),
+        ("High Fidelity Photo, no Gradients", "High Fidelity Photo", false),
+        ("High Fidelity Photo with Gradients", "High Fidelity Photo", true),
+    ] {
+        presets.push((name, TraceParams { gradients, ..vectorcraft_trace::preset(base).unwrap() }));
     }
     let inputs = inputs();
     let drawn = draw_all(&inputs);
@@ -326,6 +347,15 @@ fn report() -> String {
 fn quality_report() {
     let md = report();
     println!("{md}");
+    // Gradients finds none in art that is flat colour, however it is degraded.
+    let inputs = inputs();
+    for (name, _) in presets().iter().filter(|(_, p)| p.mode != vectorcraft_trace::Mode::BlackAndWhite && p.mode != vectorcraft_trace::Mode::Logo) {
+        let params = TraceParams { gradients: true, ..vectorcraft_trace::preset(name).unwrap() };
+        for (input, size, variant, img) in draw_all(&inputs).iter().filter(|d| !matches!(d.0.class, Class::Tone | Class::Ramp)) {
+            let found = trace_within(img, &params, MAX_ANCHORS).map_or(0, |res| res.paths.iter().filter(|p| p.gradient.is_some()).count());
+            assert_eq!(found, 0, "{name} with Gradients on {} at {size} px, {variant:?}", input.name);
+        }
+    }
     if let Ok(path) = std::env::var("TRACE_QUALITY_REPORT") {
         std::fs::write(path, md).unwrap();
     }

@@ -372,6 +372,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             st.preset = "Custom".into();
             retrace = true;
         }
+        // (Black and White has one colour and Flat Logo flat ones: no gradients to find.)
+        let gradients = st.params["gradients"].as_bool().unwrap_or(false);
+        if widgets::check(ui, tl!("Gradients"), gradients, mode == "grayscale" || mode == "color") {
+            st.params["gradients"] = json!(!gradients);
+            st.preset = "Custom".into();
+            retrace = true;
+        }
         // Ignore Color: white, unless another colour is picked.
         ui.horizontal(|ui| {
             let on = st.params["ignoreWhite"].as_bool().unwrap_or(false);

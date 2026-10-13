@@ -45,6 +45,7 @@
 mod centerline;
 mod contour;
 mod fit;
+mod gradient;
 mod group;
 mod logo;
 mod mosaic;
@@ -59,6 +60,7 @@ use serde::{Deserialize, Serialize};
 use vectorcraft_geom::PathData;
 
 pub use contour::{Component, Loop, trace_mask};
+pub use gradient::TracedGradient;
 pub use mosaic::mosaic;
 pub use quantize::{FULL_TONE_MAX, Quantized, TRANSPARENT, denoise, quantize};
 pub use shapes::TracedShape;
@@ -287,6 +289,9 @@ pub struct TraceParams {
     pub shapes: bool,
     /// Auto Grouping: say which path lies inside which ([`TraceResult::parents`]).
     pub auto_grouping: bool,
+    /// Gradients (Grayscale and Color): an area whose colour changes evenly along one direction
+    /// is one path filled with a linear gradient ([`TracedPath::gradient`]), not bands of colour.
+    pub gradients: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
     /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
@@ -319,6 +324,7 @@ impl Default for TraceParams {
             snap_curves_to_lines: false,
             shapes: false,
             auto_grouping: false,
+            gradients: false,
             fills: true,
             strokes: false,
             stroke_width: 10.0,
@@ -438,6 +444,8 @@ pub struct TracedPath {
     pub stroke: Option<f64>,
     /// Shapes: the shape the path is, exactly (`path` is that shape's outline).
     pub shape: Option<TracedShape>,
+    /// Gradients: the linear gradient the path is filled with (`color` is its middle colour).
+    pub gradient: Option<TracedGradient>,
 }
 
 /// The traced result, bottom-most path first.
@@ -506,7 +514,32 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // A photo is traced from a copy with its noise smoothed away (see `smooth`).
     let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
     let img = smoothed.as_ref().unwrap_or(img);
-    let mut q = quantize(img, params);
+    // Gradients are found first and kept out of the palette: no colour is spent on bands of them.
+    let found = (params.gradients && params.mode != Mode::BlackAndWhite).then(|| gradient::detect(img)).filter(|f| !f.1.is_empty());
+    let without = found.as_ref().map(|(of, _)| {
+        let mut rest = img.clone();
+        for (p, &g) in rest.rgba.as_chunks_mut::<4>().0.iter_mut().zip(of) {
+            if g != u32::MAX {
+                p[3] = 0;
+            }
+        }
+        rest
+    });
+    let mut q = quantize(without.as_ref().unwrap_or(img), params);
+    drop(without);
+    // Each gradient is a palette entry of its own (its colour: the gradient's middle).
+    let mut gradients: Vec<Option<TracedGradient>> = vec![None; q.palette.len()];
+    if let Some((mut of, found)) = found {
+        gradient::settle_edges(img, &mut of, &found, &mut q.labels);
+        let first = q.palette.len();
+        for (l, &g) in q.labels.iter_mut().zip(&of) {
+            if g != u32::MAX {
+                *l = u16::try_from(first + g as usize).unwrap_or(TRANSPARENT);
+            }
+        }
+        q.palette.extend(found.iter().map(|g| g.color_at(g.start.midpoint(g.end)).map(|v| v.round().clamp(0.0, 255.0) as u8)));
+        gradients.extend(found.into_iter().map(Some));
+    }
     denoise(&mut q.labels, w, h, params.noise as usize);
     // Pixel count per palette entry, and the box its pixels lie in.
     let mut counts = vec![0usize; q.palette.len()];
@@ -547,6 +580,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
         img,
         ignore,
         boxes,
+        gradients: &gradients,
         bw_tones: bw_tones(img, &q),
         style: params.outline_style(),
         w,
@@ -609,6 +643,8 @@ struct Layers<'a> {
     ignore: Option<[u8; 3]>,
     /// The box each palette entry's pixels lie in: `(x0, y0, x1, y1)`, the far sides excluded.
     boxes: Vec<Option<(usize, usize, usize, usize)>>,
+    /// Gradients: the gradient each palette entry is, if it is one.
+    gradients: &'a [Option<TracedGradient>],
     /// Black and White: the luminance of white and of black (see `bw_tones`).
     bw_tones: [f64; 2],
     /// How outlines and centre lines are fitted.
@@ -706,8 +742,15 @@ impl Layers<'_> {
             let tone = |l: u16| [if l == 1 { black } else { white }; 3];
             (tone(la), tone(lb))
         } else {
-            let (Some(ca), Some(cb)) = (self.q.palette.get(la as usize), self.q.palette.get(lb as usize)) else { return 0.0 };
-            (ca.map(f64::from), cb.map(f64::from))
+            // A side's own colour: its palette entry's, or its gradient's colour here.
+            let own = |l: u16, k: i32| {
+                let flat = self.q.palette.get(l as usize)?.map(f64::from);
+                let Some(g) = self.gradients.get(l as usize).and_then(Option::as_ref) else { return Some(flat) };
+                let i = c.at(k)?;
+                Some(g.color_at(vectorcraft_geom::Point::new((i % self.w) as f64 + 0.5, (i / self.w) as f64 + 0.5)))
+            };
+            let (Some(ca), Some(cb)) = (own(la, 0), own(lb, 1)) else { return 0.0 };
+            (ca, cb)
         };
         let d = [0, 1, 2].map(|k| cb[k] - ca[k]);
         let len2: f64 = d.iter().map(|v| v * v).sum();
@@ -808,7 +851,9 @@ impl Layers<'_> {
             if self.anchors.fetch_add(n, Ordering::Relaxed).saturating_add(n) > self.max_anchors {
                 return false;
             }
-            paths.push(TracedPath { path, color, pixels, stroke, shape });
+            // (A gradient fills; a stroked line of it is its middle colour.)
+            let gradient = self.gradients.get(ci).cloned().flatten().filter(|_| stroke.is_none());
+            paths.push(TracedPath { path, color, pixels, stroke, shape, gradient });
             true
         };
         let mut comps = trace_mask(&mask, bw, bh);
