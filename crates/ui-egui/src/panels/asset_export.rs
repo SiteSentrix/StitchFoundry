@@ -18,7 +18,7 @@ use vectorcraft_doc::{ExportAsset, Node, NodeId};
 use vectorcraft_engine::DocState;
 
 use super::{pstate, set_pstate};
-use crate::dialogs::{EXPORT_FOR_SCREENS, open_export_for_screens_assets, screen_formats, screen_saved_rows};
+use crate::dialogs::{EXPORT_FOR_SCREENS, open_export_for_screens_assets, screen_formats, screen_saved_options, screen_saved_rows};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
@@ -191,6 +191,18 @@ fn export(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
 
 fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
     let mut p = json!({ "assets": ids });
+    // Match the shared dialog's TIFF defaults, retaining saved choices and other formats.
+    if let Some(st) = app.session.active()
+        && screen_saved_rows(&st.doc.export_settings)
+            .0
+            .iter()
+            .any(|row| row["format"].as_str().and_then(vectorcraft_engine::cmd::fileio::format).is_some_and(|f| f.id == "tiff"))
+    {
+        let saved = &st.doc.export_settings;
+        let mut settings = saved.get("settings").and_then(Value::as_object).cloned().unwrap_or_default();
+        settings.insert("tiff".into(), Value::Object(screen_saved_options(app, saved, "tiff")));
+        p["settings"] = Value::Object(settings);
+    }
     if io::is_web(app) {
         p["zip"] = json!(ids.len() * files_each > 1);
     } else {
