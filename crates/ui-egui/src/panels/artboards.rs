@@ -60,6 +60,19 @@ pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
     all
 }
 
+/// Delete the picked artboards and select a remaining one.
+pub(crate) fn delete_selected(app: &mut VectorcraftApp) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    let mut all = picked(app, n);
+    if n > 1 && all.len() == n {
+        // Deleting all artboards keeps artboard 1 (the public Delete artboards guide).
+        all.retain(|i| *i != 0);
+    }
+    if n > all.len() && app.run("artboard.delete", json!({ "indices": all })).is_ok() {
+        select(app, all.first().copied().unwrap_or(0).saturating_sub(1));
+    }
+}
+
 /// Shift- or Ctrl/Cmd-click on artboard `i`'s row while the Artboard tool is in use: into its
 /// selection or out of it (the active one stays the navigator's).
 fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
@@ -203,10 +216,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if new.clicked() && app.run("artboard.new", json!({})).is_ok() {
             select(app, n);
         }
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > all.len(), 24.0).clicked()
-            && app.run("artboard.delete", json!({ "indices": all })).is_ok()
-        {
-            select(app, all.first().copied().unwrap_or(0).saturating_sub(1));
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
+            delete_selected(app);
         }
     });
 }
@@ -226,7 +237,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         duplicate(app, sel);
     }
     if menu_item(ui, tl!("Delete Artboards"), n > 1, false) {
-        app.run("artboard.delete", json!({"index": sel})).ok();
+        delete_selected(app);
     }
     if menu_item(ui, tl!("Rename"), n > 0, false) {
         set_pstate(ui.ctx(), "ab-edit", Some(sel));

@@ -372,23 +372,23 @@ impl Tool for ArtboardTool {
 
     /// Escape owns the request to return to Selection (or cancel an active drag), so the UI
     /// applies the tool's request instead of falling through to its general Escape behaviour.
-    /// Delete/Backspace remove the active artboard ahead of the Clear shortcut, which would only
-    /// delete selected art; with one artboard left (it can't be deleted) they stay the shortcut's.
-    fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
-        matches!(key, ToolKey::Escape)
-            || (matches!(key, ToolKey::Delete | ToolKey::Backspace)
-                && self.drag.is_none()
-                && cx.doc.artboards.len() > self.selected(cx).len()
-                && self.active < cx.doc.artboards.len())
+    /// Delete/Backspace belong to the artboards even when deletion is protected or a drag is
+    /// active: falling through to Clear would delete selected artwork instead.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        matches!(key, ToolKey::Escape | ToolKey::Delete | ToolKey::Backspace)
     }
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         match key {
             ToolKey::Delete | ToolKey::Backspace => {
-                if !self.claims_key(cx, key) {
+                let mut sel = self.selected(cx);
+                if self.drag.is_some() || cx.doc.artboards.len() <= 1 || self.active >= cx.doc.artboards.len() {
                     return vec![];
                 }
-                let sel = self.selected(cx);
+                // With every artboard selected, keep the first one in the current order.
+                if sel.len() == cx.doc.artboards.len() {
+                    sel.retain(|i| *i != 0);
+                }
                 self.active = sel.first().copied().unwrap_or(0).saturating_sub(1);
                 self.others.clear();
                 let params = match sel.as_slice() {
@@ -648,10 +648,15 @@ mod tests {
         let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 470.0, 450.0)));
         assert_eq!((v["indices"].clone(), v["dx"].as_f64()), (json!([0, 1]), Some(20.0)));
         assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 470.0, 450.0)), vec![Action::Commit]);
-        // Delete removes both; with all three selected it can't, so the key isn't taken.
+        // Delete removes both; with all three selected the keys retain the original first board.
         assert_eq!(t.key(&c, ToolKey::Delete, Mods::default()), vec![Action::Exec("artboard.delete".into(), json!({"indices": [0, 1]}))]);
+        for key in [ToolKey::Delete, ToolKey::Backspace] {
+            t.set_option("selected", &json!([2, 0, 1]));
+            assert!(t.claims_key(&c, key));
+            assert_eq!(t.key(&c, key, Mods::default()), vec![Action::Exec("artboard.delete".into(), json!({"indices": [1, 2]}))]);
+            assert_eq!(t.options()["selected"], json!([0]));
+        }
         t.set_option("selected", &json!([0, 1, 2]));
-        assert!(!t.claims_key(&c, ToolKey::Delete));
         // Shift-click takes one out; a plain click on an unselected one selects just it.
         click(&mut t, 100.0, 700.0, shift);
         assert_eq!(t.options()["selected"], json!([0, 1]));

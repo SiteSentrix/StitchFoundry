@@ -562,6 +562,28 @@ impl VectorcraftApp {
         let docs = self.session.documents();
         self.views.truncate(docs.len());
         self.views.extend(docs.iter().skip(self.views.len()).map(View::of));
+        for (view, doc) in self.views.iter_mut().zip(docs) {
+            view.artboard = view.artboard.min(doc.doc.artboards.len().saturating_sub(1));
+        }
+        // Undo can remove the Artboard tool's active or additionally selected boards. Repair only
+        // invalid indices: valid multiselection, drag state and tool options must survive history.
+        if self.session.tool_id() != "artboard" || self.session.tool_busy() {
+            return;
+        }
+        let Some(n) = self.session.active().map(|d| d.doc.artboards.len()).filter(|n| *n > 0) else { return };
+        let Some(view) = self.session.active_index().and_then(|i| self.views.get_mut(i)) else { return };
+        let options = self.session.tool_options();
+        let Some(selected) = options["selected"].as_array() else { return };
+        let mut valid: Vec<usize> = selected.iter().filter_map(Value::as_u64).filter_map(|i| usize::try_from(i).ok()).filter(|i| *i < n).collect();
+        if valid.len() != selected.len() {
+            if valid.is_empty() {
+                valid.push(view.artboard);
+            }
+            if let Some(active) = valid.first() {
+                view.artboard = *active;
+            }
+            self.session.set_tool_option("selected", &serde_json::json!(valid));
+        }
     }
 
     pub fn view(&self) -> Option<&View> {

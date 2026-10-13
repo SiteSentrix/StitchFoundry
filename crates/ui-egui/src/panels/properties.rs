@@ -238,7 +238,7 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             super::artboards::select(app, n);
         }
         if ui.add_enabled_ui(n > 1, |ui| widgets::flat_button(ui, tl!("Delete Artboard"), w)).inner.clicked() {
-            app.run("artboard.delete", json!({"index": i})).ok();
+            super::artboards::delete_selected(app);
         }
     });
     divider(ui);
@@ -811,6 +811,368 @@ mod tests {
         let texts = frame(&mut app, &ctx, vec![]);
         click(&mut app, &ctx, &texts, "Exit");
         assert_eq!(app.session.tool_id(), "selection");
+    }
+
+    fn artboard_deletion_app(count: usize) -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": count})).unwrap();
+        for i in 0..count {
+            app.run("shape.rectangle", json!({"x": i * 250 + 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        }
+        app.select_tool("artboard");
+        super::super::artboards::select(&mut app, 0);
+        app
+    }
+
+    fn artboard_deletion_click(
+        app: &mut VectorcraftApp,
+        ctx: &egui::Context,
+        draw: fn(&mut VectorcraftApp, &mut Ui),
+        label: Option<&str>,
+        modifiers: egui::Modifiers,
+    ) {
+        let at = if let Some(label) = label {
+            panel_frame(app, ctx, vec![], draw);
+            let texts = panel_frame(app, ctx, vec![], draw);
+            texts.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label:?} in {texts:?}"))
+        } else {
+            // The trash is the last 24-point footer button. Use the drawn panel bounds, as the Asset Export bin test uses its footer.
+            let mut bounds = Rect::NOTHING;
+            for _ in 0..2 {
+                let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), ..Default::default() };
+                let mut out = ctx.run_ui(raw, |ui| {
+                    draw(app, ui);
+                    bounds = ui.min_rect();
+                });
+                out.textures_delta.clear();
+            }
+            assert!(bounds.width() >= 24.0 && bounds.height() >= 24.0);
+            bounds.right_bottom() - vec2(12.0, 12.0)
+        };
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers };
+        panel_frame(app, ctx, vec![Event::ModifiersChanged(modifiers), Event::PointerMoved(at), button(true)], draw);
+        panel_frame(app, ctx, vec![button(false)], draw);
+        panel_frame(app, ctx, vec![Event::ModifiersChanged(egui::Modifiers::NONE)], draw);
+    }
+
+    fn select_artboard_rows(app: &mut VectorcraftApp, ctx: &egui::Context, indices: &[usize]) {
+        for (at, i) in indices.iter().enumerate() {
+            let modifiers = if at == 0 { egui::Modifiers::NONE } else { egui::Modifiers::SHIFT };
+            artboard_deletion_click(app, ctx, super::super::artboards::show, Some(&format!("Artboard {}", i + 1)), modifiers);
+        }
+        let count = app.session.doc().unwrap().doc.artboards.len();
+        assert_eq!(super::super::artboards::picked(app, count), indices, "the rows are selected before deletion");
+    }
+
+    fn assert_artboard_deletion(draw: fn(&mut VectorcraftApp, &mut Ui), label: Option<&str>) {
+        for indices in [vec![0, 2], vec![2], vec![3], vec![2, 3], vec![0, 1, 2, 3]] {
+            let mut app = artboard_deletion_app(4);
+            let ctx = egui::Context::default();
+            select_artboard_rows(&mut app, &ctx, &indices);
+            app.session.doc_mut().unwrap().mark_saved();
+            let before = app.session.doc().unwrap().doc.clone();
+            let undo = app.session.doc().unwrap().history.undo.len();
+            let all_selected = indices == [0, 1, 2, 3];
+            let expected: Vec<_> = if all_selected {
+                assert_eq!(app.view().unwrap().artboard, 3, "the active last board must not replace the first-board survivor oracle");
+                vec![&before.artboards[0]]
+            } else {
+                before.artboards.iter().enumerate().filter(|(i, _)| !indices.contains(i)).map(|(_, a)| a).collect()
+            };
+            let expected = serde_json::to_value(expected).unwrap();
+            let artwork = serde_json::to_value(&before.layers).unwrap();
+
+            let commands = app.run_count;
+            artboard_deletion_click(&mut app, &ctx, draw, label, egui::Modifiers::NONE);
+            let st = app.session.doc().unwrap();
+            assert_eq!(
+                serde_json::to_value(&st.doc.artboards).unwrap(),
+                expected,
+                "selected deletion keeps the expected IDs; all-selected keeps original board 1"
+            );
+            assert_eq!(app.run_count, commands.wrapping_add(1), "one command from the actual deletion control");
+            assert_eq!(serde_json::to_value(&st.doc.layers).unwrap(), artwork, "artwork IDs, geometry and appearance stay intact");
+            assert_eq!(st.history.undo.len(), undo + 1, "one deletion is one undo step");
+            assert!(st.is_dirty());
+            let active = app.view().unwrap().artboard;
+            if all_selected {
+                assert_eq!(active, 0);
+            }
+            assert!(active < st.doc.artboards.len(), "the active artboard remains in range");
+            assert_eq!(app.session.tool_options()["active"], json!(active));
+            assert_eq!(super::super::artboards::picked(&app, st.doc.artboards.len()), [active]);
+            assert_eq!(app.session.tool_options()["selected"], json!([active]), "raw tool selection contains only the remaining active board");
+
+            app.run("edit.undo", json!({})).unwrap();
+            let st = app.session.doc().unwrap();
+            assert_eq!(serde_json::to_value(&st.doc.artboards).unwrap(), serde_json::to_value(&before.artboards).unwrap());
+            assert_eq!(serde_json::to_value(&st.doc.layers).unwrap(), artwork);
+            assert_eq!(st.history.undo.len(), undo);
+            assert!(!st.is_dirty(), "one undo returns to the saved document");
+            app.run("edit.redo", json!({})).unwrap();
+            let st = app.session.doc().unwrap();
+            assert_eq!(serde_json::to_value(&st.doc.artboards).unwrap(), expected, "redo removes the same artboard IDs");
+            assert_eq!(serde_json::to_value(&st.doc.layers).unwrap(), artwork);
+            assert_eq!(st.history.undo.len(), undo + 1);
+            assert!(st.is_dirty());
+        }
+    }
+
+    fn assert_artboard_deletion_guard(draw: fn(&mut VectorcraftApp, &mut Ui), label: Option<&str>) {
+        let mut app = artboard_deletion_app(1);
+        // Leave a redo entry to ensure a disabled action preserves both history branches.
+        app.run("artboard.setProps", json!({"index": 0, "name": "Temporary"})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        let ctx = egui::Context::default();
+        select_artboard_rows(&mut app, &ctx, &[0]);
+        app.session.doc_mut().unwrap().mark_saved();
+        let before = app.session.doc().unwrap().doc.clone();
+        let st = app.session.doc().unwrap();
+        let history = (st.history.undo.len(), st.history.redo.len());
+        assert!(history.1 > 0);
+        let active = app.view().unwrap().artboard;
+        let options = app.session.tool_options();
+
+        let commands = app.run_count;
+        artboard_deletion_click(&mut app, &ctx, draw, label, egui::Modifiers::NONE);
+        assert_eq!(app.run_count, commands, "the disabled last-board control dispatches no command");
+        let st = app.session.doc().unwrap();
+        assert_eq!(serde_json::to_value(&st.doc.artboards).unwrap(), serde_json::to_value(&before.artboards).unwrap());
+        assert_eq!(serde_json::to_value(&st.doc.layers).unwrap(), serde_json::to_value(&before.layers).unwrap());
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), history);
+        assert!(!st.is_dirty(), "deleting the last artboard is a no-op");
+        assert_eq!(app.view().unwrap().artboard, active);
+        assert_eq!(app.session.tool_options(), options);
+    }
+
+    #[test]
+    fn artboard_menu_deletes_selected_artboards_in_one_undo_step() {
+        assert_artboard_deletion(super::super::artboards::menu, Some("Delete Artboards"));
+    }
+
+    #[test]
+    fn properties_deletes_selected_artboards_in_one_undo_step() {
+        assert_artboard_deletion(show, Some("Delete Artboard"));
+    }
+
+    #[test]
+    fn artboard_menu_preserves_last_artboard() {
+        assert_artboard_deletion_guard(super::super::artboards::menu, Some("Delete Artboards"));
+    }
+
+    #[test]
+    fn properties_preserves_last_artboard() {
+        assert_artboard_deletion_guard(show, Some("Delete Artboard"));
+    }
+
+    #[test]
+    fn artboard_trash_deletes_selected_artboards_in_one_undo_step() {
+        assert_artboard_deletion(super::super::artboards::show, None);
+    }
+
+    #[test]
+    fn artboard_trash_preserves_last_artboard() {
+        assert_artboard_deletion_guard(super::super::artboards::show, None);
+    }
+
+    /// Click the actual panel footer's New button (24 points, with a 4-point gap before Trash).
+    fn artboard_history_new(app: &mut VectorcraftApp, ctx: &egui::Context) {
+        let mut bounds = Rect::NOTHING;
+        for _ in 0..2 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                super::super::artboards::show(app, ui);
+                bounds = ui.min_rect();
+            });
+            out.textures_delta.clear();
+        }
+        let count = app.session.doc().unwrap().doc.artboards.len();
+        let commands = app.run_count;
+        let at = bounds.right_bottom() - vec2(40.0, 12.0);
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        panel_frame(app, ctx, vec![Event::PointerMoved(at), button(true)], super::super::artboards::show);
+        panel_frame(app, ctx, vec![button(false)], super::super::artboards::show);
+        assert_eq!(app.run_count, commands.wrapping_add(1), "the actual New button dispatches once");
+        assert_eq!(app.session.doc().unwrap().doc.artboards.len(), count + 1);
+        assert_eq!(app.session.tool_options()["active"], json!(count));
+        assert_eq!(app.view().unwrap().artboard, count);
+    }
+
+    /// Keep the panel and its natural focus in the same context throughout Undo and deletion.
+    fn artboard_history_key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui::Key, modifiers: egui::Modifiers) {
+        for pressed in [true, false] {
+            let events = vec![Event::ModifiersChanged(modifiers), Event::Key { key, physical_key: None, pressed, repeat: false, modifiers }];
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                crate::shortcuts::handle(app, ui.ctx());
+                super::super::artboards::show(app, ui);
+            });
+            out.textures_delta.clear();
+        }
+    }
+
+    fn artboard_history_delete_after_undo(key: Option<egui::Key>, duplicate: bool) {
+        let mut app = artboard_deletion_app(2);
+        app.session.set_tool_option("moveArt", &json!(false));
+        app.session.set_tool_option("scaleArt", &json!(true));
+        app.session.doc_mut().unwrap().mark_saved();
+        let st = app.session.doc().unwrap();
+        let before = st.doc.clone();
+        let selection = st.selection.clone();
+        assert!(!selection.is_empty(), "selected artwork catches a Clear fallthrough");
+        let undo = st.history.undo.len();
+        let ctx = egui::Context::default();
+        if duplicate {
+            let commands = app.run_count;
+            artboard_deletion_click(&mut app, &ctx, super::super::artboards::menu, Some("Duplicate Artboards"), egui::Modifiers::NONE);
+            assert_eq!(app.run_count, commands.wrapping_add(1));
+            assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 3);
+            assert_eq!(app.session.tool_options()["active"], json!(2));
+            assert_eq!(app.view().unwrap().artboard, 2);
+        } else {
+            artboard_history_new(&mut app, &ctx);
+        }
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, before, "the real Undo shortcut restores the original document");
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+        assert!(!st.is_dirty());
+        // Capture the state before another panel or pointer can repair it. Still exercise deletion
+        // on RED: keyboard deletion used to do nothing; Properties already clamped its own target.
+        let after_undo = (app.view().unwrap().artboard, app.session.tool_options());
+        if let Some(key) = key {
+            artboard_history_key(&mut app, &ctx, key, egui::Modifiers::NONE);
+        } else {
+            let texts = panel_frame(&mut app, &ctx, vec![], show);
+            assert!(texts.iter().any(|(label, _)| label == &before.artboards[1].name));
+            artboard_deletion_click(&mut app, &ctx, show, Some("Delete Artboard"), egui::Modifiers::NONE);
+        }
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.artboards, vec![before.artboards[0].clone()], "deletion after Undo removes the shown second board");
+        assert_eq!(st.doc.layers, before.layers, "ordinary artwork survives without geometry or style changes");
+        assert_eq!(st.selection, selection, "deletion never falls through to Clear");
+        assert_eq!(after_undo.0, 1, "Undo normalizes the navigator before another gesture");
+        assert_eq!(after_undo.1, json!({"active": 1, "selected": [1], "moveArt": false, "scaleArt": true}));
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+        assert_eq!(st.history.undo.last().unwrap().label, "Delete Artboard");
+        assert!(st.is_dirty());
+        assert_eq!(app.view().unwrap().artboard, 0);
+        assert_eq!(app.session.tool_options(), json!({"active": 0, "selected": [0], "moveArt": false, "scaleArt": true}));
+        let deleted = st.doc.clone();
+
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, before);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+        assert!(!st.is_dirty());
+        // Valid current selection stays put; history does not restore an earlier artboard selection.
+        assert_eq!(app.session.tool_options()["selected"], json!([0]));
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, deleted);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+        assert!(st.is_dirty());
+    }
+
+    #[test]
+    fn artboard_history_new_undo_delete_uses_remaining_board() {
+        artboard_history_delete_after_undo(Some(egui::Key::Delete), false);
+    }
+
+    #[test]
+    fn artboard_history_new_undo_backspace_uses_remaining_board() {
+        artboard_history_delete_after_undo(Some(egui::Key::Backspace), false);
+    }
+
+    #[test]
+    fn artboard_history_new_undo_properties_agrees_with_tool() {
+        artboard_history_delete_after_undo(None, false);
+    }
+
+    #[test]
+    fn artboard_history_duplicate_undo_delete_uses_remaining_board() {
+        artboard_history_delete_after_undo(Some(egui::Key::Delete), true);
+    }
+
+    #[test]
+    fn artboard_history_undo_prunes_only_removed_indices() {
+        for order in [[0, 1, 2], [0, 2, 1]] {
+            let mut app = artboard_deletion_app(2);
+            app.session.set_tool_option("moveArt", &json!(false));
+            app.session.set_tool_option("scaleArt", &json!(true));
+            app.session.doc_mut().unwrap().mark_saved();
+            let st = app.session.doc().unwrap();
+            let before = st.doc.clone();
+            let selection = st.selection.clone();
+            let undo = st.history.undo.len();
+            let ctx = egui::Context::default();
+            artboard_history_new(&mut app, &ctx);
+            let created = app.session.doc().unwrap().doc.clone();
+            for (at, i) in order.into_iter().enumerate() {
+                let modifiers = if at == 0 { egui::Modifiers::NONE } else { egui::Modifiers::SHIFT };
+                artboard_deletion_click(&mut app, &ctx, super::super::artboards::show, Some(&format!("Artboard {}", i + 1)), modifiers);
+            }
+            let options = app.session.tool_options();
+            let expected = if order[2] == 2 { json!([0, 1]) } else { json!([1, 0]) };
+            assert_eq!(options["selected"], if order[2] == 2 { json!([2, 0, 1]) } else { json!([1, 0, 2]) });
+            artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+            let mut normalized = options;
+            normalized["active"] = expected[0].clone();
+            normalized["selected"] = expected;
+            assert_eq!(app.session.tool_options(), normalized, "only the removed index is pruned, preserving surviving order and options");
+            assert_eq!(json!(app.view().unwrap().artboard), normalized["active"]);
+            let st = app.session.doc().unwrap();
+            assert_eq!(st.doc, before);
+            assert_eq!(st.selection, selection);
+            assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+            assert!(!st.is_dirty());
+            artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+            assert_eq!(app.session.doc().unwrap().doc, created);
+            assert_eq!(app.session.doc().unwrap().selection, selection);
+            assert_eq!(app.session.tool_options(), normalized, "Redo does not replace an already valid multiselection");
+        }
+    }
+
+    #[test]
+    fn artboard_history_valid_multiselection_survives_undo_redo() {
+        let mut app = artboard_deletion_app(3);
+        app.session.set_tool_option("moveArt", &json!(false));
+        app.session.set_tool_option("scaleArt", &json!(true));
+        let ctx = egui::Context::default();
+        select_artboard_rows(&mut app, &ctx, &[0, 1]);
+        let options = app.session.tool_options();
+        assert_eq!(options["selected"], json!([1, 0]));
+        let view = app.view().unwrap().artboard;
+        app.session.doc_mut().unwrap().mark_saved();
+        let st = app.session.doc().unwrap();
+        let before = st.doc.clone();
+        let selection = st.selection.clone();
+        let undo = st.history.undo.len();
+        app.run("object.move", json!({"dx": 7, "dy": 9})).unwrap();
+        let moved = app.session.doc().unwrap().doc.clone();
+        assert_ne!(moved, before);
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+        app.sync_views();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, before);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+        assert!(!st.is_dirty());
+        assert_eq!(app.session.tool_options(), options);
+        assert_eq!(app.view().unwrap().artboard, view);
+        artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+        app.sync_views();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc, moved);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+        assert!(st.is_dirty());
+        assert_eq!(app.session.tool_options(), options);
+        assert_eq!(app.view().unwrap().artboard, view);
     }
 
     /// #681: Rearrange All opens Rearrange All Artboards in one click, from the Document section

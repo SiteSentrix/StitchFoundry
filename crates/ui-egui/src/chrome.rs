@@ -976,6 +976,168 @@ mod tests {
         assert!(app.run("view.goToArtboard", json!({"index": "sideways"})).is_err());
     }
 
+    fn artboard_navigation_app(tool: &str) -> (crate::VectorcraftApp, vectorcraft_doc::NodeId) {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
+        app.select_tool(tool);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        (app, vectorcraft_doc::NodeId(id))
+    }
+
+    /// Click the actual status-bar Next control, without sending a canvas pointer event.
+    fn artboard_navigation_next(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
+        let buttons = navigator(app, ctx, vec![]);
+        assert_eq!(buttons.len(), 4);
+        let at = buttons[2].center();
+        assert!(!app.canvas_rect.unwrap().contains(at));
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
+            navigator(app, ctx, vec![event]);
+        }
+    }
+
+    fn artboard_navigation_properties_frame(
+        app: &mut crate::VectorcraftApp,
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+    ) -> Vec<(String, egui::Rect)> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            egui::Panel::right("navigation-properties").exact_size(300.0).show(ui, |ui| crate::panels::properties::show(app, ui));
+        });
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// None clicks Properties' Delete Artboard; Some routes the real key through shortcuts.
+    fn artboard_navigation_delete(key: Option<egui::Key>) {
+        for multiple in [false, true] {
+            let (mut app, id) = artboard_navigation_app("artboard");
+            let selected = if multiple { json!([0, 2]) } else { json!([0]) };
+            app.session.set_tool_option("selected", &selected);
+            assert_eq!(app.view().unwrap().artboard, 0);
+            assert_eq!(app.session.tool_options()["active"], json!(0));
+            assert_eq!(app.session.tool_options()["selected"], selected);
+            app.session.active_mut().unwrap().mark_saved();
+            let st = app.session.active().unwrap();
+            let before = st.doc.clone();
+            let selection = st.selection.clone();
+            let undo = st.history.undo.len();
+            let ctx = egui::Context::default();
+
+            artboard_navigation_next(&mut app, &ctx);
+
+            assert_eq!(app.view().unwrap().artboard, 1, "Next shows board 2");
+            assert_eq!(app.session.tool_options()["active"], json!(1), "Next must change the destructive target before deletion");
+            assert_eq!(app.session.tool_options()["selected"], json!([1]), "navigation replaces the old artboard multiselection");
+            assert_eq!(app.view().unwrap().center, before.artboards[1].rect.center());
+            let st = app.session.active().unwrap();
+            assert_eq!(st.doc, before, "navigation only changes view and tool state");
+            assert_eq!(st.selection, selection, "ordinary artwork stays selected");
+            assert_eq!(st.history.undo.len(), undo);
+            assert!(st.history.redo.is_empty());
+            assert!(!st.is_dirty());
+
+            if let Some(key) = key {
+                let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+                let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 300.0));
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events: vec![ev], ..Default::default() }, |ui| {
+                    crate::shortcuts::handle(&mut app, ui.ctx());
+                    super::status_bar(&mut app, ui);
+                });
+                out.textures_delta.clear();
+            } else {
+                artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
+                let texts = artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
+                assert!(texts.iter().any(|(label, _)| label == &before.artboards[1].name), "Properties shows the navigated board");
+                let at = texts.iter().find(|(label, _)| label == "Delete Artboard").map(|(_, rect)| rect.center()).expect("Properties Delete button");
+                assert!(!app.canvas_rect.unwrap().contains(at));
+                let button =
+                    |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+                for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
+                    artboard_navigation_properties_frame(&mut app, &ctx, vec![event]);
+                }
+            }
+
+            let st = app.session.active().unwrap();
+            assert_eq!(
+                st.doc.artboards,
+                vec![before.artboards[0].clone(), before.artboards[2].clone()],
+                "first and third original board records survive"
+            );
+            assert_eq!(st.doc.node(id), before.node(id), "selected artwork survives unchanged");
+            assert_eq!(st.selection, selection);
+            assert_eq!(st.history.undo.len(), undo + 1);
+            assert_eq!(st.history.undo.last().unwrap().label, "Delete Artboard");
+            assert!(st.history.redo.is_empty());
+            assert!(st.is_dirty());
+            let deleted = st.doc.clone();
+            app.run("edit.undo", json!({})).unwrap();
+            let st = app.session.active().unwrap();
+            assert_eq!(st.doc, before, "one Undo restores every board and the artwork");
+            assert_eq!(st.selection, selection);
+            assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
+            assert!(!st.is_dirty());
+            app.run("edit.redo", json!({})).unwrap();
+            assert_eq!(app.session.active().unwrap().doc, deleted);
+        }
+    }
+
+    #[test]
+    fn artboard_navigation_next_then_delete_uses_shown_board() {
+        artboard_navigation_delete(Some(egui::Key::Delete));
+    }
+
+    #[test]
+    fn artboard_navigation_next_then_backspace_uses_shown_board() {
+        artboard_navigation_delete(Some(egui::Key::Backspace));
+    }
+
+    #[test]
+    fn artboard_navigation_next_then_properties_delete_uses_shown_board() {
+        artboard_navigation_delete(None);
+    }
+
+    #[test]
+    fn artboard_navigation_preserves_other_tools_selection_and_history() {
+        for tool in ["selection", "rectangle"] {
+            let (mut app, _) = artboard_navigation_app(tool);
+            app.run("object.move", json!({"dx": 7, "dy": 9})).unwrap();
+            let redo = app.session.active().unwrap().doc.clone();
+            app.run("edit.undo", json!({})).unwrap();
+            app.session.active_mut().unwrap().mark_saved();
+            let st = app.session.active().unwrap();
+            let before = st.doc.clone();
+            let selection = st.selection.clone();
+            let history = (st.history.undo.len(), st.history.redo.len());
+            assert_eq!(history.1, 1);
+            let options = app.session.tool_options();
+
+            artboard_navigation_next(&mut app, &egui::Context::default());
+
+            assert_eq!(app.view().unwrap().artboard, 1);
+            assert_eq!(app.view().unwrap().center, before.artboards[1].rect.center());
+            assert_eq!(app.session.tool_id(), tool);
+            assert_eq!(app.session.tool_options(), options);
+            let st = app.session.active().unwrap();
+            assert_eq!(st.doc, before);
+            assert_eq!(st.selection, selection);
+            assert_eq!((st.history.undo.len(), st.history.redo.len()), history);
+            assert!(!st.is_dirty());
+            app.run("edit.redo", json!({})).unwrap();
+            assert_eq!(app.session.active().unwrap().doc, redo, "navigation preserves the original Redo branch");
+        }
+    }
+
     #[test]
     fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
         let mut s = Session::new();

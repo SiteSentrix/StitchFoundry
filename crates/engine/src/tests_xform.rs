@@ -459,10 +459,12 @@ fn artboard_tool_moves_with_art_creates_and_deletes() {
     assert!(s.tool_claims_key(ToolKey::Delete, ViewInfo::default()));
     s.tool_key(ToolKey::Delete, Mods::default(), ViewInfo::default()).unwrap();
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 1);
-    // The last artboard can't be deleted, so Delete stays the shortcut's.
-    assert!(!s.tool_claims_key(ToolKey::Delete, ViewInfo::default()));
-    s.tool_key(ToolKey::Delete, Mods::default(), ViewInfo::default()).unwrap();
-    assert_eq!(s.doc().unwrap().doc.artboards.len(), 1);
+    // The last artboard can't be deleted, but neither key may fall through to Clear.
+    for key in [ToolKey::Delete, ToolKey::Backspace] {
+        assert!(s.tool_claims_key(key, ViewInfo::default()));
+        s.tool_key(key, Mods::default(), ViewInfo::default()).unwrap();
+        assert_eq!(s.doc().unwrap().doc.artboards.len(), 1);
+    }
 }
 
 #[test]
