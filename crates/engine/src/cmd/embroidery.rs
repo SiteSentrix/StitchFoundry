@@ -573,7 +573,7 @@ fn set_thread(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// What unstitched art becomes when it gets a thread: shapes a fill, open lines a run (each with
 /// the properties made current for it).
-fn new_stitching(d: &Document) -> [Embroidery; 2] {
+pub(super) fn new_stitching(d: &Document) -> [Embroidery; 2] {
     let cfg = d.embroidery.as_deref();
     [
         cfg.and_then(|c| c.current_for("fill").cloned()).unwrap_or_else(Embroidery::fill),
@@ -584,7 +584,7 @@ fn new_stitching(d: &Document) -> [Embroidery; 2] {
 /// Gives a node its thread (unstitched art becomes `new`: `[fill, run]` for shapes and open
 /// lines), and paints its art `repaint`: the stroke of lines, runs and satin borders, else the
 /// fill.
-fn put_thread(n: &mut vectorcraft_doc::Node, new: &[Embroidery; 2], thread: Option<Thread>, repaint: Option<Color>) {
+pub(super) fn put_thread(n: &mut vectorcraft_doc::Node, new: &[Embroidery; 2], thread: Option<Thread>, repaint: Option<Color>) {
     let (lines, border) = (is_open(n), is_line_art(n));
     let e = n.embroidery.get_or_insert_with(|| Box::new(if lines { new[1].clone() } else { new[0].clone() }));
     e.thread = thread;

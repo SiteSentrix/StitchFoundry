@@ -4910,3 +4910,10 @@ machine	Stop	Arrêt
 	Choose Smallest Hoop	Choisir le plus petit tambour
 	Save Custom Hoop	Enregistrer un tambour personnel
 	Delete Custom Hoop	Supprimer un tambour personnel
+	Turn the hue	Tourner la teinte
+	One colour	Une seule couleur
+	Grey	Gris
+	Inverted	Inversé
+	Recolour	Recolorer
+	Recolour Threads	Recolorer les fils
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Chaque fil changé selon le schéma et accordé au nuancier du motif ; annuler les rétablit

@@ -548,6 +548,8 @@ fn structured_junk() {
         ("embroidery.hoop.rotate", json!({})),
         ("embroidery.hoop.saveCustom", json!({"name": "\u{0}", "width": f64::NAN, "height": 1e300, "shape": 2})),
         ("embroidery.hoop.deleteCustom", json!({"name": null})),
+        ("embroidery.recolor", json!({"map": [{"from": 1}], "scheme": [], "degrees": f64::NAN})),
+        ("embroidery.recolor", json!({"scheme": "hue", "degrees": 1e308, "all": true})),
         ("embroidery.visualize", json!({"image": "\u{0}", "imageWidth": f64::NAN, "at": [f64::INFINITY, 1]})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "applique": 3})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "stitch": [], "small": 2})),

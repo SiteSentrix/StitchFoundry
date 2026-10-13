@@ -4898,3 +4898,10 @@ machine	Stop	Остановка
 	Choose Smallest Hoop	Выбрать наименьшие пяльцы
 	Save Custom Hoop	Сохранить свои пяльцы
 	Delete Custom Hoop	Удалить свои пяльцы
+	Turn the hue	Повернуть оттенок
+	One colour	Один цвет
+	Grey	Серый
+	Inverted	Инверсия
+	Recolour	Перекрасить
+	Recolour Threads	Перекрасить нити
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Каждая нить изменена по схеме и подобрана по карте нитей дизайна; отмена возвращает их

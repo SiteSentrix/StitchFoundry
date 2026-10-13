@@ -4900,3 +4900,10 @@ machine	Stop	Parada
 	Choose Smallest Hoop	Elegir el bastidor más pequeño
 	Save Custom Hoop	Guardar bastidor propio
 	Delete Custom Hoop	Eliminar bastidor propio
+	Turn the hue	Girar el tono
+	One colour	Un solo color
+	Grey	Gris
+	Inverted	Invertido
+	Recolour	Recolorear
+	Recolour Threads	Recolorear hilos
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Cada hilo cambiado según el esquema y ajustado a la carta del diseño; deshacer los restaura
