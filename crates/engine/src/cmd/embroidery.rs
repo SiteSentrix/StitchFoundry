@@ -2276,6 +2276,10 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
             if cfg.machine.is_empty() { "none" } else { cfg.machine.as_str() }
         ),
     ];
+    // what to hoop under the fabric
+    if let Some(f) = cfg.fabric(&cfg.fabric) {
+        lines.push(format!("Stabiliser: {}", sf_core::fabrics::stabilizer_advice(&f)));
+    }
     if let Some(m) = &cfg.cost {
         let e = m.estimate(&stats, 1);
         lines.push(format!(

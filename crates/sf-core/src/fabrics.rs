@@ -24,6 +24,49 @@ pub struct Fabric {
     pub underlay_spacing: f64,
     /// Recommend a water-soluble topping (pile fabrics).
     pub topping: bool,
+    /// The stabiliser (backing) recommended under it.
+    pub stabilizer: Stabilizer,
+}
+
+/// A stabiliser (backing) hooped under the fabric.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Stabilizer {
+    /// Torn away after sewing: stable wovens, caps, towels.
+    #[default]
+    TearAway,
+    /// Cut away round the design, the rest left in: knits and anything that stretches.
+    CutAway,
+    /// A light cut-away that doesn't show through: thin knits and light colours.
+    NoShowMesh,
+    /// Dissolved in water: sheer fabrics, lace and freestanding work.
+    WashAway,
+}
+
+impl Stabilizer {
+    pub const ALL: [Stabilizer; 4] = [Stabilizer::TearAway, Stabilizer::CutAway, Stabilizer::NoShowMesh, Stabilizer::WashAway];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Stabilizer::TearAway => "tear-away",
+            Stabilizer::CutAway => "cut-away",
+            Stabilizer::NoShowMesh => "no-show-mesh",
+            Stabilizer::WashAway => "wash-away",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Stabilizer::TearAway => "Tear-away",
+            Stabilizer::CutAway => "Cut-away",
+            Stabilizer::NoShowMesh => "No-show mesh",
+            Stabilizer::WashAway => "Wash-away",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Stabilizer> {
+        Stabilizer::ALL.into_iter().find(|s| s.id() == id)
+    }
 }
 
 pub fn fabrics() -> Vec<Fabric> {
@@ -38,6 +81,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: true,
             underlay_spacing: 2.5,
             topping: false,
+            stabilizer: Stabilizer::TearAway,
         },
         Fabric {
             name: "Pique knit (polo shirt)".into(),
@@ -49,6 +93,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: true,
             underlay_spacing: 2.0,
             topping: true,
+            stabilizer: Stabilizer::CutAway,
         },
         Fabric {
             name: "Jersey knit (T-shirt)".into(),
@@ -60,6 +105,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: true,
             underlay_spacing: 2.0,
             topping: false,
+            stabilizer: Stabilizer::NoShowMesh,
         },
         Fabric {
             name: "Fleece / sweatshirt".into(),
@@ -71,6 +117,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: true,
             underlay_spacing: 1.8,
             topping: true,
+            stabilizer: Stabilizer::CutAway,
         },
         Fabric {
             name: "Towel / terry".into(),
@@ -82,6 +129,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: true,
             underlay_spacing: 1.5,
             topping: true,
+            stabilizer: Stabilizer::TearAway,
         },
         Fabric {
             name: "Denim / canvas".into(),
@@ -93,6 +141,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: true,
             underlay_spacing: 3.0,
             topping: false,
+            stabilizer: Stabilizer::TearAway,
         },
         Fabric {
             name: "Leather / vinyl".into(),
@@ -104,6 +153,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: false,
             underlay_spacing: 3.5,
             topping: false,
+            stabilizer: Stabilizer::TearAway,
         },
         Fabric {
             name: "Structured cap".into(),
@@ -115,6 +165,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: true,
             underlay_spacing: 2.5,
             topping: false,
+            stabilizer: Stabilizer::TearAway,
         },
         Fabric {
             name: "Silk / lightweight".into(),
@@ -126,6 +177,7 @@ pub fn fabrics() -> Vec<Fabric> {
             fill_underlay: false,
             underlay_spacing: 3.0,
             topping: false,
+            stabilizer: Stabilizer::NoShowMesh,
         },
     ]
 }
@@ -135,6 +187,12 @@ impl Default for Fabric {
     fn default() -> Self {
         Fabric { name: String::new(), description: String::new(), ..fabrics().swap_remove(0) }
     }
+}
+
+/// What to hoop under fabric `f`, in words: its stabiliser, and a topping when it wants one.
+pub fn stabilizer_advice(f: &Fabric) -> String {
+    let s = f.stabilizer.label();
+    if f.topping { format!("{s}, with a water-soluble topping") } else { s.to_string() }
 }
 
 pub fn find(name: &str) -> Option<Fabric> {
