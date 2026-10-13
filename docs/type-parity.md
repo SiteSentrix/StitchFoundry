@@ -22,7 +22,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Area Type Options (rows, columns, inset, first baseline, Auto Size, Shrink Text to Fit) | done | the commands that make or restyle type say when it does not fit its frame; MCP `add_text` takes Auto Size and Shrink Text to Fit (#1471) |
 | Threaded text, Fit Headline, Text Wrap | done | Fit Headline sees wrapping in a frame one line tall (#1444) |
 | Type on a Path effects and options; brackets | done | #429 |
-| Character and Paragraph panels, styles with overrides | done | mixed-value display for differing paragraphs missing |
+| Character and Paragraph panels, styles with overrides | done | differing paragraph alignments leave the shared alignment buttons unselected (headless regressions, full integration CI and visual review pass); mixed-value display for other paragraph fields missing |
 | Character size and horizontal scale after object/group scaling | done | #1034: fields and setters compensate the stored affine; point size follows the transformed em-height axis, not the glyph ink bounds. Range edits, keyboard increments, leading and baseline shift use document points; rotation, reflection and shear remain editable. |
 | Preserve font sizes while scaling a group | missing | Separate enhancement; scaling still scales text with the other artwork. |
 | OpenType panel, Glyphs panel, alternates | done | Highlight Alternate Glyphs preference unused (#394) |
@@ -56,6 +56,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | Paragraph/Properties alignment buttons show mixed alignment without changing range commands; headless regressions, full integration CI and visual review pass; other mixed paragraph fields, scores and hours unchanged |
 | 2026-10-13 | minor | The font scan on Linux also reads the folders fontconfig's configuration lists, such as TeX fonts under `/usr/share/texmf/fonts` (#1548, fixes #1529; not verified on Linux); scores and hours unchanged |
 | 2026-10-13 | minor | The commands that make or restyle type, and MCP `add_text`, report area type that does not fit its frame, and `add_text` takes Auto Size and Shrink Text to Fit (#1500, fixes #1471); a tab stop in the Tabs panel drags from where the press landed, a stop just added included (#1487, fixes #1458); scores and hours unchanged |
 | 2026-10-13 | minor | Fit Headline no longer pushes the tracking to its ceiling and loses glyphs when the frame holds one line (#1445, fixes #1444); text frames, wrap shapes and type paths with coordinates beyond a billion points hold no text, and layout limits its search for room, instead of hanging (#1451); scores and hours unchanged |
