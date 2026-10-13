@@ -503,6 +503,7 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Offset Path", |d, sel| {
         let (mut out, mut above) = (vec![], vec![]);
+        let mut paths = false;
         for id in &roots {
             let Some(n) = d.node(*id).cloned() else { continue };
             let mut lv = vec![];
@@ -510,6 +511,7 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
             let mut made = vec![];
             for l in lv.iter().filter(|l| !matches!(l.kind, NodeKind::Text(_))) {
                 let Some((path, rule)) = node_path(l) else { continue };
+                paths = true;
                 let base = if matches!(l.kind, NodeKind::Compound { .. }) && path.is_closed() { po::normalize(&path, rule) } else { path };
                 let off = po::offset_path(&base, delta, join, miter);
                 if off.is_empty() {
@@ -531,6 +533,9 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
             };
             out.push(new.id);
             above.push((*id, vec![new]));
+        }
+        if out.is_empty() && paths {
+            return Err(EngineError::Other("Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)".into()));
         }
         if out.is_empty() {
             return Err(EngineError::Other("Offset Path: select paths".into()));
