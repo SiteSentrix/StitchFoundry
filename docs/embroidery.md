@@ -765,6 +765,15 @@ These follow the public descriptions of lettering sequencing and joins, for exam
 https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-15.htm
 and https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Lettering/lettering_advanced/lettering_advanced-16.htm.
 
+## Appliqué lettering
+
+*Appliqué letters* in the lettering section (`applique: "#rrggbb"` on `embroidery.lettering` and
+`embroidery.lettering.edit`) makes each letter a patch of fabric that colour: one shape, the
+outline of what the letter sews (its fills and satin columns together), sewn as appliqué: a
+placement line and a stop to lay the fabric, a tack-down and a stop to trim it, then the cover.
+The appliqué settings can be changed per letter like any appliqué; the lettering stays lettering,
+and turning it off again brings back the font's own stitching. Bold, wide fonts suit it best.
+
 ## 3D puff
 
 **Embroidery › 3D Puff** (`embroidery.puff {ids?, on?, cap?}`) sews the selected objects' satin

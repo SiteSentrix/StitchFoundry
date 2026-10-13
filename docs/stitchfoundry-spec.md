@@ -543,7 +543,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-19 | Puff fill for wide areas, and the puff sewing order (a flat outline first, a stop to lay the foam) | Done | A filled shape made puff is sewn as satin across it; Sew Puff Last (`embroidery.puff.last`) moves the puff after the rest with a stop before it | – |
 | NEW-20 | A library of ready-digitized embroidery fonts, marked puff, small or appliqué where they suit | Missing | Digitized by the project from OFL typefaces with the font creator, kept in craft-fonts (never in this repo); font-list badges | 3 |
 | NEW-21 | Bubble (outline) text, and circle and spiral baselines | Done | Outline Around (`embroidery.outlineAround`): one satin or run outline round the selected art at a gap (bubble lettering, sticker borders); circles via `arc`; spirals via `spiral` (mm a turn, in or out) | 0 |
-| NEW-22 | Appliqué lettering (each letter a patch: placement, tack-down, cover) | Missing | Lettering whose glyph outlines become appliqué (AP-*) | 4 |
+| NEW-22 | Appliqué lettering (each letter a patch: placement, tack-down, cover) | Done | Lettering `applique` (fabric colour): each glyph one appliqué patch, the union of what it sews; kept on edit, off again restores the font's stitching | 0 |
 | NEW-23 | Auto basting (a basting run round the design or the hoop, first) | Done | `embroidery.settings {basting}`: a long run round the design or inside the hoop (rectangle or oval), sewn first in the first thread without ties, in previews and machine files | 0 |
 | NEW-24 | Scatter copies (copies of a motif strewn over an area) | Done | `embroidery.scatter`: random (seeded) or even (triangular grid), a gap apart, inside a closed shape, optionally turned | 0 |
 | NEW-25 | Placement aids: work areas, neckline placement, basting and printed placement marks | Partial | Life-size placement templates (`embroidery.worksheet {kind: template}`: centre lines, up arrow, 100 mm check bar); usual placements printed (`placement`); basting (NEW-23); work areas drawn on garments still to come | 6 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 169 done,
-34 partial, 41 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 170 done,
+34 partial, 40 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

@@ -209,6 +209,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.embroidery.lettering_spiral = l.spiral;
             app.embroidery.lettering_sew = l.sew;
             app.embroidery.lettering_puff = l.puff.is_some();
+            app.embroidery.lettering_applique = l.applique.map(|c| [c.r, c.g, c.b]);
         }
         None => app.embroidery.lettering_for = None,
         _ => {}
@@ -329,12 +330,27 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.checkbox(&mut app.embroidery.lettering_puff, tl!("3D puff"))
         .on_hover_text(tl!("Satin sewn over foam: dense, no underlay, its ends capped. Sew it in a colour of its own, to lay the foam at the stop"));
+    // appliqué letters, in a fabric colour
+    ui.horizontal(|ui| {
+        let mut on = app.embroidery.lettering_applique.is_some();
+        if ui
+            .checkbox(&mut on, tl!("Appliqué letters"))
+            .on_hover_text(tl!("Each letter a patch of fabric: placement line, tack-down and cover"))
+            .changed()
+        {
+            app.embroidery.lettering_applique = on.then_some([0xd9, 0xd9, 0xd9]);
+        }
+        if let Some(c) = app.embroidery.lettering_applique.as_mut() {
+            egui::color_picker::color_edit_button_srgb(ui, c);
+        }
+    });
+    let applique = app.embroidery.lettering_applique.map_or(Value::Bool(false), |[r, g, b]| json!(format!("#{r:02x}{g:02x}{b:02x}")));
     let sew = serde_json::to_value(app.embroidery.lettering_sew).unwrap_or_default();
     let arc = app.embroidery.lettering_arc;
     let text = app.embroidery.lettering_text.clone();
     let mut params = json!({ "text": text, "font": name, "size": size, "arc": arc, "spiral": spiral,
         "order": sew["order"], "lines": if sew["up"].as_bool() == Some(true) { "up" } else { "down" },
-        "join": sew["join"], "trim": sew["trim"], "puff": app.embroidery.lettering_puff });
+        "join": sew["join"], "trim": sew["trim"], "puff": app.embroidery.lettering_puff, "applique": applique });
     let (label, cmd) = match &selected {
         Some((id, _)) => {
             params["id"] = json!(id);

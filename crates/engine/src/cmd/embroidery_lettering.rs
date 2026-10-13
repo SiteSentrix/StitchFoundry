@@ -9,7 +9,8 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use sf_core::attr::{Embroidery, LetterAdjust, LetterAlign, LetterJoin, LetterOrder, LetterSewing, LetterTrim, Lettering, StitchType};
 use sf_core::model::{FillParams, Puff, SatinParams};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind};
 use vectorcraft_embroidery::fonts::{EmbFont, MAX_TEXT};
 use vectorcraft_geom::Affine;
 
@@ -78,7 +79,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embroidery Lettering",
             [],
             None,
-            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight), spiral?: mm (with `arc`: its radius shrinks this much a turn, the line winding in; negative, out; 0), puff?: bool (3D puff: the glyphs' satin sewn over foam, see embroidery.puff), order?: left|right|centre (the letters sewn left to right, right to left or from the middle out, as for caps; left), lines?: down|up (the lines sewn from the first down or the last up; down), join?: closest|baseline (each letter started where closest to the last, or at its baseline's start and stopped at its end, the thread running on along the baseline; closest), trim?: auto|letter|word|line (the thread cut after each letter, word or line; auto: where the jumps need it)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
+            "{text, font, size?: mm (its capitals' height; default: the font's own), at?: [x, y] (where the first line's baseline starts, or its middle or end by `align`; default: the first artboard's centre), leading?: × the font's line height (1), align?: left|centre|right (left), arc?: mm (the baseline round a circle that radius: positive arched over its top, negative along its bottom; 0 straight), spiral?: mm (with `arc`: its radius shrinks this much a turn, the line winding in; negative, out; 0), puff?: bool (3D puff: the glyphs' satin sewn over foam, see embroidery.puff), applique?: \"#rrggbb\"|true|false (appliqué letters: each glyph one patch of fabric that colour, the shape of what it sews, with a placement line, tack-down and cover; true: light grey), order?: left|right|centre (the letters sewn left to right, right to left or from the middle out, as for caps; left), lines?: down|up (the lines sewn from the first down or the last up; down), join?: closest|baseline (each letter started where closest to the last, or at its baseline's start and stopped at its end, the thread running on along the baseline; closest), trim?: auto|letter|word|line (the thread cut after each letter, word or line; auto: where the jumps need it)} set text in a loaded embroidery font: each glyph its digitized art, kerned and scaled, a group per glyph inside one for the lettering, which remembers what it says (embroidery.lettering.edit sets it again); a size outside what the font sews well at comes with a warning → {id, glyphs, warnings}",
             has_doc,
             lettering
         ),
@@ -87,7 +88,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Lettering",
             [],
             None,
-            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm, spiral?: mm, puff?: bool, order?, lines?, join?, trim?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
+            "{id?, text?, font?, size?: mm, leading?, align?, arc?: mm, spiral?: mm, puff?: bool, applique?: \"#rrggbb\"|false, order?, lines?, join?, trim?} set the selected lettering (in an embroidery font) again with a new text, font, size or line spacing, where it is now, moved, turned and scaled as it is; its font must be loaded → {id, glyphs, warnings}",
             has_selection,
             edit_lettering
         ),
@@ -471,7 +472,9 @@ fn glyphs_indexed(d: &mut Document, font: &EmbFont, spec: &Lettering) -> Vec<(us
         }
         let mut grp = Node::group(d.alloc_id(), children);
         grp.name = Some(g.glyph.clone());
-        if spec.puff.is_some() {
+        if let Some(fabric) = spec.applique {
+            applique_glyph(d, &mut grp, fabric);
+        } else if spec.puff.is_some() {
             puff_all(&mut grp, spec.puff, &mut (0, 0));
         }
         // its baseline's start and end
@@ -573,6 +576,44 @@ fn stitched_end(n: &mut Node, last: bool) -> Option<&mut Embroidery> {
 
 /// Every piece of satin in `n` sewn over foam (`puff`) or plain again (`None`); `counts`: the
 /// satin pieces set and the other stitched pieces passed by.
+/// A glyph as one appliqué patch in `fabric`: the shape of what its art sews, its thread the
+/// cover's.
+fn applique_glyph(d: &mut Document, grp: &mut Node, fabric: sf_core::Rgb) {
+    use vectorcraft_geom::path::{PathData, SubPath};
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let polys = sf_core::geom::poly::union(&vectorcraft_embroidery::covered_mm(grp));
+    if polys.is_empty() {
+        return;
+    }
+    // the glyph's first thread
+    fn first_thread(n: &Node) -> Option<(sf_core::Thread, Color)> {
+        if let Some(e) = n.embroidery.as_deref()
+            && !matches!(n.kind, NodeKind::Group { .. })
+        {
+            let t = vectorcraft_embroidery::node_thread(n, e);
+            return Some((t.clone(), Color::rgb8(t.color.r, t.color.g, t.color.b)));
+        }
+        n.children().into_iter().flatten().find_map(|c| first_thread(c))
+    }
+    let (thread, color) = first_thread(grp).unwrap_or((sf_core::Thread::new(sf_core::Rgb::new(0x1a, 0x1a, 0x1a), ""), Color::rgb8(0x1a, 0x1a, 0x1a)));
+    let to_pt = |q: &sf_core::Point| kurbo::Point::new(q.x * PT, q.y * PT);
+    let subpaths: Vec<SubPath> = polys
+        .iter()
+        .flat_map(|p| std::iter::once(&p.outer).chain(&p.holes))
+        .filter(|ring| ring.len() >= 3)
+        .map(|ring| SubPath::polyline(&ring.iter().map(to_pt).collect::<Vec<_>>(), true))
+        .collect();
+    let paint = Appearance::basic(Paint::solid(Color::rgb8(fabric.r, fabric.g, fabric.b)), Paint::solid(color), 1.0);
+    let mut n = Node::path(d.alloc_id(), PathData::new(subpaths), paint);
+    let mut e = Embroidery::new(StitchType::Applique(sf_core::model::AppliqueParams { fabric_color: fabric, ..Default::default() }));
+    e.thread = Some(thread);
+    n.embroidery = Some(Box::new(e));
+    n.name = Some("Appliqué".into());
+    if let NodeKind::Group { children, .. } = &mut grp.kind {
+        *children = vec![Arc::new(n)];
+    }
+}
+
 fn puff_all(n: &mut Node, puff: Option<Puff>, counts: &mut (usize, usize)) {
     if let NodeKind::Group { children, .. } = &mut n.kind {
         for c in children.iter_mut() {
@@ -688,6 +729,21 @@ fn all_puff(n: &Node) -> (usize, usize) {
     match n.embroidery.as_deref().map(|e| &e.stitch) {
         Some(StitchType::Satin(params)) => (1, usize::from(params.puff.is_some())),
         _ => (0, 0),
+    }
+}
+
+/// `applique`, when given: the fabric's colour (appliqué letters), or false or null for none
+/// (`Some(None)`).
+fn applique_param(p: &Value, cmd: &str) -> Result<Option<Option<sf_core::Rgb>>> {
+    match p.get("applique") {
+        None => Ok(None),
+        Some(Value::Null) | Some(Value::Bool(false)) => Ok(Some(None)),
+        Some(Value::Bool(true)) => Ok(Some(Some(sf_core::Rgb::new(0xd9, 0xd9, 0xd9)))),
+        Some(v) => v
+            .as_str()
+            .and_then(sf_core::Rgb::from_hex)
+            .map(|c| Some(Some(c)))
+            .ok_or_else(|| bad(cmd, "`applique` is the fabric's colour (\"#rrggbb\"), true or false")),
     }
 }
 
@@ -858,6 +914,7 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
     let mut sew = LetterSewing::default();
     sew_params(p, SET, &mut sew)?;
     let puff = puff_param(p, SET)?.unwrap_or(false).then(Puff::default);
+    let applique = applique_param(p, SET)?.flatten();
     let spec = Lettering {
         text: text.to_string(),
         font: font.info.name.clone(),
@@ -869,6 +926,7 @@ fn lettering(s: &mut Session, p: &Value) -> Result<Value> {
         sew,
         letters: Vec::new(),
         puff,
+        applique,
         frame: sf_core::Affine::translate(sf_core::Point::new(at.x, at.y)),
     };
     spiral_needs_arc(&spec, SET)?;
@@ -927,6 +985,9 @@ fn edit_lettering(s: &mut Session, p: &Value) -> Result<Value> {
     sew_params(p, EDIT, &mut spec.sew)?;
     if let Some(on) = puff_param(p, EDIT)? {
         spec.puff = if on { Some(spec.puff.unwrap_or_default()) } else { None };
+    }
+    if let Some(a) = applique_param(p, EDIT)? {
+        spec.applique = a;
     }
     warnings.extend(size_warnings(&font, spec.size));
     let count = set_again(s, id, &spec, &font, "Edit Lettering", EDIT)?;

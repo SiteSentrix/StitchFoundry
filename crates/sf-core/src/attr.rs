@@ -193,6 +193,10 @@ pub struct Lettering {
     /// 3D puff: its glyphs' satin sewn over foam.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub puff: Option<crate::model::Puff>,
+    /// Appliqué letters in fabric of this colour: each glyph one patch the shape of what it sews
+    /// (placement line, tack-down and cover), instead of its stitches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub applique: Option<crate::threads::Rgb>,
     /// From the lettering's own space (points: the first line's baseline runs from (0, 0) along
     /// x, the lines follow down y) to the document. It follows the lettering as it moves, turns
     /// and slants; a scale goes into `size`.
@@ -939,6 +943,7 @@ mod tests {
             sew: LetterSewing::default(),
             letters: vec![LetterAdjust { dy: 2.0, ..LetterAdjust::none(1) }],
             puff: None,
+            applique: None,
             frame: at,
         };
         // turned a quarter about the origin, then doubled
