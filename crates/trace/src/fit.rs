@@ -60,6 +60,65 @@ fn before(a: Point, b: Point) -> std::cmp::Ordering {
     a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y))
 }
 
+/// Lines within this of level or upright are made exactly so (the tangent of 2.5°).
+const NEARLY_UPRIGHT: f64 = 0.0437;
+
+/// Snap Curves To Lines: the straight pieces of `segs` (a chain; `closed` when its end joins its
+/// start) that are within 2.5° of level or upright and at least 2 px long are made exactly level
+/// or upright, by moving their ends across them: both to their mean, or, in an open chain, the
+/// free end to the end that is fixed (a chain's own ends are junctions other regions share, and
+/// stay where they are). The pieces next to a moved end follow it.
+fn snap_upright(segs: &mut [Cubic], closed: bool) {
+    let n = segs.len();
+    let straight = |c: &Cubic| seg_dist(c[1], c[0], c[3]) < 1e-6 && seg_dist(c[2], c[0], c[3]) < 1e-6;
+    let lines: Vec<bool> = segs.iter().map(straight).collect();
+    // Anchor `i` starts piece `i`; an open chain has one more, at its end.
+    let fixed = |i: usize| !closed && (i == 0 || i == n);
+    let at = |segs: &[Cubic], i: usize| if i < n { segs[i][0] } else { segs[n - 1][3] };
+    let put = |segs: &mut [Cubic], i: usize, p: Point| {
+        let i = if closed { i % n } else { i };
+        let d = p - at(segs, i);
+        if i < n {
+            segs[i][0] = p;
+            segs[i][1] += d;
+        }
+        if let Some(before) = if i > 0 { Some(i - 1) } else { closed.then_some(n - 1) } {
+            segs[before][3] = p;
+            segs[before][2] += d;
+        }
+    };
+    for (i, &line) in lines.iter().enumerate() {
+        let (ia, ib) = (i, if closed { (i + 1) % n } else { i + 1 });
+        let (a, b) = (at(segs, ia), at(segs, ib));
+        let d = b - a;
+        if !line || d.hypot() < 2.0 || ia == ib {
+            continue;
+        }
+        let level = d.y.abs() <= NEARLY_UPRIGHT * d.x.abs();
+        if !level && d.x.abs() > NEARLY_UPRIGHT * d.y.abs() {
+            continue;
+        }
+        let pick = |p: Point| if level { p.y } else { p.x };
+        let to = match (fixed(ia), fixed(ib)) {
+            (true, true) => continue,
+            (true, false) => pick(a),
+            (false, true) => pick(b),
+            (false, false) => (pick(a) + pick(b)) / 2.0,
+        };
+        let moved = |p: Point| if level { Point::new(p.x, to) } else { Point::new(to, p.y) };
+        if !fixed(ia) {
+            put(segs, ia, moved(a));
+        }
+        if !fixed(ib) {
+            put(segs, ib, moved(b));
+        }
+    }
+    // A straight piece has its handles on it.
+    for (c, _) in segs.iter_mut().zip(&lines).filter(|(_, line)| **line) {
+        *c = [c[0], c[0] + (c[3] - c[0]) / 3.0, c[0] + (c[3] - c[0]) * (2.0 / 3.0), c[3]];
+    }
+}
+
 /// A whole loop fitted. The same loop gives the same curves whichever way it runs and wherever it
 /// starts (it is fitted clockwise from its leftmost point): the outline of a shape and the hole it
 /// leaves in the shape around it are one curve.
@@ -79,6 +138,9 @@ fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
     // (a wild handle on a tiny or ragged loop) gives way to the outline's own points.
     if stats.reverted > 0 && !all_within(&sample_cubics(&segs, 0.25), &resample_closed(&pts, 0.5).map_or_else(|| pts.clone(), |(p, _)| p), 1.5) {
         segs = polygon(&pts, style.tol);
+    }
+    if style.upright {
+        snap_upright(&mut segs, true);
     }
     Some(if flip { reversed(segs) } else { segs })
 }
@@ -106,6 +168,9 @@ fn fit_piece(pts: &[Point], style: &Style) -> Vec<Cubic> {
         keep[n - 1] = true;
         let kept: Vec<Point> = (0..n).filter(|&i| keep[i]).map(|i| pts[i]).collect();
         segs = kept.windows(2).filter(|p| p[0] != p[1]).map(|p| [p[0], p[0], p[1], p[1]]).collect();
+    }
+    if style.upright {
+        snap_upright(&mut segs, false);
     }
     if flip { reversed(segs) } else { segs }
 }

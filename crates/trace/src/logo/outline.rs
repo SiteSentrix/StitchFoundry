@@ -25,6 +25,9 @@ pub(crate) struct Style {
     pub max_dev: f64,
     /// Spacing of the points of the fit that this check looks at.
     pub check_step: f64,
+    /// Straight pieces within a few degrees of level or upright are made exactly so (by the
+    /// tracer's other modes; Flat Logo leaves them).
+    pub upright: bool,
 }
 
 impl Default for Style {
@@ -42,6 +45,7 @@ impl Default for Style {
             restore: Some(RestoreParams::default()),
             max_dev: 1.4,
             check_step: 0.03,
+            upright: false,
         }
     }
 }

@@ -72,7 +72,7 @@ fn target(preset: &str, input: &Input) -> bool {
         "Sketched Art" => &[Class::Shape, Class::Lines],
         "Silhouettes" => &[Class::Shape],
         "Line Art" | "Outline" => &[Class::Lines],
-        "Technical Drawing" => &[Class::Lines, Class::Poly],
+        "Technical Drawing" => &[Class::Lines, Class::Poly, Class::Askew],
         _ => &[Class::Shape, Class::Poly],
     };
     classes.contains(&input.class)
@@ -172,12 +172,12 @@ fn stat(runs: &[&Metrics], field: impl Fn(&Metrics) -> f64, max: bool, digits: u
     if x.is_finite() { format!("{:.digits$}", x + 0.0) } else { "all".into() }
 }
 
-const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
+const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
 
 fn row(runs: &[&Run]) -> String {
     let m: Vec<&Metrics> = runs.iter().filter_map(|r| r.metrics.as_ref()).collect();
     if m.is_empty() {
-        return format!("| refused |{}", " |".repeat(16));
+        return format!("| refused |{}", " |".repeat(17));
     }
     let cells = [
         stat(&m, |m| m.delta, false, 2),
@@ -189,6 +189,7 @@ fn row(runs: &[&Run]) -> String {
         stat(&m, |m| m.anchors, false, 0),
         stat(&m, |m| m.anchor_ratio, false, 2),
         stat(&m, |m| m.lines, false, 0),
+        stat(&m, |m| m.upright, false, 0),
         stat(&m, |m| m.corners, false, 0),
         stat(&m, |m| m.kinks, false, 1),
         stat(&m, |m| m.slivers, false, 1),
@@ -223,7 +224,7 @@ fn report() -> String {
     let presets = presets();
     let inputs = inputs();
     let drawn = draw_all(&inputs);
-    let one_colour = |d: &&Drawing| matches!(d.0.class, Class::Shape | Class::Poly | Class::Lines);
+    let one_colour = |d: &&Drawing| matches!(d.0.class, Class::Shape | Class::Poly | Class::Lines | Class::Askew);
     if let Ok(dir) = std::env::var("TRACE_QUALITY_IMAGES") {
         for (input, size, variant, img) in &drawn {
             std::fs::write(format!("{dir}/{}.png", stem(input, *size, *variant)), img.encode_png()).unwrap();
@@ -270,7 +271,7 @@ fn report() -> String {
             .collect();
         let _ = write!(md, "\n## 4. Yardstick\n\n{} traces by another tracer, measured the same way.\n\n| inputs | variant ", theirs.len());
         md += HEADER.replacen("\n|", "\n|:--|:--|", 1).as_str();
-        for class in [Class::Shape, Class::Poly, Class::Lines] {
+        for class in [Class::Shape, Class::Poly, Class::Lines, Class::Askew] {
             for variant in VARIANTS {
                 let rows: Vec<&Run> = theirs.iter().filter(|r| r.class == class && r.variant == variant).collect();
                 let _ = writeln!(md, "| {} | {} {}", class.name(), variant.name(), row(&rows));

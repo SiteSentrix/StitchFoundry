@@ -175,6 +175,8 @@ pub struct Metrics {
     pub anchor_ratio: f64,
     /// Share (%) of the outline length made of straight segments.
     pub lines: f64,
+    /// Share (%) of the outline length that is exactly level or upright.
+    pub upright: f64,
     /// Share (%) of the art's sharp corners that have a traced corner within 1.5 px.
     pub corners: f64,
     /// Anchors where the path turns by 10° or more away from any true corner.
@@ -224,7 +226,7 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
             let kept = true_corners.iter().filter(|c| turns.iter().any(|(p, t)| *t >= 20.0 && p.distance(**c) <= 1.5)).count();
             corners = 100.0 * kept as f64 / true_corners.len() as f64;
         }
-        if input.class != Class::Lines {
+        if input.class != Class::Lines && input.class != Class::Askew {
             kinks = turns.iter().filter(|(p, t)| *t >= 10.0 && true_corners.iter().all(|c| p.distance(*c) > 2.0)).count() as f64;
         }
         if params.mode != Mode::BlackAndWhite {
@@ -234,7 +236,7 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
         }
     }
 
-    let (mut length, mut straight) = (0.0, 0.0);
+    let (mut length, mut straight, mut upright) = (0.0, 0.0, 0.0);
     for sp in art.iter().flat_map(|(tp, _)| &tp.path.subpaths) {
         for i in 0..sp.segment_count() {
             let len = sp.segment(i).arclen(0.05);
@@ -243,6 +245,9 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
             let c = sp.segment(i);
             if seg_dist(c.p1, c.p0, c.p3) < 0.02 && seg_dist(c.p2, c.p0, c.p3) < 0.02 {
                 straight += len;
+                if (c.p0.x - c.p3.x).abs() < 1e-9 || (c.p0.y - c.p3.y).abs() < 1e-9 {
+                    upright += len;
+                }
             }
         }
     }
@@ -275,6 +280,7 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
         anchors: anchors as f64,
         anchor_ratio: if input.anchors > 0 { anchors as f64 / input.anchors as f64 } else { nan },
         lines: if length > 0.0 { 100.0 * straight / length } else { nan },
+        upright: if length > 0.0 { 100.0 * upright / length } else { nan },
         corners,
         kinks,
         slivers,
