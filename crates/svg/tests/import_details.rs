@@ -229,3 +229,31 @@ fn unsupported_filters_are_named_in_the_warning() {
     assert!(w.iter().any(|w| w == "filter 't' (feTurbulence) on 'r' isn't supported; drawn without it"), "{w:?}");
     assert_eq!(art(&d).iter().filter(|n| n.path_data().is_some()).count(), 2, "both drawn");
 }
+
+/// #1601: Inkscape's pages become artboards, at their places (through the viewBox) and with their
+/// labels.
+#[test]
+fn inkscape_pages_become_artboards() {
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" width="200" height="200" viewBox="0 0 100 100">
+        <sodipodi:namedview><inkscape:page x="0" y="0" width="100" height="100" inkscape:label="Front"/><inkscape:page x="120" y="0" width="60" height="150"/><inkscape:page x="0" y="0" width="0" height="10"/></sodipodi:namedview>
+        <rect x="10" y="10" width="80" height="80" fill="red"/></svg>"#;
+    let d = import_with(svg, &ImportOptions::default()).unwrap().0;
+    let b: Vec<(String, Rect)> = d.artboards.iter().map(|a| (a.name.clone(), a.rect)).collect();
+    assert_eq!(b, vec![("Front".to_string(), Rect::new(0.0, 0.0, 200.0, 200.0)), ("Artboard 2".to_string(), Rect::new(240.0, 0.0, 360.0, 300.0))]);
+    // Hostile boxes (too large to add up, not numbers, negative) are no pages, and at most 1,000 are read.
+    let pages = r#"<inkscape:page x="1e308" y="0" width="1e308" height="10"/><inkscape:page x="NaN" y="0" width="10" height="10"/><inkscape:page width="inf" height="10"/><inkscape:page width="-5" height="10"/>"#.to_string()
+        + &r#"<inkscape:page width="10" height="10"/>"#.repeat(1500);
+    let hostile = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="50" height="50"><g>{pages}</g></svg>"#
+    );
+    let d = import_with(&hostile, &ImportOptions::default()).unwrap().0;
+    assert_eq!(d.artboards.len(), 1000);
+    assert!(d.artboards.iter().all(|a| a.rect == Rect::new(0.0, 0.0, 10.0, 10.0)), "{:?}", d.artboards.first());
+    // A file without pages keeps its one artboard.
+    let d = import_with(&svg_doc(), &ImportOptions::default()).unwrap().0;
+    assert_eq!(d.artboards.len(), 1);
+}
+
+fn svg_doc() -> String {
+    svg(r#"<rect x="10" y="10" width="20" height="20"/>"#)
+}
