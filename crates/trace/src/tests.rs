@@ -608,7 +608,7 @@ fn create_strokes_survives_noise_and_tiny_images() {
             for noise in [0, 1, 4] {
                 let p = TraceParams { strokes: true, fills, stroke_width: width, noise, ..TraceParams::default() };
                 for t in trace(&img, &p).paths {
-                    assert!(t.stroke.is_none_or(|w| w.is_finite() && w >= 1.0), "{:?}", t.stroke);
+                    assert!(t.stroke.is_none_or(|w| w.is_finite() && w >= 0.25), "{:?}", t.stroke);
                 }
             }
         }
@@ -1125,4 +1125,47 @@ fn snap_curves_to_lines_levels_a_rectangle_a_degree_askew() {
         (0..sp.segment_count())
             .all(|i| (sp.segment(i).p3.y - sp.segment(i).p0.y).abs() > 1.0 && (sp.segment(i).p3.x - sp.segment(i).p0.x).abs() > 1.0)
     );
+}
+
+#[test]
+fn a_straight_anti_aliased_line_is_two_anchors_in_its_middle_as_wide_as_its_ink() {
+    // 2.6 px wide, from (20.3, 30.7) to (170.6, 52.2): a little off the pixel rows.
+    let (a, b) = (Point::new(20.3, 30.7), Point::new(170.6, 52.2));
+    let along_line = |p: Point| ((p - a).dot(b - a) / (b - a).hypot2()).clamp(0.0, 1.0);
+    let img = soft(190, 80, |x, y| {
+        let p = Point::new(x, y);
+        p.distance(a + (b - a) * along_line(p)) <= 1.3
+    });
+    for noisy in [false, true] {
+        // (With grain of ±6 levels too: the line stays two anchors.)
+        let img = Raster::from_fn(190, 80, |x, y| {
+            let v = f64::from(img.pixel(x, y)[0]) + if noisy { 6.0 * jitter(x, y, 3) } else { 0.0 };
+            let v = v.round().clamp(0.0, 255.0) as u8;
+            [v, v, v, 255]
+        });
+        let res = trace(&img, &preset("Outline").unwrap());
+        assert_eq!(res.paths.len(), 1);
+        let (path, width) = (&res.paths[0].path, res.paths[0].stroke.unwrap());
+        assert_eq!(path.anchor_count(), 2, "noisy {noisy}: {path:?}");
+        assert!((width - 2.6).abs() < 0.15, "noisy {noisy}: {width} px wide");
+        for end in [path.subpaths[0].anchors[0].p, path.subpaths[0].anchors[1].p] {
+            // On the line through the true ends, to a tenth of a pixel.
+            let off = (end - a).cross(b - a).abs() / (b - a).hypot();
+            assert!(off < 0.1, "noisy {noisy}: an end {off} px off the line's middle");
+            // And where the ink ends, less the half width its round cap adds (the line here has round ends).
+            assert!(end.distance(a).min(end.distance(b)) < 0.6, "noisy {noisy}: an end at {end:?}");
+        }
+    }
+}
+
+#[test]
+fn a_stroke_is_as_wide_as_its_ink_not_a_whole_number_of_pixels() {
+    // (Lines with a pixel that is all ink somewhere: a thinner one's ink is read against its own
+    // darkest pixel, and comes out a little wide.)
+    for want in [1.7, 2.4, 3.4] {
+        let img = soft(120, 40, |x, y| (10.0..110.0).contains(&x) && (y - 20.3).abs() <= want / 2.0);
+        let res = trace(&img, &preset("Outline").unwrap());
+        let width = res.paths[0].stroke.unwrap();
+        assert!((width - want).abs() < 0.08, "{width} for a line {want} px wide");
+    }
 }

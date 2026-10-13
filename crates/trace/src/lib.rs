@@ -34,8 +34,9 @@
 //!    Lines also straightens slightly curved runs and makes arcs of parts of circles.
 //!
 //! With **Create: Strokes**, the parts of a colour layer no wider than the stroke width are traced
-//! as stroked centre lines instead (see `centerline`); without Fills, wider parts become stroked
-//! outlines.
+//! as stroked centre lines instead (see `centerline`): placed in the middle of their ink to a
+//! fraction of a pixel, as wide as their ink, and fitted as outlines are. Without Fills, wider
+//! parts become stroked outlines.
 //!
 //! Colour layers are traced either *abutting* (each colour's own area; shapes share edges) or
 //! *overlapping* (stacked: each layer also covers every layer above it, so no hairline gaps).
@@ -317,16 +318,6 @@ impl Default for TraceParams {
 }
 
 impl TraceParams {
-    /// Maximum distance (px) of polygon vertices from the pixel boundary.
-    fn polygon_tolerance(&self) -> f64 {
-        let f = (self.paths / 100.0).clamp(0.0, 1.0);
-        0.55 + 0.75 * (1.0 - f)
-    }
-    /// Curve fitting tolerance (px).
-    fn fit_tolerance(&self) -> f64 {
-        let f = (self.paths / 100.0).clamp(0.0, 1.0);
-        0.2 + 1.6 * (1.0 - f)
-    }
     /// How outlines are fitted: Paths sets how closely the curves follow the edge (0.08 px at 100,
     /// 0.33 px at 50, 0.78 px at 0), Corners the turn that makes a corner (35° at 100, 90° at 0).
     /// Straight edges are always lines; Snap Curves To Lines also straightens slightly curved ones,
@@ -348,11 +339,6 @@ impl TraceParams {
             upright: snap,
             ..logo::Style::default()
         }
-    }
-    /// Turn angle (degrees) above which a polygon vertex stays a corner.
-    fn corner_angle(&self) -> f64 {
-        let c = (self.corners / 100.0).clamp(0.0, 1.0);
-        150.0 - 115.0 * c
     }
 }
 
@@ -537,12 +523,6 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
         boxes,
         bw_tones: bw_tones(img, &q),
         style: params.outline_style(),
-        opts: fit::FitOptions {
-            polygon_tol: params.polygon_tolerance(),
-            fit_tol: params.fit_tolerance(),
-            corner_angle: params.corner_angle(),
-            snap_lines: params.snap_curves_to_lines,
-        },
         w,
         h,
         anchors: AtomicUsize::new(0),
@@ -605,10 +585,8 @@ struct Layers<'a> {
     boxes: Vec<Option<(usize, usize, usize, usize)>>,
     /// Black and White: the luminance of white and of black (see `bw_tones`).
     bw_tones: [f64; 2],
-    /// How outlines are fitted.
+    /// How outlines and centre lines are fitted.
     style: logo::Style,
-    /// How centre lines are fitted.
-    opts: fit::FitOptions,
     w: usize,
     h: usize,
     /// Anchor points made so far, by every layer.
@@ -766,13 +744,15 @@ impl Layers<'_> {
     /// The paths of layer `r` (palette entry `ci`), or `None` once the anchors made pass the
     /// maximum.
     fn layer(&self, r: usize, ci: usize) -> Option<Vec<TracedPath>> {
-        let (params, opts) = (self.params, &self.opts);
+        let params = self.params;
         let color = *self.q.palette.get(ci)?;
         let overlapping = params.method == Method::Overlapping;
         let (w, h) = (self.w, self.h);
         // Create Strokes: this colour's lines, left out of its areas.
         let (thin, lines) = if params.strokes {
-            centerline::lines(&self.q.labels, u16::try_from(ci).unwrap_or(TRANSPARENT), w, h, params.stroke_width, opts)
+            // The ink the lines are read against: the layer's colour; Black and White's own black.
+            let ink = if params.mode == Mode::BlackAndWhite { [self.bw_tones[usize::from(ci == 1)]; 3] } else { color.map(f64::from) };
+            centerline::lines(&self.q.labels, u16::try_from(ci).unwrap_or(TRANSPARENT), w, h, params.stroke_width, self.img, ink, &self.style)
         } else {
             (vec![], vec![])
         };

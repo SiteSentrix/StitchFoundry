@@ -172,12 +172,12 @@ fn stat(runs: &[&Metrics], field: impl Fn(&Metrics) -> f64, max: bool, digits: u
     if x.is_finite() { format!("{:.digits$}", x + 0.0) } else { "all".into() }
 }
 
-const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
+const HEADER: &str = "| ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | upright % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px | centre off | width off | anchors a stroke |\n|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n";
 
 fn row(runs: &[&Run]) -> String {
     let m: Vec<&Metrics> = runs.iter().filter_map(|r| r.metrics.as_ref()).collect();
     if m.is_empty() {
-        return format!("| refused |{}", " |".repeat(17));
+        return format!("| refused |{}", " |".repeat(20));
     }
     let cells = [
         stat(&m, |m| m.delta, false, 2),
@@ -198,6 +198,9 @@ fn row(runs: &[&Run]) -> String {
         stat(&m, |m| m.overlap, false, 1),
         stat(&m, |m| m.specks, false, 1),
         stat(&m, |m| m.outside, true, 1),
+        stat(&m, |m| m.centre_off, false, 3),
+        stat(&m, |m| m.width_off, false, 2),
+        stat(&m, |m| m.stroke_anchors, false, 1),
     ];
     format!("| {} |", cells.join(" | "))
 }

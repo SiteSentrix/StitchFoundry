@@ -82,6 +82,8 @@ pub struct Input {
     pub anchors: usize,
     /// Its sharp corners.
     pub corners: Vec<Point>,
+    /// Its lines, where it is lines: each one's two ends and its width.
+    pub strokes: Vec<(Point, Point, f64)>,
     tone: Option<Tone>,
 }
 
@@ -170,9 +172,11 @@ pub fn inputs() -> Vec<Input> {
         bg: WHITE,
         anchors,
         corners,
+        strokes: vec![],
         tone: None,
     };
-    let tone = |name, f: Tone| Input { name, class: Class::Tone, shapes: vec![], bg: WHITE, anchors: 0, corners: vec![], tone: Some(f) };
+    let tone =
+        |name, f: Tone| Input { name, class: Class::Tone, shapes: vec![], bg: WHITE, anchors: 0, corners: vec![], strokes: vec![], tone: Some(f) };
     let ink = |p: BezPath| vec![(p, INK)];
 
     let mut ellipses = Ellipse::new((90.3, 99.6), (60.0, 30.0), 0.0).to_path(1e-3);
@@ -212,10 +216,13 @@ pub fn inputs() -> Vec<Input> {
 
     // Five lines 200 long, 0.5 to 5 wide, at small angles to the pixel grid.
     let mut lines = BezPath::new();
+    let mut strokes = vec![];
     for (i, (deg, width)) in [(0.0f64, 0.5), (6.0, 1.0), (-9.0, 2.0), (12.0, 3.0), (-4.0, 5.0)].into_iter().enumerate() {
         let (hw, hl) = (width / 2.0, 100.0);
         let mut strip = poly(&[(-hl, -hw), (hl, -hw), (hl, hw), (-hl, hw)]);
-        strip.apply_affine(Affine::translate((128.3, 36.4 + 46.0 * i as f64)) * Affine::rotate(deg.to_radians()));
+        let place = Affine::translate((128.3, 36.4 + 46.0 * i as f64)) * Affine::rotate(deg.to_radians());
+        strip.apply_affine(place);
+        strokes.push((place * Point::new(-hl, 0.0), place * Point::new(hl, 0.0), width));
         lines.extend(strip);
     }
 
@@ -250,7 +257,7 @@ pub fn inputs() -> Vec<Input> {
         (poly(&bar), [40, 160, 90]),
     ];
 
-    vec![
+    let mut all = vec![
         art("circle", Class::Shape, ink(Circle::new((128.3, 127.6), 80.4).to_path(1e-3)), 4, vec![]),
         art("ellipses", Class::Shape, ink(ellipses), 8, vec![]),
         art("badge with a hole", Class::Shape, ink(badge), 12, vec![]),
@@ -264,7 +271,11 @@ pub fn inputs() -> Vec<Input> {
         art("four-colour badge", Class::Flat, multicolor, 20, points(&bar)),
         tone("gradient", gradient),
         tone("photo-like", photo),
-    ]
+    ];
+    if let Some(input) = all.iter_mut().find(|i| i.name == "lines") {
+        input.strokes = strokes;
+    }
+    all
 }
 
 impl Input {
@@ -293,6 +304,11 @@ impl Input {
     pub fn scaled(&self, size: u32) -> Vec<(BezPath, [u8; 3])> {
         let k = Affine::scale(f64::from(size) / 256.0);
         self.shapes.iter().map(|(p, c)| (k * p.clone(), *c)).collect()
+    }
+    /// Its lines in the pixel coordinates of a `size`-pixel drawing.
+    pub fn scaled_strokes(&self, size: u32) -> Vec<(Point, Point, f64)> {
+        let k = f64::from(size) / 256.0;
+        self.strokes.iter().map(|(a, b, w)| ((a.to_vec2() * k).to_point(), (b.to_vec2() * k).to_point(), w * k)).collect()
     }
     pub fn scaled_corners(&self, size: u32) -> Vec<Point> {
         self.corners.iter().map(|p| (p.to_vec2() * (f64::from(size) / 256.0)).to_point()).collect()
