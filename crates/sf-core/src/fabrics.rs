@@ -225,7 +225,7 @@ impl Fabric {
                     a.params.cover_spacing = self.satin_spacing;
                     a.params.pull_comp = self.pull_comp;
                 }
-                ObjectKind::Run(_) | ObjectKind::Stitches(_) | ObjectKind::Redwork(_) => {}
+                ObjectKind::Run(_) | ObjectKind::Stitches(_) | ObjectKind::Redwork(_) | ObjectKind::Decor(_) => {}
             }
         }
     }

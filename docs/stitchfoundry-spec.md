@@ -438,14 +438,14 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | MD-01 | Virtual decoration preview (print, foil, etc.) | Missing | Non-stitched layer types rendered in the preview | 4 |
-| MD-02 | Multi-head cording / couching | Missing | Cord objects with couching stitch + machine function codes | 4 |
-| MD-03 | Boring (cut-work holes) | Missing | Boring objects + device codes | 4 |
-| SQN-01 | Sequin mode, sequin palette (sizes, shapes, colours) | Missing | §7.5 | 4 |
-| SQN-02 | Sequin runs, multi-sequin runs, sequin fixings | Missing | §7.5 | 4 |
-| SQN-03 | Sequin fills (digitize, border, fancy, multi, split, flip) | Missing | §7.5 | 4 |
-| SQN-04 | Convert objects to sequins; manual sequins; custom sequins | Missing | §7.5 | 4 |
-| BD-01 | Beading: bead runs, fixings, edit runs, manual beads | Missing | Like sequins with bead device codes | 4 |
-| BL-01 | Bling: palettes, runs, fills, borders, manual stones, bling lettering, edit | Missing | §7.6 | 4 |
+| MD-02 | Multi-head cording / couching | Done | Cord couched with a zigzag over it, the cord shown; a stop to lay it (cording device codes aren't public) | 0 |
+| MD-03 | Boring (cut-work holes) | Done | Each closed shape a hole: outline run, stop to cut, satin edge; shown as a hole (boring device codes aren't public) | 0 |
+| SQN-01 | Sequin mode, sequin palette (sizes, shapes, colours) | Done | Sequins as a stitch type: round, square, star, heart, flower; 3–9 mm palette (`embroidery.decor.palette`); a colour of their own; shown as sequins on the canvas | 0 |
+| SQN-02 | Sequin runs, multi-sequin runs, sequin fixings | Done | Runs along lines with a gap or overlap, sizes in turn (multi), single, double, three-way and cross fixings; a stop to load them (device codes aren't public) | 0 |
+| SQN-03 | Sequin fills (digitize, border, fancy, multi, split, flip) | Done | Honeycomb or grid fills at an angle (sewn back and forth), borders inside the edge, fancy shapes, multi sizes, half-overlap (split) by a negative gap, every other flipped | 0 |
+| SQN-04 | Convert objects to sequins; manual sequins; custom sequins | Done | Any line or shape set to sequins; one at each drawn point (`layout: manual`); custom size, shape and colour | 0 |
+| BD-01 | Beading: bead runs, fixings, edit runs, manual beads | Done | Beads along lines, in shapes or at points, sewn through and back; edited as the path; counted | 0 |
+| BL-01 | Bling: palettes, runs, fills, borders, manual stones, bling lettering, edit | Partial | Rhinestones SS6–SS30 along lines, round edges, packed in shapes, at points, on type (bling lettering); not sewn; shown with facets; templates still to come (MDO-01) | 4 |
 | AP-01 | Convert vectors to appliqué; create appliqué | Done | Appliqué type | – |
 | AP-02 | Fabric swatches on appliqué (show the fabric) | Missing | Image fill in preview | 4 |
 | AP-03 | Partial-cover appliqué (cover only uncovered edges) | Done | `partial` on appliqué: the cover leaves out the edges objects sewn later lie over | – |
@@ -579,8 +579,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 211 done,
-9 partial, 24 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 218 done,
+10 partial, 16 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

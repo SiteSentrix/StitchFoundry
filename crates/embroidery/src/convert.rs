@@ -222,6 +222,54 @@ pub(crate) fn convert(node: &Node, e: &Embroidery) -> Vec<ObjectKind> {
                 out.push(ObjectKind::Redwork(RedworkObject { lines, params: params.clone() }));
             }
         }
+        StitchType::Decoration(params) => {
+            use sf_core::decor::{DecorItem, DecorKind, DecorLayout, DecorObject, along, border, packed};
+            let lines = || node_lines(node).map(|(l, _)| l).unwrap_or_default();
+            let mut obj = DecorObject { params: params.clone(), items: Vec::new(), lines: Vec::new() };
+            match params.kind {
+                DecorKind::Cord => obj.lines = lines().into_iter().map(|l| (l.pts, l.closed)).collect(),
+                DecorKind::Boring => obj.lines = crate::regions_mm(node).into_iter().map(|r| (r.outer, true)).collect(),
+                _ => match params.layout {
+                    DecorLayout::Run => {
+                        for l in lines() {
+                            let k = obj.items.len();
+                            obj.items.extend(along(&l.pts, l.closed, params, k));
+                        }
+                    }
+                    DecorLayout::Fill => {
+                        for r in crate::regions_mm(node) {
+                            obj.items.extend(packed(&r, params));
+                        }
+                    }
+                    DecorLayout::Border => {
+                        for r in crate::regions_mm(node) {
+                            obj.items.extend(border(&r, params));
+                        }
+                    }
+                    // one at each point drawn, turned the way the line goes there
+                    DecorLayout::Manual => {
+                        for sp in subpaths(node) {
+                            let pts = anchor_points(sp);
+                            for (i, p) in pts.iter().enumerate() {
+                                let prev = i.checked_sub(1).and_then(|j| pts.get(j)).unwrap_or(p);
+                                let next = pts.get(i + 1).unwrap_or(p);
+                                let k = obj.items.len();
+                                obj.items.push(DecorItem {
+                                    at: *p,
+                                    size: params.size_at(k),
+                                    angle: (*next - *prev).angle(),
+                                    flip: params.flip && k % 2 == 1,
+                                });
+                            }
+                        }
+                    }
+                },
+            }
+            obj.items.truncate(sf_core::decor::MAX_ITEMS);
+            if !obj.items.is_empty() || !obj.lines.is_empty() {
+                out.push(ObjectKind::Decor(obj));
+            }
+        }
         StitchType::Manual => {
             let mut st: Vec<Stitch> = Vec::new();
             for sp in subpaths(node) {

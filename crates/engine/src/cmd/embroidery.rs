@@ -2201,7 +2201,12 @@ fn apply_fabric(s: &mut Session, p: &Value) -> Result<Value> {
                         a.cover_spacing = fabric.satin_spacing;
                         a.pull_comp = fabric.pull_comp;
                     }
-                    StitchType::Run(_) | StitchType::Manual | StitchType::Branch | StitchType::Redwork(_) | StitchType::Lettering(_) => {}
+                    StitchType::Run(_)
+                    | StitchType::Manual
+                    | StitchType::Branch
+                    | StitchType::Redwork(_)
+                    | StitchType::Lettering(_)
+                    | StitchType::Decoration(_) => {}
                 }
             }
         }

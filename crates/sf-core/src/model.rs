@@ -641,6 +641,8 @@ pub enum ObjectKind {
     Stitches(StitchBlock),
     /// Line art sewn as one line that starts and ends at the same point (redwork).
     Redwork(RedworkObject),
+    /// Sequins, beads, rhinestones, cord or boring holes.
+    Decor(crate::decor::DecorObject),
 }
 
 impl ObjectKind {
@@ -664,6 +666,7 @@ impl ObjectKind {
             ObjectKind::Lettering(_) => "Lettering",
             ObjectKind::Stitches(_) => "Stitches",
             ObjectKind::Redwork(_) => "Redwork",
+            ObjectKind::Decor(d) => d.params.kind.label(),
         }
     }
 
@@ -676,6 +679,7 @@ impl ObjectKind {
             ObjectKind::Lettering(l) => l.glyphs.iter().fold(BBox::EMPTY, |b, g| b.union(g.shape.bbox())),
             ObjectKind::Stitches(s) => BBox::from_points(s.stitches.iter().filter(|s| s.is_move()).map(Stitch::pos)),
             ObjectKind::Redwork(r) => r.lines.iter().fold(BBox::EMPTY, |b, c| b.union(c.bbox())),
+            ObjectKind::Decor(d) => BBox::from_points(crate::decor::outlines(d).into_iter().flatten()),
         }
     }
 
@@ -716,6 +720,18 @@ impl ObjectKind {
                     c.transform(m);
                 }
             }
+            ObjectKind::Decor(d) => {
+                let a = transform_angle(0.0, m).to_radians();
+                for it in &mut d.items {
+                    it.at = m.apply(it.at);
+                    it.angle += a;
+                }
+                for (l, _) in &mut d.lines {
+                    for p in l.iter_mut() {
+                        *p = m.apply(*p);
+                    }
+                }
+            }
         }
     }
 
@@ -739,6 +755,7 @@ impl ObjectKind {
             }
             ObjectKind::Stitches(s) => vec![s.stitches.iter().filter(|s| s.is_move()).map(Stitch::pos).collect()],
             ObjectKind::Redwork(r) => r.lines.iter().map(|c| if c.closed { ring(c) } else { c.polyline(tol) }).collect(),
+            ObjectKind::Decor(d) => crate::decor::outlines(d),
         }
     }
 }

@@ -20,6 +20,7 @@ pub mod ai;
 pub mod attr;
 pub mod barcode;
 pub mod brush;
+pub mod decor;
 pub mod direction;
 pub mod engine;
 pub mod fabrics;

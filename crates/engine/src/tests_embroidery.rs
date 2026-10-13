@@ -65,6 +65,76 @@ fn every_type_and_brush_stitches() {
 }
 
 #[test]
+fn sequins_beads_stones_cord_and_boring_are_placed_and_sewn() {
+    use sf_core::decor::{DecorKind, DecorLayout};
+    use sf_core::model::ObjectKind;
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // a line of sequins: 60 mm, 5 mm sequins edge to edge: 12, a stop to load them
+    let line = NodeId(
+        s.execute("path.create", &json!({"d": format!("M {} {} L {} {}", 10.0 * PT, 10.0 * PT, 70.0 * PT, 10.0 * PT)})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("embroidery.set", &json!({"type": "sequin"})).unwrap();
+    let decor = |s: &Session, kind: DecorKind| -> Vec<sf_core::decor::DecorObject> {
+        s.embroidery_plan()
+            .unwrap()
+            .design
+            .objects
+            .iter()
+            .filter_map(|o| match &o.kind {
+                ObjectKind::Decor(d) if d.params.kind == kind => Some(d.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let seq = decor(&s, DecorKind::Sequin);
+    assert_eq!(seq.len(), 1);
+    assert_eq!(seq[0].items.len(), 12, "{:?}", seq[0].items.len());
+    let pat = s.embroidery_plan().unwrap().pattern().clone();
+    assert!(pat.stitches.iter().any(|st| st.cmd == sf_core::Cmd::Stop));
+    // a fill of 4 mm sequins in a square, honeycombed, flipped every other, a colour of their own
+    let sq = rect(&mut s, 20.0 * PT, 30.0 * PT, 40.0 * PT, 40.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "sequin"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"layout": "fill", "size": 4, "flip": true, "color": "#d4af37"}})).unwrap();
+    let fill = decor(&s, DecorKind::Sequin).into_iter().find(|d| d.params.layout == DecorLayout::Fill).unwrap();
+    assert!(fill.items.len() >= 80, "{}", fill.items.len());
+    assert!(fill.items.iter().any(|i| i.flip) && fill.items.iter().any(|i| !i.flip));
+    // rhinestones round the square's edge are not sewn: the stitch count doesn't change
+    let before = stitches(&s);
+    let st = rect(&mut s, 80.0 * PT, 30.0 * PT, 30.0 * PT, 30.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "stone"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"layout": "border"}})).unwrap();
+    assert!(!decor(&s, DecorKind::Stone)[0].items.is_empty());
+    assert_eq!(stitches(&s), before, "stones aren't sewn");
+    // beads along a line, a cord couched along another, a boring hole
+    s.execute("path.create", &json!({"d": format!("M {} {} L {} {}", 10.0 * PT, 90.0 * PT, 60.0 * PT, 90.0 * PT)})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "bead"})).unwrap();
+    s.execute("path.create", &json!({"d": format!("M {} {} C {} {} {} {} {} {}", 10.0 * PT, 110.0 * PT, 40.0 * PT, 90.0 * PT, 60.0 * PT, 130.0 * PT, 90.0 * PT, 110.0 * PT)})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "cord"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 120.0 * PT, "y": 100.0 * PT, "width": 8.0 * PT, "height": 8.0 * PT})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "boring"})).unwrap();
+    assert!(!decor(&s, DecorKind::Bead)[0].items.is_empty());
+    assert_eq!(decor(&s, DecorKind::Cord)[0].lines.len(), 1);
+    assert_eq!(decor(&s, DecorKind::Boring)[0].lines.len(), 1);
+    // the count for ordering supplies
+    let r = s.execute("embroidery.decor.count", &json!({})).unwrap();
+    assert!(r["total"].as_u64().unwrap() > 100 && r["cordMm"].as_f64().unwrap() > 80.0, "{r}");
+    assert!(r["pieces"].as_array().unwrap().iter().any(|p| p["kind"] == "sequin" && p["color"] == "#d4af37"), "{r}");
+    assert!(s.execute("embroidery.decor.palette", &json!({})).unwrap()["sizes"].as_array().unwrap().len() >= 15);
+    // moved with its object
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 10.0 * PT, "dy": 0})).unwrap();
+    let moved = decor(&s, DecorKind::Sequin).into_iter().find(|d| d.params.layout == DecorLayout::Run).unwrap();
+    assert!((moved.items[0].at.x - 22.5).abs() < 0.1, "{:?}", moved.items[0].at);
+    let _ = (sq, st);
+    // machine files keep the sequins' and beads' stitches
+    let dst = s.execute("embroidery.export", &json!({"format": "dst"})).unwrap();
+    assert!(dst["stitches"].as_u64().unwrap() > 300);
+}
+
+#[test]
 fn an_opened_machine_files_stitches_become_runs_satins_and_fills() {
     use sf_core::attr::StitchType;
     let mut s = session();
