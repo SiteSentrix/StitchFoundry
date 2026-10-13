@@ -281,9 +281,10 @@ fn save_template(s: &mut Session, p: &Value) -> Result<Value> {
         size: ranged(p, "size", 1.0..=300.0, SAVE, "`size` is 1 to 300 mm")?,
     };
     let own = &mut s.prefs.embroidery_monogram_templates;
+    let full = own.len() >= MAX_TEMPLATES;
     match own.iter_mut().find(|o| o.name.eq_ignore_ascii_case(&name)) {
         Some(o) => *o = t,
-        None if own.len() >= MAX_TEMPLATES => return Err(bad(SAVE, format!("{MAX_TEMPLATES} monogram templates at most: delete one first"))),
+        None if full => return Err(bad(SAVE, format!("{MAX_TEMPLATES} monogram templates at most: delete one first"))),
         None => own.push(t),
     }
     Ok(json!({ "name": name }))
