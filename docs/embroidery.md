@@ -450,6 +450,17 @@ on a photo of the customer's own product instead: `imageWidth` says how many mm 
 across, `at` where the design's middle goes. The mock-up opens as a new document, to show the
 customer, print or export (PNG, PDF).
 
+## Thread charts of your own
+
+Besides the built-in charts, the Design section keeps charts of your own: **Import Chart…** reads
+a CSV file (`embroidery.chart.import {name, path | text}`), from a supplier's list or a shop's
+stock: a header naming the columns (`color`, `colour` or `hex`, or `r`, `g` and `b`; `code` or
+`number`; `name` or `description`), or rows of a code, a name and a `#rrggbb` colour, with
+commas, semicolons or tabs between. **Export Chart…** writes the chosen chart as CSV
+(`embroidery.chart.export`, `code,name,color`). `embroidery.chart.save {name, threads?}` makes a
+chart thread by thread, or from the design's threads when none are given. Charts of your own are
+used like the built-in ones: to pick a thread, to match threads to a chart and to recolour.
+
 ## Recolouring threads
 
 **Recolour Threads** in the Design section (`embroidery.recolor`) changes the design's threads at

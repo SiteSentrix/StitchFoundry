@@ -4920,3 +4920,11 @@ machine	Stop	Arrêt
 	Garment Background	Fond de vêtement
 	Garment Photo…	Photo du vêtement…
 	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Une photo du vêtement derrière le motif, en taille réelle, sur un calque modèle verrouillé jamais brodé
+	Import Chart…	Importer un nuancier…
+	A thread chart of your own from a CSV file: code, name and colour a thread	Un nuancier de fils personnel depuis un fichier CSV : code, nom et couleur par fil
+	Export Chart…	Exporter le nuancier…
+	Thread Charts	Nuanciers de fils
+	Import Thread Chart	Importer un nuancier de fils
+	Export Thread Chart	Exporter un nuancier de fils
+	Save Thread Chart	Enregistrer un nuancier de fils
+	Delete Thread Chart	Supprimer un nuancier de fils

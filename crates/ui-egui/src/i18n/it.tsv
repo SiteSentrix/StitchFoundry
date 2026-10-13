@@ -4912,3 +4912,11 @@ machine	Stop	Arresto
 	Garment Background	Sfondo del capo
 	Garment Photo…	Foto del capo…
 	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Una foto del capo dietro il disegno, a grandezza reale, su un livello modello bloccato che non viene mai ricamato
+	Import Chart…	Importa cartella…
+	A thread chart of your own from a CSV file: code, name and colour a thread	Una cartella colori propria da un file CSV: codice, nome e colore per filo
+	Export Chart…	Esporta cartella…
+	Thread Charts	Cartelle colori
+	Import Thread Chart	Importa cartella colori
+	Export Thread Chart	Esporta cartella colori
+	Save Thread Chart	Salva cartella colori
+	Delete Thread Chart	Elimina cartella colori

@@ -4892,3 +4892,11 @@ machine	Stop	Зупинка
 	Garment Background	Тло виробу
 	Garment Photo…	Фото виробу…
 	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Фото виробу за дизайном у натуральну величину, на заблокованому шарі-шаблоні, який ніколи не вишивається
+	Import Chart…	Імпорт карти…
+	A thread chart of your own from a CSV file: code, name and colour a thread	Власна карта ниток із файлу CSV: номер, назва й колір кожної нитки
+	Export Chart…	Експорт карти…
+	Thread Charts	Карти ниток
+	Import Thread Chart	Імпорт карти ниток
+	Export Thread Chart	Експорт карти ниток
+	Save Thread Chart	Зберегти карту ниток
+	Delete Thread Chart	Видалити карту ниток

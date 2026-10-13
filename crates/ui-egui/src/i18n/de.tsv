@@ -4866,3 +4866,11 @@ machine	Stop	Stopp
 	Garment Background	Kleidungshintergrund
 	Garment Photo…	Kleidungsfoto…
 	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Ein Foto des Kleidungsstücks hinter dem Design, in Originalgröße, auf einer gesperrten Vorlagenebene, die nie gestickt wird
+	Import Chart…	Tabelle importieren…
+	A thread chart of your own from a CSV file: code, name and colour a thread	Eine eigene Garntabelle aus einer CSV-Datei: Nummer, Name und Farbe je Garn
+	Export Chart…	Tabelle exportieren…
+	Thread Charts	Garntabellen
+	Import Thread Chart	Garntabelle importieren
+	Export Thread Chart	Garntabelle exportieren
+	Save Thread Chart	Garntabelle speichern
+	Delete Thread Chart	Garntabelle löschen

@@ -135,16 +135,106 @@ impl Thread {
 }
 
 /// A named collection of threads.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ThreadChart {
-    pub name: &'static str,
+    pub name: String,
     pub threads: Vec<Thread>,
+}
+
+/// Threads a chart read from a file holds at most.
+pub const MAX_CHART_THREADS: usize = 5000;
+
+/// The fields of one CSV line (quotes and doubled quotes as RFC 4180 has them).
+fn csv_fields(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut quoted = false;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' if quoted && chars.peek() == Some(&'"') => {
+                cur.push('"');
+                chars.next();
+            }
+            '"' => quoted = !quoted,
+            ',' | ';' | '\t' if !quoted => out.push(std::mem::take(&mut cur).trim().to_string()),
+            _ => cur.push(c),
+        }
+    }
+    out.push(cur.trim().to_string());
+    out
+}
+
+fn csv_field(s: &str) -> String {
+    if s.contains([',', '"', '\n', ';']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() }
 }
 
 impl ThreadChart {
     /// Index of the thread closest in colour to `c`.
     pub fn nearest(&self, c: Rgb) -> usize {
         nearest_index(self.threads.iter().map(|t| t.color), c).unwrap_or(0)
+    }
+
+    /// The chart as CSV: `code,name,color` a thread (`#rrggbb`).
+    pub fn to_csv(&self) -> String {
+        let mut out = String::from("code,name,color\n");
+        for t in &self.threads {
+            out.push_str(&format!("{},{},{}\n", csv_field(&t.code), csv_field(&t.name), t.color.to_hex()));
+        }
+        out
+    }
+
+    /// A chart named `name` from CSV: a header naming the columns (`color`/`colour`/`hex`, or `r`,
+    /// `g`, `b`; `code`/`number`; `name`/`description`), or rows of a code, a name and a `#rrggbb`
+    /// colour found by their look. Commas, semicolons or tabs between fields.
+    pub fn from_csv(name: &str, text: &str) -> Result<ThreadChart, String> {
+        let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#'));
+        let first = lines.next().ok_or("the file is empty")?;
+        let head: Vec<String> = csv_fields(first).iter().map(|f| f.to_ascii_lowercase()).collect();
+        let col = |names: &[&str]| head.iter().position(|h| names.contains(&h.as_str()));
+        let hex_col = col(&["color", "colour", "hex", "rgb hex", "html"]);
+        let rgb_cols = match (col(&["r", "red"]), col(&["g", "green"]), col(&["b", "blue"])) {
+            (Some(r), Some(g), Some(b)) => Some((r, g, b)),
+            _ => None,
+        };
+        let has_header = hex_col.is_some() || rgb_cols.is_some();
+        let code_col = col(&["code", "number", "no", "no.", "id", "catalog", "catalogue"]);
+        let name_col = col(&["name", "description", "colour name", "color name"]);
+        let hex = |s: &str| Rgb::from_hex(s.trim()).or_else(|| (s.trim().len() == 6).then(|| Rgb::from_hex(&format!("#{}", s.trim()))).flatten());
+        let mut threads = Vec::new();
+        let rows = if has_header { None } else { Some(first) }.into_iter().chain(lines);
+        for line in rows {
+            if threads.len() >= MAX_CHART_THREADS {
+                break;
+            }
+            let f = csv_fields(line);
+            let get = |i: Option<usize>| i.and_then(|i| f.get(i)).cloned().unwrap_or_default();
+            let color = match (hex_col, rgb_cols) {
+                (Some(c), _) => f.get(c).and_then(|v| hex(v)),
+                (None, Some((r, g, b))) => {
+                    let n = |i: usize| f.get(i).and_then(|v| v.trim().parse::<u8>().ok());
+                    match (n(r), n(g), n(b)) {
+                        (Some(r), Some(g), Some(b)) => Some(Rgb::new(r, g, b)),
+                        _ => None,
+                    }
+                }
+                // no header: the field that looks like a colour, the others code then name
+                _ => f.iter().find_map(|v| v.starts_with('#').then(|| hex(v)).flatten()),
+            };
+            let Some(color) = color else { continue };
+            let (code, tname) = if has_header {
+                (get(code_col), get(name_col))
+            } else {
+                let rest: Vec<&String> = f.iter().filter(|v| !v.starts_with('#')).collect();
+                (rest.first().map(|s| s.to_string()).unwrap_or_default(), rest.get(1).map(|s| s.to_string()).unwrap_or_default())
+            };
+            let cut = |s: String| s.chars().take(80).collect::<String>();
+            threads.push(Thread::with_code(color, cut(tname), cut(code), name));
+        }
+        if threads.is_empty() {
+            return Err("no threads with a colour found: the CSV needs a colour column (#rrggbb, or r, g and b)".into());
+        }
+        Ok(ThreadChart { name: name.to_string(), threads })
     }
 }
 
@@ -162,7 +252,7 @@ pub fn nearest_index(colors: impl Iterator<Item = Rgb>, c: Rgb) -> Option<usize>
 }
 
 fn chart(name: &'static str, entries: &[(u32, &str, &str)]) -> ThreadChart {
-    ThreadChart { name, threads: entries.iter().map(|&(c, n, code)| Thread::with_code(Rgb::from_u32(c), n, code, name)).collect() }
+    ThreadChart { name: name.to_string(), threads: entries.iter().map(|&(c, n, code)| Thread::with_code(Rgb::from_u32(c), n, code, name)).collect() }
 }
 
 /// Default palette for new designs.
@@ -377,6 +467,22 @@ pub fn charts() -> Vec<ThreadChart> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn charts_read_and_write_csv() {
+        let c = ThreadChart::from_csv("Shop", "Code;Name;Hex\n1001;\"Red; bright\";#d62828\n1002;Navy;1d3557\nbad;row;zz\n").unwrap();
+        assert_eq!(c.threads.len(), 2);
+        assert_eq!((c.threads[0].code.as_str(), c.threads[0].name.as_str(), c.threads[0].chart.as_str()), ("1001", "Red; bright", "Shop"));
+        assert_eq!(c.threads[1].color, Rgb::new(0x1d, 0x35, 0x57));
+        let back = ThreadChart::from_csv("Shop", &c.to_csv()).unwrap();
+        assert_eq!(back, c);
+        let rgb = ThreadChart::from_csv("RGB", "name,r,g,b,number\nWhite,255,255,255,1\n").unwrap();
+        assert_eq!((rgb.threads[0].color, rgb.threads[0].code.as_str()), (Rgb::new(255, 255, 255), "1"));
+        let bare = ThreadChart::from_csv("Bare", "5, Gold, #ffcc00\n").unwrap();
+        assert_eq!((bare.threads[0].code.as_str(), bare.threads[0].name.as_str()), ("5", "Gold"));
+        assert!(ThreadChart::from_csv("None", "a,b\n1,2\n").is_err());
+        assert!(ThreadChart::from_csv("Empty", "").is_err());
+    }
 
     #[test]
     fn hex_round_trip() {

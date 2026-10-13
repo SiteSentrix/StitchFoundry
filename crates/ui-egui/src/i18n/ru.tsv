@@ -4908,3 +4908,11 @@ machine	Stop	Остановка
 	Garment Background	Фон изделия
 	Garment Photo…	Фото изделия…
 	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Фото изделия за дизайном в натуральную величину, на заблокированном слое-шаблоне, который никогда не вышивается
+	Import Chart…	Импорт карты…
+	A thread chart of your own from a CSV file: code, name and colour a thread	Своя карта нитей из файла CSV: номер, название и цвет каждой нити
+	Export Chart…	Экспорт карты…
+	Thread Charts	Карты нитей
+	Import Thread Chart	Импорт карты нитей
+	Export Thread Chart	Экспорт карты нитей
+	Save Thread Chart	Сохранить карту нитей
+	Delete Thread Chart	Удалить карту нитей

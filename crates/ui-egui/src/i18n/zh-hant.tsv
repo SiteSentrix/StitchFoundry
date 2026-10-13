@@ -4272,3 +4272,11 @@ machine	Stop	停止
 	Garment Background	服裝背景
 	Garment Photo…	服裝照片…
 	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	設計後方的服裝照片，實際尺寸，位於鎖定的範本圖層，永不刺繡
+	Import Chart…	匯入色卡…
+	A thread chart of your own from a CSV file: code, name and colour a thread	從 CSV 檔匯入自己的繡線色卡：每條線的編號、名稱與顏色
+	Export Chart…	匯出色卡…
+	Thread Charts	繡線色卡
+	Import Thread Chart	匯入繡線色卡
+	Export Thread Chart	匯出繡線色卡
+	Save Thread Chart	儲存繡線色卡
+	Delete Thread Chart	刪除繡線色卡
