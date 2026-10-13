@@ -413,3 +413,17 @@ fn random_small_images_and_settings_never_panic() {
         }
     }
 }
+
+/// A scan's paper is darker in one corner than in another: it is still one colour, not a band of
+/// paths for each tone of it.
+#[test]
+fn uneven_paper_is_one_colour() {
+    let img = Raster::from_fn(160, 120, |x, y| {
+        let shade = 1.0 - 0.1 * f64::from(x) / 160.0 - 0.04 * (f64::from(y) / 40.0).sin().abs();
+        let ink = (40..120).contains(&x) && (30..90).contains(&y);
+        let c = if ink { [40.0, 60.0, 150.0] } else { [236.0, 230.0, 214.0] };
+        [(c[0] * shade) as u8, (c[1] * shade) as u8, (c[2] * shade) as u8, 255]
+    });
+    let res = trace(&img, &crate::preset("Flat Logo").unwrap());
+    assert_eq!(res.paths.len(), 2, "{:?}", res.paths.iter().map(|p| (p.color, p.pixels)).collect::<Vec<_>>());
+}
