@@ -428,7 +428,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SP-08 | Trapunto (open fill with raised outline effect) | Done | Tatami *Trapunto*: travel keeps to the outline (with an open density) | – |
 | SP-09 | Accordion spacing with custom profiles | Done | Tatami *Spacing profile*: even, accordion, fade out and in, a curve to reshape, or any points agents set | – |
 | SP-10 | Colour blending / multi-blend (several layered fills with graded density) | Done | Make Blend: stacked tatami layers, 2 to 6 colours, each fading into the next | – |
-| SP-11 | Chenille-type patterns on regular machines (square, coil) | Missing | Pattern generators | 4 |
+| SP-11 | Chenille-type patterns on regular machines (square, coil) | Done | Coil and square-loop motifs: overlapping loops as motif runs and motif fills | 0 |
 | SP-12 | Cross-stitch fills (X stitches on a grid) | Done | Cross fill: X stitches on a square grid of any cell size and angle, as full, half, upright or double crosses | – |
 | SP-13 | Redwork (outlines grouped into one path, entry = exit) | Done | Embroidery › Redwork: line art becomes a redwork group sewn as one tour (entry = exit) over the lines' graph: odd junctions paired along the shortest ways, an Euler tour, each line sewn once in single, triple, back or stem stitch and the retraced ways as a single run; ends within 0.3 mm meet; Break Apart restores (public description: https://docs.wilcom.com/embroiderystudio/28/en/OnlineHelp/Release/rn-28-notes/rn-28-notes-5.htm) | – |
 | SP-14 | Buttonholes (preset types, single or a string) | Done | Add Buttonholes: straight, rounded and keyhole buttonholes (a holding run, satin sides, bartacks, a rounded end or an eye round an open slit), one or an evenly spaced string (`count`, `at`, `to`), each a group of satin paths; the Embroidery panel's Buttonholes section sets the style, size, count, spacing and angle | – |
@@ -579,8 +579,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 224 done,
-8 partial, 12 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 225 done,
+8 partial, 11 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
