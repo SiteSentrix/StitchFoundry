@@ -1,6 +1,7 @@
 //! Width Point Edit: double-clicking a width point with the Width tool (or `ui.widthPointEdit`)
 //! edits its side widths. Total Width changes both sides in proportion, the link keeps them equal,
 //! and Adjust Adjoining Width Points changes the nearest points either side in proportion too.
+//! Shift-double-click opens the dialog with that option enabled.
 //! OK runs `stroke.widthPoint.set`; Delete removes the point (`stroke.widthPoint.remove`).
 //!
 //! Fields: `id`, `index` (the width point), `t` (its place), `side1`, `side2` (the left and right
@@ -28,13 +29,14 @@ fn point(app: &VectorcraftApp, id: u64, index: usize) -> Option<(f64, f64, f64)>
     st.profile.as_ref()?.points.get(index).map(|&(t, l, r)| (t, l * half, r * half))
 }
 
-/// Open Width Point Edit on width point `index` of path `id` (`{id, index}`), filled in with its
-/// widths.
+/// Open Width Point Edit on width point `index` of path `id` (`{id, index, adjustAdjoining?}`),
+/// filled in with its widths. Adjoining adjustment defaults to false.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (id, index) = (p.get("id").and_then(Value::as_u64), p.get("index").and_then(Value::as_u64));
     let (Some(id), Some(index)) = (id, index) else { return Err("give the path `id` and the width point `index`".into()) };
     let (t, l, r) = point(app, id, index as usize).ok_or("no such width point")?;
-    let fields = json!({"id": id, "index": index, "t": t, "side1": l, "side2": r, "linked": (l - r).abs() < 1e-9, "adjustAdjoining": false});
+    let adjust = p.get("adjustAdjoining").and_then(Value::as_bool).unwrap_or(false);
+    let fields = json!({"id": id, "index": index, "t": t, "side1": l, "side2": r, "linked": (l - r).abs() < 1e-9, "adjustAdjoining": adjust});
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
 }
@@ -136,25 +138,45 @@ mod tests {
 
     #[test]
     fn double_click_opens_it_and_ok_sets_the_widths() {
-        let (mut app, id) = app();
-        let view = app.view_info();
-        app.select_tool("width");
-        let ev = PointerEvent::new(PointerKind::DoubleClick, 200.0, 150.0);
-        crate::canvas::dispatch(&mut app, &ev, view);
-        let d = app.ui.dialog.clone().expect("Width Point Edit opened");
-        assert_eq!((d.kind.as_str(), d.f64("side1", 0.0), d.f64("side2", 0.0), d.bool("linked")), (KIND, 4.0, 4.0, true));
-        let shown = frame(&mut app);
-        for s in ["Width Point Edit", "Side 1:", "Side 2:", "Total Width:", "Adjust Adjoining Width Points", "Delete"] {
-            assert!(shown.iter().any(|t| t == s), "{s} in {shown:?}");
+        for shift in [false, true] {
+            let (mut app, id) = app();
+            let before = app.session.doc().unwrap().doc.clone();
+            let undo = app.session.doc().unwrap().history.undo.len();
+            let view = app.view_info();
+            app.select_tool("width");
+            let mut ev = PointerEvent::new(PointerKind::DoubleClick, 200.0, 150.0);
+            ev.mods.shift = shift;
+            crate::canvas::dispatch(&mut app, &ev, view);
+            let d = app.ui.dialog.clone().expect("Width Point Edit opened");
+            assert_eq!((d.kind.as_str(), d.f64("side1", 0.0), d.f64("side2", 0.0), d.bool("linked")), (KIND, 4.0, 4.0, true));
+            assert_eq!(d.bool("adjustAdjoining"), shift);
+            let shown = frame(&mut app);
+            for s in ["Width Point Edit", "Side 1:", "Side 2:", "Total Width:", "Adjust Adjoining Width Points", "Delete"] {
+                assert!(shown.iter().any(|t| t == s), "{s} in {shown:?}");
+            }
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("side1".into(), json!(6));
+            d.fields.insert("side2".into(), json!(2));
+            super::super::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            let ends = if shift { (1.5, 0.5) } else { (1.0, 1.0) };
+            assert_eq!(points(&app, id), vec![(0.0, ends.0, ends.1), (0.5, 1.2, 0.4), (1.0, ends.0, ends.1)]);
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+            if shift {
+                let edited = app.session.doc().unwrap().doc.clone();
+                app.run("edit.undo", json!({})).unwrap();
+                assert_eq!(app.session.doc().unwrap().doc, before);
+                app.run("edit.redo", json!({})).unwrap();
+                assert_eq!(app.session.doc().unwrap().doc, edited);
+                crate::canvas::dispatch(&mut app, &ev, view);
+                app.ui.dialog.as_mut().unwrap().fields.insert("side1".into(), json!(20));
+                super::super::cancel(&mut app);
+                assert!(app.ui.dialog.is_none());
+                let st = app.session.doc().unwrap();
+                assert_eq!(st.doc, edited);
+                assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+            }
         }
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("side1".into(), json!(6));
-        d.fields.insert("side2".into(), json!(2));
-        d.fields.insert("adjustAdjoining".into(), json!(true));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        // Side 1 is 6 pt (factor 1.2 of the 5 pt half weight), and the ends scaled with it.
-        assert_eq!(points(&app, id), vec![(0.0, 1.5, 0.5), (0.5, 1.2, 0.4), (1.0, 1.5, 0.5)]);
     }
 
     #[test]

@@ -582,7 +582,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.widthPointEdit",
         "Width Point Edit…",
         "",
-        "{id, index} open Width Point Edit for width point `index` of path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; double-clicking a width point with the Width tool opens it too): OK runs stroke.widthPoint.set, discard: true (the Delete button) stroke.widthPoint.remove",
+        "{id, index, adjustAdjoining?: bool (false)} open Width Point Edit for width point `index` of path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; double-clicking a width point with the Width tool opens it too, with Shift enabling adjoining adjustment): OK runs stroke.widthPoint.set, discard: true (the Delete button) stroke.widthPoint.remove",
     ),
     (
         "ui.corners",
