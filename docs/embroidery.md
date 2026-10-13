@@ -387,7 +387,8 @@ format, as many pages as it takes.
 a folder's designs (found as the library finds them, `query` and `recursive` too) or the ones
 listed in `files` in another machine format: each beside the file it came from or into `dir`,
 named as it was (a number added when the name is taken, unless `replace`). Designs already in
-that format are skipped, the files read are left as they are, and a file that can't be read is
+that format are skipped (in the Design Library section: **Convert to**, then **Convert All**
+for the designs found), the files read are left as they are, and a file that can't be read is
 listed with why. A format without colours (DST, EXP, TAP, U01) gives the converted design
 standard threads.
 
@@ -427,6 +428,10 @@ production|approval|pattern|template|none`) and the design itself (`.stitchfound
 false` leaves it out). The files are named alike: when any name is taken, a number is added to
 all of them (`Logo-2.dst`, `Logo-2-worksheet.pdf`…) unless `replace` is set. The documents open
 stay as they are.
+
+In the Embroidery panel, **Batch Output** ticks the formats, chooses the worksheet and whether
+the design goes too, then **Write to Folder…**; **Write Again** writes to the same folder. A
+profile chosen there fills the choices in; **Save Profile** keeps them under the name typed.
 
 **Output profiles** keep a batch by name: `embroidery.output.saveProfile {name, formats?,
 worksheet?, design?, dir?}`, listed by `embroidery.output.profiles` and forgotten with

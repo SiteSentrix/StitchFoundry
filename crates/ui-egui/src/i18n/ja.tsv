@@ -4850,3 +4850,20 @@ machine	Stop	停止
 	Save Output Profile	出力プロファイルを保存
 	Delete Output Profile	出力プロファイルを削除
 	Batch Convert	一括変換
+	files written	ファイルを書き出しました
+	Machine formats (none ticked: the machine's)	ミシン形式（未選択: ミシンの形式）
+	Production	生産
+	Approval	承認
+	Placement template	配置テンプレート
+	The design file too	デザインファイルも
+	Write to Folder…	フォルダーに書き出し…
+	Machine files, worksheet PDF and design, named alike	ミシンファイル、作業指示書PDF、デザインを同じ名前で
+	Write Again	もう一度書き出し
+	Profile name	プロファイル名
+	Save Profile	プロファイルを保存
+	Profile	プロファイル
+	Convert to	変換先
+	Convert All	すべて変換
+	Each design found written again in this format beside it	見つかった各デザインをこの形式で隣に書き出します
+	Converted:	変換済み:
+	couldn't be read:	読み込めません:

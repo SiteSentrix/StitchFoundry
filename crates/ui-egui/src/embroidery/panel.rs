@@ -160,6 +160,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::CollapsingHeader::new(tl!("Design Library")).id_salt("emb-library").show(ui, |ui| library_body(app, ui));
     buttonhole_rows(app, ui);
     egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
+    egui::CollapsingHeader::new(tl!("Batch Output")).id_salt("emb-output").show(ui, |ui| output_body(app, ui));
     ui.add_space(6.0);
     object_section(app, ui);
     ui.add_space(6.0);
@@ -498,6 +499,126 @@ pub(crate) fn send_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if !app.embroidery.send_status.is_empty() {
         ui.label(app.embroidery.send_status.clone());
+    }
+}
+
+/// The worksheets Batch Output writes, as `embroidery.output` names them.
+const OUTPUT_SHEETS: [&str; 5] = ["production", "approval", "pattern", "template", "none"];
+
+/// `embroidery.output`'s params for the section's choices, written to `dir`.
+fn output_params(app: &VectorcraftApp, dir: &str) -> Value {
+    let o = &app.embroidery.output;
+    let mut p = json!({
+        "dir": dir,
+        "worksheet": OUTPUT_SHEETS.get(o.worksheet).copied().unwrap_or("production"),
+        "design": !o.no_design,
+    });
+    if !o.formats.is_empty() {
+        p["formats"] = json!(o.formats);
+    }
+    p
+}
+
+/// Writes the batch to `dir`, saying what was written.
+fn write_output(app: &mut VectorcraftApp, dir: &str) {
+    let params = output_params(app, dir);
+    app.embroidery.output.dir = dir.to_string();
+    app.embroidery.output.status = match app.run("embroidery.output", params) {
+        Ok(r) => format!("{} {} → {}", r["files"].as_array().map_or(0, Vec::len), tl!("files written"), r["dir"].as_str().unwrap_or(dir)),
+        Err(e) => e.to_string(),
+    };
+}
+
+/// Batch Output: the design's machine files in the formats ticked, its worksheet and the design,
+/// written to a folder in one step; output profiles keep the choices by name.
+pub(crate) fn output_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let profiles = app.session.prefs.embroidery_output_profiles.clone();
+    if !profiles.is_empty() {
+        let mut names: Vec<&str> = vec![tl!("None")];
+        names.extend(profiles.iter().map(|p| p.name.as_str()));
+        let cur = app.embroidery.output.profile.min(names.len() - 1);
+        if let Some(i) = pick_names(ui, tl!("Profile"), "out-profile", cur, &names) {
+            let o = &mut app.embroidery.output;
+            o.profile = i;
+            // a profile fills the rows in
+            if let Some(p) = i.checked_sub(1).and_then(|k| profiles.get(k)) {
+                o.formats = p.formats.clone();
+                o.worksheet = OUTPUT_SHEETS.iter().position(|w| *w == p.worksheet).unwrap_or(0);
+                o.no_design = !p.design;
+                o.profile_name = p.name.clone();
+                if let Some(d) = &p.dir {
+                    o.dir = d.clone();
+                }
+            }
+        }
+    }
+    ui.label(tl!("Machine formats (none ticked: the machine's)"));
+    ui.horizontal_wrapped(|ui| {
+        let o = &mut app.embroidery.output;
+        for ext in vectorcraft_engine::cmd::embroidery::MACHINE_EXTS {
+            let mut on = o.formats.iter().any(|f| f == *ext);
+            if ui.checkbox(&mut on, ext.to_ascii_uppercase()).changed() {
+                o.formats.retain(|f| f != *ext);
+                if on {
+                    o.formats.push((*ext).to_string());
+                }
+            }
+        }
+    });
+    let sheets = [tl!("Production"), tl!("Approval"), tl!("Pattern"), tl!("Placement template"), tl!("None")];
+    if let Some(i) = pick(ui, tl!("Worksheet"), "out-sheet", app.embroidery.output.worksheet, &sheets) {
+        app.embroidery.output.worksheet = i;
+    }
+    let mut design = !app.embroidery.output.no_design;
+    if ui.checkbox(&mut design, tl!("The design file too")).changed() {
+        app.embroidery.output.no_design = !design;
+    }
+    ui.horizontal(|ui| {
+        if app.services.pick_folder.is_some()
+            && button(ui, tl!("Write to Folder…")).on_hover_text(tl!("Machine files, worksheet PDF and design, named alike")).clicked()
+        {
+            crate::picks::button(app, |app| {
+                if let Some(dir) = crate::picks::folder(app) {
+                    write_output(app, &dir);
+                }
+            });
+        }
+        let dir = app.embroidery.output.dir.clone();
+        if !dir.is_empty() && button(ui, tl!("Write Again")).on_hover_text(dir.clone()).clicked() {
+            write_output(app, &dir);
+        }
+    });
+    // the choices kept by name
+    ui.horizontal(|ui| {
+        let o = &mut app.embroidery.output;
+        ui.add(egui::TextEdit::singleline(&mut o.profile_name).desired_width(110.0).hint_text(tl!("Profile name")));
+        let name = o.profile_name.trim().to_string();
+        if !name.is_empty() && button(ui, tl!("Save Profile")).clicked() {
+            let mut p = output_params(app, &app.embroidery.output.dir);
+            p["name"] = json!(name);
+            if app.embroidery.output.dir.is_empty() {
+                p["dir"] = Value::Null;
+            }
+            match app.run("embroidery.output.saveProfile", p) {
+                Ok(_) => {
+                    let names = &app.session.prefs.embroidery_output_profiles;
+                    app.embroidery.output.profile = names.iter().position(|o| o.name.eq_ignore_ascii_case(&name)).map_or(0, |i| i + 1);
+                }
+                Err(e) => app.status(e),
+            }
+        }
+        let chosen = app.embroidery.output.profile.checked_sub(1).and_then(|k| profiles.get(k)).map(|p| p.name.clone());
+        if let Some(n) = chosen
+            && button(ui, tl!("Delete Profile")).clicked()
+        {
+            if let Err(e) = app.run("embroidery.output.deleteProfile", json!({ "name": n })) {
+                app.status(e);
+            }
+            app.embroidery.output.profile = 0;
+        }
+    });
+    if !app.embroidery.output.status.is_empty() {
+        ui.label(egui::RichText::new(app.embroidery.output.status.clone()).small());
     }
 }
 
@@ -858,6 +979,30 @@ pub(crate) fn library_body(app: &mut VectorcraftApp, ui: &mut Ui) {
         let params = json!({ "folder": lib.folder, "query": lib.query, "sort": lib.sort });
         if let Err(e) = app.run("embroidery.library.catalogue", params) {
             app.status(e);
+        }
+    }
+    // batch convert: the designs found written again in another format, beside them
+    if !designs.is_empty() {
+        let exts = vectorcraft_engine::cmd::embroidery::MACHINE_EXTS;
+        let names: Vec<String> = exts.iter().map(|e| e.to_ascii_uppercase()).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let cur = app.embroidery.library.convert_to.min(names.len().saturating_sub(1));
+        if let Some(i) = pick_names(ui, tl!("Convert to"), "lib-convert", cur, &names) {
+            app.embroidery.library.convert_to = i;
+        }
+        if button(ui, tl!("Convert All")).on_hover_text(tl!("Each design found written again in this format beside it")).clicked() {
+            let lib = &app.embroidery.library;
+            let format = exts.get(lib.convert_to).copied().unwrap_or("dst");
+            let params = json!({ "folder": lib.folder, "query": lib.query, "format": format });
+            match app.run("embroidery.library.convert", params) {
+                Ok(r) => {
+                    let n = r["converted"].as_array().map_or(0, Vec::len);
+                    let failed = r["failed"].as_array().map_or(0, Vec::len);
+                    app.status(format!("{} {}, {} {}", tl!("Converted:"), n, tl!("couldn't be read:"), failed));
+                    app.embroidery.library.result = None;
+                }
+                Err(e) => app.status(e),
+            }
         }
     }
 }

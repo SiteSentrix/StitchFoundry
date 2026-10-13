@@ -4881,3 +4881,20 @@ machine	Stop	Zastavení
 	Save Output Profile	Uložit výstupní profil
 	Delete Output Profile	Smazat výstupní profil
 	Batch Convert	Dávkový převod
+	files written	souborů zapsáno
+	Machine formats (none ticked: the machine's)	Formáty stroje (nic nezaškrtnuto: formát stroje)
+	Production	Výroba
+	Approval	Schválení
+	Placement template	Šablona umístění
+	The design file too	Také soubor výšivky
+	Write to Folder…	Zapsat do složky…
+	Machine files, worksheet PDF and design, named alike	Soubory pro stroj, pracovní list v PDF a výšivka se stejným názvem
+	Write Again	Zapsat znovu
+	Profile name	Název profilu
+	Save Profile	Uložit profil
+	Profile	Profil
+	Convert to	Převést na
+	Convert All	Převést vše
+	Each design found written again in this format beside it	Každá nalezená výšivka se znovu zapíše v tomto formátu vedle sebe
+	Converted:	Převedeno:
+	couldn't be read:	nelze přečíst:

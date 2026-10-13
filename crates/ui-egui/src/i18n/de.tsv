@@ -4810,3 +4810,20 @@ machine	Stop	Stopp
 	Save Output Profile	Ausgabeprofil speichern
 	Delete Output Profile	Ausgabeprofil löschen
 	Batch Convert	Stapelkonvertierung
+	files written	Dateien geschrieben
+	Machine formats (none ticked: the machine's)	Maschinenformate (keins angehakt: das der Maschine)
+	Production	Produktion
+	Approval	Freigabe
+	Placement template	Platzierungsvorlage
+	The design file too	Auch die Designdatei
+	Write to Folder…	In Ordner schreiben…
+	Machine files, worksheet PDF and design, named alike	Maschinendateien, Arbeitsblatt-PDF und Design, gleich benannt
+	Write Again	Erneut schreiben
+	Profile name	Profilname
+	Save Profile	Profil speichern
+	Profile	Profil
+	Convert to	Konvertieren in
+	Convert All	Alle konvertieren
+	Each design found written again in this format beside it	Jedes gefundene Design in diesem Format daneben neu geschrieben
+	Converted:	Konvertiert:
+	couldn't be read:	nicht lesbar:
