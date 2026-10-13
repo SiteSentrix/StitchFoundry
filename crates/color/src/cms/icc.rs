@@ -249,12 +249,61 @@ pub(super) fn builtin_rgb_bytes(name: &str) -> Result<Vec<u8>, CmsError> {
 
 /// Encode `p` as an ICC file. The creation date is fixed so exports are reproducible.
 pub(super) fn encode(p: &ColorProfile) -> Result<Vec<u8>, CmsError> {
-    let mut bytes = p.encode().map_err(|e| CmsError::BadProfile(format!("{e:?}")))?;
+    let mut bytes = aligned(p.encode().map_err(|e| CmsError::BadProfile(format!("{e:?}")))?);
     // Header bytes 24..36: year, month, day, hours, minutes, seconds (u16 each).
     if let Some(date) = bytes.get_mut(24..36) {
         date.copy_from_slice(&[2026u16, 1, 1, 0, 0, 0].map(u16::to_be_bytes).concat());
     }
     Ok(bytes)
+}
+
+/// `icc` with every tagged element starting on a 4-byte boundary, padded with zeros, as ICC.1
+/// §7.1.2 requires (moxcms packs them, so a 62-byte `desc` left the next tag unaligned, #1584).
+/// Tags that share data keep sharing it. A profile whose tag table doesn't read is returned as it is.
+fn aligned(icc: Vec<u8>) -> Vec<u8> {
+    const TABLE: usize = 128;
+    let be = |b: &[u8], at: usize| b.get(at..at + 4).map(|v| u32::from_be_bytes([v[0], v[1], v[2], v[3]]) as usize);
+    let Some(n) = be(&icc, TABLE).filter(|n| *n <= 1000) else { return icc };
+    let data_start = TABLE + 4 + 12 * n;
+    let mut entries = Vec::with_capacity(n);
+    for i in 0..n {
+        let e = TABLE + 4 + 12 * i;
+        let (Some(off), Some(size)) = (be(&icc, e + 4), be(&icc, e + 8)) else { return icc };
+        if off < data_start || off.checked_add(size).is_none_or(|end| end > icc.len()) {
+            return icc;
+        }
+        entries.push((off, size));
+    }
+    if entries.iter().all(|(off, _)| off.is_multiple_of(4)) && icc.len().is_multiple_of(4) {
+        return icc;
+    }
+    let mut out = icc.get(..data_start).map(<[u8]>::to_vec).unwrap_or_default();
+    let mut moved: Vec<((usize, usize), usize)> = Vec::new();
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by_key(|&i| entries[i].0);
+    for i in order {
+        let (off, size) = entries[i];
+        let at = match moved.iter().find(|(k, _)| *k == (off, size)) {
+            Some((_, at)) => *at,
+            None => {
+                out.resize(out.len().next_multiple_of(4), 0);
+                let at = out.len();
+                out.extend_from_slice(&icc[off..off + size]);
+                moved.push(((off, size), at));
+                at
+            }
+        };
+        let e = TABLE + 4 + 12 * i + 4;
+        out[e..e + 4].copy_from_slice(&(at as u32).to_be_bytes());
+    }
+    out.resize(out.len().next_multiple_of(4), 0);
+    let len = out.len() as u32;
+    out[0..4].copy_from_slice(&len.to_be_bytes());
+    // The profile ID (an MD5 of the old bytes) no longer matches: zero is "not computed".
+    if let Some(id) = out.get_mut(84..100) {
+        id.fill(0);
+    }
+    out
 }
 
 fn text_tag(s: &str) -> Option<ProfileText> {
