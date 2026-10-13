@@ -467,6 +467,22 @@ fn the_bounding_box_comes_from_the_header_or_the_trailer() {
     assert!(r.warnings.iter().any(|w| w.contains("first of the file's 2 pages")), "{:?}", r.warnings);
 }
 
+/// #1552: a Type 42 font's glyph space is one unit an em, so its identity FontMatrix scaled to 12
+/// sets 12 pt type (a Type 1's 0.001 matrix needs the 1000-unit space).
+#[test]
+fn type_42_fonts_set_type_at_their_size() {
+    for (kind, matrix) in [(42, "[1 0 0 1 0 0]"), (1, "[0.001 0 0 0.001 0 0]")] {
+        let body = format!(
+            "/T 10 dict begin /FontName /T def /FontType {kind} def /FontMatrix {matrix} def /Encoding StandardEncoding def currentdict end /T exch definefont pop \
+             /T findfont 12 scalefont setfont 10 20 moveto (Hi) show"
+        );
+        let r = read(&body);
+        let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{:?}", r.warnings) };
+        let size = t.runs[0].style.size * t.xf.determinant().abs().sqrt();
+        assert!((size - 12.0).abs() < 1e-6, "FontType {kind}: {size} pt");
+    }
+}
+
 #[test]
 fn embedded_font_programs_are_skipped() {
     let body = "/MyFont 10 dict begin /FontName /MyFont def /FontMatrix [0.001 0 0 0.001 0 0] def currentdict end currentfile eexec\n\
