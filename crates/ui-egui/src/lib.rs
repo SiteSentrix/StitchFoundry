@@ -321,6 +321,8 @@ pub struct CacheKey {
     /// Appearance of Black › On Screen › Display All Blacks as Rich Black
     /// ([`vectorcraft_render::RenderOptions::rich_black`]).
     pub rich_black: bool,
+    /// Colour and style of guide paths ([`vectorcraft_render::RenderOptions::guide`]).
+    pub guide: ([u8; 3], bool),
 }
 
 #[derive(Clone, Copy, Debug, Default)]

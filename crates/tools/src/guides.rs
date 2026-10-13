@@ -384,6 +384,12 @@ impl Targets {
         self
     }
 
+    /// The ruler guides alone ([`Self::with_rulers`]): what a dragged selection's grabbed point
+    /// still snaps to with View → Snap to Point when Smart Guides line the selection up.
+    pub(crate) fn rulers(cx: &ToolContext) -> Self {
+        Self::default().styled(cx).with_rulers(cx)
+    }
+
     /// What a dragged selection's grabbed point snaps to with View → Snap to Point and Smart
     /// Guides off: the anchors of the art but `exclude` and the ruler guides.
     pub fn snap_to_point(cx: &ToolContext, exclude: &[NodeId]) -> Option<Self> {
