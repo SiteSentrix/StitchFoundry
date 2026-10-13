@@ -594,7 +594,10 @@ imported instead and the first warning says why. Choosing a standard turns it of
 path (`document.save {path: "art.ai"}` or `{format: "ai"}`) writes a PDF-compatible file that always carries the
 document, takes the PDF options and keeps its path when reopened, so Save writes `.ai` again; a `.ait` opens untitled.
 `document.export` / `serialize` to `.ai` (and the CLI's `run --export x.ai` and `convert in.svg out.ai`) write the same file
-without giving the document a path.
+without giving the document a path. `options: {aiVersion: "7"}` writes legacy `.ai` files of version 7 instead (the
+PostScript form, which keeps layers, groups, compound paths and clipping groups in apps that read it), one per artboard
+of `range` (default all; `{name}-{artboard}.ai` when several, listed in the result's `files`), with
+`transparentImages: "flatten"` (default) or `"omit"` for images with see-through pixels, opacity or a blending mode.
 
 Drive a tool like a mouse:
 

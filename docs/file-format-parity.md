@@ -18,7 +18,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
 | Formats opened or placed | ~30 | 22 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, JPEG 2000, PICT, PCX, Pixar, RTF/Word, PS |
-| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written as PDF-compatible only (no Illustrator editing data) |
+| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (no Illustrator editing data) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
 
@@ -40,12 +40,24 @@ private editing data. VectorCraft:
   A PDF saved with its editing data (`AIPDFPrivateData`) opens the same way.
 - **Writes** a PDF-compatible `.ai` (Save As › `ai`): Illustrator opens it as plain art. It never writes
   Illustrator's private editing data, which is undocumented.
+- **Writes** a legacy `.ai` of version 7 (Save As › `ai` › Version: Legacy (version 7), `aiVersion: "7"`): the
+  PostScript form, from the published *Adobe Illustrator File Format Specification* version 7.0
+  ([PRONOM fmt/423](https://www.nationalarchives.gov.uk/PRONOM/fmt/423)), which apps reading `.ai` open with its
+  structure (#868). It keeps layers (names, order, visibility, lock), groups, compound paths, clipping groups,
+  solid colours, linear and radial gradients and RGB images. The format has one artboard: each artboard chosen in
+  the options dialog's artboard picker (thumbnails to check, default all) is a file of its own,
+  `{name}-{artboard}.ai` when there are several. It has no transparency: objects are written opaque, and images
+  with see-through pixels, opacity or a blending mode are flattened (an opaque image of themselves and the art
+  under them, clipped to where they show; that art stays) or omitted (Transparent Images,
+  `transparentImages: "flatten"|"omit"`). Type is written as outlines, sublayers as groups; appearances, effects
+  and brushes are expanded; object names are left out.
 - **Known failures in users' files:** layer structure flattened or multiplied (#951: 109 layers instead of
   14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
   lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects,
   brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
   without the prolog opens since #1027, its legacy type (`To` … `TO`) not read yet.
-- Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible only).
+- Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible, or legacy
+  version 7 with layers and groups; not yet tested by users who hand files back).
   Closing the open-side issues: 10–20 h with users' files.
 
 ### Illustrator's private editing data
@@ -57,7 +69,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | Format | Illustrator | Ours: open/place | Ours: save/export | Fidelity and tests |
 |---|---|---|---|---|
 | VectorCraft `.vectorcraft` / `.vctemplate` | — | yes | yes | lossless JSON, versioned, save down to v1; property-tested round trips (`format/tests/prop_format.rs`); documents with a lot of path data are written as compact JSON, about a fifth of the size (#1492); a save falls back to a plain fsync and to writing elsewhere and copying in when the folder refuses the usual steps (#1625, #1649, part of #1620; not confirmed on a real network share); the size limits on embedded data also apply to files read from memory (#1783), and saving over a private file on Unix leaves no readable temporary copy beside it (#1778) |
-| Illustrator `.ai` | open, save | yes (PDF-compatible + editing-data structure) | PDF-compatible only | see above; no real-file corpus |
+| Illustrator `.ai` | open, save | yes (PDF-compatible + editing-data structure) | PDF-compatible, or legacy version 7 (layers and groups) | see above; no real-file corpus |
 | Illustrator template `.ait` | open, save | yes | no (save as `.vctemplate`) | |
 | PDF | open, place, save | yes (layers, masks, editable text, security, overprint; Crop To › Trim takes the bleed box as the document's bleed) | yes (presets, PDF/X-1a/3/4, layers, marks and bleed, ICC, fast web view, 1.3+) | fuzzed import; shared guarded writer and windowed reader ([pdf-backend.md](pdf-backend.md)), metadata, incomplete-content and dependency-source regressions; PDF text placement issues in some files (#722); alpha soft masks drawn as images import with the mask (#1551); a clip only counts as covering the page when its shape does (#1542); a PDF another app copied pastes as editable vector art (#1499); letter-spaced type on a path keeps its length and its glyph-by-glyph stroke comes in as one text object (#1586, #1585); a crafted name tree with shared nodes no longer takes exponential time on open (#1781) |
 | EPS | open, place, save | yes (own PostScript L3 interpreter, Illustrator EPS editing data structure) | yes (L2/L3, TIFF previews) | CID-keyed CJK type and CCITTFax images not read; #505; Type 42 (TrueType) fonts set type at its size (#1553); a clip only counts as covering the page when its shape does (#1542); an EPS another app copied pastes as editable vector art (`clipboard.importEps`, #1499); a stitched shading keeps its hard colour changes on import (#1654); ruzstd 0.9.1 for compressed editing data (#1807, RUSTSEC-2026-0344) |
