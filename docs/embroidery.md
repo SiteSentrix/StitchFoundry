@@ -532,9 +532,10 @@ height?, overlap?, dir?, format?, marks?}` lays a grid of hoopings over it that 
 hooping as a machine file of its own (`name-1`, `name-2`…, each centred on the hoop) into `dir`.
 Each hooping first sews **registration crosses** in the overlaps it shares with its neighbours,
 in a colour of its own: re-hoop the fabric so the next hooping's crosses land on the ones already
-sewn, then sew on. Without `dir` it only plans (which object goes where). Objects aren't split
-across hoopings yet: one larger than a hooping is refused (choose a larger hoop or a wider
-overlap).
+sewn, then sew on. Without `dir` it only plans (which object goes where). An object larger than any hooping is split (`split: false` refuses it instead): each
+stitch is sewn in the hooping whose middle is nearest it, and each piece is tied in and off and
+trimmed, so the pieces meet in the overlaps; a stitch longer than half the overlap is refused
+(widen the overlap).
 
 `sheets: true` also opens a document of a page per hooping to print and keep by the machine:
 the hooping's stitches in their colours inside the hoop's field (life size when it fits the

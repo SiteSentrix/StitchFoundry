@@ -246,7 +246,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Multi-Hooping",
             [],
             None,
-            "{dir?: the folder to write to (without it: the plan only), hoop?: a standard hoop's name (default: the design's), width?, height?: mm (a hoop of this field instead), overlap?: mm the hoopings share (10; 0–100), format?: as Export Machine File, prefix?: what the file names start with, marks?: bool (true), sheets?: bool (false: true opens a document of a page per hooping, to print: its stitches in its hoop, life size when they fit, its place in the grid and its file)} multi-hooping: a design larger than the hoop split into hoopings on a grid that overlap by `overlap`, each object sewn whole in the first hooping that holds it, each hooping a machine file of its own (centred on the hoop, `name-1`, `name-2`…) that first sews registration crosses in the overlaps it shares with its neighbours, as a colour of its own, to line the fabric up by → {hoopings: [{index, column, row, objects, stitches, file?}], columns, rows, files}",
+            "{dir?: the folder to write to (without it: the plan only), hoop?: a standard hoop's name (default: the design's), width?, height?: mm (a hoop of this field instead), overlap?: mm the hoopings share (10; 0–100), format?: as Export Machine File, prefix?: what the file names start with, marks?: bool (true), split?: bool (true: an object no hooping holds whole is split, each stitch sewn in the hooping whose middle is nearest it, each piece tied in and off; false: refused), sheets?: bool (false: true opens a document of a page per hooping, to print: its stitches in its hoop, life size when they fit, its place in the grid and its file)} multi-hooping: a design larger than the hoop split into hoopings on a grid that overlap by `overlap`, each object sewn whole in the first hooping that holds it, each hooping a machine file of its own (centred on the hoop, `name-1`, `name-2`…) that first sews registration crosses in the overlaps it shares with its neighbours, as a colour of its own, to line the fabric up by → {hoopings: [{index, column, row, objects, stitches, file?}], columns, rows, files}",
             has_doc,
             multi_hoop
         ),
@@ -1268,6 +1268,13 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
     // each object whole in the first hooping that holds it (its stitches: the travel in may be far off)
     let pattern = &plan.built.pattern;
     let mut assigned: Vec<Vec<usize>> = vec![Vec::new(); cells.len()];
+    // the pieces of objects split over hoopings: (object, its stitches in that hooping)
+    let mut parts: Vec<Vec<(usize, Vec<sf_core::Point>)>> = vec![Vec::new(); cells.len()];
+    let split = bool_or(p, "split", true);
+    let middles: Vec<sf_core::Point> = cells.iter().map(|c| sf_core::Point::new((c.min.x + c.max.x) / 2.0, (c.min.y + c.max.y) / 2.0)).collect();
+    let nearest = |q: sf_core::Point| middles.iter().enumerate().min_by(|a, b| a.1.distance(q).total_cmp(&b.1.distance(q))).map_or(0, |(i, _)| i);
+    let inside =
+        |c: &sf_core::BBox, q: sf_core::Point| q.x >= c.min.x - 1e-6 && q.y >= c.min.y - 1e-6 && q.x <= c.max.x + 1e-6 && q.y <= c.max.y + 1e-6;
     for (k, span) in plan.built.spans.iter().enumerate() {
         let pts: Vec<sf_core::Point> =
             pattern.stitches.get(span.range.clone()).unwrap_or_default().iter().filter(|s| s.cmd == sf_core::Cmd::Stitch).map(|s| s.pos()).collect();
@@ -1276,6 +1283,46 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
             ob.min.x >= cell.min.x - 1e-6 && ob.min.y >= cell.min.y - 1e-6 && ob.max.x <= cell.max.x + 1e-6 && ob.max.y <= cell.max.y + 1e-6
         };
         let Some(i) = cells.iter().position(fits) else {
+            if split {
+                // each stitch in the hooping whose middle is nearest its middle, the runs kept whole
+                let mut cur: Option<(usize, Vec<sf_core::Point>)> = None;
+                let mut prev: Option<sf_core::Point> = None;
+                let mut flush = |cur: &mut Option<(usize, Vec<sf_core::Point>)>| {
+                    if let Some((c, run)) = cur.take()
+                        && run.len() >= 2
+                        && let Some(slot) = parts.get_mut(c)
+                    {
+                        slot.push((k, run));
+                    }
+                };
+                for st in pattern.stitches.get(span.range.clone()).unwrap_or_default() {
+                    let q = st.pos();
+                    match st.cmd {
+                        sf_core::Cmd::Stitch => {
+                            if let Some(a) = prev {
+                                let c = nearest(sf_core::Point::new((a.x + q.x) / 2.0, (a.y + q.y) / 2.0));
+                                if !cells.get(c).is_some_and(|cell| inside(cell, a) && inside(cell, q)) {
+                                    return Err(bad(CMD, "a stitch is longer than the hoopings' overlap: widen the overlap"));
+                                }
+                                match &mut cur {
+                                    Some((cc, run)) if *cc == c && run.last().is_some_and(|l| l.distance(a) < 1e-9) => run.push(q),
+                                    _ => {
+                                        flush(&mut cur);
+                                        cur = Some((c, vec![a, q]));
+                                    }
+                                }
+                            }
+                            prev = Some(q);
+                        }
+                        _ => {
+                            flush(&mut cur);
+                            prev = None;
+                        }
+                    }
+                }
+                flush(&mut cur);
+                continue;
+            }
             return Err(bad(
                 CMD,
                 format!(
@@ -1314,9 +1361,15 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
     let sheets = bool_or(p, "sheets", false);
     let mut printed: Vec<(usize, usize, usize, sf_core::Pattern, String)> = Vec::new();
     for (i, (cell, objs)) in cells.iter().zip(&assigned).enumerate() {
-        if objs.is_empty() {
+        let pieces = parts.get(i).map(Vec::as_slice).unwrap_or_default();
+        if objs.is_empty() && pieces.is_empty() {
             continue;
         }
+        // whole objects and pieces of split ones, in sewing order
+        let mut order: Vec<usize> = objs.clone();
+        order.extend(pieces.iter().map(|(k, _)| *k));
+        order.sort_unstable();
+        order.dedup();
         index += 1;
         let (col, row) = (i % cols, i / cols);
         let centre = sf_core::Point::new((cell.min.x + cell.max.x) / 2.0, (cell.min.y + cell.max.y) / 2.0);
@@ -1339,7 +1392,7 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
             hp.threads.push(mark_thread.clone());
         }
         let mut colour: Option<usize> = None;
-        for k in objs {
+        for k in &order {
             let Some(span) = plan.built.spans.get(*k) else { continue };
             let thread_ix = plan.design.objects.get(span.index).map_or(0, |o| o.color);
             if colour != Some(thread_ix) {
@@ -1349,6 +1402,32 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 hp.threads.push(plan.design.thread(thread_ix));
                 colour = Some(thread_ix);
+            }
+            if !objs.contains(k) {
+                // a split object's pieces in this hooping, each tied in and off
+                for (_, run) in pieces.iter().filter(|(o, _)| o == k) {
+                    let (Some(a), Some(b)) = (run.first().copied().map(local), run.get(1).copied().map(local)) else { continue };
+                    let toward = |from: sf_core::Point, to: sf_core::Point| {
+                        let d = from.distance(to).max(1e-9);
+                        let t = (0.4 / d).min(0.5);
+                        sf_core::Point::new(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t)
+                    };
+                    hp.jump(a);
+                    hp.stitch(a);
+                    hp.stitch(toward(a, b));
+                    hp.stitch(a);
+                    for q in run.iter().skip(1) {
+                        hp.stitch(local(*q));
+                    }
+                    if let (Some(z), Some(y)) =
+                        (run.last().copied().map(local), run.len().checked_sub(2).and_then(|i| run.get(i)).copied().map(local))
+                    {
+                        hp.stitch(toward(z, y));
+                        hp.stitch(z);
+                    }
+                    hp.trim();
+                }
+                continue;
             }
             let mut first = true;
             for st in pattern.stitches.get(span.range.clone()).unwrap_or_default() {
@@ -1372,7 +1451,7 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
         }
         hp.ensure_end();
         let stitches = hp.stitch_count();
-        let mut entry = json!({ "index": index, "column": col + 1, "row": row + 1, "objects": objs.len(), "stitches": stitches });
+        let mut entry = json!({ "index": index, "column": col + 1, "row": row + 1, "objects": order.len(), "split": order.len() - objs.len(), "stitches": stitches });
         if let Some(d) = dir {
             let opts = sf_formats::WriteOptions { name: format!("{stem} {index}"), center: false, ..sf_formats::WriteOptions::default() };
             let bytes = sf_formats::write(format, &hp, &opts).map_err(|e| EngineError::Other(format!("{} export failed: {e}", format.name())))?;
