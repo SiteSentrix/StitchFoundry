@@ -280,4 +280,29 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(symbols(&mut app), ["New Symbol", "Badge"]);
     }
+
+    #[test]
+    fn an_imported_symbols_thumbnail_frames_its_whole_art() {
+        // The symbol of the SVG import tests: an orange 20 × 20 square from (0, 0) with a white dot.
+        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><defs><symbol id="Star" data-name="Gold Star"><path d="M0 0H20V20H0Z" fill="#e0a000"/><circle cx="10" cy="10" r="4" fill="#fff"/></symbol></defs><use href="#Star" x="20" y="30"/></svg>"##;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("document.open", json!({"name": "star.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+        let ctx = egui::Context::default();
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        // The tile's thumbnail: 40 × 40 pixels.
+        let thumb = out.textures_delta.set.values().flatten().find_map(|d| match &d.image {
+            egui::ImageData::Color(img) if img.size == [40, 40] => Some(img.clone()),
+            _ => None,
+        });
+        out.textures_delta.clear();
+        let thumb = thumb.expect("the thumbnail");
+        // The art fills it, a pixel from each edge: its top-left corner is orange too, not only the
+        // quarter the 20 × 20 square around the origin would frame.
+        let orange = |x: usize, y: usize| {
+            let [r, g, b, a] = thumb.pixels[y * 40 + x].to_array();
+            a == 255 && r > 200 && (130..190).contains(&g) && b < 40
+        };
+        assert!(orange(3, 3) && orange(36, 36), "{:?} {:?}", thumb.pixels[3 * 40 + 3], thumb.pixels[36 * 40 + 36]);
+    }
 }

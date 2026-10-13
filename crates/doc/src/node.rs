@@ -11,6 +11,7 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 use crate::appearance::Appearance;
 use crate::live::{BlendSpec, EnvelopeKind, GradientMesh, Outliner};
 use crate::pattern::RepeatSpec;
+use crate::symbols::{SYMBOL_SQUARE, SymbolBoxes};
 use crate::text::TextObject;
 
 /// Stable per-document object id. Never reused.
@@ -1004,52 +1005,101 @@ impl Node {
     }
     /// A quick box round everything the object can paint, for culling clicks: paths and compound
     /// paths grow their geometric bounds by the farthest their strokes can reach from any path
-    /// ([`Appearance::outset`]) instead of measuring along their shape.
+    /// ([`Appearance::outset`]) instead of measuring along their shape. Symbol instances are
+    /// measured as in [`Node::visual_bounds`].
     pub fn reach_bounds(&self) -> Option<Rect> {
+        self.reach(None)
+    }
+    /// [`Node::reach_bounds`] with symbol instances measured by their symbol's art box from
+    /// `symbols`. An instance that only moves its art is measured as the art's visual box moved,
+    /// and any other instance is measured as its geometric box ([`Node::geometric_bounds_with`])
+    /// grown by the farthest a stroke in the art can reach.
+    pub fn reach_bounds_with(&self, symbols: &SymbolBoxes) -> Option<Rect> {
+        symbols.quickly(|| self.reach(Some(symbols)))
+    }
+    /// The box of [`Node::reach_bounds`], or of [`Node::reach_bounds_with`] when `symbols` is given.
+    pub(crate) fn reach(&self, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
         match &self.kind {
             NodeKind::Path { .. } | NodeKind::Compound { .. } => {
                 let o = self.appearance.outset();
-                self.geometric_bounds().map(|b| b.inflate(o, o))
+                self.geometric(symbols).map(|b| b.inflate(o, o))
             }
-            _ => self.visual_bounds(),
+            _ => self.visual(symbols),
         }
     }
-    /// Geometric bounds (no stroke), recursively. Clip groups are bounded by their clip path.
+    /// Geometric bounds (no stroke), recursively. Clip groups are bounded by their clip path. A
+    /// symbol instance is measured as its transform applied to the 20 × 20 square around the origin
+    /// that symbols made in the app keep their art in ([`Node::geometric_bounds_with`] measures
+    /// its art).
     pub fn geometric_bounds(&self) -> Option<Rect> {
+        self.geometric(None)
+    }
+    /// [`Node::geometric_bounds`] with each symbol instance measured as its transform applied to
+    /// its symbol's art box from `symbols`. An instance is measured as the square when its symbol
+    /// is missing, when its symbol or a symbol nested in its art holds an instance of itself, and
+    /// when symbols nest 32 deep in its art.
+    pub fn geometric_bounds_with(&self, symbols: &SymbolBoxes) -> Option<Rect> {
+        self.geometric(Some(symbols))
+    }
+    /// The box of [`Node::geometric_bounds`], or of [`Node::geometric_bounds_with`] when `symbols`
+    /// is given.
+    pub(crate) fn geometric(&self, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
+        let union = |nodes: &[Arc<Node>]| nodes.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric(symbols)));
         match &self.kind {
             NodeKind::Path { path, .. } => path.bounds(),
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
-                children.first().and_then(|c| c.geometric_bounds())
+                children.first().and_then(|c| c.geometric(symbols))
             }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => children
                 .iter()
                 .skip(usize::from(self.extras().shaper.is_some()))
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
-                .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds())),
+                .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric(symbols))),
             NodeKind::Text(t) => self.projected(t.bounds()),
             NodeKind::Image(im) => Some(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64))),
-            NodeKind::SymbolInstance { xf, .. } => self.projected(Some(xf.transform_rect_bbox(Rect::new(-10.0, -10.0, 10.0, 10.0)))),
-            NodeKind::Blend { children, spec } => {
-                let b = crate::live::nodes_bounds(children);
-                vectorcraft_geom::union_opt(b, spec.spine.as_ref().and_then(|s| s.bounds()))
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let art = symbols.and_then(|s| s.art(symbol)).map_or(SYMBOL_SQUARE, |a| a.geometric);
+                self.projected(Some(xf.transform_rect_bbox(art)))
             }
+            NodeKind::Blend { children, spec } => vectorcraft_geom::union_opt(union(children), spec.spine.as_ref().and_then(|s| s.bounds())),
             NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, **frame),
             NodeKind::Mesh(m) => m.bounds(),
-            NodeKind::Repeat(r) => r.bounds(),
+            // Each copy is measured where the repeat draws it: `RepeatSpec::transforms` lays the
+            // copies out by the source's bounds measured without the document.
+            NodeKind::Repeat(r) => r.copies_bounds(union(&r.source)?),
             NodeKind::PlacedDocument(p) => Some(p.bounds()),
         }
     }
     /// Visual bounds: what the object paints, its strokes included (paths and compound paths
-    /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]).
+    /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]). A symbol
+    /// instance is measured as in [`Node::geometric_bounds`], grown by its own strokes' reach
+    /// ([`Node::visual_bounds_with`] measures its art).
     pub fn visual_bounds(&self) -> Option<Rect> {
+        self.visual(None)
+    }
+    /// [`Node::visual_bounds`] with symbol instances measured by their symbol's art from
+    /// `symbols`, the strokes in it included. An instance that only moves its art is measured as
+    /// the art's visual box moved. Any other instance is measured as its art transformed by it with
+    /// the strokes at their own weight, as the renderer draws it, and never smaller than its
+    /// geometric box ([`Node::geometric_bounds_with`]). Instances inside symbol art are measured as
+    /// in [`Node::reach_bounds_with`]. In boxes made by [`SymbolBoxes::with_brush_art`], the box of
+    /// an instance whose art holds brushed strokes grows by as far as their brush art can paint. In
+    /// boxes made by [`SymbolBoxes::without_art_strokes`], an instance is measured as its art's
+    /// geometric box placed by its transform, grown by its own strokes.
+    pub fn visual_bounds_with(&self, symbols: &SymbolBoxes) -> Option<Rect> {
+        self.visual(Some(symbols))
+    }
+    /// The box of [`Node::visual_bounds`], or of [`Node::visual_bounds_with`] when `symbols` is
+    /// given.
+    pub(crate) fn visual(&self, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
         match &self.kind {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // A clipping path that paints (see `clip_paint`) strokes over the clip edge.
                 let clip = children.first()?;
                 if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
-                    clip.visual_bounds()
+                    clip.visual(symbols)
                 } else {
-                    clip.geometric_bounds()
+                    clip.geometric(symbols)
                 }
             }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
@@ -1058,25 +1108,41 @@ impl Node {
                 children
                     .iter()
                     .skip(usize::from(self.extras().shaper.is_some()))
-                    .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()))
+                    .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols)))
                     .map(|b| b.inflate(o, o))
             }
             NodeKind::Blend { children, spec } => {
-                let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()));
-                let o = crate::live::max_outset(children);
+                let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols)));
+                let o = crate::live::max_outset(children, symbols);
                 vectorcraft_geom::union_opt(b, spec.spine.as_ref().and_then(|s| s.bounds()).map(|r| r.inflate(o, o)))
             }
             NodeKind::Envelope { content, .. } | NodeKind::Repeat(RepeatSpec { source: content, .. }) => {
-                let o = crate::live::max_outset(content);
-                self.geometric_bounds().map(|b| b.inflate(o, o))
+                let o = crate::live::max_outset(content, symbols);
+                self.geometric(symbols).map(|b| b.inflate(o, o))
             }
             NodeKind::Path { .. } | NodeKind::Compound { .. } => {
-                let b = self.geometric_bounds()?;
+                let b = self.geometric(symbols)?;
                 Some(self.appearance.stroked_bounds(b, || self.stroke_path().unwrap_or_default()))
+            }
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let b = match symbols.and_then(|s| Some((s, s.art(symbol)?))) {
+                    Some((s, art)) if !s.art_strokes() => xf.transform_rect_bbox(art.geometric),
+                    Some((_, art)) if moves_only(*xf) => xf.transform_rect_bbox(art.visual),
+                    Some((s, art)) => {
+                        let placed = xf.transform_rect_bbox(art.geometric);
+                        match s.placed_visual(symbol, *xf) {
+                            Some(v) => v.union(placed),
+                            None => placed.inflate(art.reach, art.reach),
+                        }
+                    }
+                    None => xf.transform_rect_bbox(SYMBOL_SQUARE),
+                };
+                let o = self.appearance.outset() + symbols.map_or(0.0, |s| s.brush_pad(symbol));
+                self.projected(Some(b)).map(|b| b.inflate(o, o))
             }
             _ => {
                 let o = self.appearance.outset();
-                self.geometric_bounds().map(|b| b.inflate(o, o))
+                self.geometric(symbols).map(|b| b.inflate(o, o))
             }
         }
     }

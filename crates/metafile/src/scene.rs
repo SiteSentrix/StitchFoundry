@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::freeform::{painted_box, spread_scale};
 use vectorcraft_color::{BlendMode, GradientKind, GradientPaint, Paint};
-use vectorcraft_doc::{AppearanceItem, Dash, Document, ImageObject, LineCap, LineJoin, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{AppearanceItem, Dash, Document, ImageObject, LineCap, LineJoin, Node, NodeKind, StrokeLayer, SymbolBoxes};
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Shape};
 
@@ -100,6 +100,9 @@ fn q(v: f32) -> u8 {
 
 pub(crate) struct Scene<'a> {
     doc: &'a Document,
+    /// The art boxes of `doc`'s symbols, which the walk measures symbol instances by when it
+    /// leaves out objects outside the region ([`SymbolBoxes::quick`]).
+    symbols: SymbolBoxes<'a>,
     region: Rect,
     /// The format clips (EMF).
     clips: bool,
@@ -116,7 +119,18 @@ pub(crate) struct Scene<'a> {
 
 impl<'a> Scene<'a> {
     pub fn new(doc: &'a Document, region: Rect, clips: bool) -> Self {
-        Self { doc, region, clips, ops: vec![], warnings: vec![], images: HashMap::new(), brushes: None, opacity: 1.0, nest: 0 }
+        Self {
+            doc,
+            symbols: doc.symbol_boxes().quick(),
+            region,
+            clips,
+            ops: vec![],
+            warnings: vec![],
+            images: HashMap::new(),
+            brushes: None,
+            opacity: 1.0,
+            nest: 0,
+        }
     }
 
     /// The operations (clipped to the region when the format clips) and the warnings.
@@ -148,7 +162,7 @@ impl<'a> Scene<'a> {
             return;
         }
         if !n.is_layer() {
-            match n.visual_bounds() {
+            match n.visual_bounds_with(&self.symbols) {
                 Some(b) if !overlaps(b, self.region) => return,
                 None if !n.is_container() => return,
                 _ => {}

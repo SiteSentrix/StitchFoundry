@@ -652,6 +652,27 @@ fn inserts_become_symbol_instances_with_their_transform() {
 }
 
 #[test]
+fn an_insert_is_measured_clicked_and_marqueed_by_its_blocks_art() {
+    let inserts = [(0, "INSERT"), (8, "Doors"), (2, "Door"), (10, "100"), (20, "50"), (41, "2"), (42, "3"), (50, "90")];
+    let doc = open(&with_door(DOOR_LINE, &inserts), &points()).document;
+    let [inst] = &leaves(&doc)[..] else { panic!() };
+    let h = height(&doc);
+    // The line, 20 units up from the insertion point: a box with no width at x 100. The 20 × 20
+    // square placed by the insert's transform would be a 60 × 40 box from x 70 to 130.
+    let b = doc.bounds_of(&[inst.id], false).unwrap();
+    assert!(close(b, Rect::new(100.0, h - 70.0, 100.0, h - 50.0), 1e-9), "{b:?}");
+    // A click 25 pt right of the line, inside that square's box, selects nothing; one on the line
+    // selects the insert.
+    let hit = |x: f64| vectorcraft_doc::hit::hit_test(&doc, Point::new(x, h - 60.0), vectorcraft_doc::hit::HitOptions::default()).map(|h| h.leaf);
+    assert_eq!(hit(125.0), None);
+    assert_eq!(hit(100.0), Some(inst.id));
+    // A marquee beside the line leaves it out; one across it takes it.
+    let marquee = |r: Rect| vectorcraft_doc::hit::marquee(&doc, r, None, false);
+    assert!(marquee(Rect::new(115.0, h - 65.0, 125.0, h - 55.0)).is_empty());
+    assert_eq!(marquee(Rect::new(90.0, h - 62.0, 110.0, h - 58.0)), vec![inst.id]);
+}
+
+#[test]
 fn by_block_colours_make_a_symbol_per_look() {
     // The block's line takes the insert's colour: red and green make two symbols; a third red
     // insert reuses the first.

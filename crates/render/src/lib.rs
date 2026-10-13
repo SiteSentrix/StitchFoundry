@@ -24,7 +24,7 @@ pub mod proof;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject, TraceView};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject, TraceView};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
 use vello_cpu::peniko::{self, BlendMode, Compose, Mix};
@@ -43,9 +43,10 @@ pub use vectorcraft_effects as effects;
 pub use vello_cpu;
 
 /// Bounds of everything `n` paints, as the renderer culls it: its members, strokes, brush art and
-/// geometry effects, and the shadows and glows of it and its members.
-pub fn painted_bounds(n: &Node) -> Option<Rect> {
-    brush_fx::cull_bounds(n)
+/// geometry effects, and the shadows and glows of it and its members. Symbol instances are
+/// measured by their art in `doc` ([`Node::visual_bounds_with`]).
+pub fn painted_bounds(doc: &Document, n: &Node) -> Option<Rect> {
+    brush_fx::cull_bounds(&doc.symbol_boxes(), n)
 }
 
 /// Largest raster an export may ask [`Renderer::render_region`] for, per side. The CPU rasteriser
@@ -399,6 +400,11 @@ pub struct Renderer {
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
     pub threads: u16,
     geom: PtrMap<usize, GeomEntry>,
+    /// The symbols (name and art) of the document last drawn, which `geom`'s bounds measured
+    /// symbol instances by (see [`Self::check_symbols`]). The art is held weakly: the reference
+    /// keeps the art's allocation, so no other art can get its address, and does not keep the
+    /// art's content.
+    symbols: Vec<(String, std::sync::Weak<Node>)>,
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<(usize, usize, u64, i32), StrokeEntry>,
@@ -515,6 +521,8 @@ struct Frame<'a> {
     /// Drawing into a multithreaded context: vello filter layers must be rendered offscreen.
     mt: bool,
     doc: &'a Document,
+    /// `doc`'s symbol art boxes, which culling measures symbol instances by ([`SymbolBoxes::quick`]).
+    symbols: &'a SymbolBoxes<'a>,
     view: Affine,
     /// Visible region in document coordinates (for culling).
     visible: Rect,
@@ -549,6 +557,7 @@ impl Renderer {
             ctx_st: None,
             threads: default_threads(),
             geom: PtrMap::default(),
+            symbols: vec![],
             strokes: PtrMap::default(),
             cur: None,
             made_again: false,
@@ -604,6 +613,8 @@ impl Renderer {
                 return Rendered { width: w, height: h, pixels };
             }
         }
+        // The document's own symbols: proofing rewrites the colors and blend modes of their art.
+        self.check_symbols(doc);
         let prepared = proof::prepare(doc, opts);
         let doc: &Document = &prepared;
         let w = width.clamp(1, u16::MAX as u32) as u16;
@@ -616,7 +627,8 @@ impl Renderer {
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let screen = if opts.rich_black { Ink::RichBlack } else { Ink::Display };
-        let frame = Frame { mt: threads > 0, doc, view, visible, px, opts, ink: screen };
+        let symbols = doc.symbol_boxes().quick();
+        let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen };
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
@@ -791,12 +803,14 @@ impl Renderer {
 
     /// Render node `n` of `doc` (its resources) into `w`×`h` transparent pixels through `view`.
     pub fn render_node(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<Rendered> {
+        self.check_symbols(doc);
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let mut ctx = single_threaded_context(w, h);
         let opts = RenderOptions::default();
-        let frame = Frame { mt: false, doc, view, visible, px, opts: &opts, ink: Ink::Display };
+        let symbols = doc.symbol_boxes().quick();
+        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts: &opts, ink: Ink::Display };
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
@@ -807,7 +821,8 @@ impl Renderer {
     }
 
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
-    /// `size`×`size` pixels, optionally over a solid premultiplied background.
+    /// `size`×`size` pixels, optionally over a solid premultiplied background. A symbol instance
+    /// is fitted by its symbol's art in `doc`.
     pub fn render_node_thumbnail(&mut self, doc: &Document, n: &Node, size: u32, background: Option<[u8; 4]>) -> Option<Rendered> {
         self.render_node_thumbnail_with(doc, n, size, background, &RenderOptions::default())
     }
@@ -826,7 +841,8 @@ impl Renderer {
         background: Option<[u8; 4]>,
         opts: &RenderOptions,
     ) -> Option<Rendered> {
-        let b = brush_fx::cull_bounds(n)?;
+        self.check_symbols(doc);
+        let b = brush_fx::cull_bounds(&doc.symbol_boxes(), n)?;
         let s = (size as f64 - 2.0) / b.width().max(b.height()).max(1e-6);
         let view = Affine::translate((size as f64 / 2.0, size as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
         let w = size.clamp(1, u16::MAX as u32) as u16;
@@ -835,7 +851,8 @@ impl Renderer {
             ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
             ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));
         }
-        let frame = Frame { mt: false, doc, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts, ink: Ink::Display };
+        let symbols = doc.symbol_boxes().quick();
+        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts, ink: Ink::Display };
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
@@ -845,8 +862,9 @@ impl Renderer {
         Some(Rendered { width: size, height: size, pixels: pm.data_as_u8_slice().to_vec() })
     }
 
-    /// Cached cull bounds of a node (containers union their cached children).
-    fn bounds_of(&mut self, a: &Arc<Node>) -> Option<Rect> {
+    /// Cached cull bounds of a node (containers union their cached children), symbol instances
+    /// measured by their art box from `symbols`.
+    fn bounds_of(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Option<Rect> {
         let key = Arc::as_ptr(a) as usize;
         if let Some(e) = self.geom.get_mut(&key)
             && Arc::ptr_eq(&e.node, a)
@@ -861,15 +879,27 @@ impl Renderer {
                 let source = a.extras().trace.is_some().then(|| children.first()).flatten();
                 for c in children {
                     if c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)) {
-                        acc = vectorcraft_geom::union_opt(acc, self.bounds_of(c));
+                        acc = vectorcraft_geom::union_opt(acc, self.bounds_of(symbols, c));
                     }
                 }
                 acc
             }
-            _ => brush_fx::cull_bounds(a),
+            _ => brush_fx::cull_bounds(symbols, a),
         };
         self.geom.insert(key, GeomEntry { node: a.clone(), bounds: b, path: None, stamp: self.stamp });
         b
+    }
+
+    /// Drop the cached bounds of symbol instances and of the objects that hold them when `doc`'s
+    /// symbols are not those of the document last drawn (by name and art): those bounds measured
+    /// the instances by their symbol's art.
+    fn check_symbols(&mut self, doc: &Document) {
+        let same = self.symbols.len() == doc.symbols.len()
+            && self.symbols.iter().zip(&doc.symbols).all(|((name, art), s)| *name == s.name && std::ptr::eq(art.as_ptr(), Arc::as_ptr(&s.art)));
+        if !same {
+            self.geom.retain(|_, e| !holds_instance(&e.node));
+            self.symbols = doc.symbols.iter().map(|s| (s.name.clone(), Arc::downgrade(&s.art))).collect();
+        }
     }
 
     /// Cached region a clip group's clipping path `a` clips to ([`effects::clip_outline`]):
@@ -903,8 +933,9 @@ impl Renderer {
         (fill, stroke)
     }
 
-    /// Cached BezPath of a path or compound path node.
-    fn path_of(&mut self, a: &Arc<Node>) -> Option<Arc<BezPath>> {
+    /// Cached BezPath of a path or compound path node (its bounds cached with it, see
+    /// [`Self::bounds_of`]).
+    fn path_of(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Option<Arc<BezPath>> {
         let key = Arc::as_ptr(a) as usize;
         if let Some(e) = self.geom.get(&key)
             && Arc::ptr_eq(&e.node, a)
@@ -913,7 +944,7 @@ impl Renderer {
             return Some(p.clone());
         }
         let p = Arc::new(a.stroke_path()?);
-        let bounds = self.bounds_of(a);
+        let bounds = self.bounds_of(symbols, a);
         self.geom.insert(key, GeomEntry { node: a.clone(), bounds, path: Some(p.clone()), stamp: self.stamp });
         Some(p)
     }
@@ -922,7 +953,7 @@ impl Renderer {
     /// Outline view and `n` is `fx_owner`, else `None`.
     fn outline_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
         let owner = self.fx_owner.as_ref().filter(|o| f.opts.outline && std::ptr::eq(&***o, n)).cloned()?;
-        self.path_of(&owner)
+        self.path_of(f.symbols, &owner)
     }
 
     /// Whether `a` is left out of this frame: hidden, a skipped template or guide, or culled.
@@ -931,7 +962,7 @@ impl Renderer {
         if !a.visible || skipped_template || f.opts.hidden.contains(&a.id) {
             return true;
         }
-        match self.bounds_of(a) {
+        match self.bounds_of(f.symbols, a) {
             Some(b) => {
                 let pad = f.px * 2.0;
                 // Level of detail: leaves smaller than a quarter pixel are invisible.
@@ -956,7 +987,7 @@ impl Renderer {
             // A masked object is a non-isolated group of its own.
             let mask = Some(self.opacity_mask(f, m, ctx.width(), ctx.height()));
             let blends = a.blend != vectorcraft_color::BlendMode::Normal || (!a.isolate && self.blends_through(a));
-            let bounds = if blends { self.bounds_of(a) } else { None };
+            let bounds = if blends { self.bounds_of(f.symbols, a) } else { None };
             self.group(ctx, f, Composite { mask, blends, bounds, ..Default::default() }, &mut |r, c, fr| r.draw_arc_body(c, fr, a));
             return;
         }
@@ -999,7 +1030,7 @@ impl Renderer {
             && !a.isolate
             && !fx::has_fx(a)
             && (self.opacity_of(a) >= 1.0 || painted_items(a) == 1)
-            && let Some(bp) = self.path_of(a)
+            && let Some(bp) = self.path_of(f.symbols, a)
         {
             self.alpha = self.opacity_of(a).clamp(0.0, 1.0);
             self.cur = Some(a.clone());
@@ -1047,7 +1078,7 @@ impl Renderer {
         }
         if force {
             // Bounds were already checked by draw_arc (or the caller wants it drawn regardless).
-        } else if let Some(b) = fx::cull_bounds(n) {
+        } else if let Some(b) = fx::cull_bounds(f.symbols, n) {
             let pad = f.px * 2.0;
             if !rects_overlap(b.inflate(pad, pad), f.visible) {
                 self.stats.culled += n.count();
@@ -1138,7 +1169,7 @@ impl Renderer {
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         if !outline && (opacity < 1.0 || n.blend != vectorcraft_color::BlendMode::Normal || n.isolate || knockout) {
             let blends = self.blends_through(n);
-            let bounds = if blends { self.node_bounds(n) } else { None };
+            let bounds = if blends { self.node_bounds(f.symbols, n) } else { None };
             let comp = Composite { blend: n.blend, opacity, isolated: n.isolate, blends, bounds, ..Default::default() };
             self.group(ctx, f, comp, &mut |r, c, fr| r.draw_content(c, fr, n, knockout));
         } else {
@@ -1266,7 +1297,7 @@ impl Renderer {
         if !c.visible || f.opts.hidden.contains(&c.id) {
             return;
         }
-        match self.bounds_of(c) {
+        match self.bounds_of(f.symbols, c) {
             Some(b) => {
                 let pad = f.px * 2.0;
                 if !rects_overlap(b.inflate(pad, pad), f.visible) {
@@ -1309,12 +1340,13 @@ impl Renderer {
         }
     }
 
-    /// Cull bounds of `n`: cached when it is a node of the tree being drawn.
-    fn node_bounds(&mut self, n: &Node) -> Option<Rect> {
+    /// Cull bounds of `n` (symbol instances measured by their art box from `symbols`): cached when
+    /// it is a node of the tree being drawn.
+    fn node_bounds(&mut self, symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         match self.geom.get(&(n as *const Node as usize)) {
             // The entry keeps its node alive, so the address is that node's.
             Some(e) if std::ptr::eq(Arc::as_ptr(&e.node), n) => e.bounds,
-            _ => fx::cull_bounds(n),
+            _ => fx::cull_bounds(symbols, n),
         }
     }
 
@@ -2040,6 +2072,14 @@ fn depends_on_document(n: &Node) -> bool {
 fn holds_type(n: &Node) -> bool {
     let mut holds = false;
     n.walk(&mut |c| holds |= matches!(c.kind, NodeKind::Text(_)) || c.extras().mask.as_ref().is_some_and(|m| holds_type(&m.art)));
+    holds
+}
+
+/// Is `n` a symbol instance, or does it hold one? Its cull bounds measure the instance by its
+/// symbol's art.
+fn holds_instance(n: &Node) -> bool {
+    let mut holds = false;
+    n.walk(&mut |c| holds |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
     holds
 }
 

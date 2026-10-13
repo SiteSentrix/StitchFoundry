@@ -1406,9 +1406,17 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     let frame = d.oriented_bounds(&ids, false).ok_or_else(|| EngineError::Other("no bounds".into()))?;
     let g = frame.rect;
     // With Use Preview Bounds the values measure the visual box, whose margins around the
-    // geometric box (left, top, right, bottom) scale with the strokes or stay.
-    let v = if s.prefs.use_preview_bounds { d.oriented_bounds(&ids, true).map_or(g, |b| b.rect) } else { g };
-    let m = [g.x0 - v.x0, g.y0 - v.y0, v.x1 - g.x1, v.y1 - g.y1];
+    // geometric box (left, top, right, bottom) scale with the strokes or stay. The margins of
+    // `vs`, the visual box without the strokes in symbols' art, scale; those strokes keep their
+    // weight when an instance scales, so the rest of the margins stay.
+    let (v, vs) = if s.prefs.use_preview_bounds {
+        (d.oriented_bounds(&ids, true).map_or(g, |b| b.rect), scaling_box(d, &ids, &frame).unwrap_or(g))
+    } else {
+        (g, g)
+    };
+    let margins = |b: Rect| [g.x0 - b.x0, g.y0 - b.y0, b.x1 - g.x1, b.y1 - g.y1];
+    let (m, all) = (margins(vs), margins(v));
+    let fixed = [all[0] - m[0], all[1] - m[1], all[2] - m[2], all[3] - m[3]];
     let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4) as usize;
     let rp = vectorcraft_geom::reference_point(v, refi);
     let mut w = f64_or(p, "width", v.width());
@@ -1420,20 +1428,33 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
             w = v.width() * h / v.height();
         }
     }
-    // The geometric scale that gives the visual size: margins grow by the strokes' scale `f`
-    // (exact for proportional scales, which scale the visual box alike).
+    // The geometric scale that gives the visual size: margins grow by the strokes' scale `f`. It is
+    // exact for proportional scales of one path; [`Spans::refit`] checks it, and solves for the
+    // scales where it misses.
     let strokes = bool_or(p, "strokes", s.prefs.scale_strokes);
     let ratio = |size: f64, geo: f64, margin: f64| if geo > 1e-9 { (size - margin) / geo } else { 1.0 };
     let f = |sx: f64, sy: f64| if strokes { (sx * sy).abs().sqrt() } else { 1.0 };
-    let (lx, ly) = (ratio(w, v.width(), 0.0), ratio(h, v.height(), 0.0));
+    // The strokes' scale `f0`: the size left after the margins in symbols' art, which stay, over
+    // `vs`, whose margins scale.
+    let (lx, ly) = (ratio(w - fixed[0] - fixed[2], vs.width(), 0.0), ratio(h - fixed[1] - fixed[3], vs.height(), 0.0));
     let f0 = f(if g.width() > 1e-9 { lx } else { 1.0 }, if g.height() > 1e-9 { ly } else { 1.0 });
-    let sx = ratio(w, g.width(), (m[0] + m[2]) * f0);
-    let sy = ratio(h, g.height(), (m[1] + m[3]) * f0);
+    // When a size of 0 or more is smaller than the margins and some of them stay, the geometry
+    // gets no width or height: the visual box is then as small as it can be. The margins in
+    // symbols' art stay, and so does every margin when strokes do not scale.
+    let fit = |size: f64, geo: f64, scaling: f64, kept: f64| {
+        let s = ratio(size, geo, scaling * f0 + kept);
+        let stays = if strokes { kept } else { scaling + kept };
+        if s < 0.0 && size >= 0.0 && stays > 0.0 { 0.0 } else { s }
+    };
+    let sx = fit(w, g.width(), m[0] + m[2], fixed[0] + fixed[2]);
+    let sy = fit(h, g.height(), m[1] + m[3], fixed[1] + fixed[3]);
     let scale = about(rp, Affine::scale_non_uniform(sx, sy));
     // Move the new visual box's reference point to x, y (default: where it was): the geometric
-    // box's reference point moves with the art, the margin from it to the visual one by `f`.
+    // box's reference point moves with the art, the margin from it to `vs`'s by `f`, and the
+    // margin from that one to the visual box's stays.
     let gp = vectorcraft_geom::reference_point(g, refi);
-    let new_rp = scale * gp + (rp - gp) * f(sx, sy);
+    let sp = vectorcraft_geom::reference_point(vs, refi);
+    let new_rp = scale * gp + (sp - gp) * f(sx, sy) + (rp - sp);
     // x, y place the reference point on the page.
     let page = frame.to_doc() * rp;
     // When every value given is the current one, the transform is the identity. Computing it can
@@ -1443,7 +1464,325 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
         return apply_transform(s, "Transform", ids, Affine::IDENTITY, p, false);
     }
     let to = frame.to_local(Point::new(f64_or(p, "x", page.x), f64_or(p, "y", page.y)));
+    // The scales and the point above can miss the size or the reference point when the margins of
+    // the objects differ, the members of groups and the objects in symbols' art included, and with
+    // strokes that scale, when the sizes are out of proportion. The objects are then measured one
+    // by one ([`Spans::measure`]), and the scales solved for.
+    let solved = if s.prefs.use_preview_bounds && w >= 0.0 && h >= 0.0 {
+        Spans::measure(d, &ids, &frame, strokes).refit(rp, refi, [w, h], (sx, sy, new_rp))
+    } else {
+        None
+    };
+    let (scale, new_rp) = solved.map_or((scale, new_rp), |(sx, sy, at)| (about(rp, Affine::scale_non_uniform(sx, sy)), at));
     apply_transform(s, "Transform", ids, frame.conjugate(Affine::translate(to - new_rp) * scale), p, false)
+}
+
+/// The visual box of `ids` square to `frame`, as [`Document::oriented_bounds`] measures it, with
+/// symbol instances measured without the strokes in their art
+/// ([`vectorcraft_doc::SymbolBoxes::without_art_strokes`]).
+fn scaling_box(d: &Document, ids: &[NodeId], frame: &OrientedBox) -> Option<Rect> {
+    let symbols = d.symbol_boxes().without_art_strokes();
+    let to_local = frame.to_doc().inverse();
+    ids.iter().filter_map(|id| d.node(*id)).fold(None, |acc, n| {
+        let b = if frame.angle == 0.0 { n.visual_bounds_with(&symbols) } else { n.bounds_in(&symbols, to_local, true) };
+        vectorcraft_geom::union_opt(acc, b)
+    })
+}
+
+/// One axis of an object that [`set_bounds`] sizes, square to its frame: the geometric box runs
+/// from `lo` to `hi`, and the visual box reaches past each end (before, after) by a margin that
+/// scales with the strokes and one that stays.
+#[derive(Clone, Copy, Debug)]
+struct Span {
+    lo: f64,
+    hi: f64,
+    scaling: [f64; 2],
+    kept: [f64; 2],
+}
+
+impl Span {
+    /// The ends of the visual box after a scale by `s` about `c`, with the margins that scale
+    /// grown by `k`. A negative scale turns the box over, and its margins with it.
+    fn scaled(self, c: f64, s: f64, k: f64) -> (f64, f64) {
+        let ([sb, sa], [kb, ka]) = (self.scaling, self.kept);
+        let (before, after) = (sb * k + kb, sa * k + ka);
+        let (a, b) = (c + s * (self.lo - c), c + s * (self.hi - c));
+        if s < 0.0 { (b - after, a + before) } else { (a - before, b + after) }
+    }
+}
+
+/// The objects that [`set_bounds`] sizes, measured one by one square to its frame.
+struct Spans {
+    x: Vec<Span>,
+    y: Vec<Span>,
+    /// Whether strokes scale. The margins that scale grow by the square root of the product of the
+    /// two scales; with strokes that do not scale, every margin stays.
+    strokes: bool,
+}
+
+impl Spans {
+    /// The objects of `ids` that have a box, measured one by one as [`Document::oriented_bounds`]
+    /// measures them square to `frame`, each plain group member by member and each symbol instance
+    /// that [`open`] opens object by object in its art. Past [`MAX_SPANS`] parts, each object of
+    /// `ids` is measured as one. The margins of the visual box without the strokes in symbols' art
+    /// ([`scaling_box`]) scale with the strokes, and the rest stay. With `strokes` false, every
+    /// margin stays.
+    fn measure(d: &Document, ids: &[NodeId], frame: &OrientedBox, strokes: bool) -> Self {
+        let (symbols, without, art) = (d.symbol_boxes(), d.symbol_boxes().without_art_strokes(), d.symbol_boxes().quick());
+        let to_local = frame.to_doc().inverse();
+        let measure = |n: &Node, s: &vectorcraft_doc::SymbolBoxes, visual: bool| match (frame.angle == 0.0, visual) {
+            (true, false) => n.geometric_bounds_with(s),
+            (true, true) => n.visual_bounds_with(s),
+            (false, _) => n.bounds_in(s, to_local, visual),
+        };
+        let roots: Vec<&Node> = ids.iter().filter_map(|id| d.node(*id)).collect();
+        let mut parts = vec![];
+        if !roots.iter().all(|n| open(n, 0.0, d, &symbols, to_local, &mut parts)) {
+            parts = roots.iter().map(|n| Part::Object(n, 0.0)).collect();
+        }
+        let mut out = Self { x: vec![], y: vec![], strokes };
+        for part in parts {
+            let (g, v, vs) = match part {
+                Part::Object(n, grow) => {
+                    let Some(g) = measure(n, &symbols, false) else { continue };
+                    let v = measure(n, &symbols, true).unwrap_or(g).inflate(grow, grow);
+                    let vs = if strokes { measure(n, &without, true).unwrap_or(g).inflate(grow, grow) } else { g };
+                    (g, v, vs)
+                }
+                // Measured as the instance's own box measures its art (`Node::visual_bounds_with`):
+                // the strokes at their own weight, and the instances in it by their art boxes.
+                Part::Art(n, xf, grow, kept) => {
+                    let mut placed = n.clone();
+                    placed.transform(xf, false);
+                    let Some(g) = placed.geometric_bounds_with(&art) else { continue };
+                    let v = placed.visual_bounds_with(&art).map_or(g, |v| v.union(g)).inflate(kept + grow, kept + grow);
+                    let vs = if strokes { g.inflate(grow, grow) } else { g };
+                    (g, v, vs)
+                }
+            };
+            out.x.push(Span { lo: g.x0, hi: g.x1, scaling: [g.x0 - vs.x0, vs.x1 - g.x1], kept: [vs.x0 - v.x0, v.x1 - vs.x1] });
+            out.y.push(Span { lo: g.y0, hi: g.y1, scaling: [g.y0 - vs.y0, vs.y1 - g.y1], kept: [vs.y0 - v.y0, v.y1 - vs.y1] });
+        }
+        out
+    }
+
+    /// The visual box after a scale by `sx`, `sy` about `c`.
+    fn visual(&self, c: Point, sx: f64, sy: f64) -> Option<Rect> {
+        let k = if self.strokes { (sx * sy).abs().sqrt() } else { 1.0 };
+        let boxes = self.x.iter().zip(&self.y).map(|(x, y)| {
+            let ((x0, x1), (y0, y1)) = (x.scaled(c.x, sx, k), y.scaled(c.y, sy, k));
+            Rect::new(x0, y0, x1, y1)
+        });
+        boxes.reduce(|a, b| a.union(b))
+    }
+
+    /// The scales along x and y that give the visual box the size `size` with a scale about `c`,
+    /// or come as near to it as the margins that stay allow ([`Self::solve`]), and the point that
+    /// goes to the reference point's place: point `refi` of the visual box they give. Returns
+    /// `None`, which keeps `closed` (the scales and the point of [`set_bounds`]'s closed form), when
+    /// the scales of `closed` put point `refi` at the point of `closed` and either give the size
+    /// `size` or are the scales [`Self::solve`] finds, to within rounding (1e-12 of the largest
+    /// value compared, or of 1).
+    fn refit(&self, c: Point, refi: usize, size: [f64; 2], closed: (f64, f64, Point)) -> Option<(f64, f64, Point)> {
+        let ([w, h], (sx, sy, at)) = (size, closed);
+        let b = self.visual(c, sx, sy)?;
+        let p = vectorcraft_geom::reference_point(b, refi);
+        let tolerance = 1e-12 * [b.x0, b.y0, b.x1, b.y1, w, h, at.x, at.y].iter().fold(1.0, |m: f64, v| m.max(v.abs()));
+        let near = |a: f64, b: f64| (a - b).abs() <= tolerance;
+        let placed = near(p.x, at.x) && near(p.y, at.y);
+        if placed && near(b.width(), w) && near(b.height(), h) {
+            return None;
+        }
+        let (tx, ty) = self.solve(w, h);
+        let same = |a: f64, b: f64| (a - b).abs() <= 1e-12 * a.abs().max(b.abs()).max(1.0);
+        if placed && same(tx, sx) && same(ty, sy) {
+            return None;
+        }
+        let b = self.visual(c, tx, ty)?;
+        Some((tx, ty, vectorcraft_geom::reference_point(b, refi)))
+    }
+
+    /// The scales of 0 or more along x and y that give the visual box the size `w` × `h`, each
+    /// found by [`scale_across`]. With strokes that scale, the margins that scale grow by `k`,
+    /// found where it is the square root of the product of the two scales.
+    fn solve(&self, w: f64, h: f64) -> (f64, f64) {
+        let at = |k: f64| (scale_across(&self.x, k, w), scale_across(&self.y, k, h));
+        if !self.strokes {
+            return at(1.0);
+        }
+        // The scales get smaller as `k` grows, so the square root of their product minus `k` is at
+        // least 0 at `k` 0 and at most 0 at `k` equal to that root. Bisection finds the `k` between
+        // the two where it is 0.
+        let (sx, sy) = at(0.0);
+        let (mut lo, mut hi) = (0.0, (sx * sy).sqrt());
+        if hi.is_nan() || hi <= 0.0 {
+            return (sx, sy);
+        }
+        for _ in 0..200 {
+            let mid = lo + (hi - lo) / 2.0;
+            if mid <= lo || mid >= hi {
+                break;
+            }
+            let (sx, sy) = at(mid);
+            if (sx * sy).sqrt() > mid {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let miss = |k: f64| {
+            let (sx, sy) = at(k);
+            ((sx * sy).sqrt() - k).abs()
+        };
+        at(if miss(lo) < miss(hi) { lo } else { hi })
+    }
+}
+
+/// Most parts [`Spans::measure`] opens the objects it sizes into: past it, each object is one part.
+const MAX_SPANS: usize = 4096;
+
+/// What [`Spans::measure`] measures as one span.
+enum Part<'a> {
+    /// An object of the selection, or a member of a plain group in it, and the outset of the
+    /// strokes of the plain groups around it, which scale with its own.
+    Object(&'a Node, f64),
+    /// An object in the art of a symbol instance and the transform that places it square to the
+    /// frame. The outset of the strokes of the instance and of the plain groups around the instance
+    /// scales with the strokes; the outset of the strokes of the plain groups around the object in
+    /// the art stays, as the strokes in the art do.
+    Art(&'a Node, Affine, f64, f64),
+}
+
+/// Adds the parts that [`Spans::measure`] measures `n` by to `parts`, `grow` being the outset of
+/// the strokes of the plain groups around it ([`Part::Object`]). A plain group ([`opens`]) adds the
+/// parts of each member. A symbol instance without effects or an opacity mask of its own adds the
+/// objects of its art, with plain groups there opened too ([`Part::Art`]), when its symbol's art
+/// measures it, it is not in perspective, and its transform keeps the art square to the frame (a
+/// turned or slanted instance is measured by the box around its turned art box). Anything else is
+/// one part. Returns false when the parts pass [`MAX_SPANS`].
+fn open<'a>(n: &'a Node, grow: f64, d: &'a Document, symbols: &vectorcraft_doc::SymbolBoxes, to_local: Affine, parts: &mut Vec<Part<'a>>) -> bool {
+    if opens(n) {
+        match &n.kind {
+            NodeKind::Group { children, .. } => {
+                let grow = grow + n.appearance.outset();
+                return children.iter().all(|c| open(c, grow, d, symbols, to_local, parts));
+            }
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let xf = to_local * *xf;
+                if n.projection().is_none()
+                    && square(xf)
+                    && symbols.art_bounds(symbol).is_some()
+                    && let Some(art) = d.symbols.iter().find(|s| s.name == *symbol)
+                {
+                    return open_art(&art.art, xf, grow + n.appearance.outset(), 0.0, parts);
+                }
+            }
+            _ => {}
+        }
+    }
+    parts.push(Part::Object(n, grow));
+    parts.len() <= MAX_SPANS
+}
+
+/// [`open`] for `n` in symbol art that `xf` places square to the frame: a plain group adds the parts
+/// of each member, and anything else, a symbol instance included, is one part. `kept` is the outset
+/// of the strokes of the plain groups around `n` in the art, and `grow` that of the instance and the
+/// plain groups around it.
+fn open_art<'a>(n: &'a Node, xf: Affine, grow: f64, kept: f64, parts: &mut Vec<Part<'a>>) -> bool {
+    if let NodeKind::Group { children, .. } = &n.kind
+        && opens(n)
+    {
+        let kept = kept + n.appearance.outset();
+        return children.iter().all(|c| open_art(c, xf, grow, kept, parts));
+    }
+    parts.push(Part::Art(n, xf, grow, kept));
+    parts.len() <= MAX_SPANS
+}
+
+/// Whether [`open`] opens `n`: a group without a clip, a Shaper construction, effects or an opacity
+/// mask of its own, or a symbol instance without effects or an opacity mask of its own.
+fn opens(n: &Node) -> bool {
+    let visible = |effects: &[vectorcraft_doc::Effect]| effects.iter().any(|e| e.visible);
+    let effects = visible(&n.appearance.effects) || n.appearance.items.iter().any(|i| visible(i.effects()));
+    let kind = match n.kind {
+        NodeKind::Group { clip, .. } => !clip && n.extras().shaper.is_none(),
+        NodeKind::SymbolInstance { .. } => true,
+        _ => false,
+    };
+    kind && !effects && n.extras().mask.is_none()
+}
+
+/// Whether `a` takes boxes square to the frame to boxes square to it: it scales, mirrors, turns by a
+/// quarter turn and moves, and nothing else, to within rounding.
+fn square(a: Affine) -> bool {
+    let [m0, m1, m2, m3, ..] = a.as_coeffs();
+    let tolerance = 1e-9 * [m0, m1, m2, m3].iter().fold(0.0, |m: f64, v| m.max(v.abs()));
+    m1.abs() <= tolerance && m2.abs() <= tolerance || m0.abs() <= tolerance && m3.abs() <= tolerance
+}
+
+/// The largest scale of 0 or more at which `spans`, with the margins that scale grown by `k`,
+/// reach across `size` together. Returns 1 when their geometric boxes reach 1e-9 or less across
+/// together, as the closed form in [`set_bounds`] does, and 0 when the spans reach farther than
+/// `size` at the scale 0.
+fn scale_across(spans: &[Span], k: f64, size: f64) -> f64 {
+    let o = spans.iter().map(|s| s.lo).fold(f64::INFINITY, f64::min);
+    let across = spans.iter().map(|s| s.hi).fold(f64::NEG_INFINITY, f64::max) - o;
+    // How far the spans reach together after a scale by `s` about `o`, and how fast that changes
+    // with `s`: the far geometric end minus the near one, of the objects that reach farthest at the
+    // two ends.
+    let reach = |s: f64| {
+        let (mut start, mut end, mut slope_start, mut slope_end) = (f64::INFINITY, f64::NEG_INFINITY, 0.0, 0.0);
+        for sp in spans {
+            let (a, b) = sp.scaled(o, s, k);
+            if a < start {
+                (start, slope_start) = (a, sp.lo - o);
+            }
+            if b > end {
+                (end, slope_end) = (b, sp.hi - o);
+            }
+        }
+        (end - start, slope_end - slope_start)
+    };
+    if across.is_nan() || across <= 1e-9 {
+        return 1.0;
+    }
+    let least = reach(0.0).0;
+    if least.is_nan() || least > size {
+        return 0.0;
+    }
+    // `reach` is convex in `s` and at most `size` at 0, so it equals `size` at one largest scale.
+    // Newton's method, started at a larger scale, reaches it one linear piece of `reach` at a
+    // time; bisection finishes the search when a step makes no progress.
+    let (mut lo, mut hi) = (0.0, size / across);
+    for _ in 0..64 {
+        if reach(hi).0 >= size {
+            break;
+        }
+        hi = 2.0 * hi + 1.0;
+    }
+    for _ in 0..64 {
+        let (r, slope) = reach(hi);
+        if r <= size {
+            return hi;
+        }
+        let next = hi - (r - size) / slope;
+        if next.is_nan() || next <= lo || next >= hi {
+            break;
+        }
+        hi = next;
+    }
+    for _ in 0..64 {
+        let mid = lo + (hi - lo) / 2.0;
+        if mid <= lo || mid >= hi {
+            break;
+        }
+        if reach(mid).0 <= size {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    if size - reach(lo).0 <= reach(hi).0 - size { lo } else { hi }
 }
 
 fn expand_shape(s: &mut Session, _: &Value) -> Result<Value> {

@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 
 use crate::DocState;
 
@@ -92,21 +92,29 @@ fn selected_part(n: &Node, keep: &HashSet<NodeId>) -> Option<Node> {
 
 /// `doc` with only the art over `rect` (an artboard): objects whose visual bounds miss it are left
 /// out, at any depth of layers and sublayers, and objects that reach it stay whole (the file's
-/// bounds clip them), as DXF's crop leaves them. A clipping layer keeps every object, its clipping
-/// path among them. An artboard's file then holds its own art, not a whole document of artboards.
+/// bounds clip them), as DXF's crop leaves them. Symbol instances are measured by their art, and
+/// the box of one whose art holds brushed strokes grows by as far as their brush art can paint
+/// ([`SymbolBoxes::with_brush_art`]). An object that holds a symbol instance also stays when what
+/// the canvas paints for it reaches `rect` ([`vectorcraft_render::painted_bounds`]: the effects in
+/// the symbols' art and its own effects). A clipping layer keeps every object, its clipping path
+/// among them. An artboard's file then holds its own art, not a whole document of artboards.
 pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect) -> Document {
-    fn kept(n: &Arc<Node>, rect: vectorcraft_geom::Rect) -> Option<Arc<Node>> {
+    fn kept(n: &Arc<Node>, doc: &Document, symbols: &SymbolBoxes, rect: vectorcraft_geom::Rect) -> Option<Arc<Node>> {
         if matches!(n.kind, NodeKind::Layer { clip: false, .. }) {
             let mut layer = Node::clone(n);
             let children = layer.children_mut()?;
-            *children = children.iter().filter_map(|c| kept(c, rect)).collect();
+            *children = children.iter().filter_map(|c| kept(c, doc, symbols, rect)).collect();
             return Some(Arc::new(layer));
         }
         let over = |b: vectorcraft_geom::Rect| b.x0 <= rect.x1 && rect.x0 <= b.x1 && b.y0 <= rect.y1 && rect.y0 <= b.y1;
-        n.visual_bounds().is_none_or(over).then(|| n.clone())
+        let mut holds_instance = false;
+        n.walk(&mut |c| holds_instance |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
+        let painted = || holds_instance && vectorcraft_render::painted_bounds(doc, n).is_some_and(over);
+        (n.visual_bounds_with(symbols).is_none_or(over) || painted()).then(|| n.clone())
     }
+    let symbols = doc.symbol_boxes().with_brush_art();
     let mut d = doc.clone();
-    d.layers = doc.layers.iter().filter_map(|l| kept(l, rect)).collect();
+    d.layers = doc.layers.iter().filter_map(|l| kept(l, doc, &symbols, rect)).collect();
     d
 }
 
@@ -152,10 +160,12 @@ fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::
 }
 
 /// Objects `ids` of `doc` alone on one layer (in that order, back to front), with one artboard
-/// named `name`: their visual bounds (`None` when they have none).
+/// named `name`: their visual bounds, symbol instances measured by their art (`None` when they
+/// have none).
 pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Document, vectorcraft_geom::Rect)> {
     let nodes: Vec<Arc<Node>> = ids.iter().filter_map(|id| doc.node(*id).cloned().map(Arc::new)).collect();
-    let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))?;
+    let symbols = doc.symbol_boxes();
+    let bounds = nodes.iter().filter_map(|n| n.visual_bounds_with(&symbols)).reduce(|a, b| a.union(b))?;
     let mut d = single_artboard(doc, bounds, name);
     let mut layer = Node::layer(d.alloc_id(), name, vectorcraft_doc::LayerColor::Preset(0));
     if let Some(ch) = layer.children_mut() {

@@ -17,7 +17,7 @@ use krilla::surface::Surface;
 use krilla::text::{Glyph, GlyphId, KrillaGlyph};
 use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
-use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject};
+use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject};
 use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 use vectorcraft_text::TextLayout;
@@ -432,6 +432,11 @@ fn date_time(t: i64) -> krilla::metadata::DateTime {
 
 pub(crate) struct Exporter<'a> {
     doc: &'a Document,
+    /// The art boxes of `doc`'s symbols, which the walk measures symbol instances by when it
+    /// leaves out objects outside the page ([`SymbolBoxes::quick`]). The box of an instance whose
+    /// art holds brushed strokes grows by as far as their brush art can paint
+    /// ([`SymbolBoxes::with_brush_art`]).
+    symbols: SymbolBoxes<'a>,
     warnings: Vec<String>,
     images: HashMap<String, Option<Image>>,
     /// The brush library, parsed when the first brushed stroke is written.
@@ -484,6 +489,7 @@ impl<'a> Exporter<'a> {
     pub(crate) fn new(doc: &'a Document, set: &'a crate::PdfSettings) -> Self {
         Self {
             doc,
+            symbols: doc.symbol_boxes().quick().with_brush_art(),
             warnings: vec![],
             images: HashMap::new(),
             brushes: None,
@@ -907,7 +913,7 @@ impl Exporter<'_> {
         self.warn("knockout groups are written as soft-masked groups (same look, but not editable as knockout groups)");
         let elements: Vec<_> = Node::knockout_elements(children)
             .into_iter()
-            .filter(|c| c.visual_bounds().is_some_and(|b| rects_overlap(b.inflate(1.0, 1.0), page)))
+            .filter(|c| c.visual_bounds_with(&self.symbols).is_some_and(|b| rects_overlap(b.inflate(1.0, 1.0), page)))
             .collect();
         let Some((first, rest)) = elements.split_first() else { return };
         for c in rest.iter().rev() {
@@ -971,7 +977,7 @@ impl Exporter<'_> {
         {
             return;
         }
-        match n.visual_bounds() {
+        match n.visual_bounds_with(&self.symbols) {
             Some(b) if !force && !rects_overlap(b.inflate(1.0, 1.0), page) => return,
             None if !n.is_container() => return,
             _ => {}
