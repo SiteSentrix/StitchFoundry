@@ -967,12 +967,12 @@ fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
                 let entry = json!({"ok": true, "result": v});
                 let size = entry.to_string().len();
                 if kept_bytes.saturating_add(size) > MAX_COMMAND_BATCH_BYTES {
-                    // The results already kept stay; this step's is replaced by the reason the
-                    // batch stops. The loop breaks either way — carrying on would defeat the cap —
+                    // The results already kept stay; this step ran, and its result is replaced by
+                    // the reason the batch stops (saying it ran, so nobody runs it again). The loop breaks either way — carrying on would defeat the cap —
                     // and the atomic group below still closes, as for any stopped batch.
                     failed += 1;
                     values.push(Value::Null);
-                    results.push(json!({"ok": false, "error": format!("batch results exceed {MAX_COMMAND_BATCH_BYTES} bytes; stopping the batch")}));
+                    results.push(json!({"ok": false, "error": format!("this step ran, but the batch's results exceed {MAX_COMMAND_BATCH_BYTES} bytes: its result is dropped and the batch stops here")}));
                     break;
                 }
                 kept_bytes += size;
