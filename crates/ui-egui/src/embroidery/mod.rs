@@ -162,6 +162,8 @@ pub struct EmbroideryUi {
     pub team_names: String,
     /// The Design Library section: its folder, search, sort and what it last found.
     pub library: LibraryView,
+    /// The Batch Output section's choices.
+    pub output: OutputView,
     /// The Monogram section: its letters, style (0 classic, 1 line), border (an index of
     /// `embroidery.monogram`'s borders) and size (mm; 0: the font's own).
     pub monogram_letters: String,
@@ -276,6 +278,7 @@ impl Default for EmbroideryUi {
             fonts_listed: false,
             team_names: String::new(),
             library: LibraryView::default(),
+            output: OutputView::default(),
             monogram_letters: String::new(),
             monogram_style: 0,
             monogram_border: 1,
@@ -337,4 +340,23 @@ pub struct LibraryView {
     pub sort: String,
     /// `embroidery.library.scan`'s answer for them; none: to look.
     pub result: Option<serde_json::Value>,
+    /// The format Convert writes, an index of the machine formats.
+    pub convert_to: usize,
+}
+
+/// The Batch Output section's state.
+#[derive(Default)]
+pub struct OutputView {
+    /// The machine formats ticked (none: the design's machine's).
+    pub formats: Vec<String>,
+    /// The worksheet, an index of `OUTPUT_SHEETS`.
+    pub worksheet: usize,
+    /// Leave the design file out.
+    pub no_design: bool,
+    /// The profile chosen (0: none, else its index + 1) and the name typed to save one.
+    pub profile: usize,
+    pub profile_name: String,
+    /// The folder last written to, and what was written.
+    pub dir: String,
+    pub status: String,
 }

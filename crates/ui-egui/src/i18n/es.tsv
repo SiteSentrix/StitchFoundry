@@ -4854,3 +4854,20 @@ machine	Stop	Parada
 	Save Output Profile	Guardar perfil de salida
 	Delete Output Profile	Eliminar perfil de salida
 	Batch Convert	Conversión por lotes
+	files written	archivos escritos
+	Machine formats (none ticked: the machine's)	Formatos de máquina (ninguno marcado: el de la máquina)
+	Production	Producción
+	Approval	Aprobación
+	Placement template	Plantilla de colocación
+	The design file too	También el archivo del diseño
+	Write to Folder…	Escribir en carpeta…
+	Machine files, worksheet PDF and design, named alike	Archivos de máquina, hoja de trabajo en PDF y diseño, con el mismo nombre
+	Write Again	Escribir de nuevo
+	Profile name	Nombre del perfil
+	Save Profile	Guardar perfil
+	Profile	Perfil
+	Convert to	Convertir a
+	Convert All	Convertir todos
+	Each design found written again in this format beside it	Cada diseño encontrado se vuelve a escribir en este formato a su lado
+	Converted:	Convertidos:
+	couldn't be read:	no se pudieron leer:

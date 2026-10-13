@@ -4436,3 +4436,20 @@ machine	Stop	停止
 	Save Output Profile	保存输出配置
 	Delete Output Profile	删除输出配置
 	Batch Convert	批量转换
+	files written	个文件已写入
+	Machine formats (none ticked: the machine's)	机器格式（未勾选：使用机器的格式）
+	Production	生产
+	Approval	审批
+	Placement template	定位模板
+	The design file too	同时写入设计文件
+	Write to Folder…	写入文件夹…
+	Machine files, worksheet PDF and design, named alike	机器文件、工作单 PDF 和设计，名称相同
+	Write Again	再次写入
+	Profile name	配置名称
+	Save Profile	保存配置
+	Profile	配置
+	Convert to	转换为
+	Convert All	全部转换
+	Each design found written again in this format beside it	找到的每个设计都以此格式写在其旁边
+	Converted:	已转换：
+	couldn't be read:	无法读取：

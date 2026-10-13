@@ -4126,3 +4126,20 @@ machine	Trim	Corte de linha
 	Save Output Profile	Salvar perfil de saída
 	Delete Output Profile	Excluir perfil de saída
 	Batch Convert	Conversão em lote
+	files written	arquivos gravados
+	Machine formats (none ticked: the machine's)	Formatos de máquina (nenhum marcado: o da máquina)
+	Production	Produção
+	Approval	Aprovação
+	Placement template	Gabarito de posicionamento
+	The design file too	O arquivo do desenho também
+	Write to Folder…	Gravar na pasta…
+	Machine files, worksheet PDF and design, named alike	Arquivos de máquina, ficha de trabalho em PDF e desenho, com o mesmo nome
+	Write Again	Gravar de novo
+	Profile name	Nome do perfil
+	Save Profile	Salvar perfil
+	Profile	Perfil
+	Convert to	Converter para
+	Convert All	Converter todos
+	Each design found written again in this format beside it	Cada desenho encontrado é gravado de novo neste formato ao lado dele
+	Converted:	Convertidos:
+	couldn't be read:	não puderam ser lidos:

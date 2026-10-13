@@ -4856,3 +4856,20 @@ machine	Stop	Arresto
 	Save Output Profile	Salva profilo di output
 	Delete Output Profile	Elimina profilo di output
 	Batch Convert	Conversione in batch
+	files written	file scritti
+	Machine formats (none ticked: the machine's)	Formati macchina (nessuno spuntato: quello della macchina)
+	Production	Produzione
+	Approval	Approvazione
+	Placement template	Sagoma di posizionamento
+	The design file too	Anche il file del disegno
+	Write to Folder…	Scrivi in una cartella…
+	Machine files, worksheet PDF and design, named alike	File macchina, scheda di lavoro PDF e disegno, con lo stesso nome
+	Write Again	Scrivi di nuovo
+	Profile name	Nome del profilo
+	Save Profile	Salva profilo
+	Profile	Profilo
+	Convert to	Converti in
+	Convert All	Converti tutti
+	Each design found written again in this format beside it	Ogni disegno trovato riscritto in questo formato accanto a sé
+	Converted:	Convertiti:
+	couldn't be read:	illeggibili:

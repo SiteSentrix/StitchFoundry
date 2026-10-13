@@ -4220,3 +4220,20 @@ machine	Stop	停止
 	Save Output Profile	儲存輸出設定檔
 	Delete Output Profile	刪除輸出設定檔
 	Batch Convert	批次轉換
+	files written	個檔案已寫入
+	Machine formats (none ticked: the machine's)	機器格式（未勾選：使用機器的格式）
+	Production	生產
+	Approval	審核
+	Placement template	定位範本
+	The design file too	同時寫入設計檔
+	Write to Folder…	寫入資料夾…
+	Machine files, worksheet PDF and design, named alike	機器檔、工作單 PDF 與設計，名稱相同
+	Write Again	再次寫入
+	Profile name	設定檔名稱
+	Save Profile	儲存設定檔
+	Profile	設定檔
+	Convert to	轉換為
+	Convert All	全部轉換
+	Each design found written again in this format beside it	找到的每個設計都以此格式寫在其旁邊
+	Converted:	已轉換：
+	couldn't be read:	無法讀取：

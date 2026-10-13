@@ -4836,3 +4836,20 @@ machine	Stop	Зупинка
 	Save Output Profile	Зберегти профіль виводу
 	Delete Output Profile	Видалити профіль виводу
 	Batch Convert	Пакетне перетворення
+	files written	файлів записано
+	Machine formats (none ticked: the machine's)	Формати машини (нічого не позначено: формат машини)
+	Production	Виробництво
+	Approval	Погодження
+	Placement template	Шаблон розміщення
+	The design file too	І файл дизайну
+	Write to Folder…	Записати в теку…
+	Machine files, worksheet PDF and design, named alike	Файли машини, робочий аркуш PDF і дизайн з однаковою назвою
+	Write Again	Записати знову
+	Profile name	Назва профілю
+	Save Profile	Зберегти профіль
+	Profile	Профіль
+	Convert to	Перетворити на
+	Convert All	Перетворити всі
+	Each design found written again in this format beside it	Кожен знайдений дизайн записується в цьому форматі поруч із ним
+	Converted:	Перетворено:
+	couldn't be read:	не читаються:
