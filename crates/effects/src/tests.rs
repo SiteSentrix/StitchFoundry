@@ -260,6 +260,46 @@ fn zigzag_spaces_ridges_evenly_along_a_straight_line() {
     }
 }
 
+/// #1554 on curves: a circle's ridges sit at equal angles, at the radius plus and minus the size in
+/// turn all the way round.
+#[test]
+fn zigzag_on_a_circle_is_regular() {
+    let circle = shapes::ellipse(Rect::new(-50.0, -50.0, 50.0, 50.0));
+    let out = run("distort.zigZag", json!({"ridges": 3, "points": "corner", "size": 10}), &circle);
+    let pts: Vec<Point> = out.subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(pts.len(), 16);
+    let start = pts[0].y.atan2(pts[0].x);
+    let mut radii = vec![];
+    for (i, q) in pts.iter().enumerate() {
+        let turn = (q.y.atan2(q.x) - start).to_degrees().abs() / 22.5;
+        assert!(close(turn, turn.round(), 0.02), "point {i} at {turn} sixteenths");
+        radii.push(q.to_vec2().hypot().round());
+    }
+    assert!(radii.iter().all(|r| *r == 60.0 || *r == 40.0) && (0..16).all(|i| radii[i] != radii[(i + 1) % 16]), "{radii:?}");
+}
+
+/// #1554 on an uneven curve: the ridges divide its length, not its parameter, into equal parts.
+#[test]
+fn zigzag_spaces_ridges_by_length_on_an_uneven_curve() {
+    use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
+    let (a, b) = (Point::new(0.0, 0.0), Point::new(300.0, 0.0));
+    let curve = PathData::single(SubPath::new(
+        vec![
+            vectorcraft_geom::Anchor::with_handles(a, a, Point::new(10.0, 40.0)),
+            vectorcraft_geom::Anchor::with_handles(b, Point::new(100.0, 200.0), b),
+        ],
+        false,
+    ));
+    let c = curve.subpaths[0].segment(0);
+    let len = c.arclen(1e-6);
+    let out = run("distort.zigZag", json!({"ridges": 3, "points": "corner", "size": 0}), &curve);
+    let along: Vec<f64> = out.subpaths[0].anchors.iter().map(|q| c.subsegment(0.0..c.nearest(q.p, 1e-9).t).arclen(1e-6) / len).collect();
+    assert_eq!(along.len(), 5);
+    for (k, share) in along.iter().enumerate() {
+        assert!(close(*share, k as f64 / 4.0, 1e-3), "{along:?}");
+    }
+}
+
 #[test]
 fn offset_path_grows_and_shrinks() {
     let grow = run("path.offsetPath", json!({"offset": 10, "joins": "miter"}), &square()).bounds().unwrap();
