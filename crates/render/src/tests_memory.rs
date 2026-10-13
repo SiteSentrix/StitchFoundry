@@ -182,6 +182,122 @@ fn swept_type_entries_give_back_their_bytes() {
     assert_eq!((r.texts.len(), r.texts.bytes()), (0, 0));
 }
 
+/// [`text_doc`] of three type objects reading `word`: one at 80% opacity, one in Multiply and one
+/// with a drop shadow.
+fn faded_text_doc(word: &str) -> Document {
+    let mut d = text_doc(3, word);
+    let ids: Vec<NodeId> = d.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    d.node_mut(ids[0]).unwrap().opacity = 0.8;
+    d.node_mut(ids[1]).unwrap().blend = vectorcraft_color::BlendMode::Multiply;
+    d.node_mut(ids[2]).unwrap().appearance.effects.push(drop_shadow());
+    d
+}
+
+/// The glyph geometry `r` keeps for each type object of `d`: under its node, or under the art
+/// drawn for it when it has effects.
+fn kept_glyphs(r: &mut Renderer, d: &Document) -> Vec<Option<Arc<TextGeom>>> {
+    let stamp = r.stamp;
+    text_keys(d)
+        .into_iter()
+        .map(|k| {
+            let k = r.fx_arts.get(&k, stamp).map_or(k, |e| Arc::as_ptr(&e.1) as usize);
+            r.texts.get(&k, stamp).map(|(_, g)| g.clone())
+        })
+        .collect()
+}
+
+/// `f`'s result from a run during which the fonts did not change: other tests add fonts, and the
+/// renderer lays all type out again when the fonts change.
+fn fonts_unchanged<T>(mut f: impl FnMut() -> T) -> T {
+    loop {
+        let fonts = vectorcraft_text::FontDb::global().generation();
+        let t = f();
+        if vectorcraft_text::FontDb::global().generation() == fonts {
+            return t;
+        }
+    }
+}
+
+/// Type at 80% opacity, in Multiply and with a drop shadow keeps its glyph geometry between
+/// frames, as opaque type does: the second frame draws the geometry the first laid out. Frames
+/// that snap type to pixels keep none, and neither does type art that the effect-art cache has no
+/// room for.
+#[test]
+fn translucent_blended_and_shadowed_type_keeps_its_glyph_geometry_between_frames() {
+    let d = faded_text_doc("Kept");
+    let opts = RenderOptions::default();
+    let (first, kept, entries, second, again) = fonts_unchanged(|| {
+        let mut r = Renderer::new();
+        let first = r.render(&d, 400, 400, Affine::IDENTITY, &opts).pixels;
+        let (kept, entries) = (kept_glyphs(&mut r, &d), r.texts.len());
+        let second = r.render(&d, 400, 400, Affine::IDENTITY, &opts).pixels;
+        (first, kept, entries, second, kept_glyphs(&mut r, &d))
+    });
+    assert!(kept.iter().all(Option::is_some) && entries == 3, "{entries} entries");
+    assert!(second == first);
+    let same = kept.iter().zip(&again).all(|pair| matches!(pair, (Some(a), Some(b)) if Arc::ptr_eq(a, b)));
+    assert!(same, "the second frame draws the geometry the first laid out");
+    // Type anti-aliasing snaps the glyphs to pixels.
+    let mut r = Renderer::new();
+    r.render(&d, 400, 400, Affine::IDENTITY, &RenderOptions { anti_alias: AntiAlias::Type, ..Default::default() });
+    assert!(r.texts.is_empty());
+    // With no room for effect art, the shadowed type's art is made in every frame.
+    let frames = fonts_unchanged(|| {
+        let mut r = Renderer::new();
+        r.fx_arts = FrameCache::new(0, 0);
+        (0..2).map(|_| (r.render(&d, 400, 400, Affine::IDENTITY, &opts).pixels == first, r.texts.len())).collect::<Vec<_>>()
+    });
+    assert_eq!(frames, [(true, 2), (true, 2)]);
+}
+
+/// Editing the text of type at 80% opacity, in Multiply or with a drop shadow lays it out again:
+/// the next frame draws what a new renderer draws.
+#[test]
+fn edited_translucent_blended_and_shadowed_type_draws_as_new() {
+    for i in 0..3 {
+        let mut d = faded_text_doc("Kept");
+        let id = d.layers[0].children().unwrap()[i].id;
+        let opts = RenderOptions::default();
+        draws_as_new(&mut d, &opts, &opts, |d| {
+            if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+                t.runs[0].text = "Edit".into();
+            }
+        });
+    }
+}
+
+/// Type showing an inline graphic, at 80% opacity, in Multiply, with a drop shadow and opaque:
+/// when the symbol's art changes size and the document's inline graphics are not resolved again,
+/// the next frame lays the type out with the new size, as a new renderer does.
+#[test]
+fn type_with_an_inline_graphic_draws_its_symbols_new_size() {
+    use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
+    for i in 0..4 {
+        let mut d = Document::new(200.0, 100.0);
+        let art = symbol_art(&mut d);
+        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+        let style = CharStyle { size: 24.0, ..Default::default() };
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), "A", style.clone());
+        t.runs.push(TextRun::inline(InlineArt::new("S"), style.clone()));
+        t.runs.push(TextRun::new("B", style));
+        let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        match i {
+            0 => n.opacity = 0.8,
+            1 => n.blend = vectorcraft_color::BlendMode::Multiply,
+            2 => n.appearance.effects.push(drop_shadow()),
+            _ => {}
+        }
+        let mut d = with_art(d, vec![n]);
+        d.resolve_inline_art();
+        // `S` becomes a wide red bar: the inline graphic grows, and the type after it moves.
+        edit_draws_as_new(d, |d| {
+            let bar = vectorcraft_geom::shapes::rectangle(Rect::new(-20.0, -4.0, 20.0, 4.0));
+            let red = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+            d.symbols[0].art = Arc::new(Node::path(d.alloc_id(), bar, red));
+        });
+    }
+}
+
 /// A symbol's art inside the 20 × 20 square around the origin: a group of a square filled blue
 /// with a 2 pt black stroke and a black line.
 fn symbol_art(d: &mut Document) -> Node {

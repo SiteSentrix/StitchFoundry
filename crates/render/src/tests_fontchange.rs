@@ -83,6 +83,37 @@ fn type_with_raster_effects_redraws_when_its_font_becomes_available() {
     assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
 }
 
+/// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes
+/// available: the glyph geometry kept for it is laid out again.
+#[test]
+fn translucent_blended_and_shadowed_type_redraws_when_its_font_becomes_available() {
+    const FAMILY: &str = "Blended Serif4";
+    let mut d = Document::new(300.0, 150.0);
+    let l = d.layers[0].id;
+    for i in 0..3 {
+        let style = CharStyle { size: 36.0, font_family: FAMILY.into(), ..Default::default() };
+        let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 40.0 + 45.0 * i as f64), "Hamburg", style))));
+        match i {
+            0 => n.opacity = 0.8,
+            1 => n.blend = vectorcraft_color::BlendMode::Multiply,
+            _ => n.appearance.effects.push(vectorcraft_doc::Effect {
+                id: "stylize.dropShadow".into(),
+                params: serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100}),
+                visible: true,
+            }),
+        }
+        d.insert(Some(l), i, n).unwrap();
+    }
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let before = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+    assert_eq!(r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, before, "drawn again from the kept glyph geometry");
+    assert!(vectorcraft_text::FontDb::global().add_font(serif_as(FAMILY)) > 0);
+    let after = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+    assert_ne!(before, after, "drawn in the font that arrived");
+    assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
+}
+
 /// Type with a geometry effect in a symbol's art redraws in a font that becomes available: the art
 /// kept for the instance is placed again when the fonts change.
 #[test]

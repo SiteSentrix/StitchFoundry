@@ -1602,7 +1602,14 @@ impl Renderer {
 
     fn draw_text(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject) {
         let t = &*f.doc.inline_resolved(t);
-        let g = text_geom_snapped(t, f.text_snap(t));
+        // Type drawn as `fx_owner` (the node `draw_arc` is drawing, or type art that `fx_arts`
+        // keeps, see `draw_fx_art`) takes its glyph geometry from `texts`, as on the fast path,
+        // except in frames that snap type to pixels.
+        let owner = self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned();
+        let g = match (f.text_snap(t), owner) {
+            (None, Some(a)) => self.text_geom_of(&a, t),
+            (snap, _) => Arc::new(text_geom_snapped(t, snap)),
+        };
         self.draw_text_geom(ctx, f, n, t, &g);
     }
 
@@ -1670,7 +1677,12 @@ impl Renderer {
     }
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).
+    /// Text `t` that is not the node's own, such as the copy whose inline graphics
+    /// `Document::inline_resolved` sized again, is laid out without the cache.
     fn text_geom_of(&mut self, a: &Arc<Node>, t: &TextObject) -> Arc<TextGeom> {
+        if !matches!(&a.kind, NodeKind::Text(own) if std::ptr::eq(&**own, t)) {
+            return Arc::new(text_geom(t));
+        }
         let fonts = vectorcraft_text::FontDb::global().generation();
         if fonts != self.text_fonts {
             self.texts.clear();

@@ -869,10 +869,10 @@ impl Renderer {
                 // A symbol's art can change while the instance doesn't: no cached shadows.
                 let cache = (cache && !matches!(a.kind, NodeKind::SymbolInstance { .. })).then_some(0);
                 let content = Content { node: a, owner: Some(a), cache, reach, outline: region.as_deref().map(|r| (&r.0, r.1)) };
-                self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_node(c, fr, &art, true));
+                self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_fx_art(c, fr, a, &art));
                 ctx.set_transform(Affine::IDENTITY);
             }
-            _ => self.draw_node(ctx, f, &art, true),
+            _ => self.draw_fx_art(ctx, f, a, &art),
         }
         self.made_again = outer;
     }
@@ -937,6 +937,19 @@ impl Renderer {
             self.fx_arts.insert(key, (a.clone(), art.clone(), found), bytes, self.stamp);
         }
         art
+    }
+
+    /// Draw `art`, the art [`Self::fx_art`] made for `a`. Type art that `fx_arts` keeps for `a` is
+    /// drawn as `fx_owner`, so [`Self::draw_text`] takes its glyph geometry from `texts`.
+    fn draw_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, art: &Arc<Node>) {
+        let kept =
+            matches!(art.kind, NodeKind::Text(_)) && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, art));
+        if !kept {
+            return self.draw_node(ctx, f, art, true);
+        }
+        let outer = self.fx_owner.replace(art.clone());
+        self.draw_node(ctx, f, art, true);
+        self.fx_owner = outer;
     }
 
     /// `art` with the colour adjustments inside it applied, then `outer` (its object's own) on
