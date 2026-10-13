@@ -232,6 +232,15 @@ Working and tested (see [`embroidery.md`](embroidery.md) for behaviour):
 - Tests: `sf-core` 62, `sf-formats` 43, engine embroidery 10, tools 2, plus the workspace's
   5,173 overall.
 
+Production (phase 6): colorways and a product visualizer (garments drawn in code, or a photo of the
+customer's own), worksheets (production, approval, pattern, placement template) with the shop's
+name, logo and Code 128 / Code 39 barcodes, stitch images and life-size print views, batch output
+with profiles, cost estimates, hoops chosen, turned, placed and of one's own, multi-hooping
+(registration marks, split objects, multi-position hoops), the design library (browse, search,
+convert), design templates, clipart, job orders, background exports and their history, a send
+queue for machine folders, placement aids on garments, colour merge and a lettering kiosk for the
+counter. See [`embroidery.md`](embroidery.md).
+
 Known weak spots: satin splitting on unusual glyph shapes, auto-digitize on photos,
 VP3/XXX/U01 interop beyond the oracle, not yet sewn on real machines.
 
@@ -729,7 +738,7 @@ and target dir each) calendar time drops by roughly half.
 | **3. Lettering suite** | LT-03, LT-05, LT-08…10, LT-13, LT-14; font recipes and editor (CL-02…04); team names (TM-01, TM-02); monograms (TM-03); KDC-01; puff (BEY-07, NEW-19); a font library (NEW-20); bubble and spiral text (NEW-21) | 6–8 |
 | **4. Multi-decoration** | Sequins (SQN-*), beads (BD-01), bling (BL-01), appliqué completion (AP-02…05), cording/boring (MD-02, MD-03), virtual decoration (MD-01), chenille-type patterns (SP-11), multi-decoration outputs (MDO-01); appliqué lettering and cover choice (NEW-22, NEW-29) | 5–7 |
 | **5. Auto and photo digitizing** | AD-03, AD-04, BM-02, BM-03, PH-01…03, SE-06 | 3–5 |
-| **6. Production and management** | Colorways and visualizer (CW-*); worksheets, barcodes, images (RP-*); batch output (OUT-02); cost (OUT-05); hooping and multi-hooping (HO-*, MH-*); more formats (MF-04, MFL-02); hot folders (OUT-03); design library (DM-*); templates and clipart; kiosk (KI-01); background exports; auto basting, placement aids, design notes, catalogue print, stabiliser advice, send to machine (NEW-23, NEW-25, NEW-26, NEW-30, NEW-31, NEW-35) | 6–8 |
+| **6. Production and management** (done 2026-10-13 but for MF-04 and RP-02, which wait on the owner) | Colorways and visualizer (CW-*); worksheets, barcodes, images (RP-*); batch output (OUT-02); cost (OUT-05); hooping and multi-hooping (HO-*, MH-*); more formats (MF-04, MFL-02); hot folders (OUT-03); design library (DM-*); templates and clipart; kiosk (KI-01); background exports; auto basting, placement aids, design notes, catalogue print, stabiliser advice, send to machine (NEW-23, NEW-25, NEW-26, NEW-30, NEW-31, NEW-35) | 6–8 |
 | **R. Release readiness** | Rebrand done 2026-10-11: StitchFoundry by SiteSentrix, an original icon, app id `com.sitesentrix.stitchfoundry`, its own preferences folder (reads VectorCraft's once), the ArtCraft name, logos and links removed, presets and profiles renamed with their old names still accepted; the repository is public at github.com/SiteSentrix/StitchFoundry, and CI (`.github/workflows/ci.yml`) runs `cargo xtask ci` on every push to main and every pull request; the Brother and Janome thread palettes are credited to pyembroidery (MIT) in `NOTICE`. The programs are `stitchfoundry` and `stitchfoundry-cli`, and the packages, installers and release files are named `stitchfoundry` too, so both apps install side by side (the Cargo packages keep VectorCraft's names). Designs save as `.stitchfoundry` (VectorCraft documents inside; `.vectorcraft` and `.drawcraft` still open), and macOS knows the type. Left: the web build's file names; VectorCraft's packaging and platform workflows, which only run in its repository; the maintainer address in the Linux packages; signed installers; website and download page; a community space | 2–3, plus the owner's Apple and Windows developer accounts |
 | **A. AI service** | The cloud AI features ([§11](#11-open-source-and-ai-features)): accounts, credits and billing behind a small cloud backend; text to embroidery (NEW-16) first, then image or logo to embroidery (NEW-17, pulling in AD-03 and AD-04), the assistant panel (NEW-07) and product mockups (NEW-18); bring-your-own-key for every AI feature. Landed 2026-10-11 with your own Anthropic API key (desktop): text to embroidery (Embroidery › Design from Prompt) and image or logo to embroidery (Redraw Image with Claude), so the cloud side comes next | 8–12, plus the owner's payment, AI provider and hosting accounts |
 | **7. Hardening and extras** | Real-machine tuning from sew-outs, performance at 100k+ stitches, web app embroidery pass, translation review, chenille machines and cross-stitch designer (CH-01, CH-03), assistant panel (NEW-07), Ink/Stitch-inspired extras (BEY-05), Multi Blend as one object (NEW-01); scatter copies, echo quilting, embossed turning satin, help in place, true-size zoom, a simple workspace (NEW-24, NEW-27, NEW-28, NEW-32…34) | 5–10, spread over the calendar |
@@ -750,6 +759,14 @@ Motif tool (MO-01), split lines that follow the shape (CS-05), My Motifs across 
 buttonholes from the Embroidery panel (SP-14, NEW-04) and a curve editor for spacing profiles
 (NEW-02). Phase 2 is complete but for one refinement moved to phase 7: a Multi Blend kept as one
 object (NEW-01; Make Blend makes one object per thread).
+
+Phase 6 (production and management) was done on 2026-10-13: colorways and the product
+visualizer, worksheets of the shop's own with barcodes, stitch images and print views, batch
+output with profiles, cost, hoops chosen and turned and kept at a fixed place, hoops of one's own,
+multi-hooping with registration marks and split objects, multi-position hoops, the design library,
+design templates and clipart, job orders, background exports with their history, a send queue for
+machine folders, placement aids, colour merge and the lettering kiosk. Two rows wait on the owner
+(§10): MF-04, more machine formats (HUS and VIP), and RP-02, the barcodes checked with a scanner.
 
 **Order (owner, 2026-10-11):** 0 → R → A → 2 → 3 → 4 → 5 → 6, with 7 alongside: the AI
 service comes right after the public launch because it pays for the project.
@@ -823,6 +840,14 @@ appliqué, satin-heavy badge, large fill) as `.vectorcraft` files in `crates/eng
 4. **Priorities:** which phase matters most to your work (for example lettering and team
    names for a shop, multi-decoration for fashion, photo stitch for gifts)?
 5. **AI assistant:** do you want an in-app "Ask" panel that calls Claude (needs an API key)?
+6. **HUS (MF-04):** Husqvarna's older HUS format can be written from its public description, but
+   its compression has no public test files to check against. Add it marked "experimental", or
+   leave it out until a HUS file sewn on a machine can confirm it?
+7. **VIP (MF-04):** the only public description of VIP's colour key is on a page marked "All
+   Rights Reserved"; it is not copied without your approval. Leave VIP out, or find another
+   source?
+8. **Barcodes (RP-02):** worksheets print Code 128 and Code 39 from the public standards; they
+   still need checking with a real barcode scanner. Scan a printed worksheet when you can.
 
 ---
 
