@@ -212,6 +212,38 @@ fn area_flow_inside_circle_keeps_glyphs_inside() {
     assert!(w(l.lines.len() / 2) > w(0));
 }
 
+/// In a frame that is narrow at the top, a word that doesn't fit the top lines moves down to the
+/// first line wide enough for it (the lines above stay empty), with either composer. Only a word
+/// wider than every line is broken.
+#[test]
+fn area_flow_moves_a_word_down_to_a_line_wide_enough_for_it() {
+    let triangle = |base: f64, height: f64| {
+        let mut p = BezPath::new();
+        p.move_to((base / 2.0, 0.0));
+        p.line_to((base, height));
+        p.line_to((0.0, height));
+        p.close_path();
+        p
+    };
+    let text = "Wonderful extraordinary typesetting";
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let mut t = area_path(text, style(12.0), &triangle(200.0, 200.0), Justify::Left);
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        assert!(!l.overflow, "{composer:?}");
+        let lines: Vec<&str> = l.lines.iter().map(|li| text[li.start..li.end].trim_end()).collect();
+        // The top lines are wide enough for "Wo" but not for "Wonderful": it starts lower.
+        assert_eq!(lines.first(), Some(&"Wonderful"), "{composer:?}: {lines:?}");
+        for li in &lines {
+            assert!(li.split(' ').all(|w| text.split(' ').any(|word| word == w)), "{composer:?}: {lines:?}");
+        }
+    }
+    // No line of this triangle is as wide as the word: it is still broken, and every letter is set.
+    let word = "Supercalifragilisticexpialidocious";
+    let l = layout(db(), &area_path(word, style(12.0), &triangle(60.0, 400.0), Justify::Left));
+    assert!(!l.overflow && l.lines.len() > 1, "{:?}", line_places(&l));
+}
+
 /// Lays `t` out as [`layout`] does, on a thread of its own, and fails the test when that panics or
 /// takes more than 20 s.
 fn layout_soon(t: &TextObject) -> TextLayout {
