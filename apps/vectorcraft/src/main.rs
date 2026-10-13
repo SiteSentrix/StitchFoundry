@@ -45,6 +45,7 @@ mod printing;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 mod system_fonts;
 mod window;
+mod window_frame;
 mod xwayland;
 
 use vectorcraft_engine::Session;
@@ -62,6 +63,8 @@ struct App {
     graphics_lost: bool,
     /// Frames the UI has run (see [`end_before_teardown`]).
     frames: u64,
+    /// Keeps the custom title bar's window borderless (Windows, #1758).
+    window_frame: Option<window_frame::WindowFrameFn>,
 }
 
 impl eframe::App for App {
@@ -72,6 +75,11 @@ impl eframe::App for App {
         file_access::unconfined(|| self.logic_frame(ctx, frame));
     }
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        // winit gives the window its caption back when it changes the window's flags (maximize,
+        // restore, …): take it off again before the frame is laid out (#1758).
+        if let Some(window_frame) = self.window_frame.as_mut() {
+            window_frame();
+        }
         #[cfg(target_os = "macos")]
         if self.app.services.native_menu.is_some() {
             mac_menu::raw_input_hook(raw);
@@ -858,7 +866,9 @@ fn main() -> std::process::ExitCode {
                 // The first frame is due from now (`gpu::watch_first_frame`).
                 #[cfg(feature = "wgpu")]
                 created.ready();
-                Ok(Box::new(App { app, graphics_loss, graphics_lost: false, frames: 0 }))
+                // The content and the pointer stay aligned on Windows (#1758).
+                let window_frame = window_frame::service(cc, custom_titlebar);
+                Ok(Box::new(App { app, graphics_loss, graphics_lost: false, frames: 0, window_frame }))
             }),
         )
     });
