@@ -530,6 +530,10 @@ display shows them (`view: flat` for flat colour), and writes a PNG: for a websi
 catalogue. `ppmm` sets the pixels a millimetre (10; up to 40 for print), `background` white, a
 colour or `transparent`, `margin` the mm round the design (3).
 
+**Embroidery › Print Stitch View** (`embroidery.printView {scale?, page?, view?}`) opens the
+stitch view as pages to print (File › Print) or export: life size over as many A4 or Letter pages
+as it takes (the pages touching, to tape together), or fitted to one page (`scale: fit`).
+
 ## Stitch lists and G-code
 
 Besides the machine formats, `embroidery.export` (and Batch Output, Send to Machine) writes the
