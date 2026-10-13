@@ -58,7 +58,7 @@ macro_rules! style_cmds {
                 concat!($p, ".new"),
                 concat!("New ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name?, attrs?: {…} (default: those of the selected text, or of text `id` at `start`), id?, start?: byte} → {name}",
+                "{name?, attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start",
                 |s, p| new(s, p, $kind),
                 true,
             ),
@@ -74,7 +74,7 @@ macro_rules! style_cmds {
                 concat!($p, ".redefine"),
                 concat!("Redefine ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name, id?, start?} from the selected text; users keep their overrides",
+                "{name, id?, start?: byte, end?: byte} from selected text; nonempty character ranges sample their first selected character, start alone keeps insertion affinity, paragraph styles sample start; users keep their overrides",
                 |s, p| redefine(s, p, $kind),
                 true,
             ),
@@ -266,8 +266,9 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
     }
 }
 
-/// The selected text's attributes: the Type tool range's start (`id`, `start`) or the first
-/// selected text object's first run.
+/// The selected text's attributes: the first selected character for a nonempty range,
+/// the insertion style at a lone `start`, or the first selected text object's first run.
+/// Paragraph capture always samples the paragraph at `start`.
 fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<String, Value>>> {
     let d = &s.doc()?.doc;
     let id = match id_param(p, "id") {
@@ -277,7 +278,13 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<Stri
     let Some(NodeKind::Text(t)) = id.and_then(|i| d.node(i)).map(|n| &n.kind) else { return Ok(None) };
     let at = p.get("start").and_then(Value::as_u64).map_or(0, |v| usize::try_from(v).unwrap_or(usize::MAX));
     Ok(Some(match kind {
-        Kind::Char => char_attrs(&vectorcraft_text::edit::style_at(&t.runs, at)),
+        Kind::Char => {
+            let style = match p.get("end").and_then(Value::as_u64).map(|v| usize::try_from(v).unwrap_or(usize::MAX)) {
+                Some(end) => vectorcraft_text::edit::insertion_style(&t.runs, at.min(end), at.max(end)),
+                None => vectorcraft_text::edit::style_at(&t.runs, at),
+            };
+            char_attrs(&style)
+        }
         // The paragraph at `start`.
         Kind::Para => to_attrs(t.para_at(t.paragraphs_in(at, at).start)),
     }))
@@ -737,5 +744,105 @@ mod tests {
         let d = s.doc().unwrap().doc.clone();
         let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
         assert_eq!(back.para_styles, d.para_styles);
+    }
+
+    fn capture_boundary_command(redefine: bool, text: &str, start: usize, end: Option<usize>, expected_size: f64) {
+        let (mut s, id) = session_with_text(text);
+        s.execute("text.setStyle", &json!({"id": id, "size": 18})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 2, "end": text.len(), "size": 34})).unwrap();
+        if redefine {
+            s.execute("charStyle.new", &json!({"name": "Captured", "attrs": {"size": 24}})).unwrap();
+        }
+        s.doc_mut().unwrap().mark_saved();
+        let before = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let mut params = json!({"name": "Captured", "id": id, "start": start});
+        if let Some(end) = end {
+            params["end"] = json!(end);
+        }
+        let command = if redefine { "charStyle.redefine" } else { "charStyle.new" };
+        s.execute(command, &params).unwrap();
+        let st = s.doc().unwrap();
+        let def = st.doc.char_styles.iter().find(|d| d.name == "Captured").unwrap();
+        assert_eq!(def.attrs.get("size").and_then(Value::as_f64), Some(expected_size), "{command} {text:?} {start}..{end:?}");
+        assert!(!def.attrs.contains_key("style_name"));
+        assert_eq!(st.doc.node(NodeId(id)), before.node(NodeId(id)), "capture does not apply the definition");
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
+        assert!(st.is_dirty());
+        let after = st.doc.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert!(!s.doc().unwrap().is_dirty());
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, after);
+        assert_eq!(s.doc().unwrap().selection, selection);
+    }
+
+    fn capture_boundary_ranges(redefine: bool) {
+        for (text, start, end, size) in [
+            ("ABcdef", 2, 5, 34.0),
+            ("é漢字", 2, 5, 34.0),
+            ("ABcdef", 5, 2, 34.0), // command ranges are ordered before selected-character sampling
+            ("ABcdef", 1, 5, 18.0), // a mixed range samples its first selected character
+            ("ABcdef", 2, 2, 18.0), // collapsed range retains insertion affinity
+            ("ABcdef", 3, 3, 34.0),
+            ("ABcdef", 99, 100, 34.0), // beyond the text retains the final run
+        ] {
+            capture_boundary_command(redefine, text, start, Some(end), size);
+        }
+    }
+
+    #[test]
+    fn char_style_new_range_capture_boundary() {
+        capture_boundary_ranges(false);
+    }
+
+    #[test]
+    fn char_style_redefine_range_capture_boundary() {
+        capture_boundary_ranges(true);
+    }
+
+    #[test]
+    fn char_style_start_only_capture_affinity_controls() {
+        for redefine in [false, true] {
+            for text in ["ABcdef", "é漢字"] {
+                for (start, size) in [(0, 18.0), (2, 18.0), (3, 34.0), (99, 34.0)] {
+                    capture_boundary_command(redefine, text, start, None, size);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn para_style_range_capture_samples_start_paragraph() {
+        for redefine in [false, true] {
+            for (start, end, justify) in [(0, 7, "Left"), (4, 7, "Right"), (4, 0, "Right")] {
+                let (mut s, id) = session_with_text("One\nTwo");
+                s.execute("text.setStyle", &json!({"id": id, "justify": "left"})).unwrap();
+                s.execute("text.setStyle", &json!({"id": id, "start": 4, "end": 7, "justify": "right"})).unwrap();
+                if redefine {
+                    s.execute("paraStyle.new", &json!({"name": "Captured", "attrs": {"justify": "Center"}})).unwrap();
+                }
+                let before = s.doc().unwrap().doc.clone();
+                let selection = s.doc().unwrap().selection.clone();
+                let undo = s.doc().unwrap().history.undo.len();
+                let command = if redefine { "paraStyle.redefine" } else { "paraStyle.new" };
+                s.execute(command, &json!({"name": "Captured", "id": id, "start": start, "end": end})).unwrap();
+                let st = s.doc().unwrap();
+                let def = st.doc.para_styles.iter().find(|d| d.name == "Captured").unwrap();
+                assert_eq!(def.attrs["justify"], json!(justify), "paragraph capture still samples start, not the end or a normalized range");
+                assert_eq!(st.doc.node(NodeId(id)), before.node(NodeId(id)));
+                assert_eq!(st.selection, selection);
+                assert_eq!(st.history.undo.len(), undo + 1);
+                let after = st.doc.clone();
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(s.doc().unwrap().doc, before);
+                s.execute("edit.redo", &json!({})).unwrap();
+                assert_eq!(s.doc().unwrap().doc, after);
+            }
+        }
     }
 }
