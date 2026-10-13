@@ -1250,3 +1250,18 @@ fn a_hard_edged_circle_is_a_circle() {
     let [TracedPath { shape: Some(TracedShape::Ellipse { center, rx, ry, .. }), .. }] = res.paths.as_slice() else { panic!("{:?}", res.paths) };
     assert!(rx == ry && (rx - 30.0).abs() < 0.3 && center.distance(Point::new(50.0, 50.0)) < 0.1, "{center:?} {rx} {ry}");
 }
+
+/// Levelling moves no end far: a long line two degrees off level stays where the image has it.
+#[test]
+fn a_long_line_two_degrees_askew_is_not_levelled() {
+    let slope = 2f64.to_radians().tan();
+    let img = Raster::from_fn(240, 40, |x, y| {
+        let top = 12.0 + slope * (f64::from(x) - 20.0);
+        let inside = (20..220).contains(&x) && (f64::from(y) + 0.5 - top - 4.0).abs() <= 4.0;
+        if inside { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    });
+    let res = trace(&img, &TraceParams { ignore_white: true, snap_curves_to_lines: true, ..Default::default() });
+    let b = res.paths[0].path.bounds().unwrap();
+    // 200 px at 2° rises 7 px: levelled, the bar would be 8 px tall, not 15.
+    assert!(b.height() > 13.0, "{b:?}");
+}

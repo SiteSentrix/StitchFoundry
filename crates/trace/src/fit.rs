@@ -54,9 +54,13 @@ fn before(a: Point, b: Point) -> std::cmp::Ordering {
 /// Lines within this of level or upright are made exactly so (the tangent of 2.5°).
 const NEARLY_UPRIGHT: f64 = 0.0437;
 
+/// The farthest (px) levelling a line may move either of its ends.
+const LEVEL_REACH: f64 = 1.6;
+
 /// Snap Curves To Lines: the straight pieces of `segs` (a chain; `closed` when its end joins its
 /// start) that are within 2.5° of level or upright and at least 2 px long are made exactly level
-/// or upright, by moving their ends across them: both to their mean, or, in an open chain, the
+/// or upright (unless that moves an end by more than [`LEVEL_REACH`]), by moving their ends
+/// across them: both to their mean, or, in an open chain, the
 /// free end to the end that is fixed (with `fixed_ends`, a chain's own ends stay where they are:
 /// they are junctions other regions share). The pieces next to a moved end follow it.
 fn snap_upright(segs: &mut [Cubic], closed: bool, fixed_ends: bool) {
@@ -96,6 +100,11 @@ fn snap_upright(segs: &mut [Cubic], closed: bool, fixed_ends: bool) {
             (false, true) => pick(b),
             (false, false) => (pick(a) + pick(b)) / 2.0,
         };
+        // Not when an end would go farther than a pixel and a half or so from where the image has it: a long line a
+        // degree or two off is that line, not a level one drawn badly.
+        if (pick(a) - to).abs().max((pick(b) - to).abs()) > LEVEL_REACH {
+            continue;
+        }
         let moved = |p: Point| if level { Point::new(p.x, to) } else { Point::new(to, p.y) };
         if !fixed(ia) {
             put(segs, ia, moved(a));
