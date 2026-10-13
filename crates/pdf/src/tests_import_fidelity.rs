@@ -78,6 +78,58 @@ fn the_mask(d: &Document) -> (Node, OpacityMask) {
     (n, m)
 }
 
+/// The two pixels of the image a soft mask of kind `s` draws: black, opaque on the left and clear
+/// on the right (its own `/SMask`).
+fn mask_image_pixels(s: &str) -> [[u8; 4]; 2] {
+    let g = first_extra(1);
+    let group = stream(
+        &format!(
+            "/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceRGB >> /Resources << /XObject << /Im0 {} 0 R >> >>",
+            g + 1
+        ),
+        "q 100 0 0 100 0 0 cm /Im0 Do Q",
+    );
+    let image = stream(
+        &format!(
+            "/Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /SMask {} 0 R",
+            g + 2
+        ),
+        "000000000000>",
+    );
+    let smask =
+        stream("/Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode", "FF00>");
+    let bytes = one_page(
+        "/GS0 gs 1 0 0 rg 0 0 100 100 re f",
+        &format!("/ExtGState << /GS0 << /SMask << /Type /Mask /S /{s} /G {g} 0 R >> >> >>"),
+        &[&group, &image, &smask],
+    );
+    let d = open(&bytes);
+    let (_, m) = the_mask(&d);
+    let mut keys = vec![];
+    m.art.walk(&mut |n| {
+        if let NodeKind::Image(im) = &n.kind {
+            keys.push(im.key.clone());
+        }
+    });
+    let [key] = keys.as_slice() else { panic!("one image in the mask art: {keys:?}") };
+    let px = image::load_from_memory(&d.images[key].bytes).unwrap().to_rgba8();
+    [px.get_pixel(0, 0).0, px.get_pixel(1, 0).0]
+}
+
+/// An alpha soft mask whose art is an image with its own alpha (some PDF writers rasterize masks
+/// so): the image is read white with that alpha, so the mask's luminance is the alpha, not the
+/// image's colour (ISO 32000-1 11.5.2: an alpha mask takes the group's alpha, not its colour).
+#[test]
+fn an_alpha_soft_mask_of_an_image_uses_the_images_alpha() {
+    assert_eq!(mask_image_pixels("Alpha"), [[255, 255, 255, 255], [255, 255, 255, 0]]);
+}
+
+/// A luminosity soft mask takes the group's colour (ISO 32000-1 11.5.3): its image stays black.
+#[test]
+fn a_luminosity_soft_mask_of_an_image_keeps_the_images_colour() {
+    assert_eq!(mask_image_pixels("Luminosity"), [[0, 0, 0, 255], [0, 0, 0, 0]]);
+}
+
 #[test]
 fn a_luminosity_soft_mask_becomes_an_opacity_mask() {
     let d = open(&masked("/S /Luminosity", "1 1 1 rg 0 0 50 100 re f"));
