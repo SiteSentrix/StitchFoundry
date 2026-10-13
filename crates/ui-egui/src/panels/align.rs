@@ -55,7 +55,14 @@ pub fn align_params(base: Value, to: AlignTo, n_selected: usize) -> Value {
 /// while there is one, else the Align To choice. Object → Align sends it too while every selected
 /// object is selected whole ([`crate::menus::invoke`]).
 pub fn with_align_to(app: &VectorcraftApp, base: Value) -> Value {
-    align_params(base, align_to(app), selection_len(app))
+    align_params(base, align_to(app), objects_aligned(app))
+}
+
+/// The selected objects that Align aligns as objects: none while anchor points are selected
+/// (Direct Selection), since the points align and a single path's points must not go to the
+/// artboard as a single object does (#1636).
+fn objects_aligned(app: &VectorcraftApp) -> usize {
+    if app.session.active().is_some_and(|st| !st.selection.anchors.is_empty()) { 0 } else { selection_len(app) }
 }
 
 pub const ALIGN: [(&str, &str, &str, &str); 6] = [
@@ -178,7 +185,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Align To:"));
             // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
-            let shown = aligns_to(to, n);
+            let shown = aligns_to(to, objects_aligned(app));
             ui.horizontal(|ui| {
                 for (v, icon, tip) in [
                     (AlignTo::Selection, "dc-alignto-selection", tl!("Align to Selection")),
@@ -525,5 +532,29 @@ mod tests {
             app.run("edit.undo", json!({})).unwrap();
             assert_eq!(anchors(&app)[1], (200.0, 60.0), "undone");
         }
+    }
+
+    /// #1636: with two anchor points of one path selected, the Align panel's buttons align the
+    /// points to each other, not to the artboard as they align a lone object, and Align To shows
+    /// the stored choice. With Align to Artboard chosen the points go to the artboard.
+    #[test]
+    fn anchor_points_of_one_path_align_to_each_other() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("path.create", json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap();
+        let xs = |app: &VectorcraftApp| -> Vec<f64> {
+            let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+            node.path_data().unwrap().anchors().map(|(_, _, a)| a.p.x).collect()
+        };
+        app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+        let ctx = egui::Context::default();
+        let ([selection, _, artboard], left) = panel_buttons(&mut app, &ctx);
+        click(&ctx, &mut app, left.center(), show);
+        assert_eq!(xs(&app), [100.0, 100.0, 150.0], "to the points' left edge: {}", app.ui.status);
+        assert_eq!(chosen_align_to(&mut app, &ctx), [selection], "the stored choice");
+        app.run("edit.undo", json!({})).unwrap();
+        click(&ctx, &mut app, artboard.center(), show);
+        click(&ctx, &mut app, left.center(), show);
+        assert_eq!(xs(&app), [0.0, 0.0, 150.0], "to the artboard's left edge: {}", app.ui.status);
     }
 }
