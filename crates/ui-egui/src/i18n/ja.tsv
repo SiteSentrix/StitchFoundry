@@ -4935,3 +4935,16 @@ machine	Stop	停止
 	Click a motif to place it, digitized, in the middle of the page.	モチーフをクリックすると、デジタイズしてページ中央に配置します。
 	Embroidery Clipart	刺繍クリップアート
 	Insert Clipart	クリップアートを挿入
+	Send When Ready	準備できたら送信
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	このフォルダー宛てにデザインを待機させます。フォルダーがあればすぐ、なければ現れたときに書き込みます
+	Waiting for the folder	フォルダーを待っています
+	Send queue	送信キュー
+	waiting	待機中
+	sent	送信済み
+	failed	失敗
+	Clear Sent	送信済みを消去
+	Send Queue	送信キュー
+	Add to Send Queue	送信キューに追加
+	Send Waiting Designs	待機中のデザインを送信
+	Remove from Send Queue	送信キューから削除
+@msg	the queued file is damaged	キュー内のファイルが壊れています

@@ -4966,3 +4966,16 @@ machine	Stop	Zastavení
 	Click a motif to place it, digitized, in the middle of the page.	Kliknutím na motiv jej umístíte digitalizovaný doprostřed stránky.
 	Embroidery Clipart	Vyšívací klipart
 	Insert Clipart	Vložit klipart
+	Send When Ready	Odeslat, až bude připraveno
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Zařadit výšivku do fronty pro tuto složku: zapíše se hned, je-li složka k dispozici, jinak jakmile bude
+	Waiting for the folder	Čeká na složku
+	Send queue	Fronta odesílání
+	waiting	čeká
+	sent	odesláno
+	failed	selhalo
+	Clear Sent	Odebrat odeslané
+	Send Queue	Fronta odesílání
+	Add to Send Queue	Přidat do fronty odesílání
+	Send Waiting Designs	Odeslat čekající výšivky
+	Remove from Send Queue	Odebrat z fronty odesílání
+@msg	the queued file is damaged	soubor ve frontě je poškozený

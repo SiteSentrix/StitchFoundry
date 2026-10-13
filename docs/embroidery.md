@@ -571,6 +571,17 @@ a home-built machine:
 
 These are exports only: they aren't read back.
 
+## Send queue
+
+**Send When Ready** in the Send to Machine section (`embroidery.queue.add {folder?, format?,
+name?}`) queues the design for the chosen machine folder: written at once when the folder is
+there, else kept until it is (a USB stick plugged in, a share back on the network); while
+designs wait the panel looks every few seconds and sends them in the order they were queued
+(`embroidery.queue.run`). The queue is kept across sessions; `embroidery.queue` lists it with
+what was sent where, and **Clear Sent** (`embroidery.queue.remove {done: true}`) tidies it. The
+machines are reached through the folders they read: their makers' network protocols aren't
+publicly documented.
+
 ## Export history
 
 Every export that writes files is remembered for the session, newest first: File › Export,

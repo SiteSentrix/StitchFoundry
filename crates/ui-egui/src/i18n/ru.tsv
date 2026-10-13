@@ -4937,3 +4937,16 @@ machine	Stop	Остановка
 	Click a motif to place it, digitized, in the middle of the page.	Щёлкните мотив, чтобы поместить его оцифрованным в центр страницы.
 	Embroidery Clipart	Вышивальный клипарт
 	Insert Clipart	Вставить клипарт
+	Send When Ready	Отправить, когда готово
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Поставить дизайн в очередь для этой папки: записать сейчас, если папка есть, иначе как только появится
+	Waiting for the folder	Ожидание папки
+	Send queue	Очередь отправки
+	waiting	ожидает
+	sent	отправлено
+	failed	ошибка
+	Clear Sent	Убрать отправленные
+	Send Queue	Очередь отправки
+	Add to Send Queue	Добавить в очередь отправки
+	Send Waiting Designs	Отправить ожидающие дизайны
+	Remove from Send Queue	Убрать из очереди отправки
+@msg	the queued file is damaged	файл в очереди повреждён

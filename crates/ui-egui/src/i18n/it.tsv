@@ -4941,3 +4941,16 @@ machine	Stop	Arresto
 	Click a motif to place it, digitized, in the middle of the page.	Fai clic su un motivo per inserirlo, digitalizzato, al centro della pagina.
 	Embroidery Clipart	Clipart da ricamo
 	Insert Clipart	Inserisci clipart
+	Send When Ready	Invia quando pronto
+	Queue the design for this folder: it is written now if the folder is there, else as soon as it is	Metti in coda il disegno per questa cartella: scritto subito se la cartella c'è, altrimenti appena c'è
+	Waiting for the folder	In attesa della cartella
+	Send queue	Coda di invio
+	waiting	in attesa
+	sent	inviato
+	failed	non riuscito
+	Clear Sent	Rimuovi inviati
+	Send Queue	Coda di invio
+	Add to Send Queue	Aggiungi alla coda di invio
+	Send Waiting Designs	Invia i disegni in attesa
+	Remove from Send Queue	Rimuovi dalla coda di invio
+@msg	the queued file is damaged	il file in coda è danneggiato
