@@ -246,16 +246,30 @@ fn style_of(n: &Node) -> Style {
 /// Leaf shapes (paths, compound paths, text) of a subtree in paint order; guides and clipping
 /// paths are skipped.
 fn leaves(n: &Node, out: &mut Vec<Node>) {
+    each_leaf(n, &mut |l| out.push(l.clone()));
+}
+
+/// Calls `f` with each leaf shape of [`leaves`], in its order.
+fn each_leaf(n: &Node, f: &mut impl FnMut(&Node)) {
     match &n.kind {
         NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => {}
-        NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_) => out.push(n.clone()),
+        NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_) => f(n),
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             for c in children {
-                leaves(c, out);
+                each_leaf(c, f);
             }
         }
         _ => {}
     }
+}
+
+/// How many shapes a Pathfinder operation takes from `n` selected alone: its leaf shapes, however
+/// deep its groups nest (an expanded stroke is a group inside the group, #1635).
+pub fn shape_count(n: &Node) -> usize {
+    // Counted without copying the shapes: the panel asks every frame.
+    let mut count = 0;
+    each_leaf(n, &mut |_| count += 1);
+    count
 }
 
 /// A node for `path`: a plain path for one subpath, else a compound path.
