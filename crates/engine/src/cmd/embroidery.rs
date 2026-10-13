@@ -228,7 +228,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Worksheet",
             ["Embroidery"],
             None,
-            "{kind?: production|approval|pattern (production), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given), barcode?: code128|code39|none (code128: the job's barcode at the top right), barcodeText?: text (the design's name; up to 48 characters, Code 39: digits, letters, space and -.$/+%), colorways?: bool (true: each colorway's threads, colour by colour, when the design has any)} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
+            "{kind?: production|approval|pattern|template (production; template: the design life size with lines through its middle, which way is up and a 100 mm bar to check the print, to lay on the garment), placement?: left-chest|right-chest|full-front|full-back|cap-front|sleeve|yoke|pocket (the usual size and place for it, printed), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given), barcode?: code128|code39|none (code128: the job's barcode at the top right), barcodeText?: text (the design's name; up to 48 characters, Code 39: digits, letters, space and -.$/+%), colorways?: bool (true: each colorway's threads, colour by colour, when the design has any)} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
             has_doc,
             worksheet
         ),
@@ -2051,6 +2051,35 @@ fn sheet_text(doc: &mut Document, x: f64, y: f64, text: &str, size: f64, color: 
     Ok(())
 }
 
+/// The usual size and place of a placement (typical values; garments and customers vary).
+fn placement_text(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "left-chest" => "Left chest: usually 75–100 mm wide, its middle 180–230 mm below the shoulder seam and 75–100 mm left of the centre front",
+        "right-chest" => "Right chest: usually 75–100 mm wide, its middle 180–230 mm below the shoulder seam and 75–100 mm right of the centre front",
+        "full-front" => "Full front: usually up to 250–300 mm wide, its top 75–100 mm below the neckline, on the centre front",
+        "full-back" => "Full back: usually up to 300–350 mm wide, its top 100–125 mm below the collar, on the centre back",
+        "cap-front" => "Cap front: usually 50–60 mm high and up to 110–130 mm wide, centred on the front seam, its bottom 12–20 mm above the brim",
+        "sleeve" => "Sleeve: usually 75–100 mm wide, centred on the sleeve 75–100 mm below the shoulder seam or above the hem",
+        "yoke" => "Back yoke: usually 75–125 mm wide, centred 25–50 mm below the collar",
+        "pocket" => "Pocket: inside the pocket, at least 6 mm clear of its seams",
+        _ => return None,
+    })
+}
+
+/// Straight lines (points, page space) in `color`, `width` wide.
+fn sheet_lines(doc: &mut Document, lines: &[Vec<(f64, f64)>], color: Color, width: f64) -> Result<()> {
+    use vectorcraft_geom::path::{PathData, SubPath};
+    let subpaths: Vec<SubPath> = lines
+        .iter()
+        .filter(|l| l.len() >= 2)
+        .map(|l| SubPath::polyline(&l.iter().map(|(x, y)| kurbo::Point::new(*x, *y)).collect::<Vec<_>>(), false))
+        .collect();
+    let n = vectorcraft_doc::Node::path(doc.alloc_id(), PathData::new(subpaths), Appearance::basic(Paint::None, Paint::solid(color), width));
+    let layer = doc.layers.first().map(|l| l.id);
+    doc.insert(layer, usize::MAX, n).map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok(())
+}
+
 /// A barcode module's width (points) for one `total` modules wide: 0.75 pt (a common minimum
 /// for laser printers), narrower to keep it within 230 pt.
 fn barcode_module(total: f64) -> f64 {
@@ -2154,8 +2183,16 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     let (approval, full) = match kind {
         "production" => (false, false),
         "approval" => (true, false),
-        "pattern" => (false, true),
-        _ => return Err(bad(CMD, "`kind` is production, approval or pattern")),
+        "pattern" | "template" => (false, true),
+        _ => return Err(bad(CMD, "`kind` is production, approval, pattern or template")),
+    };
+    let template = kind == "template";
+    let placement = match str_param(p, "placement") {
+        None => None,
+        Some(id) => Some(
+            placement_text(id)
+                .ok_or_else(|| bad(CMD, "`placement` is left-chest, right-chest, full-front, full-back, cap-front, sleeve, yoke or pocket"))?,
+        ),
     };
     let (pw, ph) = match str_param(p, "page").unwrap_or("a4") {
         "a4" | "A4" => SHEET,
@@ -2196,6 +2233,8 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     // heading
     let heading = if approval {
         "Approval sheet"
+    } else if template {
+        "Placement template"
     } else if full {
         "Pattern"
     } else {
@@ -2221,11 +2260,21 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     // the design, life size when it fits the box, in its thread colours
     let b = pattern.bounds();
     // the box the design is drawn in: most of the page for a pattern
-    let (bw, bh) = if full { (pw - 80.0, ph - 170.0) } else { (pw - 80.0, 380.0) };
+    let (bw, bh) = if template {
+        // room below for the check bar
+        (pw - 80.0, ph - 210.0)
+    } else if full {
+        (pw - 80.0, ph - 170.0)
+    } else {
+        (pw - 80.0, 380.0)
+    };
     let fit = (bw / b.width().max(1e-6)).min(bh / b.height().max(1e-6));
     let k = fit.min(PT_PER_MM);
     if !(k.is_finite() && k > 0.0) {
         return Err(bad(CMD, "the design has no size"));
+    }
+    if template && fit < PT_PER_MM - 1e-9 {
+        return Err(bad(CMD, "the design is larger than the page at life size: print a pattern (scaled) instead"));
     }
     let (ox, oy) = (40.0 + (bw - b.width() * k) / 2.0, 110.0 + (bh - b.height() * k) / 2.0);
     let layer = doc.layers.first().map(|l| l.id);
@@ -2245,6 +2294,27 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // the figures (a pattern: one line under the design)
     let shown = (k / PT_PER_MM * 100.0).round();
+    if template {
+        // lines through the design's middle to the page's margins, which way is up, and a bar
+        // to check the print is life size
+        let (cx, cy) = (ox + b.width() * k / 2.0, oy + b.height() * k / 2.0);
+        let grey_line = Color::rgb8(0x99, 0x99, 0x99);
+        sheet_lines(&mut doc, &[vec![(20.0, cy), (pw - 20.0, cy)], vec![(cx, 104.0), (cx, ph - 96.0)]], grey_line, 0.5)?;
+        sheet_lines(&mut doc, &[vec![(cx - 6.0, 116.0), (cx, 106.0), (cx + 6.0, 116.0)]], black, 1.0)?;
+        sheet_text(&mut doc, cx + 9.0, 116.0, "Up", 9.0, black)?;
+        let bar = 100.0 * PT_PER_MM;
+        let y = ph - 84.0;
+        sheet_lines(
+            &mut doc,
+            &[vec![(40.0, y), (40.0 + bar, y)], vec![(40.0, y - 5.0), (40.0, y + 5.0)], vec![(40.0 + bar, y - 5.0), (40.0 + bar, y + 5.0)]],
+            black,
+            1.0,
+        )?;
+        sheet_text(&mut doc, 40.0, y + 18.0, "100 mm: print at 100 % (no fitting to the page) and check this bar", 8.0, grey)?;
+    }
+    if let Some(text) = placement {
+        sheet_text(&mut doc, 40.0, if full { ph - 24.0 } else { 104.0 }, text, 8.0, grey)?;
+    }
     if full {
         let line = format!(
             "{:.1} × {:.1} mm (shown at {shown} %)   {} stitches   {} colours",

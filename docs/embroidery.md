@@ -385,6 +385,11 @@ for the design as a new A4 document, to print (File › Print) or export as PDF:
   or `embroidery.settings {notes}`, and kept with the design), wrapped to the page; an
   **approval sheet** (`kind: approval`) adds the customer and a line to sign.
 - a **pattern** (`kind: pattern`) is the design over the whole page with one line of figures;
+- a **placement template** (`kind: template`) is the design life size, with lines through its
+  middle to the page's edges, an arrow for which way is up and a 100 mm bar to check the print
+  wasn't scaled: cut it out or lay it on the garment to mark where the hoop goes;
+- `placement: left-chest|right-chest|full-front|full-back|cap-front|sleeve|yoke|pocket` prints
+  the usual size and place for it (typical values: garments and customers vary);
 - on A4 or US Letter paper (`page: a4|letter`); a logo or anything else can be added to the sheet
   like to any document (File › Place).
 
