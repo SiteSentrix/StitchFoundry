@@ -569,6 +569,11 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     app.hover_doc = hover.map(|p| xf.to_doc(p));
     let view = app.view_info();
     touch_gestures(app, ui, rect, view);
+    // Pressed and held still, a pen or a finger opens the context menu (egui's long touch): the
+    // tool's press is dropped, as a right-click presses nothing.
+    if resp.long_touched() {
+        drop_press(app, ui, view);
+    }
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
     // A modifier pressed or released over the canvas re-hovers the tool, so what it changes shows
     // without moving the mouse (Alt switches the Shape Builder to erase mode).
@@ -610,7 +615,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
-        let d = if zoom_mode {
+        let d = if crate::touch::finger_navigates_only() {
+            // A finger (or a palm) once a pen has been seen: it navigates, it doesn't draw.
+            Drag::Gesture
+        } else if zoom_mode {
             if animated_zoom(&app.session.prefs) { Drag::ZoomScrub { start: p, held: 0.0, moved: false } } else { Drag::ZoomBox { start: p } }
         } else if pan_mode {
             Drag::Pan { start: p, center: v.center, middle: false }
@@ -890,13 +898,13 @@ fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vec
         if phase == egui::TouchPhase::Start && !taps.is_down() && !rect.contains(pos) {
             continue;
         }
+        // A cancelled contact (a palm the shell drops when a pen lands) keeps nothing it began.
+        if phase == egui::TouchPhase::Cancel {
+            drop_press(app, ui, view);
+        }
         match taps.feed(id, phase, pos, now) {
             Some(crate::touch::Touch::Fingers) => {
-                if ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool) {
-                    // Nothing it began is kept; the tool's mouse-up returns it to rest.
-                    let _ = app.session.cancel_interaction();
-                    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
-                }
+                drop_press(app, ui, view);
                 ui.data_mut(|d| d.insert_temp(drag_id(), Drag::Gesture));
             }
             Some(crate::touch::Touch::Tap(n)) => tap = crate::touch::tap_command(n),
@@ -907,6 +915,21 @@ fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vec
     if let Some(cmd) = tap {
         crate::menus::invoke(app, cmd, serde_json::json!({}));
     }
+}
+
+/// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
+/// does nothing ([`Drag::Gesture`]).
+fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
+    match ui.data(|d| d.get_temp::<Drag>(drag_id())) {
+        Some(Drag::Tool) => {
+            // The tool's mouse-up returns it to rest.
+            let _ = app.session.cancel_interaction();
+            dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
+        }
+        Some(_) => {}
+        None => return,
+    }
+    ui.data_mut(|d| d.insert_temp(drag_id(), Drag::Gesture));
 }
 
 /// A Selection tool move dragged off the canvas (to `p`, over a panel) turns into a panel drag of

@@ -55,7 +55,7 @@ pub mod theme;
 pub mod thumb_worker;
 pub mod titlebar;
 pub mod toolbar;
-mod touch;
+pub mod touch;
 mod ui_fonts;
 pub mod unsaved;
 pub mod widgets;
