@@ -397,6 +397,37 @@ fn copies_scatter_over_a_shape_a_gap_apart() {
 }
 
 #[test]
+fn placement_templates_print_life_size() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 80.0 * PT, 60.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let r = s.execute("embroidery.worksheet", &json!({"kind": "template", "placement": "left-chest", "barcode": "none"})).unwrap();
+    assert_eq!(r["scale"].as_f64(), Some(100.0), "life size: {r}");
+    let mut texts = Vec::new();
+    let mut lines = Vec::new();
+    s.doc().unwrap().doc.walk(|n| match &n.kind {
+        NodeKind::Text(t) => texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>()),
+        NodeKind::Path { path, .. } => lines.push((path.subpaths.len(), n.geometric_bounds().unwrap())),
+        _ => {}
+    });
+    for want in ["Placement template", "Up", "Left chest: usually 75–100 mm wide"] {
+        assert!(texts.iter().any(|t| t.starts_with(want)), "{want} missing from {texts:?}");
+    }
+    // the 100 mm bar: three strokes, 100 mm wide
+    assert!(lines.iter().any(|(k, b)| *k == 3 && (b.width() - 100.0 * PT).abs() < 1e-6), "{lines:?}");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    // on a production sheet too; a placement it doesn't know
+    s.execute("embroidery.worksheet", &json!({"placement": "cap-front", "barcode": "none"})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert!(s.execute("embroidery.worksheet", &json!({"placement": "hat"})).is_err());
+    // larger than the page at life size: no template
+    rect(&mut s, 0.0, 0.0, 400.0 * PT, 300.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    assert!(s.execute("embroidery.worksheet", &json!({"kind": "template"})).is_err());
+}
+
+#[test]
 fn fabrics_recommend_a_stabiliser() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
