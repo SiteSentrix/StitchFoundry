@@ -594,3 +594,38 @@ fn the_font_shorthand_styles_type() {
     let style = st.font_style.to_ascii_lowercase();
     assert!(style.contains("bold") && style.contains("italic"), "{style}");
 }
+
+/// Inkscape's flowed text (`<flowRoot>`) becomes area type in its region's rectangle, a paragraph
+/// per `<flowPara>`; another kind of region is left out with a warning, not silently.
+#[test]
+fn flowed_text_becomes_area_type() {
+    let (d, w) = import_with_report(&svg(
+        r#"<flowRoot style="font-size:16px;font-family:sans-serif"><flowRegion><rect x="20" y="30" width="100" height="160"/></flowRegion><flowPara>This is   flowed text</flowPara><flowPara>Second <flowSpan>one</flowSpan></flowPara></flowRoot>
+        <flowRoot><flowRegion><path d="M0 0 L10 0 L5 10 Z"/></flowRegion><flowPara>Lost</flowPara></flowRoot>"#,
+    ))
+    .unwrap();
+    let t = only_text(&d);
+    assert_eq!(t.plain_text(), "This is flowed text\nSecond one");
+    let TextKind::Area { frame } = &t.kind else { panic!("{:?}", t.kind) };
+    let b = t.xf.transform_rect_bbox(frame.bounds().unwrap());
+    assert!(close(b.x0, 20.0, 1e-6) && close(b.y0, 30.0, 1e-6) && close(b.x1, 120.0, 1e-6) && close(b.y1, 190.0, 1e-6), "{b:?}");
+    assert!(close(t.runs[0].style.size * t.xf.determinant().abs().sqrt(), 16.0, 1e-6));
+    assert!(w.iter().any(|w| w.contains("flowRoot")), "{w:?}");
+}
+
+/// Flowed text that can't be read is left out with a warning each, and never stops the import: no
+/// region, a region too large for numbers, a flowRoot inside a flowRoot (read once, as the outer one).
+#[test]
+fn flowed_text_that_cannot_be_read_is_reported() {
+    let (d, w) = import_with_report(&svg(
+        r#"<flowRoot id="none"><flowPara>No region</flowPara></flowRoot>
+        <flowRoot id="huge"><flowRegion><rect width="1e999" height="10"/></flowRegion><flowPara>Huge</flowPara></flowRoot>
+        <flowRoot id="far"><flowRegion><rect x="1e308" width="1e308" height="10" transform="scale(1e308)"/></flowRegion><flowPara>Far</flowPara></flowRoot>
+        <flowRoot id="outer"><flowRegion><rect width="50" height="50"/></flowRegion><flowPara>Outer</flowPara><flowRoot><flowRegion><rect width="5" height="5"/></flowRegion><flowPara>inner</flowPara></flowRoot></flowRoot>"#,
+    ))
+    .unwrap();
+    assert_eq!(only_text(&d).plain_text(), "Outer\ninner");
+    for id in ["none", "huge", "far"] {
+        assert!(w.iter().any(|w| w.contains(id) && w.contains("flowRoot")), "{id}: {w:?}");
+    }
+}
