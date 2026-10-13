@@ -353,6 +353,50 @@ fn monograms_stack_wear_ornaments_and_ring_borders() {
 }
 
 #[test]
+fn copies_scatter_over_a_shape_a_gap_apart() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let area = rect(&mut s, 0.0, 0.0, 100.0 * PT, 80.0 * PT);
+    let motif = rect(&mut s, 200.0 * PT, 0.0, 6.0 * PT, 6.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("select.set", &json!({"ids": [area.0, motif.0]})).unwrap();
+    let r = s.execute("embroidery.scatter", &json!({"count": 12, "gap": 3})).unwrap();
+    assert_eq!(r["copies"].as_u64(), Some(12), "{r}");
+    let centres = |s: &Session, id: NodeId| -> Vec<vectorcraft_geom::Point> {
+        let st = s.doc().unwrap();
+        st.doc.node(id).unwrap().children().unwrap().iter().map(|g| g.geometric_bounds().unwrap().center()).collect()
+    };
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let cs = centres(&s, id);
+    // inside the shape, the motif's half-diagonal in from its edge; a gap apart
+    let half = 3.0 * 2f64.sqrt() * PT;
+    for (i, a) in cs.iter().enumerate() {
+        assert!(a.x >= half - 1e-6 && a.x <= 100.0 * PT - half + 1e-6 && a.y >= half - 1e-6 && a.y <= 80.0 * PT - half + 1e-6, "{a:?}");
+        for b in &cs[i + 1..] {
+            assert!(a.distance(*b) >= 2.0 * half + 3.0 * PT - 1e-6, "{a:?} {b:?}");
+        }
+    }
+    // the copies keep the motif's stitching; the same seed scatters the same way
+    let st = s.doc().unwrap();
+    let first = st.doc.node(id).unwrap().children().unwrap()[0].clone();
+    assert!(first.children().unwrap()[0].embroidery.is_some());
+    s.execute("select.set", &json!({"ids": [area.0, motif.0]})).unwrap();
+    let again = s.execute("embroidery.scatter", &json!({"count": 12, "gap": 3})).unwrap();
+    assert_eq!(centres(&s, NodeId(again["id"].as_u64().unwrap())), cs);
+    // evenly: a grid as full as it fits
+    s.execute("select.set", &json!({"ids": [area.0, motif.0]})).unwrap();
+    let r = s.execute("embroidery.scatter", &json!({"count": 500, "spread": "even", "gap": 2, "turn": true})).unwrap();
+    assert!(r["copies"].as_u64().unwrap() > 30, "{r}");
+    // what can't be done
+    s.execute("select.set", &json!({"ids": [motif.0]})).unwrap();
+    assert!(s.execute("embroidery.scatter", &json!({})).is_err(), "one object");
+    s.execute("select.set", &json!({"ids": [area.0, motif.0]})).unwrap();
+    for bad in [json!({"gap": 101}), json!({"spread": "grid"}), json!({"count": 0}), json!({"count": 9999})] {
+        assert!(s.execute("embroidery.scatter", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn fabrics_recommend_a_stabiliser() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

@@ -358,6 +358,16 @@ first, under the design, to press a towel's or fleece's pile flat; **emboss** (`
 fills a rectangle or circle (`shape`) reaching `extend` (5 mm) beyond the design with light
 tatami, leaving the design's area out, so the design stands up from a stitched background.
 
+## Scatter copies
+
+**Embroidery › Scatter Copies** (`embroidery.scatter {count?, gap?, spread?, seed?, turn?}`)
+strews copies of a motif over a shape: select the motif (one object or several) and a closed
+shape larger than it, and the copies go inside the shape, `gap` (2 mm) apart and clear of its
+edge, at random (`spread: random`, the same each time for the same `seed`) or evenly on a
+triangular grid (`even`), up to `count` (20), each turned at random with `turn`. They keep the
+motif's stitching and land in a group above the shape, which stays (delete it, or give it a
+fill to sew behind them).
+
 ## Worksheets
 
 **Embroidery › Worksheet** (`embroidery.worksheet {kind?, customer?, notes?}`) makes a worksheet
