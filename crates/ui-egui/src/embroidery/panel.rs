@@ -399,7 +399,7 @@ pub(crate) fn lettering_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             o.remove("align");
         }
         if let Err(e) = app.run("embroidery.lettering", along) {
-            app.status(&e.to_string());
+            app.status(e.to_string());
         }
     }
     if button(ui, label).clicked() && !text.trim().is_empty() {
