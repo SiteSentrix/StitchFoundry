@@ -766,6 +766,43 @@ fn select_same_font_size_and_fill() {
     assert!(s.execute("select.same.fontSize", &json!({})).is_err());
 }
 
+/// #1737: Select > Same reads type's fill and stroke from its characters (the first run), so type
+/// matches type and paths both ways.
+#[test]
+fn select_same_paint_reads_type_characters() {
+    let mut s = session();
+    let t1 = text(&mut s, "a");
+    let t2 = text(&mut s, "b");
+    let t3 = text(&mut s, "c");
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let q = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[t1, t2, r]);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    sel(&mut s, &[t3, q]);
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    sel(&mut s, &[t1, r]);
+    s.execute("paint.setStroke", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    sel(&mut s, &[t3]);
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    let q_stroke = node(&s, q).appearance;
+    assert_eq!((q_stroke.stroke_paint(), q_stroke.stroke_width()), (Paint::solid(Color::BLACK), 1.0));
+
+    let same = |s: &mut Session, from: NodeId, cmd: &str| {
+        sel(s, &[from]);
+        s.execute(cmd, &json!({})).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        v
+    };
+    assert_eq!(same(&mut s, t1, "select.same.fillColor"), vec![t1, t2, r]);
+    assert_eq!(same(&mut s, q, "select.same.fillColor"), vec![t3, q]);
+    assert_eq!(same(&mut s, r, "select.same.strokeColor"), vec![t1, r]);
+    assert_eq!(same(&mut s, t3, "select.same.strokeColor"), vec![t3, q]);
+    assert_eq!(same(&mut s, q, "select.same.strokeWeight"), vec![t3, q]);
+    assert_eq!(same(&mut s, t1, "select.same.fillAndStroke"), vec![t1, r]);
+}
+
 #[test]
 fn select_direction_handles_selects_all_anchors() {
     let mut s = session();
