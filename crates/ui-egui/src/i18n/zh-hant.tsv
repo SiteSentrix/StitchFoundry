@@ -4313,3 +4313,5 @@ machine	Stop	停止
 	Add to Send Queue	加入傳送佇列
 	Send Waiting Designs	傳送等待中的設計
 	Remove from Send Queue	從傳送佇列移除
+	Centred	置中
+	In the hoop	在繡框中

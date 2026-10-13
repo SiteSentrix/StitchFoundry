@@ -600,6 +600,27 @@ fn recolor_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
+/// Where the design sits in the hoop: centred, or at a fixed place (mm from the hoop's centre).
+fn hoop_position_row(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
+    let pos = info["settings"]["hoopPosition"]
+        .as_array()
+        .map(|a| (a.first().and_then(Value::as_f64).unwrap_or(0.0), a.get(1).and_then(Value::as_f64).unwrap_or(0.0)));
+    let names = [tl!("Centred"), tl!("Fixed")];
+    if let Some(i) = pick(ui, tl!("In the hoop"), "hoop-pos", usize::from(pos.is_some()), &names) {
+        let v = if i == 0 { Value::Null } else { json!([0.0, 0.0]) };
+        app.run("embroidery.settings", json!({ "hoopPosition": v })).ok();
+    }
+    if let Some((mut x, mut y)) = pos {
+        ui.horizontal(|ui| {
+            let a = ui.add(egui::DragValue::new(&mut x).range(-500.0..=500.0).speed(0.5).prefix("x ").suffix(" mm"));
+            let b = ui.add(egui::DragValue::new(&mut y).range(-500.0..=500.0).speed(0.5).prefix("y ").suffix(" mm"));
+            if a.changed() || b.changed() {
+                app.run("embroidery.settings", json!({ "hoopPosition": [x, y] })).ok();
+            }
+        });
+    }
+}
+
 /// A hoop of one's own: its name and field, kept with the standard ones.
 fn hoop_custom_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::CollapsingHeader::new(tl!("Custom Hoops")).id_salt("emb-custom-hoops").show(ui, |ui| {
@@ -2504,6 +2525,9 @@ fn design_section(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
             app.run("embroidery.hoop.rotate", json!({})).ok();
         }
     });
+    if info["hoop"].is_string() {
+        hoop_position_row(app, ui, &info);
+    }
     hoop_custom_row(app, ui);
     let fabrics: Vec<String> =
         info["fabrics"].as_array().map(|a| a.iter().filter_map(|f| f.as_str().map(str::to_string)).collect()).unwrap_or_default();

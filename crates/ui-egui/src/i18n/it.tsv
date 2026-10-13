@@ -4954,3 +4954,5 @@ machine	Stop	Arresto
 	Send Waiting Designs	Invia i disegni in attesa
 	Remove from Send Queue	Rimuovi dalla coda di invio
 @msg	the queued file is damaged	il file in coda è danneggiato
+	Centred	Centrato
+	In the hoop	Nel telaio

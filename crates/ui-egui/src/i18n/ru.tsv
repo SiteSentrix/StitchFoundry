@@ -4950,3 +4950,5 @@ machine	Stop	Остановка
 	Send Waiting Designs	Отправить ожидающие дизайны
 	Remove from Send Queue	Убрать из очереди отправки
 @msg	the queued file is damaged	файл в очереди повреждён
+	Centred	По центру
+	In the hoop	В пяльцах

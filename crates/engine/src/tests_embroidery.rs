@@ -793,6 +793,39 @@ fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
 }
 
 #[test]
+fn the_design_sits_at_a_fixed_place_in_the_hoop() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.settings", &json!({"hoop": "Brother 100 × 100 (4×4)"})).unwrap();
+    let centre_of = |s: &mut Session| {
+        let r = s.execute("embroidery.export", &json!({"format": "dst"})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+        let b = sf_formats::read(sf_formats::Format::Dst, &bytes).unwrap().bounds();
+        ((b.min.x + b.max.x) / 2.0, (b.min.y + b.max.y) / 2.0)
+    };
+    let (x, y) = centre_of(&mut s);
+    assert!(x.abs() < 0.5 && y.abs() < 0.5, "centred: {x} {y}");
+    // top left of the hoop
+    s.execute("embroidery.settings", &json!({"hoopPosition": [-20, -30]})).unwrap();
+    let (x, y) = centre_of(&mut s);
+    assert!((x + 20.0).abs() < 0.5 && (y + 30.0).abs() < 0.5, "placed: {x} {y}");
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!((info["fits"].as_bool(), info["settings"]["hoopPosition"][0].as_f64()), (Some(true), Some(-20.0)), "{info}");
+    // too far out: the design no longer fits
+    s.execute("embroidery.settings", &json!({"hoopPosition": [-40, 0]})).unwrap();
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["fits"].as_bool(), Some(false));
+    // centred again
+    s.execute("embroidery.settings", &json!({"hoopPosition": "centre"})).unwrap();
+    let (x, _) = centre_of(&mut s);
+    assert!(x.abs() < 0.5);
+    for bad in [json!({"hoopPosition": [1]}), json!({"hoopPosition": "left"}), json!({"hoopPosition": [1e9, 0]})] {
+        assert!(s.execute("embroidery.settings", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn queued_designs_wait_for_their_folder_and_go_when_it_is_there() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

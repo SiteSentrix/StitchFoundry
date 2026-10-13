@@ -190,6 +190,10 @@ pub struct DesignSettings {
     pub end: Option<DesignPoint>,
     /// The registration marks multi-hooping sews in the overlaps.
     pub registration: RegistrationMarks,
+    /// Where the design's middle sits in the hoop (mm from the hoop's centre, x right, y down);
+    /// none: centred, as machines centre designs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hoop_offset: Option<[f64; 2]>,
 }
 
 /// What a registration mark looks like.
@@ -358,6 +362,7 @@ impl Default for DesignSettings {
             start: None,
             end: None,
             registration: RegistrationMarks::default(),
+            hoop_offset: None,
         }
     }
 }
