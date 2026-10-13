@@ -124,7 +124,8 @@ fn topmost(app: &VectorcraftApp) -> Option<vectorcraft_doc::NodeId> {
 
 /// What Align aligns to: the key object while there is one (a click on an object of the
 /// selection makes it the key, and Align to Key Object makes the topmost one the key), else the
-/// stored Align To choice, Selection or Artboard.
+/// stored Align To choice, Selection or Artboard. The Distribute Objects and Distribute Spacing
+/// buttons send it as their `to`.
 fn align_to(app: &VectorcraftApp) -> AlignTo {
     if has_key(app) { AlignTo::Key } else { app.ui.align_to }
 }
@@ -159,7 +160,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.add_space(6.0);
             }
             if widgets::icon_button_enabled(ui, icon, tl!(tip), false, distributes, 32.0).clicked() {
-                app.run("object.distribute", json!({*axis: v})).ok();
+                app.run("object.distribute", json!({*axis: v, "to": to.param()})).ok();
             }
         }
     });
@@ -176,10 +177,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let on = distributes;
                 let sp = if key { Some(spacing) } else { None };
                 if widgets::icon_button_enabled(ui, "dc-dist-vspace", tl!("Vertical Distribute Space"), false, on, 28.0).clicked() {
-                    app.run("object.distributeSpacing", json!({"axis": "vertical", "spacing": sp})).ok();
+                    app.run("object.distributeSpacing", json!({"axis": "vertical", "spacing": sp, "to": to.param()})).ok();
                 }
                 if widgets::icon_button_enabled(ui, "dc-dist-hspace", tl!("Horizontal Distribute Space"), false, on, 28.0).clicked() {
-                    app.run("object.distributeSpacing", json!({"axis": "horizontal", "spacing": sp})).ok();
+                    app.run("object.distributeSpacing", json!({"axis": "horizontal", "spacing": sp, "to": to.param()})).ok();
                 }
                 ui.add_enabled_ui(key, |ui| {
                     if let Some(v) = widgets::spin_field(ui, "align-spacing", Some(spacing), app.session.general_unit(), 70.0, 1.0, 0.0, &[]) {
@@ -488,6 +489,54 @@ mod tests {
         let st = app.session.active().unwrap();
         let x1 = |id: &serde_json::Value| st.doc.bounds_of(&[vectorcraft_doc::NodeId(id.as_u64().unwrap())], false).unwrap().x1;
         assert_eq!((x1(&a), x1(&b)), (200.0, 200.0), "both to the artboard's right edge");
+    }
+
+    /// One frame of the Align panel → its Horizontal Distribute Left and Horizontal Distribute
+    /// Space buttons.
+    fn distribute_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> (egui::Rect, egui::Rect) {
+        frame_events(ctx, app, vec![], show);
+        // The lower row of 32-point buttons is Distribute Objects': Vertical Distribute Top, Center
+        // and Bottom, then Horizontal Distribute Left, Center and Right.
+        let objects = widget_rects(ctx, egui::vec2(32.0, 32.0));
+        let bottom = objects.last().unwrap().top();
+        let mut row: Vec<egui::Rect> = objects.into_iter().filter(|r| r.top() == bottom).collect();
+        row.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        // The 28-point buttons are Distribute Spacing's two (Vertical, then Horizontal) and then
+        // Align To's three.
+        let mut small = widget_rects(ctx, egui::vec2(28.0, 28.0));
+        small.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        (row[3], small[1])
+    }
+
+    /// With Align to Artboard chosen, the Align panel's Horizontal Distribute Left puts the
+    /// outermost of three objects (20, 40 and 20 pt wide) on the active artboard's left and right
+    /// edges and spaces their left edges evenly, and Horizontal Distribute Space makes the gaps
+    /// between them equal. With Align to Selection chosen, the outermost objects stay put.
+    #[test]
+    fn the_distribute_buttons_follow_align_to_artboard() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200, "artboards": 2})).unwrap();
+        let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+        let ids: Vec<Value> = [(10, 20), (50, 40), (120, 20)]
+            .into_iter()
+            .map(|(x, w)| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": w, "height": 10})).unwrap()["id"].clone())
+            .collect();
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        let lefts = |app: &VectorcraftApp| ids.iter().map(|id| left_edge(app, id)).collect::<Vec<_>>();
+        let ctx = egui::Context::default();
+        let (left, space) = distribute_buttons(&mut app, &ctx);
+        click(&ctx, &mut app, left.center(), show);
+        assert_eq!(lefts(&app), [10.0, 65.0, 120.0], "Align to Selection: {}", app.ui.status);
+        app.run("edit.undo", json!({})).unwrap();
+        // The objects are on artboard 0, and artboard 1 is the active one.
+        app.ui.align_to = AlignTo::Artboard;
+        app.view_mut().unwrap().artboard = 1;
+        let (x0, x1) = (boards[1].x0, boards[1].x1);
+        click(&ctx, &mut app, left.center(), show);
+        assert_eq!(lefts(&app), [x0, x0 + 90.0, x1 - 20.0], "the active artboard's edges: {}", app.ui.status);
+        app.run("edit.undo", json!({})).unwrap();
+        click(&ctx, &mut app, space.center(), show);
+        assert_eq!(lefts(&app), [x0, x0 + 80.0, x1 - 20.0], "60 pt gaps: {}", app.ui.status);
     }
 
     /// Runs the Object → Align item `label` as a click on it does.

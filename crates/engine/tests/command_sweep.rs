@@ -346,6 +346,8 @@ fn structured_junk() {
         ("object.distributeSpacing", json!({"axis": "vertical", "spacing": 0})),
         ("object.align", json!({"horizontal": "center", "vertical": "center", "to": "artboard", "bounds": "preview"})),
         ("object.distribute", json!({"vertical": "center", "bounds": "geometric"})),
+        ("object.distribute", json!({"horizontal": "right", "to": "artboard", "artboard": u64::MAX, "bounds": "preview"})),
+        ("object.distributeSpacing", json!({"axis": "vertical", "to": "artboard", "artboard": -1, "spacing": null})),
         ("artboard.setProps", json!({"index": 0, "width": -1, "height": 0})),
         ("artboard.setProps", json!({"index": 0, "width": 1e300, "height": 1e-300, "scaleArt": true, "strokes": true, "corners": true})),
         ("artboard.setProps", json!({"index": 0, "x": -1e308, "width": 0, "height": 1, "scaleArt": true, "patterns": true})),
