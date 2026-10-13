@@ -877,7 +877,11 @@ two lines), or *Import Names…* from a CSV table (its first column; `embroidery
 {csv | path, column, header}` reads any column, commas or semicolons, quoted fields). *Export One
 File per Name…* writes a machine file for each into a folder: the design with the lettering set
 to that name, named after it (`embroidery.teamNames.export {names, dir, format, prefix}`). The
-design itself is left as it is.
+design itself is left as it is. *Lay Out Together* puts every name in one design, in rows and
+columns a gap apart, each still lettering, for a large hoop or patches cut apart after
+(`embroidery.teamNames.layout {names, columns, gap}`); *Names Worksheet* lists each name with
+its size, stitches and sewing time, and the totals for the order
+(`embroidery.teamNames.worksheet {names, page}`).
 
 ## Commands
 

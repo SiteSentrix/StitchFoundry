@@ -59,6 +59,24 @@ pub fn specs() -> Vec<CommandSpec> {
             team_names_export
         ),
         cmd!(
+            "embroidery.teamNames.layout",
+            "Lay Out Team Names",
+            [],
+            None,
+            "{names: [text, …] (1–500), id?: the lettering (default: the selected one), columns?: n (1–50; default: about as many as rows), gap?: mm between names (10; 0–200)} team names together in one design (a large hoop, patches cut apart after): a copy of the lettering for each name, each still lettering, in rows and columns `gap` apart starting where the lettering is, in a group, selected → {id, count, columns, rows}",
+            has_selection,
+            team_names_layout
+        ),
+        cmd!(
+            "embroidery.teamNames.worksheet",
+            "Team Names Worksheet",
+            [],
+            None,
+            "{names: [text, …] (1–500), id?: the lettering (default: the selected one), page?: a4|letter (a4)} a worksheet listing each name with its size, stitches and sewing time, and their totals, as a new document → {count, stitches, seconds}",
+            has_selection,
+            team_names_worksheet
+        ),
+        cmd!(
             query "embroidery.teamNames.read",
             "Read Team Names",
             [],
@@ -1370,20 +1388,159 @@ fn unique(taken: &mut HashSet<String>, base: &str) -> String {
     name
 }
 
-fn team_names_export(s: &mut Session, p: &Value) -> Result<Value> {
-    const CMD: &str = "embroidery.teamNames.export";
+/// The `names` asked for: 1 to [`MAX_NAMES`], each [`MAX_TEXT`] characters at most.
+fn names_param(p: &Value, cmd: &str) -> Result<Vec<String>> {
     let names: Vec<String> = p
         .get("names")
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).collect())
         .unwrap_or_default();
     if names.is_empty() || names.len() > MAX_NAMES {
-        return Err(bad(CMD, format!("`names` are 1 to {MAX_NAMES} names")));
+        return Err(bad(cmd, format!("`names` are 1 to {MAX_NAMES} names")));
     }
     if let Some(n) = names.iter().find(|n| n.chars().count() > MAX_TEXT) {
         let start: String = n.chars().take(20).collect();
-        return Err(bad(CMD, format!("a name is {MAX_TEXT} characters at most: `{start}…`")));
+        return Err(bad(cmd, format!("a name is {MAX_TEXT} characters at most: `{start}…`")));
     }
+    Ok(names)
+}
+
+/// The team names' lettering (selected, or `id`) and its font.
+fn team_lettering(s: &mut Session, p: &Value, cmd: &str) -> Result<(NodeId, Lettering, std::sync::Arc<EmbFont>)> {
+    let ids = targets(s, p)?;
+    let (id, spec) = lettering_of(&s.doc()?.doc, &ids).ok_or_else(|| bad(cmd, "select lettering set in an embroidery font"))?;
+    let _ = ensure_fonts(s);
+    let font = loaded(s, &spec.font).ok_or_else(|| not_loaded(cmd, &spec.font))?;
+    Ok((id, spec, font))
+}
+
+/// The bounds (points) of glyphs set for `name` with `spec`, in a scratch copy of `d`.
+fn name_bounds(d: &mut Document, font: &EmbFont, spec: &Lettering, name: &str) -> Option<vectorcraft_geom::Rect> {
+    let one = Lettering { text: name.to_string(), ..spec.clone() };
+    glyphs(d, font, &one).iter().filter_map(|g| g.geometric_bounds()).reduce(|a, b| a.union(b))
+}
+
+fn team_names_layout(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.teamNames.layout";
+    let names = names_param(p, CMD)?;
+    let gap = ranged(p, "gap", 0.0..=200.0, CMD, "`gap` is 0 to 200 mm")?.unwrap_or(10.0) * vectorcraft_embroidery::PT_PER_MM;
+    let columns = match p.get("columns") {
+        None | Some(Value::Null) => ((names.len() as f64).sqrt().ceil() as usize).max(1),
+        Some(v) => v.as_u64().filter(|c| (1..=50).contains(c)).map(|c| c as usize).ok_or_else(|| bad(CMD, "`columns` is 1 to 50"))?,
+    };
+    let (id, spec, font) = team_lettering(s, p, CMD)?;
+    // the largest name sets the cell; each name's lettering starts where the original is
+    let mut scratch = (*s.doc()?.doc).clone();
+    let mut cell = (0.0f64, 0.0f64);
+    for name in &names {
+        let b = name_bounds(&mut scratch, &font, &spec, name)
+            .ok_or_else(|| bad(CMD, format!("{} has none of the characters of `{name}`", font.info.name)))?;
+        cell = (cell.0.max(b.width()), cell.1.max(b.height()));
+    }
+    let rows = names.len().div_ceil(columns);
+    let original = s.doc()?.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let parent = s.doc()?.insertion_parent();
+    let count = names.len();
+    let group = s.edit("Lay Out Team Names", |d, sel| {
+        let mut copies = Vec::with_capacity(names.len());
+        for (k, name) in names.iter().enumerate() {
+            let (col, row) = (k % columns, k / columns);
+            let shift = sf_core::Affine::translate(sf_core::Point::new(col as f64 * (cell.0 + gap), row as f64 * (cell.1 + gap)));
+            let one = Lettering { text: name.clone(), frame: spec.frame.then(&shift), ..spec.clone() };
+            let mut n = d.reid(&original);
+            n.name = Some(lettering_name(&one));
+            if let NodeKind::Group { children, .. } = &mut n.kind {
+                *children = glyphs(d, &font, &one);
+            }
+            if let Some(e) = n.embroidery.as_deref_mut() {
+                e.stitch = StitchType::Lettering(Box::new(one));
+            }
+            copies.push(Arc::new(n));
+        }
+        let mut all = Node::group(d.alloc_id(), copies);
+        all.name = Some("Team names".into());
+        let gid = all.id;
+        d.insert(parent, usize::MAX, all)?;
+        sel.set([gid]);
+        Ok(gid)
+    })?;
+    Ok(json!({ "id": group.0, "count": count, "columns": columns.min(count), "rows": rows }))
+}
+
+fn team_names_worksheet(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.teamNames.worksheet";
+    let names = names_param(p, CMD)?;
+    let (pw, ph) = match str_param(p, "page").unwrap_or("a4") {
+        "a4" | "A4" => super::embroidery::SHEET,
+        "letter" | "Letter" => (612.0, 792.0),
+        _ => return Err(bad(CMD, "`page` is a4 or letter")),
+    };
+    let (id, spec, font) = team_lettering(s, p, CMD)?;
+    // each name as it sews: the design with the lettering set to it
+    let mut doc = (*s.doc()?.doc).clone();
+    let planner = super::embroidery::EmbroideryState::default();
+    let mut rows = Vec::with_capacity(names.len());
+    for name in &names {
+        let one = Lettering { text: name.clone(), ..spec.clone() };
+        let glyphs = glyphs(&mut doc, &font, &one);
+        if glyphs.is_empty() {
+            return Err(bad(CMD, format!("{} has none of the characters of `{name}`", font.info.name)));
+        }
+        let n = doc.node_mut(id).ok_or(EngineError::NoNode(id))?;
+        let NodeKind::Group { children, .. } = &mut n.kind else { return Err(EngineError::NoNode(id)) };
+        *children = glyphs;
+        let plan = planner.plan(&doc);
+        let Some(st) = plan.stats.clone() else { continue };
+        rows.push((name.replace(['\n', '\r'], " / "), st));
+    }
+    let stitches: usize = rows.iter().map(|r| r.1.stitches).sum();
+    let seconds: f64 = rows.iter().map(|r| r.1.seconds).sum();
+    let title = super::fileio::file_stem(&s.doc()?.doc.title);
+    let black = Color::rgb8(0x1a, 0x1a, 0x1a);
+    let grey = Color::rgb8(0x66, 0x66, 0x66);
+    let mut sheet = Document::new(pw, ph);
+    sheet.title = format!("{title} team names");
+    use super::embroidery::sheet_text;
+    sheet_text(&mut sheet, 40.0, 56.0, "Team names", 20.0, black)?;
+    let t = sf_formats::Timestamp::now();
+    sheet_text(
+        &mut sheet,
+        40.0,
+        78.0,
+        &format!("{title}   {:04}-{:02}-{:02}   font: {}, {:.0} mm", t.year, t.month, t.day, spec.font, spec.size),
+        10.0,
+        grey,
+    )?;
+    let hms = |secs: f64| {
+        let s = secs.max(0.0).round() as u64;
+        format!("{}:{:02}:{:02}", s / 3600, (s / 60) % 60, s % 60)
+    };
+    sheet_text(&mut sheet, 40.0, 104.0, "Name", 9.0, grey)?;
+    sheet_text(&mut sheet, 300.0, 104.0, "Size (mm)", 9.0, grey)?;
+    sheet_text(&mut sheet, 400.0, 104.0, "Stitches", 9.0, grey)?;
+    sheet_text(&mut sheet, 480.0, 104.0, "Time", 9.0, grey)?;
+    let room = ((ph - 170.0) / 14.0).max(1.0) as usize;
+    let mut y = 122.0;
+    for (k, (name, st)) in rows.iter().take(room).enumerate() {
+        let shown: String = name.chars().take(40).collect();
+        sheet_text(&mut sheet, 40.0, y, &format!("{}. {shown}", k + 1), 9.0, black)?;
+        sheet_text(&mut sheet, 300.0, y, &format!("{:.0} × {:.0}", st.width_mm, st.height_mm), 9.0, black)?;
+        sheet_text(&mut sheet, 400.0, y, &st.stitches.to_string(), 9.0, black)?;
+        sheet_text(&mut sheet, 480.0, y, &hms(st.seconds), 9.0, black)?;
+        y += 14.0;
+    }
+    if rows.len() > room {
+        sheet_text(&mut sheet, 40.0, y, &format!("… and {} more", rows.len() - room), 9.0, grey)?;
+        y += 14.0;
+    }
+    sheet_text(&mut sheet, 40.0, y + 10.0, &format!("{} names   {stitches} stitches   {} sewing", rows.len(), hms(seconds)), 10.0, black)?;
+    s.add_document(sheet, None);
+    Ok(json!({ "count": rows.len(), "stitches": stitches, "seconds": seconds.round() }))
+}
+
+fn team_names_export(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.teamNames.export";
+    let names = names_param(p, CMD)?;
     let dir = str_param(p, "dir").filter(|d| !d.trim().is_empty()).ok_or_else(|| bad(CMD, "missing `dir`: the folder to write to"))?;
     let prefix = str_param(p, "prefix").unwrap_or("");
     let ids = targets(s, p)?;

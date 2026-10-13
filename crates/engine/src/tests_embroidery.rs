@@ -3351,6 +3351,50 @@ fn puff_fills_and_puff_sewn_last() {
 }
 
 #[test]
+fn team_names_lay_out_together_and_list_on_a_worksheet() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let r = s.execute("embroidery.lettering", &json!({"text": "A", "font": "Test Script", "at": [100, 100]})).unwrap();
+    let id = r["id"].as_u64().unwrap();
+    let names = ["AB", "BA", "AAB", "B", "ABBA"];
+    let r = s.execute("embroidery.teamNames.layout", &json!({"id": id, "names": names, "columns": 2, "gap": 5})).unwrap();
+    assert_eq!((r["count"].as_u64(), r["columns"].as_u64(), r["rows"].as_u64()), (Some(5), Some(2), Some(3)), "{r}");
+    let st = s.doc().unwrap();
+    let group = st.doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap();
+    let copies = group.children().unwrap();
+    assert_eq!(copies.len(), 5);
+    // each still lettering, saying its name; laid out in rows that don't overlap
+    let said: Vec<String> = copies
+        .iter()
+        .map(|c| match c.embroidery.as_deref().map(|e| &e.stitch) {
+            Some(sf_core::attr::StitchType::Lettering(l)) => l.text.clone(),
+            _ => String::new(),
+        })
+        .collect();
+    assert_eq!(said, names);
+    let b: Vec<_> = copies.iter().map(|c| c.geometric_bounds().unwrap()).collect();
+    assert!(b[2].y0 >= b[0].y1 && b[1].x0 >= b[0].x1, "{b:?}");
+    // the worksheet: a row a name and the totals
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let r = s.execute("embroidery.teamNames.worksheet", &json!({"id": id, "names": names})).unwrap();
+    assert_eq!(r["count"].as_u64(), Some(5));
+    assert!(r["stitches"].as_u64().unwrap() > 0);
+    let mut texts = Vec::new();
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    assert!(texts.iter().any(|t| t == "5. ABBA"), "{texts:?}");
+    assert!(texts.iter().any(|t| t.starts_with("5 names")), "{texts:?}");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    for bad in [json!({"id": id, "names": []}), json!({"id": id, "names": ["A"], "columns": 0}), json!({"id": id, "names": ["A"], "gap": -1})] {
+        assert!(s.execute("embroidery.teamNames.layout", &bad).is_err(), "{bad}");
+    }
+    assert!(s.execute("embroidery.teamNames.worksheet", &json!({"id": id, "names": ["A"], "page": "a3"})).is_err());
+}
+
+#[test]
 fn monogram_templates_come_from_the_gallery_or_are_saved() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();

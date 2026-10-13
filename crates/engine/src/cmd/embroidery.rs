@@ -2033,10 +2033,10 @@ fn outline_around(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// A4 portrait (points).
-const SHEET: (f64, f64) = (595.0, 842.0);
+pub(super) const SHEET: (f64, f64) = (595.0, 842.0);
 
 /// A line of `text` at `(x, y)` (its baseline; points), `size` points high, in `color`.
-fn sheet_text(doc: &mut Document, x: f64, y: f64, text: &str, size: f64, color: Color) -> Result<()> {
+pub(super) fn sheet_text(doc: &mut Document, x: f64, y: f64, text: &str, size: f64, color: Color) -> Result<()> {
     let style = vectorcraft_doc::text::CharStyle {
         font_family: vectorcraft_text::FALLBACK_FAMILY.to_string(),
         font_style: "Regular".into(),
