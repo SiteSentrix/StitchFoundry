@@ -15,7 +15,8 @@ use usvg::roxmltree;
 
 pub(super) type XNode<'a, 'i> = roxmltree::Node<'a, 'i>;
 
-/// `name: value` declarations of a block or `style` attribute, with their `!important` flag.
+/// `name: value` declarations of a block or `style` attribute, with their `!important` flag. The
+/// `font` shorthand becomes its longhands, as usvg reads it for the rest of the drawing (#1557).
 fn parse_decls(s: &str) -> Vec<(String, String, bool)> {
     s.split(';')
         .filter_map(|d| {
@@ -27,7 +28,26 @@ fn parse_decls(s: &str) -> Vec<(String, String, bool)> {
             };
             Some((k.trim().to_ascii_lowercase(), v.to_string(), important))
         })
+        .flat_map(|(k, v, important)| match k.as_str() {
+            "font" => font_longhands(&v).into_iter().map(|(k, v)| (k.to_string(), v, important)).collect(),
+            _ => vec![(k, v, important)],
+        })
         .collect()
+}
+
+/// The longhands of a `font` shorthand: those it leaves out back to their initial values. None
+/// when it doesn't parse (it is then ignored, as in CSS).
+fn font_longhands(v: &str) -> Vec<(&'static str, String)> {
+    let Ok(f) = svgtypes::FontShorthand::from_str(v) else { return Vec::new() };
+    let or = |o: Option<&str>| o.unwrap_or("normal").to_string();
+    vec![
+        ("font-style", or(f.font_style)),
+        ("font-variant", or(f.font_variant)),
+        ("font-weight", or(f.font_weight)),
+        ("font-stretch", or(f.font_stretch)),
+        ("font-size", f.font_size.to_string()),
+        ("font-family", f.font_family.to_string()),
+    ]
 }
 
 /// One compound selector (`text.a.b#c[x=y]`).
@@ -341,6 +361,19 @@ mod tests {
                 assert_eq!(st.own(by_id(doc, "a"), "stroke").as_deref(), Some("red"));
             },
         );
+    }
+
+    #[test]
+    fn the_font_shorthand_sets_its_longhands() {
+        let d = parse_decls("fill: red; font: italic bold 30px 'DejaVu Sans' ; font-weight: 300 !important; font: nonsense");
+        let get = |k: &str| d.iter().filter(|(n, ..)| n == k).map(|(_, v, i)| (v.as_str(), *i)).collect::<Vec<_>>();
+        assert_eq!(get("font-style"), [("italic", false)]);
+        assert_eq!(get("font-weight"), [("bold", false), ("300", true)]);
+        assert_eq!(get("font-size"), [("30px", false)]);
+        assert_eq!(get("font-family"), [("'DejaVu Sans'", false)]);
+        assert_eq!(get("font-variant"), [("normal", false)]);
+        assert_eq!(get("fill"), [("red", false)]);
+        assert!(get("font").is_empty(), "the shorthand itself is not kept");
     }
 
     #[test]

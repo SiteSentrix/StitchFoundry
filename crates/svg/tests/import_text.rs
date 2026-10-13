@@ -583,3 +583,14 @@ fn text_path_to_an_empty_shape_still_falls_back_to_point_type() {
     assert!(matches!(only_text(&d).kind, TextKind::Point));
     assert!(w.iter().any(|w| w.contains("textPath")), "{w:?}");
 }
+
+/// #1557: the `font` shorthand sets the type's size, weight and style.
+#[test]
+fn the_font_shorthand_styles_type() {
+    let d = open(r#"<text x="10" y="40" style="font: italic bold 30px sans-serif">Deco</text>"#);
+    let t = only_text(&d);
+    let st = &t.runs[0].style;
+    assert!(close(st.size * t.xf.determinant().abs().sqrt(), 30.0, 1e-6), "{}", st.size);
+    let style = st.font_style.to_ascii_lowercase();
+    assert!(style.contains("bold") && style.contains("italic"), "{style}");
+}
