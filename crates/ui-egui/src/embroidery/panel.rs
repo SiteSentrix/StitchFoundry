@@ -1898,7 +1898,8 @@ fn fabric_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
                 }
             });
             use vectorcraft_embroidery::sf_core::fabrics::Stabilizer;
-            let kinds: Vec<&str> = Stabilizer::ALL.iter().map(|k| tl!(k.label())).collect();
+            // in the order of Stabilizer::ALL
+            let kinds = [tl!("Tear-away"), tl!("Cut-away"), tl!("No-show mesh"), tl!("Wash-away")];
             let cur = Stabilizer::ALL.iter().position(|k| f["stabilizer"].as_str() == Some(k.id())).unwrap_or(0);
             if let Some(i) = pick(ui, tl!("Stabiliser"), "fab-stab", cur, &kinds)
                 && let Some(k) = Stabilizer::ALL.get(i)
