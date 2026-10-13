@@ -493,7 +493,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | AD-01 | Convert vector objects to embroidery (and back) | Done | Stitch types on vectors; "No Stitches" removes | – |
 | AD-02 | Convert between stitch types | Done | | – |
 | AD-03 | Auto-digitize shapes (click a region to stitch it) | Done | Whole-image Auto-Digitize; the Click-to-Stitch tool (`embroidery.clickStitch`): a magic-wand region becomes tatami (with or without its holes), satin, an outline or a centre-line run | – |
-| AD-04 | Smart design (auto-digitize with outlines, details as runs, sequencing) | Partial | Satin/tatami by thickness; add outlines as satin borders, details as runs, background removal choices | 5 |
+| AD-04 | Smart design (auto-digitize with outlines, details as runs, sequencing) | Done | Auto-Digitize: satin/tatami by thickness, details thinner than `details` as runs, satin outlines round the design or each filled shape in the darkest thread, threads matched to a chart, background and specks removed, sewn colour by colour nearest-first | 0 |
 | PH-01 | Photo line embroidery (photo flash: lines of varying density) | Done | `embroidery.photoStitch {mode: lines}`: parallel lines whose zigzag widens with darkness, one line of manual stitches; spacing, angle, invert, contrast | 0 |
 | PH-02 | Coral / single-run photo stitch | Done | `embroidery.photoStitch {mode: coral}`: points scattered by darkness, sewn nearest-first as one meandering run (trims over 5 mm gaps) | 0 |
 | PH-03 | Colour photo stitch | Done | `embroidery.photoStitch {mode: color}`: main colours matched to chart threads on a cell grid, cleaned, each a short-stitch tatami fill, lightest first, angles turned per colour | 0 |
@@ -579,8 +579,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 209 done,
-10 partial, 25 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 210 done,
+9 partial, 25 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
