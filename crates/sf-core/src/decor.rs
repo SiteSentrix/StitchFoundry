@@ -23,6 +23,10 @@ pub enum DecorKind {
     Cord,
     /// A cut-work hole: outlined, cut (the machine stops), its edge sewn with satin.
     Boring,
+    /// Printed ink (screen, transfer or direct print) beside the embroidery: shown, not sewn.
+    Print,
+    /// Foil pressed on beside the embroidery: shown with a metallic sheen, not sewn.
+    Foil,
 }
 
 impl DecorKind {
@@ -33,6 +37,8 @@ impl DecorKind {
             DecorKind::Stone => "stone",
             DecorKind::Cord => "cord",
             DecorKind::Boring => "boring",
+            DecorKind::Print => "print",
+            DecorKind::Foil => "foil",
         }
     }
 
@@ -43,7 +49,14 @@ impl DecorKind {
             DecorKind::Stone => "Rhinestones",
             DecorKind::Cord => "Cord",
             DecorKind::Boring => "Boring",
+            DecorKind::Print => "Print",
+            DecorKind::Foil => "Foil",
         }
+    }
+
+    /// Shown with the design, never sewn: no stitches, no stop.
+    pub fn is_virtual(self) -> bool {
+        matches!(self, DecorKind::Print | DecorKind::Foil)
     }
 }
 
@@ -157,13 +170,15 @@ impl DecorParams {
             DecorKind::Stone => 3.9,
             DecorKind::Cord => 2.0,
             DecorKind::Boring => 1.2,
+            DecorKind::Print | DecorKind::Foil => 1.0,
         };
         let spacing = match kind {
             DecorKind::Stone => 0.6,
             DecorKind::Bead => 0.5,
             _ => 0.0,
         };
-        DecorParams { kind, size, spacing, stop: !matches!(kind, DecorKind::Stone | DecorKind::Bead), ..Default::default() }
+        let stop = !(matches!(kind, DecorKind::Stone | DecorKind::Bead) || kind.is_virtual());
+        DecorParams { kind, size, spacing, stop, ..Default::default() }
     }
 
     /// The size of the `i`-th piece.
@@ -319,6 +334,9 @@ fn walk(out: &mut Vec<Stitch>, a: Point, b: Point, step: f64) {
 pub fn stitches(obj: &DecorObject, hint: Option<Point>) -> Vec<Stitch> {
     let p = &obj.params;
     let mut out: Vec<Stitch> = Vec::new();
+    if p.kind.is_virtual() {
+        return out;
+    }
     let first = match p.kind {
         DecorKind::Cord | DecorKind::Boring => obj.lines.first().and_then(|(l, _)| l.first().copied()),
         _ => obj.items.first().map(|i| i.at),
@@ -450,6 +468,7 @@ pub fn stitches(obj: &DecorObject, hint: Option<Point>) -> Vec<Stitch> {
                 }
             }
         }
+        DecorKind::Print | DecorKind::Foil => {}
     }
     out
 }
@@ -457,7 +476,7 @@ pub fn stitches(obj: &DecorObject, hint: Option<Point>) -> Vec<Stitch> {
 /// A rough outline of each piece (mm) for display and hit-testing.
 pub fn outlines(obj: &DecorObject) -> Vec<Vec<Point>> {
     match obj.params.kind {
-        DecorKind::Cord | DecorKind::Boring => obj.lines.iter().map(|(l, _)| l.clone()).collect(),
+        DecorKind::Cord | DecorKind::Boring | DecorKind::Print | DecorKind::Foil => obj.lines.iter().map(|(l, _)| l.clone()).collect(),
         _ => obj
             .items
             .iter()
@@ -469,6 +488,17 @@ pub fn outlines(obj: &DecorObject) -> Vec<Vec<Point>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn print_and_foil_are_shown_not_sewn() {
+        let ring = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)];
+        for kind in [DecorKind::Print, DecorKind::Foil] {
+            let obj = DecorObject { params: DecorParams::of(kind), items: Vec::new(), lines: vec![(ring.clone(), true)] };
+            assert!(stitches(&obj, None).is_empty(), "{kind:?}");
+            assert!(!obj.params.stop);
+            assert_eq!(outlines(&obj).len(), 1);
+        }
+    }
 
     #[test]
     fn pieces_go_along_lines_inside_shapes_and_round_edges() {

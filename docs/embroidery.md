@@ -527,8 +527,8 @@ preferences file can be edited.
 
 ## Sequins, beads, rhinestones, cord and boring
 
-Five stitch types decorate instead of stitching a fill (Embroidery panel › Stitch type, or
-`embroidery.set {type: sequin|bead|stone|cord|boring}`); their settings change with the panel or
+Seven stitch types decorate instead of stitching a fill (Embroidery panel › Stitch type, or
+`embroidery.set {type: sequin|bead|stone|cord|boring|print|foil}`); their settings change with the panel or
 `embroidery.setParams`:
 
 - **Sequins**: round, square, star, heart or flower sequins (`shape`, `size` mm across), placed
@@ -547,6 +547,9 @@ Five stitch types decorate instead of stitching a fill (Embroidery panel › Sti
   Setting type to rhinestones makes bling lettering and bling borders.
 - **Cord**: a cord couched along the line with a zigzag a little wider than it (`size`: the
   cord's width).
+- **Print** and **Foil**: the shape shown printed, flat in its colour, or as pressed foil with
+  a metallic sheen, under the embroidery: virtual decoration for mixed-media designs. They aren't
+  sewn and add nothing to the machine file.
 - **Boring**: each closed shape a cut-work hole: its outline run, a stop to cut it, then a
   satin edge round it (`size`: the edge's width).
 

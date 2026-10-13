@@ -53,6 +53,8 @@ const TYPES: &[(&str, &str)] = &[
     ("Rhinestones", "stone"),
     ("Cord", "cord"),
     ("Boring", "boring"),
+    ("Print", "print"),
+    ("Foil", "foil"),
 ];
 
 fn type_index(e: Option<&Embroidery>) -> usize {
@@ -244,7 +246,9 @@ fn decoration_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, d: &ve
         DecorKind::Boring => tl!("Edge width"),
         _ => tl!("Size"),
     };
-    if let Some(v) = num(ui, size_label, "decor-size", d.size, " mm", 1) {
+    if !kind.is_virtual()
+        && let Some(v) = num(ui, size_label, "decor-size", d.size, " mm", 1)
+    {
         set(app, target, json!({ "size": v.clamp(0.5, 30.0) }));
     }
     if pieces {
@@ -291,7 +295,9 @@ fn decoration_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, d: &ve
             }
         });
     }
-    if kind != DecorKind::Stone {
+    if kind.is_virtual() {
+        ui.label(egui::RichText::new(tl!("Shown with the design, not sewn")).small());
+    } else if kind != DecorKind::Stone {
         if let Some(v) = check(ui, tl!("Stop before"), d.stop) {
             set(app, target, json!({ "stop": v }));
         }
