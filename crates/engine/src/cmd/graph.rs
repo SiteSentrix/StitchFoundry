@@ -2048,15 +2048,17 @@ mod tests {
     fn a_scatter_x_axis_that_overflows_does_not_hang() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
-        // Finite x values whose rounded axis end is infinite: this used to add ticks forever.
+        // Finite x values whose rounded axis end is infinite: this used to add ticks forever. Now the
+        // command returns: points that far off the plot can't be drawn, which is an error.
         let csv = ",y1,x1\nP,1,1.7e308\nQ,2,1.5e308";
+        let refused = |r: crate::Result<serde_json::Value>| assert!(r.unwrap_err().to_string().contains("exceed the canvas"));
+        refused(s.execute("graph.create", &json!({"type": "scatter", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})));
+        // The same data through Graph Data, on an ordinary scatter graph: it stays as it was.
         let axes = |s: &Session, id: NodeId| group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").children().unwrap().len();
-        let id = make(&mut s, "scatter", csv);
-        assert!(axes(&s, id) < 100, "{}", axes(&s, id));
-        // The same data through Graph Data, on an ordinary scatter graph.
         let id = make(&mut s, "scatter", ",y1,x1\nP,1,10\nQ,2,20");
-        s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
-        assert!(axes(&s, id) < 100, "{}", axes(&s, id));
+        let before = axes(&s, id);
+        refused(s.execute("graph.setData", &json!({"id": id.0, "csv": csv})));
+        assert_eq!(axes(&s, id), before);
     }
 
     #[test]
