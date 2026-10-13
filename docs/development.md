@@ -1,5 +1,7 @@
 # Development
 
+> **Last updated:** 2026-10-13 · **Change:** verified PngSuite downloads (#1729).
+
 ## Web build
 
 `apps/vectorcraft-web` runs the same `VectorcraftApp` in the browser through eframe's web runner. The renderer is wgpu: WebGPU where the browser has it, WebGL2 otherwise. It is Rust only; the only JavaScript is the glue wasm-bindgen generates.
@@ -313,3 +315,31 @@ Vertical type keeps its logical order down the column. SVG export outlines text 
 lines (with a warning) until it is written with `direction`/`unicode-bidi`; PDF and raster exports
 use the laid-out glyphs. No font is bundled for these scripts: the installed fonts' fallback
 covers them (the web build needs a font with that coverage).
+
+## Verified PngSuite corpus
+
+`cargo xtask corpus --download` fetches the 175 original PngSuite PNGs and their redistribution
+license/README from [the pinned lunapaint mirror](https://github.com/lunapaint/pngsuite/tree/8cd768dd0d0063195174d0d01cacbd5a7d1e5605).
+Its README identifies `png/` as the original 2017-07-19 files; converted BMP/JSON files are excluded.
+Each file's SHA-256 and exact byte length are committed in `xtask/pngsuite.sha256`.
+
+Only HTTPS downloads and redirects are allowed. The manifest admits at most 256 flat filenames,
+1 MiB per file and 16 MiB total; current PNG data totals 114,649 bytes. Curl limits each download
+to its expected length, with a 10-second connect timeout and 60-second transfer timeout.
+Network fetching requires curl 8.4 or newer: earlier versions do not bound unknown-length
+responses ([curl documentation](https://curl.se/docs/manpage.html#--max-filesize)). Verified
+caches remain usable without invoking curl.
+Reads are independently bounded. Files are staged under temporary filenames, checked, then
+renamed into place; failed or substituted downloads never replace an existing oracle. The fetch
+stops on unexpected directories/symlinks or an existing staging file rather than overwriting them.
+Verified cached files need no network access. The corpus remains gitignored and optional.
+
+The original site's plain HTTP archive is no longer fetched or extracted. To refresh the suite,
+review the mirror commit, original-file list, redistribution license, sizes and hashes together;
+do not replace expected hashes automatically in response to a download mismatch.
+
+## Revision history
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |
