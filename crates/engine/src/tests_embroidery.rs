@@ -793,6 +793,31 @@ fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
 }
 
 #[test]
+fn a_multi_position_hoop_sews_a_file_a_position_without_marks() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // three 100 × 40 mm bands down a 280 mm length
+    for i in 0..3 {
+        rect(&mut s, 20.0 * PT, (20.0 + 100.0 * f64::from(i)) * PT, 100.0 * PT, 40.0 * PT);
+        s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    }
+    let dir = std::env::temp_dir().join(format!("sf-multipos-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let r = s.execute("embroidery.multiHoop", &json!({"hoop": "Multi-position 130 × 300 (3 × 130 × 180)", "dir": dir.to_string_lossy()})).unwrap();
+    assert_eq!((r["columns"].as_u64(), r["rows"].as_u64()), (Some(1), Some(3)), "{r}");
+    for h in r["hoopings"].as_array().unwrap() {
+        let bytes = std::fs::read(h["file"].as_str().unwrap()).unwrap();
+        let p = sf_formats::read(sf_formats::Format::Dst, &bytes).unwrap();
+        let b = p.bounds();
+        assert!(b.min.x >= -65.1 && b.max.x <= 65.1 && b.min.y >= -90.1 && b.max.y <= 90.1, "{b:?}");
+        assert_eq!(p.color_blocks().len(), 1, "no registration marks: the fabric isn't hooped again");
+    }
+    let list = s.execute("embroidery.hoops", &json!({})).unwrap();
+    assert!(list["hoops"].as_array().unwrap().iter().any(|h| h["name"].as_str().unwrap().starts_with("Multi-position")));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn an_object_larger_than_a_hooping_is_split_over_hoopings() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

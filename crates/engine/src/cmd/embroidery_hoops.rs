@@ -82,7 +82,7 @@ fn fits(h: &Hoop, (w, ht): (f64, f64)) -> bool {
 }
 
 fn turn(h: &Hoop) -> Hoop {
-    Hoop { width: h.height, height: h.width, ..h.clone() }
+    Hoop { width: h.height, height: h.width, positions: h.positions.iter().map(|[x, y]| [*y, *x]).collect(), ..h.clone() }
 }
 
 fn set_hoop(s: &mut Session, h: &Hoop) -> Result<()> {
