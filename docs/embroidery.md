@@ -671,6 +671,13 @@ type: satin for narrow parts, tatami at its best angle for the rest. The design 
 colour, nearest shape first. It is scaled to fit the hoop if one is set (or to 100 mm if it is
 larger than 200 mm). The image stays underneath as a reference. One undo step undoes it all.
 
+Smart design options: shapes no thicker than `details` (0.8 mm) are fine lines and details, sewn
+as a run round them instead of a satin too narrow to sew; `outline: design` puts a satin outline
+(`outlineWidth`, 1.5 mm) round the whole design and `outline: shapes` one round each filled
+shape, in the design's darkest thread (or `outlineColor`); `chart` matches every thread to the
+nearest in a thread chart. Choose how much to keep with `removeBackground` (the colour round the
+image's edge) and `minArea` (specks).
+
 ### Preparing an image
 
 **Embroidery › Prepare Image** (`embroidery.image.prepare {colors?, smooth?, clean?, replace?}`)

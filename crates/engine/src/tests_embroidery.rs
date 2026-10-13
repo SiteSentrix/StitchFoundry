@@ -1817,6 +1817,47 @@ fn auto_digitize_traces_an_image_into_satin_and_fill() {
 }
 
 #[test]
+fn smart_auto_digitize_sews_details_as_runs_outlines_and_matches_a_chart() {
+    let mut s = session();
+    // a blue disc and a hairline (2 px: 0.7 mm) on white
+    let r = vectorcraft_trace::Raster::from_fn(300, 200, |x, y| {
+        let (dx, dy) = (x as f64 - 90.0, y as f64 - 90.0);
+        if dx * dx + dy * dy <= 60.0 * 60.0 {
+            [20, 40, 200, 255]
+        } else if (60..260).contains(&x) && (175..177).contains(&y) {
+            [20, 20, 20, 255]
+        } else {
+            [255, 255, 255, 255]
+        }
+    });
+    s.execute("file.place", &json!({"name": "logo.png", "dataBase64": vectorcraft_format::base64_encode(&r.encode_png())})).unwrap();
+    let res = s.execute("embroidery.autoDigitize", &json!({"colors": 4, "outline": "shapes", "chart": "Generic"})).unwrap();
+    assert_eq!((res["fill"].as_u64(), res["run"].as_u64(), res["outlines"].as_u64()), (Some(1), Some(1), Some(1)), "{res}");
+    // the threads are the chart's
+    let chart = sf_core::threads::charts().into_iter().find(|c| c.name == "Generic").unwrap();
+    let plan = s.embroidery_plan().unwrap();
+    for t in &plan.pattern().threads {
+        assert!(chart.threads.iter().any(|c| c.color == t.color), "{t:?} isn't in the chart");
+    }
+    // the hairline's run is sewn, the outline in the darkest thread
+    assert!(stitches(&s) > 1000);
+    // the whole design outlined instead, no details
+    s.execute("edit.undo", &json!({})).unwrap();
+    let mut img = None;
+    s.doc().unwrap().doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Image(_)) {
+            img = Some(n.id.0);
+        }
+    });
+    s.execute("select.set", &json!({"ids": [img.unwrap()]})).unwrap();
+    let res = s.execute("embroidery.autoDigitize", &json!({"colors": 4, "outline": "design", "details": 0})).unwrap();
+    assert_eq!((res["run"].as_u64(), res["outlines"].as_u64(), res["satin"].as_u64()), (Some(0), Some(1), Some(1)), "{res}");
+    for bad in [json!({"outline": "box"}), json!({"chart": "Nope"}), json!({"outlineColor": "blue"})] {
+        assert!(s.execute("embroidery.autoDigitize", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn type_is_stitched_from_its_glyphs() {
     let mut s = session();
     // Small type (24 pt, about 8.5 mm): satin columns, with the counters of B, o and b

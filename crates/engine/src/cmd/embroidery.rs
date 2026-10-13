@@ -201,7 +201,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Auto-Digitize Image",
             ["Embroidery"],
             None,
-            "{colors?: 2-16 (6), detail?: 0-100 (60), noise?: px (16), removeBackground?: bool (true), minArea?: mm² (1), size?: mm (longest side), keepImage?: bool (true)} trace the selected image into flat colour shapes and give each a stitch type: satin for narrow parts, tatami at its best angle for the rest, specks and the background dropped, sewn colour by colour → {id, objects, satin, fill, removed, colors, scale}",
+            "{colors?: 2-16 (6), detail?: 0-100 (60), noise?: px (16), removeBackground?: bool (true), minArea?: mm² (1), size?: mm (longest side), keepImage?: bool (true), details?: mm (0.8: shapes no thicker sewn as a run round them, fine lines and details; 0 none), outline?: none|design|shapes (none: a satin outline round the whole design, or round each filled shape), outlineWidth?: mm (1.5), outlineColor?: \"#rrggbb\" (the design's darkest thread), chart?: a thread chart to match the threads to (none)} trace the selected image into flat colour shapes and give each a stitch type: satin for narrow parts, tatami at its best angle for the rest, details as runs, specks and the background dropped, sewn colour by colour, outlined and matched to a chart if asked → {id, objects, satin, fill, run, outlines, removed, colors, scale}",
             has_selection,
             auto_digitize
         ),
@@ -1678,6 +1678,20 @@ fn digitize_image(s: &mut Session, p: &Value) -> Result<Value> {
     let remove_bg = bool_or(p, "removeBackground", true);
     let min_area = f64_or(p, "minArea", 1.0).max(0.0);
     let keep_image = bool_or(p, "keepImage", true);
+    let details = f64_or(p, "details", 0.8).clamp(0.0, 5.0);
+    let outline = str_param(p, "outline").unwrap_or("none");
+    if !["none", "design", "shapes"].contains(&outline) {
+        return Err(bad(CMD, "`outline` is none, design or shapes"));
+    }
+    let outline_width = f64_or(p, "outlineWidth", 1.5).clamp(0.5, 10.0);
+    let outline_color = match str_param(p, "outlineColor") {
+        Some(c) => Some(Rgb::from_hex(c).ok_or_else(|| bad(CMD, "`outlineColor` is \"#rrggbb\""))?),
+        None => None,
+    };
+    let chart = match str_param(p, "chart") {
+        Some(name) => Some(super::embroidery_charts::find_chart(s, name).ok_or_else(|| bad(CMD, format!("unknown thread chart `{name}`")))?.name),
+        None => None,
+    };
     let size = match p.get("size").filter(|v| !v.is_null()) {
         Some(v) => Some(v.as_f64().filter(|v| v.is_finite() && *v >= 5.0).ok_or_else(|| bad(CMD, "size must be at least 5 mm"))?),
         None => None,
@@ -1722,7 +1736,7 @@ fn digitize_image(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let xf = kurbo::Affine::scale_about(scale, bounds.origin());
     let image_rect = xf.transform_rect_bbox(bounds);
-    let (mut keep, mut removed, mut satin, mut fill) = (Vec::new(), 0usize, 0usize, 0usize);
+    let (mut keep, mut removed, mut satin, mut fill, mut run) = (Vec::new(), 0usize, 0usize, 0usize, 0usize);
     for (k, c) in kids.iter().enumerate() {
         let mut n = (**c).clone();
         if (scale - 1.0).abs() > 1e-9 {
@@ -1734,8 +1748,12 @@ fn digitize_image(s: &mut Session, p: &Value) -> Result<Value> {
             removed += 1;
             continue;
         }
-        let e = vectorcraft_embroidery::suggest(&n);
-        if matches!(e.stitch, StitchType::Satin(_)) {
+        // fine lines and details, too thin for satin: a run round them
+        let thin = details > 0.0 && regions.iter().all(|r| r.thickness() <= details);
+        let e = if thin { Embroidery::run() } else { vectorcraft_embroidery::suggest(&n) };
+        if thin {
+            run += 1;
+        } else if matches!(e.stitch, StitchType::Satin(_)) {
             satin += 1;
         } else {
             fill += 1;
@@ -1796,7 +1814,36 @@ fn digitize_image(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([gid]);
         Ok(())
     })?;
-    Ok(json!({ "id": gid.0, "objects": objects, "satin": satin, "fill": fill, "removed": removed, "colors": order.len(), "scale": scale }))
+    // matched to a chart's threads
+    if let Some(chart) = &chart {
+        s.execute("embroidery.matchThreads", &json!({ "chart": chart, "ids": [gid.0] }))?;
+    }
+    // outlined: round the whole design, or round each filled shape, in the darkest thread
+    let mut outlines = 0usize;
+    if outline != "none" {
+        let (fills, darkest) = {
+            let d = &s.doc()?.doc;
+            let kids: Vec<Arc<vectorcraft_doc::Node>> = d.node(gid).and_then(|g| g.children().cloned()).unwrap_or_default();
+            let fills: Vec<u64> =
+                kids.iter().filter(|n| n.embroidery.as_deref().is_some_and(|e| matches!(e.stitch, StitchType::Fill(_)))).map(|n| n.id.0).collect();
+            let darkest = kids
+                .iter()
+                .filter_map(|n| n.embroidery.as_deref().map(|e| vectorcraft_embroidery::node_thread(n, e).color))
+                .min_by(|a, b| a.to_lab()[0].total_cmp(&b.to_lab()[0]));
+            (fills, darkest)
+        };
+        let color = outline_color.or(darkest).unwrap_or(Rgb::new(0x1a, 0x1a, 0x1a)).to_hex();
+        let groups: Vec<Vec<u64>> = if outline == "design" { vec![vec![gid.0]] } else { fills.iter().map(|id| vec![*id]).collect() };
+        for ids in groups {
+            s.execute("embroidery.outlineAround", &json!({ "ids": ids, "gap": 0, "width": outline_width, "color": color }))?;
+            outlines += 1;
+        }
+        s.execute("select.set", &json!({ "ids": [gid.0] }))?;
+    }
+    Ok(json!({
+        "id": gid.0, "objects": objects, "satin": satin, "fill": fill, "run": run, "outlines": outlines,
+        "removed": removed, "colors": order.len(), "scale": scale,
+    }))
 }
 
 fn stamp_named(name: &str) -> Option<Stamp> {
