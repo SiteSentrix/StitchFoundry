@@ -44,6 +44,9 @@ pub struct PenTool {
     in_h: Point,
     /// The pointer at the last button-down or drag: Space held moves the anchor as far as it moves.
     last: Point,
+    /// The pointer has moved past the drag threshold since the press: a press released inside it
+    /// is a click, so the anchor stays a corner without handles.
+    dragged: bool,
     /// The last anchor of the path being drawn, while a click retracts its outgoing handle or a
     /// drag pulls a new one out: (path, subpath, anchor, its position).
     handle: Option<(NodeId, usize, usize, Point)>,
@@ -52,6 +55,9 @@ pub struct PenTool {
     /// Smart Guides for the anchors placed (and the pointer hovering).
     snap: DrawSnap,
 }
+
+/// Screen pixels the pointer must move after a press before it shapes handles instead of clicking.
+const DRAG_THRESHOLD: f64 = 3.0;
 
 /// An anchor being placed, as the press decided: where it is, the path it goes on (none: the
 /// first anchor of a new path) and whether it closes that path (the press was on its first
@@ -181,6 +187,7 @@ impl Tool for PenTool {
             }
             PointerKind::Down => {
                 self.last = ev.pos;
+                self.dragged = false;
                 if let Some((id, first, last, _)) = active {
                     let end = last_anchor(cx, id);
                     let closing_end = end.filter(|(_, ai)| *ai > 0).map(|_| first);
@@ -264,6 +271,14 @@ impl Tool for PenTool {
             PointerKind::Drag => {
                 if let Some(t) = &mut self.convert {
                     return t.pointer(cx, ev);
+                }
+                // Illustrator treats a press as a drag only past a few screen pixels (`last` is
+                // still the press position until then).
+                if !self.dragged {
+                    if ev.pos.distance(self.last) < cx.tol(DRAG_THRESHOLD) {
+                        return vec![];
+                    }
+                    self.dragged = true;
                 }
                 if let Some((id, si, ai, a)) = self.handle {
                     let mut h = ev.pos;
@@ -465,6 +480,20 @@ mod tests {
     use super::*;
     use crate::testutil::*;
     use vectorcraft_doc::Selection;
+
+    #[test]
+    fn press_inside_drag_threshold_places_a_corner() {
+        let (d, s) = (vectorcraft_doc::Document::new(500.0, 500.0), Selection::default());
+        let paint = paint();
+        let cx =
+            ToolContext { zoom: 1.0, smart_guides: false, snap_to_point: false, snap_to_pixel: false, snap_to_grid: false, ..cx(&d, &s, &paint) };
+        let mut pen = PenTool::default();
+        pen.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert!(pen.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 101.0, 101.0)).is_empty());
+        assert_eq!(pen.pointer(&cx, &PointerEvent::new(PointerKind::Up, 101.0, 101.0)), vec![Action::Commit]);
+        pen.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 200.0));
+        assert_eq!(pen.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 204.0, 200.0)).len(), 1);
+    }
 
     #[test]
     fn snapped_last_endpoint_converts_active_path_after_raw_miss() {
