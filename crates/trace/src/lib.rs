@@ -866,7 +866,13 @@ impl Layers<'_> {
             }
         }
         for comp in comps {
-            let fit = |l: &Loop| fit::fit_loop(l, w, h, &|c| (self.shift(c), self.neighbour(c)), &|x, y| self.junction(x, y), &self.style);
+            // (`hard`: some of the outline has no anti-aliasing, and is known less exactly.)
+            let hard = std::cell::Cell::new(false);
+            let fit = |l: &Loop| {
+                let (sp, is_hard) = fit::fit_loop(l, w, h, &|c| (self.shift(c), self.neighbour(c)), &|x, y| self.junction(x, y), &self.style)?;
+                hard.set(hard.get() || is_hard);
+                Some(sp)
+            };
             let Some(outer) = fit(&comp.outer) else { continue };
             let mut subs = vec![outer];
             for hole in &comp.holes {
@@ -877,7 +883,7 @@ impl Layers<'_> {
             }
             // Shapes: a filled outline without holes that is a shape becomes that shape.
             let shape = match subs.as_slice() {
-                [only] if params.shapes && area_stroke.is_none() => shapes::recognise(only),
+                [only] if params.shapes && area_stroke.is_none() => shapes::recognise(only, hard.get()),
                 _ => None,
             };
             let path = shape.map_or_else(|| PathData::new(subs), |s| s.path());
