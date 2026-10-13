@@ -1,6 +1,6 @@
 # Image Trace quality
 
-> **Last reviewed:** 2026-10-13 · **Last updated:** 2026-10-13 · **Change:** minor (shared edges: gaps and overlaps between abutting paths from 22 to 50 px down to under 1)
+> **Last reviewed:** 2026-10-13 · **Last updated:** 2026-10-13 · **Change:** minor (memory: a 16 megapixel photo traced in 0.9 GB where it took 3.9)
 
 What Image Trace (`crates/trace`) makes of images whose right answer is known, measured by a harness and
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
@@ -72,7 +72,7 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Technical Drawing | polygons, star, letter A, lines | 2.66 | 13.45 | 0.201 | 1.37 | 105.76 | 4.8 | 32 | 2.23 | 100 | 85 | 5.9 | – | – | – | – | 0.1 | 0.0 |
 | Flat Logo | two touching halves, four-colour badge | 0.43 | 3.53 | 3.106 | 88.50 | 0.78 | 69.9 | 352 | 38.92 | 38 | 80 | 237.0 | 0.0 | 0 | 13.8 | – | 59.1 | 0.2 |
 
-### Now (sub-pixel edges, the palette, photo smoothing, shared edges)
+### Now (sub-pixel edges, the palette, photo smoothing, shared edges, memory)
 
 | preset | inputs | ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px |
 |:--|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
@@ -90,7 +90,7 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Technical Drawing | polygons, star, letter A, lines | 2.55 | 9.72 | 0.092 | 1.06 | 105.75 | 4.8 | 56 | 3.67 | 71 | 74 | 0.7 | – | – | – | – | 1.3 | 0.0 |
 | Flat Logo | two touching halves, four-colour badge | 0.43 | 3.53 | 3.106 | 88.50 | 0.78 | 69.9 | 352 | 38.92 | 38 | 80 | 237.0 | 0.0 | 0 | 13.8 | – | 59.1 | 0.2 |
 
-The sections below are the numbers now (sub-pixel edges, the palette, photo smoothing, shared edges).
+The sections below are the numbers now (sub-pixel edges, the palette, photo smoothing, shared edges, memory).
 
 ## 1. Each preset on the inputs it is meant for
 
@@ -282,89 +282,90 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 
 | preset | image | megapixels | result |
 |:--|:--|--:|:--|
-| Default | photo-like | 1 | 0.04 s, 29 paths, 6888 anchors, 15 MB |
-| Default | four-colour badge | 1 | 0.02 s, 3 paths, 96 anchors, 15 MB |
-| High Fidelity Photo | photo-like | 1 | 0.21 s, 968 paths, 114383 anchors, 238 MB |
-| High Fidelity Photo | four-colour badge | 1 | 0.06 s, 6 paths, 172 anchors, 36 MB |
-| Low Fidelity Photo | photo-like | 1 | 0.11 s, 129 paths, 22929 anchors, 144 MB |
-| Low Fidelity Photo | four-colour badge | 1 | 0.05 s, 6 paths, 136 anchors, 36 MB |
-| 3 Colors | photo-like | 1 | 0.08 s, 9 paths, 3367 anchors, 26 MB |
-| 3 Colors | four-colour badge | 1 | 0.05 s, 4 paths, 88 anchors, 21 MB |
-| 6 Colors | photo-like | 1 | 0.08 s, 78 paths, 9008 anchors, 42 MB |
-| 6 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 33 MB |
-| 16 Colors | photo-like | 1 | 0.10 s, 178 paths, 20466 anchors, 102 MB |
-| 16 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 88 anchors, 33 MB |
-| Shades of Gray | photo-like | 1 | 0.08 s, 81 paths, 6698 anchors, 65 MB |
-| Shades of Gray | four-colour badge | 1 | 0.06 s, 10 paths, 733 anchors, 56 MB |
-| Black and White Logo | photo-like | 1 | 0.04 s, 71 paths, 5465 anchors, 9 MB |
-| Black and White Logo | four-colour badge | 1 | 0.02 s, 1 paths, 52 anchors, 8 MB |
-| Sketched Art | photo-like | 1 | 0.04 s, 5 paths, 2971 anchors, 9 MB |
-| Sketched Art | four-colour badge | 1 | 0.02 s, 2 paths, 131 anchors, 8 MB |
-| Silhouettes | photo-like | 1 | 0.04 s, 2 paths, 791 anchors, 11 MB |
-| Silhouettes | four-colour badge | 1 | 0.02 s, 1 paths, 25 anchors, 9 MB |
-| Line Art | photo-like | 1 | 0.04 s, 54 paths, 4421 anchors, 9 MB |
-| Line Art | four-colour badge | 1 | 0.02 s, 1 paths, 232 anchors, 8 MB |
-| Technical Drawing | photo-like | 1 | 0.04 s, 221 paths, 7680 anchors, 9 MB |
-| Technical Drawing | four-colour badge | 1 | 0.02 s, 1 paths, 52 anchors, 8 MB |
+| Default | photo-like | 1 | 0.04 s, 29 paths, 6888 anchors, 12 MB |
+| Default | four-colour badge | 1 | 0.02 s, 3 paths, 96 anchors, 12 MB |
+| High Fidelity Photo | photo-like | 1 | 0.22 s, 968 paths, 114383 anchors, 170 MB |
+| High Fidelity Photo | four-colour badge | 1 | 0.05 s, 6 paths, 172 anchors, 23 MB |
+| Low Fidelity Photo | photo-like | 1 | 0.11 s, 129 paths, 22929 anchors, 103 MB |
+| Low Fidelity Photo | four-colour badge | 1 | 0.05 s, 6 paths, 136 anchors, 23 MB |
+| 3 Colors | photo-like | 1 | 0.07 s, 9 paths, 3367 anchors, 18 MB |
+| 3 Colors | four-colour badge | 1 | 0.05 s, 4 paths, 88 anchors, 13 MB |
+| 6 Colors | photo-like | 1 | 0.08 s, 78 paths, 9008 anchors, 24 MB |
+| 6 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
+| 16 Colors | photo-like | 1 | 0.10 s, 178 paths, 20466 anchors, 32 MB |
+| 16 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 88 anchors, 12 MB |
+| Shades of Gray | photo-like | 1 | 0.08 s, 81 paths, 6698 anchors, 45 MB |
+| Shades of Gray | four-colour badge | 1 | 0.06 s, 10 paths, 733 anchors, 34 MB |
+| Black and White Logo | photo-like | 1 | 0.04 s, 71 paths, 5465 anchors, 8 MB |
+| Black and White Logo | four-colour badge | 1 | 0.02 s, 1 paths, 52 anchors, 6 MB |
+| Sketched Art | photo-like | 1 | 0.04 s, 5 paths, 2971 anchors, 8 MB |
+| Sketched Art | four-colour badge | 1 | 0.02 s, 2 paths, 131 anchors, 6 MB |
+| Silhouettes | photo-like | 1 | 0.04 s, 2 paths, 791 anchors, 9 MB |
+| Silhouettes | four-colour badge | 1 | 0.02 s, 1 paths, 25 anchors, 6 MB |
+| Line Art | photo-like | 1 | 0.04 s, 54 paths, 4421 anchors, 8 MB |
+| Line Art | four-colour badge | 1 | 0.02 s, 1 paths, 232 anchors, 6 MB |
+| Technical Drawing | photo-like | 1 | 0.04 s, 221 paths, 7680 anchors, 8 MB |
+| Technical Drawing | four-colour badge | 1 | 0.02 s, 1 paths, 52 anchors, 6 MB |
 | Flat Logo | photo-like | 1 | refused after 0.09 s (not flat art), 40 MB |
-| Flat Logo | four-colour badge | 1 | 0.64 s, 5 paths, 78 anchors, 146 MB |
-| Default | photo-like | 4 | 0.18 s, 48 paths, 17801 anchors, 60 MB |
-| Default | four-colour badge | 4 | 0.09 s, 3 paths, 178 anchors, 64 MB |
-| High Fidelity Photo | photo-like | 4 | 0.72 s, 4475 paths, 341272 anchors, 981 MB |
-| High Fidelity Photo | four-colour badge | 4 | 0.24 s, 6 paths, 200 anchors, 152 MB |
-| Low Fidelity Photo | photo-like | 4 | 0.38 s, 304 paths, 61093 anchors, 568 MB |
-| Low Fidelity Photo | four-colour badge | 4 | 0.23 s, 6 paths, 152 anchors, 152 MB |
-| 3 Colors | photo-like | 4 | 0.28 s, 20 paths, 8453 anchors, 104 MB |
-| 3 Colors | four-colour badge | 4 | 0.18 s, 4 paths, 122 anchors, 84 MB |
-| 6 Colors | photo-like | 4 | 0.37 s, 115 paths, 23128 anchors, 168 MB |
-| 6 Colors | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 128 MB |
-| 16 Colors | photo-like | 4 | 0.32 s, 353 paths, 52749 anchors, 408 MB |
-| 16 Colors | four-colour badge | 4 | 0.19 s, 5 paths, 96 anchors, 128 MB |
-| Shades of Gray | photo-like | 4 | 0.29 s, 138 paths, 18794 anchors, 224 MB |
-| Shades of Gray | four-colour badge | 4 | 0.27 s, 10 paths, 1265 anchors, 220 MB |
-| Black and White Logo | photo-like | 4 | 0.20 s, 208 paths, 17188 anchors, 36 MB |
-| Black and White Logo | four-colour badge | 4 | 0.09 s, 1 paths, 64 anchors, 36 MB |
-| Sketched Art | photo-like | 4 | 0.20 s, 9 paths, 6884 anchors, 36 MB |
-| Sketched Art | four-colour badge | 4 | 0.09 s, 2 paths, 236 anchors, 36 MB |
-| Silhouettes | photo-like | 4 | 0.19 s, 2 paths, 1951 anchors, 44 MB |
-| Silhouettes | four-colour badge | 4 | 0.10 s, 1 paths, 32 anchors, 36 MB |
-| Line Art | photo-like | 4 | 0.19 s, 127 paths, 12091 anchors, 36 MB |
-| Line Art | four-colour badge | 4 | 0.09 s, 1 paths, 419 anchors, 36 MB |
-| Technical Drawing | photo-like | 4 | 0.20 s, 931 paths, 23132 anchors, 36 MB |
-| Technical Drawing | four-colour badge | 4 | 0.08 s, 1 paths, 64 anchors, 36 MB |
+| Flat Logo | four-colour badge | 1 | 0.65 s, 5 paths, 78 anchors, 146 MB |
+| Default | photo-like | 4 | 0.19 s, 48 paths, 17801 anchors, 49 MB |
+| Default | four-colour badge | 4 | 0.09 s, 3 paths, 178 anchors, 48 MB |
+| High Fidelity Photo | photo-like | 4 | 0.72 s, 4475 paths, 341272 anchors, 643 MB |
+| High Fidelity Photo | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 93 MB |
+| Low Fidelity Photo | photo-like | 4 | 0.36 s, 304 paths, 61093 anchors, 412 MB |
+| Low Fidelity Photo | four-colour badge | 4 | 0.23 s, 6 paths, 152 anchors, 96 MB |
+| 3 Colors | photo-like | 4 | 0.26 s, 20 paths, 8453 anchors, 73 MB |
+| 3 Colors | four-colour badge | 4 | 0.18 s, 4 paths, 122 anchors, 53 MB |
+| 6 Colors | photo-like | 4 | 0.26 s, 115 paths, 23128 anchors, 100 MB |
+| 6 Colors | four-colour badge | 4 | 0.19 s, 5 paths, 92 anchors, 46 MB |
+| 16 Colors | photo-like | 4 | 0.28 s, 353 paths, 52749 anchors, 122 MB |
+| 16 Colors | four-colour badge | 4 | 0.19 s, 5 paths, 96 anchors, 46 MB |
+| Shades of Gray | photo-like | 4 | 0.31 s, 138 paths, 18794 anchors, 154 MB |
+| Shades of Gray | four-colour badge | 4 | 0.26 s, 10 paths, 1265 anchors, 138 MB |
+| Black and White Logo | photo-like | 4 | 0.19 s, 208 paths, 17188 anchors, 32 MB |
+| Black and White Logo | four-colour badge | 4 | 0.08 s, 1 paths, 64 anchors, 24 MB |
+| Sketched Art | photo-like | 4 | 0.20 s, 9 paths, 6884 anchors, 32 MB |
+| Sketched Art | four-colour badge | 4 | 0.08 s, 2 paths, 236 anchors, 24 MB |
+| Silhouettes | photo-like | 4 | 0.17 s, 2 paths, 1951 anchors, 36 MB |
+| Silhouettes | four-colour badge | 4 | 0.08 s, 1 paths, 32 anchors, 24 MB |
+| Line Art | photo-like | 4 | 0.18 s, 127 paths, 12091 anchors, 32 MB |
+| Line Art | four-colour badge | 4 | 0.08 s, 1 paths, 419 anchors, 24 MB |
+| Technical Drawing | photo-like | 4 | 0.19 s, 931 paths, 23132 anchors, 32 MB |
+| Technical Drawing | four-colour badge | 4 | 0.08 s, 1 paths, 64 anchors, 24 MB |
 | Flat Logo | photo-like | 4 | refused after 0.10 s (not flat art), 40 MB |
 | Flat Logo | four-colour badge | 4 | 0.65 s, 5 paths, 69 anchors, 146 MB |
-| Default | photo-like | 16 | 1.04 s, 127 paths, 43656 anchors, 256 MB |
-| Default | four-colour badge | 16 | 0.47 s, 3 paths, 250 anchors, 240 MB |
-| High Fidelity Photo | photo-like | 16 | 2.85 s, 31125 paths, 1175671 anchors, 3856 MB |
-| High Fidelity Photo | four-colour badge | 16 | 1.11 s, 6 paths, 274 anchors, 576 MB |
-| Low Fidelity Photo | photo-like | 16 | 1.49 s, 2036 paths, 181832 anchors, 1972 MB |
-| Low Fidelity Photo | four-colour badge | 16 | 1.07 s, 6 paths, 187 anchors, 576 MB |
-| 3 Colors | photo-like | 16 | 1.22 s, 76 paths, 22878 anchors, 416 MB |
-| 3 Colors | four-colour badge | 16 | 0.82 s, 4 paths, 190 anchors, 336 MB |
-| 6 Colors | photo-like | 16 | 1.13 s, 470 paths, 60539 anchors, 672 MB |
-| 6 Colors | four-colour badge | 16 | 0.82 s, 5 paths, 126 anchors, 500 MB |
-| 16 Colors | photo-like | 16 | 1.18 s, 1973 paths, 145173 anchors, 1625 MB |
-| 16 Colors | four-colour badge | 16 | 0.84 s, 5 paths, 128 anchors, 504 MB |
-| Shades of Gray | photo-like | 16 | 1.48 s, 686 paths, 53872 anchors, 852 MB |
-| Shades of Gray | four-colour badge | 16 | 1.40 s, 9 paths, 2216 anchors, 800 MB |
-| Black and White Logo | photo-like | 16 | 1.15 s, 1128 paths, 52547 anchors, 144 MB |
-| Black and White Logo | four-colour badge | 16 | 0.47 s, 1 paths, 95 anchors, 128 MB |
-| Sketched Art | photo-like | 16 | 1.16 s, 15 paths, 16298 anchors, 144 MB |
-| Sketched Art | four-colour badge | 16 | 0.47 s, 2 paths, 414 anchors, 128 MB |
-| Silhouettes | photo-like | 16 | 1.34 s, 3 paths, 4516 anchors, 176 MB |
-| Silhouettes | four-colour badge | 16 | 0.53 s, 1 paths, 40 anchors, 144 MB |
-| Line Art | photo-like | 16 | 1.04 s, 713 paths, 43982 anchors, 144 MB |
-| Line Art | four-colour badge | 16 | 0.45 s, 1 paths, 707 anchors, 128 MB |
-| Technical Drawing | photo-like | 16 | 1.21 s, 4578 paths, 84475 anchors, 144 MB |
-| Technical Drawing | four-colour badge | 16 | 0.46 s, 1 paths, 95 anchors, 128 MB |
+| Default | photo-like | 16 | 1.02 s, 127 paths, 43656 anchors, 199 MB |
+| Default | four-colour badge | 16 | 0.47 s, 3 paths, 250 anchors, 184 MB |
+| High Fidelity Photo | photo-like | 16 | 3.65 s, 31125 paths, 1175671 anchors, 880 MB |
+| High Fidelity Photo | four-colour badge | 16 | 1.08 s, 6 paths, 274 anchors, 257 MB |
+| Low Fidelity Photo | photo-like | 16 | 1.80 s, 2036 paths, 181832 anchors, 754 MB |
+| Low Fidelity Photo | four-colour badge | 16 | 1.04 s, 6 paths, 187 anchors, 257 MB |
+| 3 Colors | photo-like | 16 | 1.20 s, 76 paths, 22878 anchors, 290 MB |
+| 3 Colors | four-colour badge | 16 | 0.80 s, 4 paths, 190 anchors, 205 MB |
+| 6 Colors | photo-like | 16 | 1.13 s, 470 paths, 60539 anchors, 298 MB |
+| 6 Colors | four-colour badge | 16 | 0.83 s, 5 paths, 126 anchors, 184 MB |
+| 16 Colors | photo-like | 16 | 1.15 s, 1973 paths, 145173 anchors, 298 MB |
+| 16 Colors | four-colour badge | 16 | 0.89 s, 5 paths, 128 anchors, 185 MB |
+| Shades of Gray | photo-like | 16 | 1.76 s, 686 paths, 53872 anchors, 407 MB |
+| Shades of Gray | four-colour badge | 16 | 1.33 s, 9 paths, 2216 anchors, 270 MB |
+| Black and White Logo | photo-like | 16 | 1.13 s, 1128 paths, 52547 anchors, 129 MB |
+| Black and White Logo | four-colour badge | 16 | 0.36 s, 1 paths, 95 anchors, 88 MB |
+| Sketched Art | photo-like | 16 | 0.99 s, 15 paths, 16298 anchors, 128 MB |
+| Sketched Art | four-colour badge | 16 | 0.40 s, 2 paths, 414 anchors, 88 MB |
+| Silhouettes | photo-like | 16 | 1.37 s, 3 paths, 4516 anchors, 144 MB |
+| Silhouettes | four-colour badge | 16 | 0.40 s, 1 paths, 40 anchors, 95 MB |
+| Line Art | photo-like | 16 | 1.07 s, 713 paths, 43982 anchors, 129 MB |
+| Line Art | four-colour badge | 16 | 0.37 s, 1 paths, 707 anchors, 88 MB |
+| Technical Drawing | photo-like | 16 | 1.17 s, 4578 paths, 84475 anchors, 130 MB |
+| Technical Drawing | four-colour badge | 16 | 0.37 s, 1 paths, 95 anchors, 88 MB |
 | Flat Logo | photo-like | 16 | refused after 0.11 s (not flat art), 40 MB |
-| Flat Logo | four-colour badge | 16 | 0.69 s, 5 paths, 67 anchors, 146 MB |
+| Flat Logo | four-colour badge | 16 | 0.66 s, 5 paths, 67 anchors, 146 MB |
 
 ## Revision history
 
 | date | change |
 |:--|:--|
+| 2026-10-13 | Memory: layers traced within the box of their pixels and a few at a time (16 megapixel photo: 3.9 GB to 0.9 GB) |
 | 2026-10-13 | Shared edges: outlines are cut at their junctions and each piece is fitted once, the same from either side |
 | 2026-10-13 | Photos: continuous-tone images are smoothed within their tones before quantising, and stacked layers go by lightness |
 | 2026-10-13 | The palette: made of the picture's own colours, noise-made colours merged, blend pixels settled, cuts where colours differ most, colours compared in Oklab |
