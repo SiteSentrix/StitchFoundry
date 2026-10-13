@@ -41,7 +41,7 @@ use crate::meshedit::MeshEdit;
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::rulerguide::GuideEdit;
 use crate::select::{MoveSnap, is_area_type, matrix_json};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Debug)]
 enum State {
@@ -360,6 +360,18 @@ impl Tool for DirectSelectionTool {
     }
     fn options(&self) -> Value {
         self.mesh.options()
+    }
+    /// Escape during a drag (anchors, handles, segments, objects, type areas, blend spines, a
+    /// marquee) cancels it: what it moved goes back and the tool waits for the next press (#1743).
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key != ToolKey::Escape || matches!(self.state, State::Idle | State::Mesh | State::Corner(_) | State::Bracket(_)) {
+            return vec![];
+        }
+        self.state = State::Idle;
+        self.guides.clear();
+        (self.anchor_snap, self.copy_snap, self.move_snap) = (None, None, None);
+        (self.click, self.click_segment) = (None, None);
+        vec![Action::Cancel]
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         if let Some(out) = self.guide.pointer(cx, ev) {
@@ -1188,6 +1200,24 @@ mod tests {
         sp.anchors[1].h_in = Point::new(200.0, 250.0);
         d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, PathData::single(sp), vectorcraft_doc::Appearance::default_art())).unwrap();
         (d, id)
+    }
+
+    /// #1743: Escape mid-drag cancels it; the release after it does nothing more.
+    #[test]
+    fn escape_cancels_a_drag() {
+        let (d, _) = arch_doc();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 262.5));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 240.0));
+        assert!(t.busy());
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+        assert!(!t.busy());
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 220.0)), vec![]);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 220.0)), vec![]);
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![], "nothing to cancel");
     }
 
     #[test]
