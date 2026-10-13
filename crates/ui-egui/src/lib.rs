@@ -261,6 +261,9 @@ pub struct Services {
     /// [`Self::start_pick`]'s dialogs are sheets on the window (macOS): while one is open the app
     /// neither quits nor closes documents, as under the modal dialog before.
     pub dialogs_are_sheets: bool,
+    /// The window is on Wayland: the tool cursors are painted into it instead of handed to the
+    /// compositor as bitmaps ([`cursors::os_cursors`]).
+    pub wayland: bool,
 }
 
 /// Cached canvas raster.

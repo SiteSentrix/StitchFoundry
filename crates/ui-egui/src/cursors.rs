@@ -386,6 +386,14 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2, scale: f32) -> bool {
 /// bitmap cursors there): those paint them into the window ([`paint`]).
 pub const OS_CURSORS: bool = !cfg!(any(target_os = "macos", target_arch = "wasm32"));
 
+/// Does this window show the glyphs as OS cursors, on a build that can ([`OS_CURSORS`])? Not on
+/// Wayland, where the compositor decides how big a cursor bitmap shows: Hyprland shows each pixel
+/// as a point, twice too big on a 2× display (#1645). The window paints them there, as PhotoCraft
+/// and PdfCraft do.
+pub fn os_cursors(build: bool, wayland: bool) -> bool {
+    build && !wayland
+}
+
 /// The cursor bitmaps handed to the OS, by (cursor, pixels per point): each glyph is rasterized
 /// once, and handing the same `Arc` every frame keeps the window's OS cursor instead of making a
 /// new one.
@@ -655,6 +663,21 @@ mod tests {
         assert!(off.platform_output.cursor_image.is_none());
     }
 
+    /// On Wayland the glyph is painted and the pointer hidden over the canvas, on every build (#1645).
+    #[test]
+    fn a_wayland_window_paints_the_tool_cursor() {
+        let mut app = VectorcraftApp::new(Session::new(), crate::Services { wayland: true, ..Default::default() });
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        for _ in 0..3 {
+            frame(&mut app, &ctx, vec![]);
+        }
+        let over = app.canvas_rect.unwrap().center();
+        let out = frame(&mut app, &ctx, vec![egui::Event::PointerMoved(over)]);
+        assert!(out.platform_output.cursor_image.is_none());
+        assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::None);
+    }
+
     /// User Interface › Scale Cursor Proportional to UI (#394): off, the tool cursors keep their
     /// size whatever the UI Scaling; on, they grow with it.
     #[test]
@@ -690,6 +713,13 @@ mod tests {
         let (full, half) = (painted(1.0), painted(0.5));
         assert!((half.height() * 2.0 - full.height()).abs() < 1.5 && full.height() > 15.0, "{full:?} {half:?}");
         assert!(full.contains(pos2(100.0, 100.0)) && half.contains(pos2(100.0, 100.0)), "{full:?} {half:?}");
+    }
+
+    #[test]
+    fn wayland_windows_paint_the_glyphs() {
+        assert!(os_cursors(true, false), "Windows, X11");
+        assert!(!os_cursors(true, true), "Wayland: the compositor would size the bitmap (#1645)");
+        assert!(!os_cursors(false, false) && !os_cursors(false, true), "macOS, the web");
     }
 
     #[test]
