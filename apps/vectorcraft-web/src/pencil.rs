@@ -73,7 +73,7 @@ impl Pointers {
     }
 
     /// Follow one pointer event; `true` if it was the pen's or a finger's (taken from eframe).
-    fn feed(&mut self, kind: &str, e: &web_sys::PointerEvent, pos: Pos2, on_canvas: bool) -> bool {
+    fn feed(&mut self, kind: &str, e: &web_sys::PointerEvent, pos: Pos2, coalesced: &[(Pos2, f32)], on_canvas: bool) -> bool {
         let id = e.pointer_id();
         match e.pointer_type().as_str() {
             "pen" => {
@@ -91,6 +91,12 @@ impl Pointers {
                         self.press(id, pos);
                     }
                     "pointermove" if self.pen == Some(id) => {
+                        // The positions the pen reported between two events (up to 240 a second
+                        // on an iPad), each with its pressure, so fast strokes keep their curve.
+                        for c in coalesced.iter().take(coalesced.len().saturating_sub(1)) {
+                            self.touch(PEN_DEVICE, id, TouchPhase::Move, c.0, Some(c.1));
+                            self.events.push(Event::PointerMoved(c.0));
+                        }
                         self.touch(PEN_DEVICE, id, TouchPhase::Move, pos, force);
                         self.events.push(Event::PointerMoved(pos));
                     }
@@ -195,7 +201,21 @@ pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, 
             let rect = canvas.get_bounding_client_rect();
             let z = runner.egui_ctx().zoom_factor();
             let pos = egui::pos2((e.client_x() as f32 - rect.left() as f32) / z, (e.client_y() as f32 - rect.top() as f32) / z);
-            if !pointers.borrow_mut().feed(kind, &e, pos, on_canvas) {
+            let at = |x: i32, y: i32| egui::pos2((x as f32 - rect.left() as f32) / z, (y as f32 - rect.top() as f32) / z);
+            let coalesced: Vec<(Pos2, f32)> = if kind == "pointermove"
+                && e.pointer_type() == "pen"
+                // Safari before 17 hasn't it, and calling a missing method would abort the app.
+                && js_sys::Reflect::has(&e, &"getCoalescedEvents".into()).unwrap_or(false)
+            {
+                e.get_coalesced_events()
+                    .iter()
+                    .filter_map(|c| c.dyn_into::<web_sys::PointerEvent>().ok())
+                    .map(|c| (at(c.client_x(), c.client_y()), c.pressure().clamp(0.0, 1.0)))
+                    .collect()
+            } else {
+                vec![]
+            };
+            if !pointers.borrow_mut().feed(kind, &e, pos, &coalesced, on_canvas) {
                 return;
             }
             e.stop_immediate_propagation();

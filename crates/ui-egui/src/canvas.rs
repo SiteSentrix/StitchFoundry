@@ -115,6 +115,34 @@ fn pen_pressure(ui: &Ui, pressed: bool) -> f32 {
     p
 }
 
+/// The positions this frame's pointer moves passed through before its last one, each with the
+/// pen force a touch event gave just before it (if any). The last move is the pointer's position.
+/// Only for pens and fingers (frames with touch events): a mouse's moves are left as they were.
+fn frame_moves(ui: &Ui) -> Vec<(Pos2, Option<f32>)> {
+    ui.input(|i| {
+        if !i.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
+            return vec![];
+        }
+        let mut force = None;
+        let mut moves = vec![];
+        for e in &i.events {
+            match e {
+                egui::Event::Touch { force: Some(f), .. } if f.is_finite() && *f > 0.0 => force = Some(f.clamp(0.0, 1.0)),
+                egui::Event::PointerMoved(p) => moves.push((*p, force)),
+                _ => {}
+            }
+        }
+        moves.pop();
+        // A burst of events (a stalled frame) is thinned to a bounded count.
+        const MAX: usize = 64;
+        if moves.len() > MAX {
+            let step = moves.len().div_ceil(MAX);
+            moves = moves.into_iter().step_by(step).collect();
+        }
+        moves
+    })
+}
+
 pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
@@ -691,6 +719,12 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 }
                 Drag::Tool => {
                     if pointer.delta() != egui::Vec2::ZERO {
+                        // Every position the pen or mouse passed this frame, not just the last: a
+                        // fast stroke keeps its curve (a pen reports far more often than frames come).
+                        for (at, force) in frame_moves(ui) {
+                            let pressure = force.unwrap_or_else(|| pen_pressure(ui, false));
+                            dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), pressure }, view);
+                        }
                         let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                         dispatch(app, &ev, view);
                     }
