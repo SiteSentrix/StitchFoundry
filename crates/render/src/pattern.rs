@@ -108,10 +108,7 @@ fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w
             r.draw_arc(&mut ctx, &frame, a);
         }
     }
-    ctx.flush();
-    let mut pm = Pixmap::new(w, h);
-    ctx.render_with(&mut pm, &mut r.resources, r.raster);
-    pm
+    r.finish(&mut ctx, r.raster)
 }
 
 /// Run `f` with the shared off-screen renderer (None when nested too deep: a pattern whose art
