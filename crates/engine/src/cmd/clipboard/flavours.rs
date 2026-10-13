@@ -217,11 +217,10 @@ fn type_only(n: &Node) -> bool {
     }
 }
 
-impl Session {
-    /// The copied type objects' text, one object per line (`None` unless the clipboard holds type
-    /// only).
-    pub fn clipboard_text(&self) -> Option<String> {
-        let nodes = &self.clipboard.nodes;
+impl Clipboard {
+    /// The copied type objects' text, one object per line (`None` unless it holds type only).
+    pub fn text(&self) -> Option<String> {
+        let nodes = &self.nodes;
         if nodes.is_empty() || !nodes.iter().all(type_only) {
             return None;
         }
@@ -236,63 +235,93 @@ impl Session {
         Some(lines.join("\n"))
     }
 
-    /// The clipboard as a document whose one artboard is the objects' visual bounds (`None` when
-    /// it is empty or has no extent).
-    fn clipboard_cropped(&self) -> Option<(Document, vectorcraft_geom::Rect)> {
-        let b = self.clipboard.bounds().filter(|b| b.width() > 0.0 && b.height() > 0.0)?;
-        Some((fileio::with_single_artboard(self.clipboard.to_document(), b, "Clipboard"), b))
+    /// The objects as a document whose one artboard is their visual bounds (`None` when there are
+    /// none or they have no extent).
+    fn cropped(&self) -> Option<(Document, vectorcraft_geom::Rect)> {
+        let b = self.bounds().filter(|b| b.width() > 0.0 && b.height() > 0.0)?;
+        Some((fileio::with_single_artboard(self.to_document(), b, "Clipboard"), b))
     }
 
-    /// A PNG of the copied objects at `scale` pixels per point → (bytes, width, height); `None`
-    /// when the clipboard is empty.
-    pub fn clipboard_png(&self, scale: f64) -> Result<Option<(Vec<u8>, u32, u32)>> {
+    /// A PNG of the objects at `scale` pixels per point → (bytes, width, height); `None` when
+    /// there are none.
+    pub fn png(&self, scale: f64) -> Result<Option<(Vec<u8>, u32, u32)>> {
         const C: &str = "clipboard.exportPng";
-        let Some((doc, b)) = self.clipboard_cropped() else { return Ok(None) };
+        let Some((doc, b)) = self.cropped() else { return Ok(None) };
         let (w, h) = vectorcraft_render::raster_size(b, scale).map_err(|e| bad(C, e))?;
         let png = fileio::encode(&doc, "png", &json!({ "scale": scale, "background": "transparent" }))?;
         Ok(Some((png, w, h)))
     }
 
-    /// A one-page PDF of the copied objects (without the native document inside); `None` when the
-    /// clipboard is empty.
-    pub fn clipboard_pdf(&self) -> Result<Option<Vec<u8>>> {
-        let Some((doc, _)) = self.clipboard_cropped() else { return Ok(None) };
+    /// A one-page PDF of the objects (without the native document inside); `None` when there are
+    /// none.
+    pub fn pdf(&self) -> Result<Option<Vec<u8>>> {
+        let Some((doc, _)) = self.cropped() else { return Ok(None) };
         fileio::encode(&doc, "pdf", &json!({ "preserveEditing": false })).map(Some)
     }
 
-    /// The MIME types of [`Self::clipboard_flavours`], without making them.
-    pub fn clipboard_flavour_types(&self) -> Vec<&'static str> {
-        if self.clipboard.is_empty() {
+    /// The MIME types of [`Self::flavours`], without making them.
+    pub fn flavour_types(&self, svg: bool, pdf: bool) -> Vec<&'static str> {
+        if self.is_empty() {
             return vec![];
         }
-        let (svg, pdf) = (self.prefs.copy_as_svg, self.prefs.copy_as_pdf);
-        let text = svg || self.clipboard.nodes.iter().all(type_only);
+        let text = svg || self.nodes.iter().all(type_only);
         // Art without an area (a lone guide-like line) has no page or picture.
-        let area = self.clipboard.bounds().is_some_and(|b| b.width() > 0.0 && b.height() > 0.0);
+        let area = self.bounds().is_some_and(|b| b.width() > 0.0 && b.height() > 0.0);
         [(TEXT, text), (SVG, svg), (PDF, pdf && area), (PNG, area)].into_iter().filter_map(|(m, on)| on.then_some(m)).collect()
     }
 
-    /// What Copy offers other apps, best first (see `clipboard.flavours`). A flavour that can't be
-    /// made (art too large to render) is left out; the PNG is scaled down to at most
-    /// [`COPY_PNG_SIDE`] pixels a side.
-    pub fn clipboard_flavours(&self) -> Vec<Flavour> {
-        let types = self.clipboard_flavour_types();
-        let svg = types.contains(&SVG).then(|| self.clipboard_svg()).flatten();
+    /// What Copy offers other apps, best first, with Include SVG Code (`svg`) and On Copy: PDF
+    /// (`pdf`) as given (see `clipboard.flavours`). A [`Flavour`] that can't be made (art too large
+    /// to render) is left out; the PNG is scaled down to at most [`COPY_PNG_SIDE`] pixels a side.
+    pub fn flavours(&self, svg: bool, pdf: bool) -> Vec<Flavour> {
+        let types = self.flavour_types(svg, pdf);
+        let svg = types.contains(&SVG).then(|| self.svg()).flatten();
         let mut out = vec![];
         for mime in types {
             let data = match mime {
-                TEXT => self.clipboard_text().or_else(|| svg.clone()).map(String::into_bytes),
+                TEXT => self.text().or_else(|| svg.clone()).map(String::into_bytes),
                 SVG => svg.clone().map(String::into_bytes),
-                PDF => self.clipboard_pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten(),
+                PDF => self.pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten(),
                 _ => {
-                    let side = self.clipboard.bounds().map_or(1.0, |b| b.width().max(b.height()));
+                    let side = self.bounds().map_or(1.0, |b| b.width().max(b.height()));
                     let scale = (COPY_PNG_SIDE / side).clamp(0.01, 1.0);
-                    self.clipboard_png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, ..)| png)
+                    self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, ..)| png)
                 }
             };
             out.extend(data.map(|data| Flavour { mime, data }));
         }
         out
+    }
+}
+
+impl Session {
+    /// The copied type objects' text, one object per line (`None` unless the clipboard holds type
+    /// only).
+    pub fn clipboard_text(&self) -> Option<String> {
+        self.clipboard.text()
+    }
+
+    /// A PNG of the copied objects at `scale` pixels per point → (bytes, width, height); `None`
+    /// when the clipboard is empty.
+    pub fn clipboard_png(&self, scale: f64) -> Result<Option<(Vec<u8>, u32, u32)>> {
+        self.clipboard.png(scale)
+    }
+
+    /// A one-page PDF of the copied objects (without the native document inside); `None` when the
+    /// clipboard is empty.
+    pub fn clipboard_pdf(&self) -> Result<Option<Vec<u8>>> {
+        self.clipboard.pdf()
+    }
+
+    /// The MIME types of [`Self::clipboard_flavours`], without making them.
+    pub fn clipboard_flavour_types(&self) -> Vec<&'static str> {
+        self.clipboard.flavour_types(self.prefs.copy_as_svg, self.prefs.copy_as_pdf)
+    }
+
+    /// What Copy offers other apps, best first (see `clipboard.flavours`): [`Clipboard::flavours`]
+    /// by the Clipboard Handling preferences.
+    pub fn clipboard_flavours(&self) -> Vec<Flavour> {
+        self.clipboard.flavours(self.prefs.copy_as_svg, self.prefs.copy_as_pdf)
     }
 
     /// Replace the clipboard with `clip`, centred on `p`'s `center` (default: the first

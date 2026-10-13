@@ -704,8 +704,14 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         );
                     }
                     // Background saves, exports and opens in progress, else the last message.
-                    let busy: Vec<&str> =
-                        app.background.jobs.iter().map(|j| j.label.as_str()).chain(app.opening.pending.iter().map(|p| p.label.as_str())).collect();
+                    let busy: Vec<&str> = app
+                        .background
+                        .jobs
+                        .iter()
+                        .filter(|j| !j.label.is_empty())
+                        .map(|j| j.label.as_str())
+                        .chain(app.opening.pending.iter().map(|p| p.label.as_str()))
+                        .collect();
                     if let Some(job) = busy.first() {
                         let more = busy.len() - 1;
                         let label = crate::i18n::msg(job);

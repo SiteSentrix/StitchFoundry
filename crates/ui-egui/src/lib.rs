@@ -390,6 +390,8 @@ pub struct VectorcraftApp {
     clipboard_out: Option<String>,
     clipboard_published: Option<String>,
     pub(crate) clipboard_in: Option<vectorcraft_engine::cmd::clipboard::Flavour>,
+    /// The Copy or Cut whose formats go to the system clipboard ([`Self::publish_clipboard`]).
+    clipboard_publishing: sysclip::Publishing,
     /// A URL to open through egui next frame (when the host has no `open_url` service).
     pending_url: Option<String>,
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
@@ -500,6 +502,7 @@ impl VectorcraftApp {
             clipboard_out: None,
             clipboard_published: None,
             clipboard_in: None,
+            clipboard_publishing: Default::default(),
             pending_url: None,
             control_rx: None,
             pending_screenshots: vec![],
@@ -1112,6 +1115,7 @@ impl VectorcraftApp {
         }
         self.poll_font_check(ctx);
         picks::poll(self, ctx);
+        self.write_formats_before_text_input(ctx);
         background::poll(self);
         screen_color::poll(self, ctx);
         opening::poll(self);
@@ -1358,6 +1362,7 @@ impl VectorcraftApp {
         self.ui_fonts.frame(&ctx);
         scrub::end_frame(self, &ctx);
         native_menu::sync(self, &ctx);
+        self.drop_formats_after_egui_copy(&ctx);
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
     }
