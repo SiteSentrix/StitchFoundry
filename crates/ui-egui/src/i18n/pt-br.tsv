@@ -4157,3 +4157,14 @@ machine	Trim	Corte de linha
 	Stitch List JSON (.json)…	Lista de pontos JSON (.json)…
 	G-code (.gcode)…	Código G (.gcode)…
 	Stitch Image PNG (.png)…	Imagem dos pontos PNG (.png)…
+	Smallest That Fits	O menor que cabe
+	The smallest hoop that holds the design, turned if that fits better	O menor bastidor que comporta o desenho, girado se assim couber melhor
+	Rotate Hoop	Girar bastidor
+	Custom Hoops	Bastidores próprios
+	Hoop name	Nome do bastidor
+	Save Hoop	Salvar bastidor
+	Delete Hoop	Excluir bastidor
+	Hoops	Bastidores
+	Choose Smallest Hoop	Escolher o menor bastidor
+	Save Custom Hoop	Salvar bastidor próprio
+	Delete Custom Hoop	Excluir bastidor próprio

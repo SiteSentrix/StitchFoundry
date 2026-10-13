@@ -530,6 +530,35 @@ fn write_output(app: &mut VectorcraftApp, dir: &str) {
     };
 }
 
+/// A hoop of one's own: its name and field, kept with the standard ones.
+fn hoop_custom_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+    egui::CollapsingHeader::new(tl!("Custom Hoops")).id_salt("emb-custom-hoops").show(ui, |ui| {
+        let d = &mut app.embroidery.hoop_draft;
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut d.0).desired_width(110.0).hint_text(tl!("Hoop name")));
+            ui.add(egui::DragValue::new(&mut d.1).range(20.0..=2000.0).suffix(" mm"));
+            ui.label("×");
+            ui.add(egui::DragValue::new(&mut d.2).range(20.0..=2000.0).suffix(" mm"));
+        });
+        let (name, w, h) = (d.0.trim().to_string(), d.1, d.2);
+        ui.horizontal(|ui| {
+            if !name.is_empty() && button(ui, tl!("Save Hoop")).clicked() {
+                match app.run("embroidery.hoop.saveCustom", json!({ "name": name, "width": w, "height": h })) {
+                    Ok(_) => {
+                        app.run("embroidery.settings", json!({ "hoop": name })).ok();
+                    }
+                    Err(e) => app.status(e),
+                }
+            }
+            if app.session.prefs.embroidery_custom_hoops.iter().any(|c| c.name.eq_ignore_ascii_case(&name))
+                && button(ui, tl!("Delete Hoop")).clicked()
+            {
+                app.run("embroidery.hoop.deleteCustom", json!({ "name": name })).ok();
+            }
+        });
+    });
+}
+
 /// The exports of this session that wrote files, newest first: where they went, or why they
 /// failed, each to run again.
 pub(crate) fn exports_body(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -2213,6 +2242,17 @@ fn design_section(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         let v = if i == 0 { Value::Null } else { json!(hoop_opts.get(i).copied().unwrap_or_default()) };
         app.run("embroidery.settings", json!({ "hoop": v })).ok();
     }
+    ui.horizontal(|ui| {
+        if button(ui, tl!("Smallest That Fits")).on_hover_text(tl!("The smallest hoop that holds the design, turned if that fits better")).clicked()
+            && let Err(e) = app.run("embroidery.hoop.auto", json!({}))
+        {
+            app.status(e);
+        }
+        if info["hoop"].is_string() && button(ui, tl!("Rotate Hoop")).clicked() {
+            app.run("embroidery.hoop.rotate", json!({})).ok();
+        }
+    });
+    hoop_custom_row(app, ui);
     let fabrics: Vec<String> =
         info["fabrics"].as_array().map(|a| a.iter().filter_map(|f| f.as_str().map(str::to_string)).collect()).unwrap_or_default();
     let mut fabric_opts: Vec<&str> = vec![tl!("Not set")];

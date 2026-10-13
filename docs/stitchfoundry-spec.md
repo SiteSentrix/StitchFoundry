@@ -277,7 +277,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | SYS-02 | Digitizing presets (default properties for new objects) | Done | Current properties per stitch type (`DocEmbroidery.current`), saved with the design: Stitch Type, Convert Artwork and Set Thread give new objects them; the panel edits them with nothing selected | 1 |
 | SYS-03 | Inserted-file thread handling (keep, match to chart) | Done | Machine files keep their colours; Match Threads to Chart (`embroidery.matchThreads`) maps them to a chart's closest threads | 1 |
 | SYS-04 | Object property apply options (apply to selection vs. new objects) | Done | The Embroidery panel edits the selection, or with nothing selected the properties new objects take (`embroidery.current.setParams`) | 1 |
-| SYS-05 | Custom hoop list, hoop options | Partial | 27 presets; add custom hoops, list editing | 6 |
+| SYS-05 | Custom hoop list, hoop options | Done | 36 standard hoops and frames; hoops of one's own kept by name (`embroidery.hoop.saveCustom`, `.deleteCustom`), listed with them | 0 |
 | SYS-06 | Registration-mark settings for multi-hooping | Missing | MH-* | 6 |
 | SYS-07 | Reshape options (show stitch angles, beads, guides) | Done | Start and stop and Inclination lines toggles in the panel: the selection's beads and stitch-angle lines with any tool | 1 |
 | SYS-08 | Warning options (long stitches, small objects, density too high) | Done | Check settings: density, long stitch, small lettering and tiny object limits saved with the design (`embroidery.settings {checks}`) | 1 |
@@ -493,9 +493,9 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
-| HO-01 | Hoop selection, manual and automatic (smallest that fits) | Partial | Manual; auto selection exists in `sf-core::hoops::smallest_fitting`, add UI | 6 |
+| HO-01 | Hoop selection, manual and automatic (smallest that fits) | Done | Manual, or **Smallest That Fits** (`embroidery.hoop.auto`): the smallest hoop that holds the design, turned when that fits better, by brand if asked | 0 |
 | HO-02 | Auto start and end (start/finish at centre or a corner) | Done | `embroidery.settings {start, end}`: the first object entered closest to a point of the design's box, the frame moved to one at the end; Design section | 0 |
-| HO-03 | Hoop positioning (auto centre vs fixed), rotate hoop, custom hoops | Partial | Centred; add fixed position, rotation, custom hoops | 6 |
+| HO-03 | Hoop positioning (auto centre vs fixed), rotate hoop, custom hoops | Partial | Centred; **Rotate Hoop**; hoops of one's own; a fixed position in the hoop still to come | 2 |
 | MH-01 | Multi-hooping, automatic and manual (split designs over several hoopings) | Partial | `embroidery.multiHoop`: an automatic grid of overlapping hoopings, each object whole in the first that holds it, a machine file per hooping; splitting objects across hoopings, manual hoopings and a panel still to come | 6 |
 | MH-02 | Registration marks, multi-position hoops, printing per hooping | Partial | Registration crosses in each overlap, sewn first in a colour of their own; multi-position hoops and printing per hooping still to come | 6 |
 | RP-01 | Production worksheets and approval sheets (PDF/print, customisable) | Partial | Embroidery › Worksheet (`embroidery.worksheet`): a production or approval sheet as an A4 document (design drawing, figures, colour table, notes, sign-off), printed or exported as PDF with the usual commands; text in English, layout fixed (customisable layouts, barcodes RP-02 still to come) | 6 |
@@ -536,7 +536,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-12 | Background exports with history | Done | Background Export (from VectorCraft) encodes off the UI thread; `export.history` remembers every file-writing export (File › Export, send, batch output, multi-hooping, convert) with its files or error; `export.again`; the Exports section | 0 |
 | NEW-13 | Keyboard design collections | Done | KDC-01 | – |
 | NEW-14 | Laydown stitch | Done | RE-06 | – |
-| NEW-15 | Magnetic hoop presets | Partial | Add more hoop presets (data only) | 6 |
+| NEW-15 | Magnetic hoop presets | Done | Magnetic frames by size (100 × 100 to 350 × 350, a pocket frame) among the standard hoops | 0 |
 | NEW-16 | AI text to embroidery: a prompt becomes flat-colour art drawn to digitize well, then a design | Partial | Embroidery › Design from Prompt (desktop): Claude draws flat-colour SVG with the user's own Anthropic API key (`sf_core::ai`), and `embroidery.placeArt` places it, gives its shapes stitch types with underlying fills cut (0.4 mm overlap), matches the chart's threads and brings same-coloured shapes together where the stacking allows (`embroidery.autoSequence {ids}`), in one undo step. Left: StitchFoundry accounts and credits (§11), the web app | A |
 | NEW-17 | AI image or logo to embroidery: the upload is redrawn as clean flat art, then digitized | Partial | Embroidery › Redraw Image with Claude (desktop): the selected image goes to Claude with the user's own key (no larger than the model looks at), its redrawing lands on the image (`embroidery.placeArt {frame}`) and is digitized as NEW-16's. Left: accounts and credits (§11), the web app, AD-03 and AD-04 for redrawings that need click-to-stitch or outlines | A |
 | NEW-18 | AI product mockups: the design shown on a shirt, cap or bag | Missing | §11; MD-01 | A |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 183 done,
-29 partial, 32 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 186 done,
+26 partial, 32 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

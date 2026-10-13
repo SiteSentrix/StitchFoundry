@@ -4845,3 +4845,14 @@ machine	Stop	Stopp
 @msg	PNG encoding failed: {e}	PNG-Kodierung fehlgeschlagen: {e}
 @msg	the design has no stitches	das Design hat keine Stiche
 @msg	the image would be {w} × {h} pixels: lower ppmm	das Bild hätte {w} × {h} Pixel: ppmm verringern
+	Smallest That Fits	Kleinster passender
+	The smallest hoop that holds the design, turned if that fits better	Der kleinste Rahmen, der das Design fasst, gedreht, wenn es so besser passt
+	Rotate Hoop	Rahmen drehen
+	Custom Hoops	Eigene Rahmen
+	Hoop name	Rahmenname
+	Save Hoop	Rahmen speichern
+	Delete Hoop	Rahmen löschen
+	Hoops	Rahmen
+	Choose Smallest Hoop	Kleinsten Rahmen wählen
+	Save Custom Hoop	Eigenen Rahmen speichern
+	Delete Custom Hoop	Eigenen Rahmen löschen

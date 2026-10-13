@@ -4885,3 +4885,14 @@ machine	Stop	停止
 @msg	PNG encoding failed: {e}	PNG のエンコードに失敗しました: {e}
 @msg	the design has no stitches	デザインにステッチがありません
 @msg	the image would be {w} × {h} pixels: lower ppmm	画像が {w} × {h} ピクセルになります: ppmm を下げてください
+	Smallest That Fits	収まる最小の枠
+	The smallest hoop that holds the design, turned if that fits better	デザインが収まる最小の刺繍枠（回転した方が収まる場合は回転）
+	Rotate Hoop	枠を回転
+	Custom Hoops	独自の刺繍枠
+	Hoop name	枠の名前
+	Save Hoop	枠を保存
+	Delete Hoop	枠を削除
+	Hoops	刺繍枠
+	Choose Smallest Hoop	最小の枠を選択
+	Save Custom Hoop	独自の枠を保存
+	Delete Custom Hoop	独自の枠を削除

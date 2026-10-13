@@ -4871,3 +4871,14 @@ machine	Stop	Зупинка
 @msg	PNG encoding failed: {e}	помилка кодування PNG: {e}
 @msg	the design has no stitches	у дизайні немає стібків
 @msg	the image would be {w} × {h} pixels: lower ppmm	зображення матиме {w} × {h} пікселів: зменште ppmm
+	Smallest That Fits	Найменші, що підходять
+	The smallest hoop that holds the design, turned if that fits better	Найменші п'яльця, що вміщують дизайн, повернуті, якщо так краще
+	Rotate Hoop	Повернути п'яльця
+	Custom Hoops	Власні п'яльця
+	Hoop name	Назва п'ялець
+	Save Hoop	Зберегти п'яльця
+	Delete Hoop	Видалити п'яльця
+	Hoops	П'яльця
+	Choose Smallest Hoop	Вибрати найменші п'яльця
+	Save Custom Hoop	Зберегти власні п'яльця
+	Delete Custom Hoop	Видалити власні п'яльця

@@ -4251,3 +4251,14 @@ machine	Stop	停止
 	Stitch List JSON (.json)…	針跡清單 JSON (.json)…
 	G-code (.gcode)…	G 代碼 (.gcode)…
 	Stitch Image PNG (.png)…	針跡影像 PNG (.png)…
+	Smallest That Fits	最小合適繡框
+	The smallest hoop that holds the design, turned if that fits better	能容納設計的最小繡框，旋轉後更合適則旋轉
+	Rotate Hoop	旋轉繡框
+	Custom Hoops	自訂繡框
+	Hoop name	繡框名稱
+	Save Hoop	儲存繡框
+	Delete Hoop	刪除繡框
+	Hoops	繡框
+	Choose Smallest Hoop	選擇最小繡框
+	Save Custom Hoop	儲存自訂繡框
+	Delete Custom Hoop	刪除自訂繡框

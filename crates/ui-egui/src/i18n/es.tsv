@@ -4889,3 +4889,14 @@ machine	Stop	Parada
 @msg	PNG encoding failed: {e}	falló la codificación PNG: {e}
 @msg	the design has no stitches	el diseño no tiene puntadas
 @msg	the image would be {w} × {h} pixels: lower ppmm	la imagen tendría {w} × {h} píxeles: baje ppmm
+	Smallest That Fits	El más pequeño que cabe
+	The smallest hoop that holds the design, turned if that fits better	El bastidor más pequeño que contiene el diseño, girado si así cabe mejor
+	Rotate Hoop	Girar bastidor
+	Custom Hoops	Bastidores propios
+	Hoop name	Nombre del bastidor
+	Save Hoop	Guardar bastidor
+	Delete Hoop	Eliminar bastidor
+	Hoops	Bastidores
+	Choose Smallest Hoop	Elegir el bastidor más pequeño
+	Save Custom Hoop	Guardar bastidor propio
+	Delete Custom Hoop	Eliminar bastidor propio

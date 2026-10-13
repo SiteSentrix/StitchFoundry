@@ -4467,3 +4467,14 @@ machine	Stop	停止
 	Stitch List JSON (.json)…	针迹列表 JSON (.json)…
 	G-code (.gcode)…	G 代码 (.gcode)…
 	Stitch Image PNG (.png)…	针迹图像 PNG (.png)…
+	Smallest That Fits	最小合适绣框
+	The smallest hoop that holds the design, turned if that fits better	能容纳设计的最小绣框，旋转后更合适则旋转
+	Rotate Hoop	旋转绣框
+	Custom Hoops	自定义绣框
+	Hoop name	绣框名称
+	Save Hoop	保存绣框
+	Delete Hoop	删除绣框
+	Hoops	绣框
+	Choose Smallest Hoop	选择最小绣框
+	Save Custom Hoop	保存自定义绣框
+	Delete Custom Hoop	删除自定义绣框

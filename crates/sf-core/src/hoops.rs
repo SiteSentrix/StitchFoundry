@@ -93,6 +93,16 @@ pub fn standard_hoops() -> Vec<Hoop> {
         Hoop::new("Wide cap frame 160 × 60", 160.0, 60.0, Rect),
         Hoop::new("Jacket back 360 × 360", 360.0, 360.0, Rect),
         Hoop::new("Sleeve 80 × 300", 80.0, 300.0, Rect),
+        // magnetic frames: common sewing fields, by size
+        Hoop::new("Magnetic frame 100 × 100", 100.0, 100.0, Rect),
+        Hoop::new("Magnetic frame 130 × 130", 130.0, 130.0, Rect),
+        Hoop::new("Magnetic frame 130 × 180", 130.0, 180.0, Rect),
+        Hoop::new("Magnetic frame 150 × 240", 150.0, 240.0, Rect),
+        Hoop::new("Magnetic frame 200 × 200", 200.0, 200.0, Rect),
+        Hoop::new("Magnetic frame 200 × 300", 200.0, 300.0, Rect),
+        Hoop::new("Magnetic frame 250 × 250", 250.0, 250.0, Rect),
+        Hoop::new("Magnetic frame 350 × 350", 350.0, 350.0, Rect),
+        Hoop::new("Magnetic pocket frame 100 × 70", 100.0, 70.0, Rect),
     ]
 }
 

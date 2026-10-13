@@ -1205,11 +1205,9 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
         (Some(w), Some(h)) if (20.0..=2000.0).contains(&w) && (20.0..=2000.0).contains(&h) => (w, h),
         (Some(_), _) | (_, Some(_)) => return Err(bad(CMD, "`width` and `height` are 20 to 2000 mm, both given")),
         _ => match str_param(p, "hoop") {
-            Some(name) => sf_core::hoops::standard_hoops()
-                .into_iter()
-                .find(|h| h.name.eq_ignore_ascii_case(name))
-                .map(|h| (h.width, h.height))
-                .ok_or_else(|| bad(CMD, format!("no hoop `{name}`")))?,
+            Some(name) => {
+                super::embroidery_hoops::find_hoop(s, name).map(|h| (h.width, h.height)).ok_or_else(|| bad(CMD, format!("no hoop `{name}`")))?
+            }
             None => cfg
                 .hoop
                 .as_ref()
@@ -1710,9 +1708,7 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
         changed = true;
         cfg.hoop = match h {
             Value::Null => None,
-            Value::String(name) => Some(
-                sf_core::hoops::standard_hoops().into_iter().find(|x| x.name == *name).ok_or_else(|| bad(CMD, format!("unknown hoop `{name}`")))?,
-            ),
+            Value::String(name) => Some(super::embroidery_hoops::find_hoop(s, name).ok_or_else(|| bad(CMD, format!("unknown hoop `{name}`")))?),
             Value::Object(_) => {
                 let w =
                     h.get("width").and_then(Value::as_f64).filter(|v| v.is_finite() && *v > 1.0).ok_or_else(|| bad(CMD, "hoop width (mm) > 1"))?;
@@ -2518,7 +2514,11 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         .map(|f| super::embroidery_props::fabric_json(f, false))
         .chain(cfg.fabrics.iter().map(|f| super::embroidery_props::fabric_json(f, true)))
         .collect();
-    let hoops: Vec<Value> = sf_core::hoops::standard_hoops().iter().map(|h| json!({"name": h.name, "width": h.width, "height": h.height})).collect();
+    let custom = &s.prefs.embroidery_custom_hoops;
+    let hoops: Vec<Value> = super::embroidery_hoops::all_hoops(s)
+        .iter()
+        .map(|h| json!({"name": h.name, "width": h.width, "height": h.height, "custom": custom.iter().any(|c| c.name == h.name)}))
+        .collect();
     let charts: Vec<&str> = sf_core::threads::charts().iter().map(|c| c.name).collect();
     let saved = &s.prefs.embroidery_machines;
     let machines: Vec<Value> = sf_core::machines::profiles(saved).iter().map(|m| super::embroidery_machines::machine_json(m, saved)).collect();
@@ -2567,6 +2567,7 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         "maxStitchMm": st.max_stitch_mm,
         "colors": st.colors.iter().map(|c| json!({"color": c.thread.color.to_hex(), "name": c.thread.label(), "stitches": c.stitches, "threadM": c.thread_m})).collect::<Vec<_>>(),
         "hoop": cfg.hoop.as_ref().map(|h| h.name.clone()),
+        "hoopSize": cfg.hoop.as_ref().map(|h| [h.width, h.height]),
         "fits": fits,
         "fabric": cfg.fabric,
         "fabrics": fabrics,
