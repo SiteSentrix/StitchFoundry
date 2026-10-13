@@ -5071,3 +5071,51 @@ fn repeats_and_envelopes_are_sewn_as_they_look() {
     let after = needles(&s, a);
     assert!(!after.is_empty() && after != before);
 }
+
+#[test]
+fn cut_files_hold_stone_holes_and_applique_pieces() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    // nothing to cut yet
+    rect(&mut s, 10.0 * PT, 10.0 * PT, 20.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    assert!(s.execute("embroidery.cutFile", &json!({})).is_err());
+    // a line of 3 mm stones and an appliqué square
+    s.execute("path.create", &json!({"d": format!("M {} {} L {} {}", 40.0 * PT, 20.0 * PT, 70.0 * PT, 20.0 * PT)})).unwrap();
+    s.execute("embroidery.set", &json!({"type": "stone"})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"size": 3}})).unwrap();
+    rect(&mut s, 10.0 * PT, 40.0 * PT, 20.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "applique"})).unwrap();
+    let r = s.execute("embroidery.cutFile", &json!({"what": "stones"})).unwrap();
+    let holes = r["holes"].as_u64().unwrap();
+    assert!(holes >= 5, "{r}");
+    assert_eq!(r["pieces"], 0);
+    let svg = r["text"].as_str().unwrap();
+    assert_eq!(svg.matches("<circle").count() as u64, holes);
+    assert!(svg.contains("r=\"1.650\""), "holes 0.3 mm larger than the stones: {svg}");
+    assert_eq!(r["stones"][0]["count"].as_u64(), Some(holes));
+    // everything as DXF: one circle a stone, four lines for the square
+    let r = s.execute("embroidery.cutFile", &json!({"format": "dxf"})).unwrap();
+    let dxf = r["text"].as_str().unwrap();
+    assert!(dxf.starts_with("0\nSECTION\n2\nENTITIES\n") && dxf.ends_with("0\nEOF\n"));
+    assert_eq!(dxf.matches("\nCIRCLE\n").count() as u64, holes);
+    assert!(dxf.matches("\nLINE\n").count() >= 4);
+    // mirrored: the stones (right of the square) swap to its left
+    let x_of_first_circle = |svg: &str| -> f64 {
+        let i = svg.find("<circle cx=\"").unwrap() + 12;
+        svg[i..].split('"').next().unwrap().parse().unwrap()
+    };
+    let plain = s.execute("embroidery.cutFile", &json!({})).unwrap();
+    let mirrored = s.execute("embroidery.cutFile", &json!({"mirror": true})).unwrap();
+    assert_eq!(mirrored["mirrored"], true);
+    let (a, b) = (x_of_first_circle(plain["text"].as_str().unwrap()), x_of_first_circle(mirrored["text"].as_str().unwrap()));
+    assert!(a > 30.0 && b < 40.0, "{a} {b}");
+    // bad values are refused
+    assert!(s.execute("embroidery.cutFile", &json!({"format": "pdf"})).is_err());
+    assert!(s.execute("embroidery.cutFile", &json!({"what": "sequins"})).is_err());
+    // opened as a document to print
+    let docs = s.documents().len();
+    let r = s.execute("embroidery.cutFile", &json!({"open": true})).unwrap();
+    assert_eq!(r["opened"], true);
+    assert_eq!(s.documents().len(), docs + 1);
+}
