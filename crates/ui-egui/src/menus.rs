@@ -905,11 +905,11 @@ pub(crate) fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
 /// `params` has only keys the params description of engine command `id` names, or the parameter
 /// error naming the one it doesn't (#1442). The UI's own commands aren't checked yet: their
 /// descriptions haven't been audited against what they read.
-pub fn check_params(id: &str, params: &Value) -> Result<(), String> {
+pub fn check_params(session: &vectorcraft_engine::Session, id: &str, params: &Value) -> Result<(), String> {
     if UI_COMMANDS.iter().any(|c| c.0 == id) {
         return Ok(());
     }
-    vectorcraft_engine::check_params(id, params).map_err(|e| e.to_string())
+    session.check_params(id, params).map_err(|e| e.to_string())
 }
 
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {

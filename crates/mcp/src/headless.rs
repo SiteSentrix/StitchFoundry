@@ -128,7 +128,7 @@ impl Headless {
         // A key the command's description doesn't name is an error, not a default (#1442).
         match HOST_COMMANDS.iter().find(|c| c.0 == id) {
             Some((_, _, doc)) => vectorcraft_engine::check_keys(id, doc, params),
-            None => vectorcraft_engine::check_params(id, params),
+            None => self.session.check_params(id, params),
         }
         .map_err(|e| e.to_string())?;
         match id {
