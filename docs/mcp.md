@@ -2302,7 +2302,9 @@ files in `Links/` (relinked: the packaged document points at the copies; the ope
 type uses in `Fonts/` (fonts whose licence doesn't allow embedding are listed in `skippedFonts` instead) and
 `<document> Report.txt`. A placed `.vectorcraft` document is packaged with its own linked files and fonts, relinked to
 the copies (each file copied once); one that can't be read is copied as it is, and a cycle of placed documents or one
-past the nesting limit stops there, each with a line in `warnings` and the report. Every option defaults to true. Without `folder` (the web, or an agent that wants the bytes) the
+past the nesting limit stops there, each with a line in `warnings` and the report. A `folder/name` where a packaged file
+would replace the document or one of its linked files (the document's own folder, say) is an error, and nothing is
+written. Every option defaults to true. Without `folder` (the web, or an agent that wants the bytes) the
 result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entries under `<name>/`).
 
 `document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
