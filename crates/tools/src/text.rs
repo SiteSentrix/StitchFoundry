@@ -381,6 +381,10 @@ impl Tool for TypeTool {
     fn wants_text(&self) -> bool {
         self.editing.is_some()
     }
+    /// Escape while editing is the tool's: it goes on to the Selection tool (#1686).
+    fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Escape && self.editing.is_some()
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
@@ -522,7 +526,13 @@ impl Tool for TypeTool {
             self.goal_x = None;
         }
         match key {
-            ToolKey::Escape => self.finish(cx),
+            // Escape ends editing and goes to the Selection tool, the type selected: the keyboard
+            // is free for tool shortcuts again (#1686).
+            ToolKey::Escape => {
+                let mut out = self.finish(cx);
+                out.push(Action::SwitchTool("selection".into()));
+                out
+            }
             ToolKey::Enter => self.replace(cx, "\n", None),
             ToolKey::Tab => self.replace(cx, "\t", None),
             ToolKey::Backspace | ToolKey::Delete if a != b => self.replace(cx, "", None),
