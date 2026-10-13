@@ -184,8 +184,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
-            has_multi,
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} With anchor points selected (Direct Selection), the points are spaced evenly between the first and the last along the axis instead (#1636)",
+            can_distribute,
             distribute
         ),
         cmd!(
@@ -193,8 +193,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute Spacing",
             ["Window", "Align"],
             None,
-            "{axis: \"horizontal\"|\"vertical\", spacing?: pt (the key object, select.key, stays put and the others are spaced from it), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
-            has_multi,
+            "{axis: \"horizontal\"|\"vertical\", spacing?: pt (the key object, select.key, stays put and the others are spaced from it), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} With anchor points selected (Direct Selection), the points are spaced evenly along the axis instead, or `spacing` apart from the first (#1636)",
+            can_distribute,
             distribute_spacing
         ),
         cmd!(
@@ -1262,9 +1262,61 @@ fn align_anchors(s: &mut Session, p: &Value, ids: &[NodeId], (h, v): (Option<&st
     ok()
 }
 
+/// Distribute needs two or more objects, or anchor points selected with Direct Selection (they
+/// may all be on one path).
+fn can_distribute(s: &Session) -> std::result::Result<(), String> {
+    if s.active().is_some_and(|st| !st.selection.anchors.is_empty()) { Ok(()) } else { has_multi(s) }
+}
+
+/// [`distribute`] and [`distribute_spacing`] of the selected anchor points (whole paths among them
+/// give all theirs): the points between the first and the last along the axis are spaced evenly,
+/// or `gap` apart from the first. A point has no size, so every Distribute option of an axis
+/// gives the same result.
+fn distribute_anchors(s: &mut Session, label: &str, horiz: bool, gap: Option<f64>) -> Result<Value> {
+    let targets = super::path::anchor_targets(s)?;
+    let d = &s.doc()?.doc;
+    let along = |q: Point| if horiz { q.x } else { q.y };
+    let mut pts: Vec<(NodeId, usize, usize, f64)> = targets
+        .iter()
+        .flat_map(|(id, refs)| {
+            refs.iter().filter_map(move |&(si, ai)| Some((*id, si, ai, along(d.node(*id)?.path_data()?.subpaths.get(si)?.anchors.get(ai)?.p))))
+        })
+        .collect();
+    pts.sort_by(|a, b| a.3.total_cmp(&b.3));
+    let (Some(first), Some(last)) = (pts.first().map(|q| q.3), pts.last().map(|q| q.3)) else {
+        return ok();
+    };
+    // Two points are the ends already; with a gap the second is placed from the first.
+    if pts.len() < if gap.is_some() { 2 } else { 3 } {
+        return ok();
+    }
+    let step = gap.unwrap_or((last - first) / (pts.len() - 1) as f64);
+    let moves: Vec<(NodeId, usize, usize, f64)> =
+        pts.iter().enumerate().map(|(i, &(id, si, ai, at))| (id, si, ai, first + step * i as f64 - at)).collect();
+    if moves.iter().all(|m| m.3.abs() <= 1e-9) {
+        return ok();
+    }
+    s.edit(label, |d, _| {
+        for &(id, si, ai, delta) in &moves {
+            if let Some(a) = super::path::path_mut(d, id)?.anchor_mut(si, ai) {
+                a.translate(if horiz { Vec2::new(delta, 0.0) } else { Vec2::new(0.0, delta) });
+            }
+        }
+        Ok(())
+    })?;
+    ok()
+}
+
 fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let preview = preview_bounds(s, p, "object.distribute")?;
+    // Anchor points selected with Direct Selection are distributed themselves, as Align aligns them.
+    if !s.doc()?.selection.anchors.is_empty() {
+        return match direction(p, "object.distribute")? {
+            (None, None) => Err(bad("object.distribute", "give horizontal or vertical")),
+            (h, _) => distribute_anchors(s, "Distribute", h.is_some(), None),
+        };
+    }
     let mut items = items_bounds(&s.doc()?.doc, &ids, preview);
     let (horiz, key): (bool, fn(&Rect, bool) -> f64) = match direction(p, "object.distribute")? {
         (Some(h), _) => (
@@ -1308,6 +1360,14 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let horiz = choice(p, "object.distributeSpacing", "axis", &["horizontal", "vertical"])? != Some("vertical");
     let preview = preview_bounds(s, p, "object.distributeSpacing")?;
+    let spacing = p
+        .get("spacing")
+        .filter(|v| !v.is_null())
+        .map(|v| v.as_f64().filter(|g| g.is_finite()).ok_or_else(|| bad("object.distributeSpacing", "`spacing` must be a number")))
+        .transpose()?;
+    if !s.doc()?.selection.anchors.is_empty() {
+        return distribute_anchors(s, "Distribute Spacing", horiz, spacing);
+    }
     let mut items = items_bounds(&s.doc()?.doc, &ids, preview);
     items.sort_by(|a, b| if horiz { a.1.x0.total_cmp(&b.1.x0) } else { a.1.y0.total_cmp(&b.1.y0) });
     let n = items.len();
@@ -1316,11 +1376,6 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let size = |r: &Rect| if horiz { r.width() } else { r.height() };
     let start = |r: &Rect| if horiz { r.x0 } else { r.y0 };
-    let spacing = p
-        .get("spacing")
-        .filter(|v| !v.is_null())
-        .map(|v| v.as_f64().filter(|g| g.is_finite()).ok_or_else(|| bad("object.distributeSpacing", "`spacing` must be a number")))
-        .transpose()?;
     let gap = match spacing {
         Some(g) => g,
         None => {
