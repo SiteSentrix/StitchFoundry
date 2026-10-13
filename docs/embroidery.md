@@ -485,6 +485,10 @@ sewn, then sew on. Without `dir` it only plans (which object goes where). Object
 across hoopings yet: one larger than a hooping is refused (choose a larger hoop or a wider
 overlap).
 
+The marks are set with the design (`embroidery.settings {registration: {shape, size, perOverlap,
+color}}`): crosses, rings or targets (a ring with a cross), how far they reach (3 mm), how many
+in each overlap (2; 1 to 4) and their thread's colour (light grey).
+
 ## Stitch image
 
 **File › Export › Machine Embroidery File › Stitch Image PNG** (`embroidery.exportImage {path?,

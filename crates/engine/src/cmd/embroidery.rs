@@ -1154,12 +1154,18 @@ fn send_targets(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "targets": targets }))
 }
 
-/// A registration cross's arms (mm from its middle).
-const MARK_ARM: f64 = 3.0;
+/// Where `n` marks go along `a`..`b`: one in the middle, else spread from a quarter in from each end.
+fn spread(a: f64, b: f64, n: usize) -> Vec<f64> {
+    if n <= 1 {
+        return vec![(a + b) / 2.0];
+    }
+    let (lo, hi) = (a + (b - a) / 4.0, b - (b - a) / 4.0);
+    (0..n).map(|k| lo + (hi - lo) * k as f64 / (n - 1) as f64).collect()
+}
 
-/// The registration crosses of hooping `(col, row)` on a `cols` × `rows` grid of `cells`: two in
+/// The registration marks of hooping `(col, row)` on a `cols` × `rows` grid of `cells`: `per` in
 /// each overlap it shares with a neighbour (mm).
-fn marks_of(cells: &[sf_core::BBox], cols: usize, rows: usize, col: usize, row: usize) -> Vec<sf_core::Point> {
+fn marks_of(cells: &[sf_core::BBox], cols: usize, rows: usize, col: usize, row: usize, per: usize) -> Vec<sf_core::Point> {
     let cell = |c: usize, r: usize| cells.get(r * cols + c).copied();
     let Some(me) = cell(col, row) else { return Vec::new() };
     let mut out = Vec::new();
@@ -1168,10 +1174,10 @@ fn marks_of(cells: &[sf_core::BBox], cols: usize, rows: usize, col: usize, row: 
         let (x0, y0, x1, y1) = (me.min.x.max(o.min.x), me.min.y.max(o.min.y), me.max.x.min(o.max.x), me.max.y.min(o.max.y));
         if across {
             let x = (x0 + x1) / 2.0;
-            out.extend([sf_core::Point::new(x, y0 + (y1 - y0) / 4.0), sf_core::Point::new(x, y1 - (y1 - y0) / 4.0)]);
+            out.extend(spread(y0, y1, per).into_iter().map(|y| sf_core::Point::new(x, y)));
         } else {
             let y = (y0 + y1) / 2.0;
-            out.extend([sf_core::Point::new(x0 + (x1 - x0) / 4.0, y), sf_core::Point::new(x1 - (x1 - x0) / 4.0, y)]);
+            out.extend(spread(x0, x1, per).into_iter().map(|x| sf_core::Point::new(x, y)));
         }
     };
     if col > 0
@@ -1283,7 +1289,8 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(d) = dir {
         super::fileio::create_dir(d)?;
     }
-    let mark_thread = Thread::new(Rgb::new(0xc0, 0xc0, 0xc0), "Registration");
+    let reg = cfg.settings.registration;
+    let mark_thread = Thread::new(reg.color, "Registration");
     let mut out = Vec::new();
     let mut files = Vec::new();
     let mut index = 0;
@@ -1298,16 +1305,14 @@ fn multi_hoop(s: &mut Session, p: &Value) -> Result<Value> {
         let mut hp = sf_core::Pattern::new();
         hp.threads.clear();
         // registration crosses first, in a colour of their own
-        let crosses = if marks { marks_of(&cells, cols, rows, col, row) } else { Vec::new() };
+        let crosses = if marks { marks_of(&cells, cols, rows, col, row, usize::from(reg.per_overlap.clamp(1, 4))) } else { Vec::new() };
         for m in &crosses {
-            let m = local(*m);
-            hp.jump(sf_core::Point::new(m.x - MARK_ARM, m.y));
-            for k in 0..=6 {
-                hp.stitch(sf_core::Point::new(m.x - MARK_ARM + f64::from(k), m.y));
-            }
-            hp.jump(sf_core::Point::new(m.x, m.y - MARK_ARM));
-            for k in 0..=6 {
-                hp.stitch(sf_core::Point::new(m.x, m.y - MARK_ARM + f64::from(k)));
+            for run in reg.runs(local(*m)) {
+                let Some(first) = run.first() else { continue };
+                hp.jump(*first);
+                for q in &run {
+                    hp.stitch(*q);
+                }
             }
             hp.trim();
         }
@@ -1845,6 +1850,24 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
             };
             changed = true;
         }
+    }
+    if let Some(v) = p.get("registration") {
+        let o = v.as_object().ok_or_else(|| bad(CMD, "registration is {shape?, size?, perOverlap?, color?}"))?;
+        let r = &mut st.registration;
+        if let Some(sh) = o.get("shape") {
+            r.shape =
+                sh.as_str().and_then(sf_core::model::MarkShape::from_id).ok_or_else(|| bad(CMD, "registration.shape is cross, circle or target"))?;
+        }
+        if let Some(v) = o.get("size") {
+            r.size = v.as_f64().filter(|x| (1.0..=20.0).contains(x)).ok_or_else(|| bad(CMD, "registration.size is 1 to 20 mm"))?;
+        }
+        if let Some(v) = o.get("perOverlap") {
+            r.per_overlap = v.as_u64().filter(|n| (1..=4).contains(n)).ok_or_else(|| bad(CMD, "registration.perOverlap is 1 to 4"))? as u8;
+        }
+        if let Some(v) = o.get("color") {
+            r.color = v.as_str().and_then(Rgb::from_hex).ok_or_else(|| bad(CMD, "registration.color is \"#rrggbb\""))?;
+        }
+        changed = true;
     }
     if let Some(v) = p.get("basting") {
         st.basting = match v {
@@ -2529,6 +2552,7 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         "tieIn": st.tie_in, "tieOff": st.tie_off, "tieLength": st.tie_length, "tieStyle": st.tie_style.id(), "machineSpeed": st.machine_speed,
         "trimSeconds": st.trim_seconds, "colorChangeSeconds": st.color_change_seconds,
         "basting": st.basting.map(|b| json!({ "hoop": b.hoop, "margin": b.margin, "length": b.length })),
+        "registration": json!({ "shape": st.registration.shape.id(), "size": st.registration.size, "perOverlap": st.registration.per_overlap, "color": st.registration.color.to_hex() }),
         "start": st.start.map(|q| q.id()),
         "end": st.end.map(|q| q.id()),
         "cost": cfg.cost.as_ref().map(|m| json!({
