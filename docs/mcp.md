@@ -111,7 +111,11 @@ to) before it is dispatched. When a tool call reaches a running app, it is one c
 request, and the app echoes its `id` in the reply: a reply with any other `id` is rejected, the
 connection dropped, and the next call starts a fresh one — the call reports uncertainty like any
 reply that never arrived whole. The app's refusals carry no `id` (a connection past its 16, a line it
-would not read): the call reports the app's reason and says nothing was run. Clients requesting `2026-07-28` through `initialize`, or through a request's
+would not read): the call reports the app's reason and says nothing was run. Before each call the
+server checks that the app still holds the connection and opens a new one when it doesn't (the app
+closes a connection left idle for 5 minutes, and a restarted app is a new one), so a request is
+never written to a closed socket; when the app can't be reached, the call says that nothing was
+sent. Clients requesting `2026-07-28` through `initialize`, or through a request's
 `_meta["io.modelcontextprotocol/protocolVersion"]`, receive `resultType: "complete"`,
 `ttlMs` and `cacheScope: "private"` on tool/resource/template/prompt lists and resource/prompt reads.
 List TTL is 600000 ms; live reads use zero. Older clients keep the original response shapes.
