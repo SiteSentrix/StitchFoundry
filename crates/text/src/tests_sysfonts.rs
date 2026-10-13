@@ -663,3 +663,91 @@ fn a_full_name_does_not_override_an_installed_family() {
     let (face, matched) = db.resolve("Alias Script Italic", "Regular").unwrap();
     assert_eq!((face.family.as_str(), face.style.as_str(), matched), ("Alias Script Italic", "Regular", FontMatch::Exact));
 }
+
+/// When type is set in a font that isn't installed, layout searches the loaded faces' names for the
+/// font's name once until fonts are added.
+#[test]
+fn a_missing_fonts_name_is_looked_up_once_until_fonts_are_added() {
+    use crate::fontdb::alias_lists;
+    let db = FontDb::with_font_dirs(vec![]);
+    // One lookup lists the names of every loaded face.
+    let before = alias_lists();
+    assert_eq!(db.canonical("Gone Sans", "Bold"), ("Gone Sans".to_string(), "Bold".to_string()));
+    let one_lookup = alias_lists() - before;
+    let style = vectorcraft_doc::CharStyle { font_family: "Gone Sans".into(), ..Default::default() };
+    let t = TextObject::point(kurbo::Point::ZERO, &vec!["Set in a font that is not installed."; 20].join("\n"), style);
+    let before = alias_lists();
+    for _ in 0..2 {
+        assert_eq!(layout(&db, &t).lines.len(), 20);
+    }
+    assert_eq!(alias_lists() - before, one_lookup, "two layouts of 20 paragraphs list the faces' names once");
+    // A font added since has the name as its full name.
+    assert_eq!(db.add_font(named(&[(3, EN, 1, "Found Sans"), (3, EN, 2, "Bold"), (3, EN, 4, "Gone Sans"), (3, EN, 6, "FoundSans-Bold")])), 1);
+    let l = layout(&db, &t);
+    assert!(!l.glyphs.is_empty() && l.glyphs.iter().all(|g| db.face_by_id(g.font_id).is_some_and(|f| f.family == "Found Sans")));
+}
+
+/// Until an installed font has a name, `canonical` returns the name and the style asked for each
+/// time; once a rescan finds the font, the name gives the font's family.
+#[test]
+fn a_name_asked_for_before_its_font_is_installed_finds_it_after_a_rescan() {
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-asked-before", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    let answer = |family: &str, style: &str| (family.to_string(), style.to_string());
+    for _ in 0..2 {
+        for style in ["Regular", "Bold"] {
+            assert_eq!(db.canonical("Later Three W3", style), answer("Later Three W3", style));
+            assert_eq!(db.canonical("後の三", style), answer("後の三", style));
+        }
+    }
+    // The name table is laid out like Hiragino Sans W3's, with a legacy family paired with its
+    // legacy style.
+    let three = named(&[
+        (1, 0, 1, "Later Three"),
+        (1, 0, 2, "W3"),
+        (3, EN, 1, "Later Three W3"),
+        (3, EN, 2, "Regular"),
+        (3, EN, 6, "LThree-W3"),
+        (3, EN, 16, "Later Three"),
+        (3, EN, 17, "W3"),
+        (3, JA, 16, "後の三"),
+        (3, JA, 17, "W3"),
+    ]);
+    std::fs::write(dir.join("LaterThree.ttf"), three).unwrap();
+    assert_eq!(db.load_system_fonts(), 1);
+    for _ in 0..2 {
+        assert_eq!(db.canonical("Later Three W3", "Regular"), answer("Later Three", "W3"));
+        assert_eq!(db.canonical("Later Three W3", "Bold"), answer("Later Three", "Bold"));
+        assert_eq!(db.canonical("後の三", "Bold"), answer("Later Three", "Bold"));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Times the layout of a story of 1,000 paragraphs set in a font that is not installed, with 0, 100
+/// and 400 fonts added to the bundled ones. Run with
+/// `cargo test --release -p vectorcraft-text --lib missing_font_story_layout_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn missing_font_story_layout_timing() {
+    let text = vec!["Type set in a font that is not installed on this computer."; 1000].join("\n");
+    let style = vectorcraft_doc::CharStyle { font_family: "No Such Font".into(), ..Default::default() };
+    let t = TextObject::point(kurbo::Point::ZERO, &text, style);
+    for extra in [0, 100, 400] {
+        let db = FontDb::with_font_dirs(vec![]);
+        for i in 0..extra {
+            let (family, full, postscript) = (format!("Loaded Sans {i}"), format!("Loaded Sans {i} Regular"), format!("LoadedSans{i}-Regular"));
+            assert_eq!(db.add_font(named(&[(3, EN, 1, &family), (3, EN, 2, "Regular"), (3, EN, 4, &full), (3, EN, 6, &postscript)])), 1);
+        }
+        let mut ms = vec![];
+        for _ in 0..7 {
+            let start = std::time::Instant::now();
+            let l = layout(&db, &t);
+            ms.push(start.elapsed().as_secs_f64() * 1000.0);
+            assert_eq!(l.lines.len(), 1000);
+        }
+        ms.sort_by(f64::total_cmp);
+        println!("{extra} fonts added, {} families loaded: median {:.1} ms; samples {ms:.1?}", db.family_list().len(), ms[3]);
+    }
+}
