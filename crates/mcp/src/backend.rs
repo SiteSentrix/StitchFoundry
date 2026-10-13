@@ -42,6 +42,11 @@ impl Remote {
         &self.addr
     }
 
+    #[cfg(test)]
+    pub(crate) fn connection_probe(&self) -> TcpStream {
+        self.conn.as_ref().unwrap().1.try_clone().unwrap()
+    }
+
     fn reconnect(&mut self) -> std::io::Result<()> {
         self.conn = None;
         let mut last = std::io::Error::new(std::io::ErrorKind::NotFound, format!("cannot resolve {}", self.addr));
@@ -61,10 +66,26 @@ impl Remote {
         Err(last)
     }
 
-    fn roundtrip(&mut self, line: &str) -> std::io::Result<String> {
+    fn prepare_connection(&mut self) -> std::io::Result<()> {
+        if let Some((_, stream)) = self.conn.as_ref() {
+            stream.set_nonblocking(true)?;
+            let probe = stream.peek(&mut [0]);
+            stream.set_nonblocking(false)?;
+            match probe {
+                // Closed by the app, or holding bytes nobody asked for (an app that explains why it
+                // closes): either way no reply to the next request can be read from it.
+                Ok(_) => self.conn = None,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(_) => self.conn = None,
+            }
+        }
         if self.conn.is_none() {
             self.reconnect()?;
         }
+        Ok(())
+    }
+
+    fn roundtrip(&mut self, line: &str) -> std::io::Result<String> {
         let Some((reader, writer)) = self.conn.as_mut() else {
             return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "not connected to the app"));
         };
@@ -86,6 +107,10 @@ impl Remote {
 
 impl Backend for Remote {
     fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+        self.prepare_connection().map_err(|e| {
+            self.conn = None;
+            format!("VectorCraft app at {} is not reachable: {e}; `{method}`: nothing was sent", self.addr)
+        })?;
         let id = self.next_id;
         self.next_id += 1;
         let line = json!({"id": id, "method": method, "params": params}).to_string();
