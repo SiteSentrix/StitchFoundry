@@ -1300,6 +1300,17 @@ impl Session {
         true
     }
 
+    /// `spec`'s `enabled` with `ids` selected instead of the selection, which is then put back.
+    fn enabled_with_selection(&mut self, spec: &CommandSpec, ids: Vec<NodeId>) -> std::result::Result<(), String> {
+        let Some(d) = self.active_mut() else { return (spec.enabled)(self) };
+        let old = std::mem::replace(&mut d.selection, Selection { objects: ids, ..Selection::default() });
+        let r = (spec.enabled)(self);
+        if let Some(d) = self.active_mut() {
+            d.selection = old;
+        }
+        r
+    }
+
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
@@ -1309,7 +1320,15 @@ impl Session {
         cmd::params::check_params(id, params)?;
         // Clear's menu needs a selection; an agent supplying explicit targets only needs a
         // document. The command validates those targets before making any edit.
-        let enabled = if id == "edit.clear" && params.get("ids").is_some() { cmd::has_doc(self) } else { (spec.enabled)(self) };
+        let enabled = if id == "edit.clear" && params.get("ids").is_some() {
+            cmd::has_doc(self)
+        } else if let Some(ids) = given_ids(spec.params, params) {
+            // Objects given as `ids` stand in for the selection: the command is enabled as it is
+            // with them selected (#1575).
+            self.enabled_with_selection(spec, ids)
+        } else {
+            (spec.enabled)(self)
+        };
         if let Err(why) = enabled {
             return Err(EngineError::Disabled(id.to_string(), why));
         }
@@ -1770,6 +1789,8 @@ mod tests_halftone;
 #[cfg(test)]
 mod tests_history_mem;
 #[cfg(test)]
+mod tests_ids_without_selection;
+#[cfg(test)]
 mod tests_inline;
 #[cfg(test)]
 mod tests_journal;
@@ -1955,3 +1976,14 @@ mod tests_widthprofiles;
 mod tests_widthtool;
 #[cfg(test)]
 mod tests_xform;
+
+/// The non-empty `ids` given to a command whose params description takes them (an `ids` word in it).
+fn given_ids(description: &str, params: &Value) -> Option<Vec<NodeId>> {
+    let takes = description.match_indices("ids").any(|(i, _)| {
+        let before = description.get(..i).and_then(|s| s.chars().next_back());
+        let after = description.get(i + 3..).and_then(|s| s.chars().next());
+        !before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_') && !after.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+    });
+    let ids: Vec<NodeId> = params.get("ids")?.as_array()?.iter().filter_map(Value::as_u64).map(NodeId).collect();
+    (takes && !ids.is_empty()).then_some(ids)
+}
