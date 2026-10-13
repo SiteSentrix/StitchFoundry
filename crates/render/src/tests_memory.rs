@@ -478,6 +478,7 @@ fn editing_an_instance_or_a_symbol_places_only_its_art_again() {
 /// then.
 #[test]
 fn instances_of_art_outside_the_square_follow_their_symbols_art() {
+    let _fonts = fonts_steady();
     /// A blue square in a group, 20 × 20 from (x, 0).
     fn square_at(d: &mut Document, x: f64) -> Arc<Node> {
         let blue = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
