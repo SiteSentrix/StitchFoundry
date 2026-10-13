@@ -671,6 +671,32 @@ fn image_trace_make_places_paths_over_the_image() {
     assert_eq!(paths[0].appearance.fill_paint(), Paint::solid(Color::rgb8(0, 0, 0)));
 }
 
+/// Shapes: the disc of the test image comes out as a live ellipse where the image lies, the same
+/// circle as its traced path; without the option it is a plain path.
+#[test]
+fn image_trace_shapes_makes_live_shapes() {
+    let mut s = session();
+    image_doc(&mut s);
+    let r = s.execute("imageTrace.make", &json!({"params": {"ignoreWhite": true, "shapes": true}})).unwrap();
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    let paths = traced_paths(&n);
+    assert_eq!(paths.len(), 1);
+    let NodeKind::Path { path, live: Some(live), .. } = &paths[0].kind else { panic!("not a live shape: {:?}", paths[0].kind) };
+    let vectorcraft_doc::LiveShape::Ellipse { w, h, .. } = **live else { panic!("{live:?}") };
+    // A circle of r = 30 px, drawn twice the size.
+    assert!(w == h && (w - 60.0).abs() < 0.75, "{w} × {h}");
+    let bb = path.bounds().unwrap();
+    assert!((bb.center().x - 150.0).abs() < 1.5 && (bb.center().y - 150.0).abs() < 1.5 && (bb.width() - 120.0).abs() < 1.5, "{bb:?}");
+    assert_eq!(*path, live.to_path());
+    assert_eq!(paths[0].appearance.fill_paint(), Paint::solid(Color::rgb8(0, 0, 0)));
+    // Off, as documents saved before have it: a path.
+    let mut s = session();
+    image_doc(&mut s);
+    let r = s.execute("imageTrace.make", &json!({"params": {"ignoreWhite": true}})).unwrap();
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert!(matches!(traced_paths(&n)[0].kind, NodeKind::Path { live: None, .. }));
+}
+
 #[test]
 fn image_trace_release_and_expand() {
     let mut s = session();

@@ -360,6 +360,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             st.preset = "Custom".into();
             retrace = true;
         }
+        let shapes = st.params["shapes"].as_bool().unwrap_or(false);
+        if widgets::check(ui, tl!("Shapes"), shapes, true) {
+            st.params["shapes"] = json!(!shapes);
+            st.preset = "Custom".into();
+            retrace = true;
+        }
         // Ignore Color: white, unless another colour is picked.
         ui.horizontal(|ui| {
             let on = st.params["ignoreWhite"].as_bool().unwrap_or(false);

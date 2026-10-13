@@ -48,6 +48,7 @@ mod fit;
 mod logo;
 mod mosaic;
 mod quantize;
+mod shapes;
 mod smooth;
 mod subpixel;
 
@@ -59,6 +60,7 @@ use vectorcraft_geom::PathData;
 pub use contour::{Component, Loop, trace_mask};
 pub use mosaic::mosaic;
 pub use quantize::{FULL_TONE_MAX, Quantized, TRANSPARENT, denoise, quantize};
+pub use shapes::TracedShape;
 use subpixel::Crack;
 
 /// Errors decoding a raster.
@@ -279,6 +281,9 @@ pub struct TraceParams {
     /// Replace nearly-straight curves with straight lines. In Logo mode this also snaps tight arcs
     /// to true circles.
     pub snap_curves_to_lines: bool,
+    /// Shapes: a filled outline that is a circle, an ellipse, a rectangle (square or rounded
+    /// corners) or a regular polygon comes out as exactly that shape ([`TracedPath::shape`]).
+    pub shapes: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
     /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
@@ -309,6 +314,7 @@ impl Default for TraceParams {
             ignore_white: false,
             ignore_color: None,
             snap_curves_to_lines: false,
+            shapes: false,
             fills: true,
             strokes: false,
             stroke_width: 10.0,
@@ -426,6 +432,8 @@ pub struct TracedPath {
     /// Create Strokes: the path is stroked this wide (px), not filled (centre lines, or the
     /// outlines of wider areas without Fills).
     pub stroke: Option<f64>,
+    /// Shapes: the shape the path is, exactly (`path` is that shape's outline).
+    pub shape: Option<TracedShape>,
 }
 
 /// The traced result, bottom-most path first.
@@ -777,12 +785,12 @@ impl Layers<'_> {
         let area_stroke = (params.strokes && !params.fills).then_some(1.0);
         let min_hole = params.noise.max(1) as i64;
         let mut paths = vec![];
-        let mut add = |path: PathData, pixels: usize, stroke: Option<f64>| {
+        let mut add = |path: PathData, pixels: usize, stroke: Option<f64>, shape: Option<TracedShape>| {
             let n = path.anchor_count();
             if self.anchors.fetch_add(n, Ordering::Relaxed).saturating_add(n) > self.max_anchors {
                 return false;
             }
-            paths.push(TracedPath { path, color, pixels, stroke });
+            paths.push(TracedPath { path, color, pixels, stroke, shape });
             true
         };
         let mut comps = trace_mask(&mask, bw, bh);
@@ -804,12 +812,18 @@ impl Layers<'_> {
                 }
                 subs.extend(fit(hole));
             }
-            if !add(PathData::new(subs), comp.pixels, area_stroke) {
+            // Shapes: a filled outline without holes that is a shape becomes that shape.
+            let shape = match subs.as_slice() {
+                [only] if params.shapes && area_stroke.is_none() => shapes::recognise(only),
+                _ => None,
+            };
+            let path = shape.map_or_else(|| PathData::new(subs), |s| s.path());
+            if !add(path, comp.pixels, area_stroke, shape) {
                 return None;
             }
         }
         for line in lines {
-            if !add(line.path, line.pixels, Some(line.width)) {
+            if !add(line.path, line.pixels, Some(line.width), None) {
                 return None;
             }
         }

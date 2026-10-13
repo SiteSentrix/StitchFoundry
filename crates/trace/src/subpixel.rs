@@ -173,6 +173,56 @@ pub(crate) fn outline(
     };
     let step: Vec<bool> = (0..n).map(|i| edges[i].len == 1 && turn(i) * turn(i + 1) < 0).collect();
     let outward = |d: (i32, i32)| Vec2::new(f64::from(d.1), f64::from(-d.0));
+    // The pixel at a corner of the shape lies on both of the corner's edges, and what it lacks of
+    // the inside's colour is the doing of both: read as one edge's alone it dents the corner. The
+    // crack of each edge on it takes the shift of the next crack along that edge instead (edges
+    // of three pixels or more: a shorter one has no pixel clear of its corners).
+    let shifts = {
+        let mut shifts = shifts;
+        for i in 0..n {
+            let (b, e) = ((i + n - 1) % n, i);
+            if step[b] || step[e] || turn(i) == 0 {
+                continue;
+            }
+            let (before, edge) = (&edges[b], &edges[e]);
+            if before.len >= 3 {
+                shifts[before.first + before.len - 1] = shifts[before.first + before.len - 2];
+            }
+            if edge.len >= 3 {
+                shifts[edge.first] = shifts[edge.first + 1];
+            }
+        }
+        shifts
+    };
+
+    // A sharp corner whose own pixel is less than half the inside's colour goes to the outside, and
+    // the loop cuts the corner in two steps (the same, turned round, where the corner pixel of a
+    // notch goes to the inside). Between two edges of three pixels or more, those two steps are
+    // that corner: it lies where the two edges, each moved by its shift, meet. `notch[i]` is, for
+    // the first of the two steps, the corner (`Some(Some(..))`), for the second nothing
+    // (`Some(None)`), for any other edge `None`.
+    let mut notch: Vec<Option<Option<Point>>> = vec![None; n];
+    for i in 0..n {
+        let (a, s1, s2, b) = ((i + n - 1) % n, i, (i + 1) % n, (i + 2) % n);
+        let free = |e: usize| junctions[edges[e].first].is_none();
+        if n >= 6
+            && step[s1]
+            && step[s2]
+            && edges[a].len >= 3
+            && edges[b].len >= 3
+            && edges[s1].dir == edges[b].dir
+            && edges[s2].dir == edges[a].dir
+            && free(s1)
+            && free(s2)
+            && free(b)
+        {
+            let (ea, eb) = (&edges[a], &edges[b]);
+            // Edge `a` carried on one pixel further meets edge `b` carried back one.
+            let meet = at(s1) + Vec2::new(f64::from(ea.dir.0), f64::from(ea.dir.1));
+            notch[s1] = Some(Some(meet + outward(ea.dir) * shifts[ea.first + ea.len - 1] + outward(eb.dir) * shifts[eb.first]));
+            notch[s2] = Some(None);
+        }
+    }
 
     let mut pieces: Vec<Piece> = Vec::new();
     let start = first.unwrap_or(0);
@@ -196,7 +246,10 @@ pub(crate) fn outline(
                 let before = &edges[(i + n - 1) % n];
                 pts.push(corner + outward(before.dir) * shifts[(crack + cracks - 1) % cracks] + outward(e.dir) * shifts[crack]);
             }
-            if step[i] || !hard {
+            if !hard && let Some(sharp) = notch[i] {
+                // A corner whose own pixel went to the other side: the corner, not the two steps.
+                pts.extend(sharp);
+            } else if step[i] || !hard {
                 pts.push(corner + Vec2::new(f64::from(e.dir.0), f64::from(e.dir.1)) * 0.5 + outward(e.dir) * shifts[crack]);
             }
         }
