@@ -105,6 +105,9 @@ fn density_buckets_go_into_sub_folders() {
     // A prefix names files, not folders.
     let r = export(&mut s, json!({"range": "2", "prefix": "../a\\b:", "formats": [{"format": "svg"}]}));
     assert_eq!(names(&r), ["..-a-b-Artboard-2.svg"]);
+    // So does a suffix: it can't open a folder or climb out of the export folder.
+    let r = export(&mut s, json!({"range": "2", "formats": [{"format": "svg", "suffix": "/../x\\..\\y"}, {"format": "png", "suffix": "-ok"}]}));
+    assert_eq!(names(&r), ["Artboard-2-..-x-..-y.svg", "Artboard-2-ok.png"]);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
