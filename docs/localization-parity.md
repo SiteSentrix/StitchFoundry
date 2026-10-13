@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (French: 423 strings added since the catalog was measured and 188 entries reworded, #1511; Hungarian: one message in the informal address, #1474; scores and estimates unchanged; Vietnamese catalog added, complete under the tests; 12-language score 63% → 71%; Czech: 128 strings added since the catalog was completed are translated, #1461; scores and estimates unchanged; Korean catalog added, complete under the tests; 12-language score 54% → 63%; Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (Polish: 4,510 rows counted in the catalog (the row said 4,492), #1498; French: 423 strings added since the catalog was measured and 188 entries reworded, #1511; Hungarian: one message in the informal address, #1474; scores and estimates unchanged; Vietnamese catalog added, complete under the tests; 12-language score 63% → 71%; Czech: 128 strings added since the catalog was completed are translated, #1461; scores and estimates unchanged; Korean catalog added, complete under the tests; 12-language score 54% → 63%; Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -50,7 +50,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
 | Hungarian | `hu` | 4,524 rows: menus, `tl!` literals and messages complete (tests); one plural form | full |
-| Polish | `pl` | 4,492 rows: menus, `tl!` literals and messages complete (tests); one/few/many plurals | full; native review pending |
+| Polish | `pl` | 4,510 rows (counted 2026-10-13): menus, `tl!` literals and messages complete (tests); one/few/many plurals | full; native review pending |
 | Czech | `cs` | 4,411 catalog entries, including 636 `@msg` rows (measured locally 2026-10-11); menu, literal and message coverage enforced by tests | catalog complete; render-site gaps reduced; native review pending |
 
 Fifteen non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
@@ -80,6 +80,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | Polish (`pl`, #1498): the row count is corrected to the 4,510 rows in `pl.tsv` (it said 4,492), 654 of them `@msg` rows; AI-drafted, native review pending; scores and estimates unchanged |
 | 2026-10-13 | minor | French: the 423 strings added since the catalog was last complete are translated, and 188 entries are reworded to the feature names French users know (#1511); Hungarian: one message uses the informal address like the rest of the interface (#1474); the entry counts in the tables are the earlier measurements; native review still pending; scores and estimates unchanged |
 | 2026-10-12 | minor | Vietnamese (`vi`) catalog added, complete under the tests (menus, literals, messages; one plural form); 12-language score 63% → 71%, hours 60–100 → 55–90 |
 | 2026-10-13 | minor | Czech: 128 more strings translated (tool names, PDF and Image Trace presets, pie graph options and others added since the catalog was completed; #1461); the entry count in the table is the 2026-10-11 measurement; native review still pending; scores and estimates unchanged |
