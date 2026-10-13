@@ -150,6 +150,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     if app.session.active().is_none() {
         crate::panels::empty_state(ui, "waves", tl!("No document"), tl!("Open or create a document to digitize embroidery."));
+        templates_body(app, ui);
         return;
     }
     digitize_row(app, ui);
@@ -157,6 +158,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     lettering_rows(app, ui);
     team_name_rows(app, ui);
     monogram_rows(app, ui);
+    egui::CollapsingHeader::new(tl!("Design Templates")).id_salt("emb-templates").show(ui, |ui| templates_body(app, ui));
     egui::CollapsingHeader::new(tl!("Design Library")).id_salt("emb-library").show(ui, |ui| library_body(app, ui));
     buttonhole_rows(app, ui);
     egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
@@ -1024,6 +1026,64 @@ pub(crate) fn team_names_body(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The design library: a folder's machine files as thumbnails, searched and sorted; a click opens
 /// one, and the catalogue prints them all.
+/// Design templates: a new design from one, and the active one kept as one's own.
+pub(crate) fn templates_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let list = app.run("embroidery.templates", json!({})).ok();
+    let items: Vec<(String, String, bool)> = list
+        .as_ref()
+        .and_then(|r| r["templates"].as_array())
+        .map(|a| {
+            a.iter()
+                .map(|t| {
+                    (
+                        t["name"].as_str().unwrap_or_default().to_string(),
+                        t["description"].as_str().unwrap_or_default().to_string(),
+                        t["custom"] == true,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut open = None;
+    let mut forget = None;
+    for (name, description, custom) in &items {
+        ui.horizontal(|ui| {
+            let r = ui.button(name.as_str());
+            let r = if description.is_empty() { r } else { r.on_hover_text(description.as_str()) };
+            if r.clicked() {
+                open = Some(name.clone());
+            }
+            if *custom && ui.small_button("×").on_hover_text(tl!("Delete Template")).clicked() {
+                forget = Some(name.clone());
+            }
+        });
+    }
+    if let Some(name) = open
+        && let Err(e) = app.run("embroidery.template.new", json!({ "name": name }))
+    {
+        app.status(e);
+    }
+    if let Some(name) = forget {
+        app.run("embroidery.template.delete", json!({ "name": name })).ok();
+    }
+    if app.session.active().is_some() {
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut app.embroidery.template_name).desired_width(120.0).hint_text(tl!("Template name")));
+            let name = app.embroidery.template_name.trim().to_string();
+            if !name.is_empty()
+                && button(ui, tl!("Save as Template"))
+                    .on_hover_text(tl!("Keep this design's page, art, hoop, fabric and settings to start new designs from"))
+                    .clicked()
+            {
+                match app.run("embroidery.template.save", json!({ "name": name })) {
+                    Ok(_) => app.embroidery.template_name.clear(),
+                    Err(e) => app.status(e),
+                }
+            }
+        });
+    }
+}
+
 pub(crate) fn library_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     let lib = &mut app.embroidery.library;
     ui.horizontal(|ui| {

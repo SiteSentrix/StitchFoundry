@@ -4495,3 +4495,8 @@ machine	Stop	停止
 	Export Thread Chart	导出绣线色卡
 	Save Thread Chart	保存绣线色卡
 	Delete Thread Chart	删除绣线色卡
+	Design Templates	设计模板
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	保留此设计的页面、图稿、绣框、面料和设置，用于新建设计
+	New from Design Template	从设计模板新建
+	Save as Design Template	另存为设计模板
+	Delete Design Template	删除设计模板

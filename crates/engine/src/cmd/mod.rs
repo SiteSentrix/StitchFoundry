@@ -45,6 +45,7 @@ pub mod embroidery_scatter;
 pub mod embroidery_sequence;
 pub mod embroidery_splits;
 pub mod embroidery_stitches;
+pub mod embroidery_templates;
 pub mod embroidery_visualizer;
 pub mod expand;
 pub mod export_history;
@@ -268,6 +269,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_hoops::specs());
         v.extend(embroidery_recolor::specs());
         v.extend(embroidery_charts::specs());
+        v.extend(embroidery_templates::specs());
         v.extend(embroidery_scatter::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());

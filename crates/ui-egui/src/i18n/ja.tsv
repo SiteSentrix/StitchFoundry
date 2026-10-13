@@ -4914,3 +4914,8 @@ machine	Stop	停止
 	Export Thread Chart	糸チャートを書き出し
 	Save Thread Chart	糸チャートを保存
 	Delete Thread Chart	糸チャートを削除
+	Design Templates	デザインテンプレート
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	このデザインのページ・アート・枠・生地・設定を新しいデザインの元として保存します
+	New from Design Template	デザインテンプレートから新規作成
+	Save as Design Template	デザインテンプレートとして保存
+	Delete Design Template	デザインテンプレートを削除

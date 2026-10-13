@@ -505,6 +505,46 @@ fn an_object_in_the_same_colour_can_be_a_block_of_its_own() {
 }
 
 #[test]
+fn designs_start_from_templates_built_in_and_ones_own() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = Session::new();
+    let list = s.execute("embroidery.templates", &json!({})).unwrap();
+    assert!(list["templates"].as_array().unwrap().len() >= 7);
+    // a round patch: its page, its hoop and its satin border sewn already
+    s.execute("embroidery.template.new", &json!({"name": "round patch 75 mm"})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["hoop"].as_str(), Some("Brother 100 × 100 (4×4)"));
+    assert!(info["stitches"].as_u64().unwrap() > 100 && (info["widthMm"].as_f64().unwrap() - 75.0).abs() < 2.0, "{info}");
+    let ab = s.doc().unwrap().doc.artboards[0].rect;
+    assert!((ab.width() / PT - 110.0).abs() < 0.5);
+    // the area is a guide, not stitched
+    let mut guides = 0;
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Path { guide: true, .. } = n.kind {
+            guides += 1;
+        }
+    });
+    assert_eq!(guides, 1);
+    // a plain one: a guide and nothing sewn
+    s.execute("embroidery.template.new", &json!({"name": "Cap front"})).unwrap();
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["hoop"].as_str(), Some("Cap frame 130 × 60"));
+    // one's own: kept, opened again as it was
+    rect(&mut s, 30.0 * PT, 30.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let stitches = s.embroidery_plan().unwrap().pattern().stitch_count();
+    s.execute("embroidery.template.save", &json!({"name": "Club cap"})).unwrap();
+    let docs = s.documents().len();
+    s.execute("embroidery.template.new", &json!({"name": "club CAP"})).unwrap();
+    assert_eq!(s.documents().len(), docs + 1);
+    assert_eq!(s.embroidery_plan().unwrap().pattern().stitch_count(), stitches);
+    assert_eq!(s.execute("embroidery.info", &json!({})).unwrap()["hoop"].as_str(), Some("Cap frame 130 × 60"));
+    assert!(s.execute("embroidery.template.save", &json!({"name": "Full back"})).is_err());
+    assert!(s.execute("embroidery.template.new", &json!({"name": "Nothing"})).is_err());
+    s.execute("embroidery.template.delete", &json!({"name": "Club cap"})).unwrap();
+    assert!(s.execute("embroidery.template.delete", &json!({"name": "Club cap"})).is_err());
+}
+
+#[test]
 fn thread_charts_of_ones_own_come_from_csv_and_the_design() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
