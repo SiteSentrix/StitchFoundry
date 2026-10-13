@@ -181,6 +181,79 @@ pub struct DesignSettings {
     /// A basting run sewn before everything else (none: not sewn).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub basting: Option<Basting>,
+    /// Where on the design sewing starts: the first object entered at its point closest to it
+    /// (none: where the first object starts).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<DesignPoint>,
+    /// Where the frame goes when the design is done (none: where its last stitch is).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end: Option<DesignPoint>,
+}
+
+/// A point of the design's box: its centre, a corner or the middle of a side.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DesignPoint {
+    Centre,
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+impl DesignPoint {
+    pub const ALL: [DesignPoint; 9] = [
+        DesignPoint::Centre,
+        DesignPoint::TopLeft,
+        DesignPoint::Top,
+        DesignPoint::TopRight,
+        DesignPoint::Left,
+        DesignPoint::Right,
+        DesignPoint::BottomLeft,
+        DesignPoint::Bottom,
+        DesignPoint::BottomRight,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            DesignPoint::Centre => "centre",
+            DesignPoint::TopLeft => "top-left",
+            DesignPoint::Top => "top",
+            DesignPoint::TopRight => "top-right",
+            DesignPoint::Left => "left",
+            DesignPoint::Right => "right",
+            DesignPoint::BottomLeft => "bottom-left",
+            DesignPoint::Bottom => "bottom",
+            DesignPoint::BottomRight => "bottom-right",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<DesignPoint> {
+        let id = if id == "center" { "centre" } else { id };
+        DesignPoint::ALL.into_iter().find(|p| p.id() == id)
+    }
+
+    /// The point on `b` (y down: the top is its least y).
+    pub fn on(self, b: &BBox) -> Point {
+        let (x0, x1, y0, y1) = (b.min.x, b.max.x, b.min.y, b.max.y);
+        let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+        let (x, y) = match self {
+            DesignPoint::Centre => (cx, cy),
+            DesignPoint::TopLeft => (x0, y0),
+            DesignPoint::Top => (cx, y0),
+            DesignPoint::TopRight => (x1, y0),
+            DesignPoint::Left => (x0, cy),
+            DesignPoint::Right => (x1, cy),
+            DesignPoint::BottomLeft => (x0, y1),
+            DesignPoint::Bottom => (cx, y1),
+            DesignPoint::BottomRight => (x1, y1),
+        };
+        Point::new(x, y)
+    }
 }
 
 impl Default for DesignSettings {
@@ -198,6 +271,8 @@ impl Default for DesignSettings {
             trim_seconds: 6.0,
             color_change_seconds: 20.0,
             basting: None,
+            start: None,
+            end: None,
         }
     }
 }

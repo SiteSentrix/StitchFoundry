@@ -2001,6 +2001,27 @@ fn machine_rows(app: &mut VectorcraftApp, ui: &mut Ui, info: &Value) {
             app.run("embroidery.settings", json!({ "basting": { "margin": v.clamp(0.0, 50.0) } })).ok();
         }
     }
+    // where sewing starts and where the frame ends
+    let points = vectorcraft_embroidery::sf_core::model::DesignPoint::ALL;
+    let mut names = vec![tl!("Where it falls")];
+    names.extend([
+        tl!("Centre"),
+        tl!("Top left"),
+        tl!("Top"),
+        tl!("Top right"),
+        tl!("Left"),
+        tl!("Right"),
+        tl!("Bottom left"),
+        tl!("Bottom"),
+        tl!("Bottom right"),
+    ]);
+    for (label, key, id) in [(tl!("Start at"), "start", "design-start"), (tl!("End at"), "end", "design-end")] {
+        let cur = s[key].as_str().and_then(|v| points.iter().position(|q| q.id() == v)).map_or(0, |i| i + 1);
+        if let Some(i) = pick(ui, label, id, cur, &names) {
+            let v = i.checked_sub(1).and_then(|k| points.get(k)).map_or(Value::Null, |q| json!(q.id()));
+            app.run("embroidery.settings", json!({ key: v })).ok();
+        }
+    }
     colorway_rows(app, ui);
     // the cost estimate's prices
     let cost = &s["cost"];
