@@ -24,9 +24,11 @@ pub enum Class {
     Flat,
     /// Continuous tone: a gradient and a photo-like image.
     Tone,
+    /// Linear gradients whose line and stops are known: one over the whole image, one in a disc.
+    Ramp,
 }
 
-pub const CLASSES: [Class; 7] = [Class::Shape, Class::Poly, Class::Lines, Class::Askew, Class::Plain, Class::Flat, Class::Tone];
+pub const CLASSES: [Class; 8] = [Class::Shape, Class::Poly, Class::Lines, Class::Askew, Class::Plain, Class::Flat, Class::Tone, Class::Ramp];
 
 impl Class {
     pub fn name(self) -> &'static str {
@@ -38,6 +40,7 @@ impl Class {
             Class::Plain => "plain shapes",
             Class::Flat => "flat colour art",
             Class::Tone => "gradient, photo",
+            Class::Ramp => "linear gradients",
         }
     }
 }
@@ -89,7 +92,63 @@ pub struct Input {
     pub plain: Vec<TracedShape>,
     /// Its lines, where it is lines: each one's two ends and its width.
     pub strokes: Vec<(Point, Point, f64)>,
+    /// The linear gradient it is, where it is one.
+    pub ramp: Option<Ramp>,
     tone: Option<Tone>,
+}
+
+/// A linear gradient: its line (256-unit coordinates) and its stops along it (0 to 1).
+#[derive(Clone)]
+pub struct Ramp {
+    pub start: Point,
+    pub end: Point,
+    pub stops: Vec<(f64, [f64; 3])>,
+}
+
+impl Ramp {
+    pub fn color_at(&self, p: Point) -> [f64; 3] {
+        let d = self.end - self.start;
+        let t = ((p - self.start).dot(d) / d.hypot2()).clamp(0.0, 1.0);
+        let after = self.stops.iter().position(|s| s.0 >= t).unwrap().max(1);
+        let (a, b) = (self.stops[after - 1], self.stops[after]);
+        let k = (t - a.0) / (b.0 - a.0);
+        [0, 1, 2].map(|c| a.1[c] + (b.1[c] - a.1[c]) * k)
+    }
+}
+
+/// Dark blue to yellow across the whole image, 25° down from level.
+fn two_stop_ramp() -> Ramp {
+    let dir = kurbo::Vec2::from_angle(25f64.to_radians());
+    let reach = kurbo::Vec2::new(128.0, 128.0).dot(dir);
+    let centre = Point::new(128.0, 128.0);
+    Ramp { start: centre - dir * reach, end: centre + dir * reach, stops: vec![(0.0, [24.0, 40.0, 150.0]), (1.0, [250.0, 215.0, 60.0])] }
+}
+
+/// Red through white to green across a disc, 110° from level.
+fn three_stop_ramp() -> Ramp {
+    let dir = kurbo::Vec2::from_angle(110f64.to_radians());
+    let centre = Point::new(128.0, 128.0);
+    Ramp {
+        start: centre - dir * DISC,
+        end: centre + dir * DISC,
+        stops: vec![(0.0, [200.0, 30.0, 40.0]), (0.4, [245.0, 240.0, 230.0]), (1.0, [20.0, 120.0, 70.0])],
+    }
+}
+
+/// The radius of the disc the three-stop gradient fills.
+const DISC: f64 = 90.0;
+
+fn two_stop(u: f64, v: f64, _: u32, _: u32) -> [f64; 3] {
+    two_stop_ramp().color_at(Point::new(u * 256.0, v * 256.0))
+}
+
+fn three_stop(u: f64, v: f64, x: u32, _: u32) -> [f64; 3] {
+    let p = Point::new(u * 256.0, v * 256.0);
+    let inside = three_stop_ramp().color_at(p);
+    // The disc's edge, anti-aliased: how much of the pixel (256 / size units wide) is in it.
+    let pixel = 256.0 * u / (f64::from(x) + 0.5);
+    let cover = (0.5 + (DISC - p.distance(Point::new(128.0, 128.0))) / pixel).clamp(0.0, 1.0);
+    [0, 1, 2].map(|c| 255.0 + (inside[c] - 255.0) * cover)
 }
 
 const WHITE: [u8; 3] = [255, 255, 255];
@@ -179,6 +238,7 @@ pub fn inputs() -> Vec<Input> {
         corners,
         strokes: vec![],
         plain: vec![],
+        ramp: None,
         tone: None,
     };
     let tone = |name, f: Tone| Input {
@@ -190,6 +250,7 @@ pub fn inputs() -> Vec<Input> {
         corners: vec![],
         strokes: vec![],
         plain: vec![],
+        ramp: None,
         tone: Some(f),
     };
     let ink = |p: BezPath| vec![(p, INK)];
@@ -301,6 +362,8 @@ pub fn inputs() -> Vec<Input> {
         art("four-colour badge", Class::Flat, multicolor, 20, points(&bar)),
         tone("gradient", gradient),
         tone("photo-like", photo),
+        Input { class: Class::Ramp, ramp: Some(two_stop_ramp()), ..tone("two-stop gradient", two_stop) },
+        Input { class: Class::Ramp, ramp: Some(three_stop_ramp()), ..tone("three-stop gradient in a disc", three_stop) },
     ];
     if let Some(input) = all.iter_mut().find(|i| i.name == "plain shapes") {
         input.plain = plain;

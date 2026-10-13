@@ -746,6 +746,33 @@ fn image_trace_auto_grouping_groups_what_is_inside() {
     assert_eq!(expanded.children().unwrap().len(), 2);
 }
 
+/// Gradients: an image that is one linear gradient is one path filled with it, the gradient's line
+/// where the image lies; without the option it is bands of flat colour, as saved documents have it.
+#[test]
+fn image_trace_gradients_fills_with_a_gradient() {
+    let art = vectorcraft_trace::Raster::from_fn(100, 60, |x, _| {
+        let t = (f64::from(x) + 0.5) / 100.0;
+        [(20.0 + 200.0 * t) as u8, 40, (220.0 - 180.0 * t) as u8, 255]
+    });
+    let make = |gradients: bool| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::translate((50.0, 50.0)) * Affine::scale(2.0));
+        let r = s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": {"gradients": gradients}})).unwrap();
+        traced_paths(&node(&s, NodeId(r["id"].as_u64().unwrap())))
+    };
+    let paths = make(true);
+    assert_eq!(paths.len(), 1);
+    let Paint::Gradient(g) = paths[0].appearance.fill_paint() else { panic!("{:?}", paths[0].appearance.fill_paint()) };
+    assert_eq!(g.gradient.kind, vectorcraft_color::GradientKind::Linear);
+    assert_eq!(g.gradient.stops.len(), 2);
+    // Level, from the image's left edge (x = 50) to its right one (x = 250), at any height.
+    let geom = g.geom.as_ref().unwrap();
+    let (a, b) = if geom.start.x < geom.end.x { (geom.start, geom.end) } else { (geom.end, geom.start) };
+    assert!((a.x - 50.0).abs() < 3.0 && (b.x - 250.0).abs() < 3.0 && (a.y - b.y).abs() < 2.0, "{geom:?}");
+    let flat = make(false);
+    assert!(flat.len() > 1 && flat.iter().all(|n| matches!(n.appearance.fill_paint(), Paint::Solid { .. })));
+}
+
 #[test]
 fn image_trace_release_and_expand() {
     let mut s = session();

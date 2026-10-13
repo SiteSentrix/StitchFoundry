@@ -2,7 +2,7 @@
 //! from ground-truth vector shapes here, never loaded from files.
 
 use kurbo::{BezPath, PathEl, Point};
-use vectorcraft_trace::Raster;
+use vectorcraft_trace::{Raster, TracedGradient};
 
 /// The closed polylines of `path` (one per subpath), flattened within `tol`.
 pub fn polylines(path: &BezPath, tol: f64) -> Vec<Vec<Point>> {
@@ -78,15 +78,25 @@ pub fn coverage(path: &BezPath, w: usize, h: usize) -> Vec<f32> {
 
 /// Paints `scene` (bottom first) over `bg`, anti-aliased, the way a renderer shows a trace.
 pub fn render(scene: &[(BezPath, [u8; 3])], bg: [u8; 3], w: usize, h: usize) -> Raster {
+    let scene: Vec<(BezPath, [u8; 3], Option<&TracedGradient>)> = scene.iter().map(|(p, c)| (p.clone(), *c, None)).collect();
+    render_painted(&scene, bg, w, h)
+}
+
+/// [`render`], with the paths that have a gradient filled with it.
+pub fn render_painted(scene: &[(BezPath, [u8; 3], Option<&TracedGradient>)], bg: [u8; 3], w: usize, h: usize) -> Raster {
     let mut buf = vec![bg.map(f32::from); w * h];
     let mut cov = vec![0.0f32; w * h];
-    for (path, color) in scene {
+    for (path, color, gradient) in scene {
         let (r0, r1) = coverage_into(path, w, h, &mut cov);
         for i in r0 * w..r1 * w {
             let a = cov[i].min(1.0);
             if a > 0.0 {
+                let color = match gradient {
+                    Some(g) => g.color_at(Point::new((i % w) as f64 + 0.5, (i / w) as f64 + 0.5)).map(|v| v as f32),
+                    None => color.map(f32::from),
+                };
                 for ch in 0..3 {
-                    buf[i][ch] += (f32::from(color[ch]) - buf[i][ch]) * a;
+                    buf[i][ch] += (color[ch] - buf[i][ch]) * a;
                 }
                 cov[i] = 0.0;
             }

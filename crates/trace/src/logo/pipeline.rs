@@ -484,6 +484,7 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
             pixels: (s.area * (factor * factor) as f64) as usize,
             stroke: None,
             shape: None,
+            gradient: None,
         });
     }
     Ok(out)
