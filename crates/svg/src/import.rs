@@ -296,14 +296,16 @@ fn inkscape_pages(xml: &roxmltree::Document, user: Affine) -> Option<Vec<vectorc
         .filter_map(|p| {
             let (w, h) = (num(p, "width")?, num(p, "height")?);
             let (x, y) = (num(p, "x").unwrap_or(0.0), num(p, "y").unwrap_or(0.0));
-            (w > 0.0 && h > 0.0).then(|| (p, Rect::new(x, y, x + w, y + h)))
+            // A box too large to add up or to place (1e308 wide) is no page.
+            let r = user.transform_rect_bbox(Rect::new(x, y, x + w, y + h));
+            (w > 0.0 && h > 0.0 && r.is_finite()).then_some((p, r))
         })
         .take(1000)
         .enumerate()
         .map(|(i, (p, r))| vectorcraft_doc::Artboard {
             id: i as u32 + 1,
             name: p.attribute((INKSCAPE, "label")).filter(|l| !l.trim().is_empty()).map_or_else(|| format!("Artboard {}", i + 1), str::to_string),
-            rect: user.transform_rect_bbox(r),
+            rect: r,
             show_center_mark: false,
             show_cross_hairs: false,
         })

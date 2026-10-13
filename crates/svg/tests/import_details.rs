@@ -240,6 +240,15 @@ fn inkscape_pages_become_artboards() {
     let d = import_with(svg, &ImportOptions::default()).unwrap().0;
     let b: Vec<(String, Rect)> = d.artboards.iter().map(|a| (a.name.clone(), a.rect)).collect();
     assert_eq!(b, vec![("Front".to_string(), Rect::new(0.0, 0.0, 200.0, 200.0)), ("Artboard 2".to_string(), Rect::new(240.0, 0.0, 360.0, 300.0))]);
+    // Hostile boxes (too large to add up, not numbers, negative) are no pages, and at most 1,000 are read.
+    let pages = r#"<inkscape:page x="1e308" y="0" width="1e308" height="10"/><inkscape:page x="NaN" y="0" width="10" height="10"/><inkscape:page width="inf" height="10"/><inkscape:page width="-5" height="10"/>"#.to_string()
+        + &r#"<inkscape:page width="10" height="10"/>"#.repeat(1500);
+    let hostile = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="50" height="50"><g>{pages}</g></svg>"#
+    );
+    let d = import_with(&hostile, &ImportOptions::default()).unwrap().0;
+    assert_eq!(d.artboards.len(), 1000);
+    assert!(d.artboards.iter().all(|a| a.rect == Rect::new(0.0, 0.0, 10.0, 10.0)), "{:?}", d.artboards.first());
     // A file without pages keeps its one artboard.
     let d = import_with(&svg_doc(), &ImportOptions::default()).unwrap().0;
     assert_eq!(d.artboards.len(), 1);
