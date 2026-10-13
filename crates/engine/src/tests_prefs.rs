@@ -373,6 +373,134 @@ fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
     assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
 }
 
+/// Use Precise Cursors changes the pointer of the tools that have one of their own: off, each shows its own
+/// pointer; on, a crosshair. Every other drawing tool shows a crosshair either way, and the Type tool and the
+/// Scissors over no path keep theirs.
+#[test]
+fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let at = vectorcraft_geom::Point::new(300.0, 300.0);
+    let cursor = |s: &mut Session, tool: &str| {
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        s.cursor(at, Mods::default(), ViewInfo::default())
+    };
+    // Off: the pointer of each tool whose own pointer the preference replaces.
+    let own = [
+        ("pen", Cursor::Pen),
+        ("addAnchor", Cursor::PenAdd),
+        ("deleteAnchor", Cursor::PenDelete),
+        ("anchorPoint", Cursor::Pen),
+        ("curvature", Cursor::Pen),
+        ("mesh", Cursor::PenAdd),
+        ("eyedropper", Cursor::Eyedropper),
+        ("slice", Cursor::Slice),
+        ("blend", Cursor::Blend),
+        ("shapeBuilder", Cursor::ShapeBuilder),
+    ];
+    for (tool, c) in own {
+        assert_eq!(cursor(&mut s, tool), c, "{tool} off");
+    }
+    // The tools that show a crosshair whatever the preference says.
+    let always = [
+        "lineSegment",
+        "arc",
+        "spiral",
+        "rectangularGrid",
+        "polarGrid",
+        "rectangle",
+        "roundedRectangle",
+        "ellipse",
+        "polygon",
+        "star",
+        "flare",
+        "paintbrush",
+        "blobBrush",
+        "shaper",
+        "pencil",
+        "smooth",
+        "pathEraser",
+        "join",
+        "eraser",
+        "knife",
+        "mirrorCut",
+        "lineCut",
+        "rectCut",
+        "gradient",
+    ];
+    for tool in always {
+        assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} off");
+    }
+    s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    for (tool, _) in own {
+        assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} on");
+    }
+    for tool in always {
+        assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} on");
+    }
+    assert_eq!(cursor(&mut s, "type"), Cursor::Text);
+    assert_eq!(cursor(&mut s, "scissors"), Cursor::NotAllowed);
+    s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
+    for (tool, c) in own {
+        assert_eq!(cursor(&mut s, tool), c, "{tool} off again");
+    }
+}
+
+/// Every state of the Pen's pointer, and the other drawing pointers, turn into a crosshair; the rest stay.
+#[test]
+fn precise_cursors_replace_every_pen_state() {
+    use vectorcraft_tools::Cursor;
+    for c in [
+        Cursor::Pen,
+        Cursor::PenAdd,
+        Cursor::PenDelete,
+        Cursor::PenClose,
+        Cursor::PenContinue,
+        Cursor::PenJoin,
+        Cursor::PenConvert,
+        Cursor::Eyedropper,
+        Cursor::Slice,
+        Cursor::Blend,
+        Cursor::BlendObject,
+        Cursor::BlendAnchor,
+        Cursor::ShapeBuilder,
+        Cursor::ShapeBuilderErase,
+    ] {
+        assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+    }
+    for c in [Cursor::Arrow, Cursor::Move, Cursor::Text, Cursor::Hand, Cursor::NotAllowed, Cursor::SliceSelect] {
+        assert_eq!(c.precise(), c, "{c:?}");
+    }
+}
+
+/// Switching the preference is not an edit: no undo step, no unsaved changes.
+#[test]
+fn use_precise_cursors_is_not_an_edit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let before = (s.active().unwrap().history.undo.len(), s.active().unwrap().history.redo.len());
+    assert!(!s.active().unwrap().is_dirty());
+    s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    assert!(s.prefs.use_precise_cursors);
+    let st = s.active().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.redo.len()), before, "no undo step");
+    assert!(!st.is_dirty(), "the document stays saved");
+}
+
+/// The preference is saved with the others and reads back as it was.
+#[test]
+fn use_precise_cursors_is_saved_and_restored() {
+    let mut s = Session::new();
+    assert!(!s.prefs.use_precise_cursors, "off by default");
+    s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    let saved = s.prefs.to_json();
+    assert_eq!(saved["usePreciseCursors"], json!(true));
+    let mut t = Session::new();
+    t.apply_prefs(serde_json::from_value(saved).unwrap());
+    assert!(t.prefs.use_precise_cursors);
+}
+
 // ---------- #394, second batch ----------
 
 fn new_doc() -> Session {

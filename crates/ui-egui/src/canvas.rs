@@ -484,7 +484,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             {
                 crate::place::paint_cursor(app, ui.ctx(), &painter, hp);
             }
-            // Caps Lock gives precise (crosshair) cursors, like Illustrator; env opt-out for system cursors.
+            // The glyph cursors are drawn here; General › Use Precise Cursors (the session turns the drawing tools' pointers
+            // into crosshairs, `Cursor::precise`) needs no handling. VECTORCRAFT_SYSTEM_CURSORS opts out of the glyphs.
             let custom = std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none();
             // User Interface › Scale Cursor Proportional to UI: the glyphs grow with UI Scaling;
             // off, they keep their size.
@@ -2208,6 +2209,32 @@ mod tests {
     use super::*;
     use vectorcraft_engine::Session;
     use vectorcraft_geom::Shape as _;
+
+    /// With VECTORCRAFT_SYSTEM_CURSORS set the glyphs aren't drawn and the system's cursors stand in: those of
+    /// the Pen and the other drawing tools are the system crosshair already, so Use Precise Cursors makes no
+    /// difference to them there.
+    #[test]
+    fn system_cursors_show_the_same_crosshair_with_precise_cursors_on_or_off() {
+        for c in [
+            Cursor::Pen,
+            Cursor::PenAdd,
+            Cursor::PenDelete,
+            Cursor::PenClose,
+            Cursor::PenContinue,
+            Cursor::PenJoin,
+            Cursor::PenConvert,
+            Cursor::Eyedropper,
+            Cursor::Slice,
+            Cursor::Blend,
+            Cursor::BlendObject,
+            Cursor::BlendAnchor,
+            Cursor::ShapeBuilder,
+            Cursor::ShapeBuilderErase,
+        ] {
+            assert_eq!(cursor_icon(c), egui::CursorIcon::Crosshair, "{c:?}");
+            assert_eq!(cursor_icon(c), cursor_icon(c.precise()), "{c:?}");
+        }
+    }
 
     /// #826: in a turned view each ruler still has ticks along its whole length; at 0° the top one
     /// reads x where the canvas has it.
