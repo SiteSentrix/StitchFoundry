@@ -1014,7 +1014,9 @@ pub fn slider(ui: &mut Ui, slider: egui::Slider<'_>) -> Response {
     let t = Tokens::get(ui.ctx());
     ui.scope(|ui| {
         let v = ui.visuals_mut();
-        v.widgets.inactive.bg_fill = t.input_border;
+        // The buttons' border shows against the panel in every brightness; the fields' border
+        // all but vanished on Medium Dark's panel (#1662).
+        v.widgets.inactive.bg_fill = t.button_border;
         v.selection.bg_fill = t.accent;
         ui.add(slider.trailing_fill(true))
     })
