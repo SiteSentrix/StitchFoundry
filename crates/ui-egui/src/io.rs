@@ -412,7 +412,11 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
     }
     if ask && asks_options(mode, chosen.format) {
         let path = chosen.path.clone().unwrap_or_default();
-        return ask_format_options(app, mode, chosen.format, &path);
+        let r = ask_format_options(app, mode, chosen.format, &path);
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert(crate::dialogs::AFTER_PANEL.into(), json!(true));
+        }
+        return r;
     }
     write_plan(app, chosen)
 }

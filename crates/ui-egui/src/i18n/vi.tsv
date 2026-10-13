@@ -1694,6 +1694,15 @@
 	Left-Justified Tab	Tab căn trái
 	Left-to-Right Paragraph Direction	Đoạn văn từ trái sang phải
 	Left:	Trái:
+	Legacy (version 7)	Cũ (phiên bản 7)
+	Transparent Images:	Ảnh trong suốt:
+	Flatten	Làm phẳng
+	Omit	Bỏ qua
+	Legacy .ai Options	Tùy chọn .ai cũ
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Một tệp .ai cũ chỉ chứa một bảng vẽ: mỗi bảng vẽ bạn chọn được lưu thành một tệp riêng.
+	{count} of {total} artboards	{count} trên {total} bảng vẽ
+	Check an artboard to save.	Hãy chọn một bảng vẽ để lưu.
+	PDF-compatible	Tương thích PDF
 	Legacy Macintosh RGB (Gamma 1.8)	RGB Macintosh cũ (Gamma 1.8)
 	Legacy vector clipboard	Bảng tạm vector cũ
 	Legacy vector clipboard (no transparency)	Bảng tạm vector cũ (không có trong suốt)

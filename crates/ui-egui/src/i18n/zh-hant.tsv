@@ -1455,6 +1455,15 @@
 	Left:	左：
 	Legacy Macintosh RGB (Gamma 1.8)	舊版 Macintosh RGB (Gamma 1.8)
 	Legacy vector clipboard	舊版向量剪貼簿
+	Legacy (version 7)	舊版 (版本 7)
+	Transparent Images:	透明影像：
+	Flatten	平面化
+	Omit	略過
+	Legacy .ai Options	舊版 .ai 選項
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	舊版 .ai 檔案只包含一個工作區域：勾選的每個工作區域都會儲存為獨立的檔案。
+	{count} of {total} artboards	{total} 個工作區域中的 {count} 個
+	Check an artboard to save.	請勾選要儲存的工作區域。
+	PDF-compatible	與 PDF 相容
 	Legacy vector clipboard (no transparency)	舊版向量剪貼簿 (無透明度)
 	Less	較少
 	Letter	Letter

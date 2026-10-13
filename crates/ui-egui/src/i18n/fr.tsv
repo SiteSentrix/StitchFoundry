@@ -1476,6 +1476,15 @@
 	Left:	Gauche :
 	Legacy Macintosh RGB (Gamma 1.8)	RVB Macintosh hérité (gamma 1,8)
 	Legacy vector clipboard	Presse-papiers vectoriel hérité
+	Legacy (version 7)	Hérité (version 7)
+	Transparent Images:	Images transparentes :
+	Flatten	Aplatir
+	Omit	Omettre
+	Legacy .ai Options	Options .ai hérité
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Un fichier .ai hérité contient un seul plan de travail : chaque plan de travail coché est enregistré dans un fichier distinct.
+	{count} of {total} artboards	{count} plans de travail sur {total}
+	Check an artboard to save.	Cochez un plan de travail à enregistrer.
+	PDF-compatible	Compatible PDF
 	Legacy vector clipboard (no transparency)	Presse-papiers vectoriel hérité (sans transparence)
 	Less	Moins
 	Letter	Lettre US

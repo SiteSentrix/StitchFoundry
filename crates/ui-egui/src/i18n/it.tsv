@@ -1479,6 +1479,15 @@
 	Left:	Sinistra:
 	Legacy Macintosh RGB (Gamma 1.8)	RGB Macintosh tradizionale (gamma 1.8)
 	Legacy vector clipboard	Appunti vettoriali tradizionali
+	Legacy (version 7)	Tradizionale (versione 7)
+	Transparent Images:	Immagini trasparenti:
+	Flatten	Unisci
+	Omit	Ometti
+	Legacy .ai Options	Opzioni .ai tradizionale
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Un file .ai tradizionale contiene una tavola da disegno: ogni tavola selezionata viene salvata come file separato.
+	{count} of {total} artboards	{count} di {total} tavole da disegno
+	Check an artboard to save.	Seleziona una tavola da disegno da salvare.
+	PDF-compatible	Compatibile PDF
 	Legacy vector clipboard (no transparency)	Appunti vettoriali tradizionali (senza trasparenza)
 	Less	Meno
 	Letter	Lettera

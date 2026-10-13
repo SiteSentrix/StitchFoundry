@@ -149,6 +149,8 @@ pub(crate) struct DialogSpec {
     /// The OK button's label when it depends on the app (Export for Screens' "Download" on the
     /// web); `ok` when none. Only with an `ok`.
     pub ok_label: Option<fn(&VectorcraftApp) -> &'static str>,
+    /// Can OK (or Enter) apply the dialog as it is? None: always. The body says why not.
+    pub ok_enabled: Option<fn(&VectorcraftApp, &Dialog) -> bool>,
 }
 
 impl DialogSpec {
@@ -170,6 +172,7 @@ impl DialogSpec {
         max_width: None,
         preview: false,
         ok_label: None,
+        ok_enabled: None,
     };
 
     /// A dialog that draws its own window and confirms through its module.
@@ -380,6 +383,10 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
     missing_fonts::open_next(app);
 }
 
+/// The field of a dialog that a save panel opened (its format's options): Enter doesn't confirm it
+/// until Enter has been let go.
+pub(crate) const AFTER_PANEL: &str = "__afterPanel";
+
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
     settle(app);
@@ -418,8 +425,14 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return window(app, ctx);
     }
     let mut ok = false;
+    let mut ok_enabled = true;
     let mut cancel = false;
     let mut discard = false;
+    // Opened as a save panel closed: the Enter that closed it isn't this dialog's, until it is let go.
+    let after_panel = d.bool(AFTER_PANEL);
+    if after_panel && !ctx.input(|i| i.key_down(egui::Key::Enter) || i.key_pressed(egui::Key::Enter)) {
+        d.fields.remove(AFTER_PANEL);
+    }
     let heading = (spec.heading)(&d);
     let revolves = revolve_gizmo::active(&d);
     if revolves {
@@ -450,9 +463,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // right-to-left layout would otherwise take all the room left in the window, so the
         // window could never shrink to its content.
         let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ok_enabled = spec.ok_enabled.is_none_or(|f| f(app, &d));
         ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
-                && widgets::primary_button(ui, label).clicked()
+                && widgets::primary_button_enabled(ui, label, ok_enabled).clicked()
             {
                 ok = true;
             }
@@ -466,7 +480,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
     });
-    if spec.ok.is_some() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+    if spec.ok.is_some() && ok_enabled && !after_panel && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
         ok = true;
     }
     if discard {

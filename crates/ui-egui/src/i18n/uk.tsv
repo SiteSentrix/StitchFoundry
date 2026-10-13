@@ -1473,6 +1473,15 @@
 	Left:	Зліва:
 	Legacy Macintosh RGB (Gamma 1.8)	Застарілий Macintosh RGB (гама 1.8)
 	Legacy vector clipboard	Застарілий векторний буфер обміну
+	Legacy (version 7)	Застарілий (версія 7)
+	Transparent Images:	Прозорі зображення:
+	Flatten	Об’єднати
+	Omit	Пропустити
+	Legacy .ai Options	Параметри застарілого .ai
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Застарілий файл .ai містить одну монтажну область: кожна позначена монтажна область зберігається в окремий файл.
+	{count} of {total} artboards	{count} з {total} монтажних областей
+	Check an artboard to save.	Позначте монтажну область для збереження.
+	PDF-compatible	Сумісний із PDF
 	Legacy vector clipboard (no transparency)	Застарілий векторний буфер обміну (без прозорості)
 	Less	Менше
 	Letter	Letter

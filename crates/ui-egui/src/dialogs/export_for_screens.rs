@@ -596,7 +596,7 @@ fn format_settings(ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
 }
 
 /// A small cached rendering of artboard `i` (keyed by document revision).
-fn artboard_thumb(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize) -> Option<egui::TextureHandle> {
+pub(super) fn artboard_thumb(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize) -> Option<egui::TextureHandle> {
     let st = app.session.active()?;
     let key = egui::Id::new(("ab-thumb", i, st.revision));
     if let Some(t) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(key)) {

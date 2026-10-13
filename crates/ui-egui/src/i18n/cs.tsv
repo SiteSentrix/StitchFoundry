@@ -3178,6 +3178,15 @@ theme	Appearance	Motiv
 	Large	Velké
 	Large Tabs	Velké karty
 	Legacy vector clipboard	Starší vektorová schránka
+	Legacy (version 7)	Starší (verze 7)
+	Transparent Images:	Průhledné obrazy:
+	Flatten	Sloučit
+	Omit	Vynechat
+	Legacy .ai Options	Starší soubor .ai – volby
+	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Soubor .ai ve starší verzi obsahuje jedinou kreslicí plochu: každá zaškrtnutá kreslicí plocha se uloží jako samostatný soubor.
+	{count} of {total} artboards	{count} z {total} kreslicích ploch
+	Check an artboard to save.	Zaškrtněte kreslicí plochu, kterou chcete uložit.
+	PDF-compatible	Kompatibilní s PDF
 	Legacy vector clipboard (no transparency)	Starší vektorová schránka (bez průhlednosti)
 	Line Color	Barva čar
 	Lines	Čáry

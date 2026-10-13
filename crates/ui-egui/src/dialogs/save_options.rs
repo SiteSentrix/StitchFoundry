@@ -7,7 +7,10 @@
 //! editable), `path`, `format`, and one field per option (agents set them with `ui.dialog.set`).
 //! Native and `.ai` files show their save options (VectorCraft Options after Save As): each
 //! artboard to a separate file, with `all` (true: every artboard) or `range`, Include Linked Files,
-//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression.
+//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. A `.ai` file's Version comes
+//! first: PDF-compatible, or legacy version 7 (`aiVersion: "7"`, a file per artboard), which takes
+//! only Transparent Images and, with several artboards, a picker of the artboards to save
+//! (thumbnails to check, field `boards`, saved as `range`).
 
 use std::sync::OnceLock;
 
@@ -22,7 +25,12 @@ use crate::{VectorcraftApp, io, widgets};
 /// Dialog kind.
 pub const KIND: &str = "saveOptions";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 380.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 380.0, ok_enabled: Some(can_save), ..DialogSpec::FORM };
+
+/// OK saves a legacy `.ai` file only with an artboard checked.
+fn can_save(app: &VectorcraftApp, d: &Dialog) -> bool {
+    !legacy_ai(d) || picked_boards(d, app.session.active().map_or(0, |st| st.doc.artboards.len())).iter().any(|b| *b)
+}
 
 fn heading(d: &Dialog) -> String {
     if d.bool("__pick") {
@@ -32,6 +40,9 @@ fn heading(d: &Dialog) -> String {
             _ => tl!("Save As"),
         }
         .into();
+    }
+    if legacy_ai(d) {
+        return tl!("Legacy .ai Options").into();
     }
     crate::i18n::fmt(tl!("{format} Options"), &[("format", fileio::format(&d.str("format")).map_or("", |f| f.label))])
 }
@@ -133,21 +144,197 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 ui.end_row();
             }
         }
-        for o in shown(f) {
+        // Version first; the legacy version takes only its own options.
+        let legacy = legacy_ai(d);
+        let mut rows: Vec<&FormatOption> = shown(f).filter(|o| LEGACY_ONLY.contains(&o.name) == legacy || o.name == "aiVersion").collect();
+        rows.sort_by_key(|o| o.name != "aiVersion");
+        for o in rows {
             option_row(app, ui, d, o);
         }
     });
+    if legacy_ai(d) && app.session.active().is_some_and(|st| st.doc.artboards.len() > 1) {
+        artboard_picker(app, ui, d);
+    }
     if let Some(id) = switch.filter(|id| *id != f.id) {
         switch_format(app, d, id);
     }
     false
 }
 
-/// One option: a checkbox, an artboard menu, a number or a text field.
+/// The `.ai` options only the legacy version takes (and the only ones it takes, besides the
+/// version).
+const LEGACY_ONLY: &[&str] = &["transparentImages"];
+
+/// Is a `.ai` file to be saved in the legacy version 7 (`aiVersion: "7"`)?
+fn legacy_ai(d: &Dialog) -> bool {
+    d.str("format") == "ai" && d.str("aiVersion").trim() == "7"
+}
+
+/// The artboards a legacy `.ai` save writes (field `boards`: one bool per artboard), as last
+/// saved (`range`), else all of them.
+fn picked_boards(d: &Dialog, n: usize) -> Vec<bool> {
+    if let Some(a) = d.fields.get("boards").and_then(Value::as_array) {
+        let mut b: Vec<bool> = a.iter().map(|b| b.as_bool().unwrap_or(false)).collect();
+        b.resize(n, false);
+        return b;
+    }
+    let range = d.str("range");
+    match (ArtboardPick { range: Some(range.clone()), ..Default::default() }).resolve(n) {
+        Ok(Some(chosen)) if !range.trim().is_empty() => (0..n).map(|i| chosen.contains(&i)).collect(),
+        _ => vec![true; n],
+    }
+}
+
+/// The file each checked artboard is saved to (`None` for the others): the file itself when one
+/// is checked, else `{stem}-{artboard}.ai` beside it, as the save names them.
+fn board_files(app: &VectorcraftApp, d: &Dialog, boards: &[bool]) -> Vec<Option<String>> {
+    let checked: Vec<usize> = boards.iter().enumerate().filter(|(_, on)| **on).map(|(i, _)| i).collect();
+    let path = d.str("path");
+    let file = std::path::Path::new(path.trim());
+    let name = file.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let mut names = match (app.session.active(), checked.len()) {
+        (_, 1) => vec![name],
+        (Some(st), _) => fileio::artboard_file_names(&st.doc, &checked).into_iter().map(|b| format!("{stem}-{b}.ai")).collect(),
+        (None, _) => vec![],
+    }
+    .into_iter();
+    boards.iter().map(|on| if *on { names.next() } else { None }).collect()
+}
+
+/// `text` as it fits in `width` with `font`: whole, else its start cut short before its last
+/// `tail` characters ("desktop-i…-Artboard-1.ai"), else as much of its end as fits.
+fn elide_before_tail(ui: &egui::Ui, text: &str, tail: usize, font: &egui::FontId, width: f32) -> String {
+    let fits = |s: &str| ui.painter().layout_no_wrap(s.to_string(), font.clone(), egui::Color32::WHITE).size().x <= width;
+    if fits(text) {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let split = chars.len().saturating_sub(tail);
+    let (head, end) = chars.split_at(split);
+    let end: String = end.iter().collect();
+    for p in (1..head.len()).rev() {
+        let s = format!("{}…{end}", head.iter().take(p).collect::<String>());
+        if fits(&s) {
+            return s;
+        }
+    }
+    for k in (1..=chars.len()).rev() {
+        let s = format!("…{}", chars.iter().skip(chars.len() - k).collect::<String>());
+        if fits(&s) {
+            return s;
+        }
+    }
+    "…".into()
+}
+
+/// Legacy `.ai`: the artboards to save, as thumbnails to check; each is saved as a file of its own.
+fn artboard_picker(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    const TILE: egui::Vec2 = egui::vec2(116.0, 84.0);
+    let t = Tokens::get(ui.ctx());
+    let names: Vec<String> = app.session.active().map(|st| st.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
+    let n = names.len();
+    let mut boards = picked_boards(d, n);
+    let before = boards.clone();
+    ui.add_space(10.0);
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(tl!("A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.")).color(t.text_dim),
+        )
+        .wrap(),
+    );
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        if ui.small_button(tl!("Select All")).clicked() {
+            boards.iter_mut().for_each(|b| *b = true);
+        }
+        if ui.small_button(tl!("Clear")).clicked() {
+            boards.iter_mut().for_each(|b| *b = false);
+        }
+        let checked = boards.iter().filter(|b| **b).count();
+        let (count, total) = (checked.to_string(), n.to_string());
+        let text = crate::i18n::fmt(tl!("{count} of {total} artboards"), &[("count", &count), ("total", &total)]);
+        ui.label(egui::RichText::new(text).color(if checked == 0 { t.warning } else { t.text_dim }));
+        if checked == 0 {
+            ui.label(egui::RichText::new(tl!("Check an artboard to save.")).color(t.warning));
+        }
+    });
+    ui.add_space(4.0);
+    let files = board_files(app, d, &boards);
+    let stem = std::path::Path::new(d.str("path").trim()).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    egui::ScrollArea::vertical().max_height(330.0).show(ui, |ui| {
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true), |ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(10.0, 10.0);
+            for (i, name) in names.iter().enumerate() {
+                let on = boards.get(i).copied().unwrap_or(false);
+                ui.allocate_ui(egui::vec2(TILE.x, TILE.y + 44.0), |ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(TILE.x);
+                        let (r, resp) = ui.allocate_exact_size(TILE, egui::Sense::click());
+                        ui.painter().rect_filled(r, 3.0, t.pasteboard);
+                        let inner = r.shrink(6.0);
+                        match super::export_for_screens::artboard_thumb(app, ui.ctx(), i) {
+                            Some(tex) => {
+                                let sz = tex.size_vec2();
+                                let s = (inner.width() / sz.x).min(inner.height() / sz.y).min(1.0);
+                                let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+                                ui.painter().image(tex.id(), egui::Rect::from_center_size(inner.center(), sz * s), uv, egui::Color32::WHITE);
+                            }
+                            None => {
+                                ui.painter().rect_filled(inner, 0.0, egui::Color32::WHITE);
+                            }
+                        }
+                        let stroke = if on { egui::Stroke::new(2.0, t.accent) } else { egui::Stroke::new(1.0, t.border) };
+                        ui.painter().rect_stroke(r, 3.0, stroke, egui::StrokeKind::Inside);
+                        let mut flip = resp.on_hover_text(name.as_str()).clicked();
+                        flip |= widgets::check_name(ui, name, on);
+                        let file = files.get(i).cloned().flatten().unwrap_or_default();
+                        // The end tells the files apart: the start gives way first.
+                        let font = egui::TextStyle::Small.resolve(ui.style());
+                        let tail = file.strip_prefix(stem.as_str()).map_or(0, |t| t.chars().count());
+                        let shown = elide_before_tail(ui, &file, tail, &font, TILE.x);
+                        let label = ui.add(egui::Label::new(egui::RichText::new(&shown).small().color(t.text_dim)));
+                        if shown != file {
+                            label.on_hover_text(file);
+                        }
+                        if flip && let Some(b) = boards.get_mut(i) {
+                            *b ^= true;
+                        }
+                    });
+                });
+            }
+        });
+    });
+    if boards != before || !d.fields.contains_key("boards") {
+        d.fields.insert("boards".into(), json!(boards));
+    }
+}
+
+/// One option: a checkbox, an artboard menu, a version menu, a number or a text field.
 fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &FormatOption) {
     let t = Tokens::get(ui.ctx());
     let label = label(o);
     let value = d.fields.get(o.name).cloned().unwrap_or(Value::Null);
+    if o.name == "aiVersion" {
+        ui.label(egui::RichText::new(tl!("Version:")).color(t.text_dim)).on_hover_text(o.description);
+        let versions = [tl!("PDF-compatible"), tl!("Legacy (version 7)")];
+        let at = usize::from(legacy_ai(d));
+        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), versions.get(at).copied().unwrap_or_default(), &versions, 254.0) {
+            d.fields.insert(o.name.into(), json!(if i == 1 { "7" } else { "pdf" }));
+        }
+        ui.end_row();
+        return;
+    }
+    if o.name == "transparentImages" {
+        ui.label(egui::RichText::new(tl!("Transparent Images:")).color(t.text_dim)).on_hover_text(o.description);
+        let choices = [tl!("Flatten"), tl!("Omit")];
+        let at = usize::from(d.str("transparentImages").trim().eq_ignore_ascii_case("omit"));
+        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), choices.get(at).copied().unwrap_or_default(), &choices, 254.0) {
+            d.fields.insert(o.name.into(), json!(if i == 1 { "omit" } else { "flatten" }));
+        }
+        ui.end_row();
+        return;
+    }
     if o.ty == "boolean" {
         ui.label("");
         let on = value.as_bool().unwrap_or(false);
@@ -216,7 +403,18 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         .iter()
         .filter_map(|o| d.fields.get(o.name).filter(|v| !v.is_null() && v.as_str() != Some("")).map(|v| (o.name.to_string(), v.clone())))
         .collect();
-    if separates(f) {
+    if legacy_ai(d) {
+        // The artboards checked in the picker (all of them: no range).
+        options.remove("range");
+        let n = app.session.active().map_or(0, |s| s.doc.artboards.len());
+        let boards = picked_boards(d, n);
+        if !boards.iter().any(|b| *b) {
+            return Err(tl!("Check an artboard to save.").into());
+        }
+        if !boards.iter().all(|b| *b) {
+            options.insert("range".into(), json!(super::export_for_screens::range_text(&boards)));
+        }
+    } else if separates(f) {
         if !d.bool("separateArtboards") || all_artboards(d) {
             options.remove("range");
         } else {
@@ -333,6 +531,115 @@ mod tests {
         app.run("file.save", json!({})).unwrap();
         assert!(app.ui.dialog.is_none() && picks.borrow().len() == 1);
         assert!(written.borrow()[1].1.starts_with(b"<?xml"));
+    }
+
+    #[test]
+    fn save_as_ai_version_7_writes_a_file_per_artboard() {
+        let (mut app, written, _) = desktop("art.ai");
+        app.run("artboard.new", json!({"x": 200, "y": 0, "width": 100, "height": 80, "name": "Back"})).unwrap();
+        assert_eq!(app.run("file.saveAs", json!({})).unwrap()["pending"], KIND);
+        assert_eq!(dialog(&app).str("aiVersion"), "pdf", "PDF-compatible unless asked");
+        assert_eq!(dialog(&app).str("transparentImages"), "flatten");
+        frame(&mut app, false);
+        app.ui.dialog.as_mut().unwrap().fields.insert("aiVersion".into(), json!("7"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("transparentImages".into(), json!("omit"));
+        frame(&mut app, false);
+        frame(&mut app, true);
+        assert!(app.ui.dialog.is_none());
+        let names: Vec<String> = written.borrow().iter().map(|(p, _)| p.clone()).collect();
+        assert_eq!(names, ["art-Artboard-1.ai", "art-Back.ai"]);
+        assert!(written.borrow().iter().all(|(_, b)| b.starts_with(b"%!PS")));
+        let st = app.session.active().unwrap();
+        assert_eq!((st.format, st.save_options["aiVersion"].clone()), ("ai", json!("7")), "Save remembers the version");
+        assert_eq!(st.save_options["transparentImages"], json!("omit"));
+    }
+
+    /// An Illustrator file opened, then saved as `.ai`: the options dialog stays open through the
+    /// Enter that closed the save panel, and only an Enter after it is let go confirms it.
+    #[test]
+    fn legacy_ai_saves_the_artboards_checked_in_its_picker() {
+        let (mut app, written, _) = desktop("art.ai");
+        for (i, name) in ["Back", "Side", "Top"].iter().enumerate() {
+            let x = 200.0 * (i + 1) as f64;
+            app.run("artboard.new", json!({"x": x, "y": 0, "width": 100, "height": 80 + 20 * i, "name": name})).unwrap();
+            app.run("shape.ellipse", json!({"x": x + 10.0, "y": 10, "width": 40, "height": 40})).unwrap();
+        }
+        app.run("file.saveAs", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("aiVersion".into(), json!("7"));
+        frame(&mut app, false);
+        assert_eq!(dialog(&app).fields["boards"], json!([true, true, true, true]), "every artboard to start with");
+        if let Some(dir) = std::env::var_os("CRAFT_UI_SAVE_OPTIONS_SHOT") {
+            let mut ready = false;
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 760.0)).wgpu().build_ui_state(
+                move |ui, app: &mut VectorcraftApp| {
+                    if !ready {
+                        theme::install_fonts(ui.ctx());
+                        theme::apply(ui.ctx(), theme::Brightness::MediumDark);
+                        ready = true;
+                        return;
+                    }
+                    super::super::show(app, ui.ctx());
+                },
+                app,
+            );
+            h.run_steps(6);
+            h.render().unwrap().save(std::path::Path::new(&dir).join("legacy-ai-picker.png")).unwrap();
+            let fields = &mut h.state_mut().ui.dialog.as_mut().unwrap().fields;
+            fields.insert("path".into(), json!("desktop-ideas1-vc5.ai"));
+            fields.insert("boards".into(), json!([false, false, false, false]));
+            h.run_steps(2);
+            h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("boards".into(), json!([true, true, false, true]));
+            h.run_steps(2);
+            h.render().unwrap().save(std::path::Path::new(&dir).join("legacy-ai-picker-long.png")).unwrap();
+            h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("boards".into(), json!([false, false, false, false]));
+            h.run_steps(2);
+            h.render().unwrap().save(std::path::Path::new(&dir).join("legacy-ai-picker-none.png")).unwrap();
+            app = h.into_state();
+            app.ui.dialog.as_mut().unwrap().fields.insert("path".into(), json!("art.ai"));
+        }
+        // Clearing them all keeps the dialog open.
+        app.ui.dialog.as_mut().unwrap().fields.insert("boards".into(), json!([false, false, false, false]));
+        let d = dialog(&app).clone();
+        assert!(!can_save(&app, &d), "OK is greyed out");
+        frame(&mut app, true);
+        assert!(app.ui.dialog.is_some(), "Enter does nothing");
+        assert!(confirm(&mut app, &d).is_err());
+        assert!(written.borrow().is_empty());
+        app.ui.dialog.as_mut().unwrap().fields.insert("boards".into(), json!([true, false, true, false]));
+        frame(&mut app, true);
+        assert!(app.ui.dialog.is_none());
+        let names: Vec<String> = written.borrow().iter().map(|(p, _)| p.clone()).collect();
+        assert_eq!(names, ["art-Artboard-1.ai", "art-Side.ai"]);
+        assert_eq!(board_files_of(&app, [true, false, true, false]), [Some("art-Artboard-1.ai".into()), None, Some("art-Side.ai".into()), None]);
+        assert_eq!(board_files_of(&app, [false, true, false, false]), [None, Some("art.ai".into()), None, None], "one: the file itself");
+        // Save As again starts from the artboards saved.
+        assert_eq!(app.session.active().unwrap().save_options["range"], json!("1, 3"));
+        app.run("file.saveAs", json!({})).unwrap();
+        frame(&mut app, false);
+        assert_eq!(dialog(&app).fields["boards"], json!([true, false, true, false]));
+    }
+
+    fn board_files_of(app: &VectorcraftApp, boards: [bool; 4]) -> Vec<Option<String>> {
+        let d = Dialog { kind: KIND.into(), fields: [("path".to_string(), json!("art.ai"))].into_iter().collect() };
+        board_files(app, &d, &boards)
+    }
+
+    #[test]
+    fn the_enter_that_closed_the_save_panel_does_not_confirm_the_options() {
+        let (mut app, written, _) = desktop("again.ai");
+        let dir = vectorcraft_testkit::temp_dir("ai-options-enter");
+        let orig = dir.join("orig.ai");
+        std::fs::write(&orig, vectorcraft_testkit::ai::ai(&vectorcraft_testkit::ai::sample_data(), vectorcraft_testkit::ai::page_pdf())).unwrap();
+        app.run("document.open", json!({"path": orig.to_string_lossy()})).unwrap();
+        assert_eq!(app.run("file.saveAs", json!({})).unwrap()["pending"], KIND);
+        frame(&mut app, true);
+        assert!(app.ui.dialog.is_some(), "the panel's Enter doesn't confirm it");
+        assert!(written.borrow().is_empty());
+        // Let go, then pressed again: OK.
+        frame(&mut app, false);
+        frame(&mut app, true);
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(written.borrow()[0].0, "again.ai");
     }
 
     #[test]
