@@ -447,6 +447,9 @@ pub struct Renderer {
     /// Clip paths pushed on the current context (path, rule, transform): starting the context
     /// again from a picture of it pushes them again (see [`Self::group`]).
     clip_paths: Vec<(BezPath, FillRule, Affine)>,
+    /// The picture [`Self::flatten`] started the current context again from, with 8-bit
+    /// compositing: [`Self::finish`] renders the context over it.
+    picture: Option<Arc<Pixmap>>,
     /// What clipping paths paint, per clipping path (see [`Self::clip_paint_of`]).
     clip_paints: FrameCache<usize, ClipPaintEntry>,
     /// Gradients along or across strokes (see [`Self::fill_path_gradient`]), keyed by
@@ -555,6 +558,7 @@ impl Renderer {
             backdrop: None,
             blends: PtrMap::default(),
             clip_paths: vec![],
+            picture: None,
             clip_paints: FrameCache::new(lru::CLIP_BUDGET, 256),
             stroke_slices: PtrMap::default(),
             adjusts: HashMap::new(),
@@ -687,7 +691,7 @@ impl Renderer {
                 ctx.fill_rect(&ab.rect);
             }
         }
-        (self.nested, self.backdrop) = (0, None);
+        (self.nested, self.backdrop, self.picture) = (0, None, None);
         self.clip_paths.clear();
         if opts.trim && !f.doc.artboards.is_empty() {
             let mut clip = BezPath::new();
@@ -700,9 +704,7 @@ impl Renderer {
         } else {
             self.draw_page(&mut ctx, f);
         }
-        ctx.flush();
-        let mut pm = Pixmap::new(w, h);
-        ctx.render_with(&mut pm, &mut self.resources, self.raster);
+        let pm = self.finish(&mut ctx, self.raster);
         if threads == 0 {
             self.ctx_st = Some(ctx);
         } else {
@@ -775,12 +777,10 @@ impl Renderer {
         let opts = RenderOptions::default();
         let frame = Frame { mt: false, doc, view, visible, px, opts: &opts, ink: Ink::Display };
         self.begin_frame();
-        (self.knockout, self.nested, self.backdrop) = (false, 0, None);
+        (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
         self.draw_arc(&mut ctx, &frame, n);
-        ctx.flush();
-        let mut pm = Pixmap::new(w, h);
-        ctx.render(&mut pm, &mut self.resources);
+        let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
         self.end_frame();
         Some(Rendered { width: w as u32, height: h as u32, pixels: pm.data_as_u8_slice().to_vec() })
     }
@@ -816,12 +816,10 @@ impl Renderer {
         }
         let frame = Frame { mt: false, doc, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts, ink: Ink::Display };
         self.begin_frame();
-        (self.knockout, self.nested, self.backdrop) = (false, 0, None);
+        (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
         self.draw_node(&mut ctx, &frame, n, true);
-        ctx.flush();
-        let mut pm = Pixmap::new(w, w);
-        ctx.render(&mut pm, &mut self.resources);
+        let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
         self.end_frame();
         Some(Rendered { width: size, height: size, pixels: pm.data_as_u8_slice().to_vec() })
     }
@@ -948,13 +946,16 @@ impl Renderer {
         let mut mctx = f.offscreen_context(w, h);
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
         // and its luminance is that of its screen colours.
-        let outer =
-            (std::mem::take(&mut self.knockout), std::mem::take(&mut self.nested), self.backdrop.take(), std::mem::take(&mut self.clip_paths));
+        let outer = (
+            std::mem::take(&mut self.knockout),
+            std::mem::take(&mut self.nested),
+            self.backdrop.take(),
+            std::mem::take(&mut self.clip_paths),
+            self.picture.take(),
+        );
         self.draw_node(&mut mctx, &Frame { mt: false, ink: Ink::Display, ..*f }, &m.art, true);
-        (self.knockout, self.nested, self.backdrop, self.clip_paths) = outer;
-        mctx.flush();
-        let mut pm = Pixmap::new(w, h);
-        mctx.render_with(&mut pm, &mut self.resources, self.raster);
+        let pm = self.finish(&mut mctx, self.raster);
+        (self.knockout, self.nested, self.backdrop, self.clip_paths, self.picture) = outer;
         pm.data().iter().map(|p| mask_value(p.r, p.g, p.b, p.a, m.clip, m.invert)).collect()
     }
 
