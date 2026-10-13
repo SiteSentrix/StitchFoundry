@@ -365,6 +365,16 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     ] {
         if ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
             let r = app.session.tool_key(tk, crate::canvas::mods(m, false), view);
+            // Keyboard actions can change the Artboard tool's active board too. Keep the
+            // navigator aligned with its valid survivor, as pointer dispatch does.
+            if r.is_ok()
+                && app.session.tool_id() == "artboard"
+                && let Some(i) = app.session.tool_options()["active"].as_u64().and_then(|i| usize::try_from(i).ok())
+                && app.session.active().is_some_and(|d| i < d.doc.artboards.len())
+                && let Some(v) = app.view_mut()
+            {
+                v.artboard = i;
+            }
             crate::canvas::apply_requests(app, r);
             return;
         }
