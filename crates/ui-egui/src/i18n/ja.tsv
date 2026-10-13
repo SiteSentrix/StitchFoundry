@@ -4972,3 +4972,6 @@ machine	Stop	停止
 	PIN	PIN
 	Leave Kiosk	キオスクを終了
 	Leaving the kiosk will take this PIN	キオスクを終了するにはこの PIN が必要になります
+	Snapback	スナップバック
+	Trucker cap	トラッカーキャップ
+	Dad cap	ダッドキャップ

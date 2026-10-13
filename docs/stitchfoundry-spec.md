@@ -333,7 +333,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | CW-02 | Name design elements | Done | Layers/object names | – |
 | CW-03 | Split colour blocks (same colour, separate stops) | Done | *Own colour block* (`ownBlock`): a colour change before the object even in the same colour, kept in machine files | 0 |
 | CW-04 | Backgrounds (fabric colour, garment image) | Done | Fabric colour; **Garment Photo** (`embroidery.background`): a photo life size behind the design on a locked template layer, never stitched | 0 |
-| CW-05 | Product visualizer (design on a garment mockup) | Done | `embroidery.visualize`: life size on a T-shirt, polo, hoodie, cap, tote or towel drawn in its colour at the usual placement (back view for back placements), or on the customer's photo; too-wide designs warned of | 0 |
+| CW-05 | Product visualizer (design on a garment mockup) | Done | `embroidery.visualize`: life size on a T-shirt, polo, hoodie, cap (ball cap, snapback, trucker or dad cap), tote or towel drawn in its colour at the usual placement (back view for back placements), or on the customer's photo; too-wide designs warned of | 0 |
 | CW-06 | Change colour schemes (recolour design) | Done | `embroidery.recolor`: threads changed by a colour map or a scheme (hue turn, one hue, grey, inverted), matched to a chart, art repainted, one undo; colorways keep schemes side by side | 0 |
 
 ### 6.6 Combine, sequence, transform, reshape

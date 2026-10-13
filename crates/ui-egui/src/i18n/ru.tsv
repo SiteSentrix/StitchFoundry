@@ -4974,3 +4974,6 @@ machine	Stop	Остановка
 	PIN	PIN-код
 	Leave Kiosk	Выйти из киоска
 	Leaving the kiosk will take this PIN	Для выхода из киоска понадобится этот PIN-код
+	Snapback	Снэпбек
+	Trucker cap	Кепка-тракер
+	Dad cap	Мягкая кепка
