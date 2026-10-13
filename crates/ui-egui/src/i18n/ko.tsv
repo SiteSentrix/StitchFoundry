@@ -664,6 +664,7 @@
 	Hide Print Tiling	인쇄 타일링 숨기기
 	Unlock Grid	격자 잠금 해제
 	Edit Envelope	엔벨로프 편집
+	Auto Color	자동 색상
 	Automatic	자동
 	Isolate Selected Group	선택한 그룹 격리
 	Exit Isolation Mode	격리 모드 종료
@@ -1476,6 +1477,7 @@
 	Identify Objects By	개체 식별 기준
 	Ignore	무시
 	Ignore Artboards (all the art as one page)	아트보드 무시 (모든 아트웍을 한 페이지로)
+	Ignore Color	색상 무시
 	Ignore White	흰색 무시
 	Palette:	팔레트:
 	Limited	제한
@@ -3218,6 +3220,7 @@
 	Yellow	노랑
 	[Normal Character Style]	[기본 문자 스타일]
 	[Normal Paragraph Style]	[기본 단락 스타일]
+imageTrace	Outline	윤곽선
 @plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)|색상 표 ({n}색)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?|그래픽 스타일 {n}개를 삭제하시겠습니까?
 @plural	{n} Layer|{n} Layers	레이어 {n}개|레이어 {n}개

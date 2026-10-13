@@ -666,6 +666,7 @@
 	Hide Print Tiling	プリント分割を隠す
 	Unlock Grid	グリッドをロック解除
 	Edit Envelope	エンベロープを編集
+	Auto Color	自動カラー
 	Automatic	自動
 	Isolate Selected Group	選択したグループを分離
 	Exit Isolation Mode	分離モードを終了
@@ -1481,6 +1482,7 @@
 	Identify Objects By	オブジェクトの識別方法
 	Ignore	無視
 	Ignore Artboards (all the art as one page)	アートボードを無視 (すべてのアートを 1 ページとして扱う)
+	Ignore Color	カラーを無視
 	Ignore White	白を無視
 	Palette:	パレット:
 	Limited	限定
@@ -3225,6 +3227,7 @@
 	Yellow	イエロー
 	[Normal Character Style]	[標準文字スタイル]
 	[Normal Paragraph Style]	[標準段落スタイル]
+imageTrace	Outline	アウトライン
 @plural	Color Table ({n} color)|Color Table ({n} colors)	カラーテーブル ({n} 色)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	{n} 個のグラフィックスタイルを削除しますか？
 @plural	{n} Layer|{n} Layers	{n} レイヤー

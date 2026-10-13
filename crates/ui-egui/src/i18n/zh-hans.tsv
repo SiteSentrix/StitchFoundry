@@ -205,6 +205,7 @@
 	Author Title:	作者职务：
 	Author:	作者：
 	Auto	自动
+	Auto Color	自动颜色
 	Automatic	自动
 	Auto Size New Area Type	自动调整新区域文字大小
 	Auto Spell Check	自动拼写检查
@@ -1189,6 +1190,7 @@
 	Identify Objects By	对象识别方式
 	Ignore	忽略
 	Ignore Artboards (all the art as one page)	忽略画板 (所有图稿作为一页)
+	Ignore Color	忽略颜色
 	Ignore White	忽略白色
 	Palette:	调板：
 	Limited	有限
@@ -3129,6 +3131,7 @@
 	{warning}: click to correct to the closest color ({hex})	{warning}：单击以修正为最接近的颜色 ({hex})
 	“{file}” is protected by a password.	“{file}”受密码保护。
 	● Recording	● 录制中
+imageTrace	Outline	轮廓
 @plural	{n} item|{n} items	{n} 个项目
 @plural	Color Table ({n} color)|Color Table ({n} colors)	颜色表 ({n} 色)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	要删除这 {n} 个图形样式吗？

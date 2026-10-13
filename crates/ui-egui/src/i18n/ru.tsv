@@ -245,6 +245,7 @@
 	Author Title:	Должность автора:
 	Author:	Автор:
 	Auto	Авто
+	Auto Color	Автоцвет
 	Automatic	Автоматически
 	Auto Size New Area Type	Автоматически подгонять размер нового текста в области
 	Auto Spell Check	Автоматическая проверка орфографии
@@ -1241,6 +1242,7 @@
 	Identify Objects By	Определять объекты по
 	Ignore	Игнорировать
 	Ignore Artboards (all the art as one page)	Игнорировать монтажные области (весь рисунок как одна страница)
+	Ignore Color	Игнорировать цвет
 	Ignore White	Игнорировать белый
 	Palette:	Палитра:
 	Limited	Ограниченная
@@ -3232,6 +3234,7 @@
 	{warning}: click to correct to the closest color ({hex})	{warning}: щёлкните для исправления на ближайший цвет ({hex})
 	“{file}” is protected by a password.	«{file}» защищён паролем.
 	● Recording	● Запись
+imageTrace	Outline	Контур
 @plural	{n} item|{n} items	{n} элемент|{n} элемента|{n} элементов
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Цветовая таблица ({n} цвет)|Цветовая таблица ({n} цвета)|Цветовая таблица ({n} цветов)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Удалить этот графический стиль ({n})?|Удалить эти графические стили ({n})?|Удалить эти графические стили ({n})?

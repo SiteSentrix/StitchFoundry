@@ -621,6 +621,7 @@
 	VectorCraft on GitHub	VectorCraft na GitHubu
 	Search Commands…	Hledat příkazy…
 	VectorCraft Help…	Nápověda VectorCraft…
+	Auto Color	Automatická barva
 	Automatic	Automaticky
 	Isolate Selected Group	Izolovat vybranou skupinu
 	Exit Isolation Mode	Ukončit izolovaný režim
@@ -1424,6 +1425,7 @@ lighting	Light	Světlo
 	Abutting	Sousedící
 	Black and White	Černobílé
 	Corners	Rohy
+	Ignore Color	Ignorovat barvu
 	Ignore White	Ignorovat bílou
 	Palette:	Paleta:
 	Limited	Omezená
@@ -3660,6 +3662,7 @@ effect	Regular	Pravidelný
 	Stroke Pressure	Tlak tahu
 
 # Plurals: one|few|other
+imageTrace	Outline	Obrys
 @plural	{n} item|{n} items	{n} položka|{n} položky|{n} položek
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Tabulka barev ({n} barva)|Tabulka barev ({n} barvy)|Tabulka barev ({n} barev)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Odstranit {n} grafický styl?|Odstranit {n} grafické styly?|Odstranit {n} grafických stylů?

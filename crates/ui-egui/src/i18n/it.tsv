@@ -247,6 +247,7 @@
 	Author Title:	Qualifica dell'autore:
 	Author:	Autore:
 	Auto	Auto
+	Auto Color	Colore automatico
 	Automatic	Automatico
 	Auto Size New Area Type	Dimensionamento automatico del nuovo testo in area
 	Auto Spell Check	Controllo ortografico automatico
@@ -1243,6 +1244,7 @@
 	Identify Objects By	Identifica oggetti per
 	Ignore	Ignora
 	Ignore Artboards (all the art as one page)	Ignora tavole da disegno (tutta la grafica come una sola pagina)
+	Ignore Color	Ignora colore
 	Ignore White	Ignora bianco
 	Palette:	Palette:
 	Limited	Limitata
@@ -3236,6 +3238,7 @@
 	{warning}: click to correct to the closest color ({hex})	{warning}: fai clic per correggere con il colore più vicino ({hex})
 	“{file}” is protected by a password.	“{file}” è protetto da password.
 	● Recording	● Registrazione in corso
+imageTrace	Outline	Contorno
 @plural	{n} item|{n} items	{n} elemento|{n} elementi
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Tabella colori ({n} colore)|Tabella colori ({n} colori)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Eliminare {n} stile grafico?|Eliminare questi {n} stili grafici?

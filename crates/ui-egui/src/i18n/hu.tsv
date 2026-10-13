@@ -360,6 +360,7 @@
 	Auto Spell Check	Automatikus helyesírás-ellenőrzés
 	Auto-Collapse Iconic Panels	Ikonpanelek automatikus becsukása
 	Auto-Rotate (turn the paper to each artboard)	Automatikus elforgatás (a papír igazodik minden rajztáblához)
+	Auto Color	Automatikus szín
 	Automatic	Automatikus
 	Automatic flatness	Automatikus simaság
 	Automatically	Automatikusan
@@ -1608,6 +1609,7 @@
 	Identify Objects By	Objektumok azonosítása
 	Ignore	Kihagy
 	Ignore Artboards (all the art as one page)	Rajztáblák figyelmen kívül hagyása (az összes grafika egy oldalon)
+	Ignore Color	Szín figyelmen kívül hagyása
 	Ignore White	Fehér figyelmen kívül hagyása
 	Image	Kép
 	Image Info	Kép adatai
@@ -3935,6 +3937,7 @@ lighting	Light	Fény
 theme	Appearance	Kinézet
 
 # Plurals: one|other
+imageTrace	Outline	Körvonal
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Színtábla ({n} szín)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	{n} grafikai stílus törlése?
 @plural	{n} area highlighted|{n} areas highlighted	Kiemelt terület: {n}

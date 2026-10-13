@@ -241,6 +241,7 @@
 	Author Title:	Посада автора:
 	Author:	Автор:
 	Auto	Авто
+	Auto Color	Автоколір
 	Automatic	Автоматично
 	Auto Size New Area Type	Автоматично підганяти розмір нового тексту в області
 	Auto Spell Check	Автоматична перевірка орфографії
@@ -1237,6 +1238,7 @@
 	Identify Objects By	Визначати об’єкти по
 	Ignore	Ігнорувати
 	Ignore Artboards (all the art as one page)	Ігнорувати монтажні області (весь малюнок як одна сторінка)
+	Ignore Color	Ігнорувати колір
 	Ignore White	Ігнорувати білий
 	Palette:	Палітра:
 	Limited	Обмежена
@@ -3229,6 +3231,7 @@ effect	Points	Точки
 	{warning}: click to correct to the closest color ({hex})	{warning}: натисніть , щоб виправити найближчий колір ({hex})
 	“{file}” is protected by a password.	"{file}" захищений паролем.
 	● Recording	● Запис
+imageTrace	Outline	Контур
 @plural	{n} item|{n} items	{n} елемент|{n} елементи|{n} елементів
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Таблиця кольорів ({n} колір)|Таблиця кольорів ({n} кольори)|Таблиця кольорів ({n} кольорів)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Видалити цей графічний стиль ({n})?|Видалити ці графічні стилі ({n})?|Видалити ці графічні стилі ({n})?

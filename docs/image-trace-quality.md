@@ -1,6 +1,6 @@
 # Image Trace quality
 
-> **Last reviewed:** 2026-10-13 · **Last updated:** 2026-10-13 · **Change:** minor (thin lines in blurred and scanned art: Line Art 78 anchors to 46, 0.093 px off to 0.055)
+> **Last reviewed:** 2026-10-13 · **Last updated:** 2026-10-13 · **Change:** minor (two documented presets, Auto Color and Outline, measured; Ignore Color)
 
 What Image Trace (`crates/trace`) makes of images whose right answer is known, measured by a harness and
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
@@ -72,11 +72,12 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Technical Drawing | polygons, star, letter A, lines | 2.66 | 13.45 | 0.201 | 1.37 | 105.76 | 4.8 | 32 | 2.23 | 100 | 85 | 5.9 | – | – | – | – | 0.1 | 0.0 |
 | Flat Logo | two touching halves, four-colour badge | 0.43 | 3.53 | 3.106 | 88.50 | 0.78 | 69.9 | 352 | 38.92 | 38 | 80 | 237.0 | 0.0 | 0 | 13.8 | – | 59.1 | 0.2 |
 
-### Now (sub-pixel edges, the palette, photo smoothing, shared edges, memory, thin lines)
+### Now (sub-pixel edges, the palette, photo smoothing, shared edges, memory, thin lines, two more presets)
 
 | preset | inputs | ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px |
 |:--|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | Default | circle, ellipses, badge with a hole, letter D, polygons, star, letter A | 2.60 | 10.02 | 0.090 | 1.02 | 2.22 | 1.9 | 17 | 1.74 | 29 | 69 | 0.4 | – | – | 0.5 | 0.6 | 0.0 | 0.0 |
+| Auto Color | two touching halves, four-colour badge | 0.55 | 4.98 | 0.140 | 1.33 | 1.21 | 4.0 | 53 | 3.28 | 38 | 86 | 5.1 | 0.0 | 0 | 1.4 | 1.1 | 0.0 | 0.0 |
 | High Fidelity Photo | gradient, photo-like | 1.75 | 1.97 | – | – | – | 120.7 | 10001 | – | 38 | – | – | – | – | 0.0 | – | 10.3 | 0.0 |
 | Low Fidelity Photo | gradient, photo-like | 2.45 | 2.69 | – | – | – | 37.1 | 2118 | – | 41 | – | – | – | – | 0.0 | – | 0.0 | 0.0 |
 | 3 Colors | two touching halves | 0.42 | 3.98 | 0.104 | 0.91 | 0.91 | 2.0 | 11 | 1.81 | 39 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
@@ -88,9 +89,10 @@ Each preset on the inputs it is meant for, all sizes and variants.
 | Silhouettes | circle, ellipses, badge with a hole, letter D | 2.98 | 19.28 | 0.524 | 2.19 | 2.18 | 1.2 | 14 | 1.65 | 11 | 79 | 0.3 | – | – | – | – | 0.0 | 0.0 |
 | Line Art | lines | 2.62 | 9.44 | 0.055 | 0.96 | 105.82 | 5.4 | 46 | 2.29 | 41 | – | – | – | – | – | – | 0.1 | 0.0 |
 | Technical Drawing | polygons, star, letter A, lines | 2.54 | 9.65 | 0.084 | 1.02 | 105.82 | 4.8 | 46 | 3.23 | 71 | 73 | 0.8 | – | – | – | – | 1.2 | 0.0 |
+| Outline | lines | 2.93 | 15.91 | 0.310 | 1.84 | 106.00 | 5.0 | 81 | 4.03 | 15 | – | – | – | – | – | – | 0.0 | 0.0 |
 | Flat Logo | two touching halves, four-colour badge | 0.43 | 3.53 | 3.106 | 88.50 | 0.78 | 69.9 | 352 | 38.92 | 38 | 80 | 237.0 | 0.0 | 0 | 13.8 | – | 59.1 | 0.2 |
 
-The sections below are the numbers now (sub-pixel edges, the palette, photo smoothing, shared edges, memory, thin lines).
+The sections below are the numbers now (sub-pixel edges, the palette, photo smoothing, shared edges, memory, thin lines, two more presets).
 
 ## 1. Each preset on the inputs it is meant for
 
@@ -99,6 +101,7 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | preset | inputs | ΔE | edge ΔE | off mean | off max | missed max | paths | anchors | × art | lines % | corners % | kinks | odd colours | odd px | gap px | overlap px | specks | outside px |
 |:--|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | Default | circle, ellipses, badge with a hole, letter D, polygons, star, letter A | 2.60 | 10.02 | 0.090 | 1.02 | 2.22 | 1.9 | 17 | 1.74 | 29 | 69 | 0.4 | – | – | 0.5 | 0.6 | 0.0 | 0.0 |
+| Auto Color | two touching halves, four-colour badge | 0.55 | 4.98 | 0.140 | 1.33 | 1.21 | 4.0 | 53 | 3.28 | 38 | 86 | 5.1 | 0.0 | 0 | 1.4 | 1.1 | 0.0 | 0.0 |
 | High Fidelity Photo | gradient, photo-like | 1.75 | 1.97 | – | – | – | 120.7 | 10001 | – | 38 | – | – | – | – | 0.0 | – | 10.3 | 0.0 |
 | Low Fidelity Photo | gradient, photo-like | 2.45 | 2.69 | – | – | – | 37.1 | 2118 | – | 41 | – | – | – | – | 0.0 | – | 0.0 | 0.0 |
 | 3 Colors | two touching halves | 0.42 | 3.98 | 0.104 | 0.91 | 0.91 | 2.0 | 11 | 1.81 | 39 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
@@ -110,6 +113,7 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Silhouettes | circle, ellipses, badge with a hole, letter D | 2.98 | 19.28 | 0.524 | 2.19 | 2.18 | 1.2 | 14 | 1.65 | 11 | 79 | 0.3 | – | – | – | – | 0.0 | 0.0 |
 | Line Art | lines | 2.62 | 9.44 | 0.055 | 0.96 | 105.82 | 5.4 | 46 | 2.29 | 41 | – | – | – | – | – | – | 0.1 | 0.0 |
 | Technical Drawing | polygons, star, letter A, lines | 2.54 | 9.65 | 0.084 | 1.02 | 105.82 | 4.8 | 46 | 3.23 | 71 | 73 | 0.8 | – | – | – | – | 1.2 | 0.0 |
+| Outline | lines | 2.93 | 15.91 | 0.310 | 1.84 | 106.00 | 5.0 | 81 | 4.03 | 15 | – | – | – | – | – | – | 0.0 | 0.0 |
 | Flat Logo | two touching halves, four-colour badge | 0.43 | 3.53 | 3.106 | 88.50 | 0.78 | 69.9 | 352 | 38.92 | 38 | 80 | 237.0 | 0.0 | 0 | 13.8 | – | 59.1 | 0.2 |
 
 ## 2. Each preset on each kind of input (clean, three sizes)
@@ -121,6 +125,11 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Default | thin lines | 0.53 | 4.28 | 0.045 | 0.47 | 105.51 | 3.3 | 23 | 1.15 | 48 | – | – | – | – | 0.0 | 0.0 | 0.0 | 0.0 |
 | Default | flat colour art | 19.91 | 17.97 | 0.172 | 0.51 | 179.34 | 1.5 | 16 | 1.17 | 14 | 0 | 0.0 | – | – | 0.0 | 0.0 | 0.0 | 0.0 |
 | Default | gradient, photo | 39.03 | 38.65 | – | – | – | 3.2 | 601 | – | 54 | – | – | – | – | 19.1 | 38.4 | 0.0 | 0.0 |
+| Auto Color | curved shapes | 0.06 | 2.45 | 0.043 | 0.27 | 0.28 | 1.8 | 17 | 1.78 | 15 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Auto Color | polygons | 0.05 | 2.09 | 0.035 | 0.51 | 1.34 | 2.0 | 15 | 1.33 | 88 | 89 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Auto Color | thin lines | 0.69 | 5.23 | 0.057 | 0.48 | 105.59 | 5.0 | 33 | 1.63 | 57 | – | – | 4.0 | 3216 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Auto Color | flat colour art | 0.12 | 2.70 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Auto Color | gradient, photo | 2.07 | 2.38 | – | – | – | 159.3 | 4430 | – | 19 | – | – | – | – | 22.7 | 32.4 | 0.0 | 0.0 |
 | High Fidelity Photo | curved shapes | 0.04 | 1.66 | 0.026 | 0.18 | 0.20 | 1.2 | 19 | 2.12 | 20 | 100 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 |
 | High Fidelity Photo | polygons | 0.05 | 1.88 | 0.031 | 0.51 | 1.34 | 1.7 | 16 | 1.43 | 88 | 89 | 0.0 | 0.0 | 0 | 0.0 | – | 0.0 | 0.0 |
 | High Fidelity Photo | thin lines | 0.34 | 5.96 | 0.075 | 0.85 | 4.31 | 40.3 | 339 | 16.93 | 37 | – | – | 27.3 | 4490 | 0.0 | – | 19.0 | 0.0 |
@@ -176,6 +185,11 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Technical Drawing | thin lines | 0.53 | 5.80 | 0.121 | 0.50 | 55.74 | 15.3 | 70 | 3.50 | 88 | – | – | – | – | – | – | 7.7 | 0.0 |
 | Technical Drawing | flat colour art | 19.90 | 17.76 | 0.157 | 0.30 | 179.51 | 1.0 | 18 | 1.12 | 23 | 0 | 0.0 | – | – | – | – | 0.0 | 0.0 |
 | Technical Drawing | gradient, photo | 38.94 | 38.51 | – | – | – | 20.0 | 627 | – | 71 | – | – | – | – | – | – | 11.3 | 0.0 |
+| Outline | curved shapes | 23.38 | 44.70 | 0.498 | 0.90 | 0.52 | 1.2 | 16 | 1.76 | 19 | 83 | 0.0 | – | – | – | – | 0.0 | 0.0 |
+| Outline | polygons | 17.94 | 44.20 | 0.494 | 0.83 | 0.74 | 1.7 | 15 | 1.29 | 88 | 89 | 0.0 | – | – | – | – | 0.0 | 0.0 |
+| Outline | thin lines | 0.99 | 14.15 | 0.310 | 1.82 | 106.00 | 3.3 | 88 | 4.40 | 25 | – | – | – | – | – | – | 0.0 | 0.0 |
+| Outline | flat colour art | 26.69 | 32.18 | 0.494 | 0.92 | 178.93 | 1.0 | 18 | 1.30 | 21 | 0 | 0.0 | – | – | – | – | 0.0 | 0.0 |
+| Outline | gradient, photo | 39.57 | 39.32 | – | – | – | 7.5 | 421 | – | 56 | – | – | – | – | – | – | 0.0 | 0.8 |
 | Flat Logo | curved shapes | 0.06 | 2.14 | 0.036 | 0.25 | 0.25 | 1.8 | 31 | 3.38 | 19 | 100 | 0.0 | 0.0 | 0 | 6.8 | – | 0.0 | 0.0 |
 | Flat Logo | polygons | 0.09 | 3.44 | 0.060 | 0.35 | 1.03 | 2.0 | 35 | 3.17 | 67 | 94 | 0.0 | 0.0 | 0 | 6.8 | – | 0.0 | 0.0 |
 | Flat Logo | thin lines | 1.17 | 11.78 | 0.050 | 0.49 | all | 3.0 | 189 | 9.45 | 28 | – | – | 0.0 | 0 | 5467.1 | – | 0.0 | 0.0 |
@@ -191,6 +205,11 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Default | blurred | 0.81 | 16.57 | 0.078 | 0.98 | 2.22 | 1.9 | 24 | 2.34 | 5 | 19 | 1.3 | – | – | 0.0 | 0.0 | 0.0 | 0.0 |
 | Default | noisy | 1.74 | 4.53 | 0.054 | 0.54 | 1.32 | 1.9 | 15 | 1.47 | 41 | 84 | 0.0 | – | – | 1.9 | 0.3 | 0.0 | 0.0 |
 | Default | scanned | 15.06 | 20.17 | 0.114 | 0.79 | 2.14 | 1.9 | 26 | 2.53 | 2 | 25 | 1.3 | – | – | 1.6 | 4.2 | 0.0 | 0.0 |
+| Auto Color | clean | 0.12 | 2.70 | 0.057 | 0.31 | 0.30 | 3.0 | 28 | 2.00 | 43 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Auto Color | aliased | 0.29 | 10.43 | 0.298 | 1.00 | 1.00 | 3.0 | 27 | 2.05 | 43 | 100 | 0.0 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Auto Color | blurred | 0.61 | 9.31 | 0.208 | 1.33 | 1.21 | 6.0 | 119 | 6.53 | 39 | 50 | 15.5 | 0.0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Auto Color | noisy | 0.85 | 2.61 | 0.076 | 0.52 | 0.58 | 3.0 | 34 | 2.34 | 28 | 88 | 0.0 | 0.0 | 0 | 0.3 | 0.5 | 0.0 | 0.0 |
+| Auto Color | scanned | 1.73 | 4.42 | 0.230 | 1.20 | 0.94 | 7.0 | 108 | 6.02 | 28 | 62 | 20.5 | 0.0 | 0 | 9.6 | 7.5 | 0.0 | 0.0 |
 | High Fidelity Photo | clean | 1.80 | 2.04 | – | – | – | 134.7 | 11321 | – | 39 | – | – | – | – | 0.0 | – | 7.3 | 0.0 |
 | High Fidelity Photo | aliased | 1.77 | 2.00 | – | – | – | 73.0 | 8004 | – | 40 | – | – | – | – | 0.0 | – | 5.5 | 0.0 |
 | High Fidelity Photo | blurred | 1.59 | 1.95 | – | – | – | 72.0 | 7388 | – | 40 | – | – | – | – | 0.0 | – | 0.5 | 0.0 |
@@ -246,6 +265,11 @@ All sizes and variants (clean, aliased, blurred, noisy, scanned) of those inputs
 | Technical Drawing | blurred | 1.03 | 16.48 | 0.076 | 0.96 | 105.82 | 2.0 | 58 | 4.73 | 26 | 25 | 2.7 | – | – | – | – | 0.0 | 0.0 |
 | Technical Drawing | noisy | 1.41 | 4.24 | 0.053 | 0.50 | 31.79 | 7.8 | 41 | 2.51 | 85 | 86 | 0.0 | – | – | – | – | 2.8 | 0.0 |
 | Technical Drawing | scanned | 14.44 | 19.98 | 0.100 | 0.87 | 105.79 | 2.0 | 98 | 7.51 | 23 | 34 | 2.7 | – | – | – | – | 0.0 | 0.0 |
+| Outline | clean | 0.99 | 14.15 | 0.310 | 1.82 | 106.00 | 3.3 | 88 | 4.40 | 25 | – | – | – | – | – | – | 0.0 | 0.0 |
+| Outline | aliased | 0.79 | 17.03 | 0.300 | 1.08 | 55.51 | 11.0 | 93 | 4.65 | 14 | – | – | – | – | – | – | 0.0 | 0.0 |
+| Outline | blurred | 1.66 | 18.46 | 0.311 | 1.84 | 105.72 | 3.0 | 68 | 3.40 | 0 | – | – | – | – | – | – | 0.0 | 0.0 |
+| Outline | noisy | 1.50 | 12.92 | 0.304 | 1.30 | 56.25 | 8.0 | 74 | 3.70 | 11 | – | – | – | – | – | – | 0.0 | 0.0 |
+| Outline | scanned | 13.60 | 20.48 | 0.323 | 1.79 | 105.55 | 3.0 | 65 | 3.25 | 9 | – | – | – | – | – | – | 0.0 | 0.0 |
 | Flat Logo | clean | 0.07 | 1.53 | 0.065 | 0.31 | 0.27 | 3.0 | 36 | 3.51 | 47 | 100 | 0.0 | 0.0 | 0 | 6.8 | – | 0.0 | 0.0 |
 | Flat Logo | aliased | 0.13 | 5.87 | 0.218 | 0.65 | 0.65 | 3.0 | 31 | 1.96 | 44 | 50 | 0.0 | 0.0 | 0 | 5.8 | – | 0.0 | 0.0 |
 | Flat Logo | blurred | 0.54 | 8.33 | 0.052 | 0.62 | 0.78 | 3.0 | 28 | 1.78 | 43 | 50 | 0.0 | 0.0 | 0 | 5.8 | – | 0.0 | 0.0 |
@@ -284,18 +308,20 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 |:--|:--|--:|:--|
 | Default | photo-like | 1 | 0.04 s, 29 paths, 6701 anchors, 12 MB |
 | Default | four-colour badge | 1 | 0.02 s, 3 paths, 64 anchors, 12 MB |
-| High Fidelity Photo | photo-like | 1 | 0.21 s, 968 paths, 114383 anchors, 170 MB |
+| Auto Color | photo-like | 1 | 0.15 s, 732 paths, 45410 anchors, 19 MB |
+| Auto Color | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
+| High Fidelity Photo | photo-like | 1 | 0.22 s, 968 paths, 114383 anchors, 170 MB |
 | High Fidelity Photo | four-colour badge | 1 | 0.05 s, 6 paths, 172 anchors, 23 MB |
-| Low Fidelity Photo | photo-like | 1 | 0.11 s, 129 paths, 22929 anchors, 104 MB |
+| Low Fidelity Photo | photo-like | 1 | 0.11 s, 129 paths, 22929 anchors, 105 MB |
 | Low Fidelity Photo | four-colour badge | 1 | 0.05 s, 6 paths, 136 anchors, 23 MB |
-| 3 Colors | photo-like | 1 | 0.08 s, 9 paths, 3367 anchors, 18 MB |
+| 3 Colors | photo-like | 1 | 0.07 s, 9 paths, 3367 anchors, 18 MB |
 | 3 Colors | four-colour badge | 1 | 0.05 s, 4 paths, 88 anchors, 13 MB |
 | 6 Colors | photo-like | 1 | 0.08 s, 78 paths, 9008 anchors, 24 MB |
 | 6 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 84 anchors, 12 MB |
-| 16 Colors | photo-like | 1 | 0.10 s, 178 paths, 20466 anchors, 31 MB |
+| 16 Colors | photo-like | 1 | 0.11 s, 178 paths, 20466 anchors, 31 MB |
 | 16 Colors | four-colour badge | 1 | 0.05 s, 5 paths, 88 anchors, 12 MB |
-| Shades of Gray | photo-like | 1 | 0.08 s, 81 paths, 6698 anchors, 41 MB |
-| Shades of Gray | four-colour badge | 1 | 0.06 s, 10 paths, 733 anchors, 34 MB |
+| Shades of Gray | photo-like | 1 | 0.08 s, 81 paths, 6698 anchors, 42 MB |
+| Shades of Gray | four-colour badge | 1 | 0.06 s, 10 paths, 733 anchors, 35 MB |
 | Black and White Logo | photo-like | 1 | 0.04 s, 71 paths, 5047 anchors, 8 MB |
 | Black and White Logo | four-colour badge | 1 | 0.02 s, 1 paths, 47 anchors, 6 MB |
 | Sketched Art | photo-like | 1 | 0.04 s, 5 paths, 2880 anchors, 8 MB |
@@ -306,65 +332,76 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 | Line Art | four-colour badge | 1 | 0.02 s, 1 paths, 38 anchors, 6 MB |
 | Technical Drawing | photo-like | 1 | 0.04 s, 221 paths, 6443 anchors, 8 MB |
 | Technical Drawing | four-colour badge | 1 | 0.02 s, 1 paths, 47 anchors, 6 MB |
+| Outline | photo-like | 1 | 0.05 s, 45 paths, 3875 anchors, 16 MB |
+| Outline | four-colour badge | 1 | 0.03 s, 1 paths, 38 anchors, 11 MB |
 | Flat Logo | photo-like | 1 | refused after 0.09 s (not flat art), 40 MB |
 | Flat Logo | four-colour badge | 1 | 0.65 s, 5 paths, 78 anchors, 146 MB |
 | Default | photo-like | 4 | 0.18 s, 48 paths, 15720 anchors, 49 MB |
 | Default | four-colour badge | 4 | 0.09 s, 3 paths, 72 anchors, 48 MB |
-| High Fidelity Photo | photo-like | 4 | 0.69 s, 4475 paths, 341272 anchors, 634 MB |
-| High Fidelity Photo | four-colour badge | 4 | 0.23 s, 6 paths, 200 anchors, 93 MB |
-| Low Fidelity Photo | photo-like | 4 | 0.35 s, 304 paths, 61093 anchors, 401 MB |
-| Low Fidelity Photo | four-colour badge | 4 | 0.22 s, 6 paths, 152 anchors, 94 MB |
-| 3 Colors | photo-like | 4 | 0.27 s, 20 paths, 8453 anchors, 73 MB |
-| 3 Colors | four-colour badge | 4 | 0.18 s, 4 paths, 122 anchors, 53 MB |
-| 6 Colors | photo-like | 4 | 0.26 s, 115 paths, 23128 anchors, 83 MB |
+| Auto Color | photo-like | 4 | 0.44 s, 1469 paths, 148161 anchors, 89 MB |
+| Auto Color | four-colour badge | 4 | 0.18 s, 5 paths, 92 anchors, 46 MB |
+| High Fidelity Photo | photo-like | 4 | 0.70 s, 4475 paths, 341272 anchors, 634 MB |
+| High Fidelity Photo | four-colour badge | 4 | 0.21 s, 6 paths, 200 anchors, 97 MB |
+| Low Fidelity Photo | photo-like | 4 | 0.36 s, 304 paths, 61093 anchors, 401 MB |
+| Low Fidelity Photo | four-colour badge | 4 | 0.23 s, 6 paths, 152 anchors, 97 MB |
+| 3 Colors | photo-like | 4 | 0.26 s, 20 paths, 8453 anchors, 73 MB |
+| 3 Colors | four-colour badge | 4 | 0.18 s, 4 paths, 122 anchors, 51 MB |
+| 6 Colors | photo-like | 4 | 0.26 s, 115 paths, 23128 anchors, 100 MB |
 | 6 Colors | four-colour badge | 4 | 0.18 s, 5 paths, 92 anchors, 46 MB |
-| 16 Colors | photo-like | 4 | 0.29 s, 353 paths, 52749 anchors, 109 MB |
+| 16 Colors | photo-like | 4 | 0.28 s, 353 paths, 52749 anchors, 124 MB |
 | 16 Colors | four-colour badge | 4 | 0.18 s, 5 paths, 96 anchors, 46 MB |
-| Shades of Gray | photo-like | 4 | 0.28 s, 138 paths, 18794 anchors, 158 MB |
-| Shades of Gray | four-colour badge | 4 | 0.26 s, 10 paths, 1265 anchors, 137 MB |
-| Black and White Logo | photo-like | 4 | 0.20 s, 208 paths, 13717 anchors, 32 MB |
+| Shades of Gray | photo-like | 4 | 0.29 s, 138 paths, 18794 anchors, 157 MB |
+| Shades of Gray | four-colour badge | 4 | 0.26 s, 10 paths, 1265 anchors, 134 MB |
+| Black and White Logo | photo-like | 4 | 0.18 s, 208 paths, 13717 anchors, 32 MB |
 | Black and White Logo | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
-| Sketched Art | photo-like | 4 | 0.17 s, 9 paths, 5358 anchors, 32 MB |
+| Sketched Art | photo-like | 4 | 0.18 s, 9 paths, 5358 anchors, 32 MB |
 | Sketched Art | four-colour badge | 4 | 0.08 s, 2 paths, 196 anchors, 24 MB |
-| Silhouettes | photo-like | 4 | 0.19 s, 2 paths, 1457 anchors, 36 MB |
+| Silhouettes | photo-like | 4 | 0.18 s, 2 paths, 1457 anchors, 36 MB |
 | Silhouettes | four-colour badge | 4 | 0.08 s, 1 paths, 28 anchors, 24 MB |
-| Line Art | photo-like | 4 | 0.18 s, 127 paths, 11461 anchors, 32 MB |
+| Line Art | photo-like | 4 | 0.19 s, 127 paths, 11461 anchors, 32 MB |
 | Line Art | four-colour badge | 4 | 0.08 s, 1 paths, 42 anchors, 24 MB |
 | Technical Drawing | photo-like | 4 | 0.18 s, 931 paths, 21061 anchors, 32 MB |
 | Technical Drawing | four-colour badge | 4 | 0.08 s, 1 paths, 57 anchors, 24 MB |
+| Outline | photo-like | 4 | 0.23 s, 113 paths, 10455 anchors, 64 MB |
+| Outline | four-colour badge | 4 | 0.12 s, 1 paths, 42 anchors, 44 MB |
 | Flat Logo | photo-like | 4 | refused after 0.10 s (not flat art), 40 MB |
-| Flat Logo | four-colour badge | 4 | 0.68 s, 5 paths, 69 anchors, 146 MB |
-| Default | photo-like | 16 | 1.08 s, 127 paths, 34766 anchors, 199 MB |
-| Default | four-colour badge | 16 | 0.47 s, 3 paths, 88 anchors, 184 MB |
-| High Fidelity Photo | photo-like | 16 | 3.68 s, 31125 paths, 1175671 anchors, 880 MB |
+| Flat Logo | four-colour badge | 4 | 0.65 s, 5 paths, 69 anchors, 146 MB |
+| Default | photo-like | 16 | 0.90 s, 127 paths, 34766 anchors, 199 MB |
+| Default | four-colour badge | 16 | 0.48 s, 3 paths, 88 anchors, 184 MB |
+| Auto Color | photo-like | 16 | 1.58 s, 5391 paths, 449395 anchors, 279 MB |
+| Auto Color | four-colour badge | 16 | 0.83 s, 5 paths, 126 anchors, 184 MB |
+| High Fidelity Photo | photo-like | 16 | 3.72 s, 31125 paths, 1175671 anchors, 880 MB |
 | High Fidelity Photo | four-colour badge | 16 | 1.05 s, 6 paths, 274 anchors, 257 MB |
-| Low Fidelity Photo | photo-like | 16 | 1.78 s, 2036 paths, 181832 anchors, 754 MB |
-| Low Fidelity Photo | four-colour badge | 16 | 1.07 s, 6 paths, 187 anchors, 257 MB |
-| 3 Colors | photo-like | 16 | 1.17 s, 76 paths, 22878 anchors, 290 MB |
-| 3 Colors | four-colour badge | 16 | 0.82 s, 4 paths, 190 anchors, 205 MB |
-| 6 Colors | photo-like | 16 | 1.09 s, 470 paths, 60539 anchors, 298 MB |
-| 6 Colors | four-colour badge | 16 | 0.81 s, 5 paths, 126 anchors, 184 MB |
-| 16 Colors | photo-like | 16 | 1.09 s, 1973 paths, 145173 anchors, 303 MB |
-| 16 Colors | four-colour badge | 16 | 0.83 s, 5 paths, 128 anchors, 184 MB |
-| Shades of Gray | photo-like | 16 | 1.61 s, 686 paths, 53872 anchors, 407 MB |
-| Shades of Gray | four-colour badge | 16 | 1.35 s, 9 paths, 2216 anchors, 270 MB |
-| Black and White Logo | photo-like | 16 | 1.01 s, 1128 paths, 45117 anchors, 129 MB |
+| Low Fidelity Photo | photo-like | 16 | 1.75 s, 2036 paths, 181832 anchors, 754 MB |
+| Low Fidelity Photo | four-colour badge | 16 | 1.04 s, 6 paths, 187 anchors, 257 MB |
+| 3 Colors | photo-like | 16 | 1.11 s, 76 paths, 22878 anchors, 290 MB |
+| 3 Colors | four-colour badge | 16 | 0.81 s, 4 paths, 190 anchors, 205 MB |
+| 6 Colors | photo-like | 16 | 1.12 s, 470 paths, 60539 anchors, 298 MB |
+| 6 Colors | four-colour badge | 16 | 0.79 s, 5 paths, 126 anchors, 184 MB |
+| 16 Colors | photo-like | 16 | 1.10 s, 1973 paths, 145173 anchors, 303 MB |
+| 16 Colors | four-colour badge | 16 | 0.81 s, 5 paths, 128 anchors, 184 MB |
+| Shades of Gray | photo-like | 16 | 1.56 s, 686 paths, 53872 anchors, 407 MB |
+| Shades of Gray | four-colour badge | 16 | 1.30 s, 9 paths, 2216 anchors, 270 MB |
+| Black and White Logo | photo-like | 16 | 1.10 s, 1128 paths, 45117 anchors, 129 MB |
 | Black and White Logo | four-colour badge | 16 | 0.36 s, 1 paths, 69 anchors, 88 MB |
-| Sketched Art | photo-like | 16 | 0.99 s, 15 paths, 11568 anchors, 128 MB |
-| Sketched Art | four-colour badge | 16 | 0.39 s, 2 paths, 361 anchors, 88 MB |
-| Silhouettes | photo-like | 16 | 1.30 s, 3 paths, 3358 anchors, 144 MB |
+| Sketched Art | photo-like | 16 | 0.94 s, 15 paths, 11568 anchors, 128 MB |
+| Sketched Art | four-colour badge | 16 | 0.37 s, 2 paths, 361 anchors, 88 MB |
+| Silhouettes | photo-like | 16 | 1.31 s, 3 paths, 3358 anchors, 144 MB |
 | Silhouettes | four-colour badge | 16 | 0.41 s, 1 paths, 32 anchors, 95 MB |
-| Line Art | photo-like | 16 | 0.95 s, 713 paths, 36212 anchors, 129 MB |
-| Line Art | four-colour badge | 16 | 0.34 s, 1 paths, 49 anchors, 88 MB |
-| Technical Drawing | photo-like | 16 | 1.09 s, 4578 paths, 79049 anchors, 130 MB |
-| Technical Drawing | four-colour badge | 16 | 0.37 s, 1 paths, 69 anchors, 88 MB |
-| Flat Logo | photo-like | 16 | refused after 0.11 s (not flat art), 40 MB |
-| Flat Logo | four-colour badge | 16 | 0.67 s, 5 paths, 67 anchors, 146 MB |
+| Line Art | photo-like | 16 | 1.01 s, 713 paths, 36212 anchors, 129 MB |
+| Line Art | four-colour badge | 16 | 0.35 s, 1 paths, 49 anchors, 88 MB |
+| Technical Drawing | photo-like | 16 | 1.14 s, 4578 paths, 79049 anchors, 130 MB |
+| Technical Drawing | four-colour badge | 16 | 0.36 s, 1 paths, 69 anchors, 88 MB |
+| Outline | photo-like | 16 | 1.28 s, 632 paths, 31715 anchors, 256 MB |
+| Outline | four-colour badge | 16 | 0.55 s, 1 paths, 49 anchors, 176 MB |
+| Flat Logo | photo-like | 16 | refused after 0.12 s (not flat art), 40 MB |
+| Flat Logo | four-colour badge | 16 | 0.66 s, 5 paths, 67 anchors, 146 MB |
 
 ## Revision history
 
 | date | change |
 |:--|:--|
+| 2026-10-13 | Ignore Color; the Auto Color and Outline presets, measured from here on (Outline is the first measure of Create: Strokes) |
 | 2026-10-13 | Thin lines: black and white read against the image's darkest black and the paper near each edge |
 | 2026-10-13 | Memory: layers traced within the box of their pixels and a few at a time (16 megapixel photo: 3.9 GB to 0.9 GB) |
 | 2026-10-13 | Shared edges: outlines are cut at their junctions and each piece is fitted once, the same from either side |

@@ -229,6 +229,7 @@
 	Author Title:	Titel des Autors:
 	Author:	Autor:
 	Auto	Auto
+	Auto Color	Automatische Farbe
 	Automatic	Automatisch
 	Auto Size New Area Type	Größe von neuem Flächentext automatisch anpassen
 	Auto Spell Check	Automatische Rechtschreibprüfung
@@ -1226,6 +1227,7 @@
 	Identify Objects By	Objekte identifizieren nach
 	Ignore	Ignorieren
 	Ignore Artboards (all the art as one page)	Zeichenflächen ignorieren (gesamte Grafik als eine Seite)
+	Ignore Color	Farbe ignorieren
 	Ignore White	Weiß ignorieren
 	Palette:	Palette:
 	Limited	Begrenzt
@@ -3135,6 +3137,7 @@ effect	Points	Punkte
 	{warning}: click to correct to the closest color ({hex})	{warning}: Klicken korrigiert auf die nächstliegende Farbe ({hex})
 	“{file}” is protected by a password.	„{file}“ ist durch ein Kennwort geschützt.
 	● Recording	● Aufzeichnung
+imageTrace	Outline	Kontur
 @plural	{n} item|{n} items	{n} Element|{n} Elemente
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Farbtabelle ({n} Farbe)|Farbtabelle ({n} Farben)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Diesen {n} Grafikstil löschen?|Diese {n} Grafikstile löschen?
