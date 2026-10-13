@@ -366,9 +366,9 @@ impl Out {
     /// A new clip of `path` inside `clips`; `None` for a rectangle around the whole page, which
     /// clips nothing.
     fn clip(&mut self, path: BezPath, rule: FillRule) -> Option<Arc<Clip>> {
-        let lines = path.elements().iter().all(|e| !matches!(e, PathEl::QuadTo(..) | PathEl::CurveTo(..)));
-        let around = path.bounding_box().inflate(0.5, 0.5);
-        if lines && path.elements().len() <= 6 && around.contains(self.frame.origin()) && around.contains(Point::new(self.frame.x1, self.frame.y1)) {
+        // Only a polygon that really covers the page: a diamond touching its edges has the page as
+        // its bounding box but cuts its corners away (#1542).
+        if path.elements().len() <= 6 && vectorcraft_geom::hit::polygon_covers_rect(&path, self.frame, 0.5) {
             return None;
         }
         self.next_clip += 1;
