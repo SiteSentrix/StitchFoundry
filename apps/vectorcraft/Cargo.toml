@@ -80,3 +80,7 @@ wayland-protocols = { version = "0.32", features = ["client"] }
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.
 winresource = "0.1"
+
+[dev-dependencies]
+# Bound socket buffers in real loopback transport deadline regressions.
+socket2 = { workspace = true }
