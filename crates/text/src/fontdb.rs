@@ -16,6 +16,8 @@ use skrifa::{GlyphId, MetadataProvider, Tag};
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
 
+/// The fonts every database starts with (feature `bundled-fonts`, on by default).
+#[cfg(feature = "bundled-fonts")]
 static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf"),
     include_bytes!("../../../assets/fonts/SourceSans3-Semibold.ttf"),
@@ -27,6 +29,10 @@ static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"),
     include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
 ];
+/// Without `bundled-fonts` a database starts with none: the embedder adds its fonts
+/// ([`FontDb::add_font`]); until then text has no glyphs.
+#[cfg(not(feature = "bundled-fonts"))]
+static BUNDLED: &[&[u8]] = &[];
 
 /// An axis setting of a variable font: the axis tag (`wght`) and its value in user units (700).
 pub type Variation = ([u8; 4], f32);
@@ -1919,8 +1925,8 @@ impl FontDb {
 
     /// Resolve a family + style to a face, falling back to the closest style of the family, then to
     /// Source Sans 3 Regular. Installed system fonts are found by name whatever ran before. `None`
-    /// only if no font at all is loaded (the bundled fonts failed to parse), in which case text has
-    /// no glyphs.
+    /// only if no font at all is loaded (the bundled fonts failed to parse, or were left out with
+    /// the `bundled-fonts` feature and none was added), in which case text has no glyphs.
     pub fn face(&self, family: &str, style: &str) -> Option<Arc<FontFace>> {
         let (family, style) = self.canonical(family, style);
         let (family, style) = (family.as_str(), style.as_str());

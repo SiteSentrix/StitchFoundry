@@ -1,7 +1,8 @@
 //! VectorCraft text: font database, shaping, layout, glyph outlines.
 //!
 //! API contract used by `vectorcraft-render`, `vectorcraft-tools` and the UI:
-//! - [`FontDb::global`]: process-wide database preloaded with the bundled OFL fonts.
+//! - [`FontDb::global`]: process-wide database preloaded with the bundled OFL fonts (feature
+//!   `bundled-fonts`, on by default; without it the embedder adds fonts with [`FontDb::add_font`]).
 //! - [`layout`]: lays out a [`TextObject`] into glyph outlines in *text space* (apply `t.xf` to
 //!   get document coordinates), plus line and caret information.
 //! - [`caret_position`] / [`hit_byte`]: caret geometry and hit testing for the Type tool.
