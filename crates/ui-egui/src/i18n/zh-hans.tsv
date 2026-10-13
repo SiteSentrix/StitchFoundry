@@ -4559,3 +4559,11 @@ machine	Stop	停止
 	Prepare Image	准备图像
 	Photo Stitch	照片刺绣
 	Convert Stitches to Objects	将针迹转换为对象
+	Colour Preview	颜色预览
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	以这些颜色平滑后的图像副本，去除杂点，可用于数字化或点击刺绣
+	Colours	颜色
+	Coral	珊瑚
+	background, not sewn	背景，不缝制
+	thread changes	次换线
+	threads sewn	种线缝制
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	在照片上直接缝制：之字形线条、一条蜿蜒的平针或其颜色

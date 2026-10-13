@@ -4979,3 +4979,11 @@ machine	Stop	停止
 	Prepare Image	画像を準備
 	Photo Stitch	フォトステッチ
 	Convert Stitches to Objects	ステッチをオブジェクトに変換
+	Colour Preview	カラープレビュー
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	これらの色で滑らかにし、点を取り除いた画像のコピー。デジタイズやクリック刺しゅうに使えます
+	Colours	色
+	Coral	コーラル
+	background, not sewn	背景、縫わない
+	thread changes	回の糸替え
+	threads sewn	色の糸で縫う
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	写真をその上に縫います：ジグザグの線、蛇行する1本のランニング、またはその色で

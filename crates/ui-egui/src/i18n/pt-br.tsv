@@ -4253,3 +4253,11 @@ machine	Trim	Corte de linha
 	Prepare Image	Preparar imagem
 	Photo Stitch	Bordado fotográfico
 	Convert Stitches to Objects	Converter pontos em objetos
+	Colour Preview	Pré-visualização de cores
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Uma cópia suavizada da imagem nestas cores, sem pontinhos, para digitalizar ou bordar com um clique
+	Colours	Cores
+	Coral	Coral
+	background, not sewn	fundo, não bordado
+	thread changes	trocas de linha
+	threads sewn	linhas bordadas
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Borda a foto sobre ela mesma: linhas em ziguezague, um ponto corrido sinuoso ou suas cores

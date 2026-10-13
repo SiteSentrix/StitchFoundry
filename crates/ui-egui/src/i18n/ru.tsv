@@ -4981,3 +4981,11 @@ machine	Stop	Остановка
 	Prepare Image	Подготовить изображение
 	Photo Stitch	Фотовышивка
 	Convert Stitches to Objects	Преобразовать стежки в объекты
+	Colour Preview	Предпросмотр цветов
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Сглаженная копия изображения в этих цветах без крапинок — для оцифровки или вышивки по щелчку
+	Colours	Цвета
+	Coral	Коралл
+	background, not sewn	фон, не вышивается
+	thread changes	смен нити
+	threads sewn	нитей вышивается
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Вышить фото поверх него самого: зигзагом, одной извилистой строчкой или его цветами

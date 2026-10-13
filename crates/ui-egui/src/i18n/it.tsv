@@ -4985,3 +4985,11 @@ machine	Stop	Arresto
 	Prepare Image	Prepara immagine
 	Photo Stitch	Ricamo fotografico
 	Convert Stitches to Objects	Converti punti in oggetti
+	Colour Preview	Anteprima colori
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Una copia levigata dell’immagine in questi colori, senza puntini, da digitalizzare o ricamare con un clic
+	Colours	Colori
+	Coral	Corallo
+	background, not sewn	sfondo, non ricamato
+	thread changes	cambi di filo
+	threads sewn	fili ricamati
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Ricama la foto sopra sé stessa: linee a zigzag, un punto filza serpeggiante o i suoi colori

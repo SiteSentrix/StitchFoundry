@@ -4965,3 +4965,11 @@ machine	Stop	Зупинка
 	Prepare Image	Підготувати зображення
 	Photo Stitch	Фотовишивка
 	Convert Stitches to Objects	Перетворити стібки на об’єкти
+	Colour Preview	Попередній перегляд кольорів
+	A smoothed copy of the image in these colours, its specks cleaned, to digitize or click to stitch	Згладжена копія зображення в цих кольорах без цяток — для оцифрування або вишивки за клацанням
+	Colours	Кольори
+	Coral	Корал
+	background, not sewn	тло, не вишивається
+	thread changes	змін нитки
+	threads sewn	ниток вишивається
+	Sew the photo over itself as zigzag lines, one meandering run, or its colours	Вишити фото поверх нього самого: зигзагом, однією звивистою строчкою або його кольорами

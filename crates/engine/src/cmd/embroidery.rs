@@ -201,7 +201,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Auto-Digitize Image",
             ["Embroidery"],
             None,
-            "{colors?: 2-16 (6), detail?: 0-100 (60), noise?: px (16), removeBackground?: bool (true), minArea?: mm² (1), size?: mm (longest side), keepImage?: bool (true), details?: mm (0.8: shapes no thicker sewn as a run round them, fine lines and details; 0 none), outline?: none|design|shapes (none: a satin outline round the whole design, or round each filled shape), outlineWidth?: mm (1.5), outlineColor?: \"#rrggbb\" (the design's darkest thread), chart?: a thread chart to match the threads to (none)} trace the selected image into flat colour shapes and give each a stitch type: satin for narrow parts, tatami at its best angle for the rest, details as runs, specks and the background dropped, sewn colour by colour, outlined and matched to a chart if asked → {id, objects, satin, fill, run, outlines, removed, colors, scale}",
+            "{colors?: 2-32 (6), detail?: 0-100 (60), noise?: px (16), removeBackground?: bool (true), minArea?: mm² (1), size?: mm (longest side), keepImage?: bool (true), details?: mm (0.8: shapes no thicker sewn as a run round them, fine lines and details; 0 none), outline?: none|design|shapes (none: a satin outline round the whole design, or round each filled shape), outlineWidth?: mm (1.5), outlineColor?: \"#rrggbb\" (the design's darkest thread), chart?: a thread chart to match the threads to (none)} trace the selected image into flat colour shapes and give each a stitch type: satin for narrow parts, tatami at its best angle for the rest, details as runs, specks and the background dropped, sewn colour by colour, outlined and matched to a chart if asked → {id, objects, satin, fill, run, outlines, removed, colors, scale}",
             has_selection,
             auto_digitize
         ),
@@ -1672,7 +1672,7 @@ fn auto_digitize(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn digitize_image(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.autoDigitize";
-    let colors = p.get("colors").and_then(Value::as_u64).unwrap_or(6).clamp(2, 16);
+    let colors = p.get("colors").and_then(Value::as_u64).unwrap_or(6).clamp(2, 32);
     let detail = f64_or(p, "detail", 60.0).clamp(0.0, 100.0);
     let noise = p.get("noise").and_then(Value::as_u64).unwrap_or(16).clamp(1, 10_000);
     let remove_bg = bool_or(p, "removeBackground", true);

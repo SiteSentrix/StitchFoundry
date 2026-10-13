@@ -130,6 +130,10 @@ pub struct EmbroideryUi {
     /// Auto-Digitize: thread colours to trace with, and whether the background is dropped.
     pub digitize_colors: u32,
     pub digitize_background: bool,
+    /// The colour preview of the selected image (Auto-Digitize's colours, before digitizing).
+    pub colour_preview: Option<ColourPreview>,
+    /// Photo Stitch's mode: lines, coral or colour.
+    pub photo_mode: usize,
     /// The last Check Design results (`embroidery.check` findings); `None` until run.
     pub checks: Option<Vec<serde_json::Value>>,
     /// The stitch type whose properties for new objects the Embroidery panel shows.
@@ -277,6 +281,8 @@ impl Default for EmbroideryUi {
             widget: widget::WidgetState::default(),
             digitize_colors: 6,
             digitize_background: true,
+            colour_preview: None,
+            photo_mode: 0,
             checks: None,
             new_type: "fill".into(),
             blend_to: [255, 255, 255],
@@ -353,6 +359,15 @@ pub fn tick(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
         p.playing = false;
     }
     ctx.request_repaint();
+}
+
+/// An image reduced to a number of thread colours, as Auto-Digitize sees it.
+pub struct ColourPreview {
+    /// The image, the colours asked for and whether the background is left out.
+    pub key: (u64, u32, bool),
+    pub texture: egui::TextureHandle,
+    /// `embroidery.image.preview`'s answer (the colours, threads, thread changes).
+    pub info: serde_json::Value,
 }
 
 /// The Design Library section's state.
