@@ -297,7 +297,9 @@ fn visualize(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 add_path(&mut doc, svg_path(&rect, 0.0, 0.0)?, look)?;
                 let label = format!("{} {widest:.0} × {ah:.0} mm", spoken(id));
-                sheet_text(&mut doc, (x + 2.0) * PT_PER_MM, (y + 6.0) * PT_PER_MM, &label, 11.0, blue)?;
+                // named inside its bottom left corner: areas that start level (a chest and the
+                // full front) keep their names apart
+                sheet_text(&mut doc, (x + 2.0) * PT_PER_MM, (y + ah - 3.0) * PT_PER_MM, &label, 11.0, blue)?;
                 areas += 1;
             }
         }
