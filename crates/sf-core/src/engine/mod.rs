@@ -739,11 +739,15 @@ mod tests {
             o.color = 0;
         }
         assert_eq!(build(&d).pattern.color_blocks().len(), 1);
-        // the second its own: three blocks of the same thread, two changes
+        // the second its own: two blocks of the same thread (the third sewn on in the second's)
         d.objects[1].own_block = true;
         let p = build(&d).pattern;
-        assert_eq!(p.color_blocks().len(), 3);
-        assert_eq!(p.stitches.iter().filter(|s| s.cmd == Cmd::ColorChange).count(), 2);
+        assert_eq!(p.color_blocks().len(), 2);
+        assert_eq!(p.stitches.iter().filter(|s| s.cmd == Cmd::ColorChange).count(), 1);
+        // the third its own too: three
+        d.objects[2].own_block = true;
+        assert_eq!(build(&d).pattern.color_blocks().len(), 3);
+        d.objects[2].own_block = false;
         assert!(p.threads.iter().all(|t| t.color == p.threads[0].color));
         // first in the design: nothing before it to split from
         d.objects[1].own_block = false;
