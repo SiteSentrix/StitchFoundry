@@ -660,6 +660,22 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
     assert!((st.width() / PT - 120.0).abs() < 3.0, "{}", st.width() / PT);
     assert!((st.center().x / PT - 540.0).abs() < 3.0 && (st.center().y / PT - 260.0).abs() < 3.0, "{:?}", st.center());
     assert!(s.doc().unwrap().doc.title.ends_with("on T-shirt"));
+    // 200 mm from the shirt's top, the neckline at 80
+    assert!((r["belowNeckMm"].as_f64().unwrap() - 120.0).abs() < 1.0, "{r}");
+    // the usual work areas of the front: chests, full front, sleeve (no pocket), dashed
+    s.set_active(0);
+    let r = s.execute("embroidery.visualize", &json!({"areas": true})).unwrap();
+    assert_eq!(r["areas"], 4, "{r}");
+    let mut dashed = 0;
+    s.doc().unwrap().doc.walk(|n| {
+        if n.appearance.stroke().is_some_and(|st| st.dash.is_some()) {
+            dashed += 1;
+        }
+    });
+    assert_eq!(dashed, 4);
+    s.set_active(0);
+    let r = s.execute("embroidery.visualize", &json!({"product": "hoodie", "placement": "full-back", "areas": true})).unwrap();
+    assert_eq!(r["areas"], 2, "the back: full back and yoke");
     // full front is wide enough; the back of a navy polo for the full back
     s.set_active(0);
     let r = s.execute("embroidery.visualize", &json!({"placement": "full-front"})).unwrap();
@@ -669,8 +685,10 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
     assert_eq!(r["view"].as_str(), Some("back"));
     for product in ["hoodie", "cap", "tote", "towel"] {
         s.set_active(0);
-        let r = s.execute("embroidery.visualize", &json!({"product": product})).unwrap();
+        let r = s.execute("embroidery.visualize", &json!({"product": product, "areas": true})).unwrap();
         assert_eq!(r["product"].as_str(), Some(product));
+        assert_eq!(r["belowNeckMm"].is_null(), product != "hoodie", "{r}");
+        assert!(r["areas"].as_u64().unwrap() >= 1);
     }
     // a photo of the customer's own: the design on it, the photo under it
     let png = std::env::temp_dir().join(format!("sf-mockup-{}.png", std::process::id()));
