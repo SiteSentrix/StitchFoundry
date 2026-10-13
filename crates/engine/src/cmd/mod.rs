@@ -20,6 +20,7 @@ mod draw2;
 mod edit;
 mod effectcmd;
 pub mod embroidery;
+pub mod embroidery_applique;
 pub mod embroidery_art;
 pub mod embroidery_blend;
 pub mod embroidery_buttonholes;
@@ -286,6 +287,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_kiosk::specs());
         v.extend(embroidery_photo::specs());
         v.extend(embroidery_recognise::specs());
+        v.extend(embroidery_applique::specs());
         v.extend(embroidery_cutfile::specs());
         v.extend(embroidery_decor::specs());
         v.extend(embroidery_merge::specs());

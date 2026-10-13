@@ -74,6 +74,7 @@ fn main() {
             shape: Shape::ellipse(Point::new(-35.0, 45.0), 14.0, 10.0),
             params: AppliqueParams::default(),
             covered: Vec::new(),
+            extra: Vec::new(),
         }),
         8,
     );

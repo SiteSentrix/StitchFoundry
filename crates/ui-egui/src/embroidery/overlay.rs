@@ -6,6 +6,7 @@ use std::sync::Arc;
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{Color32, Painter, Pos2, Shape, Stroke};
 use vectorcraft_embroidery::sf_core::decor::{DecorKind, DecorShape};
+use vectorcraft_embroidery::sf_core::geom::FLATTEN_TOLERANCE;
 use vectorcraft_embroidery::sf_core::model::ObjectKind;
 use vectorcraft_embroidery::sf_core::pattern::{Cmd, Pattern};
 use vectorcraft_embroidery::sf_core::threads::Rgb;
@@ -246,7 +247,8 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
     let repeats = (app.embroidery.repeats, app.embroidery.repeat_gap);
     let cache = &mut app.embroidery.mesh;
     cache.update(&plan, xf, (mode, upto, points), repeats);
-    // sequins, beads, cord and boring holes under their stitches; stones on top
+    // appliqué fabric, sequins, beads, cord and boring holes under their stitches; stones on top
+    fabrics(&plan, painter, xf);
     decorations(&plan, painter, xf, false);
     painter.add(Shape::mesh(cache.mesh.clone()));
     decorations(&plan, painter, xf, true);
@@ -313,6 +315,96 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
     }
 }
 
+/// Each appliqué's fabric under its stitches, in its colour and pattern.
+fn fabrics(plan: &StitchPlan, painter: &Painter, xf: &Xf) {
+    use vectorcraft_embroidery::sf_core::model::FabricPattern;
+    for obj in &plan.design.objects {
+        let ObjectKind::Applique(a) = &obj.kind else { continue };
+        let p = &a.params;
+        let rings: Vec<Vec<_>> = a.pieces().flat_map(|s| s.polygon(FLATTEN_TOLERANCE).rings().cloned().collect::<Vec<_>>()).collect();
+        let (c1, c2) = (c32(p.fabric_color, 1.0), c32(p.fabric_color_2, 1.0));
+        let cell = (p.fabric_pattern != FabricPattern::Plain).then_some(2.0);
+        let pattern = p.fabric_pattern;
+        fill_rings(painter, xf, &rings, cell, &|u, v| lerp(c1, c2, pattern.mix(u, v) as f32));
+    }
+}
+
+fn lerp(a: Color32, b: Color32, t: f32) -> Color32 {
+    let t = t.clamp(0.0, 1.0);
+    let m = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
+    Color32::from_rgb(m(a.r(), b.r()), m(a.g(), b.g()), m(a.b(), b.b()))
+}
+
+/// Most cells a filled area is cut into, so a big patterned piece stays quick to draw.
+const MAX_FILL_CELLS: f32 = 120_000.0;
+
+/// Fills the even-odd area of `rings` (mm; concave, with holes) by screen scanlines; with
+/// `cell` (px), each line is cut into cells coloured by `color(u, v)` at their middles (mm).
+fn fill_rings(
+    painter: &Painter,
+    xf: &Xf,
+    rings: &[Vec<vectorcraft_embroidery::sf_core::geom::Point>],
+    cell: Option<f32>,
+    color: &dyn Fn(f64, f64) -> Color32,
+) {
+    let scr: Vec<Vec<Pos2>> = rings.iter().filter(|r| r.len() >= 3).map(|r| r.iter().map(|q| xf.to_screen(pt(*q))).collect()).collect();
+    let mut bb = egui::Rect::NOTHING;
+    for p in scr.iter().flatten() {
+        bb.extend_with(*p);
+    }
+    let area = bb.intersect(painter.clip_rect());
+    if !(area.is_positive() && area.width().is_finite() && area.height().is_finite()) {
+        return;
+    }
+    // rows and cells about `cell` px, fewer when the area is large
+    let base = cell.unwrap_or(1.5).max(1.0);
+    let step = base.max((area.width() * area.height() / MAX_FILL_CELLS).sqrt());
+    let rows = (area.height() / step).ceil().min(4000.0) as usize;
+    let mm = |p: Pos2| {
+        let d = xf.to_doc(p);
+        (d.x / PT_PER_MM, d.y / PT_PER_MM)
+    };
+    let mut mesh = Mesh::default();
+    let mut xs: Vec<f32> = Vec::new();
+    for k in 0..rows {
+        let y0 = area.top() + k as f32 * step;
+        let y1 = (y0 + step).min(area.bottom());
+        let y = (y0 + y1) / 2.0;
+        xs.clear();
+        for r in &scr {
+            for (a, b) in r.iter().zip(r.iter().cycle().skip(1)) {
+                if (a.y <= y) != (b.y <= y) && (b.y - a.y).abs() > f32::EPSILON {
+                    xs.push(a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y));
+                }
+            }
+        }
+        xs.sort_by(f32::total_cmp);
+        for pair in xs.chunks_exact(2) {
+            let (Some(&xa), Some(&xb)) = (pair.first(), pair.get(1)) else { continue };
+            let (xa, xb) = (xa.max(area.left()), xb.min(area.right()));
+            if xb <= xa {
+                continue;
+            }
+            match cell {
+                None => {
+                    let (u, v) = mm(Pos2::new((xa + xb) / 2.0, y));
+                    mesh.add_colored_rect(egui::Rect::from_min_max(Pos2::new(xa, y0), Pos2::new(xb, y1)), color(u, v));
+                }
+                Some(_) => {
+                    let mut x = xa;
+                    while x < xb {
+                        let x1 = (x + step).min(xb);
+                        let (u, v) = mm(Pos2::new((x + x1) / 2.0, y));
+                        mesh.add_colored_rect(egui::Rect::from_min_max(Pos2::new(x, y0), Pos2::new(x1, y1)), color(u, v));
+                        x = x1;
+                    }
+                }
+            }
+        }
+    }
+    painter.add(Shape::mesh(mesh));
+}
+
 /// A piece's outline (screen) of `shape`, `r` across, turned `angle`, round `c`.
 fn decor_outline(shape: DecorShape, c: Pos2, r: f32, angle: f32) -> Vec<Pos2> {
     let n = 40;
@@ -376,11 +468,14 @@ fn decorations(plan: &StitchPlan, painter: &Painter, xf: &Xf, top: bool) {
                 }
             }
             DecorKind::Boring => {
-                for (line, _) in &d.lines {
-                    let pts: Vec<Pos2> = line.iter().map(|q| at(*q)).collect();
-                    if pts.len() >= 3 {
-                        painter.add(Shape::convex_polygon(pts, Color32::from_gray(38), Stroke::new(1.0, Color32::from_gray(20))));
+                let rings: Vec<Vec<_>> = d.lines.iter().map(|(l, _)| l.clone()).collect();
+                fill_rings(painter, xf, &rings, None, &|_, _| Color32::from_gray(38));
+                for line in &rings {
+                    let mut pts: Vec<Pos2> = line.iter().map(|q| at(*q)).collect();
+                    if let Some(f) = pts.first().copied() {
+                        pts.push(f);
                     }
+                    painter.add(Shape::line(pts, Stroke::new(1.0, Color32::from_gray(20))));
                 }
             }
             DecorKind::Sequin | DecorKind::Bead | DecorKind::Stone => {

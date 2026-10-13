@@ -569,6 +569,9 @@ fn structured_junk() {
         ("embroidery.image.preview", json!({"colors": 0, "size": 9999, "removeBackground": "x"})),
         ("embroidery.decor.count", json!({"x": f64::NAN})),
         ("embroidery.decor.palette", json!([])),
+        ("embroidery.applique.combine", json!({"ids": ["x", -1, null]})),
+        ("embroidery.applique.prepare", json!({"ids": [null], "close": 3, "breakUp": "x"})),
+        ("embroidery.setParams", json!({"params": {"fabric_pattern": "Zebra", "fabric_color_2": "#zz", "combine": 3}})),
         ("embroidery.cutFile", json!({"what": 3, "format": [], "mirror": "x", "path": "\u{0}/x.svg", "open": "y"})),
         (
             "embroidery.setParams",

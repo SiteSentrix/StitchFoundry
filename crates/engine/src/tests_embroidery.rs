@@ -5119,3 +5119,53 @@ fn cut_files_hold_stone_holes_and_applique_pieces() {
     assert_eq!(r["opened"], true);
     assert_eq!(s.documents().len(), docs + 1);
 }
+
+#[test]
+fn applique_pieces_combine_and_are_prepared() {
+    use sf_core::model::ObjectKind;
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let stops = |s: &Session| s.embroidery_plan().unwrap().pattern().stitches.iter().filter(|st| st.cmd == sf_core::Cmd::Stop).count();
+    let a = rect(&mut s, 10.0 * PT, 10.0 * PT, 20.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "applique"})).unwrap();
+    let b = rect(&mut s, 50.0 * PT, 10.0 * PT, 20.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "applique"})).unwrap();
+    assert_eq!(stops(&s), 4, "each piece its own two stops");
+    // combined: one object of two pieces, two stops in all
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("embroidery.applique.combine", &json!({})).unwrap();
+    assert_eq!(r["pieces"], 2, "{r}");
+    assert_eq!(stops(&s), 2);
+    let plan = s.embroidery_plan().unwrap();
+    let appl: Vec<_> = plan.design.objects.iter().filter(|o| matches!(o.kind, ObjectKind::Applique(_))).collect();
+    assert_eq!(appl.len(), 1);
+    // undo brings the pieces back
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(stops(&s), 4);
+    // the fabric's look is kept with the piece
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("embroidery.setParams", &json!({"params": {"fabric_pattern": "Check", "fabricColor2": "#203040"}})).unwrap();
+    let e = s.doc().unwrap().doc.node(a).unwrap().embroidery.clone().unwrap();
+    let sf_core::attr::StitchType::Applique(p) = &e.stitch else { panic!("appliqué") };
+    assert_eq!(p.fabric_pattern, sf_core::model::FabricPattern::Check);
+    assert_eq!(p.fabric_color_2, sf_core::Rgb::new(0x20, 0x30, 0x40));
+    // prepare: an open outline is closed, overlapping pieces broken up
+    let open = NodeId(
+        s.execute("path.create", &json!({"d": format!("M {} {} L {} {} L {} {}", 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT, 40.0 * PT, 40.0 * PT)}))
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("embroidery.set", &json!({"type": "applique"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, open.0]})).unwrap();
+    let r = s.execute("embroidery.applique.prepare", &json!({})).unwrap();
+    assert_eq!(r["closed"], 1, "{r}");
+    assert!(!r["ids"].as_array().unwrap().is_empty());
+    // the pieces don't overlap any more: their areas add up to their union's
+    let plan = s.embroidery_plan().unwrap();
+    let polys: Vec<_> =
+        plan.design.objects.iter().filter(|o| matches!(o.kind, ObjectKind::Applique(_))).flat_map(sf_core::engine::object_polygons).collect();
+    let sum: f64 = polys.iter().map(|p| p.area().abs()).sum();
+    let union: f64 = sf_core::geom::poly::union(&polys).iter().map(|p| p.area().abs()).sum();
+    assert!((sum - union).abs() < 1.0, "{sum} {union}");
+}
