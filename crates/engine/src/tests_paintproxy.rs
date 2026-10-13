@@ -210,6 +210,11 @@ fn live_previews_remember_only_the_committed_colour() {
     s.preview("paint.setFill", &json!({"color": "#400000"})).unwrap();
     s.cancel_interaction().unwrap();
     assert_eq!(hexes(&s), ["#300000"], "a cancelled preview is forgotten");
+    s.begin_interaction("Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#500000"})).unwrap();
+    assert!(s.preview("no.such.command", &json!({})).is_err());
+    s.commit_interaction().unwrap();
+    assert_eq!(hexes(&s), ["#300000"], "a preview undone by a failed one is forgotten");
 }
 
 #[test]
