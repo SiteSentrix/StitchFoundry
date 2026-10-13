@@ -578,6 +578,11 @@ fn strip_replay_only(id: &str, p: &mut Value) {
     }
 }
 
+/// Is `id` a path made into a guide (View → Guides → Make Guides)?
+pub(crate) fn is_guide_path(d: &Document, id: NodeId) -> bool {
+    d.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: true, .. }))
+}
+
 /// Cheap sanity check after an edit: artboards and the objects just touched (the selection) must
 /// have finite, in-range geometry, so saved files always reload and renderers never see NaN/∞.
 fn doc_sane(d: &Document, sel: &Selection) -> bool {
@@ -1482,10 +1487,18 @@ impl Session {
     /// Change only the selection (not an undo step).
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.active_appearance_item = None;
+        let guides_locked = self.menu.guides_locked;
         let st = self.doc_mut()?;
         let before = st.selection.objects.clone();
         f(&st.doc, &mut st.selection);
         st.selection.prune(&st.doc);
+        // Lock Guides locks the paths made into guides too (#1534), whatever selects them.
+        if guides_locked {
+            let locked: Vec<NodeId> = st.selection.objects.iter().copied().filter(|id| is_guide_path(&st.doc, *id)).collect();
+            for id in locked {
+                st.selection.remove(id);
+            }
+        }
         // Selecting art makes its layer (or sublayer) the current one, as in the Layers panel of
         // the reference app: new art then goes beside it.
         if st.selection.objects != before
