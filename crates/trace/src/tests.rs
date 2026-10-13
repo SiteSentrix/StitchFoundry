@@ -1049,3 +1049,26 @@ fn layers_traced_a_few_at_a_time_come_out_the_same() {
     let b = trace(&img, &bw()).paths[0].path.bounds().unwrap();
     assert!([(b.x0, 60.0), (b.y0, 40.0), (b.x1, 80.0), (b.y1, 60.0)].iter().all(|(got, want)| (got - want).abs() < 0.01), "{b:?}");
 }
+
+#[test]
+fn a_blurred_thin_line_on_unevenly_lit_paper_is_a_few_anchors() {
+    // A line 2 px wide a little off the pixel rows, blurred over three pixels, on paper that is a
+    // quarter darker at one end than at the other: nowhere is its ink pure black, or the paper white.
+    let img = Raster::from_fn(160, 40, |x, y| {
+        let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        let paper = 235.0 - 55.0 * fx / 160.0;
+        let centre = 17.3 + 0.06 * fx;
+        // The share of ink in the pixel, the line's edges blurred linearly over 1.5 px either way.
+        let ink = if (10.0..150.0).contains(&fx) { ((1.0 + 1.5 - (fy - centre).abs()) / 3.0).clamp(0.0, 1.0) } else { 0.0 };
+        let v = (paper * (1.0 - ink) + 40.0 * ink).round() as u8;
+        [v, v, v, 255]
+    });
+    let res = trace(&img, &preset("Line Art").unwrap());
+    assert_eq!(res.paths.len(), 1);
+    let path = &res.paths[0].path;
+    // Its two long edges are smooth: a ripple would take an anchor every few pixels.
+    assert!(path.anchor_count() <= 10, "{} anchors", path.anchor_count());
+    // And it lies along the line's middle, about as wide as its ink.
+    let off = along(path).iter().filter(|p| p.x > 14.0 && p.x < 146.0).map(|p| ((p.y - (17.3 + 0.06 * p.x)).abs() - 1.0).abs()).fold(0.0, f64::max);
+    assert!(off < 0.5, "edges {off} px from where the ink's width puts them");
+}

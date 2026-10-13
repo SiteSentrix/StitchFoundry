@@ -536,17 +536,32 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     Ok(out)
 }
 
-/// The mean luminance of the pixels labelled 0 (white) and 1 (black) of a Black and White
-/// quantisation: pure white and black where a side has no pixel.
+/// The luminance of white and of black in a Black and White quantisation: what its lightest
+/// white pixels and its darkest black ones have (the 98th and 2nd percentiles; pure white and
+/// black where a side has no pixel). Not the means: where the black is thin lines, blurred or
+/// scanned, most black pixels are part paper, their mean is a gray, and read against it the middle
+/// of every line would count as more than all ink, now more and now less as the line crosses the
+/// pixel rows, which put a ripple on its edges.
 fn bw_tones(img: &Raster, q: &Quantized) -> [f64; 2] {
-    let (mut sum, mut n) = ([0.0f64; 2], [0.0f64; 2]);
+    let mut hist = [[0u64; 256]; 2];
     for (p, &l) in img.rgba.as_chunks::<4>().0.iter().zip(&q.labels) {
-        if let (Some(s), Some(n)) = (sum.get_mut(l as usize), n.get_mut(l as usize)) {
-            *s += (f64::from(p[0]) * 299.0 + f64::from(p[1]) * 587.0 + f64::from(p[2]) * 114.0) / 1000.0;
-            *n += 1.0;
+        if let Some(h) = hist.get_mut(l as usize) {
+            h[((u32::from(p[0]) * 299 + u32::from(p[1]) * 587 + u32::from(p[2]) * 114 + 500) / 1000).min(255) as usize] += 1;
         }
     }
-    [if n[0] > 0.0 { sum[0] / n[0] } else { 255.0 }, if n[1] > 0.0 { sum[1] / n[1] } else { 0.0 }]
+    // The luminance a share `at` of the side's pixels are darker than.
+    let percentile = |h: &[u64; 256], at: f64, none: f64| {
+        let total: u64 = h.iter().sum();
+        let mut seen = 0;
+        for (v, n) in h.iter().enumerate() {
+            seen += n;
+            if total > 0 && seen as f64 >= at * total as f64 {
+                return v as f64;
+            }
+        }
+        none
+    };
+    [percentile(&hist[0], 0.98, 255.0), percentile(&hist[1], 0.02, 0.0)]
 }
 
 /// What tracing one colour layer needs.
@@ -558,7 +573,7 @@ struct Layers<'a> {
     img: &'a Raster,
     /// The box each palette entry's pixels lie in: `(x0, y0, x1, y1)`, the far sides excluded.
     boxes: Vec<Option<(usize, usize, usize, usize)>>,
-    /// Black and White: the mean luminance of the white pixels and of the black ones.
+    /// Black and White: the luminance of white and of black (see `bw_tones`).
     bw_tones: [f64; 2],
     /// How outlines are fitted.
     style: logo::Style,
@@ -620,7 +635,7 @@ impl Layers<'_> {
     /// How far the edge lies from a crack between two pixels, towards the outside one (−0.5 to 0.5).
     ///
     /// Each pixel of the column across the crack is read as a blend of the tones on its two sides
-    /// (the two pixels' palette colours; in Black and White the mean luminance of the black and of
+    /// (the two pixels' palette colours; in Black and White the luminance of the image's black and of
     /// the white pixels). The edge is where the blends, summed, put it: as far out as there is
     /// inside tone in the outside pixels, less the outside tone in the inside ones (two pixels each
     /// way, while they are on the same side and no more blended than the pixel before: more would be
@@ -641,8 +656,20 @@ impl Layers<'_> {
             return 0.0;
         }
         let bw = self.params.mode == Mode::BlackAndWhite;
+        // Black and White: black is the image's black; white is the lightest pixel within a few
+        // pixels of the crack, the paper as it is here (a scan's paper is darker in one corner than
+        // in another, and read against the image's lightest white it would count as part ink).
+        let black = self.bw_tones[1];
+        let white = if bw {
+            let light = (-3..=4)
+                .filter_map(|k| c.at(k).and_then(|i| self.img.rgba.get(i * 4..i * 4 + 3)))
+                .map(|p| (f64::from(p[0]) * 299.0 + f64::from(p[1]) * 587.0 + f64::from(p[2]) * 114.0) / 1000.0);
+            light.fold(f64::NEG_INFINITY, f64::max).clamp((black + 32.0).min(self.bw_tones[0]), self.bw_tones[0])
+        } else {
+            self.bw_tones[0]
+        };
         let (ca, cb) = if bw {
-            let tone = |l: u16| [self.bw_tones[usize::from(l == 1)]; 3];
+            let tone = |l: u16| [if l == 1 { black } else { white }; 3];
             (tone(la), tone(lb))
         } else {
             let (Some(ca), Some(cb)) = (self.q.palette.get(la as usize), self.q.palette.get(lb as usize)) else { return 0.0 };
@@ -700,7 +727,6 @@ impl Layers<'_> {
         };
         if bw {
             // The share of black at which a pixel turns black.
-            let (white, black) = (self.bw_tones[0], self.bw_tones[1]);
             let turn = ((white - f64::from(self.params.threshold)) / (white - black).max(1.0)).clamp(0.02, 0.98);
             shift += if la == 1 { 1.0 } else { -1.0 } * (0.5 - turn) / steep;
         }
