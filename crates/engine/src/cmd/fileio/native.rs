@@ -99,6 +99,18 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         default: "true",
         description: "compress the PDF's content and the native document it carries (the PDF option compression.compressText)",
     },
+    FormatOption {
+        name: "aiVersion",
+        ty: "string",
+        default: "\"pdf\"",
+        description: "pdf (a PDF-compatible .ai carrying the VectorCraft document) or 7 (the legacy, PostScript-form .ai of version 7, which keeps layers, groups, compound paths and clipping groups in apps that read it; one file per artboard, transparent objects opaque, type as outlines; the other .ai options don't apply)",
+    },
+    FormatOption {
+        name: "transparentImages",
+        ty: "string",
+        default: "\"flatten\"",
+        description: "with aiVersion 7, the images version 7 can't hold (see-through pixels, opacity or a blending mode): flatten (the default: each becomes an opaque image of itself and the art under it, clipped to where it changes what shows; that art stays as it is) or omit (left out)",
+    },
 ];
 
 #[derive(Default, Deserialize)]

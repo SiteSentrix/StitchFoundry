@@ -407,7 +407,7 @@ fn expand_pieces(d: &mut Document, m: &mut Node, all: bool, stroke_art: effects:
 /// Expand Appearance of `id` (and, recursively, of a group's or layer's members): every fill and
 /// stroke becomes an object of its own (strokes outlined, brushes as their art), geometry effects
 /// are baked, raster effects become an embedded image, and the object keeps its transparency.
-fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
+pub(crate) fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
     let Some(mut n) = d.node(id).cloned() else { return };
     if !expandable(&n) {
         return;
