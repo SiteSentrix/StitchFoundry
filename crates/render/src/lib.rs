@@ -96,6 +96,9 @@ pub struct RenderOptions {
     /// Pattern editing mode's tile edge and swatch bounds colour (Object → Pattern → Tile Edge
     /// Color), RGB.
     pub tile_edge: [u8; 3],
+    /// Colour and style of the paths made into guides (Preferences › Guides & Grid, as the ruler
+    /// guides the UI draws): RGB, and whether they are dotted.
+    pub guide: ([u8; 3], bool),
     /// View Opacity Mask (Alt-click the mask thumbnail): instead of the artwork, show this object's
     /// opacity mask alone as its coverage in greyscale (white = opaque, black = transparent).
     pub mask_view: Option<NodeId>,
@@ -201,6 +204,7 @@ impl Default for RenderOptions {
             trim: false,
             skip_templates: false,
             tile_edge: vectorcraft_doc::LAYER_COLORS[0].1,
+            guide: ([0x4a, 0xd8, 0xff], false),
             mask_view: None,
             highlight_substitutions: false,
             anti_alias: AntiAlias::Art,
@@ -1158,7 +1162,17 @@ impl Renderer {
             NodeKind::Path { path, rule, guide, .. } => {
                 let bp = path.to_bezpath();
                 if *guide {
-                    self.hairline(ctx, f, &bp, [0x4a, 0xd8, 0xff, 255]);
+                    let ([r, g, b], dots) = f.opts.guide;
+                    if dots {
+                        let mut screen = bp.clone();
+                        screen.apply_affine(f.view);
+                        ctx.set_transform(Affine::IDENTITY);
+                        ctx.set_stroke(kurbo::Stroke::new(1.5).with_dashes(0.0, [1.5, 2.5]));
+                        ctx.set_paint(f.ink.fixed([r, g, b, 255]));
+                        ctx.stroke_path(&screen);
+                    } else {
+                        self.hairline(ctx, f, &bp, [r, g, b, 255]);
+                    }
                 } else {
                     self.draw_shape(ctx, f, n, &bp, *rule);
                 }
