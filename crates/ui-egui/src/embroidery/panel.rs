@@ -164,6 +164,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
     egui::CollapsingHeader::new(tl!("Batch Output")).id_salt("emb-output").show(ui, |ui| output_body(app, ui));
     egui::CollapsingHeader::new(tl!("Exports")).id_salt("emb-exports").show(ui, |ui| exports_body(app, ui));
+    egui::CollapsingHeader::new(tl!("Job Orders")).id_salt("emb-jobs").show(ui, |ui| jobs_body(app, ui));
     ui.add_space(6.0);
     object_section(app, ui);
     ui.add_space(6.0);
@@ -624,6 +625,64 @@ fn hoop_custom_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
+}
+
+/// Job orders: a new one for this design, and the open ones with their status, worksheet and files.
+pub(crate) fn jobs_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    {
+        let d = &mut app.embroidery.job_draft;
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut d.0).desired_width(120.0).hint_text(tl!("Customer")));
+            ui.add(egui::DragValue::new(&mut d.1).range(1..=1_000_000).suffix(" pcs"));
+        });
+        ui.add(egui::TextEdit::singleline(&mut d.2).desired_width(160.0).hint_text(tl!("Due (YYYY-MM-DD)")));
+    }
+    let (customer, quantity, due) = app.embroidery.job_draft.clone();
+    if !customer.trim().is_empty() && button(ui, tl!("New Job for This Design")).clicked() {
+        match app.run("embroidery.job.create", json!({ "customer": customer, "quantity": quantity, "due": due })) {
+            Ok(_) => app.embroidery.job_draft = (String::new(), 1, String::new()),
+            Err(e) => app.status(e),
+        }
+    }
+    let jobs = app
+        .session
+        .prefs
+        .embroidery_jobs
+        .iter()
+        .rev()
+        .filter(|j| {
+            !matches!(
+                j.status,
+                vectorcraft_engine::cmd::embroidery_jobs::JobStatus::Done | vectorcraft_engine::cmd::embroidery_jobs::JobStatus::Cancelled
+            )
+        })
+        .take(15)
+        .cloned()
+        .collect::<Vec<_>>();
+    let statuses = ["open", "production", "done", "cancelled"];
+    let names = [tl!("Open"), tl!("In production"), tl!("Done"), tl!("Cancelled")];
+    let mut act: Option<(&str, Value)> = None;
+    for j in &jobs {
+        ui.separator();
+        ui.label(egui::RichText::new(format!("{}  {}  ×{}  {}", j.number, j.customer, j.quantity, j.due)).small());
+        ui.horizontal(|ui| {
+            let cur = statuses.iter().position(|s| *s == j.status.id()).unwrap_or(0);
+            if let Some(i) =
+                crate::widgets::dropdown(ui, ("emb-job", j.id), names.get(cur).copied().unwrap_or_default(), &names, 110.0).filter(|i| *i != cur)
+                && let Some(st) = statuses.get(i)
+            {
+                act = Some(("embroidery.job.update", json!({ "id": j.id, "status": st })));
+            }
+            if button(ui, tl!("Worksheet")).clicked() {
+                act = Some(("embroidery.job.worksheet", json!({ "id": j.id })));
+            }
+        });
+    }
+    if let Some((id, p)) = act
+        && let Err(e) = app.run(id, p)
+    {
+        app.status(e);
+    }
 }
 
 /// The exports of this session that wrote files, newest first: where they went, or why they

@@ -429,6 +429,17 @@ for the design as a new A4 document, to print (File › Print) or export as PDF:
 
 The worksheet's text is in English for now.
 
+## Job orders
+
+The Embroidery panel's **Job Orders** section keeps customers' orders: **New Job for This Design**
+(`embroidery.job.create {customer, design?, quantity?, due?, garment?, placement?, notes?}`) numbers
+it (J-0001 on) and remembers the active design's file; each open job shows its status (open, in
+production, done, cancelled: `embroidery.job.update`) and a **Worksheet** button
+(`embroidery.job.worksheet`): the design opened if it isn't already, and a worksheet with the
+customer, the job's number as its barcode, the quantity, due date, garment, placement, notes and
+the cost for the quantity. `embroidery.job.output {id, dir?, profile?…}` writes the job's files as
+Batch Output does, named after the job's number. `embroidery.jobs {status?, query?}` lists them.
+
 ## Batch output
 
 `embroidery.output {dir, formats?, worksheet?, design?, name?, replace?}` writes everything a job

@@ -4286,3 +4286,14 @@ machine	Stop	停止
 	Save as Design Template	另存為設計範本
 	Delete Design Template	刪除設計範本
 	Print Stitch View	列印針跡檢視
+	Job Orders	訂單
+	Customer	客戶
+	Due (YYYY-MM-DD)	交期 (YYYY-MM-DD)
+	New Job for This Design	為此設計新增訂單
+	In production	生產中
+	Cancelled	已取消
+	New Job Order	新增訂單
+	Update Job Order	更新訂單
+	Delete Job Order	刪除訂單
+	Job Worksheet	訂單工作單
+	Job Output	訂單輸出

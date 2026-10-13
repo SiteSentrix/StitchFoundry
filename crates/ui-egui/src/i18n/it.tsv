@@ -4926,3 +4926,14 @@ machine	Stop	Arresto
 	Save as Design Template	Salva come modello di disegno
 	Delete Design Template	Elimina modello di disegno
 	Print Stitch View	Stampa vista dei punti
+	Job Orders	Ordini
+	Customer	Cliente
+	Due (YYYY-MM-DD)	Consegna (AAAA-MM-GG)
+	New Job for This Design	Nuovo ordine per questo disegno
+	In production	In produzione
+	Cancelled	Annullato
+	New Job Order	Nuovo ordine
+	Update Job Order	Aggiorna ordine
+	Delete Job Order	Elimina ordine
+	Job Worksheet	Scheda dell'ordine
+	Job Output	Output dell'ordine

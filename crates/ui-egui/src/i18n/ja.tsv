@@ -4920,3 +4920,14 @@ machine	Stop	停止
 	Save as Design Template	デザインテンプレートとして保存
 	Delete Design Template	デザインテンプレートを削除
 	Print Stitch View	ステッチ表示を印刷
+	Job Orders	受注
+	Customer	顧客
+	Due (YYYY-MM-DD)	納期 (YYYY-MM-DD)
+	New Job for This Design	このデザインで新規受注
+	In production	生産中
+	Cancelled	キャンセル
+	New Job Order	新規受注
+	Update Job Order	受注を更新
+	Delete Job Order	受注を削除
+	Job Worksheet	受注の作業指示書
+	Job Output	受注の出力

@@ -4192,3 +4192,14 @@ machine	Trim	Corte de linha
 	Save as Design Template	Salvar como modelo de desenho
 	Delete Design Template	Excluir modelo de desenho
 	Print Stitch View	Imprimir vista dos pontos
+	Job Orders	Pedidos
+	Customer	Cliente
+	Due (YYYY-MM-DD)	Entrega (AAAA-MM-DD)
+	New Job for This Design	Novo pedido para este desenho
+	In production	Em produção
+	Cancelled	Cancelado
+	New Job Order	Novo pedido
+	Update Job Order	Atualizar pedido
+	Delete Job Order	Excluir pedido
+	Job Worksheet	Ficha do pedido
+	Job Output	Saída do pedido

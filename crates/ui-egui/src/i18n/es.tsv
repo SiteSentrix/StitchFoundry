@@ -4924,3 +4924,14 @@ machine	Stop	Parada
 	Save as Design Template	Guardar como plantilla de diseño
 	Delete Design Template	Eliminar plantilla de diseño
 	Print Stitch View	Imprimir vista de puntadas
+	Job Orders	Pedidos
+	Customer	Cliente
+	Due (YYYY-MM-DD)	Entrega (AAAA-MM-DD)
+	New Job for This Design	Nuevo pedido para este diseño
+	In production	En producción
+	Cancelled	Cancelado
+	New Job Order	Nuevo pedido
+	Update Job Order	Actualizar pedido
+	Delete Job Order	Eliminar pedido
+	Job Worksheet	Hoja del pedido
+	Job Output	Salida del pedido

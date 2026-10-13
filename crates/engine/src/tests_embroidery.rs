@@ -793,6 +793,58 @@ fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
 }
 
 #[test]
+fn job_orders_keep_the_order_and_print_its_worksheet() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let r = s.execute("embroidery.job.create", &json!({"customer": "Rovers FC", "quantity": 24, "due": "2026-11-01", "garment": "Navy polo", "placement": "left-chest", "notes": "Club crest"})).unwrap();
+    assert_eq!(r["number"].as_str(), Some("J-0001"));
+    let id = r["id"].as_u64().unwrap();
+    let r = s.execute("embroidery.job.create", &json!({"customer": "Cafe Uno"})).unwrap();
+    assert_eq!(r["number"].as_str(), Some("J-0002"));
+    // listed newest first, found by text, by status
+    let list = s.execute("embroidery.jobs", &json!({})).unwrap();
+    assert_eq!(list["jobs"][0]["customer"].as_str(), Some("Cafe Uno"));
+    assert_eq!(s.execute("embroidery.jobs", &json!({"query": "rovers"})).unwrap()["jobs"].as_array().unwrap().len(), 1);
+    s.execute("embroidery.job.update", &json!({"id": id, "status": "production", "quantity": 30})).unwrap();
+    let busy = s.execute("embroidery.jobs", &json!({"status": "production"})).unwrap();
+    assert_eq!((busy["jobs"][0]["quantity"].as_u64(), busy["jobs"].as_array().unwrap().len()), (Some(30), 1));
+    // the worksheet: the job's number as its barcode, its order in the notes
+    s.execute("embroidery.job.worksheet", &json!({"id": id})).unwrap();
+    let mut texts = Vec::new();
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    assert!(texts.iter().any(|t| t == "J-0001"), "{texts:?}");
+    assert!(texts.iter().any(|t| t.contains("30 pieces")) && texts.iter().any(|t| t.contains("Navy polo")), "{texts:?}");
+    // its files, named after it
+    s.set_active(0);
+    let dir = std::env::temp_dir().join(format!("sf-jobs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let r = s
+        .execute("embroidery.job.output", &json!({"id": id, "dir": dir.to_string_lossy(), "formats": ["dst"], "worksheet": "none", "design": false}))
+        .unwrap();
+    assert!(r["files"][0]["path"].as_str().unwrap().contains("J-0001"), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+    for (cmd, bad) in [
+        ("embroidery.job.create", json!({})),
+        ("embroidery.job.create", json!({"customer": "X", "quantity": 0})),
+        ("embroidery.job.update", json!({"id": id, "status": "lost"})),
+        ("embroidery.job.update", json!({"id": 99})),
+        ("embroidery.job.worksheet", json!({"id": id, "kind": "pattern"})),
+        ("embroidery.jobs", json!({"status": "lost"})),
+    ] {
+        assert!(s.execute(cmd, &bad).is_err(), "{cmd} {bad}");
+    }
+    s.execute("embroidery.job.delete", &json!({"id": id})).unwrap();
+    assert!(s.execute("embroidery.job.delete", &json!({"id": id})).is_err());
+}
+
+#[test]
 fn the_stitch_view_prints_life_size_or_fitted() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
