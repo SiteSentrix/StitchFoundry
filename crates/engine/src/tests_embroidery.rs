@@ -3351,6 +3351,42 @@ fn puff_fills_and_puff_sewn_last() {
 }
 
 #[test]
+fn warped_lettering_sews_as_it_looks_and_stays_lettering() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let r = s.execute("embroidery.lettering", &json!({"text": "ABAB", "font": "Test Script", "at": [100, 300]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let all = |s: &Session| -> Vec<sf_core::Point> {
+        let plan = s.embroidery_plan().unwrap();
+        plan.pattern().stitches.iter().filter(|s| s.cmd == sf_core::Cmd::Stitch).map(|s| s.pos()).collect()
+    };
+    let flat = all(&s);
+    let height = |pts: &[sf_core::Point]| {
+        let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.y), hi.max(p.y)));
+        hi - lo
+    };
+    // an arc warp bends the stitches with the letters: taller than flat, still sewn
+    for style in ["arc", "flag", "bulge"] {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("object.envelope.makeWithWarp", &json!({"style": style, "bend": 50})).unwrap();
+        let warped = all(&s);
+        assert!(!warped.is_empty() && warped != flat, "{style}");
+        if style == "arc" {
+            assert!(height(&warped) > height(&flat) * 1.2, "{style}: {} vs {}", height(&warped), height(&flat));
+        }
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(all(&s), flat, "{style}: undone");
+    }
+    // set again inside the envelope: still lettering, warped with its new text
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 50})).unwrap();
+    let before = all(&s);
+    s.execute("embroidery.lettering.edit", &json!({"id": id.0, "text": "AB"})).unwrap();
+    let after = all(&s);
+    assert!(!after.is_empty() && after.len() < before.len(), "{} → {}", before.len(), after.len());
+}
+
+#[test]
 fn team_names_lay_out_together_and_list_on_a_worksheet() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
