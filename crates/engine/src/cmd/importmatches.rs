@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Matches",
             [],
             None,
-            "{kind?: name|key|modifiers, query?: text in the name, target or label (any case)} the matches the user confirmed when importing other apps' files (shortcut sets), kept with the preferences → [{kind, name, target, label?}] (target \"\": no equivalent)",
+            "{kind?: name|key|modifiers, query?: text (in the name, target or label; any case)} the matches the user confirmed when importing other apps' files (shortcut sets), kept with the preferences → [{kind, name, target, label?}] (target \"\": no equivalent)",
             always,
             list
         ),

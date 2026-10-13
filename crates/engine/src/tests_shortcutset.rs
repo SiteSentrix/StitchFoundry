@@ -224,3 +224,17 @@ fn read_shows_what_earlier_imports_matched() {
     let mods = json!([{"value": 0, "count": 1, "mods": ""}, {"value": 64, "count": 1, "mods": "Cmd"}, {"value": 80, "count": 1}]);
     assert_eq!(r["codes"]["modifiers"], mods);
 }
+
+#[test]
+fn the_commands_take_only_the_keys_they_describe() {
+    // The control channel, MCP and the CLI check params against the description (#1442).
+    for (id, every_key) in [
+        ("shortcutSet.read", json!({"path": "/x/a.kys", "data": "", "dataBase64": "", "name": "a.kys"})),
+        ("importMatches.list", json!({"kind": "name", "query": "undo"})),
+        ("importMatches.set", json!({"matches": []})),
+        ("importMatches.reset", json!({"kind": "key"})),
+    ] {
+        check_params(id, &every_key).unwrap();
+        assert!(check_params(id, &json!({"qeury": "undo"})).is_err(), "{id}");
+    }
+}
