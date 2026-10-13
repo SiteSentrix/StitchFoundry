@@ -735,6 +735,22 @@ pub(crate) fn team_names_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let names: Vec<String> = app.embroidery.team_names.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
     ui.label(format!("{}: {}", tl!("Names"), names.len()));
+    if !names.is_empty() {
+        ui.horizontal(|ui| {
+            if button(ui, tl!("Lay Out Together"))
+                .on_hover_text(tl!("Every name in one design, in rows and columns, for a large hoop or patches"))
+                .clicked()
+                && let Err(e) = app.run("embroidery.teamNames.layout", json!({ "names": names.clone() }))
+            {
+                app.status(e);
+            }
+            if button(ui, tl!("Names Worksheet")).on_hover_text(tl!("Each name with its size, stitches and sewing time, and the totals")).clicked()
+                && let Err(e) = app.run("embroidery.teamNames.worksheet", json!({ "names": names.clone() }))
+            {
+                app.status(e);
+            }
+        });
+    }
     if app.services.pick_folder.is_some() && !names.is_empty() && button(ui, tl!("Export One File per Name…")).clicked() {
         crate::picks::button(app, move |app| {
             let Some(dir) = crate::picks::folder(app) else { return };
