@@ -4979,3 +4979,5 @@ machine	Stop	Zastavení
 	Send Waiting Designs	Odeslat čekající výšivky
 	Remove from Send Queue	Odebrat z fronty odesílání
 @msg	the queued file is damaged	soubor ve frontě je poškozený
+	Centred	Na střed
+	In the hoop	V rámečku

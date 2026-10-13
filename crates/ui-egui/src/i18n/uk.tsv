@@ -4934,3 +4934,5 @@ machine	Stop	Зупинка
 	Send Waiting Designs	Надіслати дизайни в очікуванні
 	Remove from Send Queue	Прибрати з черги надсилання
 @msg	the queued file is damaged	файл у черзі пошкоджено
+	Centred	По центру
+	In the hoop	У п'яльцях

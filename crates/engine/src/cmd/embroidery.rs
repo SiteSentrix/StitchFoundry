@@ -963,8 +963,25 @@ pub(super) fn export_machine_file(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let title = &s.doc()?.doc.title;
     let name = str_param(p, "name").map_or_else(|| super::fileio::file_stem(title), str::to_string);
-    let opts = sf_formats::WriteOptions { name, center: bool_or(p, "center", true), ..sf_formats::WriteOptions::default() };
-    let pattern = plan.pattern();
+    let mut opts = sf_formats::WriteOptions { name, center: bool_or(p, "center", true), ..sf_formats::WriteOptions::default() };
+    // a fixed place in the hoop: the design's middle there, not on the hoop's centre
+    let offset = s.doc()?.doc.embroidery.as_deref().and_then(|e| e.settings.hoop_offset).filter(|_| opts.center);
+    let moved;
+    let pattern = match offset {
+        Some([x, y]) => {
+            let mut q = plan.pattern().clone();
+            let b = q.bounds();
+            let (dx, dy) = (x - (b.min.x + b.max.x) / 2.0, y - (b.min.y + b.max.y) / 2.0);
+            for st in &mut q.stitches {
+                st.x += dx;
+                st.y += dy;
+            }
+            opts.center = false;
+            moved = q;
+            &moved
+        }
+        None => plan.pattern(),
+    };
     let bytes = sf_formats::write(format, pattern, &opts).map_err(|e| EngineError::Other(format!("{} export failed: {e}", format.name())))?;
     Ok(json!({
         "dataBase64": vectorcraft_format::base64_encode(&bytes),
@@ -1947,6 +1964,21 @@ fn settings(s: &mut Session, p: &Value) -> Result<Value> {
             changed = true;
         }
     }
+    if let Some(v) = p.get("hoopPosition") {
+        st.hoop_offset = match v {
+            Value::Null => None,
+            Value::String(c) if c == "centre" || c == "center" => None,
+            Value::Array(a) => {
+                let n = |i: usize| a.get(i).and_then(Value::as_f64).filter(|v| v.is_finite() && v.abs() <= 1000.0);
+                match (n(0), n(1), a.len()) {
+                    (Some(x), Some(y), 2) => Some([x, y]),
+                    _ => return Err(bad(CMD, "hoopPosition is [x, y]: mm from the hoop's centre, each within 1000")),
+                }
+            }
+            _ => return Err(bad(CMD, "hoopPosition is centre or [x, y] (mm from the hoop's centre)")),
+        };
+        changed = true;
+    }
     if let Some(v) = p.get("registration") {
         let o = v.as_object().ok_or_else(|| bad(CMD, "registration is {shape?, size?, perOverlap?, color?}"))?;
         let r = &mut st.registration;
@@ -2648,6 +2680,7 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         "tieIn": st.tie_in, "tieOff": st.tie_off, "tieLength": st.tie_length, "tieStyle": st.tie_style.id(), "machineSpeed": st.machine_speed,
         "trimSeconds": st.trim_seconds, "colorChangeSeconds": st.color_change_seconds,
         "basting": st.basting.map(|b| json!({ "hoop": b.hoop, "margin": b.margin, "length": b.length })),
+        "hoopPosition": st.hoop_offset,
         "registration": json!({ "shape": st.registration.shape.id(), "size": st.registration.size, "perOverlap": st.registration.per_overlap, "color": st.registration.color.to_hex() }),
         "start": st.start.map(|q| q.id()),
         "end": st.end.map(|q| q.id()),
@@ -2662,9 +2695,13 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
     });
     let fits = cfg.hoop.as_ref().map(|h| {
         let b = plan.pattern().bounds();
-        let centered =
-            sf_core::BBox::new(sf_core::Point::new(-b.width() / 2.0, -b.height() / 2.0), sf_core::Point::new(b.width() / 2.0, b.height() / 2.0));
-        h.fits(&centered)
+        // centred, or where the design is placed in the hoop
+        let [ox, oy] = cfg.settings.hoop_offset.unwrap_or([0.0, 0.0]);
+        let placed = sf_core::BBox::new(
+            sf_core::Point::new(ox - b.width() / 2.0, oy - b.height() / 2.0),
+            sf_core::Point::new(ox + b.width() / 2.0, oy + b.height() / 2.0),
+        );
+        h.fits(&placed)
     });
     let Some(st) = &plan.stats else {
         return Ok(

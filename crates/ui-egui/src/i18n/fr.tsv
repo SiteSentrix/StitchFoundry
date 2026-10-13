@@ -4962,3 +4962,5 @@ machine	Stop	Arrêt
 	Send Waiting Designs	Envoyer les motifs en attente
 	Remove from Send Queue	Retirer de la file d'envoi
 @msg	the queued file is damaged	le fichier en file est endommagé
+	Centred	Centré
+	In the hoop	Dans le tambour

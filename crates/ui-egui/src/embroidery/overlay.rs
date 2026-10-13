@@ -234,9 +234,12 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
     let connectors = ui.connectors;
     let (beads, guides) = (ui.beads, ui.guides);
     let selected: Vec<_> = st.selection.objects.clone();
-    // The hoop's sewing field, centred on the design as the machine centres it.
-    if let Some(hoop) = st.doc.embroidery.as_deref().and_then(|e| e.hoop.as_ref()) {
-        hoop_outline(painter, xf, hoop, plan.pattern());
+    // The hoop's sewing field, centred on the design as the machine centres it (or where the
+    // design is placed in it).
+    if let Some(e) = st.doc.embroidery.as_deref()
+        && let Some(hoop) = e.hoop.as_ref()
+    {
+        hoop_outline(painter, xf, hoop, plan.pattern(), e.settings.hoop_offset.unwrap_or([0.0, 0.0]));
     }
     let repeats = (app.embroidery.repeats, app.embroidery.repeat_gap);
     let cache = &mut app.embroidery.mesh;
@@ -307,12 +310,13 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
 
 /// The hoop's sewing field (dashed, red where the design doesn't fit) round the
 /// design's centre, with centre marks and the hoop's name.
-fn hoop_outline(painter: &Painter, xf: &Xf, hoop: &vectorcraft_embroidery::sf_core::hoops::Hoop, pattern: &Pattern) {
+fn hoop_outline(painter: &Painter, xf: &Xf, hoop: &vectorcraft_embroidery::sf_core::hoops::Hoop, pattern: &Pattern, [ox, oy]: [f64; 2]) {
     let b = pattern.bounds();
     if b.is_empty() {
         return;
     }
-    let c = b.center();
+    // the hoop's centre: the design's middle, less where the design sits in the hoop
+    let c = b.center() - vectorcraft_embroidery::sf_core::Point::new(ox, oy);
     let fits = hoop.fits(&vectorcraft_embroidery::sf_core::geom::BBox::new(b.min - c, b.max - c));
     let color = if fits { Color32::from_rgb(70, 110, 170) } else { Color32::from_rgb(210, 50, 50) };
     let mut ring: Vec<Pos2> = hoop.outline().into_iter().map(|q| xf.to_screen(pt(q + c))).collect();

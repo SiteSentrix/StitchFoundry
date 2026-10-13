@@ -4952,3 +4952,5 @@ machine	Stop	Parada
 	Send Waiting Designs	Enviar diseños en espera
 	Remove from Send Queue	Quitar de la cola de envío
 @msg	the queued file is damaged	el archivo en cola está dañado
+	Centred	Centrado
+	In the hoop	En el bastidor
