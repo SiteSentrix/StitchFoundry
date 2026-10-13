@@ -250,7 +250,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | BAS-01 | Graphics and embroidery in one workspace (reference: switch to CorelDRAW mode) | Done | VectorCraft is the graphics editor; embroidery overlays the same document | – |
-| BAS-02 | Design library browser | Missing | See DM-* | 6 |
+| BAS-02 | Design library browser | Done | The Design Library section (DM-01) | 0 |
 | BAS-03 | Object properties view | Done | Embroidery panel | – |
 | BAS-04 | Choose the target machine format for the design | Done | Design › Machine picks a machine profile; export writes its format unless another is chosen | 1 |
 | BAS-05 | Open machine designs | Done | 8 formats as manual-stitch paths | – |
@@ -511,7 +511,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | OUT-05 | Cost estimate (stitches, thread, time, machine heads) | Done | `embroidery.settings {cost}` (per 1000 stitches, machine hour over its heads, thread per 1000 m, set-up an order, currency); `embroidery.cost {quantity}`; shown in the Design section and on worksheets | 0 |
 | MDO-01 | Export vectors, appliqué cut files, bling templates, multi-decoration files | Missing | SVG/DXF/PLT exports of the relevant layers | 4 |
 | NET-01 | Machine networking (device setup, queues, device settings) | Out | Vendor ecosystems | – |
-| DM-01 | Design library: browse folders, thumbnails, search, design info | Partial | `embroidery.library.scan`: a folder's machine files with figures and stitch thumbnails, searched and sorted, cached; the library panel still to come | 6 |
+| DM-01 | Design library: browse folders, thumbnails, search, design info | Done | The Design Library section (`embroidery.library.scan`): a folder's machine files as stitch thumbnails with size, stitches, colours and date, searched and sorted, cached, opened with a click | 0 |
 | DM-02 | Job orders, batch convert, output selected designs | Missing | §7.12 | 6 |
 | DM-03 | Embroidery clipart (insert library designs) | Missing | Our own small clipart set + user libraries | 6 |
 | CH-01 | Chenille machines (chain and moss stitches) | Missing | Chenille object types + formats with chenille codes | 7 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 177 done,
-29 partial, 38 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 179 done,
+28 partial, 37 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

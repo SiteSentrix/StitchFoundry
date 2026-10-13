@@ -4832,3 +4832,14 @@ machine	Stop	停止
 	Each name with its size, stitches and sewing time, and the totals	各名前のサイズ、針数、縫製時間と合計
 	Design Library	デザインライブラリ
 	Design Catalogue	デザインカタログ
+	No folder chosen	フォルダー未選択
+	Choose Folder…	フォルダーを選択…
+	Newest	新しい順
+	Most stitches	針数の多い順
+	Largest	大きい順
+	Designs	デザイン
+	Couldn't be read	読み込めないファイル
+	stitches	針
+	colours	色
+	Print Catalogue	カタログを印刷
+	A sheet of the designs found, to print or save as PDF	見つかったデザインの一覧シート（印刷またはPDF保存用）

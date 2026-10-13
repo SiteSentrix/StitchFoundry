@@ -157,6 +157,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     lettering_rows(app, ui);
     team_name_rows(app, ui);
     monogram_rows(app, ui);
+    egui::CollapsingHeader::new(tl!("Design Library")).id_salt("emb-library").show(ui, |ui| library_body(app, ui));
     buttonhole_rows(app, ui);
     egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
     ui.add_space(6.0);
@@ -759,6 +760,123 @@ pub(crate) fn team_names_body(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Err(e) => app.status(e),
             }
         });
+    }
+}
+
+/// The design library: a folder's machine files as thumbnails, searched and sorted; a click opens
+/// one, and the catalogue prints them all.
+pub(crate) fn library_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let lib = &mut app.embroidery.library;
+    ui.horizontal(|ui| {
+        let shown = if lib.folder.is_empty() { tl!("No folder chosen").to_string() } else { lib.folder.clone() };
+        ui.label(egui::RichText::new(shown).small());
+    });
+    let mut rescan = false;
+    if app.services.pick_folder.is_some() && button(ui, tl!("Choose Folder…")).clicked() {
+        crate::picks::button(app, |app| {
+            if let Some(dir) = crate::picks::folder(app) {
+                app.embroidery.library.folder = dir;
+                app.embroidery.library.result = None;
+            }
+        });
+    }
+    let lib = &mut app.embroidery.library;
+    if lib.folder.is_empty() {
+        return;
+    }
+    ui.horizontal(|ui| {
+        rescan |= ui.add(egui::TextEdit::singleline(&mut lib.query).desired_width(120.0).hint_text(tl!("Find"))).changed();
+        let sorts = ["name", "date", "stitches", "size"];
+        let names = [tl!("Name"), tl!("Newest"), tl!("Most stitches"), tl!("Largest")];
+        let cur = sorts.iter().position(|s| *s == lib.sort).unwrap_or(0);
+        if let Some(i) = pick(ui, tl!("Sort"), "lib-sort", cur, &names)
+            && let Some(s) = sorts.get(i)
+        {
+            lib.sort = (*s).to_string();
+            rescan = true;
+        }
+        rescan |= button(ui, tl!("Refresh")).clicked();
+    });
+    if rescan || lib.result.is_none() {
+        let params = json!({ "folder": lib.folder, "query": lib.query, "sort": lib.sort });
+        let folder = lib.folder.clone();
+        match app.run("embroidery.library.scan", params) {
+            Ok(r) => app.embroidery.library.result = Some(r),
+            Err(e) => {
+                app.embroidery.library.result = Some(json!({ "folder": folder, "designs": [] }));
+                app.status(e);
+            }
+        }
+    }
+    let Some(result) = app.embroidery.library.result.clone() else { return };
+    let designs = result["designs"].as_array().cloned().unwrap_or_default();
+    ui.label(format!("{}: {}", tl!("Designs"), designs.len()));
+    if let Some(failed) = result["failed"].as_array().filter(|f| !f.is_empty()) {
+        ui.label(egui::RichText::new(format!("{}: {}", tl!("Couldn't be read"), failed.len())).small());
+    }
+    let mut open = None;
+    let tile = 92.0;
+    egui::ScrollArea::vertical().id_salt("lib-grid").max_height(360.0).show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            for d in &designs {
+                let (rect, resp) = ui.allocate_exact_size(egui::vec2(tile, tile + 16.0), egui::Sense::click());
+                let t = Tokens::get(ui.ctx());
+                let painter = ui.painter_at(rect);
+                let thumb = egui::Rect::from_min_size(rect.min, egui::vec2(tile, tile));
+                painter.rect_filled(thumb, 3.0, t.panel_darker);
+                draw_thumbnail(&painter, thumb.shrink(5.0), d);
+                let name: String = d["name"].as_str().unwrap_or_default().chars().take(14).collect();
+                painter.text(egui::pos2(rect.min.x + 2.0, rect.max.y - 14.0), egui::Align2::LEFT_TOP, name, egui::FontId::proportional(10.0), t.text);
+                let resp = resp.on_hover_text(format!(
+                    "{}\n{:.0} × {:.0} mm   {} {}   {} {}\n{}",
+                    d["name"].as_str().unwrap_or_default(),
+                    d["widthMm"].as_f64().unwrap_or(0.0),
+                    d["heightMm"].as_f64().unwrap_or(0.0),
+                    d["stitches"].as_u64().unwrap_or(0),
+                    tl!("stitches"),
+                    d["colors"].as_u64().unwrap_or(0),
+                    tl!("colours"),
+                    d["path"].as_str().unwrap_or_default()
+                ));
+                if resp.hovered() {
+                    painter.rect_stroke(thumb, 3.0, egui::Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
+                }
+                if resp.clicked() {
+                    open = d["path"].as_str().map(str::to_string);
+                }
+            }
+        });
+    });
+    if let Some(path) = open
+        && let Err(e) = crate::io::open_path(app, &path)
+    {
+        app.status(e);
+    }
+    if !designs.is_empty() && button(ui, tl!("Print Catalogue")).on_hover_text(tl!("A sheet of the designs found, to print or save as PDF")).clicked()
+    {
+        let lib = &app.embroidery.library;
+        let params = json!({ "folder": lib.folder, "query": lib.query, "sort": lib.sort });
+        if let Err(e) = app.run("embroidery.library.catalogue", params) {
+            app.status(e);
+        }
+    }
+}
+
+/// A design's stitch outline (`embroidery.library.scan`'s preview) fitted in `r`.
+fn draw_thumbnail(painter: &egui::Painter, r: egui::Rect, d: &Value) {
+    let (w, h) = (d["widthMm"].as_f64().unwrap_or(0.0) as f32, d["heightMm"].as_f64().unwrap_or(0.0) as f32);
+    let k = r.width().min(r.height()) / w.max(h).max(1.0);
+    let o = egui::pos2(r.center().x - w * k / 2.0, r.center().y - h * k / 2.0);
+    for block in d["preview"].as_array().into_iter().flatten() {
+        let Some(c) = block["color"].as_str().and_then(vectorcraft_embroidery::sf_core::Rgb::from_hex) else { continue };
+        let stroke = egui::Stroke::new(0.8, egui::Color32::from_rgb(c.r, c.g, c.b));
+        for run in block["runs"].as_array().into_iter().flatten().filter_map(Value::as_array) {
+            let pts: Vec<egui::Pos2> =
+                run.iter().filter_map(|q| Some(egui::pos2(o.x + q.get(0)?.as_f64()? as f32 * k, o.y + q.get(1)?.as_f64()? as f32 * k))).collect();
+            if pts.len() >= 2 {
+                painter.add(egui::Shape::line(pts, stroke));
+            }
+        }
     }
 }
 
