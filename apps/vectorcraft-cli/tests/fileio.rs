@@ -99,3 +99,19 @@ fn info_reports_why_an_eps_read_partly() {
     assert!(w.contains("`frobnicate`"), "{v}");
     assert_eq!(v["kinds"]["Path"], 1, "{v}");
 }
+
+/// #1604: convert reports what reading the input left out (here a missing linked image) as
+/// importWarnings, next to the export's own warnings.
+#[test]
+fn convert_reports_import_warnings() {
+    let svg = tmp("missing-link.svg");
+    std::fs::write(
+        &svg,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><image width="40" height="40" href="nowhere-to-be-found.png"/></svg>"#,
+    )
+    .unwrap();
+    let png = tmp("missing-link.png");
+    let out: Value = serde_json::from_str(ok(&["convert", &svg, &png]).trim()).unwrap();
+    let w = out["importWarnings"].as_array().unwrap_or_else(|| panic!("{out}"));
+    assert!(w.iter().any(|w| w.as_str().unwrap().contains("nowhere-to-be-found.png")), "{out}");
+}

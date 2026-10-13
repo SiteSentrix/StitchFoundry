@@ -382,12 +382,16 @@ pub(crate) fn source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
 
 pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
     let src = source(p, "document.open")?;
-    open_bytes_with(s, src.name, &src.bytes, src.path.map(str::to_string), p)
+    // A relative path is the file in the working directory: its folder is where relative links
+    // are found (a bare file name has no folder of its own).
+    let path = src.path.map(super::absolute_path);
+    open_bytes_with(s, path.as_deref().unwrap_or(src.name), &src.bytes, path.clone(), p)
 }
 
 pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
     let src = source(p, "file.newFromTemplate")?;
-    open_template(s, src.name, &src.bytes, src.path)
+    let path = src.path.map(super::absolute_path);
+    open_template(s, path.as_deref().unwrap_or(src.name), &src.bytes, path.as_deref())
 }
 
 /// The most memory decoding one image may take: a 60 in print sheet at 300 ppi (18000 × 6600 px)
