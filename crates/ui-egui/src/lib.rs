@@ -282,6 +282,9 @@ pub struct CanvasCache {
     pub slices: Option<SliceCache>,
     /// The print tiling's pages for (document uid, revision) (View → Show Print Tiling).
     pub print_tiling: Option<PrintTilingCache>,
+    /// The marks Type → Show Hidden Characters drew on each text object in the last frame that
+    /// showed them.
+    pub hidden_chars: canvas::HiddenChars,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
     pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
     /// [`VectorcraftApp::selection_bounds`] for (document uid, revision).
@@ -472,6 +475,7 @@ impl VectorcraftApp {
                 worker_started: false,
                 slices: None,
                 print_tiling: None,
+                hidden_chars: Default::default(),
                 selection_box: None,
                 selection_bounds: None,
                 cursors: Default::default(),

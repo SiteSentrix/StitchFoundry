@@ -1523,25 +1523,86 @@ fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f
 }
 
 /// Type → Show Hidden Characters: spaces as dots, ¶ at paragraph ends, # at the end of a story.
-fn hidden_chars_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+/// The marks of each text object are kept from one frame to the next ([`HiddenChars`]).
+fn hidden_chars_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(st) = app.session.active() else { return };
     let clip = p.clip_rect();
     let color = Color32::from_rgb(0x4f, 0x9d, 0xff);
     let font = egui::FontId::proportional(((10.0 * xf.zoom) as f32).clamp(7.0, 18.0));
-    st.doc.walk(|n| {
+    let kept = &mut app.canvas.hidden_chars;
+    // `last` holds the marks of the last frame that showed them. The marks of the objects this
+    // frame doesn't draw are dropped at the end.
+    let mut last = std::mem::take(&mut kept.marks);
+    // The inputs are read before any layout: when fonts load during this frame, the next frame
+    // lays all type out again.
+    let inputs = (vectorcraft_text::FontDb::global().generation(), vectorcraft_text::hyphenation_exceptions());
+    if kept.inputs != inputs {
+        last.clear();
+        kept.inputs = inputs;
+    }
+    // `walk` visits each node's `Arc` in the order `Document::walk` visits the nodes (depth first,
+    // in paint order).
+    fn walk(nodes: &[std::sync::Arc<Node>], f: &mut impl FnMut(&std::sync::Arc<Node>)) {
+        for n in nodes {
+            f(n);
+            if let Some(children) = n.children() {
+                walk(children, f);
+            }
+        }
+    }
+    walk(&st.doc.layers, &mut |n| {
         let NodeKind::Text(tx) = &n.kind else { return };
         if !n.visible || n.geometric_bounds().is_none_or(|b| !xf.rect_to_screen(b).intersects(clip)) {
             return;
         }
+        let marks = match last.remove(&n.id) {
+            Some((was, marks)) if std::sync::Arc::ptr_eq(&was, n) => marks,
+            _ => std::sync::Arc::new(HiddenMarks::of(tx)),
+        };
+        for &at in &marks.spaces {
+            p.circle_filled(xf.to_screen(at), 1.2, color);
+        }
+        for &(at, glyph) in &marks.ends {
+            p.text(xf.to_screen(at), egui::Align2::LEFT_BOTTOM, glyph, font.clone(), color);
+        }
+        kept.marks.insert(n.id, (n.clone(), marks));
+    });
+}
+
+/// The Show Hidden Characters marks of the text objects drawn in the last frame that showed them
+/// ([`crate::CanvasCache::hidden_chars`]). Each is kept with the object it was laid out from: an
+/// edited object is a new `Arc` and is laid out again, and all type is laid out again when the
+/// fonts or the hyphenation exceptions change.
+#[derive(Default)]
+pub struct HiddenChars {
+    /// The fonts' generation ([`vectorcraft_text::FontDb::generation`]) and the hyphenation
+    /// exceptions the marks were laid out with.
+    inputs: (u64, String),
+    /// Each text object drawn, by id: the node it was laid out from and its marks.
+    marks: std::collections::HashMap<vectorcraft_doc::NodeId, (std::sync::Arc<Node>, std::sync::Arc<HiddenMarks>)>,
+}
+
+/// One text object's marks in document space: a dot over each space, and ¶ or # after the lines
+/// that end a paragraph or the story. Type on a path has none.
+#[derive(Default)]
+struct HiddenMarks {
+    spaces: Vec<Point>,
+    ends: Vec<(Point, &'static str)>,
+}
+
+impl HiddenMarks {
+    /// Lay out `tx` and place its marks.
+    fn of(tx: &vectorcraft_doc::TextObject) -> Self {
+        let mut marks = Self::default();
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
         if lay.on_path {
-            return;
+            return marks;
         }
         let text = tx.plain_text();
-        let to = |q: Point| xf.to_screen(tx.xf * q);
+        let to = |q: Point| tx.xf * q;
         for g in &lay.glyphs {
             if text.get(g.byte..).is_some_and(|s| s.starts_with(' ')) {
-                p.circle_filled(to(Point::new(g.origin.x + g.advance / 2.0, g.origin.y - 3.0)), 1.2, color);
+                marks.spaces.push(to(Point::new(g.origin.x + g.advance / 2.0, g.origin.y - 3.0)));
             }
         }
         for (i, line) in lay.lines.iter().enumerate() {
@@ -1555,10 +1616,11 @@ fn hidden_chars_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                 ("", false)
             };
             if at {
-                p.text(to(Point::new(line.x1 + 1.0, line.baseline)), egui::Align2::LEFT_BOTTOM, glyph, font.clone(), color);
+                marks.ends.push((to(Point::new(line.x1 + 1.0, line.baseline)), glyph));
             }
         }
-    });
+        marks
+    }
 }
 
 /// Text threads of the selected frames: a line from each frame's out port (bottom right) to the
@@ -3616,6 +3678,89 @@ mod tests {
         assert_eq!(widget(&mut app), vec![layer]);
         app.ui.view.bounding_box = false;
         assert!(widget(&mut app).is_empty(), "no bounding box, no widget");
+    }
+
+    /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
+    fn hidden_chars(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) -> Vec<Shape> {
+        let raw = egui::RawInput { screen_rect: Some(xf.rect), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| hidden_chars_overlay(app, ui.painter(), xf));
+        out.textures_delta.clear();
+        out.shapes.into_iter().map(|c| c.shape).collect()
+    }
+
+    /// Show Hidden Characters lays out type once: a frame keeps the marks of the frame before, and
+    /// after an edit only the object edited is laid out again.
+    #[test]
+    fn show_hidden_characters_lays_out_only_type_that_changed() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ids: Vec<_> = (0..3)
+            .map(|i| app.session.execute("text.create", &json!({"x": 20, "y": 40 + 80 * i, "text": "a b\nc d"})).unwrap()["id"].as_u64().unwrap())
+            .map(vectorcraft_doc::NodeId)
+            .collect();
+        let ctx = egui::Context::default();
+        let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), zoom: 1.0, center: Point::new(200.0, 150.0), rot: 0.0 };
+        // `frame` draws one frame and returns each object's marks and whether that frame found the
+        // fonts and hyphenation exceptions of the frame before.
+        let frame = |app: &mut VectorcraftApp| {
+            let inputs = app.canvas.hidden_chars.inputs.clone();
+            hidden_chars(app, &ctx, &xf);
+            let kept = &app.canvas.hidden_chars;
+            (kept.inputs == inputs, ids.iter().map(|id| kept.marks[id].1.clone()).collect::<Vec<_>>())
+        };
+        // `frames` draws a frame, runs `edit` and draws the next frame. Tests running alongside add
+        // fonts and set hyphenation exceptions, which lays all type out again: `frames` draws both
+        // frames again until neither the fonts nor the exceptions changed in between.
+        let frames = |app: &mut VectorcraftApp, edit: &dyn Fn(&mut VectorcraftApp)| {
+            (0..100)
+                .find_map(|_| {
+                    let (_, before) = frame(app);
+                    edit(app);
+                    let (same, after) = frame(app);
+                    same.then_some((before, after))
+                })
+                .unwrap()
+        };
+        let same = |a: &std::sync::Arc<HiddenMarks>, b: &std::sync::Arc<HiddenMarks>| std::sync::Arc::ptr_eq(a, b);
+        let (before, after) = frames(&mut app, &|_| {});
+        assert!(before.iter().zip(&after).all(|(a, b)| same(a, b)), "a frame lays out no type");
+        let (before, after) = frames(&mut app, &|app| {
+            app.session.execute("text.setText", &json!({"id": ids[1].0, "text": "a b c"})).unwrap();
+        });
+        assert!(!same(&before[1], &after[1]), "the edited object is laid out again");
+        assert!(same(&before[0], &after[0]) && same(&before[2], &after[2]), "the others are not");
+    }
+
+    /// The marks Show Hidden Characters keeps follow the type: after an edit, a zoom and a font
+    /// that arrives, a frame draws what a new overlay draws, and the marks moved.
+    #[test]
+    fn show_hidden_characters_follows_edits_zooms_and_fonts() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        // The type is set in Bold of a family that is not installed and whose name starts with a
+        // dot; the font menus do not list such names. Source Sans 3 Bold stands in for it until the
+        // family arrives below with a Regular face only.
+        let text = json!({"x": 20, "y": 60, "text": "one two\nthree four", "font": ".Hidden Marks", "style": "Bold"});
+        let id = app.session.execute("text.create", &text).unwrap()["id"].clone();
+        let ctx = egui::Context::default();
+        let mut xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), zoom: 1.0, center: Point::new(200.0, 150.0), rot: 0.0 };
+        // `drawn` draws a frame with what the overlay kept and checks it against a new overlay.
+        let drawn = |app: &mut VectorcraftApp, xf: &Xf| {
+            let kept = hidden_chars(app, &ctx, xf);
+            app.canvas.hidden_chars = Default::default();
+            assert_eq!(hidden_chars(app, &ctx, xf), kept, "as a new overlay draws them");
+            kept
+        };
+        let start = drawn(&mut app, &xf);
+        assert!(start.len() > 2, "{start:?}");
+        app.session.execute("text.setText", &json!({"id": id, "text": "one two three\nfour"})).unwrap();
+        let edited = drawn(&mut app, &xf);
+        assert_ne!(edited, start, "the edit moved the marks");
+        xf.zoom = 2.0;
+        let zoomed = drawn(&mut app, &xf);
+        assert_ne!(zoomed, edited, "zoomed in");
+        assert!(vectorcraft_text::FontDb::global().add_font(vectorcraft_testkit::fonts::renamed(".Hidden Marks")) > 0, "the family is new");
+        assert_ne!(drawn(&mut app, &xf), zoomed, "set in the family that arrived");
     }
 
     /// General › Zoom with Mouse Wheel (#394), through the control channel's `ui.wheel`: off,
