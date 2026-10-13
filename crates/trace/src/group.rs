@@ -158,7 +158,7 @@ mod tests {
 
     fn disc(c: (f64, f64), r: f64, color: u8) -> TracedPath {
         let path = PathData::from_bezpath(&kurbo::Shape::to_path(&kurbo::Circle::new(c, r), 0.01));
-        TracedPath { path, color: [color; 3], pixels: 1, stroke: None, shape: None, gradient: None }
+        TracedPath { path, color: [color; 3], pixels: 1, stroke: None, shape: None, gradient: None, square_caps: false }
     }
 
     #[test]

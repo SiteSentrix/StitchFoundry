@@ -493,6 +493,7 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
             stroke: None,
             shape: None,
             gradient: None,
+            square_caps: false,
         });
     }
     Ok(out)

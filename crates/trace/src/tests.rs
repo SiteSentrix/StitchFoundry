@@ -1265,3 +1265,33 @@ fn a_long_line_two_degrees_askew_is_not_levelled() {
     // 200 px at 2° rises 7 px: levelled, the bar would be 8 px tall, not 15.
     assert!(b.height() > 13.0, "{b:?}");
 }
+
+/// Create Strokes: a line cut square at its ends is stroked with square caps, a line with round
+/// ends with round ones, and either ends where its ink does.
+#[test]
+fn stroke_caps_are_square_or_round_as_the_ink_is() {
+    let line = |square: bool| {
+        let img = Raster::from_fn(140, 40, |x, y| {
+            // Anti-aliased by 4 × 4 samples: a bar 8 px thick from x = 20 to 110.
+            let mut inside = 0;
+            for sy in 0..4 {
+                for sx in 0..4 {
+                    let (px, py) = (f64::from(x) + (f64::from(sx) + 0.5) / 4.0, f64::from(y) + (f64::from(sy) + 0.5) / 4.0);
+                    let d = if square { (py - 20.3).abs().max((px - 65.0).abs() - 41.0) } else { (px.clamp(24.0, 106.0) - px).hypot(py - 20.3) };
+                    inside += u32::from(d <= 4.0);
+                }
+            }
+            let v = (255 - inside * 255 / 16) as u8;
+            [v, v, v, 255]
+        });
+        let res = trace(&img, &crate::preset("Outline").unwrap());
+        let [only] = res.paths.as_slice() else { panic!("{:?}", res.paths) };
+        let (a, b) = (only.path.subpaths[0].anchors[0].p, only.path.subpaths[0].anchors.last().unwrap().p);
+        // Either cap goes half the width past the path's end: the path runs from 24 to 106.
+        assert!((a.x.min(b.x) - 24.0).abs() < 0.6 && (a.x.max(b.x) - 106.0).abs() < 0.6, "{a:?} {b:?}");
+        assert!((only.stroke.unwrap() - 8.0).abs() < 0.4);
+        only.square_caps
+    };
+    assert!(line(true));
+    assert!(!line(false));
+}

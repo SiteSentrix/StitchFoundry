@@ -848,10 +848,10 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
             // Gradients: a path the tracer found to be a linear gradient is filled with it.
             let paint = tp.gradient.as_ref().map_or_else(|| Paint::solid(color), |g| traced_gradient(g, xf));
             n.appearance = match tp.stroke {
-                // Traced lines: round ends and corners, as drawn lines have.
+                // Traced lines: round corners, and ends round or square as the tracer found them.
                 Some(width) => Appearance {
                     items: vec![AppearanceItem::Stroke(StrokeLayer {
-                        cap: LineCap::Round,
+                        cap: if tp.square_caps { LineCap::Square } else { LineCap::Round },
                         join: LineJoin::Round,
                         ..StrokeLayer::new(paint, width * unit)
                     })],

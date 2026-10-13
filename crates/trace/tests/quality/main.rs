@@ -147,6 +147,7 @@ fn svg_trace(svg: &str) -> TraceResult {
             stroke: None,
             shape: None,
             gradient: None,
+            square_caps: false,
         })
     });
     TraceResult { paths: paths.collect(), palette: vec![[0; 3]], ..Default::default() }

@@ -36,6 +36,8 @@ pub(crate) struct Line {
     /// Stroke width in pixels.
     pub width: f64,
     pub pixels: usize,
+    /// Its ends are cut square (the ink is as long beside the line's middle as along it), not round.
+    pub square: bool,
 }
 
 /// The lines of colour `label` in `labels` (`w` × `h`, row-major) no wider than `max_width`
@@ -374,22 +376,48 @@ fn trace_line(comp: &[usize], w: usize, max_width: f64, img: &Raster, ink: [f64;
     // wide as its pixels make it).
     widths.sort_by(f64::total_cmp);
     let width = widths.get(widths.len() / 2).copied().unwrap_or(coarse).clamp(0.25, max_width.max(1.0));
-    // Each end goes where the ink ends, less the half width its round cap adds.
+    // Each end goes where the ink ends, less the half width its cap adds. The cap is square when
+    // the ends wide enough to tell are, taken together: the ink reaches as far a third of the width to either side
+    // of the line's middle as along it, where a round end stops short by a seventh of the width.
+    let (mut short_by, mut told) = (0.0, 0);
     for r in runs.iter_mut().filter(|r| !r.closed && r.pts.len() >= 2) {
         for k in 0..2 {
             if r.ends[k].is_some_and(|e| meet[e] > 1) {
                 continue;
             }
             let n = r.pts.len();
-            let (tip, inner) = if k == 0 { (r.pts[0], r.pts[3.min(n - 1)]) } else { (r.pts[n - 1], r.pts[n - 1 - 3.min(n - 1)]) };
-            let d = tip - inner;
+            let at = |i: usize| if k == 0 { i.min(n - 1) } else { n - 1 - i.min(n - 1) };
+            // The last points of a wide line's skeleton turn towards a corner of its end: the end
+            // lies where the line was going a width back, and they are put on that line.
+            let back = (width.round() as usize + 2).max(3);
+            let (tip, inner) = (r.pts[at(0)], r.pts[at(back)]);
+            // (Only an end that has left that line: over so few pixels the line's direction is known
+            // to a few degrees at best, less without anti-aliasing, and an end already on it is
+            // better left where it is.)
+            let before = inner - r.pts[at(2 * back)];
+            let wide = width >= 3.0 && n > 2 * back && before.cross(tip - inner).abs() > (0.25 * width).max(1.0) * before.hypot();
+            let d = if wide { before } else { tip - inner };
             if d.hypot() < 1e-9 {
                 continue;
             }
-            let more = ink.beyond(tip, d / d.hypot()) - width / 2.0;
-            if more.abs() > 0.05 && more > -1.0 {
-                let to = tip + d / d.hypot() * more;
-                if k == 0 { r.pts[0] = to } else { r.pts[n - 1] = to }
+            let along = d / d.hypot();
+            let on_line = |p: Point| inner + along * (p - inner).dot(along).max(0.0);
+            if wide {
+                for i in 0..back {
+                    r.pts[at(i)] = on_line(r.pts[at(i)]);
+                }
+            }
+            let tip = on_line(tip);
+            let reach = ink.beyond(tip, along);
+            if width >= 3.0 {
+                let aside = kurbo::Vec2::new(-along.y, along.x) * (0.35 * width);
+                let short = reach - (ink.beyond(tip + aside, along) + ink.beyond(tip - aside, along)) / 2.0;
+                short_by += short / width;
+                told += 1;
+            }
+            let more = reach - width / 2.0;
+            if more.abs() > 0.05 && more > 1.0 - (tip - inner).hypot() {
+                r.pts[at(0)] = tip + along * more;
             }
         }
     }
@@ -409,7 +437,7 @@ fn trace_line(comp: &[usize], w: usize, max_width: f64, img: &Raster, ink: [f64;
     if subs.is_empty() {
         return None;
     }
-    Some(Line { path: PathData::new(subs), width, pixels: comp.len() })
+    Some(Line { path: PathData::new(subs), width, pixels: comp.len(), square: told > 0 && short_by / f64::from(told) < 0.07 })
 }
 
 /// What the image says of a line's ink.
