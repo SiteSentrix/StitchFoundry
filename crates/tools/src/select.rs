@@ -90,6 +90,9 @@ pub(crate) struct MoveSnap {
     /// original.
     copy_targets: Option<Targets>,
     copy_points: Option<Targets>,
+    /// With Smart Guides on, the ruler guides View › Snap to Point still pulls the grabbed point
+    /// onto (#1534); `points` holds them with Smart Guides off.
+    rulers: Option<Targets>,
 }
 
 impl MoveSnap {
@@ -102,6 +105,7 @@ impl MoveSnap {
             points: points(&cx.selection.objects),
             copy_targets: guides.then(|| Targets::for_move(cx, &[])),
             copy_points: points(&[]),
+            rulers: (guides && cx.snap_to_point).then(|| Targets::rulers(cx)),
         }
     }
 
@@ -130,6 +134,14 @@ impl MoveSnap {
             } else {
                 let (adj, ov) = t.snap_rect(b + d, cx.snap_tol());
                 d += adj;
+                guides = ov;
+            }
+        }
+        // A ruler guide within reach of the grabbed point wins over lining the bounds up.
+        if let Some(t) = &self.rulers {
+            let (q, ov) = t.snap_point(start + d, cx.tol(cx.snap_tolerance));
+            if q != start + d {
+                d = q - start;
                 guides = ov;
             }
         }
@@ -731,6 +743,29 @@ mod tests {
         assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["matrix"][4] == 10.0));
         let a = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 150.0));
         assert_eq!(a, vec![Action::Commit]);
+    }
+
+    /// #1534: with Smart Guides on (the default), the point a selection is dragged by still snaps
+    /// to a ruler guide within the Snap to Point distance; not with Snap to Point off.
+    #[test]
+    fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
+        let (mut d, id) = doc_with_rect();
+        d.guides = vec![vectorcraft_doc::Guide::new(true, 173.4)];
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let dx = |c: &ToolContext, to: f64| {
+            let mut t = SelectionTool::default();
+            t.pointer(c, &ev(PointerKind::Down, 150.0, 150.0));
+            let a = t.pointer(c, &ev(PointerKind::Drag, to, 150.0));
+            let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+            v["matrix"][4].as_f64().unwrap()
+        };
+        let c = cx(&d, &s, &p);
+        assert!(c.smart_guides && c.snap_to_point);
+        assert!((dx(&c, 172.0) - 23.4).abs() < 1e-9, "onto the guide");
+        assert_eq!(dx(&c, 165.0), 15.0, "out of reach");
+        assert_eq!(dx(&ToolContext { snap_to_point: false, ..cx(&d, &s, &p) }, 172.0), 22.0);
     }
 
     /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
