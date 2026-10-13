@@ -1229,22 +1229,17 @@ impl Session {
         format!("Untitled-{}", self.untitled_counter)
     }
     /// Text layout bounds are a cache (not saved): compute them for a document just read, or
-    /// selection boxes and hit testing would use the rough estimate until each text is edited.
+    /// selection boxes and hit testing would use the rough estimate until each text is edited, and
+    /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
+    /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
+    /// not only in the layers (#1738).
     pub(crate) fn refresh_text_bounds(doc: &mut Document) {
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
-        let mut texts = vec![];
-        doc.walk(|n| {
-            if matches!(n.kind, NodeKind::Text(_)) {
-                texts.push(n.id);
-            }
-        });
-        for id in texts {
-            if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind)
-                && t.cached_bounds.is_none()
-            {
-                cmd::typecmd::refresh_bounds(t);
-            }
+        let trees = doc.layers.iter_mut().chain(doc.symbols.iter_mut().map(|s| &mut s.art));
+        let trees = trees.chain(doc.graph_designs.iter_mut().map(|g| &mut g.art));
+        for tree in trees.chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut())) {
+            refresh_tree_text_bounds(tree);
         }
     }
     /// Add a document and make it active.
@@ -1701,6 +1696,31 @@ impl Session {
     /// Commands with enablement (for menus, palette, MCP `list_commands`).
     pub fn commands(&self) -> Vec<CommandInfo> {
         command_specs().iter().map(|c| c.info(self)).collect()
+    }
+}
+
+/// Lay out the type in tree `n` (opacity mask art included) whose bounds aren't cached. Only the
+/// nodes on the way to such type are copied.
+fn refresh_tree_text_bounds(n: &mut Arc<vectorcraft_doc::Node>) {
+    fn stale(n: &vectorcraft_doc::Node) -> bool {
+        matches!(&n.kind, NodeKind::Text(t) if t.cached_bounds.is_none())
+            || n.extras().mask.as_deref().is_some_and(|m| stale(&m.art))
+            || n.children().is_some_and(|ch| ch.iter().any(|c| stale(c)))
+    }
+    if !stale(n) {
+        return;
+    }
+    let n = Arc::make_mut(n);
+    if let NodeKind::Text(t) = &mut n.kind
+        && t.cached_bounds.is_none()
+    {
+        cmd::typecmd::refresh_bounds(t);
+    }
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
+        refresh_tree_text_bounds(&mut m.art);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        refresh_tree_text_bounds(c);
     }
 }
 
