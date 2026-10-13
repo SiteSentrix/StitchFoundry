@@ -4280,3 +4280,8 @@ machine	Stop	停止
 	Export Thread Chart	匯出繡線色卡
 	Save Thread Chart	儲存繡線色卡
 	Delete Thread Chart	刪除繡線色卡
+	Design Templates	設計範本
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	保留此設計的頁面、圖稿、繡框、布料與設定，用於新建設計
+	New from Design Template	從設計範本新建
+	Save as Design Template	另存為設計範本
+	Delete Design Template	刪除設計範本

@@ -368,6 +368,16 @@ triangular grid (`even`), up to `count` (20), each turned at random with `turn`.
 motif's stitching and land in a group above the shape, which stays (delete it, or give it a
 fill to sew behind them).
 
+## Design templates
+
+The Embroidery panel's **Design Templates** section (shown also with no document open) starts a
+design from a template (`embroidery.template.new {name}`): **Left chest logo**, **Cap front**,
+**Full back**, **Sleeve** and **Towel border** set the page, the hoop and a guide round the area
+such designs fill; **Round patch 75 mm** and **Name tape 100 × 30** also have their satin border
+digitized. **Save as Template** keeps the active design as a template of your own
+(`embroidery.template.save`): its page, layers, art, hoop, fabric, machine and settings, opened
+again as a new untitled design.
+
 ## Design library
 
 The Embroidery panel's **Design Library** section shows a folder's designs as thumbnails of their

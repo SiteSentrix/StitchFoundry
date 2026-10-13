@@ -4928,3 +4928,8 @@ machine	Stop	Arrêt
 	Export Thread Chart	Exporter un nuancier de fils
 	Save Thread Chart	Enregistrer un nuancier de fils
 	Delete Thread Chart	Supprimer un nuancier de fils
+	Design Templates	Modèles de motif
+	Keep this design's page, art, hoop, fabric and settings to start new designs from	Garder la page, le dessin, le tambour, le tissu et les réglages de ce motif pour en commencer d'autres
+	New from Design Template	Nouveau depuis un modèle de motif
+	Save as Design Template	Enregistrer comme modèle de motif
+	Delete Design Template	Supprimer le modèle de motif

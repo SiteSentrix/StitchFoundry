@@ -254,7 +254,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BAS-03 | Object properties view | Done | Embroidery panel | – |
 | BAS-04 | Choose the target machine format for the design | Done | Design › Machine picks a machine profile; export writes its format unless another is chosen | 1 |
 | BAS-05 | Open machine designs | Done | 8 formats as manual-stitch paths | – |
-| BAS-06 | New design from template | Partial | VectorCraft templates keep embroidery; no embroidery template gallery | 6 |
+| BAS-06 | New design from template | Done | Design Templates: 7 built-in starts (left chest, cap front, full back, sleeve, towel, round patch, name tape: page, hoop, area guide, patch borders) and one's own | 0 |
 | BAS-07 | Save native design | Done | `.stitchfoundry` keeps every stitch setting (VectorCraft documents inside, so `.vectorcraft` files open too) | – |
 | BAS-08 | Send design by email | Out | Desktop share sheets vary; users attach the exported file | – |
 | BAS-09 | Select objects | Done | VectorCraft selection tools | – |
@@ -319,7 +319,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | OP-02 | Make selected object's properties current | Done | Make Current in the panel, Embroidery › Make Properties Current (`embroidery.makeCurrent`) | 1 |
 | OP-03 | Fabrics: choose, apply, manage custom fabrics | Done | 9 presets plus fabrics saved with the design: Fabric settings in the panel, `embroidery.fabric.save` / `delete`; a library shared between designs comes with templates (OP-05) | 1 |
 | OP-04 | Styles: named property sets, apply and update | Done | Embroidery Styles panel and `embroidery.style.*`: new from the selection, apply, redefine (updates every object following it), break link, rename, duplicate, delete | 1 |
-| OP-05 | Design templates (properties + layout) | Partial | VectorCraft templates | 6 |
+| OP-05 | Design templates (properties + layout) | Done | `embroidery.template.save`: a design's page, layers, art, hoop, fabric, machine and settings kept as a template of one's own | 0 |
 | CW-01 | Colorways (several thread schemes per design) | Done | `DocEmbroidery.colorways` (a thread per slot: the design's colours in first-use order) and the active one, used by the preview, machine files and worksheets; `embroidery.colorway.*` and the Design section | 0 |
 | CW-02 | Name design elements | Done | Layers/object names | – |
 | CW-03 | Split colour blocks (same colour, separate stops) | Done | *Own colour block* (`ownBlock`): a colour change before the object even in the same colour, kept in machine files | 0 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 191 done,
-22 partial, 31 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 193 done,
+20 partial, 31 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 
