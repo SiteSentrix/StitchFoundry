@@ -350,14 +350,15 @@ pub(crate) fn motif_shape(m: Motif) -> Vec<(f64, f64)> {
         Motif::EStitch => vec![(0.0, 0.0), (0.0, 1.0), (0.0, 0.0), (1.0, 0.0)],
         // A coil: the line runs on while turning a full loop to one side and back across
         // itself (a prolate cycloid), so the loops overlap like chenille's.
-        Motif::Coil => (0..=16)
+        // Ten stitches a loop, so they stay long enough to sew.
+        Motif::Coil => (0..=10)
             .map(|i| {
-                let a = f64::from(i) / 16.0 * std::f64::consts::TAU;
-                (a / std::f64::consts::TAU + 0.45 * a.sin(), -0.25 * (1.0 - a.cos()))
+                let a = f64::from(i) / 10.0 * std::f64::consts::TAU;
+                (a / std::f64::consts::TAU + 0.45 * a.sin(), -0.5 * (1.0 - a.cos()))
             })
             .collect(),
         // A square loop: on, down, back across, up past where it went down, on.
-        Motif::SquareLoop => vec![(0.0, 0.0), (0.75, 0.0), (0.75, -0.5), (0.25, -0.5), (0.25, 0.0), (1.0, 0.0)],
+        Motif::SquareLoop => vec![(0.0, 0.0), (0.75, 0.0), (0.75, -1.0), (0.25, -1.0), (0.25, 0.0), (1.0, 0.0)],
         // A loop like a handwritten l.
         Motif::Loop => {
             let mut v = vec![(0.0, 0.0)];
@@ -670,7 +671,7 @@ mod tests {
                 q.x < furthest - 0.5
             });
             assert!(back, "{motif:?}");
-            assert!(pts.len() > 40, "{motif:?}: {}", pts.len());
+            assert!(pts.len() > 30, "{motif:?}: {}", pts.len());
         }
     }
 
