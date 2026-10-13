@@ -100,7 +100,7 @@ tools, never checked side by side) isn't captured row by row.
 | Tangent and perpendicular snapping for line endpoints (new in 30.0) | missing | |
 | Snapping panel/popover consolidating the snap options (30.0) | missing | |
 | Customisable rotation snap angle (#973) | missing | Illustrator: Constrain Angle and construction angles only |
-| Ruler guides: drag out, select, move, delete, lock, Make/Release Guides | done | #414, #451 |
+| Ruler guides: drag out, select, move, delete, lock, Make/Release Guides | done | #414, #451; marquee selects unlocked ruler guides |
 | Ruler origin: corner drag with preview, double-click reset to the active artboard, relative X/Y fields, native save/reopen | done | #1212; `document.setRulerOrigin`, `document.resetRulerOrigin`; geometry and command coordinates stay absolute |
 | Ruler guides as Layers rows: shown, hidden, locked and deleted with their layer; rows dragged to another layer | done | `guide.setLayer`; guides from older files go on a layer |
 | Objects made into guides: drawn in the guide colour and style of Preferences; Lock Guides locks them too (no select, move or delete); a dragged selection snaps to ruler guides with Smart Guides on | done | #1534 (#1543, #1583) |

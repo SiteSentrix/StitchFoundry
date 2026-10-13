@@ -459,7 +459,22 @@ impl Tool for SelectionTool {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
                 let ids: Vec<NodeId> = marquee(cx.doc, r, cx.isolation, false);
-                vec![Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }))]
+                let guides = crate::rulerguide::guides_in_rect(cx, r);
+                let mut out = vec![];
+                if toggle {
+                    if !ids.is_empty() {
+                        out.push(Action::Exec("select.toggle".into(), json!({ "ids": json_ids(&ids) })));
+                    }
+                    if !guides.is_empty() {
+                        out.push(Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })));
+                    }
+                } else {
+                    out.push(Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) })));
+                    if !guides.is_empty() {
+                        out.push(Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })));
+                    }
+                }
+                out
             }
             _ => vec![],
         }
@@ -991,6 +1006,58 @@ mod tests {
         assert_eq!(a, vec![Action::Exec("select.toggle".into(), json!({"ids": [id.0]}))]);
         t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0).with_mods(shift));
         assert!(t.pointer(&cx, &ev(PointerKind::Up, 50.0, 50.0).with_mods(shift)).is_empty());
+    }
+
+    #[test]
+    fn marquee_selects_ruler_guides() {
+        let (mut d, id) = doc_with_rect();
+        d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 120.0, 120.0));
+        let a = t.pointer(&cx, &ev(PointerKind::Up, 120.0, 120.0));
+        assert_eq!(
+            a,
+            vec![
+                Action::Exec("select.set".into(), json!({"ids": [id.0]})),
+                Action::Exec("guide.select".into(), json!({"indexes": [0], "toggle": true})),
+            ]
+        );
+    }
+
+    #[test]
+    fn marquee_selects_only_guide() {
+        let (mut d, _) = doc_with_rect();
+        d.guides.push(vectorcraft_doc::Guide::new(true, 20.0));
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 30.0, 30.0));
+        let a = t.pointer(&cx, &ev(PointerKind::Up, 30.0, 30.0));
+        assert_eq!(
+            a,
+            vec![Action::Exec("select.set".into(), json!({"ids": []})), Action::Exec("guide.select".into(), json!({"indexes": [0], "toggle": true})),]
+        );
+    }
+
+    #[test]
+    fn marquee_ignores_locked_guides() {
+        let (mut d, id) = doc_with_rect();
+        d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+        let s = Selection::default();
+        let p = paint();
+        let mut cx_locked = cx(&d, &s, &p);
+        cx_locked.guides = false;
+        let mut t = SelectionTool::default();
+        t.pointer(&cx_locked, &ev(PointerKind::Down, 50.0, 50.0));
+        t.pointer(&cx_locked, &ev(PointerKind::Drag, 120.0, 120.0));
+        let a = t.pointer(&cx_locked, &ev(PointerKind::Up, 120.0, 120.0));
+        assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
     }
 
     #[test]
