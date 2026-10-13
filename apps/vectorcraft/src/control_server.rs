@@ -7,7 +7,7 @@
 //! bounded ([`MAX_LINE`]) and so is the number of open connections ([`MAX_CONNECTIONS`]); junk
 //! never reaches the UI thread. See `docs/control-protocol.md`.
 
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -22,6 +22,8 @@ use vectorcraft_ui_egui::ControlRequest;
 pub const MAX_LINE: usize = 4 * 1024 * 1024;
 /// Connections served at once; further ones get an error line and are closed.
 pub const MAX_CONNECTIONS: usize = 16;
+/// Size in bytes of the buffer that [`write_line`] writes a reply line through.
+const REPLY_CHUNK: usize = 64 * 1024;
 
 pub fn start(port: u16, ctx: egui::Context) -> Receiver<ControlRequest> {
     let (tx, rx) = channel::<ControlRequest>();
@@ -43,7 +45,7 @@ fn accept_loop(listener: TcpListener, tx: Sender<ControlRequest>, ctx: egui::Con
         if open.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
             open.fetch_sub(1, Ordering::SeqCst);
             // Best effort: the connection is dropped either way, and a peer that can't read the reason loses nothing.
-            let _ = writeln!(stream, "{}", json!({"ok": false, "error": "too many control connections"}));
+            let _ = write_line(&mut stream, &json!({"ok": false, "error": "too many control connections"}));
             continue;
         }
         let tx = tx.clone();
@@ -127,6 +129,13 @@ fn read_bounded_line(reader: &mut impl BufRead, buf: &mut Vec<u8>, max: usize) -
     Ok(true)
 }
 
+/// Write `v` and a newline to `out` through a buffer of [`REPLY_CHUNK`] bytes, then flush `out`.
+fn write_line(out: &mut impl Write, v: &Value) -> std::io::Result<()> {
+    let mut out = BufWriter::with_capacity(REPLY_CHUNK, out);
+    writeln!(out, "{v}")?;
+    out.flush()
+}
+
 /// Serve requests from `read`, answering on `out`, until the peer closes, sends something that is
 /// not a request, or `handle` returns `None` (app gone). `handle` gets `(method, params)` and
 /// returns the reply object (the request's `id` is added here).
@@ -145,7 +154,7 @@ fn serve_lines<R: Read, W: Write>(read: R, mut out: W, mut handle: impl FnMut(St
                     if let Some(o) = r.as_object_mut() {
                         o.insert("id".into(), id);
                     }
-                    if writeln!(out, "{r}").and_then(|()| out.flush()).is_err() {
+                    if write_line(&mut out, &r).is_err() {
                         return;
                     }
                     continue;
@@ -153,7 +162,7 @@ fn serve_lines<R: Read, W: Write>(read: R, mut out: W, mut handle: impl FnMut(St
             },
         };
         // Best effort: the connection closes either way, and a peer that can't read the reason loses nothing.
-        let _ = writeln!(out, "{}", json!({"ok": false, "error": reject})).and_then(|()| out.flush());
+        let _ = write_line(&mut out, &json!({"ok": false, "error": reject}));
         return;
     }
 }
@@ -173,6 +182,37 @@ mod tests {
         (replies, calls)
     }
 
+    /// Counts the `write` calls made on it and keeps the bytes they write.
+    #[derive(Default)]
+    struct Writes {
+        calls: usize,
+        bytes: Vec<u8>,
+    }
+
+    impl Write for Writes {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.calls += 1;
+            self.bytes.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// A reply shaped like `document.inspect`'s for a layer of `n` squares in rows of 200.
+    fn inspect_reply(n: u64) -> Value {
+        let paths: Vec<Value> = (0..n)
+            .map(|k| {
+                let (x, y) = ((k % 200) as f64 * 20.0, (k / 200) as f64 * 20.0);
+                json!({"anchors": 4, "bounds": {"height": 10.0, "width": 10.0, "x": x, "y": y}, "closed": true, "fill": "#f4a261",
+                    "id": k + 2, "kind": "Path", "locked": false, "name": "<Path>", "stroke": "None", "strokeWidth": 0.0, "visible": true})
+            })
+            .collect();
+        json!({"ok": true, "result": {"layers": [{"children": paths, "id": 1, "kind": "Layer", "name": "Layer 1"}]}})
+    }
+
     #[test]
     fn requests_are_answered_in_order_with_ids() {
         let (r, calls) = run(b"{\"id\":1,\"method\":\"a\"}\n\n{\"id\":2,\"method\":\"b\",\"params\":{}}\r\n{\"method\":\"c\"}");
@@ -181,6 +221,25 @@ mod tests {
         assert_eq!(r[0]["id"], 1);
         assert_eq!(r[1]["id"], 2);
         assert_eq!(r[2]["id"], Value::Null);
+    }
+
+    #[test]
+    fn replies_are_written_in_few_large_writes() {
+        for reply in [json!({"ok": true, "result": null}), inspect_reply(2_000)] {
+            let mut out = Writes::default();
+            let mut once = Some(reply.clone());
+            serve_lines(&b"{\"id\":1,\"method\":\"document.inspect\"}\n"[..], &mut out, |_, _| once.take());
+            let mut want = reply;
+            want["id"] = json!(1);
+            let text = String::from_utf8(out.bytes).unwrap();
+            // The writer receives the bytes that `writeln!(out, "{want}")` writes, in at most one write per 4 KiB.
+            assert_eq!(text, format!("{want}\n"));
+            assert!(out.calls <= text.len().div_ceil(4096), "{} writes for {} bytes", out.calls, text.len());
+        }
+        // A refusal is one write as well.
+        let mut out = Writes::default();
+        serve_lines(&b"hello\n"[..], &mut out, |_, _| None);
+        assert_eq!(out.calls, 1);
     }
 
     #[test]
@@ -261,6 +320,37 @@ mod tests {
         assert_eq!(lines.len(), 2, "{text}");
         assert!(lines[0].contains("\"id\":7"));
         assert!(lines[1].contains("closing the connection"));
+    }
+
+    #[test]
+    fn ten_inspect_replies_for_10000_objects_arrive_within_20_s() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let reply = inspect_reply(10_000);
+        let mut want = reply.clone();
+        want["id"] = json!(1);
+        let want = format!("{want}\n");
+        std::thread::spawn(move || {
+            let (s, _) = listener.accept().unwrap();
+            let read = s.try_clone().unwrap();
+            serve_lines(read, s, |_, _| Some(reply.clone()));
+        });
+        // The client sends each request line and reads its reply line through a `BufReader`, as `vectorcraft_mcp::Remote` does.
+        let (tx, rx) = channel();
+        std::thread::spawn(move || {
+            let mut c = TcpStream::connect(addr).unwrap();
+            let mut read = BufReader::new(c.try_clone().unwrap());
+            let mut lines = vec![];
+            for _ in 0..10 {
+                c.write_all(b"{\"id\":1,\"method\":\"document.inspect\"}\n").unwrap();
+                let mut line = String::new();
+                read.read_line(&mut line).unwrap();
+                lines.push(line);
+            }
+            tx.send(lines).ok();
+        });
+        let lines = rx.recv_timeout(Duration::from_secs(20)).unwrap_or_else(|_| panic!("ten replies did not arrive within 20 s"));
+        assert!(lines.iter().all(|l| *l == want), "a reply differs from the bytes `writeln!` writes");
     }
 
     #[test]
