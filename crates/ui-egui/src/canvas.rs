@@ -345,14 +345,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         match k.pixel {
             // Document pixels: placed over the document rect they cover, turning with the view.
             Some([x0, y0, x1, y1]) => {
-                let q = xf.quad(Rect::new(x0 as f64, y0 as f64, x1 as f64, y1 as f64));
-                let mut mesh = egui::Mesh::with_texture(tex.id());
-                for (pos, uv) in q.into_iter().zip([pos2(0.0, 0.0), pos2(1.0, 0.0), pos2(1.0, 1.0), pos2(0.0, 1.0)]) {
-                    mesh.vertices.push(egui::epaint::Vertex { pos, uv, color: Color32::WHITE });
-                }
-                mesh.add_triangle(0, 1, 2);
-                mesh.add_triangle(0, 2, 3);
-                painter.add(Shape::mesh(mesh));
+                textured_quad(&painter, tex.id(), &xf.quad(Rect::new(x0 as f64, y0 as f64, x1 as f64, y1 as f64)), (1.0, 1.0));
             }
             None if (k.rot - v.rotation).abs() < 1e-9 => {
                 // Reproject the last frame if it was rendered for a different view.
@@ -367,13 +360,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => {
                 let old = Xf { rect, zoom: k.zoom, center: Point::new(k.cx, k.cy), rot: k.rot.to_radians() };
                 let q = [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()].map(|c| xf.to_screen(old.to_doc(c)));
-                let mut mesh = egui::Mesh::with_texture(tex.id());
-                for (pos, uv) in q.into_iter().zip([pos2(0.0, 0.0), pos2(1.0, 0.0), pos2(1.0, 1.0), pos2(0.0, 1.0)]) {
-                    mesh.vertices.push(egui::epaint::Vertex { pos, uv, color: Color32::WHITE });
-                }
-                mesh.add_triangle(0, 1, 2);
-                mesh.add_triangle(0, 2, 3);
-                painter.add(Shape::mesh(mesh));
+                textured_quad(&painter, tex.id(), &q, (1.0, 1.0));
             }
         }
     }
@@ -999,10 +986,15 @@ pub(crate) const TRANSPARENCY_GRID: &str = "transparency grid";
 /// The transparency grid over the artboard `ab` (screen corners `quad`): one textured quad whose
 /// cells stay `cell` screen points at every zoom and turn with a rotated view.
 fn checker(p: &egui::Painter, quad: &[Pos2], ab: Rect, zoom: f64, tex: egui::TextureId, cell: f32) {
-    let mut mesh = egui::Mesh::with_texture(tex);
     // Two cells per texture repeat.
     let per = (2.0 * cell as f64 / zoom).max(1e-9);
-    let (u, v) = ((ab.width() / per) as f32, (ab.height() / per) as f32);
+    textured_quad(p, tex, quad, ((ab.width() / per) as f32, (ab.height() / per) as f32));
+}
+
+/// One quad drawn with `tex`: its corners `quad` (from the top left, clockwise) show the texture
+/// from (0, 0) to (`u`, `v`).
+fn textured_quad(p: &egui::Painter, tex: egui::TextureId, quad: &[Pos2], (u, v): (f32, f32)) {
+    let mut mesh = egui::Mesh::with_texture(tex);
     for (pos, uv) in quad.iter().zip([pos2(0.0, 0.0), pos2(u, 0.0), pos2(u, v), pos2(0.0, v)]) {
         mesh.vertices.push(egui::epaint::Vertex { pos: *pos, uv, color: Color32::WHITE });
     }
