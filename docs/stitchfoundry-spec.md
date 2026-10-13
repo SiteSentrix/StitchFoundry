@@ -498,7 +498,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | HO-03 | Hoop positioning (auto centre vs fixed), rotate hoop, custom hoops | Done | Centred or at a fixed place in the hoop (`hoopPosition`: machine files, outline and fit follow); **Rotate Hoop**; hoops of one's own | 0 |
 | MH-01 | Multi-hooping, automatic and manual (split designs over several hoopings) | Done | `embroidery.multiHoop`: a grid of overlapping hoopings, objects whole where they fit and split stitch by stitch (tied in and off) where they don't, a machine file and a printed sheet per hooping, registration marks | 0 |
 | MH-02 | Registration marks, multi-position hoops, printing per hooping | Done | Registration marks in each overlap (shape, size, count, colour: SYS-06); multi-position hoops (a file a position, no marks); a printed sheet per hooping (`multiHoop {sheets}`) | 0 |
-| RP-01 | Production worksheets and approval sheets (PDF/print, customisable) | Partial | Embroidery › Worksheet (`embroidery.worksheet`): a production or approval sheet as an A4 document (design drawing, figures, colour table, notes, sign-off), printed or exported as PDF with the usual commands; text in English, layout fixed (customisable layouts, barcodes RP-02 still to come) | 6 |
+| RP-01 | Production worksheets and approval sheets (PDF/print, customisable) | Done | Embroidery › Worksheet: production, approval, pattern and placement-template sheets (design, figures, colours, colorways, notes, barcode, placement); the shop's name, details and logo and the sections shown set once (`embroidery.worksheet.setup`); job worksheets (DM-02) | 0 |
 | RP-02 | Barcodes on worksheets (Code 39, Code 128) | Partial | `embroidery.worksheet {barcode, barcodeText}`: Code 128 (set B) or Code 39 of the job at the top right, from the public standards; still to confirm with a scanner | 6 |
 | RP-03 | Print colorways, colour blocks | Done | Worksheets list the colour blocks in sewing order and every colorway's threads colour by colour, the one in use marked (`embroidery.worksheet {colorways}`) | 0 |
 | RP-04 | Output designs as images | Done | `embroidery.exportImage`: the stitches as lit thread (as TrueView) or flat, PNG at up to 40 pixels a mm on white, a colour or transparent; art exports as before | 0 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 200 done,
-14 partial, 30 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 201 done,
+13 partial, 30 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

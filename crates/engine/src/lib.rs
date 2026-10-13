@@ -679,6 +679,10 @@ pub struct Prefs {
     /// the ones sent. Kept across sessions; not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub embroidery_queue: Vec<cmd::embroidery_queue::QueueItem>,
+    /// What every worksheet carries (`embroidery.worksheet.setup`): the shop's name, details and
+    /// logo, and the sections left out.
+    #[serde(default, skip_serializing_if = "crate::cmd::embroidery_sheet_setup::SheetSetup::is_empty")]
+    pub embroidery_sheet_setup: cmd::embroidery_sheet_setup::SheetSetup,
     /// The machine folders designs are sent to (`embroidery.send`): USB sticks, machine folders,
     /// network shares, the last used first. A local list, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -869,6 +873,7 @@ impl Default for Prefs {
             embroidery_templates: vec![],
             embroidery_jobs: vec![],
             embroidery_queue: vec![],
+            embroidery_sheet_setup: Default::default(),
             embroidery_send_dirs: vec![],
             templates_folder: String::new(),
             append_converted: true,

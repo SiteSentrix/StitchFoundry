@@ -435,6 +435,11 @@ for the design as a new A4 document, to print (File › Print) or export as PDF:
 - on A4 or US Letter paper (`page: a4|letter`); a logo or anything else can be added to the sheet
   like to any document (File › Place).
 
+**Worksheet setup** (`embroidery.worksheet.setup {company?, details?, logo?, hide?}`) makes the
+worksheets the shop's own: its name and details (address, phone, web) in every worksheet's
+footer, its logo (an image file) at the bottom right, and the sections left out (`figures`,
+`colors`, `colorways`, `notes`, `barcode`); `hide` on a worksheet overrides it for that one.
+
 The worksheet's text is in English for now.
 
 ## Job orders
