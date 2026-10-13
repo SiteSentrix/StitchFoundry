@@ -3340,6 +3340,7 @@ theme	Appearance	Erscheinungsbild
 @msg	No saved selections (Select → Save Selection…)	Keine gespeicherten Auswahlen (Auswahl → Auswahl speichern…)
 @msg	No saved views (View → New View…)	Keine gespeicherten Ansichten (Ansicht → Neue Ansicht…)
 @msg	Offset Path: select paths	Pfad verschieben: Wählen Sie Pfade aus
+@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Pfad verschieben: Der Versatz lässt von den ausgewählten Pfaden nichts übrig (ein Versatz nach innen, der größer ist als die Formen)
 @msg	Opened with {_1} note(s): {_2}	Mit {_1} Hinweis(en) geöffnet: {_2}
 @msg	Opened {url}	{url} geöffnet
 @msg	Outline Stroke: no stroked paths selected	Konturlinie: keine Pfade mit Kontur ausgewählt

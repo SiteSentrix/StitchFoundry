@@ -3436,6 +3436,7 @@ axis	Both	Оба
 @msg	No saved selections (Select → Save Selection…)	Нет сохранённых выделений (Выделение → Сохранить выделение…)
 @msg	No saved views (View → New View…)	Нет сохранённых видов (Просмотр → Новый вид…)
 @msg	Offset Path: select paths	Смещение контура: выделите контуры
+@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Смещение контура: после смещения от выделенных контуров ничего не остаётся (смещение внутрь больше самих фигур)
 @msg	Opened with {_1} note(s): {_2}	Открыто с примечаниями ({_1}) : {_2}
 @msg	Opened {url}	Открыто {url}
 @msg	Outline Stroke: no stroked paths selected	Обводка контура: не выделены контуры с обводкой

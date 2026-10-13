@@ -3597,6 +3597,7 @@ theme	Appearance	外観
 @msg	Divide Objects Below: select a path	背面のオブジェクトで型抜き: パスを選択してください
 @msg	Divide Objects Below: select exactly one path	背面のオブジェクトで型抜き: パスを 1 つだけ選択してください
 @msg	Offset Path: select paths	パスのオフセット: パスを選択してください
+@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	パスのオフセット: オフセットすると選択したパスが何も残りません (内側へのオフセットがシェイプより大きい)
 @msg	Outline Stroke: no stroked paths selected	パスのアウトライン: 線のあるパスが選択されていません
 @msg	Split Into Grid: select paths large enough for the grid	グリッドに分割: グリッドが収まる大きさのパスを選択してください
 @msg	empty cutter	型抜きに使うパスが空です
