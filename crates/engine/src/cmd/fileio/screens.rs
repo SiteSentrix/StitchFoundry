@@ -15,7 +15,9 @@ use vectorcraft_geom::Rect;
 use super::super::*;
 use super::encode::single_artboard;
 use super::export::{isolated, without_artboards};
-use super::{ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, encode, unique_file_names, writable, write_file};
+use super::{
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, encode, unique_file_names, with_black_output, writable, write_file,
+};
 
 const C: &str = "document.exportForScreens";
 
@@ -363,6 +365,8 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         if subfolders { format!("{}/{file}", r.folder) } else { file }
     };
     let mut out = Output::default();
+    // Appearance of Black › Printing / Exporting for RGB raster rows.
+    let write = |doc: &Document, format: &str, options: &Value| encode(doc, format, &with_black_output(s, options));
     if o.full_document {
         let stem = safe_name(&super::file_stem(&doc.title)).unwrap_or_else(|| "Untitled".into());
         // The bounds of all visible art, as the one artboard of the files that aren't PDFs.
@@ -376,7 +380,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 // One page per artboard.
                 let mut options = r.options.clone();
                 options["range"] = json!("all");
-                encode(&doc, "pdf", &options)?
+                write(&doc, "pdf", &options)?
             } else {
                 if whole.is_none() {
                     let bounds =
@@ -385,7 +389,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 let Some(d) = whole.as_ref() else { continue };
                 let region = d.artboards.first().map_or(Rect::ZERO, |a| a.rect);
-                encode(d, r.format.id, &r.options_for(region, Some(0))?)?
+                write(d, r.format.id, &r.options_for(region, Some(0))?)?
             };
             out.put(folder, o.zip, name, bytes)?;
         }
@@ -403,7 +407,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 if !out.claim(&name) {
                     continue;
                 }
-                let bytes = encode(&d, r.format.id, &r.options_for(bounds, Some(0))?)?;
+                let bytes = write(&d, r.format.id, &r.options_for(bounds, Some(0))?)?;
                 out.put(folder, o.zip, name, bytes)?;
             }
         }
@@ -420,7 +424,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 if !out.claim(&name) {
                     continue; // the same file from two identical rows
                 }
-                let bytes = encode(&doc, r.format.id, &r.options_for(region, Some(b))?)?;
+                let bytes = write(&doc, r.format.id, &r.options_for(region, Some(b))?)?;
                 out.put(folder, o.zip, name, bytes)?;
             }
         }

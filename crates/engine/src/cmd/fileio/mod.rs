@@ -1052,6 +1052,12 @@ pub(crate) fn merge(mut a: Value, b: Value) -> Value {
     a
 }
 
+/// Appearance of Black › Printing / Exporting (#394): Output All Blacks as Rich Black makes RGB
+/// raster exports draw pure CMYK black as RGB black (`richBlack` on the encoder params).
+pub(crate) fn with_black_output(s: &Session, p: &Value) -> Value {
+    if s.prefs.black_output == "rich" { merge(p.clone(), json!({ "richBlack": true })) } else { p.clone() }
+}
+
 /// A file name for bytes handed back without a path: the document's title with `ext`.
 pub(crate) fn default_name(doc: &vectorcraft_doc::Document, ext: &str) -> String {
     let stem = std::path::Path::new(&doc.title).file_stem().map(|s| s.to_string_lossy().into_owned()).filter(|s| !s.is_empty());

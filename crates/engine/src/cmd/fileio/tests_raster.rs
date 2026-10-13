@@ -106,6 +106,36 @@ fn screens_and_rasterize_take_anti_aliasing() {
     assert!(s.execute("object.rasterize", &json!({"antiAlias": "fuzzy"})).is_err());
 }
 
+/// Appearance of Black › Printing / Exporting (#394): Output All Blacks as Rich Black makes an
+/// RGB PNG of a CMYK document draw pure black ink as RGB black; Accurately (the default) shows it
+/// through the CMYK profile. `blackOnScreen` does not change the export; a rich black is the same
+/// either way.
+#[test]
+fn black_output_rich_draws_pure_cmyk_black_as_rgb_black_in_png() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 20, "height": 20, "colorMode": "cmyk"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("paint.setFill", &json!({"color": {"c": 0, "m": 0, "y": 0, "k": 1}})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap();
+    let centre = |s: &mut Session| {
+        let png = rgba(&b64(&s.execute("document.export", &json!({"format": "png", "background": "white"})).unwrap()));
+        png.get_pixel(10, 10).0
+    };
+    let accurate = centre(&mut s);
+    let shown = vectorcraft_color::Color::cmyk(0.0, 0.0, 0.0, 1.0).to_rgba8(1.0);
+    assert!(accurate.iter().zip(shown).all(|(a, b)| a.abs_diff(b) <= 1), "accurate: {accurate:?}");
+    assert!(accurate[0] > 10, "accurate: dark grey, not RGB black");
+    s.execute("prefs.set", &json!({"key": "blackOnScreen", "value": "rich"})).unwrap();
+    assert_eq!(centre(&mut s), accurate, "blackOnScreen does not change exports");
+    s.execute("prefs.set", &json!({"key": "blackOutput", "value": "rich"})).unwrap();
+    assert_eq!(centre(&mut s), [0, 0, 0, 255], "rich: RGB black");
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": {"c": 0.6, "m": 0.4, "y": 0.4, "k": 1}})).unwrap();
+    let rich = centre(&mut s);
+    s.execute("prefs.set", &json!({"key": "blackOutput", "value": "accurate"})).unwrap();
+    assert_eq!(centre(&mut s), rich, "a rich black shows the same either way");
+}
+
 #[test]
 fn formats_list_the_raster_options() {
     let mut s = Session::new();
