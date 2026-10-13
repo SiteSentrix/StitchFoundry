@@ -5,6 +5,8 @@ use std::sync::Arc;
 
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{Color32, Painter, Pos2, Shape, Stroke};
+use vectorcraft_embroidery::sf_core::decor::{DecorKind, DecorShape};
+use vectorcraft_embroidery::sf_core::model::ObjectKind;
 use vectorcraft_embroidery::sf_core::pattern::{Cmd, Pattern};
 use vectorcraft_embroidery::sf_core::threads::Rgb;
 use vectorcraft_embroidery::{PT_PER_MM, StitchPlan, pt};
@@ -244,7 +246,10 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
     let repeats = (app.embroidery.repeats, app.embroidery.repeat_gap);
     let cache = &mut app.embroidery.mesh;
     cache.update(&plan, xf, (mode, upto, points), repeats);
+    // sequins, beads, cord and boring holes under their stitches; stones on top
+    decorations(&plan, painter, xf, false);
     painter.add(Shape::mesh(cache.mesh.clone()));
+    decorations(&plan, painter, xf, true);
     if connectors {
         for [a, b] in &cache.jumps {
             painter.add(Shape::dashed_line(&[*a, *b], Stroke::new(1.0, Color32::from_rgba_unmultiplied(120, 60, 200, 200)), 4.0, 3.0));
@@ -305,6 +310,131 @@ pub fn paint(app: &mut crate::VectorcraftApp, painter: &Painter, xf: &Xf) {
         let p = xf.to_screen(pt(s.pos()));
         painter.circle_stroke(p, 7.0, Stroke::new(2.0, Color32::from_rgb(255, 170, 40)));
         painter.line_segment([p - egui::vec2(0.0, 14.0), p + egui::vec2(0.0, 14.0)], Stroke::new(1.0, Color32::from_rgb(255, 170, 40)));
+    }
+}
+
+/// A piece's outline (screen) of `shape`, `r` across, turned `angle`, round `c`.
+fn decor_outline(shape: DecorShape, c: Pos2, r: f32, angle: f32) -> Vec<Pos2> {
+    let n = 40;
+    (0..n)
+        .map(|k| {
+            let t = std::f32::consts::TAU * k as f32 / n as f32;
+            let (x, y) = match shape {
+                DecorShape::Round => (t.cos(), t.sin()),
+                DecorShape::Square => {
+                    let (cx, cy) = (t.cos(), t.sin());
+                    let m = cx.abs().max(cy.abs()).max(1e-6);
+                    (cx / m * 0.85, cy / m * 0.85)
+                }
+                DecorShape::Star => {
+                    let k5 = (t * 5.0 / std::f32::consts::TAU).fract();
+                    let rr = 0.45 + 0.55 * (1.0 - 2.0 * (k5 - 0.5).abs());
+                    (rr * (t - std::f32::consts::FRAC_PI_2).cos(), rr * (t - std::f32::consts::FRAC_PI_2).sin())
+                }
+                DecorShape::Heart => {
+                    let x = 16.0 * t.sin().powi(3) / 17.0;
+                    let y = -(13.0 * t.cos() - 5.0 * (2.0 * t).cos() - 2.0 * (3.0 * t).cos() - (4.0 * t).cos()) / 17.0;
+                    (x, y)
+                }
+                DecorShape::Flower => {
+                    let rr = 0.78 + 0.22 * (6.0 * t).cos();
+                    (rr * t.cos(), rr * t.sin())
+                }
+            };
+            let (sa, ca) = angle.sin_cos();
+            c + egui::vec2((x * ca - y * sa) * r, (x * sa + y * ca) * r)
+        })
+        .collect()
+}
+
+/// Sequins, beads, stones, cord and boring holes as they will look: stones (`top`) over the
+/// stitches, the rest under them.
+fn decorations(plan: &StitchPlan, painter: &Painter, xf: &Xf, top: bool) {
+    let clip = painter.clip_rect().expand(40.0);
+    let scale = (xf.zoom * PT_PER_MM) as f32;
+    for obj in &plan.design.objects {
+        let ObjectKind::Decor(d) = &obj.kind else { continue };
+        let p = &d.params;
+        if (p.kind == DecorKind::Stone) != top {
+            continue;
+        }
+        let thread = plan.design.palette.get(obj.color).map(|t| t.color).unwrap_or(Rgb::new(0x80, 0x80, 0x80));
+        let base = c32(p.color.unwrap_or(thread), 1.0);
+        let dark = c32(p.color.unwrap_or(thread), 0.55);
+        let light = toward_white(base, 0.6);
+        let at = |q: vectorcraft_embroidery::sf_core::geom::Point| xf.to_screen(pt(q));
+        match p.kind {
+            DecorKind::Cord => {
+                for (line, closed) in &d.lines {
+                    let mut pts: Vec<Pos2> = line.iter().map(|q| at(*q)).collect();
+                    if *closed && let Some(f) = pts.first().copied() {
+                        pts.push(f);
+                    }
+                    let w = (p.size as f32 * scale).max(1.5);
+                    painter.add(Shape::line(pts.clone(), Stroke::new(w, dark)));
+                    painter.add(Shape::line(pts, Stroke::new(w * 0.45, base)));
+                }
+            }
+            DecorKind::Boring => {
+                for (line, _) in &d.lines {
+                    let pts: Vec<Pos2> = line.iter().map(|q| at(*q)).collect();
+                    if pts.len() >= 3 {
+                        painter.add(Shape::convex_polygon(pts, Color32::from_gray(38), Stroke::new(1.0, Color32::from_gray(20))));
+                    }
+                }
+            }
+            DecorKind::Sequin | DecorKind::Bead | DecorKind::Stone => {
+                for it in &d.items {
+                    let c = at(it.at);
+                    let r = (it.size as f32 * scale / 2.0).max(1.0);
+                    if !clip.contains(c) {
+                        continue;
+                    }
+                    let angle = it.angle as f32 + xf.rot as f32;
+                    match p.kind {
+                        DecorKind::Bead => {
+                            // a seed bead seen from above: a rounded barrel, its hole along the run
+                            let dir = egui::vec2(angle.cos(), angle.sin());
+                            let half = dir * r * 0.35;
+                            let w = r * 1.5;
+                            painter.line_segment([c - half, c + half], Stroke::new(w, dark));
+                            painter.circle_filled(c - half, w / 2.0, dark);
+                            painter.circle_filled(c + half, w / 2.0, dark);
+                            painter.line_segment([c - half, c + half], Stroke::new(w * 0.75, base));
+                            painter.circle_filled(c - egui::vec2(r * 0.3, r * 0.35), (r * 0.22).max(0.7), light);
+                        }
+                        DecorKind::Stone => {
+                            let shape = if p.shape == DecorShape::Square { DecorShape::Square } else { DecorShape::Round };
+                            let face = decor_outline(shape, c, r, angle);
+                            painter.add(Shape::convex_polygon(face, toward_white(base, 0.25), Stroke::new(1.0, dark)));
+                            // facets and a glint
+                            for k in 0..8 {
+                                let t = std::f32::consts::TAU * k as f32 / 8.0;
+                                painter.line_segment(
+                                    [c + egui::vec2(t.cos(), t.sin()) * r * 0.45, c + egui::vec2(t.cos(), t.sin()) * r * 0.95],
+                                    Stroke::new(0.6, dark),
+                                );
+                            }
+                            painter.circle_filled(c - egui::vec2(r * 0.3, r * 0.3), (r * 0.18).max(0.8), Color32::WHITE);
+                        }
+                        _ => {
+                            let (face, rim) = if it.flip { (dark, base) } else { (base, dark) };
+                            let outline = decor_outline(p.shape, c, r, angle);
+                            if matches!(p.shape, DecorShape::Round | DecorShape::Square) {
+                                painter.add(Shape::convex_polygon(outline, face, Stroke::new(1.0, rim)));
+                            } else {
+                                painter.add(Shape::closed_line(outline.clone(), Stroke::new(1.0, rim)));
+                                painter.add(Shape::convex_polygon(decor_outline(DecorShape::Round, c, r * 0.6, angle), face, Stroke::NONE));
+                                painter.add(Shape::closed_line(outline, Stroke::new((r * 0.25).max(1.0), face)));
+                            }
+                            // a sheen toward the light, and the hole
+                            painter.circle_filled(c - egui::vec2(r * 0.35, r * 0.35), r * 0.28, light.gamma_multiply(0.8));
+                            painter.circle_filled(c, (r * 0.14).max(0.7), Color32::from_gray(30));
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

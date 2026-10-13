@@ -67,6 +67,9 @@ pub enum StitchType {
     /// remembers what it says, in what font and how big, so that can change where the lettering
     /// is now. The group itself sews nothing.
     Lettering(Box<Lettering>),
+    /// Multi-decoration: sequins, beads, rhinestones, cord or boring holes placed along the
+    /// line, inside the shape, round its edge or at its points (phase 4).
+    Decoration(crate::decor::DecorParams),
 }
 
 impl StitchType {
@@ -96,6 +99,13 @@ impl StitchType {
             "applique" => StitchType::Applique(AppliqueParams::default()),
             "manual" => StitchType::Manual,
             "redwork" => StitchType::Redwork(RunParams::default()),
+            "sequin" | "sequins" => StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Sequin)),
+            "bead" | "beads" => StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Bead)),
+            "stone" | "stones" | "rhinestone" | "rhinestones" | "bling" => {
+                StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Stone))
+            }
+            "cord" | "couching" => StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Cord)),
+            "boring" => StitchType::Decoration(crate::decor::DecorParams::of(crate::decor::DecorKind::Boring)),
             _ => return None,
         })
     }
@@ -110,6 +120,7 @@ impl StitchType {
             StitchType::Branch => "Branch",
             StitchType::Redwork(_) => "Redwork",
             StitchType::Lettering(_) => "Lettering",
+            StitchType::Decoration(d) => d.kind.label(),
         }
     }
 
@@ -142,6 +153,7 @@ impl StitchType {
             StitchType::Branch => "branch",
             StitchType::Redwork(_) => "redwork",
             StitchType::Lettering(_) => "lettering",
+            StitchType::Decoration(d) => d.kind.id(),
         }
     }
 
@@ -157,6 +169,7 @@ impl StitchType {
             StitchType::Branch => "branch",
             StitchType::Redwork(_) => "redwork",
             StitchType::Lettering(_) => "lettering",
+            StitchType::Decoration(_) => "decoration",
         }
     }
 }

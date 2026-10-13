@@ -48,6 +48,11 @@ const TYPES: &[(&str, &str)] = &[
     ("Motif Fill", "motiffill"),
     ("Appliqué", "applique"),
     ("Manual Stitches", "manual"),
+    ("Sequins", "sequin"),
+    ("Beads", "bead"),
+    ("Rhinestones", "stone"),
+    ("Cord", "cord"),
+    ("Boring", "boring"),
 ];
 
 fn type_index(e: Option<&Embroidery>) -> usize {
@@ -176,6 +181,95 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// place the lettering in the middle of the first artboard.
 fn lettering_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::CollapsingHeader::new(tl!("Embroidery Lettering")).id_salt("emb-lettering").show(ui, |ui| lettering_body(app, ui));
+}
+
+/// A decoration's settings: where the pieces go, their size, shape and colour, how sequins are
+/// held, and whether the machine stops first.
+fn decoration_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, d: &vectorcraft_embroidery::sf_core::decor::DecorParams) {
+    use vectorcraft_embroidery::sf_core::decor::{DecorKind, DecorLayout, DecorPacking, DecorShape, Fixing};
+    let kind = d.kind;
+    let pieces = matches!(kind, DecorKind::Sequin | DecorKind::Bead | DecorKind::Stone);
+    if pieces {
+        let layouts = [DecorLayout::Run, DecorLayout::Fill, DecorLayout::Border, DecorLayout::Manual];
+        let names = [tl!("Along the line"), tl!("Fill the shape"), tl!("Round the edge"), tl!("At each point")];
+        let cur = layouts.iter().position(|l| *l == d.layout).unwrap_or(0);
+        if let Some(i) = pick(ui, tl!("Place"), "decor-layout", cur, &names)
+            && let Some(l) = layouts.get(i)
+        {
+            set(app, target, json!({ "layout": l }));
+        }
+    }
+    if matches!(kind, DecorKind::Sequin | DecorKind::Stone) {
+        let shapes = [DecorShape::Round, DecorShape::Square, DecorShape::Star, DecorShape::Heart, DecorShape::Flower];
+        let names = [tl!("Round"), tl!("Square"), tl!("Star"), tl!("Heart"), tl!("Flower")];
+        let n = if kind == DecorKind::Stone { 2 } else { shapes.len() };
+        let cur = shapes.iter().position(|x| *x == d.shape).unwrap_or(0).min(n - 1);
+        if let Some(i) = pick(ui, tl!("Shape"), "decor-shape", cur, names.get(..n).unwrap_or(&names))
+            && let Some(x) = shapes.get(i)
+        {
+            set(app, target, json!({ "shape": x }));
+        }
+    }
+    let size_label = match kind {
+        DecorKind::Bead => tl!("Bead length"),
+        DecorKind::Cord => tl!("Cord width"),
+        DecorKind::Boring => tl!("Edge width"),
+        _ => tl!("Size"),
+    };
+    if let Some(v) = num(ui, size_label, "decor-size", d.size, " mm", 1) {
+        set(app, target, json!({ "size": v.clamp(0.5, 30.0) }));
+    }
+    if pieces {
+        if let Some(v) = num(ui, tl!("Gap"), "decor-gap", d.spacing, " mm", 1) {
+            set(app, target, json!({ "spacing": v.clamp(-15.0, 50.0) }));
+        }
+        if d.layout == DecorLayout::Fill {
+            let packs = [DecorPacking::Hex, DecorPacking::Grid];
+            let names = [tl!("Honeycomb"), tl!("Grid")];
+            let cur = packs.iter().position(|x| *x == d.packing).unwrap_or(0);
+            if let Some(i) = pick(ui, tl!("Packing"), "decor-pack", cur, &names)
+                && let Some(x) = packs.get(i)
+            {
+                set(app, target, json!({ "packing": x }));
+            }
+            if let Some(v) = num(ui, tl!("Angle"), "decor-angle", d.angle, "°", 0) {
+                set(app, target, json!({ "angle": v.clamp(-360.0, 360.0) }));
+            }
+        }
+    }
+    if kind == DecorKind::Sequin {
+        let fixings = [Fixing::Single, Fixing::Double, Fixing::Tri, Fixing::Cross];
+        let names = [tl!("Single"), tl!("Double"), tl!("Three"), tl!("Cross")];
+        let cur = fixings.iter().position(|x| *x == d.fixing).unwrap_or(0);
+        if let Some(i) = pick(ui, tl!("Fixing"), "decor-fix", cur, &names)
+            && let Some(x) = fixings.get(i)
+        {
+            set(app, target, json!({ "fixing": x }));
+        }
+        if let Some(v) = check(ui, tl!("Flip every other"), d.flip) {
+            set(app, target, json!({ "flip": v }));
+        }
+    }
+    if kind != DecorKind::Boring {
+        ui.horizontal(|ui| {
+            ui.label(tl!("Colour"));
+            let c = d.color.unwrap_or(vectorcraft_embroidery::sf_core::Rgb::new(0xc0, 0xc0, 0xc0));
+            let mut rgb = [c.r, c.g, c.b];
+            if ui.color_edit_button_srgb(&mut rgb).changed() {
+                set(app, target, json!({ "color": format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]) }));
+            }
+            if d.color.is_some() && ui.small_button(tl!("Thread colour")).clicked() {
+                set(app, target, json!({ "color": null }));
+            }
+        });
+    }
+    if kind != DecorKind::Stone {
+        if let Some(v) = check(ui, tl!("Stop before"), d.stop) {
+            set(app, target, json!({ "stop": v }));
+        }
+    } else {
+        ui.label(egui::RichText::new(tl!("Rhinestones aren't sewn: export their template to cut and set them")).small());
+    }
 }
 
 /// The selected lettering set in an embroidery font (or the one holding what is selected), and
@@ -2203,6 +2297,7 @@ fn props_rows(app: &mut VectorcraftApp, ui: &mut Ui, target: Target, e: &Embroid
         StitchType::Manual => {
             ui.label(tl!("Each anchor point is a needle penetration."));
         }
+        StitchType::Decoration(d) => decoration_rows(app, ui, target, d),
         StitchType::Branch | StitchType::Lettering(_) => {}
         StitchType::Redwork(r) => {
             // redwork lines are sewn in one of the outline stitches

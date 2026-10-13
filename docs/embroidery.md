@@ -512,6 +512,39 @@ Kiosk** takes the PIN. The kiosk stays on across restarts, so a counter computer
 PIN keeps the full app out of reach by mistake; it is not a security barrier, since the
 preferences file can be edited.
 
+## Sequins, beads, rhinestones, cord and boring
+
+Five stitch types decorate instead of stitching a fill (Embroidery panel › Stitch type, or
+`embroidery.set {type: sequin|bead|stone|cord|boring}`); their settings change with the panel or
+`embroidery.setParams`:
+
+- **Sequins**: round, square, star, heart or flower sequins (`shape`, `size` mm across), placed
+  along the line (`layout: run`), packed inside the shape (`fill`: a honeycomb or a grid, rows at
+  `angle`, sewn back and forth), round the inside of its edge (`border`) or one at each point
+  drawn (`manual`). `spacing` sets the gap between them (negative overlaps them: minus half the
+  size makes a half-overlapping run), `sizes` takes several sizes in turn (multi-sequin), `flip`
+  shows every other one's back, and `color` their own colour. Each is held by fixing stitches
+  from its hole over the edge (`fixing`: single, the way the run goes, under the next sequin;
+  double; three; or a cross).
+- **Beads**: seed or bugle beads along the line, in the shape or at points; each sewn through
+  and back so it lies flat.
+- **Rhinestones**: stones (SS6 to SS30, by size in mm) along the line, round the edge, packed
+  inside the shape or at points, round or square. They aren't sewn and add nothing to the
+  machine file; export their template (Cut File) to cut, brush the stones into and press.
+  Setting type to rhinestones makes bling lettering and bling borders.
+- **Cord**: a cord couched along the line with a zigzag a little wider than it (`size`: the
+  cord's width).
+- **Boring**: each closed shape a cut-work hole: its outline run, a stop to cut it, then a
+  satin edge round it (`size`: the edge's width).
+
+The machine stops before each sequin, cord and boring object (`stop`), for the operator to load
+the sequins, lay the cord or cut the holes: the codes that drive sequin, cording and boring
+devices on multi-head machines aren't publicly documented, so they aren't written. The canvas
+shows the sequins, beads, stones, cord and holes as they will look, the stitches over them
+(stones over everything). **Count Decorations** (`embroidery.decor.count`) lists the sequins,
+beads and stones by kind, size and colour, and the cord's length, to order supplies;
+`embroidery.decor.palette` gives the standard sizes.
+
 ## Merging colours
 
 **Merge Colours** (`embroidery.colors.merge {tolerance?, sequence?}`) makes the design's threads of
