@@ -126,6 +126,18 @@ fn every_version_declares_its_acadver_and_is_well_formed() {
 }
 
 #[test]
+fn r12_viewport_has_no_duplicate_group_codes() {
+    let d = shapes_doc();
+    let out = export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap();
+    let vport = table(&out, "VPORT").into_iter().find(|o| kind(o) == "VPORT").expect("VPORT table record");
+    let codes: Vec<i32> = vport.iter().map(|pair| pair.0).collect();
+    let unique: std::collections::HashSet<_> = codes.iter().collect();
+    assert_eq!(unique.len(), codes.len(), "R12 VPORT record has duplicate group codes: {vport:?}");
+    let z = vport.iter().find(|pair| pair.0 == 36).map(|pair| pair.1.trim().parse::<f64>().unwrap());
+    assert_eq!(z, Some(1.0), "the view direction looks down the z axis");
+}
+
+#[test]
 fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     let d = shapes_doc();
     let out = export(&d, &opts(&d)).unwrap();
