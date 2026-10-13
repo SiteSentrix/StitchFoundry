@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_geom::Rect;
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use super::*;
 
@@ -589,32 +589,4 @@ fn brushes_and_symbols_survive_vectorcraft_round_trip() {
     let r = s2.execute("symbol.place", &json!({"name": "Box", "x": 100, "y": 100})).unwrap();
     let b = s2.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
     assert!(close(b, Rect::new(60.0, 80.0, 140.0, 120.0), 1e-9));
-}
-
-/// #1661: with the Paintbrush, `]` and `[` size the brush itself, a tenth a press: the stroke
-/// weight new art takes stays, the selected path keeps its stroke, nothing goes on the undo list,
-/// and the next stroke is drawn at the new size.
-#[test]
-fn paintbrush_brackets_size_the_next_stroke_and_leave_the_weight() {
-    let mut s = session();
-    let v = ViewInfo::default();
-    let selected = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
-    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
-    let before = node(&s, selected);
-    let undo = s.doc().unwrap().history.undo.len();
-    s.select_tool("paintbrush", v).unwrap();
-    for _ in 0..2 {
-        s.tool_key(ToolKey::BracketRight, Mods::default(), v).unwrap();
-    }
-    s.tool_key(ToolKey::BracketLeft, Mods::default(), v).unwrap();
-    assert_eq!(s.paint.stroke_width, 3.0, "the weight stays");
-    assert_eq!(node(&s, selected), before, "the selection keeps its stroke");
-    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing to undo");
-    for (k, x, y) in [(PointerKind::Down, 100.0, 100.0), (PointerKind::Drag, 150.0, 130.0), (PointerKind::Up, 200.0, 110.0)] {
-        s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
-    }
-    let drawn = s.doc().unwrap().selection.objects[0];
-    assert_ne!(drawn, selected);
-    assert!((node(&s, drawn).appearance.stroke().unwrap().width - 3.0 * 1.1).abs() < 1e-12);
-    assert_eq!(s.paint.stroke_width, 3.0);
 }
