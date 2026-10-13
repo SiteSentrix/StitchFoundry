@@ -848,9 +848,11 @@ pub(crate) fn monogram_body(app: &mut VectorcraftApp, ui: &mut Ui) {
         if button(ui, tl!("Save as Template")).clicked() && !name.is_empty() {
             use vectorcraft_engine::cmd::embroidery_monogram::{BORDERS, ORNAMENTS};
             let m = &app.embroidery;
-            let params = json!({ "name": name, "style": ["classic", "line", "stacked"].get(m.monogram_style).copied().unwrap_or("classic"),
-                "border": BORDERS.get(m.monogram_border).copied().unwrap_or("none"), "rings": m.monogram_rings.clamp(1, 4),
-                "ornament": ORNAMENTS.get(m.monogram_ornament).copied().unwrap_or("none"), "size": size });
+            let style = ["classic", "line", "stacked"].get(m.monogram_style).copied().unwrap_or("classic");
+            let border = BORDERS.get(m.monogram_border).copied().unwrap_or("none");
+            let ornament = ORNAMENTS.get(m.monogram_ornament).copied().unwrap_or("none");
+            let params = json!({ "name": name, "style": style, "border": border, "rings": m.monogram_rings.clamp(1, 4),
+                "ornament": ornament, "size": size });
             if let Err(e) = app.run("embroidery.monogram.saveTemplate", params) {
                 app.status(e);
             }
