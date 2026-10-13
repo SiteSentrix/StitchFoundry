@@ -609,8 +609,11 @@ impl SaveJob {
                 if Arc::ptr_eq(&st.doc, &self.source) {
                     st.doc = self.snapshot.clone();
                 } else {
-                    // Edited while the save ran: the dates still go on, the edits stay unsaved.
+                    // Edited while the save ran: the dates still go on, the edits stay unsaved. The
+                    // undo history holds the document as it was before the dates, so that is the
+                    // saved state: undoing back to it leaves the document unmodified.
                     stamp_save_dates(st, at);
+                    return st.mark_saved_as(&self.source);
                 }
             }
             st.mark_saved_as(&self.snapshot);

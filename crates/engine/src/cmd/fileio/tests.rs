@@ -523,4 +523,7 @@ fn a_failed_save_does_not_stamp_the_documents_dates() {
     assert_eq!(st.doc.metadata.modified, Some(777));
     assert_eq!(st.path.as_deref(), Some("/x/z.vectorcraft"));
     assert!(st.is_dirty());
+    // Undoing the edit is back at what the file holds.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty());
 }
