@@ -511,7 +511,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | OUT-05 | Cost estimate (stitches, thread, time, machine heads) | Done | `embroidery.settings {cost}` (per 1000 stitches, machine hour over its heads, thread per 1000 m, set-up an order, currency); `embroidery.cost {quantity}`; shown in the Design section and on worksheets | 0 |
 | MDO-01 | Export vectors, appliqué cut files, bling templates, multi-decoration files | Missing | SVG/DXF/PLT exports of the relevant layers | 4 |
 | NET-01 | Machine networking (device setup, queues, device settings) | Out | Vendor ecosystems | – |
-| DM-01 | Design library: browse folders, thumbnails, search, design info | Missing | §7.12 | 6 |
+| DM-01 | Design library: browse folders, thumbnails, search, design info | Partial | `embroidery.library.scan`: a folder's machine files with figures and stitch thumbnails, searched and sorted, cached; the library panel still to come | 6 |
 | DM-02 | Job orders, batch convert, output selected designs | Missing | §7.12 | 6 |
 | DM-03 | Embroidery clipart (insert library designs) | Missing | Our own small clipart set + user libraries | 6 |
 | CH-01 | Chenille machines (chain and moss stitches) | Missing | Chenille object types + formats with chenille codes | 7 |
@@ -551,7 +551,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-27 | Echo and background quilting round objects | Missing | Offset runs or a stipple behind the design (CS-*, SP-*) | 7 |
 | NEW-28 | Embossed pattern that follows a turning satin | Missing | Pattern stretched along the turning direction (PS-*) | 7 |
 | NEW-29 | Appliqué cover choice (satin, blanket, zigzag or one's own) and printed mirrored cutting templates | Partial | Covers: satin, blanket, zigzag, triple run or none; printed templates still to come (MDO-01) | 4 |
-| NEW-30 | Catalogue print of a design folder (thumbnail sheets, lists) | Missing | With DM-01 and RP-* | 6 |
+| NEW-30 | Catalogue print of a design folder (thumbnail sheets, lists) | Done | `embroidery.library.catalogue`: thumbnail sheets of a folder's designs in their colours with name, size, stitches, colours and format | 0 |
 | NEW-31 | Fabric presets that recommend a stabiliser | Done | Each fabric names a stabiliser (tear-away, cut-away, no-show mesh, wash-away) and a topping where it wants one; shown under Fabric settings and printed on worksheets | 0 |
 | NEW-32 | Help in place: F1 on a tool opens its help, a hints panel with short tips | Missing | Docs sections linked from tools | 7 |
 | NEW-33 | True-size zoom (calibrate the screen so 100 % is life size) | Missing | A preference with a ruler to match | 7 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 176 done,
-28 partial, 40 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 177 done,
+29 partial, 38 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

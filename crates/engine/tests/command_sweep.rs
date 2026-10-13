@@ -531,6 +531,8 @@ fn structured_junk() {
         ("embroidery.cost", json!({"quantity": -1.5})),
         ("embroidery.colorway.setThread", json!({"slot": u64::MAX, "index": u64::MAX, "color": "#zzzzzz"})),
         ("embroidery.colorway.activate", json!({"index": -1})),
+        ("embroidery.library.scan", json!({"folder": "/nonexistent/\u{0}", "sort": 3, "query": []})),
+        ("embroidery.library.catalogue", json!({"folder": "", "columns": u64::MAX})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "applique": 3})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "stitch": [], "small": 2})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "path": u64::MAX, "vertical": "yes"})),
