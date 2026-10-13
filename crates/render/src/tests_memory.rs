@@ -1,11 +1,13 @@
 //! What renderers keep between frames: decoded images shared by all of them, image mips, symbol
 //! art placed for instances and inline graphics, raster effects made again when what they read
-//! changes, and caches swept by every kind of render.
+//! changes, and caches swept by every kind of render. Each test holds [`fonts_steady`]: fonts added
+//! while it runs would make its renderers lay type out again.
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 
 use super::*;
+use crate::tests_fontchange::fonts_steady;
 
 /// A `w`×`h` PNG whose pixels depend on `seed` (each test its own image: the store is shared by
 /// the tests running alongside).
@@ -31,6 +33,7 @@ fn doc_with_image(key: &str, bytes: Vec<u8>, w: u32, h: u32) -> Document {
 
 #[test]
 fn renderers_share_one_decode_of_an_image() {
+    let _fonts = fonts_steady();
     let bytes = png(16, 16, 101);
     let a = doc_with_image("img", bytes.clone(), 16, 16);
     // Another document holding the same image under another key (its own copy of the bytes).
@@ -57,6 +60,7 @@ fn renderers_share_one_decode_of_an_image() {
 /// longer drawn are dropped, with the nodes they kept alive.
 #[test]
 fn node_renders_sweep_stale_cache_entries() {
+    let _fonts = fonts_steady();
     let mut d = Document::new(10.0, 10.0);
     let id = d.alloc_id();
     let square = |x: f64| {
@@ -85,6 +89,7 @@ fn node_renders_sweep_stale_cache_entries() {
 /// more than half size from the full pixels as before.
 #[test]
 fn image_mips_are_opt_in_and_change_nothing_off() {
+    let _fonts = fonts_steady();
     let d = doc_with_image("img", png(64, 64, 103), 64, 64);
     let (off, on) = (RenderOptions::default(), RenderOptions { image_mips: true, ..Default::default() });
     let quarter = Affine::scale(0.25);
@@ -135,6 +140,7 @@ fn text_keys(d: &Document) -> Vec<usize> {
 /// rest is laid out again), where emptying the cache when full laid out every object every frame.
 #[test]
 fn type_over_the_text_budget_keeps_its_entries_between_frames() {
+    let _fonts = fonts_steady();
     let d = text_doc(40, "Type");
     let opts = RenderOptions::default();
     let mut r = Renderer::new();
@@ -162,6 +168,7 @@ fn type_over_the_text_budget_keeps_its_entries_between_frames() {
 /// Type no longer drawn leaves the glyph cache after a few frames, and its bytes with it.
 #[test]
 fn swept_type_entries_give_back_their_bytes() {
+    let _fonts = fonts_steady();
     let d = text_doc(12, "Swept");
     let mut r = Renderer::new();
     r.texts = FrameCache::new(lru::TEXT_BUDGET, 0);
@@ -225,6 +232,7 @@ fn placed_copies(r: &Renderer, docs: &[&Document]) -> std::collections::BTreeSet
 /// holds the symbol's art itself only weakly.
 #[test]
 fn symbol_instances_keep_their_placed_art_between_frames() {
+    let _fonts = fonts_steady();
     let d = symbol_doc();
     let opts = RenderOptions::default();
     let mut r = Renderer::new();
@@ -241,6 +249,7 @@ fn symbol_instances_keep_their_placed_art_between_frames() {
 /// draws.
 #[test]
 fn editing_an_instance_or_a_symbol_places_only_its_art_again() {
+    let _fonts = fonts_steady();
     let mut d = symbol_doc();
     // Symbol `T` is a green square, and one instance of it stands below the others.
     let green = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0);
@@ -315,6 +324,7 @@ fn holder_doc(mut d: Document, members: Vec<Node>) -> Document {
 /// frame draws what a new renderer draws.
 #[test]
 fn art_showing_another_symbol_draws_its_edits() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
@@ -344,6 +354,7 @@ fn art_showing_another_symbol_draws_its_edits() {
 /// renderer draws.
 #[test]
 fn art_with_raster_effects_draws_pattern_and_resolution_edits() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
     let effect = |id: &str, params: serde_json::Value| vectorcraft_doc::Effect { id: id.into(), params, visible: true };
     let mut d = Document::new(200.0, 100.0);
@@ -381,6 +392,7 @@ fn art_with_raster_effects_draws_pattern_and_resolution_edits() {
 /// draws.
 #[test]
 fn art_with_live_objects_draws_pattern_layout_edits() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::live::EnvelopeOptions;
     use vectorcraft_doc::pattern::{PatternDef, TileType, pattern_paint};
     let mut d = Document::new(200.0, 100.0);
@@ -452,6 +464,7 @@ fn checks(color: Color) -> vectorcraft_doc::pattern::PatternDef {
 /// Pattern Options sets it) under a blur and a drop shadow.
 #[test]
 fn rasters_draw_pattern_edits() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::pattern::{TileType, pattern_paint};
     use vectorcraft_geom::shapes::rectangle;
     let doc = || {
@@ -480,6 +493,7 @@ fn rasters_draw_pattern_edits() {
 /// file is read again (a blur).
 #[test]
 fn rasters_draw_symbol_brush_and_image_edits() {
+    let _fonts = fonts_steady();
     use vectorcraft_geom::shapes::{line, rectangle};
     // A group of an instance of symbol `A`, whose art shows symbol `S`, and a green square.
     let mut d = Document::new(200.0, 100.0);
@@ -545,6 +559,7 @@ fn missing_font_type(d: &mut Document, fx: vectorcraft_doc::Effect) -> Node {
 /// Images under an image's blur.
 #[test]
 fn rasters_draw_document_and_layer_setting_edits() {
+    let _fonts = fonts_steady();
     use vectorcraft_geom::shapes::rectangle;
     // The path holds ten bars, 1 pt high and 2 pt apart.
     let mut d = Document::new(200.0, 100.0);
@@ -591,6 +606,7 @@ fn rasters_draw_document_and_layer_setting_edits() {
 /// blurred group, entered and left.
 #[test]
 fn rasters_follow_the_view_options() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::text::{CharStyle, TextObject};
     use vectorcraft_geom::shapes::{ellipse, rectangle};
     let on_white = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
@@ -629,6 +645,7 @@ fn rasters_follow_the_view_options() {
 /// documents light ones.
 #[test]
 fn filtered_thumbnails_follow_the_color_mode() {
+    let _fonts = fonts_steady();
     use vectorcraft_geom::shapes::rectangle;
     let mut d = Document::new(200.0, 100.0);
     d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
@@ -649,6 +666,7 @@ fn filtered_thumbnails_follow_the_color_mode() {
 /// cache too small for all of the art. Art no longer drawn leaves the cache after a few frames.
 #[test]
 fn symbol_instances_draw_as_groups_of_their_placed_art() {
+    let _fonts = fonts_steady();
     let mut d = symbol_doc();
     let l = d.layers[0].id;
     // An instance placed like the first one lies over it, stained green.
@@ -699,6 +717,7 @@ fn symbol_instances_draw_as_groups_of_their_placed_art() {
 /// Inline graphics in type draw the art placed for them in an earlier frame, as instances do.
 #[test]
 fn inline_graphics_keep_their_placed_art_between_frames() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
@@ -722,6 +741,7 @@ fn inline_graphics_keep_their_placed_art_between_frames() {
 /// decorations in layout order (the whole text's path is kept once, the runs as spans of it).
 #[test]
 fn text_runs_draw_their_own_glyphs_from_the_shared_outlines() {
+    let _fonts = fonts_steady();
     use vectorcraft_doc::text::{CharStyle, TextObject, TextRun};
     let plain = CharStyle { size: 24.0, ..Default::default() };
     let under = CharStyle { underline: true, ..plain.clone() };

@@ -1,11 +1,28 @@
 //! Type redraws in a font that becomes available while it is on screen (fonts added, Refresh Font
 //! List).
 
+use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
 use vectorcraft_doc::text::{CharStyle, TextObject};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::Point;
 
 use super::*;
+
+/// Taken to add fonts. Renderers lay type out again when the fonts change, so tests of what they
+/// keep between frames hold it shared ([`fonts_steady`]) and the tests here hold it alone.
+static FONTS: RwLock<()> = RwLock::new(());
+
+/// No fonts are added by these tests until the guard is dropped.
+pub(crate) fn fonts_steady() -> RwLockReadGuard<'static, ()> {
+    // A test that failed holding it leaves nothing to undo.
+    FONTS.read().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// No test holding [`fonts_steady`] runs until the guard is dropped.
+fn adding_fonts() -> RwLockWriteGuard<'static, ()> {
+    FONTS.write().unwrap_or_else(PoisonError::into_inner)
+}
 
 /// The bundled Source Serif 4 renamed `family` (as long as the original name).
 fn serif_as(family: &str) -> Vec<u8> {
@@ -24,6 +41,7 @@ fn serif_as(family: &str) -> Vec<u8> {
 
 #[test]
 fn type_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
     const FAMILY: &str = "Arrival Serif4";
     let mut d = Document::new(300.0, 150.0);
     let style = CharStyle { size: 60.0, font_family: FAMILY.into(), ..Default::default() };
@@ -44,6 +62,7 @@ fn type_redraws_when_its_font_becomes_available() {
 /// blurred content are made again.
 #[test]
 fn type_with_raster_effects_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
     const FAMILY: &str = "Raster Serif 4";
     let mut d = Document::new(300.0, 150.0);
     let l = d.layers[0].id;
@@ -68,6 +87,7 @@ fn type_with_raster_effects_redraws_when_its_font_becomes_available() {
 /// kept for the instance is placed again when the fonts change.
 #[test]
 fn symbol_type_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
     const FAMILY: &str = "Placed Serif 4";
     let mut d = Document::new(300.0, 150.0);
     let style = CharStyle { size: 60.0, font_family: FAMILY.into(), ..Default::default() };
