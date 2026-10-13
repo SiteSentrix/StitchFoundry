@@ -955,4 +955,13 @@ mod tests {
         let mut seen = HashSet::new();
         assert!(entries().iter().all(|e| seen.insert(e.key.clone())), "duplicate entries");
     }
+
+    #[test]
+    fn duplicate_can_be_given_a_shortcut() {
+        // Duplicate has no default chord (#1539): it must still be listed so one can be set.
+        assert_eq!(entry("edit.duplicate").map(|e| e.group.as_str()), Some("Edit"));
+        let mut ov = BTreeMap::new();
+        assign(&mut ov, "edit.duplicate", Some("Cmd+Alt+Shift+F8"), false).unwrap();
+        assert_eq!(effective_in(&ov, "edit.duplicate").as_deref(), Some("Cmd+Alt+Shift+F8"));
+    }
 }
