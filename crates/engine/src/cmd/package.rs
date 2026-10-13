@@ -343,6 +343,7 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let warnings = std::mem::take(&mut collector.warnings);
     let fonts = collector.fonts;
     let links = collector.copies.len();
+    let copied_sources: Vec<String> = collector.copies.keys().cloned().collect();
 
     // The report.
     if let Some(info) = info {
@@ -357,6 +358,9 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({ "files": files, "links": links, "fonts": fonts, "missingLinks": missing, "skippedFonts": skipped, "warnings": warnings });
     match root {
         Some(root) => {
+            // Never replace the open document or a file it links to: the folder may be the document's own.
+            let sources: Vec<&str> = std::iter::once(doc_path.as_str()).chain(copied_sources.iter().map(String::as_str)).collect();
+            check_no_overwrite(&root, &entries, &sources)?;
             for (rel, bytes) in &entries {
                 let path = root.join(rel);
                 if let Some(dir) = path.parent() {
@@ -375,6 +379,21 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     Ok(out)
+}
+
+/// An error when writing any of `entries` (paths relative to `root`) would replace one of the
+/// `sources` (compared by their real paths, so aliases and `..` don't hide a collision).
+fn check_no_overwrite(root: &Path, entries: &[Entry], sources: &[&str]) -> Result<()> {
+    let real: Vec<PathBuf> = sources.iter().filter_map(|s| std::fs::canonicalize(s).ok()).collect();
+    for (rel, _) in entries {
+        let path = root.join(rel);
+        if let Ok(dest) = std::fs::canonicalize(&path)
+            && real.contains(&dest)
+        {
+            return Err(bad(C, format!("`{}` would be overwritten by the package: choose a different folder or name", path.display())));
+        }
+    }
+    Ok(())
 }
 
 // ---------- zip archives ----------
