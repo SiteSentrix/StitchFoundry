@@ -141,6 +141,12 @@ fn safe_name(s: &str) -> Option<String> {
     (!n.trim_matches('.').is_empty()).then_some(n)
 }
 
+/// Text that goes into a file name (prefix, suffix): path separators and `:` become `-`, so it can't
+/// start a folder or climb out of the export folder.
+fn file_part(s: &str) -> String {
+    s.chars().map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c }).collect()
+}
+
 /// Keys of a format row that aren't encoder options.
 const ROW_KEYS: [&str; 7] = ["format", "scale", "ppi", "width", "height", "suffix", "folder"];
 
@@ -169,7 +175,7 @@ impl Row {
         let size = if format.raster { ScreenSize::of_row(row)? } else { ScreenSize::Scale(1.0) };
         let suffix = match str_param(row, "suffix") {
             Some(s) if !format.raster && is_size_suffix(s) => String::new(),
-            Some(s) => s.to_string(),
+            Some(s) => file_part(s),
             None => size.suffix(),
         };
         let folder = match str_param(row, "folder").and_then(safe_name) {
@@ -336,7 +342,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let subfolders = o.subfolders || o.preset.is_some();
     // A prefix names files, not folders.
-    let prefix: String = o.prefix.as_deref().unwrap_or("").chars().map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c }).collect();
+    let prefix = file_part(o.prefix.as_deref().unwrap_or(""));
     let folder = o.folder.as_deref().filter(|f| !f.is_empty());
     if let Some(dir) = folder {
         create_dir(dir)?;
