@@ -492,7 +492,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             match ui.input(|i| i.pointer.hover_pos()) {
                 // An OS cursor: the system moves it at once, where a painted one trails the pointer
                 // (#444). The system cursor stands in for cursors without a glyph.
-                Some(_) if custom && crate::cursors::OS_CURSORS => {
+                Some(_) if custom && crate::cursors::os_cursors(crate::cursors::OS_CURSORS, app.services.wayland) => {
                     let ppp = ui.ctx().pixels_per_point() / ui_scale;
                     ui.ctx().set_cursor_image(app.canvas.cursors.get(c, ppp));
                     cursor_icon(c)

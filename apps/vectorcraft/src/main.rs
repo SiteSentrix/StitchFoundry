@@ -489,6 +489,8 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
 
 /// The host's services; `ui` is woken when a file dialog answers.
 fn services(parent: Parent, ui: egui::Context) -> Services {
+    use winit::raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
+    let wayland = parent.as_ref().and_then(|w| w.window_handle().ok()).is_some_and(|h| matches!(h.as_raw(), RawWindowHandle::Wayland(_)));
     let (p1, p2, p3, p4, p5) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
     Services {
         pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
@@ -498,6 +500,7 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
         // dialogs run the window's events while they are open.
         start_pick: cfg!(unix).then(|| Box::new(move |request: PickRequest| start_pick(request, &p5, &ui)) as vectorcraft_ui_egui::picks::StartPick),
         dialogs_are_sheets: cfg!(target_os = "macos"),
+        wayland,
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(write_file)),
         // Background Save and Export write from a worker thread.
