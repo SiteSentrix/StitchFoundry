@@ -258,10 +258,18 @@ pub fn entries() -> &'static [Entry] {
             .collect();
         let mut seen = HashSet::new();
         for c in vectorcraft_engine::command_specs() {
-            if (c.menu.is_empty() && c.shortcut.is_none()) || !seen.insert(c.id) {
+            // Commands outside the menus (panel menu items) are
+            // listed when a key alone can run them; queries and aliases never are.
+            let listed = if c.menu.is_empty() {
+                c.shortcut.is_some() || (c.journal && !vectorcraft_engine::cmd::is_alias(c.id) && runs_without_params(c.params))
+            } else {
+                true
+            };
+            if !listed || !seen.insert(c.id) {
                 continue;
             }
-            v.push(Entry { key: c.id.into(), label: c.label.into(), group: c.menu.join(" › "), is_tool: false });
+            let group = if c.menu.is_empty() { id_group(c.id) } else { c.menu.join(" › ") };
+            v.push(Entry { key: c.id.into(), label: c.label.into(), group, is_tool: false });
         }
         v.extend(crate::state::all_panels().map(|(id, label)| Entry {
             key: format!("panel:{id}"),
@@ -273,14 +281,24 @@ pub fn entries() -> &'static [Entry] {
             if !seen.insert(id) || (sc.is_empty() && !params.starts_with("{}") && !params.starts_with("{path")) {
                 continue;
             }
-            let group = id.split('.').next().map(|g| {
-                let mut c = g.chars();
-                c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
-            });
-            v.push(Entry { key: id.to_string(), label: label.to_string(), group: group.unwrap_or_default(), is_tool: false });
+            v.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false });
         }
         v
     })
+}
+
+/// The group of a command no menu holds: the first part of its id, capitalised (`edit.x` → "Edit").
+fn id_group(id: &str) -> String {
+    let mut c = id.split('.').next().unwrap_or_default().chars();
+    c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+}
+
+/// Does a command's params doc (`{a?, b?} …`) say it runs with no params, as a shortcut runs it?
+fn runs_without_params(params: &str) -> bool {
+    params
+        .strip_prefix('{')
+        .and_then(|r| r.split_once('}'))
+        .is_some_and(|(fields, _)| fields.split(',').all(|f| f.trim().is_empty() || f.trim_end().ends_with('?')))
 }
 
 pub fn entry(key: &str) -> Option<&'static Entry> {
@@ -963,5 +981,24 @@ mod tests {
         let mut ov = BTreeMap::new();
         assign(&mut ov, "edit.duplicate", Some("Cmd+Alt+Shift+F8"), false).unwrap();
         assert_eq!(effective_in(&ov, "edit.duplicate").as_deref(), Some("Cmd+Alt+Shift+F8"));
+    }
+
+    /// #1539: a command outside the menus that runs without params (a panel menu's Break Link to
+    /// Symbol) can be given a shortcut; one that needs params, a query or an alias can't.
+    #[test]
+    fn menuless_commands_that_run_bare_are_listed() {
+        let e = entry("symbol.breakLink").expect("listed");
+        assert_eq!((e.label.as_str(), e.group.as_str()), ("Break Link to Symbol", "Symbol"));
+        for id in ["brush.duplicate", "path.convertAnchors", "document.json", "prefs.list"] {
+            assert!(entry(id).is_none(), "{id}");
+        }
+        for (doc, bare) in
+            [("{}", true), ("{dx?, dy?} x", true), ("{id?|ids?, clip?}", true), ("{name, newName?}", false), ("{a?: {b}}", false), ("same as", false)]
+        {
+            assert_eq!(runs_without_params(doc), bare, "{doc}");
+        }
+        let mut ov = BTreeMap::new();
+        assert!(assign(&mut ov, "symbol.breakLink", Some("Cmd+Alt+Shift+F9"), true).is_ok());
+        assert_eq!(effective_in(&ov, "symbol.breakLink").as_deref(), Some("Cmd+Alt+Shift+F9"));
     }
 }
