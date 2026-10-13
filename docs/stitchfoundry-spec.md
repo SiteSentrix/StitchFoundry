@@ -512,7 +512,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | MDO-01 | Export vectors, appliqué cut files, bling templates, multi-decoration files | Missing | SVG/DXF/PLT exports of the relevant layers | 4 |
 | NET-01 | Machine networking (device setup, queues, device settings) | Out | Vendor ecosystems | – |
 | DM-01 | Design library: browse folders, thumbnails, search, design info | Done | The Design Library section (`embroidery.library.scan`): a folder's machine files as stitch thumbnails with size, stitches, colours and date, searched and sorted, cached, opened with a click | 0 |
-| DM-02 | Job orders, batch convert, output selected designs | Missing | §7.12 | 6 |
+| DM-02 | Job orders, batch convert, output selected designs | Partial | `embroidery.library.convert`: a folder's designs or the chosen ones written in another machine format; job orders still to come | 4 |
 | DM-03 | Embroidery clipart (insert library designs) | Missing | Our own small clipart set + user libraries | 6 |
 | CH-01 | Chenille machines (chain and moss stitches) | Missing | Chenille object types + formats with chenille codes | 7 |
 | CH-02 | Schiffli machines | Out | Separate industry; low demand |  – |
@@ -571,7 +571,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
 **Tally:** 250 rows (grouping the roughly 300 features the reference lists): 180 done,
-29 partial, 35 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+30 partial, 34 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

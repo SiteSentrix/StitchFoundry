@@ -620,6 +620,33 @@ fn the_design_library_lists_machine_files_with_their_figures() {
     let empty = dir.join("caps").join("none");
     std::fs::create_dir_all(&empty).unwrap();
     assert!(s.execute("embroidery.library.catalogue", &json!({"folder": empty.to_string_lossy()})).is_err());
+    // batch convert: the folder's designs to JEF beside them, the broken one said, then again
+    // numbered, and the chosen ones to VP3 in another folder
+    let r = s.execute("embroidery.library.convert", &json!({"folder": folder, "format": "jef"})).unwrap();
+    let to: Vec<&str> = r["converted"].as_array().unwrap().iter().filter_map(|c| c["to"].as_str()).collect();
+    assert!(to.len() == 2 && to.iter().all(|t| t.ends_with(".jef")) && to.iter().any(|t| t.ends_with("caps/Logo.jef")), "{r}");
+    assert_eq!((r["skipped"].as_array().unwrap().len(), r["failed"].as_array().unwrap().len()), (1, 0), "broken.jef is already JEF: {r}");
+    let jef = sf_formats::read(sf_formats::Format::Jef, &std::fs::read(dir.join("Rose.jef")).unwrap()).unwrap();
+    let dst = sf_formats::read(sf_formats::Format::Dst, &std::fs::read(dir.join("Rose.dst")).unwrap()).unwrap();
+    assert!(jef.stitch_count().abs_diff(dst.stitch_count()) <= dst.stitch_count() / 50, "{} vs {}", jef.stitch_count(), dst.stitch_count());
+    let r = s.execute("embroidery.library.convert", &json!({"folder": folder, "format": "jef", "recursive": false, "query": "rose"})).unwrap();
+    assert!(r["converted"][0]["to"].as_str().unwrap().ends_with("Rose-2.jef"), "{r}");
+    let out = dir.join("vp3");
+    std::fs::create_dir_all(&out).unwrap();
+    let rose_path = dir.join("Rose.dst").to_string_lossy().to_string();
+    let r = s
+        .execute("embroidery.library.convert", &json!({"files": [rose_path, "/nowhere/x.pes"], "format": ".VP3", "dir": out.to_string_lossy()}))
+        .unwrap();
+    assert!(out.join("Rose.vp3").exists() && r["failed"].as_array().unwrap().len() == 1, "{r}");
+    for bad in [
+        json!({"folder": folder}),
+        json!({"folder": folder, "format": "svg"}),
+        json!({"format": "dst"}),
+        json!({"files": [], "format": "dst"}),
+        json!({"files": [rose_path], "format": "dst", "dir": out.join("none").to_string_lossy()}),
+    ] {
+        assert!(s.execute("embroidery.library.convert", &bad).is_err(), "{bad}");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
