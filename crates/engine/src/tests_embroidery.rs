@@ -706,6 +706,14 @@ fn worksheets_show_the_design_and_its_figures() {
     assert_eq!(r["kind"].as_str(), Some("pattern"));
     let st = s.doc().unwrap();
     assert_eq!((st.doc.artboards[0].rect.width(), st.doc.artboards[0].rect.height()), (612.0, 792.0));
+    // one line of figures, its count of colours said right
+    let mut figures = Vec::new();
+    st.doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            figures.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    assert!(figures.iter().any(|t| t.ends_with("2 colours")), "{figures:?}");
     assert!(s.execute("embroidery.worksheet", &json!({"page": "a3"})).is_err());
     // a barcode at the top right: the design's name by default, as bars inside the margin
     let barcode = |s: &Session| {
