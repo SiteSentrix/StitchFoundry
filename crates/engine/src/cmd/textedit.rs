@@ -230,7 +230,12 @@ pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>
     let Some(v) = p.get("features").filter(|v| !v.is_null()) else { return Ok(None) };
     let tags: Vec<&str> = v.as_array().ok_or_else(|| bad(cmd, "features must be a list of tags"))?.iter().filter_map(Value::as_str).collect();
     if let Some(t) = tags.iter().find(|t| !vectorcraft_text::OtFeatures::known_tag(t)) {
-        return Err(bad(cmd, format!("unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh; prefix - to turn off)")));
+        return Err(bad(
+            cmd,
+            format!(
+                "unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs; prefix - to turn off)"
+            ),
+        ));
     }
     Ok(Some(vectorcraft_text::OtFeatures::default().with_tags(tags).to_tags()))
 }
