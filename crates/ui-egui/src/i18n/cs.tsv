@@ -4934,3 +4934,6 @@ machine	Stop	Zastavení
 	Recolour	Přebarvit
 	Recolour Threads	Přebarvit nitě
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Každá nit změněna podle schématu a přizpůsobena vzorníku výšivky; zpět je vrátí
+	Garment Background	Pozadí oděvu
+	Garment Photo…	Fotografie oděvu…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Fotografie oděvu za výšivkou ve skutečné velikosti, na zamčené vrstvě šablony, která se nikdy nevyšívá

@@ -4905,3 +4905,6 @@ machine	Stop	Остановка
 	Recolour	Перекрасить
 	Recolour Threads	Перекрасить нити
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Каждая нить изменена по схеме и подобрана по карте нитей дизайна; отмена возвращает их
+	Garment Background	Фон изделия
+	Garment Photo…	Фото изделия…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Фото изделия за дизайном в натуральную величину, на заблокированном слое-шаблоне, который никогда не вышивается

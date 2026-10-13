@@ -14,15 +14,26 @@ use super::*;
 const MARGIN: f64 = 40.0;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(
-        "embroidery.visualize",
-        "Product Visualizer",
-        ["Embroidery"],
-        None,
-        "{product?: tshirt|polo|hoodie|cap|tote|towel (tshirt), color?: \"#rrggbb\" (the product's colour; white), placement?: left-chest|right-chest|full-front|full-back|yoke|sleeve|pocket (garments), cap-front (caps), full-front (totes, towels) (the product's usual), image?: a photo of the customer's own product instead (PNG, JPEG…), imageWidth?: mm the photo shows across (500; 50–3000), at?: [x, y] mm from the photo's top left where the design's middle goes (its middle)} the design's stitches life size on the product drawn in its colour (front, or back for full-back and yoke) at the usual place for it, or on the photo; a size larger than usual there is warned of; opens a new document → {product, placement, view, widthMm, heightMm, warnings}",
-        has_doc,
-        visualize
-    )]
+    vec![
+        cmd!(
+            "embroidery.visualize",
+            "Product Visualizer",
+            ["Embroidery"],
+            None,
+            "{product?: tshirt|polo|hoodie|cap|tote|towel (tshirt), color?: \"#rrggbb\" (the product's colour; white), placement?: left-chest|right-chest|full-front|full-back|yoke|sleeve|pocket (garments), cap-front (caps), full-front (totes, towels) (the product's usual), image?: a photo of the customer's own product instead (PNG, JPEG…), imageWidth?: mm the photo shows across (500; 50–3000), at?: [x, y] mm from the photo's top left where the design's middle goes (its middle)} the design's stitches life size on the product drawn in its colour (front, or back for full-back and yoke) at the usual place for it, or on the photo; a size larger than usual there is warned of; opens a new document → {product, placement, view, widthMm, heightMm, warnings}",
+            has_doc,
+            visualize
+        ),
+        cmd!(
+            "embroidery.background",
+            "Garment Background",
+            [],
+            None,
+            "{path: a photo of the garment or product (PNG, JPEG…), width?: mm the photo shows across (500; 50–3000), at?: [x, y] mm where its middle goes (the design's middle)} a photo of the garment behind the design while it is digitized, life size: on a locked template layer below the current one, never stitched, printed or exported with the design; delete the layer to take it away → {ids, widthMm, heightMm}",
+            has_doc,
+            background
+        ),
+    ]
 }
 
 /// Where the design goes: its middle across at `x`, and its middle, top or bottom at `y` (mm).
@@ -274,4 +285,40 @@ fn visualize(s: &mut Session, p: &Value) -> Result<Value> {
         "heightMm": (h * 10.0).round() / 10.0,
         "warnings": warnings,
     }))
+}
+
+fn background(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "embroidery.background";
+    let path =
+        str_param(p, "path").map(str::trim).filter(|p| !p.is_empty()).ok_or_else(|| bad(CMD, "missing `path`: the garment's photo"))?.to_string();
+    let width = match p.get("width") {
+        None | Some(Value::Null) => 500.0,
+        Some(v) => v.as_f64().filter(|v| (50.0..=3000.0).contains(v)).ok_or_else(|| bad(CMD, "`width` is 50 to 3000 mm"))?,
+    };
+    let info = s.execute("file.place.info", &json!({ "path": path }))?;
+    let (iw, ih) = (info["width"].as_f64().unwrap_or(0.0), info["height"].as_f64().unwrap_or(0.0));
+    if !(iw.is_finite() && ih.is_finite() && iw > 0.0 && ih > 0.0) {
+        return Err(bad(CMD, "the image has no size"));
+    }
+    let height = width * ih / iw;
+    // its middle on the design's (else the first artboard's)
+    let at = match p.get("at") {
+        None | Some(Value::Null) => {
+            let b = s.embroidery_plan().map(|plan| plan.pattern().bounds()).filter(|b| !b.is_empty());
+            match b {
+                Some(b) => ((b.min.x + b.max.x) / 2.0, (b.min.y + b.max.y) / 2.0),
+                None => {
+                    let r = s.doc()?.doc.artboards.first().map(|a| a.rect).unwrap_or_default();
+                    ((r.x0 + r.x1) / 2.0 / PT_PER_MM, (r.y0 + r.y1) / 2.0 / PT_PER_MM)
+                }
+            }
+        }
+        Some(v) => {
+            let pt = v.as_array().filter(|a| a.len() == 2).and_then(|a| Some((a.first()?.as_f64()?, a.get(1)?.as_f64()?)));
+            pt.filter(|(x, y)| x.is_finite() && y.is_finite()).ok_or_else(|| bad(CMD, "`at` is [x, y] in mm"))?
+        }
+    };
+    let rect = [(at.0 - width / 2.0) * PT_PER_MM, (at.1 - height / 2.0) * PT_PER_MM, width * PT_PER_MM, height * PT_PER_MM];
+    let r = s.execute("file.place", &json!({ "path": path, "template": true, "rect": rect }))?;
+    Ok(json!({ "ids": r["ids"], "widthMm": (width * 10.0).round() / 10.0, "heightMm": (height * 10.0).round() / 10.0 }))
 }

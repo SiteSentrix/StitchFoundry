@@ -2301,6 +2301,19 @@ fn design_section(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         app.run("embroidery.applyFabric", json!({ "name": name })).ok();
     }
     fabric_rows(app, ui, &info);
+    if app.services.pick_open.is_some()
+        && button(ui, tl!("Garment Photo…"))
+            .on_hover_text(tl!("A photo of the garment behind the design, life size, on a locked template layer that is never stitched"))
+            .clicked()
+    {
+        crate::picks::button(app, |app| {
+            let pick = crate::FilePick { filters: vec![("Images", &["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp"])], ..Default::default() };
+            let Some(path) = crate::picks::open(app, &pick) else { return };
+            if let Err(e) = app.run("embroidery.background", json!({ "path": path })) {
+                app.status(e);
+            }
+        });
+    }
     // the chart threads are picked from, and matching the design's threads to it
     let charts: Vec<&str> = info["charts"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     let chart = app.session.active().and_then(|s| s.doc.embroidery.as_ref().map(|c| c.chart.clone())).unwrap_or_default();

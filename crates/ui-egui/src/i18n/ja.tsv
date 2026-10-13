@@ -4903,3 +4903,6 @@ machine	Stop	停止
 	Recolour	色替え
 	Recolour Threads	糸の色替え
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	すべての糸を配色に従って変え、デザインの糸チャートに合わせます（取り消しで元に戻ります）
+	Garment Background	衣類の背景
+	Garment Photo…	衣類の写真…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	デザインの後ろに衣類の写真を実寸で置きます（刺繍されないロックされたテンプレートレイヤー）

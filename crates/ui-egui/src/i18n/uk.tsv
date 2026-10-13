@@ -4889,3 +4889,6 @@ machine	Stop	Зупинка
 	Recolour	Перефарбувати
 	Recolour Threads	Перефарбувати нитки
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Кожну нитку змінено за схемою й підібрано за картою ниток дизайну; скасування повертає їх
+	Garment Background	Тло виробу
+	Garment Photo…	Фото виробу…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Фото виробу за дизайном у натуральну величину, на заблокованому шарі-шаблоні, який ніколи не вишивається

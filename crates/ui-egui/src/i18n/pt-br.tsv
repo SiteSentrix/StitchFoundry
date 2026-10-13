@@ -4175,3 +4175,6 @@ machine	Trim	Corte de linha
 	Recolour	Recolorir
 	Recolour Threads	Recolorir linhas
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Cada linha trocada pelo esquema e ajustada à cartela do desenho; desfazer as restaura
+	Garment Background	Fundo da peça
+	Garment Photo…	Foto da peça…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Uma foto da peça atrás do desenho, em tamanho real, numa camada de modelo bloqueada que nunca é bordada

@@ -4909,3 +4909,6 @@ machine	Stop	Arresto
 	Recolour	Ricolora
 	Recolour Threads	Ricolora i fili
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Ogni filo cambiato secondo lo schema e abbinato alla cartella del disegno; annulla li ripristina
+	Garment Background	Sfondo del capo
+	Garment Photo…	Foto del capo…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Una foto del capo dietro il disegno, a grandezza reale, su un livello modello bloccato che non viene mai ricamato

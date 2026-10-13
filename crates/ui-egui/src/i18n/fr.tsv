@@ -4917,3 +4917,6 @@ machine	Stop	Arrêt
 	Recolour	Recolorer
 	Recolour Threads	Recolorer les fils
 	Every thread changed by the scheme and matched to the design's chart; undo puts them back	Chaque fil changé selon le schéma et accordé au nuancier du motif ; annuler les rétablit
+	Garment Background	Fond de vêtement
+	Garment Photo…	Photo du vêtement…
+	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Une photo du vêtement derrière le motif, en taille réelle, sur un calque modèle verrouillé jamais brodé
