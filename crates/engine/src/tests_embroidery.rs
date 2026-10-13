@@ -1185,6 +1185,21 @@ fn big_designs_split_into_hoopings_with_registration_marks() {
         sf_formats::read_any(&bytes, Some("dst")).unwrap().1
     };
     let crosses = first(&mut s);
+    // a sheet a hooping to print
+    let docs = s.documents().len();
+    let r = s.execute("embroidery.multiHoop", &json!({"hoop": "Brother 130 × 180 (5×7)", "sheets": true})).unwrap();
+    assert_eq!(r["sheets"].as_u64(), Some(3), "{r}");
+    assert_eq!(s.documents().len(), docs + 1);
+    let sheet = &s.doc().unwrap().doc;
+    assert_eq!(sheet.artboards.len(), 3);
+    let mut texts = Vec::new();
+    sheet.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+        }
+    });
+    assert!(texts.iter().any(|t| t == "Hooping 2 of 3") && texts.iter().any(|t| t.contains("column 2, row 1")), "{texts:?}");
+    s.set_active(0);
     s.execute("embroidery.settings", &json!({"registration": {"shape": "target", "size": 4, "perOverlap": 3, "color": "#0055ff"}})).unwrap();
     let info = s.execute("embroidery.info", &json!({})).unwrap();
     assert_eq!(info["settings"]["registration"]["shape"].as_str(), Some("target"), "{info}");
