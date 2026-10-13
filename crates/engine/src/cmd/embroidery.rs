@@ -2316,12 +2316,13 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
         sheet_text(&mut doc, 40.0, if full { ph - 24.0 } else { 104.0 }, text, 8.0, grey)?;
     }
     if full {
+        let colours = stats.colors.len();
         let line = format!(
-            "{:.1} × {:.1} mm (shown at {shown} %)   {} stitches   {} colours",
+            "{:.1} × {:.1} mm (shown at {shown} %)   {} stitches   {colours} {}",
             stats.width_mm,
             stats.height_mm,
             stats.stitches,
-            stats.colors.len()
+            if colours == 1 { "colour" } else { "colours" }
         );
         sheet_text(&mut doc, 40.0, ph - 40.0, &line, 9.0, grey)?;
         s.add_document(doc, None);
