@@ -2,6 +2,7 @@
 //! Bounding Box, Rasterize, Crop Image, Mask (an image), Create Trim Marks, Convert to Shape and
 //! Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
 
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -209,7 +210,9 @@ fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
 fn above(s: &mut Session, lock: bool) -> Result<Value> {
     let roots = selected_roots(s)?;
     let d = &s.doc()?.doc;
-    let mut hits: Vec<NodeId> = vec![];
+    // `selected` holds each selected object's visual bounds, by layer, with the index there of its
+    // ancestor directly inside the layer.
+    let mut selected: BTreeMap<NodeId, Vec<(usize, Rect)>> = BTreeMap::new();
     for id in &roots {
         let Some(layer) = d.layer_of(*id) else { continue };
         // The selected object's ancestor directly inside the layer.
@@ -218,12 +221,26 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
         let top = anc.get(pos + 1).copied().unwrap_or(*id);
         let Some(b) = d.node(*id).and_then(|n| n.visual_bounds()) else { continue };
         let Some((_, idx, _)) = d.position(top) else { continue };
-        for n in d.children(Some(layer)).into_iter().flatten().skip(idx + 1) {
-            if roots.contains(&n.id) || hits.contains(&n.id) {
+        selected.entry(layer).or_default().push((idx, b));
+    }
+    // The loop walks up each layer once. Each object that is not selected and overlaps a selected
+    // object below it is locked (Lock) or hidden (Hide).
+    let roots: HashSet<NodeId> = roots.into_iter().collect();
+    let mut hits: BTreeSet<NodeId> = BTreeSet::new();
+    for (layer, mut below) in selected {
+        below.sort_by_key(|(idx, _)| *idx);
+        let mut below = below.into_iter().peekable();
+        // `under` holds the bounds of the selected objects below the object at `i`.
+        let mut under: Vec<Rect> = vec![];
+        for (i, n) in d.children(Some(layer)).into_iter().flatten().enumerate() {
+            while let Some((_, b)) = below.next_if(|(idx, _)| *idx < i) {
+                under.push(b);
+            }
+            if under.is_empty() || roots.contains(&n.id) {
                 continue;
             }
-            if n.visual_bounds().is_some_and(|nb| nb.intersect(b).area() > 0.0 || nb.contains(b.center())) {
-                hits.push(n.id);
+            if n.visual_bounds().is_some_and(|nb| under.iter().any(|b| nb.intersect(*b).area() > 0.0 || nb.contains(b.center()))) {
+                hits.insert(n.id);
             }
         }
     }
