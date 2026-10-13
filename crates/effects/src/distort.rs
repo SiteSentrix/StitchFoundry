@@ -1,6 +1,7 @@
 //! Distort & Transform effects.
 
 use serde_json::Value;
+use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, Anchor, ParamCurve, PathData, Point, Rect, SubPath, Vec2};
 
 use crate::util::*;
@@ -194,7 +195,10 @@ pub fn twist(path: &PathData, b: Rect, angle: f64) -> PathData {
     map_nonlinear(path, pieces, f)
 }
 
-/// Zig Zag: `ridges` extra points per segment, alternately displaced along the normal.
+const ZIGZAG_ARCLEN_ACCURACY: f64 = 1e-4;
+
+/// Zig Zag: `ridges` extra points per segment, evenly spaced along its length and alternately
+/// displaced along the normal.
 pub fn zig_zag(path: &PathData, b: Rect, p: &Value) -> PathData {
     let size = num(p, "size", 10.0).clamp(-1e4, 1e4);
     let amp = if flag(p, "relative", false) { size / 100.0 * mean_size(b) } else { size };
@@ -207,8 +211,12 @@ pub fn zig_zag(path: &PathData, b: Rect, p: &Value) -> PathData {
         let mut k = 0usize;
         for i in 0..segs {
             let c = sp.segment(i);
+            // Ridges are spaced by length, not by `t`: a line's retracted handles bunch `t` up
+            // near the anchors, and so does any uneven curve.
+            let len = c.arclen(ZIGZAG_ARCLEN_ACCURACY);
             for j in 0..=ridges {
-                let t = j as f64 / (ridges + 1) as f64;
+                let s = j as f64 / (ridges + 1) as f64;
+                let t = if j > 0 && len > 1e-9 { c.inv_arclen(s * len, ZIGZAG_ARCLEN_ACCURACY).clamp(0.0, 1.0) } else { s };
                 let nrm = if j == 0 {
                     // Average the normals of the segments meeting at the anchor.
                     let prev = if i > 0 {
