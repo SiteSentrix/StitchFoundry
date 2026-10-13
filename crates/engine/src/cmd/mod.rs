@@ -46,6 +46,7 @@ pub mod embroidery_queue;
 pub mod embroidery_recolor;
 pub mod embroidery_scatter;
 pub mod embroidery_sequence;
+pub mod embroidery_sheet_setup;
 pub mod embroidery_splits;
 pub mod embroidery_stitches;
 pub mod embroidery_templates;
@@ -276,6 +277,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(embroidery_jobs::specs());
         v.extend(embroidery_clipart::specs());
         v.extend(embroidery_queue::specs());
+        v.extend(embroidery_sheet_setup::specs());
         v.extend(embroidery_scatter::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());

@@ -793,6 +793,51 @@ fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
 }
 
 #[test]
+fn worksheets_carry_the_shop_and_leave_out_what_is_hidden() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let texts = |s: &Session| {
+        let mut v = Vec::new();
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                v.push(t.runs.iter().map(|r| r.text.clone()).collect::<String>());
+            }
+        });
+        v
+    };
+    let png = std::env::temp_dir().join(format!("sf-logo-{}.png", std::process::id()));
+    let mut logo = session();
+    rect(&mut logo, 0.0, 0.0, 200.0, 80.0);
+    logo.execute("document.export", &json!({"path": png.to_string_lossy(), "format": "png"})).unwrap();
+    s.execute(
+        "embroidery.worksheet.setup",
+        &json!({"company": "Stitch & Co", "details": "1 High St · 01234 567890", "logo": png.to_string_lossy(), "hide": ["colors", "barcode"]}),
+    )
+    .unwrap();
+    s.execute("embroidery.worksheet", &json!({})).unwrap();
+    let t = texts(&s);
+    assert!(t.iter().any(|x| x.contains("Stitch & Co") && x.contains("High St")), "{t:?}");
+    assert!(!t.iter().any(|x| x == "Colours in sewing order"), "{t:?}");
+    let mut images = 0;
+    s.doc().unwrap().doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Image(_)) {
+            images += 1;
+        }
+    });
+    assert_eq!(images, 1, "the logo");
+    // asked for now: shown again
+    s.set_active(0);
+    s.execute("embroidery.worksheet", &json!({"hide": []})).unwrap();
+    assert!(texts(&s).iter().any(|x| x == "Colours in sewing order"));
+    let r = s.execute("embroidery.worksheet.setup", &json!({})).unwrap();
+    assert_eq!(r["hide"], json!(["colors", "barcode"]));
+    assert!(s.execute("embroidery.worksheet.setup", &json!({"hide": ["everything"]})).is_err());
+    let _ = std::fs::remove_file(&png);
+}
+
+#[test]
 fn a_multi_position_hoop_sews_a_file_a_position_without_marks() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

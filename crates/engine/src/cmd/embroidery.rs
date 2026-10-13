@@ -228,7 +228,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Worksheet",
             ["Embroidery"],
             None,
-            "{kind?: production|approval|pattern|template (production; template: the design life size with lines through its middle, which way is up and a 100 mm bar to check the print, to lay on the garment), placement?: left-chest|right-chest|full-front|full-back|cap-front|sleeve|yoke|pocket (the usual size and place for it, printed), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given), barcode?: code128|code39|none (code128: the job's barcode at the top right), barcodeText?: text (the design's name; up to 48 characters, Code 39: digits, letters, space and -.$/+%), colorways?: bool (true: each colorway's threads, colour by colour, when the design has any)} a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
+            "{kind?: production|approval|pattern|template (production; template: the design life size with lines through its middle, which way is up and a 100 mm bar to check the print, to lay on the garment), placement?: left-chest|right-chest|full-front|full-back|cap-front|sleeve|yoke|pocket (the usual size and place for it, printed), page?: a4|letter (a4), customer?: text, notes?: text (the design's own notes when not given), barcode?: code128|code39|none (code128: the job's barcode at the top right), barcodeText?: text (the design's name; up to 48 characters, Code 39: digits, letters, space and -.$/+%), colorways?: bool (true: each colorway's threads, colour by colour, when the design has any), hide?: [figures|colors|colorways|notes|barcode] (the setup's, embroidery.worksheet.setup)} the shop's name, details and logo from the worksheet setup in the footer; a worksheet for the design as a new A4 or Letter document to print or export (PDF): the design drawn in its thread colours (life size when it fits), its size, stitches, colours, colour changes, trims, thread and sewing time, hoop, fabric and machine, a table of its colours in sewing order (thread, stitches, length), the notes, and on an approval sheet the customer and a line to sign; a pattern is the design over the whole page with one line of figures; opens a new document → {kind, colors, scale}",
             has_doc,
             worksheet
         ),
@@ -2505,8 +2505,15 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // the design's own notes unless others are given
     let notes = if notes.is_empty() { cfg.notes.trim().chars().take(2000).collect() } else { notes };
+    // the shop's setup: sections left out (as asked, else as set up), its name, details and logo
+    let sheet = s.prefs.embroidery_sheet_setup.clone();
+    let hidden: Vec<String> = match p.get("hide").and_then(Value::as_array) {
+        Some(a) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+        None => sheet.hide.clone(),
+    };
+    let shows = |section: &str| !hidden.iter().any(|h| h == section);
     // the job's barcode: its name unless other text is given
-    let code = match str_param(p, "barcode").unwrap_or("code128") {
+    let code = match str_param(p, "barcode").unwrap_or(if shows("barcode") { "code128" } else { "none" }) {
         "none" => None,
         name => {
             let kind = sf_core::barcode::Symbology::from_name(name).ok_or_else(|| bad(CMD, "`barcode` is code128, code39 or none"))?;
@@ -2657,15 +2664,19 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
             m.money(e.setup)
         ));
     }
-    for l in &lines {
-        sheet_text(&mut doc, 40.0, y, l, 10.0, black)?;
-        y += 15.0;
+    if shows("figures") {
+        for l in &lines {
+            sheet_text(&mut doc, 40.0, y, l, 10.0, black)?;
+            y += 15.0;
+        }
     }
     // the colours in sewing order
-    y += 8.0;
-    sheet_text(&mut doc, 40.0, y, "Colours in sewing order", 11.0, black)?;
-    y += 16.0;
-    let room = ((ph - 90.0 - y) / 15.0).max(1.0) as usize;
+    let room = if shows("colors") { ((ph - 90.0 - y - 24.0) / 15.0).max(1.0) as usize } else { 0 };
+    if room > 0 {
+        y += 8.0;
+        sheet_text(&mut doc, 40.0, y, "Colours in sewing order", 11.0, black)?;
+        y += 16.0;
+    }
     for (i, c) in stats.colors.iter().enumerate().take(room) {
         let rgb = c.thread.color;
         let corners = [(40.0, y - 9.0), (50.0, y - 9.0), (50.0, y + 1.0), (40.0, y + 1.0)].map(|(x, y)| kurbo::Point::new(x, y)).to_vec();
@@ -2681,12 +2692,12 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
         sheet_text(&mut doc, 58.0, y, &format!("{}. {name}{brand}   {} stitches, {:.1} m", i + 1, c.stitches, c.thread_m), 9.0, black)?;
         y += 15.0;
     }
-    if stats.colors.len() > room {
+    if room > 0 && stats.colors.len() > room {
         sheet_text(&mut doc, 58.0, y, &format!("… and {} more", stats.colors.len() - room), 9.0, grey)?;
         y += 15.0;
     }
     // the design's colorways, a line or two each: its threads colour by colour
-    if !cfg.colorways.is_empty() && p.get("colorways").and_then(Value::as_bool).unwrap_or(true) {
+    if !cfg.colorways.is_empty() && p.get("colorways").and_then(Value::as_bool).unwrap_or(true) && shows("colorways") {
         let width = ((pw - 98.0) / 4.8).max(20.0) as usize;
         y += 8.0;
         sheet_text(&mut doc, 40.0, y, "Colorways", 11.0, black)?;
@@ -2708,7 +2719,7 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    if !notes.is_empty() {
+    if !notes.is_empty() && shows("notes") {
         // wrapped to the page, eight lines at most
         let width = ((pw - 80.0) / 4.8).max(20.0) as usize;
         let lines = wrap_text(&format!("Notes: {notes}"), width);
@@ -2719,7 +2730,17 @@ fn worksheet(s: &mut Session, p: &Value) -> Result<Value> {
     if approval {
         sheet_text(&mut doc, 40.0, ph - 40.0, "Approved by: ______________________________   Date: ______________", 10.0, black)?;
     }
+    // the shop in the footer, its logo at the right
+    if !sheet.company.is_empty() || !sheet.details.is_empty() {
+        let line = [sheet.company.as_str(), sheet.details.as_str()].iter().filter(|t| !t.is_empty()).copied().collect::<Vec<_>>().join("   ");
+        sheet_text(&mut doc, 40.0, ph - 18.0, &line, 8.0, grey)?;
+    }
     s.add_document(doc, None);
+    if !sheet.logo.is_empty() {
+        // a logo that can't be read leaves the worksheet without it, not unmade
+        let _ = s.execute("file.place", &json!({ "path": sheet.logo, "rect": [pw - 150.0, ph - 60.0, 110.0, 44.0] }));
+        let _ = s.execute("select.none", &json!({}));
+    }
     Ok(json!({ "kind": kind, "colors": stats.colors.len(), "scale": shown }))
 }
 
