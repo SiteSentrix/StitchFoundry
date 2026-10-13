@@ -434,6 +434,10 @@ pub struct Renderer {
     /// What the contents of those rasters read from the document, and the color settings, as last
     /// found for a frame (`stamp`) and document (address) (see [`Self::doc_inputs`]).
     doc_inputs: Option<((u64, usize), Arc<fx::DocInputs>)>,
+    /// Whether a document's layers, symbol art and pattern art show transparency, as last found
+    /// (see [`Self::blends_in_cmyk`]), with that art in order, held weakly: a weak reference keeps
+    /// the allocation, so no other art gets one of those addresses while the answer is kept.
+    transparency: Option<(Vec<std::sync::Weak<Node>>, bool)>,
     /// Whether the group being drawn is a knockout group (what its neutral children inherit).
     knockout: bool,
     /// Address of the knockout-group element being drawn as its knockout shape: at full object
@@ -494,6 +498,9 @@ pub struct FrameStats {
     /// The drop shadows, outer glows and filtered contents the frame drew from rasters made before
     /// their object moved, or made over such rasters ([`RenderOptions::interacting`]).
     pub moved: usize,
+    /// How many threads composed the frame from its two ink planes, in a CMYK document that shows
+    /// transparency; 0 for other frames.
+    pub ink_threads: usize,
     pub micros: u64,
 }
 
@@ -556,6 +563,7 @@ impl Renderer {
             shadows: PtrMap::default(),
             pixel_fx: PtrMap::default(),
             doc_inputs: None,
+            transparency: None,
             live: live::LiveCache::default(),
             knockout: false,
             shape_of: 0,
@@ -617,13 +625,19 @@ impl Renderer {
             self.stats.micros = now().saturating_sub(start);
             return Rendered { width: w as u32, height: h as u32, pixels };
         }
-        let mut pixels = if inks || ink::blends_in_cmyk(doc, opts) {
+        let mut pixels = if inks || self.blends_in_cmyk(doc, opts) {
             // Blending in CMYK: one frame per ink plane, then their inks shown on screen.
             let cmy = self.draw_frame(&Frame { ink: Ink::Cmy, ..frame }, w, h);
             let stats = self.stats;
             let k = self.draw_frame(&Frame { ink: Ink::K, ..frame }, w, h);
             self.stats = stats;
-            if inks { ink::amounts(&cmy, &k) } else { ink::compose(&cmy, &k, opts) }
+            if inks {
+                ink::amounts(&cmy, &k)
+            } else {
+                let (pixels, composed) = ink::compose(&cmy, &k, opts, threads);
+                self.stats.ink_threads = composed;
+                pixels
+            }
         } else {
             self.draw_frame(&frame, w, h)
         };
