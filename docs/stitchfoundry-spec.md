@@ -494,7 +494,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | Id | Feature | Status | Our approach / gap | Phase |
 |---|---|---|---|---|
 | HO-01 | Hoop selection, manual and automatic (smallest that fits) | Partial | Manual; auto selection exists in `sf-core::hoops::smallest_fitting`, add UI | 6 |
-| HO-02 | Auto start and end (start/finish at centre or a corner) | Missing | Design-level start/end points | 6 |
+| HO-02 | Auto start and end (start/finish at centre or a corner) | Done | `embroidery.settings {start, end}`: the first object entered closest to a point of the design's box, the frame moved to one at the end; Design section | 0 |
 | HO-03 | Hoop positioning (auto centre vs fixed), rotate hoop, custom hoops | Partial | Centred; add fixed position, rotation, custom hoops | 6 |
 | MH-01 | Multi-hooping, automatic and manual (split designs over several hoopings) | Partial | `embroidery.multiHoop`: an automatic grid of overlapping hoopings, each object whole in the first that holds it, a machine file per hooping; splitting objects across hoopings, manual hoopings and a panel still to come | 6 |
 | MH-02 | Registration marks, multi-position hoops, printing per hooping | Partial | Registration crosses in each overlap, sewn first in a colour of their own; multi-position hoops and printing per hooping still to come | 6 |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 166 done,
-33 partial, 45 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 167 done,
+33 partial, 44 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

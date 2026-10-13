@@ -353,6 +353,31 @@ fn monograms_stack_wear_ornaments_and_ring_borders() {
 }
 
 #[test]
+fn designs_start_and_end_where_asked() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 30.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    let r = s.execute("embroidery.settings", &json!({"start": "top-left", "end": "center"})).unwrap();
+    assert_eq!((r["settings"]["start"].as_str(), r["settings"]["end"].as_str()), (Some("top-left"), Some("centre")), "{r}");
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["settings"]["end"].as_str(), Some("centre"));
+    let plan = s.embroidery_plan().unwrap();
+    let p = plan.pattern();
+    let b = p.bounds();
+    let last = p.stitches.iter().rev().find(|s| s.is_move()).unwrap();
+    let c = sf_core::Point::new((b.min.x + b.max.x) / 2.0, (b.min.y + b.max.y) / 2.0);
+    assert!(last.pos().distance(c) < 0.5, "{last:?} {b:?}");
+    let first = p.stitches.iter().find(|s| s.cmd == sf_core::Cmd::Stitch).unwrap().pos();
+    assert!(first.distance(b.min) < first.distance(b.max), "{first:?}");
+    s.execute("embroidery.settings", &json!({"start": null, "end": "none"})).unwrap();
+    assert!(s.execute("embroidery.info", &json!({})).unwrap()["settings"]["end"].is_null());
+    for bad in [json!({"start": "middle"}), json!({"end": 3})] {
+        assert!(s.execute("embroidery.settings", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn an_object_in_the_same_colour_can_be_a_block_of_its_own() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

@@ -549,7 +549,11 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
     em.p.name = design.name.clone();
     let mut spans = Vec::new();
     let mut current_color: Option<usize> = None;
-    let mut pos: Option<Point> = None;
+    // the design's start and end points, on its box
+    let bbox = design.bbox();
+    let (start, end) = if bbox.is_empty() { (None, None) } else { (settings.start.map(|p| p.on(&bbox)), settings.end.map(|p| p.on(&bbox))) };
+    // the first object entered closest to the start
+    let mut pos: Option<Point> = start;
     let mut force_trim = false;
     let covers = branch_covers(design);
     // a basting run, sewn first in the first thread
@@ -604,6 +608,12 @@ pub fn build_cached(design: &Design, cache: &mut StitchCache) -> Built {
         force_trim = obj.trim_after;
     }
     em.cut();
+    // the frame to the end point
+    if let Some(q) = end
+        && em.last_move().is_some()
+    {
+        em.jump(q);
+    }
     if !em.p.stitches.is_empty() {
         em.p.ensure_end();
     }
@@ -753,6 +763,31 @@ mod tests {
         d.objects[1].own_block = false;
         d.objects[0].own_block = true;
         assert_eq!(build(&d).pattern.color_blocks().len(), 1);
+    }
+
+    #[test]
+    fn the_design_starts_near_its_start_point_and_ends_at_its_end_point() {
+        let mut d = demo();
+        d.objects.truncate(1);
+        let first = |p: &Pattern| p.stitches.iter().find(|s| s.cmd == Cmd::Stitch).map(Stitch::pos).unwrap();
+        let b = d.bbox();
+        // a fill: started at the corner asked for
+        for at in [DesignPoint::TopLeft, DesignPoint::BottomRight] {
+            d.settings.start = Some(at);
+            let p = build(&d).pattern;
+            let corner = at.on(&b);
+            let others = DesignPoint::ALL.iter().filter(|q| **q != at).map(|q| q.on(&b).distance(first(&p))).fold(f64::INFINITY, f64::min);
+            assert!(first(&p).distance(corner) < others, "{at:?}: {:?}", first(&p));
+        }
+        // ended at the centre: a trim, then the frame there
+        d.settings.end = Some(DesignPoint::Centre);
+        let p = build(&d).pattern;
+        let last = p.stitches.iter().rev().find(|s| s.is_move()).unwrap();
+        assert_eq!(last.cmd, Cmd::Jump);
+        assert!(last.pos().distance(DesignPoint::Centre.on(&b)) < 1e-9);
+        assert!(p.stitches.iter().any(|s| s.cmd == Cmd::Trim));
+        assert_eq!(DesignPoint::from_id("center"), Some(DesignPoint::Centre));
+        assert!(DesignPoint::ALL.iter().all(|q| DesignPoint::from_id(q.id()) == Some(*q)));
     }
 
     #[test]

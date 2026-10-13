@@ -503,6 +503,10 @@ time and thread used, and whether the design fits the hoop. Its settings:
   the section also has their **Name**, their file **Format** and **Delete Machine**. Profiles are
   kept with your preferences, not in the design: a design keeps the name and format of its
   machine, so it still exports in that format on a computer without the profile.
+- **Start at** and **End at**: where sewing starts (the first object entered at its point
+  closest to the design's centre, a corner or the middle of a side) and where the frame goes when
+  the design is done, after a trim: the centre, say, to take the hoop off with the needle clear,
+  or a corner to line up the next hooping (`embroidery.settings {start, end}`).
 - **Basting first**: a basting run, long running stitches (6 mm) sewn before everything else in
   the first thread and without ties, holding the fabric to the stabiliser, to pick out after.
   *Basting round* the design (*Basting margin* out from it, 5 mm) or the hoop (that far in from
