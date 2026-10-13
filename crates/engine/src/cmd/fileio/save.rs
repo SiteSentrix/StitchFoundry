@@ -93,7 +93,10 @@ impl SavePlan {
 /// File Info's dates for a save to a file: the modified date (and the created date, when it has
 /// none) become `at`. Not an undo step.
 pub fn stamp_save_dates(st: &mut DocState, at: i64) {
-    let d = std::sync::Arc::make_mut(&mut st.doc);
+    stamp_doc_dates(std::sync::Arc::make_mut(&mut st.doc), at);
+}
+
+fn stamp_doc_dates(d: &mut Document, at: i64) {
     d.metadata.created.get_or_insert(at);
     d.metadata.modified = Some(at);
 }
@@ -296,6 +299,10 @@ pub struct SaveJob {
     params: Value,
     /// The document when the job was made: what counts as saved once the file is written.
     snapshot: Arc<Document>,
+    /// The live document `snapshot` was made from, and the date stamped on `snapshot` (not on the
+    /// live document until the file is written).
+    source: Arc<Document>,
+    stamped: Option<i64>,
     /// The artboards also saved to files of their own (`separateArtboards`).
     boards: Vec<usize>,
 }
@@ -417,24 +424,29 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
     Ok(Encoded { warnings, ..Encoded::one(bytes) })
 }
 
-/// Snapshot the active document for `plan` (stamping File Info's dates when the file becomes the
-/// document's own). Bad options fail here, before anything is encoded.
+/// Snapshot the active document for `plan` (stamping File Info's dates on the snapshot when the
+/// file becomes the document's own; the live document gets them in [`SaveJob::finish`]). Bad
+/// options fail here, before anything is encoded.
 pub fn save_job(s: &mut Session, plan: SavePlan) -> Result<SaveJob> {
     // The web build, without a clock, leaves the dates unless given one.
-    if plan.path.is_some()
-        && plan.retargets()
-        && let Some(at) = clock_date(s, "modified", plan.modified)
-    {
-        stamp_save_dates(s.doc_mut()?, at);
-    }
-    job_for(s, s.doc()?, plan)
+    let at = if plan.path.is_some() && plan.retargets() { clock_date(s, "modified", plan.modified) } else { None };
+    job_for_stamped(s, s.doc()?, plan, at)
 }
 
 /// Snapshot `st` (any open document of `s`) for `plan`, without stamping dates (Data Recovery
 /// snapshots documents that aren't active).
 pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<SaveJob> {
+    job_for_stamped(s, st, plan, None)
+}
+
+fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i64>) -> Result<SaveJob> {
     let cmd = plan.mode.command();
-    let own = doc_to_save(st, plan.format);
+    let mut own = doc_to_save(st, plan.format);
+    let mut snapshot = st.doc.clone();
+    if let Some(at) = stamped {
+        stamp_doc_dates(Arc::make_mut(&mut own), at);
+        stamp_doc_dates(Arc::make_mut(&mut snapshot), at);
+    }
     // A native file records its links' paths relative to where it is written.
     let relative = plan.path.as_deref().filter(|_| is_native(plan.format)).and_then(|p| crate::cmd::links::with_relative_paths(&own, p));
     let doc = relative.map_or(own, Arc::new);
@@ -455,7 +467,7 @@ pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<Save
         // Save keeps every artboard; exports may choose a subset instead.
         o.insert("range".into(), json!("all"));
     }
-    Ok(SaveJob { plan, doc, params, snapshot: st.doc.clone(), boards })
+    Ok(SaveJob { plan, doc, params, snapshot, source: st.doc.clone(), stamped, boards })
 }
 
 impl SaveJob {
@@ -593,6 +605,17 @@ impl SaveJob {
             st.save_options = self.plan.options;
             st.converted = false;
             st.recovered = false;
+            if let Some(at) = self.stamped {
+                if Arc::ptr_eq(&st.doc, &self.source) {
+                    st.doc = self.snapshot.clone();
+                } else {
+                    // Edited while the save ran: the dates still go on, the edits stay unsaved. The
+                    // undo history holds the document as it was before the dates, so that is the
+                    // saved state: undoing back to it leaves the document unmodified.
+                    stamp_save_dates(st, at);
+                    return st.mark_saved_as(&self.source);
+                }
+            }
             st.mark_saved_as(&self.snapshot);
         }
     }
