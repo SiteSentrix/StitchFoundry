@@ -368,6 +368,14 @@ triangular grid (`even`), up to `count` (20), each turned at random with `turn`.
 motif's stitching and land in a group above the shape, which stays (delete it, or give it a
 fill to sew behind them).
 
+## Clipart
+
+The Embroidery panel's **Clipart** section places simple motifs drawn for StitchFoundry (heart,
+star, sparkle, crown, paw, leaf, flower, sun, moon, lightning, shield, snowflake, music note,
+anchor, check mark, arrow) digitized in the design chart's threads, as Design from Prompt's art
+is (`embroidery.clipart.insert {name, size?, at?, color?}`; `color` puts every part in one
+colour). Designs of your own come in from the Design Library.
+
 ## Design templates
 
 The Embroidery panel's **Design Templates** section (shown also with no document open) starts a

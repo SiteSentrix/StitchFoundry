@@ -160,6 +160,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     monogram_rows(app, ui);
     egui::CollapsingHeader::new(tl!("Design Templates")).id_salt("emb-templates").show(ui, |ui| templates_body(app, ui));
     egui::CollapsingHeader::new(tl!("Design Library")).id_salt("emb-library").show(ui, |ui| library_body(app, ui));
+    egui::CollapsingHeader::new(tl!("Clipart")).id_salt("emb-clipart").show(ui, |ui| clipart_body(app, ui));
     buttonhole_rows(app, ui);
     egui::CollapsingHeader::new(tl!("Send to Machine")).id_salt("emb-send").show(ui, |ui| send_body(app, ui));
     egui::CollapsingHeader::new(tl!("Batch Output")).id_salt("emb-output").show(ui, |ui| output_body(app, ui));
@@ -1085,6 +1086,29 @@ pub(crate) fn team_names_body(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The design library: a folder's machine files as thumbnails, searched and sorted; a click opens
 /// one, and the catalogue prints them all.
+/// Clipart: a motif placed digitized with a click.
+pub(crate) fn clipart_body(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let names: Vec<String> = app
+        .run("embroidery.clipart", json!({}))
+        .ok()
+        .and_then(|r| r["clipart"].as_array().map(|a| a.iter().filter_map(|c| c["name"].as_str().map(str::to_string)).collect()))
+        .unwrap_or_default();
+    ui.label(egui::RichText::new(tl!("Click a motif to place it, digitized, in the middle of the page.")).small());
+    let mut pick = None;
+    ui.horizontal_wrapped(|ui| {
+        for n in &names {
+            if ui.button(n.as_str()).clicked() {
+                pick = Some(n.clone());
+            }
+        }
+    });
+    if let Some(name) = pick
+        && let Err(e) = app.run("embroidery.clipart.insert", json!({ "name": name }))
+    {
+        app.status(e);
+    }
+}
+
 /// Design templates: a new design from one, and the active one kept as one's own.
 pub(crate) fn templates_body(app: &mut VectorcraftApp, ui: &mut Ui) {
     let list = app.run("embroidery.templates", json!({})).ok();
