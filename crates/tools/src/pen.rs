@@ -44,6 +44,8 @@ pub struct PenTool {
     in_h: Point,
     /// The pointer at the last button-down or drag: Space held moves the anchor as far as it moves.
     last: Point,
+    /// Where the button went down: the drag threshold is measured from it.
+    pressed: Point,
     /// The pointer has moved past the drag threshold since the press: a press released inside it
     /// is a click, so the anchor stays a corner without handles.
     dragged: bool,
@@ -187,6 +189,7 @@ impl Tool for PenTool {
             }
             PointerKind::Down => {
                 self.last = ev.pos;
+                self.pressed = ev.pos;
                 self.dragged = false;
                 if let Some((id, first, last, _)) = active {
                     let end = last_anchor(cx, id);
@@ -272,10 +275,12 @@ impl Tool for PenTool {
                 if let Some(t) = &mut self.convert {
                     return t.pointer(cx, ev);
                 }
-                // Illustrator treats a press as a drag only past a few screen pixels (`last` is
-                // still the press position until then).
+                // Illustrator treats a press as a drag only past a few screen pixels. `last` follows the
+                // pointer meanwhile, so Space pressed before the threshold moves the anchor by the
+                // next move only.
                 if !self.dragged {
-                    if ev.pos.distance(self.last) < cx.tol(DRAG_THRESHOLD) {
+                    if ev.pos.distance(self.pressed) < cx.tol(DRAG_THRESHOLD) {
+                        self.last = ev.pos;
                         return vec![];
                     }
                     self.dragged = true;
@@ -704,6 +709,25 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 440.0).with_mods(alt));
         let drag = PointerEvent::new(PointerKind::Drag, 340.0, 440.0).with_mods(alt);
         assert_eq!(handles(t.pointer(&cx, &drag)), (json!([300.0, 440.0]), json!([340.0, 440.0])));
+    }
+
+    #[test]
+    fn space_pressed_inside_the_drag_threshold_moves_the_anchor_by_the_next_move_only() {
+        let (d, s) = (vectorcraft_doc::Document::new(500.0, 500.0), Selection::default());
+        let paint = paint();
+        let cx =
+            ToolContext { zoom: 1.0, smart_guides: false, snap_to_point: false, snap_to_pixel: false, snap_to_grid: false, ..cx(&d, &s, &paint) };
+        let space = Mods { space: true, ..Mods::default() };
+        let mut pen = PenTool::default();
+        pen.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        // Still inside the threshold, Space held: nothing happens yet.
+        assert!(pen.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 102.0, 100.0).with_mods(space)).is_empty());
+        // The move that crosses it moves the anchor by that move (2 px to 4 px), not by the 4 px since the press.
+        let acts = pen.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 104.0, 100.0).with_mods(space));
+        let Some(Action::Preview(c, v)) = acts.first() else { panic!("not a preview: {acts:?}") };
+        assert_eq!(c, "path.create");
+        assert_eq!(v["anchors"][0]["x"], json!(102.0), "moved by the delta");
+        assert_eq!(v["anchors"][0]["y"], json!(100.0));
     }
 
     #[test]
