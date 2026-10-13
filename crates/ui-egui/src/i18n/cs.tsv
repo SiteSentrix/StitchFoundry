@@ -4898,3 +4898,5 @@ machine	Stop	Zastavení
 	Each design found written again in this format beside it	Každá nalezená výšivka se znovu zapíše v tomto formátu vedle sebe
 	Converted:	Převedeno:
 	couldn't be read:	nelze přečíst:
+	Product Visualizer	Náhled na výrobku
+@msg	product outline: {e}	obrys výrobku: {e}

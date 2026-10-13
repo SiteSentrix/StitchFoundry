@@ -539,6 +539,8 @@ fn structured_junk() {
         ("embroidery.output.deleteProfile", json!({"name": []})),
         ("embroidery.library.convert", json!({"format": "pes", "files": [1, "\u{0}", "../../../etc/x.dst"], "dir": 5})),
         ("embroidery.library.convert", json!({"format": "", "folder": "/nonexistent"})),
+        ("embroidery.visualize", json!({"product": 4, "color": "#zzzzzz", "placement": []})),
+        ("embroidery.visualize", json!({"image": "\u{0}", "imageWidth": f64::NAN, "at": [f64::INFINITY, 1]})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "applique": 3})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "stitch": [], "small": 2})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "path": u64::MAX, "vertical": "yes"})),

@@ -4871,3 +4871,5 @@ machine	Stop	Parada
 	Each design found written again in this format beside it	Cada diseño encontrado se vuelve a escribir en este formato a su lado
 	Converted:	Convertidos:
 	couldn't be read:	no se pudieron leer:
+	Product Visualizer	Visualizador de productos
+@msg	product outline: {e}	contorno del producto: {e}

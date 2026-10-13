@@ -505,6 +505,81 @@ fn an_object_in_the_same_colour_can_be_a_block_of_its_own() {
 }
 
 #[test]
+fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 120.0 * PT, 40.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    // a T-shirt, left chest: the design wider than usual there is warned of
+    let r = s.execute("embroidery.visualize", &json!({})).unwrap();
+    assert_eq!((r["product"].as_str(), r["placement"].as_str(), r["view"].as_str()), (Some("tshirt"), Some("left-chest"), Some("front")), "{r}");
+    assert_eq!(r["warnings"].as_array().unwrap().len(), 1, "{r}");
+    assert!((r["widthMm"].as_f64().unwrap() - 120.0).abs() < 2.0);
+    let stitches_in = |s: &Session, red: vectorcraft_color::Color| {
+        let mut b = kurbo::Rect::ZERO;
+        let mut found = false;
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::Path { path, .. } = &n.kind
+                && n.appearance
+                    .items
+                    .iter()
+                    .any(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(st) if st.paint == vectorcraft_color::Paint::solid(red)))
+            {
+                let r = kurbo::Shape::bounding_box(&path.to_bezpath());
+                b = if found { b.union(r) } else { r };
+                found = true;
+            }
+        });
+        b
+    };
+    let red = vectorcraft_color::Color::rgb8(0xd6, 0x28, 0x28);
+    let st = stitches_in(&s, red);
+    // life size, its middle where a left-chest design goes (500, 220 mm on the shirt, 40 mm margin)
+    assert!((st.width() / PT - 120.0).abs() < 3.0, "{}", st.width() / PT);
+    assert!((st.center().x / PT - 540.0).abs() < 3.0 && (st.center().y / PT - 260.0).abs() < 3.0, "{:?}", st.center());
+    assert!(s.doc().unwrap().doc.title.ends_with("on T-shirt"));
+    // full front is wide enough; the back of a navy polo for the full back
+    s.set_active(0);
+    let r = s.execute("embroidery.visualize", &json!({"placement": "full-front"})).unwrap();
+    assert!(r["warnings"].as_array().unwrap().is_empty());
+    s.set_active(0);
+    let r = s.execute("embroidery.visualize", &json!({"product": "polo", "placement": "full-back", "color": "#102040"})).unwrap();
+    assert_eq!(r["view"].as_str(), Some("back"));
+    for product in ["hoodie", "cap", "tote", "towel"] {
+        s.set_active(0);
+        let r = s.execute("embroidery.visualize", &json!({"product": product})).unwrap();
+        assert_eq!(r["product"].as_str(), Some(product));
+    }
+    // a photo of the customer's own: the design on it, the photo under it
+    let png = std::env::temp_dir().join(format!("sf-mockup-{}.png", std::process::id()));
+    let mut photo = session();
+    rect(&mut photo, 0.0, 0.0, 300.0, 200.0);
+    photo.execute("document.export", &json!({"path": png.to_string_lossy(), "format": "png"})).unwrap();
+    s.set_active(0);
+    let docs = s.documents().len();
+    let r = s.execute("embroidery.visualize", &json!({"image": png.to_string_lossy(), "imageWidth": 400, "at": [200, 150]})).unwrap();
+    assert_eq!((r["product"].as_str(), s.documents().len()), (Some("photo"), docs + 1), "{r}");
+    let st = stitches_in(&s, red);
+    assert!((st.center().x / PT - 200.0).abs() < 3.0 && (st.center().y / PT - 150.0).abs() < 3.0, "{:?}", st.center());
+    let d = &s.doc().unwrap().doc;
+    let first = d.layers.first().and_then(|l| l.children().and_then(|c| c.first().cloned())).unwrap();
+    assert!(matches!(first.kind, NodeKind::Image(_) | NodeKind::Group { .. }), "the photo is at the back");
+    let _ = std::fs::remove_file(&png);
+    s.set_active(0);
+    for bad in [
+        json!({"product": "mug"}),
+        json!({"placement": "cap-front"}),
+        json!({"product": "cap", "placement": "left-chest"}),
+        json!({"color": "red"}),
+        json!({"image": "/nowhere/photo.png"}),
+        json!({"image": "/nowhere/photo.png", "imageWidth": 5}),
+    ] {
+        assert!(s.execute("embroidery.visualize", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn batch_output_writes_machine_files_worksheet_and_design_in_one_step() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
