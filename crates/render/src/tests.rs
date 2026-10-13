@@ -210,6 +210,185 @@ fn outline_mode_no_fill() {
     assert!(r.pixel(10, 50)[0] < 200);
 }
 
+/// A 100 × 100 document with each kind of path Outline view draws, and the ids of its objects by
+/// name: a stroked square, a compound path with a hole, a path and a compound path with a live
+/// effect, a guide, a clip group, an Image Trace object showing its outlines, and a path in a layer
+/// with Preview off. The clip group holds a path reaching past its clipping path, a compound path,
+/// a group of two paths, a nested clip group, a path with a live effect, a hidden path and an
+/// unstroked path a tenth of a point wide.
+fn outline_doc() -> (Document, Vec<(&'static str, NodeId)>) {
+    let mut d = Document::new(100.0, 100.0);
+    let mut ids = vec![];
+    let black = || Paint::solid(Color::BLACK);
+    let offset = |by: f64| vectorcraft_doc::Effect { id: "path.offsetPath".into(), params: serde_json::json!({ "offset": by }), visible: true };
+    let compound = |d: &mut Document, outer: Rect, hole: Rect| {
+        let children = [outer, hole].map(|r| Arc::new(rect_node(d, r, Paint::None, Paint::None, 0.0))).to_vec();
+        let mut n = Node::new(d.alloc_id(), NodeKind::Compound { children, rule: FillRule::EvenOdd });
+        n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+        n
+    };
+    let clipping = |mut n: Node| {
+        if let NodeKind::Path { clipping, .. } = &mut n.kind {
+            *clipping = true;
+        }
+        n
+    };
+    let mut named = |name: &'static str, n: Node| {
+        ids.push((name, n.id));
+        Arc::new(n)
+    };
+    let square = named("square", rect_node(&mut d, Rect::new(5.0, 5.0, 25.0, 25.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), black(), 2.0));
+    let holed = named("holed", compound(&mut d, Rect::new(30.0, 5.0, 50.0, 25.0), Rect::new(35.0, 10.0, 45.0, 20.0)));
+    let mut fx_path = rect_node(&mut d, Rect::new(55.0, 8.0, 70.0, 22.0), black(), Paint::None, 0.0);
+    fx_path.appearance.effects.push(offset(2.0));
+    let fx_path = named("fx path", fx_path);
+    let mut fx_compound = compound(&mut d, Rect::new(75.0, 5.0, 95.0, 25.0), Rect::new(80.0, 10.0, 90.0, 20.0));
+    fx_compound.appearance.effects.push(offset(-1.0));
+    let fx_compound = named("fx compound", fx_compound);
+    let mut guide = Node::path(d.alloc_id(), shapes::line(Point::new(5.0, 30.0), Point::new(95.0, 30.0)), Appearance::default());
+    if let NodeKind::Path { guide, .. } = &mut guide.kind {
+        *guide = true;
+    }
+    let guide = named("guide", guide);
+    // The clip group.
+    let ellipse = Node::path(d.alloc_id(), shapes::ellipse(Rect::new(5.0, 35.0, 55.0, 85.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+    let clip_path = named("clipping path", clipping(ellipse));
+    let past = named("past the clip", rect_node(&mut d, Rect::new(0.0, 50.0, 60.0, 60.0), Paint::None, black(), 1.0));
+    let member_compound = named("member compound", compound(&mut d, Rect::new(10.0, 65.0, 20.0, 75.0), Rect::new(12.0, 67.0, 18.0, 73.0)));
+    let pair_rect = named("pair rect", rect_node(&mut d, Rect::new(25.0, 65.0, 30.0, 75.0), black(), Paint::None, 0.0));
+    let pair_ellipse = Node::path(d.alloc_id(), shapes::ellipse(Rect::new(32.0, 65.0, 40.0, 75.0)), Appearance::basic(black(), Paint::None, 0.0));
+    let pair_ellipse = named("pair ellipse", pair_ellipse);
+    let pair = named("pair", Node::group(d.alloc_id(), vec![pair_rect, pair_ellipse]));
+    let nested_clip = named("nested clipping path", clipping(rect_node(&mut d, Rect::new(42.0, 62.0, 54.0, 80.0), Paint::None, Paint::None, 0.0)));
+    let nested_path = named("nested path", rect_node(&mut d, Rect::new(44.0, 64.0, 70.0, 78.0), black(), Paint::None, 0.0));
+    let nested = named("nested", Node::new(d.alloc_id(), NodeKind::Group { children: vec![nested_clip, nested_path], clip: true }));
+    let mut member_fx = rect_node(&mut d, Rect::new(15.0, 40.0, 30.0, 47.0), black(), Paint::None, 0.0);
+    member_fx.appearance.effects.push(offset(1.5));
+    let member_fx = named("member fx", member_fx);
+    let mut hidden = rect_node(&mut d, Rect::new(20.0, 80.0, 40.0, 84.0), Paint::None, black(), 1.0);
+    hidden.visible = false;
+    let hidden = named("hidden", hidden);
+    let tiny = named("tiny", rect_node(&mut d, Rect::new(48.0, 56.0, 48.1, 56.1), black(), Paint::None, 0.0));
+    let members = vec![clip_path, past, member_compound, pair, nested, member_fx, hidden, tiny];
+    let clip = named("clip group", Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true }));
+    // The Image Trace object: its hidden source, then the traced shapes.
+    let mut source = rect_node(&mut d, Rect::new(60.0, 35.0, 95.0, 95.0), Paint::solid(Color::rgb(0.5, 0.5, 0.5)), Paint::None, 0.0);
+    source.visible = false;
+    let shape_a =
+        named("trace shape a", rect_node(&mut d, Rect::new(62.0, 40.0, 80.0, 60.0), Paint::solid(Color::rgb(0.0, 0.5, 0.0)), Paint::None, 0.0));
+    let shape_b = Node::path(
+        d.alloc_id(),
+        shapes::ellipse(Rect::new(70.0, 62.0, 92.0, 84.0)),
+        Appearance::basic(Paint::solid(Color::rgb(1.0, 0.5, 0.0)), Paint::None, 0.0),
+    );
+    let shape_b = named("trace shape b", shape_b);
+    let mut traced = Node::group(d.alloc_id(), vec![Arc::new(source), shape_a, shape_b]);
+    traced.extras_mut().trace = Some(Box::new(serde_json::json!({ "view": "outlines" })));
+    let traced = named("traced", traced);
+    let unpreviewed =
+        named("unpreviewed", rect_node(&mut d, Rect::new(5.0, 88.0, 40.0, 97.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+    let l = d.layers[0].id;
+    for n in [square, holed, fx_path, fx_compound, guide, clip, traced] {
+        d.insert(Some(l), usize::MAX, Arc::unwrap_or_clone(n)).unwrap();
+    }
+    let layer = Node::layer(d.alloc_id(), "Preview off", vectorcraft_doc::LayerColor::Preset(1));
+    let off = d.insert(None, usize::MAX, layer).unwrap();
+    if let Some(NodeKind::Layer { preview, .. }) = d.node_mut(off).map(|n| &mut n.kind) {
+        *preview = false;
+    }
+    d.insert(Some(off), 0, Arc::unwrap_or_clone(unpreviewed)).unwrap();
+    (d, ids)
+}
+
+/// The id `outline_doc` gave the object `name`.
+fn id_of(ids: &[(&'static str, NodeId)], name: &str) -> NodeId {
+    ids.iter().find(|(n, _)| *n == name).map(|(_, id)| *id).unwrap_or_else(|| panic!("no object {name}"))
+}
+
+/// Outline frames drawn from the geometry a renderer keeps between frames are the frames a new
+/// renderer draws, at three views each drawn twice, and after a member of the clip group moves
+/// (here with dotted guides). In Preview the Image Trace object's outlines and the layer with
+/// Preview off are drawn in outline.
+#[test]
+fn outline_frames_from_kept_geometry_match_a_new_renderer() {
+    let (d, ids) = outline_doc();
+    let outline = RenderOptions { outline: true, guide: ([0, 128, 255], true), background: Some([255; 4]), ..Default::default() };
+    let screen = RenderOptions { trace_views: true, background: Some([255; 4]), ..Default::default() };
+    let views = [Affine::IDENTITY, Affine::scale(4.0) * Affine::translate((-40.0, -35.0)), Affine::translate((6.0, -4.0))];
+    let mut moved = d.clone();
+    if let Some(n) = moved.node_mut(id_of(&ids, "past the clip")) {
+        n.transform(Affine::translate((3.0, 2.0)), false);
+    }
+    for opts in [&outline, &screen] {
+        let mut kept = Renderer::new();
+        for (d, view) in views.iter().chain(&views).map(|v| (&d, v)).chain([(&moved, &Affine::IDENTITY)]) {
+            let new = Renderer::new().render(d, 100, 100, *view, opts);
+            assert_eq!(kept.render(d, 100, 100, *view, opts).pixels, new.pixels, "outline: {}, view {view:?}", opts.outline);
+        }
+    }
+    // Outline view draws the members of the clip group unclipped, the tenth-of-a-point path as a
+    // dot, and no fills.
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &outline);
+    assert!(img.pixel(58, 50)[0] < 200, "the member past the clipping path");
+    assert!(img.pixel(48, 56)[0] < 255, "the tenth-of-a-point path");
+    assert_eq!(img.pixel(15, 15), [255; 4], "the square's fill");
+}
+
+/// Outline view draws paths and compound paths from the geometry the renderer keeps for them,
+/// the members of clip groups and the shapes of an Image Trace object showing its outlines
+/// included: the next frame draws the same paths. A member of a clip group keeps its live-effect
+/// geometry, and the members out of view are culled by bounds the renderer keeps.
+#[test]
+fn outline_view_draws_paths_from_kept_geometry() {
+    let (d, ids) = outline_doc();
+    let kept_paths = |r: &Renderer| -> HashMap<NodeId, Arc<BezPath>> { r.geom.values().filter_map(|e| Some((e.node.id, e.path.clone()?))).collect() };
+    let outline = RenderOptions { outline: true, ..Default::default() };
+    let screen = RenderOptions { trace_views: true, ..Default::default() };
+    let in_outline = [
+        "square",
+        "holed",
+        "fx path",
+        "fx compound",
+        "guide",
+        "clipping path",
+        "past the clip",
+        "member compound",
+        "pair rect",
+        "pair ellipse",
+        "nested clipping path",
+        "nested path",
+        "member fx",
+        "tiny",
+        "trace shape a",
+        "trace shape b",
+        "unpreviewed",
+    ];
+    for (opts, drawn) in [(&outline, &in_outline[..]), (&screen, &["trace shape a", "trace shape b", "unpreviewed"][..])] {
+        let mut r = Renderer::new();
+        r.render(&d, 100, 100, Affine::IDENTITY, opts);
+        let first = kept_paths(&r);
+        r.render(&d, 100, 100, Affine::IDENTITY, opts);
+        let second = kept_paths(&r);
+        for name in drawn {
+            let id = id_of(&ids, name);
+            let path = first.get(&id).unwrap_or_else(|| panic!("outline: {}: no path kept for {name}", opts.outline));
+            assert!(second.get(&id).is_some_and(|p| Arc::ptr_eq(p, path)), "outline: {}: {name} drawn again from its kept path", opts.outline);
+        }
+        assert!(!first.contains_key(&id_of(&ids, "hidden")));
+    }
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, Affine::IDENTITY, &outline);
+    let member_fx = d.node(id_of(&ids, "member fx")).map(|n| n as *const Node as usize);
+    assert!(member_fx.is_some_and(|key| r.fx_geom.contains_key(&key)), "the member's live-effect geometry is kept");
+    // Zoomed in 4× on part of the clip group.
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, Affine::scale(4.0) * Affine::translate((-40.0, -35.0)), &outline);
+    for name in ["member compound", "pair", "member fx"] {
+        let id = id_of(&ids, name);
+        assert!(r.geom.values().any(|e| e.node.id == id && e.bounds.is_some() && e.path.is_none()), "{name}: culled by kept bounds");
+    }
+}
+
 #[test]
 fn artboards_white_on_pasteboard() {
     let d = Document::new(50.0, 50.0);

@@ -409,6 +409,9 @@ pub struct Renderer {
     /// caches did not keep.
     made_again: bool,
     /// The node `draw_shape_fx` may cache the live-effect geometry of (the one `draw_arc` is drawing).
+    /// In Outline view its path comes from `geom` too ([`Self::outline_path`]), and
+    /// [`Self::draw_outline_member`] sets it to each member of a clip group or shape of an Image
+    /// Trace object that it draws.
     fx_owner: Option<Arc<Node>>,
     /// Live-effect geometry per node ([`fx::FxGeom`]), keyed by `Arc` identity like `geom`.
     fx_geom: PtrMap<usize, fx::FxGeom>,
@@ -886,7 +889,7 @@ impl Renderer {
         (fill, stroke)
     }
 
-    /// Cached BezPath of a path node.
+    /// Cached BezPath of a path or compound path node.
     fn path_of(&mut self, a: &Arc<Node>) -> Option<Arc<BezPath>> {
         let key = Arc::as_ptr(a) as usize;
         if let Some(e) = self.geom.get(&key)
@@ -895,10 +898,17 @@ impl Renderer {
         {
             return Some(p.clone());
         }
-        let p = Arc::new(a.path_data()?.to_bezpath());
+        let p = Arc::new(a.stroke_path()?);
         let bounds = self.bounds_of(a);
         self.geom.insert(key, GeomEntry { node: a.clone(), bounds, path: Some(p.clone()), stamp: self.stamp });
         Some(p)
+    }
+
+    /// The cached path of path or compound path `n` ([`Self::path_of`]) when the frame is in
+    /// Outline view and `n` is `fx_owner`, else `None`.
+    fn outline_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
+        let owner = self.fx_owner.as_ref().filter(|o| f.opts.outline && std::ptr::eq(&***o, n)).cloned()?;
+        self.path_of(&owner)
     }
 
     /// Whether `a` is left out of this frame: hidden, a skipped template or guide, or culled.
@@ -1135,7 +1145,7 @@ impl Renderer {
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } if f.opts.outline => {
                 for c in children {
-                    self.draw_node(ctx, f, c, false);
+                    self.draw_outline_member(ctx, f, c);
                 }
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
@@ -1171,11 +1181,11 @@ impl Renderer {
                 }
             }
             NodeKind::Path { path, rule, guide, .. } => {
-                let bp = path.to_bezpath();
+                let bp = self.outline_path(f, n).unwrap_or_else(|| Arc::new(path.to_bezpath()));
                 if *guide {
                     let ([r, g, b], dots) = f.opts.guide;
                     if dots {
-                        let mut screen = bp.clone();
+                        let mut screen = BezPath::clone(&bp);
                         screen.apply_affine(f.view);
                         ctx.set_transform(Affine::IDENTITY);
                         ctx.set_stroke(kurbo::Stroke::new(1.5).with_dashes(0.0, [1.5, 2.5]));
@@ -1189,6 +1199,9 @@ impl Renderer {
                 }
             }
             NodeKind::Compound { children, rule } => {
+                if let Some(bp) = self.outline_path(f, n) {
+                    return self.draw_shape(ctx, f, n, &bp, *rule);
+                }
                 let mut bp = BezPath::new();
                 for c in children {
                     if let Some(p) = c.path_data() {
@@ -1227,9 +1240,32 @@ impl Renderer {
             let opts = RenderOptions { outline: true, ..f.opts.clone() };
             let frame = Frame { opts: &opts, ..*f };
             for c in shapes {
-                self.draw_node(ctx, &frame, c, false);
+                self.draw_outline_member(ctx, &frame, c);
             }
         }
+    }
+
+    /// [`Self::draw_node`] for `c`, a member of a clip group or a shape of an Image Trace object in
+    /// Outline view, culled by its cached bounds ([`Self::bounds_of`]) and drawn with `c` as
+    /// `fx_owner`, so its path and live-effect geometry come from the caches.
+    fn draw_outline_member(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>) {
+        if !c.visible || f.opts.hidden.contains(&c.id) {
+            return;
+        }
+        match self.bounds_of(c) {
+            Some(b) => {
+                let pad = f.px * 2.0;
+                if !rects_overlap(b.inflate(pad, pad), f.visible) {
+                    self.stats.culled += c.count();
+                    return;
+                }
+            }
+            None if !c.is_container() => return,
+            None => {}
+        }
+        let outer = self.fx_owner.replace(c.clone());
+        self.draw_node(ctx, f, c, true);
+        self.fx_owner = outer;
     }
 
     /// The children of a group: as the elements of a knockout group when `knockout`.
