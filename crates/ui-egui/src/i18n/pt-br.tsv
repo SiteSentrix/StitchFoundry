@@ -4121,3 +4121,7 @@ machine	Trim	Corte de linha
 	colours	cores
 	Print Catalogue	Imprimir catálogo
 	A sheet of the designs found, to print or save as PDF	Uma folha com os desenhos encontrados, para imprimir ou salvar em PDF
+	Batch Output	Saída em lote
+	Output Profiles	Perfis de saída
+	Save Output Profile	Salvar perfil de saída
+	Delete Output Profile	Excluir perfil de saída

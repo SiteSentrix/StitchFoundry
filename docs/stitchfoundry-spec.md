@@ -505,7 +505,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | MFL-01 | Native design file | Done | `.stitchfoundry` (the reference's EMB is proprietary: Out) | – |
 | MFL-02 | Condensed formats (Melco CND), colour-merge | Missing | MF-04 | 6 |
 | OUT-01 | Export for machine | Done | 10 formats | – |
-| OUT-02 | Batch output profiles (machine files + design + worksheets in one step) | Missing | `embroidery.output {profile}` (2026 feature) | 6 |
+| OUT-02 | Batch output profiles (machine files + design + worksheets in one step) | Done | `embroidery.output`: machine files in several formats, the worksheet as PDF and the design, named alike, to a folder in one step; output profiles kept by name | 0 |
 | OUT-03 | Send to machine / USB / network queue | Done | Send to Machine writes to remembered machine folders (USB, the machine's folder, network shares), checked first; a queue manager is HW-01 | – |
 | OUT-04 | Wireless transfer to specific machine brands | Out | Proprietary protocols; revisit if documented | – |
 | OUT-05 | Cost estimate (stitches, thread, time, machine heads) | Done | `embroidery.settings {cost}` (per 1000 stitches, machine hour over its heads, thread per 1000 m, set-up an order, currency); `embroidery.cost {quantity}`; shown in the Design section and on worksheets | 0 |
@@ -531,7 +531,7 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | NEW-07 | In-app assistant for embroidery questions | Partial | Agents can already drive the app over MCP; add an "Ask" panel that calls Claude, paid by AI credits or the user's own key | A |
 | NEW-08 | Contour fill robustness on tiny objects | Done | Falls back cleanly | – |
 | NEW-09 | Twin-sided pull compensation | Done | RE-05 | 1 |
-| NEW-10 | Batch output, barcode formats | Missing | OUT-02, RP-02 | 6 |
+| NEW-10 | Batch output, barcode formats | Partial | Batch output and profiles done (OUT-02); Code 128 and Code 39 on worksheets (RP-02) still to be checked with a scanner | 1 |
 | NEW-11 | Lettering min/max height display | Done | LT-13 | – |
 | NEW-12 | Background exports with history | Missing | Exports run off the UI thread, Exports panel | 6 |
 | NEW-13 | Keyboard design collections | Done | KDC-01 | – |
@@ -570,8 +570,8 @@ not started · **Out** out of scope (reason given). **Phase** points to [§8](#8
 | BEY-06 | Open Ink/Stitch designs with their stitch settings | Done | An SVG with Ink/Stitch's `inkstitch:*` settings opens stitched: dashed strokes run (bean stitch, repeats), satin columns between their rails with their rungs as inclination lines, other strokes satin lines, filled shapes fills (method, angle, spacing, stitch length, underlay); the settings are kept with the art (public documentation: https://inkstitch.org/docs/params/) |
 | BEY-07 | 3D puff (satin over foam, capped ends; puff lettering) | Done | `embroidery.puff` / Embroidery › 3D Puff: dense satin without underlay, sides pushed out, end caps past the ends; lettering keeps it (`puff`); public descriptions: https://wilcom.com/resources/blog/qa-from-3d-puff-embroidery-webinar, https://hatchembroidery.com/resources/blog/how-to-digitize-for-3d-puffy-foam-machine-embroidery |
 
-**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 179 done,
-28 partial, 37 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
+**Tally:** 250 rows (grouping the roughly 300 features the reference lists): 180 done,
+29 partial, 35 missing, 6 out of scope (counted 2026-10-12, after the Hatch and Chroma comparison). Most of what is missing is breadth (more stitch
 effects, the lettering suite, multi-decoration, production tools); the core digitizing loop is
 in place.
 

@@ -4431,3 +4431,7 @@ machine	Stop	停止
 	colours	色
 	Print Catalogue	打印目录
 	A sheet of the designs found, to print or save as PDF	所找到设计的目录页，可打印或存为 PDF
+	Batch Output	批量输出
+	Output Profiles	输出配置
+	Save Output Profile	保存输出配置
+	Delete Output Profile	删除输出配置

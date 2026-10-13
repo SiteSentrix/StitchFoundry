@@ -410,6 +410,21 @@ for the design as a new A4 document, to print (File › Print) or export as PDF:
 
 The worksheet's text is in English for now.
 
+## Batch output
+
+`embroidery.output {dir, formats?, worksheet?, design?, name?, replace?}` writes everything a job
+needs to a folder in one step: the design's machine files in each format asked for (the design's
+machine's when none are), its worksheet as a PDF (`name-worksheet.pdf`; `worksheet:
+production|approval|pattern|template|none`) and the design itself (`.stitchfoundry`; `design:
+false` leaves it out). The files are named alike: when any name is taken, a number is added to
+all of them (`Logo-2.dst`, `Logo-2-worksheet.pdf`…) unless `replace` is set. The documents open
+stay as they are.
+
+**Output profiles** keep a batch by name: `embroidery.output.saveProfile {name, formats?,
+worksheet?, design?, dir?}`, listed by `embroidery.output.profiles` and forgotten with
+`embroidery.output.deleteProfile`. `embroidery.output {profile}` uses one, its folder too; what
+the request says wins over it.
+
 ## Multi-hooping
 
 A design larger than the hoop is sewn in several hoopings: `embroidery.multiHoop {hoop?, width?,

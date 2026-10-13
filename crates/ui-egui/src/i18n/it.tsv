@@ -4851,3 +4851,7 @@ machine	Stop	Arresto
 	A sheet of the designs found, to print or save as PDF	Un foglio dei disegni trovati, da stampare o salvare in PDF
 @msg	larger than {_1} MB	più grande di {_1} MB
 @msg	not a machine file: .{ext}	non è un file per macchina da ricamo: .{ext}
+	Batch Output	Output in batch
+	Output Profiles	Profili di output
+	Save Output Profile	Salva profilo di output
+	Delete Output Profile	Elimina profilo di output

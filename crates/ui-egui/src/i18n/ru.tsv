@@ -4847,3 +4847,7 @@ machine	Stop	Остановка
 	A sheet of the designs found, to print or save as PDF	Лист найденных дизайнов для печати или сохранения в PDF
 @msg	larger than {_1} MB	больше {_1} МБ
 @msg	not a machine file: .{ext}	не файл для вышивальной машины: .{ext}
+	Batch Output	Пакетный вывод
+	Output Profiles	Профили вывода
+	Save Output Profile	Сохранить профиль вывода
+	Delete Output Profile	Удалить профиль вывода

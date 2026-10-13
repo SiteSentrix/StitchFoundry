@@ -4845,3 +4845,7 @@ machine	Stop	停止
 	A sheet of the designs found, to print or save as PDF	見つかったデザインの一覧シート（印刷またはPDF保存用）
 @msg	larger than {_1} MB	{_1} MB を超えています
 @msg	not a machine file: .{ext}	刺繍ミシンのファイルではありません: .{ext}
+	Batch Output	一括出力
+	Output Profiles	出力プロファイル
+	Save Output Profile	出力プロファイルを保存
+	Delete Output Profile	出力プロファイルを削除

@@ -656,6 +656,10 @@ pub struct Prefs {
     /// library, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub embroidery_monogram_templates: Vec<cmd::embroidery_monogram::MonogramTemplate>,
+    /// Output profiles of the user's own (`embroidery.output.saveProfile`): what a batch output
+    /// writes. A local library, not a Preferences dialog field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub embroidery_output_profiles: Vec<cmd::embroidery_output::OutputProfile>,
     /// The machine folders designs are sent to (`embroidery.send`): USB sticks, machine folders,
     /// network shares, the last used first. A local list, not a Preferences dialog field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -840,6 +844,7 @@ impl Default for Prefs {
             embroidery_motifs: vec![],
             embroidery_font_dirs: vec![],
             embroidery_monogram_templates: vec![],
+            embroidery_output_profiles: vec![],
             embroidery_send_dirs: vec![],
             templates_folder: String::new(),
             append_converted: true,

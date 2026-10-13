@@ -4849,3 +4849,7 @@ machine	Stop	Parada
 	A sheet of the designs found, to print or save as PDF	Una hoja con los diseños encontrados, para imprimir o guardar como PDF
 @msg	larger than {_1} MB	mayor de {_1} MB
 @msg	not a machine file: .{ext}	no es un archivo de máquina de bordar: .{ext}
+	Batch Output	Salida por lotes
+	Output Profiles	Perfiles de salida
+	Save Output Profile	Guardar perfil de salida
+	Delete Output Profile	Eliminar perfil de salida
