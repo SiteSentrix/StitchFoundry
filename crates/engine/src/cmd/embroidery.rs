@@ -602,7 +602,7 @@ fn match_threads(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "embroidery.matchThreads";
     let cfg = s.doc()?.doc.embroidery.as_deref().cloned().unwrap_or_default();
     let name = str_param(p, "chart").map_or_else(|| cfg.chart.clone(), str::to_string);
-    let chart = sf_core::threads::charts().into_iter().find(|c| c.name == name).ok_or_else(|| bad(CMD, format!("unknown thread chart `{name}`")))?;
+    let chart = super::embroidery_charts::find_chart(s, &name).ok_or_else(|| bad(CMD, format!("unknown thread chart `{name}`")))?;
     let repaint = bool_or(p, "paint", true);
     // the selection's stitched objects; every one with `all` or nothing selected
     let everything = bool_or(p, "all", false) || (p.get("ids").is_none() && s.doc()?.selection.objects.is_empty());
@@ -2542,7 +2542,7 @@ fn info(s: &mut Session, _p: &Value) -> Result<Value> {
         .iter()
         .map(|h| json!({"name": h.name, "width": h.width, "height": h.height, "custom": custom.iter().any(|c| c.name == h.name)}))
         .collect();
-    let charts: Vec<&str> = sf_core::threads::charts().iter().map(|c| c.name).collect();
+    let charts: Vec<String> = super::embroidery_charts::all_charts(s).into_iter().map(|c| c.name).collect();
     let saved = &s.prefs.embroidery_machines;
     let machines: Vec<Value> = sf_core::machines::profiles(saved).iter().map(|m| super::embroidery_machines::machine_json(m, saved)).collect();
     let machine_format = cfg.machine_file_format(saved);

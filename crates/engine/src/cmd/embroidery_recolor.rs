@@ -108,9 +108,7 @@ fn recolor(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let chart = match str_param(p, "chart") {
         None => None,
-        Some(name) => {
-            Some(sf_core::threads::charts().into_iter().find(|c| c.name == name).ok_or_else(|| bad(CMD, format!("unknown thread chart `{name}`")))?)
-        }
+        Some(name) => Some(super::embroidery_charts::find_chart(s, name).ok_or_else(|| bad(CMD, format!("unknown thread chart `{name}`")))?),
     };
     let repaint = bool_or(p, "paint", true);
     let everything = bool_or(p, "all", false) || (p.get("ids").is_none() && s.doc()?.selection.objects.is_empty());

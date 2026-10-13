@@ -4910,3 +4910,11 @@ machine	Stop	Parada
 	Garment Background	Fondo de prenda
 	Garment Photo…	Foto de la prenda…
 	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	Una foto de la prenda detrás del diseño, a tamaño real, en una capa de plantilla bloqueada que nunca se borda
+	Import Chart…	Importar carta…
+	A thread chart of your own from a CSV file: code, name and colour a thread	Una carta de hilos propia desde un archivo CSV: código, nombre y color por hilo
+	Export Chart…	Exportar carta…
+	Thread Charts	Cartas de hilos
+	Import Thread Chart	Importar carta de hilos
+	Export Thread Chart	Exportar carta de hilos
+	Save Thread Chart	Guardar carta de hilos
+	Delete Thread Chart	Eliminar carta de hilos

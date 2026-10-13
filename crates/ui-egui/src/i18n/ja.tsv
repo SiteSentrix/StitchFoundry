@@ -4906,3 +4906,11 @@ machine	Stop	停止
 	Garment Background	衣類の背景
 	Garment Photo…	衣類の写真…
 	A photo of the garment behind the design, life size, on a locked template layer that is never stitched	デザインの後ろに衣類の写真を実寸で置きます（刺繍されないロックされたテンプレートレイヤー）
+	Import Chart…	チャートを読み込み…
+	A thread chart of your own from a CSV file: code, name and colour a thread	CSV ファイルから独自の糸チャート（糸ごとに番号・名前・色）
+	Export Chart…	チャートを書き出し…
+	Thread Charts	糸チャート
+	Import Thread Chart	糸チャートを読み込み
+	Export Thread Chart	糸チャートを書き出し
+	Save Thread Chart	糸チャートを保存
+	Delete Thread Chart	糸チャートを削除

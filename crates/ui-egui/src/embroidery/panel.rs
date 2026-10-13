@@ -10,7 +10,7 @@ use vectorcraft_embroidery::sf_core::model::{
     Corners, CoverKind, CrossStyle, CustomMotif, FillKind, FillParams, JaggedSides, MAX_PASSES, Motif, MotifColumn, MotifWarp, RunKind, SatinParams,
     TATAMI_LENGTH, TackdownKind, TexturePattern, TieStyle, WarpKind,
 };
-use vectorcraft_embroidery::sf_core::threads::{Rgb, charts};
+use vectorcraft_embroidery::sf_core::threads::Rgb;
 
 use super::{ArtView, StitchView};
 use crate::VectorcraftApp;
@@ -528,6 +528,35 @@ fn write_output(app: &mut VectorcraftApp, dir: &str) {
         Ok(r) => format!("{} {} → {}", r["files"].as_array().map_or(0, Vec::len), tl!("files written"), r["dir"].as_str().unwrap_or(dir)),
         Err(e) => e.to_string(),
     };
+}
+
+/// Thread charts of one's own: one read from a CSV file, the chosen one written out.
+fn chart_rows(app: &mut VectorcraftApp, ui: &mut Ui, chart: &str) {
+    ui.horizontal(|ui| {
+        if app.services.pick_open.is_some()
+            && button(ui, tl!("Import Chart…"))
+                .on_hover_text(tl!("A thread chart of your own from a CSV file: code, name and colour a thread"))
+                .clicked()
+        {
+            crate::picks::button(app, |app| {
+                let pick = crate::FilePick { filters: vec![("CSV", &["csv", "txt"])], ..Default::default() };
+                let Some(path) = crate::picks::open(app, &pick) else { return };
+                let name = std::path::Path::new(&path).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "My chart".into());
+                match app.run("embroidery.chart.import", json!({ "name": name, "path": path })) {
+                    Ok(_) => {
+                        app.run("embroidery.settings", json!({ "chart": name })).ok();
+                    }
+                    Err(e) => app.status(e),
+                }
+            });
+        }
+        if !chart.is_empty() && button(ui, tl!("Export Chart…")).clicked() {
+            let chart = chart.to_string();
+            if let Err(e) = crate::io::save_command_output(app, "embroidery.chart.export", "csv", json!({ "name": chart })) {
+                app.status(e);
+            }
+        }
+    });
 }
 
 /// Recolouring every thread at once by a scheme, matched to the design's chart.
@@ -2217,7 +2246,7 @@ fn thread_row(app: &mut VectorcraftApp, ui: &mut Ui, e: &Embroidery) {
         }
         // pick a named thread from a chart
         let chart_name = app.session.active().and_then(|s| s.doc.embroidery.as_ref().map(|c| c.chart.clone())).unwrap_or_else(|| "Generic".into());
-        let all = charts();
+        let all = vectorcraft_engine::cmd::embroidery_charts::all_charts(&app.session);
         let chart = all.iter().find(|c| c.name == chart_name).or(all.first());
         if let Some(chart) = chart {
             let label = e.thread.as_ref().map(|t| t.label()).unwrap_or_else(|| tl!("Object color").to_string());
@@ -2327,6 +2356,7 @@ fn design_section(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
     {
         app.run("embroidery.matchThreads", json!({ "all": true })).ok();
     }
+    chart_rows(app, ui, &chart);
     if stitches > 0 {
         recolor_row(app, ui);
     }

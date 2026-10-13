@@ -505,6 +505,53 @@ fn an_object_in_the_same_colour_can_be_a_block_of_its_own() {
 }
 
 #[test]
+fn thread_charts_of_ones_own_come_from_csv_and_the_design() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#cc3300"})).unwrap();
+    // a supplier's list, then used like the built-in charts
+    let csv = "Number,Description,Hex\n501,Flame,#ff4400\n502,Deep Sea,#003366\n";
+    let r = s.execute("embroidery.chart.import", &json!({"name": "Shop stock", "text": csv})).unwrap();
+    assert_eq!(r["threads"].as_u64(), Some(2));
+    let list = s.execute("embroidery.charts", &json!({"name": "Shop stock"})).unwrap();
+    assert!(list["charts"].as_array().unwrap().iter().any(|c| c["name"] == "Shop stock" && c["custom"] == true), "{list}");
+    assert_eq!(list["threads"][1]["code"].as_str(), Some("502"));
+    s.execute("embroidery.matchThreads", &json!({"chart": "Shop stock", "all": true})).unwrap();
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert_eq!(info["colors"][0]["color"].as_str(), Some("#ff4400"), "{info}");
+    assert!(info["charts"].as_array().unwrap().iter().any(|c| c == "Shop stock"));
+    s.execute("embroidery.recolor", &json!({"scheme": "invert", "chart": "Shop stock"})).unwrap();
+    // written out as CSV, read back the same
+    let out = s.execute("embroidery.chart.export", &json!({"name": "Shop stock"})).unwrap();
+    let text = out["text"].as_str().unwrap();
+    assert!(text.starts_with("code,name,color\n501,Flame,#ff4400"), "{text}");
+    s.execute("embroidery.chart.import", &json!({"name": "Again", "text": text})).unwrap();
+    let again = s.execute("embroidery.charts", &json!({"name": "Again"})).unwrap();
+    assert_eq!(again["threads"], list["threads"]);
+    // the built-in ones export too, and a chart of the design's own threads
+    assert!(s.execute("embroidery.chart.export", &json!({"name": "Generic"})).unwrap()["threads"].as_u64().unwrap() > 10);
+    let r = s.execute("embroidery.chart.save", &json!({"name": "This job"})).unwrap();
+    assert_eq!(r["threads"].as_u64(), Some(1));
+    s.execute("embroidery.chart.save", &json!({"name": "Two", "threads": [{"color": "#000000", "name": "Black"}, {"color": "#ffffff"}]})).unwrap();
+    assert_eq!(s.prefs.embroidery_thread_charts.len(), 4);
+    for (cmd, bad) in [
+        ("embroidery.chart.import", json!({"name": "Generic", "text": csv})),
+        ("embroidery.chart.import", json!({"name": "X", "text": "a,b\n1,2"})),
+        ("embroidery.chart.import", json!({"name": "X"})),
+        ("embroidery.chart.save", json!({"name": "X", "threads": []})),
+        ("embroidery.chart.save", json!({"name": "X", "threads": [{"color": "red"}]})),
+        ("embroidery.chart.export", json!({"name": "Nowhere"})),
+        ("embroidery.chart.delete", json!({"name": "Generic"})),
+    ] {
+        assert!(s.execute(cmd, &bad).is_err(), "{cmd} {bad}");
+    }
+    s.execute("embroidery.chart.delete", &json!({"name": "Two"})).unwrap();
+    assert_eq!(s.prefs.embroidery_thread_charts.len(), 3);
+}
+
+#[test]
 fn a_garment_photo_goes_behind_the_design_life_size_and_unstitched() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let png = std::env::temp_dir().join(format!("sf-garment-{}.png", std::process::id()));
