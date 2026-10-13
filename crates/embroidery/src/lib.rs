@@ -237,6 +237,31 @@ pub fn contour_to_path(c: &sf_core::geom::Contour) -> vectorcraft_geom::path::Pa
     PathData::single(SubPath::new(anchors, c.closed))
 }
 
+/// What the stitched art in `node` (and inside it) covers, in millimetres: fills and appliqué
+/// their shapes, satin columns their outlines; art sewn only as lines, its closed paths' areas.
+pub fn covered_mm(node: &Node) -> Vec<sf_core::geom::Polygon> {
+    fn walk(n: &Node, out: &mut Vec<sf_core::geom::Polygon>) {
+        if let Some(e) = n.embroidery.as_deref()
+            && !matches!(n.kind, NodeKind::Group { .. })
+        {
+            let before = out.len();
+            for kind in convert::convert(n, e) {
+                out.extend(sf_core::engine::object_polygons(&EmbObject::new(0, kind, 0)));
+            }
+            if out.len() == before {
+                out.extend(regions_mm(n));
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, out);
+        }
+    }
+    let mut out = Vec::new();
+    walk(node, &mut out);
+    out.retain(|p| p.outer.len() >= 3);
+    out
+}
+
 /// The filled regions of a path or compound path, in millimetres.
 pub fn regions_mm(node: &Node) -> Vec<sf_core::geom::Polygon> {
     match convert::node_lines(node) {

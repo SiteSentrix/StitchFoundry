@@ -186,6 +186,8 @@ pub struct EmbroideryUi {
     pub letter_index: usize,
     /// The lettering to set is 3D puff.
     pub lettering_puff: bool,
+    /// Appliqué letters in fabric of this colour.
+    pub lettering_applique: Option<[u8; 3]>,
     /// The machine folder chosen to send to, and what the last send or check said.
     pub send_folder: usize,
     pub send_status: String,
@@ -280,6 +282,7 @@ impl Default for EmbroideryUi {
             lettering_sew: vectorcraft_embroidery::sf_core::attr::LetterSewing::default(),
             letter_index: 0,
             lettering_puff: false,
+            lettering_applique: None,
             send_folder: 0,
             send_status: String::new(),
             prompt: prompt::PromptState::default(),

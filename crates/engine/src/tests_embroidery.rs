@@ -3351,6 +3351,43 @@ fn puff_fills_and_puff_sewn_last() {
 }
 
 #[test]
+fn applique_lettering_makes_each_letter_a_patch() {
+    use sf_core::attr::StitchType;
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let r = s.execute("embroidery.lettering", &json!({"text": "AA", "font": "Test Script", "applique": "#336699"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let kinds = |s: &Session| -> Vec<Vec<String>> {
+        let st = s.doc().unwrap();
+        st.doc
+            .node(id)
+            .unwrap()
+            .children()
+            .unwrap()
+            .iter()
+            .map(|g| g.children().unwrap().iter().filter_map(|c| c.embroidery.as_deref()).map(|e| e.stitch.type_name().to_string()).collect())
+            .collect()
+    };
+    assert_eq!(kinds(&s), vec![vec!["applique".to_string()]; 2]);
+    {
+        let st = s.doc().unwrap();
+        let g = &st.doc.node(id).unwrap().children().unwrap()[0];
+        let e = g.children().unwrap()[0].embroidery.as_deref().unwrap().clone();
+        let StitchType::Applique(a) = &e.stitch else { panic!("appliqué") };
+        assert_eq!(a.fabric_color, sf_core::Rgb::new(0x33, 0x66, 0x99));
+    }
+    // sewn as appliqué: the machine stops to lay and trim the fabric
+    let p = s.embroidery_plan().unwrap().pattern().clone();
+    assert!(p.stitches.iter().filter(|s| s.cmd == sf_core::Cmd::Stop).count() >= 2, "stops for the fabric");
+    // off again: the font's own stitching
+    s.execute("embroidery.lettering.edit", &json!({"applique": false})).unwrap();
+    assert!(kinds(&s).iter().flatten().all(|k| k != "applique"), "{:?}", kinds(&s));
+    s.execute("embroidery.lettering.edit", &json!({"applique": true})).unwrap();
+    assert_eq!(kinds(&s)[0], vec!["applique".to_string()]);
+    assert!(s.execute("embroidery.lettering.edit", &json!({"applique": "blue"})).is_err());
+}
+
+#[test]
 fn lettering_aligns_and_follows_arcs() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
