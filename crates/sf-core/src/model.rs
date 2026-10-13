@@ -861,10 +861,14 @@ pub enum Motif {
     Zigzag,
     /// A blanket prong: in a motif fill, an E-stitch fill.
     EStitch,
+    /// Chenille look on a regular machine: overlapping round loops, like a coiled spring.
+    Coil,
+    /// Chenille look on a regular machine: square loops, each crossing the last.
+    SquareLoop,
 }
 
 impl Motif {
-    pub const ALL: [Motif; 11] = [
+    pub const ALL: [Motif; 13] = [
         Motif::Wave,
         Motif::Scallop,
         Motif::Diamond,
@@ -876,6 +880,8 @@ impl Motif {
         Motif::Loop,
         Motif::Zigzag,
         Motif::EStitch,
+        Motif::Coil,
+        Motif::SquareLoop,
     ];
 
     pub fn label(self) -> &'static str {
@@ -891,6 +897,8 @@ impl Motif {
             Motif::Loop => "Loop",
             Motif::Zigzag => "Zigzag",
             Motif::EStitch => "E-stitch",
+            Motif::Coil => "Coil",
+            Motif::SquareLoop => "Square loop",
         }
     }
 }

@@ -348,6 +348,16 @@ pub(crate) fn motif_shape(m: Motif) -> Vec<(f64, f64)> {
         Motif::Zigzag => vec![(0.0, 0.0), (0.25, 0.5), (0.75, -0.5), (1.0, 0.0)],
         // A prong out to one side and back, then along: blanket stitch.
         Motif::EStitch => vec![(0.0, 0.0), (0.0, 1.0), (0.0, 0.0), (1.0, 0.0)],
+        // A coil: the line runs on while turning a full loop to one side and back across
+        // itself (a prolate cycloid), so the loops overlap like chenille's.
+        Motif::Coil => (0..=16)
+            .map(|i| {
+                let a = f64::from(i) / 16.0 * std::f64::consts::TAU;
+                (a / std::f64::consts::TAU + 0.45 * a.sin(), -0.25 * (1.0 - a.cos()))
+            })
+            .collect(),
+        // A square loop: on, down, back across, up past where it went down, on.
+        Motif::SquareLoop => vec![(0.0, 0.0), (0.75, 0.0), (0.75, -0.5), (0.25, -0.5), (0.25, 0.0), (1.0, 0.0)],
         // A loop like a handwritten l.
         Motif::Loop => {
             let mut v = vec![(0.0, 0.0)];
@@ -640,11 +650,27 @@ mod tests {
         let (lo, hi) = pts.iter().fold((0.0f64, 0.0f64), |(lo, hi), q| (lo.min(q.y), hi.max(q.y)));
         assert!((lo + 2.0).abs() < 1e-6 && hi.abs() < 1e-6, "{lo} {hi}");
         // The built-in star and loop stand upright the same way.
-        for motif in [Motif::Star, Motif::Loop] {
+        for motif in [Motif::Star, Motif::Loop, Motif::Coil, Motif::SquareLoop] {
             let p = RunParams { kind: RunKind::Motif, motif, width: 4.0, spacing: 4.0, ..Default::default() };
             let pts: Vec<Point> = generate(&line(), &p, None, None).iter().map(|s| s.pos()).collect();
             let (lo, hi) = pts.iter().fold((0.0f64, 0.0f64), |(lo, hi), q| (lo.min(q.y), hi.max(q.y)));
             assert!(-lo > hi + 0.3, "{motif:?}: {lo} {hi}");
+        }
+    }
+
+    #[test]
+    fn chenille_coils_and_square_loops_turn_back_on_themselves() {
+        // each repeat goes back against the line, so the loops cross
+        for motif in [Motif::Coil, Motif::SquareLoop] {
+            let p = RunParams { kind: RunKind::Motif, motif, width: 3.0, spacing: 2.0, ..Default::default() };
+            let pts: Vec<Point> = generate(&line(), &p, None, None).iter().map(|s| s.pos()).collect();
+            let mut furthest = f64::NEG_INFINITY;
+            let back = pts.iter().any(|q| {
+                furthest = furthest.max(q.x);
+                q.x < furthest - 0.5
+            });
+            assert!(back, "{motif:?}");
+            assert!(pts.len() > 40, "{motif:?}: {}", pts.len());
         }
     }
 

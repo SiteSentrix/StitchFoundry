@@ -2488,6 +2488,8 @@ fn motif_name(m: Motif) -> &'static str {
         Motif::Loop => tl!("Loop"),
         Motif::Zigzag => tl!("Zigzag"),
         Motif::EStitch => tl!("E-stitch"),
+        Motif::Coil => tl!("Coil"),
+        Motif::SquareLoop => tl!("Square loop"),
     }
 }
 
