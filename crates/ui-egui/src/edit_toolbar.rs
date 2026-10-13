@@ -408,7 +408,10 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let id = drawer_id();
     let size = ctx.memory(|m| m.area_rect(id)).map_or(vec2(WIDTH, 200.0), |r| r.size());
     let x = (bar.right() + GAP).min(screen.right() - size.x - GAP).max(screen.left());
-    let y = button.top().min(screen.bottom() - size.y - GAP).max(screen.top() + GAP);
+    // Never above the toolbar's top: higher up are the window's title bar (and on macOS its
+    // buttons) and the bars under it.
+    let top = bar.top().max(screen.top() + GAP);
+    let y = button.top().min(screen.bottom() - size.y - GAP).max(top);
     let in_toolbar: BTreeSet<&str> = crate::toolbar::slots(app).into_iter().flat_map(|(_, s)| s).collect();
     let active = app.session.tool_id();
     let dragged = DragAndDrop::payload::<ToolDrag>(ctx).map(|d| *d);
@@ -448,7 +451,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.add_space(4.0);
             // As tall as its tools, up to the window's height (it scrolls then); the Area's size
             // from the last frame mustn't cap it.
-            let room = (screen.height() - 2.0 * GAP - 104.0).max(120.0);
+            let room = (screen.bottom() - top - GAP - 104.0).max(120.0);
             egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).auto_shrink([false, true]).show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 let inner = ui.available_width() - 10.0;
@@ -885,6 +888,7 @@ mod tests {
         let bar = ctx.data(|d| d.get_temp::<Rect>(toolbar_id())).unwrap();
         assert!((drawer.left() - bar.right() - GAP).abs() < 1.0, "beside the toolbar: {drawer:?} {bar:?}");
         assert!((drawer.top() - edit.top()).abs() < 1.0 || drawer.bottom() >= SCREEN.y - GAP - 1.0, "by the button: {drawer:?} {edit:?}");
+        assert!(drawer.top() >= bar.top() - 0.5, "never above the toolbar (the title bar's there): {drawer:?} {bar:?}");
         assert!(drawer.y_range().contains(edit.center().y), "by the button: {drawer:?} {edit:?}");
         assert!(drawer.width() < WIDTH + 24.0, "one row of tools wide: {drawer:?}");
         // A click on a toolbar tool picks it and leaves the drawer open.

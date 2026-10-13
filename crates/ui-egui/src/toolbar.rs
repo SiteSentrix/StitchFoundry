@@ -182,9 +182,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
         // A group torn off into a floating flyout is raised instead of opening its flyout.
         let mut raise: Option<&'static str> = None;
+        let labels = app.session.prefs.tool_group_labels;
         let mut i = 0;
         while i < all.len() {
-            if all[i].0.is_some() && !app.session.prefs.tool_group_labels {
+            if all[i].0.is_some() && !labels && cols == 2 {
+                // Without labels, two columns run on from group to group, as the reference's
+                // Basic toolbar: no half-empty rows, no dashes between rows.
+            } else if all[i].0.is_some() && !labels {
                 // User Interface › Show Tool Group Labels off: a faint dash between the groups.
                 let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
                 ui.painter().line_segment([r.center() - vec2(6.0, 0.0), r.center() + vec2(6.0, 0.0)], egui::Stroke::new(1.0, t.divider));
@@ -196,9 +200,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     if cols == 1 && cat.chars().count() > 6 { format!("{}...", cat.chars().take(4).collect::<String>()) } else { cat.to_string() };
                 ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
             }
-            // One row = `cols` slots (a category label always starts a new row).
+            // One row = `cols` slots (a category label always starts a new row; without labels, a
+            // new group does only in one column).
             let mut row = vec![i];
-            while row.len() < cols && i + row.len() < all.len() && all[i + row.len()].0.is_none() {
+            while row.len() < cols && i + row.len() < all.len() && (all[i + row.len()].0.is_none() || !labels) {
                 row.push(i + row.len());
             }
             ui.horizontal(|ui| {
@@ -1257,6 +1262,37 @@ pub(crate) mod tests {
         lefts.sort_unstable();
         lefts.dedup();
         lefts.len()
+    }
+
+    /// Rows of tool buttons by their tops: how many buttons each row holds, top to bottom.
+    fn row_sizes(rects: &[egui::Rect]) -> Vec<usize> {
+        let mut rows: Vec<(i32, usize)> = vec![];
+        for r in rects {
+            let top = r.top().round() as i32;
+            match rows.last_mut() {
+                Some((t, n)) if *t == top => *n += 1,
+                _ => rows.push((top, 1)),
+            }
+        }
+        rows.into_iter().map(|(_, n)| n).collect()
+    }
+
+    /// #1736: without group labels (as it ships), two columns run on from group to group, every
+    /// row full but maybe the last; with the labels, each group starts its own row under its name.
+    #[test]
+    fn two_columns_run_on_without_group_labels() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.ui.toolbar_double = true;
+        let ctx = egui::Context::default();
+        let rows = row_sizes(&frame_in(&mut app, &ctx, 0.0, vec![], 1600.0));
+        let slots = slots(&app).len();
+        assert_eq!(rows.iter().sum::<usize>(), slots);
+        assert!(rows[..rows.len() - 1].iter().all(|n| *n == 2), "{rows:?}");
+        assert_eq!(rows.len(), slots.div_ceil(2));
+        app.run("prefs.set", json!({"key": "toolGroupLabels", "value": true})).unwrap();
+        let labelled = row_sizes(&frame_in(&mut app, &ctx, 1.0, vec![], 1600.0));
+        assert!(labelled.len() > rows.len() && labelled.contains(&1), "{labelled:?}");
     }
 
     #[test]
