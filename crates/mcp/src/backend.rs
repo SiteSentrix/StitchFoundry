@@ -72,8 +72,9 @@ impl Remote {
             let probe = stream.peek(&mut [0]);
             stream.set_nonblocking(false)?;
             match probe {
-                Ok(0) => self.conn = None,
-                Ok(_) => {}
+                // Closed by the app, or holding bytes nobody asked for (an app that explains why it
+                // closes): either way no reply to the next request can be read from it.
+                Ok(_) => self.conn = None,
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(_) => self.conn = None,
             }

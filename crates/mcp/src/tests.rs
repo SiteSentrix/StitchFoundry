@@ -668,6 +668,36 @@ fn remote_edit_succeeds_once_when_app_restarts() {
     assert_eq!((requests, edits), (1, 1), "the edit must be sent and applied exactly once");
 }
 
+/// A connection holding a line nobody asked for (an app that says why it closes an idle
+/// connection) is not used: the call goes out once, on a fresh connection, and succeeds.
+#[test]
+fn remote_does_not_send_on_a_connection_with_a_stray_line() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let mut remote = Remote::connect(&addr).unwrap();
+    let (mut stale, _) = listener.accept().unwrap();
+    writeln!(stale, "{}", json!({"ok": false, "error": "idle"})).unwrap();
+    let probe = remote.connection_probe();
+    probe.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    assert_eq!(probe.peek(&mut [0]).unwrap(), 1, "the stray line arrived");
+    drop(probe);
+    let h = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let mut out = stream.try_clone().unwrap();
+        let mut line = String::new();
+        BufReader::new(stream).read_line(&mut line).unwrap();
+        let msg: Value = serde_json::from_str(&line).unwrap();
+        writeln!(out, "{}", json!({"ok": true, "result": 7, "id": msg["id"]})).unwrap();
+    });
+    assert_eq!(remote.call("document.inspect", json!({})), Ok(json!(7)));
+    h.join().unwrap();
+    // Nothing was written to the stale connection: it ends (or is reset, its line unread) without a byte.
+    stale.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    let mut rest = String::new();
+    assert_eq!(BufReader::new(stale).read_line(&mut rest).unwrap_or(0), 0, "{rest}");
+}
+
 #[test]
 fn remote_call_reports_nothing_sent_when_reconnect_is_refused() {
     let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
