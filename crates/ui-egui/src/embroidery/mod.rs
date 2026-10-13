@@ -160,6 +160,8 @@ pub struct EmbroideryUi {
     pub fonts_listed: bool,
     /// The Team Names section's names, one a line.
     pub team_names: String,
+    /// The Design Library section: its folder, search, sort and what it last found.
+    pub library: LibraryView,
     /// The Monogram section: its letters, style (0 classic, 1 line), border (an index of
     /// `embroidery.monogram`'s borders) and size (mm; 0: the font's own).
     pub monogram_letters: String,
@@ -273,6 +275,7 @@ impl Default for EmbroideryUi {
             notes_draft: None,
             fonts_listed: false,
             team_names: String::new(),
+            library: LibraryView::default(),
             monogram_letters: String::new(),
             monogram_style: 0,
             monogram_border: 1,
@@ -324,4 +327,14 @@ pub fn tick(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
         p.playing = false;
     }
     ctx.request_repaint();
+}
+
+/// The Design Library section's state.
+#[derive(Default)]
+pub struct LibraryView {
+    pub folder: String,
+    pub query: String,
+    pub sort: String,
+    /// `embroidery.library.scan`'s answer for them; none: to look.
+    pub result: Option<serde_json::Value>,
 }

@@ -370,6 +370,10 @@ fill to sew behind them).
 
 ## Design library
 
+The Embroidery panel's **Design Library** section shows a folder's designs as thumbnails of their
+stitches: *Choose Folder…*, then *Find* by name and *Sort* by name, newest, most stitches or
+largest; hover one for its size, stitches, colours and file, click it to open it, and *Print
+Catalogue* makes a catalogue sheet of the designs found. Underneath,
 `embroidery.library.scan {folder, query?, recursive?, sort?}` lists the machine embroidery files
 in a folder and its subfolders (DST, EXP, JEF, PES, PEC, VP3, XXX, U01, PCS, TAP): each with its
 size, stitches, colours, threads, date and an outline of its stitches for a thumbnail; `query`
