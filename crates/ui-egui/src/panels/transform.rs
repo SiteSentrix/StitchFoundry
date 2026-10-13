@@ -1,6 +1,7 @@
 //! Transform panel: reference point, X/Y/W/H with the constrain link, rotate and shear, flips,
 //! live-shape properties and the Scale Corners / Scale Strokes & Effects options. While the
-//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead.
+//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead, and with only
+//! ruler guides selected their X (vertical guides) and Y (horizontal ones).
 
 use egui::Ui;
 use serde_json::json;
@@ -94,6 +95,39 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
     });
 }
 
+/// With ruler guides selected and no art: the X of the vertical ones and the Y of the horizontal
+/// ones (the least of each; none where no such guide is selected).
+fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Option<f64>)> {
+    let st = app.session.active()?;
+    if !st.selection.objects.is_empty() || st.selection.guides.is_empty() {
+        return None;
+    }
+    let least = |vertical: bool| {
+        st.selection.guides.iter().filter_map(|i| st.doc.guides.get(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
+    };
+    Some((least(true), least(false)))
+}
+
+/// The selected ruler guides' view of the panel (#1597): X moves the vertical ones and Y the
+/// horizontal ones, together.
+fn guide_fields(app: &mut VectorcraftApp, ui: &mut Ui, (x, y): (Option<f64>, Option<f64>)) {
+    let units = app.session.general_unit();
+    let origin = app.ruler_origin();
+    egui::Grid::new("xfp-guide-grid").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+        for (label, id, pos, origin, by) in [("X:", "xfp-guide-x", x, origin.x, "dx"), ("Y:", "xfp-guide-y", y, origin.y, "dy")] {
+            widgets::dim_label(ui, label);
+            ui.add_enabled_ui(pos.is_some(), |ui| {
+                if let (Some(v), Some(pos)) = (widgets::num_field(ui, id, pos.map(|p| p - origin), units, 80.0), pos)
+                    && let Err(e) = app.run("guide.move", json!({ by: v + origin - pos }))
+                {
+                    app.status(e);
+                }
+            });
+            ui.end_row();
+        }
+    });
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     if app.session.active().is_none() {
@@ -102,6 +136,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some((i, r)) = tool_artboard(app) {
         artboard_fields(app, ui, i, r);
+        return;
+    }
+    if let Some(guides) = selected_guides(app) {
+        guide_fields(app, ui, guides);
         return;
     }
     let units = app.session.general_unit();
@@ -424,6 +462,28 @@ mod tests {
             assert!(shown.iter().any(|t| t == v), "{v} in {shown:?}");
         }
         assert!(!shown.iter().any(|t| t == "40 pt" || t == "0°"), "{shown:?}");
+    }
+
+    /// #1597: with only ruler guides selected the panel shows their X or Y, and nothing of the art.
+    #[test]
+    fn selected_guides_show_their_position() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("guide.add", json!({"vertical": true, "pos": 120})).unwrap();
+        app.run("guide.add", json!({"vertical": false, "pos": 45})).unwrap();
+        app.run("guide.select", json!({"indexes": [0]})).unwrap();
+        assert_eq!(selected_guides(&app), Some((Some(120.0), None)));
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "120 pt") && !shown.iter().any(|t| t == "W:" || t == "45 pt"), "{shown:?}");
+        app.run("guide.select", json!({"indexes": [0, 1]})).unwrap();
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "120 pt") && shown.iter().any(|t| t == "45 pt"), "{shown:?}");
+        // The field's edit: the vertical guide moves, the horizontal one stays.
+        app.run("guide.move", json!({"dx": 30})).unwrap();
+        assert_eq!(selected_guides(&app), Some((Some(150.0), Some(45.0))));
+        // Art selected with them: the art's box, as before.
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
+        assert_eq!(selected_guides(&app), None);
     }
 
     #[test]
