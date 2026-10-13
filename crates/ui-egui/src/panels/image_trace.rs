@@ -366,6 +366,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             st.preset = "Custom".into();
             retrace = true;
         }
+        let grouping = st.params["autoGrouping"].as_bool().unwrap_or(false);
+        if widgets::check(ui, tl!("Auto Grouping"), grouping, true) {
+            st.params["autoGrouping"] = json!(!grouping);
+            st.preset = "Custom".into();
+            retrace = true;
+        }
         // Ignore Color: white, unless another colour is picked.
         ui.horizontal(|ui| {
             let on = st.params["ignoreWhite"].as_bool().unwrap_or(false);

@@ -194,17 +194,40 @@ pub struct Metrics {
     pub stroke_anchors: f64,
     /// Share (%) of the art's plain shapes that came out as a shape lying within 0.6 px of it.
     pub shapes: f64,
+    /// Auto Grouping: share (%) of the paths that lie inside another.
+    pub grouped: f64,
     /// Paths under 6 px of area.
     pub specks: f64,
     /// How far (px) the trace reaches outside the image: a stray curve.
     pub outside: f64,
 }
 
+/// The order a grouped result is painted in: each path, then those inside it.
+fn draw_order(res: &TraceResult) -> Vec<usize> {
+    let mut inside = vec![vec![]; res.paths.len()];
+    let mut stack = vec![];
+    for i in (0..res.paths.len()).rev() {
+        match res.parents.get(i).copied().flatten() {
+            Some(p) => inside[p].insert(0, i),
+            None => stack.push(i),
+        }
+    }
+    let mut order = vec![];
+    while let Some(i) = stack.pop() {
+        order.push(i);
+        stack.extend(inside[i].iter().rev());
+    }
+    order
+}
+
 /// Measure `res`, the trace of `src` (`input` drawn `size` px square as `variant`) with `params`.
 pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params: &TraceParams, res: &TraceResult) -> Metrics {
     let n = size as usize;
     let shapes: Vec<(BezPath, [u8; 3])> = res.paths.iter().map(|tp| (painted(tp), tp.color)).collect();
-    let (delta_mean, edge_delta) = fidelity(src, &render(&shapes, [255; 3], n, n));
+    // Painted as the result is grouped: each path, then those inside it.
+    let drawn: Vec<(BezPath, [u8; 3])> = draw_order(res).into_iter().map(|i| shapes[i].clone()).collect();
+    let (delta_mean, edge_delta) = fidelity(src, &render(&drawn, [255; 3], n, n));
+    let grouped = if res.parents.is_empty() { f64::NAN } else { 100.0 * res.parents.iter().flatten().count() as f64 / res.paths.len().max(1) as f64 };
 
     // The background's frame: a path as large as the image.
     let is_frame = |p: &BezPath| {
@@ -317,6 +340,7 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
     }
 
     Metrics {
+        grouped,
         shapes: shapes_found,
         centre_off,
         width_off,

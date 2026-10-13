@@ -697,6 +697,55 @@ fn image_trace_shapes_makes_live_shapes() {
     assert!(matches!(traced_paths(&n)[0].kind, NodeKind::Path { live: None, .. }));
 }
 
+/// Auto Grouping: a ring and the dot in its hole are a group (the ring first), the square beside
+/// them is not in it; the picture is the same as without, and the group traces again, expands
+/// and releases as any other.
+#[test]
+fn image_trace_auto_grouping_groups_what_is_inside() {
+    let art = vectorcraft_trace::Raster::from_fn(120, 80, |x, y| {
+        let d = (x as f64 + 0.5 - 40.0).hypot(y as f64 + 0.5 - 40.0);
+        if d <= 6.0 || (90..110).contains(&x) && (30..50).contains(&y) {
+            [200, 0, 0, 255]
+        } else if (16.0..=30.0).contains(&d) {
+            [0, 0, 160, 255]
+        } else {
+            [255, 255, 255, 255]
+        }
+    });
+    let make = |grouping: bool| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let r = s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": {"ignoreWhite": true, "autoGrouping": grouping}})).unwrap();
+        assert_eq!(r["paths"], 3);
+        let g = NodeId(r["id"].as_u64().unwrap());
+        (s, g)
+    };
+    let (mut s, g) = make(true);
+    let items = traced_paths(&node(&s, g));
+    assert_eq!(items.len(), 2);
+    let group = items.iter().find(|n| matches!(n.kind, NodeKind::Group { .. })).expect("a group");
+    let inside = group.children().unwrap();
+    assert_eq!(inside.len(), 2);
+    assert_eq!(inside[0].appearance.fill_paint(), Paint::solid(Color::rgb8(0, 0, 160)));
+    assert_eq!(inside[1].appearance.fill_paint(), Paint::solid(Color::rgb8(200, 0, 0)));
+    assert!(matches!(items.iter().find(|n| n.id != group.id).unwrap().kind, NodeKind::Path { .. }));
+    // The same picture as without.
+    let (flat, fg) = make(false);
+    assert_eq!(traced_paths(&node(&flat, fg)).len(), 3);
+    let shot = |s: &Session| {
+        let img = render_doc(s, true);
+        (0..120).flat_map(|x| (0..80).map(move |y| (x, y))).map(|(x, y)| img.pixel(x, y)).collect::<Vec<_>>()
+    };
+    assert_eq!(shot(&s), shot(&flat));
+    // Traced again without the option, it is flat again; expanded, the groups stay.
+    let r = s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": {"ignoreWhite": true}})).unwrap();
+    assert_eq!(traced_paths(&node(&s, NodeId(r["id"].as_u64().unwrap()))).len(), 3);
+    s.execute("imageTrace.make", &json!({"preset": "6 Colors", "params": {"ignoreWhite": true, "autoGrouping": true}})).unwrap();
+    let r = s.execute("imageTrace.expand", &json!({})).unwrap();
+    let expanded = node(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+    assert_eq!(expanded.children().unwrap().len(), 2);
+}
+
 #[test]
 fn image_trace_release_and_expand() {
     let mut s = session();
