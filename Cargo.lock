@@ -4976,6 +4976,7 @@ dependencies = [
  "vectorcraft-three-d",
  "vectorcraft-tools",
  "wat",
+ "web-time",
 ]
 
 [[package]]
