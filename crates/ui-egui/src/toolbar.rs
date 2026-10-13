@@ -185,13 +185,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         let labels = app.session.prefs.tool_group_labels;
         let mut i = 0;
         while i < all.len() {
-            if all[i].0.is_some() && !labels && cols == 2 {
-                // Without labels, two columns run on from group to group, as the reference's
-                // Basic toolbar: no half-empty rows, no dashes between rows.
-            } else if all[i].0.is_some() && !labels {
-                // User Interface › Show Tool Group Labels off: a faint dash between the groups.
-                let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
-                ui.painter().line_segment([r.center() - vec2(6.0, 0.0), r.center() + vec2(6.0, 0.0)], egui::Stroke::new(1.0, t.divider));
+            if all[i].0.is_some() && !labels {
+                // User Interface › Show Tool Group Labels off: the tools run on from group to group,
+                // in one column or two (as the reference's Basic toolbar in two), with nothing
+                // between the groups.
             } else if let Some(cat) = all[i].0 {
                 let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
                 // A long name is cut to its first four characters in the single column.
@@ -200,8 +197,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     if cols == 1 && cat.chars().count() > 6 { format!("{}...", cat.chars().take(4).collect::<String>()) } else { cat.to_string() };
                 ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
             }
-            // One row = `cols` slots (a category label always starts a new row; without labels, a
-            // new group does only in one column).
+            // One row = `cols` slots (a category label always starts a new row; without labels,
+            // nothing does).
             let mut row = vec![i];
             while row.len() < cols && i + row.len() < all.len() && (all[i + row.len()].0.is_none() || !labels) {
                 row.push(i + row.len());
@@ -1277,15 +1274,20 @@ pub(crate) mod tests {
         rows.into_iter().map(|(_, n)| n).collect()
     }
 
-    /// #1736: without group labels (as it ships), two columns run on from group to group, every
-    /// row full but maybe the last; with the labels, each group starts its own row under its name.
+    /// #1736: without group labels (as it ships), the tools run on from group to group: one column
+    /// evenly spaced, with nothing between the groups; two columns with every row full but maybe
+    /// the last. With the labels, each group starts its own row under its name.
     #[test]
-    fn two_columns_run_on_without_group_labels() {
+    fn the_tools_run_on_without_group_labels() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        app.ui.toolbar_double = true;
         let ctx = egui::Context::default();
-        let rows = row_sizes(&frame_in(&mut app, &ctx, 0.0, vec![], 1600.0));
+        let one = frame_in(&mut app, &ctx, 0.0, vec![], 1600.0);
+        assert_eq!(one.len(), slots(&app).len());
+        let steps: Vec<f32> = one.windows(2).map(|w| w[1].top() - w[0].top()).collect();
+        assert!(steps.iter().all(|d| (d - steps[0]).abs() < 0.5), "evenly spaced: {steps:?}");
+        app.ui.toolbar_double = true;
+        let rows = row_sizes(&frame_in(&mut app, &ctx, 0.5, vec![], 1600.0));
         let slots = slots(&app).len();
         assert_eq!(rows.iter().sum::<usize>(), slots);
         assert!(rows[..rows.len() - 1].iter().all(|n| *n == 2), "{rows:?}");
@@ -1477,7 +1479,7 @@ pub(crate) mod tests {
     }
 
     /// User Interface › Show Tool Group Labels (#663): off as it ships (#1736), the toolbar shows
-    /// none of its groups' names, a faint dash between the groups instead; on, it names them.
+    /// none of its groups' names and nothing between the groups; on, it names them.
     #[test]
     fn tool_group_labels_can_be_hidden() {
         fn texts(s: &egui::Shape, out: &mut Vec<String>) {

@@ -716,7 +716,7 @@ pub struct Prefs {
     pub canvas_color: String,
     pub auto_collapse_icon_panels: bool,
     /// User Interface › Show Tool Group Labels: the toolbar's group names (Select, Shapes, Draw…);
-    /// off (as it ships, #1736), a faint dash separates the groups instead (#663).
+    /// off (as it ships, #1736), the tools run on from group to group with nothing between them.
     pub tool_group_labels: bool,
     pub open_documents_as_tabs: bool,
     pub large_tabs: bool,
