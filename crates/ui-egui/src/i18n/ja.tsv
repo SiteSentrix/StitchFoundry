@@ -4896,3 +4896,10 @@ machine	Stop	停止
 	Choose Smallest Hoop	最小の枠を選択
 	Save Custom Hoop	独自の枠を保存
 	Delete Custom Hoop	独自の枠を削除
+	Turn the hue	色相を回転
+	One colour	単色
+	Grey	グレー
+	Inverted	反転
+	Recolour	色替え
+	Recolour Threads	糸の色替え
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	すべての糸を配色に従って変え、デザインの糸チャートに合わせます（取り消しで元に戻ります）

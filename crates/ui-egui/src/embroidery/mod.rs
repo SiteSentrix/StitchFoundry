@@ -166,6 +166,10 @@ pub struct EmbroideryUi {
     pub output: OutputView,
     /// A hoop of one's own as typed: name, width and height (mm).
     pub hoop_draft: (String, f64, f64),
+    /// Recolour: the scheme (an index), the hue turn (degrees) and the one colour.
+    pub recolor_scheme: usize,
+    pub recolor_degrees: f64,
+    pub recolor_tone: [u8; 3],
     /// The Monogram section: its letters, style (0 classic, 1 line), border (an index of
     /// `embroidery.monogram`'s borders) and size (mm; 0: the font's own).
     pub monogram_letters: String,
@@ -282,6 +286,9 @@ impl Default for EmbroideryUi {
             library: LibraryView::default(),
             output: OutputView::default(),
             hoop_draft: (String::new(), 150.0, 150.0),
+            recolor_scheme: 0,
+            recolor_degrees: 60.0,
+            recolor_tone: [0x1d, 0x35, 0x57],
             monogram_letters: String::new(),
             monogram_style: 0,
             monogram_border: 1,

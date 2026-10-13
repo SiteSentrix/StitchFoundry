@@ -530,6 +530,42 @@ fn write_output(app: &mut VectorcraftApp, dir: &str) {
     };
 }
 
+/// Recolouring every thread at once by a scheme, matched to the design's chart.
+fn recolor_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let schemes = ["hue", "mono", "grayscale", "invert"];
+    let names = [tl!("Turn the hue"), tl!("One colour"), tl!("Grey"), tl!("Inverted")];
+    let cur = app.embroidery.recolor_scheme.min(schemes.len() - 1);
+    if let Some(i) = pick(ui, tl!("Recolour"), "recolor", cur, &names) {
+        app.embroidery.recolor_scheme = i;
+    }
+    ui.horizontal(|ui| {
+        let scheme = schemes.get(app.embroidery.recolor_scheme).copied().unwrap_or("hue");
+        let mut p = json!({ "scheme": scheme, "all": true });
+        match scheme {
+            "hue" => {
+                ui.add(egui::DragValue::new(&mut app.embroidery.recolor_degrees).range(-180.0..=180.0).suffix("°"));
+                p["degrees"] = json!(app.embroidery.recolor_degrees);
+            }
+            "mono" => {
+                let c = &mut app.embroidery.recolor_tone;
+                ui.color_edit_button_srgb(c);
+                p["color"] = json!(format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]));
+            }
+            _ => {}
+        }
+        if let Some(chart) = app.session.active().and_then(|s| s.doc.embroidery.as_ref().map(|c| c.chart.clone())).filter(|c| !c.is_empty()) {
+            p["chart"] = json!(chart);
+        }
+        if button(ui, tl!("Recolour Threads"))
+            .on_hover_text(tl!("Every thread changed by the scheme and matched to the design's chart; undo puts them back"))
+            .clicked()
+            && let Err(e) = app.run("embroidery.recolor", p)
+        {
+            app.status(e);
+        }
+    });
+}
+
 /// A hoop of one's own: its name and field, kept with the standard ones.
 fn hoop_custom_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::CollapsingHeader::new(tl!("Custom Hoops")).id_salt("emb-custom-hoops").show(ui, |ui| {
@@ -2277,6 +2313,9 @@ fn design_section(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
     if stitches > 0 && button(ui, tl!("Match Threads to Chart")).on_hover_text(tl!("Give every stitched object the chart's closest thread")).clicked()
     {
         app.run("embroidery.matchThreads", json!({ "all": true })).ok();
+    }
+    if stitches > 0 {
+        recolor_row(app, ui);
     }
     machine_rows(app, ui, &info);
     // How stitches are shown.

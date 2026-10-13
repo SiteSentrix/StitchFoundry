@@ -4262,3 +4262,10 @@ machine	Stop	停止
 	Choose Smallest Hoop	選擇最小繡框
 	Save Custom Hoop	儲存自訂繡框
 	Delete Custom Hoop	刪除自訂繡框
+	Turn the hue	旋轉色相
+	One colour	單色
+	Grey	灰色
+	Inverted	反相
+	Recolour	重新配色
+	Recolour Threads	重新配色繡線
+	Every thread changed by the scheme and matched to the design's chart; undo puts them back	依方案變更每條繡線並配合設計的色卡；復原可還原

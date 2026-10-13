@@ -450,6 +450,16 @@ on a photo of the customer's own product instead: `imageWidth` says how many mm 
 across, `at` where the design's middle goes. The mock-up opens as a new document, to show the
 customer, print or export (PNG, PDF).
 
+## Recolouring threads
+
+**Recolour Threads** in the Design section (`embroidery.recolor`) changes the design's threads at
+once, the art repainted to match, in one undo step: by a `map` of colours (`[{from, to}]`, every
+thread of a colour), or by a `scheme`: the hue turned (`degrees`), every thread in one colour's
+hue at its own lightness (`mono`, `color`), grey by lightness, or inverted. With `chart` (the
+panel uses the design's) each new colour becomes that chart's closest thread. It works on the
+selection's stitched objects, or all of them when nothing is selected. Colorways keep several
+recolourings of one design side by side.
+
 ## Hoops
 
 The Embroidery panel's Design section picks the design's hoop from the standard ones (Brother,

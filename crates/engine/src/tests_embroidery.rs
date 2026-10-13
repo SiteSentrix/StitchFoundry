@@ -580,6 +580,56 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
 }
 
 #[test]
+fn the_threads_recolour_by_a_map_or_a_scheme_in_one_undo() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    let a = rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#ff0000"})).unwrap();
+    let b = rect(&mut s, 20.0 * PT, 60.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let threads =
+        |s: &Session| -> Vec<String> { s.embroidery_plan().unwrap().stats.clone().unwrap().colors.iter().map(|c| c.thread.color.to_hex()).collect() };
+    assert_eq!(threads(&s), ["#ff0000", "#0000ff"]);
+    // a map: red becomes green, blue stays
+    let r = s.execute("embroidery.recolor", &json!({"map": [{"from": "#FF0000", "to": "#00ff00"}]})).unwrap();
+    assert_eq!(r["changed"].as_u64(), Some(1));
+    assert_eq!(threads(&s), ["#00ff00", "#0000ff"]);
+    // the art repainted to match
+    let fill = s.doc().unwrap().doc.node(a).unwrap().appearance.fill_paint();
+    assert_eq!(fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb8(0, 255, 0)));
+    // grey, one undo step for all of them
+    s.execute("embroidery.recolor", &json!({"scheme": "grayscale"})).unwrap();
+    let grey = threads(&s);
+    assert!(grey.iter().all(|c| c[1..3] == c[3..5] && c[3..5] == c[5..7]), "{grey:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(threads(&s), ["#00ff00", "#0000ff"]);
+    // the hue turned, matched to a chart: chart threads, with names
+    let r = s.execute("embroidery.recolor", &json!({"scheme": "hue", "degrees": 120, "chart": "Generic"})).unwrap();
+    assert_eq!(r["colors"].as_array().unwrap().len(), 2, "{r}");
+    let info = s.execute("embroidery.info", &json!({})).unwrap();
+    assert!(info["colors"].as_array().unwrap().iter().all(|c| !c["name"].as_str().unwrap().is_empty()), "{info}");
+    // only the selection
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("embroidery.recolor", &json!({"scheme": "mono", "color": "#ffcc00"})).unwrap();
+    let after = threads(&s);
+    assert_eq!(after.len(), 2);
+    for bad in [
+        json!({}),
+        json!({"scheme": "sepia"}),
+        json!({"scheme": "mono"}),
+        json!({"map": [{"from": "red", "to": "#000000"}]}),
+        json!({"scheme": "hue", "degrees": 999}),
+        json!({"map": [{"from": "#123456", "to": "#000000"}], "all": true}),
+        json!({"scheme": "invert", "chart": "Nowhere"}),
+    ] {
+        assert!(s.execute("embroidery.recolor", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn the_smallest_hoop_is_chosen_turned_and_ones_own_kept() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();
