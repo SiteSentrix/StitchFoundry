@@ -393,6 +393,23 @@ fn twist_fixes_the_outer_circle_and_rotates_inside() {
 }
 
 #[test]
+fn scribble_does_not_cross_holes() {
+    // #1648: a U (opening at the top, the notch x 30..70, y 0..60). Rows (y 2.5, 7.5, ...) through the prongs have
+    // two spans; their zig-zags must stay apart instead of crossing the notch.
+    let u = [(0.0, 0.0), (30.0, 0.0), (30.0, 60.0), (70.0, 60.0), (70.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+    let u = PathData::single(SubPath::polyline(&u.map(|(x, y)| Point::new(x, y)), true));
+    let params = json!({"angle": 0, "variation": 0, "curviness": 0, "strokeWidth": 2, "spacing": 5});
+    let out = run("stylize.scribble", params, &u).to_bezpath();
+    for x in [40.0, 50.0, 60.0] {
+        for y in [12.5, 32.5, 52.5] {
+            assert_eq!(vectorcraft_geom::kurbo::Shape::winding(&out, Point::new(x, y)), 0, "scribble covers the notch at ({x}, {y})");
+        }
+    }
+    // The bar below the notch is still hatched.
+    assert_ne!(vectorcraft_geom::kurbo::Shape::winding(&out, Point::new(50.0, 82.5)), 0);
+}
+
+#[test]
 fn scribble_produces_filled_outline_inside_bounds() {
     let out = run("stylize.scribble", json!({}), &square());
     assert!(!out.is_empty());
