@@ -15,7 +15,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer, LineCap, LineJoin, StrokeLayer};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection, TraceView};
+use vectorcraft_doc::{Appearance, Document, LiveShape, Node, NodeId, NodeKind, Selection, TraceView};
 use vectorcraft_geom::{FillRule, PathData, Point, Rect, SubPath};
 use vectorcraft_pathops as po;
 use vectorcraft_tools::builder::{
@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -703,6 +703,30 @@ fn trace_library(s: &Session, params: &mut tr::TraceParams) -> Result<Vec<([u8; 
 /// refused with advice instead (#525).
 pub const MAX_TRACE_ANCHORS: usize = 2_000_000;
 
+/// The live shape for a shape the tracer found (in the image's pixels), placed in the document by `xf`.
+fn traced_shape(shape: tr::TracedShape, xf: vectorcraft_geom::Affine) -> LiveShape {
+    use vectorcraft_geom::Affine;
+    let about = |c: Point, deg: f64| Affine::translate(c.to_vec2()) * Affine::rotate(deg.to_radians());
+    let mut live = match shape {
+        tr::TracedShape::Rectangle { center, width, height, radius, rotation } => LiveShape::Rectangle {
+            w: width,
+            h: height,
+            radii: [radius; 4],
+            kinds: Default::default(),
+            xf: about(center, rotation) * Affine::translate((-width / 2.0, -height / 2.0)),
+        },
+        tr::TracedShape::Ellipse { center, rx, ry, rotation } => {
+            LiveShape::Ellipse { w: 2.0 * rx, h: 2.0 * ry, pie: (0.0, 360.0), xf: about(center, rotation) * Affine::translate((-rx, -ry)) }
+        }
+        tr::TracedShape::Polygon { center, radius, sides, rotation } => {
+            LiveShape::Polygon { radius, sides, xf: about(center, rotation), radii: vec![], kinds: vec![] }
+        }
+    };
+    // (Whether the move changed the shape's own numbers does not matter: its path is made from them next.)
+    let _ = live.transform(xf);
+    live
+}
+
 fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     const C: &str = "imageTrace.make";
     let mut params = trace_params(p)?;
@@ -766,6 +790,12 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
         for tp in res.paths {
             let path = tp.path.transformed(xf);
             let mut n = shape_node(d, path, None);
+            // Shapes: a path the tracer found to be a shape is that live shape.
+            if let (Some(shape), NodeKind::Path { path, live, .. }) = (tp.shape, &mut n.kind) {
+                let shape = traced_shape(shape, xf);
+                *path = shape.to_path();
+                *live = Some(Box::new(shape));
+            }
             // A library colour fills with the swatch's own colour (its model kept).
             let color = library.iter().find(|(rgb, _)| *rgb == tp.color).map_or_else(|| Color::rgb8(tp.color[0], tp.color[1], tp.color[2]), |l| l.1);
             let paint = Paint::solid(color);

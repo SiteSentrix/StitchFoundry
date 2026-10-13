@@ -478,7 +478,13 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
         if !out.palette.contains(&color) {
             out.palette.push(color);
         }
-        out.paths.push(TracedPath { path: PathData::new(subs), color, pixels: (s.area * (factor * factor) as f64) as usize, stroke: None });
+        out.paths.push(TracedPath {
+            path: PathData::new(subs),
+            color,
+            pixels: (s.area * (factor * factor) as f64) as usize,
+            stroke: None,
+            shape: None,
+        });
     }
     Ok(out)
 }

@@ -2,7 +2,7 @@
 //! sizes) and two continuous-tone images computed per pixel.
 
 use kurbo::{Affine, BezPath, Circle, Ellipse, Point, RoundedRect, Shape};
-use vectorcraft_trace::Raster;
+use vectorcraft_trace::{Raster, TracedShape};
 
 use crate::raster::{self, noise};
 
@@ -18,13 +18,15 @@ pub enum Class {
     /// Straight-edged shapes and lines a degree or two off level and upright, as a scan or a
     /// screenshot taken a little askew has them.
     Askew,
+    /// Plain shapes apart from each other: a circle, an ellipse, rectangles, a regular polygon.
+    Plain,
     /// Flat art in several colours, with regions that touch.
     Flat,
     /// Continuous tone: a gradient and a photo-like image.
     Tone,
 }
 
-pub const CLASSES: [Class; 6] = [Class::Shape, Class::Poly, Class::Lines, Class::Askew, Class::Flat, Class::Tone];
+pub const CLASSES: [Class; 7] = [Class::Shape, Class::Poly, Class::Lines, Class::Askew, Class::Plain, Class::Flat, Class::Tone];
 
 impl Class {
     pub fn name(self) -> &'static str {
@@ -33,6 +35,7 @@ impl Class {
             Class::Poly => "polygons",
             Class::Lines => "thin lines",
             Class::Askew => "askew shapes",
+            Class::Plain => "plain shapes",
             Class::Flat => "flat colour art",
             Class::Tone => "gradient, photo",
         }
@@ -82,6 +85,8 @@ pub struct Input {
     pub anchors: usize,
     /// Its sharp corners.
     pub corners: Vec<Point>,
+    /// The plain shapes it is made of, where it is made of them.
+    pub plain: Vec<TracedShape>,
     /// Its lines, where it is lines: each one's two ends and its width.
     pub strokes: Vec<(Point, Point, f64)>,
     tone: Option<Tone>,
@@ -173,10 +178,20 @@ pub fn inputs() -> Vec<Input> {
         anchors,
         corners,
         strokes: vec![],
+        plain: vec![],
         tone: None,
     };
-    let tone =
-        |name, f: Tone| Input { name, class: Class::Tone, shapes: vec![], bg: WHITE, anchors: 0, corners: vec![], strokes: vec![], tone: Some(f) };
+    let tone = |name, f: Tone| Input {
+        name,
+        class: Class::Tone,
+        shapes: vec![],
+        bg: WHITE,
+        anchors: 0,
+        corners: vec![],
+        strokes: vec![],
+        plain: vec![],
+        tone: Some(f),
+    };
     let ink = |p: BezPath| vec![(p, INK)];
 
     let mut ellipses = Ellipse::new((90.3, 99.6), (60.0, 30.0), 0.0).to_path(1e-3);
@@ -247,6 +262,20 @@ pub fn inputs() -> Vec<Input> {
     askew.extend(turned(poly(&[(20.0, 150.3), (100.0, 150.3), (100.0, 153.3), (20.0, 153.3)]), 1.0, (60.0, 152.0)));
     askew.extend(turned(poly(&[(60.4, 170.0), (62.4, 170.0), (62.4, 240.0), (60.4, 240.0)]), 2.0, (61.0, 205.0)));
 
+    // A circle, a rectangle, a square, a rounded rectangle, an ellipse and a hexagon.
+    let plain = vec![
+        TracedShape::Ellipse { center: Point::new(50.3, 50.6), rx: 30.0, ry: 30.0, rotation: 0.0 },
+        TracedShape::Rectangle { center: Point::new(170.4, 50.3), width: 110.0, height: 60.0, radius: 0.0, rotation: 0.0 },
+        TracedShape::Rectangle { center: Point::new(50.6, 140.4), width: 60.0, height: 60.0, radius: 0.0, rotation: 0.0 },
+        TracedShape::Rectangle { center: Point::new(170.3, 140.6), width: 100.0, height: 50.0, radius: 12.0, rotation: 0.0 },
+        TracedShape::Ellipse { center: Point::new(70.4, 220.3), rx: 45.0, ry: 18.0, rotation: 0.0 },
+        TracedShape::Polygon { center: Point::new(190.6, 215.4), radius: 30.0, sides: 6, rotation: 10.0 },
+    ];
+    let mut plain_art = BezPath::new();
+    for shape in &plain {
+        plain_art.extend(shape.path().to_bezpath());
+    }
+
     let centre = Point::new(128.4, 128.3);
     let touching = vec![(half_disc(centre, 90.0, true), [200, 40, 50]), (half_disc(centre, 90.0, false), [30, 90, 200])];
     let bar = [(60.3, 180.4), (196.6, 180.4), (196.6, 206.7), (60.3, 206.7)];
@@ -267,11 +296,15 @@ pub fn inputs() -> Vec<Input> {
         art("letter A", Class::Poly, ink(with_holes(poly(&a_outer), &[poly(&a_counter)])), 10, points(&[&a_outer[..], &a_counter].concat())),
         art("lines", Class::Lines, ink(lines), 20, vec![]),
         art("askew shapes and lines", Class::Askew, ink(askew), 24, vec![]),
+        art("plain shapes", Class::Plain, ink(plain_art), 30, vec![]),
         art("two touching halves", Class::Flat, touching, 6, vec![(centre.x, centre.y - 90.0).into(), (centre.x, centre.y + 90.0).into()]),
         art("four-colour badge", Class::Flat, multicolor, 20, points(&bar)),
         tone("gradient", gradient),
         tone("photo-like", photo),
     ];
+    if let Some(input) = all.iter_mut().find(|i| i.name == "plain shapes") {
+        input.plain = plain;
+    }
     if let Some(input) = all.iter_mut().find(|i| i.name == "lines") {
         input.strokes = strokes;
     }
@@ -309,6 +342,11 @@ impl Input {
     pub fn scaled_strokes(&self, size: u32) -> Vec<(Point, Point, f64)> {
         let k = f64::from(size) / 256.0;
         self.strokes.iter().map(|(a, b, w)| ((a.to_vec2() * k).to_point(), (b.to_vec2() * k).to_point(), w * k)).collect()
+    }
+    /// Its plain shapes' outlines in the pixel coordinates of a `size`-pixel drawing.
+    pub fn scaled_plain(&self, size: u32) -> Vec<BezPath> {
+        let k = Affine::scale(f64::from(size) / 256.0);
+        self.plain.iter().map(|s| k * s.path().to_bezpath()).collect()
     }
     pub fn scaled_corners(&self, size: u32) -> Vec<Point> {
         self.corners.iter().map(|p| (p.to_vec2() * (f64::from(size) / 256.0)).to_point()).collect()

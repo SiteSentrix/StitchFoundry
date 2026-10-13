@@ -1169,3 +1169,84 @@ fn a_stroke_is_as_wide_as_its_ink_not_a_whole_number_of_pixels() {
         assert!((width - want).abs() < 0.08, "{width} for a line {want} px wide");
     }
 }
+
+#[test]
+fn an_anti_aliased_rectangle_along_the_pixel_grid_is_four_anchors() {
+    // Its sides lie between pixel columns and rows: its corner pixels are part of two sides each.
+    let img = soft(140, 90, |x, y| (20.4..120.7).contains(&x) && (15.3..70.6).contains(&y));
+    let res = trace(&img, &bw());
+    let sp = &res.paths[0].path.subpaths[0];
+    assert_eq!(sp.anchors.len(), 4, "{sp:?}");
+    assert!((0..4).all(|i| sp.segment_is_line(i)));
+    let b = res.paths[0].path.bounds().unwrap();
+    // (To the eighth of a pixel the test picture is drawn to.)
+    assert!((b.x0 - 20.4).abs() < 0.07 && (b.x1 - 120.7).abs() < 0.07 && (b.y0 - 15.3).abs() < 0.07 && (b.y1 - 70.6).abs() < 0.07, "{b:?}");
+}
+
+#[test]
+fn shapes_come_out_as_shapes_when_asked_for() {
+    // A disc, a square along the pixel grid and a rectangle turned 20°, anti-aliased.
+    let turn = 20f64.to_radians();
+    let turned = |x: f64, y: f64| {
+        let (dx, dy) = (x - 180.4, y - 45.3);
+        (dx * turn.cos() + dy * turn.sin()).abs() <= 30.0 && (dy * turn.cos() - dx * turn.sin()).abs() <= 18.0
+    };
+    let img = soft(220, 90, |x, y| {
+        Point::new(x, y).distance(Point::new(40.3, 44.6)) <= 25.0 || ((80.4..130.7).contains(&x) && (20.3..70.6).contains(&y)) || turned(x, y)
+    });
+    let plain = trace(&img, &bw());
+    assert!(plain.paths.iter().all(|p| p.shape.is_none()));
+    let res = trace(&img, &TraceParams { shapes: true, ..bw() });
+    assert_eq!(res.paths.len(), 3);
+    let mut found = (false, false, false);
+    for p in &res.paths {
+        // The path is the shape's own outline.
+        assert_eq!(Some(&p.path), p.shape.map(|s| s.path()).as_ref());
+        match p.shape {
+            Some(TracedShape::Ellipse { center, rx, ry, .. }) => {
+                found.0 = center.distance(Point::new(40.3, 44.6)) < 0.15 && (rx - 25.0).abs() < 0.15 && rx == ry
+            }
+            Some(TracedShape::Rectangle { center, width, height, radius: 0.0, rotation }) if center.x < 150.0 => {
+                found.1 = center.distance(Point::new(105.55, 45.45)) < 0.15
+                    && (width - 50.3).abs() < 0.25
+                    && (height - 50.3).abs() < 0.25
+                    && rotation.abs() < 0.3
+            }
+            Some(TracedShape::Rectangle { center, width, height, radius: 0.0, rotation }) => {
+                found.2 = center.distance(Point::new(180.4, 45.3)) < 0.2
+                    && (width - 60.0).abs() < 0.3
+                    && (height - 36.0).abs() < 0.3
+                    && (rotation - 20.0).abs() < 0.3
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    assert_eq!(found, (true, true, true));
+    // A letter is no shape, and a ring is not a disc.
+    let ring = soft(100, 100, |x, y| (20.0..40.0).contains(&Point::new(x, y).distance(Point::new(50.0, 50.0))));
+    assert!(trace(&ring, &TraceParams { shapes: true, ..bw() }).paths.iter().all(|p| p.shape.is_none()));
+}
+
+#[test]
+fn a_corner_whose_pixel_is_mostly_outside_is_still_a_corner() {
+    // Each corner pixel is under half covered (0.6 × 0.7 and less) and traces as outside.
+    let img = soft(140, 90, |x, y| (20.4..120.6).contains(&x) && (15.3..70.7).contains(&y));
+    let res = trace(&img, &bw());
+    let sp = &res.paths[0].path.subpaths[0];
+    assert_eq!(sp.anchors.len(), 4, "{sp:?}");
+    assert!((0..4).all(|i| sp.segment_is_line(i)));
+    let b = res.paths[0].path.bounds().unwrap();
+    assert!((b.x0 - 20.4).abs() < 0.07 && (b.x1 - 120.6).abs() < 0.07 && (b.y0 - 15.3).abs() < 0.07 && (b.y1 - 70.7).abs() < 0.07, "{b:?}");
+}
+
+/// A circle without anti-aliasing is still a circle, not an ellipse a little wider than tall.
+#[test]
+fn a_hard_edged_circle_is_a_circle() {
+    let img = Raster::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (x as f64 + 0.5 - 50.0, y as f64 + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    });
+    let res = trace(&img, &TraceParams { shapes: true, ignore_white: true, ..Default::default() });
+    let [TracedPath { shape: Some(TracedShape::Ellipse { center, rx, ry, .. }), .. }] = res.paths.as_slice() else { panic!("{:?}", res.paths) };
+    assert!(rx == ry && (rx - 30.0).abs() < 0.3 && center.distance(Point::new(50.0, 50.0)) < 0.1, "{center:?} {rx} {ry}");
+}

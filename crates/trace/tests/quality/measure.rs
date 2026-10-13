@@ -192,6 +192,8 @@ pub struct Metrics {
     pub centre_off: f64,
     pub width_off: f64,
     pub stroke_anchors: f64,
+    /// Share (%) of the art's plain shapes that came out as a shape lying within 0.6 px of it.
+    pub shapes: f64,
     /// Paths under 6 px of area.
     pub specks: f64,
     /// How far (px) the trace reaches outside the image: a stray curve.
@@ -231,7 +233,7 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
             let kept = true_corners.iter().filter(|c| turns.iter().any(|(p, t)| *t >= 20.0 && p.distance(**c) <= 1.5)).count();
             corners = 100.0 * kept as f64 / true_corners.len() as f64;
         }
-        if input.class != Class::Lines && input.class != Class::Askew {
+        if !matches!(input.class, Class::Lines | Class::Askew | Class::Plain) {
             kinks = turns.iter().filter(|(p, t)| *t >= 10.0 && true_corners.iter().all(|c| p.distance(*c) > 2.0)).count() as f64;
         }
         if params.mode != Mode::BlackAndWhite {
@@ -302,7 +304,20 @@ pub fn measure(input: &Input, variant: Variant, size: u32, src: &Raster, params:
         }
     }
 
+    // Plain shapes: each is found when some path that is a shape lies on it.
+    let plain = input.scaled_plain(size);
+    let mut shapes_found = nan;
+    if !plain.is_empty() {
+        let made: Vec<Outline> = res.paths.iter().filter(|tp| tp.shape.is_some()).map(|tp| Outline::new([&tp.path.to_bezpath()], None)).collect();
+        let found = plain.iter().filter(|p| {
+            let truth = Outline::new([*p], None);
+            made.iter().any(|m| m.distance_to(&truth).1 <= 0.6 && truth.distance_to(m).1 <= 0.6)
+        });
+        shapes_found = 100.0 * found.count() as f64 / plain.len() as f64;
+    }
+
     Metrics {
+        shapes: shapes_found,
         centre_off,
         width_off,
         stroke_anchors,
