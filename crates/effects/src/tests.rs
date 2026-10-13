@@ -245,6 +245,22 @@ fn zigzag_ridge_count_and_amplitude() {
 }
 
 #[test]
+fn zigzag_spaces_ridges_evenly_along_a_straight_line() {
+    // #1554: on a straight line every ridge is the same distance from the line and as far from
+    // the next one, whether the points are corners or smooth.
+    let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(0.0, 500.0)], false));
+    for points in ["corner", "smooth"] {
+        let out = run("distort.zigZag", json!({"ridges": 4, "points": points, "size": 20}), &line);
+        let ps: Vec<Point> = out.subpaths[0].anchors.iter().map(|a| a.p).collect();
+        assert_eq!(ps.len(), 6, "{points}");
+        for (k, q) in ps.iter().enumerate() {
+            assert!(close(q.x.abs(), 20.0, 1e-6), "{points} {k}: {q:?}");
+            assert!(close(q.y, 100.0 * k as f64, 1e-3), "{points} {k}: {q:?}");
+        }
+    }
+}
+
+#[test]
 fn offset_path_grows_and_shrinks() {
     let grow = run("path.offsetPath", json!({"offset": 10, "joins": "miter"}), &square()).bounds().unwrap();
     assert!(close(grow.width(), 120.0, 0.1), "{grow:?}");
