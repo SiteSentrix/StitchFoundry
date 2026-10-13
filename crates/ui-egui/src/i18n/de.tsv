@@ -1469,6 +1469,11 @@
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Eine ältere .ai-Datei enthält eine Zeichenfläche: Jede aktivierte Zeichenfläche wird als eigene Datei gespeichert.
 	{count} of {total} artboards	{count} von {total} Zeichenflächen
 	Check an artboard to save.	Aktivieren Sie eine Zeichenfläche zum Speichern.
+	Hidden Objects:	Ausgeblendete Objekte:
+	Hidden Layer	Ausgeblendete Ebene
+	Make Visible	Einblenden
+	Text:	Text:
+	Editable	Bearbeitbar
 	PDF-compatible	PDF-kompatibel
 	Legacy vector clipboard (no transparency)	Ältere Vektorzwischenablage (ohne Transparenz)
 	Less	Weniger

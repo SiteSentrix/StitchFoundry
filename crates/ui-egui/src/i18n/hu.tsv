@@ -1888,6 +1888,11 @@
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	A régi .ai fájl egy rajztáblát tartalmaz: minden bejelölt rajztábla külön fájlba kerül.
 	{count} of {total} artboards	{count} / {total} rajztábla
 	Check an artboard to save.	Jelöljön be egy mentendő rajztáblát.
+	Hidden Objects:	Rejtett objektumok:
+	Hidden Layer	Rejtett réteg
+	Make Visible	Láthatóvá tétel
+	Text:	Szöveg:
+	Editable	Szerkeszthető
 	PDF-compatible	PDF-kompatibilis
 	Legacy vector clipboard (no transparency)	Régi vektoros vágólap (átlátszóság nélkül)
 	Legal	Legal

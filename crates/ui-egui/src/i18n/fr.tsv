@@ -1484,6 +1484,11 @@
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Un fichier .ai hérité contient un seul plan de travail : chaque plan de travail coché est enregistré dans un fichier distinct.
 	{count} of {total} artboards	{count} plans de travail sur {total}
 	Check an artboard to save.	Cochez un plan de travail à enregistrer.
+	Hidden Objects:	Objets masqués :
+	Hidden Layer	Calque masqué
+	Make Visible	Rendre visibles
+	Text:	Texte :
+	Editable	Modifiable
 	PDF-compatible	Compatible PDF
 	Legacy vector clipboard (no transparency)	Presse-papiers vectoriel hérité (sans transparence)
 	Less	Moins

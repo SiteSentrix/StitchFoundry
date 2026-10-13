@@ -1485,6 +1485,11 @@
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Un archivo .ai heredado contiene una mesa de trabajo: cada mesa de trabajo marcada se guarda como un archivo independiente.
 	{count} of {total} artboards	{count} de {total} mesas de trabajo
 	Check an artboard to save.	Marque una mesa de trabajo para guardarla.
+	Hidden Objects:	Objetos ocultos:
+	Hidden Layer	Capa oculta
+	Make Visible	Hacer visibles
+	Text:	Texto:
+	Editable	Editable
 	PDF-compatible	Compatible con PDF
 	Legacy vector clipboard (no transparency)	Portapapeles vectorial heredado (sin transparencia)
 	Less	Menos

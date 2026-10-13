@@ -9,8 +9,10 @@
 //! artboard to a separate file, with `all` (true: every artboard) or `range`, Include Linked Files,
 //! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. A `.ai` file's Version comes
 //! first: PDF-compatible, or legacy version 7 (`aiVersion: "7"`, a file per artboard), which takes
-//! only Transparent Images and, with several artboards, a picker of the artboards to save
-//! (thumbnails to check, field `boards`, saved as `range`).
+//! only Transparent Images (`transparentImages`), Hidden Objects (`hiddenObjects`: a hidden layer,
+//! omitted or made visible), Text (`outlineText`: editable or outlines) and, with several
+//! artboards, a picker of the artboards to save (thumbnails to check, field `boards`, saved as
+//! `range`).
 
 use std::sync::OnceLock;
 
@@ -163,7 +165,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 /// The `.ai` options only the legacy version takes (and the only ones it takes, besides the
 /// version).
-const LEGACY_ONLY: &[&str] = &["transparentImages"];
+const LEGACY_ONLY: &[&str] = &["transparentImages", "hiddenObjects", "outlineText"];
 
 /// Is a `.ai` file to be saved in the legacy version 7 (`aiVersion: "7"`)?
 fn legacy_ai(d: &Dialog) -> bool {
@@ -331,6 +333,30 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
         let at = usize::from(d.str("transparentImages").trim().eq_ignore_ascii_case("omit"));
         if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), choices.get(at).copied().unwrap_or_default(), &choices, 254.0) {
             d.fields.insert(o.name.into(), json!(if i == 1 { "omit" } else { "flatten" }));
+        }
+        ui.end_row();
+        return;
+    }
+    if o.name == "hiddenObjects" {
+        ui.label(egui::RichText::new(tl!("Hidden Objects:")).color(t.text_dim)).on_hover_text(o.description);
+        let choices = [tl!("Hidden Layer"), tl!("Omit"), tl!("Make Visible")];
+        let at = match d.str("hiddenObjects").trim() {
+            "omit" => 1,
+            "visible" => 2,
+            _ => 0,
+        };
+        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), choices.get(at).copied().unwrap_or_default(), &choices, 254.0) {
+            d.fields.insert(o.name.into(), json!(["layer", "omit", "visible"].get(i).copied().unwrap_or("layer")));
+        }
+        ui.end_row();
+        return;
+    }
+    if o.name == "outlineText" && legacy_ai(d) {
+        ui.label(egui::RichText::new(tl!("Text:")).color(t.text_dim)).on_hover_text(o.description);
+        let choices = [tl!("Editable"), tl!("Outlines")];
+        let at = usize::from(value.as_bool().unwrap_or(false));
+        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), choices.get(at).copied().unwrap_or_default(), &choices, 254.0) {
+            d.fields.insert(o.name.into(), json!(i == 1));
         }
         ui.end_row();
         return;
@@ -540,9 +566,13 @@ mod tests {
         assert_eq!(app.run("file.saveAs", json!({})).unwrap()["pending"], KIND);
         assert_eq!(dialog(&app).str("aiVersion"), "pdf", "PDF-compatible unless asked");
         assert_eq!(dialog(&app).str("transparentImages"), "flatten");
+        assert_eq!(dialog(&app).str("hiddenObjects"), "layer");
+        assert!(!dialog(&app).bool("outlineText"));
         frame(&mut app, false);
         app.ui.dialog.as_mut().unwrap().fields.insert("aiVersion".into(), json!("7"));
         app.ui.dialog.as_mut().unwrap().fields.insert("transparentImages".into(), json!("omit"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("hiddenObjects".into(), json!("visible"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("outlineText".into(), json!(true));
         frame(&mut app, false);
         frame(&mut app, true);
         assert!(app.ui.dialog.is_none());
@@ -552,6 +582,7 @@ mod tests {
         let st = app.session.active().unwrap();
         assert_eq!((st.format, st.save_options["aiVersion"].clone()), ("ai", json!("7")), "Save remembers the version");
         assert_eq!(st.save_options["transparentImages"], json!("omit"));
+        assert_eq!((st.save_options["hiddenObjects"].clone(), st.save_options["outlineText"].clone()), (json!("visible"), json!(true)));
     }
 
     /// An Illustrator file opened, then saved as `.ai`: the options dialog stays open through the

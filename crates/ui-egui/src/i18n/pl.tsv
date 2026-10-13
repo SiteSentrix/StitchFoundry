@@ -4659,6 +4659,11 @@ mark-style	Japanese	Japońskie
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Starszy plik .ai zawiera jeden obszar kompozycji: każdy zaznaczony obszar kompozycji jest zapisywany jako osobny plik.
 	{count} of {total} artboards	{count} z {total} obszarów kompozycji
 	Check an artboard to save.	Zaznacz obszar kompozycji, aby zapisać.
+	Hidden Objects:	Ukryte obiekty:
+	Hidden Layer	Ukryta warstwa
+	Make Visible	Uwidocznij
+	Text:	Tekst:
+	Editable	Edytowalny
 	PDF-compatible	Zgodny z PDF
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Wymiar

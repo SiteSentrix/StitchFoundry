@@ -1669,6 +1669,11 @@
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	레거시 .ai 파일에는 대지가 하나만 들어갑니다. 선택한 각 대지는 별도의 파일로 저장됩니다.
 	{count} of {total} artboards	대지 {total}개 중 {count}개
 	Check an artboard to save.	저장할 대지를 선택하십시오.
+	Hidden Objects:	숨겨진 개체:
+	Hidden Layer	숨겨진 레이어
+	Make Visible	표시
+	Text:	텍스트:
+	Editable	편집 가능
 	PDF-compatible	PDF 호환
 	Legacy vector clipboard (no transparency)	레거시 벡터 클립보드 (투명도 없음)
 	Less	간단히

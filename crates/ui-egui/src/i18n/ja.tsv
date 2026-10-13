@@ -1674,6 +1674,11 @@
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	従来の .ai ファイルにはアートボードが 1 つしか入りません。チェックした各アートボードは別々のファイルとして保存されます。
 	{count} of {total} artboards	{total} 個中 {count} 個のアートボード
 	Check an artboard to save.	保存するアートボードをチェックしてください。
+	Hidden Objects:	非表示のオブジェクト:
+	Hidden Layer	非表示レイヤー
+	Make Visible	表示する
+	Text:	テキスト:
+	Editable	編集可能
 	PDF-compatible	PDF 互換
 	Legacy vector clipboard (no transparency)	従来のベクタークリップボード (透明なし)
 	Less	少なく

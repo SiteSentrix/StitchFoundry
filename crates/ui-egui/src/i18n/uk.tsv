@@ -1481,6 +1481,11 @@
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	Застарілий файл .ai містить одну монтажну область: кожна позначена монтажна область зберігається в окремий файл.
 	{count} of {total} artboards	{count} з {total} монтажних областей
 	Check an artboard to save.	Позначте монтажну область для збереження.
+	Hidden Objects:	Приховані об’єкти:
+	Hidden Layer	Прихований шар
+	Make Visible	Зробити видимими
+	Text:	Текст:
+	Editable	Редагований
 	PDF-compatible	Сумісний із PDF
 	Legacy vector clipboard (no transparency)	Застарілий векторний буфер обміну (без прозорості)
 	Less	Менше
