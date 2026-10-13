@@ -27,8 +27,8 @@ use vello_cpu::Pixmap;
 use vello_cpu::color::PremulRgba8;
 use vello_cpu::peniko;
 
-use crate::RenderOptions;
 use crate::images::{self, ImageKey};
+use crate::{RenderOptions, Renderer};
 
 /// What a frame paints for colours.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -91,15 +91,31 @@ fn is_pure_black([c, m, y, k]: [f32; 4]) -> bool {
     c <= 0.0 && m <= 0.0 && y <= 0.0 && k >= 1.0
 }
 
-/// Whether `doc` is drawn by ink planes: a CMYK document that shows transparency, unless drawn
-/// in Outline view or Separations Preview (which paints plates).
-pub(crate) fn blends_in_cmyk(doc: &Document, opts: &RenderOptions) -> bool {
-    doc.color_mode == ColorMode::Cmyk
-        && !opts.outline
-        && opts.proof.as_ref().is_none_or(|p| p.separations.is_none())
-        && (doc.layers.iter().any(|l| l.shows_transparency())
-            || doc.symbols.iter().any(|s| s.art.shows_transparency())
-            || doc.patterns.iter().any(|p| p.art.iter().any(|a| a.shows_transparency())))
+impl Renderer {
+    /// Whether `doc` is drawn by ink planes: a CMYK document that shows transparency, unless drawn
+    /// in Outline view or Separations Preview (which paints plates).
+    pub(crate) fn blends_in_cmyk(&mut self, doc: &Document, opts: &RenderOptions) -> bool {
+        doc.color_mode == ColorMode::Cmyk
+            && !opts.outline
+            && opts.proof.as_ref().is_none_or(|p| p.separations.is_none())
+            && self.shows_transparency(doc)
+    }
+
+    /// Whether `doc`'s layers, symbol art or pattern art show transparency
+    /// ([`vectorcraft_doc::Node::shows_transparency`]). The answer is kept with that art (see
+    /// [`Self::transparency`]) and found again only when the document holds other art.
+    fn shows_transparency(&mut self, doc: &Document) -> bool {
+        let art = || doc.layers.iter().chain(doc.symbols.iter().map(|s| &s.art)).chain(doc.patterns.iter().flat_map(|p| &p.art));
+        if let Some((held, shows)) = &self.transparency
+            && held.len() == art().count()
+            && held.iter().zip(art()).all(|(h, a)| std::ptr::eq(h.as_ptr(), Arc::as_ptr(a)))
+        {
+            return *shows;
+        }
+        let shows = art().any(|a| a.shows_transparency());
+        self.transparency = Some((art().map(Arc::downgrade).collect(), shows));
+        shows
+    }
 }
 
 /// The inks of `c` in the working CMYK space: CMYK as it is, grey as black ink, RGB and Lab
@@ -175,19 +191,62 @@ fn cached<T>(slot: &Cached<T>, build: impl FnOnce(&Cms) -> T) -> (Arc<T>, u64) {
     }
 }
 
+/// [`compose`] puts at least this many pixels in each band but the last.
+const BAND_PIXELS: usize = 1 << 16;
+
 /// The picture of a CMYK document from its ink planes (premultiplied RGBA8 drawn with
 /// [`Ink::Cmy`] and [`Ink::K`]): each pixel's inks shown through the working CMYK profile (pure
 /// black as RGB black with [`RenderOptions::rich_black`]). Where only the `background` of `opts`
-/// shows it keeps its exact screen colour.
-pub(crate) fn compose(cmy: &[u8], k: &[u8], opts: &RenderOptions) -> Vec<u8> {
+/// shows it keeps its exact screen colour. The pixels are split into bands of one size (the last can
+/// be smaller): `threads` of them, or one per [`BAND_PIXELS`] pixels in the frame when that makes
+/// fewer, and at least one. This thread composes the first band, and a thread of its own composes
+/// each other band (this thread does when that one can't start). Returns the picture and the number
+/// of threads that composed it.
+pub(crate) fn compose(cmy: &[u8], k: &[u8], opts: &RenderOptions, threads: u16) -> (Vec<u8>, usize) {
     let (lut, _) = cached(&DISPLAY, InkLut::build);
     let bg = opts.background.map(|b| (Ink::Cmy.fixed8(b), Ink::K.fixed8(b), b));
-    let mut out = Vec::with_capacity(cmy.len());
+    let mut out = vec![0; cmy.len().min(k.len()) / 4 * 4];
+    let pixels = out.len() / 4;
+    let bands = (pixels / BAND_PIXELS).clamp(1, usize::from(threads).max(1));
+    let band = |o: &mut [u8], p: &[u8], q: &[u8]| compose_band(o, p, q, &lut, bg, opts.rich_black);
+    if bands == 1 {
+        band(&mut out, cmy, k);
+        return (out, 1);
+    }
+    let size = pixels.div_ceil(bands).max(1) * 4;
+    let mut unstarted = vec![];
+    let used = std::thread::scope(|s| {
+        let mut parts = out.chunks_mut(size).zip(cmy.chunks(size)).zip(k.chunks(size)).enumerate();
+        let first = parts.next();
+        let mut used = 1;
+        for (i, ((o, p), q)) in parts {
+            match std::thread::Builder::new().spawn_scoped(s, move || band(o, p, q)) {
+                Ok(_) => used += 1,
+                Err(_) => unstarted.push(i),
+            }
+        }
+        if let Some((_, ((o, p), q))) = first {
+            band(o, p, q);
+        }
+        used
+    });
+    for at in unstarted.into_iter().map(|i| i * size) {
+        let end = (at + size).min(out.len());
+        if let (Some(o), Some(p), Some(q)) = (out.get_mut(at..end), cmy.get(at..end), k.get(at..end)) {
+            band(o, p, q);
+        }
+    }
+    (out, used)
+}
+
+/// [`compose`] for one band: the pixels of `cmy` and `k` into `out`. `bg` is the background as
+/// the [`Ink::Cmy`] and [`Ink::K`] planes paint it, and its screen color.
+fn compose_band(out: &mut [u8], cmy: &[u8], k: &[u8], lut: &InkLut, bg: Option<([u8; 4], [u8; 4], [u8; 4])>, rich_black: bool) {
     // Runs of one colour convert once.
     let mut last: Option<([u8; 8], [u8; 4])> = None;
-    for (p, q) in cmy.as_chunks::<4>().0.iter().zip(k.as_chunks::<4>().0) {
+    for ((o, p), q) in out.as_chunks_mut::<4>().0.iter_mut().zip(cmy.as_chunks::<4>().0).zip(k.as_chunks::<4>().0) {
         let key = [p[0], p[1], p[2], p[3], q[0], q[1], q[2], q[3]];
-        let px = match (&last, &bg) {
+        *o = match (&last, &bg) {
             _ if p[3] == 0 => [0; 4],
             (Some((k0, v)), _) if *k0 == key => *v,
             (_, Some((bc, bk, b))) if p == bc && q == bk => *b,
@@ -195,16 +254,14 @@ pub(crate) fn compose(cmy: &[u8], k: &[u8], opts: &RenderOptions) -> Vec<u8> {
                 let un = |v: u8, a: u8| if a == 0 { 1.0 } else { (v as f32 / a as f32).min(1.0) };
                 let a = p[3];
                 let inks = planes_cmyk([un(p[0], a), un(p[1], a), un(p[2], a)], un(q[0], q[3]));
-                let rgb = if opts.rich_black && is_pure_black(inks) { [0.0; 3] } else { lut.apply(inks) };
+                let rgb = if rich_black && is_pure_black(inks) { [0.0; 3] } else { lut.apply(inks) };
                 let pm = |v: f32| (v.clamp(0.0, 1.0) * a as f32).round() as u8;
                 let v = [pm(rgb[0]), pm(rgb[1]), pm(rgb[2]), a];
                 last = Some((key, v));
                 v
             }
         };
-        out.extend_from_slice(&px);
     }
-    out
 }
 
 /// Each pixel's ink amounts (C, M, Y, K bytes, 0 = no ink) from its ink planes (premultiplied
