@@ -1269,12 +1269,21 @@ pub fn system_font_dirs() -> Vec<PathBuf> {
         // list their own data folders), relative paths ignored as the XDG spec says.
         let xdg = |var| std::env::var_os(var).map(|v| std::env::split_paths(&v).filter(|p| p.is_absolute()).collect::<Vec<_>>()).unwrap_or_default();
         let data_home = xdg("XDG_DATA_HOME").into_iter().next().or_else(|| home.as_ref().map(|h| h.join(".local/share")));
-        dirs.extend(data_home.into_iter().chain(xdg("XDG_DATA_DIRS")).map(|d| d.join("fonts")));
+        dirs.extend(data_home.iter().cloned().chain(xdg("XDG_DATA_DIRS")).map(|d| d.join("fonts")));
         if let Some(h) = &home {
             dirs.push(h.join(".fonts"));
         }
         // In a Flatpak sandbox, the host's fonts (system, local and the user's).
         dirs.extend(["/run/host/fonts", "/run/host/local-fonts", "/run/host/user-fonts"].map(Into::into));
+        // The folders fontconfig is set up with outside those: packages add their own (TeX fonts
+        // under `/usr/share/texmf/fonts`, #1529), and `fc-list` and other apps show their fonts.
+        let config_home = xdg("XDG_CONFIG_HOME").into_iter().next().or_else(|| home.as_ref().map(|h| h.join(".config")));
+        let places = crate::fontconfig::Places { home: home.clone(), data_home, config_home };
+        for dir in crate::fontconfig::font_dirs(&crate::fontconfig::root(), &places) {
+            if !dirs.iter().any(|known| dir.starts_with(known)) {
+                dirs.push(dir);
+            }
+        }
     }
     dirs.extend(app_font_dir().map(Path::to_path_buf));
     #[cfg(not(target_arch = "wasm32"))]
