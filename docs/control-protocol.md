@@ -1,5 +1,7 @@
 # Control protocol
 
+> **Last updated:** 2026-10-13 · **Change:** bounded transport waits (#1726).
+
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
 before it starts. One JSON request per line:
@@ -18,7 +20,12 @@ an object without `method`, invalid UTF-8, and a line longer than 4 MiB. An HTTP
 web page's cross-origin `fetch` to `127.0.0.1:<port>`) therefore can't smuggle a command in its body:
 its request line is rejected first. At most 16 connections are served at once; further ones get an error
 line and are closed. Clients that get an error reply should reconnect. The port has no authentication,
-so only enable it while you use it. Transport: `apps/vectorcraft/src/control_server.rs`.
+so only enable it while you use it. Idle clients have 5 minutes to start their next line; once the
+first byte arrives, the complete line must arrive within an absolute 30 seconds (trickled bytes do not
+renew it). A reply has 60 seconds to be written. Expiration closes the connection and returns its slot;
+persistent clients can send further requests within these bounds, or reconnect after idle expiration.
+These transport budgets are separate from the existing 60-second command-processing wait.
+Transport: `apps/vectorcraft/src/control_server.rs`.
 
 ## Confining file access
 
@@ -792,3 +799,15 @@ resizes the root divider (`false`/`true` path entries select first/second childr
 `SetStackOpen {panel,open}` / `ResizeStack {panel,height}` control accordion entries.
 The UI dispatches these same commands. Unknown panel IDs, invalid geometry, and stale
 split paths return an error without changing the workspace.
+
+## Transport hardening checklist
+
+- [x] Bound idle, partial-line and reply-write waits without renewing a partial-line deadline per byte.
+- [x] Release connection slots on worker exit, including timeout and failed worker creation.
+- [x] Preserve correlated replies and persistent connections within the transport budgets.
+
+## Revision history
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-13 | minor | Documented transport deadlines and connection-slot recovery (#1726). |

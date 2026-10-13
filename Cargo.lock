@@ -4510,6 +4510,7 @@ dependencies = [
  "raw-window-handle",
  "rfd",
  "serde_json",
+ "socket2",
  "vectorcraft-engine",
  "vectorcraft-text",
  "vectorcraft-ui-egui",

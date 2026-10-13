@@ -17,6 +17,10 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use vectorcraft_ui_egui::ControlRequest;
 
+#[path = "control_deadlines.rs"]
+mod deadlines;
+use deadlines::{DeadlineReader, DeadlineWriter};
+
 /// Longest accepted request line (bytes, without the newline). Requests are small JSON objects;
 /// anything longer is refused and the connection closed.
 pub const MAX_LINE: usize = 4 * 1024 * 1024;
@@ -24,6 +28,19 @@ pub const MAX_LINE: usize = 4 * 1024 * 1024;
 pub const MAX_CONNECTIONS: usize = 16;
 /// Size in bytes of the buffer that [`write_line`] writes a reply line through.
 const REPLY_CHUNK: usize = 64 * 1024;
+
+#[derive(Clone, Copy)]
+struct ConnectionTimeouts {
+    idle: Duration,
+    line: Duration,
+    write: Duration,
+}
+
+impl Default for ConnectionTimeouts {
+    fn default() -> Self {
+        Self { idle: Duration::from_secs(300), line: Duration::from_secs(30), write: Duration::from_secs(60) }
+    }
+}
 
 pub fn start(port: u16, ctx: egui::Context) -> Receiver<ControlRequest> {
     let (tx, rx) = channel::<ControlRequest>();
@@ -41,31 +58,77 @@ pub fn start(port: u16, ctx: egui::Context) -> Receiver<ControlRequest> {
 
 fn accept_loop(listener: TcpListener, tx: Sender<ControlRequest>, ctx: egui::Context) {
     let open = Arc::new(AtomicUsize::new(0));
-    for mut stream in listener.incoming().flatten() {
-        if open.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
-            open.fetch_sub(1, Ordering::SeqCst);
+    for stream in listener.incoming().flatten() {
+        let Some(slot) = acquire_slot(&open) else {
+            let mut out = DeadlineWriter::new(stream, ConnectionTimeouts::default().write);
             // Best effort: the connection is dropped either way, and a peer that can't read the reason loses nothing.
-            let _ = write_line(&mut stream, &json!({"ok": false, "error": "too many control connections"}));
+            if out.begin_reply().is_ok() {
+                let _ = write_line(&mut out, &json!({"ok": false, "error": "too many control connections"}));
+            }
             continue;
+        };
+        if let Err(e) = spawn_connection(stream, tx.clone(), ctx.clone(), slot, ConnectionTimeouts::default()) {
+            eprintln!("vectorcraft: control worker failed to start: {e}");
         }
-        let tx = tx.clone();
-        let ctx = ctx.clone();
-        let open = Arc::clone(&open);
-        std::thread::spawn(move || {
-            serve(stream, &tx, &ctx);
-            open.fetch_sub(1, Ordering::SeqCst);
-        });
     }
 }
 
-fn serve(stream: TcpStream, tx: &Sender<ControlRequest>, ctx: &egui::Context) {
+struct ConnectionSlot(Arc<AtomicUsize>);
+
+fn acquire_slot(open: &Arc<AtomicUsize>) -> Option<ConnectionSlot> {
+    let mut n = open.load(Ordering::SeqCst);
+    loop {
+        if n >= MAX_CONNECTIONS {
+            return None;
+        }
+        match open.compare_exchange_weak(n, n + 1, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(_) => return Some(ConnectionSlot(Arc::clone(open))),
+            Err(current) => n = current,
+        }
+    }
+}
+
+impl Drop for ConnectionSlot {
+    fn drop(&mut self) {
+        // Each successful acquisition creates exactly one non-cloneable guard.
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn spawn_connection(
+    stream: TcpStream,
+    tx: Sender<ControlRequest>,
+    ctx: egui::Context,
+    slot: ConnectionSlot,
+    timeouts: ConnectionTimeouts,
+) -> std::io::Result<std::thread::JoinHandle<()>> {
+    std::thread::Builder::new().name("vectorcraft-control".into()).spawn(move || {
+        let _slot = slot;
+        serve_socket(stream, timeouts, |method, params| {
+            let (req, rrx) = ControlRequest::new(method, params);
+            tx.send(req).ok()?;
+            ctx.request_repaint();
+            Some(rrx.recv_timeout(Duration::from_secs(60)).unwrap_or_else(|_| json!({"ok": false, "error": "timeout"})))
+        });
+    })
+}
+
+fn serve_socket(stream: TcpStream, timeouts: ConnectionTimeouts, handle: impl FnMut(String, Value) -> Option<Value>) {
     let Ok(read) = stream.try_clone() else { return };
-    serve_lines(read, stream, |method, params| {
-        let (req, rrx) = ControlRequest::new(method, params);
-        tx.send(req).ok()?;
-        ctx.request_repaint();
-        Some(rrx.recv_timeout(Duration::from_secs(60)).unwrap_or_else(|_| json!({"ok": false, "error": "timeout"})))
-    });
+    let read = DeadlineReader::new(read, timeouts.idle, timeouts.line);
+    // Replies reach the writer in [`REPLY_CHUNK`] pieces ([`write_line`]), so checking the remaining
+    // budget costs one socket option call per piece, not one per JSON token.
+    let out = DeadlineWriter::new(stream, timeouts.write);
+    serve_lines_with(
+        read,
+        out,
+        handle,
+        |reader| {
+            let buffered = !reader.buffer().is_empty();
+            reader.get_mut().begin_line(buffered)
+        },
+        DeadlineWriter::begin_reply,
+    );
 }
 
 /// One parsed line.
@@ -139,10 +202,24 @@ fn write_line(out: &mut impl Write, v: &Value) -> std::io::Result<()> {
 /// Serve requests from `read`, answering on `out`, until the peer closes, sends something that is
 /// not a request, or `handle` returns `None` (app gone). `handle` gets `(method, params)` and
 /// returns the reply object (the request's `id` is added here).
-fn serve_lines<R: Read, W: Write>(read: R, mut out: W, mut handle: impl FnMut(String, Value) -> Option<Value>) {
+#[cfg(test)]
+fn serve_lines<R: Read, W: Write>(read: R, out: W, handle: impl FnMut(String, Value) -> Option<Value>) {
+    serve_lines_with(read, out, handle, |_| Ok(()), |_| Ok(()));
+}
+
+fn serve_lines_with<R: Read, W: Write>(
+    read: R,
+    mut out: W,
+    mut handle: impl FnMut(String, Value) -> Option<Value>,
+    mut begin_line: impl FnMut(&mut BufReader<R>) -> std::io::Result<()>,
+    mut begin_reply: impl FnMut(&mut W) -> std::io::Result<()>,
+) {
     let mut reader = BufReader::new(read);
     let mut buf = Vec::new();
     loop {
+        if begin_line(&mut reader).is_err() {
+            return;
+        }
         let reject = match read_bounded_line(&mut reader, &mut buf, MAX_LINE) {
             Ok(false) => return,
             Err(e) => e,
@@ -154,7 +231,7 @@ fn serve_lines<R: Read, W: Write>(read: R, mut out: W, mut handle: impl FnMut(St
                     if let Some(o) = r.as_object_mut() {
                         o.insert("id".into(), id);
                     }
-                    if write_line(&mut out, &r).is_err() {
+                    if begin_reply(&mut out).and_then(|()| write_line(&mut out, &r)).is_err() {
                         return;
                     }
                     continue;
@@ -162,7 +239,7 @@ fn serve_lines<R: Read, W: Write>(read: R, mut out: W, mut handle: impl FnMut(St
             },
         };
         // Best effort: the connection closes either way, and a peer that can't read the reason loses nothing.
-        let _ = write_line(&mut out, &json!({"ok": false, "error": reject}));
+        let _ = begin_reply(&mut out).and_then(|()| write_line(&mut out, &json!({"ok": false, "error": reject})));
         return;
     }
 }
@@ -170,6 +247,139 @@ fn serve_lines<R: Read, W: Write>(read: R, mut out: W, mut handle: impl FnMut(St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn short_timeouts() -> ConnectionTimeouts {
+        ConnectionTimeouts { idle: Duration::from_millis(150), line: Duration::from_millis(120), write: Duration::from_millis(150) }
+    }
+
+    fn socket_fixture(
+        timeouts: ConnectionTimeouts,
+        handle: impl FnMut(String, Value) -> Option<Value> + Send + 'static,
+    ) -> (TcpStream, Receiver<()>, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (finished, done) = channel();
+        let worker = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            socket2::SockRef::from(&stream).set_send_buffer_size(4096).unwrap();
+            serve_socket(stream, timeouts, handle);
+            finished.send(()).unwrap();
+        });
+        let client = TcpStream::connect(addr).unwrap();
+        socket2::SockRef::from(&client).set_recv_buffer_size(4096).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+        (client, done, worker)
+    }
+
+    fn expect_socket_deadline(client: TcpStream, done: Receiver<()>, worker: std::thread::JoinHandle<()>) {
+        let stopped = done.recv_timeout(Duration::from_secs(3)).is_ok();
+        // Always unblock the old implementation too, so a failed regression leaves no worker behind.
+        let _ = client.shutdown(std::net::Shutdown::Both);
+        drop(client);
+        worker.join().unwrap();
+        assert!(stopped, "the server retained a stalled connection beyond its transport deadline");
+    }
+
+    #[test]
+    fn idle_control_socket_releases_its_worker() {
+        let (client, done, worker) = socket_fixture(short_timeouts(), |_, _| panic!("no request expected"));
+        expect_socket_deadline(client, done, worker);
+    }
+
+    #[test]
+    fn partial_control_line_releases_its_worker() {
+        let (mut client, done, worker) = socket_fixture(short_timeouts(), |_, _| panic!("incomplete requests must not execute"));
+        client.write_all(b"{\"method\":").unwrap();
+        expect_socket_deadline(client, done, worker);
+    }
+
+    #[test]
+    fn trickled_control_line_has_an_absolute_deadline() {
+        let (mut client, done, worker) = socket_fixture(short_timeouts(), |_, _| panic!("incomplete requests must not execute"));
+        client.write_all(b"{").unwrap();
+        let mut writer = client.try_clone().unwrap();
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let writing = Arc::clone(&stop);
+        let trickle = std::thread::spawn(move || {
+            while !writing.load(Ordering::SeqCst) {
+                if writer.write_all(b" ").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        });
+        let stopped = done.recv_timeout(Duration::from_secs(3)).is_ok();
+        stop.store(true, Ordering::SeqCst);
+        // Both socket copies belong to this fixture; shutdown cleans up the baseline failure as well.
+        let _ = client.shutdown(std::net::Shutdown::Both);
+        trickle.join().unwrap();
+        worker.join().unwrap();
+        assert!(stopped, "trickled bytes restarted the line's deadline");
+    }
+
+    #[test]
+    fn a_nonreading_control_peer_cannot_retain_the_writer() {
+        let payload = "x".repeat(2 * 1024 * 1024);
+        let (mut client, done, worker) = socket_fixture(short_timeouts(), move |_, _| Some(json!({"ok": true, "result": payload})));
+        client.write_all(b"{\"method\":\"large\"}\n").unwrap();
+        expect_socket_deadline(client, done, worker);
+    }
+
+    #[test]
+    fn persistent_control_requests_get_fresh_transport_deadlines() {
+        let timeouts = ConnectionTimeouts { idle: Duration::from_secs(2), ..short_timeouts() };
+        let (mut client, done, worker) = socket_fixture(timeouts, |_, _| {
+            // Application processing is not transport time; begin the reply budget afterwards.
+            std::thread::sleep(Duration::from_millis(200));
+            Some(json!({"ok": true}))
+        });
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        for id in [1, 2] {
+            writeln!(client, "{}", json!({"id": id, "method": "inspect"})).unwrap();
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            assert_eq!(serde_json::from_str::<Value>(&line).unwrap(), json!({"id": id, "ok": true}));
+        }
+        client.shutdown(std::net::Shutdown::Write).unwrap();
+        done.recv_timeout(Duration::from_secs(3)).unwrap();
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn buffered_partial_control_line_also_expires() {
+        let (mut client, done, worker) = socket_fixture(short_timeouts(), |_, _| Some(json!({"ok": true})));
+        client.write_all(b"{\"id\":1,\"method\":\"inspect\"}\n{").unwrap();
+        let mut line = String::new();
+        BufReader::new(client.try_clone().unwrap()).read_line(&mut line).unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&line).unwrap()["id"], 1);
+        expect_socket_deadline(client, done, worker);
+    }
+
+    #[test]
+    fn timed_out_worker_returns_its_connection_slot() {
+        let open = Arc::new(AtomicUsize::new(0));
+        let held: Vec<_> = (0..MAX_CONNECTIONS - 1).map(|_| acquire_slot(&open).unwrap()).collect();
+        let slot = acquire_slot(&open).unwrap();
+        assert!(acquire_slot(&open).is_none());
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (stream, _) = listener.accept().unwrap();
+        let (tx, _rx) = channel();
+        let worker = spawn_connection(stream, tx, egui::Context::default(), slot, short_timeouts()).unwrap();
+        let start = std::time::Instant::now();
+        while open.load(Ordering::SeqCst) == MAX_CONNECTIONS && start.elapsed() < Duration::from_secs(3) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let released = open.load(Ordering::SeqCst) < MAX_CONNECTIONS;
+        // Clean up an old implementation that never returned its slot as well.
+        let _ = client.shutdown(std::net::Shutdown::Both);
+        worker.join().unwrap();
+        assert!(released, "the deadline did not free capacity for the next client");
+        let replacement = acquire_slot(&open).expect("a new client can reserve the freed slot");
+        drop(replacement);
+        drop(held);
+        assert_eq!(open.load(Ordering::SeqCst), 0);
+    }
 
     fn run(input: &[u8]) -> (Vec<Value>, Vec<String>) {
         let mut out = Vec::new();
