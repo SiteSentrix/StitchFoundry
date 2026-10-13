@@ -390,6 +390,52 @@ fn expand_yields_n_copies() {
     assert_eq!(u.len(), ids.len());
 }
 
+/// #1756: Object → Expand turns radial, grid and mirror repeats into groups of their instances, in
+/// one undo step, as Expand Repeat does.
+#[test]
+fn object_expand_expands_repeats() {
+    for (cmd, opts) in [("object.repeat.radial", json!({"instances": 5})), ("object.repeat.grid", json!({})), ("object.repeat.mirror", json!({}))] {
+        let mut s = session();
+        let r = rect(&mut s, 195.0, 95.0, 10.0, 10.0);
+        sel(&mut s, &[r]);
+        let id = id_of(&s.execute(cmd, &opts).unwrap());
+        let NodeKind::Repeat(spec) = node(&s, id).kind else { panic!("{cmd}") };
+        let n = spec.expand().len();
+        assert_eq!(s.execute("object.expand.info", &json!({})).unwrap()["object"], json!(true), "{cmd}");
+        let undo = s.doc().unwrap().history.undo.len();
+        s.execute("object.expand", &json!({"fill": false, "stroke": false})).unwrap();
+        let g = node(&s, id);
+        assert!(matches!(g.kind, NodeKind::Group { .. }), "{cmd}");
+        assert_eq!(g.children().unwrap().len(), n, "{cmd}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{cmd}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![id], "{cmd}");
+        // Nothing left to expand: the instances are plain rectangles.
+        assert_eq!(s.execute("object.expand.info", &json!({})).unwrap()["object"], json!(false), "{cmd}");
+    }
+}
+
+/// Expand reaches repeats inside a selected group, and with every option on also outlines the
+/// instances' strokes.
+#[test]
+fn object_expand_expands_repeats_in_groups() {
+    let mut s = session();
+    let r = rect(&mut s, 195.0, 95.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    let rep = id_of(&s.execute("object.repeat.radial", &json!({"instances": 4})).unwrap());
+    let other = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[rep, other]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("object.expand", &json!({})).unwrap();
+    let mut repeats = 0;
+    for l in &doc(&s).layers {
+        l.walk(&mut |c| repeats += usize::from(matches!(c.kind, NodeKind::Repeat(_))));
+    }
+    assert_eq!(repeats, 0);
+    let g = node(&s, rep);
+    assert_eq!(g.children().unwrap().len(), 4);
+    assert!(g.children().unwrap().iter().all(|c| c.appearance.stroke_paint().is_none()));
+}
+
 #[test]
 fn grid_repeat_and_options() {
     let mut s = session();
