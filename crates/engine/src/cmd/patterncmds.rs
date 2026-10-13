@@ -708,26 +708,48 @@ fn fix_ids(d: &mut Document, n: &mut Node) {
 fn repeat_expand(s: &mut Session, _: &Value) -> Result<Value> {
     let reps = selected_repeats(s);
     let ids = s.edit("Expand Repeat", |d, sel| {
-        let mut out = vec![];
         for r in &reps {
-            let Some(n) = d.node(*r).cloned() else { continue };
-            let mut g = vectorcraft_doc::live::expanded_group(&n, None);
-
-            // The group keeps the repeat's id; every generated instance node gets a fresh one.
-            if let Some(ch) = g.children_mut() {
-                for c in ch.iter_mut() {
-                    fix_ids(d, Arc::make_mut(c));
-                }
-            }
-            let (par, idx, _) = d.position(*r).ok_or(EngineError::NoNode(*r))?;
-            d.remove(*r)?;
-            d.insert(par, idx, g)?;
-            out.push(*r);
+            expand_repeat(d, *r)?;
         }
-        sel.set(out.iter().copied());
-        Ok(out)
+        sel.set(reps.iter().copied());
+        Ok(reps.clone())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// Repeat `r` replaced by a group of its instances, keeping its id and place; every generated
+/// instance node gets a fresh id.
+fn expand_repeat(d: &mut Document, r: NodeId) -> Result<()> {
+    let Some(n) = d.node(r).cloned() else { return Ok(()) };
+    let mut g = vectorcraft_doc::live::expanded_group(&n, None);
+    if let Some(ch) = g.children_mut() {
+        for c in ch.iter_mut() {
+            fix_ids(d, Arc::make_mut(c));
+        }
+    }
+    let (par, idx, _) = d.position(r).ok_or(EngineError::NoNode(r))?;
+    d.remove(r)?;
+    d.insert(par, idx, g)?;
+    Ok(())
+}
+
+/// Object › Expand: every repeat in the subtrees of `roots` becomes a group of its instances
+/// ([`expand_repeat`]), inner ones first so an outer repeat repeats plain art. Returns how many.
+pub(crate) fn expand_repeats(d: &mut Document, roots: &[NodeId]) -> Result<usize> {
+    let mut reps = vec![];
+    for r in roots {
+        if let Some(n) = d.node(*r) {
+            n.walk(&mut |c| {
+                if pattern::is_repeat(c) {
+                    reps.push(c.id);
+                }
+            });
+        }
+    }
+    for r in reps.iter().rev() {
+        expand_repeat(d, *r)?;
+    }
+    Ok(reps.len())
 }
 
 fn repeat_options(s: &mut Session, p: &Value) -> Result<Value> {
