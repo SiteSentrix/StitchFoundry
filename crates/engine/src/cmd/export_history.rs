@@ -10,8 +10,15 @@ use super::*;
 const MAX: usize = 100;
 
 /// The commands whose exports are remembered (when they write files).
-pub const RECORDED: &[&str] =
-    &["document.export", "document.exportSelection", "embroidery.send", "embroidery.output", "embroidery.multiHoop", "embroidery.library.convert"];
+pub const RECORDED: &[&str] = &[
+    "document.export",
+    "document.exportSelection",
+    "embroidery.send",
+    "embroidery.output",
+    "embroidery.multiHoop",
+    "embroidery.library.convert",
+    "embroidery.exportImage",
+];
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

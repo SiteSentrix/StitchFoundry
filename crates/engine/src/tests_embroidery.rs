@@ -580,6 +580,43 @@ fn the_product_visualizer_shows_the_design_life_size_on_the_product() {
 }
 
 #[test]
+fn the_design_exports_as_an_image_of_its_stitches() {
+    const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
+    let mut s = session();
+    rect(&mut s, 20.0 * PT, 20.0 * PT, 40.0 * PT, 20.0 * PT);
+    s.execute("embroidery.set", &json!({"type": "fill"})).unwrap();
+    s.execute("embroidery.setThread", &json!({"color": "#d62828"})).unwrap();
+    let png = |r: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let r = s.execute("embroidery.exportImage", &json!({})).unwrap();
+    let img = png(&r);
+    // 40 × 20 mm and 3 mm round it, 10 pixels a millimetre
+    assert!((img.width() as i64 - 460).abs() <= 12 && (img.height() as i64 - 260).abs() <= 12, "{}×{}", img.width(), img.height());
+    assert_eq!(img.get_pixel(1, 1).0, [255, 255, 255, 255], "white round it");
+    let c = img.get_pixel(img.width() / 2, img.height() / 2).0;
+    assert!(c[0] > 90 && c[0] > c[1] + 40 && c[0] > c[2] + 40 && c[3] == 255, "red thread in the middle: {c:?}");
+    // lit thread varies in shade; flat thread doesn't
+    let shades = |img: &image::RgbaImage| {
+        let mut v: Vec<[u8; 4]> = (60..200).map(|x| img.get_pixel(x, img.height() / 2).0).filter(|p| p[0] > p[1] + 40).collect();
+        v.sort_unstable();
+        v.dedup();
+        v.len()
+    };
+    assert!(shades(&img) > 3);
+    let flat = png(&s.execute("embroidery.exportImage", &json!({"view": "flat", "ppmm": 4, "background": "transparent"})).unwrap());
+    assert_eq!(flat.get_pixel(0, 0).0[3], 0, "transparent round it");
+    assert!(flat.width() < 200);
+    // written to a file, and remembered among the exports
+    let path = std::env::temp_dir().join(format!("sf-stitch-image-{}.png", std::process::id()));
+    let r = s.execute("embroidery.exportImage", &json!({"path": path.to_string_lossy(), "background": "#102040"})).unwrap();
+    assert!(std::fs::read(&path).unwrap().starts_with(b"\x89PNG") && r["width"].as_u64().is_some());
+    assert_eq!(s.export_history.front().and_then(|e| e["command"].as_str()), Some("embroidery.exportImage"));
+    let _ = std::fs::remove_file(&path);
+    for bad in [json!({"ppmm": 0}), json!({"ppmm": 41}), json!({"view": "3d"}), json!({"background": "blue"}), json!({"margin": -1})] {
+        assert!(s.execute("embroidery.exportImage", &bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn stitch_lists_and_gcode_export_the_stitches_as_text() {
     const PT: f64 = vectorcraft_embroidery::PT_PER_MM;
     let mut s = session();

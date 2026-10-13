@@ -462,6 +462,14 @@ sewn, then sew on. Without `dir` it only plans (which object goes where). Object
 across hoopings yet: one larger than a hooping is refused (choose a larger hoop or a wider
 overlap).
 
+## Stitch image
+
+**File › Export › Machine Embroidery File › Stitch Image PNG** (`embroidery.exportImage {path?,
+ppmm?, background?, margin?, view?}`) draws the design's stitches as lit thread, as the TrueView
+display shows them (`view: flat` for flat colour), and writes a PNG: for a website, a quote or a
+catalogue. `ppmm` sets the pixels a millimetre (10; up to 40 for print), `background` white, a
+colour or `transparent`, `margin` the mm round the design (3).
+
 ## Stitch lists and G-code
 
 Besides the machine formats, `embroidery.export` (and Batch Output, Send to Machine) writes the
