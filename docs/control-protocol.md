@@ -1,6 +1,6 @@
 # Control protocol
 
-> **Last updated:** 2026-10-13 · **Change:** bounded transport waits (#1726).
+> **Last updated:** 2026-10-13 · **Change:** synthetic input budgets (#1709); bounded transport waits (#1726).
 
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
@@ -28,6 +28,20 @@ that stalls gets the usual error line first);
 persistent clients can send further requests within these bounds, or reconnect after idle expiration.
 These transport budgets are separate from the existing 60-second command-processing wait.
 Transport: `apps/vectorcraft/src/control_server.rs`.
+
+## Synthetic input budgets
+
+`ui.drag` accepts at most **256** `steps`; `ui.click` and `ui.drag` accept at most **16** `count`.
+They must be non-negative JSON integers. Omitted values keep their defaults (8 steps, one click);
+explicit zero still acts as one, as before. Oversized or malformed values return an error before
+any move, press or release is queued.
+
+All synthetic methods (`ui.key`, `ui.text`, `ui.move`, `ui.click`, `ui.drag`, `ui.wheel`) share a
+**1,024-event** pending-queue limit. The whole request must fit; rejection preserves existing input
+and does not append a partial gesture. Clients can retry once earlier input has drained. At most
+**64 control requests** run per frame; later requests remain on the channel and another frame is
+scheduled. These limits cover synthetic input admission, separately from socket transport and
+command-processing timeouts.
 
 ## Confining file access
 
@@ -73,6 +87,8 @@ the two can still win that race.
 | `ui.tool.select` / `ui.tool.list` | `{tool}` | |
 | `ui.pointer` | `{events:[{kind: down|drag|up|move|doubleclick, x, y, space?: "doc"|"screen", mods?}]}` | drive the active tool exactly like the mouse: `mods.cmd` held at a press with any tool but a selection tool drags with the selection tool chosen last (Direct Selection with the Pen until one is), and the release gives the tool back as it was; the reply lists `selection`, `key` (the key object, null without one) and `tool` |
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | synthetic keyboard input |
+| `ui.move` | `{x, y}` | screen-point pointer move |
+| `ui.click` / `ui.drag` | `{x, y, button?, count?, shift?, alt?, ctrl?, cmd?}` / `{x, y, toX, toY, steps?, count?, button?, shift?, alt?, ctrl?, cmd?}` | egui pointer input; see synthetic input budgets above |
 | `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel (Option on the Mac) zooms about the pointer; with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?}` | |
 | `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` | fill and submit the open dialog |
@@ -802,6 +818,12 @@ resizes the root divider (`false`/`true` path entries select first/second childr
 The UI dispatches these same commands. Unknown panel IDs, invalid geometry, and stale
 split paths return an error without changing the workspace.
 
+## Synthetic input hardening checklist
+
+- [x] Validate counts and reserve the whole gesture before queue mutation.
+- [x] Bound pending events across all synthetic methods, preserving rejected requests' prior queue.
+- [x] Yield after a finite control-request batch per frame; retain later requests and schedule another frame.
+
 ## Transport hardening checklist
 
 - [x] Bound idle, partial-line and reply-write waits without renewing a partial-line deadline per byte.
@@ -812,4 +834,5 @@ split paths return an error without changing the workspace.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | Documented count, pending-event and per-frame request budgets (#1709). |
 | 2026-10-13 | minor | Documented transport deadlines and connection-slot recovery (#1726). |
