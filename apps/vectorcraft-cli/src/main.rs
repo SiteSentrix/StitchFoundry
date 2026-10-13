@@ -4,7 +4,7 @@
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg]... [--scale 2]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000] [--deep]
@@ -84,7 +84,7 @@ USAGE:
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data]
+  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
       formats). --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
       unless one of them is given, EPS the bounds of the art, the other formats the first artboard.
@@ -95,6 +95,11 @@ USAGE:
       --replace-lossy is given. --editing-data opens a .ai from its editing copy even where that
       draws differently from its PDF part (which can be older), as long as it can be read. The
       result has the export's warnings, and importWarnings for what reading IN left out.
+      --ai-version 7 writes a .ai as the legacy version 7 (layers, groups and type kept; one file
+      per artboard, OUT-<artboard>.ai when there are several; default pdf, PDF-compatible), with
+      --hidden-objects (default layer: a hidden layer above each layer's hidden objects; omit;
+      visible), --transparent-images (default flatten, with the art under them; omit) and
+      --outline-text (type as outlines instead of text).
 
   vectorcraft-cli info FILE
       Print a JSON summary: the import warnings (what didn't come in as it was, such as an EPS
@@ -223,6 +228,9 @@ fn convert(args: &[String]) -> Result<(), String> {
     let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data) =
         (1.0f64, None::<u64>, None::<String>, false, false, false);
     let mut decimals = None::<u64>;
+    // Legacy `.ai` options, passed on as the export's own (`aiVersion`, `hiddenObjects`,
+    // `transparentImages`); the engine checks their values.
+    let mut legacy: Vec<(&str, String)> = vec![];
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -233,6 +241,9 @@ fn convert(args: &[String]) -> Result<(), String> {
             "--decimals" => decimals = Some(it.next().and_then(|v| v.parse::<u64>().ok()).ok_or("--decimals needs a number")?),
             "--replace-lossy" => replace_lossy = true,
             "--editing-data" => editing_data = true,
+            "--ai-version" => legacy.push(("aiVersion", it.next().cloned().ok_or("--ai-version needs 7 or pdf")?)),
+            "--hidden-objects" => legacy.push(("hiddenObjects", it.next().cloned().ok_or("--hidden-objects needs layer, omit or visible")?)),
+            "--transparent-images" => legacy.push(("transparentImages", it.next().cloned().ok_or("--transparent-images needs flatten or omit")?)),
             f => files.push(f.to_string()),
         }
     }
@@ -249,6 +260,9 @@ fn convert(args: &[String]) -> Result<(), String> {
     let mut params = json!({"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
     if let Some(decimals) = decimals {
         params["decimals"] = json!(decimals);
+    }
+    for (key, value) in legacy {
+        params[key] = json!(value);
     }
     let mut r = h.call("engine.execute", json!({"command": "document.export", "params": params})).map_err(|e| format!("export {output}: {e}"))?;
     // What reading the input left out (a missing linked file, an unsupported filter…) matters as
