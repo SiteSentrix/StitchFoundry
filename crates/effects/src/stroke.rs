@@ -116,8 +116,34 @@ pub fn line_outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64) -> B
             out.extend(dot_outline(&d.dots, width, st.cap, tol).iter());
             out
         }
-        (None, None) => plain_outline(line, &style(st, width), tol),
+        (None, None) => {
+            let mut out = plain_outline(line, &style(st, width), tol);
+            out.extend(dot_outline(&point_dots(line), width, st.cap, tol).iter());
+            out
+        }
     }
+}
+
+/// The subpaths of `line` that never leave their first point (`m` then `L` to the same point, as
+/// `.ai` files write dots, #1613), as dots: kurbo strokes nothing for them, where PDF and SVG
+/// viewers paint the cap. They lie along the x axis, which a projecting cap's square follows
+/// (SVG 2, "Path data": zero-length path segments).
+fn point_dots(line: &BezPath) -> Vec<Dot> {
+    let els = line.elements();
+    subpaths(line)
+        .into_iter()
+        .filter_map(|(r, _)| {
+            let sub = els.get(r)?;
+            let at = sub.first()?.end_point()?;
+            let still = sub.iter().all(|e| match e {
+                PathEl::MoveTo(p) | PathEl::LineTo(p) => *p == at,
+                PathEl::QuadTo(a, b) => *a == at && *b == at,
+                PathEl::CurveTo(a, b, c) => *a == at && *b == at && *c == at,
+                PathEl::ClosePath => true,
+            });
+            still.then_some(Dot { at, dir: kurbo::Vec2::new(1.0, 0.0), t: 0.0 })
+        })
+        .collect()
 }
 
 /// `line` stroked with `style`, to fill with the non-zero rule.

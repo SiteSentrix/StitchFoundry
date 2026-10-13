@@ -467,3 +467,39 @@ fn supersampled_art_leaves_no_seam_between_shapes_that_meet() {
     assert_eq!(supersample_factor(5000, 5000), None);
     assert_eq!(supersample_factor(40_000, 10), None);
 }
+
+/// #1613: a zero-length subpath (`m` then `L` to the same point, as `.ai` files write dots) is a
+/// dot as wide as the stroke: a disc under a round cap, a square under a projecting one, nothing
+/// under a butt cap (PDF 32000-1 8.5.3.2, SVG 2 "Path data" zero-length segments).
+#[test]
+fn zero_length_subpaths_draw_dots_with_their_cap() {
+    let dots = |cap: vectorcraft_doc::LineCap| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut bp = BezPath::new();
+        for at in [(30.0, 50.0), (70.0, 50.0)] {
+            bp.move_to(at);
+            bp.line_to(at);
+        }
+        let id = d.alloc_id();
+        let mut n = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 10.0));
+        n.appearance.stroke_mut().unwrap().cap = cap;
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        render(&d)
+    };
+    let (black, white) = ([0, 0, 0, 255], [255, 255, 255, 255]);
+    let round = dots(vectorcraft_doc::LineCap::Round);
+    for x in [30, 70] {
+        assert_eq!(round.pixel(x, 50), black, "round dot at {x}");
+        assert_eq!(round.pixel(x + 2, 52), black, "inside the round dot at {x}");
+        assert_eq!(round.pixel(x + 4, 54), white, "the round dot's corner at {x}");
+    }
+    let square = dots(vectorcraft_doc::LineCap::Square);
+    for x in [30, 70] {
+        assert_eq!(square.pixel(x, 50), black, "square dot at {x}");
+        assert_eq!(square.pixel(x + 4, 54), black, "the square dot's corner at {x}");
+        assert_eq!(square.pixel(x + 6, 50), white, "past the square dot at {x}");
+    }
+    let butt = dots(vectorcraft_doc::LineCap::Butt);
+    assert_eq!(butt.pixels.iter().filter(|&&p| p != 255).count(), 0, "a butt cap draws no dot");
+}
