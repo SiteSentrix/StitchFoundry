@@ -534,6 +534,8 @@ fn structured_junk() {
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "applique": 3})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "stitch": [], "small": 2})),
         ("embroidery.lettering", json!({"text": "ab", "font": "x", "path": u64::MAX, "vertical": "yes"})),
+        ("embroidery.monogram.saveTemplate", json!({"name": "\u{0}", "rings": -1, "size": f64::NAN})),
+        ("embroidery.monogram", json!({"letters": "ab", "font": "x", "template": 5})),
         ("embroidery.scatter", json!({"count": u64::MAX, "gap": f64::NAN, "seed": -3, "spread": 1})),
         ("embroidery.settings", json!({"start": ["x"], "end": "\u{0}"})),
         ("embroidery.worksheet", json!({"barcode": "code39", "barcodeText": "\u{0}\u{7f}"})),

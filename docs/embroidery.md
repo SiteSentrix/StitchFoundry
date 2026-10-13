@@ -862,6 +862,13 @@ also come as an **oval**, **octagon**, **heart** or **shield**, and in up to fou
 apart (`rings`); an **ornament** either side of the letters, mirrored (hearts, stars, dots as
 satin, swirls as a triple run; `ornament`), is drawn in code and goes inside the border.
 
+**Templates**: *Template* picks a look from the gallery (Classic circle, Double ring, Wedding
+heart, Royal shield, Diamond trio, Scalloped, Starry oval, Square block, Stacked crest) or one of
+your own; *Save as Template* keeps the look now set (style, border, rings, ornament, size) under a
+name, kept with your preferences for any design, and *Delete Template* removes one of yours
+(`embroidery.monogram.templates`, `.saveTemplate`, `.deleteTemplate`; `embroidery.monogram
+{template}`, anything given with it winning).
+
 ## Team names
 
 One design, many names (a team's shirts): set the name in an embroidery font, select it, and in the

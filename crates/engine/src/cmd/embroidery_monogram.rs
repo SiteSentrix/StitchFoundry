@@ -27,18 +27,101 @@ pub const BORDERS: [&str; 9] = ["none", "circle", "diamond", "square", "scallop"
 pub const ORNAMENTS: [&str; 5] = ["none", "hearts", "stars", "dots", "swirls"];
 /// Rings of a border at most, and how far apart (mm).
 const MAX_RINGS: u64 = 4;
+/// Monogram templates of the user's own kept at most.
+const MAX_TEMPLATES: usize = 100;
+
+/// A monogram's look, kept by name: style, border, rings, ornament and, when set, size.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MonogramTemplate {
+    pub name: String,
+    pub style: String,
+    pub border: String,
+    pub rings: u64,
+    pub ornament: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<f64>,
+}
+
+impl MonogramTemplate {
+    fn json(&self, builtin: bool) -> Value {
+        json!({ "name": self.name, "style": self.style, "border": self.border, "rings": self.rings,
+            "ornament": self.ornament, "size": self.size, "builtin": builtin })
+    }
+}
+
+/// The gallery that comes with StitchFoundry.
+pub fn builtin_templates() -> Vec<MonogramTemplate> {
+    let t = |name: &str, style: &str, border: &str, rings: u64, ornament: &str| MonogramTemplate {
+        name: name.into(),
+        style: style.into(),
+        border: border.into(),
+        rings,
+        ornament: ornament.into(),
+        size: None,
+    };
+    vec![
+        t("Classic circle", "classic", "circle", 1, "none"),
+        t("Double ring", "classic", "circle", 2, "none"),
+        t("Wedding heart", "classic", "heart", 2, "hearts"),
+        t("Royal shield", "classic", "shield", 1, "swirls"),
+        t("Diamond trio", "classic", "diamond", 1, "dots"),
+        t("Scalloped", "classic", "scallop", 1, "none"),
+        t("Starry oval", "line", "oval", 1, "stars"),
+        t("Square block", "line", "square", 2, "none"),
+        t("Stacked crest", "stacked", "octagon", 3, "none"),
+    ]
+}
+
+/// A template by name: the user's own first, then the gallery's.
+fn template_named(s: &Session, name: &str) -> Option<MonogramTemplate> {
+    s.prefs
+        .embroidery_monogram_templates
+        .iter()
+        .find(|t| t.name.eq_ignore_ascii_case(name))
+        .cloned()
+        .or_else(|| builtin_templates().into_iter().find(|t| t.name.eq_ignore_ascii_case(name)))
+}
 const RING_GAP: f64 = 3.0;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(
-        "embroidery.monogram",
-        "Monogram",
-        [],
-        None,
-        "{letters: 1 to 3 characters, font: a loaded embroidery font, size?: mm (the letters' height, the middle one of three larger in a classic monogram; default: the font's own), style?: classic|line|stacked (classic: the middle of three letters larger, each centred on the monogram's middle; line: all one size on one baseline; stacked: one above the other), border?: none|circle|diamond|square|scallop|oval|octagon|heart|shield (none), rings?: 1–4 borders, 3 mm apart (1), ornament?: none|hearts|stars|dots|swirls (none: either side of the letters, mirrored), at?: [x, y] (its middle; default: the first artboard's centre)} a monogram: each letter lettering in the font (set again with embroidery.lettering.edit), round them and the ornaments a satin border (a scalloped one a scallop motif run), in a group → {id, letters, warnings}",
-        has_doc,
-        monogram
-    )]
+    vec![
+        cmd!(
+            "embroidery.monogram.templates",
+            "Monogram Templates",
+            [],
+            None,
+            "{} the monogram templates: the gallery's and the user's own → {templates: [{name, style, border, rings, ornament, size, builtin}]}",
+            always,
+            list_templates
+        ),
+        cmd!(
+            "embroidery.monogram.saveTemplate",
+            "Save Monogram Template",
+            [],
+            None,
+            "{name, style?, border?, rings?, ornament?, size?: mm} keep a monogram's look under a name (the user's own; a gallery name can't be taken), to make others with embroidery.monogram {template} → {name}",
+            always,
+            save_template
+        ),
+        cmd!(
+            "embroidery.monogram.deleteTemplate",
+            "Delete Monogram Template",
+            [],
+            None,
+            "{name} delete one of the user's monogram templates → {name}",
+            always,
+            delete_template
+        ),
+        cmd!(
+            "embroidery.monogram",
+            "Monogram",
+            [],
+            None,
+            "{letters: 1 to 3 characters, font: a loaded embroidery font, template?: a monogram template's name (its style, border, rings, ornament and size, unless given here), size?: mm (the letters' height, the middle one of three larger in a classic monogram; default: the font's own), style?: classic|line|stacked (classic: the middle of three letters larger, each centred on the monogram's middle; line: all one size on one baseline; stacked: one above the other), border?: none|circle|diamond|square|scallop|oval|octagon|heart|shield (none), rings?: 1–4 borders, 3 mm apart (1), ornament?: none|hearts|stars|dots|swirls (none: either side of the letters, mirrored), at?: [x, y] (its middle; default: the first artboard's centre)} a monogram: each letter lettering in the font (set again with embroidery.lettering.edit), round them and the ornaments a satin border (a scalloped one a scallop motif run), in a group → {id, letters, warnings}",
+            has_doc,
+            monogram
+        ),
+    ]
 }
 
 /// A border's outline round `b` (points), `margin` clear of it: a circle (scalloped too), a
@@ -163,7 +246,81 @@ fn ornament(kind: &str, c: Point, size: f64, mirror: bool) -> (Vec<Vec<Point>>, 
     }
 }
 
+fn list_templates(s: &mut Session, _p: &Value) -> Result<Value> {
+    let all: Vec<Value> =
+        builtin_templates().iter().map(|t| t.json(true)).chain(s.prefs.embroidery_monogram_templates.iter().map(|t| t.json(false))).collect();
+    Ok(json!({ "templates": all }))
+}
+
+fn save_template(s: &mut Session, p: &Value) -> Result<Value> {
+    const SAVE: &str = "embroidery.monogram.saveTemplate";
+    let name: String =
+        str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(SAVE, "missing `name`"))?.chars().take(60).collect();
+    if builtin_templates().iter().any(|t| t.name.eq_ignore_ascii_case(&name)) {
+        return Err(bad(SAVE, format!("`{name}` is in the gallery: save it under another name")));
+    }
+    let pick = |key: &str, all: &[&str], default: &str| -> Result<String> {
+        match str_param(p, key) {
+            None => Ok(default.to_string()),
+            Some(v) => all
+                .iter()
+                .find(|k| **k == v)
+                .map(|k| (*k).to_string())
+                .ok_or_else(|| bad(SAVE, format!("unknown {key} `{v}`: one of {}", all.join(", ")))),
+        }
+    };
+    let t = MonogramTemplate {
+        name: name.clone(),
+        style: pick("style", &["classic", "line", "stacked"], "classic")?,
+        border: pick("border", &BORDERS, "none")?,
+        rings: match p.get("rings") {
+            None | Some(Value::Null) => 1,
+            Some(v) => v.as_u64().filter(|r| (1..=MAX_RINGS).contains(r)).ok_or_else(|| bad(SAVE, "`rings` is 1 to 4"))?,
+        },
+        ornament: pick("ornament", &ORNAMENTS, "none")?,
+        size: ranged(p, "size", 1.0..=300.0, SAVE, "`size` is 1 to 300 mm")?,
+    };
+    let own = &mut s.prefs.embroidery_monogram_templates;
+    match own.iter_mut().find(|o| o.name.eq_ignore_ascii_case(&name)) {
+        Some(o) => *o = t,
+        None if own.len() >= MAX_TEMPLATES => return Err(bad(SAVE, format!("{MAX_TEMPLATES} monogram templates at most: delete one first"))),
+        None => own.push(t),
+    }
+    Ok(json!({ "name": name }))
+}
+
+fn delete_template(s: &mut Session, p: &Value) -> Result<Value> {
+    const DELETE: &str = "embroidery.monogram.deleteTemplate";
+    let name = str_param(p, "name").ok_or_else(|| bad(DELETE, "missing `name`"))?.to_string();
+    let own = &mut s.prefs.embroidery_monogram_templates;
+    let before = own.len();
+    own.retain(|t| !t.name.eq_ignore_ascii_case(&name));
+    if own.len() == before {
+        return Err(bad(DELETE, format!("no monogram template of yours is named `{name}`")));
+    }
+    Ok(json!({ "name": name }))
+}
+
 fn monogram(s: &mut Session, p: &Value) -> Result<Value> {
+    // a template's look, unless the request says otherwise
+    let merged;
+    let p = match str_param(p, "template") {
+        None => p,
+        Some(name) => {
+            let t = template_named(s, name).ok_or_else(|| bad(CMD, format!("no monogram template `{name}`")))?;
+            let mut m = json!({ "style": t.style, "border": t.border, "rings": t.rings, "ornament": t.ornament });
+            if let Some(size) = t.size {
+                m["size"] = json!(size);
+            }
+            if let (Some(o), Some(given)) = (m.as_object_mut(), p.as_object()) {
+                for (k, v) in given {
+                    o.insert(k.clone(), v.clone());
+                }
+            }
+            merged = m;
+            &merged
+        }
+    };
     let letters: Vec<char> = str_param(p, "letters").map(|t| t.chars().filter(|c| !c.is_whitespace()).collect()).unwrap_or_default();
     if !(1..=3).contains(&letters.len()) {
         return Err(bad(CMD, "`letters` are 1 to 3 characters"));

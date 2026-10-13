@@ -766,6 +766,25 @@ pub(crate) fn monogram_body(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     ui.label(format!("{}: {font}", tl!("Font")));
+    // a template's look, from the gallery or the user's own
+    let templates = app.run("embroidery.monogram.templates", json!({})).ok().and_then(|r| r["templates"].as_array().cloned()).unwrap_or_default();
+    let mut names = vec![tl!("Custom").to_string()];
+    names.extend(templates.iter().filter_map(|t| t["name"].as_str()).map(str::to_string));
+    let opts: Vec<&str> = names.iter().map(String::as_str).collect();
+    if let Some(i) = pick_names(ui, tl!("Template"), "mono-template", 0, &opts)
+        && let Some(t) = i.checked_sub(1).and_then(|k| templates.get(k))
+    {
+        use vectorcraft_engine::cmd::embroidery_monogram::{BORDERS, ORNAMENTS};
+        let m = &mut app.embroidery;
+        m.monogram_style = ["classic", "line", "stacked"].iter().position(|s| t["style"] == *s).unwrap_or(0);
+        m.monogram_border = BORDERS.iter().position(|s| t["border"] == *s).unwrap_or(0);
+        m.monogram_rings = t["rings"].as_u64().unwrap_or(1) as usize;
+        m.monogram_ornament = ORNAMENTS.iter().position(|s| t["ornament"] == *s).unwrap_or(0);
+        if let Some(size) = t["size"].as_f64() {
+            m.monogram_size = size;
+        }
+        m.monogram_template = t["name"].as_str().unwrap_or_default().to_string();
+    }
     ui.add(egui::TextEdit::singleline(&mut app.embroidery.monogram_letters).char_limit(3).hint_text(tl!("Initials")));
     let styles = [tl!("Classic"), tl!("In a line"), tl!("Stacked")];
     if let Some(i) = pick(ui, tl!("Style"), "mono-style", app.embroidery.monogram_style, &styles) {
@@ -806,6 +825,25 @@ pub(crate) fn monogram_body(app: &mut VectorcraftApp, ui: &mut Ui) {
             Err(e) => app.status(e),
         }
     }
+    // this look kept as a template of the user's own
+    ui.horizontal(|ui| {
+        ui.add(egui::TextEdit::singleline(&mut app.embroidery.monogram_template).desired_width(120.0).hint_text(tl!("Template name")));
+        let name = app.embroidery.monogram_template.trim().to_string();
+        if button(ui, tl!("Save as Template")).clicked() && !name.is_empty() {
+            use vectorcraft_engine::cmd::embroidery_monogram::{BORDERS, ORNAMENTS};
+            let m = &app.embroidery;
+            let params = json!({ "name": name, "style": ["classic", "line", "stacked"].get(m.monogram_style).copied().unwrap_or("classic"),
+                "border": BORDERS.get(m.monogram_border).copied().unwrap_or("none"), "rings": m.monogram_rings.clamp(1, 4),
+                "ornament": ORNAMENTS.get(m.monogram_ornament).copied().unwrap_or("none"), "size": size });
+            if let Err(e) = app.run("embroidery.monogram.saveTemplate", params) {
+                app.status(e);
+            }
+        }
+        let own = templates.iter().any(|t| t["name"] == name.as_str() && t["builtin"] == false);
+        if own && button(ui, tl!("Delete Template")).clicked() {
+            app.run("embroidery.monogram.deleteTemplate", json!({ "name": name })).ok();
+        }
+    });
 }
 
 /// Buttonholes: one, or a row of them evenly spaced, in the middle of the first artboard.
