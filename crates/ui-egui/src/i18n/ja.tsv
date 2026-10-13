@@ -4819,3 +4819,8 @@ machine	Stop	停止
 	Under 6 mm	6 mm 未満
 	Place Along Selected Line	選択した線に沿って配置
 	The text along the selected line or shape, from its start	選択した線や図形に沿って、その始点から文字を配置
+	Monogram Templates	モノグラムのテンプレート
+	Save Monogram Template	モノグラムのテンプレートを保存
+	Delete Monogram Template	モノグラムのテンプレートを削除
+	Template name	テンプレート名
+	Delete Template	テンプレートを削除

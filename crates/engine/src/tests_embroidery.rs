@@ -3351,6 +3351,44 @@ fn puff_fills_and_puff_sewn_last() {
 }
 
 #[test]
+fn monogram_templates_come_from_the_gallery_or_are_saved() {
+    let mut s = session();
+    s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
+    let list = s.execute("embroidery.monogram.templates", &json!({})).unwrap();
+    let names: Vec<&str> = list["templates"].as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
+    assert!(names.contains(&"Wedding heart") && names.len() >= 9, "{names:?}");
+    // a gallery template sets the look; the request still wins where it says
+    let r = s.execute("embroidery.monogram", &json!({"letters": "AB", "font": "Test Script", "template": "Double ring"})).unwrap();
+    let rings = |s: &Session, id: u64| {
+        let st = s.doc().unwrap();
+        let mut n = 0;
+        st.doc.node(NodeId(id)).unwrap().children().unwrap().iter().for_each(|c| {
+            if c.name.as_deref().is_some_and(|n| n.starts_with("Border")) {
+                n += 1;
+            }
+        });
+        n
+    };
+    assert_eq!(rings(&s, r["id"].as_u64().unwrap()), 2, "two rings");
+    let r = s.execute("embroidery.monogram", &json!({"letters": "AB", "font": "Test Script", "template": "Double ring", "rings": 1})).unwrap();
+    assert_eq!(rings(&s, r["id"].as_u64().unwrap()), 1, "the request's rings win");
+    // one of the user's own
+    s.execute("embroidery.monogram.saveTemplate", &json!({"name": "Shop crest", "border": "shield", "rings": 3, "ornament": "stars", "size": 25}))
+        .unwrap();
+    assert_eq!(s.prefs.embroidery_monogram_templates.len(), 1);
+    s.execute("embroidery.monogram", &json!({"letters": "A", "font": "Test Script", "template": "shop crest"})).unwrap();
+    let list = s.execute("embroidery.monogram.templates", &json!({})).unwrap();
+    let mine = list["templates"].as_array().unwrap().iter().find(|t| t["name"] == "Shop crest").unwrap().clone();
+    assert_eq!((mine["builtin"].as_bool(), mine["rings"].as_u64(), mine["size"].as_f64()), (Some(false), Some(3), Some(25.0)));
+    // the gallery's names are taken; bad values; deleting
+    assert!(s.execute("embroidery.monogram.saveTemplate", &json!({"name": "Wedding heart"})).is_err());
+    assert!(s.execute("embroidery.monogram.saveTemplate", &json!({"name": "X", "border": "star"})).is_err());
+    assert!(s.execute("embroidery.monogram", &json!({"letters": "A", "font": "Test Script", "template": "nope"})).is_err());
+    s.execute("embroidery.monogram.deleteTemplate", &json!({"name": "Shop crest"})).unwrap();
+    assert!(s.execute("embroidery.monogram.deleteTemplate", &json!({"name": "Classic circle"})).is_err());
+}
+
+#[test]
 fn lettering_stacks_vertically_and_follows_drawn_lines() {
     let mut s = session();
     s.execute("embroidery.font.load", &json!({"json": TEST_FONT_JSON, "svg": TEST_FONT_SVG})).unwrap();
