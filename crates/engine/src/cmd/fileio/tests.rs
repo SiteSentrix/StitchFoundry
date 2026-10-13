@@ -486,3 +486,41 @@ fn a_save_that_fails_while_streaming_leaves_the_file_as_it_was() {
     }
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// A save that fails leaves File Info's dates and the saved state alone; one that works stamps them.
+#[test]
+fn a_failed_save_does_not_stamp_the_documents_dates() {
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let before = s.doc().unwrap().doc.metadata.clone();
+    let dirty = s.doc().unwrap().is_dirty();
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/y.vectorcraft", "modified": 12345})).unwrap();
+    let e = save_with(&mut s, plan, |_, _| Err(EngineError::Other("disk full".into()))).unwrap_err();
+    assert_eq!(e.to_string(), "disk full");
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata, before);
+    assert_eq!(st.is_dirty(), dirty);
+    // Options the encoder refuses: the same.
+    assert!(s.execute("file.saveAs", &json!({"path": "/x/y.vectorcraft", "version": 99, "modified": 12345})).is_err());
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata, before);
+    assert_eq!(st.is_dirty(), dirty);
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/y.vectorcraft", "modified": 12345})).unwrap();
+    save_with(&mut s, plan, |_, _| Ok(())).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata.modified, Some(12345));
+    assert!(!st.is_dirty());
+    // Edited while the file is written (Background Save): the dates go on once it is, and the
+    // edit keeps the document modified.
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/z.vectorcraft", "modified": 777})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let uid = s.doc().unwrap().uid;
+    assert_eq!(s.doc().unwrap().doc.metadata.modified, Some(12345));
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+    job.write(|_, _| Ok(())).unwrap();
+    job.complete(&mut s, uid);
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata.modified, Some(777));
+    assert_eq!(st.path.as_deref(), Some("/x/z.vectorcraft"));
+    assert!(st.is_dirty());
+}
