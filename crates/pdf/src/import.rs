@@ -1277,7 +1277,9 @@ impl<'p> Builder<'p> {
         if ![(b.x0, ink.x0), (b.y0, ink.y0), (b.x1, ink.x1), (b.y1, ink.y1)].iter().all(|(a, c)| (a - c).abs() <= tol) {
             return false;
         }
-        let st = stroke_layer(p, opacity, props, mean_scale(transform));
+        let mut st = stroke_layer(p, opacity, props, mean_scale(transform));
+        // Every painted path takes its turn in the scan's overprint list, a held one too.
+        st.overprint = self.path_overprint();
         let n = Node::path(self.id(), PathData::from_bezpath(&bp), Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() });
         if let Some(line) = &mut self.text {
             line.held.push(n);
